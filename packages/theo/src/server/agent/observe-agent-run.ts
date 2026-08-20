@@ -45,17 +45,39 @@ interface ObservedChunk {
   messageMetadata?: unknown
 }
 
+/**
+ * The `finish` chunk's `messageMetadata` is an `AgentTurnMetadata`:
+ * `{ usage: { inputTokens, outputTokens, totalTokens, ... }, cost?, durationMs }`
+ * (`packages/agents/src/bridge/agent-stream-events.ts:141-146`). The tokens are
+ * nested under `usage`, not flat on the metadata.
+ *
+ * This read them flat when it was first written, against a shape invented for the
+ * test rather than read from the producer — so the span carried no token
+ * attributes at all and the test agreed with it, because the fixture had the same
+ * invented shape. Found by someone auditing the criteria, not by the suite. The
+ * lesson is the one this codebase keeps re-learning: a test whose fixture comes
+ * from the same assumption as the code cannot disagree with it.
+ */
 const TOKEN_FIELDS: [string, string][] = [
   ['inputTokens', 'tokens.input'],
   ['outputTokens', 'tokens.output'],
   ['totalTokens', 'tokens.total'],
+  ['reasoningTokens', 'tokens.reasoning'],
+  ['cacheReadTokens', 'tokens.cache_read'],
+  ['cacheWriteTokens', 'tokens.cache_write'],
 ]
 
 function recordTokenUsage(span: SpanHandle, metadata: unknown): void {
   if (metadata === null || typeof metadata !== 'object') return
-  const bag = metadata as Record<string, unknown>
+  const bag = metadata as { usage?: unknown; cost?: unknown }
+
+  if (typeof bag.cost === 'number') span.setAttribute('cost.usd', bag.cost)
+
+  const usage = bag.usage
+  if (usage === null || usage === undefined || typeof usage !== 'object') return
+  const fields = usage as Record<string, unknown>
   for (const [field, attribute] of TOKEN_FIELDS) {
-    const value = bag[field]
+    const value = fields[field]
     if (typeof value === 'number') span.setAttribute(attribute, value)
   }
 }
