@@ -103,6 +103,20 @@ Reporting a partial run as the benchmark is forbidden. Ten journeys or a stated 
 ## Cross-references
 
 - The obligation this satisfies: the program goal's second condition
+- The ten criteria files, one per journey, written before either implementation exists — `docs/program/journeys/`:
+  [J1 tool](journeys/j01-tool.md) ·
+  [J2 HITL](journeys/j02-hitl.md) ·
+  [J3 streaming](journeys/j03-streaming.md) ·
+  [J4 thread](journeys/j04-thread.md) ·
+  [J5 multi-step](journeys/j05-multi-step.md) ·
+  [J6 retry](journeys/j06-retry.md) ·
+  [J7 rate limit](journeys/j07-rate-limit.md) ·
+  [J8 tenant](journeys/j08-tenant.md) ·
+  [J9 observability](journeys/j09-observability.md) ·
+  [J10 deploy](journeys/j10-deploy.md)
+- J8's blocker, which § Sequencing above leaves unnamed, is measured and named in
+  [its own criteria file](journeys/j08-tenant.md) — the framework has no tenant identity, so the
+  journey currently has no subject
 - The other instrument: `docs/program/northstar-app.md`
 - Parity milestones that must land first: `ROADMAP.md` Wave 0.5 and Wave 1
 - The decision J2 and J8 wait on: `docs/adr/0001-authorization-is-transport-independent.md`
