@@ -115,10 +115,23 @@ all. Next.js satisfies all five, and the option that satisfies them is the same 
 chain. The full measurement, both published diffs, the six declared judgements and the confirmed AI
 SDK version facts are in [J5's criteria file](journeys/j05-multi-step.md).
 
+**J5 was re-measured the same day, because the capability it lost on shipped — still a tie, and now
+a more expensive one.** The paragraph above is left standing as the record of what was true when it
+was written; hours after it, `3762c7d0f` gave the fluent builder, `defineAgent` and the decorator
+path a step ceiling that reaches the served run. Re-run against that framework, TheoKit satisfies
+**four** of five criteria instead of three — and the three countable metrics move the other way:
+glue lines 9 against 8, concepts **6 against 6**. The framework spent the only metric it led on this
+journey to stop failing two criteria, because a ceiling nobody can declare is also a name nobody has
+to learn. The margins are 1.0x, 1.125x and 1.0x, so it is still a tie, and criterion 4 is still open
+for a narrower reason: the declaration now travels, and the step-limit outcome still does not come
+back to the caller (usetheokit/theokit#379). The re-measurement, the re-run judgements and the before-and-after table are in
+[J5's criteria file](journeys/j05-multi-step.md).
+
 **Two journeys measured, two ties, and neither goes our way on a single metric by a margin outside
 noise.** The goal states "win all ten by a margin outside noise". Two of ten are in, and the
 framework has not yet won one - which is the kind of early number this protocol exists to make
-visible rather than to absorb.
+visible rather than to absorb. J5's re-measurement did not change that sentence, and it is worth
+saying why it could not: shipping the missing capability moved a criterion, not a margin.
 
 **One thing this re-measurement should not be read as.** J9 being unblocked means it can be scored;
 it does not mean it will score well. A journey that is newly possible and a journey that is

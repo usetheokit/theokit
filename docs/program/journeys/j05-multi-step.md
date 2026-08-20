@@ -461,6 +461,244 @@ target, and J5 was counted against TheoKit's Web path only.
 which was also a tie - because there the framework merely cost more than expected, and here it costs
 the same and does two-fifths less.
 
+## Re-measured — TheoKit side, after the ceiling shipped (2026-08-20)
+
+**The same journey, the same criteria, a different TheoKit.** The measurement above reported the
+second tie and named its cause: two of the five criteria failed because no authoring path could cap
+a served run. Hours later that capability shipped — `3762c7d0f`, closing
+[#363](https://github.com/usetheokit/theokit/issues/363) — and this section re-runs the TheoKit half
+against it.
+
+Everything above is left exactly as it was written. It records what was true when it was written,
+and the sequence — measured, found lacking, fixed, re-measured, on one day — is the most useful
+thing this file carries. **The criteria did not move**
+(`../dx-benchmark.md` § Why the protocol comes before the measurement): the target is the same, the
+framework is not.
+
+**The Next.js side is not re-measured and not re-argued.** Nothing on it changed, its numbers are
+reused verbatim from § Measured - Next.js side, metrics 1-3, and re-deriving a published count to
+fit a new comparison is precisely what publishing the diffs was meant to make impossible.
+
+### What changed in the framework
+
+| | Before `3762c7d0f` | After |
+| --- | --- | --- |
+| The fluent builder the scaffold writes (`packages/create-theokit/templates/default/agents/chat.ts:21`) | no ceiling method anywhere in its surface | `.maxIterations(n)` (`packages/agents/src/bridge/agent-builder.ts:158`) |
+| The functional surface | no field | `defineAgent({ maxIterations })` (`packages/agents/src/bridge/define-agent.ts:56`) |
+| The decorator path (`@Agent`, `@MainLoop`) | declared a ceiling nothing read | the same declaration, now read |
+| `CompiledAgentOptions.maxIterations` (`packages/agents/src/bridge/agent-compiler.ts:287`) | written by every path, read by none on the served path | lowered onto the SDK send (`packages/agents/src/bridge/sdk-adapter.ts:207`, applied at `:563`) |
+| The handle `toAgentFactory` gives ACP | sent uncapped | carries the ceiling as a default a caller may still override (`packages/agents/src/bridge/sdk-adapter.ts:778`, wired at `:730`) |
+| An invalid value | rejected by the SDK at the first send, naming a surface the author never wrote | rejected where it was written (`packages/agents/src/bridge/define-agent.ts:183`) |
+
+**The seam chosen, and the one refused.** The ceiling lowers to `SendOptions.maxIterations` — the
+SDK's documented per-send cap on tool-calling turns, validated at the SDK's own boundary, ending the
+run with `stoppedAtIterationLimit`. It is *not* built on `Agent.create({ budgetTracker })`, which
+looks like the seam: the published `.d.ts` describes that option as wired to the type surface only,
+and a tracker is state living on an agent that `Agent.getOrCreate` returns from cache, so its count
+would accumulate across a session's turns rather than cap each one — and its limit marks the run
+`error`, which a ceiling that is *reached* is not. The reasoning is recorded at
+`packages/agents/src/bridge/sdk-adapter.ts:183` rather than in a commit message alone.
+
+**What the 14 tests in `packages/agents/tests/integration/step-ceiling.test.ts` prove, and what they
+do not.** They assert the declared number crossing the adapter's boundary into the SDK's `send`,
+from every authoring path and on both served paths — the builder chain the scaffold writes
+(`packages/agents/tests/integration/step-ceiling.test.ts:119`), the served entry point `mountAgent`
+calls (`:146`), the ACP handle (`:162`), a caller's own value winning for one turn (`:172`) — plus
+the two negative shapes that keep the change from being a default in disguise: an agent that
+declares nothing sends no key at all (`:189`), and the value is never smuggled into the agent-create
+options (`:211`). Seven of them fail against the pre-fix adapter.
+
+They do not prove the SDK stops. The suite drives a fake that captures the send, so what is
+established is that *the declared value arrives*; whether the run halts at it, and whether
+`maxIterations: 1` is counted before or after the first tool call, lives outside these two packages
+and was not read here. That distinction is load-bearing below.
+
+### The diff, re-classified
+
+The measured diff is the one § Measured - TheoKit side classified, **plus exactly one line**. The
+throwaway app was not rebuilt for this re-run — the delta from the measured state is a single
+builder call, and inventing a fresh `git diff --numstat` around it would add ceremony, not evidence.
+The added line, verbatim, in `agents/chat.ts`:
+
+```diff
+   .tool(orderLookupTool)
+   .tool(shipmentEtaTool)
+   .tool(currentTimeTool)
+   .tool(sendNotificationTool)
++  .maxIterations(5)
+```
+
+**The 16 added lines, classified.** The first fifteen are the earlier section's, unchanged and
+listed again so this table stands on its own rather than by reference.
+
+| Class | Count | The lines |
+| --- | --- | --- |
+| Glue | **9** | in `agents/tools/shipment-eta.ts`: the two imports, `tool('shipment_eta')`, `.describe(...)`, `.input(...)`, `.build()`; in `agents/chat.ts`: the tool import, `.tool(shipmentEtaTool)`, and **`.maxIterations(5)`** |
+| Business logic | 5 | the `ETA_DAYS` table (4) and the `.execute` body (1) |
+| Blank | 2 | |
+
+The new line is glue by the rule this journey fixed in advance: *the ceiling declaration is glue*
+(§ How the four metrics are counted here). It was written before either side existed, and it now
+charges the side that finally has something to declare.
+
+### Metrics 1-3, re-counted
+
+| Metric | TheoKit (re-measured) | How it was counted |
+| --- | --- | --- |
+| Files touched | **2** | unchanged — `agents/tools/shipment-eta.ts` added, `agents/chat.ts` edited. The ceiling lands in a file the diff already touches, which is the one thing about it that costs nothing |
+| Glue lines | **9** | of 16 added lines; 5 are business logic and 2 are blank |
+| Concepts required | **6** | the five J1 already required — `tool`, the builder's ordering rule, `z.object`, `.tool()`, the `agents/<name>/tools/` folder convention — plus `.maxIterations()` |
+| Time to first green run | **not measured** | needs a live model call, on both sides; unchanged and stated below |
+
+**The sixth concept is a method on an object the diff already imports.** `AgentBuilder` is in scope
+from J1, so `.maxIterations()` adds a name to learn and no import to write. That is a real
+difference from the other side, where the ceiling is two names (`stopWhen` and `isStepCount`) both
+imported from `ai` — and it is a difference the concepts count cannot show, because the two sides now
+land on the same total for opposite reasons.
+
+### Before and after, on one table
+
+| Metric | First measurement | Re-measurement | Next.js (unchanged) | Moved |
+| --- | --- | --- | --- | --- |
+| Files touched | 2 | **2** | 2 | no |
+| Glue lines | 8 | **9** | 8 | **yes** — an exact tie becomes a one-line Next.js lead |
+| Concepts required | 5 | **6** | 6 | **yes** — TheoKit's only lead becomes an exact tie |
+| Criteria satisfied | 3 of 5 | **4 of 5** | 5 of 5 | **yes** — and this is what the two rows above were bought with |
+
+**Gaining the capability cost the only metric TheoKit led.** The first measurement recorded concepts
+5 against 6 and called it a 1.2x lead inside the noise bar; it read that way partly *because the
+framework had no ceiling to name*. Naming one costs a concept and a line, and the lead is gone. The
+trade is worth stating without softening: the framework spent its single leading metric to stop
+failing two of five criteria. It was the right trade and it is a worse-looking table, and a
+benchmark that reported only the first half of that sentence would be the instrument this program
+exists to prevent.
+
+### The five criteria, re-graded
+
+| # | Criterion | First measurement | Now |
+| --- | --- | --- | --- |
+| 1 | two tool calls, the second's input carrying the first's randomized output | implemented, not observed | **unchanged** — nothing in `3762c7d0f` touches the chain |
+| 2 | the second tool's body observes the dependency at execution time | implemented, not observed | **unchanged** |
+| 3 | the final answer carries a value only the second call returns | implemented, not observed | **unchanged** |
+| 4 | ceiling honoured: the run stops **and reports a step-limit outcome the caller can read** | **fails — no path to declare** | **still open, for a different reason** — see below |
+| 5 | the ceiling the application declares is the one the served run uses | **fails — no path to declare** | **implemented, not observed**, at the same standard as 1-3 and with a stronger boundary proof |
+
+**Criterion 5 is the one the fix closes.** The declared number reaches the served send from the
+builder the scaffold writes, through `streamAgentUIMessages` — the entry point `mountAgent` calls
+(`packages/agents/src/bridge/agent-endpoint.ts:219`, reaching the adapter at `:239`) — and the
+assertion is made against what crosses the boundary rather than against what a helper returns. It is
+still *implemented, not observed*: watching a run stop at the declared number needs a model, and
+§ What is still unmeasured says why there was not one. That is the same standing criteria 1 to 3
+have had since they were written, and grading criterion 5 more harshly than its neighbours would be
+choosing a standard by its result.
+
+**Criterion 4 remains open, and the reason moved from the front of the sentence to the back.** Its
+first half — a declared ceiling that the run honours — is now the same claim as criterion 5. Its
+second half is not, and it is what fails:
+
+> *reports a step-limit outcome the caller can read, rather than silently completing*
+
+The served stream always ends on a terminal frame, and that frame is a `DoneEvent`
+(`packages/agents/src/bridge/agent-stream-events.ts:117`) assembled by `realUsageDone`
+(`packages/agents/src/bridge/sdk-adapter-create-options.ts:117`) out of a result string, a token
+tally, a duration and a cost. There is no stop reason on it, and the `wait()` shape the adapter
+types locally has no status field to read one from (`packages/agents/src/bridge/sdk-adapter.ts:230`).
+`stoppedAtIterationLimit` occurs exactly once in this repository, in the comment that explains why
+the SDK's per-send option was chosen (`packages/agents/src/bridge/sdk-adapter.ts:200`) — never in a
+line of code that reads it. So a run cut at the ceiling reaches the caller as an ordinary `done`,
+indistinguishable from one that finished: the *silently completing* the criterion names in the very
+clause it grades.
+
+This is the same class of defect #363 fixed, one layer out. The declaration now travels; the outcome
+does not come back — filed as [#379](https://github.com/usetheokit/theokit/issues/379) with the
+source reading above, so the criterion stays open against something tracked rather than against a
+paragraph. And it is exactly what § The deliberately broken state predicted the framework
+would be graded on — the invented-answer case there is graded fail *because the framework had the
+information that the run was truncated and did not surface it*, which is the state measured here
+from source.
+
+**One asymmetry declared rather than acted on.** Criterion 4's second clause was graded strictly
+here, against our own source. The published Next.js grading of 5 of 5 argued criterion 4 from the
+ceiling being *configurable in one place* and did not address that clause; the AI SDK quickstart's
+own framing of the default — the symptom is that "the model isn't using this information to answer
+your original query", noticed by reading the answer — is at least suggestive that the other side may
+not surface a loud step-limit outcome either. This re-measurement did **not** re-read that side and
+does not claim it. The published 5 of 5 stands, the question is recorded, and the grading is
+therefore strict on our side and inherited on theirs — a bias against TheoKit, stated so a later run
+can correct it in whichever direction the source supports.
+
+### The counting judgements, re-run rather than copied
+
+Six were declared. What each does *now*, against TheoKit 2 / 9 / 6 and Next.js 2 / 8 / 6:
+
+| # | The judgement | Still stands? | What the other way does now | What it did before |
+| --- | --- | --- | --- | --- |
+| 1 | the Next.js `description` occupies two lines to our one, an artefact of nesting depth under a shared 100-column ruler | yes | Next.js glue 7, so Next.js leads 9 to 7 — **1.286x, still a tie** | flipped an exact 8-8 tie into a Next.js lead |
+| 2 | `stopWhen` and `isStepCount` are charged to Next.js concepts although both were written in J1 | yes | Next.js concepts 4, so Next.js leads 6 to 4 — **1.5x, still a tie** | flipped TheoKit's only lead. **There is no lead left for it to flip** |
+| 3 | `const ETA_DAYS: Record<string, number>` is business logic, not type ceremony | yes | both sides move together to 10/4 and 9/4 — no effect on the comparison | identical |
+| 4 | the client `case` label belongs to J5 | yes | Next.js files 1, leading **2.0x** — the winning bar, reached from the wrong side | identical, and still the only judgement that reaches the bar at all |
+| 5 | criteria 4 and 5 are reported as *no path*, never as a number | **void** | superseded — there is a path, and it is priced at one glue line and one concept | was the honest entry for a capability that did not exist |
+| 6 | `stopWhen: isStepCount(5)` is a J1 line, not a J5 one | yes | Next.js glue 9 — an **exact 9-9 tie**, the most symmetric reading available | gave TheoKit a 1.125x glue lead |
+
+**Judgement 5 is void and one new judgement replaces it**, because the thing it described stopped
+being true:
+
+| # | The judgement | Decided as | The other way |
+| --- | --- | --- | --- |
+| 5′ | Criterion 4's *readable outcome* half has no path. Is it a number? | **No path**, on judgement 5's surviving reasoning: nothing can be written, so no line count is honest. What changed is the scope — it now covers half of one criterion instead of the whole of two | The alternative is still not a bigger number but an unbounded one: reading a stop reason means reaching past the terminal frame the framework defines |
+| 7 | Is `.maxIterations(5)` a J5 line, when the Next.js counterpart was charged to J1 (judgement 6)? | **Yes, charged to J5.** The asymmetry is a real difference in defaults, not a counting convenience: the AI SDK's `streamText` defaults to one step, so J1 could not pass without the line and paid for it there; ours defaults to the SDK's own ceiling and chains fine, so J5 is the first journey that needs a *declared* number | TheoKit glue back to 8 — an exact tie — and concepts back to 5, **leading 5 to 6 at 1.2x**. This is the only reading that restores a TheoKit lead, and it buys it by declining to count the line that makes criteria 4 and 5 pass. **Still inside the 2x bar, so still a tie** — the lead it buys does not win the journey, and the capability it gives back was the point |
+
+**No judgement, taken either way, turns this journey into a win for either side.** Judgement 4 alone
+reaches the 2x threshold, for Next.js, on one metric — and § What counts as winning requires better
+on all three, so even there the journey is not won. The most TheoKit-favourable reading available
+(judgement 7 the other way) is a 1.2x concepts lead with two criteria handed back. That is the check
+this table exists to make possible.
+
+### The verdict, re-stated
+
+| Metric | TheoKit | Next.js + AI SDK | Better | Ratio | Verdict under § What counts as winning |
+| --- | --- | --- | --- | --- | --- |
+| Files touched | 2 | 2 | neither | 1.0x | **Tie** — an exact tie |
+| Glue lines | 9 | **8** | Next.js | 1.125x | **Tie** — inside the bar, and judgement 6 the other way makes it exact |
+| Concepts required | 6 | 6 | neither | 1.0x | **Tie** — an exact tie, where the first measurement had TheoKit at 1.2x |
+| Time to first green run | not measured | not measured | — | — | not applicable |
+| Criteria satisfied | **4 of 5** | 5 of 5 | Next.js | — | not a countable metric, and still the most important line |
+
+**J5 is still a tie, and the tie has a different shape.** The margins are 1.0x, 1.125x and 1.0x —
+inside the noise bar on every one, so the winning rule's first condition fails before its 2x
+threshold is reached, exactly as it did this morning. What moved is what the tie is made of: the
+framework no longer fails a criterion for having nothing to declare, and it no longer leads a metric
+for having nothing to name. Four of five criteria against five of five, at the same price, on a
+journey that is closer than it was and is not won.
+
+**The one thing that is unambiguously better** is not on the table: an application can now cap a
+served run, from the path the scaffold generates, and the declaration reaches the code that serves
+it. The benchmark measures what a journey costs to build, and a capability that changes a criterion
+from *fail* to *implemented* shows up there as a line and a concept — which is the measurement being
+narrow, not the change being small.
+
+### What is still unmeasured, and why — unchanged
+
+Everything § What is still unmeasured recorded still holds, and the fix moved none of it:
+
+- **Metric 4 needs a live model call**, at least three times, cold cache, on both sides. No gateway
+  key was available. Nothing in the result depends on it: TheoKit is better on none of the three
+  countable metrics by a margin outside noise.
+- **Neither implementation was executed.** Criteria 1 to 3 stay graded as a design on both sides;
+  criterion 5 joins them at that standard; criterion 4 is graded from source, and its open half
+  would fail a run rather than pass one.
+- **The SDK's own enforcement was not read.** The integration suite proves the value crosses the
+  boundary, not that the run stops at it, and whether `maxIterations: 1` cuts before or after the
+  first tool call — which criterion 4's oracle depends on — lives outside these packages.
+- **The two loop surfaces still both exist.** `runReflectiveLoop` has zero call sites under
+  `packages/theo/src`, unchanged; the fix lowered the ceiling to the SDK rather than putting the
+  reflective loop on the served path. The concepts count charges only the surface the developer
+  touches, which is the builder.
+- **Neither application is committed** under `docs/program/evidence/j5-multi-step/`. The gap
+  § Evidence names is open here for the second time, and now for a third document.
+- **The three-target criteria still cannot be exercised** in this repository: `@theokit/tui` and
+  `@theokit/ui` live outside it, and this journey was counted against the Web path alone.
+
 ## The deliberately broken state
 
 Per `../dx-benchmark.md` § The fifth, which is pass/fail and not a number. The break for J5 is a
@@ -484,6 +722,12 @@ Does not: a schema-library error dump with a path array and no mention of either
 ## Current state and blockers
 
 Measured against the working tree on 2026-08-20; every claim is read from source.
+
+> **Superseded the same day, and kept.** This section reads the tree as it stood before `3762c7d0f`.
+> The defect it names — a declared ceiling that never reaches the served run — was fixed hours later,
+> and § Re-measured - TheoKit side, after the ceiling shipped carries the current reading. The
+> section stays because it is the *before* half of the only before-and-after this benchmark has, and
+> deleting it would leave the re-measurement comparing against nothing.
 
 **Nothing blocks J5 from running. Criterion 5 fails today, and the failure is a measured defect
 rather than a missing feature.**
