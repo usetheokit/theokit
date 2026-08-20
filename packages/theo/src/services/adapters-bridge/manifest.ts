@@ -84,7 +84,17 @@ function topoSort(services: ServicesConfig): string[] {
   const indeg: Record<string, number> = Object.fromEntries(names.map((n) => [n, 0]))
   const adj: Record<string, string[]> = Object.fromEntries(names.map((n) => [n, []]))
 
-  const cmp = (a: string, b: string) => a.localeCompare(b)
+  // By code unit, not by collation: this comparator breaks ties in the topological
+  // sort, so it decides service start order and the emitted manifest. A collated
+  // order is derived from `LC_ALL` and would differ per machine
+  // (usetheokit/theokit#351). Inlined rather than imported: `server/_internal/` is
+  // private to `server/` by architecture invariant 3, and one three-line
+  // comparator is a cheaper duplicate than a new cross-module public util.
+  const cmp = (a: string, b: string): number => {
+    if (a < b) return -1
+    if (a > b) return 1
+    return 0
+  }
 
   for (const name of names) {
     const deps = services[name].dependsOn ?? []

@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **Build-time scanners order by code unit, so the emitted output no longer depends on the machine's
+  locale.** Five scanners still compared with `localeCompare` after #346 established the rule for the
+  route scanner — including the middleware scanner, where the order being emitted is an *execution*
+  order and therefore decides whether an auth middleware runs before what it protects. `localeCompare`
+  with no locale argument uses the default collator, and Node derives that from `LC_ALL`: an `ä` sorts
+  after `z` under `sv-SE` and before `a` under `en-US`. Cron and job manifests, detected HTTP methods
+  and the services-bridge topological tiebreak were affected the same way. (usetheokit/theokit#351)
+
 - **A request no longer reaches the wrong route handler when a generic and a specific route
   overlap.** Server route precedence is decided by the order the scanner returns, because
   `matchRoute` stops at the first pattern that matches — and the tiebreak compared the whole path

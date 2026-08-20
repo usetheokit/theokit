@@ -21,6 +21,7 @@ import { createRequire } from 'node:module'
 import type * as TS from 'typescript'
 
 import { HTTP_METHODS, type HttpMethod } from '../../core/contracts/http-methods.js'
+import { compareByCodeUnit } from '../_internal/compare-by-code-unit.js'
 
 const require_ = createRequire(import.meta.url)
 
@@ -88,5 +89,9 @@ export function detectExportedHttpMethods(filePath: string, content?: string): H
   for (const stmt of sourceFile.statements) {
     collectFromStatement(stmt, found)
   }
-  return [...found].sort((a, b) => a.localeCompare(b))
+  // HTTP method names are ASCII, so no collation disagrees about them today.
+  // Ordered by code unit anyway, so that "build output orders by code unit"
+  // stays a rule a reader can check by grep rather than a rule with exceptions
+  // each needing its own argument (usetheokit/theokit#351).
+  return [...found].sort(compareByCodeUnit)
 }
