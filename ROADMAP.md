@@ -132,9 +132,9 @@ not itself a dependency — two milestones in the same wave may run in either or
 **Definition of done (all must hold):**
 
 - [ ] the HITL approval path rejects an unauthenticated caller and an authenticated non-owner, verified against the published build; the open private security advisory is resolved and its fix released
-- [ ] an owner check exists and is exercised: approving a run as a caller who does not own it is refused, not merely undocumented
+- [ ] an owner check exists and is exercised: approving a run as a caller who does not own it is refused, not merely undocumented. **Routes now have one** — `RoutePolicy` is evaluated by all three transports and `requireOwner` answers the question once (`packages/theo/src/core/contracts/route-policy.ts`). **The agent endpoint does not use it**: `mountAgent` admits a request, then resumes whatever conversation id the body names, with no check that the caller owns it (usetheokit/theokit#365). The criterion says *approving a run*, which is the agent path, so the primitive existing elsewhere does not satisfy it
 - [ ] importing a server-only module from client code fails the build with an error naming both the module and the importing file
-- [ ] CSRF protection on the Web handler is on by default — a cross-origin POST with no token is rejected by a build that sets no CSRF option (`packages/theo/src/server/web-handler.ts:314,482`, where absent currently means off)
+- [ ] CSRF protection on the Web handler is on by default — a cross-origin POST with no token is rejected by a build that sets no CSRF option. **Implemented 2026-08-20:** `shouldEnforceCsrf` now reads absence as enforced, and only an explicit `'off'` disables it (`packages/theo/src/server/web-handler.ts:508`). The bullet stays `[ ]` on purpose — implemented is not accepted, and only `/acceptance` against a published build may tick it
 - [ ] Applies to: Web, Tauri, TUI — each listed target is exercised in acceptance, not merely declared
 - [ ] Tauri: the authorization ADR is decided and implemented — **decided, and its core guarantee is implemented as of 2026-08-20**: `RouteConfig.policy` is evaluated by both HTTP executors AND `callProcedure` from one function, verified by `tests/unit/access-decision-parity.test.ts`. The sentence this criterion was written from — "`callProcedure` runs no middleware and no auth" — no longer describes the code. What remains is the ADR's breaking half (absence stops meaning open; `session.ts` loses `ServerResponse`), which is why the box stays `[ ]` — that, and the fact that only `/acceptance` against a published build may flip it. See `docs/adr/0001-authorization-is-transport-independent.md` § Implementation status
 - [ ] TUI: same ADR, same seam — the route's access rules are enforced off-web rather than re-invented per surface. CSRF is *not applicable*: there is no browser origin to forge a request from
@@ -234,7 +234,7 @@ not itself a dependency — two milestones in the same wave may run in either or
 **Definition of done (all must hold):**
 
 - [ ] a request carrying a W3C `traceparent` produces spans continuing that trace id — no `randomUUID()` is minted where a parent context exists. **Half done, measured 2026-08-20:** the production start path now resolves the trace from the header (`packages/theo/src/cli/commands/start/request-handler.ts:233`) and the `randomUUID()` this criterion was written against is gone from that file. `packages/theo/src/vite-plugin/agent-middleware.ts:122,199` still mints one, so the dev agent path still starts a new trace
-- [ ] a run emits spans for run start and end, every tool call, every HITL pause and resume, and token usage, read back from an exported trace against a published build
+- [ ] a run emits spans for run start and end, every tool call, every HITL pause and resume, and token usage, read back from an exported trace against a published build. **The spans now exist** — `packages/theo/src/server/agent/observe-agent-run.ts` translates the wire chunks into `agent.run` / `agent.tool` / `agent.hitl` spans, including token usage read from the producer's own shape. **The trace does not.** `serializeSpansToOtlp` mints a fresh `traceId` per span (`packages/theo/src/server/observability/otlp-serializer.ts:65`) and `SpanData` carries no parent (`packages/theo/src/server/observability/span.ts:8`), so an exported run arrives at the collector as N unrelated single-span traces and "read back from an exported trace" has nothing to read back (usetheokit/theokit#368). The criterion says *trace*, not *span*, and it is the harder half
 - [ ] the exported signal is produced by a production caller, not only by a test
 - [ ] Applies to: Web, Tauri, TUI — each listed target is exercised in acceptance, not merely declared
 - [ ] Tauri: emits the same spans over the in-process path, with the trace continuing across the IPC boundary
@@ -320,11 +320,32 @@ not itself a dependency — two milestones in the same wave may run in either or
 **Surface:** `.claude/skills/build-adapters-specialist/` — what the build emits, and what a deploy target consumes.
 **Dependencies:** M3
 
+**Status, measured 2026-08-20:** the third criterion below turns out to be the whole milestone. Two
+findings, and the second contains the first:
+
+- **No adapter serves an agent.** The string `agent` appears zero times across all fourteen files in
+  `packages/theo/src/adapters/`. Agents are a separate scan (`scanAgents`) served by `mountAgent`,
+  which no adapter knows and which only the internal contract exports (usetheokit/theokit#367). For a
+  framework whose thesis is that an agent ships through the same pipeline as a page, this is the
+  criterion that decides whether the thesis holds.
+- **The Cloudflare worker discovers routes by reading a directory at runtime.** It calls
+  `scanServerRoutes` (a `readdirSync`) and loads modules through `import()` of a file path, in a
+  runtime with no filesystem — and the generated `wrangler.toml` uploads `.theokit/client`, never
+  `server/` (usetheokit/theokit#369). Marked needs-repro: inferred from three agreeing sites, not
+  from a deploy.
+
+**And nothing would have caught either.** `tests/integration/wrangler-smoke.test.ts` runs a real
+`wrangler dev`, against a fixture worker that imports its route statically and calls
+`executeWebRequest` directly — so it proves the executor runs on Workers and never touches the two
+mechanisms above. Its own header already records the posture: *"Cloudflare Workers is a future /
+opt-in compatibility surface — TheoCloud is the only end-to-end-validated deploy target."*
+
 **Definition of done (all must hold):**
 
 - [ ] a streaming `/api/*` route streams on every listed adapter — chunks observed arriving before the response completes — or the adapter is delisted; the `web-shim` buffering the whole response is the current blocker across six targets
 - [ ] declaring a capability the target cannot serve (WebSockets on a target without them) fails the build by name instead of deploying silently degraded
-- [ ] no adapter is listed that nobody exercises in acceptance
+- [ ] no adapter is listed that nobody exercises in acceptance — **the sharpest criterion here, and the measurement above says the list currently contains adapters nobody exercises.** Delisting is a legitimate way to satisfy it, and cheaper than pretending
+- [ ] an agent endpoint answers on every listed adapter, or the adapter is delisted for agents specifically — a target that serves pages and not agents is a partial target, and saying which half works beats listing it whole
 - [ ] Applies to: Web, Tauri, TUI — each listed target is exercised in acceptance, not merely declared
 - [ ] Tauri: the desktop build is produced by the same emitted output
 - [ ] TUI: *not applicable* — the terminal client runs the core in-process and consumes no adapter; there is no hop for an adapter to bridge
