@@ -175,6 +175,43 @@ said for the 3x, and it is worth nothing until usetheokit/theokit#361, #380, #38
 close. The measurement, both diffs, the collector payloads and seven declared judgements are in
 [J9's criteria file](journeys/j09-observability.md).
 
+**J9 was re-measured the same day, and it is the first won journey of the ten.** The paragraph above
+stands as the record of what was true when it was written; hours after it, four commits closed four of
+the five defects it named. Re-run at `91fce4761` against the same local OTLP collector — and this time
+against a **published build started by the shipped CLI**, which closes the criterion-7 asymmetry the
+first run recorded against us — TheoKit satisfies **six** of the seven criteria against the Next.js
+side's five. The model identifier is on the exported run span under the OpenTelemetry GenAI spelling,
+so criterion 5's cost question now has an answer; the `http.request` span and the thread route both
+continue the caller's trace and name the caller's span as parent, so criterion 6 holds on all three
+paths; and a gated tool produces one span rather than two. **The three countable metrics did not move
+— files 1 against 3, glue lines 2 against 14, concepts 3 against 7, or 3x, 7x and 2.33x** — because
+the breaking policy gate of `91fce4761` costs this journey nothing: the scaffold ships the declaration
+and the untouched baseline builds, starts and answers `200`.
+
+**What the win rests on, stated where it will be contested.** Files and glue lines rest on no
+judgement that could flip them — every declared alternative leaves both outside the bar. **Concepts
+at 2.33x rests on one judgement**, re-argued from scratch here and decided the same way twice: whether
+the Next.js side's four instrumentation names are four concepts or one setup block. Read as one, the
+ratio is 1.33x, the concepts metric is a tie, the winning rule's "all three" is not met, and J9 is not
+won. And **metric 4 is unmeasured on both sides**, so the rule's "not worse on time to green" clause
+is untested rather than satisfied — every journey so far has that hole, and this is the first one
+where it matters. The one criterion TheoKit still fails, criterion 3, the Next.js side fails too and
+fails harder: its pause span does not exist, and its two halves of an approval land in two unrelated
+root traces. Ours exists, closes at the resume, and measures the human's wait **plus the model's
+next-turn latency** (measured excess of 41, 719 and 1510 ms against model latencies of 20, 700 and
+1500 ms) — usetheokit/theokit#389.
+
+**And the trace the two lines buy is still incomplete in ways no criterion sees.** A request with no
+`traceparent` — which is every request a browser makes — arrives as two disconnected traces
+(usetheokit/theokit#404, reproduced on the production build). The thread, approve and MCP endpoints
+emit no `http.request` span at all, because the aux branch never reaches the plugin runner
+(usetheokit/theokit#405). And the `agent` attribute an operator groups by is the module's absolute
+filesystem path on one route and a quoted label on another (usetheokit/theokit#406). All three are
+framework defects that cost the application zero lines to close, and all three were found only by
+running the shipped CLI rather than by reading. The re-measurement, the collector payloads from a
+published build, the re-argued judgements and the before-and-after tables are in
+[J9's criteria file](journeys/j09-observability.md).
+
 **J6 has both sides now, and it is the first journey run end to end without a live model on either
 side — a tie on cost, and a criterion lost to a defect only a run could find.** Measured 2026-08-20.
 The three countable metrics are the narrowest set this programme has produced: files 1 against 1,

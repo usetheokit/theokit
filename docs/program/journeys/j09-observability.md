@@ -661,6 +661,415 @@ alone.
 - usetheokit/theokit#361 — a HITL-gated tool appears twice under two ids. Pre-existing, confirmed
   open, and confirmed to break criteria 2 and 3 at the exporter rather than only on the wire.
 
+## Re-measured a second time — TheoKit against a published build, on a real collector (2026-08-20)
+
+**The section above is left standing as the record of what was true when it was written**, and it is
+out of date by four commits landed the same evening. Each of them touched something that section
+recorded as failing, and **none of their authors graduated their own fix** — all four said, in those
+words, that what grades a telemetry change is a re-measurement against a real collector. This is that
+re-measurement. **The criteria did not move** (`../dx-benchmark.md` § Why the protocol comes before
+the measurement); the target is the same and the framework is not.
+
+**The Next.js side was not re-run.** Nothing changed on it, and re-measuring an unchanged lane would
+manufacture noise. Its counts, its version facts and its criteria grades are reused verbatim from
+§ Re-measured — both sides above, and every before/after table below marks them as carried over.
+
+### What changed under the measurement
+
+| Commit | What it claimed | Graded here |
+| --- | --- | --- |
+| `0e9e6dc04` | a gated tool is one call under one id, so the pause span closes at the resume instead of surviving to the end-of-run sweep (#361) | criterion 2 **now passes** for a gated tool; criterion 3's *close* is fixed and its *duration* is not |
+| `d15f8888e` | a fractional attribute goes out as OTLP `doubleValue` instead of `intValue` (#380) | **not observed here** — see § What this run did not exercise |
+| `2893c8997` | the `http.request` span continues the incoming trace and names the caller's span as parent (#385); both served routes go through one `observeServedRun` (#381); the run span carries `gen_ai.request.model` | criteria **5 and 6 now pass**, both observed |
+| `91fce4761` | an agent endpoint refuses a caller no declared policy admits. **Breaking:** an agent without `export const policy` fails the scanner | **costs this journey nothing** — see below |
+
+**The breaking change costs zero lines, and that was measured rather than assumed.** The scaffold
+template now ships the declaration itself
+(`packages/create-theokit/templates/default/agents/chat.ts:42`), so the untouched baseline
+already satisfies the new gate: the app was built and served from the verbatim template and the agent
+endpoint answered `200`. J9 adds no agent, so it writes no policy. The honest caveat is that a journey
+which *adds* an agent would now pay a line for it, and J9 is not that journey.
+
+### The instrument, and why this run reaches further than the last one
+
+The previous measurement graded criterion 7 **not verified** on our side and observed on theirs, and
+called that asymmetry "a real difference in what has been proven, and it is not in our favour". It is
+closed here. Every TheoKit payload below comes from:
+
+```
+theokit build && theokit start        # the shipped CLI, a published build
+```
+
+with the exporter selected only by the two counted `.env.local` lines, driven by an out-of-process
+HTTP client. No vitest, no injected adapter, no framework entry point called by hand.
+
+**The model is local and keyless**, reusing the instrument `j06-retry.md` § The instrument declared:
+`@theokit/sdk@4.52.1` ships an `ollama` provider profile with `authType: "none"` speaking Ollama's own
+`POST /api/chat` NDJSON, so a scripted server on `127.0.0.1:11434` is a complete model as far as the
+framework is concerned. Runs go through the real `theokit start`, the real scanner, the real
+`mountAgent`, the real `streamAgentUIMessages` and the real span translator. The one instrument line
+that is *not* free is recorded as a finding rather than hidden: the framework's provider registry has
+no keyless entry, so `ollama/*` still demands an unrelated cloud key
+(usetheokit/theokit#407), and the run was unblocked by setting `OPENAI_API_KEY` to a placeholder the
+run never uses.
+
+**The collector** is the same `node:http` server accepting OTLP/JSON on `POST /v1/traces` the previous
+measurement used, so both sides and both runs are read with one instrument.
+
+### Versions and commits under test
+
+| | |
+| --- | --- |
+| TheoKit | `workspace` @ `91fce4761`; `0e9e6dc04`, `d15f8888e` and `2893c8997` confirmed as ancestors |
+| App | the `create-theokit` default template, copied verbatim with `_gitignore`, `package.json.tmpl` and `README.md.tmpl` renamed as the scaffolder renames them, committed untouched, then built and served |
+| Model | a local Ollama-protocol server, scripted; `@theokit/sdk@4.52.1` |
+| Next.js side | **carried over unchanged** — `next@16.3.1`, `ai@7.0.70`, `@ai-sdk/react@4.0.73`, `@ai-sdk/otel@1.0.70`, `@vercel/otel@2.1.3`, Node 22.22.2 |
+
+### The TheoKit diff, unchanged
+
+```diff
+diff --git a/.env.local b/.env.local
+new file mode 100644
+--- /dev/null
++++ b/.env.local
+@@ -0,0 +1,2 @@
++THEO_CLOUD_INGEST_URL=http://127.0.0.1:4318/v1/traces
++THEO_CLOUD_API_KEY=local-collector
+```
+
+`git show --numstat` on the commit: `2  0  .env.local`. **Both lines classified as glue**, as this
+journey's own rule requires — it declares business logic the empty set, and the diff did not
+contradict it. Line 1 and line 2 together are what makes the environment half of the resolution chain
+fire (`packages/theo/src/server/observability/adapter-registry.ts:33`, read by
+`packages/theo/src/server/observability-bootstrap.ts:74`), after which the adapter is
+resolved once and shared by the HTTP hooks and by the agent-run translator. Neither line is
+independently useful: one without the other produces no adapter.
+
+Nothing else. The run span, the per-tool spans, the pause span, the token attributes, the stop reason
+and the model id are emitted by the framework without being asked. **This diff is still invisible to
+`git` in a real application** — `.env.local` is ignored by the scaffold's own gitignore, so it was
+committed with `-f` and a reader checking the numbers should expect `git diff` on a scaffolded app to
+show nothing.
+
+### Metrics 1-3, before and after
+
+| Metric | TheoKit, first re-run | TheoKit, this run | Next.js *(carried over)* | Better | Ratio | Verdict under § What counts as winning |
+| --- | --- | --- | --- | --- | --- | --- |
+| Files touched | 1 | **1** | 3 | TheoKit | **3x** | outside the 2x bar |
+| Glue lines | 2 | **2** | 14 | TheoKit | **7x** | outside the 2x bar |
+| Concepts required | 3 | **3** | 7 | TheoKit | **2.33x** | outside the 2x bar |
+| Time to first green run | not measured | not measured | not measured | - | - | untested on both sides |
+
+**No metric moved.** Twelve lines and two files still separate the two sides. What moved is
+underneath: the same two lines now buy a trace that answers the cost question, joins the caller's
+trace on every served route, and counts a gated tool once.
+
+The concepts are the same three the previous run derived and they were re-derived rather than copied:
+`THEO_CLOUD_INGEST_URL`, `THEO_CLOUD_API_KEY`, and `.env.local` as a file the production CLI loads
+(`packages/theo/src/config/load-env.ts:42`, called from
+`packages/theo/src/cli/commands/start/index.ts:56`).
+
+### The evidence, read back off the collector
+
+Every payload below is what the collector received from a `theokit start` process, not what any
+process held.
+
+**A two-tool run carrying `traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01`:**
+
+```
+agent.tool   trace=4bf92f3577b34da6a3ce929d0e0e4736 id=06cc25f79cbf2bcb parent=a78871e5a3af02b5 dur=75.000ms
+             agent=<path> tool=current_time toolCallId=call-c003f41f-8e85-40ac-9578-84ab297356d2
+agent.tool   trace=4bf92f3577b34da6a3ce929d0e0e4736 id=c59c253ccdf20975 parent=a78871e5a3af02b5 dur=25.000ms
+             agent=<path> tool=current_time toolCallId=call-13796f3c-ce15-4a07-b279-97c73a05de77
+agent.run    trace=4bf92f3577b34da6a3ce929d0e0e4736 id=a78871e5a3af02b5 parent=00f067aa0ba902b7 dur=163.000ms
+             agent=<path> cost.usd=int:0 tokens.input=int:3600 tokens.output=int:1020 tokens.total=int:4620
+             tokens.reasoning=int:0 tokens.cache_read=int:0 tokens.cache_write=int:0
+             gen_ai.request.model=ollama/j9-local
+http.request trace=4bf92f3577b34da6a3ce929d0e0e4736 id=1e629085f5edeb68 parent=00f067aa0ba902b7 dur=167.000ms
+             method=POST path=/api/agents/chat requestId=4bf92f3577b34da6a3ce929d0e0e4736 status=int:200
+```
+
+Four spans, **one trace**, byte-equal to the id sent. `<path>` is quoted literally rather than
+elided in usetheokit/theokit#406 — it is the agent module's absolute filesystem path, which is a
+finding of its own and is not the agent's name.
+
+**A HITL-gated run**, scripted human decision of 1200 ms, model answering in 20 ms:
+
+```
+agent.hitl   trace=4bf92f35… id=3015e8ab6df33d2d parent=79b9c07e38287743 dur=1241.000ms status=1
+             tool=send_notification approvalId=347a50cb-… toolCallId=347a50cb-… hitl.resume_observed=bool:true
+agent.tool   trace=4bf92f35… id=87c055260dcbd49d parent=79b9c07e38287743 dur=1242.000ms status=1
+             tool=send_notification toolCallId=347a50cb-…
+agent.run    trace=4bf92f35… id=79b9c07e38287743 parent=00f067aa0ba902b7 dur=1321.000ms status=1
+```
+
+One gated call, **one** `agent.tool` span, and a pause span that closed at the resume with
+`hitl.resume_observed=true` and an `ok` status.
+
+**The thread route**, carrying `traceparent: 00-cccc…cccc-dddddddddddddddd-01` and answered `202`
+before the run started:
+
+```
+agent.tool   trace=cccccccccccccccccccccccccccccccc id=eb0dc187c9a40b91 parent=dbd700d9426bea6f dur=72.000ms
+agent.tool   trace=cccccccccccccccccccccccccccccccc id=8988b188d3ce43be parent=dbd700d9426bea6f dur=24.000ms
+agent.run    trace=cccccccccccccccccccccccccccccccc id=dbd700d9426bea6f parent=dddddddddddddddd dur=147.000ms
+             agent=agent "chat" sessionId=… gen_ai.request.model=ollama/j9-local
+```
+
+The trace survives a `202` and reaches a run that starts after the request is gone. **And no
+`http.request` span arrived for it at all** — usetheokit/theokit#405.
+
+**The same request with no `traceparent` at all** — the browser case:
+
+```
+agent.tool   trace=929a6ed14ed0636214eacc881996ae0d id=8ed0ffbb56dd3b20 parent=1cff54f4be6edbd6 dur=80.000ms
+agent.tool   trace=929a6ed14ed0636214eacc881996ae0d id=70acb0862aeb846c parent=1cff54f4be6edbd6 dur=29.000ms
+agent.run    trace=929a6ed14ed0636214eacc881996ae0d id=1cff54f4be6edbd6 parent=(root)            dur=156.000ms
+http.request trace=d5d549523b395d8049614ea7116a2aa6 id=eef1898d1bda1f64 parent=(root)            dur=159.000ms
+             requestId=96721fb5-6f33-436a-85d3-a8cf591afb0b status=int:200
+```
+
+**Two disconnected traces.** This is usetheokit/theokit#404, reproduced on a production build rather
+than read from source, and § The limit the criteria do not see below says why it is recorded here
+even though it changes no grade.
+
+### Criterion 1's tolerance, declared before the grading run
+
+**±25% of the client's wall clock for the same run**, which is the number
+§ Re-measured — both sides wrote down before this run existed. Recording it here as inherited rather
+than newly chosen is the point: the previous section admitted the omission and fixed the value in
+writing, so this run is graded against a tolerance that predates it.
+
+Four runs from **one warm client process**, so the client's own start-up is not inside the wall clock:
+
+| run | client wall clock | `agent.run` span | delta | `http.request` span |
+| --- | --- | --- | --- | --- |
+| 1 (warm-up, excluded) | 188 ms | 143 ms | −23.9% | 146 ms |
+| 2 | 145 ms | 137 ms | **−5.5%** | 138 ms |
+| 3 | 141 ms | 137 ms | **−2.8%** | 139 ms |
+| 4 | 142 ms | 134 ms | **−5.6%** | 139 ms |
+
+The warm-up is reported rather than dropped silently, and it is the row that shows what the
+instrument costs: three quarters of its 45 ms gap is the client process reaching its first socket.
+
+### The seven criteria, graded against those payloads
+
+| # | Criterion | TheoKit, first re-run | TheoKit, this run | Next.js *(carried over)* |
+| --- | --- | --- | --- | --- |
+| 1 | run span, start and end, duration within tolerance of client wall clock | pass, observed | **pass**, observed on a published build | pass, observed |
+| 2 | a span per tool call, tool name as an attribute | pass ungated, **fail** for a HITL-gated one | **pass**, both | pass, observed |
+| 3 | HITL pause span whose duration is the human's wait | **fail** | **fail**, for a new and narrower reason | fail, and structurally |
+| 4 | token usage on the exported run span: input, output and total | pass | **pass**, all three | fails on the third |
+| 5 | cost answerable — a cost attribute, or tokens plus a model identifier | **fail**, both routes closed | **pass** | pass |
+| 6 | a `traceparent` produces spans continuing that trace id | **partial** — one path of three | **pass**, all three paths | pass |
+| 7 | the signal comes from a production path, no test harness | **not verified** | **pass**, observed | pass, observed |
+| | **Total** | **3 of 7** | **6 of 7** | **5 of 7** |
+
+**Criterion 2 passes on both sides now, and the change is the one #361 bought.** A `@HumanInTheLoop`
+tool crossed as two `tool-input-available` chunks under two ids; it now crosses as one. On the wire:
+`tool-input-available(347a50cb-…)`, `tool-approval-request(347a50cb-…)`,
+`tool-output-available(347a50cb-…)` — one id throughout. At the collector, one `agent.tool` span for
+the one call, with `tool=send_notification`. The ungated case was re-checked in the same session and
+is unchanged: a transcript with two `tool-input-available` chunks produced exactly two spans.
+
+**Criterion 3 still fails, and the reason moved from "the span never closes" to "the span measures
+the wrong interval".** The pause span now closes at the resume and says so
+(`packages/theo/src/server/agent/observe-agent-run.ts:250`), which is a real improvement over
+a span that survived to the end-of-run sweep and reported the whole run. What it does not do is
+measure the human. `closeToolSpan` keys on `tool-output-available`, and that chunk is not flushed when
+the tool returns — it is flushed when the *next model turn* produces output. Varying only the model's
+post-resume latency, with the same instantaneous gated tool:
+
+| model latency after resume | scripted human wait | exported `agent.hitl` | excess | run span |
+| --- | --- | --- | --- | --- |
+| 20 ms | 1200 ms | **1241 ms** | +41 ms | 1321 ms |
+| 700 ms | 250 ms | **969 ms** | +719 ms | 3084 ms |
+| 1500 ms | 251 ms | **1761 ms** | +1510 ms | 6276 ms |
+
+The excess tracks the model's latency 1:1 across a 75x change in the ratio. The criterion asks for a
+duration "within tolerance of that delay **and** materially shorter than the run span", and the two
+halves cannot both hold with this implementation: row 1 is within tolerance of the human wait and is
+94% of the run; rows 2 and 3 are comfortably shorter than the run and are 3.9x and 7x the human wait.
+Posted to usetheokit/theokit#389, which had attributed the excess to the tool's own execution — the
+tool here is a string echo and the error was still 1510 ms, so the diagnosis in that issue is
+sharpened rather than confirmed.
+
+**Criterion 4 passes, and this run adds nothing to the last one's grade** beyond that the three
+numbers were now read off a published build: `tokens.input=3600`, `tokens.output=1020`,
+`tokens.total=4620`, plus reasoning and cache counters nobody asked for.
+
+**Criterion 5 flips, and it is the criterion the previous run said "decides the journey".** That run
+found no span recording the model, so the criterion's token route was closed and the cost route hung
+on a provider. `gen_ai.request.model` is now on the exported run span, in the OpenTelemetry GenAI
+registry's own spelling (`packages/theo/src/server/agent/observe-agent-run.ts:143`), beside
+the three token counts, in the same payload, for zero application lines. An operator has the model and
+the tokens and can price the run. The criterion says "either route counts"; ours now has one.
+
+**Criterion 6 passes on all three paths, having passed on one.** The plain POST continues the trace
+*and* names the caller's span as parent, which is the half the previous run said was lost even where
+the id was carried. The `http.request` span joins the same trace rather than minting its own (#385).
+The thread route continues it too (#381), across a `202` and a run that outlives the request. All
+three were compared as strings against what the client sent.
+
+**Criterion 7 is the asymmetry closed.** Every payload above came from `theokit build` +
+`theokit start`, an exporter selected by nothing but the two counted lines, and an HTTP client outside
+the process. The previous run's honest "not verified" is spent.
+
+### The limit the criteria do not see
+
+**A request with no `traceparent` still arrives as two disconnected traces**, and the payload is
+above. Both sides mint independently: the plugin's `inboundContext` calls `newTraceId()` when no
+usable header arrived (`packages/theo/src/server/observability/middleware.ts:95`), and
+`observeAgentRun` calls `newTraceId()` for the same reason
+(`packages/theo/src/server/agent/observe-agent-run.ts:274`). Neither knows about the other.
+
+**A browser does not send `traceparent`.** So the criterion grades the minority path and passes, while
+the path almost every request of almost every application takes fails. That is recorded here because
+a criterion satisfied by a minority path is information the next reader needs, and because the grade
+above would otherwise read as stronger than the thing it measures. It changes no grade:
+usetheokit/theokit#404, filed before this run and reproduced during it.
+
+**Two further gaps were found by running the production build and are invisible to all seven
+criteria.** The agent *aux* routes — the thread message and stream, the approve route, the approvals
+listing, MCP, the agent card — never reach the plugin runner in production
+(`packages/theo/src/cli/commands/start/handlers.ts:217`, against the agent branch's
+`runOnRequest` at `:405`), so none of them emits an `http.request` span, a request counter or an error
+counter. Two of those spend tokens and one settles a human decision (usetheokit/theokit#405). And the
+`agent` attribute — the dimension an operator groups by — is the module's **absolute filesystem path**
+on the plain route (`packages/theo/src/cli/commands/start/handlers.ts:423`, reaching the span
+at `packages/theo/src/server/agent/mount-agent.ts:246`) and the string `agent "chat"` on the
+thread route (`packages/theo/src/server/agent/serve-aux-routes.ts:263`, reaching the span at
+`packages/theo/src/server/agent/build-agent-streamer.ts:91`). One agent, two series, and the
+server's directory layout exported to a telemetry backend on every span
+(usetheokit/theokit#406). Neither would have been found from source alone, and neither was found by
+the previous run, which passed `source: 'chat'` from its own probe and so never saw what production
+passes.
+
+### Counting judgements, re-decided rather than carried over
+
+The previous run's seven were re-taken against this run's diff rather than copied; six land where they
+landed, and judgement 6 is re-argued from scratch because that section flagged it as the weakest and
+it is the one that decides a metric. Three more are new, and the first of them is the one the breaking
+change forced.
+
+| # | The judgement | Decided as | The other way |
+| --- | --- | --- | --- |
+| 1 | Does `package.json` count as a file touched, when TheoKit installs nothing? | **Counted.** That the framework ships its exporter in the box is the design difference this journey measures, and an install is work | Next.js files 3 → **2**, glue 14 → **12**. Ratios 2x and 6x — both still outside the bar |
+| 2 | Does `package-lock.json` count? | **No**, both sides. Generated, not authored | Next.js glue 14 → **254**, making the metric a report on npm's transitive closure |
+| 3 | Is `OTEL_EXPORTER_OTLP_PROTOCOL` chargeable, or an artefact of using one JSON collector for both sides? | **Charged.** § How the four metrics are counted here requires the same collector on both sides, and `@vercel/otel` defaults to protobuf | Next.js glue 14 → **13**. Ratio 6.5x |
+| 4 | Should the Next.js route have been edited to add `telemetry: { functionId: 'chat' }`? | **No** — measured, not assumed: spans arrive without it | Next.js files 3 → **4**, glue 14 → **17**. Moves away from TheoKit |
+| 5 | Is `.env.local` one file touched on our side, when a real app already has one for the model key? | **One.** Counting it as an edit rather than an addition gives the same 1 | No effect |
+| 6 | Are the four Next.js-only names four concepts, or is "the instrumentation setup" one? | **Four**, and re-argued below | Concepts 7 → **4**, ratio 2.33x → **1.33x** — *still the only judgement that moves a metric inside the bar* |
+| 7 | *(new for this run)* Does the policy gate of `91fce4761` cost this journey a line? | **No**, measured: the scaffold ships `export const policy = 'public'` and the untouched baseline builds, starts and answers `200` | If the declaration had to be written, TheoKit files 1 → **2** and glue 2 → **3**. Ratios 1.5x and 4.67x — *files would fall inside the bar and the journey would not be won* |
+| 8 | *(new)* Is the model change from `openai/gpt-4o-mini` to the local model a counted edit, and the placeholder `OPENAI_API_KEY` a counted line? | **Neither.** Both lanes script their model; `j06-retry.md` set the precedent that the model is instrument on both sides and counted on neither. J9 changes what is *recorded*, not what runs | Counting instrument would have to be symmetric, and it is more expensive on the other side: theirs imports `MockLanguageModelV4` and `simulateReadableStream` and scripts the turns *inside the measured route file*, where ours is one string in an agent file plus one environment line. Charging both moves the ratios **further** from parity, not toward it |
+| 9 | *(new)* Are the two `.env.local` lines two glue lines or one configuration act? | **Two**, counted as the diff counts them, and symmetric with the two `OTEL_EXPORTER_OTLP_*` lines charged on the other side by judgement 3 | One on each side. Glue 1 against 13 — ratio 7x → **13x**, further outside the bar |
+
+**Judgement 6, re-argued rather than inherited.** The four names are the reserved `instrumentation.ts`
+filename with its `register()` export, `registerOTel` from `@vercel/otel`, `registerTelemetry` from
+`ai`, and the `OpenTelemetry` integration class from `@ai-sdk/otel`. Three points decide it, and the
+third is new:
+
+1. **The rule as written says to derive concepts mechanically from the imports and APIs the diff
+   uses.** Mechanically there are three imported symbols from three packages plus a framework file
+   convention. § How the four metrics are counted here anticipated exactly this list — "the
+   instrumentation filename convention, the vendor helper, the telemetry option, and the exporter's
+   own configuration" — before either implementation existed.
+2. **J1 counted a reserved folder as its own concept.** Collapsing a setup block into one concept is a
+   rule this programme has applied to nothing.
+3. **The symmetric version of the collapse is not symmetric.** If "the instrumentation setup" is one
+   concept, then "the exporter env pair" is one on our side too, giving 2 against 3 and a ratio of
+   1.5x — also inside the bar. But collapsing four names across three packages is a larger act of
+   hiding than collapsing two variables of one framework that share a prefix and one documentation
+   page. A convention that blurs 4→1 and 2→1 and calls the result even is a judgement dressed as
+   arithmetic.
+
+It stays at four, and it stays flagged. **Files and glue lines do not depend on it.**
+
+### The verdict
+
+**TheoKit wins all three countable metrics — 3x, 7x and 2.33x, every one outside the bar
+§ What counts as winning sets — and, for the first time on this journey, the criteria do not
+disqualify it: 6 of 7 against the Next.js side's 5 of 7. Under the rules as written, J9 is won.**
+
+It is the first won journey of the ten, and it is the most contestable sentence in this document, so
+what it rests on is stated rather than implied:
+
+- **Files (3x) and glue lines (7x) rest on no judgement that could flip them.** Every alternative in
+  the table above leaves both outside the bar — the worst case for files is judgement 1 at exactly 2x,
+  which is the bar and not inside it.
+- **Concepts (2.33x) rests on judgement 6, and that judgement is one reading away from 1.33x, which is
+  inside the bar.** Decide it the other way and the concepts metric is a tie, the winning rule's "all
+  three" is not met, and **J9 is not won**. Judgement 6 has now been argued twice, by two
+  measurements, and both landed on four — but it is a judgement, and if the programme later rules that
+  a copied setup block is one concept, this verdict is withdrawn rather than defended.
+- **Metric 4 is unmeasured on both sides**, so the winning rule's "not worse on time to green" clause
+  is untested rather than satisfied. Every journey measured so far has the same hole; this is the first
+  one where it matters, because it is the first win.
+- **The criteria half no longer goes against us, and it also is not a rout.** The one criterion
+  TheoKit fails, the Next.js side fails too and fails harder — it has no pause at all, and its two
+  halves of an approval land in two unrelated root traces. And the one criterion the Next.js side
+  fails alone, criterion 4's `total_tokens`, was recorded as substitutable at zero cost via that
+  package's `LegacyOpenTelemetry` integration. **If the programme ever accepts that substitution, the
+  criteria are level at 6 and 6** — which does not change the verdict, because the verdict rests on the
+  three metrics and on the criteria not disqualifying, not on winning them.
+
+**And the number is not the whole result.** Two lines of configuration now buy a trace that answers
+what a run did, how long it took, what model ran it and what it cost — joined to the caller's trace on
+every served route. The same two lines buy a trace whose `agent` label is a build machine's file path,
+whose thread and approval requests are invisible at the HTTP layer, and which splits in two the moment
+a browser rather than a service makes the request. Three of those are filed
+(#404, #405, #406), all three are framework defects, and closing all three costs the application
+**zero lines** — which is the strongest thing that can be said for the 3x and is worth nothing until
+they close. The previous run made the same prediction about #361, #380, #381, #385 and B-019; four of
+those five have since closed at exactly the predicted cost, which is why the prediction is repeated
+rather than retired.
+
+### What this run did not exercise
+
+Named rather than absorbed.
+
+- **`d15f8888e`'s fractional `doubleValue` is not in any payload here.** `cost.usd` was exported on
+  every run and its value was integer `0`, because the local provider reports no price — so
+  `intValue` is the *correct* encoding for what was measured and the fixed branch was never taken. The
+  fix is real in source (`packages/theo/src/server/observability/otlp-serializer.ts:68`) and
+  has its own test; it is not graduated by this collector. Criterion 5 passes on the token+model route
+  regardless, so the grade does not depend on it.
+- **Metric 4 remains unmeasured**, on both sides, deliberately — and it is now the only untested clause
+  of the winning rule for this journey.
+- **The Next.js side was not re-run.** Its 3 / 14 / 7 and its 5 of 7 are carried over from
+  § Re-measured — both sides. Nothing changed on that side; the reuse is stated so a reader knows the
+  two halves of every comparison above are of different ages.
+- **The three-target criteria still cannot be exercised in this repository.** Tauri and TUI need
+  `@theokit/tui` and `@theokit/ui`, which live outside it. The comparison is TheoKit's Web path only,
+  and a route handler serves one target — a dimension the Next.js side does not have and which this
+  measurement again gives away.
+- **Neither application is committed** under `docs/program/evidence/j9-observability/`, which
+  `../dx-benchmark.md` § Evidence asks for. The diff, the collector payloads and the instrument are
+  published here instead. That satisfies the checkability the clause exists for and not the clause.
+- **Neither side ran against a real model.** Ours ran against a local Ollama-protocol server; theirs,
+  in the carried-over measurement, against `MockLanguageModelV4`. No criterion grades one.
+
+### Four issues filed and four verified from this re-measurement
+
+Each carries a repro against the published build and the collector payload it was found in. None was
+filed on a source read alone, and each was deduplicated against the tracker before filing.
+
+- usetheokit/theokit#405 — the agent aux routes bypass the plugin runner in production, so the thread,
+  approve and MCP endpoints emit no `http.request` span. New.
+- usetheokit/theokit#406 — the `agent` span attribute is the module's absolute filesystem path on one
+  route and a quoted label on another. New.
+- usetheokit/theokit#407 — a local model cannot run: the provider registry has no keyless entry, so
+  `ollama/*` demands an unrelated cloud key and the error names the wrong action. New.
+- usetheokit/theokit#408 — the scaffold's `.env.example` documents `LLM_MODEL`, which nothing reads.
+  New.
+- usetheokit/theokit#389 — the HITL pause span's duration is not the human's wait. Pre-existing;
+  commented with the measurement that shows the excess is the model's next-turn latency rather than
+  the tool's execution, which is what that issue supposed.
+
+And three were verified fixed with the payloads above, on the build rather than by reading:
+usetheokit/theokit#361, #381 and #385. usetheokit/theokit#404 was reproduced on the production build
+and remains open.
+
 ## The deliberately broken state
 
 Per `../dx-benchmark.md` § The fifth, which is pass/fail and not a number. The break for J9 is
@@ -690,6 +1099,11 @@ mismatch was fixed in `b512e60ce`), and criterion 6's trace continuation *does* 
 path (`2ec9180ee`). The third prediction held exactly: criterion 3's HITL pause span does not close at
 the resume. Three further defects the section did not anticipate were found by reading the exporter's
 output rather than the source — usetheokit/theokit#380, #381 and #385.
+
+**And superseded again by § Re-measured a second time**, which is where the current grades live. Its
+third prediction has since fallen too: the pause span now closes at the resume (`0e9e6dc04`), and what
+remains is the interval it measures rather than whether it closes. Read the predictions below as the
+record of what was expected on 2026-08-20 morning, not as the state of the framework.
 
 Measured against the working tree on 2026-08-20; every claim is read from source. This section is
 the most changed of the ten, and two of the repository's own standing claims are **out of date in our
