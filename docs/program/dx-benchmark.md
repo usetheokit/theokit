@@ -103,6 +103,23 @@ baseline and the published diffs are in [J1's criteria file](journeys/j01-tool.m
 not the benchmark, and a tie on the simplest of the ten is the kind of early number this protocol
 exists to make visible rather than to absorb.
 
+**J5 has both sides now, and it is also a tie - measured 2026-08-20.** Two of ten, and the second
+contrast lands harder than the first. On the three countable metrics the two sides are level: 2
+files against 2, 8 glue lines against 8, 5 concepts against 6 - 1.0x, 1.0x and 1.2x, every one of
+them inside the bar § What counts as winning sets, and three declared counting decisions each move a
+metric to the Next.js column. Worse, the journey's own criteria are not symmetric: TheoKit satisfies
+three of five, because **an application's declared step ceiling never reaches a served run from
+either authoring path** - the fluent builder has no method for it, the decorator's value is dropped
+before the adapter builds its options, and the loop that enforces one is not on the served path at
+all. Next.js satisfies all five, and the option that satisfies them is the same one that enables the
+chain. The full measurement, both published diffs, the six declared judgements and the confirmed AI
+SDK version facts are in [J5's criteria file](journeys/j05-multi-step.md).
+
+**Two journeys measured, two ties, and neither goes our way on a single metric by a margin outside
+noise.** The goal states "win all ten by a margin outside noise". Two of ten are in, and the
+framework has not yet won one - which is the kind of early number this protocol exists to make
+visible rather than to absorb.
+
 **One thing this re-measurement should not be read as.** J9 being unblocked means it can be scored;
 it does not mean it will score well. A journey that is newly possible and a journey that is
 comfortable are different claims, and the second is exactly what the benchmark exists to test rather

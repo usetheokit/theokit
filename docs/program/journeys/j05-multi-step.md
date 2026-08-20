@@ -108,7 +108,8 @@ journey, and hiding retries would turn it into a finding about the framework.
 **Three of four metrics, one side, and three of five criteria.** Criteria 1 to 3 - the chain itself -
 were implemented and counted. Criteria 4 and 5 - the declared step ceiling - have no implementable
 path, so they contribute no number and the reason is stated below rather than averaged away. Metric
-4 and the whole Next.js side are unmeasured.
+4 is unmeasured; the Next.js half is measured in the section that follows, and the two are put side
+by side in the section after that.
 
 Obtained from a real diff, not an estimate: the scaffold template was copied verbatim and committed
 as an untouched baseline, J1's implementation was applied on top as a second uncounted commit - per
@@ -187,18 +188,278 @@ flowing.
 ceiling never reaches the served run; the run that would show it stopping at the framework default
 instead of the declared number was not performed, and the SDK's default is itself unread.
 
-**The Next.js side does not exist yet.** Until it does, nothing here is a comparison, and the
-winning rule cannot be applied. § The Next.js side predicts this is where the other stack writes the
-least code, so a 2-file, 8-glue-line count settles nothing on its own.
+**The Next.js side did not exist when this half was written.** It does now - measured the same day,
+in § Measured - Next.js side, metrics 1-3 - so the comparison this paragraph deferred is in
+§ The two sides compared rather than outstanding. What the paragraph got right is that a 2-file,
+8-glue-line count settles nothing on its own; what it expected, that the other stack would write the
+least code here, is not what the diff showed.
 
 **The three-target criteria cannot be exercised in this repository.** The Tauri and TUI lines need
 `@theokit/tui` and `@theokit/ui`, which live outside it (`.claude/rules/three-target-parity.md`
 records the same limit). What settles them is the north-star app
 (`.claude/rules/northstar-app.md`), which does not exist yet.
 
-**So: J5 is not won, not tied, and not run.** Three of its five criteria have a measured cost on one
-side; the other two have no path at all, which is a finding about the framework rather than a number
-about the benchmark.
+**So: this half is measured and not run.** Three of its five criteria have a measured cost; the other
+two have no path at all, which is a finding about the framework rather than a number about the
+benchmark. Whether the journey is won is settled against the other side, below.
+
+## Measured - Next.js side, metrics 1-3 (2026-08-20)
+
+**The other half, measured the same day by the same rule**, on the same throwaway app the J1
+Next.js measurement used - so the J5 delta sits on a committed J1 state rather than on a
+reconstruction, which is the mirror of what the TheoKit side did with its own J1 commit. The app
+builds and typechecks; it was never run against a model, and § What is still unmeasured says so.
+
+### The version-specific facts, confirmed against the source
+
+§ The Next.js side above deferred two questions to implementation time, both about the step ceiling.
+Both were read - from the installed package's own type declarations and from the quickstart the docs
+site publishes - rather than remembered.
+
+| Deferred question | Answer | Read from | Diverged from the supposition? |
+| --- | --- | --- | --- |
+| The current spelling of the step ceiling - a plain maximum-steps number, or a composable stopping condition | A composable stopping condition. `stopWhen` takes a `StopCondition`, and `isStepCount(n)` is the built-in that expresses a count. The same function is also exported under the alias `stepCountIs`, so both spellings compile against `ai@7.0.70` | the installed `ai` package's declaration of `isStepCount`, and its export list, which re-exports it as `stepCountIs` | **No.** The section predicted the two shapes and named the later one correctly; what it did not predict is that the older-sounding alias still resolves |
+| Whether the default permits more than one step without configuration | **It does not.** `stopWhen` defaults to `isStepCount(1)` on both `generateText` and `streamText`, so a tool call ends the generation and the result never reaches the answer. The `Agent` class defaults to `isStepCount(20)` instead - a different default on a different surface | the `@default` annotations on the `stopWhen` field of each options type in the installed package | **No**, and it matters more than the spelling: the quickstart opens its multi-step section with the symptom, "the model isn't using this information to answer your original query", which is this journey's criterion 3 failing |
+
+**The official example for this journey exists and is the one used.** The AI SDK Next.js App Router
+quickstart - the same document J1 cited - carries a section titled *Enabling Multi-Step Tool Calls*
+and, immediately after it, *Add another tool*, whose whole point is a second tool that consumes the
+first tool's output: the weather tool returns a Fahrenheit temperature, and
+`convertFahrenheitToCelsius` takes `temperature` as its input. That is J5, written by the vendor of
+the other side, and § Why the protocol comes before the measurement requires it be used rather than
+improved on. The implementation below is that section with the two tools renamed to the ones this
+journey's criteria randomize.
+
+Versions under test are J1's, unchanged: `next@16.3.1`, `ai@7.0.70`, `@ai-sdk/react@4.0.73`,
+`zod@4.4.3`, Node 22.
+
+### The baseline, declared
+
+The same three-commit ladder as the TheoKit side, and for the same reason - a journey measured from
+a bare scaffold re-counts work another journey already counted:
+
+1. `create-next-app` (TypeScript, App Router, Tailwind) plus `npm install ai @ai-sdk/react zod`,
+   untouched.
+2. The quickstart's pre-tools chat stage - `app/api/chat/route.ts` and `app/page.tsx` pasted
+   verbatim - reformatted with the `create-theokit` Prettier config
+   (`packages/create-theokit/templates/default/.prettierrc`, `printWidth: 100`, `semi: false`) so
+   both sides are counted with one ruler. This is J1's declared baseline and its argument for
+   choosing it is not re-litigated here.
+3. J1's own diff: the `orderLookup` tool, `stopWhen: isStepCount(5)`, and the client's
+   `case 'tool-orderLookup':` branch. **Uncounted**, exactly as the TheoKit side leaves its J1
+   commit uncounted.
+
+J5 is the delta from commit 3. That placement decides one number and is declared as judgement 6
+below: `stopWhen: isStepCount(5)` was written in J1, was counted in J1, and does not change here, so
+it is not charged again.
+
+### Metrics 1-3
+
+| Metric | Next.js + AI SDK | How it was counted |
+| --- | --- | --- |
+| Files touched | **2** | `app/api/chat/route.ts` edited, `app/page.tsx` edited. Nothing added, nothing deleted - the second tool lives inline in the route file beside the first, which is where the official example puts it |
+| Glue lines | **8** | of 14 added lines; 5 are business logic and 1 is blank |
+| Concepts required | **6** | `tool`, `z.object`, the `tools` map on `streamText`, the `tool-${toolName}` part-type convention, plus `stopWhen` and `isStepCount` - the last two charged by this journey's own rule, see judgement 2 |
+| Time to first green run | **not measured** | needs a live model call, on both sides; see below |
+
+**Zero lines feed a tool result back to the model here too, and the zero is not free.** § How the
+four metrics are counted here asks for that zero explicitly, and the AI SDK earns it the same way
+ours does: the loop that sends the first tool's result back for the second call is the SDK's. The
+difference is that the AI SDK charges one line of configuration for permission to run that loop at
+all, and J1 already paid it.
+
+### The diff, published
+
+`git diff` between the J1 commit and the J5 commit, verbatim.
+
+```diff
+diff --git a/app/api/chat/route.ts b/app/api/chat/route.ts
+@@ -14,6 +14,11 @@ const SHIPPING_REFERENCES: Record<string, string> = {
+   'A-1002': 'SHIP-9Q4M-8871',
+ }
+
++const ETA_DAYS: Record<string, number> = {
++  'SHIP-7F3K-2210': 2,
++  'SHIP-9Q4M-8871': 5,
++}
++
+ export async function POST(req: Request) {
+   const { messages }: { messages: UIMessage[] } = await req.json()
+
+@@ -29,6 +34,14 @@ export async function POST(req: Request) {
+         }),
+         execute: async ({ orderId }) => SHIPPING_REFERENCES[orderId] ?? `No order ${orderId}.`,
+       }),
++      shipmentEta: tool({
++        description:
++          'Get the delivery ETA in days for a shipping reference returned by orderLookup.',
++        inputSchema: z.object({
++          shipmentRef: z.string().describe('A shipping reference, e.g. "SHIP-7F3K-2210"'),
++        }),
++        execute: async ({ shipmentRef }) => ETA_DAYS[shipmentRef] ?? `No ETA for ${shipmentRef}.`,
++      }),
+     },
+   })
+
+diff --git a/app/page.tsx b/app/page.tsx
+@@ -16,6 +16,7 @@ export default function Chat() {
+               case 'text':
+                 return <div key={`${message.id}-${i}`}>{part.text}</div>
+               case 'tool-orderLookup':
++              case 'tool-shipmentEta':
+                 return <pre key={`${message.id}-${i}`}>{JSON.stringify(part, null, 2)}</pre>
+             }
+           })}
+```
+
+**The 14 added lines, classified.**
+
+Glue (8): in `route.ts`, `shipmentEta: tool({`, the two lines the `description` occupies,
+`inputSchema: z.object({`, the `shipmentRef` field line, and the two closing lines that finish the
+schema and the tool literal; in `page.tsx`, the `case 'tool-shipmentEta':` label, which falls
+through to the branch J1 already wrote.
+
+Business logic (5): the `ETA_DAYS` table and the `execute` body - deliberately the same five lines
+of substance as the TheoKit side, mapping the same shipping references to the same day counts, so
+that what the two counts differ by is ceremony and nothing else.
+
+Blank (1).
+
+**The dependency is typed, and the typing was checked rather than assumed.** `execute` receives
+`{ shipmentRef: string }` inferred from the Zod `inputSchema`; annotating that parameter as
+`{ shipmentRef: number }` is a compile error (`TS2769`, the overload rejects the schema/handler
+pair), and `next build` runs the typecheck. So the field that carries the chain - the one criterion 1
+randomizes a value through - is a declared contract on this side, as it is on ours.
+
+### Counting judgements, stated rather than buried
+
+Six. Three of them change which side leads a metric. None of them produces a TheoKit win, which is
+the fact this table exists to make checkable rather than assertable.
+
+| # | The judgement | Decided as | The other way |
+| --- | --- | --- | --- |
+| 1 | The `description` occupies two lines on the Next.js side and one on ours, because the tool literal is nested four levels inside `streamText` while the TheoKit tool file is top-level, and Prettier wraps at 100 columns | **Counted as two glue lines** - what the diff contains, under the shared ruler both baselines were formatted with | Next.js glue 8 to **7**, and Next.js *leads* glue lines 7 to 8. This is the judgement most favourable to TheoKit in the whole count, and it is an artefact of indentation depth rather than of authoring effort |
+| 2 | `stopWhen` and `isStepCount` are charged to the Next.js concept count although neither appears in the J5 diff - both were written in J1 | **Charged.** § How the four metrics are counted here says, in advance, that *the ceiling's name counts as a concept on both sides*. The clause presumes both sides have a ceiling to name; only one does, and the clause is applied to the side that does | Counting only what the J5 diff textually uses gives Next.js **4**, which *leads* concepts 4 to 5 - flipping the only metric TheoKit currently leads, and by 1.25x rather than 1.2x |
+| 3 | Is `const ETA_DAYS: Record<string, number>` glue or logic? | **Logic** - J1's judgement 2, applied for the third time across two journeys and now on both sides of this one | Both sides move together: Next.js 9/4, TheoKit 9/4. No effect on the comparison |
+| 4 | Does the client edit belong to J5? Criterion 1's oracle reads the transcript, not the rendered surface, so `case 'tool-shipmentEta':` is not what makes the criteria pass | **Counted anyway**, for J1's reason: the official example includes it, and the protocol requires the official example be used | Next.js files 2 to **1**, and Next.js *leads* files touched by exactly 2x - the bar § What counts as winning sets, reached from the wrong side |
+| 5 | Criteria 4 and 5 are reported on the TheoKit side as *no path*, not as a large number | **Kept as no path**, per the TheoKit section's own reasoning: a cost nobody can pay is not a cost | See § The ceiling, and the path that is not a number - the alternative is not a bigger number, it is an unbounded one |
+| 6 | Is `stopWhen: isStepCount(5)` a J5 glue line? It is what makes the chain legal, and this journey is the chain | **No** - it was written and counted in J1, and this journey's rule excludes J1 work reused unchanged. The same rule excludes TheoKit's `orderLookupTool` | Next.js glue 8 to **9**, and TheoKit leads glue lines 8 to 9 by 1.125x - still inside the bar, still a tie |
+
+## The ceiling, and the path that is not a number
+
+Criteria 4 and 5 are two of this journey's five, and they are the reason § Current state predicted
+this measurement would be interesting. They are also where the two sides stop being comparable, so
+the asymmetry is named here rather than folded into a metric.
+
+**On the Next.js side the ceiling is the same option that enables the chain.** `stopWhen` is a
+first-class argument to `streamText`; setting it to `isStepCount(1)` is criterion 4's configuration,
+and the default already *is* `isStepCount(1)`, read from the installed package. Criterion 5 - that
+the ceiling the application declares is the one the served run uses - is satisfied because there is
+exactly one place the value is read. The marginal cost for J5 is zero because J1 paid it, and the
+absolute cost is one line.
+
+**On the TheoKit side there is no declaration to make on the path the scaffold generates.** The
+fluent `AgentBuilder` interface (`packages/agents/src/bridge/agent-builder.ts:125` through its
+closing `build` at `:291`) carries no ceiling method, and the scaffold writes that builder
+(`packages/create-theokit/templates/default/agents/chat.ts:21`). The TheoKit section above already
+recorded this. What this measurement adds is the answer to the question
+[#363](https://github.com/usetheokit/theokit/issues/363) left open, because the benchmark needed it:
+
+**the ceiling does not reach a served run from either authoring path.** The decorator path does
+declare it (`packages/agents/src/capability/agent-capabilities.ts:238`) and the compiled agent does
+carry it (`packages/agents/src/bridge/agent-compiler.ts:287`). But an HTTP run reaches
+`streamAgentUIMessages` (`packages/agents/src/bridge/agent-endpoint.ts:219`), which assembles its
+runtime overrides field by field (`:225` onward) and calls `createSdkAgentStream` directly (`:239`);
+the adapter then builds the SDK's create-options from scratch
+(`packages/agents/src/bridge/sdk-adapter.ts:512`) and its extras helper
+(`packages/agents/src/bridge/sdk-adapter.ts:143`) never mentions `maxIterations`. The enforcement
+lives in the reflective loop (`packages/agents/src/loop/run-reflective-loop.ts:537`, with the
+`step_limit` reason at `packages/agents/src/loop/loop-strategy.ts:23`), and `runReflectiveLoop` has
+**zero references anywhere in `packages/theo/src`**. So the served path never touches the code that
+enforces a ceiling, and the effective limit on `POST /api/agents/<name>` is whatever the underlying
+SDK does by default - which was not read here, and does not need to be: criterion 5 grades that the
+*declared* number is the observed one, and nothing declared reaches the run.
+
+**A path that honours a ceiling does exist, and using it means leaving the framework's own mount.**
+`AgentRunner` is public (`packages/agents/src/loop/index.ts:10`, re-exported from the package root
+at `packages/agents/src/index.ts:21`), it drives the reflective loop, and it takes a per-run ceiling
+(`packages/agents/src/loop/agent-runner.ts:127`, applied at `:271`). But it yields a stream of
+events, not an HTTP response, and `streamAgentUIMessages` offers no seam to inject it - it
+constructs its own source. An application that wants criteria 4 and 5 must therefore write the
+transport that `mountAgent` (`packages/theo/src/server/agent/mount-agent.ts:167`, 279 lines) and
+`streamAgentUIMessages` (300 lines) already provide: the wire format, the HITL pause, the session
+plumbing.
+
+That is why judgement 5 refuses to turn this into a glue-line number. A number implies a developer
+could pay it and get the journey; what they would get is a second serving path to maintain, and the
+framework's own one unused. **The honest entry is that the framework can cap a loop and cannot cap a
+served one**, and that is a finding about the framework rather than a figure about the benchmark.
+
+## The two sides compared
+
+| Metric | TheoKit | Next.js + AI SDK | Better | Ratio | Verdict under § What counts as winning |
+| --- | --- | --- | --- | --- | --- |
+| Files touched | 2 | 2 | neither | 1.0x | **Tie** - an exact tie, not a narrow one |
+| Glue lines | 8 | 8 | neither | 1.0x | **Tie** - an exact tie, and judgement 1 moves it to Next.js |
+| Concepts required | **5** | 6 | TheoKit | 1.2x | **Tie** - inside the 2x bar, and judgement 2 moves it to Next.js |
+| Time to first green run | not measured | not measured | - | - | not applicable |
+| Criteria satisfied | **3 of 5** | 5 of 5 | Next.js | - | not a countable metric, and the most important line in the table |
+
+**J5 is a tie on cost that TheoKit cannot cash.** The three countable metrics come out at 1.0x,
+1.0x and 1.2x - inside the noise bar on every one, so the winning rule's first condition fails
+before its 2x threshold is even reached. And unlike J1, where both sides satisfied every criterion
+at different prices, here the prices are the same and only one side satisfies the journey.
+
+The prediction in § The Next.js side was that this would be *the shortest code on either side* for
+Next.js. It was wrong about the code and right about the reason: the AI SDK's chain costs the same
+eight glue lines ours does, because both runtimes close the loop for the developer. Where the two
+sides actually diverge is not the chain at all - it is the containment around it, which the
+countable metrics were never going to see.
+
+**Where the comparison is not apples to apples.** Named rather than adjusted for:
+
+- **The ceiling is a metric on one side and an absence on the other.** Next.js spends one line
+  (in J1) and two concepts; TheoKit spends nothing and gets nothing. A reader who takes the concepts
+  row at face value reads TheoKit as 1.2x leaner, when one of the two concepts it saves is the one
+  that would have made criteria 4 and 5 pass.
+- **One file or two, again.** The TheoKit tool must be its own file under a folder convention; the
+  AI SDK tool sits inline beside the first. On J1 that cost TheoKit a file; on J5 it costs nothing,
+  because both sides touch two files - ours a new tool file plus the agent, theirs the route plus
+  the client.
+- **The client edit still has no TheoKit counterpart.** Ours renders a new tool through the shared
+  presenter with no client change; theirs adds a case label per tool. One line here, two in J1, and
+  the same two designs behind both numbers.
+- **Neither side was run.** Metrics 1-3 come from the diffs, which is what the counting rule
+  specifies. Criterion 1's randomized-value oracle has still never been watched flowing on either
+  side.
+
+### What is still unmeasured, and why
+
+**Metric 4 (time to first green run) needs a live model call**, at least three times, cold cache, on
+both sides. That spends real credits, and the figure is only meaningful measured identically on each
+side. This journey additionally requires reporting the retries when the model declines to chain -
+and a retry count cannot exist without runs. Nothing in the result above depends on it: the winning
+rule needs TheoKit better on all three countable metrics, and it is better on none of them by a
+margin outside noise.
+
+**Neither implementation was executed.** The Next.js app builds, typechecks, and its second tool's
+input type is inferred from the schema; it was never pointed at a model, because no gateway key was
+available in this environment. Criteria 1 to 3 therefore remain graded as a design on both sides,
+and criteria 4 and 5 are graded from source rather than from a stopped run.
+
+**Neither application is committed.** § Evidence asks for both implementations under
+`docs/program/evidence/jN-<journey>/`; that directory does not exist and this measurement did not
+create it. The diffs and the counts are published here instead, which satisfies the checkability the
+clause exists for and does not satisfy the clause - recorded as an open gap, identically to J1, and
+now twice rather than once.
+
+**The three-target criteria cannot be exercised in this repository**, for the reason the TheoKit
+section already gave. Note again what the comparison silently gives away: a route handler serves one
+target, and J5 was counted against TheoKit's Web path only.
+
+**So: J5 is a tie on the three countable metrics, and it is not won.** It is a worse result than J1,
+which was also a tie - because there the framework merely cost more than expected, and here it costs
+the same and does two-fifths less.
 
 ## The deliberately broken state
 
