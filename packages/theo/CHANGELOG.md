@@ -1,5 +1,23 @@
 # theo
 
+## 0.49.0
+
+### Minor Changes
+
+- Wave 0.5 of the framework-parity programme: the subsystems that shipped built, tested and unreachable are now wired, and the ones that could not be wired were deleted rather than left to look present.
+
+  **Access control is the same decision on every transport.** A route can declare `policy`, and the Node executor, the Web executor and the in-process caller all evaluate it from one function — so a route reached from a desktop shell or a terminal gets the decision it would get from a browser. It ran no authorization at all in-process before. `requireOwner` answers "may this subject touch this record" once, where every action used to answer it alone.
+
+  **BREAKING: `executeWebRequest` enforces CSRF unless it is explicitly turned off.** Omitting `csrfMode` used to mean no check. A route opts out per-route with `csrf: false`, which that executor now honours — the public contract had always promised it and only the Node executor delivered. See `MIGRATION.md`.
+
+  **An agent run emits telemetry.** Spans for the run, each tool call, each human-in-the-loop pause, and the token usage and cost, read off the wire stream the agent already emits. The exporter drains on its interval and on SIGTERM instead of accumulating forever, and bounds what it holds. Production also stops discarding an incoming W3C `traceparent`, and the correlation header it falls back to is validated before it reaches the logs.
+
+  **The cache subsystem works.** `revalidateTag`, `revalidatePath` and `updateTag` are public and threw in every application, because the engine they resolve was never initialized. It is initialized at boot, a configured `defaults` reaches it, and the `X-Theo-Cache` signal survives a production build.
+
+  **Streaming SSR serves a document.** With `ssrStreaming: true` both renderers returned a bare React tree — no `<html>`, no `<head>`, no hydration data — so a streamed page loaded no stylesheet and re-fetched everything the server had just sent.
+
+  **Routing and build output are correct.** Dynamic route precedence is compared per segment, so a request no longer reaches a generic handler past an authorization check placed on the specific route. Build-time scanners order by code unit rather than by collation, including the one that decides middleware execution order.
+
 ## 0.48.14
 
 ### Patch Changes
