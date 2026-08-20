@@ -17,6 +17,7 @@ import { join, resolve } from 'node:path'
 
 import { loadConfig } from '../../../config/load-config.js'
 import { loadEnv } from '../../../config/load-env.js'
+import { initCacheEngineFromConfig } from '../../../server/cache-bootstrap.js'
 import { createCronScheduler } from '../../../server/cron/cron-runtime-node.js'
 import { defineHealthRoute } from '../../../server/define/health-route.js'
 import { createPluginRunnerFromConfig } from '../../../server/plugins/load-plugins.js'
@@ -59,6 +60,10 @@ export async function startCommand(options: StartOptions): Promise<void> {
 
   await configureAgentRegistryFromConfig(config.agents?.registry)
   await configureStorageManagerFromConfig(config.storage)
+  // #352 — without this, `revalidateTag` / `revalidatePath` / `updateTag` throw
+  // in every application: they resolve the engine from a singleton nothing
+  // initialized.
+  await initCacheEngineFromConfig(config.cache)
 
   const distDir = resolve(cwd, '.theokit')
   const clientDir = resolve(distDir, 'client')

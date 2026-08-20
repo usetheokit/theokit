@@ -4,6 +4,7 @@ import { createServer, type Plugin, type ViteDevServer } from 'vite'
 import { loadConfig } from '../../config/load-config.js'
 import { loadEnv } from '../../config/load-env.js'
 import { validateProjectStructure } from '../../config/validate-structure.js'
+import { initCacheEngineFromConfig } from '../../server/cache-bootstrap.js'
 import { orchestrateDev } from '../../services/index.js'
 import { theoPluginAsync } from '../../vite-plugin/index.js'
 import { preflightNodeAndBindings } from '../preflight-node-version.js'
@@ -28,6 +29,11 @@ export async function startDevServer(cwd: string, options?: DevOptions): Promise
   const config = await loadConfig(cwd)
   // #95 — pass config.appDir so the structure gate honors a custom frontend dir (e.g. apps/web).
   validateProjectStructure(cwd, config.appDir)
+
+  // #352 — same engine, same config key, so `revalidateTag` behaves identically
+  // under `theo dev` and `theo start`. A cache that only exists in production is
+  // a cache nobody develops against.
+  await initCacheEngineFromConfig(config.cache)
 
   // Wave 2 (T1.1) — spawn polyglot services BEFORE Vite. Healthcheck gates
   // readiness. Empty `services: {}` → early return (Wave 1 BC preserved).

@@ -61,6 +61,19 @@ export function getCacheEngine(): CacheEngine {
 }
 
 /**
+ * Whether `initCacheEngine` has already run in this process.
+ *
+ * Exists so a caller can be idempotent WITHOUT wrapping `initCacheEngine` in a
+ * `catch`. A boot legitimately reaches this state more than once — HMR, a second
+ * server started in one process, an integration test booting twice in one worker
+ * — and catching the throw to absorb that would swallow the genuine
+ * double-initialisation bug the throw exists to report.
+ */
+export function isCacheEngineInitialized(): boolean {
+  return _engine !== undefined
+}
+
+/**
  * Test-only: clear the singleton so the next test can re-init.
  * Production code MUST NOT call this.
  */
