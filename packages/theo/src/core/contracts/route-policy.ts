@@ -55,10 +55,12 @@ export function subjectFromContext(context: unknown): RouteSubject | null {
  * such pipeline; that absence is what ADR 0001 exists to close.
  *
  * An undeclared policy returns `allowed` and is NOT the same thing as `'public'`.
- * Making absence deny would break every existing route in every consumer at once,
- * and the ADR routes that through a build-time gate plus a migration rather than
- * through a silent runtime flip. Absence is reported by `hasDeclaredPolicy` so a
- * gate can find it; it is not reinterpreted here.
+ * Absence is refused where an application DECLARES its routes — the file-system
+ * scanner fails the build naming the file (`MissingRoutePolicyError`) — and not
+ * here, where the argument may be a `RouteConfig` a caller built in memory and
+ * never scanned. Reinterpreting absence as denial at this point would break
+ * every direct caller of the executors at once, which the ADR routes through the
+ * build gate and a migration instead.
  */
 export async function evaluateRoutePolicy(
   policy: RoutePolicy | undefined,

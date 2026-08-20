@@ -53,8 +53,8 @@ describe('detectApiRoutes', () => {
 
   it('finds .ts route files', () => {
     const dir = makeServerDir({
-      'routes/users.ts': 'export const GET = {}',
-      'routes/posts.ts': 'export const GET = {}',
+      'routes/users.ts': "export const GET = { policy: 'public' }",
+      'routes/posts.ts': "export const GET = { policy: 'public' }",
     })
     try {
       const result = [...detectApiRoutes(dir)].sort((a, b) => a.localeCompare(b))
@@ -66,7 +66,7 @@ describe('detectApiRoutes', () => {
 
   it('finds nested route files', () => {
     const dir = makeServerDir({
-      'routes/users/[id].ts': 'export const GET = {}',
+      'routes/users/[id].ts': "export const GET = { policy: 'public' }",
     })
     try {
       expect(detectApiRoutes(dir)).toContain('users/[id].ts')
@@ -77,7 +77,7 @@ describe('detectApiRoutes', () => {
 
   it('ignores non-route files', () => {
     const dir = makeServerDir({
-      'routes/users.ts': 'export const GET = {}',
+      'routes/users.ts': "export const GET = { policy: 'public' }",
       'routes/README.md': 'docs',
       'routes/.gitkeep': '',
     })

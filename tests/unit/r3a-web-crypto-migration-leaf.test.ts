@@ -253,6 +253,9 @@ describe('T5a.1a — leaf-file Web Crypto migration (node:crypto → globalThis.
       'packages/theo/src/server/scan/middleware-scan.ts',
       'packages/theo/src/server/scan/ws-scan.ts',
       'packages/theo/src/server/scan/detect-http-methods.ts',
+      // Sibling of detect-http-methods: same TS-compiler-API load via
+      // `node:module`'s createRequire, same build-time-only boundary.
+      'packages/theo/src/server/scan/detect-route-policy.ts',
       'packages/theo/src/server/scan/module-loader.ts',
       'packages/theo/src/server/jobs/job-scan.ts',
       'packages/theo/src/server/cron/cron-scan.ts',

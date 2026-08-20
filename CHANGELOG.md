@@ -10,6 +10,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- **BREAKING: a route file that declares no `policy` fails the build, naming the file.** The route
+  scanner refuses an HTTP export with no access policy, so `theo build`, `theo start`, `theo dev`,
+  `theo routes` and every deployment adapter stop before serving a route nobody decided about.
+  Absence used to mean "not declared", which every reader had to interpret as open — a route
+  deliberately left public and a route nobody thought about looked identical. `'public'` is still an
+  answer; it is now an answer somebody writes down, and one you can count. The error names the file,
+  the URL it serves, the methods that are silent, and the two ways out. `route().policy(...)` is the
+  builder form. Nothing changes for a `RouteConfig` built in memory and passed straight to
+  `executeWebRequest` or `callProcedure`: that value never passes a scanner. See `MIGRATION.md`.
+  (ADR 0001, Decision point 5)
+
 ### Deprecated
 
 ### Removed

@@ -126,7 +126,10 @@ describe('controller client emit — typed parity (ADR-2 fallback: body unknown)
     const serverDir = join(root, 'server')
     const distDir = join(root, '.theokit')
     mkdirSync(join(serverDir, 'routes'), { recursive: true })
-    writeFileSync(join(serverDir, 'routes', 'ping.ts'), 'export const GET = () => ({ ok: true })\n')
+    writeFileSync(
+      join(serverDir, 'routes', 'ping.ts'),
+      "export const GET = { policy: 'public', handler: () => ({ ok: true }) }\n",
+    )
 
     const r1 = await emitClientDts({ cwd: root, serverDir, distDir })
     const first = readFileSync(r1.path, 'utf-8')

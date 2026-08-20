@@ -2,13 +2,15 @@
  * Build-time scanner: walks `serverDir/routes/` derived from cwd.
  * No HTTP input ever reaches these fs calls.
  */
-import { existsSync, statSync } from 'node:fs'
+import { existsSync, readFileSync, statSync } from 'node:fs'
 import { basename, extname, join, relative } from 'node:path'
 
+import type { HttpMethod } from '../../core/contracts/http-methods.js'
 import { walkSourceFiles } from '../_internal/scan-walker.js'
 
 import { detectExportedHttpMethods } from './detect-http-methods.js'
-import { RouterConventionError } from './errors.js'
+import { detectMethodsWithDeclaredPolicy } from './detect-route-policy.js'
+import { MissingRoutePolicyError, RouterConventionError } from './errors.js'
 import { compilePattern, type ServerRouteNode } from './match.js'
 
 const ROUTE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx'])
@@ -77,6 +79,37 @@ function assertNoDottedSegment(filePath: string, routesDir: string): void {
   }
 }
 
+/**
+ * ADR 0001, Decision point 5 — a route declares its policy explicitly, `public`
+ * included, and absence stops meaning open.
+ *
+ * The refusal lives here, next to the dotted-basename refusal, because this is
+ * the one place every entry point passes through: `theo build`, `theo start`,
+ * `theo dev`, `theo routes` and each deployment adapter all reach routes by
+ * calling `scanServerRoutes`. A gate wired into the build command instead would
+ * have to be remembered by six adapters that generate their own entry file, and
+ * a gate you can forget to call is a gate that reports on the routes somebody
+ * remembered.
+ *
+ * The blast radius stops at the file system. A `RouteConfig` built in memory and
+ * handed to `executeWebRequest` or `callProcedure` never passed a scanner, so it
+ * never reaches this function — the runtime still treats an undeclared policy as
+ * "not declared", exactly as `evaluateRoutePolicy` documents. Absence is refused
+ * where an application DECLARES its routes, not where a caller passes one.
+ */
+function assertEveryMethodDeclaresPolicy(
+  filePath: string,
+  routePath: string,
+  methods: readonly HttpMethod[],
+  source: string,
+): void {
+  if (methods.length === 0) return
+  const declared = detectMethodsWithDeclaredPolicy(filePath, source)
+  const missing = methods.filter((method) => !declared.has(method))
+  if (missing.length === 0) return
+  throw new MissingRoutePolicyError({ file: filePath, routePath, methods: missing })
+}
+
 function fileToRoutePath(filePath: string, routesDir: string): string {
   let rel = relative(routesDir, filePath)
   // Strip extension
@@ -116,7 +149,9 @@ export function scanServerRoutes(serverDir: string): ServerRouteNode[] {
 
     const routePath = fileToRoutePath(absPath, routesDir)
     const { pattern, paramNames } = compilePattern(routePath)
-    const methods = detectExportedHttpMethods(absPath)
+    const source = readFileSync(absPath, 'utf-8')
+    const methods = detectExportedHttpMethods(absPath, source)
+    assertEveryMethodDeclaresPolicy(absPath, routePath, methods, source)
     results.push({
       filePath: absPath,
       routePath,

@@ -19,6 +19,8 @@
 
 - File at `server/routes/tasks/[id].ts` maps to `/api/tasks/:id`
 - Export HTTP method handlers: `export const GET = defineRoute({...})`
+- Every method declares `policy` — who may call it. `'public'` is a valid answer and an explicit one;
+  omitting it fails the build with the file named
 - Use `params: z.object({...})` for URL params, `body:` for request body
 - Use `status: 201` for creation responses, not manual `res.status()`
 

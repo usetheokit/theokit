@@ -17,6 +17,7 @@ import { z } from 'zod'
 
 // GET handler — no body, optional params/query
 export const GET = defineRoute({
+  policy: 'public',                              // who may call it — required
   params: z.object({ id: z.coerce.number() }),   // URL params
   query: z.object({ page: z.coerce.number().optional() }), // Query string
   handler: ({ params, query }) => {
@@ -26,6 +27,7 @@ export const GET = defineRoute({
 
 // POST handler — with body validation + custom status
 export const POST = defineRoute({
+  policy: ({ subject }) => subject !== null,     // any authenticated caller
   body: z.object({
     title: z.string().min(3),
     done: z.boolean().default(false),
@@ -38,9 +40,25 @@ export const POST = defineRoute({
 })
 
 // PUT, DELETE follow the same pattern
-export const PUT = defineRoute({ body: z.object({...}), handler: ({body, params}) => {...} })
-export const DELETE = defineRoute({ params: z.object({id: z.coerce.number()}), handler: ({params}) => {...} })
+export const PUT = defineRoute({ policy: 'public', body: z.object({...}), handler: ({body, params}) => {...} })
+export const DELETE = defineRoute({ policy: 'public', params: z.object({id: z.coerce.number()}), handler: ({params}) => {...} })
 ```
+
+## policy — who may call this route
+
+Required on every exported method. The scanner refuses a route file that omits it and names the
+file, so absence is a build error rather than a route silently open to everyone.
+
+```typescript
+policy: 'public'                                          // open, and said out loud
+policy: ({ subject }) => subject !== null                 // any authenticated caller
+policy: ({ subject, params }) =>
+  requireOwner(subject, ownerOf(params.id))               // this subject owns this record
+```
+
+`requireOwner` comes from `theokit/server`. The policy is evaluated identically over HTTP and
+in-process, so a desktop or terminal surface gets the same answer a browser does. It receives no
+headers and no cookies: identity arrives as `subject`, established by the transport.
 
 ## File-to-URL Mapping
 
@@ -71,6 +89,7 @@ export const createTask = defineAction({
 import { TheoError } from 'theokit'
 
 export const GET = defineRoute({
+  policy: 'public',
   handler: ({ params }) => {
     const task = db.select().from(tasks).where(eq(tasks.id, params.id)).get()
     if (!task) throw new TheoError({ code: 'NOT_FOUND', message: 'Task not found' })

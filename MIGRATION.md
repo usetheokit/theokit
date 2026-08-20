@@ -9,6 +9,72 @@
 > against the version that carried it, and the ones that need you to change code get a section
 > here.
 
+## `theokit` — every route file declares who may call it
+
+**Breaking**, for every application with routes under `server/routes/`. The route scanner refuses a
+file whose HTTP export declares no `policy`, so `theo build`, `theo start`, `theo dev`, `theo routes`
+and every deployment adapter fail until each route says something. Nothing changes for a
+`RouteConfig` you build in memory and hand to `executeWebRequest` or `callProcedure` directly — that
+value never passes a scanner.
+
+### What changed
+
+`RouteConfig.policy` shipped in theokit 0.49.0 and was optional. Optional meant a route that nobody
+had thought about was indistinguishable from a route deliberately left open: both had no policy, and
+both were served to anyone. ADR 0001 calls that the fail-open-by-omission class, and closes it by
+making the absence a build error rather than a silent default.
+
+`'public'` is still an answer. It is just an answer somebody has to write down, which is what makes
+"how much of this app is open" a number you can `grep` for.
+
+```diff
+  import { route } from 'theokit/server'
+
+  export const GET = route()
++   .policy('public')
+    .handler(() => ({ status: 'ok' }))
+    .build()
+```
+
+The builder gained `.policy()` in this release; `defineRoute({ policy, handler })` takes the same
+value.
+
+### What you need to do
+
+| Your situation | Action |
+|---|---|
+| A route serves data anyone may read (health, version, public feed) | `.policy('public')` |
+| A route reads or writes data belonging to a user | `.policy(({ subject, params }) => requireOwner(subject, ownerOf(params.id)))` |
+| A route needs any authenticated caller, without per-record ownership | `.policy(({ subject }) => subject !== null)` |
+| You export a bare function (`export function GET() {}`) | Wrap it: `route().policy(...).handler(fn).build()`. A bare function has nowhere to put a policy |
+| You re-export a route (`export { GET } from './shared'`) | Declare the policy in the file the scanner reads, or import the config and re-declare it. The scanner does not follow module specifiers |
+| You call `executeWebRequest` / `callProcedure` with a config you built | Nothing. The gate is on scanned files |
+
+`requireOwner` is exported from `theokit/server` and answers "may this subject touch this record"
+once, so each route does not answer it again.
+
+### How the failure reads
+
+```
+Route policy not declared: every route says who may call it (ADR 0001).
+
+  File:    /app/server/routes/posts/[id].ts
+  Route:   /api/posts/:id
+  Missing: DELETE, GET
+  ...
+```
+
+The file, the URL it serves, and the methods that are silent. Fix them one file at a time; the
+scanner reports the first file it reaches, so the loop is: run `theo routes`, fix, repeat.
+
+### Why not flip it at runtime instead
+
+Making an undeclared policy deny at request time would have turned every existing route in every
+consumer into a 403 with no build step in between, and the error would have arrived one request at a
+time in production. The scanner already refuses a dotted route basename and a collision with the
+reserved batch path by name, before anything serves traffic. This is the same gate, for a bigger
+class of mistake.
+
 ## `theokit` — `executeWebRequest` enforces CSRF unless you turn it off
 
 **Breaking**, for anyone calling `executeWebRequest` from `theokit/server` directly. Routes served

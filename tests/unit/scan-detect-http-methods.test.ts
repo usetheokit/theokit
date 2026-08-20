@@ -132,9 +132,9 @@ describe('scanServerRoutes propagates methods to ServerRouteNode', () => {
   it('populates methods for each route file', () => {
     write(
       'server/routes/users.ts',
-      'export const GET = () => ({})\nexport const POST = () => ({})\n',
+      "export const GET = { policy: 'public' }\nexport const POST = { policy: 'public' }\n",
     )
-    write('server/routes/posts.ts', 'export const GET = () => ({})\n')
+    write('server/routes/posts.ts', "export const GET = { policy: 'public' }\n")
     write('server/routes/util.ts', `export const HELPER = 1\n`)
     const routes = scanServerRoutes(serverDir)
     const byPath = Object.fromEntries(routes.map((r) => [r.routePath, r.methods]))
@@ -146,14 +146,17 @@ describe('scanServerRoutes propagates methods to ServerRouteNode', () => {
 
 describe('manifest round-trip with methods field', () => {
   it('generateManifest includes methods in route entries', () => {
-    write('server/routes/x.ts', 'export const GET = () => ({})\nexport const DELETE = () => ({})\n')
+    write(
+      'server/routes/x.ts',
+      "export const GET = { policy: 'public' }\nexport const DELETE = { policy: 'public' }\n",
+    )
     const manifest = generateManifest(serverDir)
     const x = manifest.routes.find((r) => r.routePath === '/api/x')
     expect(x?.methods).toEqual(['DELETE', 'GET'])
   })
 
   it('write + load preserves methods field', () => {
-    write('server/routes/x.ts', 'export const GET = () => ({})\n')
+    write('server/routes/x.ts', "export const GET = { policy: 'public' }\n")
     const manifest = generateManifest(serverDir)
     const distDir = join(sandbox, '.theokit')
     writeManifest(manifest, distDir)

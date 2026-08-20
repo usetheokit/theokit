@@ -42,7 +42,7 @@ afterEach(() => {
 function touch(relativePath: string) {
   const full = join(routesDir, relativePath)
   mkdirSync(join(full, '..'), { recursive: true })
-  writeFileSync(full, 'export const GET = { handler: () => ({}) }')
+  writeFileSync(full, "export const GET = { policy: 'public', handler: () => ({}) }")
 }
 
 function relativize(plan: RouterMigrationPlanItem[]): { from: string; to: string }[] {

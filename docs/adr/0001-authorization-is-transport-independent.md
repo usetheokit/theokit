@@ -1,8 +1,8 @@
 # ADR 0001 — Authorization is transport-independent; transport concerns stay on the transport
 
-- **Status:** Proposed — decision points 1-3 implemented and verified; points 4-5 (the breaking half) await sign-off
+- **Status:** Accepted (2026-08-20, project owner) — decision points 1-3 and 5 implemented and verified; point 4 deferred to its own breaking release
 - **Date:** 2026-08-19
-- **Deciders:** program coordinator (this ADR requires the project owner's sign-off before M1 starts)
+- **Deciders:** program coordinator; accepted by the project owner on 2026-08-20, including the breaking half
 - **Blocks:** M1 (server-boundary-security), and through it every other three-target milestone
 
 ## Context
@@ -52,10 +52,10 @@ The consequence is not theoretical. A route that enforces access rules over HTTP
 
 ## Implementation status (2026-08-20)
 
-Recorded here rather than in a commit message, because a reader arriving at a `Proposed` ADR needs
-to know which half of it is already load-bearing.
+Recorded here rather than in a commit message, because a reader arriving at this ADR needs to know
+which parts of it are load-bearing today and which are still a decision on paper.
 
-**Implemented and verified.** Points 1-3 of the Decision. `RouteConfig.policy` exists and is
+**Implemented and verified.** Points 1-3 and 5 of the Decision. `RouteConfig.policy` exists and is
 evaluated by the Node executor, the Web executor and `callProcedure` from one function
 (`packages/theo/src/core/contracts/route-policy.ts`). `requireOwner` is the primitive point 3 asks
 for. The verification this ADR names as *"the test that IS the ADR"* exists and passes across all
@@ -63,16 +63,26 @@ three transports (`tests/unit/access-decision-parity.test.ts`), including the ca
 whole decision: an authenticated non-owner, refused identically whether the route is reached over
 HTTP or in-process.
 
-**Not implemented, and deliberately.** Points 4 and 5 are the breaking half.
+Point 5 shipped on 2026-08-20 with the migration that makes it survivable. `scanServerRoutes`
+refuses a route file whose HTTP export declares no policy and throws `MissingRoutePolicyError`
+naming the file, the URL it serves and the silent methods
+(`packages/theo/src/server/scan/detect-route-policy.ts`,
+`packages/theo/src/server/scan/errors.ts`). The gate sits in the scanner rather than in the build
+command because the scanner is the one path every entry point shares — `theo build`, `theo start`,
+`theo dev`, `theo routes` and each generated adapter entry all call it, and a gate the six adapters
+would have to remember to call is a gate that reports on the routes somebody remembered.
 
-- Point 4 — `session.ts` still carries `ServerResponse` in its public signature. Identity reaches the
-  policy through the run context each transport already builds, so nothing is blocked on this today;
-  removing the coupling is a breaking release with a `MIGRATION.md` entry.
-- Point 5 — absence still means "not declared" at runtime rather than denial. Flipping it would
-  refuse every existing route in every consumer at once, so it belongs with the build-time gate and
-  the migration that make refusing it survivable. A helper written for that gate was removed before
-  committing rather than shipped ahead of it: an unused seam is the built-and-disconnected pattern
-  this programme spent a wave unwinding.
+**Where the gate deliberately stops.** On routes read from the file system. A `RouteConfig` built in
+memory and handed to `executeWebRequest` or `callProcedure` never passed a scanner, and
+`evaluateRoutePolicy` still treats an undeclared policy as "not declared" rather than as denial.
+Making the executors refuse it would convert a build gate into a runtime break for every direct
+caller, which is the all-at-once failure this ADR routed through a migration in the first place.
+`tests/unit/route-policy-declaration-gate.test.ts` holds both halves of that line.
+
+**Not implemented, and deliberately.** Point 4. `session.ts` still carries `ServerResponse` in its
+public signature. Identity reaches the policy through the run context each transport already builds,
+so nothing is blocked on this today; removing the coupling is its own breaking release with its own
+`MIGRATION.md` entry.
 
 **What this means for M1 and M13.** The ROADMAP gates both on this ADR being "decided and
 implemented". The decision is made and its core guarantee is enforced by a test; the milestones
@@ -92,7 +102,7 @@ than a change.
 
 - A test that reaches the same route over HTTP and through `callProcedure` and asserts an identical access decision for the same subject. That test is the ADR: without it, the claim "not a second implementation" is unenforced.
 - The HITL endpoints reject an unauthenticated caller and an authenticated non-owner, exercised against the published build (M1 DoD).
-- A route with no declared policy fails the build, naming the file.
+- A route with no declared policy fails the build, naming the file. Enforced by `scanServerRoutes`; covered by `tests/unit/route-policy-declaration-gate.test.ts`.
 
 ## References
 
