@@ -30,7 +30,18 @@ export type SsrRender = (
 export type SsrRenderStreaming = (
   url: string,
   response: ServerResponse,
-  options?: { signal?: AbortSignal; nonce?: string },
+  options?: {
+    signal?: AbortSignal
+    nonce?: string
+    /**
+     * The template up to and including `<div id="root">`, written before React
+     * produces a byte. Without it the streamed response is React's output alone
+     * — no `<html>`, no `<head>` (usetheokit/theokit#343).
+     */
+    htmlHead?: string
+    /** The template after `</div>`, written after the hydration data script. */
+    htmlTail?: string
+  },
 ) => Promise<RenderStreamingResult>
 
 interface SsrSetupResult {

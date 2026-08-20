@@ -161,6 +161,15 @@ async function handleSsrStreaming(
     const result = await ctx.ssrRenderStreaming(url, res, {
       signal: controller.signal,
       nonce,
+      // #343 — the streamed response carried neither of these, so `ssrStreaming: true`
+      // served a bare React tree: no `<head>`, no client entry, no hydration data.
+      //
+      // `applyNonceToInlineScripts` and not `withHoistedHead`: hoisting reads the
+      // RENDERED body for head elements, and nothing is rendered yet when the head
+      // has to flush. Metadata hoisting under streaming is the same defect on a
+      // different surface, and it is M9's, not this one's.
+      htmlHead: applyNonceToInlineScripts(ctx.htmlHead, nonce),
+      htmlTail: ctx.htmlTail,
     })
     if (isRedirectResult(result)) sendRedirect(res, result)
     return true
