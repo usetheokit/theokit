@@ -55,11 +55,19 @@ the two disagree, the rule wins and this one is the bug.
 
 ## Index
 
-0 items — **Open** 0 · **In flight** 0 · **Closed** 0
+7 items — **Open** 7 · **In flight** 0 · **Closed** 0
 
-### Open (0)
+### Open (7)
 
-_None._
+| Item | Title | Status | Severity |
+|---|---|---|---|
+| [`B-001`](#b-001--ssrstreaming-serves-a-document-with-no-head-and-no-hydration-data----) | ssrStreaming serves a document with no `<head>` and no hydration data | `triaged` | — |
+| [`B-002`](#b-002--renderstreamingweb-throws-referenceerror-on-every-request-tdz-on-url----) | `renderStreamingWeb` throws `ReferenceError` on every request (TDZ on `url`) | `triaged` | — |
+| [`B-003`](#b-003--the-public-middleware-builder-produces-a-handler-the-runner-cannot-invoke----) | the public `middleware()` builder produces a handler the runner cannot invoke | `triaged` | — |
+| [`B-004`](#b-004--readdirsync-is-unsorted-so-the-client-build-is-not-reproducible----) | `readdirSync` is unsorted, so the client build is not reproducible | `triaged` | — |
+| [`B-005`](#b-005--cache-observability-cost-tracking-and-csrf-hardening-ship-with-no-production-caller----) | cache, observability, cost tracking and CSRF hardening ship with no production caller | `triaged` | — |
+| [`B-006`](#b-006--dynamic-route-precedence-uses-a-whole-path-localecompare-so-the-less-specific-route-wins----) | dynamic route precedence uses a whole-path `localeCompare`, so the less specific route wins | `triaged` | — |
+| [`B-007`](#b-007--resolve-the-open-private-security-advisory----) | resolve the open private security advisory | `triaged` | — |
 
 ### In flight (0)
 
@@ -73,15 +81,109 @@ _None._
 
 ## Items
 
-No items yet. This registry is honestly empty rather than dishonestly populated: an item nobody
-filed has no `why_now`, no Definition of Done and no owner, and gets inherited as a decision
-nobody made.
+Ids are monotonic and never reused. Seven items registered 2026-08-19 from the surface
+re-measurement; all seven arrived already measured, which is why they are `triaged` rather than
+`raw` — a sweep finding skips intake because it carries the evidence intake is not allowed to
+require.
 
-Existing findings elsewhere in `knowledge-base/` are **not** migrated here automatically. Doing so
-is a separate, evidence-preserving migration — each imported item needs its original pointer and
-its original date, or it arrives as a hunch and loses exactly what made it worth keeping.
+**Gap files are not evidence.** Eleven of the sixteen `theokit-gap.md` files came back materially
+wrong on re-measurement. No item below cites one; each cites an issue and a `file:line`.
 
-Next free id: **B-001**.
+## B-001 — ssrStreaming serves a document with no `<head>` and no hydration data   [ ]
 
-Next step: `/backlog-item {slug}` to register a hunch, or `/discover --sweep theokit` to register
-measured findings.
+domain: theokit
+repo: packages/theo
+suggested_mode: bug
+source: discover-review
+evidence: usetheokit/theokit#343 — measured 2026-08-19; the streamed document is served without `<head>` and without the hydration data script
+why_now: it is the blocker under M2, and M9's missing metadata hoist is the same defect surfacing on a different surface — fixing one informs the other
+status: triaged
+dod:
+  - `curl` of the root route against a published build with `ssrStreaming: true` returns a parseable document containing `<head>` and the hydration data script
+  - a regression test executes the generated entry against a real `Request` rather than asserting `toContain` over the template string
+
+## B-002 — `renderStreamingWeb` throws `ReferenceError` on every request (TDZ on `url`)   [ ]
+
+domain: theokit
+repo: packages/theo
+suggested_mode: bug
+source: discover-review
+evidence: usetheokit/theokit#344 — `packages/theo/src/router/entry-server.ts`, `url.split('?')` is evaluated before `const url = new URL(request.url)`
+why_now: the Cloudflare target is broken on every request, and the existing tests only assert `toContain` over the template string — which is exactly why it shipped
+status: triaged
+dod:
+  - a test executes the generated web entry against a real `Request` and fails today with `ReferenceError`
+  - the declaration is hoisted above the preload block and that test passes
+  - the fix is a separate atomic commit citing the issue
+
+## B-003 — the public `middleware()` builder produces a handler the runner cannot invoke   [ ]
+
+domain: theokit
+repo: packages/theo
+suggested_mode: bug
+source: discover-review
+evidence: usetheokit/theokit#345 — the builder's output shape is incompatible with the file-scan runner that is supposed to call it
+why_now: it is the blocker under M13; the documented authoring path produces middleware that never runs
+status: triaged
+dod:
+  - a middleware authored with the public `middleware()` builder is invoked by the file-scan runner in a published build
+  - a regression test covers the builder-to-runner boundary rather than the builder alone
+
+## B-004 — `readdirSync` is unsorted, so the client build is not reproducible   [ ]
+
+domain: theokit
+repo: packages/theo
+suggested_mode: bug
+source: discover-review
+evidence: usetheokit/theokit#346 — `packages/theo/src/router/scan.ts:132`; the sibling scanner `packages/theo/src/server/scan/scan.ts:140` already sorts, so the two disagree
+why_now: it is the blocker under M3, and a non-reproducible build makes every downstream determinism claim unverifiable
+status: triaged
+dod:
+  - two scans over the same tree created in different orders produce identical output
+  - two clean builds of the same commit produce client bundles whose `sha256sum` values are equal
+  - the fix matches the sibling scanner rather than inventing a second ordering rule
+
+## B-005 — cache, observability, cost tracking and CSRF hardening ship with no production caller   [ ]
+
+domain: theokit
+repo: packages/theo
+suggested_mode: review
+source: discover-review
+evidence: usetheokit/theokit#347 — `initCacheEngine` has zero callers; the cache's `opts.defaults` is destructured and dropped; `createObservabilityPlugin` and `resolveAdapter` appear only in tests; `trackAgentRun` appears only in comments; `csrf-multi-header` is implemented and never exported; `action-encryption` is exercised only by its own test
+why_now: this is the Wave 0.5 pattern — subsystems built, tested and never connected. It is the cheapest work available (the code exists) and it gates the rest: with observability unwired, the agent-axis benchmark has no instrument
+status: triaged
+dod:
+  - each named symbol either has a production caller exercised in a published build, or is deleted
+  - the cache serves a hit on a second request, observed through its own signal rather than inferred
+  - a run emits spans reaching an exporter from a production path, not from a test
+  - CSRF hardening is reachable through a public export and on by default on the Web handler
+  - this item is split into per-subsystem items at planning time if the wiring turns out to be more than one change
+
+## B-006 — dynamic route precedence uses a whole-path `localeCompare`, so the less specific route wins   [ ]
+
+domain: theokit
+repo: packages/theo
+suggested_mode: bug
+source: discover-review
+evidence: usetheokit/theokit#348 — `packages/theo/src/server/scan/scan.ts:152` is the tiebreak; `packages/theo/src/server/scan/match.ts:40` returns on first match, so the sort order is the precedence. Reproduced by executing the comparator: `/api/:resource/settings` sorts ahead of `/api/users/:id`
+why_now: silent wrong-handler dispatch on a public URL — an auth check placed on the specific route is bypassed when the generic one wins. Verified before filing, on request, because no one had opened the file
+status: triaged
+dod:
+  - `/api/users/settings` resolves to `/api/users/:id` and not to `/api/:resource/settings` against a published build
+  - precedence is compared per segment, with `localeCompare` retained only as a final total-order fallback
+  - a regression test fails when the tiebreak is restored to a whole-path comparison
+
+## B-007 — resolve the open private security advisory   [ ]
+
+domain: theokit
+repo: theokit
+suggested_mode: bug
+source: discover-review
+evidence: a draft private GitHub Security Advisory on this repository — details deliberately not reproduced here
+why_now: `SECURITY.md` forbids a public issue for this class, and `BACKLOG.md` is a public file in a public repository, so the mechanism, the affected path and the advisory id are all withheld. The item exists so the work is tracked and schedulable; the substance lives in the advisory
+status: triaged
+dod:
+  - the advisory is resolved, its fix released, and the advisory published or withdrawn per `SECURITY.md`
+  - the criteria under M1 that depend on it pass against the published build
+
+Next free id: **B-008**.
