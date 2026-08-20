@@ -26,7 +26,12 @@ export default defineConfig({
     typecheck: {
       enabled: true,
       include: ['tests/**/*.test-d.ts'],
-      tsconfig: '../../tsconfig.json',
+      // The PACKAGE's test tsconfig, not the root one. The root config expects the
+      // whole monorepo built, and the CI job that runs this builds only
+      // `@theokit/agents...` — so pointing at the root turned every unbuilt
+      // sibling into `Cannot find module 'theokit/client/core'`. This one carries
+      // the package's own path mappings and includes `tests/**`.
+      tsconfig: './tsconfig.test.json',
     },
   },
 })
