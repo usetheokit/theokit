@@ -1,9 +1,58 @@
 import type { WireMessage as UIMessage, WireChunk as UIMessageChunk } from '@theokit/presenter/wire'
+import { TheokitAgentError } from '@theokit/sdk/errors'
 
 import { consumeChunkStream } from './consume-ui-message-stream.js'
 import type { AgentTransport, ApprovalDecision, RequestContext } from './transport.js'
 
 export type UseAgentStatus = 'idle' | 'streaming' | 'done' | 'error'
+
+/**
+ * The stream ended before the run did — theokit#384.
+ *
+ * ## Why the status is `'error'` and not a new `'interrupted'` member
+ *
+ * `UseAgentStatus` is published, and every surface in and out of this repo switches on it. Adding a
+ * member fixes the lie only for the consumers who then update their switch; for everyone else the
+ * new value falls through to the same "not streaming, not an error" branch that shows a finished
+ * turn — the exact symptom, preserved. Reusing `'error'` fixes it for all of them at once, and it
+ * is already the value the rest of this store treats correctly: `send()` refuses to commit a turn
+ * that did not settle on `'done'`, so a half-answer stops being written into history as complete,
+ * and the reconnect wiring the issue found disabled (`status === 'error'` → `reconnect()`) starts
+ * firing without the consumer changing a line.
+ *
+ * ## Why the discrimination is a typed error rather than a status
+ *
+ * "The provider refused" and "the connection died" want opposite reactions — one is a failure to
+ * report, the other is a turn that can be resumed — and this framework already has a place for that
+ * difference: `TheokitAgentError`'s `code` + `isRetryable`, which `isTransientError` reads. A class
+ * outside that hierarchy is invisible to it and leaves the consumer matching on message text (M80).
+ *
+ * ## Why this is NOT a `stopReason` (theokit#379)
+ *
+ * The two are orthogonal, and collapsing them would be a category error. `stopReason` says why the
+ * RUN stopped and rides the `finish` chunk's metadata — it exists only when a terminal frame
+ * arrived. An interruption is the ABSENCE of that frame: the run may still be going, and this
+ * client cannot know why it stopped, because it never heard. Spelling it as a third `stopReason`
+ * member would put a value on a `done` turn that no producer produced, and would reintroduce the
+ * defect it fixes — a truncated run reported through the field that means "the agent finished".
+ * Transport termination and execution termination are separate axes; this is the transport one.
+ */
+export class AgentStreamInterruptedError extends TheokitAgentError {
+  override readonly name = 'AgentStreamInterruptedError'
+  constructor(readonly chunksReceived: number) {
+    super(
+      `The agent stream ended after ${String(chunksReceived)} chunk(s) without its terminal frame — ` +
+        `the connection dropped mid-run, so the answer on screen is incomplete.`,
+      {
+        // A dropped connection is the definition of transient: the run may still be alive on the
+        // server, and `AgentClient.reconnect()` is the affordance built for it. DECLARED, because a
+        // default here would be a retry policy nobody chose.
+        isRetryable: true,
+        code: 'AGENT_STREAM_INTERRUPTED',
+      },
+    )
+  }
+}
 
 /** The observable state the store exposes (stable reference between emits — `useSyncExternalStore` contract). */
 export interface AgentClientState {
@@ -202,7 +251,7 @@ export class AgentClient<TInput = unknown> {
         this.#emit()
         return
       }
-      await consumeChunkStream(stream, (message) => {
+      const outcome = await consumeChunkStream(stream, (message) => {
         if (aborted()) return
         // The SDK leaves the assistant message id empty — fabricate a stable per-turn id so every chunk
         // upserts into the SAME message and the committed copy has a collision-free key (M46).
@@ -213,6 +262,17 @@ export class AgentClient<TInput = unknown> {
         this.#scheduleEmit()
       })
       if (aborted()) return
+      // theokit#384 — a stream that RAN OUT is not a stream that FINISHED. Until this branch existed
+      // there were only two outcomes here, "the reader threw" and "it did not", and a dropped socket
+      // reports neither: `reader.read()` says `done`, nothing rejects, and a run cut mid-word settled
+      // as an ordinary `done`. The messages already delivered are kept — the user is told the answer
+      // is incomplete, not shown an empty turn.
+      if (!outcome.terminated) {
+        this.#error = new AgentStreamInterruptedError(outcome.chunksReceived)
+        this.#status = 'error'
+        this.#emit()
+        return
+      }
       this.#status = 'done'
       this.#emit()
     } catch (err) {

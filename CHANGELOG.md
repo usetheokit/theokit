@@ -30,6 +30,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   that declared no ceiling included. A run that finishes on its own carries no `stopReason` at all.
   (usetheokit/theokit#379)
 
+### Fixed
+
+- **A run whose connection drops mid-answer is reported as interrupted instead of finished.** The
+  agent client settled a dropped stream in `status: 'done'` with no error, so the spinner stopped,
+  the error surface stayed empty, and half a sentence was committed to the thread as a completed
+  turn — the user had no way to know the answer was cut off, and the `reconnect()` machinery that
+  exists for exactly this never fired. The client now checks that the stream carried its terminal
+  frame: when it did not, the status is `'error'` and `error` is an `AgentStreamInterruptedError`
+  (`code: 'AGENT_STREAM_INTERRUPTED'`, `isRetryable: true`), the text already received stays on
+  screen, and the truncated turn is not written into history as finished. A stream that ends on its
+  terminal frame is unchanged, down to the snapshot's fields. (usetheokit/theokit#384)
+
 ### Changed
 
 - **Importing server code from a client page fails the build with an error that names both.** The

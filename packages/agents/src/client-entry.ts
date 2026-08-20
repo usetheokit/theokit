@@ -52,6 +52,9 @@ export type { AgentClientState } from './client/agent-client.js'
 // denied one; the capability would exist and be unreachable across the boundary.
 export type { AgentClientOptions } from './client/agent-client.js'
 export { ApprovalAbortedError } from './client/in-process-transport.js'
+// theokit#384 — the class a consumer needs to tell "the connection dropped" (resumable) from any
+// other `status: 'error'` (not). Unexported, the only recourse left is matching on message text.
+export { AgentStreamInterruptedError } from './client/agent-client.js'
 
 export { agentHandle, isAgentHandle } from './client/agent-handle.js'
 export type { AgentHandle } from './client/agent-handle.js'
@@ -61,6 +64,9 @@ export {
   responseToChunkStream,
   consumeChunkStream,
 } from './client/consume-ui-message-stream.js'
+// theokit#384 — a custom transport reading the wire itself needs the same distinction the store
+// makes, and it is the reader's return type.
+export type { ChunkStreamOutcome } from './client/consume-ui-message-stream.js'
 
 export { extractLastUserText } from './client/last-user-text.js'
 

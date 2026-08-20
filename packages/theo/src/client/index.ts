@@ -60,6 +60,9 @@ export type {
 } from '@theokit/agents/client'
 export { AgentClient } from '@theokit/agents/client'
 export type { AgentClientState } from '@theokit/agents/client'
+// theokit#384 — a run whose connection dropped settles `status: 'error'` carrying THIS error. It is
+// the only way to tell a resumable interruption from a real failure without matching message text.
+export { AgentStreamInterruptedError } from '@theokit/agents/client'
 // M44 (ADR-0053) — the standalone (no-React) client is also re-exported here for convenience; a node
 // consumer should import it from the React-free `theokit/client/core` entry instead.
 export { createAgentClient } from './create-agent-client.js'

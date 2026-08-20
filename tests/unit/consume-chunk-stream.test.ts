@@ -62,7 +62,13 @@ describe('consumeChunkStream (#136 — error surfacing)', () => {
       { type: 'finish' },
     ])
     const seen: UIMessage[] = []
-    await expect(consumeChunkStream(stream, (m) => seen.push(m))).resolves.toBeUndefined()
+    // theokit#384 — the reader used to resolve with `undefined`, which is exactly why a dropped
+    // connection was indistinguishable from a finished run: its caller had nothing to read. It now
+    // reports how the stream ENDED, and a stream carrying its terminal `finish` chunk ended.
+    await expect(consumeChunkStream(stream, (m) => seen.push(m))).resolves.toEqual({
+      terminated: true,
+      chunksReceived: 5,
+    })
     const text = seen
       .at(-1)
       ?.parts.filter((p): p is { type: 'text'; text: string } => p.type === 'text')
@@ -117,7 +123,12 @@ describe('consumeUIMessageStream (#136 — SSE/HTTP path surfaces errors)', () =
       { type: 'finish' },
     ])
     const seen: UIMessage[] = []
-    await expect(consumeUIMessageStream(response, (m) => seen.push(m))).resolves.toBeUndefined()
+    // theokit#384 — same outcome across the SSE path: the `Response` reader forwards what the chunk
+    // reader observed, so a custom transport built on it can tell a cut stream from a complete one.
+    await expect(consumeUIMessageStream(response, (m) => seen.push(m))).resolves.toEqual({
+      terminated: true,
+      chunksReceived: 5,
+    })
     expect(seen.length).toBeGreaterThan(0)
   })
 })
