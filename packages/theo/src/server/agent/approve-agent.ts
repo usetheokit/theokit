@@ -9,12 +9,27 @@
  * (built server) so the two never drift (EC-4 parity with `mountAgent`). The registry is INJECTED —
  * dev/prod pass the process singleton (`getApprovalRegistry`), tests pass a fresh instance.
  */
+import type { RoutePolicy } from '../../core/contracts/route-policy.js'
 import { validateCsrfRequest, type CsrfMode } from '../security/csrf.js'
 
+import { admitAgentRequest, agentAccessDenied, type AgentSubjectResolver } from './agent-access.js'
 import type { ApprovalDecision, ApprovalRegistry } from './approval-registry.js'
 
 /** The path segment separating the agent name from the approval id. */
 const APPROVE_SEGMENT = '/approve/'
+
+const APPROVE_PATH = /^\/api\/agents\/([^/]+)\/approve\/([^/]+)$/
+
+/**
+ * The agent named by a `/api/agents/<name>/approve/<id>` path, or `null`.
+ *
+ * The route's own gate is the agent's declared policy, and reading the policy needs the agent —
+ * which this path carries and nothing previously read (usetheokit/theokit#365).
+ */
+export function parseApprovalAgentName(urlPath: string): string | null {
+  const match = APPROVE_PATH.exec(urlPath)
+  return match ? decodeURIComponent(match[1]) : null
+}
 
 /**
  * Extract the `<approvalId>` from a `/api/agents/<name>/approve/<approvalId>` path.
@@ -73,9 +88,23 @@ export function parseApprovalBody(body: unknown): ApprovalDecision | null {
 }
 
 /**
- * Resolve a pending HITL approval. CSRF-guarded like `mountAgent` (the custom `X-Theo-Action`
- * header + Origin match) — a cross-origin POST must not approve a paused tool. Returns:
+ * The gates it applies (usetheokit/theokit#365):
+ *
+ * CSRF, which refuses a cross-origin POST and identifies nobody — and then the agent's declared
+ * `policy`, which is what makes "who is asking" a question this endpoint can answer at all.
+ * Reproduced before the policy existed: a process holding no cookie and no credential read a
+ * pending id off the listing, POSTed here, and the gated tool ran.
+ *
+ * What the policy CANNOT decide here, and it is worth being exact about: whether this approval
+ * belongs to this caller. `ApprovalRegistry` keys by a bare id and records no owner, so the
+ * strongest question available is "may this subject touch this agent's approvals" —
+ * `params.approvalId` is passed so an application holding its own owner map can answer more, and
+ * the framework holds none. An authenticated tenant can still settle another tenant's approval on
+ * an agent both are admitted to.
+ *
+ * Returns:
  *   403 CSRF_FAILED  — strict CSRF check failed
+ *   403 FORBIDDEN    — the agent's policy refused this caller
  *   400 BAD_REQUEST  — no `/approve/<id>` in the path, or body lacks a boolean `approved`
  *   404 NOT_PENDING  — the id is unknown or already settled (idempotent double-submit)
  *   200 { resolved:true } — the approval was settled by this call
@@ -85,6 +114,7 @@ export async function handleAgentApproval(
   urlPath: string,
   registry: ApprovalRegistry,
   csrfMode: CsrfMode = 'strict',
+  access: { policy?: RoutePolicy; resolveSubject?: AgentSubjectResolver } = {},
 ): Promise<Response> {
   if (csrfMode !== 'off') {
     const csrf = validateCsrfRequest(request)
@@ -97,6 +127,14 @@ export async function handleAgentApproval(
   if (approvalId === null) {
     return jsonError(400, 'BAD_REQUEST', 'Approval path must be /api/agents/<name>/approve/<id>.')
   }
+
+  const params = {
+    agent: parseApprovalAgentName(urlPath) ?? 'unknown',
+    endpoint: 'approve' as const,
+    approvalId,
+  }
+  const decision = await admitAgentRequest(access.policy, access.resolveSubject, params)
+  if (!decision.allowed) return agentAccessDenied(decision, params)
 
   let body: unknown = null
   try {

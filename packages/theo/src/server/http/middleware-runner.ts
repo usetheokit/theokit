@@ -113,15 +113,31 @@ export async function runMiddlewareAndContext(
   }
 
   // 4. Create context (if exists)
-  let ctx: unknown = {}
-  const contextPath = join(serverDir, 'context.ts')
-  if (existsSync(contextPath)) {
-    const mod = await loadModule(contextPath)
-    const createContext = mod.createContext as ContextFactory | undefined
-    if (typeof createContext === 'function') {
-      ctx = await createContext({ request: req, response: res })
-    }
-  }
+  return { ctx: await createServerContext(req, res, loadModule, serverDir), aborted: false }
+}
 
-  return { ctx, aborted: false }
+/**
+ * Run ONLY the application's `server/context.ts` factory and return what it produced.
+ *
+ * Split out of {@link runMiddlewareAndContext} because the agent endpoints need the identity half
+ * of that function and must not take the middleware half with it (usetheokit/theokit#365).
+ *
+ * The split is not a shortcut, it is the whole of what those endpoints can honestly reuse today:
+ * middleware here is `(req, res, next)` and contributes NOTHING to `ctx` — only this factory does.
+ * So running the chain would buy the policy no identity it does not already get, while adding
+ * abort semantics and header side effects to a dispatch branch that has never had them. Running
+ * `server/middleware/` on agent URLs is a separate, larger behaviour change; it is not this one.
+ */
+export async function createServerContext(
+  req: IncomingMessage,
+  res: ServerResponse,
+  loadModule: LoadModule,
+  serverDir: string,
+): Promise<unknown> {
+  const contextPath = join(serverDir, 'context.ts')
+  if (!existsSync(contextPath)) return {}
+  const mod = await loadModule(contextPath)
+  const createContext = mod.createContext as ContextFactory | undefined
+  if (typeof createContext !== 'function') return {}
+  return await createContext({ request: req, response: res })
 }

@@ -143,3 +143,84 @@ export class MissingRoutePolicyError extends Error {
     this.migrationUrl = migrationUrl
   }
 }
+
+/**
+ * Canonical landing page for the agent-policy migration. Module-local for the same reason as its
+ * route sibling: nothing outside this file names it, and an export with no consumer is what `knip`
+ * exists to refuse.
+ */
+const AGENT_POLICY_MIGRATION_GUIDE_URL = 'https://theokit.dev/migration/agent-policy'
+
+interface MissingAgentPolicyErrorOptions {
+  /** Absolute path of the agent file. */
+  file: string
+  /** The URL the agent is served at, so the message reads like the app rather than like the disk. */
+  agentPath: string
+  /** Migration guide URL (defaults to {@link AGENT_POLICY_MIGRATION_GUIDE_URL}). */
+  migrationUrl?: string
+}
+
+/**
+ * Thrown by `scanAgents` when an agent file declares no access policy
+ * (ADR 0001 Decision point 5, extended to the agent surface by usetheokit/theokit#365).
+ *
+ * ## Why absence had to stop meaning open HERE and not at runtime
+ *
+ * The agent endpoints resume a conversation the CALLER names, and they are dispatched before route
+ * matching, so no route, no middleware and no `server/context.ts` ever saw those URLs. A caller
+ * holding a conversation id and no credential read that conversation back.
+ *
+ * There is no safe runtime default for that. Refusing every caller-named session id would break
+ * multi-turn chat, which is the base case; admitting them is the defect. So the decision moves to
+ * where a person can answer it once, in the file that owns the agent — the same place and the same
+ * reasoning as the route gate, which is why this error reads like its sibling.
+ *
+ * ## What it costs
+ *
+ * Every existing application with an agent fails its next build until it adds one line. That is the
+ * half of ADR 0001 the ADR itself called breaking, and the trade it names: a build error that
+ * points at a file beats a silent 200 that hands over somebody else's conversation.
+ */
+export class MissingAgentPolicyError extends Error {
+  override readonly name = 'MissingAgentPolicyError'
+  readonly file: string
+  readonly agentPath: string
+  readonly migrationUrl: string
+
+  constructor(opts: MissingAgentPolicyErrorOptions) {
+    const migrationUrl = opts.migrationUrl ?? AGENT_POLICY_MIGRATION_GUIDE_URL
+    const message = [
+      `Agent policy not declared: every agent says who may run it (ADR 0001).`,
+      ``,
+      `  File:  ${opts.file}`,
+      `  Agent: ${opts.agentPath}`,
+      ``,
+      `This one declaration covers every endpoint the agent exposes - the run, the`,
+      `thread routes, the pending-approval listing, the approve route and MCP - because`,
+      `they all reach the same conversation and the same paused tools.`,
+      ``,
+      `Add ONE of these to the file above:`,
+      ``,
+      `  export const policy = 'public'   // anyone who can reach it may run it`,
+      ``,
+      `  import { requireOwner } from 'theokit/server/define'`,
+      ``,
+      `  //  subject  <- what server/context.ts put on ctx.subject`,
+      `  //  params   <- { agent, endpoint, sessionId?, approvalId? }`,
+      `  //  body     <- the parsed chat body, on the endpoints that have one`,
+      `  export const policy = ({ subject, params }) =>`,
+      `    requireOwner(subject, ownerOf(params.sessionId))`,
+      ``,
+      `Writing 'public' is a decision and not a default. The endpoint resumes whatever`,
+      `conversation the CALLER names, so 'public' means any caller holding an id may read`,
+      `and continue that conversation - a capability model, which is legitimate when it is`,
+      `the choice somebody made and greppable once it is written down.`,
+      ``,
+      `Migration guide: ${migrationUrl}`,
+    ].join('\n')
+    super(message)
+    this.file = opts.file
+    this.agentPath = opts.agentPath
+    this.migrationUrl = migrationUrl
+  }
+}

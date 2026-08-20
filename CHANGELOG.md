@@ -28,12 +28,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   client instead of merely giving it a poorer prompt. The tool's name and its resolved input are not
   duplicated: the preceding `tool-input-available` frame already announces both under the same call
   id, and both readers fold the two frames into one part. (usetheokit/theokit#394)
-- **The agent endpoint can declare who may run it.** `mountAgent` accepts a `policy` and a `subject`
-  and evaluates them with the same function the route executors and the in-process caller use, so
-  ADR 0001's guarantee now reaches the surface this framework exists for. It runs before the module
-  is compiled and long before the SDK: an agent run spends real tokens, so a caller who may not run it
-  is turned away before any of that is paid for. An endpoint that declares no policy behaves exactly
-  as before. (usetheokit/theokit#365)
+- **An agent declares who may run it, and every one of its endpoints obeys that declaration.** An
+  agent file exports a `policy` — `'public'`, or a function over `{ subject, body, params }` — and
+  the run endpoint, the thread routes, the pending-approval listing, the approve route and MCP all
+  evaluate it, with the same function the route executors and the in-process caller use. `params`
+  carries `{ agent, endpoint, sessionId?, approvalId? }`, so one declaration can answer the
+  endpoints differently. Identity comes from `ctx.subject`, produced by the application's own
+  `server/context.ts` — the seam every `route()` already reads and no agent URL reached, because
+  those URLs are dispatched before route matching. The check runs before the module is compiled and
+  long before the SDK: an agent run spends real tokens, so a caller who may not run it is turned
+  away before any of that is paid for. The `policy` option `mountAgent` gained earlier in this cycle
+  stays, for a host that resolved the decision itself, and overrides the file's declaration.
+  (usetheokit/theokit#365)
 - **An agent can declare how many steps it is allowed to take, and the served agent obeys it.**
   `AgentBuilder.create().maxIterations(5)` and `defineAgent({ maxIterations: 5 })` cap the tool-calling
   turns of a single run, and the ceiling `@Agent`/`@MainLoop` already accepted now reaches the runtime
@@ -164,6 +170,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   at a framework chunk: a bundler's difficulty, not the author's, and an accident of Node builtins
   not existing in a browser rather than a rule. `server/actions/schemas/**` still reaches the client,
   which is what it is for. (usetheokit/theokit#373)
+- **BREAKING: an agent file that declares no `policy` fails the build, naming the file.** The agent
+  scanner refuses a file under `agents/` with no access declaration, so `theo build`, `theo start`
+  and `theo dev` stop before serving an agent nobody decided about — the same gate the route scanner
+  applies, for the same reason and with the same shape of message: the file, the URL it serves, and
+  the two ways out. Absence used to mean open, and on this surface open means more than it does on a
+  route: the endpoints resume the conversation the CALLER names, so anyone holding a session id read
+  and continued it. `'public'` is still an answer and now says out loud that the app runs a
+  capability model. One declaration covers every endpoint the agent exposes. Nothing changes for an
+  agent module built in memory and passed straight to `mountAgent`. See `MIGRATION.md`.
+  (usetheokit/theokit#365)
+- **A refusal from an agent endpoint no longer repeats which check refused.** The wire gets one fixed
+  message naming what the caller must supply; the specific reason goes to the server log. The
+  owner primitive distinguishes "no recorded owner" from "not the owner", and returning that pair
+  would let an unauthenticated caller tell an existing conversation from one that never existed.
+  (usetheokit/theokit#365)
+- **BREAKING: `GET /api/agents/<name>/approvals` requires the agent's policy to admit the caller,
+  and 404s for an agent that does not exist.** It answered `200` with every pending approval id to
+  anyone who asked, and it lost its last in-tree caller when the pending approval started reaching
+  the client over the stream (usetheokit/theokit#392). It also no longer serves the process-wide
+  ledger under a name no agent has. (usetheokit/theokit#365)
 - **BREAKING: a route file that declares no `policy` fails the build, naming the file.** The route
   scanner refuses an HTTP export with no access policy, so `theo build`, `theo start`, `theo dev`,
   `theo routes` and every deployment adapter stop before serving a route nobody decided about.

@@ -359,6 +359,16 @@ precisely the position criterion 5 exists to forbid.
 session id that it "MUST add its own auth gate before this endpoint". Point 2 above is why no such
 gate is constructible.
 
+> **Addendum, 2026-08-20 — what changed after this was measured.** The measurement above stands as
+> written; it is what the tree held on the day. Since then, usetheokit/theokit#365 closed **stop 2**:
+> an agent file exports a `policy`, every agent endpoint evaluates it, identity comes from the
+> application's own `server/context.ts`, and `scanAgents` refuses a file that declares nothing. The
+> instruction in the last paragraph is now one an application can follow. **Stop 1 is unchanged** —
+> none of this is in a published artifact, so a `0.48.x` install still has no seam. **Stop 3 is
+> unchanged and is the honest limit**: `requireOwner` still compares a subject id to an owner id,
+> there is still no key contract, and the approval ledger still records no owner — so this page's
+> § Break 2 finding survives the fix, on the framework's route as much as on the application's.
+
 ### The two implementations, and why they are the shapes they are
 
 Both sides do the same four things: resolve a tenant server-side from a signed/encrypted cookie, put

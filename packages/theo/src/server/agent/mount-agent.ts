@@ -11,13 +11,15 @@
  */
 import { compileAgentModule, resolveEnabledSkills, streamAgentUIMessages } from '@theokit/agents'
 
-import {
-  evaluateRoutePolicy,
-  type RoutePolicy,
-  type RouteSubject,
-} from '../../core/contracts/route-policy.js'
+import type { RoutePolicy } from '../../core/contracts/route-policy.js'
 import { validateCsrfRequest, type CsrfMode } from '../security/csrf.js'
 
+import {
+  admitAgentRequest,
+  agentAccessDenied,
+  readAgentPolicy,
+  type AgentSubjectResolver,
+} from './agent-access.js'
 import type { ApiKeyResolver } from './api-key-resolver.js'
 import { buildAgentHitl } from './build-agent-streamer.js'
 import { durableUiMessageStreamResponse } from './durable-ui-message-stream-response.js'
@@ -88,22 +90,31 @@ interface MountAgentOptions {
    */
   projectRoot?: string
   /**
+   * The agent's name, as the scanner discovered it. Reported to the policy under
+   * `params.agent` and named in a refusal. Defaults to {@link MountAgentOptions.source}.
+   */
+  agentName?: string
+  /**
    * Who may run this agent, and against which conversation (ADR 0001,
    * usetheokit/theokit#365).
    *
-   * `mountAgent` is not a `route()`, so the policy seam the two HTTP executors and
-   * `callProcedure` share did not reach the surface this framework exists for. The
-   * endpoint accepts a caller-supplied session id and the durable store resumes
-   * whatever conversation it names, so without this there is no owner check
-   * anywhere on the path.
+   * NORMALLY ABSENT, and that is the fix rather than an omission: the policy is read from the
+   * agent module's own `export const policy`, so it travels with the agent instead of depending
+   * on every caller remembering to pass it. This option exists for a host that resolved the
+   * decision itself (an `@Expose`-bound controller, an embedder), and it OVERRIDES the module's
+   * declaration when given.
    *
    * Evaluated against the parsed request body, so a policy can ask who owns the
-   * conversation being resumed. Absent ⇒ not evaluated, matching the route
-   * executors: absence means "not declared" and is not reinterpreted as denial.
+   * conversation being resumed. Absent on both ends ⇒ not evaluated, matching the route
+   * executors: absence means "not declared" and is not reinterpreted as denial. Absence is
+   * refused at scan time instead, where the file that omitted it can be named.
    */
   policy?: RoutePolicy
-  /** The authenticated caller, resolved by whatever established identity for this transport. */
-  subject?: RouteSubject | null
+  /**
+   * Resolve the authenticated caller. Invoked at most once, and only when a policy exists — an
+   * agent declaring `'public'` never pays for the application's `createContext`.
+   */
+  resolveSubject?: AgentSubjectResolver
 }
 
 /**
@@ -125,7 +136,8 @@ interface MountAgentOptions {
 async function admitRequest(
   request: Request,
   policy: RoutePolicy | undefined,
-  subject: RouteSubject | null | undefined,
+  resolveSubject: AgentSubjectResolver | undefined,
+  agentName: string,
 ): Promise<AgentRequestInput | Response> {
   let body: unknown = null
   try {
@@ -139,15 +151,9 @@ async function admitRequest(
     return jsonError(400, 'BAD_REQUEST', 'Request must contain a non-empty message or messages[].')
   }
 
-  const decision = await evaluateRoutePolicy(policy, {
-    subject: subject ?? null,
-    query: undefined,
-    body: input,
-    params: undefined,
-  })
-  if (!decision.allowed) {
-    return jsonError(403, 'FORBIDDEN', `Access denied: ${decision.reason}`)
-  }
+  const params = { agent: agentName, endpoint: 'run' as const, sessionId: input.sessionId }
+  const decision = await admitAgentRequest(policy, resolveSubject, params, input)
+  if (!decision.allowed) return agentAccessDenied(decision, params)
 
   return input
 }
@@ -170,8 +176,9 @@ export async function mountAgent(
     source = 'agent module',
     csrfMode = 'strict',
     projectRoot,
+    agentName,
     policy,
-    subject,
+    resolveSubject,
   }: MountAgentOptions = {},
 ): Promise<Response> {
   // Enforce CSRF BEFORE any work — an agent run spends real LLM tokens, so a cross-origin
@@ -185,7 +192,14 @@ export async function mountAgent(
     }
   }
 
-  const admitted = await admitRequest(request, policy, subject)
+  // The declaration travels with the agent, not with the caller — see `agent-access.ts`. An
+  // explicit option still wins, for a host that already took the decision.
+  const admitted = await admitRequest(
+    request,
+    policy ?? readAgentPolicy(mod, source),
+    resolveSubject,
+    agentName ?? source,
+  )
   if (admitted instanceof Response) return admitted
   const input = admitted
 

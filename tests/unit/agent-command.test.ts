@@ -18,7 +18,11 @@ let root: string
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'theo-agent-cmd-'))
   mkdirSync(join(root, 'agents'), { recursive: true })
-  writeFileSync(join(root, 'agents', 'ops.ts'), 'export default {}\n')
+  // usetheokit/theokit#365 - the scanner refuses an agent file that declares no policy.
+  writeFileSync(
+    join(root, 'agents', 'ops.ts'),
+    "export const policy = 'public'\nexport default {}\n",
+  )
 })
 
 afterEach(() => {

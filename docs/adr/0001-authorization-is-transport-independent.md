@@ -79,6 +79,33 @@ Making the executors refuse it would convert a build gate into a runtime break f
 caller, which is the all-at-once failure this ADR routed through a migration in the first place.
 `tests/unit/route-policy-declaration-gate.test.ts` holds both halves of that line.
 
+**Extended to the agent surface (2026-08-20, usetheokit/theokit#365).** The endpoints this framework
+exists for — `POST /api/agents/<name>`, the thread routes, the pending-approval listing, the approve
+route and MCP — are dispatched *before* route matching, so the seam above never reached them. They
+now read a `policy` exported by the agent file itself and evaluate it through `evaluateRoutePolicy`,
+with identity resolved from the application's own `server/context.ts`, which is the same seam the
+Node executor reads. `scanAgents` refuses an agent file that declares nothing
+(`MissingAgentPolicyError`), so absence stopped meaning open here as well.
+
+Two details this ADR did not anticipate, both learned by building it:
+
+- **An option nobody passes is not a seam.** `mountAgent` accepted `policy` and `subject` for a day,
+  and every production caller omitted both — a gate that worked perfectly and was never reached. The
+  declaration had to travel with the *agent*, not with the caller, which is why it is a module
+  export rather than a call argument. A suite can prove a gate works; only a request over a socket
+  proves it is reached (`tests/integration/agent-endpoints-refuse-an-unauthenticated-caller.test.ts`).
+- **`requireOwner`'s reason is an oracle.** It distinguishes "resource has no recorded owner" from
+  "subject does not own this resource". Echoed to the wire, that pair tells an unauthenticated
+  caller whether a conversation id exists — enumeration rebuilt out of the check added to stop the
+  leak. The reason is logged; the wire gets one fixed message naming the remedy.
+
+**Where this stops.** `requireOwner` compares a subject id to an owner id, and a tenant is a scope
+over subjects rather than an owner. The framework still has no key contract, so the isolation
+question `docs/program/journeys/j08-tenant.md` asks is answered by the application's own key
+derivation and not by anything here. The approval ledger records no owner at all, so a policy asked
+about `'approve'` can decide whether a caller may touch this agent's approvals and cannot decide
+whether the approval is theirs.
+
 **Not implemented, and deliberately.** Point 4. `session.ts` still carries `ServerResponse` in its
 public signature. Identity reaches the policy through the run context each transport already builds,
 so nothing is blocked on this today; removing the coupling is its own breaking release with its own
@@ -101,7 +128,7 @@ than a change.
 ## Verification
 
 - A test that reaches the same route over HTTP and through `callProcedure` and asserts an identical access decision for the same subject. That test is the ADR: without it, the claim "not a second implementation" is unenforced.
-- The HITL endpoints reject an unauthenticated caller and an authenticated non-owner, exercised against the published build (M1 DoD).
+- The HITL endpoints reject an unauthenticated caller and an authenticated non-owner, exercised against the published build (M1 DoD). Half of this now exists in the tree rather than against a published build: `tests/integration/agent-endpoints-refuse-an-unauthenticated-caller.test.ts` boots the production request handler on a real listener and sends real requests with no credential to the run endpoint, the thread routes, the approval listing and the approve route. The published-build half stays open until a release carries it.
 - A route with no declared policy fails the build, naming the file. Enforced by `scanServerRoutes`; covered by `tests/unit/route-policy-declaration-gate.test.ts`.
 
 ## References

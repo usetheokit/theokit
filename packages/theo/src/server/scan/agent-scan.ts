@@ -2,10 +2,13 @@
  * Build-time scanner: walks `<projectRoot>/agents/` derived from cwd.
  * No HTTP input ever reaches these fs calls.
  */
-import { existsSync, statSync } from 'node:fs'
+import { existsSync, readFileSync, statSync } from 'node:fs'
 import { extname, join, relative } from 'node:path'
 
 import { walkSourceFiles } from '../_internal/scan-walker.js'
+
+import { declaresAgentPolicy } from './detect-agent-policy.js'
+import { MissingAgentPolicyError } from './errors.js'
 
 const AGENT_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx'])
 // Convention § 5: a co-located test file is not an agent.
@@ -73,11 +76,52 @@ export function scanAgents(projectRoot: string, agentsDirName = 'agents'): Agent
     // `agents/foo/index.ts` still collapses to `foo` (a named nested agent).
     if (rel.endsWith('/index')) rel = rel.slice(0, -6)
     if (rel === 'index' || rel === '') return
+    const agentPath = `/api/agents/${rel}`
+    assertAgentDeclaresPolicy(absPath, agentPath)
     results.push({
       filePath: absPath,
-      agentPath: `/api/agents/${rel}`,
+      agentPath,
       name: rel,
     })
   })
   return results
+}
+
+/**
+ * Cache of the policy-declaration answer, keyed by path + mtime + size.
+ *
+ * `theokit dev` re-scans the agents directory on EVERY request, so parsing each agent file with the
+ * TypeScript AST per request would turn a build-time check into per-request latency. Keying on the
+ * file's own mtime and size means an edit invalidates the entry without anyone remembering to, and
+ * a `theokit build` (one process, one scan) never notices the cache exists.
+ */
+const policyDeclarationCache = new Map<string, boolean>()
+
+/** Test seam — the module-level cache would otherwise outlive a fixture directory. */
+export function _resetAgentPolicyCacheForTests(): void {
+  policyDeclarationCache.clear()
+}
+
+/**
+ * Refuse an agent file that declares no access policy (usetheokit/theokit#365).
+ *
+ * The refusal lives in the scanner, next to the reserved-name and empty-name refusals, because this
+ * is the one place every entry point passes through: `theokit build`, `theokit start`, `theokit dev`
+ * and the manifest generator all reach agents by calling `scanAgents`.
+ *
+ * The blast radius stops at the file system, exactly as it does for routes. A module handed to
+ * `mountAgent` in memory — a test, an embedder, an `@Expose`d controller method — never passed a
+ * scanner, and `admitAgentRequest` still treats an undeclared policy as "not declared" rather than
+ * as denial. Absence is refused where an application DECLARES its agents, not where a caller passes
+ * one.
+ */
+function assertAgentDeclaresPolicy(filePath: string, agentPath: string): void {
+  const stat = statSync(filePath)
+  const key = `${filePath}:${String(stat.mtimeMs)}:${String(stat.size)}`
+  let declared = policyDeclarationCache.get(key)
+  if (declared === undefined) {
+    declared = declaresAgentPolicy(filePath, readFileSync(filePath, 'utf8'))
+    policyDeclarationCache.set(key, declared)
+  }
+  if (!declared) throw new MissingAgentPolicyError({ file: filePath, agentPath })
 }

@@ -77,7 +77,8 @@ describe('generateManifest', () => {
     const serverDir = join(TMP_DIR, 'server')
     setupFixture({
       'server/routes/health.ts': "export const GET = { policy: 'public', handler: () => ({}) }",
-      'agents/support.ts': 'export default {}',
+      // usetheokit/theokit#365 - the scanner refuses an agent file that declares no policy.
+      'agents/support.ts': "export const policy = 'public'\nexport default {}",
     })
 
     const manifest = generateManifest(serverDir)

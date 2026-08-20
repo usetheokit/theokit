@@ -68,6 +68,9 @@ beforeAll(() => {
     [
       `import { AgentBuilder } from '@theokit/agents'`,
       `import { z } from 'zod'`,
+      // usetheokit/theokit#365 — the scanner refuses an agent that declares no access policy.
+      // `'public'` is the declaration; what this file measures is the wire, not who may call.
+      `export const policy = 'public'`,
       `export default AgentBuilder.create()`,
       `  .input(z.object({ message: z.string() }))`,
       `  .model('test-model')`,

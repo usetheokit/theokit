@@ -2,8 +2,14 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { extname } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
+import type { RouteSubject } from '../../../core/contracts/route-policy.js'
+import { readAgentPolicy } from '../../../server/agent/agent-access.js'
 import { getApprovalRegistry } from '../../../server/agent/approval-registry.js'
-import { handleAgentApproval, isApprovalPath } from '../../../server/agent/approve-agent.js'
+import {
+  handleAgentApproval,
+  isApprovalPath,
+  parseApprovalAgentName,
+} from '../../../server/agent/approve-agent.js'
 import { mountAgent } from '../../../server/agent/mount-agent.js'
 import { resolveProvider } from '../../../server/agent/provider-resolver.js'
 import { serveAgentAuxRoute } from '../../../server/agent/serve-aux-routes.js'
@@ -15,6 +21,7 @@ import {
   incomingMessageToWebRequest,
   writeWebResponseToServerResponse,
 } from '../../../server/http/node-web-adapter.js'
+import { createAgentSubjectResolver } from '../../../server/http/resolve-agent-subject.js'
 import { sendError } from '../../../server/http/send-response.js'
 import { serveStaticFile } from '../../../server/http/static.js'
 import { logRequest } from '../../../server/observability/logger.js'
@@ -87,6 +94,23 @@ export interface RequestHandlerCtx {
   rateLimiter:
     | ((req: IncomingMessage) => Promise<{ limited: boolean; headers: Record<string, string> }>)
     | null
+}
+
+/**
+ * The caller's identity, from the application's own `server/context.ts` — the seam every
+ * `route()` already reads and no agent URL ever reached (usetheokit/theokit#365).
+ *
+ * Memoized per request by `createAgentSubjectResolver` and invoked only on a path this process is
+ * about to answer, and only when that path's agent declares a policy.
+ */
+function agentSubjectResolver(c: RequestHandlerCtx): () => Promise<RouteSubject | null> {
+  return createAgentSubjectResolver({
+    req: c.req,
+    res: c.res,
+    loadModule: c.loadModule,
+    serverDir: c.serverDir,
+    pluginRunner: c.pluginRunner,
+  })
 }
 
 /** Apply rate limit; return true if request was limited (response sent). */
@@ -202,6 +226,9 @@ export async function tryServeAgentAux(c: RequestHandlerCtx): Promise<boolean> {
     // M39 — the thread follow-up route drives the agent; resolve the key on demand.
     // theokit#328 — the thread route drives an agent, so its key follows the model too.
     resolveApiKey: (model) => resolveProvider(model).apiKey,
+    // usetheokit/theokit#365 — who is asking. Memoized and LAZY: this branch runs for every url,
+    // and the application's `createContext` must not execute for the ones it declines.
+    resolveSubject: agentSubjectResolver(c),
   })
   if (response === null) return false
   c.res.setHeader(X_REQUEST_ID, c.requestId)
@@ -250,12 +277,22 @@ export async function tryServeAgent(c: RequestHandlerCtx): Promise<boolean> {
       return true
     }
     try {
+      // usetheokit/theokit#365 — the approve route settles a paused tool, so it answers to the
+      // named agent's declared policy. The subject resolver runs BEFORE the Node request is
+      // converted, because `createContext` receives the Node `req` and the conversion drains it.
+      const approveAgent = c.cachedAgents.find((a) => a.name === parseApprovalAgentName(urlPath))
+      const resolveSubject = agentSubjectResolver(c)
+      const policy =
+        approveAgent === undefined
+          ? undefined
+          : readAgentPolicy(await c.loadModule(approveAgent.filePath), approveAgent.filePath)
       const request = incomingMessageToWebRequest(c.req)
       const response = await handleAgentApproval(
         request,
         urlPath,
         getApprovalRegistry(),
         c.csrfMode,
+        { policy, resolveSubject },
       )
       await writeWebResponseToServerResponse(response, c.res)
     } catch (err) {
@@ -316,7 +353,7 @@ export async function tryServeAgent(c: RequestHandlerCtx): Promise<boolean> {
  */
 async function serveAgentTurn(
   c: RequestHandlerCtx,
-  agent: { filePath: string },
+  agent: { filePath: string; name: string },
   method: string,
 ): Promise<void> {
   // theokit#324 — the plugin lifecycle runs here too.
@@ -332,6 +369,11 @@ async function serveAgentTurn(
   // same `onError` on the failure path — an agent route should not have a lifecycle of its own.
   let pluginCtx: PluginContext | undefined
   let request: Request
+
+  // Built before the conversion below, for the same reason the approve branch does it: the
+  // application's `createContext` is handed the Node `req`, and `incomingMessageToWebRequest`
+  // drains that stream (theokit#400).
+  const resolveSubject = agentSubjectResolver(c)
 
   try {
     request = incomingMessageToWebRequest(c.req)
@@ -381,6 +423,10 @@ async function serveAgentTurn(
       source: agent.filePath,
       csrfMode: c.csrfMode,
       projectRoot: c.projectRoot,
+      // usetheokit/theokit#365 — the policy is read off `mod` inside `mountAgent`; what this
+      // caller owes is the identity to judge it against.
+      agentName: agent.name,
+      resolveSubject,
     })
     await writeWebResponseToServerResponse(response, c.res)
   } catch (err) {

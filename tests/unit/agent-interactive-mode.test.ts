@@ -22,7 +22,12 @@ let projectRoot: string
 beforeEach(() => {
   projectRoot = mkdtempSync(join(tmpdir(), 'agent-interactive-'))
   mkdirSync(join(projectRoot, 'agents'), { recursive: true })
-  writeFileSync(join(projectRoot, 'agents', 'chat.ts'), 'export default {}', 'utf8')
+  writeFileSync(
+    join(projectRoot, 'agents', 'chat.ts'),
+    // usetheokit/theokit#365 - the scanner refuses an agent file that declares no policy.
+    "export const policy = 'public'\nexport default {}",
+    'utf8',
+  )
 })
 afterEach(() => {
   rmSync(projectRoot, { recursive: true, force: true })

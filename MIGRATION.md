@@ -75,6 +75,74 @@ time in production. The scanner already refuses a dotted route basename and a co
 reserved batch path by name, before anything serves traffic. This is the same gate, for a bigger
 class of mistake.
 
+## `theokit` — every agent file declares who may run it
+
+**Breaking**, for every application with a file under `agents/`. The agent scanner refuses a file
+that declares no `policy`, so `theo build`, `theo start` and `theo dev` fail until each agent says
+something. Nothing changes for an agent module you build in memory and hand to `mountAgent`
+directly — that value never passes a scanner.
+
+### What changed
+
+The agent endpoints — the run, the thread routes, the pending-approval listing, the approve route
+and MCP — are dispatched before route matching, so no `route()`, no `server/middleware/` and no
+`server/context.ts` ever saw those URLs. They had no owner check anywhere on the path, and they
+resume the conversation the **caller** names. Whoever holds a conversation id could read and
+continue that conversation.
+
+One declaration per agent covers all of its endpoints, because they all reach the same conversation
+and the same paused tools.
+
+```diff
+  import { AgentBuilder } from '@theokit/agents'
+
++ export const policy = 'public'
++
+  export default AgentBuilder.create()
+    .model('openai/gpt-4o-mini')
+    .build()
+```
+
+`'public'` is an answer, and for an app with no login it is the honest one — it says that anyone
+holding a session id may read and continue that conversation, which is a capability model. What it
+stops being is invisible.
+
+For an app that has users, the check is the same primitive routes use:
+
+```ts
+import { requireOwner } from 'theokit/server/define'
+
+//  subject  <- what server/context.ts put on ctx.subject
+//  params   <- { agent, endpoint, sessionId?, approvalId? }
+//  body     <- the parsed chat body, on the endpoints that carry one
+export const policy = ({ subject, params }) =>
+  requireOwner(subject, ownerOfConversation(params.sessionId))
+```
+
+`params.endpoint` is one of `'run' | 'thread-message' | 'thread-stream' | 'approvals' | 'approve' |
+'mcp'`, so a single declaration can answer them differently.
+
+### Where the identity comes from
+
+`ctx.subject`, produced by your `server/context.ts` — the same seam every `route()` already reads.
+The agent branches now build that context too. An app with no `context.ts` resolves no subject, so a
+policy calling `requireOwner` refuses everyone; that is the correct direction for missing wiring, and
+it fails on the first request rather than quietly admitting.
+
+### What this does NOT decide
+
+Whether a pending **approval** belongs to the caller. The approval ledger keys by a bare id and
+records no owner, so the strongest question available is "may this subject touch this agent's
+approvals". An authenticated user can still settle another user's approval on an agent both are
+admitted to. `params.approvalId` is passed to the policy so an application holding its own owner map
+can answer more.
+
+### Why not flip it at runtime instead
+
+There is no safe runtime default. Refusing every caller-supplied session id would break multi-turn
+chat, which is the base case; admitting them is the defect. So the question moves to a build error
+that names the file, exactly as the route gate above does.
+
 ## `theokit` — `executeWebRequest` enforces CSRF unless you turn it off
 
 **Breaking**, for anyone calling `executeWebRequest` from `theokit/server` directly. Routes served

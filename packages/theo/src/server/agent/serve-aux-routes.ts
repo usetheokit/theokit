@@ -18,6 +18,13 @@ import type { WebRequestSource } from '../http/node-request.js'
 import type { AgentNode } from '../scan/agent-scan.js'
 import { validateCsrfRequest, type CsrfMode } from '../security/csrf.js'
 
+import {
+  admitAgentRequest,
+  agentAccessDenied,
+  readAgentPolicy,
+  type AgentAccessParams,
+  type AgentSubjectResolver,
+} from './agent-access.js'
 import { isAgentCardPath, handleAgentCard } from './agent-card-handler.js'
 import type { ApiKeyResolver } from './api-key-resolver.js'
 import { getApprovalRegistry } from './approval-registry.js'
@@ -66,6 +73,37 @@ interface AuxRouteDeps {
    * an agent declaring `anthropic/…` was handed whichever key env priority found first.
    */
   resolveApiKey?: ApiKeyResolver
+  /**
+   * Who is asking (usetheokit/theokit#365). Invoked ONLY on a path this dispatcher owns and only
+   * when that path's agent declares a policy — the same "convert nothing you are not about to
+   * answer" discipline theokit#400 imposed on `source.toRequest()`, for the same reason: this
+   * function runs for every url in the process, and the application's `createContext` must not be
+   * executed for the ones it merely declines.
+   */
+  resolveSubject?: AgentSubjectResolver
+}
+
+/**
+ * Evaluate the agent's declared policy for one aux endpoint.
+ *
+ * Returns the refusal `Response`, or `null` when the caller is admitted. Loading the module here is
+ * what makes the gate reachable at all: the policy is an export of the agent file, and three of
+ * these branches previously answered without ever opening it.
+ */
+async function admitAux(
+  deps: AuxRouteDeps,
+  agent: AgentNode,
+  params: AgentAccessParams,
+  body?: unknown,
+): Promise<Response | null> {
+  const mod = await deps.loadModule(agent.filePath)
+  const decision = await admitAgentRequest(
+    readAgentPolicy(mod, agent.filePath),
+    deps.resolveSubject,
+    params,
+    body,
+  )
+  return decision.allowed ? null : agentAccessDenied(decision, params)
 }
 
 /**
@@ -101,8 +139,18 @@ export async function serveAgentAuxRoute(
   }
 
   // M14 — GET /api/agents/<name>/approvals (pending HITL approvals).
-  if (isListApprovalsPath(urlPath)) {
+  //
+  // usetheokit/theokit#365 — this used to answer 200 with every pending approval id to anyone who
+  // asked, and the id is all the approve route needs to settle a paused tool. It is now gated by
+  // the named agent's policy, which also means an unknown `<name>` falls through to a 404 instead
+  // of listing the process-wide ledger for an agent that does not exist.
+  const approvalsName = isListApprovalsPath(urlPath)
+  if (approvalsName !== null) {
     if (method !== 'GET') return null
+    const agent = deps.agents.find((a) => a.name === approvalsName)
+    if (!agent) return null
+    const refusal = await admitAux(deps, agent, { agent: agent.name, endpoint: 'approvals' })
+    if (refusal !== null) return refusal
     return handleListApprovals(getApprovalRegistry())
   }
 
@@ -112,6 +160,11 @@ export async function serveAgentAuxRoute(
   // Observe-by-runId is a FEATURE (ADR-0046 D5) — a second client resumes a run a
   // first started. Do NOT add a custom-header CSRF check here: browsers send NO
   // custom headers with `EventSource`, so it would break native SSE reconnect.
+  //
+  // usetheokit/theokit#365 gated every sibling branch and deliberately left this one alone: the
+  // key here is MINTED BY THE SERVER (`mintRunId`) and handed only to the caller that started the
+  // run, so it is a capability the framework issued rather than a name the caller chose. That is
+  // the property the thread and conversation keys lack, and it is the whole of the difference.
   const runStream = isAgentRunStreamPath(urlPath)
   if (runStream !== null) {
     if (method !== 'GET') return null
@@ -145,11 +198,15 @@ export async function serveAgentAuxRoute(
  *
  * SECURITY (thread stream): unlike the M37 reconnect route — keyed on an
  * `mintRunId()` UUID (122-bit unguessable) — the thread stream is keyed on the
- * caller-supplied `sessionId`. The open GET is safe ONLY if the `sessionId` is
- * unguessable (e.g. a client-minted UUID). An app that uses a PREDICTABLE
- * sessionId (user id, email, sequential id) MUST add its own auth gate before
- * this endpoint, or any party who can guess the sessionId can read the thread's
- * live conversation stream.
+ * caller-supplied `sessionId`, so an app using a PREDICTABLE sessionId (a user id,
+ * an email, a tenant-derived key) is one guess away from another party reading the
+ * thread's live conversation.
+ *
+ * usetheokit/theokit#365 — this paragraph used to end by telling the application it
+ * "MUST add its own auth gate before this endpoint", and no such gate was constructible:
+ * the URL is dispatched before route matching, so no `route()` and no middleware ever
+ * saw it. The gate is the agent's own `export const policy`, evaluated here, and the
+ * instruction is now one an application can follow.
  *
  * Returns `null` to fall through (not a thread route, wrong method, unknown agent).
  */
@@ -162,7 +219,16 @@ async function serveThreadRoute(
   const stream = isThreadStreamPath(urlPath)
   if (stream !== null) {
     if (method !== 'GET') return null
-    if (!deps.agents.some((a) => a.name === stream.name)) return null
+    const streamAgent = deps.agents.find((a) => a.name === stream.name)
+    if (!streamAgent) return null
+    // Resolved BEFORE `toRequest()`: `createContext` receives the Node `req`, and the conversion
+    // drains it.
+    const refusal = await admitAux(deps, streamAgent, {
+      agent: streamAgent.name,
+      endpoint: 'thread-stream',
+      sessionId: stream.sessionId,
+    })
+    if (refusal !== null) return refusal
     return handleThreadStream(stream.sessionId, source.toRequest())
   }
 
@@ -171,6 +237,12 @@ async function serveThreadRoute(
     if (method !== 'POST') return null
     const agent = deps.agents.find((a) => a.name === msg.name)
     if (!agent) return null
+    const refusal = await admitAux(deps, agent, {
+      agent: agent.name,
+      endpoint: 'thread-message',
+      sessionId: msg.sessionId,
+    })
+    if (refusal !== null) return refusal
     if (deps.resolveApiKey === undefined) {
       // MEDIUM-1 — the path matched but the caller wired no provider-key resolver.
       // Fail loudly (501) instead of a silent 404 that reads as "route not found".
@@ -217,6 +289,16 @@ async function serveMcpRoute(
   // multi-surface thesis). Absent the opt-in, fall through to 404 (the agent is web-only). This is a
   // breaking change from the M16 auto-mount (documented in the CHANGELOG § Security).
   if (!isMcpExposed(mod)) return null
+
+  // usetheokit/theokit#365 — the MCP route drives the agent and reaches its tools, so it answers to
+  // the same declared policy as the run route. Resolved before `toRequest()` for the reason above.
+  const mcpParams = { agent: agent.name, endpoint: 'mcp' as const }
+  const mcpDecision = await admitAgentRequest(
+    readAgentPolicy(mod, agent.filePath),
+    deps.resolveSubject,
+    mcpParams,
+  )
+  if (!mcpDecision.allowed) return agentAccessDenied(mcpDecision, mcpParams)
 
   // M34 (#97) — enforce CSRF BEFORE any work. The MCP route drives the agent (real LLM tokens), so a
   // cross-origin POST must be rejected — parity with the agent-run route (`mount-agent.ts:83-91`).

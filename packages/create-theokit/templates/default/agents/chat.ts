@@ -18,6 +18,29 @@ import { weatherTool } from './tools/weather.js'
  * the environment — OPENROUTER_API_KEY (preferred) OR ANTHROPIC_API_KEY / OPENAI_API_KEY; the model id is
  * provider-prefixed so OpenRouter routes it upstream (https://openrouter.ai/models).
  */
+/**
+ * Who may run this agent, and against which conversation (ADR 0001).
+ *
+ * Every agent declares this; `'public'` is the decision, not the absence of one — and it is the
+ * honest one for a scaffold with no login. It means: the endpoint resumes whatever conversation the
+ * caller names, so anyone holding a session id may read and continue it. That is a capability
+ * model, and it is fine while the ids are the random UUIDs the client mints.
+ *
+ * The moment this app has users, replace it with the owner check:
+ *
+ * ```ts
+ * import { requireOwner } from 'theokit/server/define'
+ *
+ * export const policy = ({ subject, params }) =>
+ *   requireOwner(subject, ownerOfConversation(params.sessionId))
+ * ```
+ *
+ * `subject` is whatever `server/context.ts` put on `ctx.subject`; `params` carries
+ * `{ agent, endpoint, sessionId?, approvalId? }`. One declaration covers the run, the thread
+ * routes, the approval surface and MCP.
+ */
+export const policy = 'public'
+
 export default AgentBuilder.create()
   .input(z.object({ message: z.string() }))
   .model('openai/gpt-4o-mini')

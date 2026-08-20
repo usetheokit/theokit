@@ -256,6 +256,9 @@ describe('T5a.1a — leaf-file Web Crypto migration (node:crypto → globalThis.
       // Sibling of detect-http-methods: same TS-compiler-API load via
       // `node:module`'s createRequire, same build-time-only boundary.
       'packages/theo/src/server/scan/detect-route-policy.ts',
+      // Same again for the agent surface (usetheokit/theokit#365): one export-name
+      // question, answered on the TS AST at scan time, never at request time.
+      'packages/theo/src/server/scan/detect-agent-policy.ts',
       'packages/theo/src/server/scan/module-loader.ts',
       'packages/theo/src/server/jobs/job-scan.ts',
       'packages/theo/src/server/cron/cron-scan.ts',
