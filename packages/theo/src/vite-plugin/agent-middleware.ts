@@ -23,6 +23,7 @@ import { isMcpPath } from '../server/agent/mcp-handler.js'
 import { mountAgent } from '../server/agent/mount-agent.js'
 import { resolveProvider } from '../server/agent/provider-resolver.js'
 import { serveAgentAuxRoute } from '../server/agent/serve-aux-routes.js'
+import { createWebRequestSource } from '../server/http/node-request.js'
 import {
   incomingMessageToWebRequest,
   writeWebResponseToServerResponse,
@@ -122,8 +123,7 @@ async function serveAux(
   const requestId = randomUUID()
   const start = Date.now()
   try {
-    const request = incomingMessageToWebRequest(req)
-    const response = await serveAgentAuxRoute(request, urlPath, {
+    const response = await serveAgentAuxRoute(createWebRequestSource(req), urlPath, {
       agents: scanAgents(deps.projectRoot, deps.agentsDir),
       loadModule: deps.loadModule,
       baseUrl: `http://${req.headers.host ?? 'localhost'}`,

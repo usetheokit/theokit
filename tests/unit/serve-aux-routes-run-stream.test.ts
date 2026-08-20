@@ -5,6 +5,8 @@ import { durableUiMessageStreamResponse } from '../../packages/theo/src/server/a
 import { getRunEventCache } from '../../packages/theo/src/server/agent/run-event-cache.js'
 import { serveAgentAuxRoute } from '../../packages/theo/src/server/agent/serve-aux-routes.js'
 import type { AgentNode } from '../../packages/theo/src/server/scan/agent-scan.js'
+import type { WebRequestSource } from '../../packages/theo/src/server/http/node-request.js'
+import { sourceOf } from '../lib/web-request-source.js'
 
 /**
  * M37 (ADR-0046) — end-to-end wiring through the REAL aux-route dispatcher +
@@ -27,10 +29,11 @@ const deps = {
   csrfMode: 'off' as const,
 }
 
-function getReq(url: string, lastEventId?: string): Request {
+// theokit#400 — the dispatcher takes a deferred request source, not a `Request`.
+function getReq(url: string, lastEventId?: string): WebRequestSource {
   const headers = new Headers()
   if (lastEventId !== undefined) headers.set('last-event-id', lastEventId)
-  return new Request(`https://app.example${url}`, { method: 'GET', headers })
+  return sourceOf(new Request(`https://app.example${url}`, { method: 'GET', headers }))
 }
 
 async function* chunks(...items: UIMessageChunk[]): AsyncIterable<UIMessageChunk> {
@@ -95,7 +98,7 @@ describe('serveAgentAuxRoute — M37 durable run-stream reconnect', () => {
   it('falls through (null) for a non-GET method on the run-stream route', async () => {
     const path = '/api/agents/support/runs/run-x/stream'
     const res = await serveAgentAuxRoute(
-      new Request(`https://app.example${path}`, { method: 'POST' }),
+      sourceOf(new Request(`https://app.example${path}`, { method: 'POST' })),
       path,
       deps,
     )

@@ -77,6 +77,38 @@ export function incomingMessageToWebRequest(req: IncomingMessage): Request {
 }
 
 /**
+ * A Node request that has NOT been converted yet — method now, body only if someone claims it.
+ *
+ * theokit#400. `incomingMessageToWebRequest` drains the Node stream, and a stream drains once. A
+ * dispatcher that converts in order to decide whether it owns a path has already spent the body on
+ * every path it does not own: the next branch attaches to a readable that has already ended, waits
+ * for an `'end'` that cannot fire twice, and the request hangs with no status at all.
+ *
+ * The fix is an ordering one, so the type encodes the ordering: a router reads `method` (free) and
+ * calls `toRequest()` only after it has decided the request is its own. Passing the source instead
+ * of a `Request` is what makes "did you convert before deciding?" answerable by reading a signature.
+ *
+ * `toRequest()` memoizes, because a second conversion of the same `IncomingMessage` yields a
+ * Request whose body is an empty closed stream — a silent truncation, which is worse than the hang
+ * it would replace.
+ */
+export interface WebRequestSource {
+  /** Uppercase HTTP method. Available without touching the body. */
+  readonly method: string
+  /** Convert on demand. Idempotent: repeated calls return the same `Request`. */
+  toRequest: () => Request
+}
+
+/** Wrap `req` as a {@link WebRequestSource} — the conversion is deferred and memoized. */
+export function createWebRequestSource(req: IncomingMessage): WebRequestSource {
+  let converted: Request | undefined
+  return {
+    method: (req.method ?? 'GET').toUpperCase(),
+    toRequest: () => (converted ??= incomingMessageToWebRequest(req)),
+  }
+}
+
+/**
  * Build the Web `Request` handed to a route handler as `ctx.request` in the
  * Node server path (dev + `theokit start`). Method + absolute URL + headers
  * only — NO body.

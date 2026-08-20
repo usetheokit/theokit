@@ -14,6 +14,7 @@
  * the app wires `handleChannelWebhook` in its own route (it cannot be auto-derived from the module).
  * The HITL approve route stays in each caller (it carries caller-specific rate-limiting/CSRF plumbing).
  */
+import type { WebRequestSource } from '../http/node-request.js'
 import type { AgentNode } from '../scan/agent-scan.js'
 import { validateCsrfRequest, type CsrfMode } from '../security/csrf.js'
 
@@ -71,13 +72,23 @@ interface AuxRouteDeps {
  * Serve an agent auxiliary route. Returns a `Response` when `urlPath` matches an aux route (card /
  * list-approvals / mcp) and the method + agent resolve; returns `null` to fall through (not an aux
  * route, wrong method, or unknown agent — the caller then owns the 404/next).
+ *
+ * theokit#400 — the first parameter is a {@link WebRequestSource}, not a `Request`, and that is the
+ * whole shape of the fix. Every fall-through here answers from `urlPath`, `method` and the agent
+ * table alone, so no branch that returns `null` ever calls `source.toRequest()`; the Node body
+ * stream survives intact for whichever branch downstream actually owns the path. Handing this
+ * function a ready-made `Request` is what made the caller drain the body in order to learn it was
+ * not the owner — a POST with a JSON body to any `/api` file route then hung forever.
+ *
+ * The invariant to preserve when editing: **convert only on a path you are about to answer.** A new
+ * branch that calls `toRequest()` before its `return null` reintroduces the hang.
  */
 export async function serveAgentAuxRoute(
-  request: Request,
+  source: WebRequestSource,
   urlPath: string,
   deps: AuxRouteDeps,
 ): Promise<Response | null> {
-  const method = request.method.toUpperCase()
+  const method = source.method.toUpperCase()
 
   // M15 — A2A agent card at `/.well-known/<name>/agent-card.json` (GET).
   const cardName = isAgentCardPath(urlPath)
@@ -105,19 +116,19 @@ export async function serveAgentAuxRoute(
   if (runStream !== null) {
     if (method !== 'GET') return null
     if (!deps.agents.some((a) => a.name === runStream.name)) return null
-    return handleAgentRunReconnect(runStream.runId, request, getRunEventCache())
+    return handleAgentRunReconnect(runStream.runId, source.toRequest(), getRunEventCache())
   }
 
   // M39 — thread signal routes (follow-up message + subscribe-by-thread). Extracted
   // to keep this dispatcher within the cognitive-complexity budget (G6).
-  const threadResponse = await serveThreadRoute(request, method, urlPath, deps)
+  const threadResponse = await serveThreadRoute(source, method, urlPath, deps)
   if (threadResponse !== null) return threadResponse
 
   // M16 — POST /api/agents/<name>/mcp (JSON-RPC MCP server). Extracted to keep this dispatcher
   // within the cognitive-complexity budget (G6).
   const mcpName = isMcpPath(urlPath)
   if (mcpName !== null) {
-    return serveMcpRoute(request, method, mcpName, deps)
+    return serveMcpRoute(source, method, mcpName, deps)
   }
 
   return null
@@ -143,7 +154,7 @@ export async function serveAgentAuxRoute(
  * Returns `null` to fall through (not a thread route, wrong method, unknown agent).
  */
 async function serveThreadRoute(
-  request: Request,
+  source: WebRequestSource,
   method: string,
   urlPath: string,
   deps: AuxRouteDeps,
@@ -152,7 +163,7 @@ async function serveThreadRoute(
   if (stream !== null) {
     if (method !== 'GET') return null
     if (!deps.agents.some((a) => a.name === stream.name)) return null
-    return handleThreadStream(stream.sessionId, request)
+    return handleThreadStream(stream.sessionId, source.toRequest())
   }
 
   const msg = isThreadMessagePath(urlPath)
@@ -176,7 +187,7 @@ async function serveThreadRoute(
       // model is known (theokit#328).
       apiKey: deps.resolveApiKey,
       sessionId: msg.sessionId,
-      request,
+      request: source.toRequest(),
       source: `agent "${msg.name}"`,
       csrfMode: deps.csrfMode ?? 'strict',
     })
@@ -190,7 +201,7 @@ async function serveThreadRoute(
  * JSON-RPC response.
  */
 async function serveMcpRoute(
-  request: Request,
+  source: WebRequestSource,
   method: string,
   mcpName: string,
   deps: AuxRouteDeps,
@@ -209,6 +220,10 @@ async function serveMcpRoute(
 
   // M34 (#97) — enforce CSRF BEFORE any work. The MCP route drives the agent (real LLM tokens), so a
   // cross-origin POST must be rejected — parity with the agent-run route (`mount-agent.ts:83-91`).
+  //
+  // theokit#400 — the LAST fall-through (`isMcpExposed`) is above this line, so converting here is
+  // safe: from this point every path returns a Response.
+  const request = source.toRequest()
   const csrfMode = deps.csrfMode ?? 'strict'
   if (csrfMode === 'strict') {
     const csrf = validateCsrfRequest(request)

@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 
-import { parseRequestBody } from '../body-parser.js'
+import { parseRequestBody, RequestBodyConsumedError } from '../body-parser.js'
 
 import { sendError } from './send-response.js'
 
@@ -44,6 +44,12 @@ export async function parseQueryAndBody(
       body = undefined
     }
   } catch (err) {
+    // theokit#400 — a body somebody upstream already drained is OUR fault, not the caller's. A 400
+    // would tell the client to fix a request that was correct; this says 500 and names the cause.
+    if (err instanceof RequestBodyConsumedError) {
+      sendError(res, 'INTERNAL_ERROR', err.message, err.status, undefined, requestId)
+      return { ok: false }
+    }
     const message = (err as Error).message
     const status = message.includes('Unsupported Content-Type') ? 415 : 400
     sendError(res, 'VALIDATION_ERROR', message, status, undefined, requestId)

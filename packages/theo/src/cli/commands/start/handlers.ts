@@ -10,6 +10,7 @@ import { serveAgentAuxRoute } from '../../../server/agent/serve-aux-routes.js'
 import { executeAction } from '../../../server/http/action-execute.js'
 import { dispatchControllerRequest } from '../../../server/http/controller-dispatch.js'
 import { executeRoute } from '../../../server/http/execute.js'
+import { createWebRequestSource } from '../../../server/http/node-request.js'
 import {
   incomingMessageToWebRequest,
   writeWebResponseToServerResponse,
@@ -180,12 +181,19 @@ export async function tryServeAction(c: RequestHandlerCtx): Promise<boolean> {
  * agent cards (`/.well-known/<name>/agent-card.json`), MCP (`/api/agents/<name>/mcp`), and the
  * pending-approvals listing (`/api/agents/<name>/approvals`). Before this, they were dev-only, so a
  * built/deployed app 404'd them. Delegates to the shared `serveAgentAuxRoute` dispatcher (DRY).
+ *
+ * theokit#400 — this branch runs for EVERY url, so it hands the dispatcher a deferred
+ * `WebRequestSource` instead of a converted `Request`. It used to convert first and ask second, and
+ * the conversion drains the Node body stream: every POST with a JSON body to an `/api` file route
+ * (the most ordinary route an application has) then reached `parseJsonBody` with a readable that had
+ * already ended, and waited forever for an `'end'` that had already fired. Not a 500, not a timeout
+ * — no response at all. `theokit dev` was unaffected because its middleware matches the aux paths
+ * before it converts, which is exactly what this now does.
  */
 export async function tryServeAgentAux(c: RequestHandlerCtx): Promise<boolean> {
   const urlPath = c.url.split('?')[0]
   const baseUrl = `http://${c.req.headers.host ?? 'localhost'}`
-  const request = incomingMessageToWebRequest(c.req)
-  const response = await serveAgentAuxRoute(request, urlPath, {
+  const response = await serveAgentAuxRoute(createWebRequestSource(c.req), urlPath, {
     agents: c.cachedAgents,
     loadModule: c.loadModule,
     baseUrl,
