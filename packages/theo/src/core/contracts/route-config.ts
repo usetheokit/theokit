@@ -15,6 +15,8 @@
 
 import type { z } from 'zod'
 
+import type { RoutePolicy } from './route-policy.js'
+
 export interface RouteConfig<
   TQuery extends z.ZodType = z.ZodUndefined,
   TBody extends z.ZodType = z.ZodUndefined,
@@ -49,6 +51,22 @@ export interface RouteConfig<
    * disable the global mode setting for other routes.
    */
   csrf?: false
+  /**
+   * Who may perform this operation (ADR 0001).
+   *
+   * Evaluated by the Node executor, the Web executor AND `callProcedure`, from
+   * one implementation — which is what makes "the same route gives the same
+   * access decision on every transport" a property of the code. Before this
+   * existed, a route's access rules applied over HTTP and applied nowhere
+   * in-process, and in-process is the path the desktop and terminal targets are
+   * built on.
+   *
+   * `'public'` is a declaration and not a default. Absence currently means "not
+   * declared" and is NOT reinterpreted as denial at runtime: flipping that would
+   * break every existing route in every consumer at once. The ADR routes it
+   * through a build-time gate and a migration instead.
+   */
+  policy?: RoutePolicy<z.infer<TQuery>, z.infer<TBody>, z.infer<TParams>>
   handler: (ctx: {
     query: z.infer<TQuery>
     body: z.infer<TBody>

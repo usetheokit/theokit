@@ -17,6 +17,7 @@
 import type { z } from 'zod'
 
 import type { RouteConfig } from '../../core/contracts/route-config.js'
+import { evaluateRoutePolicy, subjectFromContext } from '../../core/contracts/route-policy.js'
 
 import {
   validateRouteInput,
@@ -39,6 +40,19 @@ export class ProcedureInputError extends Error {
     this.name = 'ProcedureInputError'
     this.channel = channel
     this.issues = error.issues
+  }
+}
+
+/**
+ * Thrown when the route's policy refuses this subject. The off-web analog of the
+ * HTTP 403 - a typed error, because there is no status code to return here.
+ */
+export class ProcedureAccessError extends Error {
+  readonly reason: string
+  constructor(reason: string) {
+    super(`Access denied: ${reason}`)
+    this.name = 'ProcedureAccessError'
+    this.reason = reason
   }
 }
 
@@ -80,6 +94,19 @@ export async function callProcedure(
 ): Promise<unknown> {
   const validated = validateRouteInput(config, input)
   if (!validated.ok) throw new ProcedureInputError(validated.channel, validated.error)
+
+  // ADR 0001 - the same policy the HTTP executors evaluate, from the same
+  // function. The docstring above still says "no middleware chain" and that
+  // remains true: CORS, cookies and CSP are transport concerns and stay on the
+  // transport. Access control is not one of those, and its absence here was the
+  // gap the ADR closes.
+  const decision = await evaluateRoutePolicy(config.policy, {
+    subject: subjectFromContext(ctx),
+    query: validated.query,
+    body: validated.body,
+    params: validated.params,
+  })
+  if (!decision.allowed) throw new ProcedureAccessError(decision.reason)
 
   const result = await config.handler({
     query: validated.query,
