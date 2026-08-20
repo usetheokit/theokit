@@ -34,6 +34,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **The release workflow hands npm the credential under the name it looks for.** `changesets/action`
+  reads an environment variable called `NPM_TOKEN`; the workflow exported the secret only as
+  `NODE_AUTH_TOKEN`, so the action reported `No NPM_TOKEN found` and fell back to OIDC trusted
+  publishing, which nothing had configured. The log line read like a missing secret and was not one:
+  the secret exists and resolved. Whether this alone explains the `E404` that stopped `0.49.0` from
+  publishing is settled by the next release, not by this change. (usetheokit/theokit#366)
 - **`theo start` binds the address its configuration names.** `config.host` was declared, defaulted to
   `localhost`, documented as the way to open a server to the LAN — and never passed to `listen`. Node
   with no address binds every interface, so the production server listened WIDER than its own

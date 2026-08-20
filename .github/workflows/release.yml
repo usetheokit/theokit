@@ -82,3 +82,18 @@ jobs:
           # upgrade, pinned to a version that tolerates pnpm's forwarded flag, or after changesets
           # stops injecting it.
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          # #366 — the same secret, under the name `changesets/action` actually looks for.
+          #
+          # The action reads `process.env.NPM_TOKEN` (its dist: `if (process.env.NPM_TOKEN) { write
+          # //registry.npmjs.org/:_authToken } else if (OIDC env) { info('No NPM_TOKEN found, but
+          # OIDC is available - using npm trusted publishing') }`). With only NODE_AUTH_TOKEN set
+          # and `id-token: write` granted above, it took the OIDC branch and wrote no credential —
+          # while the log line "No NPM_TOKEN found" read like the secret was missing. It is not:
+          # `gh secret list` shows it, and the run masked it as `***`.
+          #
+          # This does not yet explain the E404: setup-node's own .npmrc points authToken at
+          # NODE_AUTH_TOKEN, so an accepted credential should have published regardless of which
+          # branch the action chose. Setting this removes one variable from that question. If the
+          # next release still E404s, the remaining explanation is the token itself — rotate it on
+          # the `usetheodev` npm account, which owns both published packages.
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
