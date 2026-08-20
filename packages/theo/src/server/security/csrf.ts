@@ -158,9 +158,23 @@ export function validateCsrf(
   const action = req.headers['x-theo-action']
   const origin = req.headers.origin
   const host = req.headers.host
+
+  // RFC 6454: Origin is single-valued. A caller that synthesizes an
+  // IncomingMessage — an adapter, a shim, a proxy library — can hand us an
+  // array, and choosing one of two conflicting origins is a decision the
+  // request never authorized. The disagreement IS the rejection.
+  //
+  // `node:http` itself joins a repeated Origin with `, ` rather than
+  // producing an array, and that string already fails to parse as a URL
+  // below. This branch covers the shape the type allows and `pickHeader`
+  // used to resolve silently.
+  if (Array.isArray(origin)) {
+    return { valid: false, reason: 'Multiple Origin headers (RFC 6454 violation)' }
+  }
+
   return isCsrfValidFromHeaders({
     csrfActionHeader: typeof action === 'string' ? action : null,
-    origin: origin !== undefined ? pickHeader(origin) || null : null,
+    origin: origin !== undefined ? origin || null : null,
     host: host !== undefined ? pickHeader(host) || null : null,
   })
 }
