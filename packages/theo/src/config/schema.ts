@@ -6,6 +6,7 @@ import { servicesConfigSchema } from '../services/index.js'
 import {
   cacheSchema,
   loggingSchema,
+  observabilitySchema,
   rateLimitSchema,
   securitySchema,
   storageSchema,
@@ -189,6 +190,12 @@ export const theoConfigSchema = z
      * Pass `cache: {}` to opt in with defaults.
      */
     cache: cacheSchema.optional(),
+    /**
+     * Observability (#353). Default `undefined` keeps telemetry off. Present and
+     * not `enabled: false` opts in; `provider` overrides the environment-derived
+     * adapter, which is the priority `adapter-registry.ts` has always documented.
+     */
+    observability: observabilitySchema.optional(),
     /**
      * Devtools overlay (Phase 0.4.0+ —
      *

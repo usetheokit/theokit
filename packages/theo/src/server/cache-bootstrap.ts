@@ -31,7 +31,7 @@ export async function initCacheEngineFromConfig(cacheConfig: unknown): Promise<v
   const { initCacheEngine, isCacheEngineInitialized } = await import('../cache/engine-singleton.js')
   if (isCacheEngineInitialized()) return
 
-  const { cacheSchema } = await import('../config/schemas/cache.js')
+  const { cacheSchema } = await import('../config/schemas/index.js')
   const parsed = cacheSchema.parse(cacheConfig)
   if (!parsed.enabled) return
 
