@@ -40,43 +40,43 @@ Non-negotiable: **the same run must render through both front-ends via the same 
 
 | Capability | Subpath | Evidence | How the app exercises it |
 |---|---|---|---|
-| Route/action/ws/middleware/tool/plugin authoring | `theokit/server/define` | `server/define/index.ts:29-34` | a `route().get()` reached through `theoFetch` |
-| Convention scanner | `theokit/server/scan` | `server/scan/index.ts:1-7` | files created; manifest observed |
-| Agent discovery + 13 reserved folders | `theokit/server/scan` | `server/scan/agent-scan.ts:22-36,52` | `agents/x/tools/y.ts` is NOT a route; `agents/x/index.ts` is |
-| Programmatic fetch handler | `theokit/boot` | `server/boot.ts:43` | serve a `Request` with no CLI |
-| HTTP pipeline (CORS, cookies, batch, trace, error pages) | `theokit/server/http` | `server/http/index.ts:5-17` | request with `traceparent`, assert propagation |
-| Typed errors + envelope | `theokit/server/http` | `server/http/index.ts:5-8` | throw `TheoError`, assert the serialized envelope |
-| Auth (session, TOTP, backup codes, throttle, OAuth PKCE, OIDC) | `theokit/server/auth` | `server/auth/index.ts:1-10` | login + session rotation + second factor |
-| Cron | `theokit/server/cron` | `server/cron/index.ts:11-42` | `crons/tick.ts` fires; execution asserted |
-| Webhooks (raw body, timing-safe compare) | `theokit/server/webhook` | `server/webhook/index.ts:7-11` | one signed POST, one with a wrong signature |
-| Rate limit | `theokit/server/rate-limit` | `server/rate-limit/index.ts:1-3` | exceed the limit, assert 429 |
-| Plugins | `theokit/server/plugins` | `server/plugins/index.ts:1-2` | a config plugin marking the request |
-| Realtime channels | `theokit/server/realtime` | `server/realtime/channel-manager.ts:3` | two ws clients on one channel |
-| In-process agent seam, code-mode, MCP stdio, ACP | `theokit/server/agent` | `server/agent/index.ts:12-70` | TUI runs a turn with no HTTP |
-| Agent authoring + guardrails + A2A + skills | `@theokit/agents` | `agents/src/index.ts:19-31,136` | agent with a tool and a guardrail |
-| HITL approval | `@theokit/agents/bridge` | `agents/src/bridge-entry.ts:2-4` | a human approval blocking a tool |
-| Agent client + 3 transports | `@theokit/agents/client` | `agents/src/client-entry.ts:28-53` | **the same turn over all three transports** |
+| Route/action/ws/middleware/tool/plugin authoring | `theokit/server/define` | `packages/theo/src/server/define/index.ts:29-34` | a `route().get()` reached through `theoFetch` |
+| Convention scanner | `theokit/server/scan` | `packages/theo/src/server/scan/index.ts:1-7` | files created; manifest observed |
+| Agent discovery + 13 reserved folders | `theokit/server/scan` | `packages/theo/src/server/scan/agent-scan.ts:22-36,52` | `agents/x/tools/y.ts` is NOT a route; `agents/x/index.ts` is |
+| Programmatic fetch handler | `theokit/boot` | `packages/theo/src/server/boot.ts:43` | serve a `Request` with no CLI |
+| HTTP pipeline (CORS, cookies, batch, trace, error pages) | `theokit/server/http` | `packages/theo/src/server/http/index.ts:5-17` | request with `traceparent`, assert propagation |
+| Typed errors + envelope | `theokit/server/http` | `packages/theo/src/server/http/index.ts:5-8` | throw `TheoError`, assert the serialized envelope |
+| Auth (session, TOTP, backup codes, throttle, OAuth PKCE, OIDC) | `theokit/server/auth` | `packages/theo/src/server/auth/index.ts:1-10` | login + session rotation + second factor |
+| Cron | `theokit/server/cron` | `packages/theo/src/server/cron/index.ts:11-42` | `crons/tick.ts` fires; execution asserted |
+| Webhooks (raw body, timing-safe compare) | `theokit/server/webhook` | `packages/theo/src/server/webhook/index.ts:7-11` | one signed POST, one with a wrong signature |
+| Rate limit | `theokit/server/rate-limit` | `packages/theo/src/server/rate-limit/index.ts:1-3` | exceed the limit, assert 429 |
+| Plugins | `theokit/server/plugins` | `packages/theo/src/server/plugins/index.ts:1-2` | a config plugin marking the request |
+| Realtime channels | `theokit/server/realtime` | `packages/theo/src/server/realtime/channel-manager.ts:3` | two ws clients on one channel |
+| In-process agent seam, code-mode, MCP stdio, ACP | `theokit/server/agent` | `packages/theo/src/server/agent/index.ts:12-70` | TUI runs a turn with no HTTP |
+| Agent authoring + guardrails + A2A + skills | `@theokit/agents` | `packages/agents/src/index.ts:19-31,136` | agent with a tool and a guardrail |
+| HITL approval | `@theokit/agents/bridge` | `packages/agents/src/bridge-entry.ts:2-4` | a human approval blocking a tool |
+| Agent client + 3 transports | `@theokit/agents/client` | `packages/agents/src/client-entry.ts:30-54` | **the same turn over all three transports** |
 | Session / persistence / hooks / ask / commands / doctor / tool-scope / mcp-health / testing | `@theokit/agents/*` | per-entry barrels | resume a session; pre-tool hook; `askUserVia`; `diagnose()` |
-| `AgentOutputEvent` + Presenter strategy | `@theokit/presenter` | `presenter/src/index.ts:10-18` | **one turn rendered by all three presenters** |
-| Wire protocol | `@theokit/presenter/wire` | `presenter/src/wire/index.ts:10-25` | `readMessageStream` over a synthetic stream |
-| Tauri sidecar (turn → JSONL) | `@theokit/tauri/sidecar` | `tauri/src/sidecar.ts:23` | run the binary, read JSONL |
-| Decorator HTTP layer + `TheoApp` | `@theokit/http`, `/app`, `/runtime/node` | `http/src/index.ts:2-6`, `app.ts:172` | a decorated controller serving a route |
+| `AgentOutputEvent` + Presenter strategy | `@theokit/presenter` | `packages/presenter/src/index.ts:10-18` | **one turn rendered by all three presenters** |
+| Wire protocol | `@theokit/presenter/wire` | `packages/presenter/src/wire/index.ts:10-25` | `readMessageStream` over a synthetic stream |
+| Tauri sidecar (turn → JSONL) | `@theokit/tauri/sidecar` | `packages/tauri/src/sidecar.ts:23` | run the binary, read JSONL |
+| Decorator HTTP layer + `TheoApp` | `@theokit/http`, `/app`, `/runtime/node` | `packages/http/src/index.ts:2-6`, `packages/http/src/app.ts:172` | a decorated controller serving a route |
 
 ## T1 — Web presentation
 
 | Capability | Subpath | Evidence | How the app exercises it |
 |---|---|---|---|
-| Vite plugin, dev server, HMR | `theokit/vite-plugin` | `vite-plugin/index.ts:300` | edit a page in dev |
-| Reserved route files (`page`,`layout`,`error`,`loading`,`not-found`) | convention | `router/types.ts:5,11` | force an error, assert `error.tsx` renders |
-| `theoFetch` + typed app client + batching | `theokit/client` | `client/index.ts:7-15` | two concurrent calls collapse into one `/api/__theo_batch__` |
-| React-free agent client | `theokit/client/core` | `client/core.ts:11-13` | import in Node, assert React absent |
-| React Query adapter | `theokit/react-query` | `client/react-query.ts:31` | `stableQueryKey` + a query hook |
-| Devtools overlay | auto-injected | `config/schema.ts:202` | open the overlay in dev |
-| Security headers / CSRF / CSP report | `theokit/server/security` | `server/security/index.ts:1-5` | POST without a CSRF token is rejected |
+| Vite plugin, dev server, HMR | `theokit/vite-plugin` | `packages/theo/src/vite-plugin/index.ts:300` | edit a page in dev |
+| Reserved route files (`page`,`layout`,`error`,`loading`,`not-found`) | convention | `packages/theo/src/router/types.ts:5,11` | force an error, assert `error.tsx` renders |
+| `theoFetch` + typed app client + batching | `theokit/client` | `packages/theo/src/client/index.ts:7-15` | two concurrent calls collapse into one `/api/__theo_batch__` |
+| React-free agent client | `theokit/client/core` | `packages/theo/src/client/core.ts:11-13` | import in Node, assert React absent |
+| React Query adapter | `theokit/react-query` | `packages/theo/src/client/react-query.ts:31` | `stableQueryKey` + a query hook |
+| Devtools overlay | auto-injected | `packages/theo/src/config/schema.ts:202` | open the overlay in dev |
+| Security headers / CSRF / CSP report | `theokit/server/security` | `packages/theo/src/server/security/index.ts:1-5` | POST without a CSRF token is rejected |
 
 ## T2 — Reached, not completed
 
-- **6 of 9 deploy adapters** (`vercel`, `cloudflare`, `netlify`, `aws-lambda`, `deno-deploy`, `theo-cloud`) — `adapters/registry.ts:27-33`. The app asserts the artifact is emitted; running it needs the real platform.
+- **6 of 9 deploy adapters** (`vercel`, `cloudflare`, `netlify`, `aws-lambda`, `deno-deploy`, `theo-cloud`) — `packages/theo/src/adapters/registry.ts:26-33`. The app asserts the artifact is emitted; running it needs the real platform.
 - **Jobs on Postgres, storage on Postgres/Redis** — in-memory paths are T1; the backed ones need a service.
 - **`openapi` typed client** — soft-depends on `@hey-api/openapi-ts`, and **skips silently when absent**, which is indistinguishable from success. The app must assert the artifact, never the exit code.
 
@@ -97,14 +97,14 @@ These ship, are exported or reachable, and have no production caller. An app tha
 
 | Capability | Evidence | What the app observes |
 |---|---|---|
-| The whole `cache/` subsystem | `cache/index.ts:10-52` | **no public subpath at all** — only reachable through the deprecated `theokit/server` barrel (`server/index.ts:98`), which prints a deprecation warning on first import |
-| `initCacheEngine` | `cache/engine-singleton.ts:23` | with `cache: {}` configured, the engine is never initialised; `getCacheEngine()` throws "Cache engine not initialized" (`:57`) |
-| `createObservabilityPlugin` | `observability/index.ts:11` | must be registered by hand in `plugins`; without that, no request span exists |
-| `trackAgentRun` | `server/cost/track-agent-run.ts:49` | the devtools agents tab stays empty — the code itself says "trigger a request to an endpoint using `trackAgentRun`" (`devtools/.../AgentsTab.tsx:94`) |
-| `evaluateCsrfMultiHeader` | `security/csrf-multi-header.ts:128,171` | **not exported** by `security/index.ts` — unreachable by any consumer |
-| `@theokit/http/action-encryption` | `http/src/action-encryption.ts:21,52,72` | callable directly; nothing in the action pipeline uses it |
-| `@theokit/http/server-inserted-html` | `http/src/server-inserted-html.ts:38` | no SSR path consumes it |
-| `@theokit/http/css-resource` | `http/src/css-resource.ts:31` | same shape: test-only |
+| The whole `cache/` subsystem | `packages/theo/src/cache/index.ts:10-65` | **no public subpath at all** — only reachable through the deprecated `theokit/server` barrel (`packages/theo/src/server/index.ts:98`), which prints a deprecation warning on first import |
+| `initCacheEngine` | `packages/theo/src/cache/engine-singleton.ts:23` | with `cache: {}` configured, the engine is never initialised; `getCacheEngine()` throws "Cache engine not initialized" (`:57`) |
+| `createObservabilityPlugin` | `packages/theo/src/server/observability/index.ts:11` | must be registered by hand in `plugins`; without that, no request span exists |
+| `trackAgentRun` | `packages/theo/src/server/cost/track-agent-run.ts:49` | the devtools agents tab stays empty — the code itself says "trigger a request to an endpoint using `trackAgentRun`" (`packages/theo/src/devtools/components/Tabs/AgentsTab.tsx:94`) |
+| `evaluateCsrfMultiHeader` | `packages/theo/src/server/security/csrf-multi-header.ts:128,171` | **not exported** by `security/index.ts` — unreachable by any consumer |
+| `@theokit/http/action-encryption` | `packages/http/src/action-encryption.ts:21,52,72` | callable directly; nothing in the action pipeline uses it |
+| `@theokit/http/server-inserted-html` | `packages/http/src/server-inserted-html.ts:38` | no SSR path consumes it |
+| `@theokit/http/css-resource` | `packages/http/src/css-resource.ts:31` | same shape: test-only |
 
 ## Not measured
 
