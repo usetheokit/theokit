@@ -55,9 +55,9 @@ the two disagree, the rule wins and this one is the bug.
 
 ## Index
 
-12 items — **Open** 12 · **In flight** 0 · **Closed** 0
+19 items — **Open** 19 · **In flight** 0 · **Closed** 0
 
-### Open (12)
+### Open (19)
 
 | Item | Title | Status | Severity |
 |---|---|---|---|
@@ -73,6 +73,13 @@ the two disagree, the rule wins and this one is the bug.
 | [`B-010`](#b-010--make-the-observability-plugin-registrable-and-give-it-the-config-key-its-registry-documents----) | make the observability plugin registrable and give it the config key its registry documents | `triaged` | — |
 | [`B-011`](#b-011--the-web-executor-honours-the-csrf-false-opt-out-the-public-contract-promises----) | the Web executor honours the `csrf: false` opt-out the public contract promises | `triaged` | — |
 | [`B-012`](#b-012--decide-the-fate-of-the-fourth-orphan-in-theokithttp----) | decide the fate of the fourth orphan in `@theokit/http` | `triaged` | — |
+| [`B-013`](#b-013--a-gated-tool-appears-on-the-wire-twice-under-two-ids-so-the-pause-never-correlates-with-the-resume----) | a gated tool appears on the wire twice, under two ids, so the pause never correlates with the resume | `triaged` | — |
+| [`B-014`](#b-014--the-fluent-agentbuilder-cannot-declare-a-step-ceiling-and-it-is-the-path-the-scaffold-generates----) | the fluent `AgentBuilder` cannot declare a step ceiling, and it is the path the scaffold generates | `triaged` | — |
+| [`B-015`](#b-015--a-conversation-does-not-survive-a-reload-chatid-is-private-drawn-in-the-constructor-and-can-be-neither-supplied-nor-read----) | a conversation does not survive a reload: `#chatId` is private, drawn in the constructor, and can be neither supplied nor read | `triaged` | — |
+| [`B-016`](#b-016--the-agent-endpoint-resumes-any-conversation-by-id-with-no-owner-check----) | the agent endpoint resumes any conversation by id, with no owner check | `triaged` | — |
+| [`B-017`](#b-017--the-release-workflow-reports-success-publishing-nothing----) | the release workflow reports success publishing nothing | `triaged` | — |
+| [`B-018`](#b-018--the-cloudflare-worker-scans-disk-at-runtime-and-no-adapter-serves-an-agent----) | the Cloudflare worker scans disk at runtime, and no adapter serves an agent | `triaged` | — |
+| [`B-019`](#b-019--there-is-no-trace-the-otlp-serializer-draws-a-traceid-per-span----) | there is no trace: the OTLP serializer draws a `traceId` per span | `triaged` | — |
 
 ### In flight (0)
 
@@ -270,4 +277,113 @@ dod:
   - **REWRITTEN 2026-08-20, after measurement refuted its premise.** The original bullet asked for `server-inserted-html` and `css-resource` to be wired into `packages/http/src/stream-renderer.ts:58` or deleted. Neither is right there: `renderToStream` owns only the front of the stream, so `</head>` ships in React's first chunk before any component can call `add()` and the manager read there is always empty; and `css-resource` is redundant under React 19, which hoists `<link rel="stylesheet" precedence>` into `<head>` itself. The real seam was born next door in `dd010c516` (`packages/theo/src/router/entry-server.ts`), which assembles the document around the stream. What closes this bullet is an ADR deciding whether the server-inserted-html capability is wanted at all, before someone tries again to wire it where it cannot go
   - `action-encryption` stays a published subpath rather than being deleted with `action-handler.ts`: the two were never connected in either direction, so the premise in `why_now` is false for that pair. Recorded rather than corrected in place, because the item was planned on it
 
-Next free id: **B-013**.
+Seven more registered 2026-08-20, from the DX benchmark and the re-measurement of the sixteen
+surfaces, against eight issues — B-018 takes two of them, and says inside the item why they are
+one change. They are `triaged` for the same reason the batch above is: each arrives with an
+issue and a `file:line`, so intake had nothing left to ask.
+
+## B-013 — a gated tool appears on the wire twice, under two ids, so the pause never correlates with the resume   [ ]
+
+domain: theokit
+repo: packages/agents
+suggested_mode: bug
+source: discover-review
+evidence: usetheokit/theokit#361 — the bridge marks the approval UUID as seen (`packages/agents/src/bridge/present-ui-message-stream.ts:163`) and emits `tool-input-available` under it (`:165`); the SDK's own `callId` arrives later unseen, so a second `tool-input-available` goes out under a different id (`packages/presenter/src/presenters/ui-message-stream.ts:175`). The UUID cannot be the SDK's: it is drawn in the plugin (`packages/agents/src/bridge/hitl-plugin.ts:89`) inside a `pre_tool_call` hook whose context carries `name`, `args`, `agentId` and `runId` and no tool-call id (`packages/agents/src/bridge/hitl-plugin.ts:20-24`)
+why_now: the HITL pause span was built on this defect and is already reporting around it — `observe-agent-run.ts:108` opens `agent.hitl`, the resume never reaches it under the same id, and `:169` now sets `hitl.resume_observed: false` so an operator does not read a whole run as the human thinking. That makes the span honest, not correct, and J9 criterion 3 grades the number that is still unavailable
+status: triaged
+dod:
+  - a test drives a gated tool from approval to result and asserts exactly one `tool-input-available` per logical call
+  - the `agent.hitl` span closes on the resume with `hitl.resume_observed` true, and its duration bounds the human wait rather than the run
+  - which of the two ids becomes canonical is decided and recorded, together with what happens to the `approve/${approvalId}` callback URL (`packages/agents/src/bridge/hitl-plugin.ts:96`) under that choice — this is a wire change for every consumer already reading these chunks
+  - J9 criterion 3 passes against a published build
+
+## B-014 — the fluent `AgentBuilder` cannot declare a step ceiling, and it is the path the scaffold generates   [ ]
+
+domain: theokit
+repo: packages/agents
+suggested_mode: bug
+source: discover-review
+evidence: usetheokit/theokit#363 — `packages/agents/src/bridge/agent-builder.ts` exposes fifteen methods, from `model` (`:143`) to `mcp` (`:279`), and none reaches the ceiling. The machine exists on the other path: `maxIterations` is a field of the loop contract (`packages/agents/src/loop/loop-strategy.ts:49`) with a finite default (`:54`), is carried by the compiled agent (`packages/agents/src/bridge/agent-compiler.ts:287`) and is fed by `@MainLoop` (`packages/agents/src/bridge/agent-orchestrator.ts:184`). The scaffold writes the builder path (`packages/create-theokit/templates/default/agents/chat.ts:21`)
+why_now: two authoring paths ship one containment guarantee, and the half without it is the half `create-theokit` generates — so the default agent in a fresh project is the one that cannot cap its own spend. J5 criteria 4-5 grade that path
+status: triaged
+dod:
+  - measure first whether a run served by `mountAgent` reaches `runReflectiveLoop` at all; that decides whether the finite default already protects a scaffolded agent, and therefore whether this is a DX gap or a containment gap. #363 records it as unmeasured and it changes what the fix has to be
+  - a builder method feeds the same `maxIterations` the decorator feeds — one mechanism, not a second one alongside it
+  - a test drives an agent whose tool keeps asking for another round and asserts the run stops with `step_limit` (`packages/agents/src/loop/loop-strategy.ts:23`) rather than by exhausting something else
+
+## B-015 — a conversation does not survive a reload: `#chatId` is private, drawn in the constructor, and can be neither supplied nor read   [ ]
+
+domain: theokit
+repo: packages/agents
+suggested_mode: evolve
+source: discover-review
+evidence: usetheokit/theokit#364 — `packages/agents/src/client/agent-client.ts:68` initialises `readonly #chatId = crypto.randomUUID()` in the field, so every `new AgentClient(...)` draws a fresh one; `AgentClientOptions` (`:56`) has no field for it and the constructor (`:108-112`) takes only `transport`, `contextResolver` and `options`. It is sent as the top-level `id` (`packages/agents/src/client/http-transport.ts:92`) and read by the server as the session id
+why_now: J4 criterion 1 does not have an expensive path, it has no path — nothing an application can write reaches the identifier. The server keeps the previous conversation on disk under the discarded id, so the history is unreachable rather than lost: full cost, no value
+status: triaged
+dod:
+  - the form is decided and recorded as an ADR **before** any client change lands, because the two candidate answers have different blast radii: an id accepted in `AgentClientOptions` leaves every application to invent where it lives, while a framework-owned URL convention does not. J4 criterion 4 constrains the choice — surviving a storage wipe is satisfied only by the URL
+  - the ADR states the ordering against B-016 explicitly: an id the caller supplies is an id the caller chooses, so shipping this before the owner check trades a DX gap for an authorization one
+  - a test constructs a second client with a persisted id and continues the same history, and fails on the current code
+  - the default stays the random draw, so a consumer that supplies nothing sees no change
+
+## B-016 — the agent endpoint resumes any conversation by id, with no owner check   [ ]
+
+domain: theokit
+repo: packages/theo
+suggested_mode: bug
+source: discover-review
+evidence: usetheokit/theokit#365 — the session id arrives in the request body in both accepted shapes (`packages/theo/src/server/agent/mount-agent.ts:66`, `:72-73`) and keys the durable conversation the SDK resumes (`packages/agents/src/bridge/agent-compiler.ts:297`, `packages/agents/src/bridge/agent-endpoint.ts:154`). The only gate on the path authenticates nobody: CSRF refuses a cross-origin POST (`packages/theo/src/server/agent/mount-agent.ts:182-186`) and identifies no caller. `08c277c12` did give `mountAgent` the policy seam (`packages/theo/src/server/agent/mount-agent.ts:105-107`, evaluated at `:143`) and absence is deliberately not denial, but the production handler passes neither `policy` nor `subject` (`packages/theo/src/cli/commands/start/handlers.ts:372-376`), so the served path still has no owner check
+why_now: B-015's natural fix puts the id in the URL, and the moment it is there it is shareable and lands in `Referer`, proxy logs, browser history and screenshots — a latent capability model becomes an exposed one. The seam that would close this was built on 2026-08-19 and no serving path uses it, so the code today states neither model
+status: triaged
+dod:
+  - the choice is recorded: a conversation belongs to an authenticated subject, or the capability model is the declared design. Both are defensible; only the current silence is not
+  - if ownership wins, the production agent handler (`packages/theo/src/cli/commands/start/handlers.ts:372`) supplies `subject` and a policy, and a request carrying another session's id is refused with 403 against a published build
+  - if the capability model wins, it is documented where a consumer reads it before B-015 puts the id anywhere a capability may not go
+  - the thread routes (`packages/theo/src/server/agent/handle-thread-routes.ts`) are measured against the same question; #365 records them as unmeasured and they may carry a different surface
+
+## B-017 — the release workflow reports success publishing nothing   [ ]
+
+domain: theokit
+repo: theokit
+suggested_mode: bug
+source: discover-review
+evidence: usetheokit/theokit#366 — run 32370544611 on `main` @ `60822a48b` logged `No NPM_TOKEN found, but OIDC is available` and then `E404 Not Found - PUT` for both `theokit` and `create-theokit`, which already exist on the registry, so it is permission and not a free name. `.github/workflows/release.yml:84` passes `NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}` and the secret resolves empty; the comment directly above it (`:79-83`) records that the tokenless path cannot pay here while the repository is private. The run before it (32286443293) was green with the same missing-token line and no `is being published` line at all
+why_now: this blocks the whole of condition 1 — with no published artifact, `/acceptance` does not run against any of the sixteen surfaces. The secret has been absent for at least one run, most plausibly since the `usetheodev` to `usetheokit` transfer, and the first release carrying real content is what exposed it
+status: triaged
+dod:
+  - the pending version is on the npm registry, its tag exists, and the GitHub release is created
+  - a run that should have published and did not fails instead of reporting success: after the publish step, a version section in `CHANGELOG.md` with no matching version on the registry is an error
+  - `/acceptance` runs against the published artifact for at least one surface — which is the thing this unblocks, and the only proof the publish is real
+
+## B-018 — the Cloudflare worker scans disk at runtime, and no adapter serves an agent   [ ]
+
+domain: theokit
+repo: packages/theo
+suggested_mode: live-test
+source: discover-review
+evidence: usetheokit/theokit#369 and usetheokit/theokit#367. The generated worker discovers routes with `scanServerRoutes(serverDir)` (`packages/theo/src/adapters/cloudflare.ts:142`, the directory a build-time literal at `:113`) and loads modules with `createProductionLoader`, which is `import(pathToFileURL(path).href)` (`packages/theo/src/server/scan/module-loader.ts:11-15`) — a filesystem read and a runtime-computed dynamic import, neither of which a Worker has; and `server/` is not even uploaded, since the generated `wrangler.toml` declares `bucket = ".theokit/client"` (`packages/theo/src/adapters/cloudflare.ts:170`). Separately, `command grep -rc agent packages/theo/src/adapters/*.ts` returns no file with a hit across all fourteen: agents are a second scan (`packages/theo/src/cli/commands/start/manifest-loader.ts:16`, `:58`) served by `mountAgent`, which only the internal contract exports (`packages/theo/src/server/internal-api.ts:43`). #369 is marked `[NEEDS-REPRO]` — static inference from three agreeing sites, no deploy
+why_now: **one item, and the merge is the finding.** Both close on one change: the build has to emit a server manifest of static imports the bundler can see, which is exactly what the client route manifest already does for pages. Once server modules reach the bundle, agents arrive through the same door, because `mountAgent` is already Web-shaped — `Request` in, `Response` out. Split in two, neither DoD is gradeable on its own: an agent cannot be shown to be served on a target where no server module loads, and once one loads the agent is another entry in the same manifest. What changed here is that the programme spent the week closing surface gaps — cache, streaming, observability, CSRF, access policy — every one of them on the Node path, and this is the item that measures how far those guarantees actually travel
+status: triaged
+dod:
+  - **the repro comes first**, because #369 is inference: `wrangler deploy` of a scaffolded app, then a `curl` of one `/api/*` route, recorded. That either confirms the failure or kills half this item before anyone builds a manifest
+  - a file route under `/api/*` answers from a deployed Worker, with no directory read and no path-computed `import()` on the request path
+  - an agent answers on that same deployed target — the M14 criterion this item exists for, and the one the word count in the adapters says nobody has
+  - the other eight targets are checked against those same two requests, and a target failing both is delisted rather than documented as supported, which is M14's own criterion. #369 measured only Cloudflare and #367 measured only the absence of the word, so the per-target answer is written down rather than generalised from one
+
+## B-019 — there is no trace: the OTLP serializer draws a `traceId` per span   [ ]
+
+domain: theokit
+repo: packages/theo
+suggested_mode: bug
+source: discover-review
+evidence: usetheokit/theokit#368 — `packages/theo/src/server/observability/otlp-serializer.ts:65` sets `traceId: randomHex(32)` inside a per-span `map` (`:64`), and the data has nowhere to carry a relation: `SpanData` (`packages/theo/src/server/observability/span.ts:8-16`) has no `traceId`, `spanId` or `parentSpanId`, and `startSpan(name, attributes?)` (`packages/theo/src/server/observability/adapters/types.ts:29`) accepts no parent, so an adapter written by an application cannot recover the correlation either. The incoming `traceparent` is resolved at the door (`packages/theo/src/cli/commands/start/request-handler.ts:233`) and dies there, though the W3C primitives already exist (`packages/theo/src/server/http/trace-context.ts:1`). No span records the model id — the run span carries `agent` and `sessionId` only (`packages/theo/src/server/agent/observe-agent-run.ts:139-140`)
+why_now: the four spans M8 asks for were implemented on 2026-08-20 and they do exist, drain to an exporter, and do not relate to one another — a run reaches a collector as three unlinked records. Reporting M8 as 4/4 on that would be counting spans rather than counting usable telemetry, and J9 criteria 5-6 grade the second
+status: triaged
+dod:
+  - `SpanData` carries `traceId`, `spanId` and `parentSpanId`, and the serializer reads them instead of drawing one
+  - `startSpan` takes a parent context, so a custom adapter can build the tree too
+  - a request carrying a W3C `traceparent` produces spans continuing that trace id, read back on the collector side — M8's first criterion, unreachable by construction today
+  - the run span is the parent of the tool and HITL spans, verified by reading the exported payload rather than the in-process objects
+  - some span records the model identifier, so tokens convert to cost: J9 criterion 5 allows cost, or tokens, or a cost attribute, and without the model the token route does not close
+
+Next free id: **B-020**.
