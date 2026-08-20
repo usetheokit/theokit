@@ -69,6 +69,15 @@ interface WebRouteHandlerConfig {
   response?: z.ZodType
   /** Honored for plain-object returns to match the Node runner (D3). */
   status?: number
+  /**
+   * Per-route CSRF opt-out, mirroring `executeRoute`'s handling of the same
+   * field (`server/http/execute.ts`). Declared on the shared public contract
+   * (`core/contracts/route-config.ts`) for endpoints that legitimately
+   * receive third-party POSTs: Stripe/GitHub webhooks, OAuth callbacks.
+   *
+   * Only this route is exempted; the executor-wide mode is untouched.
+   */
+  csrf?: false
   handler: (ctx: {
     query: unknown
     body: unknown
@@ -450,6 +459,26 @@ function methodNotAllowedResponse(method: string): Response {
   })
 }
 
+/**
+ * Decide whether the CSRF gate applies to this request.
+ *
+ * Two conditions exempt a request: a safe method (GET/HEAD/OPTIONS carry no
+ * state change), and a route that declared the `csrf: false` opt-out on the
+ * shared `defineRoute` contract. Both mirror `executeRoute`'s Node-side gate.
+ *
+ * Extracted so the no-hooks branch and the hook pipeline read the same
+ * decision, and so neither caller pays its conditions against the lint cap.
+ */
+function shouldEnforceCsrf(
+  method: string,
+  config: WebRouteHandlerConfig | undefined,
+  csrfMode: ExecuteWebRequestOptions['csrfMode'],
+): boolean {
+  if (csrfMode !== 'strict') return false
+  if (!CSRF_PROTECTED_METHODS.has(method)) return false
+  return config?.csrf !== false
+}
+
 /** Build a 403 CSRF envelope Response. */
 function csrfFailedResponse(reason: string): Response {
   const envelope: TheoErrorEnvelope = {
@@ -479,7 +508,7 @@ export async function executeWebRequest(
     if (config === undefined || typeof config.handler !== 'function') {
       return methodNotAllowedResponse(method)
     }
-    if (opts.csrfMode === 'strict' && CSRF_PROTECTED_METHODS.has(method)) {
+    if (shouldEnforceCsrf(method, config, opts.csrfMode)) {
       const csrfCheck = validateCsrfRequest(request)
       if (!csrfCheck.valid) return csrfFailedResponse(csrfCheck.reason)
     }
@@ -541,11 +570,7 @@ async function runPreHandlerPipeline(
   if (hooks.onRequest) await runList(hooks.onRequest)
   // CSRF gate AFTER onRequest (auth-short-circuit avoids CSRF cost) but
   // BEFORE the handler.
-  if (
-    hookCtx.response === undefined &&
-    opts.csrfMode === 'strict' &&
-    CSRF_PROTECTED_METHODS.has(method)
-  ) {
+  if (hookCtx.response === undefined && shouldEnforceCsrf(method, config, opts.csrfMode)) {
     const csrfCheck = validateCsrfRequest(request)
     if (!csrfCheck.valid) hookCtx.response = csrfFailedResponse(csrfCheck.reason)
   }
