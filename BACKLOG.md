@@ -55,9 +55,9 @@ the two disagree, the rule wins and this one is the bug.
 
 ## Index
 
-8 items — **Open** 8 · **In flight** 0 · **Closed** 0
+12 items — **Open** 12 · **In flight** 0 · **Closed** 0
 
-### Open (8)
+### Open (12)
 
 | Item | Title | Status | Severity |
 |---|---|---|---|
@@ -69,6 +69,10 @@ the two disagree, the rule wins and this one is the bug.
 | [`B-006`](#b-006--dynamic-route-precedence-uses-a-whole-path-localecompare-so-the-less-specific-route-wins----) | dynamic route precedence uses a whole-path `localeCompare`, so the less specific route wins | `triaged` | — |
 | [`B-007`](#b-007--resolve-the-open-private-security-advisory----) | resolve the open private security advisory | `triaged` | — |
 | [`B-008`](#b-008--the-derived-domain-routing-table-is-gitignored-so-a-fresh-checkout-routes-by-the-wrong-map----) | the derived domain routing table is gitignored, so a fresh checkout routes by the wrong map | `triaged` | — |
+| [`B-009`](#b-009--wire-the-cache-engine-at-boot-so-revalidatetag-stops-throwing-in-every-app----) | wire the cache engine at boot, so `revalidateTag` stops throwing in every app | `triaged` | — |
+| [`B-010`](#b-010--make-the-observability-plugin-registrable-and-give-it-the-config-key-its-registry-documents----) | make the observability plugin registrable and give it the config key its registry documents | `triaged` | — |
+| [`B-011`](#b-011--the-web-executor-honours-the-csrf-false-opt-out-the-public-contract-promises----) | the Web executor honours the `csrf: false` opt-out the public contract promises | `triaged` | — |
+| [`B-012`](#b-012--decide-the-fate-of-the-fourth-orphan-in-theokithttp----) | decide the fate of the fourth orphan in `@theokit/http` | `triaged` | — |
 
 ### In flight (0)
 
@@ -158,7 +162,11 @@ dod:
   - the cache serves a hit on a second request, observed through its own signal rather than inferred
   - a run emits spans reaching an exporter from a production path, not from a test
   - CSRF hardening is reachable through a public export and on by default on the Web handler
-  - this item is split into per-subsystem items at planning time if the wiring turns out to be more than one change
+  - split 2026-08-20 into B-009 (cache), B-010 (observability), B-011 (CSRF) and B-012 (the
+    `@theokit/http` orphans) — the wiring measured as four distinct changes, which is the
+    condition this bullet named. The umbrella stays open with its evidence intact and keeps
+    what none of the four took: `trackAgentRun` (`packages/theo/src/server/cost/track-agent-run.ts:49`)
+    is exported from `packages/theo/src/server/cost/index.ts:11` and still has no production caller
 
 ## B-006 — dynamic route precedence uses a whole-path `localeCompare`, so the less specific route wins   [ ]
 
@@ -201,4 +209,64 @@ dod:
   - exactly one copy of the routing table is authoritative, and the script reads that one — a second copy that drifts silently is the failure being fixed, not an acceptable cost
   - the decision between versioning the derived table and having the script read from `docs/` is recorded as an ADR, since it binds every consumer of the kit
 
-Next free id: **B-009**.
+## B-009 — wire the cache engine at boot, so `revalidateTag` stops throwing in every app   [ ]
+
+domain: theokit
+repo: packages/theo
+suggested_mode: bug
+source: discover-review
+evidence: usetheokit/theokit#352 — `initCacheEngine` (`packages/theo/src/cache/engine-singleton.ts:23`) has zero production callers, while `getCacheEngine()` has three (`packages/theo/src/cache/revalidate.ts:27`, `:40`, `:59`), so all three public revalidation functions throw `Cache engine not initialized` (`packages/theo/src/cache/engine-singleton.ts:57`) in any app. Nothing under `packages/theo/src` reads `config.cache`, and `opts.defaults` is never even destructured (`packages/theo/src/cache/cache-engine.ts:85`)
+why_now: the cheapest slice of Wave 0.5 carrying the largest consumer-visible symptom — an exported public API that throws on every call
+status: triaged
+dod:
+  - `initCacheEngineFromConfig` is called at boot (`packages/theo/src/cli/commands/start/bootstrap-stages.ts`) and in dev (`packages/theo/src/cli/commands/dev.ts`), and is idempotent — HMR and a second boot in the same process do not take the start down
+  - `cache: { enabled: false }` does not take the boot down; today `packages/theo/src/cache/engine-singleton.ts:33` throws on exactly that
+  - a configured `defaults.maxAge` is the fallback `defineCachedRoute` uses, in place of the hardcoded constant (`packages/theo/src/cache/validation.ts:76`)
+  - the cache serves a hit on a second request, observed through a signal that survives `NODE_ENV=production` — the `X-Theo-Cache` header is dev-only today (`packages/theo/src/cache/define-cached-route.ts:368`), so M5's criterion is not observable on a published build without this
+
+## B-010 — make the observability plugin registrable and give it the config key its registry documents   [ ]
+
+domain: theokit
+repo: packages/theo
+suggested_mode: bug
+source: discover-review
+evidence: usetheokit/theokit#353 — `createObservabilityPlugin` (`packages/theo/src/server/observability/middleware.ts:36`) returns `{ name, onRequest, onResponse, onError }` while the loader demands `{ name, register }` and throws `InvalidPluginShapeError` (`packages/theo/src/server/plugins/load-plugins.ts:20-22`); the `observability` key that `packages/theo/src/server/observability/adapter-registry.ts:5` documents as source #1 does not exist in `packages/theo/src/config/schema.ts:142-155`; `startSpan` is called from a single production file (`packages/theo/src/server/observability/middleware.ts:44`), and that file has no caller of its own
+why_now: it is the declared pre-condition of the whole programme — with no span at all, the agent-axis benchmark has no instrument. M8 measured 0/4 on its central criterion
+status: triaged
+dod:
+  - the plugin registers through `config.plugins` without throwing, and `register()` installs the hooks
+  - the `observability` key exists in the schema and is the source #1 that `packages/theo/src/server/observability/adapter-registry.ts:5` already documents
+  - a run emits spans that reach an exporter from a production path, read back on the collector side
+  - `activeSpans` (`packages/theo/src/server/observability/middleware.ts:28`) carries a cap or a TTL — without one, every agent run holding a stream open leaks a span permanently
+  - `flushIntervalMs` (`packages/theo/src/server/observability/adapters/theo-cloud.ts:21`, `:34`) either implements the timer or stops being accepted; today it promises behaviour that does not exist
+
+## B-011 — the Web executor honours the `csrf: false` opt-out the public contract promises   [ ]
+
+domain: theokit
+repo: packages/theo
+suggested_mode: bug
+source: discover-review
+evidence: usetheokit/theokit#355 — `packages/theo/src/core/contracts/route-config.ts:44-51` declares `csrf?: false` on the contract both runtimes share, and the field directly above it spells out the parity norm, "BOTH runtimes (Node `executeRoute` + Web `executeWebRequest`)" (`:29-32`). `csrf` does not get that parity: the Node executor honours it (`packages/theo/src/server/http/execute.ts:199-201`), the Web one never reads the field (`packages/theo/src/server/web-handler.ts:64-80`, `:482`, `:546`). `evaluateCsrfMultiHeader` is never re-exported (`packages/theo/src/server/security/index.ts:1-5`) and accepts `Sec-Fetch-Site: same-site` (`packages/theo/src/server/security/csrf-multi-header.ts:73-75`) and `Origin: null` (`:86`)
+why_now: it blocks M1's CSRF-on-by-default criterion, and taken in the wrong order it breaks webhooks — flipping the default before the Web executor honours the opt-out makes every webhook served on that path unreachable
+status: triaged
+dod:
+  - `WebRouteHandlerConfig` (`packages/theo/src/server/web-handler.ts:64`) carries `csrf?: false` and both gates read it, mirroring `packages/theo/src/server/http/execute.ts:199-201`
+  - a cross-origin POST with no token is rejected by a build that configures no CSRF option at all
+  - both holes in the multi-header gate are closed BEFORE it is exported
+  - the public-API break is recorded under `Changed` in `CHANGELOG.md` and in `MIGRATION.md`
+
+## B-012 — decide the fate of the fourth orphan in `@theokit/http`   [ ]
+
+domain: theokit
+repo: packages/http
+suggested_mode: review
+source: discover-review
+evidence: usetheokit/theokit#356 — `packages/http/src/action-handler.ts` is in neither the barrel nor `packages/http/tsup.config.ts`, and its only importer is its own unit test. The B-M74-01 sweep documented at `packages/http/src/index.ts:21-33` caught three of the four. `packages/http/src/css-resource.ts:35` and `:40` interpolate into HTML without escaping
+why_now: `action-encryption` has nowhere to plug in precisely because the pipeline that would call it is itself an orphan; the two are resolved or deleted together
+status: triaged
+dod:
+  - `action-handler.ts` enters the barrel or is deleted, and the decision is recorded
+  - `server-inserted-html` and `css-resource` are wired into `packages/http/src/stream-renderer.ts:58` or deleted
+  - the latent XSS at `packages/http/src/css-resource.ts:35` and `:40` is closed before any wiring
+
+Next free id: **B-013**.
