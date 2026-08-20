@@ -308,12 +308,19 @@ function handlerErrorResponse(err: unknown): Response {
  * the safe "no-op" stance so existing Phase A consumers (T1.2 fixture
  * tests) keep working unchanged.
  *
- * **`csrfMode`** (T5a.2 Phase B slice 1/6) — when set to `'strict'`, the
- * Web-Standards request gate runs `validateCsrfRequest` BEFORE method
- * dispatch on state-changing methods (POST/PUT/PATCH/DELETE) and emits a
- * `403 FORBIDDEN` envelope when the check fails. Default: `'off'` (no
- * CSRF enforcement) to preserve Phase A backward compat. Production
- * consumers SHOULD pass `csrfMode: 'strict'`.
+ * **`csrfMode`** — the Web request gate runs `validateCsrfRequest` BEFORE
+ * method dispatch on state-changing methods (POST/PUT/PATCH/DELETE) and
+ * emits a `403 FORBIDDEN` envelope when the check fails. **Omitting the
+ * option enforces the gate**; only an explicit `'off'` disables it.
+ *
+ * The default used to be `'off'`, which meant a caller that never heard of
+ * the option served every state-changing request unchecked. A security
+ * control that has to be asked for is not a control, and this executor is
+ * the boundary the CF / Bun / Deno adapters are built on -- each of them a
+ * caller that would have had to remember. A route that legitimately takes
+ * third-party POSTs opts out by itself, per route, with `csrf: false` on
+ * `defineRoute`; `'off'` is for an application with another defense, such
+ * as one that ships no session cookie at all.
  *
  * Per the T5a.2 plan v1.0 § Phase B header-only leaves: csrf.ts is the
  * first leaf to be migrated (slice 1/6); 5 more sibling leaves remain
@@ -474,7 +481,8 @@ function shouldEnforceCsrf(
   config: WebRouteHandlerConfig | undefined,
   csrfMode: ExecuteWebRequestOptions['csrfMode'],
 ): boolean {
-  if (csrfMode !== 'strict') return false
+  // Absent means enforced. Only an explicit `'off'` turns the gate off.
+  if ((csrfMode ?? 'strict') === 'off') return false
   if (!CSRF_PROTECTED_METHODS.has(method)) return false
   return config?.csrf !== false
 }

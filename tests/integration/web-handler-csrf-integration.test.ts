@@ -200,14 +200,25 @@ describe('executeWebRequest + csrfMode: strict (T5a.2 Phase B slice 1/6 integrat
     expect(body.code).toBe('FORBIDDEN')
   })
 
-  it('csrfMode: off (default) — POST without X-Theo-Action runs normally (Phase A backward compat)', async () => {
+  it('POST without X-Theo-Action is rejected when no csrfMode is passed (secure default)', async () => {
     const request = new Request('http://example.com/api', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ name: 'alice' }),
     })
-    // No opts → defaults to csrfMode: 'off' (Phase A behavior preserved).
+    // No opts at all: the gate is on. An adapter that forgets to configure
+    // CSRF gets the safe behaviour, not the open one.
     const response = await executeWebRequest(request, routes)
+    expect(response.status).toBe(403)
+  })
+
+  it("csrfMode: 'off' still runs the handler, and now has to be asked for", async () => {
+    const request = new Request('http://example.com/api', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'alice' }),
+    })
+    const response = await executeWebRequest(request, routes, { csrfMode: 'off' })
     expect(response.status).toBe(200)
   })
 })
