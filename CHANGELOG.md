@@ -36,6 +36,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **A Web-executor route that declares `csrf: false` is exempt from the CSRF gate, as it already was
+  on the Node executor.** `defineRoute`'s public contract offers the opt-out for endpoints that
+  legitimately receive third-party POSTs -- Stripe and GitHub webhooks, OAuth callbacks -- and the
+  field beside it names both runtimes as honouring what the contract declares. `executeRoute` read
+  it; `executeWebRequest` never did, so the same route module that served a webhook under Node
+  rejected every delivery with a 403 once served through the Web executor. Both of its gates now
+  read the field, mirroring the Node executor rather than inventing a second mechanism.
+  (usetheokit/theokit#355)
+
 - **Exported telemetry actually leaves the process.** The TheoCloud exporter accepted a
   `flushIntervalMs` option, defaulted it, and read it nowhere — there was no timer in the file. Its
   only drain was `shutdown()`, which nothing called, so a long-running server accumulated spans and

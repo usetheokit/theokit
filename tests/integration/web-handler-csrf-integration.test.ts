@@ -211,3 +211,66 @@ describe('executeWebRequest + csrfMode: strict (T5a.2 Phase B slice 1/6 integrat
     expect(response.status).toBe(200)
   })
 })
+
+describe('executeWebRequest — per-route `csrf: false` opt-out (B-011 step 1)', () => {
+  const strictOpts: ExecuteWebRequestOptions = { csrfMode: 'strict' }
+
+  // A webhook route: third-party POSTs can never carry X-Theo-Action.
+  const webhookRoutes = {
+    POST: defineRoute({
+      csrf: false,
+      body: z.object({ event: z.string() }),
+      handler({ body }) {
+        return { received: (body as { event: string }).event }
+      },
+    }),
+  }
+
+  it('POST without X-Theo-Action reaches the handler when the route opts out', async () => {
+    const request = new Request('http://example.com/webhook', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ event: 'payment.succeeded' }),
+    })
+    const response = await executeWebRequest(request, webhookRoutes, strictOpts)
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as { received: string }
+    expect(body.received).toBe('payment.succeeded')
+  })
+
+  it('POST without X-Theo-Action reaches the handler when the route opts out, with hooks wired', async () => {
+    const request = new Request('http://example.com/webhook', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ event: 'payment.succeeded' }),
+    })
+    const response = await executeWebRequest(request, webhookRoutes, {
+      ...strictOpts,
+      hooks: { onRequest: [] },
+    })
+    expect(response.status).toBe(200)
+  })
+
+  it('a route that did NOT opt out is still rejected (the opt-out is per route)', async () => {
+    const request = new Request('http://example.com/api', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'alice' }),
+    })
+    const response = await executeWebRequest(request, routes, strictOpts)
+    expect(response.status).toBe(403)
+  })
+
+  it('a route that did NOT opt out is still rejected with hooks wired', async () => {
+    const request = new Request('http://example.com/api', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'alice' }),
+    })
+    const response = await executeWebRequest(request, routes, {
+      ...strictOpts,
+      hooks: { onRequest: [] },
+    })
+    expect(response.status).toBe(403)
+  })
+})
