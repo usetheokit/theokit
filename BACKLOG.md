@@ -55,9 +55,9 @@ the two disagree, the rule wins and this one is the bug.
 
 ## Index
 
-19 items — **Open** 19 · **In flight** 0 · **Closed** 0
+20 items — **Open** 20 · **In flight** 0 · **Closed** 0
 
-### Open (19)
+### Open (20)
 
 | Item | Title | Status | Severity |
 |---|---|---|---|
@@ -80,6 +80,7 @@ the two disagree, the rule wins and this one is the bug.
 | [`B-017`](#b-017--the-release-workflow-reports-success-publishing-nothing----) | the release workflow reports success publishing nothing | `triaged` | — |
 | [`B-018`](#b-018--the-cloudflare-worker-scans-disk-at-runtime-and-no-adapter-serves-an-agent----) | the Cloudflare worker scans disk at runtime, and no adapter serves an agent | `triaged` | — |
 | [`B-019`](#b-019--there-is-no-trace-the-otlp-serializer-draws-a-traceid-per-span----) | there is no trace: the OTLP serializer draws a `traceId` per span | `triaged` | — |
+| [`B-020`](#b-020--an-acceptance-record-is-evidence-nobody-outside-this-machine-can-read----) | an acceptance record is evidence nobody outside this machine can read | `triaged` | — |
 
 ### In flight (0)
 
@@ -385,5 +386,20 @@ dod:
   - a request carrying a W3C `traceparent` produces spans continuing that trace id, read back on the collector side — M8's first criterion, unreachable by construction today
   - the run span is the parent of the tool and HITL spans, verified by reading the exported payload rather than the in-process objects
   - some span records the model identifier, so tokens convert to cost: J9 criterion 5 allows cost, or tokens, or a cost attribute, and without the model the token route does not close
+note: four of the five criteria landed on 2026-08-20 in `2ec9180ee` — `SpanData` carries the three ids, the serializer reads them, `startSpan` takes a parent context (forwarded by `defineObservabilityAdapter` too), `mountAgent` continues an incoming `traceparent`, and the run span parents the tool and HITL spans. The item stays open on the fifth: no span records the model identifier, so tokens still do not convert to cost. The two read-back criteria are asserted against the serialized payload, not against a live collector
 
-Next free id: **B-020**.
+## B-020 — an acceptance record is evidence nobody outside this machine can read   [ ]
+
+domain: theokit
+repo: theokit
+suggested_mode: evolve
+source: discover-review
+evidence: the first acceptance run of this programme wrote `.claude/knowledge-base/acceptance/M1-2026-08-20.md` plus sixteen evidence files, and `git ls-files .claude | wc -l` returns 0 — `.gitignore:84` excludes `.claude/` wholesale. `.claude/rules/knowledge-base-location.md` makes that directory canonical, so the record is in the right place and untracked at the same time
+why_now: before 2026-08-20 no acceptance record existed, so the collision between "canonical location" and "ignored path" had never been reached. It has now, and the programme goal closes each of the sixteen surfaces "by `/acceptance`" — a verdict that lives on one developer's disk cannot close anything for anyone else. `docs/surfaces/` already solved the identical problem for the sixteen gap measurements by versioning a copy under `docs/`, and its README says why: a measurement readable by one person is auditable by nobody
+status: triaged
+dod:
+  - an acceptance record and its evidence are readable from a fresh clone, without the machine that produced them
+  - `cycle-acceptance`'s `## Output` section names the tracked location, so the next run does not have to rediscover this
+  - the arrangement does not fork into two copies that drift — the failure `B-008` and `docs/surfaces/README.md` both register for their own artifacts
+
+Next free id: **B-021**.
