@@ -48,6 +48,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **The pre-commit gate refuses a commit that grew paths nobody staged.** With a partially staged
+  file in the tree, the lint/format step restored the whole working tree into the index: a commit
+  that named six paths carried fourteen, and the eight extra belonged to unfinished work elsewhere in
+  the checkout. The hook now records the staged set before and after and refuses when it grew, naming
+  the paths that appeared and how to recover. Shrinking still passes — a formatter may leave a file
+  byte-identical — and partial staging is not banned, because forbidding it would trade a rare silent
+  loss for a constant obstruction. (usetheokit/theokit#378)
 - **The deprecation on `theokit/server` now names destinations that exist.** Importing the umbrella
   prints "use sub-paths" and schedules removal for `0.x+2`, and 58 of its 272 symbols had no subpath
   to migrate to — the instruction could not be followed. Sixteen HTTP-boundary symbols, including
