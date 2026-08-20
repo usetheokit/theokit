@@ -13,8 +13,11 @@ import {
 } from '@theokit/agents'
 import type { WireChunk as UIMessageChunk } from '@theokit/presenter/wire'
 
+import { getObservabilityAdapter } from '../observability-bootstrap.js'
+
 import type { ApiKeyResolver } from './api-key-resolver.js'
 import { getApprovalRegistry } from './approval-registry.js'
+import { observeAgentRun } from './observe-agent-run.js'
 
 type Compiled = ReturnType<typeof compileAgentModule>
 
@@ -72,6 +75,13 @@ export function makeThreadStartRun(
       const hitl = buildAgentHitl(compiled)
       // Now that the model is known, let the caller pick the credential for THAT provider.
       const resolvedApiKey = typeof apiKey === 'function' ? apiKey(compiled.model) : apiKey
-      yield* streamAgentUIMessages(compiled, resolvedApiKey, { message, sessionId, hitl })
+      const stream = streamAgentUIMessages(compiled, resolvedApiKey, { message, sessionId, hitl })
+      // M8 — the thread route runs the same agent and must produce the same
+      // spans. Instrumenting only the plain POST would make a run's telemetry
+      // depend on which endpoint reached it (usetheokit/theokit#353).
+      const adapter = getObservabilityAdapter()
+      yield* adapter === undefined
+        ? stream
+        : observeAgentRun(stream, adapter, { agent: source, sessionId })
     })()
 }
