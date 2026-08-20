@@ -93,6 +93,16 @@ So the honest order is: define the criteria for all ten now (this document plus 
 implement and measure J1, J3, J4, J5, J7, **J9** after Wave 0.5 wires what exists, and hold J2 until
 the authorization ADR lands and J8 until its own blocker is named.
 
+**J1 has both sides now, and it is a tie — measured 2026-08-20.** It is the first real contrast this
+document has, and it does not go our way: TheoKit touches *more* files than the best idiomatic
+Next.js equivalent (3 against 2, the third being a deletion its own scaffold forces), and its wins on
+glue lines (8 against 14) and concepts (5 against 6) are 1.75x and 1.2x — both inside the 2x bar
+§ What counts as winning sets. A single declared counting decision moves four of the six glue lines,
+and moves them the wrong way. The full measurement, the confirmed AI SDK version facts, the chosen
+baseline and the published diffs are in [J1's criteria file](journeys/j01-tool.md). One journey is
+not the benchmark, and a tie on the simplest of the ten is the kind of early number this protocol
+exists to make visible rather than to absorb.
+
 **One thing this re-measurement should not be read as.** J9 being unblocked means it can be scored;
 it does not mean it will score well. A journey that is newly possible and a journey that is
 comfortable are different claims, and the second is exactly what the benchmark exists to test rather
