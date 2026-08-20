@@ -37,6 +37,11 @@ import 'reflect-metadata'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WireChunk } from '@theokit/presenter/wire'
 
+import type {
+  ObservabilityAdapter,
+  SpanAttributes,
+} from '../../../theo/src/server/observability/adapters/types.js'
+
 /** How the fake run behaves — set per test, read inside the hoisted SDK mock. */
 const h = vi.hoisted(() => ({
   /** Milliseconds the fake loop spends before the gated tool is dispatched (pre-pause run time). */
@@ -354,16 +359,22 @@ interface TimedSpan {
 
 function createTimedRecorder() {
   const spans: TimedSpan[] = []
-  const adapter = {
+  // Typed against the contract rather than inferred. An inferred mock drifts the
+  // moment the interface gains a parameter — `startSpan` took a third argument
+  // (the span's place in a trace) hours before this file was written, and an
+  // `attrs` that was required rather than optional slipped past the package's own
+  // test run and was caught by the pre-push typecheck. A mock that does not
+  // declare what it stands in for cannot be told when it stops standing in for it.
+  const adapter: ObservabilityAdapter = {
     name: 'timed-recorder',
-    startSpan(name: string, attrs: Record<string, unknown>) {
+    startSpan(name: string, attrs?: SpanAttributes) {
       const span: TimedSpan = { name, attrs: { ...attrs }, startedAt: performance.now() }
       spans.push(span)
       return {
-        setAttribute(key: string, value: unknown) {
+        setAttribute(key: string, value: string | number | boolean) {
           span.attrs[key] = value
         },
-        setStatus(status: string) {
+        setStatus(status: 'ok' | 'error') {
           span.status = status
         },
         end() {
