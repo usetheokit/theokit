@@ -207,14 +207,38 @@ Deny (usetheokit/theokit#393) — the fifth instance of the family after #379, #
 measurement, both published diffs, the seven declared judgements, the confirmed AI SDK version facts
 and the instrument are in [J2's criteria file](journeys/j02-hitl.md).
 
-**Six journeys measured, three ties, one loss, one unresolved and one metric sweep — and the framework
-has not won a journey.** The goal states "win all ten by a margin outside noise". Six of ten are in,
-and the two that produced the largest margins are the two that most clearly did not win. J5's re-measurement
+**J4 has both sides now, it is a tie, and it is the first journey where every criterion is satisfied
+on both sides — measured 2026-08-20, in a real browser, against a local model on both stacks.** Files
+4 against 5, glue lines 59 against 74, concepts 13 against 13 — 1.25x, 1.25x and 1.0x, every one
+inside the 2x bar § What counts as winning sets. What makes this one different from the five before
+it is the row underneath: **5 of 5 criteria against 5 of 5**, exercised rather than inferred — a full
+document reload, a follow-up turn whose answer quotes a marker sent before the reload, a cleared
+browser store, and two threads whose message ids do not intersect. The framework is not cheaper here,
+and for the first time it is not short of the thing the criteria describe either.
+
+**J4's first measurement was published this morning and did not survive the afternoon, which is worth
+recording rather than editing away.** It reported criterion 1 as having *no implementable path* on the
+grounds that reading a transcript back means inventing a reader over a format that lives outside this
+repository. The format is re-exported by this repository — `loadJsonl`, `transcriptPath` and the
+`TranscriptMessage` type are public on `@theokit/agents/persistence`, a subpath a scaffolded app
+already depends on — so the history endpoint is 27 lines of ordinary route. usetheokit/theokit#364
+still describes the code it cites exactly, and its claim that no supported path exists is now refuted;
+that correction is posted on the issue, which stays open because the identity workaround is still
+ceremony an application should not write. The measurement, both published diffs, the nine declared
+judgements, the four confirmed AI SDK version facts and the local-model instrument are in
+[J4's criteria file](journeys/j04-thread.md).
+
+**Seven journeys measured, four ties, one loss, one unresolved and one metric sweep — and the framework
+has not won a journey.** The goal states "win all ten by a margin outside noise". Seven of ten are in, and the
+two that produced the largest margins are the two that most clearly did not win. J5's re-measurement
 could not change that sentence because shipping the missing capability moved a criterion, not a
 margin. J3 and J9 could not change it for opposite reasons: J3's margins price six lines whose
 trigger never fires, and J9's margins are real while the criteria they were meant to serve stay
 unsatisfied. A journey is won by costing less to build *the thing the criteria describe*; costing
 less to build something short of it is a different sentence, and this document will keep them apart.
+J4 is the first journey to which that sentence does not apply — both sides built the thing the
+criteria describe — and it is still a tie, which is the other half of the goal and the half no
+journey has met yet.
 
 **One thing this re-measurement should not be read as.** J9 being unblocked means it can be scored;
 it does not mean it will score well. A journey that is newly possible and a journey that is
@@ -252,3 +276,7 @@ Reporting a partial run as the benchmark is forbidden. Ten journeys or a stated 
   to obtain the id), #393 (an expired approval is reported as a human denial), #394 (the
   `tool-approval-request` chunk carries only two ids). Its criterion-4 failure is a security finding
   and went to GHSA-g94h-459g-rjhj rather than to a public issue
+- The five defects J4's measurement found and filed: #395 (agent transcripts land in git), #396 (the
+  pristine scaffold fails `tsc`), #397 (`create-theokit` reports a successful install as a failure),
+  #398 (`.env.example` documents a variable nothing reads), #399 (a lost conversation is
+  indistinguishable from a new one)
