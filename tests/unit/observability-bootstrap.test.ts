@@ -1,6 +1,10 @@
-import { describe, it, expect } from 'vitest'
+import { beforeEach, describe, it, expect } from 'vitest'
 
-import { createObservabilityPluginFromConfig } from '../../packages/theo/src/server/observability-bootstrap.js'
+import {
+  _resetObservabilityAdapter,
+  createObservabilityPluginFromConfig,
+  getObservabilityAdapter,
+} from '../../packages/theo/src/server/observability-bootstrap.js'
 import { NoopObservabilityAdapter } from '../../packages/theo/src/server/observability/adapters/noop.js'
 import { theoConfigSchema } from '../../packages/theo/src/config/schema.js'
 
@@ -16,7 +20,25 @@ const CLOUD = {
   THEO_CLOUD_API_KEY: 'k',
 }
 
+beforeEach(() => {
+  // The boot-resolved adapter is process state. Without this, one test that opts
+  // in leaves it set for every test after it in the same worker — and the agent
+  // spans read it, so the pollution would reach a different file entirely.
+  _resetObservabilityAdapter()
+})
+
 describe('observability wiring decision (B-010)', () => {
+  it('test_the_resolved_adapter_is_reachable_to_callers_that_are_not_the_plugin', () => {
+    expect(getObservabilityAdapter()).toBeUndefined()
+
+    createObservabilityPluginFromConfig({}, { NODE_ENV: 'development' })
+
+    // `observeAgentRun` produces its spans far from the request hooks and must
+    // use the SAME adapter: two independently resolved adapters mean two
+    // exporters and two half-complete pictures of one run.
+    expect(getObservabilityAdapter()?.name).toBe('console')
+  })
+
   it('test_the_config_schema_accepts_the_key_its_registry_documents', () => {
     const parsed = theoConfigSchema.parse({ observability: {} })
 
