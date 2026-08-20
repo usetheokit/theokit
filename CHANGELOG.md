@@ -6,7 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **`theokit/server/security` now exports the multi-header CSRF gate and its wildcard-origin
+  matcher.** `evaluateCsrfMultiHeaderRequest`, `matchWildcardDomain` and `isCsrfOriginAllowed` were
+  implemented, tested and unreachable: the barrel the subpath points at listed five modules and not
+  these two, so no consumer could name them. An application that wants an origin-based policy --
+  Sec-Fetch-Site, then Origin, then Referer, against a wildcard allowlist -- alongside the
+  custom-header check can now import one. `CsrfMultiHeaderOptions` and `CsrfDecision` ship with it,
+  so the options argument and the returned decision are nameable in TypeScript.
+  (usetheokit/theokit#355)
+
 ### Removed
+
+- **The `IncomingMessage` form of the multi-header CSRF gate, `evaluateCsrfMultiHeader`, is gone.**
+  Nothing consumer-visible changes: it was in no barrel and had no subpath, so its only caller was
+  its own unit test. It is removed rather than published because shipping it would have put two
+  different origin policies in front of the same Node request object -- the executor's own gate,
+  which demands the `X-Theo-Action` header, and this one, which does not -- and left a consumer to
+  pick. The Web `Request` form covers every target the framework serves: Node has had a global
+  `Request` since 18, and `node-web-adapter.ts` already converts an `IncomingMessage` into one. The
+  one check the removed form had and `validateCsrf` did not -- rejecting a multi-valued `Origin` --
+  moved to `validateCsrf` first, where the wired Node gate reads it. (usetheokit/theokit#355)
 
 - **`packages/http/src/action-handler.ts` is gone. It was the server-action pipeline `@theokit/http`
   never finished, and `packages/theo` shipped a different one.** Nothing consumer-visible changes:
@@ -216,6 +237,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   as the way to match a path. (usetheokit/theokit#324)
 
 ### Security
+
+- **`validateCsrf` rejects a multi-valued `Origin` header instead of silently picking the first
+  one.** RFC 6454 makes Origin single-valued, and two disagreeing values are a request nobody
+  authorized -- but the header reader took `value[0]` and carried on. `node:http` joins a repeated
+  Origin with `, ` rather than producing an array, so the exposure was never through a plain Node
+  server; it was through any caller that synthesizes an `IncomingMessage` -- an adapter, a shim, a
+  proxy library -- where the array shape the type allows is real. The disagreement is now the
+  rejection. (usetheokit/theokit#355)
 
 - **The multi-header CSRF gate stops accepting the two signals that prove nothing: `Sec-Fetch-Site:
   same-site` and `Origin: null`.** Neither requires the attacker to set a custom header, so a plain

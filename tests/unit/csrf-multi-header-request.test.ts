@@ -1,15 +1,10 @@
 /**
- * T5a.2 Phase B slice 2/6 — Web-Standards-shaped multi-header CSRF tests.
+ * T5a.2 Phase B slice 2/6 — Web-Standards multi-header CSRF tests.
  *
- * Verifies `evaluateCsrfMultiHeaderRequest(request: Request, options)` is
- * a behaviour-equivalent mirror of `evaluateCsrfMultiHeader(req:
- * IncomingMessage, options)` for the Web Standards path. The pure
- * `evaluateCsrfMultiHeaderFromInputs` helper is shared between both
- * wrappers — these tests cover the wrapper's input extraction + decision
- * shape.
- *
- * v1.0 § Phase B. The IncomingMessage tests in `csrf-multi-header.test.ts`
- * cover the legacy path; this file covers the Web Request path.
+ * `evaluateCsrfMultiHeaderRequest(request: Request, options)` is the only
+ * shape of this gate. Its `IncomingMessage` twin was removed once the Web
+ * `Request` covered every target, so the cases that used to live in
+ * `csrf-multi-header.test.ts` are here.
  */
 import { describe, it, expect } from 'vitest'
 
@@ -144,6 +139,19 @@ describe('evaluateCsrfMultiHeaderRequest (T5a.2 Phase B slice 2/6 — Web shape)
     expect(decision).toEqual({ allow: true, signal: 'referer' })
   })
 
+  it('rejects when the Referer origin is a different host', () => {
+    const request = new Request('http://example.com/api', {
+      method: 'POST',
+      headers: {
+        referer: 'http://evil.com/page',
+        host: 'example.com',
+      },
+    })
+    const decision = evaluateCsrfMultiHeaderRequest(request)
+    expect(decision.allow).toBe(false)
+    if (!decision.allow) expect(decision.signal).toBe('referer')
+  })
+
   it('rejects when Referer URL is malformed', () => {
     const request = new Request('http://example.com/api', {
       method: 'POST',
@@ -193,6 +201,21 @@ describe('evaluateCsrfMultiHeaderRequest (T5a.2 Phase B slice 2/6 — Web shape)
       },
     })
     const decision = evaluateCsrfMultiHeaderRequest(request, { trustForwardedHeaders: true })
+    expect(decision).toEqual({ allow: true, signal: 'origin' })
+  })
+
+  it('derives own origin from the real host when trustForwardedHeaders=false', () => {
+    // An injected x-forwarded-host must not move the goalposts: the Origin
+    // matches the real host, so the request is allowed on that basis alone.
+    const request = new Request('http://example.com/api', {
+      method: 'POST',
+      headers: {
+        origin: 'http://example.com',
+        host: 'example.com',
+        'x-forwarded-host': 'evil.com',
+      },
+    })
+    const decision = evaluateCsrfMultiHeaderRequest(request)
     expect(decision).toEqual({ allow: true, signal: 'origin' })
   })
 

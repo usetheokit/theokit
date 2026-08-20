@@ -6,17 +6,23 @@
  * TanStack `createCsrfMiddleware.ts:120-150` decision-tree pattern combined
  * with Next.js wildcard support. **No DEV bypass** (vs SvelteKit anti-pattern).
  *
+ * Web Standards only. The `IncomingMessage` twin was removed once the Web
+ * `Request` shape covered every target the framework serves: Node has had a
+ * global `Request` since 18, `node-web-adapter.ts` converts an
+ * `IncomingMessage` into one, and the Node executor's own gate
+ * (`enforceCsrf` → `validateCsrf`) is what actually runs there. Publishing a
+ * second, weaker origin policy against the same Node request object invited
+ * a consumer to pick the one that demands no custom header.
+ *
  * Returns a structured decision: `allow` (boolean) + `reason` (string) +
  * `signal` (which header proved the decision). Caller maps to 403 response
  * + structured log via `limitUntrustedHeaderValueForLogs`.
  */
-import type { IncomingMessage } from 'node:http'
-
 import { limitUntrustedHeaderValueForLogs } from '../_internal/log-safe.js'
 
 import { isCsrfOriginAllowed } from './wildcard-origin.js'
 
-interface CsrfMultiHeaderOptions {
+export interface CsrfMultiHeaderOptions {
   /**
    * Wildcard-aware allowlist of additional origins (beyond same-origin).
    * Example: `['app.example.com', '*.staging.example.com']`.
@@ -37,22 +43,24 @@ interface CsrfMultiHeaderOptions {
   allowRequestsWithoutOriginCheck?: boolean
 }
 
-type CsrfDecision =
+export type CsrfDecision =
   | { allow: true; signal: 'sec-fetch-site' | 'origin' | 'referer' | 'no-headers-allowed' }
   | {
       allow: false
-      signal: 'sec-fetch-site' | 'origin' | 'referer' | 'no-headers' | 'multiple-origin'
+      signal: 'sec-fetch-site' | 'origin' | 'referer' | 'no-headers'
       reason: string
     }
 
 /**
  * T5a.2 Phase B slice 2/6 — pure header-only multi-header CSRF logic.
  * Accepts a structural reader (string|undefined-typed getter per header)
- * + a pre-resolved ownOrigin string. EC-10 (multi-Origin) is handled by
- * the caller because the Web Standards `Headers` API collapses multi-
- * value headers — only the IncomingMessage path can observe the attack.
+ * + a pre-resolved ownOrigin string.
  *
- * Pure logic. Re-used by both wrappers below.
+ * EC-10 (multi-Origin) is not observable here: the Web `Headers` API
+ * collapses a repeated header into one comma-joined string, which fails to
+ * parse as a URL and is rejected by the Origin branch below. The Node gate
+ * carries its own explicit check (`validateCsrf`), where the array shape a
+ * synthesized `IncomingMessage` can hold used to be resolved silently.
  */
 interface CsrfMultiHeaderInputs {
   secFetchSite: string | undefined
@@ -123,59 +131,18 @@ function evaluateCsrfMultiHeaderFromInputs(
 }
 
 /**
- * Evaluate CSRF for an incoming POST/PUT/PATCH/DELETE request.
+ * T5a.2 Phase B slice 2/6 — Web-Standards multi-header CSRF evaluator.
+ * Consumes `request.headers.get(name)` (native Headers API).
  *
- * Check order:
- *   1. Sec-Fetch-Site (modern browser-native; default must be 'same-origin')
- *   2. Origin (compared to own origin + allowlist with wildcards)
- *   3. Referer (parsed for origin; same comparison)
- *   4. All missing → `allowRequestsWithoutOriginCheck` config decides
+ * **EC-10 note:** the Web `Headers` API collapses multi-value headers into a
+ * single comma-separated string at parse time, and that string fails to parse
+ * as a URL — so a repeated Origin is rejected by the Origin branch rather than
+ * by a signal of its own. (`headers.getSetCookie()` — `Set-Cookie` is the only
+ * multi-value header the Web spec exposes; all others are single-valued at the
+ * API layer.)
  *
- * EC-10: if `Origin` header is present multiple times (Node parses as
- * array), reject — RFC 6454 says origin is single-valued.
- */
-export function evaluateCsrfMultiHeader(
-  req: IncomingMessage,
-  options: CsrfMultiHeaderOptions = {},
-): CsrfDecision {
-  // EC-10: reject if Origin header is multi-valued (only observable on
-  // IncomingMessage; Web Standards Headers API collapses to single value).
-  const rawOrigin = req.headers.origin
-  if (Array.isArray(rawOrigin)) {
-    return {
-      allow: false,
-      signal: 'multiple-origin',
-      reason: 'Multiple Origin headers (RFC 6454 violation)',
-    }
-  }
-  const ownOrigin = getOwnOrigin(req, options.trustForwardedHeaders === true)
-  return evaluateCsrfMultiHeaderFromInputs(
-    {
-      secFetchSite: headerAsString(req.headers['sec-fetch-site']),
-      origin: typeof rawOrigin === 'string' ? rawOrigin : undefined,
-      referer: headerAsString(req.headers.referer),
-    },
-    ownOrigin,
-    options,
-  )
-}
-
-/**
- * T5a.2 Phase B slice 2/6 — Web-Standards-shaped multi-header CSRF
- * evaluator. Mirror of `evaluateCsrfMultiHeader(req: IncomingMessage)`
- * for the Web `Request` shape. Consumes `request.headers.get(name)`
- * (native Headers API) instead of the Node indexer.
- *
- * **EC-10 note:** the Web `Headers` API collapses multi-value headers
- * into a single comma-separated string at parse time — the multi-Origin
- * attack vector observable on IncomingMessage does NOT exist here. The
- * `'multiple-origin'` decision signal is unreachable on this path by
- * design. (See `headers.getSetCookie()` — `Set-Cookie` is the only
- * multi-value header the Web spec exposes; all others are
- * single-valued at the API layer.)
- *
- * Used by `executeWebRequest` (T5a.2 Phase A) when opts integrate CSRF
- * multi-header policy alongside the simpler `validateCsrfRequest`.
+ * Available to `executeWebRequest` consumers who want an origin-based policy
+ * alongside the custom-header `validateCsrfRequest`.
  */
 export function evaluateCsrfMultiHeaderRequest(
   request: Request,
@@ -193,27 +160,12 @@ export function evaluateCsrfMultiHeaderRequest(
   )
 }
 
-function getOwnOrigin(req: IncomingMessage, trustForwarded: boolean): string | undefined {
-  let host: string | undefined
-  let proto: string | undefined
-
-  if (trustForwarded) {
-    host = headerAsString(req.headers['x-forwarded-host']) ?? headerAsString(req.headers.host)
-    proto = headerAsString(req.headers['x-forwarded-proto']) ?? 'http'
-  } else {
-    host = headerAsString(req.headers.host)
-    proto = 'http'
-  }
-  if (host === undefined) return undefined
-  return `${proto}://${host}`
-}
-
 /**
- * Web-Standards counterpart of getOwnOrigin. Uses native Headers API +
- * the request's URL (which Web Request always populates with the full
- * absolute URL — unlike IncomingMessage where `req.url` is path-only).
+ * Resolve the request's own origin. Uses the native Headers API + the
+ * request's URL (which a Web `Request` always populates with the full
+ * absolute URL — unlike `IncomingMessage`, where `req.url` is path-only).
  *
- * Precedence (same as IncomingMessage path):
+ * Precedence:
  *   1. x-forwarded-host (when trustForwarded=true) → x-forwarded-proto
  *   2. host header → 'http' default proto
  *   3. fallback: request.url's origin (already absolute on Web Request)
@@ -252,11 +204,6 @@ function originMatches(
   if (host === undefined) return false
   if (allowedOrigins === undefined || allowedOrigins.length === 0) return false
   return isCsrfOriginAllowed(host, allowedOrigins)
-}
-
-function headerAsString(value: string | string[] | undefined): string | undefined {
-  if (Array.isArray(value)) return value[0]
-  return value
 }
 
 function safeOriginFromUrl(url: string): string | undefined {
