@@ -52,6 +52,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **A container built from the documented path is reachable, and the log says which it is.**
+  `config.host` had been declared, defaulted to `localhost` and never passed to `listen`, so the
+  server bound every interface while its own default said otherwise. Passing it fixed that and broke
+  containers: inside one, `localhost` means nobody, so the image started, printed a URL and refused
+  every request including its own. `HOST` and `PORT` are now read — the two variables every container
+  platform sets — with explicit configuration still winning, and `host: false` outranking the
+  environment because it is somebody writing down "do not open me up". The startup line now states
+  the bound address and, when nobody chose one, what to write to change it: it used to print
+  `localhost` either way, so a container serving everyone and a container serving nobody produced
+  byte-identical output. (usetheokit/theokit#402)
 - **A `POST` carrying a JSON body reaches its `/api` route under `theokit start`.** Every such
   request hung forever: no status, no error, no timeout — the connection simply stayed open and the
   handler was never called, while `theokit dev` answered the identical request in single-digit
