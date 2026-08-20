@@ -8,6 +8,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **A web application can render a human-in-the-loop approval prompt.** `useAgent` returns
+  `pendingApprovals` — one entry per decision the run is parked on, carrying the `approvalId` that
+  `approve()` takes, the gated tool's name, the arguments it is about to run with, the question
+  declared on the gate and the window before it settles itself. The hook used to expose only the
+  settle half: the store dropped the approval frame on the way in, so while a human was deciding its
+  whole snapshot was `messages`/`thread`/`status`/`error` and the paused tool sat in
+  `state: 'input-available'` — indistinguishable from an ungated tool running — leaving polling an
+  out-of-band endpoint as the only path. The transcript carries it too: the gated call's own part
+  moves to `state: 'approval-requested'` with the id under `approval.id`, and leaves that state when
+  the decision is settled. A tool with no gate is unchanged, with `pendingApprovals` empty.
+  (usetheokit/theokit#392)
+- **An approval says what it is asking.** The question declared on `.approval(name, { question })`
+  and the timeout the gate expires in now reach the client, as a transient `data-approval` part
+  emitted alongside the approval frame. They were dropped between the producer and the surface, so
+  the one thing a gate exists to show a human was recoverable only from
+  `GET /api/agents/<name>/approvals`. They ride a data part rather than the approval frame because
+  `ai`'s chunk schema is strict — a field added there would delete the whole frame for an ai-sdk
+  client instead of merely giving it a poorer prompt. The tool's name and its resolved input are not
+  duplicated: the preceding `tool-input-available` frame already announces both under the same call
+  id, and both readers fold the two frames into one part. (usetheokit/theokit#394)
 - **The agent endpoint can declare who may run it.** `mountAgent` accepts a `policy` and a `subject`
   and evaluates them with the same function the route executors and the in-process caller use, so
   ADR 0001's guarantee now reaches the surface this framework exists for. It runs before the module

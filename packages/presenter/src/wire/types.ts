@@ -21,6 +21,27 @@ export interface WireMessagePart {
   readonly [key: string]: unknown
 }
 
+/**
+ * The outstanding HITL decision a tool part carries while it sits in `state: 'approval-requested'`
+ * (usetheokit/theokit#392).
+ *
+ * Declared rather than left to the part's index signature because `id` is an ARGUMENT — it is what
+ * `approve(approvalId, …)` takes — and a caller reading it off `unknown` has to assert a string it
+ * cannot check. The other two are optional because the ai-sdk's own frame carries neither, and this
+ * wire is readable by an ai-sdk server as well as ours.
+ *
+ * The tool's name and its resolved input are NOT here: they live on the part itself, put there by
+ * the `tool-input-available` chunk under the same `toolCallId`. One fact, one field.
+ */
+export interface WireToolApproval {
+  /** The id `approve()` settles. Distinct from the part's `toolCallId` by contract, equal in practice. */
+  readonly id: string
+  /** The question the agent's author declared for the human, when the producer sent one. */
+  readonly question?: string
+  /** How long the gate waits before it settles itself, in ms. Absent means the producer said nothing. */
+  readonly timeoutMs?: number
+}
+
 export interface WireMessage<METADATA = unknown> {
   id: string
   role: WireMessageRole

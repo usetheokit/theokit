@@ -32,7 +32,12 @@ export {
   consumeChunkStream,
 } from '@theokit/agents/client'
 export { useAgent } from '@theokit/agents/client/react'
-export type { UseAgentReturn, UseAgentOptions, UseAgentStatus } from '@theokit/agents/client/react'
+export type {
+  PendingApproval,
+  UseAgentReturn,
+  UseAgentOptions,
+  UseAgentStatus,
+} from '@theokit/agents/client/react'
 
 // M47 (ADR-M47-2) — the typed, client-safe agent handle (`useAgent(chat)` — no magic string, no dup type).
 export { agentHandle, isAgentHandle } from '@theokit/agents/client'

@@ -162,12 +162,20 @@ describe('theokit#384 — a dropped connection is not a finished run', () => {
       status: 'done',
       error: undefined,
     })
+    // `pendingApprovals` joined the key set in usetheokit/theokit#392 and this assertion was
+    // updated rather than relaxed. It is not the addition this test was written to refuse: that one
+    // would have reported the INTERRUPTION through a new field, leaving `status` lying while a
+    // consumer that never read the field kept seeing a finished turn. This one carries an
+    // orthogonal fact, it is `[]` on every path without a gated tool — asserted below, not assumed
+    // — and it changes the value of none of the four keys that were already here.
     expect(Object.keys(snapshot).sort((a, b) => a.localeCompare(b))).toEqual([
       'error',
       'messages',
+      'pendingApprovals',
       'status',
       'thread',
     ])
+    expect(snapshot.pendingApprovals).toEqual([])
     expect(textOf(client)).toBe('Half an ans')
   })
 })

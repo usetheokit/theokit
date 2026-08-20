@@ -69,9 +69,18 @@ async function viaMirror(text: string): Promise<unknown[]> {
 }
 
 /**
- * One case per variant the presenter or the bridge can emit. `tool-approval-request` and the
- * `data-*` family are transport signals the transcript does not carry, so both sides drop them —
- * that agreement is itself worth asserting.
+ * One case per variant the presenter or the bridge can emit.
+ *
+ * `tool-approval-request` used to be listed here as a signal "the transcript does not carry, so
+ * both sides drop it". Only our side dropped it: the oracle folds the frame into the tool part it
+ * names, as `state: 'approval-requested'` with `approval.id` — which is what a renderer scans for,
+ * and what our reader was missing (usetheokit/theokit#392). The case below is the evidence that the
+ * state is the ai-sdk's own vocabulary rather than one invented here.
+ *
+ * The TheoKit-only extension the same issue's sibling adds (`question` / `timeoutMs` on the frame)
+ * is deliberately NOT in this case: the oracle's schema strips fields it does not declare, so a
+ * case carrying them would grade a divergence we chose. It is asserted in
+ * `read-message-stream.test.ts` instead, where the claim is about our reader and not about parity.
  */
 const CASES: ReadonlyArray<{ name: string; frames: readonly unknown[] }> = [
   { name: 'start + finish (an empty turn)', frames: [{ type: 'start' }, { type: 'finish' }] },
@@ -163,6 +172,38 @@ const CASES: ReadonlyArray<{ name: string; frames: readonly unknown[] }> = [
     ],
   },
   {
+    name: 'a gated tool run pauses on an approval and then resolves',
+    frames: [
+      { type: 'start' },
+      {
+        type: 'tool-input-available',
+        toolCallId: 'c1',
+        toolName: 'send_email',
+        input: { to: 'ops@example.com' },
+        dynamic: true,
+      },
+      { type: 'tool-approval-request', approvalId: 'ap-1', toolCallId: 'c1' },
+      { type: 'tool-output-available', toolCallId: 'c1', output: 'sent' },
+      { type: 'finish' },
+    ],
+  },
+  {
+    name: 'a gated tool run whose approval was denied',
+    frames: [
+      { type: 'start' },
+      {
+        type: 'tool-input-available',
+        toolCallId: 'c1',
+        toolName: 'send_email',
+        input: {},
+        dynamic: true,
+      },
+      { type: 'tool-approval-request', approvalId: 'ap-1', toolCallId: 'c1' },
+      { type: 'tool-output-error', toolCallId: 'c1', errorText: 'denied by human approver' },
+      { type: 'finish' },
+    ],
+  },
+  {
     name: 'start with an explicit messageId',
     frames: [
       { type: 'start', messageId: 'm-42' },
@@ -199,6 +240,10 @@ describe('differential — the mirror reproduces the oracle', () => {
       'tool-input-available',
       'tool-output-available',
       'tool-output-error',
+      // Entered this list the same way `data-*` did — after escaping. The reader dropped the frame
+      // and this assertion did not object, because it had been written from the same assumption
+      // that dropping it was correct (usetheokit/theokit#392).
+      'tool-approval-request',
       // The `data-*` family entered this list AFTER escaping: the reader's first version discarded it
       // wholesale and the differential did not flag it, because the coverage assertion had been
       // written from the same wrong assumption. What caught it was a consumer's test.

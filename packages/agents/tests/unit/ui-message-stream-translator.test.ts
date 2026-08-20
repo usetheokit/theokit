@@ -592,9 +592,10 @@ describe('presentUIMessageStream — tool chunks (M1 / T1.2)', () => {
 })
 
 describe('presentUIMessageStream — HITL approval (M4)', () => {
-  it('test_maps_approval_required_to_tool_input_then_approval_request', async () => {
+  it('test_maps_approval_required_to_tool_input_then_detail_then_approval_request', async () => {
     // A HITL-gated tool pauses BEFORE running: the translator first synthesizes the
-    // tool-input part (so the client has a tool to gate), then the ai-sdk-native
+    // tool-input part (so the client has a tool to gate), then the transient detail part carrying
+    // what the gate is asking (usetheokit/theokit#394), then the ai-sdk-native
     // tool-approval-request chunk referencing the same toolCallId.
     const events: AgentStreamEvent[] = [
       {
@@ -617,12 +618,30 @@ describe('presentUIMessageStream — HITL approval (M4)', () => {
         input: { env: 'prod' },
         dynamic: true,
       },
+      {
+        type: 'data-approval',
+        data: { approvalId: 'call-1', question: 'Deploy to prod?', timeoutMs: 300_000 },
+        transient: true,
+      },
       { type: 'tool-approval-request', approvalId: 'call-1', toolCallId: 'call-1' },
       { type: 'finish' },
+    ])
+    // The detail part carries neither the tool name nor the input: the `tool-input-available` above
+    // already announced both under the same id, and one fact with two carriers has no tie-break.
+    const detail = chunks[2] as { data: Record<string, unknown> }
+    expect(Object.keys(detail.data).sort((a, b) => a.localeCompare(b))).toEqual([
+      'approvalId',
+      'question',
+      'timeoutMs',
     ])
   })
 
   it('test_approval_request_chunk_validates_against_ai_schema', async () => {
+    // The gate this whole design turns on (usetheokit/theokit#394). `uiMessageChunkSchema` is
+    // STRICT — one undeclared key fails the union and `useChat` drops what fails to parse — so a
+    // `question` added to the approval frame would not give an ai-sdk client a poorer prompt, it
+    // would delete the pause for that client. This assertion is what refuses that shortcut, and it
+    // is why the question travels as a `data-*` part instead: measured, that variant validates.
     const schema = uiMessageChunkSchema()
     const validate = (schema as { validate?: (c: unknown) => Promise<{ success: boolean }> })
       .validate

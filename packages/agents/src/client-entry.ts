@@ -48,6 +48,9 @@ export type {
 
 export { AgentClient } from './client/agent-client.js'
 export type { AgentClientState } from './client/agent-client.js'
+// usetheokit/theokit#392 — the outstanding HITL decision the snapshot publishes. Exported because a
+// non-React surface (TUI, desktop, a plain script) reads it off `getState()` and needs to type it.
+export type { PendingApproval } from './client/agent-client.js'
 // M92 — without these the consumer cannot turn on coalescing nor tell an aborted approval from a
 // denied one; the capability would exist and be unreachable across the boundary.
 export type { AgentClientOptions } from './client/agent-client.js'

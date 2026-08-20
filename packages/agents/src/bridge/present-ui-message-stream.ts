@@ -1,5 +1,6 @@
 import { UIMessageStreamPresenter } from '@theokit/presenter'
 import type { AgentOutputEvent } from '@theokit/presenter'
+import { WIRE_APPROVAL_DETAIL_PART } from '@theokit/presenter/wire'
 import type { WireChunk as UIMessageChunk } from '@theokit/presenter/wire'
 
 import type { AgentStreamEvent, AgentTurnMetadata, DoneEvent } from './agent-stream-events.js'
@@ -124,8 +125,9 @@ function* errorChunks(errorText: string, code: string | undefined): Generator<UI
  * repetition of `closeBlock()` at each branch was an invitation to forget it at the fifth.
  *
  * `checkpoint_saved` joins them because it always was one of these; only its name predates the
- * pattern. `approval_required` stays inline: it emits TWO chunks and consults presenter state, so
- * it is genuinely a different shape rather than the same one spelled differently.
+ * pattern. `approval_required` stays inline: it emits THREE chunks (the synthesised tool input, its
+ * own detail part, and the gate) and consults presenter state, so it is genuinely a different shape
+ * rather than the same one spelled differently.
  */
 function diagnosticDataPart(event: AgentStreamEvent): UIMessageChunk | null {
   switch (event.type) {
@@ -195,7 +197,8 @@ export async function* presentUIMessageStream(
       }
       if (event.type === 'approval_required') {
         // A framework chunk must not sit inside an open text/reasoning block — close it first (as the
-        // original translator did), then synthesize the tool-input (EC-1) once, then the approval.
+        // original translator did), then synthesize the tool-input (EC-1) once, then the detail part
+        // and the approval.
         yield* presenter.closeBlock()
         // #361 — the call this gates, under the id the wire uses for it. That is the runtime's own
         // tool-call id when the SDK already announced it, and the approval id when it did not; the
@@ -211,6 +214,21 @@ export async function* presentUIMessageStream(
             dynamic: true,
           }
         }
+        // #394 — the gate says what it is ASKING, and it says it here rather than on the approval
+        // frame for the reason `errorChunks` above already documents in full: ai's chunk schema is
+        // strict, so a field added to a shared variant does not degrade an ai-sdk client's prompt,
+        // it deletes the frame for that client. Same protocol, same right place — a data part.
+        //
+        // `toolName` and `input` are NOT repeated: the `tool-input-available` above carries them
+        // under this same `toolCallId`, and both readers fold the frames into one part.
+        //
+        // BEFORE the frame it describes, like the error code and for the same reason: a sequential
+        // consumer already holds the detail when the thing it describes arrives.
+        yield dataPart(WIRE_APPROVAL_DETAIL_PART, {
+          approvalId: event.callId,
+          question: event.question,
+          timeoutMs: event.timeoutMs,
+        })
         yield { type: 'tool-approval-request', approvalId: event.callId, toolCallId }
         continue
       }
