@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **`revalidateTag`, `revalidatePath` and `updateTag` no longer throw in every application.** All
+  three are exported publicly and resolve the cache engine from a process singleton that nothing
+  initialized — `initCacheEngine` had no production caller, so the first call to any of them raised
+  `Cache engine not initialized`. The subsystem was not unreachable code; it was a bridge with one
+  half published and the other half never built. `theo start` and `theo dev` now initialize the
+  engine from `theo.config.ts > cache`. An application with no `cache` key is unaffected: no engine
+  is created, exactly as before. (usetheokit/theokit#352)
+
 - **Build-time scanners order by code unit, so the emitted output no longer depends on the machine's
   locale.** Five scanners still compared with `localeCompare` after #346 established the rule for the
   route scanner — including the middleware scanner, where the order being emitted is an *execution*
