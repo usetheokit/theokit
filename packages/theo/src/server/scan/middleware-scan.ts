@@ -5,6 +5,8 @@
 import { readdirSync, existsSync, statSync } from 'node:fs'
 import { join, extname } from 'node:path'
 
+import { compareByCodeUnit } from '../_internal/compare-by-code-unit.js'
+
 const MW_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx'])
 
 /**
@@ -31,8 +33,9 @@ export function scanMiddlewares(serverDir: string): string[] {
     files.push(join(mwDir, entry.name))
   }
 
-  // Sort alphabetically — numeric prefix (01-, 02-) guarantees order.
-  // Use `localeCompare` for stable, locale-aware ordering.
-  files.sort((a, b) => a.localeCompare(b))
+  // Sorted so the numeric prefix (01-, 02-) guarantees execution order.
+  // By code unit, not by collation: this order is what runs first, and a
+  // collated order is machine-dependent (usetheokit/theokit#351).
+  files.sort(compareByCodeUnit)
   return files
 }
