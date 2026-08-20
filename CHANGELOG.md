@@ -6,7 +6,115 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **`theokit/server/security` now exports the multi-header CSRF gate and its wildcard-origin
+  matcher.** `evaluateCsrfMultiHeaderRequest`, `matchWildcardDomain` and `isCsrfOriginAllowed` were
+  implemented, tested and unreachable: the barrel the subpath points at listed five modules and not
+  these two, so no consumer could name them. An application that wants an origin-based policy --
+  Sec-Fetch-Site, then Origin, then Referer, against a wildcard allowlist -- alongside the
+  custom-header check can now import one. `CsrfMultiHeaderOptions` and `CsrfDecision` ship with it,
+  so the options argument and the returned decision are nameable in TypeScript.
+  (usetheokit/theokit#355)
+
+### Changed
+
+- **BREAKING: `executeWebRequest` enforces CSRF unless it is explicitly turned off.** Its `csrfMode`
+  option had no default, and every gate compared against `'strict'` -- so a caller that omitted the
+  option served every POST, PUT, PATCH and DELETE with no check at all, and the option's own
+  documentation described that as intentional backward compatibility. A security control a caller
+  has to know about and ask for is not a control. Omitting `csrfMode` now enforces; `'off'` is the
+  only value that disables it, and a route that legitimately receives third-party POSTs opts out by
+  itself with `csrf: false` on `defineRoute`. Honest scope: `executeWebRequest` has no production
+  caller in this repository -- `theo dev` and `theo start` serve through `executeRoute`, whose gate
+  has defaulted to strict all along -- so this closes the boundary the Cloudflare, Bun and Deno
+  adapters are built on, not a live exposure. See `MIGRATION.md`. (usetheokit/theokit#355)
+
+### Removed
+
+- **The `IncomingMessage` form of the multi-header CSRF gate, `evaluateCsrfMultiHeader`, is gone.**
+  Nothing consumer-visible changes: it was in no barrel and had no subpath, so its only caller was
+  its own unit test. It is removed rather than published because shipping it would have put two
+  different origin policies in front of the same Node request object -- the executor's own gate,
+  which demands the `X-Theo-Action` header, and this one, which does not -- and left a consumer to
+  pick. The Web `Request` form covers every target the framework serves: Node has had a global
+  `Request` since 18, and `node-web-adapter.ts` already converts an `IncomingMessage` into one. The
+  one check the removed form had and `validateCsrf` did not -- rejecting a multi-valued `Origin` --
+  moved to `validateCsrf` first, where the wired Node gate reads it. (usetheokit/theokit#355)
+
+- **`packages/http/src/action-handler.ts` is gone. It was the server-action pipeline `@theokit/http`
+  never finished, and `packages/theo` shipped a different one.** Nothing consumer-visible changes:
+  the module was in neither the package barrel nor `tsup.config.ts`, so it had no subpath, no build
+  entry and exactly one importer -- its own unit test. It is the fourth module in the pattern the
+  B-M74-01 sweep recorded at `packages/http/src/index.ts:21`, and the only one of the four that no
+  consumer could reach.
+
+  It was superseded, not abandoned. `packages/theo/src/server/http/action-execute.ts` resolves an
+  action by file path and export name rather than by a registry key, and carries everything the
+  prototype had no place for: a POST-only gate, CSRF enforcement with a per-action opt-out, the
+  middleware and context pipeline, plugin `onRequest` / `preHandler` / `onResponse` / `onError`,
+  multipart bodies, the typed `ActionInputError` envelope, devalue serialization, and the dev
+  telemetry the devtools Actions tab reads. The two also disagreed on the wire: the prototype read
+  `x-theo-action` as an action **id**, while the generated client
+  (`packages/theo/src/vite-plugin/actions-virtual-module.ts:219`), both CSRF gates and the readiness
+  endpoint read it as the literal flag `1`. Shipping both would have put two incompatible readings
+  of one header into one framework.
+
+  `@theokit/http/action-encryption` is deliberately **kept**. The backlog item tied the two together
+  on the theory that the encryption had nowhere to plug in because the pipeline that would call it
+  was itself an orphan -- but the two modules never referenced each other, and the pipeline that did
+  ship does not encrypt either, because TheoKit actions send an input payload rather than the
+  closure-bound arguments Next.js encryption exists to seal. It is a published subpath, a
+  self-contained Web Crypto primitive a consumer can call on its own, and it costs the main bundle
+  nothing. (usetheokit/theokit#356)
+
 ### Fixed
+
+- **A request carrying a W3C `traceparent` keeps its trace id in production, and an untrusted
+  correlation header can no longer reach the logs.** `theo start` minted a fresh UUID per request and
+  discarded the incoming `traceparent`, so a trace crossing into the server started over — `theo dev`
+  had honoured the header on `/api/*` for a while, and production honoured it nowhere. The fallback
+  header, `x-request-id`, was accepted verbatim: any length, any bytes. It is chosen by the caller and
+  ends up in the structured logs, where a newline splits one line into two with the second forged. It
+  is now bounded and restricted to the characters real id formats use, and a value that fails falls
+  through to a generated id rather than rejecting the request. Both the Node and the Web-shaped
+  resolvers apply the same rule. (usetheokit/theokit#353)
+
+- **A Web-executor route that declares `csrf: false` is exempt from the CSRF gate, as it already was
+  on the Node executor.** `defineRoute`'s public contract offers the opt-out for endpoints that
+  legitimately receive third-party POSTs -- Stripe and GitHub webhooks, OAuth callbacks -- and the
+  field beside it names both runtimes as honouring what the contract declares. `executeRoute` read
+  it; `executeWebRequest` never did, so the same route module that served a webhook under Node
+  rejected every delivery with a 403 once served through the Web executor. Both of its gates now
+  read the field, mirroring the Node executor rather than inventing a second mechanism.
+  (usetheokit/theokit#355)
+
+- **Exported telemetry actually leaves the process.** The TheoCloud exporter accepted a
+  `flushIntervalMs` option, defaulted it, and read it nowhere — there was no timer in the file. Its
+  only drain was `shutdown()`, which nothing called, so a long-running server accumulated spans and
+  exported none of them. It now flushes on the interval it advertises, with a timer that does not
+  hold the process open; `theo start` flushes it on SIGTERM after evicting agents and draining
+  storage, so the spans covering the shutdown itself are in the batch that leaves. The pending
+  buffer is also bounded — a collector that is unreachable does not make the spans stop arriving —
+  and dropped spans are counted rather than lost silently. (usetheokit/theokit#353)
+
+- **An agent run now emits telemetry: a span for the run, one per tool call, one per
+  human-in-the-loop pause, and the token usage.** These are the four signals the observability
+  milestone asks for, and all four measured absent — no production file created an agent span at
+  all. They are read off the wire-chunk stream the agent already emits rather than by instrumenting
+  the agent loop, which keeps `@theokit/agents` free of any dependency on the server package and
+  means a desktop or terminal front-end gets the same spans over the same events. An application
+  that configured no telemetry passes the stream through untouched and pays nothing.
+  (usetheokit/theokit#353)
+
+- **`ssrStreaming: true` serves a document again, instead of a bare React tree.** With streaming on,
+  both renderers returned React's output and nothing else: no `<html>`, no `<head>`, and none of the
+  hydration data the client router reads before it boots — so a streamed page loaded no stylesheet,
+  no client entry, and re-fetched on the client everything the server had just sent. The single-shot
+  `render()` never had the problem because it returns `{ html, hydrationData }` for the caller to
+  place in the template; the streaming siblings had no such seam. The document is now assembled
+  around the stream, with the head flushed before React produces a byte and the hydration script
+  written after the app markup and before the client entry. (usetheokit/theokit#343)
 
 - **The observability plugin can be registered, and `theo.config.ts` finally has the
   `observability` key its own adapter registry documents.** `createObservabilityPlugin` returned
@@ -109,8 +217,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   (usetheokit/theokit#334)
 
 
-### Fixed
-
 - **Fifteen test files create their temporary directories atomically.** Each built a path under
   `tmpdir()` from `Date.now()` or a random suffix and then created it — two steps, with a window
   between them in which something else can occupy the path, and `Date.now()` in particular collides
@@ -153,6 +259,38 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   lifecycle gap. The field doc and the `plugin()` example now show `new URL(ctx.request.url).pathname`
   as the way to match a path. (usetheokit/theokit#324)
 
+### Security
+
+- **`validateCsrf` rejects a multi-valued `Origin` header instead of silently picking the first
+  one.** RFC 6454 makes Origin single-valued, and two disagreeing values are a request nobody
+  authorized -- but the header reader took `value[0]` and carried on. `node:http` joins a repeated
+  Origin with `, ` rather than producing an array, so the exposure was never through a plain Node
+  server; it was through any caller that synthesizes an `IncomingMessage` -- an adapter, a shim, a
+  proxy library -- where the array shape the type allows is real. The disagreement is now the
+  rejection. (usetheokit/theokit#355)
+
+- **The multi-header CSRF gate stops accepting the two signals that prove nothing: `Sec-Fetch-Site:
+  same-site` and `Origin: null`.** Neither requires the attacker to set a custom header, so a plain
+  HTML form POST carrying either value passed the gate on its own. `same-site` covers every host
+  under the same registrable domain, which makes any sibling subdomain -- compromised, or belonging
+  to another tenant -- a valid forger; `Origin: null` is what an `<iframe sandbox="allow-scripts
+  allow-forms">` sends, and an opaque origin is the absence of evidence rather than evidence of
+  same-origin. Both are rejected now, with a reason naming the header that decided it. The gate had
+  no caller and no export at the time, which is why this was latent rather than live -- and the
+  reason it is closed before the gate is published rather than after. (usetheokit/theokit#355)
+
+- **`@theokit/http/css-resource` escapes what it interpolates, so a stylesheet URL taken from
+  configuration can no longer inject markup.** `renderCssResource` assembled its `<link>` and
+  `<style>` tags by string interpolation and escaped nothing: an `href` or `precedence` containing
+  `">` closed the attribute and opened an element of the caller's choosing, and inline `content`
+  containing `</style>` closed the element outright. Nothing inside the package renders with it yet,
+  which is the only reason this was latent rather than live -- and the reason it is closed before any
+  SSR path is allowed to reach it rather than after. `href` and `precedence` are attribute-escaped
+  now; inline content has the one sequence that can terminate a raw text element (`</style`)
+  rewritten as the CSS escape `\3c `, which a CSS string parses back to `<` and which leaves media
+  range syntax such as `@media (width < 600px)` alone. A caller passing an href with a query string
+  now sees `&` rendered as `&amp;`, which is what an HTML attribute has always required.
+  (usetheokit/theokit#356)
 
 ## [theokit 0.48.14] - 2026-08-19
 

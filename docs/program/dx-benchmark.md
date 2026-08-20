@@ -77,11 +77,26 @@ They share no code. An app tuned to make the benchmark look good would corrupt b
 
 The benchmark cannot run credibly yet, and pretending otherwise would waste it:
 
-- **J9 (observability) cannot be measured today.** There is no signal for a run, a tool call, an approval or a token — the subsystem exists with no production caller (#347). Measuring it now would score a zero that reflects wiring, not design.
-- **J2 (HITL) is under an open security advisory.** Measuring the DX of a path whose authorization is being redesigned would measure something about to change.
-- **J10 (deploy) depends on #350** — the build does not survive its own parallel invocation.
+- **J9 (observability) was unmeasurable and now is not — re-measured 2026-08-20.** The blocker was
+  real: no signal existed for a run, a tool call, an approval or a token, and scoring it then would
+  have measured wiring rather than design. All four now exist and reach an exporter from a
+  production path (`packages/theo/src/server/agent/observe-agent-run.ts`, wired in `mount-agent.ts`
+  and `build-agent-streamer.ts`; the exporter drains on its interval and on SIGTERM). **J9 is
+  unblocked.** What it will measure is the framework's design, which is what the journey is for.
+- **J2 (HITL) is under an open security advisory.** Unchanged. Measuring the DX of a path whose
+  authorization is being redesigned would measure something about to change.
+- **J10 (deploy) depends on #350** — the build does not survive its own parallel invocation. The fix
+  is merged into `develop` and the issue is still open, so this line stays until the issue is
+  verified closed rather than until someone remembers it was fixed.
 
-So the honest order is: define the criteria for all ten now (this document plus ten criteria files), implement and measure J1, J3, J4, J5, J7 after Wave 0.5 wires what exists, and hold J2, J8, J9 until the authorization ADR and the observability wiring land.
+So the honest order is: define the criteria for all ten now (this document plus ten criteria files),
+implement and measure J1, J3, J4, J5, J7, **J9** after Wave 0.5 wires what exists, and hold J2 until
+the authorization ADR lands and J8 until its own blocker is named.
+
+**One thing this re-measurement should not be read as.** J9 being unblocked means it can be scored;
+it does not mean it will score well. A journey that is newly possible and a journey that is
+comfortable are different claims, and the second is exactly what the benchmark exists to test rather
+than to assume.
 
 Reporting a partial run as the benchmark is forbidden. Ten journeys or a stated subset with the reason — never a subset presented as the whole.
 

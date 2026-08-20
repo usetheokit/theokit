@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { validateCsrf } from '../../packages/theo/src/server/security/csrf.js'
 import type { IncomingMessage } from 'node:http'
 
-function mockReq(headers: Record<string, string>): IncomingMessage {
+function mockReq(headers: Record<string, string | string[]>): IncomingMessage {
   return { headers } as unknown as IncomingMessage
 }
 
@@ -35,5 +35,21 @@ describe('validateCsrf', () => {
   it('should accept request with X-Theo-Action and no Host header', () => {
     const result = validateCsrf(mockReq({ 'x-theo-action': '1', origin: 'http://localhost:3000' }))
     expect(result.valid).toBe(true)
+  })
+
+  it('should reject a multi-valued Origin header (RFC 6454: Origin is single-valued)', () => {
+    // A caller that hands us a synthesized IncomingMessage -- an adapter, a
+    // shim, a proxy library -- can carry Origin as an array. Picking one of
+    // two conflicting origins silently is a decision the request did not
+    // authorize, so the disagreement itself is the rejection.
+    const result = validateCsrf(
+      mockReq({
+        'x-theo-action': '1',
+        origin: ['http://localhost:3000', 'http://evil.com'],
+        host: 'localhost:3000',
+      }),
+    )
+    expect(result.valid).toBe(false)
+    if (!result.valid) expect(result.reason).toContain('Origin')
   })
 })

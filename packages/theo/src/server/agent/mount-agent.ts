@@ -11,11 +11,13 @@
  */
 import { compileAgentModule, resolveEnabledSkills, streamAgentUIMessages } from '@theokit/agents'
 
+import { getObservabilityAdapter } from '../observability-bootstrap.js'
 import { validateCsrfRequest, type CsrfMode } from '../security/csrf.js'
 
 import type { ApiKeyResolver } from './api-key-resolver.js'
 import { buildAgentHitl } from './build-agent-streamer.js'
 import { durableUiMessageStreamResponse } from './durable-ui-message-stream-response.js'
+import { observeAgentRun } from './observe-agent-run.js'
 import { getRunEventCache, mintRunId } from './run-event-cache.js'
 
 // Re-exported so existing importers keep working. It is declared in its own module because
@@ -146,14 +148,20 @@ export async function mountAgent(
   // (or a second client observe) via `GET /api/agents/<name>/runs/<runId>/stream`.
   // The runId is surfaced in the `x-theokit-run-id` response header.
   const runId = mintRunId()
+  const stream = streamAgentUIMessages(compiled, resolvedApiKey, {
+    ...input,
+    hitl,
+    signal: request.signal,
+    cwd: resolveDiscoveryCwd(compiled, projectRoot),
+    baseDir: resolveSessionBaseDir(projectRoot),
+  })
+  // M8 — spans for the run, each tool call, each HITL pause and the token usage,
+  // read off the chunk stream the agent already emits. Absent adapter ⇒ the
+  // stream is passed through untouched, so an app that configured no telemetry
+  // pays nothing (usetheokit/theokit#353).
+  const adapter = getObservabilityAdapter()
   return durableUiMessageStreamResponse(
-    streamAgentUIMessages(compiled, resolvedApiKey, {
-      ...input,
-      hitl,
-      signal: request.signal,
-      cwd: resolveDiscoveryCwd(compiled, projectRoot),
-      baseDir: resolveSessionBaseDir(projectRoot),
-    }),
+    adapter === undefined ? stream : observeAgentRun(stream, adapter, { agent: source }),
     { runId, cache: getRunEventCache() },
   )
 }

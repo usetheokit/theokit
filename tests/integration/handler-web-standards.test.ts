@@ -136,7 +136,7 @@ describe('Web-standards handler — BDD scenarios (T1.2)', () => {
   it('validation error: POST with Zod schema mismatch → 400', async () => {
     const request = new Request('http://localhost/api/test', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', 'x-theo-action': '1' },
       body: JSON.stringify({ wrong_field: true }), // schema expects { name: string }
     })
     const response = await executeWebRequest(request, { POST })
@@ -147,7 +147,7 @@ describe('Web-standards handler — BDD scenarios (T1.2)', () => {
   it('edge case: empty body POST → handler treats as undefined, no crash', async () => {
     const request = new Request('http://localhost/api/test', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', 'x-theo-action': '1' },
       body: '',
     })
     // Expect SOME response (400 from Zod, OR 422). Critical assertion:

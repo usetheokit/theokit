@@ -50,9 +50,17 @@ export default defineConfig({
           fileParallelism: false,
         },
       },
+      // Every package that owns tests is listed. A package whose config exists but
+      // is missing here runs nowhere and reports nothing — which is how 18 files
+      // in `theo`, `create-theokit` and `tauri` typechecked without ever executing
+      // (usetheokit/theokit#357). `tests/unit/vitest-projects-cover-every-test.test.ts`
+      // is what keeps this list honest; it sweeps `packages/*/tests` too.
       './packages/agents/vitest.config.ts',
       './packages/http/vitest.config.ts',
       './packages/presenter/vitest.config.ts',
+      './packages/theo/vitest.config.ts',
+      './packages/create-theokit/vitest.config.ts',
+      './packages/tauri/vitest.config.ts',
     ],
     // A better-sqlite3 NODE_MODULE_VERSION mismatch surfaces as a raw test failure. Run
     // `pnpm rebuild better-sqlite3` when it does.

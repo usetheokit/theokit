@@ -43,18 +43,45 @@ export function parseTraceparent(value: string): string | null {
 }
 
 /**
- * Pick the first string value out of an IncomingMessage header. Node
+ * Shape a correlation id must have to be trusted: printable, unpunctuated beyond
+ * the separators real id formats use, and bounded.
+ *
+ * `x-request-id` is chosen by the caller and ends up in the structured logs an
+ * operator reads. Unvalidated, a newline in it splits one log line into two with
+ * the second forged, and a megabyte of it is a megabyte per request through the
+ * whole log pipeline (usetheokit/theokit#353). The character set covers what real
+ * id formats use — UUID, ULID, hex, dotted and colon-separated ids — and excludes
+ * whitespace and control characters, which no id format needs and every injection
+ * does.
+ *
+ * 128 is comfortably above any of those formats and far below a payload.
+ */
+const REQUEST_ID_RE = /^[A-Za-z0-9_.:-]{1,128}$/
+
+function isTrustedRequestId(value: string): boolean {
+  return REQUEST_ID_RE.test(value)
+}
+
+/**
+ * Pick the first TRUSTED string value out of an IncomingMessage header. Node
  * collapses repeated headers into arrays; proxies sometimes do this for
  * `x-request-id`. Empty strings count as absent.
+ *
+ * "First trusted" rather than "first non-empty": taking the first value and
+ * validating afterwards would let a proxy prepending a hostile value defeat a
+ * good one sitting behind it.
  */
-function pickHeader(value: string | string[] | undefined): string | null {
+function pickHeader(
+  value: string | string[] | undefined,
+  isTrusted: (candidate: string) => boolean = () => true,
+): string | null {
   if (Array.isArray(value)) {
     for (const v of value) {
-      if (typeof v === 'string' && v.length > 0) return v
+      if (typeof v === 'string' && v.length > 0 && isTrusted(v)) return v
     }
     return null
   }
-  if (typeof value === 'string' && value.length > 0) return value
+  if (typeof value === 'string' && value.length > 0 && isTrusted(value)) return value
   return null
 }
 
@@ -77,7 +104,7 @@ function resolveTraceIdFromHeaders(traceparent: string | null, requestId: string
 export function extractTraceId(req: IncomingMessage): string {
   return resolveTraceIdFromHeaders(
     pickHeader(req.headers[TRACE_PARENT_HEADER]),
-    pickHeader(req.headers[REQUEST_ID_HEADER]),
+    pickHeader(req.headers[REQUEST_ID_HEADER], isTrustedRequestId),
   )
 }
 
@@ -98,8 +125,11 @@ export function extractTraceId(req: IncomingMessage): string {
  * single-valued).
  */
 export function extractTraceIdFromRequest(request: Request): string {
+  const requestId = request.headers.get(REQUEST_ID_HEADER)
   return resolveTraceIdFromHeaders(
     request.headers.get(TRACE_PARENT_HEADER),
-    request.headers.get(REQUEST_ID_HEADER),
+    // Same policy on both resolvers. A validation living on one side only is the
+    // gap an attacker picks the other transport to reach.
+    requestId !== null && isTrustedRequestId(requestId) ? requestId : null,
   )
 }

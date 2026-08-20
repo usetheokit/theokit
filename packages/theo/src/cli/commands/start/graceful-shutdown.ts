@@ -51,6 +51,22 @@ export function installGracefulShutdown(server: HttpServer): void {
           message: msg,
         })
       }
+      // #353 — flush telemetry LAST, so the spans covering eviction and the
+      // storage drain are in the batch that leaves. Without this the exporter's
+      // final buffer dies with the process, and the most interesting spans a
+      // deploy produces — the ones from the shutdown itself — are the ones
+      // guaranteed never to arrive.
+      try {
+        const { getObservabilityAdapter } =
+          await import('../../../server/observability-bootstrap.js')
+        await getObservabilityAdapter()?.shutdown()
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        warnOnce('shutdown.observability_error', {
+          event: 'shutdown.observability_error',
+          message: msg,
+        })
+      }
       console.log(`  [theokit] shutdown complete`)
       server.close(() => {
         process.exit(0)

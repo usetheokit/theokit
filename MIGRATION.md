@@ -6,7 +6,50 @@
 > `AgentBuilder.create().input(…).model(…).tool(…).build()` — which carries compile-time guards the
 > capability array cannot. Migrating off decorators? Follow this guide, then read the builder in the
 > [README](README.md). Every breaking change since is recorded in [`CHANGELOG.md`](CHANGELOG.md)
-> against the version that carried it.
+> against the version that carried it, and the ones that need you to change code get a section
+> here.
+
+## `theokit` — `executeWebRequest` enforces CSRF unless you turn it off
+
+**Breaking**, for anyone calling `executeWebRequest` from `theokit/server` directly. Routes served
+by `theo dev` or `theo start` go through `executeRoute`, whose CSRF gate has defaulted to strict all
+along, and are unaffected.
+
+### What changed
+
+`ExecuteWebRequestOptions.csrfMode` had no default. Both of the executor's gates compared the value
+against `'strict'`, so omitting the option meant no CSRF check ran on POST, PUT, PATCH or DELETE.
+
+Omitting it now enforces. `'off'` is the only value that disables the gate.
+
+```diff
+- // no csrfMode → no CSRF check
+- await executeWebRequest(request, routeModule)
++ // no csrfMode → gate enforced
++ await executeWebRequest(request, routeModule)
++
++ // opt out explicitly, only if you have another defense
++ await executeWebRequest(request, routeModule, { csrfMode: 'off' })
+```
+
+### What you need to do
+
+| Your situation | Action |
+|---|---|
+| You already pass `csrfMode: 'strict'` | Nothing. |
+| Your callers are browsers using the generated action client | Nothing — the client already sends `X-Theo-Action: 1`. |
+| A route legitimately receives third-party POSTs (Stripe or GitHub webhook, OAuth callback) | Declare `csrf: false` on that route's `defineRoute` config. The Web executor honours it now; it previously ignored it. |
+| Your application has another defense entirely (no session cookie, bearer-only auth) | Pass `csrfMode: 'off'` explicitly. |
+| A request now returns `403 FORBIDDEN` with `CSRF check failed: Missing X-Theo-Action header` | Send `X-Theo-Action: 1` on state-changing requests, or opt the route out per the row above. |
+
+### Why it is worth the break
+
+The option existed, the safe value existed, and the default was the unsafe one — so the check ran
+only for a caller who already knew to ask. This executor is the boundary the Cloudflare, Bun and
+Deno adapters are built on, and each of those is a caller that would have had to remember.
+
+It has no production caller in this repository today, so this closes a future boundary rather than
+a live exposure. That is the honest size of it.
 
 ## `@theokit/agents` v1.0 — agent decorators removed (M53)
 

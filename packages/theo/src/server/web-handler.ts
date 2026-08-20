@@ -23,11 +23,15 @@
  *     handler throws) per G5 boundary translation (serverErrorToEnvelope).
  *
  * **NOT included (deferred to T5a.2 Phase B-G):**
- *   - Plugin runner integration (onRequest/preHandler/onResponse hooks).
- *   - CSRF / CORS / security headers / rate limiting / cookies / auth.
  *   - Middleware chain. SSR rendering. WebSocket upgrade. File upload.
  *   - File-system routing scan; consumer provides the route module
  *     explicitly (Web Request entry doesn't yet know about scan results).
+ *
+ * Two entries left this list because they arrived: the plugin runner is
+ * integrated (`runPreHandlerPipeline` below), and CSRF is enforced BY DEFAULT
+ * (`shouldEnforceCsrf`). The CSRF line is the one worth calling out — a module
+ * header stating that a security control is absent, above a module where it is
+ * on by default, misleads in the direction that gets a check skipped.
  *
  * The narrow scope makes this a viable Phase A landing zone — turns the
  * 7 T1.2 RED tests GREEN without prematurely refactoring the full
@@ -69,6 +73,15 @@ interface WebRouteHandlerConfig {
   response?: z.ZodType
   /** Honored for plain-object returns to match the Node runner (D3). */
   status?: number
+  /**
+   * Per-route CSRF opt-out, mirroring `executeRoute`'s handling of the same
+   * field (`server/http/execute.ts`). Declared on the shared public contract
+   * (`core/contracts/route-config.ts`) for endpoints that legitimately
+   * receive third-party POSTs: Stripe/GitHub webhooks, OAuth callbacks.
+   *
+   * Only this route is exempted; the executor-wide mode is untouched.
+   */
+  csrf?: false
   handler: (ctx: {
     query: unknown
     body: unknown
@@ -299,12 +312,19 @@ function handlerErrorResponse(err: unknown): Response {
  * the safe "no-op" stance so existing Phase A consumers (T1.2 fixture
  * tests) keep working unchanged.
  *
- * **`csrfMode`** (T5a.2 Phase B slice 1/6) — when set to `'strict'`, the
- * Web-Standards request gate runs `validateCsrfRequest` BEFORE method
- * dispatch on state-changing methods (POST/PUT/PATCH/DELETE) and emits a
- * `403 FORBIDDEN` envelope when the check fails. Default: `'off'` (no
- * CSRF enforcement) to preserve Phase A backward compat. Production
- * consumers SHOULD pass `csrfMode: 'strict'`.
+ * **`csrfMode`** — the Web request gate runs `validateCsrfRequest` BEFORE
+ * method dispatch on state-changing methods (POST/PUT/PATCH/DELETE) and
+ * emits a `403 FORBIDDEN` envelope when the check fails. **Omitting the
+ * option enforces the gate**; only an explicit `'off'` disables it.
+ *
+ * The default used to be `'off'`, which meant a caller that never heard of
+ * the option served every state-changing request unchecked. A security
+ * control that has to be asked for is not a control, and this executor is
+ * the boundary the CF / Bun / Deno adapters are built on -- each of them a
+ * caller that would have had to remember. A route that legitimately takes
+ * third-party POSTs opts out by itself, per route, with `csrf: false` on
+ * `defineRoute`; `'off'` is for an application with another defense, such
+ * as one that ships no session cookie at all.
  *
  * Per the T5a.2 plan v1.0 § Phase B header-only leaves: csrf.ts is the
  * first leaf to be migrated (slice 1/6); 5 more sibling leaves remain
@@ -450,6 +470,27 @@ function methodNotAllowedResponse(method: string): Response {
   })
 }
 
+/**
+ * Decide whether the CSRF gate applies to this request.
+ *
+ * Two conditions exempt a request: a safe method (GET/HEAD/OPTIONS carry no
+ * state change), and a route that declared the `csrf: false` opt-out on the
+ * shared `defineRoute` contract. Both mirror `executeRoute`'s Node-side gate.
+ *
+ * Extracted so the no-hooks branch and the hook pipeline read the same
+ * decision, and so neither caller pays its conditions against the lint cap.
+ */
+function shouldEnforceCsrf(
+  method: string,
+  config: WebRouteHandlerConfig | undefined,
+  csrfMode: ExecuteWebRequestOptions['csrfMode'],
+): boolean {
+  // Absent means enforced. Only an explicit `'off'` turns the gate off.
+  if ((csrfMode ?? 'strict') === 'off') return false
+  if (!CSRF_PROTECTED_METHODS.has(method)) return false
+  return config?.csrf !== false
+}
+
 /** Build a 403 CSRF envelope Response. */
 function csrfFailedResponse(reason: string): Response {
   const envelope: TheoErrorEnvelope = {
@@ -479,7 +520,7 @@ export async function executeWebRequest(
     if (config === undefined || typeof config.handler !== 'function') {
       return methodNotAllowedResponse(method)
     }
-    if (opts.csrfMode === 'strict' && CSRF_PROTECTED_METHODS.has(method)) {
+    if (shouldEnforceCsrf(method, config, opts.csrfMode)) {
       const csrfCheck = validateCsrfRequest(request)
       if (!csrfCheck.valid) return csrfFailedResponse(csrfCheck.reason)
     }
@@ -541,11 +582,7 @@ async function runPreHandlerPipeline(
   if (hooks.onRequest) await runList(hooks.onRequest)
   // CSRF gate AFTER onRequest (auth-short-circuit avoids CSRF cost) but
   // BEFORE the handler.
-  if (
-    hookCtx.response === undefined &&
-    opts.csrfMode === 'strict' &&
-    CSRF_PROTECTED_METHODS.has(method)
-  ) {
+  if (hookCtx.response === undefined && shouldEnforceCsrf(method, config, opts.csrfMode)) {
     const csrfCheck = validateCsrfRequest(request)
     if (!csrfCheck.valid) hookCtx.response = csrfFailedResponse(csrfCheck.reason)
   }
