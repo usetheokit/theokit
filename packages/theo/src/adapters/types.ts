@@ -23,6 +23,28 @@ export interface AdapterBuildContext {
 
 export interface DeployAdapter {
   name: string
+  /**
+   * #382 — does the handler this adapter emits hand its runtime a response
+   * whose body is still being written?
+   *
+   * The claim is deliberately narrow, and it is the only part we can verify
+   * without a real deployment: `true` means the emitted contract carries a
+   * live body (a `Response` over a `ReadableStream`, or a chunk-by-chunk drain
+   * into the runtime's own writable) rather than a fully materialized string
+   * or buffer. It does NOT claim the platform was observed flushing early —
+   * that needs a deploy, and none of these targets has one in CI.
+   *
+   * Omitted means no, on purpose: a new adapter should have to state that it
+   * streams, because the failure mode of the opposite default is a target
+   * silently listed for something nobody exercised.
+   *
+   * `aws-lambda` is the one target that answers no by construction — its v2
+   * result object carries `body` as a string, so the response cannot exist
+   * before the run ends. Making it stream means `awslambda.streamifyResponse`
+   * plus a Function URL in `RESPONSE_STREAM` invoke mode, which this adapter
+   * does not emit and which would break every API Gateway deployment of it.
+   */
+  streamsResponses?: boolean
   build(config: TheoConfig, cwd: string, ctx?: AdapterBuildContext): Promise<void>
 }
 

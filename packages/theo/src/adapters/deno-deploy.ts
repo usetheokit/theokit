@@ -77,8 +77,9 @@ export function renderDenoEntry(port: number): string {
     `  const { req, res, toResponse } = createWebShim(request)`,
     `  const requestId = crypto.randomUUID()`,
     `  const method = request.method.toUpperCase()`,
-    `  await executeRoute({ route: match.route, method, params: match.params, req, res, loadModule: loaderCache, serverDir, requestId })`,
-    `  return toResponse()`,
+    `  // #382 — not awaited: toResponse() settles at the headers and carries a`,
+    `  // live body, so Deno.serve streams while the handler writes.`,
+    `  return toResponse(executeRoute({ route: match.route, method, params: match.params, req, res, loadModule: loaderCache, serverDir, requestId }))`,
     `})`,
     ``,
     `console.log('Theo (Deno Deploy) listening on :' + port)`,
@@ -115,6 +116,7 @@ export async function buildDeno(
 
 export const denoDeployAdapter: DeployAdapter = {
   name: 'deno-deploy',
+  streamsResponses: true,
   build(config, cwd, ctx) {
     return buildDeno(config, cwd, {}, ctx)
   },

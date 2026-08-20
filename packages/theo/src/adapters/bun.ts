@@ -103,8 +103,9 @@ export function renderBunEntry(port: number, opts: { ssrStreaming?: boolean } = 
     `      const { req, res, toResponse } = createWebShim(request)`,
     `      const requestId = randomUUID()`,
     `      const method = request.method.toUpperCase()`,
-    `      await executeRoute({ route: match.route, method, params: match.params, req, res, loadModule, serverDir, requestId })`,
-    `      return toResponse()`,
+    `      // #382 — not awaited: toResponse() settles at the headers and carries`,
+    `      // a live body, so Bun.serve streams while the handler writes.`,
+    `      return toResponse(executeRoute({ route: match.route, method, params: match.params, req, res, loadModule, serverDir, requestId }))`,
     `    }`,
     ``,
     `    // 3) SPA fallback`,
@@ -149,6 +150,7 @@ export async function buildBun(
 
 export const bunAdapter: DeployAdapter = {
   name: 'bun',
+  streamsResponses: true,
   build(config, cwd, ctx) {
     return buildBun(config, cwd, {}, ctx)
   },

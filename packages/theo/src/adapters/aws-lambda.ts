@@ -122,10 +122,26 @@ export function renderAwsLambdaEntry(): string {
     `  })`,
     `}`,
     ``,
-    `async function responseToV2Result(response) {`,
+    `// #382 — this target is DELISTED for response streaming, by construction.`,
+    `// The Lambda v2 result object below carries \`body\` as a string, so the`,
+    `// response cannot exist until the run has finished, no matter how the`,
+    `// framework's shim writes it. Streaming here would require`,
+    `// \`awslambda.streamifyResponse\` plus a Function URL in RESPONSE_STREAM`,
+    `// invoke mode — neither of which this adapter emits, and which would break`,
+    `// every API Gateway deployment of it. Rather than degrade in silence, a`,
+    `// response that is unambiguously a stream is named in the logs below.`,
+    `async function responseToV2Result(response, routePath) {`,
     `  const headers = {}`,
     `  response.headers.forEach((v, k) => { headers[k] = v })`,
     `  const ct = headers['content-type'] ?? ''`,
+    `  if (ct.includes('text/event-stream')) {`,
+    `    console.warn(`,
+    `      '[theo][aws-lambda] ' + routePath + ' returned a streaming response (' + ct + '), ' +`,
+    `      'but the aws-lambda target buffers it whole and delivers it when the run ends. ' +`,
+    `      'This target is delisted for streaming (theokit#382). Deploy streaming routes to ' +`,
+    `      'cloudflare, vercel, netlify, bun, deno-deploy or node.'`,
+    `    )`,
+    `  }`,
     `  const isBinary = /^application\\/(octet-stream|pdf|zip)|^(image|audio|video)\\//.test(ct)`,
     `  if (isBinary) {`,
     `    const buf = Buffer.from(await response.arrayBuffer())`,
@@ -173,9 +189,8 @@ export function renderAwsLambdaEntry(): string {
     `  const { req, res, toResponse } = createWebShim(request)`,
     `  const requestId = randomUUID()`,
     `  const method = request.method.toUpperCase()`,
-    `  await executeRoute({ route: match.route, method, params: match.params, req, res, loadModule: loaderCache, serverDir, requestId })`,
-    `  const response = await toResponse()`,
-    `  return responseToV2Result(response)`,
+    `  const response = await toResponse(executeRoute({ route: match.route, method, params: match.params, req, res, loadModule: loaderCache, serverDir, requestId }))`,
+    `  return responseToV2Result(response, path)`,
     `}`,
   ].join('\n')
 }
@@ -188,6 +203,20 @@ export async function buildAwsLambda(
 ): Promise<void> {
   // Wave 2 (T2.2) — reject polyglot services on this adapter.
   assertServicesUnsupported('aws-lambda', readManifest(cwd))
+
+  // #382 — refuse by name rather than build something that cannot do what was
+  // asked. `ssrStreaming` is the config's declaration that responses stream,
+  // and this target is delisted for that (see `awsLambdaAdapter.streamsResponses`).
+  if (config.ssrStreaming) {
+    throw new Error(
+      '[adapter-aws-lambda] ssrStreaming is on, but the aws-lambda target does not stream ' +
+        'responses: the Lambda v2 result object carries the body as a string, so nothing can ' +
+        'leave the function before the run ends. Response streaming would need ' +
+        'awslambda.streamifyResponse plus a Function URL in RESPONSE_STREAM invoke mode, which ' +
+        'this adapter does not emit. Build a streaming target instead (cloudflare, vercel, ' +
+        'netlify, bun, deno-deploy, node), or set ssrStreaming: false in theo.config.ts.',
+    )
+  }
 
   const runNodeBuild = deps.runNodeBuild ?? nodeAdapter.build.bind(nodeAdapter)
   await runNodeBuild(config, cwd, ctx)
@@ -210,6 +239,8 @@ export async function buildAwsLambda(
 
 export const awsLambdaAdapter: DeployAdapter = {
   name: 'aws-lambda',
+  // #382 — delisted for streaming, deliberately. See DeployAdapter.
+  streamsResponses: false,
   build(config, cwd, ctx) {
     return buildAwsLambda(config, cwd, {}, ctx)
   },

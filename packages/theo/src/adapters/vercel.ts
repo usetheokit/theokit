@@ -75,16 +75,54 @@ export function renderVercelFunctionEntry(): string {
     ``,
     `  const { req, res, toResponse } = createWebShim(webRequest)`,
     `  const requestId = randomUUID()`,
-    `  await executeRoute({`,
+    `  // #382 — executeRoute() is NOT awaited before the Response is taken:`,
+    `  // toResponse() settles at the headers and carries a live body.`,
+    `  const webResponse = await toResponse(executeRoute({`,
     `    route: match.route, method, params: match.params,`,
     `    req, res, loadModule: loaderCache, serverDir, requestId,`,
-    `  })`,
-    `  const webResponse = await toResponse()`,
+    `  }))`,
     ``,
-    `  nodeRes.statusCode = webResponse.status`,
-    `  webResponse.headers.forEach((v, k) => nodeRes.setHeader(k, v))`,
-    `  const text = await webResponse.text()`,
-    `  nodeRes.end(text)`,
+    `  const headers = {}`,
+    `  webResponse.headers.forEach((v, k) => { headers[k] = v })`,
+    `  nodeRes.writeHead(webResponse.status, headers)`,
+    `  if (typeof nodeRes.flushHeaders === 'function') nodeRes.flushHeaders()`,
+    ``,
+    `  // #382 — this used to materialize the entire body as a string and hand`,
+    `  // it to a single end(), which re-buffered the whole response inside the`,
+    `  // function even after the shim was fixed. Drain chunk by chunk instead,`,
+    `  // honouring Node backpressure so a slow client cannot grow the queue.`,
+    `  if (webResponse.body === null) {`,
+    `    nodeRes.end()`,
+    `    return`,
+    `  }`,
+    `  const reader = webResponse.body.getReader()`,
+    `  try {`,
+    `    for (;;) {`,
+    `      const { done, value } = await reader.read()`,
+    `      if (done) break`,
+    `      if (nodeRes.write(value) === false) {`,
+    `        await new Promise((resolveDrain) => {`,
+    `          const finish = () => {`,
+    `            nodeRes.off('drain', finish)`,
+    `            nodeRes.off('close', finish)`,
+    `            nodeRes.off('error', finish)`,
+    `            resolveDrain()`,
+    `          }`,
+    `          nodeRes.once('drain', finish)`,
+    `          nodeRes.once('close', finish)`,
+    `          nodeRes.once('error', finish)`,
+    `        })`,
+    `      }`,
+    `    }`,
+    `    nodeRes.end()`,
+    `  } catch (streamErr) {`,
+    `    // The handler failed after the head went out. Destroying the socket is`,
+    `    // the only signal left that the body is incomplete — ending normally`,
+    `    // would report a truncated response as a complete one (ADR-0002).`,
+    `    nodeRes.destroy(streamErr)`,
+    `  } finally {`,
+    `    reader.releaseLock()`,
+    `  }`,
     `}`,
   ].join('\n')
 }
@@ -114,17 +152,25 @@ export function renderVercelVcConfigJson(): {
   handler: string
   launcherType: string
   shouldAddHelpers: boolean
+  supportsResponseStreaming: boolean
 } {
   return {
     runtime: 'nodejs22.x',
     handler: 'index.mjs',
     launcherType: 'Nodejs',
     shouldAddHelpers: true,
+    // #382 — Build Output API v3 opt-in. Without it the platform buffers the
+    // function's response no matter how the handler writes it, so the emitted
+    // chunk-by-chunk drain above would never reach the client. We cannot
+    // verify the platform side from here; see the streaming note in
+    // `adapters/web-shim.ts` and the adapter's `streamsResponses` flag.
+    supportsResponseStreaming: true,
   }
 }
 
 export const vercelAdapter: DeployAdapter = {
   name: 'vercel',
+  streamsResponses: true,
 
   async build(config: TheoConfig, cwd: string, ctx?: AdapterBuildContext): Promise<void> {
     // Wave 2 (T2.2) — reject polyglot services on this adapter.

@@ -20,6 +20,9 @@ import type { DeployAdapter } from './types.js'
 
 export const theoCloudAdapter: DeployAdapter = {
   name: 'theo-cloud',
+  // #382 — this adapter validates the manifest and prepares a bundle; it
+  // emits no request handler, so it makes no streaming claim.
+  streamsResponses: false,
 
   build(_config: TheoConfig, cwd: string): Promise<void> {
     const manifest = readManifest(cwd)

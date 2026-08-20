@@ -15,6 +15,10 @@ import type { AdapterBuildContext, DeployAdapter } from './types.js'
 
 export const nodeAdapter: DeployAdapter = {
   name: 'node',
+  // #382 — no handler is emitted here: the bundle runs the framework's own
+  // Node server, whose writer calls res.write() per chunk
+  // (server/http/execute.ts, via node-web-adapter.ts).
+  streamsResponses: true,
 
   async build(config: TheoConfig, cwd: string, ctx?: AdapterBuildContext): Promise<void> {
     // T1.1 (architecture-cleanup) — Vite plugin composition is INJECTED via `ctx.makeVitePlugins`.

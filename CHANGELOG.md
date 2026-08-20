@@ -32,6 +32,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **A streaming response reaches the client as it is produced, on every deploy target that emits a
+  handler.** The deploy shim collected every `res.write()` into an array and built the `Response`
+  from one concatenation inside `end()`, so `toResponse()` could not settle before the handler
+  finished and no byte was observable early — a run emitting a chunk every 120 ms arrived as a single
+  chunk at the millisecond it ended, against eight chunks on the served Node path. All six adapters
+  that emit a handler (Cloudflare, Vercel, Netlify, Bun, Deno Deploy, AWS Lambda) also awaited the run
+  before asking for the Response, which re-buffered the body a second time in the handler itself; they
+  now hand the in-flight run to `toResponse()`. The Vercel function additionally read the whole body
+  into a string and now writes it chunk by chunk, with `supportsResponseStreaming` declared in its
+  `.vc-config.json`. Headers freeze at the first byte and a later `setHeader` is refused by name
+  rather than dropped; `write()` reports backpressure instead of always accepting; a run that fails
+  after the first byte breaks the body stream rather than closing it as if it had finished.
+  (usetheokit/theokit#382)
+- **AWS Lambda no longer claims a streaming it cannot do.** The Lambda v2 result object carries the
+  body as a string, so the response cannot exist before the run ends. The target is delisted for
+  response streaming: the build refuses by name when `ssrStreaming` is on, and the emitted handler
+  names the route in its logs when it buffers a `text/event-stream` response instead of degrading
+  quietly. Every deploy adapter now declares `streamsResponses`. (usetheokit/theokit#382)
+
 - **A human-in-the-loop tool call is one call on the wire again.** A `@HumanInTheLoop` tool crossed as
   two `tool-input-available` chunks under two different `toolCallId`s — the approval id the HITL
   plugin mints for its callback URL, and the runtime tool-call id the SDK mints when it dispatches the

@@ -271,6 +271,8 @@ export async function buildStatic(
 
 export const staticAdapter: DeployAdapter = {
   name: 'static',
+  // #382 — no server at all; there is nothing to stream from.
+  streamsResponses: false,
   build(config, cwd, ctx) {
     return buildStatic(config, cwd, {}, ctx)
   },

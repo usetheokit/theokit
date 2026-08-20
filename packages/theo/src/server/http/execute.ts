@@ -43,6 +43,37 @@ interface StreamPipeCtx {
 }
 
 /**
+ * Honour Node backpressure: `res.write()` answered `false`, so wait until the
+ * consumer has made room before reading the next chunk. Without this the
+ * producer outruns a slow consumer and the queued bytes grow unbounded —
+ * which is how a streaming fix trades one memory defect for another.
+ *
+ * Deliberately narrow. Only an exact `false` waits (a stub `res.write` that
+ * returns `undefined` must not park the pipeline), only a `res` that carries
+ * an event emitter waits, and `close`/`error` release the wait as well as
+ * `drain`, so a disconnected client cannot hang the handler.
+ */
+async function waitForDrain(res: ServerResponse): Promise<void> {
+  if (typeof res.once !== 'function') return
+  await new Promise<void>((resolve) => {
+    let settled = false
+    const finish = (): void => {
+      if (settled) return
+      settled = true
+      if (typeof res.off === 'function') {
+        res.off('drain', finish)
+        res.off('close', finish)
+        res.off('error', finish)
+      }
+      resolve()
+    }
+    res.once('drain', finish)
+    res.once('close', finish)
+    res.once('error', finish)
+  })
+}
+
+/**
  * Pipe a Web Standard ReadableStream into a Node ServerResponse. Stream
  * errors after headers are sent cannot change the response status, but
  * MUST be logged + reported (CR-004 fix). Extracted from `executeRoute`
@@ -59,7 +90,11 @@ async function pipeWebStreamToResponse(
     while (!done) {
       const chunk = await reader.read()
       done = chunk.done
-      if (!done) res.write(chunk.value)
+      // The comparison is against `false` on purpose. The type says `boolean`, but stub `res`
+      // objects across the suite return `undefined`, and `!x` would park the pipeline on a drain
+      // those stubs never emit.
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-boolean-literal-compare -- see above
+      if (!done && res.write(chunk.value) === false) await waitForDrain(res)
     }
   } catch (streamErr) {
     warnOnce(`stream-error:${ctx.routePath}:${ctx.method}`, {

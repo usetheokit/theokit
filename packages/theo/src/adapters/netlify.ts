@@ -62,8 +62,9 @@ export function renderNetlifyFunction(): string {
     `  const { req, res, toResponse } = createWebShim(request)`,
     `  const requestId = randomUUID()`,
     `  const method = request.method.toUpperCase()`,
-    `  await executeRoute({ route: match.route, method, params: match.params, req, res, loadModule: loaderCache, serverDir, requestId })`,
-    `  return toResponse()`,
+    `  // #382 — not awaited: toResponse() settles at the headers and carries a`,
+    `  // live body, so Netlify streams while the handler writes.`,
+    `  return toResponse(executeRoute({ route: match.route, method, params: match.params, req, res, loadModule: loaderCache, serverDir, requestId }))`,
     `}`,
   ].join('\n')
 }
@@ -192,6 +193,7 @@ export async function buildNetlify(
 
 export const netlifyAdapter: DeployAdapter = {
   name: 'netlify',
+  streamsResponses: true,
   build(config, cwd, ctx) {
     return buildNetlify(config, cwd, {}, ctx)
   },

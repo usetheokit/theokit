@@ -148,11 +148,15 @@ export function renderCloudflareWorkerEntry(
     `    const { req, res, toResponse } = createWebShim(request, { trustedProxy: 'platform' })`,
     `    const requestId = crypto.randomUUID()`,
     `    const method = request.method.toUpperCase()`,
-    `    await executeRoute({`,
+    `    // #382 — the run is NOT awaited before returning. toResponse() settles`,
+    `    // as soon as status + headers are known and carries a live body, so the`,
+    `    // Worker starts flushing while the handler is still writing. Awaiting`,
+    `    // executeRoute() first would re-buffer the whole response here even`,
+    `    // though the shim streams.`,
+    `    return toResponse(executeRoute({`,
     `      route: match.route, method, params: match.params,`,
     `      req, res, loadModule: loaderCache, serverDir, requestId,`,
-    `    })`,
-    `    return toResponse()`,
+    `    }))`,
     `  },`,
     `}`,
   ].join('\n')
@@ -176,6 +180,7 @@ export function renderWranglerToml(): string {
 
 export const cloudflareAdapter: DeployAdapter = {
   name: 'cloudflare',
+  streamsResponses: true,
 
   async build(config: TheoConfig, cwd: string, ctx?: AdapterBuildContext): Promise<void> {
     // Wave 2 (T2.2) — reject polyglot services on this adapter.
