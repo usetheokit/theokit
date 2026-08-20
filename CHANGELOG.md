@@ -20,6 +20,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   too. Every authoring path wrote the number and nothing on the served path read it, so an agent that
   declared a limit ran without one. An agent that declares no ceiling is unchanged. A value that is
   not a positive integer is refused where it is written, not mid-run. (usetheokit/theokit#363)
+- **A run that was cut short says so.** The terminal `done` frame and the turn metadata a client
+  reads off `UIMessage.metadata` carry an optional `stopReason` — `'step_limit'` when the run ran out
+  of tool-calling turns while the model still wanted more, `'no_progress'` when the doom-loop guard
+  stopped it repeating identical tool calls — and the `agent.run` observability span records it as
+  `stop.reason`. Both outcomes arrived as an ordinary `done` before, identical to a run that finished
+  on its own, so a surface could not tell an answer from a truncation. It is not a rare case: the
+  step ceiling defaults to 8, so any run needing a ninth tool-calling turn was cut in silence, agents
+  that declared no ceiling included. A run that finishes on its own carries no `stopReason` at all.
+  (usetheokit/theokit#379)
 
 ### Changed
 

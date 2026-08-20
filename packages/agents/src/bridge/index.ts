@@ -33,6 +33,7 @@ export {
   type ApprovalRequiredEvent,
   type ErrorEvent,
   type DoneEvent,
+  type AgentStopReason,
   type AgentTurnMetadata,
   type RunStartedEvent,
   isTextDelta,

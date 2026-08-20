@@ -13,6 +13,7 @@ import type { McpServersMap } from '../types.js'
 
 import type { CompiledAgentOptions } from './agent-compiler.js'
 import type { StreamEvent } from './agent-sse-handler.js'
+import type { AgentStopReason } from './agent-stream-events.js'
 import { compileProjectContext } from './compile-project-context.js'
 
 /** Extra `Agent.create()` options compiled from the M8 declarative decorators. */
@@ -111,8 +112,32 @@ export function assembleM8CreateOptions(compiled: CompiledAgentOptions): {
 }
 
 /**
+ * theokit#379 — map the SDK `RunResult`'s two truncation flags onto the framework's stop reason, or
+ * `undefined` when the run finished on its own.
+ *
+ * The precedence is NOT a preference. It mirrors the SDK's own `classifyRound`
+ * (`run-to-completion.ts`, read from the shipped bundle), which tests `stoppedByDoomLoop` FIRST and
+ * only then `stoppedAtIterationLimit`. A doom-loop stop is the more specific verdict and the one
+ * that must not be re-sent, so a caller reading our reason and a caller reading the SDK's driver
+ * reach the same decision instead of disagreeing about a run both observed.
+ */
+function stopReasonOf(result: {
+  stoppedAtIterationLimit?: boolean
+  stoppedByDoomLoop?: boolean
+}): AgentStopReason | undefined {
+  if (result.stoppedByDoomLoop === true) return 'no_progress'
+  if (result.stoppedAtIterationLimit === true) return 'step_limit'
+  return undefined
+}
+
+/**
  * V4-N.1: build the terminal `done` event from the SDK `RunResult` (real per-run token usage +
  * cost). Extracted from the stream generator to keep its complexity within budget (G6).
+ *
+ * theokit#379: it also carries WHY the run stopped. Until then this read three fields off a run
+ * object that reports more, so a run the SDK cut at its iteration ceiling — which, absent a declared
+ * `maxIterations`, is every served run needing more than the SDK's default of 8 tool-calling turns —
+ * reached the caller as an ordinary `done`.
  */
 export function realUsageDone(
   result: {
@@ -126,12 +151,17 @@ export function realUsageDone(
       cacheWriteTokens?: number
     }
     cost?: { amount?: number }
+    // theokit#379: the SDK's truncation flags. Optional — absent on a clean finish and on an SDK
+    // that predates them, which is the degradation this layer wants.
+    stoppedAtIterationLimit?: boolean
+    stoppedByDoomLoop?: boolean
   },
   t0: number,
 ): StreamEvent {
   const u = result.usage
   const inputTokens = u?.inputTokens ?? 0
   const outputTokens = u?.outputTokens ?? 0
+  const stopReason = stopReasonOf(result)
   return {
     type: 'done',
     result: result.result ?? '',
@@ -147,5 +177,9 @@ export function realUsageDone(
     },
     durationMs: Date.now() - t0,
     cost: result.cost?.amount ?? 0,
+    // theokit#379: SPREAD, not `stopReason: undefined`. A clean run's `done` must stay byte-identical
+    // to what it was before this shipped — absence is what means "finished", so a key holding
+    // `undefined` would be a new, noisy field on every uncapped run.
+    ...(stopReason !== undefined ? { stopReason } : {}),
   }
 }

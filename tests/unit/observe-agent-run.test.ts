@@ -239,6 +239,72 @@ describe('agent run observability (M8)', () => {
     expect(run.attrs['cost.usd']).toBe(0.0021)
   })
 
+  it('test_the_stop_reason_from_the_finish_chunk_lands_on_the_run_span', async () => {
+    // usetheokit/theokit#379 — a run the SDK cut still ends on `finish`, so without this attribute
+    // the trace of a truncated run is identical to the trace of a finished one. The fixture is the
+    // producer's shape (`AgentTurnMetadata.stopReason`), not an invented one.
+    const { adapter, byName } = createRecorder()
+
+    await drain(
+      observeAgentRun(
+        chunks(
+          { type: 'start' },
+          {
+            type: 'finish',
+            messageMetadata: {
+              usage: { inputTokens: 1, outputTokens: 2, totalTokens: 3 },
+              durationMs: 900,
+              stopReason: 'step_limit',
+            },
+          },
+        ),
+        adapter,
+        { agent: 'chat' },
+      ),
+    )
+
+    const run = byName('agent.run')[0]
+    expect(run.attrs['stop.reason']).toBe('step_limit')
+    // A reached ceiling is a declared outcome, not a failure. Marking it an error would put every
+    // capped run in an operator's error budget.
+    expect(run.status).toBe('ok')
+  })
+
+  it('test_a_clean_finish_leaves_the_run_span_without_a_stop_reason', async () => {
+    // Absence is the finished case, on the span exactly as on the wire: an operator filtering on
+    // `stop.reason` must see only the runs that were actually cut.
+    const { adapter, byName } = createRecorder()
+
+    await drain(
+      observeAgentRun(
+        chunks(
+          { type: 'start' },
+          { type: 'finish', messageMetadata: { usage: { inputTokens: 1 }, durationMs: 9 } },
+        ),
+        adapter,
+        { agent: 'chat' },
+      ),
+    )
+
+    expect(byName('agent.run')[0].attrs['stop.reason']).toBeUndefined()
+  })
+
+  it('test_an_unknown_stop_reason_is_not_passed_through', async () => {
+    // The attribute is what a dashboard groups by. Forwarding an arbitrary string would let a value
+    // this framework never produces create a bucket nobody can explain.
+    const { adapter, byName } = createRecorder()
+
+    await drain(
+      observeAgentRun(
+        chunks({ type: 'start' }, { type: 'finish', messageMetadata: { stopReason: 'whatever' } }),
+        adapter,
+        { agent: 'chat' },
+      ),
+    )
+
+    expect(byName('agent.run')[0].attrs['stop.reason']).toBeUndefined()
+  })
+
   it('test_a_flat_metadata_shape_is_NOT_read_as_usage', async () => {
     // The guard against the defect returning. If someone reintroduces the flat
     // read, this passes silently unless the flat shape is explicitly refused.

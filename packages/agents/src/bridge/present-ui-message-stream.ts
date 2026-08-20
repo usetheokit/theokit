@@ -37,11 +37,21 @@ function toAgentOutputEvent(e: AgentStreamEvent): AgentOutputEvent | null {
   }
 }
 
-/** Project the `done` event's authoritative totals into the finish chunk's metadata (unchanged from M1). */
+/**
+ * Project the `done` event's authoritative totals into the finish chunk's metadata.
+ *
+ * theokit#379 adds `stopReason` to what travels. Both optional fields are spread conditionally
+ * rather than assigned as `undefined`: this object IS the `messageMetadata` a client reconstructs
+ * onto `UIMessage.metadata`, so a key holding `undefined` would appear on every clean turn. A turn
+ * that finished on its own therefore produces exactly the metadata it produced before.
+ */
 function doneToMetadata(event: DoneEvent): AgentTurnMetadata {
-  return event.cost === undefined
-    ? { usage: event.usage, durationMs: event.durationMs }
-    : { usage: event.usage, durationMs: event.durationMs, cost: event.cost }
+  return {
+    usage: event.usage,
+    durationMs: event.durationMs,
+    ...(event.cost === undefined ? {} : { cost: event.cost }),
+    ...(event.stopReason === undefined ? {} : { stopReason: event.stopReason }),
+  }
 }
 
 /** The data-part name carrying the failure `code`. Public in effect: the consumer matches on it. */

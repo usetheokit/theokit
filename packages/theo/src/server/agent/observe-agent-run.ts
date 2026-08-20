@@ -79,6 +79,31 @@ const TOKEN_FIELDS: [string, string][] = [
   ['cacheWriteTokens', 'tokens.cache_write'],
 ]
 
+/**
+ * usetheokit/theokit#379 — the stop reason, as the attribute an operator filters on.
+ *
+ * A run the SDK cut at its iteration ceiling (or stopped as a doom loop) still ends on `finish`, not
+ * on an error, so without this attribute the trace of a truncated run is identical to the trace of a
+ * finished one. That is the same blindness the issue reports one layer out, and the span is the
+ * consumer that suffers it longest: nobody re-reads a stream, everybody re-reads a trace.
+ *
+ * The span status stays `ok`. A reached ceiling is a declared outcome, not a failure — calling it an
+ * error would put every capped run in an operator's error budget.
+ *
+ * Only the two values the producer can emit are recorded. An unknown string is ignored rather than
+ * passed through: the attribute is what a dashboard groups by, and a typo'd or hostile value would
+ * silently create a new bucket.
+ */
+const STOP_REASONS = new Set(['step_limit', 'no_progress'])
+
+function recordStopReason(span: SpanHandle, metadata: unknown): void {
+  if (metadata === null || typeof metadata !== 'object') return
+  const reason = (metadata as { stopReason?: unknown }).stopReason
+  if (typeof reason === 'string' && STOP_REASONS.has(reason)) {
+    span.setAttribute('stop.reason', reason)
+  }
+}
+
 function recordTokenUsage(span: SpanHandle, metadata: unknown): void {
   if (metadata === null || typeof metadata !== 'object') return
   const bag = metadata as { usage?: unknown; cost?: unknown }
@@ -227,7 +252,10 @@ export async function* observeAgentRun<T>(
       else if (observed.type === 'tool-approval-request') openPauseSpan(state, adapter, observed)
       else if (observed.type === 'tool-output-available' || observed.type === 'tool-output-error')
         closeToolSpan(state, observed)
-      else if (observed.type === 'finish') recordTokenUsage(state.run, observed.messageMetadata)
+      else if (observed.type === 'finish') {
+        recordTokenUsage(state.run, observed.messageMetadata)
+        recordStopReason(state.run, observed.messageMetadata)
+      }
 
       yield chunk
     }

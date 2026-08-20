@@ -227,6 +227,11 @@ interface SdkAgentApi {
       stream: () => AsyncGenerator<SdkMessage>
       // V4-N.1: the SDK Run's terminal await — carries the real per-run token usage + cost.
       // V4-O: usage also carries optional reasoning/cache buckets (forwarded by realUsageDone).
+      // theokit#379: it ALSO carries why the run stopped. This shape declared three fields, so
+      // `realUsageDone` had no status to read even had it wanted one — the boundary, not the SDK,
+      // is what dropped the outcome. Both flags are optional, so an SDK that predates them (or one
+      // that finished cleanly) reads `undefined` rather than breaking — the same optional-peer
+      // discipline `applyStepCeiling` uses for the ceiling travelling the other way.
       wait: () => Promise<{
         result?: string
         usage?: {
@@ -237,6 +242,8 @@ interface SdkAgentApi {
           cacheWriteTokens?: number
         }
         cost?: { amount?: number }
+        stoppedAtIterationLimit?: boolean
+        stoppedByDoomLoop?: boolean
       }>
     }>
     dispose: () => Promise<void>
