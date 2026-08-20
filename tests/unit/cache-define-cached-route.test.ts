@@ -106,7 +106,7 @@ describe('defineCachedRoute', () => {
       expect(await r2.json()).toEqual({ calls: 1 })
     })
 
-    it('emits X-Theo-Cache header in non-production', async () => {
+    it('emits the X-Theo-Cache signal on miss and on hit', async () => {
       const route = defineCachedRoute(engine, {
         cache: { maxAge: 60 },
         handler: () => Response.json({ ok: true }),
@@ -353,6 +353,50 @@ describe('defineCachedRoute', () => {
       const r = await route.handler(makeCtx(new Request('https://x/api')))
       expect(r.headers.get('content-type')).toContain('application/json')
       expect(await r.json()).toEqual({ hello: 'world' })
+    })
+  })
+
+  /**
+   * B-009 / usetheokit/theokit#352 — the only signal a caller can read to tell a hit
+   * from a miss was gated behind `process.env.NODE_ENV !== 'production'`, and every
+   * real deploy sets exactly that. M5's acceptance criterion asks for the hit to be
+   * observed on a published build, so the gate made the criterion unmeetable for a
+   * reason that has nothing to do with the cache.
+   */
+  describe('X-Theo-Cache under NODE_ENV=production', () => {
+    it('emits the cache signal when NODE_ENV is production', async () => {
+      vi.stubEnv('NODE_ENV', 'production')
+      try {
+        const route = defineCachedRoute(engine, {
+          cache: { maxAge: 60 },
+          handler: () => Response.json({ ok: true }),
+        })
+        const req = new Request('https://x/api')
+        const r1 = await route.handler(makeCtx(req))
+        const r2 = await route.handler(makeCtx(req))
+        expect(r1.headers.get('X-Theo-Cache')).toBe('MISS')
+        expect(r2.headers.get('X-Theo-Cache')).toBe('HIT')
+      } finally {
+        vi.unstubAllEnvs()
+      }
+    })
+
+    it('adds exactly one header, whose value is the bare status word', async () => {
+      vi.stubEnv('NODE_ENV', 'production')
+      try {
+        const route = defineCachedRoute(engine, {
+          cache: { maxAge: 60, tags: ['a-tag'], cacheVersion: 'a-version' },
+          handler: () => Response.json({ ok: true }),
+        })
+        const req = new Request('https://x/api?token=a-query-value')
+        await route.handler(makeCtx(req))
+        const r2 = await route.handler(makeCtx(req))
+        const theoHeaders = [...r2.headers.keys()].filter((k) => k.startsWith('x-theo'))
+        expect(theoHeaders).toEqual(['x-theo-cache'])
+        expect(r2.headers.get('X-Theo-Cache')).toBe('HIT')
+      } finally {
+        vi.unstubAllEnvs()
+      }
     })
   })
 
