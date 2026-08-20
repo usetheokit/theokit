@@ -8,6 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **The `X-Theo-Cache` header now survives a production build, so a cached route can be shown to be
+  serving hits where it matters.** The header — `HIT`, `STALE` or `MISS`, the only signal a caller
+  has for telling one from the other — was written only when `NODE_ENV` was not `production`, and
+  every real deploy sets exactly that. Verifying a cache in the environment it was configured for
+  was therefore impossible without attaching a debugger. It is emitted unconditionally now: the
+  value is one of three fixed words, carries no key, tag, cache version or request data, and is the
+  same signal every CDN publishes in front of an application (`X-Cache`, `CF-Cache-Status`, and the
+  `Cache-Status` header of RFC 9211). (usetheokit/theokit#352)
+
 - **A cache default configured in `theo.config.ts` now reaches the routes it was configured for.**
   `cache.defaults` was parsed at boot, handed to the engine and dropped there: `createCacheEngine`
   destructured only `storage` and `onError`. A route that declared no `maxAge` therefore used the

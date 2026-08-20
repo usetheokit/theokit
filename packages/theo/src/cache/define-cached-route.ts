@@ -360,6 +360,29 @@ async function tryCacheResponse(
   return { body: text, status: response.status, headers }
 }
 
+/**
+ * The one signal that tells a caller a hit from a miss.
+ *
+ * It used to be written only when `process.env.NODE_ENV !== 'production'`, and
+ * every real deploy sets exactly that — so the signal existed in development and
+ * vanished in the place where anyone needed to check whether the cache was
+ * working (#352).
+ *
+ * It is emitted unconditionally rather than behind a config flag. The value is
+ * one of three fixed words derived from the lookup outcome alone: it carries no
+ * key, no tag, no cache version and nothing derived from the request or from the
+ * cached body. Entries are shared by construction — `cookie` is stripped from
+ * `varies` and a response carrying `Set-Cookie` is never written — so a `HIT`
+ * says a URL was fetched recently and cannot say by whom. Publishing cache
+ * status in production is what every CDN in front of this framework already does
+ * (`X-Cache`, `CF-Cache-Status`, and the `Cache-Status` header of RFC 9211).
+ */
+function toCacheStatusHeader(status: CacheStatus): 'HIT' | 'STALE' | 'MISS' {
+  if (status === 'hit') return 'HIT'
+  if (status === 'stale') return 'STALE'
+  return 'MISS'
+}
+
 function buildResponseFromCache(
   value: RouteCacheValue,
   status: CacheStatus,
@@ -370,11 +393,6 @@ function buildResponseFromCache(
   if (!headers.has('cache-control')) {
     headers.set('cache-control', getCacheControlHeader({ maxAge, swr: swr ?? maxAge * 60 }))
   }
-  if (process.env.NODE_ENV !== 'production') {
-    let cacheStatusHeader: 'HIT' | 'STALE' | 'MISS' = 'MISS'
-    if (status === 'hit') cacheStatusHeader = 'HIT'
-    else if (status === 'stale') cacheStatusHeader = 'STALE'
-    headers.set('X-Theo-Cache', cacheStatusHeader)
-  }
+  headers.set('X-Theo-Cache', toCacheStatusHeader(status))
   return new Response(value.body, { status: value.status, headers })
 }
