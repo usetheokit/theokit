@@ -8,6 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **The observability plugin can be registered, and `theo.config.ts` finally has the
+  `observability` key its own adapter registry documents.** `createObservabilityPlugin` returned
+  `{ name, onRequest, onResponse, onError }` against a plugin contract of `{ name, register }`, so
+  the obvious wiring — putting it in `config.plugins` — threw `InvalidPluginShapeError` at boot.
+  Nothing else called it either, which meant the framework created no spans anywhere: every adapter,
+  the OTLP serializer and the span implementation were tested, published and unreachable. `theo start`
+  and `theo dev` now register it when `observability` is configured or `THEO_CLOUD_INGEST_URL` +
+  `THEO_CLOUD_API_KEY` are set. An application that configures neither is unaffected and pays no
+  plugin runner. (usetheokit/theokit#353)
+
 - **The `X-Theo-Cache` header now survives a production build, so a cached route can be shown to be
   serving hits where it matters.** The header — `HIT`, `STALE` or `MISS`, the only signal a caller
   has for telling one from the other — was written only when `NODE_ENV` was not `production`, and
