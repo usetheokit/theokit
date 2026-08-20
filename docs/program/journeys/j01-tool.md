@@ -105,6 +105,55 @@ criteria assertions pass. Cold cache, at least three runs, mean and standard dev
 latency is inside the measurement on both sides and is not subtracted: it is part of what a
 developer waits for.
 
+## Measured - TheoKit side, metrics 1-3 (2026-08-20)
+
+**Three of four metrics, one side.** This is not the journey being won; it is the first number this
+programme has. Metric 4 and the whole Next.js side are unmeasured, and the subsection below says why.
+
+Obtained from a real diff, not an estimate: the scaffold template was copied verbatim, committed as
+an untouched baseline, and the journey implemented on top. The counts are `git diff --numstat` over
+that commit.
+
+| Metric | TheoKit | How it was counted |
+| --- | --- | --- |
+| Files touched | **3** | `agents/chat.ts` edited, `agents/tools/order-lookup.ts` added, `agents/tools/weather.ts` deleted. The deletion counts because the metric section above defines this journey as *replacing* the scaffolded tool |
+| Glue lines | **8** | of 15 added lines; 5 are business logic and 2 are blank |
+| Concepts required | **5** | `tool`, the builder's ordering rule, `z.object`, the agent builder's `.tool()`, and the `agents/<name>/tools/` folder convention - the list fixed in advance above |
+| Time to first green run | **not measured** | needs a live model call; see below |
+
+**The 15 added lines, classified.** Published because the glue/logic split is the metric most open to
+being argued after the fact, and a table nobody can check is not evidence.
+
+Glue (8): the two imports in the tool file, `tool('order_lookup')`, `.describe(...)`, `.input(...)`,
+`.build()`, the import in `chat.ts`, and `.tool(orderLookupTool)`.
+
+Business logic (5): the `SHIPPING_REFERENCES` table and the `.execute` body - the data the answer
+comes from and the code that produces it.
+
+**One judgement call, stated rather than buried.** `const SHIPPING_REFERENCES: Record<string, string>`
+carries a type annotation, and the metric definition lists type ceremony as glue. It is counted as
+business logic because the line's substance is the lookup table, not the annotation. Counting it as
+glue would move the split to 9/4 and does not change the shape of the result. The Next.js side must
+be counted by the same rule, and the diffs are published so the rule can be checked rather than
+trusted.
+
+### What is still unmeasured, and why
+
+**Metric 4 (time to first green run) needs a live model call**, at least three times, cold cache.
+That spends real credits, and the number is only meaningful measured identically on both sides - so
+running one side alone would produce a figure with nothing to compare it to.
+
+**The Next.js side does not exist yet.** Until it does, nothing here is a comparison, and the
+winning rule cannot be applied. A journey is won or tied; a one-sided count is neither.
+
+**The three-target criteria cannot be exercised in this repository.** The Tauri and TUI lines above
+need `@theokit/tui` and `@theokit/ui`, which live outside it (`.claude/rules/three-target-parity.md`
+records the same limit). What settles them is the north-star app
+(`.claude/rules/northstar-app.md`), which does not exist yet.
+
+**So: J1 is not won, not tied, and not run.** It has one side of three metrics. Reporting it as
+anything more would be the failure the winning rule names.
+
 ## The deliberately broken state
 
 Per `../dx-benchmark.md` § The fifth, which is pass/fail and not a number. The break for J1 is the
