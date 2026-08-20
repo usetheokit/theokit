@@ -17,6 +17,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   so the options argument and the returned decision are nameable in TypeScript.
   (usetheokit/theokit#355)
 
+### Changed
+
+- **BREAKING: `executeWebRequest` enforces CSRF unless it is explicitly turned off.** Its `csrfMode`
+  option had no default, and every gate compared against `'strict'` -- so a caller that omitted the
+  option served every POST, PUT, PATCH and DELETE with no check at all, and the option's own
+  documentation described that as intentional backward compatibility. A security control a caller
+  has to know about and ask for is not a control. Omitting `csrfMode` now enforces; `'off'` is the
+  only value that disables it, and a route that legitimately receives third-party POSTs opts out by
+  itself with `csrf: false` on `defineRoute`. Honest scope: `executeWebRequest` has no production
+  caller in this repository -- `theo dev` and `theo start` serve through `executeRoute`, whose gate
+  has defaulted to strict all along -- so this closes the boundary the Cloudflare, Bun and Deno
+  adapters are built on, not a live exposure. See `MIGRATION.md`. (usetheokit/theokit#355)
+
 ### Removed
 
 - **The `IncomingMessage` form of the multi-header CSRF gate, `evaluateCsrfMultiHeader`, is gone.**
@@ -56,6 +69,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   nothing. (usetheokit/theokit#356)
 
 ### Fixed
+
+- **A request carrying a W3C `traceparent` keeps its trace id in production, and an untrusted
+  correlation header can no longer reach the logs.** `theo start` minted a fresh UUID per request and
+  discarded the incoming `traceparent`, so a trace crossing into the server started over — `theo dev`
+  had honoured the header on `/api/*` for a while, and production honoured it nowhere. The fallback
+  header, `x-request-id`, was accepted verbatim: any length, any bytes. It is chosen by the caller and
+  ends up in the structured logs, where a newline splits one line into two with the second forged. It
+  is now bounded and restricted to the characters real id formats use, and a value that fails falls
+  through to a generated id rather than rejecting the request. Both the Node and the Web-shaped
+  resolvers apply the same rule. (usetheokit/theokit#353)
 
 - **A Web-executor route that declares `csrf: false` is exempt from the CSRF gate, as it already was
   on the Node executor.** `defineRoute`'s public contract offers the opt-out for endpoints that
