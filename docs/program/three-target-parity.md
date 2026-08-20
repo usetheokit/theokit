@@ -66,16 +66,16 @@ Blocking three-target parity:
 
 | Blocker | Breaks | Evidence |
 |---|---|---|
-| Generated action client calls `fetch` directly with `credentials: 'same-origin'` | TUI, Tauri | `vite-plugin/actions-virtual-module.ts:224` |
-| Session typed on `IncomingMessage`/`ServerResponse` + `Set-Cookie` | TUI, Tauri IPC | `server/auth/session.ts:1,49,141` |
+| Generated action client calls `fetch` directly with `credentials: 'same-origin'` | TUI, Tauri | `packages/theo/src/vite-plugin/actions-virtual-module.ts:224` |
+| Session typed on `IncomingMessage`/`ServerResponse` + `Set-Cookie` | TUI, Tauri IPC | `packages/theo/src/server/auth/session.ts:1,49,141` |
 | Both middleware runners bound to a transport (`node:http` / `Request`) | TUI, Tauri IPC | `middleware-runner.ts:6-7`, `web-middleware-runner.ts:19` |
-| Router entry emits `window` / `document` | TUI | `router/entry.ts:79,125` |
+| Router entry emits `window` / `document` | TUI | `packages/theo/src/router/entry.ts:79,125` |
 | React-free gate does not walk `@theokit/presenter` | TUI/Node | `tests/unit/create-agent-client.test.ts:197-199` |
-| Surface tests assert scaffolded files, never a build or a run | TUI, Tauri | `create-theokit/tests/integration/surface-matrix.test.ts:77-83` |
+| Surface tests assert scaffolded files, never a build or a run | TUI, Tauri | `packages/create-theokit/tests/integration/surface-matrix.test.ts:77-83` |
 
 ### The authorization seam, stated precisely
 
-`callProcedure` runs no middleware and no auth. This is **deliberate and documented** (`server/http/in-process-caller.ts:5-6,69`), on tRPC's precedent, and input validation *is* shared with the HTTP path, so there is no validation drift.
+`callProcedure` runs no middleware and no auth. This is **deliberate and documented** (`packages/theo/src/server/http/in-process-caller.ts:5-6,69`), on tRPC's precedent, and input validation *is* shared with the HTTP path, so there is no validation drift.
 
 The consequence is nonetheless real: authorization has no shared home off-web, so every non-HTTP surface invents its own — and the framework offers no `requireOwner`-style primitive to invent it with. Combined, that means a TUI or Tauri surface reaching a route reaches it without the access rules the same route enforces over HTTP.
 

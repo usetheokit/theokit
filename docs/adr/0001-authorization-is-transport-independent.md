@@ -14,7 +14,7 @@ Today it is reachable from one target. Measured on 2026-08-19:
 - `callProcedure` — the seam TUI, Tauri and MCP surfaces use — runs **no middleware and no auth**. This is deliberate and documented (`packages/theo/src/server/http/in-process-caller.ts:5-6,69`), on tRPC's `callProcedure` precedent, and input validation *is* shared with the HTTP path, so there is no validation drift.
 - Auth is typed on the transport: `session.ts:1,49,141` takes `IncomingMessage`/`ServerResponse` and writes `Set-Cookie`. There is no `res` on an IPC call and no cookie jar in a terminal.
 - Both middleware runners are transport-bound — `middleware-runner.ts:6-7` on `node:http`, `web-middleware-runner.ts:19` on `Request`.
-- The framework offers `requireAuth` (`server/auth/auth.ts:11`) and nothing for authorization. Every action re-invents "may this subject touch this record".
+- The framework offers `requireAuth` (`packages/theo/src/server/auth/auth.ts:11`) and nothing for authorization. Every action re-invents "may this subject touch this record".
 
 The consequence is not theoretical. A route that enforces access rules over HTTP enforces none of them when the same route is reached in-process — which is the path the two new targets are built on. The open HITL advisory (GHSA-g94h-459g-rjhj) is the same failure one layer up: an endpoint whose only control was CSRF, which authenticates nobody.
 

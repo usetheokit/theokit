@@ -97,7 +97,7 @@ not itself a dependency — two milestones in the same wave may run in either or
 - [ ] the HITL approval path rejects an unauthenticated caller and an authenticated non-owner, verified against the published build; the open private security advisory is resolved and its fix released
 - [ ] an owner check exists and is exercised: approving a run as a caller who does not own it is refused, not merely undocumented
 - [ ] importing a server-only module from client code fails the build with an error naming both the module and the importing file
-- [ ] CSRF protection on the Web handler is on by default — a cross-origin POST with no token is rejected by a build that sets no CSRF option (`packages/theo/src/server/http/web-handler.ts:314,482`, where absent currently means off)
+- [ ] CSRF protection on the Web handler is on by default — a cross-origin POST with no token is rejected by a build that sets no CSRF option (`packages/theo/src/server/web-handler.ts:314,482`, where absent currently means off)
 - [ ] Applies to: Web, Tauri, TUI — each listed target is exercised in acceptance, not merely declared
 - [ ] Tauri: the authorization ADR is decided and implemented — `callProcedure` runs no middleware and no auth today, deliberately (`packages/theo/src/server/http/in-process-caller.ts:5-6,69`), so this milestone closes only once that seam has a decided home and the IPC path honours it
 - [ ] TUI: same ADR, same seam — the route's access rules are enforced off-web rather than re-invented per surface. CSRF is *not applicable*: there is no browser origin to forge a request from
@@ -196,7 +196,7 @@ not itself a dependency — two milestones in the same wave may run in either or
 
 **Definition of done (all must hold):**
 
-- [ ] a request carrying a W3C `traceparent` produces spans continuing that trace id — no `randomUUID()` is minted where a parent context exists (`packages/theo/src/server/http/request-handler.ts:216`, `agent-middleware.ts:122,199`)
+- [ ] a request carrying a W3C `traceparent` produces spans continuing that trace id — no `randomUUID()` is minted where a parent context exists (`packages/theo/src/cli/commands/start/request-handler.ts:216`, `packages/theo/src/vite-plugin/agent-middleware.ts:122,199`)
 - [ ] a run emits spans for run start and end, every tool call, every HITL pause and resume, and token usage, read back from an exported trace against a published build
 - [ ] the exported signal is produced by a production caller, not only by a test
 - [ ] Applies to: Web, Tauri, TUI — each listed target is exercised in acceptance, not merely declared
