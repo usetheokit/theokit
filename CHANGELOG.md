@@ -8,6 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **`ssrStreaming: true` serves a document again, instead of a bare React tree.** With streaming on,
+  both renderers returned React's output and nothing else: no `<html>`, no `<head>`, and none of the
+  hydration data the client router reads before it boots — so a streamed page loaded no stylesheet,
+  no client entry, and re-fetched on the client everything the server had just sent. The single-shot
+  `render()` never had the problem because it returns `{ html, hydrationData }` for the caller to
+  place in the template; the streaming siblings had no such seam. The document is now assembled
+  around the stream, with the head flushed before React produces a byte and the hydration script
+  written after the app markup and before the client entry. (usetheokit/theokit#343)
+
 - **The observability plugin can be registered, and `theo.config.ts` finally has the
   `observability` key its own adapter registry documents.** `createObservabilityPlugin` returned
   `{ name, onRequest, onResponse, onError }` against a plugin contract of `{ name, register }`, so
