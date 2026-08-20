@@ -6,6 +6,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Removed
+
+- **`packages/http/src/action-handler.ts` is gone. It was the server-action pipeline `@theokit/http`
+  never finished, and `packages/theo` shipped a different one.** Nothing consumer-visible changes:
+  the module was in neither the package barrel nor `tsup.config.ts`, so it had no subpath, no build
+  entry and exactly one importer -- its own unit test. It is the fourth module in the pattern the
+  B-M74-01 sweep recorded at `packages/http/src/index.ts:21`, and the only one of the four that no
+  consumer could reach.
+
+  It was superseded, not abandoned. `packages/theo/src/server/http/action-execute.ts` resolves an
+  action by file path and export name rather than by a registry key, and carries everything the
+  prototype had no place for: a POST-only gate, CSRF enforcement with a per-action opt-out, the
+  middleware and context pipeline, plugin `onRequest` / `preHandler` / `onResponse` / `onError`,
+  multipart bodies, the typed `ActionInputError` envelope, devalue serialization, and the dev
+  telemetry the devtools Actions tab reads. The two also disagreed on the wire: the prototype read
+  `x-theo-action` as an action **id**, while the generated client
+  (`packages/theo/src/vite-plugin/actions-virtual-module.ts:219`), both CSRF gates and the readiness
+  endpoint read it as the literal flag `1`. Shipping both would have put two incompatible readings
+  of one header into one framework.
+
+  `@theokit/http/action-encryption` is deliberately **kept**. The backlog item tied the two together
+  on the theory that the encryption had nowhere to plug in because the pipeline that would call it
+  was itself an orphan -- but the two modules never referenced each other, and the pipeline that did
+  ship does not encrypt either, because TheoKit actions send an input payload rather than the
+  closure-bound arguments Next.js encryption exists to seal. It is a published subpath, a
+  self-contained Web Crypto primitive a consumer can call on its own, and it costs the main bundle
+  nothing. (usetheokit/theokit#356)
+
+
 ### Security
 
 - **`@theokit/http/css-resource` escapes what it interpolates, so a stylesheet URL taken from
