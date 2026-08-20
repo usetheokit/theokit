@@ -18,7 +18,7 @@ interface OtlpSpan {
   endTimeUnixNano: string
   attributes: {
     key: string
-    value: { stringValue?: string; intValue?: string; boolValue?: boolean }
+    value: { stringValue?: string; intValue?: string; doubleValue?: number; boolValue?: boolean }
   }[]
   status: { code: number; message?: string }
 }
@@ -39,6 +39,7 @@ interface ExportTraceServiceRequest {
 interface OtlpAttributeValue {
   stringValue?: string
   intValue?: string
+  doubleValue?: number
   boolValue?: boolean
 }
 
@@ -55,7 +56,16 @@ function paraValorOtlp(value: string | number | boolean): OtlpAttributeValue {
     case 'string':
       return { stringValue: value }
     case 'number':
-      return { intValue: String(value) }
+      // usetheokit/theokit#380 — every number used to go out as `intValue`, so
+      // `cost.usd` reached the collector as `{"intValue":"0.0031"}`: a string
+      // that is not an integer, in the field reserved for integers. A collector
+      // may reject it, coerce it to 0, or keep the string; none of those is the
+      // number, and cost is the one attribute that answers what a run cost.
+      //
+      // `Number.isInteger` and not a decimal-point test: `2.0` IS `2` in
+      // JavaScript, and making the wire shape depend on how a literal was typed
+      // rather than on the value would be a stranger rule than the bug.
+      return Number.isInteger(value) ? { intValue: String(value) } : { doubleValue: value }
     default:
       return { boolValue: value }
   }

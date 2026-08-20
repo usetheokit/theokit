@@ -57,6 +57,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **A fractional span attribute reaches the collector as a number.** Every numeric attribute was
+  serialized under OTLP's `intValue`, so `cost.usd` — the one attribute that answers what a run cost —
+  arrived as `{"intValue":"0.0031"}`: a string that is not an integer, in the field reserved for
+  integers. A collector may reject it, coerce it to zero, or store the string; none of those is the
+  number. Fractional values now use `doubleValue`; integers are unchanged, so token counts and status
+  codes keep aggregating as integers. (usetheokit/theokit#380)
 - **The pre-commit gate refuses a commit that grew paths nobody staged.** With a partially staged
   file in the tree, the lint/format step restored the whole working tree into the index: a commit
   that named six paths carried fourteen, and the eight extra belonged to unfinished work elsewhere in
