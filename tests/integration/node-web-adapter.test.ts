@@ -7,6 +7,11 @@
  * conversions end-to-end (no mocks).
  *
  * v1.0 § Phase G slice 5/N (closes the executor bridge surface).
+ *
+ * The POSTs carry `x-theo-action: 1` because the CSRF gate is on by default:
+ * these tests are about the bridge, and a browser making the same call sends
+ * that header. Passing `csrfMode: 'off'` would prove the bridge works on a
+ * path an application does not use.
  */
 import { createServer, type Server } from 'node:http'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -91,7 +96,7 @@ describe('executeWebRequestFromNode — IncomingMessage ↔ Web Request bridge (
   it('POST /echo with JSON body parses + handler sees parsed body', async () => {
     const response = await fetch(`${baseUrl}/echo`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', 'x-theo-action': '1' },
       body: JSON.stringify({ name: 'alice' }),
     })
     expect(response.status).toBe(200)
@@ -142,7 +147,7 @@ describe('executeWebRequestFromNode — IncomingMessage ↔ Web Request bridge (
   it('Zod validation failure → 400 envelope via bridge', async () => {
     const response = await fetch(`${baseUrl}/echo`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', 'x-theo-action': '1' },
       body: JSON.stringify({ wrong_field: 'oops' }), // schema requires `name`
     })
     expect(response.status).toBe(400)
@@ -168,7 +173,7 @@ describe('incomingMessageToWebRequest unit conversions (T5a.2 Phase G slice 5/N)
   it('preserves host header → request.url host', async () => {
     const response = await fetch(`${baseUrl}/echo`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', 'x-theo-action': '1' },
       body: JSON.stringify({ name: 'bob' }),
     })
     const body = (await response.json()) as { url: string }
