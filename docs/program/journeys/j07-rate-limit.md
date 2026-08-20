@@ -105,6 +105,94 @@ assertions pass, including criterion 3's real wait. The wait is a fixed, declare
 and is subtracted from the reported figure — this is the only subtraction any journey makes, and it
 is made because the value is chosen by the test rather than by the framework.
 
+## Measured - TheoKit side, metrics 1-3 (2026-08-20)
+
+**Three of four metrics, one side.** This is not the journey being won; it is the first number this
+journey has. Metric 4 and the whole Next.js side are unmeasured, and the subsection below says why.
+
+Obtained from a real diff, not an estimate: the scaffold template was copied verbatim, committed as
+an untouched baseline, and the journey implemented on top. The counts are `git diff --numstat` over
+that commit.
+
+| Metric | TheoKit | How it was counted |
+| --- | --- | --- |
+| Files touched | **1** | `theo.config.ts` edited. Nothing else is created or edited: the limiter is already applied on every `/api` branch of the production server (`packages/theo/src/cli/commands/start/handlers.ts:92`, applied at `:115`, `:224`, `:277`, `:406`) |
+| Glue lines | **2** | of 3 added lines and 1 removed; the third added line is business logic, because it is the budget |
+| Concepts required | **3** | the `rateLimit` config key, its flat `{ windowMs, max }` shape, and `config().set()` - the builder ships no `.rateLimit()` setter, so the escape hatch is the only door (`packages/theo/src/config/config-builder.ts:38`) |
+| Time to first green run | **not measured** | see below - and the reason is not credits |
+
+**The 3 added lines, classified.** Published because the glue split is the metric most open to being
+argued after the fact, and a table nobody can check is not evidence - least of all one published by
+the side it favours.
+
+Glue (2): `export default config()` and `  .build()` - the two lines the formatter breaks the chain
+into, which the removed line already contained.
+
+Business logic (1): `  .set({ rateLimit: { windowMs: 60_000, max: 20 } })`. The window and the limit
+are a product decision, and the rule above says so.
+
+**Four judgement calls, stated rather than buried.**
+
+1. **The whole `.set(...)` line was counted as business logic**, although it also carries the
+   declaration wrapper. Splitting a line between the two categories is not something the rule
+   defines, and counting the line as glue would report a journey whose entire authored content is a
+   product decision as containing none. Deciding the other way gives 3 glue and 0 business logic.
+2. **`numstat` was reported as it counts, not as the edit reads.** Three lines are added and one
+   removed; the substance is a single inserted line, because the formatter breaks a three-call chain
+   across lines. Counting substance gives 1 added line. This is the same divergence J3 recorded, and
+   it is reported the same way.
+3. **The flat shape was chosen over the per-route shape.** Both satisfy the criteria on a published
+   build - `createRouteRateLimiter` normalises the flat form into the default bucket
+   (`packages/theo/src/server/rate-limit/rate-limit-per-route.ts:151`) - and the flat one is one
+   line. The per-route shape is a nested object instead of a flat one; it was not measured, because
+   the criteria do not need per-route budgets, and it is the shape § The deliberately broken state
+   records the dev server narrowing away before it reaches the limiter
+   (`packages/theo/src/cli/commands/dev.ts:63`).
+4. **No store was provisioned, and that is a zero rather than an omission.** The rule says a store
+   counts as glue on the side that needs one and as zero on the side that does not, with the
+   operational difference recorded rather than scored. Ours cannot have one: every shipped factory
+   refuses anything but the in-memory implementation
+   (`packages/theo/src/server/rate-limit/rate-limit.ts:53`,
+   `packages/theo/src/server/rate-limit/rate-limit-per-route.ts:162`). So the zero here is the same
+   fact as the reach asymmetry § The Next.js side already said the report must state plainly.
+
+**Which target the run measures decides the result, and that is not a detail.** Criteria 1 and 5
+hold on the Node production server and fail on the Web-standards handler, whose rate-limit factories
+have no production caller (`packages/theo/src/server/rate-limit/rate-limit.ts:105`,
+`packages/theo/src/server/rate-limit/rate-limit-per-route.ts:295`). Six deploy targets are built on
+that handler. A one-line diff that protects `theokit start` and protects nothing on those targets is
+one number with two meanings, and `j10-deploy.md` measures the other one.
+
+### What is still unmeasured, and why
+
+**Metric 4 (time to first green run) was not measured, and the reason is different here.** This
+journey needs no live model call: the refusal happens before the agent runs, so even criterion 5 is
+gradeable without a model key. What blocks it is the rest of the protocol - at least three cold runs
+from `npx create-theokit`, including criterion 3's real wait, and a second side to compare against.
+Recording that difference matters: J7 is the cheapest of the ten to time, and it is still not timed.
+
+**Nothing was executed.** No build, no server, no request, no refusal observed. Criteria 1 through 5
+are read from source: the limiter is constructed when the key is present
+(`packages/theo/src/cli/commands/start/index.ts:123`), applied before the handler on each `/api`
+branch, and answers with a dedicated code and a retry-after header
+(`packages/theo/src/server/rate-limit/rate-limit-per-route.ts:210`). Read is not run.
+
+**The Next.js side does not exist yet.** Until it does, nothing here is a comparison, and the winning
+rule cannot be applied. A journey is won or tied; a one-sided count is neither.
+
+**Behaviour under concurrency and at the fixed window's seam is out of scope by the exclusion this
+page already stated**, and this measurement neither narrows nor widens it.
+
+**The three-target criteria cannot be exercised in this repository.** The Tauri and TUI lines need
+`@theokit/tui` and `@theokit/ui`, which live outside it (`.claude/rules/three-target-parity.md`
+records the same limit). What settles them is the north-star app
+(`.claude/rules/northstar-app.md`), which does not exist yet. Criterion 7's real question - whether a
+declared budget is enforced off HTTP or refused by name - is untouched by a diff that only declares
+one.
+
+**So: J7 is not won, not tied, and not run.** It has one side of three metrics, on the one target
+where the mechanism is wired.
+
 ## The deliberately broken state
 
 Per `../dx-benchmark.md` § The fifth, which is pass/fail and not a number. The break for J7 is a

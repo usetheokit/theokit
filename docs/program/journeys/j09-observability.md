@@ -116,6 +116,124 @@ assertions pass against an exporter. Cold cache, at least three runs, mean and s
 The exporter is a local collector on both sides, and the same collector is used for both, so neither
 side is measured against a vendor's hosted latency.
 
+## Measured - TheoKit side, metrics 1-3 (2026-08-20)
+
+**Three of four metrics, one side, and the journey does not pass.** What follows is the smallest
+number in this batch attached to the largest gap: two lines of configuration buy every signal the
+framework emits, and two of the seven criteria are not reachable from an application at all. Metric 4
+and the whole Next.js side are unmeasured.
+
+Obtained from a real diff, not an estimate: the scaffold template was copied verbatim, committed as
+an untouched baseline, and the journey implemented on top. The counts are `git diff --numstat` over
+that commit.
+
+**Read the number with the failure attached to it.** The diff below satisfies criteria 1, 2, 4 and 7
+as far as source can, leaves criterion 5 conditional on the model provider, and does not satisfy
+criteria 3 and 6 - neither of which an application can fix, because both live behind seams it cannot
+reach. A cost of 1 file for a journey that fails two criteria is a different fact from a cost of 1
+file for a journey that passes, and reporting the first as the second would be the failure this
+programme exists to stop.
+
+| Metric | TheoKit | How it was counted |
+| --- | --- | --- |
+| Files touched | **1, and criteria 3 and 6 still fail** | `.env.local` - the two variables that select the OTLP exporter. Nothing else: the run span, the per-tool spans, the pause span and the token attributes are emitted by the framework without being asked |
+| Glue lines | **2** of 2 added | this journey declares business logic the empty set; the diff did not contradict it |
+| Concepts required | **3** | `THEO_CLOUD_INGEST_URL`, `THEO_CLOUD_API_KEY`, and `.env.local` as a file the production CLI loads (`packages/theo/src/config/load-env.ts:42`, loaded at `packages/theo/src/cli/commands/start/index.ts:55`) |
+| Time to first green run | **not measured, and there is no green run to time** | see below |
+
+**The 2 added lines, classified.** Both glue, and the classification is not interesting; what is
+interesting is what they do not need to be accompanied by. Setting an ingest URL and a key is what
+makes the environment half of the documented resolution chain fire (`packages/theo/src/server/observability-bootstrap.ts:73`),
+after which the adapter is resolved once and shared by the HTTP hooks and by the agent-run
+translator - which is why nothing else has to be written.
+
+**This diff is invisible to git in a real application.** `.env.local` is ignored by the scaffold's
+own gitignore (`packages/create-theokit/templates/default/_gitignore:12`); the baseline copy tracks
+it only because that file is not renamed into place until `create-theokit` runs. So the file was
+counted by hand rather than by the diff, and a reader checking the numbers should expect `git diff`
+on a scaffolded app to show nothing at all.
+
+**Five judgement calls, stated rather than buried.**
+
+1. **The environment route was measured, not a configuration-file route, and the alternative is not
+   equivalent.** `observability: {}` in `theo.config.ts` is the obvious move and it produces no
+   telemetry in a published build: the chain's console branch is gated on `NODE_ENV=development`
+   (`packages/theo/src/server/observability/adapter-registry.ts:40`), the fallback is a noop
+   (`:45`), and the bootstrap then returns no plugin at all, silently
+   (`packages/theo/src/server/observability-bootstrap.ts:83`). A configuration key that validates
+   and does nothing is the exact failure shape `j07-rate-limit.md` § The deliberately broken state
+   describes for a budget, and it is worth naming here as its own finding.
+2. **Writing an adapter instead was measured rather than estimated.** The other honest route is
+   `observability.provider` with an adapter the application writes - which is also the only way to
+   read spans back without running a collector. Measured on the same baseline: 2 files and 45 added
+   lines, against 1 file and 2. It buys a readable file and it does not buy either failing criterion.
+3. **`.env.local` was counted as one file touched**, although a real application already has one for
+   the model key. Counting it as an edit rather than an addition gives the same 1.
+4. **Comments were left out of the two lines.** A commented version is 3 lines; nothing else moves.
+5. **The concepts list written in advance did not survive the measurement.** § How the four metrics
+   are counted here named the config key, the adapter contract, the resolution-chain environment
+   variables and the shutdown behaviour - four. Measured: only the environment variables appear, the
+   config key is *the wrong door* for a production build per judgement call 1, and the adapter
+   contract and the shutdown behaviour never surface because the framework owns both. Applying the
+   list as written scores 4; applying the rule's own first sentence - derive it from the diff -
+   scores 3.
+
+### What is still unmeasured, and why
+
+**Criterion 6 has no implementable path from an application, so its cost is not a large number - it
+is not a number.** Two independent reasons, both read from source. First, the exported span's trace
+id is minted per span (`packages/theo/src/server/observability/otlp-serializer.ts:65`), so each span
+an operator receives belongs to its own trace no matter what arrived on the wire - and the incoming
+`traceparent` *is* honoured for the request id
+(`packages/theo/src/cli/commands/start/request-handler.ts:233`), which makes the loss happen at the
+exporter rather than at the door. Second, an application that
+writes its own adapter cannot recover it either: the HTTP span carries the resolved id as an
+attribute (`packages/theo/src/server/observability/middleware.ts:94`), and the run and tool spans
+carry only `{ agent }` (`packages/theo/src/server/agent/mount-agent.ts:224`) or
+`{ agent, sessionId }` (`packages/theo/src/server/agent/build-agent-streamer.ts:85`), while
+`startSpan` takes a name and attributes and nothing else
+(`packages/theo/src/server/observability/adapters/types.ts:29`). So the request can continue a
+trace and the run inside it cannot, which is the half of criterion 6 that matters.
+
+**Criterion 3 fails and an application cannot make it pass.** The pause span is opened on the HITL
+plugin's approval id and closed on the tool-call id, which is a different id, so it never closes at
+the resume; the end-of-run sweep now marks it `hitl.resume_observed: false` and gives it an error
+status rather than reporting a duration it did not measure
+(`packages/theo/src/server/agent/observe-agent-run.ts:169`). That is the honest behaviour and it is
+still a fail: the criterion asks for the time the human took, and no span carries it
+(usetheokit/theokit#361).
+
+**Criterion 5 passes only when the provider reports a cost.** `cost.usd` is set from the finish
+metadata's `cost` field (`packages/theo/src/server/agent/observe-agent-run.ts:74`), which the
+producer includes only when the SDK reported one
+(`packages/agents/src/bridge/agent-stream-events.ts:144`). The criterion's alternative route - token counts plus a recorded model identifier - is not available:
+the run span's attributes are the agent name and the session id
+(`packages/theo/src/server/agent/observe-agent-run.ts:139`), and no span records which model ran. So
+the criterion hangs on a field this repository does not control, and the substitution it deliberately
+allowed is closed.
+
+**Metric 4 has no green run to time.** Even setting aside that it needs a live model call on both
+sides, the run it would time does not exist on this one.
+
+**Criteria 1, 2, 4 and 7 are read from source, not observed.** No collector was run, no span was
+received, no duration compared against a client's wall clock. The token attributes in particular are
+read as *correct in shape* since the producer's shape was adopted
+(`packages/theo/src/server/agent/observe-agent-run.ts:76`); that they arrive at a collector was not
+seen.
+
+**The Next.js side does not exist yet.** Until it does, nothing here is a comparison, and the winning
+rule cannot be applied. § The Next.js side already predicted this is a journey where the other stack
+starts ahead, and a one-file count on our side does not settle a race whose other lane is empty.
+
+**The three-target criteria cannot be exercised in this repository.** The Tauri and TUI lines need
+`@theokit/tui` and `@theokit/ui`, which live outside it (`.claude/rules/three-target-parity.md`
+records the same limit). What settles them is the north-star app
+(`.claude/rules/northstar-app.md`), which does not exist yet.
+
+**So: J9 is not won, not tied, and not run.** It is the journey where the framework gives away the
+most for free, and the two things it does not give away are the two an application cannot build
+itself.
+
 ## The deliberately broken state
 
 Per `../dx-benchmark.md` § The fifth, which is pass/fail and not a number. The break for J9 is

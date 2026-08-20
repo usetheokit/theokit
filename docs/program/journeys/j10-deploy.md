@@ -118,6 +118,131 @@ a non-build machine. Cold cache, at least three runs, mean and standard deviatio
 provisioning is inside the measurement on both sides — it is what the developer waits for — and the
 report separates it from local build time so a slow platform is not read as a slow framework.
 
+## Measured - TheoKit side, metrics 1-3 (2026-08-20)
+
+**Three of four metrics, one side, and two numbers rather than one - because the two honest targets
+fail different criteria.** Metric 4 and the whole Next.js side are unmeasured, and the subsection
+below says why. The hold this page records on issue #350 is unchanged: nothing here verifies it.
+
+Obtained from a real diff, not an estimate: the scaffold template was copied verbatim, committed as
+an untouched baseline, and the journey implemented on top. The counts are `git diff --numstat` over
+that commit.
+
+**Read the numbers with the failures attached to them.** A platform target costs the developer no
+files and cannot serve the agent this framework exists to serve; the container path can serve it and
+is not documented anywhere, which is what criterion 6 grades. Reporting either number alone would
+report a deployment that does not do the journey.
+
+| Metric | TheoKit | How it was counted |
+| --- | --- | --- |
+| Files touched | **2** for `node` in a container, **0** for `cloudflare` | `Dockerfile` and `.dockerignore` added for the first; for the second the adapter emits `worker.mjs` and `wrangler.toml` itself (`packages/theo/src/adapters/cloudflare.ts:198`, `:204`), which the rule above excludes as generated output |
+| Glue lines | **11**, then **0** | this journey declares business logic the empty set; the diff did not contradict it |
+| Concepts required | **7**, then **4** | node: the `node` target, `theokit build`, `theokit start`, the `.theokit` output directory, the `.env.local` convention that must be kept out of the image, the Dockerfile format, and a registry or host account. cloudflare: the `cloudflare` target, `wrangler.toml`, `wrangler deploy`, and a Cloudflare account |
+| Time to first green run | **not measured, and on eight of the nine targets there is no green run to time** | see below |
+
+**The 11 added lines, classified.** Published because the glue split is the metric most open to being
+argued after the fact, and a table nobody can check is not evidence - least of all one published by
+the side it favours.
+
+`Dockerfile`, 8 lines, all glue: the base image, `WORKDIR`, the `package.json` copy, the install, the
+source copy, `npm run build`, `EXPOSE`, and `CMD ["npm", "start"]`.
+
+`.dockerignore`, 3 lines, all glue: `node_modules`, `.theokit`, and `.env.local`. The third is
+load-bearing rather than tidy - it is what criterion 5 buys, since without it the developer's local
+secret is copied into the image and the criterion's grep finds it.
+
+**No adapter serves an agent route, and that is the finding of this measurement.** The string `agent`
+does not occur in any of the fourteen files under `packages/theo/src/adapters/`. The generated
+Cloudflare worker branches on `/api/` and resolves the request through `scanServerRoutes` and
+`executeRoute` (`packages/theo/src/adapters/cloudflare.ts:138`, `:142`), which are the *file* routes;
+agents are a separate scan (`packages/theo/src/cli/commands/start/manifest-loader.ts:58`) served by
+`mountAgent`, which is exported only from the internal contract
+(`packages/theo/src/server/internal-api.ts:43`, a file whose own header states it is not the public
+API). So criterion 2 - J1's tool call against the deployed URL - fails on all eight adapter targets,
+and it fails without a supported workaround: an application cannot mount its own agent endpoint.
+`streamAgentTurnInProcess` is public (`packages/theo/src/server/agent/index.ts:29`) and is a
+lower-level seam; what rebuilding the run endpoint on top of it would cost was **not measured,
+because its shape is not determined** - the same "no number, because no path" this programme
+recorded for J4's criterion 1.
+
+**The one target that can pass criterion 2 passes it by not deploying an artifact.** `theokit start`
+serves the project rather than a bundle: it reads the manifest and dynamically imports the scanned
+source paths at request time (`packages/theo/src/cli/commands/start/manifest-loader.ts:41`,
+`packages/theo/src/server/scan/module-loader.ts:11`). The container therefore ships the repository,
+which is why the Dockerfile copies everything and builds inside the image.
+
+**Four judgement calls, stated rather than buried.**
+
+1. **Two targets were measured rather than one.** § The Next.js side says comparing each side's best
+   target is the honest comparison, and on this side "best" splits: cloudflare is cheapest and cannot
+   run the journey, node is dearest and can. Reporting only the first gives a **0** that means the
+   developer wrote nothing for a deployment that answers no agent request; reporting only the second
+   hides that the platform targets exist. Both are reported, with what each fails.
+2. **The platform manifest was not counted, so 2 is a floor.** No host was chosen: a compose file, a
+   `fly.toml` or a Kubernetes manifest is at least one more file, and picking one would measure that
+   platform rather than this framework.
+3. **The generated `wrangler.toml` was not counted**, per the rule that generated deployment output
+   is not counted unless hand-edited. It would need editing for a custom domain or a secret binding;
+   that edit was not made, and if it were it would be counted with the reason recorded.
+4. **Criterion 6 was graded, not skipped, and it fails by construction.** The documented path is
+   `README.md:466`, which lists the nine targets and `theokit build --target <name>` and stops. Every
+   step after it - the base image, the install, the port, the process to run, where the secret comes
+   from - was invented here rather than followed, and the criterion says in its own words that a step
+   the operator had to discover is a defect of the criterion. The entire 11-line diff is that defect.
+
+**Two fixes landed today, both real, and neither unblocks this journey.** The static adapter no
+longer emits a meta refresh for every exported page - the redirect fallback now runs only for a
+genuine redirect (`packages/theo/src/adapters/static.ts:192`, with the previous behaviour recorded at
+`:173`) - and the Cloudflare worker no longer serves a document with no `<head>`: the shell is read
+from the built `index.html` and the build refuses by name when it is missing
+(`packages/theo/src/adapters/cloudflare.ts:38`, read at `:197`). Both concern what a *page* looks
+like. Criterion 2 concerns whether an agent endpoint exists at all, and on the adapter targets it
+does not.
+
+**A third finding, recorded because it is deploy-shaped:** the production server never binds the
+configured host. `server.listen(port, …)` passes no address
+(`packages/theo/src/cli/commands/start/index.ts:179`) while the schema defaults `host` to
+`localhost` (`packages/theo/src/config/schema.ts:116`). The effect is convenient in a container and
+wrong as a contract - a declared bind address does nothing, in either direction.
+
+### What is still unmeasured, and why
+
+**Nothing was deployed.** No image was built, no worker was published, no request was issued from a
+second machine. Every claim above is read from source, and criterion 1 - the whole journey, in one
+line - is untouched by a measurement that never left this machine.
+
+**Criterion 3 was not exercised and is expected to fail on six targets.** The Web shim still collects
+every chunk and constructs the `Response` inside `end()`
+(`packages/theo/src/adapters/web-shim.ts:194`), which is what `../../../ROADMAP.md` § M14 records.
+The `node` path does not go through that shim, so the container measured here is the one target where
+criterion 3 has a chance, and it was not run.
+
+**Criterion 4 - build twice, deploy twice - was not run.** That is the criterion the #350 hold is
+about, and this page still does not get to close it by reading a changelog.
+
+**Whether `theokit start` can import the sources it scans inside a container image was not tested.**
+The loader performs a plain dynamic `import()` of the manifest's path
+(`packages/theo/src/server/scan/module-loader.ts:11`), and those paths are TypeScript sources.
+Whether that resolves on the image's Node build - and therefore whether the container serves at all -
+is exactly the class of question this journey exists to ask, and it was not asked here.
+
+**Metric 4 (time to first green run) needs a live model call for criterion 2**, at least three times,
+cold cache, plus platform provisioning inside the clock. That spends real credits and a platform
+account, and the number is only meaningful measured identically on both sides.
+
+**The Next.js side does not exist yet.** Until it does, nothing here is a comparison, and the winning
+rule cannot be applied. § The Next.js side already recorded that the asymmetry favours the other
+stack; a 0 and a 2 on this side do not change that and do not settle it.
+
+**The three-target criteria cannot be exercised in this repository.** The Tauri and TUI lines need
+`@theokit/tui` and `@theokit/ui`, which live outside it (`.claude/rules/three-target-parity.md`
+records the same limit). The TUI line is explicit that *not applicable* is unavailable to it, so both
+remain open rather than excused.
+
+**So: J10 is not won, not tied, and not run.** It is the second journey in this programme whose cost
+cannot be reduced to a number, and the reason is not that the work is large - it is that on eight of
+nine targets there is no path from the artifact to the journey's own agent.
+
 ## The deliberately broken state
 
 Per `../dx-benchmark.md` § The fifth, which is pass/fail and not a number. The break for J10 is a

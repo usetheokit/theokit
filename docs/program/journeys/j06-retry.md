@@ -103,6 +103,114 @@ assertions pass. Cold cache, at least three runs, mean and standard deviation. T
 themselves are inside the wall clock and are configured small for the measurement; the configured
 values are recorded so the number is comparable across sides.
 
+## Measured - TheoKit side, metrics 1-3 (2026-08-20)
+
+**Three of four metrics, one side, and the tie this page predicted is not the one the diff shows.**
+§ The Next.js side predicts a tie on the ground that *neither* side has a primitive. On this side
+that premise is false: `Retry.create` is re-exported from `@theokit/agents`
+(`packages/agents/src/index.ts:202`), reaches a scaffolded application unchanged, and carries the
+loop, the wait, the attempt ceiling and the predicate seam. What the developer still writes is the
+error taxonomy, which the counting rule calls business logic and which both sides pay. What the
+measurement cannot say is whether the *outcome* is a tie, because the other lane is empty. Metric 4 and the whole Next.js side are
+unmeasured, and the subsection below says why.
+
+Obtained from a real diff, not an estimate: the scaffold template was copied verbatim, committed as
+an untouched baseline, and the journey implemented on top. The counts are `git diff --numstat` over
+that commit.
+
+**A correction to this page's own § Current state, recorded rather than quietly relied on.** That
+section reads the same re-export as something a tool author can use to "hand-roll a wrapper - which
+is exactly the Next.js-side cost, paid on our side too". It is not a wrapper: `Retry.create(fn,
+options)` runs `fn` with exponential backoff, an injectable predicate, an attempt ceiling and an
+injectable random source. The hand-rolling that remains on our side is the classification policy,
+which the counting rule calls business logic and which both sides must write anyway.
+
+| Metric | TheoKit | How it was counted |
+| --- | --- | --- |
+| Files touched | **2** | `agents/lib/retry-policy.ts` added, `agents/tools/weather.ts` edited. The simulated failing dependency is excluded by the rule above and was not written |
+| Glue lines | **15** | of 50 added lines; 24 are business logic, 4 are comments and 7 are blank |
+| Concepts required | **6** | `Retry.create`, the `retries` / `initialDelayMs` schedule, the `rng` option and the full-jitter default it overrides, the `isRetryable` seam, `isTransientError`, and the `agents/lib/` semantic folder |
+| Time to first green run | **not measured** | needs a live model call; see below |
+
+**The 50 added lines, classified.** Published because the glue split is the metric most open to being
+argued after the fact, and a table nobody can check is not evidence - least of all one published by
+the side it favours.
+
+In `agents/lib/retry-policy.ts`, 35 lines. Glue (7): the `isTransientError` import, and the six lines
+of the `TOOL_RETRY` object - its declaration, `retries`, `initialDelayMs`, `isRetryable`, `rng` and
+the closing brace, which are the attempt ceiling and the backoff schedule the rule names as glue.
+Business logic (18): the three lines of `PermanentToolError`, the three of `TransientToolError`, the
+`RETRYABLE_STATUS` set, the six of `classifyHttpFailure` and the five of `isRetryableToolFailure` -
+together, the declaration of which failures are worth another attempt. Comments (4). Blank (6).
+
+In `agents/tools/weather.ts`, 15 lines. Glue (8): the two imports, and, in each of the two retried
+blocks, `const geoRes = await Retry.create(async () => {` / `const wxRes = await Retry.create(async
+() => {`, `return res` and `}, TOOL_RETRY)`. Business logic (6): in each block, the `fetch` call and
+the line that turns a non-ok status into one of the two classes, plus the two `PermanentToolError`
+throws for a place that does not exist and a forecast that is absent. Blank (1).
+
+**The `rng` override is the interesting line, and it is there because criterion 3 and the shipped
+default disagree.** The SDK computes each wait as `floor(rng() * ceiling)` - full jitter, a uniform
+draw over the whole interval - so two consecutive waits can come out in the wrong order and
+criterion 3 ("each interval strictly greater than the one before") fails at random rather than never.
+Drawing from the top quarter instead keeps criterion 4's jitter and makes every wait strictly longer
+than the last, because the smallest draw at attempt *n+1* is 1.5x the largest at *n*. That
+implementation was read from the installed `@theokit/sdk` 4.52.1, which lives outside this
+repository and therefore carries no `file:line` here; the house style this repository does own
+computes its backoff the narrowed way (`packages/agents/src/auth/auth-provider.ts:91`).
+
+**Four judgement calls, stated rather than buried.**
+
+1. **The retry wraps the dependency call, not the tool body - and criterion 1's oracle does not say
+   which of those it means.** The criterion counts invocations "inside the tool body". With the retry
+   around the HTTP call, a counter placed in the retried closure reads N+1 and a counter placed at
+   the top of `.execute` reads 1. Both are "inside the tool body". Nothing on either side re-invokes
+   a *tool* - the AI SDK's retry option governs the model request - so the second reading is
+   unsatisfiable by both stacks, and this measurement takes the first. The ambiguity is reported
+   here rather than resolved by rewording the criterion, which would void the journey. Deciding the
+   other way was measured rather than guessed: wrapping the whole body costs the same 2 files and 62
+   added lines instead of 50, 12 of the extra being re-indentation of code that did not change.
+2. **The two error classes were counted as business logic.** The rule calls the classification policy
+   business logic and type ceremony glue, and a class whose entire content is its identity sits on
+   the line between them. Counting their six lines as ceremony moves the split from 15/24 to 21/18
+   and does not change the shape of the result.
+3. **The `agents/lib/` folder was counted as a concept**, on J1's precedent that a folder the agent
+   scanner treats specially is a name the reader must know. Not counting it gives 5.
+4. **The failing dependency was not written at all.** The rule excludes it from the count on both
+   sides; writing it and excluding it produces the same number, and nothing was executed either way.
+
+### What is still unmeasured, and why
+
+**Metric 4 (time to first green run) needs a live model call**, at least three times, cold cache.
+That spends real credits, and the number is only meaningful measured identically on both sides - so
+running one side alone would produce a figure with nothing to compare it to.
+
+**The Next.js side does not exist yet.** Until it does, nothing here is a comparison, and the winning
+rule cannot be applied. On this journey the absence is sharper than elsewhere: the page predicted a
+tie from a premise about *both* sides, and only one of them has now been read.
+
+**None of the five criteria were exercised.** No run was performed: no transient failure was
+injected, no invocation counter was read, no interval was timed. What the diff establishes is what
+the code says, and the argument above about strictly increasing intervals is arithmetic over the
+SDK's formula rather than an observation of five runs.
+
+**What the SDK's retry does under a real failure is read from the installed package, not from
+source in this repository.** The classifier it falls back to (`isTransientError`) was not read at
+all; the measured implementation shadows it for the two classes it declares and defers to it for
+everything else, so a wrong answer there is invisible to this diff.
+
+**Criterion 4 remains the weak oracle this page already labelled it.** Nothing in this measurement
+strengthens it, and a passing run would still be consistent with scheduler noise.
+
+**The three-target criteria cannot be exercised in this repository.** The Tauri and TUI lines need
+`@theokit/tui` and `@theokit/ui`, which live outside it (`.claude/rules/three-target-parity.md`
+records the same limit). What settles them is the north-star app
+(`.claude/rules/northstar-app.md`), which does not exist yet.
+
+**So: J6 is not won, not tied, and not run.** The tie this page predicted is not confirmed and not
+refuted - its stated premise is refuted, and the outcome it predicted remains open until a second
+lane exists.
+
 ## The deliberately broken state
 
 Per `../dx-benchmark.md` § The fifth, which is pass/fail and not a number. The break for J6 is
