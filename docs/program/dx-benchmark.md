@@ -273,8 +273,13 @@ Upstash version facts — including that Vercel's own in-code answer, `@vercel/f
 for a dashboard rule that fails open and is a no-op outside production — are in
 [J7's criteria file](journeys/j07-rate-limit.md).
 
-**Nine journeys measured, three ties, three losses, one unresolved, one metric sweep and one that wins
-every countable metric without being won — and the framework has not won a journey.** The goal states "win all ten by a margin outside noise". Nine of ten are in, and the
+**All ten journeys are measured — four ties, three losses, one unresolved, one metric sweep and one
+that wins every countable metric without being won — and the framework has not won a single one. The
+program's second obligation is now measured in full, and it is not met.** This paragraph read "eight"
+while ten of the paragraphs around it existed, because the count was updated one journey late twice
+running; a closing tally that lags the sections it summarises is the one sentence a reader trusts and
+should not, so it is corrected here rather than incremented again. The goal states "win all ten by a
+margin outside noise". Ten of ten are in, and the
 three that produced the largest margins are the three that did not win. J5's re-measurement
 could not change that sentence because shipping the missing capability moved a criterion, not a
 margin. J3 and J9 could not change it for opposite reasons: J3's margins price six lines whose
