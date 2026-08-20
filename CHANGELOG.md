@@ -34,24 +34,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   self-contained Web Crypto primitive a consumer can call on its own, and it costs the main bundle
   nothing. (usetheokit/theokit#356)
 
-
-### Security
-
-- **`@theokit/http/css-resource` escapes what it interpolates, so a stylesheet URL taken from
-  configuration can no longer inject markup.** `renderCssResource` assembled its `<link>` and
-  `<style>` tags by string interpolation and escaped nothing: an `href` or `precedence` containing
-  `">` closed the attribute and opened an element of the caller's choosing, and inline `content`
-  containing `</style>` closed the element outright. Nothing inside the package renders with it yet,
-  which is the only reason this was latent rather than live -- and the reason it is closed before any
-  SSR path is allowed to reach it rather than after. `href` and `precedence` are attribute-escaped
-  now; inline content has the one sequence that can terminate a raw text element (`</style`)
-  rewritten as the CSS escape `\3c `, which a CSS string parses back to `<` and which leaves media
-  range syntax such as `@media (width < 600px)` alone. A caller passing an href with a query string
-  now sees `&` rendered as `&amp;`, which is what an HTML attribute has always required.
-  (usetheokit/theokit#356)
-
-
 ### Fixed
+
+- **An agent run now emits telemetry: a span for the run, one per tool call, one per
+  human-in-the-loop pause, and the token usage.** These are the four signals the observability
+  milestone asks for, and all four measured absent — no production file created an agent span at
+  all. They are read off the wire-chunk stream the agent already emits rather than by instrumenting
+  the agent loop, which keeps `@theokit/agents` free of any dependency on the server package and
+  means a desktop or terminal front-end gets the same spans over the same events. An application
+  that configured no telemetry passes the stream through untouched and pays nothing.
+  (usetheokit/theokit#353)
 
 - **`ssrStreaming: true` serves a document again, instead of a bare React tree.** With streaming on,
   both renderers returned React's output and nothing else: no `<html>`, no `<head>`, and none of the
@@ -163,8 +155,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   (usetheokit/theokit#334)
 
 
-### Fixed
-
 - **Fifteen test files create their temporary directories atomically.** Each built a path under
   `tmpdir()` from `Date.now()` or a random suffix and then created it — two steps, with a window
   between them in which something else can occupy the path, and `Date.now()` in particular collides
@@ -207,6 +197,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   lifecycle gap. The field doc and the `plugin()` example now show `new URL(ctx.request.url).pathname`
   as the way to match a path. (usetheokit/theokit#324)
 
+### Security
+
+- **`@theokit/http/css-resource` escapes what it interpolates, so a stylesheet URL taken from
+  configuration can no longer inject markup.** `renderCssResource` assembled its `<link>` and
+  `<style>` tags by string interpolation and escaped nothing: an `href` or `precedence` containing
+  `">` closed the attribute and opened an element of the caller's choosing, and inline `content`
+  containing `</style>` closed the element outright. Nothing inside the package renders with it yet,
+  which is the only reason this was latent rather than live -- and the reason it is closed before any
+  SSR path is allowed to reach it rather than after. `href` and `precedence` are attribute-escaped
+  now; inline content has the one sequence that can terminate a raw text element (`</style`)
+  rewritten as the CSS escape `\3c `, which a CSS string parses back to `<` and which leaves media
+  range syntax such as `@media (width < 600px)` alone. A caller passing an href with a query string
+  now sees `&` rendered as `&amp;`, which is what an HTML attribute has always required.
+  (usetheokit/theokit#356)
 
 ## [theokit 0.48.14] - 2026-08-19
 
