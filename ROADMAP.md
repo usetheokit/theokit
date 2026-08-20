@@ -98,9 +98,15 @@ anywhere failed to say so.
 
 The precondition it named has been paid. M8's central criterion — spans for run start and end, every
 tool call, every HITL pause and resume, and token usage — measured **0 of 4** on the morning of
-2026-08-20 and **4 of 4** by that afternoon
-(`packages/theo/src/server/agent/observe-agent-run.ts`). Two caveats travel with that number and are
-not footnotes: the token attributes were initially read from a shape the producer never emits and had
+2026-08-20 and **4 of 4 by span, not yet by trace,** that afternoon
+(`packages/theo/src/server/agent/observe-agent-run.ts`). The qualifier is load-bearing and was added
+after the fact: the four spans exist and reach an exporter, and they do NOT form a trace. The OTLP
+serializer mints a fresh `traceId` per span
+(`packages/theo/src/server/observability/otlp-serializer.ts:65`) and `SpanData` carries no parent
+(`packages/theo/src/server/observability/span.ts:8`), so one run arrives at a collector as several
+unrelated records. Counting spans instead of counting usable telemetry is exactly the move this
+programme exists to refuse, so the count is stated with its limit
+(usetheokit/theokit#368). Three further caveats travel with it and are not footnotes: the token attributes were initially read from a shape the producer never emits and had
 to be re-fixed, and the HITL pause span still cannot correlate its resume
 (usetheokit/theokit#361), so it records that it could not rather than reporting a duration it did
 not measure.

@@ -38,6 +38,7 @@ import { installGracefulShutdown } from './graceful-shutdown.js'
 import type { RequestHandlerCtx } from './handlers.js'
 import { loadRoutesAndActions } from './manifest-loader.js'
 import { createRequestHandler } from './request-handler.js'
+import { resolveListenHost } from './resolve-listen-host.js'
 import { setupSsr } from './ssr-setup.js'
 import { attachWebSocketHandler } from './websocket-handler.js'
 
@@ -176,9 +177,15 @@ export async function startCommand(options: StartOptions): Promise<void> {
     createCronScheduler(cronDefinitions).start()
   }
 
-  server.listen(port, () => {
+  // `config.host` was never passed here, and `listen(port)` with no address binds
+  // every interface — so the server listened wider than its own configuration,
+  // whose default says `localhost`.
+  const listenHost = resolveListenHost(config.host)
+  server.listen(port, listenHost, () => {
     console.log(`\n  Theo production server`)
-    console.log(`  → http://localhost:${String(port)}\n`)
+    console.log(
+      `  → http://${listenHost === '0.0.0.0' ? 'localhost' : listenHost}:${String(port)}\n`,
+    )
     if (cronDefinitions.length > 0) {
       console.log(`  Crons: ${String(cronDefinitions.length)} scheduled in-process\n`)
     }

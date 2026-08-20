@@ -34,6 +34,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **`theo start` binds the address its configuration names.** `config.host` was declared, defaulted to
+  `localhost`, documented as the way to open a server to the LAN — and never passed to `listen`. Node
+  with no address binds every interface, so the production server listened WIDER than its own
+  configuration said, and the default said the narrow thing. `host: true` opens every interface,
+  a string is used verbatim, and absent means the loopback.
+
+- **Configuring observability and getting no exporter now says so.** `observability: {}` validated,
+  the boot passed, and no spans were recorded — with nothing in the output to search for. It warns by
+  name and says what to do: set the ingest credentials, pass your own `provider`, or use development
+  where the console exporter resolves. An application that configured nothing is still not warned at.
+  (usetheokit/theokit#321)
+
 - **A Cloudflare Worker with `ssrStreaming: true` serves a document instead of a bare React tree.**
   The streaming assembly was fixed in the generated entry and left unfixed at its only caller: the
   worker called `renderStreamingWeb(request)` with no options, and both halves of the document shell
