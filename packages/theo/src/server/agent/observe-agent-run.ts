@@ -157,7 +157,19 @@ export async function* observeAgentRun<T>(
   function closeAll(status: 'ok' | 'error', message?: string): void {
     if (settled) return
     settled = true
-    for (const span of state.pauses.values()) span.end()
+    for (const span of state.pauses.values()) {
+      // A pause span reaching the sweep was never observed to resume, so its
+      // duration approximates the whole run rather than the time a human took.
+      // Saying so is not a nicety: an operator reading a four-minute pause span
+      // has no other way to tell "the human thought for four minutes" from "we
+      // never saw the resume". Today that is the NORMAL case, not an edge one -
+      // the approval chunk and the tool result carry different ids for the same
+      // logical call, so `closeToolSpan` never matches the pause
+      // (usetheokit/theokit#361).
+      span.setAttribute('hitl.resume_observed', false)
+      span.setStatus('error', 'HITL pause never observed to resume; duration is not the human wait')
+      span.end()
+    }
     for (const span of state.tools.values()) {
       span.setStatus(status, message)
       span.end()

@@ -27,6 +27,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **A human-in-the-loop pause span no longer reports a duration that is not the human's wait.** The
+  approval chunk and the tool result carry different ids for the same logical call, so the pause was
+  never matched at resume and its span was closed by the end-of-run sweep — with a duration
+  approximating the whole run. It now records `hitl.resume_observed: false` and an error status when
+  that happens. This makes the span honest rather than correct: the real number stays unavailable
+  until the two ids correlate. (usetheokit/theokit#361)
+
 ### Security
 
 ## [theokit 0.49.0] - 2026-08-20

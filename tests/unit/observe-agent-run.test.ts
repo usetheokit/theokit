@@ -135,6 +135,42 @@ describe('agent run observability (M8)', () => {
     expect(tools.every((s) => s.ended)).toBe(true)
   })
 
+  it('test_a_pause_never_observed_to_resume_says_so_instead_of_reporting_a_duration', async () => {
+    const { adapter, byName } = createRecorder()
+
+    await drain(
+      observeAgentRun(
+        chunks(
+          { type: 'start' },
+          {
+            type: 'tool-input-available',
+            toolCallId: 'approval-uuid',
+            toolName: 'deploy',
+            input: {},
+          },
+          {
+            type: 'tool-approval-request',
+            approvalId: 'approval-uuid',
+            toolCallId: 'approval-uuid',
+          },
+          // The resume arrives under the SDK's own call id, not the approval id -
+          // which is what actually happens on the wire today (#361). The pause is
+          // therefore never matched, and the span must not pretend its duration
+          // is the human's wait.
+          { type: 'tool-output-available', toolCallId: 'sdk-call-id', output: {} },
+          { type: 'finish' },
+        ),
+        adapter,
+        { agent: 'chat' },
+      ),
+    )
+
+    const pause = byName('agent.hitl')[0]
+    expect(pause.attrs['hitl.resume_observed']).toBe(false)
+    expect(pause.status).toBe('error')
+    expect(pause.ended).toBe(true)
+  })
+
   it('test_a_hitl_pause_opens_a_span_that_the_resume_closes', async () => {
     const { adapter, byName } = createRecorder()
 
