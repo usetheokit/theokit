@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **A cache default configured in `theo.config.ts` now reaches the routes it was configured for.**
+  `cache.defaults` was parsed at boot, handed to the engine and dropped there: `createCacheEngine`
+  destructured only `storage` and `onError`. A route that declared no `maxAge` therefore used the
+  built-in one-second fallback instead of the configured value, and `defaults.swr` and
+  `defaults.cacheErrors` had no effect anywhere. `defineCachedRoute` now resolves `maxAge`, `swr`,
+  `cacheErrors` and `cacheVersion` against the engine's defaults; anything the route declares still
+  wins over them. (usetheokit/theokit#352)
+
 - **`revalidateTag`, `revalidatePath` and `updateTag` no longer throw in every application.** All
   three are exported publicly and resolve the cache engine from a process singleton that nothing
   initialized — `initCacheEngine` had no production caller, so the first call to any of them raised
