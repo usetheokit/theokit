@@ -82,17 +82,28 @@ because the first one would have destroyed working code:
   assertion, so the code runs. What it has is no production caller — which is the claim that matters
   and the one the criterion should grade.
 
-Wiring is cheaper than building, but it is **not** the trivial work the first reading suggested. Two
-of the subsystems cannot be wired as they stand: `createObservabilityPlugin` returns
+Wiring was cheaper than building and it was **not** the trivial work the first reading suggested.
+Two subsystems could not be wired as they stood: `createObservabilityPlugin` returned
 `{ name, onRequest, onResponse, onError }` while the plugin loader requires `{ name, register }` and
 throws `InvalidPluginShapeError` otherwise (`packages/theo/src/server/plugins/load-plugins.ts:20`),
-and the `observability` key the adapter registry documents as its first configuration source does
-not exist in the config schema at all. Each item names its own blockers.
+and the `observability` key the adapter registry documents as its first configuration source did not
+exist in the config schema at all.
 
-It is still a **precondition for measuring anything else**: with observability unwired, the
-agent-axis benchmark has no instrument. M8's central criterion — spans for run start and end, every
-tool call, every HITL pause and resume, and token usage — measured **0 of 4** on 2026-08-20. Exactly
-one production file calls `startSpan`, and nothing calls that file.
+**Both were fixed on 2026-08-20, and this paragraph is corrected rather than deleted.** The plugin
+now returns `{ name, register }` and is registered at boot in production and in dev; the key exists
+at `packages/theo/src/config/schema.ts:198`. The sentences above are kept in the past tense because
+the shape of the obstacle is the lesson: two subsystems were unreachable not for want of code but
+because their published shape did not match the contract that would consume them, and nothing
+anywhere failed to say so.
+
+The precondition it named has been paid. M8's central criterion — spans for run start and end, every
+tool call, every HITL pause and resume, and token usage — measured **0 of 4** on the morning of
+2026-08-20 and **4 of 4** by that afternoon
+(`packages/theo/src/server/agent/observe-agent-run.ts`). Two caveats travel with that number and are
+not footnotes: the token attributes were initially read from a shape the producer never emits and had
+to be re-fixed, and the HITL pause span still cannot correlate its resume
+(usetheokit/theokit#361), so it records that it could not rather than reporting a duration it did
+not measure.
 
 It is tracked as items in [`BACKLOG.md`](BACKLOG.md), not as a milestone, because it is repair
 spread across surfaces rather than a surface of its own. Wave 1 criteria that depend on a wired
@@ -216,7 +227,7 @@ not itself a dependency — two milestones in the same wave may run in either or
 
 **Definition of done (all must hold):**
 
-- [ ] a request carrying a W3C `traceparent` produces spans continuing that trace id — no `randomUUID()` is minted where a parent context exists (`packages/theo/src/cli/commands/start/request-handler.ts:216`, `packages/theo/src/vite-plugin/agent-middleware.ts:122,199`)
+- [ ] a request carrying a W3C `traceparent` produces spans continuing that trace id — no `randomUUID()` is minted where a parent context exists. **Half done, measured 2026-08-20:** the production start path now resolves the trace from the header (`packages/theo/src/cli/commands/start/request-handler.ts:233`) and the `randomUUID()` this criterion was written against is gone from that file. `packages/theo/src/vite-plugin/agent-middleware.ts:122,199` still mints one, so the dev agent path still starts a new trace
 - [ ] a run emits spans for run start and end, every tool call, every HITL pause and resume, and token usage, read back from an exported trace against a published build
 - [ ] the exported signal is produced by a production caller, not only by a test
 - [ ] Applies to: Web, Tauri, TUI — each listed target is exercised in acceptance, not merely declared
