@@ -27,6 +27,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **`build --target static` produces pages again instead of a redirect loop.** Every page of an SSR
+  project was emitted as `<meta http-equiv="refresh" content="0; url=/">`, and `/index.html`
+  refreshed to itself. The static adapter still typed the SSR entry's `render` as returning a string;
+  the generator has returned `{ html, hydrationData }` for some time, and the other two callers were
+  updated while this one was not — so the render branch was dead and control fell through to the
+  redirect fallback. The rendered markup and the hydration data now reach the exported document.
+  (usetheokit/theokit#362)
+
 - **The build error that refuses a policy-less route now names an import that resolves.** It told the
   author to call `requireOwner(...)`, and no package entry point exported it — a gate that fails a
   build and names an unreachable remedy. `requireOwner` and the policy types are exported from
