@@ -165,8 +165,25 @@ said for the 3x, and it is worth nothing until usetheokit/theokit#361, #380, #38
 close. The measurement, both diffs, the collector payloads and seven declared judgements are in
 [J9's criteria file](journeys/j09-observability.md).
 
-**Four journeys measured, two ties, one unresolved and one metric sweep — and the framework has not
-won a journey.** The goal states "win all ten by a margin outside noise". Four of ten are in, and the
+**J6 has both sides now, and it is the first journey run end to end without a live model on either
+side — a tie on cost, and a criterion lost to a defect only a run could find.** Measured 2026-08-20.
+The three countable metrics are the narrowest set this programme has produced: files 1 against 1,
+glue lines 10 against **9**, concepts 5 against 5 — 1.0x, 1.11x and 1.0x, with TheoKit the worse side
+on the only metric that is not level. Both sides get the retry loop from a primitive they did not
+write (`Retry.create` on ours, `p-retry` on theirs), which refutes this journey's own premise that
+neither side has one, and produces the tie it predicted for a different reason. The criteria go 4 of
+5 against 5 of 5. Retry itself works on our side, measured rather than read — transient failures
+retried with strictly increasing jittered delays, a permanent failure not retried, a custom error
+type honoured by the shipped predicate with nothing configured. What fails is criterion 2's second
+half: **a tool that throws — including one that throws after exhausting every retry — reaches the
+caller as a successful tool result on a run that ends `done`**, because the SDK's `exitCode: 1` is
+discarded and `isError` is hardcoded `false` (usetheokit/theokit#388). That is the fourth instance in
+one day of abnormal termination reported as normal, after #379, #384 and #382. The measurement, both
+published diffs, the eleven declared judgements, the local-model instrument and the wire payloads
+from both sides are in [J6's criteria file](journeys/j06-retry.md).
+
+**Five journeys measured, three ties, one unresolved and one metric sweep — and the framework has not
+won a journey.** The goal states "win all ten by a margin outside noise". Five of ten are in, and the
 two that produced the largest margins are the two that most clearly did not win. J5's re-measurement
 could not change that sentence because shipping the missing capability moved a criterion, not a
 margin. J3 and J9 could not change it for opposite reasons: J3's margins price six lines whose
@@ -204,3 +221,5 @@ Reporting a partial run as the benchmark is forbidden. Ten journeys or a stated 
 - Blockers named above: #347 (wiring), #350 (build), GHSA-g94h-459g-rjhj (HITL authorization)
 - Defects J3's measurement found and filed: #382 (the deploy shim buffers a stream whole), #383 (the
   agent SSE response sends no anti-buffering headers), #384 (a dropped run settles as `done`)
+- The defect J6's measurement found and filed: #388 (a tool that throws reaches the caller as
+  `isError: false` on a `done` run)
