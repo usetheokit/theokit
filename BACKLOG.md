@@ -150,7 +150,7 @@ domain: theokit
 repo: packages/theo
 suggested_mode: review
 source: discover-review
-evidence: usetheokit/theokit#347 — `initCacheEngine` has zero callers; the cache's `opts.defaults` is destructured and dropped; `createObservabilityPlugin` and `resolveAdapter` appear only in tests; `trackAgentRun` appears only in comments; `csrf-multi-header` is implemented and never exported; `action-encryption` is exercised only by its own test
+evidence: usetheokit/theokit#347 — `initCacheEngine` has zero production callers; the cache's `defaults` never reaches the engine; `createObservabilityPlugin` and the observability `resolveAdapter` appear only in tests; `trackAgentRun` has no production caller; `csrf-multi-header` is implemented and never exported; `action-encryption` is exercised only by its own test. Corrected 2026-08-20: the original wording said "`resolveAdapter` appears only in tests", which named two homonyms — the deploy registry's `resolveAdapter` (`packages/theo/src/adapters/registry.ts:41`) IS wired and dispatches `build --target` (`packages/theo/src/cli/commands/build.ts:222`); only the observability one is orphaned. It also said `trackAgentRun` "appears only in comments" when it has a unit test and a build assertion — the true claim is that it has no production caller
 why_now: this is the Wave 0.5 pattern — subsystems built, tested and never connected. It is the cheapest work available (the code exists) and it gates the rest: with observability unwired, the agent-axis benchmark has no instrument
 status: triaged
 dod:

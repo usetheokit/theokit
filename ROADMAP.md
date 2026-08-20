@@ -64,15 +64,35 @@ fine corrections (navigation-prefetching, route-conventions).
 ## Wave 0.5 — wire what exists, first
 
 The re-measurement found a pattern rather than a gap: **subsystems built, tested, and never
-connected.** `initCacheEngine` has zero callers; the cache's `opts.defaults` is destructured and
-dropped; `createObservabilityPlugin` and `resolveAdapter` appear only in tests; `trackAgentRun`
-appears only in comments; `csrf-multi-header` is implemented and never exported; `action-encryption`
-is exercised only by its own test. The repository already records the shape: *"1,715 LOC of
-observability and cost … none of it was reachable"*.
+connected.** `initCacheEngine` has zero production callers; the cache's `defaults` never reaches the
+engine; `createObservabilityPlugin` and the observability `resolveAdapter` appear only in tests;
+`trackAgentRun` has no production caller; `csrf-multi-header` is implemented and never exported;
+`action-encryption` is exercised only by its own test. The repository already records the shape:
+*"1,715 LOC of observability and cost … none of it was reachable"*.
 
-This is the cheapest work in the programme — the code exists and is merely disconnected — and it is
-a **precondition for measuring anything else**: with observability unwired, the agent-axis benchmark
-has no instrument.
+**Two corrections to that sentence, measured 2026-08-20** — recorded rather than edited away,
+because the first one would have destroyed working code:
+
+- *"`resolveAdapter` appears only in tests"* named two different symbols. The **deploy** registry's
+  `resolveAdapter` (`packages/theo/src/adapters/registry.ts:41`) is wired and is how `build --target`
+  dispatches (`packages/theo/src/cli/commands/build.ts:222`); deleting it as dead code would break
+  every deploy target. Only the **observability** one
+  (`packages/theo/src/server/observability/adapter-registry.ts:26`) is orphaned.
+- *"`trackAgentRun` appears only in comments"* understated it: it has a unit test and a build
+  assertion, so the code runs. What it has is no production caller — which is the claim that matters
+  and the one the criterion should grade.
+
+Wiring is cheaper than building, but it is **not** the trivial work the first reading suggested. Two
+of the subsystems cannot be wired as they stand: `createObservabilityPlugin` returns
+`{ name, onRequest, onResponse, onError }` while the plugin loader requires `{ name, register }` and
+throws `InvalidPluginShapeError` otherwise (`packages/theo/src/server/plugins/load-plugins.ts:20`),
+and the `observability` key the adapter registry documents as its first configuration source does
+not exist in the config schema at all. Each item names its own blockers.
+
+It is still a **precondition for measuring anything else**: with observability unwired, the
+agent-axis benchmark has no instrument. M8's central criterion — spans for run start and end, every
+tool call, every HITL pause and resume, and token usage — measured **0 of 4** on 2026-08-20. Exactly
+one production file calls `startSpan`, and nothing calls that file.
 
 It is tracked as items in [`BACKLOG.md`](BACKLOG.md), not as a milestone, because it is repair
 spread across surfaces rather than a surface of its own. Wave 1 criteria that depend on a wired
