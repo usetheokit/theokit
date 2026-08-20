@@ -245,6 +245,19 @@ function idsOf(chunks: WireChunk[], type: string): string[] {
     .map((c) => (c as unknown as { toolCallId: string }).toolCallId)
 }
 
+/**
+ * The ids the wire reported a RESULT under, whichever way the call ended.
+ *
+ * usetheokit/theokit#388 split the result chunk in two: a call the SDK reports with a non-zero exit
+ * code now emits `tool-output-error` instead of `tool-output-available`. A denial is exactly that —
+ * `vetoFromPluginPreHook` completes the call with exit code 126 — so the denied path below moved
+ * from one chunk type to the other. The claim THIS file makes is about identity, not about which
+ * chunk carries it, so it reads both and keeps asserting the thing it was written to assert.
+ */
+function resultIds(chunks: WireChunk[]): string[] {
+  return [...idsOf(chunks, 'tool-output-available'), ...idsOf(chunks, 'tool-output-error')]
+}
+
 describe('theokit#361 a gated tool call is one call on the wire', () => {
   beforeEach(() => {
     h.beforeDispatchMs = 0
@@ -307,9 +320,11 @@ describe('theokit#361 a gated tool call is one call on the wire', () => {
 
     const announced = idsOf(chunks, 'tool-input-available')
     expect(announced).toHaveLength(1)
-    expect(idsOf(chunks, 'tool-output-available')).toEqual(announced)
-    const output = chunks.find((c) => c.type === 'tool-output-available')
-    expect(String((output as unknown as { output: unknown }).output)).toContain(
+    expect(resultIds(chunks)).toEqual(announced)
+    // #388 — and the denial is reported as a failure, not as the tool's output: the SDK completes a
+    // vetoed call with exit code 126, and a call a human refused never produced anything to show.
+    const output = chunks.find((c) => c.type === 'tool-output-error')
+    expect(String((output as unknown as { errorText: unknown }).errorText)).toContain(
       'denied by human approver',
     )
   })

@@ -26,7 +26,12 @@ import { type SdkMessage } from './event-translator.js'
 import { buildModelSelection } from './model-selection.js'
 import { assembleM8CreateOptions, realUsageDone } from './sdk-adapter-create-options.js'
 import { sdkErrorEvent } from './sdk-error.js'
-import { createToolSeen, type SdkTimelineEvent, translateTimelineEvent } from './sdk-timeline.js'
+import {
+  createToolSeen,
+  flushPendingToolResults,
+  type SdkTimelineEvent,
+  translateTimelineEvent,
+} from './sdk-timeline.js'
 import { extractThinkTagStream } from './think-tag-extractor.js'
 import { stripToolDialectStream } from './tool-dialect-stripper.js'
 
@@ -587,8 +592,8 @@ async function* streamSdkAgent(
         events: () => AsyncGenerator<SdkTimelineEvent>
       }
       const seen = createToolSeen()
-      for await (const ev of run.events()) {
-        for (const event of translateTimelineEvent(ev, runId, seen)) {
+      const emit = function* (events: StreamEvent[]): Generator<StreamEvent> {
+        for (const event of events) {
           if (event.type === 'error') state.sawError = true
           // #142 — the SDK's `done` stays suppressed here, on the promise that the tail block below
           // emits the terminal frame (a real-usage `done`, or an `error` when the turn failed).
@@ -597,6 +602,13 @@ async function* streamSdkAgent(
           yield event
         }
       }
+      for await (const ev of run.events()) {
+        yield* emit(translateTimelineEvent(ev, runId, seen))
+      }
+      // #388 — a tool result held for a second report the run never sent still belongs on the wire.
+      // Without this, a turn whose last act was a tool call would drop it: the hold is released by
+      // the next timeline event, and a run that ends has none.
+      yield* emit(flushPendingToolResults(seen))
     }
     for await (const event of applyTextTransforms(timeline(), {
       parseThinkTags,

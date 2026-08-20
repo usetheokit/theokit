@@ -52,6 +52,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   (`code: 'AGENT_STREAM_INTERRUPTED'`, `isRetryable: true`), the text already received stays on
   screen, and the truncated turn is not written into history as finished. A stream that ends on its
   terminal frame is unchanged, down to the snapshot's fields. (usetheokit/theokit#384)
+- **A tool that failed reaches the caller as a tool that failed.** A tool whose handler threw — and a
+  tool that threw again on every retry until the retries ran out — crossed the wire as
+  `tool-output-available`, the SUCCESS part, carrying the error message in the field a UI renders as
+  the tool's answer, on a run that ended in an ordinary `done`. Nothing distinguished it from a call
+  that worked, so a caller watching for a failure never fired and a UI printed the error as the
+  result. The SDK reports the failure as an exit code on the tool result; the framework hardcoded
+  `isError: false` at both translation sites and dropped the only report that carried the code as a
+  duplicate. The exit code now travels, and a failed call reaches the wire as `tool-output-error`
+  with the message in `errorText`. This includes a call refused by a human approver or blocked by a
+  hook, which the SDK also completes with a non-zero code. A call that succeeded is unchanged, chunk
+  for chunk, and still reported exactly once. (usetheokit/theokit#388)
 
 ### Changed
 
