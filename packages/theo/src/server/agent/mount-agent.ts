@@ -16,6 +16,7 @@ import {
   type RoutePolicy,
   type RouteSubject,
 } from '../../core/contracts/route-policy.js'
+import { extractW3CTraceId } from '../http/trace-context.js'
 import { getObservabilityAdapter } from '../observability-bootstrap.js'
 import { validateCsrfRequest, type CsrfMode } from '../security/csrf.js'
 
@@ -227,7 +228,16 @@ export async function mountAgent(
   // pays nothing (usetheokit/theokit#353).
   const adapter = getObservabilityAdapter()
   return durableUiMessageStreamResponse(
-    adapter === undefined ? stream : observeAgentRun(stream, adapter, { agent: source }),
+    adapter === undefined
+      ? stream
+      : observeAgentRun(stream, adapter, {
+          agent: source,
+          // M8, criterion 1 — a request carrying a `traceparent` produces spans
+          // that continue THAT trace. Absent or malformed, the run opens its
+          // own; what it must never do is export the request's `x-request-id`
+          // or a dashed UUID as a trace id.
+          traceId: extractW3CTraceId(request),
+        }),
     { runId, cache: getRunEventCache() },
   )
 }

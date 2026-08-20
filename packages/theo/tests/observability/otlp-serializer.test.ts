@@ -6,6 +6,8 @@ describe('T30.3 — OTLP serializer', () => {
   it('produces valid ExportTraceServiceRequest JSON', () => {
     const spans: SpanData[] = [
       {
+        traceId: '0123456789abcdef0123456789abcdef',
+        spanId: 'a1b2c3d4e5f60718',
         name: 'http.request',
         attributes: { method: 'GET', path: '/api/test' },
         status: 'ok',
@@ -29,6 +31,8 @@ describe('T30.3 — OTLP serializer', () => {
   it('serializes attributes with correct types', () => {
     const spans: SpanData[] = [
       {
+        traceId: '0123456789abcdef0123456789abcdef',
+        spanId: 'a1b2c3d4e5f60718',
         name: 'test',
         attributes: { method: 'POST', status: 201, cached: true },
         status: 'ok',
@@ -54,6 +58,8 @@ describe('T30.3 — OTLP serializer', () => {
   it('error status maps to code 2', () => {
     const spans: SpanData[] = [
       {
+        traceId: '0123456789abcdef0123456789abcdef',
+        spanId: 'a1b2c3d4e5f60718',
         name: 'test',
         attributes: {},
         status: 'error',

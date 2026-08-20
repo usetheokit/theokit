@@ -31,17 +31,25 @@ interface RecordedSpan {
   status?: string
   message?: string
   ended: boolean
+  /**
+   * The third argument of `startSpan`. Recorded because the recorder used to
+   * drop it, and a recorder that drops an argument cannot disagree with code
+   * that never passes it — which is how a run emitted spans belonging to no
+   * common trace while nine tests stayed green (usetheokit/theokit#368).
+   */
+  context?: { traceId: string; spanId?: string; parentSpanId?: string }
 }
 
 function createRecorder() {
   const spans: RecordedSpan[] = []
   const adapter: ObservabilityAdapter = {
     name: 'recorder',
-    startSpan(name, attrs) {
+    startSpan(name, attrs, context) {
       const span: RecordedSpan = {
         name,
         attrs: { ...attrs } as Record<string, unknown>,
         ended: false,
+        context,
       }
       spans.push(span)
       const handle: SpanHandle = {
@@ -281,5 +289,68 @@ describe('agent run observability (M8)', () => {
     for await (const _ of stream) break
 
     expect(byName('agent.run')[0].ended).toBe(true)
+  })
+})
+
+describe('a run is one trace (usetheokit/theokit#368)', () => {
+  const HEX32 = /^[0-9a-f]{32}$/
+  const HEX16 = /^[0-9a-f]{16}$/
+
+  const toolRun = () =>
+    chunks(
+      { type: 'start' },
+      { type: 'tool-input-available', toolCallId: 'c1', toolName: 'lookup' },
+      { type: 'tool-approval-request', toolCallId: 'c1', approvalId: 'a1' },
+      { type: 'tool-output-available', toolCallId: 'c1' },
+      { type: 'finish' },
+    )
+
+  it('test_every_span_of_a_run_shares_one_trace_id', async () => {
+    const { adapter, spans } = createRecorder()
+
+    await drain(observeAgentRun(toolRun(), adapter, { agent: 'chat' }))
+
+    expect(spans.length).toBeGreaterThan(1)
+    const traces = new Set(spans.map((s) => s.context?.traceId))
+    expect(traces.size).toBe(1)
+    expect([...traces][0]).toMatch(HEX32)
+  })
+
+  it('test_tool_and_hitl_spans_hang_under_the_run_span', async () => {
+    const { adapter, spans, byName } = createRecorder()
+
+    await drain(observeAgentRun(toolRun(), adapter, { agent: 'chat' }))
+
+    const runSpanId = byName('agent.run')[0].context?.spanId
+    expect(runSpanId).toMatch(HEX16)
+
+    // The run is the root; everything else names it. A flat list of siblings
+    // renders at a collector as a run with no tool calls in it.
+    for (const span of spans.filter((s) => s.name !== 'agent.run')) {
+      expect(span.context?.parentSpanId).toBe(runSpanId)
+    }
+    expect(byName('agent.run')[0].context?.parentSpanId).toBeUndefined()
+  })
+
+  it('test_two_runs_do_not_share_a_trace', async () => {
+    const first = createRecorder()
+    const second = createRecorder()
+
+    await drain(observeAgentRun(toolRun(), first.adapter, { agent: 'chat' }))
+    await drain(observeAgentRun(toolRun(), second.adapter, { agent: 'chat' }))
+
+    expect(first.spans[0].context?.traceId).not.toBe(second.spans[0].context?.traceId)
+  })
+
+  it('test_a_caller_with_a_trace_keeps_it_so_the_request_and_the_run_are_one_thing', async () => {
+    const { adapter, spans } = createRecorder()
+    const incoming = 'abcdefabcdefabcdefabcdefabcdefab'
+
+    await drain(observeAgentRun(toolRun(), adapter, { agent: 'chat', traceId: incoming }))
+
+    // An agent invoked from an HTTP request belongs to that request's trace.
+    // Minting a new one here would file the cause and the effect as two
+    // unrelated things that happened at the same time.
+    expect(new Set(spans.map((s) => s.context?.traceId))).toEqual(new Set([incoming]))
   })
 })

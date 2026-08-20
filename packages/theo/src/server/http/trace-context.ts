@@ -124,6 +124,23 @@ export function extractTraceId(req: IncomingMessage): string {
  * is treated as a single string anyway (both headers are conventionally
  * single-valued).
  */
+/**
+ * The request's W3C trace id, or `undefined` when the caller supplied none.
+ *
+ * Deliberately narrower than {@link extractTraceIdFromRequest}, which always
+ * returns something and may return an `x-request-id` or a generated UUID. Those
+ * are fine as a log correlation key and are NOT trace ids: OTLP wants 32 hex
+ * characters, and a dashed UUID exported as a `traceId` is a malformed span.
+ *
+ * So a span-emitting caller asks this question instead — "is there a real trace
+ * to join?" — and mints its own when the answer is no (usetheokit/theokit#368).
+ */
+export function extractW3CTraceId(request: Request): string | undefined {
+  const traceparent = request.headers.get(TRACE_PARENT_HEADER)
+  if (traceparent === null) return undefined
+  return parseTraceparent(traceparent) ?? undefined
+}
+
 export function extractTraceIdFromRequest(request: Request): string {
   const requestId = request.headers.get(REQUEST_ID_HEADER)
   return resolveTraceIdFromHeaders(

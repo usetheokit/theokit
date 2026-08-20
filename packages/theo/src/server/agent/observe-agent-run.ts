@@ -27,12 +27,24 @@
  * breaks the client in order to instrument the server.
  */
 import type { ObservabilityAdapter, SpanHandle } from '../observability/adapters/types.js'
+import { newSpanId, newTraceId } from '../observability/trace-context-propagation.js'
 
 export interface AgentRunSpanContext {
   /** The agent being run, as the attribute an operator will group by. */
   agent: string
   /** Optional session/thread id, when the caller has one. */
   sessionId?: string
+  /**
+   * The trace this run belongs to, when the caller already has one — the
+   * `traceparent` of the request that started it, typically. Absent means the
+   * run opens a trace of its own, which is correct for a run nothing else
+   * triggered (a cron, a terminal session).
+   *
+   * Without this the run would always be a root, and an agent invoked from an
+   * HTTP request would sit in a trace of its own next to the request that caused
+   * it — two traces for one thing that happened.
+   */
+  traceId?: string
 }
 
 /** The chunk fields this reads. Deliberately structural: the wire schema is owned elsewhere. */
@@ -89,6 +101,19 @@ interface RunSpans {
   pauses: Map<string, SpanHandle>
   toolNames: Map<string, string>
   agent: string
+  /**
+   * The trace every span of this run belongs to, and the run span they hang
+   * under. Held here because the `SpanHandle` an adapter returns exposes no
+   * identity — parentage is decided by the code that opens both spans, which is
+   * this file, and passed in (usetheokit/theokit#368).
+   */
+  traceId: string
+  runSpanId: string
+}
+
+/** Where a child span of this run sits: same trace, under the run span. */
+function childOf(state: RunSpans): { traceId: string; parentSpanId: string } {
+  return { traceId: state.traceId, parentSpanId: state.runSpanId }
 }
 
 function openToolSpan(state: RunSpans, adapter: ObservabilityAdapter, chunk: ObservedChunk): void {
@@ -96,7 +121,10 @@ function openToolSpan(state: RunSpans, adapter: ObservabilityAdapter, chunk: Obs
   if (id === undefined) return
   const tool = chunk.toolName ?? 'unknown'
   state.toolNames.set(id, tool)
-  state.tools.set(id, adapter.startSpan('agent.tool', { agent: state.agent, tool, toolCallId: id }))
+  state.tools.set(
+    id,
+    adapter.startSpan('agent.tool', { agent: state.agent, tool, toolCallId: id }, childOf(state)),
+  )
 }
 
 function openPauseSpan(state: RunSpans, adapter: ObservabilityAdapter, chunk: ObservedChunk): void {
@@ -105,12 +133,16 @@ function openPauseSpan(state: RunSpans, adapter: ObservabilityAdapter, chunk: Ob
   if (id === undefined || approvalId === undefined) return
   state.pauses.set(
     id,
-    adapter.startSpan('agent.hitl', {
-      agent: state.agent,
-      tool: state.toolNames.get(id) ?? 'unknown',
-      approvalId,
-      toolCallId: id,
-    }),
+    adapter.startSpan(
+      'agent.hitl',
+      {
+        agent: state.agent,
+        tool: state.toolNames.get(id) ?? 'unknown',
+        approvalId,
+        toolCallId: id,
+      },
+      childOf(state),
+    ),
   )
 }
 
@@ -139,12 +171,19 @@ export async function* observeAgentRun<T>(
   const runAttributes: Record<string, string> = { agent: context.agent }
   if (context.sessionId !== undefined) runAttributes.sessionId = context.sessionId
 
+  // Minted before the run span so the id can be pinned and then named as parent
+  // by every tool and pause span below.
+  const traceId = context.traceId ?? newTraceId()
+  const runSpanId = newSpanId()
+
   const state: RunSpans = {
-    run: adapter.startSpan('agent.run', runAttributes),
+    run: adapter.startSpan('agent.run', runAttributes, { traceId, spanId: runSpanId }),
     tools: new Map(),
     pauses: new Map(),
     toolNames: new Map(),
     agent: context.agent,
+    traceId,
+    runSpanId,
   }
   let settled = false
 

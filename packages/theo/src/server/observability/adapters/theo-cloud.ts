@@ -10,7 +10,7 @@
 import { serializeSpansToOtlp } from '../otlp-serializer.js'
 import { SpanImpl, NoopSpan, type SpanData } from '../span.js'
 
-import type { ObservabilityAdapter, SpanHandle, SpanAttributes } from './types.js'
+import type { ObservabilityAdapter, SpanHandle, SpanAttributes, SpanContextInput } from './types.js'
 
 interface TheoCloudAdapterOptions {
   /** TheoCloud ingest endpoint URL. */
@@ -73,9 +73,9 @@ export class TheoCloudObservabilityAdapter implements ObservabilityAdapter {
     return !this.flushTimer.hasRef()
   }
 
-  startSpan(name: string, attributes?: SpanAttributes): SpanHandle {
+  startSpan(name: string, attributes?: SpanAttributes, context?: SpanContextInput): SpanHandle {
     if (this.isShutdown) return new NoopSpan()
-    const span = new SpanImpl(name, attributes)
+    const span = new SpanImpl(name, attributes, context)
     return {
       setAttribute: (k, v) => {
         span.setAttribute(k, v)

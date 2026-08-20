@@ -10,6 +10,8 @@ import type { SpanData } from './span.js'
 interface OtlpSpan {
   traceId: string
   spanId: string
+  /** Omitted on the root span — OTLP reads an absent parent as "this is the root". */
+  parentSpanId?: string
   name: string
   kind: number
   startTimeUnixNano: string
@@ -62,8 +64,12 @@ function paraValorOtlp(value: string | number | boolean): OtlpAttributeValue {
 /** Convert SpanData[] to OTLP JSON bytes (Uint8Array). */
 export function serializeSpansToOtlp(spans: SpanData[], serviceName = 'theokit'): Uint8Array {
   const otlpSpans: OtlpSpan[] = spans.map((s) => ({
-    traceId: randomHex(32),
-    spanId: randomHex(16),
+    // #368 — read, never minted. This used to call `randomHex` for both, which
+    // gave every span a trace of its own and made a multi-span run unreadable at
+    // the collector. The ids now arrive on the span, decided when it started.
+    traceId: s.traceId,
+    spanId: s.spanId,
+    ...(s.parentSpanId === undefined ? {} : { parentSpanId: s.parentSpanId }),
     name: s.name,
     kind: 2, // SPAN_KIND_SERVER
     startTimeUnixNano: String(s.startTimeMs * 1_000_000),
@@ -89,10 +95,4 @@ export function serializeSpansToOtlp(spans: SpanData[], serviceName = 'theokit')
   }
 
   return new TextEncoder().encode(JSON.stringify(request))
-}
-
-function randomHex(length: number): string {
-  const bytes = new Uint8Array(length / 2)
-  globalThis.crypto.getRandomValues(bytes)
-  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
 }

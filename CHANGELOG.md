@@ -34,6 +34,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **An agent run reaches the collector as one trace instead of one trace per span.** Spans carried no
+  identity, so the OTLP serializer minted a `traceId` for each one at export time. Every export was
+  well-formed and every span was an island: a run with three tool calls arrived as five unrelated
+  single-span traces, and "read the run back from an exported trace" had nothing to read. A span now
+  decides its trace and its own id when it starts, `agent.tool` and `agent.hitl` hang under the
+  `agent.run` that opened them, and a request carrying a `traceparent` is continued rather than
+  replaced — so the request that invoked an agent and the run it caused are one thing that happened,
+  not two. `startSpan` takes an optional third argument for callers that open several spans for one
+  operation; existing callers and custom adapters are unaffected. (usetheokit/theokit#368)
 - **The release workflow hands npm the credential under the name it looks for.** `changesets/action`
   reads an environment variable called `NPM_TOKEN`; the workflow exported the secret only as
   `NODE_AUTH_TOKEN`, so the action reported `No NPM_TOKEN found` and fell back to OIDC trusted
