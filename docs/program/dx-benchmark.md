@@ -127,11 +127,37 @@ for a narrower reason: the declaration now travels, and the step-limit outcome s
 back to the caller (usetheokit/theokit#379). The re-measurement, the re-run judgements and the before-and-after table are in
 [J5's criteria file](journeys/j05-multi-step.md).
 
-**Two journeys measured, two ties, and neither goes our way on a single metric by a margin outside
-noise.** The goal states "win all ten by a margin outside noise". Two of ten are in, and the
-framework has not yet won one - which is the kind of early number this protocol exists to make
-visible rather than to absorb. J5's re-measurement did not change that sentence, and it is worth
-saying why it could not: shipping the missing capability moved a criterion, not a margin.
+**J3 has both sides now, and it is the first journey where every countable metric goes our way by a
+margin outside the bar - and it is still not a win, for a reason worth stating plainly: the numbers
+price an implementation that was run and does not work.** Measured 2026-08-20. The journey splits in
+two. On criteria 1 to 3 - tokens arriving progressively - both sides are **zero on all three
+metrics**: neither developer writes anything, because both shipped starting points already stream,
+and § The four metrics excludes untouched scaffold output on both sides. On criterion 5 - reconnect
+after a mid-run drop - TheoKit touches 1 file, 6 glue lines and 3 concepts against Next.js's 5, 53
+and 12: 5x, 8.8x and 4x. Then the criterion was exercised, and our six lines never fire. A mid-run
+disconnect settles the client store in `'done'`, not `'error'`, so the wired trigger is never
+reached (usetheokit/theokit#384), and the run id lives only in memory, so a reload cannot reconnect
+at all. J5 already fixed the rule this falls under - "the honest entry for them is 'no path', never
+'0 lines'" - and a cost paid for an unsatisfied criterion is the same kind of entry. The Next.js
+version was exercised against a live Redis and works.
+
+**J3's criteria go the other way, 5-3 on what each side satisfies, and criterion 4 is the sharp
+one.** Ours passes criteria 1 to 3 on the served path, measured with a client-side chunk timer: 8
+text chunks 120 ms apart, first text at 0.26 of the run. Behind the deploy shim the same run arrives
+as **one chunk at the instant it completes** (ratio 0.999) - the buffered failure mode criterion 1
+was written to catch, now reproduced rather than inferred (usetheokit/theokit#382). And beneath that
+sits a deeper failure of the same criterion: no adapter serves an agent at all, in any of the
+fourteen files under `packages/theo/src/adapters/`. The full measurement, both published diffs, the
+six declared judgements, the instrument, and the four confirmed AI SDK version facts are in
+[J3's criteria file](journeys/j03-streaming.md).
+
+**Three journeys measured, two ties and one unresolved, and the framework has still not won a single
+metric on a criterion both sides satisfy.** The goal states "win all ten by a margin outside noise".
+Three of ten are in. J5's re-measurement did not change that sentence, and it is worth saying why it
+could not: shipping the missing capability moved a criterion, not a margin. J3 did not change it
+either, and its reason is sharper - the framework produced its largest margins on this journey, and
+they measure the cost of code that does not do the thing the criterion grades. A cheap
+implementation that fails is not a cheaper way to succeed.
 
 **One thing this re-measurement should not be read as.** J9 being unblocked means it can be scored;
 it does not mean it will score well. A journey that is newly possible and a journey that is
@@ -161,3 +187,5 @@ Reporting a partial run as the benchmark is forbidden. Ten journeys or a stated 
 - Parity milestones that must land first: `ROADMAP.md` Wave 0.5 and Wave 1
 - The decision J2 and J8 wait on: `docs/adr/0001-authorization-is-transport-independent.md`
 - Blockers named above: #347 (wiring), #350 (build), GHSA-g94h-459g-rjhj (HITL authorization)
+- Defects J3's measurement found and filed: #382 (the deploy shim buffers a stream whole), #383 (the
+  agent SSE response sends no anti-buffering headers), #384 (a dropped run settles as `done`)
