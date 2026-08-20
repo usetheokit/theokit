@@ -36,6 +36,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **Exported telemetry actually leaves the process.** The TheoCloud exporter accepted a
+  `flushIntervalMs` option, defaulted it, and read it nowhere — there was no timer in the file. Its
+  only drain was `shutdown()`, which nothing called, so a long-running server accumulated spans and
+  exported none of them. It now flushes on the interval it advertises, with a timer that does not
+  hold the process open; `theo start` flushes it on SIGTERM after evicting agents and draining
+  storage, so the spans covering the shutdown itself are in the batch that leaves. The pending
+  buffer is also bounded — a collector that is unreachable does not make the spans stop arriving —
+  and dropped spans are counted rather than lost silently. (usetheokit/theokit#353)
+
 - **An agent run now emits telemetry: a span for the run, one per tool call, one per
   human-in-the-loop pause, and the token usage.** These are the four signals the observability
   milestone asks for, and all four measured absent — no production file created an agent span at
