@@ -209,6 +209,21 @@ Deny (usetheokit/theokit#393) — the fifth instance of the family after #379, #
 measurement, both published diffs, the seven declared judgements, the confirmed AI SDK version facts
 and the instrument are in [J2's criteria file](journeys/j02-hitl.md).
 
+**J2 was re-measured the same day, because the defect that priced the loss was fixed — and it is
+still lost.** The paragraph above stands as the record of what was true when it was written; hours
+after it, `4411a59be` gave the client store `pendingApprovals` and put the paused tool in
+`state: 'approval-requested'` with its id, closing usetheokit/theokit#392 and #394. Re-run against
+that framework the counted client stops polling: **glue lines 62 → 42** and **concepts 7 → 5**, so
+the client half of the diff is now 26 lines against the AI SDK's 27 — one line shorter. TheoKit also
+satisfies **four** of five criteria instead of three, because the approval the surface renders now
+names the tool, its resolved input and the question. **Files touched did not move — 4 against 2, the
+2x bar — so metric 1 is a loss for the second time and the journey is not won.** Unlike J5, gaining
+the capability cost nothing here: the missing thing was not a declaration but a discovery, and its
+whole price was paid by the application. Criterion 4 still fails to the tool's side effect against
+GHSA-g94h-459g-rjhj, unchanged, and the re-measurement corrects one arithmetic slip in the first
+one's judgement table. The re-run counts, the re-graded criteria, the two new judgements and the
+before-and-after table are in [J2's criteria file](journeys/j02-hitl.md).
+
 **J4 has both sides now, it is a tie, and it is the first journey where every criterion is satisfied
 on both sides — measured 2026-08-20, in a real browser, against a local model on both stacks.** Files
 4 against 5, glue lines 59 against 74, concepts 13 against 13 — 1.25x, 1.25x and 1.0x, every one
