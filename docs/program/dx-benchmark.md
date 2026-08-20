@@ -88,9 +88,11 @@ The benchmark cannot run credibly yet, and pretending otherwise would waste it:
   change under the measurement. It has not: the endpoint still authenticates nobody, so criterion 4
   was graded as the failure it is rather than waited out, and the end-to-end reproduction went to the
   advisory rather than to a public issue. **J2 is measured and lost** — see below.
-- **J10 (deploy) depends on #350** — the build does not survive its own parallel invocation. The fix
-  is merged into `develop` and the issue is still open, so this line stays until the issue is
-  verified closed rather than until someone remembers it was fixed.
+- **J10 (deploy) depended on #350, and the hold is discharged — measured 2026-08-20.** The condition
+  this line set was a tracker query, not a memory; the query was run and **#350 is closed**
+  (`2026-08-20T12:45:57Z`). The criterion it guarded was then exercised rather than inferred: three
+  consecutive builds on each side, all producing a deployable artifact. **J10 is measured and lost**
+  — see below.
 
 So the honest order is: define the criteria for all ten now (this document plus ten criteria files),
 implement and measure J1, J3, J4, J5, J7, **J9** after Wave 0.5 wires what exists, and hold J8 until
@@ -228,8 +230,8 @@ ceremony an application should not write. The measurement, both published diffs,
 judgements, the four confirmed AI SDK version facts and the local-model instrument are in
 [J4's criteria file](journeys/j04-thread.md).
 
-**Seven journeys measured, four ties, one loss, one unresolved and one metric sweep — and the framework
-has not won a journey.** The goal states "win all ten by a margin outside noise". Seven of ten are in, and the
+**Eight journeys measured, four ties, two losses, one unresolved and one metric sweep — and the framework
+has not won a journey.** The goal states "win all ten by a margin outside noise". Eight of ten are in, and the
 two that produced the largest margins are the two that most clearly did not win. J5's re-measurement
 could not change that sentence because shipping the missing capability moved a criterion, not a
 margin. J3 and J9 could not change it for opposite reasons: J3's margins price six lines whose
@@ -239,6 +241,29 @@ less to build something short of it is a different sentence, and this document w
 J4 is the first journey to which that sentence does not apply — both sides built the thing the
 criteria describe — and it is still a tie, which is the other half of the goal and the half no
 journey has met yet.
+
+**J10 has both sides now, both were containerised and run, and it is the second journey the framework
+outright loses — on the journey its own criteria file predicted it would.** Measured 2026-08-20. The
+hold this document placed on #350 was discharged by the tracker query it demanded (#350 closed
+`2026-08-20T12:45:57Z`). Against Next.js's best target — its vendor's platform, zero files and zero
+lines by documented inference — TheoKit's only target that can serve an agent costs **3 files, 12 glue
+lines, 9 concepts**, and there is no deploy command in the framework at all. Against Next.js's
+*container*, the numbers invert to 3/3, **12 against 247** and 9 against 13; that 20.6x is the most
+fragile margin this programme has produced, and it was tested rather than argued: a 9-line Dockerfile
+of the same shape as ours was **written, built and run** on the Next.js side, and it serves — at which
+point the three metrics read 1.0x, 1.08x, 1.0x. § The Next.js side forbids the container-only
+comparison in advance, so the verdict is the loss. Criteria go **4 of 6 against 5 of 6**: both sides
+serve the agent turn, the tool call and the progressive stream from a container, and both fail
+criterion 1 for the same reason — no platform account was obtainable non-interactively on either side.
+The fifth metric goes our way, and it is the first time: a missing key at the target reaches our caller
+as `OPENAI_API_KEY is not set. Set OPENAI_API_KEY, or change the model's provider prefix`, and reaches
+theirs as `An error occurred.` with the actionable text left in a server log. **The finding is a
+seventh instance of the family, and it is the first that is a deploy**: a container built from the
+documented path starts, logs `→ http://localhost:3000`, and refuses every request, because
+`config.host` defaults to loopback — and the success line is byte-identical whether the container
+serves everyone or nobody (usetheokit/theokit#402). That default is a regression from a fix that landed
+the same day. The measurement, both published diffs, the six declared judgements and the shim,
+container and proxy runs are in [J10's criteria file](journeys/j10-deploy.md).
 
 **One thing this re-measurement should not be read as.** J9 being unblocked means it can be scored;
 it does not mean it will score well. A journey that is newly possible and a journey that is
@@ -276,6 +301,10 @@ Reporting a partial run as the benchmark is forbidden. Ten journeys or a stated 
   to obtain the id), #393 (an expired approval is reported as a human denial), #394 (the
   `tool-approval-request` chunk carries only two ids). Its criterion-4 failure is a security finding
   and went to GHSA-g94h-459g-rjhj rather than to a public issue
+- The defect J10's measurement found and filed: #402 (a container built from the documented path
+  reports a healthy start and serves nobody; `theokit start` also never reads `PORT`). J10 also
+  reproduced #401 (`registerProvider` mutates a registry the served path never reads) on a build from
+  the worktree and on an existing provider name, and posted both facts to that issue
 - The five defects J4's measurement found and filed: #395 (agent transcripts land in git), #396 (the
   pristine scaffold fails `tsc`), #397 (`create-theokit` reports a successful install as a failure),
   #398 (`.env.example` documents a variable nothing reads), #399 (a lost conversation is
