@@ -97,7 +97,11 @@ The benchmark cannot run credibly yet, and pretending otherwise would waste it:
 So the honest order is: define the criteria for all ten now (this document plus ten criteria files),
 implement and measure J1, J3, J4, J5, J7, **J9** after Wave 0.5 wires what exists, and hold J8 until
 its own blocker is named. J2's hold expired for the reason above — the authorization did not change
-under it, so waiting longer would have withheld a result rather than protected one.
+under it, so waiting longer would have withheld a result rather than protected one. **J8's hold was
+discharged on 2026-08-20, and not by the blocker clearing.** The blocker was named — the framework has
+no tenant — and holding for it would have waited on a primitive nobody is building. What its own
+criteria file said instead is that the fair comparison is hand-rolled against hand-rolled, so both
+sides were hand-rolled and both were run. **J8 is measured and lost** — see below.
 
 **J1 has both sides now, and it is a tie — measured 2026-08-20.** It is the first real contrast this
 document has, and it does not go our way: TheoKit touches *more* files than the best idiomatic
@@ -269,8 +273,8 @@ Upstash version facts — including that Vercel's own in-code answer, `@vercel/f
 for a dashboard rule that fails open and is a no-op outside production — are in
 [J7's criteria file](journeys/j07-rate-limit.md).
 
-**Eight journeys measured, three ties, two losses, one unresolved, one metric sweep and one that wins
-every countable metric without being won — and the framework has not won a journey.** The goal states "win all ten by a margin outside noise". Eight of ten are in, and the
+**Nine journeys measured, three ties, three losses, one unresolved, one metric sweep and one that wins
+every countable metric without being won — and the framework has not won a journey.** The goal states "win all ten by a margin outside noise". Nine of ten are in, and the
 three that produced the largest margins are the three that did not win. J5's re-measurement
 could not change that sentence because shipping the missing capability moved a criterion, not a
 margin. J3 and J9 could not change it for opposite reasons: J3's margins price six lines whose
@@ -306,6 +310,30 @@ serves everyone or nobody (usetheokit/theokit#402). That default is a regression
 the same day. The measurement, both published diffs, the six declared judgements and the shim,
 container and proxy runs are in [J10's criteria file](journeys/j10-deploy.md).
 
+**J8 has both sides now, and it is the third journey the framework outright loses — the first one
+where both sides satisfy every gradeable criterion and the framework loses anyway.** Measured
+2026-08-20 against published builds on both lanes, with two tenants, a signed session on each side and
+a side-effect recorder in a third process. Files 9 against 9 — level; concepts 13 against **11** —
+1.18x, inside the bar; glue lines 193 against **147**, and this journey's own counting rule fixed in
+advance that glue is scored as an **absolute gap** here, because business logic is the empty set and a
+ratio over zero is undefined. Forty-six lines is the three files ours has and theirs does not: the
+agent route, the owner map, and the approve route — all three forced, because the framework's own
+agent, thread and approval endpoints are dispatched ahead of application routes
+(`packages/theo/src/cli/commands/start/request-handler.ts:255-257`) and expose no policy seam, and
+`mountAgent` — the one function that accepts a `policy` — is exported only from a file whose header
+says it is not the public API. **ADR 0001's primitive is not in the published artifact at all**:
+`requireOwner`, `evaluateRoutePolicy`, `subjectFromContext` and `route().policy(…)` appear nowhere in
+`theokit@0.48.14`, npm `latest`. Adding them would cost six more lines here, not fewer, because a
+route policy answers "may this subject call this route" and J8 asks "which records may this subject
+see" — a question the key answers, and there is no key contract. **The criteria are 5 of 5 against 5
+of 5 and the property they protect is not**: the same published build that serves the isolated
+application returns one tenant's conversation to an unauthenticated caller, with a `200` and no log
+line — an eighth instance of the family, and the first that is a cross-tenant read. That went to a
+security advisory rather than to a public issue; the source-level version is already public as #365,
+opened by the maintainers and explicitly never exercised. The measurement, both published diffs, the
+twelve declared judgements, the four confirmed Vercel / Next.js / AI SDK version facts and the two
+injected breaks are in [J8's criteria file](journeys/j08-tenant.md).
+
 **One thing this re-measurement should not be read as.** J9 being unblocked means it can be scored;
 it does not mean it will score well. A journey that is newly possible and a journey that is
 comfortable are different claims, and the second is exactly what the benchmark exists to test rather
@@ -327,9 +355,12 @@ Reporting a partial run as the benchmark is forbidden. Ten journeys or a stated 
   [J8 tenant](journeys/j08-tenant.md) ·
   [J9 observability](journeys/j09-observability.md) ·
   [J10 deploy](journeys/j10-deploy.md)
-- J8's blocker, which § Sequencing above leaves unnamed, is measured and named in
+- J8's blocker, which § Sequencing above leaves unnamed, was measured and named in
   [its own criteria file](journeys/j08-tenant.md) — the framework has no tenant identity, so the
-  journey currently has no subject
+  journey had no subject. The hold was discharged on 2026-08-20 by building both sides by hand,
+  which is what that file said the comparison would have to be; the framework still has no tenant
+- The cross-tenant read J8's run reproduced is a security finding and lives in an advisory, not in an
+  issue; its public source-level counterpart is #365
 - The other instrument: `docs/program/northstar-app.md`
 - Parity milestones that must land first: `ROADMAP.md` Wave 0.5 and Wave 1
 - The decision J2 and J8 wait on: `docs/adr/0001-authorization-is-transport-independent.md`
