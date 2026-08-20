@@ -55,9 +55,9 @@ the two disagree, the rule wins and this one is the bug.
 
 ## Index
 
-20 items — **Open** 20 · **In flight** 0 · **Closed** 0
+23 items — **Open** 23 · **In flight** 0 · **Closed** 0
 
-### Open (20)
+### Open (23)
 
 | Item | Title | Status | Severity |
 |---|---|---|---|
@@ -81,6 +81,9 @@ the two disagree, the rule wins and this one is the bug.
 | [`B-018`](#b-018--the-cloudflare-worker-scans-disk-at-runtime-and-no-adapter-serves-an-agent----) | the Cloudflare worker scans disk at runtime, and no adapter serves an agent | `triaged` | — |
 | [`B-019`](#b-019--there-is-no-trace-the-otlp-serializer-draws-a-traceid-per-span----) | there is no trace: the OTLP serializer draws a `traceId` per span | `triaged` | — |
 | [`B-020`](#b-020--an-acceptance-record-is-evidence-nobody-outside-this-machine-can-read----) | an acceptance record is evidence nobody outside this machine can read | `triaged` | — |
+| [`B-021`](#b-021--abnormal-endings-are-reported-as-normal-ones-across-four-subsystems----) | abnormal endings are reported as normal ones, across four subsystems | `triaged` | — |
+| [`B-022`](#b-022--a-fixture-born-of-the-same-assumption-as-the-code-cannot-disagree-with-it----) | a fixture born of the same assumption as the code cannot disagree with it | `triaged` | — |
+| [`B-023`](#b-023--the-deploy-shim-buffers-a-stream-whole-across-six-of-nine-targets----) | the deploy shim buffers a stream whole, across six of nine targets | `triaged` | — |
 
 ### In flight (0)
 
@@ -402,4 +405,46 @@ dod:
   - `cycle-acceptance`'s `## Output` section names the tracked location, so the next run does not have to rediscover this
   - the arrangement does not fork into two copies that drift — the failure `B-008` and `docs/surfaces/README.md` both register for their own artifacts
 
-Next free id: **B-021**.
+## B-021 — abnormal endings are reported as normal ones, across four subsystems   [ ]
+
+domain: theokit
+repo: packages/agents
+suggested_mode: review
+source: discover-review
+evidence: four defects measured on 2026-08-20 by exercising benchmark journeys against real bytes rather than reading source. usetheokit/theokit#379 — the agent loop hit its iteration ceiling and emitted an ordinary `done`; the SDK default is 8 turns (`IterationBudget`, `maxIterations ?? 8`), so it fired for agents declaring nothing. #384 — a dropped connection settled the client at `status: 'done'`, `error: null`, answer cut mid-word. #382 — the deploy shim delivered 659 bytes as one chunk at millisecond 1123 of an 1123 ms run and reported success. #388 — an exhausted retry emitted `tool-output-available`, the success part type, carrying the error text; the SDK ships `status: "completed"` as a hardcoded literal, so the translator's `status === 'error'` branch was dead code. Recorded as `docs/adr/0002-an-abnormal-ending-is-never-reported-as-normal.md`
+why_now: three of the four were fixed on 2026-08-20 and the rule they share was written down the same day, but the ADR is Proposed and nothing enforces it. The next producer to add a terminal event has no gate telling it that absence must mean success — which is exactly how four subsystems arrived here independently. The suite could not find any of the four: in every case the code did what its author intended and the tests asserted that intention
+status: triaged
+dod:
+  - the ADR is accepted or rejected by the project owner — a Proposed rule binds nobody
+  - a gate names a terminal event that carries no way to distinguish an abnormal ending, or the ADR states in writing that this one is unmechanizable and why
+  - #382 is closed or its adapters are delisted; it is the only one of the four still open, and the only one needing a contract change rather than a field
+
+## B-022 — a fixture born of the same assumption as the code cannot disagree with it   [ ]
+
+domain: theokit
+repo: theokit
+suggested_mode: review
+source: discover-review
+evidence: five occurrences on 2026-08-20 alone. Token attributes were read from a flat object invented for the test, and the code read the same invented shape. The `observeAgentRun` recorder dropped `startSpan`'s third argument, so it could not disagree with a caller that passed none. The OTLP serializer's only numeric fixture was `201`, which happens to be an integer, so `{"intValue":"0.0031"}` shipped (usetheokit/theokit#380). Four stream fixtures ended without a terminal chunk while calling themselves clean turns. And the `ai` oracle test in `hitl-harness.test.ts` **passed because of** the defect — it read the final message, where a permanently pending approval part hung beside the completed one
+why_now: all five were found on the same day, by measurement rather than by the suite, and four of them were found only because a benchmark journey graded output bytes instead of reading source. A sixth was caught hours later by the pre-push typecheck: an inferred adapter mock whose `attrs` was required where the interface declares it optional. The rate is the finding — this is not five unrelated slips
+status: triaged
+dod:
+  - a written convention says where a fixture's shape must come from — the published `.d.ts`, the producer's own builder, a recorded payload — and it lives somewhere a reviewer will cite
+  - the mocks standing in for a published interface declare that interface, so a signature change breaks them instead of drifting past
+  - at least one existing suite is re-checked against the convention and the result is reported, pass or fail
+
+## B-023 — the deploy shim buffers a stream whole, across six of nine targets   [ ]
+
+domain: theokit
+repo: packages/theo
+suggested_mode: bug
+source: discover-review
+evidence: usetheokit/theokit#382. `createWebShim` accumulates every write into an array and concatenates once at `end()` (`packages/theo/src/adapters/web-shim.ts:157,190,194`), so no byte is observable before the handler returns. Measured through it, a run that streams 8 chunks 120 ms apart on the served path arrives as **one chunk at the instant it completes** — ratio 0.999 against criterion 3's 0.5 bar. Six of the nine registry entries consume it: cloudflare, vercel, netlify, bun, deno-deploy, aws-lambda. **Two of the six buffer a second time in their own emitted contract** (`vercel.ts:86` `await webResponse.text()`, `aws-lambda.ts:142` `body: await response.text()`), so a fixed shim still leaves those two non-streaming
+why_now: `ROADMAP.md § M14` has named this blocker in its Definition of done since the surface was measured, and it carried no issue number until 2026-08-20 — so nothing could comment on it, and nothing could close it. It also decides J3's criterion 4 and is the last of the four `docs/adr/0002` instances still open. The adapter streaming tests could not catch it: they grep the **generated source text** for `onShellReady` and never run a stream
+status: triaged
+dod:
+  - a streaming route observed delivering a chunk before the response completes, on each listed target, or the target is delisted for streaming
+  - the two double-buffering contracts are fixed or their targets are delisted — fixing the shim alone provably does not reach them
+  - a test that runs a stream rather than reading the emitted module, because that gap is why this survived
+
+Next free id: **B-024**.
