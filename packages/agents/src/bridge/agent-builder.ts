@@ -147,6 +147,15 @@ export interface AgentBuilder<
   system(prompt: string): AgentBuilder<TInput, TModel, TContext, TTools>
   /** Set the extended-thinking effort. */
   reasoningEffort(effort: ReasoningEffort): AgentBuilder<TInput, TModel, TContext, TTools>
+  /**
+   * theokit#363 — cap the agent's tool-calling turns within ONE run. A positive integer; throws at
+   * `.build()` otherwise. Unset ⇒ the SDK's own ceiling (8) applies, unchanged.
+   *
+   * This is the chain the scaffold writes, and until now it had no way to say "stop after N steps":
+   * the declaration existed on the decorator path only, and even there nothing on the served path
+   * read it. See {@link DefineAgentConfig.maxIterations} for why the name is `maxIterations`.
+   */
+  maxIterations(limit: number): AgentBuilder<TInput, TModel, TContext, TTools>
   /** Set the run-context (M7) — the object every tool handler receives as `ctx.context`. */
   context<C extends Record<string, unknown>>(value: C): AgentBuilder<TInput, TModel, C, TTools>
   /**
@@ -307,6 +316,9 @@ function makeBuilder(config: DefineAgentConfig): AgentBuilder {
     system: (prompt: string) => makeBuilder({ ...config, system: prompt }),
     reasoningEffort: (effort: ReasoningEffort) =>
       makeBuilder({ ...config, reasoningEffort: effort }),
+    // theokit#363 — accumulates like every other scalar; validation happens once, at `.build()` →
+    // `defineAgent`, so the fluent and functional surfaces cannot disagree about what is valid.
+    maxIterations: (limit: number) => makeBuilder({ ...config, maxIterations: limit }),
     context: (value: Record<string, unknown>) => makeBuilder({ ...config, context: value }),
     tool: (tool: CustomTool) => makeBuilder({ ...config, tools: [...(config.tools ?? []), tool] }),
     tools: (list: readonly CustomTool[]) =>

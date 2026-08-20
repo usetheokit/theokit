@@ -14,6 +14,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   is compiled and long before the SDK: an agent run spends real tokens, so a caller who may not run it
   is turned away before any of that is paid for. An endpoint that declares no policy behaves exactly
   as before. (usetheokit/theokit#365)
+- **An agent can declare how many steps it is allowed to take, and the served agent obeys it.**
+  `AgentBuilder.create().maxIterations(5)` and `defineAgent({ maxIterations: 5 })` cap the tool-calling
+  turns of a single run, and the ceiling `@Agent`/`@MainLoop` already accepted now reaches the runtime
+  too. Every authoring path wrote the number and nothing on the served path read it, so an agent that
+  declared a limit ran without one. An agent that declares no ceiling is unchanged. A value that is
+  not a positive integer is refused where it is written, not mid-run. (usetheokit/theokit#363)
 
 ### Changed
 
