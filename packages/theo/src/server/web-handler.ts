@@ -23,11 +23,15 @@
  *     handler throws) per G5 boundary translation (serverErrorToEnvelope).
  *
  * **NOT included (deferred to T5a.2 Phase B-G):**
- *   - Plugin runner integration (onRequest/preHandler/onResponse hooks).
- *   - CSRF / CORS / security headers / rate limiting / cookies / auth.
  *   - Middleware chain. SSR rendering. WebSocket upgrade. File upload.
  *   - File-system routing scan; consumer provides the route module
  *     explicitly (Web Request entry doesn't yet know about scan results).
+ *
+ * Two entries left this list because they arrived: the plugin runner is
+ * integrated (`runPreHandlerPipeline` below), and CSRF is enforced BY DEFAULT
+ * (`shouldEnforceCsrf`). The CSRF line is the one worth calling out — a module
+ * header stating that a security control is absent, above a module where it is
+ * on by default, misleads in the direction that gets a check skipped.
  *
  * The narrow scope makes this a viable Phase A landing zone — turns the
  * 7 T1.2 RED tests GREEN without prematurely refactoring the full
