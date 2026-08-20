@@ -41,6 +41,11 @@ import type { z } from 'zod'
 
 import { envelopeCodeToStatus } from '../core/contracts/envelope-code-to-status.js'
 import type { TheoErrorEnvelope } from '../core/contracts/error-envelope.js'
+import {
+  evaluateRoutePolicy,
+  subjectFromContext,
+  type RoutePolicy,
+} from '../core/contracts/route-policy.js'
 import { serverErrorToEnvelope } from '../core/contracts/server-error-to-envelope.js'
 import { TheoError } from '../core/contracts/theo-error.js'
 
@@ -82,6 +87,12 @@ interface WebRouteHandlerConfig {
    * Only this route is exempted; the executor-wide mode is untouched.
    */
   csrf?: false
+  /**
+   * Who may perform this operation (ADR 0001). Mirrors `RouteConfig.policy` and is
+   * evaluated by the same function, so a route reached through this executor gets
+   * the decision it would get through the Node executor or `callProcedure`.
+   */
+  policy?: RoutePolicy
   handler: (ctx: {
     query: unknown
     body: unknown
@@ -241,6 +252,20 @@ async function runHandler(
     return { ok: false, response: validationErrorResponse(validated.error, validated.channel) }
   }
   const { query, body, params } = validated
+
+  // ADR 0001 — the same evaluator `callProcedure` and the Node executor call.
+  // Placed here for the same reason `validateRouteInput` is here: one pipeline,
+  // no drift. Identity arrives on `context`, put there by whatever established it
+  // for this transport, so the policy never sees a header or a cookie.
+  const decision = await evaluateRoutePolicy(config.policy, {
+    subject: subjectFromContext(context),
+    query,
+    body,
+    params,
+  })
+  if (!decision.allowed) {
+    return { ok: false, response: accessDeniedResponse(decision.reason) }
+  }
 
   const result = await config.handler({ query, body, params, request, context })
   return validateResponseOutput(config.response, result) ?? { ok: true, result }
@@ -489,6 +514,18 @@ function shouldEnforceCsrf(
   if ((csrfMode ?? 'strict') === 'off') return false
   if (!CSRF_PROTECTED_METHODS.has(method)) return false
   return config?.csrf !== false
+}
+
+/** Build a 403 envelope Response for a policy refusal (ADR 0001). */
+function accessDeniedResponse(reason: string): Response {
+  const envelope: TheoErrorEnvelope = {
+    code: 'FORBIDDEN',
+    message: `Access denied: ${reason}`,
+  }
+  return new Response(JSON.stringify({ error: envelope }), {
+    status: 403,
+    headers: { 'Content-Type': 'application/json' },
+  })
 }
 
 /** Build a 403 CSRF envelope Response. */

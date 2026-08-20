@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **A route can declare who may call it, and the answer is the same on every transport.**
+  `RouteConfig.policy` is evaluated by the Node executor, the Web executor and the in-process caller
+  from one implementation, so a route reached from a desktop shell or a terminal gets the access
+  decision it would get from a browser. Before this, access rules applied over HTTP and applied
+  nowhere in-process — and in-process is the path the desktop and terminal targets are built on.
+  `requireOwner` answers "may this subject touch this record" once, where every action used to answer
+  it alone. A route that declares no policy behaves exactly as before. (ADR 0001)
+
 - **`theokit/server/security` now exports the multi-header CSRF gate and its wildcard-origin
   matcher.** `evaluateCsrfMultiHeaderRequest`, `matchWildcardDomain` and `isCsrfOriginAllowed` were
   implemented, tested and unreachable: the barrel the subpath points at listed five modules and not
