@@ -26,6 +26,18 @@ import { describe, expect, it } from 'vitest'
  * So: every test file under `tests/` must be claimed by exactly one project. Not zero — that is the
  * silent gap. Not two — that is the double execution this split introduced on its first attempt,
  * where both projects inherited the root `include` and ran the same 550 files twice.
+ *
+ * ## The sweep covers `packages/{name}/tests/` too, and did not always
+ *
+ * It swept `tests/` alone, and the enumeration it exists to police lists PACKAGE configs as well.
+ * So it confirmed full coverage of a scope that excluded the gap: eighteen files under
+ * `packages/theo`, `packages/create-theokit` and `packages/tauri` typechecked and ran in no project
+ * at all — `packages/theo` had no vitest config, and the other two had one that the root never
+ * referenced (usetheokit/theokit#357). One of them had been asserting against a literal that no
+ * longer appeared in the file, and nothing said so, because nothing ran it.
+ *
+ * That is this file's own failure mode arriving one level up: a guard whose scope is narrower than
+ * the thing it guards reports green over the part it cannot see.
  */
 
 const ROOT = resolve(__dirname, '../..')
@@ -69,8 +81,48 @@ function filesVitestWillRun(): Map<string, Set<string>> {
   return byProject
 }
 
+/**
+ * Test roots: the repository's own `tests/`, plus each package's. Derived from disk
+ * rather than listed, for the same reason the rest of this file exists — a list
+ * fails by omission, and a new package would inherit exactly the gap #357 recorded.
+ */
+function testRoots(): string[] {
+  const roots = [join(ROOT, 'tests')]
+  const packagesDir = join(ROOT, 'packages')
+  for (const entry of readdirSync(packagesDir)) {
+    const candidate = join(packagesDir, entry, 'tests')
+    try {
+      if (statSync(candidate).isDirectory()) roots.push(candidate)
+    } catch {
+      // The package owns no tests. Nothing to claim, nothing to check.
+    }
+  }
+  return roots
+}
+
+/**
+ * Files deliberately claimed by NO project, each with the reason it is out.
+ *
+ * An allowlist and not a silent skip: a declared exclusion and a forgotten one look
+ * identical from the outside, and telling them apart is the entire job of this file.
+ * Adding a row here is a decision someone made on the record; adding a test that
+ * nothing runs is not.
+ */
+const DECLARED_EXCLUSIONS: { pattern: RegExp; why: string }[] = [
+  {
+    pattern: /^packages\/agents\/tests\/live\//,
+    why: 'hits a real provider; excluded by packages/agents/vitest.config.ts and run on demand via `npm run test:live`',
+  },
+]
+
+function isDeclaredExclusion(file: string): boolean {
+  return DECLARED_EXCLUSIONS.some((rule) => rule.pattern.test(file))
+}
+
 describe('the vitest project split reaches every test file', () => {
-  const onDisk = testFilesOnDisk(join(ROOT, 'tests'))
+  const onDisk = testRoots()
+    .flatMap((root) => testFilesOnDisk(root))
+    .filter((file) => !isDeclaredExclusion(file))
   const claimed = filesVitestWillRun()
 
   it('test_there_is_at_least_one_test_file_to_check', () => {
