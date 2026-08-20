@@ -193,6 +193,357 @@ one.
 **So: J7 is not won, not tied, and not run.** It has one side of three metrics, on the one target
 where the mechanism is wired.
 
+## Measured — both sides, exercised (2026-08-20)
+
+**The section above had one side and had run nothing. This one has both sides, and both were run.**
+It does not replace the counts above — it reproduces them from an independent diff and adds the
+Next.js half, the criteria graded against real requests on real published builds, and two defects
+that only a run could find.
+
+Every request below went over HTTP to a published build on each side — `theokit build` +
+`theokit start` on ours, `next build` + `next start` on theirs — driven from a separate process,
+with the side-effect oracle in a third. Three runs per lane; the three agreed on every row.
+
+### The three version-specific facts, confirmed against the source
+
+§ The Next.js side deferred three questions to implementation time. All three were checked against
+the packages actually installed and against Vercel's and Upstash's own documentation, and the
+answers are recorded including where they refute what the section supposed.
+
+| Deferred question | Answer | Checked against | Diverged from the supposition? |
+| --- | --- | --- | --- |
+| The current package names for the limiter and its store | `@upstash/ratelimit@2.0.8` and `@upstash/redis@1.38.2` | the installed packages, and `npm view` | **Partly, and it matters.** The names are right, but they are no longer what *Vercel* documents — see the row below the table |
+| Whether the limiter's default algorithm is sliding-window or fixed-window | **Neither: there is no default.** `limiter` is a required field of `RegionRatelimitConfig`, with no `?`. The README's Basic Usage picks `slidingWindow`; the Upstash/Vercel template `ratelimit-with-redis` picks `fixedWindow` | the installed `dist/index.d.ts`, the README, and the template the Vercel gallery links to | **Yes.** The question presupposed a default. The developer must choose, and the two official samples choose differently |
+| Whether the current recommendation places the check in middleware or in the handler | **The handler**, in both first-party sources. Vercel's rate-limiting SDK page and the Next.js "Backend for Frontend" guide both show `export async function POST(request: Request)` | vercel.com/docs/vercel-firewall/vercel-waf/rate-limiting-sdk; nextjs.org/docs/app/guides/backend-for-frontend | **Yes, and the middleware file has been renamed underneath the question.** In Next 16 the convention is `proxy.ts` with an exported `proxy`; `middleware.ts` is deprecated but still works, and `proxy` runs on Node only |
+
+**A fourth fact the section did not anticipate, and it decides what the Next.js side even is.**
+Vercel's own answer to "rate limit in code" is now `@vercel/firewall@1.2.5` and its
+`checkRateLimit()`. It is not a limiter. Reading its `dist/rate-limit.js`: it issues an HTTP request
+to `https://${host}/.well-known/vercel/rate-limit-api/${id}` and decides from the status alone
+(`204` allow, `429` refuse, `403` blocked, `404` → `console.warn` and **allow**). The id must match a
+rule created in the Vercel dashboard, and outside `NODE_ENV=production` the function returns
+`{ rateLimited: false }` after a warning. So it cannot be exercised off-platform, it fails **open**
+when unconfigured, and it is a client for a dashboard rule — precisely the thing § The Next.js side
+already ruled out of this comparison, now wearing an import statement. It is recorded and not
+measured, and the reason is the one this page wrote before it existed.
+
+That leaves `@upstash/ratelimit` as the benchmarkable answer, which is also what the Vercel template
+gallery points at — `vercel.com/templates/next.js/api-rate-limit-upstash` now links out to
+`upstash/examples/tree/main/examples/ratelimit-with-redis`.
+
+**Two official examples were read and neither could be used verbatim, which is itself the finding.**
+`vercel/examples`' `edge-middleware/rate-limit-any-framework` pins `@upstash/ratelimit@^0.4.3`
+(current: 2.0.8) on `@vercel/kv`, a package npm now marks deprecated. The Upstash template pins
+`next@14.2.15` and calls `headers()` without `await`, which Next 16 removed. The implementation below
+follows their shape — construct, `limit(key)`, branch on `success` — on current versions.
+
+Versions under test: **TheoKit** — `create-theokit@latest` → `theokit@0.48.14`,
+`@theokit/agents@10.1.0`, `@theokit/sdk@4.53.1`, `@theokit/ui@1.4.1`, `zod@4.4.3`, React 19.2.8.
+**Next.js** — `next@16.3.1`, `ai@7.0.70`, `@ai-sdk/react@4.0.73`, `@upstash/ratelimit@2.0.8`,
+`@upstash/redis@1.38.2`, `zod@4.4.3`, React 19.2.8. Node 22.22.2 on both. Source claims are read from
+the worktree at `6e4102775`.
+
+### The instrument, and why this journey could be run without credits
+
+Counted on neither side.
+
+**The store.** The Next.js lane runs against a real Redis: `redis:7-alpine` behind
+`hiett/serverless-redis-http`, the Upstash-compatible HTTP proxy Upstash's own "Developing with
+Upstash Redis" page names for local development. `@upstash/redis` speaks REST, so this is the real
+client against a real server — not a stub. The TheoKit lane provisions nothing, because it cannot:
+every shipped factory refuses anything but the in-memory store.
+
+**The side-effect oracle.** An append-only recorder on `:4311`, byte-identical for both sides. Each
+lane has one probe route whose handler POSTs to it before returning. Criterion 4 is graded by reading
+that log back from outside both frameworks, so "did the handler run" is an artefact rather than a
+claim about a response body.
+
+**The model.** The Next.js lane uses the AI SDK's `MockLanguageModelV4` driven by
+`simulateReadableStream`, scripted to emit one text delta and finish. J6's trap is avoided
+(`finishReason` is `{ unified, raw }`) and J2's correction applied (`LanguageModelV4Usage` nests its
+counts) — with one further correction of the same kind, recorded because the next journey will hit
+it: in `ai@7.0.70` the nesting is **asymmetric**, `inputTokens` taking
+`{ total, noCache, cacheRead, cacheWrite }` and `outputTokens` taking `{ total, text, reasoning }`.
+`convertToModelMessages` also returns a promise now and must be awaited.
+
+**The TheoKit lane has no model, and that is a finding rather than a shortcut.** J6 and J2 reached a
+local model through `@theokit/sdk`'s `ollama` / `lmstudio` catalog profiles (`authType: "none"`), but
+they did it in a harness. This journey must grade a **published build**, because that is where the
+limiter is wired, and `theokit start` resolves providers through a registry that knows only
+`openrouter`, `openai` and `anthropic` (`packages/theo/src/server/agent/provider-resolver.ts:90`). The
+documented escape hatch, `registerProvider`, does not work: the published bundle ships the registry
+**twice**, and the copy the application mutates is not the copy the server reads
+([#401](https://github.com/usetheokit/theokit/issues/401)). So on the agent path the three unrefused
+requests answer `500 INTERNAL — No LLM provider API key found`. That is still a usable oracle for
+criterion 5, and a sharper one than a 200 would be: a 500 from the provider resolver proves the agent
+branch **ran**, and the 429 proves the refused one did not.
+
+### The baselines, and the argument for each
+
+| Lane | Baseline | Argument |
+| --- | --- | --- |
+| TheoKit | `npx create-theokit@latest tk-rate --yes`, committed untouched by the scaffolder itself | Unchanged from J4: the app has to run, and this is what a developer installs today |
+| Next.js | `create-next-app` (TypeScript, App Router, Tailwind, Turbopack) + `npm install ai @ai-sdk/react zod` + the AI SDK quickstart's chat Route Handler at `app/api/chat/route.ts`, committed untouched | J1's argument, unchanged and load-bearing here: the TheoKit scaffold hands the developer a working agent endpoint for free, and criterion 5 requires one on both sides. Charging Next.js for building an agent while TheoKit is charged for none would measure the two scaffolds |
+
+Each lane also carries one instrument route (`server/routes/probe.ts`, `app/api/probe/route.ts`) and
+one instrument model swap, both in the baseline commit and counted on neither side.
+
+**One formatting control**, unchanged from J1: both diffs are formatted with the `create-theokit`
+Prettier config (`packages/create-theokit/templates/default/.prettierrc`, `printWidth: 100`,
+`semi: false`), so both sides are counted with the same ruler.
+
+### Metrics 1-3
+
+| Metric | TheoKit | Next.js + `@upstash/ratelimit` | Margin | Bar |
+| --- | --- | --- | --- | --- |
+| Files touched | **1** | **3** | 3x | ≥ 2x — **outside** |
+| Glue lines | **2** | **26** | 13x | ≥ 2x — **outside** |
+| Concepts required | **3** | **9** | 3x | ≥ 2x — **outside** |
+| Time to first green run | not measured | not measured | — | — |
+
+**TheoKit, 1 file.** `theo.config.ts`, 3 added lines and 1 removed. Independently re-derived here
+from a fresh scaffold and identical to the section above, which is the point of publishing it twice.
+
+```
++export default config()
++  .set({ rateLimit: { windowMs: 5_000, max: 3 } })
++  .build()
+-export default config().build()
+```
+
+Glue (2): `export default config()` and `  .build()`. Business logic (1): the `.set(...)` line, which
+carries the window and the limit. The values differ from the section above (5 s / 3 rather than 60 s /
+20) because criterion 3 performs the wait; the line count is identical either way and the budget is a
+product decision, so the substitution changes nothing it is not allowed to change.
+
+**Next.js, 3 files.** `proxy.ts` added (26 lines, 3 blank), `package.json` (2 dependency lines),
+`.env.local` added (2 lines). `package-lock.json` is not counted: it is tool output nobody edits by
+hand, the same exclusion the metric applies to scaffolder output on both sides.
+
+```ts
+import { Ratelimit } from '@upstash/ratelimit'
+import { Redis } from '@upstash/redis'
+
+const ratelimit = new Ratelimit({
+  redis: Redis.fromEnv(),
+  limiter: Ratelimit.fixedWindow(3, '5 s'),
+})
+
+export const config = { matcher: '/api/:path*' }
+
+export async function proxy(request: Request) {
+  const key = request.headers.get('x-forwarded-for') ?? 'anonymous'
+  const { success, limit, remaining, reset } = await ratelimit.limit(key)
+  if (success) return
+  return Response.json(
+    { error: { code: 'RATE_LIMITED', message: 'Too many requests' } },
+    {
+      status: 429,
+      headers: {
+        'Retry-After': String(Math.ceil((reset - Date.now()) / 1000)),
+        'X-RateLimit-Limit': String(limit),
+        'X-RateLimit-Remaining': String(remaining),
+      },
+    },
+  )
+}
+```
+
+plus, in `package.json`, `"@upstash/ratelimit": "^2.0.8"` and `"@upstash/redis": "^1.38.2"`; and in
+`.env.local`, `UPSTASH_REDIS_REST_URL=…` and `UPSTASH_REDIS_REST_TOKEN=…` (values redacted here; the
+run used the local proxy and a token invented for it).
+
+**The 27 non-blank added lines, classified.** Published because the glue split is the metric most
+open to being argued after the fact, and a table nobody can check is not evidence — least of all one
+published by the side it favours.
+
+Business logic (1): `  limiter: Ratelimit.fixedWindow(3, '5 s'),` — the window and the limit, by the
+same whole-line rule the TheoKit side used.
+
+Glue (26): the two imports; `const ratelimit = new Ratelimit({`, `  redis: Redis.fromEnv(),`, `})`;
+the `config` matcher export; the function signature; the key derivation; the `limit()` destructuring;
+the `if (success) return`; the eleven lines of `Response.json` with its body and its three headers;
+the closing `)` and `}`; the two dependency lines; the two environment lines.
+
+**Concepts, derived mechanically from what the diffs import and call.**
+
+| TheoKit (3) | Next.js (9) |
+| --- | --- |
+| the `rateLimit` config key | the `Ratelimit` constructor |
+| its flat `{ windowMs, max }` shape | `Ratelimit.fixedWindow` — and that an algorithm must be chosen, because there is no default |
+| `config().set()`, because the builder ships no `.rateLimit()` setter (`packages/theo/src/config/config-builder.ts:38`) | `Redis.fromEnv()`, the store client |
+| | the `UPSTASH_REDIS_REST_URL` / `_TOKEN` contract — credentials, which this page's counting rule says count |
+| | the `proxy.ts` convention and its exported `proxy`, Next 16's renamed middleware |
+| | `config.matcher` |
+| | the `limit()` result shape, including that `reset` is an absolute epoch **milliseconds** value |
+| | `x-forwarded-for` as the bucket key |
+| | `Retry-After`, which the developer writes by hand because the library ships no header helper |
+
+`Response.json` is not counted: it is Web-standard vocabulary the baseline already uses. Counting it
+gives 10 and does not change the shape of the result.
+
+### The criteria, graded against the runs
+
+Three runs per lane, same machine, budget `max: 3` over a 5 s window on both sides. Every row is
+measured, not read.
+
+| # | Criterion | TheoKit | Next.js + `@upstash/ratelimit` |
+| --- | --- | --- | --- |
+| 1 | request N succeeds, N+1 refused, asserted on the boundary | **PASS** — `200, 200, 200, 429` on all three runs | **PASS** — `200, 200, 200, 429` on all three runs |
+| 2 | machine-readable, a dedicated code read from the parsed body | **PASS** — `{"error":{"code":"RATE_LIMITED","message":"Too many requests","requestId":"…"}}` at 429. The code is exclusive: the *token* budget crosses as `TOO_MANY_REQUESTS` (`packages/theo/src/core/contracts/server-error-to-envelope.ts:48`), a different code on the same status | **PASS** — `{"error":{"code":"RATE_LIMITED","message":"Too many requests"}}` at 429. Exclusive by construction, because the application authored both the code and the envelope |
+| 3 | a retry-after value is present, the wait is performed, the follow-up succeeds | **PASS** — `Retry-After: 5`; a request at deadline−1.2 s is still `429`; after the full wait, `200`. Identical on all three runs | **PASS** — `Retry-After: 2, 4, 2` across runs (it varies with position in the fixed window, which is correct); deadline−1.2 s still `429`; after the full wait, `200` |
+| 4 | the refused request did no work, counted inside the handler | **PASS** — recorder holds exactly **3** entries after the four requests, and **4** after the post-wait request | **PASS** — recorder holds exactly **3**, then **4** |
+| 5 | the same refusal on the agent path as on a plain route | **PASS** — `POST /api/agents/chat` gives `500, 500, 500, 429`; the 429 carries the same `RATE_LIMITED` body and a **byte-identical** header set to the plain route's. The three 500s are the provider resolver, i.e. proof the agent branch ran; the 429 arrives in 4-9 ms without it | **PASS** — `200, 200, 200, 429`, the three 200s streaming a real run (`text-delta … "MODEL-OK"`), the 429 carrying the same code and the same three headers as the plain route |
+| 6-8 | Web, Tauri, TUI exercised | **not exercisable here**, unchanged from the section above: `@theokit/tui` and `@theokit/ui` live outside this repository and the north-star app does not exist | **n/a** — the journey's three-target rule is transversal to TheoKit |
+
+**Five of five against five of five, both sides exercised.** That is the second time in this
+programme, after J4, that both sides built the thing the criteria describe.
+
+### Who the limit is applied to — measured, not assumed
+
+The criteria do not ask this and the answer changes what the numbers mean, so it was run as its own
+block: exhaust the budget with no forwarded header, then repeat carrying one.
+
+| Request after the budget is exhausted | TheoKit | Next.js |
+| --- | --- | --- |
+| no extra header (control) | 429 | 429 |
+| `x-forwarded-for: 203.0.113.7` | **429** | **200** |
+| `x-forwarded-for: 203.0.113.8` | **429** | **200** |
+| `x-real-ip: 203.0.113.9` | 429 | 429 |
+
+**There is a concept of identity at this point on both sides, and only one of them is not
+client-writable by default.** TheoKit keys on `req.socket.remoteAddress` and ignores
+`x-forwarded-for` unless the operator declares how many proxies to trust
+(`packages/theo/src/server/rate-limit/client-ip.ts:53`), and offers `keyBy: 'session' | 'user' | fn`
+above that (`packages/theo/src/config/schemas/rate-limit.ts:16`). The Next.js idiom has no equivalent:
+`request.ip` no longer exists, the official samples read `x-forwarded-for` with an `'anonymous'`
+fallback, and a header any client can set is therefore the bucket key. Two spoofed values, two
+bypasses, measured.
+
+**This is stated as an asymmetry and not scored, and the fairness note is the whole of it.** On
+Vercel the platform writes `x-forwarded-for` and the header is not client-controlled, so on-platform
+the idiom is sound. Off-platform — which is where this measurement ran, and where a self-hosted
+Next.js application lives — it is a one-header bypass. The shorter Next.js implementation is the one
+the criteria reward; the safer one costs a trust-hop concept and more lines. Neither side is charged
+for the difference.
+
+The other half of the same question, and it goes the other way: **TheoKit's limit is per-caller and
+per-process.** Every shipped factory throws when handed anything but the in-memory store
+(`packages/theo/src/server/rate-limit/rate-limit.ts:53`,
+`packages/theo/src/server/rate-limit/rate-limit-per-route.ts:162`), so three instances mean three
+budgets. The Next.js one was exercised against a real Redis and has one budget however many instances
+there are. § The Next.js side said this must be stated plainly rather than scored, and this is it.
+
+### Is the refusal legible, and does it match the specification
+
+Both sides refuse with `429` and a parsed-body code, and both tell the caller when to return. Neither
+speaks the current specification.
+
+| | TheoKit | Next.js (as written here) |
+| --- | --- | --- |
+| Status | 429 (RFC 6585) | 429 |
+| Body code | `RATE_LIMITED` | `RATE_LIMITED` |
+| `Retry-After` | present, `5` — RFC 9110 § 10.2.3 `delay-seconds` | present, computed by the application from `reset − Date.now()` |
+| `RateLimit` / `RateLimit-Policy` (draft-ietf-httpapi-ratelimit-headers-11) | **absent** | **absent** |
+| `X-RateLimit-*` | `Limit`, `Remaining` — the legacy names the draft's appendix catalogues as an interop problem; no `Reset` | same three, written by hand |
+| Headers on a **successful** response | `X-RateLimit-Limit`, `X-RateLimit-Remaining` on every response | **none** — the proxy returns `undefined` to continue, and adding headers there costs another concept |
+
+**No sixth instance of the B-021 family here, and that is worth saying plainly.** A refused request
+on both sides is reported as refused, with a status, a code and a deadline. This journey looked for
+the failure `docs/adr/0002-an-abnormal-ending-is-never-reported-as-normal.md` names and did not find
+it in the refusal path.
+
+**One prediction this measurement made and then refuted.** Upstash's `reset` is documented as the end
+of the current window, and under `slidingWindow` the previous window's weighted contribution should
+still exceed the limit at that instant — so obeying `Retry-After` ought to fail criterion 3. It was
+run: the limiter was rebuilt with `Ratelimit.slidingWindow(3, '5 s')` and the burst-then-obey cycle
+repeated three times. All three succeeded (`Retry-After` 2, 3, 4 s; `200` after each). The prediction
+was wrong and the entry is the measurement, not the reasoning.
+
+### Two defects the run found, both filed
+
+Neither is a rate-limit defect, and both were found because this journey insisted on a published
+build rather than a harness.
+
+- **[#400](https://github.com/usetheokit/theokit/issues/400) — every `POST` with a JSON body to an
+  `/api` file route hangs forever under `theokit start`.** Not a 500, not a timeout: the connection
+  stays open and the handler never runs. `theokit dev` serves the same request in 4-44 ms.
+  `tryServeAgentAux` runs before the API branch for every URL
+  (`packages/theo/src/cli/commands/start/request-handler.ts:255`) and converts the request to a Web
+  `Request` **before** deciding it does not own the path
+  (`packages/theo/src/cli/commands/start/handlers.ts:187`), which drains the Node stream
+  (`packages/theo/src/server/http/node-request.ts:68`); `parseJsonBody` then waits on an `'end'` that
+  already happened (`packages/theo/src/server/body-parser.ts:63`). Tracing the published bundle
+  confirms it: at the moment the parser attaches, `readableEnded: true, complete: true,
+  readableLength: 0`, and the listener already on the stream is Node's internal `onData` from
+  `Readable.toWeb`. **The probes here send no body for exactly this reason**, which the criteria
+  permit and which is recorded rather than smoothed over.
+- **[#401](https://github.com/usetheokit/theokit/issues/401) — `registerProvider` mutates a registry
+  `theokit start` never reads.** The published bundle carries the provider registry in two chunks with
+  independent module state; the application's `theokit/server` import reaches one and the CLI reaches
+  the other, and no `./dist/*` export exists to reach the second. This is what kept a local model off
+  the TheoKit lane's agent path.
+
+### Declared judgements, with the effect of inverting each
+
+| # | Judgement | Decided | Effect of the other choice |
+| --- | --- | --- | --- |
+| 1 | Does `package.json` count as a file touched on the Next.js side? | **Counted**, on J3's reasoning: `@upstash/ratelimit` and `@upstash/redis` exist only because this criterion does | Files 3 → 2 (2x, still at the bar); glue 26 → 24 (12x) |
+| 2 | Does `.env.local` count as a file touched? | **Counted.** This page's own rule says provisioning a store counts as glue on the side that needs one, and credentials count as a concept; the file is where the store is provisioned | Files 3 → 2; glue 26 → 24. Both still outside the bar, but metric 1's margin lands exactly on 2x, which is a loss for Next.js rather than a tie only because the bar is "≥ 2x" |
+| 3 | Is the whole `limiter:` line business logic on the Next.js side, as the whole `.set(…)` line is on ours? | **Yes**, symmetrically. The line carries the budget and also the algorithm name | Glue 26 → 27 on theirs and 2 → 3 on ours; 9x instead of 13x. The ratio moves, the verdict does not |
+| 4 | Is `Response.json` a concept? | **No** — Web-standard vocabulary already in the Next.js baseline | Concepts 9 → 10; 3.33x instead of 3x |
+| 5 | Is `@vercel/firewall` the Next.js side? | **No.** It is a client for a dashboard rule, is a no-op outside production, and fails open when unconfigured — the exact thing § The Next.js side excluded before the package was read | If it were, the Next.js diff is roughly 6 lines and **1 file**, and metric 1 and metric 2 both invert. It would also satisfy **none** of the five criteria off-platform, because it never refuses anything there. Choosing it would buy a smaller number by measuring something that does not run |
+| 6 | Is the check placed in `proxy.ts` or in each Route Handler, given that both first-party sources show the handler? | **`proxy.ts`.** The protocol says the Next.js side is written to win where no example binds, and one file that covers both endpoints beats two edits | In handlers: 4 files (`chat`, `probe`, `package.json`, `.env.local`) and roughly 34 glue lines, because the construction and the 429 are either duplicated or extracted into a fifth file. Files 1 vs 4 and glue 2 vs 34 — the margin widens. The shorter opponent was chosen |
+| 7 | `fixedWindow` or `slidingWindow` on the Next.js side? | **`fixedWindow`**, matching the Upstash/Vercel template and matching our algorithm, so the comparison is like-for-like | Identical line count. `slidingWindow` was built and run anyway (see above) and also passes criterion 3 |
+| 8 | Is the flat `{ windowMs, max }` shape the TheoKit implementation, rather than the per-route shape? | **Flat**, unchanged from the section above: both satisfy the criteria and the flat one is one line | The per-route shape is a nested object: glue 2 → 3 or 4 and one more concept. 13x → ~8x. Still outside |
+| 9 | Do the three `500`s on the TheoKit agent path void criterion 5? | **No.** The criterion asks that a caller exceeding the budget on the agent endpoint be refused with the same code and headers, and it was. A 500 from the provider resolver is stronger evidence the branch ran than a 200 would be | Grading them as failures makes criterion 5 **unmeasurable on our side**, and the criteria row becomes 4-of-5 against 5-of-5. It would not move a metric |
+| 10 | Does the store asymmetry get scored? | **No**, per this page's own rule — recorded instead | If in-process-only were scored as a failure, TheoKit's cheaper diff would be buying a limiter with no multi-instance meaning, and the three margins would be describing different products |
+| 11 | Does the `x-forwarded-for` bypass get scored against Next.js? | **No.** It is an artefact of running off-platform, and it is the idiom the official samples publish | Scoring it would give TheoKit a criterion the criteria never wrote, which is the exact failure § Why the protocol comes before the measurement exists to stop |
+
+### Where the comparison is not apples to apples
+
+- **Reach.** Ours is one process; theirs is a shared Redis. Same criteria, different operational
+  meaning, and the rule says record it rather than score it.
+- **Target.** Ours protects `theokit start`. The Web-standards factories have no production caller
+  (`packages/theo/src/server/rate-limit/rate-limit.ts:105`,
+  `packages/theo/src/server/rate-limit/rate-limit-per-route.ts:295`), and no adapter under
+  `packages/theo/src/adapters/` references a limiter at all — the only mention is a comment
+  (`packages/theo/src/adapters/web-shim.ts:136`). Theirs protects every target `next build` produces.
+  One line against twenty-six is not the same purchase when one of them covers one deployment shape
+  and the other covers all of them.
+- **The dev/prod split.** Ours behaves differently in `theokit dev`, where the per-route shape is
+  narrowed away before it reaches the limiter and the agent middleware has no rate-limit call at all
+  (§ Current state). Theirs runs the same `proxy.ts` in both.
+- **What a caller sees while under budget.** Ours reports the remaining budget on every response for
+  free; theirs reports nothing until it refuses.
+
+### Verdict
+
+**All three countable metrics go to TheoKit by a margin outside the bar, both sides satisfy every
+gradeable criterion, and the journey is still not won.** Files 1 against 3, glue lines 2 against 26,
+concepts 3 against 9 — 3x, 13x and 3x, against a bar of 2x. It is the largest set of margins this
+programme has produced on an implementation that was *run and works on both sides*, which is the
+sentence J3 could not write and J9 could not write.
+
+Two things stop it being a win, and only one of them is about the framework.
+
+**Metric 4 is unmeasured on both sides.** § What counts as winning requires TheoKit to be better on
+the three countable metrics *and not worse on time-to-green*. Unmeasured is not "not worse", and this
+document does not get to treat an absent measurement as a passing one.
+
+**And the three margins are not pricing the same purchase.** Twenty-six lines buy a Next.js
+application a limiter on every target it deploys to, shared across every instance. Two lines buy a
+TheoKit application a limiter on one target, private to one process, on a server where — until
+[#400](https://github.com/usetheokit/theokit/issues/400) is fixed — the ordinary `POST` with a JSON
+body to the protected route never returns at all. A journey is won by costing less to build the thing
+the criteria describe; the criteria describe a refusal, and both sides deliver one. What they do not
+describe is where that refusal is in force, and on that the cheap side is the narrow one.
+
+So: **J7 is measured on both sides, its three countable metrics are the framework's best result so
+far, and it is reported as undecided rather than won.** The honest way to close the remainder is to
+measure metric 4 and to make the Web-standards handler enforce the budget it already knows how to
+parse — neither of which is a counting decision.
+
 ## The deliberately broken state
 
 Per `../dx-benchmark.md` § The fifth, which is pass/fail and not a number. The break for J7 is a

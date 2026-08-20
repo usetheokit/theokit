@@ -230,9 +230,33 @@ ceremony an application should not write. The measurement, both published diffs,
 judgements, the four confirmed AI SDK version facts and the local-model instrument are in
 [J4's criteria file](journeys/j04-thread.md).
 
-**Eight journeys measured, four ties, two losses, one unresolved and one metric sweep — and the framework
-has not won a journey.** The goal states "win all ten by a margin outside noise". Eight of ten are in, and the
-two that produced the largest margins are the two that most clearly did not win. J5's re-measurement
+**J7 has both sides now, and it is the framework's best result so far — three countable metrics won by
+a margin outside the bar, on an implementation that was run and works on both sides, and it is still
+not a win.** Measured 2026-08-20, both lanes exercised end to end against published builds: `theokit
+build` + `theokit start` on ours, `next build` + `next start` on theirs, with the Next.js limiter
+against a real Redis. Files 1 against 3, glue lines 2 against **26**, concepts 3 against 9 — 3x, 13x
+and 3x, every one outside the 2x bar § What counts as winning sets. And unlike J3 and J9, the numbers
+price something that works: **5 of 5 criteria against 5 of 5**, exercised rather than inferred, with
+the wait in criterion 3 actually performed and a side-effect log in a third process proving the
+refused request did no work. Two things stop it. **Metric 4 is unmeasured on both sides**, and the
+win condition requires "not worse on time-to-green" — unmeasured is not "not worse". And the margins
+are not pricing the same purchase: 26 lines buy a Next.js application a limiter on every target it
+deploys to, shared across instances; 2 lines buy a TheoKit application a limiter on one target,
+private to one process, on a server where a plain `POST` with a JSON body to the protected route
+never returns at all. The journey also settled two questions the criteria never asked: **the limit is
+per-caller on both sides, and only ours is not client-writable** — `x-forwarded-for` bypasses the
+official Next.js idiom twice out of two attempts off-platform and is ignored by our limiter by
+default; and **neither side speaks the current rate-limit specification**
+(draft-ietf-httpapi-ratelimit-headers-11), though both emit a conformant `Retry-After`. No sixth
+instance of the abnormal-ending family here: a refused request is reported as refused on both sides.
+The measurement, both published diffs, the eleven declared judgements, the confirmed Vercel and
+Upstash version facts — including that Vercel's own in-code answer, `@vercel/firewall`, is a client
+for a dashboard rule that fails open and is a no-op outside production — are in
+[J7's criteria file](journeys/j07-rate-limit.md).
+
+**Eight journeys measured, three ties, two losses, one unresolved, one metric sweep and one that wins
+every countable metric without being won — and the framework has not won a journey.** The goal states "win all ten by a margin outside noise". Eight of ten are in, and the
+three that produced the largest margins are the three that did not win. J5's re-measurement
 could not change that sentence because shipping the missing capability moved a criterion, not a
 margin. J3 and J9 could not change it for opposite reasons: J3's margins price six lines whose
 trigger never fires, and J9's margins are real while the criteria they were meant to serve stay
@@ -240,7 +264,9 @@ unsatisfied. A journey is won by costing less to build *the thing the criteria d
 less to build something short of it is a different sentence, and this document will keep them apart.
 J4 is the first journey to which that sentence does not apply — both sides built the thing the
 criteria describe — and it is still a tie, which is the other half of the goal and the half no
-journey has met yet.
+journey has met yet. J7 is the second, and it is the closest any journey has come: both sides built
+the thing the criteria describe, and the margins are 3x, 13x and 3x. What holds it open is an
+unmeasured fourth metric and a reach the cheap side does not have.
 
 **J10 has both sides now, both were containerised and run, and it is the second journey the framework
 outright loses — on the journey its own criteria file predicted it would.** Measured 2026-08-20. The
@@ -309,3 +335,7 @@ Reporting a partial run as the benchmark is forbidden. Ten journeys or a stated 
   pristine scaffold fails `tsc`), #397 (`create-theokit` reports a successful install as a failure),
   #398 (`.env.example` documents a variable nothing reads), #399 (a lost conversation is
   indistinguishable from a new one)
+- The two defects J7's measurement found and filed: #400 (a `POST` with a JSON body to an `/api` file
+  route hangs forever under `theokit start`, because the agent-aux branch drains the request stream
+  for paths it does not own), #401 (`registerProvider` mutates a registry `theokit start` never
+  reads — the provider registry is duplicated across two bundle chunks)
