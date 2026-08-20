@@ -1,6 +1,6 @@
 # ADR 0001 — Authorization is transport-independent; transport concerns stay on the transport
 
-- **Status:** Proposed
+- **Status:** Proposed — decision points 1-3 implemented and verified; points 4-5 (the breaking half) await sign-off
 - **Date:** 2026-08-19
 - **Deciders:** program coordinator (this ADR requires the project owner's sign-off before M1 starts)
 - **Blocks:** M1 (server-boundary-security), and through it every other three-target milestone
@@ -49,6 +49,44 @@ The consequence is not theoretical. A route that enforces access rules over HTTP
 **Risks.** Declaring `public` becomes the easy escape, and a codebase where everything is `public` has a gate that verifies nothing. Mitigation: `public` is explicit and greppable, so its use is measurable — which is more than can be said for the current state, where openness has no marker at all.
 
 **Not decided here.** Where the policy is evaluated relative to the cache lookup. `define-cached-route.ts:70-73` already documents that middleware must run before the cache lookup, and nothing structurally guarantees it. That ordering deserves its own ADR alongside the cache wiring (B-005).
+
+## Implementation status (2026-08-20)
+
+Recorded here rather than in a commit message, because a reader arriving at a `Proposed` ADR needs
+to know which half of it is already load-bearing.
+
+**Implemented and verified.** Points 1-3 of the Decision. `RouteConfig.policy` exists and is
+evaluated by the Node executor, the Web executor and `callProcedure` from one function
+(`packages/theo/src/core/contracts/route-policy.ts`). `requireOwner` is the primitive point 3 asks
+for. The verification this ADR names as *"the test that IS the ADR"* exists and passes across all
+three transports (`tests/unit/access-decision-parity.test.ts`), including the case that motivated the
+whole decision: an authenticated non-owner, refused identically whether the route is reached over
+HTTP or in-process.
+
+**Not implemented, and deliberately.** Points 4 and 5 are the breaking half.
+
+- Point 4 — `session.ts` still carries `ServerResponse` in its public signature. Identity reaches the
+  policy through the run context each transport already builds, so nothing is blocked on this today;
+  removing the coupling is a breaking release with a `MIGRATION.md` entry.
+- Point 5 — absence still means "not declared" at runtime rather than denial. Flipping it would
+  refuse every existing route in every consumer at once, so it belongs with the build-time gate and
+  the migration that make refusing it survivable. A helper written for that gate was removed before
+  committing rather than shipped ahead of it: an unused seam is the built-and-disconnected pattern
+  this programme spent a wave unwinding.
+
+**What this means for M1 and M13.** The ROADMAP gates both on this ADR being "decided and
+implemented". The decision is made and its core guarantee is enforced by a test; the milestones
+still cannot close, because closing them requires `/acceptance` against a published build and nothing
+has been released. The blocker those criteria describe — that `callProcedure` runs no auth — is no
+longer accurate and the criteria should be re-read against this section rather than against the
+sentence they were written from.
+
+**One thing the implementation learned that the ADR did not anticipate.** The Node executor's handler
+context is not the object passed to `executeRoute`; it is a separate run context built from middleware
+and plugin decorations. Seeding identity on the call argument silently produced "not authenticated"
+on every request, including the ones that should pass. Fail-closed, so it surfaced immediately — but
+it is the kind of detail that makes "just evaluate the policy in all three places" a smaller sentence
+than a change.
 
 ## Verification
 
