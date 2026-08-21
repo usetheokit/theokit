@@ -33,6 +33,7 @@ describe('the thread path resolves the key from the agent it is about to run (th
         return 'sk-test'
       },
       'agent "probe"',
+      'probe',
       // `request` became required so the omission that made a thread run open a
       // trace of its own (usetheokit/theokit#381) stops being expressible. This
       // test is about provider routing, so any request will do — but it has to be
@@ -59,6 +60,7 @@ describe('the thread path resolves the key from the agent it is about to run (th
         agentModule('gpt-4o-mini'),
         'sk-test',
         'agent "probe"',
+        'probe',
         new Request('http://localhost/api/agents/probe/threads/t1/messages'),
       ),
     ).not.toThrow()

@@ -194,11 +194,18 @@ export async function mountAgent(
 
   // The declaration travels with the agent, not with the caller — see `agent-access.ts`. An
   // explicit option still wins, for a host that already took the decision.
+  // ONE identity for the agent, resolved once: the gate judges it and the spans are labelled with
+  // it. They used to be two — `agentName` for the policy, `source` for the telemetry — and the two
+  // disagreed on the plain route, where `source` is the module's absolute path
+  // (usetheokit/theokit#406). A caller that names no agent still gets `source`, as the policy
+  // always has; both convention routes name one, which is why neither exports a path any more.
+  const identity = agentName ?? source
+
   const admitted = await admitRequest(
     request,
     policy ?? readAgentPolicy(mod, source),
     resolveSubject,
-    agentName ?? source,
+    identity,
   )
   if (admitted instanceof Response) return admitted
   const input = admitted
@@ -242,11 +249,14 @@ export async function mountAgent(
   // The trace the spans join is decided inside `observeServedRun`, from this
   // request — the same function the thread route calls, so the two endpoints
   // cannot drift into producing different telemetry for the same agent
-  // (usetheokit/theokit#381).
-  return durableUiMessageStreamResponse(observeServedRun(stream, { agent: source, request }), {
-    runId,
-    cache: getRunEventCache(),
-  })
+  // (usetheokit/theokit#381). What that function could not decide was the agent
+  // LABEL, which arrives from here: this call used to pass `source`, so every
+  // span of every run on this route carried the module's absolute path
+  // (usetheokit/theokit#406).
+  return durableUiMessageStreamResponse(
+    observeServedRun(stream, { agentName: identity, request }),
+    { runId, cache: getRunEventCache() },
+  )
 }
 
 /**

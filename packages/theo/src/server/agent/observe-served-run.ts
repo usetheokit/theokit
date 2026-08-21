@@ -18,6 +18,12 @@
  * and get identical telemetry, and a third route added later inherits it by
  * calling the same function rather than by remembering to.
  *
+ * Unifying the function was not enough by itself, and #406 is the proof: the two
+ * routes went on labelling the same agent differently, because the label is a
+ * value the caller passes in rather than one derived here. What this function
+ * can do about that is refuse an ambiguous one — hence `agentName`, whose
+ * documentation below says what a name is and what it is not.
+ *
  * ## The honest wrinkle about a thread run
  *
  * A thread follow-up is HEADLESS: `postThreadFollowUp` answers `202` and the run
@@ -37,8 +43,24 @@ import { getObservabilityAdapter } from '../observability-bootstrap.js'
 import { observeAgentRun, type AgentRunSpanContext } from './observe-agent-run.js'
 
 export interface ServedRunObservation {
-  /** The agent being run, as the attribute an operator will group by. */
-  readonly agent: string
+  /**
+   * The agent's NAME — `chat` for `agents/chat.ts`, the same string the URL carries and the same
+   * one the access policy is judged under (`params.agent`).
+   *
+   * It is spelled `agentName` rather than `agent` because the field's whole history is callers
+   * handing it something that identifies the agent's *module* instead: the plain route passed the
+   * absolute file path it compiles from, the thread route passed the label `agent "chat"` it puts
+   * in error messages, and both are values a reviewer reads as "the agent" without noticing that
+   * neither is a name (usetheokit/theokit#406). A path identifies a file on one machine — it
+   * changes with the deploy, splits one agent into a series per environment, and carries the
+   * server's directory layout (on a developer machine, the user's account name) to a telemetry
+   * backend nobody decided to export it to.
+   *
+   * If the module path is ever wanted for debugging it belongs on its own attribute
+   * (`code.filepath` is the OpenTelemetry registry spelling), deliberately, and never as the key
+   * an operator groups by.
+   */
+  readonly agentName: string
   /** The thread/session id, when the route has one. */
   readonly sessionId?: string
   /**
@@ -63,7 +85,7 @@ export function observeServedRun<T>(
   if (adapter === undefined) return stream
 
   const inbound = extractW3CTraceContext(options.request)
-  const context: AgentRunSpanContext = { agent: options.agent }
+  const context: AgentRunSpanContext = { agent: options.agentName }
   if (options.sessionId !== undefined) context.sessionId = options.sessionId
   if (inbound !== undefined) {
     context.traceId = inbound.traceId

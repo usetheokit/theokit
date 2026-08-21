@@ -12,21 +12,18 @@ import {
 } from '../../../server/agent/approve-agent.js'
 import { mountAgent } from '../../../server/agent/mount-agent.js'
 import { resolveProvider } from '../../../server/agent/provider-resolver.js'
-import { serveAgentAuxRoute } from '../../../server/agent/serve-aux-routes.js'
+import { matchAgentAuxRoute, serveMatchedAuxRoute } from '../../../server/agent/serve-aux-routes.js'
 import { executeAction } from '../../../server/http/action-execute.js'
 import { dispatchControllerRequest } from '../../../server/http/controller-dispatch.js'
 import { executeRoute } from '../../../server/http/execute.js'
 import { createWebRequestSource } from '../../../server/http/node-request.js'
-import {
-  incomingMessageToWebRequest,
-  writeWebResponseToServerResponse,
-} from '../../../server/http/node-web-adapter.js'
+import { writeWebResponseToServerResponse } from '../../../server/http/node-web-adapter.js'
+import { serveThroughPluginLifecycle } from '../../../server/http/plugin-lifecycle.js'
 import { createAgentSubjectResolver } from '../../../server/http/resolve-agent-subject.js'
 import { sendError } from '../../../server/http/send-response.js'
 import { serveStaticFile } from '../../../server/http/static.js'
 import { logRequest } from '../../../server/observability/logger.js'
 import { findSuggestion } from '../../../server/observability/suggest.js'
-import type { PluginContext } from '../../../server/plugin-types.js'
 import type { PluginRunner } from '../../../server/plugins/plugin-runner.js'
 import type { ActionNode } from '../../../server/scan/action-scan.js'
 import type { AgentNode } from '../../../server/scan/agent-scan.js'
@@ -201,40 +198,63 @@ export async function tryServeAction(c: RequestHandlerCtx): Promise<boolean> {
 }
 
 /**
- * Branch 1.4: agent AUXILIARY routes served identically in dev + prod (M15/M16 follow-up) —
- * agent cards (`/.well-known/<name>/agent-card.json`), MCP (`/api/agents/<name>/mcp`), and the
- * pending-approvals listing (`/api/agents/<name>/approvals`). Before this, they were dev-only, so a
- * built/deployed app 404'd them. Delegates to the shared `serveAgentAuxRoute` dispatcher (DRY).
+ * Branch 1.4: agent AUXILIARY routes served identically in dev + prod (M15/M16 follow-up) — agent
+ * cards (`/.well-known/<name>/agent-card.json`), MCP (`/api/agents/<name>/mcp`), the pending-approvals
+ * listing, the durable run stream and the two thread routes. Before this, they were dev-only, so a
+ * built/deployed app 404'd them.
  *
- * theokit#400 — this branch runs for EVERY url, so it hands the dispatcher a deferred
- * `WebRequestSource` instead of a converted `Request`. It used to convert first and ask second, and
- * the conversion drains the Node body stream: every POST with a JSON body to an `/api` file route
- * (the most ordinary route an application has) then reached `parseJsonBody` with a readable that had
- * already ended, and waited forever for an `'end'` that had already fired. Not a 500, not a timeout
- * — no response at all. `theokit dev` was unaffected because its middleware matches the aux paths
- * before it converts, which is exactly what this now does.
+ * theokit#400 — this branch runs for EVERY url, so it must decide ownership without converting the
+ * request: `incomingMessageToWebRequest` drains the Node body stream, and a POST with a JSON body to
+ * an ordinary `/api` file route then reached `parseJsonBody` with a readable that had already ended
+ * and waited forever for an `'end'` that had already fired — no status, no timeout, no response.
+ * `matchAgentAuxRoute` is handed a method and a url and cannot convert anything, so the ordering is
+ * now a property of the signature rather than of this comment.
+ *
+ * usetheokit/theokit#405 — and having a match separate from the answer is what lets the plugin
+ * lifecycle run here at all. It did not, in either surface: six endpoints answered without
+ * `onRequest`/`onResponse`/`onError`, so an app embedding TheoKit could not observe them and the
+ * observability plugin emitted no `http.request` span for the two that spend tokens. The same
+ * bracket the plain agent turn uses now wraps this one, from the same function.
  */
 export async function tryServeAgentAux(c: RequestHandlerCtx): Promise<boolean> {
   const urlPath = c.url.split('?')[0]
-  const baseUrl = `http://${c.req.headers.host ?? 'localhost'}`
-  const response = await serveAgentAuxRoute(createWebRequestSource(c.req), urlPath, {
+  const deps = {
     agents: c.cachedAgents,
     loadModule: c.loadModule,
-    baseUrl,
+    baseUrl: `http://${c.req.headers.host ?? 'localhost'}`,
     // M34 (#97) — the MCP aux route drives the agent (spends tokens); enforce CSRF like the run route.
     csrfMode: c.csrfMode,
     // M39 — the thread follow-up route drives the agent; resolve the key on demand.
     // theokit#328 — the thread route drives an agent, so its key follows the model too.
-    resolveApiKey: (model) => resolveProvider(model).apiKey,
-    // usetheokit/theokit#365 — who is asking. Memoized and LAZY: this branch runs for every url,
-    // and the application's `createContext` must not execute for the ones it declines.
+    resolveApiKey: (model: string | undefined) => resolveProvider(model).apiKey,
+    // usetheokit/theokit#365 — who is asking. Memoized and LAZY: built here, invoked only inside
+    // `serveMatchedAuxRoute` and only when the matched agent declares a policy, so the application's
+    // `createContext` never runs for a url this branch declines.
     resolveSubject: agentSubjectResolver(c),
-  })
-  if (response === null) return false
+  }
+
+  const method = (c.req.method ?? 'GET').toUpperCase()
+  const route = await matchAgentAuxRoute(method, urlPath, deps)
+  if (route === null) return false
+
   c.res.setHeader(X_REQUEST_ID, c.requestId)
-  await writeWebResponseToServerResponse(response, c.res)
+  await serveThroughPluginLifecycle(
+    {
+      source: createWebRequestSource(c.req),
+      res: c.res,
+      requestId: c.requestId,
+      pluginRunner: c.pluginRunner,
+      failureMessage: 'Agent aux handler failed',
+    },
+    async (request) => {
+      await writeWebResponseToServerResponse(
+        await serveMatchedAuxRoute(route, request, deps),
+        c.res,
+      )
+    },
+  )
   logRequest({
-    method: (c.req.method ?? 'GET').toUpperCase(),
+    method,
     url: c.url,
     status: c.res.statusCode,
     duration: Date.now() - c.startTime,
@@ -276,35 +296,36 @@ export async function tryServeAgent(c: RequestHandlerCtx): Promise<boolean> {
       })
       return true
     }
-    try {
-      // usetheokit/theokit#365 — the approve route settles a paused tool, so it answers to the
-      // named agent's declared policy. The subject resolver runs BEFORE the Node request is
-      // converted, because `createContext` receives the Node `req` and the conversion drains it.
-      const approveAgent = c.cachedAgents.find((a) => a.name === parseApprovalAgentName(urlPath))
-      const resolveSubject = agentSubjectResolver(c)
-      const policy =
-        approveAgent === undefined
-          ? undefined
-          : readAgentPolicy(await c.loadModule(approveAgent.filePath), approveAgent.filePath)
-      const request = incomingMessageToWebRequest(c.req)
-      const response = await handleAgentApproval(
-        request,
-        urlPath,
-        getApprovalRegistry(),
-        c.csrfMode,
-        { policy, resolveSubject },
-      )
-      await writeWebResponseToServerResponse(response, c.res)
-    } catch (err) {
-      sendError(
-        c.res,
-        'INTERNAL',
-        err instanceof Error ? err.message : 'Approve handler failed',
-        500,
-        undefined,
-        c.requestId,
-      )
-    }
+    // usetheokit/theokit#405 — the approve route settles a human decision and answered with no
+    // plugin lifecycle at all, so a hook that fires for every other route never fired for this one
+    // and no `http.request` span was emitted for it. Same bracket as the turn below.
+    await serveThroughPluginLifecycle(
+      {
+        source: createWebRequestSource(c.req),
+        res: c.res,
+        requestId: c.requestId,
+        pluginRunner: c.pluginRunner,
+        failureMessage: 'Approve handler failed',
+      },
+      async (request) => {
+        // usetheokit/theokit#365 — the approve route settles a paused tool, so it answers to the
+        // named agent's declared policy. The resolver is memoized and lazy: `handleAgentApproval`
+        // invokes it only when the agent declares one.
+        const approveAgent = c.cachedAgents.find((a) => a.name === parseApprovalAgentName(urlPath))
+        const policy =
+          approveAgent === undefined
+            ? undefined
+            : readAgentPolicy(await c.loadModule(approveAgent.filePath), approveAgent.filePath)
+        const response = await handleAgentApproval(
+          request,
+          urlPath,
+          getApprovalRegistry(),
+          c.csrfMode,
+          { policy, resolveSubject: agentSubjectResolver(c) },
+        )
+        await writeWebResponseToServerResponse(response, c.res)
+      },
+    )
     logRequest({
       method,
       url: c.url,
@@ -365,84 +386,36 @@ async function serveAgentTurn(
   // invisible by construction, since a hook that never runs looks exactly like one with nothing to
   // say.
   //
-  // Mirrors `executeRoute`'s shape deliberately: same `PluginContext`, same short-circuit contract,
-  // same `onError` on the failure path — an agent route should not have a lifecycle of its own.
-  let pluginCtx: PluginContext | undefined
-  let request: Request
-
-  // Built before the conversion below, for the same reason the approve branch does it: the
-  // application's `createContext` is handed the Node `req`, and `incomingMessageToWebRequest`
-  // drains that stream (theokit#400).
+  // The bracket itself moved to `serveThroughPluginLifecycle` when the aux and approve branches
+  // needed the same one (usetheokit/theokit#405): this shape was copied twice and drifted five
+  // ways, which is the argument for having one of it.
   const resolveSubject = agentSubjectResolver(c)
 
-  try {
-    request = incomingMessageToWebRequest(c.req)
-    pluginCtx = { request, response: c.res, ctx: {}, requestId: c.requestId }
-  } catch (err) {
-    // A request the adapter cannot represent is a 500, exactly as before this branch grew a
-    // lifecycle — the conversion used to sit inside the try below and this preserves that.
-    sendError(
-      c.res,
-      'INTERNAL',
-      err instanceof Error ? err.message : 'Agent handler failed',
-      500,
-      undefined,
-      c.requestId,
-    )
-    logRequest({
-      method,
-      url: c.url,
-      status: c.res.statusCode,
-      duration: Date.now() - c.startTime,
+  await serveThroughPluginLifecycle(
+    {
+      source: createWebRequestSource(c.req),
+      res: c.res,
       requestId: c.requestId,
-    })
-
-    return
-  }
-
-  if (c.pluginRunner) {
-    c.pluginRunner.applyDecorations(pluginCtx.ctx)
-    const onRequest = await c.pluginRunner.runOnRequest(pluginCtx)
-    if (onRequest.shortCircuited) {
-      logRequest({
-        method,
-        url: c.url,
-        status: c.res.statusCode,
-        duration: Date.now() - c.startTime,
-        requestId: c.requestId,
+      pluginRunner: c.pluginRunner,
+      failureMessage: 'Agent handler failed',
+    },
+    async (request) => {
+      const mod = await c.loadModule(agent.filePath)
+      // theokit#326 — resolve against the model the agent declares, not by env priority.
+      const apiKey = (model: string | undefined): string => resolveProvider(model).apiKey
+      const response = await mountAgent(mod, request, apiKey, {
+        source: agent.filePath,
+        csrfMode: c.csrfMode,
+        projectRoot: c.projectRoot,
+        // usetheokit/theokit#365 — the policy is read off `mod` inside `mountAgent`; what this
+        // caller owes is the identity to judge it against. usetheokit/theokit#406 — and it is the
+        // same value the run's spans are labelled with, so `source` above never reaches telemetry.
+        agentName: agent.name,
+        resolveSubject,
       })
-      return
-    }
-  }
-
-  try {
-    const mod = await c.loadModule(agent.filePath)
-    // theokit#326 — resolve against the model the agent declares, not by env priority.
-    const apiKey = (model: string | undefined): string => resolveProvider(model).apiKey
-    const response = await mountAgent(mod, request, apiKey, {
-      source: agent.filePath,
-      csrfMode: c.csrfMode,
-      projectRoot: c.projectRoot,
-      // usetheokit/theokit#365 — the policy is read off `mod` inside `mountAgent`; what this
-      // caller owes is the identity to judge it against.
-      agentName: agent.name,
-      resolveSubject,
-    })
-    await writeWebResponseToServerResponse(response, c.res)
-  } catch (err) {
-    if (c.pluginRunner) await c.pluginRunner.runOnError(pluginCtx, err)
-    sendError(
-      c.res,
-      'INTERNAL',
-      err instanceof Error ? err.message : 'Agent handler failed',
-      500,
-      undefined,
-      c.requestId,
-    )
-  }
-
-  // After the response is written, as `executeRoute` does — a hook here observes a completed turn.
-  if (c.pluginRunner) await c.pluginRunner.runOnResponse(pluginCtx)
+      await writeWebResponseToServerResponse(response, c.res)
+    },
+  )
   logRequest({
     method,
     url: c.url,

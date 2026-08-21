@@ -60,11 +60,19 @@ export function buildAgentHitl(compiled: Compiled) {
  * that could carry it — so the value was dropped at the call site, silently, while
  * `handleThreadMessage` held the `Request` two lines away. An optional parameter would have left
  * the same omission available; a required one makes the call site state what it is doing.
+ *
+ * `agentName` is required for the same reason, one defect later (usetheokit/theokit#406). There was
+ * one string here, `source`, and it was doing two jobs: labelling a fail-fast `AgentDefinitionError`
+ * and labelling every span of the run. This route's caller passes `agent "chat"` — good prose in an
+ * error message, and not a name — while the plain route passes the module's absolute file path. Two
+ * parameters because they are two values; the compile label may stay human-readable precisely
+ * because it is no longer the key an operator groups by.
  */
 export function makeThreadStartRun(
   mod: unknown,
   apiKey: string | ApiKeyResolver,
   source: string,
+  agentName: string,
   request: Request,
 ): (sessionId: string, message: string) => AsyncIterable<UIMessageChunk> {
   return (sessionId, message) =>
@@ -87,7 +95,10 @@ export function makeThreadStartRun(
       // the trace id that is exactly what happened, until both routes were made
       // to go through one function (usetheokit/theokit#381). The trace continued
       // is the one of the request that STARTED this run, which outlives it:
-      // `observe-served-run.ts` says why that is the right answer.
-      yield* observeServedRun(stream, { agent: source, sessionId, request })
+      // `observe-served-run.ts` says why that is the right answer. The `agent`
+      // attribute took a second pass to converge (usetheokit/theokit#406): it was
+      // `source`, so this route labelled every span `agent "chat"` while the plain
+      // route labelled its own with a file path.
+      yield* observeServedRun(stream, { agentName, sessionId, request })
     })()
 }

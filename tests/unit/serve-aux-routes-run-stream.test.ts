@@ -3,10 +3,10 @@ import { describe, expect, it } from 'vitest'
 
 import { durableUiMessageStreamResponse } from '../../packages/theo/src/server/agent/durable-ui-message-stream-response.js'
 import { getRunEventCache } from '../../packages/theo/src/server/agent/run-event-cache.js'
-import { serveAgentAuxRoute } from '../../packages/theo/src/server/agent/serve-aux-routes.js'
+
 import type { AgentNode } from '../../packages/theo/src/server/scan/agent-scan.js'
 import type { WebRequestSource } from '../../packages/theo/src/server/http/node-request.js'
-import { sourceOf } from '../lib/web-request-source.js'
+import { dispatchAuxRoute, sourceOf } from '../lib/web-request-source.js'
 
 /**
  * M37 (ADR-0046) — end-to-end wiring through the REAL aux-route dispatcher +
@@ -51,7 +51,7 @@ async function readAll(res: Response): Promise<string> {
   return out
 }
 
-describe('serveAgentAuxRoute — M37 durable run-stream reconnect', () => {
+describe('the agent aux dispatcher — M37 durable run-stream reconnect', () => {
   it('reconnects a completed run through the dispatcher + shared singleton cache', async () => {
     const cache = getRunEventCache() // the SAME singleton mountAgent uses
     const runId = 'run-e2e-1'
@@ -61,7 +61,7 @@ describe('serveAgentAuxRoute — M37 durable run-stream reconnect', () => {
     await readAll(durableUiMessageStreamResponse(chunks(start, delta), { runId, cache }))
 
     const path = `/api/agents/support/runs/${runId}/stream`
-    const res = await serveAgentAuxRoute(getReq(path), path, deps)
+    const res = await dispatchAuxRoute(getReq(path), path, deps)
     expect(res).not.toBeNull()
     const body = await readAll(res!)
     expect(body).toBe(
@@ -77,27 +77,27 @@ describe('serveAgentAuxRoute — M37 durable run-stream reconnect', () => {
     await readAll(durableUiMessageStreamResponse(chunks(a, b), { runId, cache }))
 
     const path = `/api/agents/support/runs/${runId}/stream`
-    const res = await serveAgentAuxRoute(getReq(path, '0'), path, deps)
+    const res = await dispatchAuxRoute(getReq(path, '0'), path, deps)
     const body = await readAll(res!)
     expect(body).toBe(`id: 1\ndata: ${JSON.stringify(b)}\n\ndata: [DONE]\n\n`)
   })
 
   it('returns 404 for an unknown runId under a known agent', async () => {
     const path = '/api/agents/support/runs/run-missing/stream'
-    const res = await serveAgentAuxRoute(getReq(path), path, deps)
+    const res = await dispatchAuxRoute(getReq(path), path, deps)
     expect(res).not.toBeNull()
     expect(res!.status).toBe(404)
   })
 
   it('falls through (null) for an unknown agent name', async () => {
     const path = '/api/agents/ghost/runs/run-x/stream'
-    const res = await serveAgentAuxRoute(getReq(path), path, deps)
+    const res = await dispatchAuxRoute(getReq(path), path, deps)
     expect(res).toBeNull()
   })
 
   it('falls through (null) for a non-GET method on the run-stream route', async () => {
     const path = '/api/agents/support/runs/run-x/stream'
-    const res = await serveAgentAuxRoute(
+    const res = await dispatchAuxRoute(
       sourceOf(new Request(`https://app.example${path}`, { method: 'POST' })),
       path,
       deps,

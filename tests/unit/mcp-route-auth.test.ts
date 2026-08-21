@@ -8,8 +8,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { defineAgent } from '../../packages/agents/src/bridge/define-agent.js'
-import { serveAgentAuxRoute } from '../../packages/theo/src/server/agent/serve-aux-routes.js'
-import { sourceOf } from '../lib/web-request-source.js'
+import { dispatchAuxRoute, sourceOf } from '../lib/web-request-source.js'
 
 const agentMod = {
   default: defineAgent({
@@ -58,13 +57,13 @@ describe('MCP surface default-DENY (M34 — explicit opt-in)', () => {
   }
 
   it('an agent that does NOT opt into MCP (no `export const mcp = true`) is not exposed → 404 fall-through', async () => {
-    const res = await serveAgentAuxRoute(sourceOf(mcpRequest()), '/api/agents/ops/mcp', denyDeps)
+    const res = await dispatchAuxRoute(sourceOf(mcpRequest()), '/api/agents/ops/mcp', denyDeps)
     // Default-DENY: the dispatcher returns null so the caller emits a 404 — the agent is NOT an MCP surface.
     expect(res).toBeNull()
   })
 
   it('an agent that opts in (`export const mcp = true`) IS exposed', async () => {
-    const res = await serveAgentAuxRoute(sourceOf(mcpRequest()), '/api/agents/ops/mcp', optInDeps)
+    const res = await dispatchAuxRoute(sourceOf(mcpRequest()), '/api/agents/ops/mcp', optInDeps)
     expect(res).not.toBeNull()
     expect(res!.status).toBe(200)
   })
@@ -72,13 +71,13 @@ describe('MCP surface default-DENY (M34 — explicit opt-in)', () => {
 
 describe('MCP route auth gate (M34 — closes #97)', () => {
   it('rejects a cross-origin POST with no CSRF header → 403 (parity with the agent-run route)', async () => {
-    const res = await serveAgentAuxRoute(sourceOf(mcpRequest()), '/api/agents/ops/mcp', deps)
+    const res = await dispatchAuxRoute(sourceOf(mcpRequest()), '/api/agents/ops/mcp', deps)
     expect(res).not.toBeNull()
     expect(res!.status).toBe(403)
   })
 
   it('allows a same-origin request carrying the X-Theo-Action header', async () => {
-    const res = await serveAgentAuxRoute(
+    const res = await dispatchAuxRoute(
       sourceOf(mcpRequest({ 'X-Theo-Action': '1', origin: 'http://localhost:3000' })),
       '/api/agents/ops/mcp',
       deps,
@@ -88,7 +87,7 @@ describe('MCP route auth gate (M34 — closes #97)', () => {
   })
 
   it('csrfMode "off" skips the gate (dev/testing escape hatch)', async () => {
-    const res = await serveAgentAuxRoute(sourceOf(mcpRequest()), '/api/agents/ops/mcp', {
+    const res = await dispatchAuxRoute(sourceOf(mcpRequest()), '/api/agents/ops/mcp', {
       ...deps,
       csrfMode: 'off',
     })

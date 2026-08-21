@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import { serveAgentAuxRoute } from '../../packages/theo/src/server/agent/serve-aux-routes.js'
-import { sourceOf, type CountingRequestSource } from '../lib/web-request-source.js'
+import {
+  dispatchAuxRoute,
+  sourceOf,
+  type CountingRequestSource,
+} from '../lib/web-request-source.js'
 import { defineAgent } from '../../packages/agents/src/bridge/define-agent.js'
 import type { AgentNode } from '../../packages/theo/src/server/scan/agent-scan.js'
 
@@ -46,10 +49,10 @@ function req(url: string, method = 'GET', body?: unknown): CountingRequestSource
   )
 }
 
-describe('serveAgentAuxRoute — production parity for card/mcp/list-approvals', () => {
+describe('the agent aux dispatcher — production parity for card/mcp/list-approvals', () => {
   it('M15 — serves the agent card at /.well-known/<name>/agent-card.json', async () => {
     const path = '/.well-known/support/agent-card.json'
-    const res = await serveAgentAuxRoute(req(path), path, deps)
+    const res = await dispatchAuxRoute(req(path), path, deps)
     expect(res).not.toBeNull()
     expect(res!.status).toBe(200)
     const card = (await res!.json()) as { name: string; url: string }
@@ -59,7 +62,7 @@ describe('serveAgentAuxRoute — production parity for card/mcp/list-approvals',
 
   it('M16 — serves the MCP JSON-RPC endpoint at /api/agents/<name>/mcp', async () => {
     const path = '/api/agents/support/mcp'
-    const res = await serveAgentAuxRoute(
+    const res = await dispatchAuxRoute(
       req(path, 'POST', { jsonrpc: '2.0', id: 1, method: 'initialize' }),
       path,
       deps,
@@ -71,7 +74,7 @@ describe('serveAgentAuxRoute — production parity for card/mcp/list-approvals',
 
   it('M14 — serves the pending-approvals listing at /api/agents/<name>/approvals', async () => {
     const path = '/api/agents/support/approvals'
-    const res = await serveAgentAuxRoute(req(path), path, deps)
+    const res = await dispatchAuxRoute(req(path), path, deps)
     expect(res).not.toBeNull()
     const body = (await res!.json()) as { approvals: unknown[] }
     expect(Array.isArray(body.approvals)).toBe(true)
@@ -79,13 +82,13 @@ describe('serveAgentAuxRoute — production parity for card/mcp/list-approvals',
 
   it('falls through (null) for a non-aux path', async () => {
     const path = '/api/agents/support'
-    expect(await serveAgentAuxRoute(req(path, 'POST'), path, deps)).toBeNull()
+    expect(await dispatchAuxRoute(req(path, 'POST'), path, deps)).toBeNull()
   })
 
   it('falls through (null) for an unknown agent', async () => {
     const path = '/api/agents/ghost/mcp'
     expect(
-      await serveAgentAuxRoute(
+      await dispatchAuxRoute(
         req(path, 'POST', { jsonrpc: '2.0', id: 1, method: 'initialize' }),
         path,
         deps,
@@ -95,7 +98,7 @@ describe('serveAgentAuxRoute — production parity for card/mcp/list-approvals',
 
   it('falls through (null) on the wrong method (card is GET-only)', async () => {
     const path = '/.well-known/support/agent-card.json'
-    expect(await serveAgentAuxRoute(req(path, 'POST'), path, deps)).toBeNull()
+    expect(await dispatchAuxRoute(req(path, 'POST'), path, deps)).toBeNull()
   })
 })
 
@@ -105,7 +108,7 @@ describe('serveAgentAuxRoute — production parity for card/mcp/list-approvals',
  */
 import { defineAppResource } from '../../packages/theo/src/server/agent/mcp-app-resources.js'
 
-describe('serveAgentAuxRoute — M30 per-agent appResources wiring', () => {
+describe('the agent aux dispatcher — M30 per-agent appResources wiring', () => {
   const withResources = {
     agents: [{ name: 'ui', filePath: '/agents/ui.ts', agentPath: '/api/agents/ui' } as AgentNode],
     loadModule: async () => ({
@@ -119,7 +122,7 @@ describe('serveAgentAuxRoute — M30 per-agent appResources wiring', () => {
 
   it('resources/list returns the module-declared ui:// resources', async () => {
     const path = '/api/agents/ui/mcp'
-    const res = await serveAgentAuxRoute(
+    const res = await dispatchAuxRoute(
       req(path, 'POST', { jsonrpc: '2.0', id: 1, method: 'resources/list' }),
       path,
       withResources,
@@ -132,7 +135,7 @@ describe('serveAgentAuxRoute — M30 per-agent appResources wiring', () => {
 
   it('initialize advertises capabilities.resources when the module declares any', async () => {
     const path = '/api/agents/ui/mcp'
-    const res = await serveAgentAuxRoute(
+    const res = await dispatchAuxRoute(
       req(path, 'POST', { jsonrpc: '2.0', id: 1, method: 'initialize' }),
       path,
       withResources,
@@ -155,7 +158,7 @@ describe('serveAgentAuxRoute — M30 per-agent appResources wiring', () => {
  * `sourceOf` increments on every `toRequest()`, so "did not touch the body" is an assertion instead
  * of a comment.
  */
-describe('serveAgentAuxRoute — a path it does not own costs nothing', () => {
+describe('the agent aux dispatcher — a path it does not own costs nothing', () => {
   const notOurs = [
     ['an ordinary /api file route', '/api/probe'],
     ['the agent run route (owned by the sibling branch)', '/api/agents/support'],
@@ -168,7 +171,7 @@ describe('serveAgentAuxRoute — a path it does not own costs nothing', () => {
     it(`test_falls_through_without_converting_the_request_for_${path}`, async () => {
       const source = req(path, 'POST', { a: 1 })
 
-      const res = await serveAgentAuxRoute(source, path, deps)
+      const res = await dispatchAuxRoute(source, path, deps)
 
       expect(res, `${label} must fall through`).toBeNull()
       expect(source.calls, `${label} must not convert the request`).toBe(0)
@@ -180,7 +183,7 @@ describe('serveAgentAuxRoute — a path it does not own costs nothing', () => {
     const path = '/.well-known/support/agent-card.json'
     const source = req(path, 'POST', { a: 1 })
 
-    expect(await serveAgentAuxRoute(source, path, deps)).toBeNull()
+    expect(await dispatchAuxRoute(source, path, deps)).toBeNull()
     expect(source.calls).toBe(0)
   })
 
@@ -190,7 +193,7 @@ describe('serveAgentAuxRoute — a path it does not own costs nothing', () => {
     const path = '/api/agents/support/mcp'
     const source = req(path, 'POST', { jsonrpc: '2.0', id: 1, method: 'initialize' })
 
-    const res = await serveAgentAuxRoute(source, path, deps)
+    const res = await dispatchAuxRoute(source, path, deps)
 
     expect(res!.status).toBe(200)
     expect(source.calls).toBe(1)

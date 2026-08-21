@@ -67,6 +67,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **The agent endpoints beside the run route are no longer invisible at the HTTP layer.** The thread
+  message and stream routes, MCP, the agent card, the pending-approvals listing, the durable
+  run-stream reconnect and the HITL approve route answered without ever consulting the plugin
+  runner, in a built app and in `theokit dev` alike — so no `onRequest`, no `onResponse`, no
+  `onError`, and therefore no `http.request` span and neither HTTP counter for six endpoints, two of
+  which spend tokens and one of which settles a human decision. An operator reading HTTP latency or
+  error rate saw nothing for them, which reads exactly like no traffic rather than like no
+  instrumentation, while their `agent.run` spans arrived and showed a run with no request above it.
+  All of them now run the same lifecycle the plain agent route runs, from one shared bracket rather
+  than a copy per branch, including the `onRequest` short-circuit and the `onError` path. As part of
+  it, `theokit dev` stopped 404ing the two thread routes and the run-stream reconnect that
+  `theokit start` serves: the dev middleware kept a hand-written subset of the dispatcher's route
+  table, and now asks the table. (usetheokit/theokit#405)
+- **A dashboard grouped by agent stops splitting one agent in two, and server paths stop reaching
+  the telemetry backend.** The `agent` attribute on `agent.run`, `agent.tool` and `agent.hitl` was
+  the agent module's absolute filesystem path when the run started on `POST /api/agents/<name>` and
+  the string `agent "chat"` when it started on the thread route. So the dimension an operator groups
+  by was neither a name nor stable: one agent became two series, the path form changed with every
+  deploy and every directory rename, and on a developer machine it carried the user's home directory
+  — and therefore their account name — to a third-party backend on every span of every run. Both
+  routes now report the agent's name, the same string the URL carries and the same one its access
+  policy is judged under. The module path is not exported under another attribute either; that would
+  be a deliberate opt-in, and it was never one. (usetheokit/theokit#406)
 - **One request that runs an agent arrives as one trace instead of two.** The `http.request` span
   joined no trace: it minted a fresh one on every route, while the agent run it contained continued
   the caller's `traceparent`. The caller's trace id was on the HTTP span all along — as the

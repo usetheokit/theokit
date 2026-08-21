@@ -275,6 +275,7 @@ describe('a run trace does not depend on which endpoint started it (usetheokit/t
         body: JSON.stringify({ message: 'hi' }),
       }),
       source: 'chat',
+      agentName: 'chat',
       csrfMode: 'off',
     })
     expect(response.status).toBe(202)
@@ -311,6 +312,7 @@ describe('a run trace does not depend on which endpoint started it (usetheokit/t
         body: JSON.stringify({ message: 'hi' }),
       }),
       source: 'chat',
+      agentName: 'chat',
       csrfMode: 'off',
     })
     await runEnded(((await threadResponse.json()) as { runId: string }).runId)

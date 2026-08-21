@@ -57,13 +57,20 @@ interface ThreadMessageArgs {
   readonly apiKey: string | ApiKeyResolver
   readonly sessionId: string
   readonly request: Request
+  /** Labels a fail-fast `AgentDefinitionError`. Human-readable; never a telemetry key. */
   readonly source: string
+  /**
+   * The agent's name, as the scanner discovered it — the attribute an operator groups runs by.
+   * Separate from {@link ThreadMessageArgs.source} since usetheokit/theokit#406: one field was
+   * carrying both, and this route's `source` is the label `agent "chat"`.
+   */
+  readonly agentName: string
   readonly csrfMode?: CsrfMode
 }
 
 /** POST a follow-up on a thread. Returns `202` with `{ runId }` (started) or `{ queued: true }`. */
 export async function handleThreadMessage(args: ThreadMessageArgs): Promise<Response> {
-  const { mod, apiKey, sessionId, request, source, csrfMode = 'strict' } = args
+  const { mod, apiKey, sessionId, request, source, agentName, csrfMode = 'strict' } = args
   // A follow-up drives the agent (spends LLM tokens) — reject a cross-origin POST.
   if (csrfMode === 'strict') {
     const csrf = validateCsrfRequest(request)
@@ -85,7 +92,7 @@ export async function handleThreadMessage(args: ThreadMessageArgs): Promise<Resp
       cache: getRunEventCache(),
       // usetheokit/theokit#381 — the request goes with it, so the run's spans join the trace of
       // the caller that queued it instead of opening one of their own.
-      startRun: makeThreadStartRun(mod, apiKey, source, request),
+      startRun: makeThreadStartRun(mod, apiKey, source, agentName, request),
     },
     sessionId,
     input.message,
