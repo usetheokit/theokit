@@ -1264,3 +1264,32 @@ It does not withdraw the three countable metrics or the criteria — those were 
 collector and stand. It says the journey is not won, because winning has four parts and the fourth was
 never run. And it applies beyond this journey: **metric 4 is still unmeasured on the other nine**, and
 the install cost measured here is a baseline both sides pay on every one of them.
+
+### Annotation, 2026-08-21: the protocol above was asymmetric, and the number is not re-run
+
+J7's re-measurement ran this same harness on its own two applications and found something about the
+protocol rather than about either framework: **the two source trees here are not symmetric.**
+`j09-next` carries a `package-lock.json`; `j09-theo` does not. A tree with a lockfile installs from
+it; a tree without one re-resolves the whole dependency graph against the registry on every run.
+Both scaffolders write a lockfile, so the tree without one is the anomaly.
+
+Measured on J7's pair, three runs per cell: removing the lockfile costs TheoKit **8.97 s** of install
+and Next.js **5.15 s**. Roughly 3.8 s of the gap this section reports was therefore charged to one
+side only.
+
+**The number above is not corrected here, and the win is not restored.** Nothing in J7's run
+re-executes J9's applications, and editing a measurement by inference is the move this programme
+refuses everywhere else. What is recorded is that the protocol had a handicap in it, that the
+handicap is worth about 3.8 s of the 15.4 s install gap, and that J9's metric 4 needs re-running
+symmetrically before its verdict means what it says. J7's own metric 4, measured both ways, does not
+reproduce this gap on either protocol — see [J7's criteria file](j07-rate-limit.md) § Metric 4.
+
+Two further caveats found the same way, both of which cut against the decomposition rather than
+against the totals. First, `node-pty@1.1.0` ships prebuilt binaries for `darwin-*` and `win32-*` and
+**none for `linux-x64`**, so `node-gyp rebuild` really does run on this platform — and takes about
+two seconds once the node-gyp header cache is warm, not the ten-plus a cold machine would pay.
+Second, with lockfiles present the whole script cost re-measures at about **2.1 s**, against the
+19.8 s recorded in `../evidence/b025-install-decomposition-2026-08-20.txt`. The decomposition's
+shape holds — TheoKit pays for lifecycle scripts and Next.js declares none — and its magnitude is
+protocol-dependent in a way that measurement did not previously state. Neither figure was ever taken
+on a cold machine, which is where a new developer actually stands.

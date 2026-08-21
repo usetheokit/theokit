@@ -567,6 +567,323 @@ document refuses everywhere else. Two things still hold it open, and only one of
 A re-measurement was started on 2026-08-20 and stopped before it built anything, so nothing here is
 graded by it. What is recorded is only that one of the two named obstacles is gone.
 
+**The re-measurement was completed on 2026-08-21 — see § Re-measured below.** It found that "gone"
+overstated it: `c4a3b4d` is unreleased, so the artifact this journey grades still hangs, three times
+out of three. It also measured metric 4, which clears its clause, and it withdrew the store asymmetry
+as a reason while sharpening a third one this paragraph folded into it.
+
+## Re-measured — both sides, metric 4 included (2026-08-21)
+
+**The section above closed with two reasons and an invitation to re-measure. This is the
+re-measurement.** It builds both lanes again from scratch, re-derives metrics 1-3 from fresh diffs,
+re-exercises the criteria against running builds, and — for the first time on this journey — measures
+metric 4 on both sides. It does not replace the 2026-08-20 sections; it says what moved.
+
+Two of the three things that changed between the measurements were changes to *this repository's
+working tree*, and neither of them is on npm yet. That distinction decides half of what follows, so it
+is established by measurement before anything is concluded from it.
+
+### What changed between the two measurements, and what did not
+
+| | 2026-08-20 | 2026-08-21 | How it was checked |
+| --- | --- | --- | --- |
+| [#400](https://github.com/usetheokit/theokit/issues/400) — `POST` with a body hangs | open, reproduced | **fixed on `workspace` (`c4a3b4d`), unreleased** — still reproduces 3 of 3 on the artifact npm serves | a real `POST` over TCP against both builds, below |
+| Vite major in a scaffolded app | two (`vite@6` from the framework, `vite@7` from Tailwind), two `esbuild` | **one of each on `workspace` (`d635f7fe9`), unreleased** | `npm ls esbuild vite --all` on both trees |
+| The Next.js side | `next@16.3.1`, `@upstash/ratelimit@2.0.8`, `@upstash/redis@1.38.2` | **identical — all three still the current published versions** | `npm view <pkg> version`, all three |
+| The store | in-process by enforcement | **unchanged** (`packages/theo/src/server/rate-limit/rate-limit.ts:53`, `packages/theo/src/server/rate-limit/rate-limit-per-route.ts:162`) | read from the working tree |
+| The Web-standards handler | no limiter, no production caller | **unchanged** (`packages/theo/src/server/rate-limit/rate-limit.ts:105`, `packages/theo/src/server/rate-limit/rate-limit-per-route.ts:295`) | `grep` for callers across `packages/`, tests excluded |
+| Metric 4 | unmeasured on both sides | **measured on both sides**, below | the harness at `../evidence/metric4-harness.sh` |
+
+The Next.js side is therefore reused rather than rebuilt from zero, and the reuse is earned: the three
+packages the diff depends on are byte-for-byte the versions the previous measurement installed, and the
+lane's own git history still shows the same baseline and the same 26-line delta with nothing on top.
+`ai` and `@ai-sdk/react` moved by one patch each (7.0.70 → 7.0.71, 4.0.73 → 4.0.74); both are baseline
+dependencies counted on neither side, and neither is imported by the rate-limit diff.
+
+### #400 is fixed in the tree and still shipping broken, and the difference is the whole point
+
+The previous verdict's parenthetical — a server "where the ordinary `POST` with a JSON body to the
+protected route never returns at all" — was checked against both artifacts rather than against the
+commit. One `POST` carrying `{"hello":"world"}` to an `/api` file route, bounded at 8 s, three times
+each:
+
+| | `theokit@0.48.14` (npm, what `create-theokit` installs today) | `theokit@0.49.0` (this worktree, contains `c4a3b4d`) |
+| --- | --- | --- |
+| run 1 | no response, aborted at 8001 ms | **200 in 5 ms**, body echoed back verbatim |
+| run 2 | no response, aborted at 8001 ms | **200 in 5 ms**, body echoed |
+| run 3 | no response, aborted at 8000 ms | **200 in 5 ms**, body echoed |
+| `GET` on the same server afterwards | 200 in 3 ms | 200 |
+
+The fix works, and the regression test that guards it
+(`tests/integration/start-post-body-reaches-the-route.test.ts`) asserts the echoed body rather than the
+status, so a fix that delivered an empty body would not pass it. What the fix is not is *shipped*:
+`c4a3b4d` is dated after both the `0.48.14` release npm serves and the unpublished `0.49.0` release
+commit, and [#400](https://github.com/usetheokit/theokit/issues/400) is still open. § Acceptance
+criteria grades this journey **against a published build**. On that artifact the sentence the previous
+verdict wrote is still true, measured today, three times out of three.
+
+So the first of the two stated reasons is discharged *in the code* and is not yet discharged *in the
+artifact this journey grades*. Both halves are recorded because collapsing them is how a fix comes to
+be credited twice.
+
+### Metric 4 — measured, and the previous protocol had an asymmetry in it
+
+Same harness as J9 (`../evidence/metric4-harness.sh`), same definition: a clean copy of each side's
+committed source, no `node_modules`, no build output, through install → build → start → first
+successful HTTP response, probing `/` on both sides so no lane needs its store to answer. Warm npm
+cache, stated rather than hidden, exactly as J9 declared it. Every run below, including the six that
+failed and were discarded, is in `../evidence/j07-metric4-2026-08-21.txt`.
+
+**One thing was checked before any number was reported, and it changed the protocol.** J9's two source
+trees were not symmetric: `j09-next` carries a `package-lock.json` and `j09-theo` does not. A tree with
+a lockfile installs from it; a tree without one re-resolves the whole dependency graph against the
+registry on every run. Both scaffolders write a lockfile — `create-next-app` and `create-theokit`
+alike — so the tree without one is the anomaly, not the tree with one. Every number below is therefore
+reported **both ways, on both sides**, and the asymmetry is priced rather than argued.
+
+#### With each tree's own lockfile — six runs per side, interleaved
+
+| run | Next.js + `@upstash/ratelimit` | TheoKit `0.48.14` |
+| --- | --- | --- |
+| 1 | 12.9 s | 12.7 s |
+| 2 | 13.9 s | 14.5 s |
+| 3 | 15.7 s | 14.5 s |
+| 4 | 13.0 s | 11.5 s |
+| 5 | 14.5 s | 12.3 s |
+| 6 | 18.3 s | 12.5 s |
+| **mean ± 1σ** | **14.72 ± 2.04** → [12.68, 16.75] | **13.00 ± 1.23** → [11.77, 14.23] |
+
+Runs 4-6 were taken alternating lane by lane rather than three of one then three of the other, so any
+drift in machine load falls on both columns.
+
+**The intervals overlap, and TheoKit's mean is the lower one.** By § What counts as winning's own test
+— non-overlapping intervals at ±1σ over ≥ 3 runs — TheoKit is **not worse on time to first green run**.
+It is also not *better* by that test, because the same overlap that clears "not worse" denies "outside
+noise"; the winning rule asks only for the first.
+
+| phase, mean ± 1σ | Next.js | TheoKit |
+| --- | --- | --- |
+| install | 5.18 ± 0.66 | 6.13 ± 0.79 |
+| build | 8.95 ± 1.42 | **5.77 ± 0.53** |
+| start | 0.65 ± 0.12 | 1.05 ± 0.05 |
+
+TheoKit installs about a second slower and builds about three seconds faster, and the build is the
+larger term. That is the same shape J9 found on the build half and the opposite of what it found on the
+install half.
+
+#### Without a lockfile on either side — J9's protocol, applied symmetrically
+
+| | Next.js | TheoKit |
+| --- | --- | --- |
+| runs | 20.9, 19.2, 18.4 | 23.4, 22.6, 19.5 |
+| **mean ± 1σ** | **19.50 ± 1.28** → [18.22, 20.78] | **21.83 ± 2.06** → [19.77, 23.89] |
+| install, mean | 10.33 | 15.10 |
+
+Removing the lockfile costs TheoKit 8.97 s of install and Next.js 5.15 s — both real, neither free, and
+the difference between them is roughly 3.8 s that J9's protocol charged to one side only. Even so the
+intervals still overlap (19.77 < 20.78), so **the verdict is the same under either protocol**: not
+worse. That matters more than which protocol is right, because it means the conclusion does not rest on
+the protocol correction.
+
+#### What this does and does not say about J9
+
+It does not restore J9's win. J9's number was measured on a different pair of applications, and nothing
+here re-runs it. What it says is narrower and still worth saying: **J9's 30.40 ± 7.50 s was measured
+with a handicap on one side**, and this journey's own numbers, measured symmetrically, do not reproduce
+its gap on either protocol. J9's § Metric 4 has been annotated accordingly rather than rewritten, and
+its number stands as what was measured until somebody re-runs it.
+
+The other half of the divergence is the machine, and it is stated rather than defended. This
+measurement ran after the same trees had been installed a dozen times in the same session, so the npm
+cache and the node-gyp header cache are warmer than they were for J9. `node-pty` ships prebuilt
+binaries for `darwin-*` and `win32-*` and **none for `linux-x64`**, so `node scripts/prebuild.js ||
+node-gyp rebuild` really does compile on this platform every time — it just compiles fast when the
+headers are already local. Neither this measurement nor J9's timed a cold machine, and neither should
+be read as one.
+
+#### The install decomposition, re-run with lockfiles
+
+Two runs per cell, mirroring `../evidence/b025-install-decomposition-2026-08-20.txt` so the two are
+comparable:
+
+| | with scripts | `--ignore-scripts` | scripts cost |
+| --- | --- | --- | --- |
+| TheoKit | 5.0 s, 5.3 s | 3.1 s, 3.1 s | ~2.1 s |
+| Next.js | 4.7 s, 5.9 s | 5.1 s, 4.1 s | ~0 s (it declares none) |
+
+The published decomposition put TheoKit's script cost at 19.8 s and its `--ignore-scripts` floor at
+10.5 s. Both figures were taken on a tree with no lockfile, and both collapse when the lockfile is
+present and the caches are warm. The *shape* survives — TheoKit pays for lifecycle scripts and Next.js
+pays for none — and its magnitude does not. `B-025` is still worth closing; what it is worth is smaller
+than 19.8 s under this protocol, and nobody has yet measured either number on a cold machine, which is
+where a new developer actually stands.
+
+### Did Vite 7 move our number? Measured, and no — not under this protocol
+
+`d635f7fe9` changes one field of one manifest (`"vite": "^6.4.3"` → `"^7.0.0"`) and nothing else. To
+isolate it, the worktree's `theokit` was packed twice into two tarballs differing in exactly that field
+and nothing else, and installed into two copies of the same application. The dependency claim holds
+outright:
+
+| | `vite@^6.4.3` | `vite@^7.0.0` |
+| --- | --- | --- |
+| `vite` majors in the tree | 2 (`6.4.3` + `7.3.6`) | **1** (`7.3.6`) |
+| `esbuild` copies | 2 (`0.25.12` + `0.28.2`) | **1** (`0.28.2`) |
+| packages installed | 386 | **383** |
+
+The time claim does not:
+
+| | `vite@^6.4.3` | `vite@^7.0.0` |
+| --- | --- | --- |
+| runs | 13.0, 11.3, 11.1 | 10.8, 10.8, 12.7 |
+| **total, mean ± 1σ** | **11.80 ± 1.04** | **11.43 ± 1.10** |
+| install, mean | 5.40 | 5.00 |
+
+**0.37 s on the total and 0.40 s on install, against σ of about 1 s on each side — inside noise.** The
+second `esbuild` costs 11 MB on disk and one more `postinstall`, and on a warm cache that
+`postinstall` unpacks a tarball npm already holds. This is a real saving in tree size that this
+protocol cannot see as time, and the honest report is the negative result rather than the disk figure
+standing in for it. What it would be worth on a cold cache — where the second `esbuild` must fetch its
+platform binary over the network — is **not measured here, on either side**.
+
+Both lanes carry a caveat worth stating: `theokit@0.49.0` needs `@theokit/agents` from the same
+worktree, because its client imports `AgentStreamInterruptedError`, which published
+`@theokit/agents@10.1.0` does not export — the two carry the same version number and different
+exports. The first attempt at this lane installed worktree `theokit` against npm `@theokit/agents`
+and the client bundle failed on that import, which cost six runs. **This is an artefact of packing a
+pre-release tree by hand, not a defect**: `.changeset/agent-stream-interrupted.md` declares a minor
+bump on both packages, so a real release ships them together and the `workspace:^` range resolves to
+the bumped version. It is recorded because the next person to pack this repository by hand will hit
+it, and because `npm pack` does not rewrite pnpm's `workspace:` protocol the way publishing does.
+
+### Metrics 1-3, re-derived from fresh diffs
+
+Both counts come from `git diff --numstat` over a committed untouched baseline, formatted with the
+`create-theokit` Prettier config on both sides, exactly as the section above describes.
+
+| Metric | TheoKit | Next.js + `@upstash/ratelimit` | Margin | Bar |
+| --- | --- | --- | --- | --- |
+| Files touched | **1** | **3** | 3x | ≥ 2x — **outside** |
+| Glue lines | **2** | **26** | 13x | ≥ 2x — **outside** |
+| Concepts required | **3** | **9** | 3x | ≥ 2x — **outside** |
+| Time to first green run | **13.00 ± 1.23 s** | **14.72 ± 2.04 s** | intervals overlap | **not worse** |
+
+The TheoKit diff re-derived here from a fresh `create-theokit@latest` scaffold is `3 1 theo.config.ts`
+— three lines added, one removed, character for character what the previous measurement published. The
+Next.js diff is `26 0 proxy.ts`, `2 0 package.json`, `2 0 .env.local`, unchanged in its lane's git
+history. Nothing in the counting moved, and the eleven declared judgements of § Declared judgements
+apply unchanged.
+
+### The criteria, re-exercised against running builds
+
+Three runs per lane, budget `max: 3` over a 5 s window on both sides, the same side-effect recorder on
+`:4311` for every lane. A third lane was added: the same TheoKit application against the worktree
+build, which is the only one that can be probed the way the Next.js lane is probed.
+
+| # | Criterion | TheoKit `0.48.14` (published) | TheoKit `0.49.0` (worktree) | Next.js + `@upstash/ratelimit` |
+| --- | --- | --- | --- | --- |
+| 1 | N succeeds, N+1 refused, on the boundary | **PASS** — `200, 200, 200, 429`, 3/3 runs | **PASS** — same, and the probe is a `POST` **carrying a JSON body** | **PASS** — `200, 200, 200, 429`, 3/3 |
+| 2 | machine-readable, dedicated code from the parsed body | **PASS** — `{"error":{"code":"RATE_LIMITED",…}}` | **PASS** — same | **PASS** — same code, application-authored |
+| 3 | retry-after present, wait performed, follow-up succeeds | **PASS** — `Retry-After: 5`, all 3 runs; deadline−1.2 s still `429`; after the wait `200` | **PASS** — same | **PASS** — `Retry-After: 3, 3, 2` across runs, which varies with position in the fixed window and is correct; deadline−1.2 s still `429`; after the wait `200` |
+| 4 | the refused request did no work | **PASS** — recorder holds **3**, then **4** | **PASS** — same, for a refused `POST` with a body | **PASS** — **3**, then **4** |
+| 5 | same refusal on the agent path | **PASS** — `500, 500, 500, 429`, headers byte-identical to the plain route | **PASS** — `400, 400, 400, 429`, headers byte-identical | **PASS** — `200, 200, 200, 429`, the three 200s streaming a real mock run; same three header names, `Retry-After` differing by window position |
+| 6-8 | Web, Tauri, TUI exercised | **not exercisable here** | **not exercisable here** | **n/a** — a TheoKit-transversal rule |
+
+Every row agreed across all three runs of every lane. The three non-`429` statuses on each TheoKit
+agent lane are the provider resolver and the request validator respectively — both prove the agent
+branch **ran**, which is what criterion 5 needs from them, and the `429` arrives in 3-4 ms without
+either.
+
+**The honest tally is five of eight, not five of five.** Criteria 6, 7 and 8 have never been gradeable
+in this repository, and § What is still unmeasured, and why said so before any number existed. Reading
+three ungradeable criteria as a clean sweep is the same move as reading an unmeasured metric 4 as "not
+worse", and this document refused that one.
+
+### "Not the same purchase" — argued from scratch
+
+The previous verdict held the journey open on a single sentence that turns out to carry three
+different claims. Separating them is most of the work, because they are not graded the same way.
+
+**Claim 1 — the store is in-process and theirs is shared.** This is an asymmetry of *capacity*, and it
+is **not a reason to withhold the win**. § How the four metrics are counted here settled it before
+either implementation existed: "Provisioning a store counts as glue on the side that needs one, and its
+absence counts as zero on the side that does not, with the operational difference recorded rather than
+scored." That rule was written into the criteria, ahead of the code, precisely so that the side without
+a store could not be charged for not having one after the numbers arrived. Scoring it now is adding a
+criterion after the fact — the same failure judgement 11 refused in the other direction when it
+declined to charge Next.js for the `x-forwarded-for` bypass.
+
+The J3 test is the one worth applying, and it does not catch this. J3 refused an 8.8x margin because
+its lines priced code whose trigger never fires. These two lines price a limiter that **was run** and
+that refused real requests over HTTP, three runs, two builds. A limiter that holds on one process is
+not a limiter that does not work; it is a limiter with a smaller operating envelope, and the envelope
+was stated in the criteria before it was measured.
+
+There is a sharper form of the objection and it should be answered rather than skipped: the in-process
+store is not merely absent, it is *refused* — every shipped factory throws when handed anything else,
+so a developer who outgrows one instance cannot buy the Next.js capability at any price inside the
+framework's own API. That is true, and it is a limit on what is *purchasable*, not on what these two
+lines purchased. It belongs in the roadmap, and the second break in § The deliberately broken state
+already grades the silent version of it. It is not a counting decision and it does not move a metric.
+
+**Claim 2 — the protected server could not take a `POST` with a body.** Measured above: fixed in the
+tree, unfixed in the artifact this journey grades, three times out of three. It is a release away from
+being discharged, and until the release it is not discharged.
+
+**Claim 3 — ours protects one target and theirs protects every target.** This is the one that survives,
+it is J3-shaped, and it was buried inside a sentence about stores. The two lines are read by the Node
+production server. The Web-standards rate-limit factories still have **no production caller**
+(`packages/theo/src/server/rate-limit/rate-limit.ts:105`,
+`packages/theo/src/server/rate-limit/rate-limit-per-route.ts:295`), and the six deploy adapters built on
+the Web shim — `vercel`, `cloudflare`, `netlify`, `bun`, `deno-deploy`, `aws-lambda` — contain no
+reference to a limiter at all; the only mention anywhere under `packages/theo/src/adapters/` is a
+comment (`packages/theo/src/adapters/web-shim.ts:136`). On those six targets the declared budget is
+parsed and no limiter is constructed: the same line, the same config key, and nothing refuses anything.
+That is J3's failure exactly — lines that price a trigger which never fires — and it is not softened by
+being true on a seventh target where it does fire.
+
+It is also not a new criterion smuggled in after the fact. Criterion 6 asks that the budget hold on
+**Web**, and criteria 6-8 have been ungradeable here since before the first number. What the source
+says is not a substitute for grading them; but a limiter that is never constructed cannot limit, and a
+journey does not get to count an unbuildable criterion as satisfied while refusing to count an
+unmeasured metric as passed.
+
+### Verdict — 2026-08-21
+
+**Metric 4 no longer holds this journey open. One reason does, and it is a different one from the two
+that were named.**
+
+The scorecard, with everything measured today:
+
+| | Result |
+| --- | --- |
+| Files touched | 1 against 3 — **3x, outside the bar** |
+| Glue lines | 2 against 26 — **13x, outside the bar** |
+| Concepts required | 3 against 9 — **3x, outside the bar** |
+| Time to first green run | 13.00 ± 1.23 s against 14.72 ± 2.04 s — intervals overlap, **not worse**, and the same conclusion holds without lockfiles on either side |
+| Gradeable criteria | **5 of 5 against 5 of 5**, exercised on published builds |
+| Ungradeable criteria | **3**, all on the TheoKit side (Web, Tauri, TUI) |
+
+Three margins outside the bar and a fourth metric that clears its clause. That is the whole winning
+rule satisfied on the arithmetic, and it is the first time any of the ten has got here.
+
+**It is still reported as not won, on one claim of the three the old sentence contained.** The two
+lines buy a limiter on `node`, the one target `theokit start` serves. On the six adapters built on
+the Web-standards handler, the identical line declares a budget that nothing reads — parsed, validated,
+and never handed to a limiter, because the Web-shaped factories have no caller. Twenty-six lines of
+`proxy.ts` run wherever `next build` deploys. A journey is won by costing less to build *the thing the
+criteria describe*, and criterion 6 describes it holding on Web.
+
+The store asymmetry is **withdrawn as a reason**, with the argument above and against this document's
+own pre-committed counting rule. The `POST`-with-a-body clause is **discharged in the code and pending
+a release**. What is left is a single, cheap, entirely mechanical gap: give the Web-standards handler
+the limiter it already knows how to construct. It is the same fix `j10-deploy.md` needs, and when it
+lands, this journey has nothing left holding it open.
+
+**So: J7's three countable metrics are the framework's best result, metric 4 clears its clause on both
+protocols, both sides pass every gradeable criterion, and the journey is reported as not won because
+the cheap side protects `node` and none of the six adapters built on the Web-standards handler.**
+
 ## The deliberately broken state
 
 Per `../dx-benchmark.md` § The fifth, which is pass/fail and not a number. The break for J7 is a

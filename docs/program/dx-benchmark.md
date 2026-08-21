@@ -374,6 +374,21 @@ Upstash version facts — including that Vercel's own in-code answer, `@vercel/f
 for a dashboard rule that fails open and is a no-op outside production — are in
 [J7's criteria file](journeys/j07-rate-limit.md).
 
+**J7 was re-measured on 2026-08-21, and metric 4 stopped being what holds it open.** Both lanes
+rebuilt, metrics 1-3 re-derived from fresh diffs (unchanged: 1/3, 2/26, 3/9), criteria re-exercised
+(unchanged: 5 of 5 both sides, over nine runs), and metric 4 measured for the first time on this
+journey: **13.00 ± 1.23 s against 14.72 ± 2.04 s over six runs each, intervals overlapping** — so the
+"not worse on time-to-green" clause is satisfied, and it is satisfied under a no-lockfile protocol
+too. Of the two reasons the paragraph above gives, one is now measured away and the other splits:
+the `POST`-with-a-body clause is **fixed in the tree and unreleased**, still reproducing 3 of 3 on
+the artifact npm serves; the store asymmetry is **withdrawn as a reason**, because § How the four
+metrics are counted here pre-committed to recording it rather than scoring it. What remains is a
+third claim the old sentence folded into the second: the two lines protect `node`, the one target
+`theokit start` serves, and the six adapters built on the Web-standards handler parse the same budget
+and hand it to nobody. That is J3's shape, and it is what J7 is still reported on. The
+re-measurement, the lockfile asymmetry it found in metric 4's protocol, and the Vite 7 result are in
+[J7's criteria file](journeys/j07-rate-limit.md) § Re-measured.
+
 **All ten journeys are measured — four ties, three losses, one unresolved, one metric sweep and one
 that wins every countable metric, every criterion it needs, and still loses on the fourth metric
 nobody had run — and the framework has not won a single one. The program's second obligation is now
