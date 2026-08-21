@@ -184,7 +184,29 @@ its caveats are in [J9's criteria file](journeys/j09-observability.md) § Metric
 is left standing as the record of what was concluded before that number existed, because a retraction
 that edits away what it retracts teaches nobody what went wrong.
 
-**And the lesson generalises past this journey: metric 4 is still unmeasured on the other nine.** The
+**Metric 4's number is a baseline, and that changes what it means for the other nine.** What was
+timed is the scaffold each journey starts from — install, build, start, first response — and every
+journey's delta is single-digit lines of source against a gap of 15.5 seconds. The delta cannot move
+it. So the honest reading is not "metric 4 is unmeasured on nine journeys"; it is that **the same
+baseline gap applies to all ten, and a journey can only escape it if the Next.js side's own delta
+costs more than 15.5 s of install** — and none measured so far comes close. The dependencies that
+side adds are pure JavaScript: `p-retry` on J6, `resumable-stream` and `redis` on J3,
+`@upstash/ratelimit` on J7. Seconds, not fifteen.
+
+The consequence is worth stating plainly rather than leaving to be inferred: **until the install cost
+is resolved, no journey can satisfy the winning rule's fourth clause, so no journey can be won.** J9
+did not lose metric 4 because of anything J9 does. It lost the scaffold's, and so would the other
+nine. The cause is one native dependency and it is registered as `B-025`, with the measurement, the
+attempted fix and the reason that fix was reverted — two well-argued rules conflict, and resolving
+them is a decision rather than a repair.
+
+This also inverts the order of the remaining work. Closing defects a journey names and re-measuring
+is what produced J9's six-of-seven criteria, and it is the right method; it simply cannot produce a
+win on its own from here. One dependency decision gates all ten.
+
+**What is genuinely unmeasured on the other nine is the per-journey delta**, which is bounded above by
+the difference between each side's added dependencies and is small on every journey measured. Timing
+them individually would refine the number and cannot change its sign. The
 install cost measured here is a baseline both sides pay on every one of them, and it is invisible to
 files, glue lines and concepts — which is why the goal names four metrics and not three. A framework
 can be cheaper to write in every countable way and still make a person wait twice as long to see the
