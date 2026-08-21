@@ -194,6 +194,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- **`theokit` builds on Vite 7, so a scaffolded application installs one esbuild instead of two.**
+  The framework pinned `vite@^6` while the same scaffold's `@tailwindcss/vite@^4` pulls `vite@7`, so
+  every application resolved two Vite majors and, with them, two `esbuild` copies — 23 MB and two
+  `postinstall` binary fetches for one framework. Measured: with a single major in the tree, one
+  `vite` and one `esbuild` remain. Eighteen of the twenty files that touch the Vite API import only
+  types; the two that call it at runtime are the node adapter's `build` and `theokit dev`'s
+  `createServer`, and both are unchanged. An application using a Vite plugin built for v6 will need
+  that plugin's v7 line. (`B-025`)
 - **Importing server code from a client page fails the build with an error that names both.** The
   client bundle now refuses `theokit/server`, any `theokit/server/*` subpath, and any module under
   your own `server/` directory, naming the module, the file whose import crossed the line, and the
