@@ -544,6 +544,29 @@ far, and it is reported as undecided rather than won.** The honest way to close 
 measure metric 4 and to make the Web-standards handler enforce the budget it already knows how to
 parse — neither of which is a counting decision.
 
+### One of the two reasons was removed later the same day — and this is not a re-measurement
+
+`#400` is fixed (`c4a3b4d`). `tests/integration/start-post-body-reaches-the-route.test.ts` boots the
+real production request handler on a real listener and asserts the **echoed body**, not merely a
+status — a fix that handed the handler an empty body would pass a status check and fails this one —
+with every fetch bounded by `AbortSignal.timeout`, so a regression reads as "no response in 2000 ms"
+rather than hanging the suite. Four cases, green. The clause above about a server "where the ordinary
+`POST` with a JSON body to the protected route never returns at all" no longer describes the code.
+
+**The verdict above stands unchanged, and deliberately.** Removing a stated blocker is not the same
+as re-running the measurement, and editing a verdict without re-measuring is the moved target this
+document refuses everywhere else. Two things still hold it open, and only one of them was #400:
+
+- **Metric 4 is unmeasured on both sides**, so "not worse on time to first green run" is untested —
+  a hole every one of the ten journeys shares, and the one that decides here.
+- **The other half of "not the same purchase" was never about #400.** Our store is in-process and
+  theirs is a shared Redis. That is an asymmetry of *capacity*, not of cost, and whether it is a
+  reason not to win or a difference the criteria already graded — both sides passed all five — is a
+  judgement a re-measurement has to make from scratch rather than inherit.
+
+A re-measurement was started on 2026-08-20 and stopped before it built anything, so nothing here is
+graded by it. What is recorded is only that one of the two named obstacles is gone.
+
 ## The deliberately broken state
 
 Per `../dx-benchmark.md` § The fifth, which is pass/fail and not a number. The break for J7 is a
