@@ -1397,3 +1397,33 @@ compared here as well.
 **The limit is unchanged and no criterion sees it.** Every HITL run driven *without* a `traceparent`
 arrived as **three** disconnected traces: the run's, the initial POST's, and the approve POST's.
 A browser sends no `traceparent`. usetheokit/theokit#404, reproduced again.
+
+### Criterion 3 — the pause span still measures the wrong interval, and the reason is the same one
+
+Three runs, varying only the model's post-resume latency against an instantaneous gated tool. The
+tolerance is the ±25% this file already declared. The client reports the delay it actually measured,
+so the comparison is against an observed wait rather than an intended one.
+
+| model latency after resume | human wait, measured | exported `agent.hitl` | excess | run span | hitl / run |
+| --- | --- | --- | --- | --- | --- |
+| 20 ms | 1200 ms | **1230.000 ms** | +30 ms | 1312.000 ms | 93.8% |
+| 700 ms | 250 ms | **973.000 ms** | +723 ms | 3093.000 ms | 31.5% |
+| 1500 ms | 252 ms | **1776.000 ms** | +1524 ms | 6306.000 ms | 28.2% |
+
+The excess tracks the model's latency 1:1 across a 75x change in the ratio. The criterion asks for a
+duration within tolerance of the delay **and** materially shorter than the run span, and the two
+halves cannot both hold: row 1 is within 2.5% of the human wait and is 94% of the run; rows 2 and 3
+are comfortably shorter than the run and are 3.9x and 7.0x the human wait.
+
+**What has improved is real and is not the criterion.** `hitl.resume_observed=true` and status `ok`
+on all three — the span closes at the resume, which is what `0e9e6dc04` bought. **Why it still
+measures the wrong interval was read off the wire rather than inferred**: in the third run the
+approval was answered at ≈3306 ms and `tool-output-available` — the chunk `closeToolSpan` keys on —
+reached the client at 4829 ms, 1523 ms later, which is the model's post-resume latency to the
+millisecond. usetheokit/theokit#389.
+
+**And an application still cannot make it pass.** The pause span is opened and closed inside
+`observeAgentRun`; an application supplies no chunk and no timestamp to it, and `startSpan` takes a
+name, attributes and a trace context — nothing that would let a caller end a span earlier. That
+half of § Measured — TheoKit side's sentence survives; the other half of it does not, and the next
+section says so.

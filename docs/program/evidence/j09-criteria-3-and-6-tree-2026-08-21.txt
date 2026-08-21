@@ -189,3 +189,116 @@ re-run with the COMMITTED copies to show the fix changed nothing that matters:
   http.request trace=4bf92f3577b34da6a3ce929d0e0e4736 id=3682d7cf625d4cf3 parent=00f067aa0ba902b7 dur=150.000ms
 
   4 spans; distinct traces: 1     -- same trace id, same parentage, new span ids
+
+
+CRITERION 3 — a HITL pause is a span whose duration is the time the HUMAN took:
+              within tolerance of a scripted delay AND materially shorter than
+              the run span
+================================================================================
+
+The tolerance was fixed before these runs and is the one this file already
+declared for criterion 1: +/-25% of the interval being compared against.
+
+The client answers the approval after a KNOWN delay and reports the delay it
+actually measured, so the comparison is against an observed wait, not an intended
+one. The model's post-resume latency is the only variable that changes between the
+three runs (THINK_MS on the scripted model); the gated tool is a string echo in all
+three, so nothing but the model moves.
+
+RUN 3.A — human 1200 ms, model latency 20 ms
+--------------------------------------------
+  $ MODEL_PORT=11533 SCRIPT=gated THINK_MS=20 node model.mjs
+  $ PORT=3199 HUMAN_DELAY_MS=1200 node drive-hitl.mjs
+  -> clientWallClockMs 1335, approval answered after a measured 1200 ms
+     wire order: 86ms tool-input-available / 86ms tool-approval-request
+                 1315ms tool-output-available / 1335ms finish
+http.request trace=1478e1a1cec8756178aaaed742b15ebc id=171ec1d9149e2298 parent=---------------- dur=1.000ms status=1
+             method=POST path=/api/agents/chat/approve/aebc1d6a-3957-4586-b208-78014966bc7e requestId=9feb4c00-08e2-43e9-a4d4-0fa6576116e0 status=int:200
+agent.hitl   trace=edd68497383e71a993761a7eca623f4a id=6099760d4f5641a9 parent=76ce49dd11d28454 dur=1230.000ms status=1
+             agent=chat tool=send_notification approvalId=aebc1d6a-3957-4586-b208-78014966bc7e toolCallId=aebc1d6a-3957-4586-b208-78014966bc7e hitl.resume_observed=bool:true
+agent.tool   trace=edd68497383e71a993761a7eca623f4a id=4e133f7929daf373 parent=76ce49dd11d28454 dur=1230.000ms status=1
+             agent=chat tool=send_notification toolCallId=aebc1d6a-3957-4586-b208-78014966bc7e
+agent.run    trace=edd68497383e71a993761a7eca623f4a id=76ce49dd11d28454 parent=---------------- dur=1312.000ms status=1
+             agent=chat cost.usd=int:0 tokens.input=int:2400 tokens.output=int:680 tokens.total=int:3080 tokens.reasoning=int:0 tokens.cache_read=int:0 tokens.cache_write=int:0 gen_ai.request.model=ollama/j9-local
+http.request trace=2825d110aedd45ffa5db6cbdae1c834e id=164256bb54ebcb31 parent=---------------- dur=1313.000ms status=1
+             method=POST path=/api/agents/chat requestId=df6ec317-6743-4816-ac38-0d81e3e3e5e2 status=int:200
+
+5 spans; distinct traces: 3
+
+RUN 3.B — human 250 ms, model latency 700 ms
+--------------------------------------------
+  $ MODEL_PORT=11533 SCRIPT=gated THINK_MS=700 node model.mjs
+  $ PORT=3199 HUMAN_DELAY_MS=250 node drive-hitl.mjs
+  -> clientWallClockMs 3119, approval answered after a measured 250 ms
+     wire order: 1443ms tool-approval-request / 2415ms tool-output-available / 3119ms finish
+http.request trace=95e4dbebaa5187445dd04386edbd9e05 id=7094422482764f35 parent=---------------- dur=2.000ms status=1
+             method=POST path=/api/agents/chat/approve/5cc851b8-212d-42a2-85d3-2e85b5b17ca3 requestId=67f19c56-10c1-4c0b-8c3b-f633768b3502 status=int:200
+agent.hitl   trace=17a923bb93befd64e6a0ba33a6ce27a9 id=72f27e1f788fa92a parent=1f1f258c51cdcda4 dur=973.000ms status=1
+             agent=chat tool=send_notification approvalId=5cc851b8-212d-42a2-85d3-2e85b5b17ca3 toolCallId=5cc851b8-212d-42a2-85d3-2e85b5b17ca3 hitl.resume_observed=bool:true
+agent.tool   trace=17a923bb93befd64e6a0ba33a6ce27a9 id=f1acf5aff3971e6a parent=1f1f258c51cdcda4 dur=973.000ms status=1
+             agent=chat tool=send_notification toolCallId=5cc851b8-212d-42a2-85d3-2e85b5b17ca3
+agent.run    trace=17a923bb93befd64e6a0ba33a6ce27a9 id=1f1f258c51cdcda4 parent=---------------- dur=3093.000ms status=1
+             agent=chat cost.usd=int:0 tokens.input=int:2400 tokens.output=int:680 tokens.total=int:3080 tokens.reasoning=int:0 tokens.cache_read=int:0 tokens.cache_write=int:0 gen_ai.request.model=ollama/j9-local
+http.request trace=d9f4f9b00b47fa64e78e1d55d3a830f3 id=ca2e714b11b45e99 parent=---------------- dur=3096.000ms status=1
+             method=POST path=/api/agents/chat requestId=af970335-9dd9-4e27-932f-f02779533dbb status=int:200
+
+5 spans; distinct traces: 3
+
+RUN 3.C — human 250 ms, model latency 1500 ms
+---------------------------------------------
+  $ MODEL_PORT=11533 SCRIPT=gated THINK_MS=1500 node model.mjs
+  $ PORT=3199 HUMAN_DELAY_MS=250 node drive-hitl.mjs
+  -> clientWallClockMs 6333, approval answered after a measured 252 ms
+     wire order: 3054ms tool-approval-request / 4829ms tool-output-available / 6333ms finish
+http.request trace=f5ed7b697bae6fdf28d350f28e9bd23b id=815c36e4ae919332 parent=---------------- dur=3.000ms status=1
+             method=POST path=/api/agents/chat/approve/ced2bb31-1730-4808-8643-96ee717c8702 requestId=53c5ad3e-ac68-4760-b0e4-39127c531fe2 status=int:200
+agent.hitl   trace=c94223b2a578d154b7a7b287fce92cd0 id=e7ca451f144fd240 parent=ab28cfaf9e55ee85 dur=1776.000ms status=1
+             agent=chat tool=send_notification approvalId=ced2bb31-1730-4808-8643-96ee717c8702 toolCallId=ced2bb31-1730-4808-8643-96ee717c8702 hitl.resume_observed=bool:true
+agent.tool   trace=c94223b2a578d154b7a7b287fce92cd0 id=66acbfb3a2610806 parent=ab28cfaf9e55ee85 dur=1776.000ms status=1
+             agent=chat tool=send_notification toolCallId=ced2bb31-1730-4808-8643-96ee717c8702
+agent.run    trace=c94223b2a578d154b7a7b287fce92cd0 id=ab28cfaf9e55ee85 parent=---------------- dur=6306.000ms status=1
+             agent=chat cost.usd=int:0 tokens.input=int:2400 tokens.output=int:680 tokens.total=int:3080 tokens.reasoning=int:0 tokens.cache_read=int:0 tokens.cache_write=int:0 gen_ai.request.model=ollama/j9-local
+http.request trace=728c5614d580af674fc1e7a9ffc0d25f id=9b1a049d2c61d37b parent=---------------- dur=6308.000ms status=1
+             method=POST path=/api/agents/chat requestId=67b86487-9286-4b07-ad4d-090acc249536 status=int:200
+
+5 spans; distinct traces: 3
+
+THE TABLE
+---------
+  run  model latency  human wait (measured)  agent.hitl duration  excess   run span   hitl/run
+  3.A     20 ms            1200 ms                1230.000 ms     +30 ms   1312.000 ms   93.8%
+  3.B    700 ms             250 ms                 973.000 ms    +723 ms   3093.000 ms   31.5%
+  3.C   1500 ms             252 ms                1776.000 ms   +1524 ms   6306.000 ms   28.2%
+
+The excess tracks the model's post-resume latency 1:1 across a 75x change in the
+ratio (30/723/1524 against 20/700/1500). The pause span does not measure the human;
+it measures the human PLUS the model's next turn.
+
+VERDICT ON CRITERION 3 (tree, ungraded)
+---------------------------------------
+FAILS on the tree, and the two halves of the criterion cannot both hold with this
+implementation:
+
+  3.A is within tolerance of the human wait (+2.5%) and is 93.8% of the run span,
+      so it is not "materially shorter than the run span".
+  3.B and 3.C are comfortably shorter than the run span (31.5%, 28.2%) and are
+      3.9x and 7.0x the human wait, so they are nowhere near tolerance.
+
+hitl.resume_observed=true on all three, and the span status is ok — so the span
+DOES close at the resume now, which is the improvement 0e9e6dc04 bought. What it
+does not do is measure the interval the criterion names.
+
+WHY, read from the wire rather than guessed. `closeToolSpan` keys on
+`tool-output-available`, and the transcripts above show that chunk is not flushed
+when the tool returns: in run 3.C the approval was answered at ~3306 ms
+(3054 + 252) and `tool-output-available` reached the client at 4829 ms — 1523 ms
+later, which is the model's post-resume latency. Filed as usetheokit/theokit#389;
+this run reproduces it on a tree where the span closes correctly, which sharpens
+the issue rather than restating it.
+
+An application cannot fix this. The pause span is opened and closed inside
+observe-agent-run.ts, an application supplies no chunk and no timestamp to it, and
+`startSpan` takes a name, attributes and a trace context and nothing that would let
+a caller end a span earlier. The journey file's older sentence about criterion 3 --
+"an application cannot make it pass" -- is still accurate, for a reason that has
+moved: the span used to never close, and now it closes on the wrong chunk.
