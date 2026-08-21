@@ -1,6 +1,6 @@
 ---
 'create-theokit': patch
-'theokit': patch
+'theokit': minor
 ---
 
 An agent now declares who may run it, and every endpoint it exposes obeys that declaration.
