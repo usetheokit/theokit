@@ -286,7 +286,7 @@ not itself a dependency — two milestones in the same wave may run in either or
 
 **Band: parity required.** What M14 deploys is what this emits, and reproducibility is the floor under every other measurement in the programme.
 
-**Measured 2026-08-21:** The route scan sorts by code unit (`packages/theo/src/router/scan.ts:142`) and **the consolidated walker does not** (`packages/theo/src/server/_internal/scan-walker.ts:36`), so three of the four scanners still read the filesystem in creation order. No CI job grades reproducibility, and `modulepreload` is emitted nowhere.
+**Measured 2026-08-21, and corrected the same day after the first count was taken without checking the call sites.** The client-router scan sorts by code unit (`packages/theo/src/router/scan.ts:142`); the consolidated walker does not (`packages/theo/src/server/_internal/scan-walker.ts:36`), and **six scanners consume it** — routes, actions, websockets, cron, agents and jobs. Only one of the six re-orders afterwards: `packages/theo/src/server/scan/scan.ts:173` sorts by route specificity, ending in a code-unit fallback (`:209`), which is a total order and therefore independent of walk order. The other five carry the filesystem's creation order into their output. No CI job grades reproducibility, and `modulepreload` is emitted nowhere.
 
 **Definition of done (all must hold):**
 

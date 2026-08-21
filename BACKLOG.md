@@ -171,7 +171,7 @@ dod:
   - two scans over the same tree created in different orders produce identical output
   - two clean builds of the same commit produce client bundles whose `sha256sum` values are equal
   - the fix matches the sibling scanner rather than inventing a second ordering rule
-  - `walkSourceFiles` sorts too — **re-measured 2026-08-21 and this is what is left.** `packages/theo/src/router/scan.ts:142` now sorts by code unit, so the site this item was opened against is fixed; the consolidated walker at `packages/theo/src/server/_internal/scan-walker.ts:36` does not, and it is the walker that three scanners share after the DRY consolidation its own header records. The item reads as half-closed and is closer to a quarter
+  - `walkSourceFiles` sorts too — **re-measured 2026-08-21 and this is what is left.** `packages/theo/src/router/scan.ts:142` now sorts by code unit, so the site this item was opened against is fixed; the consolidated walker at `packages/theo/src/server/_internal/scan-walker.ts:36` does not, and **six scanners consume it** (routes, actions, websockets, cron, agents, jobs) rather than the three its own header names — the consolidation grew after that comment was written. Only `packages/theo/src/server/scan/scan.ts:173` re-orders afterwards, by route specificity with a code-unit fallback (`:209`), so routes are already order-independent and the other five are not. The item reads as half-closed and is closer to a quarter
   - a CI job fails the build when two clean builds of one commit disagree — today no workflow under `.github/workflows/` grades reproducibility at all, so the first two bullets could regress silently
 
 ## B-005 — cache, observability, cost tracking and CSRF hardening ship with no production caller   [ ]
