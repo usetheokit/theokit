@@ -55,9 +55,9 @@ the two disagree, the rule wins and this one is the bug.
 
 ## Index
 
-24 items — **Open** 24 · **In flight** 0 · **Closed** 0
+25 items — **Open** 25 · **In flight** 0 · **Closed** 0
 
-### Open (24)
+### Open (25)
 
 | Item | Title | Status | Severity |
 |---|---|---|---|
@@ -85,6 +85,7 @@ the two disagree, the rule wins and this one is the bug.
 | [`B-022`](#b-022--a-fixture-born-of-the-same-assumption-as-the-code-cannot-disagree-with-it----) | a fixture born of the same assumption as the code cannot disagree with it | `triaged` | — |
 | [`B-023`](#b-023--the-deploy-shim-buffers-a-stream-whole-across-six-of-nine-targets----) | the deploy shim buffers a stream whole, across six of nine targets | `triaged` | — |
 | [`B-024`](#b-024--two-conventions-cost-a-file-each-and-nobody-has-decided-whether-they-are-worth-it----) | two conventions cost a file each, and nobody has decided whether they are worth it | `triaged` | — |
+| [`B-025`](#b-025--a-web-app-compiles-a-terminal-pty-it-will-never-use-and-it-costs-the-benchmarks-fourth-metric----) | a web app compiles a terminal PTY it will never use, and it costs the benchmark's fourth metric | `triaged` | — |
 
 ### In flight (0)
 
@@ -463,4 +464,19 @@ dod:
   - whichever way each goes, an ADR states it, because a convention kept for a good reason and a convention kept by inertia are indistinguishable from the outside — and the benchmark will keep charging for it either way
   - J2 re-measured after the decisions land, so the number reflects them
 
-Next free id: **B-025**.
+## B-025 — a web app compiles a terminal PTY it will never use, and it costs the benchmark's fourth metric   [ ]
+
+domain: theokit
+repo: packages/agents
+suggested_mode: evolve
+source: discover-review
+evidence: metric 4 measured on 2026-08-20 (`docs/program/evidence/metric4-j09-2026-08-20.txt`) puts a scaffolded TheoKit app at 30.40 ± 7.50 s to first green run against Next.js at 14.93 ± 0.91 s — intervals non-overlapping, which is the test `docs/program/dx-benchmark.md` § What counts as winning sets, and the clause that retracted J9's win. The whole gap is install: 19.6 s against 4.2 s, while TheoKit's **build is faster** (7.8 s against 10.2 s). It is not tree size — measured, TheoKit installs **fewer** packages and less bytes: 230 packages / 404 MB against 285 / 644 MB. It is one dependency: `node-pty` declares `"install": "node scripts/prebuild.js || node-gyp rebuild"`, a native step that downloads a prebuild or falls back to a C++ compile, which also explains a variance eight times the Next.js side's. The chain is `@theokit/agents` → `@theokit/sdk-pty` → `node-pty`, and `sdk-pty` is a hard `dependencies` entry of `@theokit/agents` (`packages/agents/package.json`), reached by exactly one source file, `packages/agents/src/pty-entry.ts`, which exists to re-export it
+why_now: metric 4 went unmeasured on all ten journeys until 2026-08-20 and was assumed not to matter. It decided one: J9 won three countable metrics and six of seven criteria and is still not won, because the fourth clause is "not worse on time-to-green". This is the first cost the benchmark has surfaced that none of the other three metrics can see — files, glue lines and concepts are all blind to what a person waits for — and it is paid by every application on every journey, whether or not it ever opens a terminal
+status: triaged
+dod:
+  - a scaffolded web app installs without running a native build step, verified by timing rather than by reading the manifest
+  - `theokit dev` and `theokit start` still work for an app that does want the PTY backend, and how it opts in is documented
+  - metric 4 re-measured on J9 afterwards, because the number is the point and the manifest is not
+  - whatever shape is chosen, it does not become a second way to fail at install time — an optional dependency that silently does not install and then throws at runtime trades a slow start for `docs/adr/0002-an-abnormal-ending-is-never-reported-as-normal.md`
+
+Next free id: **B-026**.
