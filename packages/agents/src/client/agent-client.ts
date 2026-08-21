@@ -195,11 +195,26 @@ export interface AgentClientOptions {
    * change the observable behaviour of anyone counting emits or depending on first-token latency.
    */
   readonly emitIntervalMs?: number
+
+  /**
+   * The conversation this client continues. Absent = a fresh one is drawn.
+   *
+   * The id is not decorative: the HTTP transport sends it as the top-level `id`, which the server
+   * reads as the session id (`client/http-transport.ts:88-92`). It used to be drawn in the field
+   * declaration with no way to supply or read it, so every `new AgentClient(...)` was a new
+   * conversation and a page reload silently abandoned the thread the server still held
+   * (usetheokit/theokit#364).
+   *
+   * Supply it to resume; read `client.chatId` to persist it. Both halves are needed: reading without
+   * supplying lets an application store an id it can never restore, and supplying without reading
+   * leaves it nothing to store.
+   */
+  readonly chatId?: string
 }
 
 export class AgentClient<TInput = unknown> {
   readonly #transport: AgentTransport
-  readonly #chatId = crypto.randomUUID()
+  readonly #chatId: string
   readonly #listeners = new Set<() => void>()
   /** M43 — resolves per-request context (evaluated on every send/reconnect — dynamic, never stale). */
   readonly #contextResolver: (() => RequestContext | undefined) | undefined
@@ -253,6 +268,19 @@ export class AgentClient<TInput = unknown> {
     this.#transport = transport
     this.#contextResolver = contextResolver
     this.#emitIntervalMs = options?.emitIntervalMs ?? 0
+    // A fresh draw stays the default: two clients built with no id must be two conversations, or
+    // two unrelated tabs would share a thread — the opposite defect, and the more dangerous one.
+    this.#chatId = options?.chatId ?? crypto.randomUUID()
+  }
+
+  /**
+   * The conversation this client is on — the id the server keys the session by.
+   *
+   * Readable so an application can persist it and pass it back through
+   * {@link AgentClientOptions.chatId} after a reload (usetheokit/theokit#364).
+   */
+  get chatId(): string {
+    return this.#chatId
   }
 
   /** Subscribe to state changes; returns an unsubscribe fn. */
