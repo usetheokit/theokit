@@ -37,16 +37,28 @@ on:
       - 'packages/agents/src/**'
       - 'packages/agents/tests/**'
 
+permissions:
+  contents: read
+
+concurrency:
+  group: architecture-guards-${{ github.ref }}
+  # A cancelled run on an integration branch leaves the commit with no verdict,
+  # which reads the same as a passing one. Only supersede elsewhere.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/develop' }}
+
 jobs:
   agents-surface:
     name: surface parity (the layer enriches the SDK, never reduces it — M73)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          node-version: 22
+          persist-credentials: false
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: '.nvmrc'
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       # The M90 surface gate (`subpath-surface.test.ts` in the package) reads `dist/*.d.ts`, not the
@@ -63,12 +75,15 @@ jobs:
   dep-cruiser:
     name: dependency-cruiser (architecture rules)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          node-version: 22
+          persist-credentials: false
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: '.nvmrc'
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
       - run: pnpm check:deps
@@ -76,12 +91,15 @@ jobs:
   ls-lint:
     name: ls-lint (filename convention)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          node-version: 22
+          persist-credentials: false
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: '.nvmrc'
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
       - run: pnpm check:naming
@@ -89,6 +107,7 @@ jobs:
   wire-ownership:
     name: wire ownership (no published package carries the ai-sdk)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     # The DTS for theokit's ~24 entrypoints blows the runner's default heap
     # (ERR_WORKER_OUT_OF_MEMORY). `release.yml` carries the same line for the same reason.
     env:
@@ -96,11 +115,13 @@ jobs:
     steps:
       # Pinned by SHA: a tag is mutable, and a workflow that installs dependencies would otherwise
       # trust whatever the tag points at on the day.
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
-      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          node-version: 22
+          persist-credentials: false
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: '.nvmrc'
           cache: pnpm
       # `--ignore-scripts`: this job only builds and inspects; no lifecycle script is needed, and
       # allowing them widens the supply-chain surface for nothing.

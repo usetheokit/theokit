@@ -18,9 +18,13 @@ concurrency: ${{ github.workflow }}-${{ github.ref }}
 env:
   NODE_OPTIONS: --max-old-space-size=8192
 
+permissions:
+  contents: read
+
 jobs:
   release:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: write
       pull-requests: write
@@ -35,25 +39,57 @@ jobs:
       # Each pin carries the version it resolved to on 2026-08-21, read from the action's own
       # tags rather than assumed from the ref name. Majors are deliberately unchanged: pinning
       # freezes what already runs, upgrading is a separate decision with its own risk.
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1 # zizmor: ignore[artipacked]
         with:
+          # The one checkout in this repository that keeps its credential, and not
+          # by oversight: changesets/action pushes the version commit and the
+          # release tags with the git CLI, which authenticates from exactly this
+          # persisted token. `persist-credentials: false` breaks the release.
           fetch-depth: 0
-      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        # No `version:` here on purpose. The action reads `packageManager` from
+        # package.json, which is already the single authority on the pnpm version.
+        # Pinning it a second time in this file creates two places to update, and
+        # once they disagree action-setup aborts with ERR_PNPM_BAD_PM_VERSION.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          version: 9.15.0
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with:
-          node-version: 22
+          node-version-file: '.nvmrc'
           cache: 'pnpm'
-          registry-url: 'https://registry.npmjs.org'
-      # #169 — the `npm install -g npm@latest` step that used to sit here is GONE, and with it the
-      # failure that kept this workflow red from 2026-07-24 to 2026-08-06 (7 consecutive runs):
+          # NO `registry-url`. It looks harmless and is not: setup-node writes
+          # `//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}` into an npmrc
+          # UNCONDITIONALLY and points NPM_CONFIG_USERCONFIG at it, then exports
+          # NODE_AUTH_TOKEN only if the caller supplied one — which, under OIDC,
+          # nobody does. The job would publish with a config declaring a credential
+          # that does not exist. This line was also half of the E404 mystery below:
+          # it made the npmrc look authenticated when nothing was.
+
+      # THE STEP WITHOUT WHICH THE OIDC CONFIGURATION IS CORRECT AND USELESS.
+      # setup-node ships whatever npm the Node release bundles, and Node 22 bundles
+      # npm 10.9.7, which has no OIDC code at all — measured in theokit-plugins by
+      # unpacking the tarballs and grepping lib/ for ACTIONS_ID_TOKEN_REQUEST_URL:
+      # 10.9.7 -> 0 files, 11.4.1 -> 0, 11.5.1 -> 2. Without it the CLI never
+      # presents the OIDC token, publishes unauthenticated, and the registry answers
+      # `E404 Not Found - PUT`.
+      #
+      # 11.9.0 and NOT 12.x. The comment below already records why an npm upgrade was
+      # removed from this file: npm 12 rejects the `--no-git-checks` flag changesets
+      # forwards for pnpm, with EUNKNOWNCONFIG. That line is npm 12, not npm 11 —
+      # measured against one package on each version: 10.9.7 accepts, 11.5.1 accepts,
+      # 11.9.0 accepts, 12.0.2 rejects. The OIDC floor is 11.5.1, so 11.9.0 satisfies
+      # both constraints. npm 12 has a second, quieter bug: `npm info --json` returns
+      # an ARRAY where earlier npm returned an object, so changesets reads no
+      # published versions and tries to publish everything.
+      - name: Install an npm that speaks OIDC (>= 11.5.1) but tolerates pnpm's forwarded flag
+        run: npm install -g npm@11.9.0 # zizmor: ignore[adhoc-packages] — bootstrapping npm itself; no lockfile can cover it
+      # #169 — an `npm install -g npm@latest` step used to sit here, and it kept this workflow red
+      # from 2026-07-24 to 2026-08-06 (7 consecutive runs):
       #
       #   npm error code EUNKNOWNCONFIG / Unknown cli flag: --git-checks
       #
       # `changeset publish` always appends `--no-git-checks` for pnpm (`@changesets/cli`, any pnpm
       # major >= 5), pnpm forwards it verbatim to npm, and npm REJECTS unknown flags where npm 10
-      # only warned. The step upgraded npm past that line.
+      # only warned. `@latest` upgraded npm past that line. The fix was not to drop the step — OIDC
+      # needs a new npm — but to pin it, which is what the step above does.
       #
       # CORRECTION (2026-08-21): that line is npm 12, not npm 11, so the two requirements are NOT
       # mutually exclusive. Measured against one package on each version: 10.9.7 accepts, 11.5.1
@@ -106,33 +142,22 @@ jobs:
           version: pnpm version-packages
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # #169 — this used to read "NPM_TOKEN intentionally absent", because an NPM_TOKEN env
-          # silently disables the OIDC trusted-publisher binding. That reasoning was sound and its
-          # premise is not: the tokenless path buys provenance, and npm refuses provenance for a
-          # private source repository (E422). The comment described a decision whose benefit this
-          # repo could never collect, so it is reverted rather than left describing a policy that
-          # no longer holds.
+          # NO npm credential of any kind, and this is the resolution of #169/#366
+          # rather than a reversal of them.
           #
-          # `setup-node` above wired the registry `.npmrc` to read NODE_AUTH_TOKEN.
+          # The history: the tokenless path was chosen for provenance, then reverted
+          # because "npm refuses provenance for a private source repository (E422)"
+          # — true at the time, and the comment named going public as the trigger to
+          # migrate back. The repository is public now, and the rest of the
+          # precondition list it wrote out has been met: `publishConfig.provenance`
+          # sits in all six manifests, every one of them carries a Trusted Publisher
+          # connection on npmjs.com naming this repository and THIS FILE, and the npm
+          # pinned above is new enough to speak OIDC and old enough to tolerate the
+          # flag changesets forwards.
           #
-          # Migration path, when this repo goes public: restore NPM_CONFIG_PROVENANCE + the
-          # `publishConfig.provenance` fields, configure trusted publishers at
-          # npmjs.com/package/<pkg>/settings, drop NODE_AUTH_TOKEN — and only then re-add an npm
-          # upgrade, pinned to a version that tolerates pnpm's forwarded flag, or after changesets
-          # stops injecting it.
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          # #366 — the same secret, under the name `changesets/action` actually looks for.
-          #
-          # The action reads `process.env.NPM_TOKEN` (its dist: `if (process.env.NPM_TOKEN) { write
-          # //registry.npmjs.org/:_authToken } else if (OIDC env) { info('No NPM_TOKEN found, but
-          # OIDC is available - using npm trusted publishing') }`). With only NODE_AUTH_TOKEN set
-          # and `id-token: write` granted above, it took the OIDC branch and wrote no credential —
-          # while the log line "No NPM_TOKEN found" read like the secret was missing. It is not:
-          # `gh secret list` shows it, and the run masked it as `***`.
-          #
-          # This does not yet explain the E404: setup-node's own .npmrc points authToken at
-          # NODE_AUTH_TOKEN, so an accepted credential should have published regardless of which
-          # branch the action chose. Setting this removes one variable from that question. If the
-          # next release still E404s, the remaining explanation is the token itself — rotate it on
-          # the `usetheodev` npm account, which owns both published packages.
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          # Both variables have to go, not just one. `changesets/action` reads
+          # `process.env.NPM_TOKEN` and writes an authToken if it finds one;
+          # `setup-node` wires its npmrc to `NODE_AUTH_TOKEN`. Either one present
+          # means the npm CLI prefers token auth over the OIDC token from
+          # `id-token: write`, the trusted-publisher binding is silently skipped, and
+          # provenance goes with it — with no error to notice.
