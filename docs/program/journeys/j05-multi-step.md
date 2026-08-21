@@ -767,6 +767,35 @@ agent. That lives outside the two source packages and was not read; the criteria
 number does not need to be known in advance — criterion 5 grades that the *declared* value is the
 one observed, whatever the default happens to be.
 
+## Metric 4 — measured 2026-08-21
+
+Three runs per lane, alternating lane by lane:
+
+| | Next.js | TheoKit |
+| --- | --- | --- |
+| install | 4.90 ± 0.10 | 4.63 ± 0.57 |
+| build | 8.93 ± 1.01 | **5.50 ± 0.26** |
+| start | 0.60 ± 0.00 | 1.10 ± 0.00 |
+| **total, mean ± 1σ** | **14.37 ± 1.08** → [13.29, 15.45] | **11.17 ± 0.32** → [10.85, 11.49] |
+
+**The intervals do not overlap and TheoKit is the faster side, so the "not worse" clause holds.**
+Install is level — 4.63 s against 4.90 s — which is what should be expected on two applications whose
+dependency sets differ by nothing this journey added.
+
+**The TheoKit lane does not carry J5's own delta**, and that is a gap rather than a footnote. No
+surviving tree carries it: the tree the J5 work was done against no longer exists, and the closest
+one stops at J1's commit. The delta is 9 glue lines in one file and adds no dependency, so install is
+untouched and the build differs by nine lines against a number whose unit is seconds — but what was
+timed is J1's TheoKit application against J5's Next.js application, which is the reading most
+favourable to TheoKit the surviving trees permit. Warm npm cache, never cold. Both in
+[the evidence file](../evidence/j05-metric4-2026-08-21.txt).
+
+**The verdict does not move.** J5 is a tie at 1.0×, 1.125× and 1.0× — every countable margin inside
+the bar, one of them against us — and § What counts as winning requires better on all three before
+time-to-green is reached. Criterion 4 is still open for the reason the re-measurement gives: the step
+declaration now travels, and the step-limit outcome still does not come back to the caller
+(usetheokit/theokit#379).
+
 ## Cross-references
 
 - The benchmark this journey belongs to: `../dx-benchmark.md`
