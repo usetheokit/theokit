@@ -38,3 +38,17 @@ J9's protocol carried. A package-lock.json was generated for it on 2026-08-21 wi
 
 No run was discarded on this journey. Nothing failed apart from the first probe attempt described
 above, which was an instrument fault and produced no number.
+
+--- Excluded: two harness-validation runs, recorded rather than deleted ---
+
+Before the counted runs, one run per lane was taken to confirm the harness worked on this pair:
+
+  smoke-j04-theokit      run1 install=4.1 build=5.6 start=1.1 total=10.8
+  smoke-j04-nextjs       run1 NEVER_ANSWERED          (probe "/", which this app answers 404)
+  smoke-j04-nextjs-chat  run1 install=4.3 build=8.4 start=0.6 total=13.3
+
+They are excluded from the means because they were not interleaved - all three ran consecutively on
+one lane before the other - and the protocol this sweep uses alternates lanes so machine drift falls
+on both columns. They are recorded because a discarded run that is deleted rather than recorded is
+how a measurement becomes unfalsifiable. Both numbers sit inside the counted intervals for their
+lane, so nothing turns on the exclusion.
