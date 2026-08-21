@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
-# Metric 4 — time to first green run, both sides, cold.
+# Metric 4 — time to first green run, both sides.
+#
+# Warm by default, cold with M4_COLD=1. The first line of this file used to say "cold" while the
+# paragraph below explained it was warm; the title was wrong and the paragraph was right.
 #
 # The hole this closes: the winning rule requires "not worse on time to first green run", and metric
 # 4 is unmeasured on every one of the ten journeys — including J9, the one journey reported as won.
@@ -10,6 +13,16 @@
 # throughput on this connection more than it measures either framework, and it would be the same
 # tax on both sides anyway. Runs are therefore WARM-CACHE and comparable to each other, not to a
 # first-ever install on a new machine.
+#
+# Fourth lesson, 2026-08-21: `M4_COLD=1` gives each run a private, empty npm cache
+# (`npm_config_cache` pointed at a fresh temp dir, removed afterwards), so the install actually pays
+# for the network. This matters because § The four metrics defines metric 4 as **cold cache**, and
+# until this flag existed no measurement in the programme had ever met its own definition -- ten
+# journeys were graded warm against a rule that says cold. It is a flag rather than the default
+# because the two answer different questions: warm compares the frameworks to each other, cold is
+# what a new developer on a new machine actually waits for. Both are reported, neither is implied.
+# A private cache dir is used instead of `npm cache clean --force` on purpose: the second destroys
+# the machine's cache for everything else on it, and a measurement should not be able to do that.
 #
 # The journey delta is not re-applied. J9's delta is 2 lines against 14; it cannot move a number
 # whose unit is tens of seconds, and both sides carry their own already.
@@ -29,9 +42,20 @@ for i in $(seq 1 "$RUNS"); do
   ( cd "$SRC" && tar --exclude=node_modules --exclude=.next --exclude=.theokit --exclude=dist \
       --exclude='*.log' -cf - . ) | ( cd "$WORK" && tar -xf - ) 2>/dev/null
 
+  # Cold runs get a private empty cache; warm runs share the machine's, as before.
+  # `env` is required: a variable assignment produced BY EXPANSION is not recognised as an
+  # assignment prefix -- bash treats the expanded word as the command name. The first cold run
+  # reported INSTALL_FAILED six times out of six for exactly that reason.
+  COLDCACHE=""
+  if [ "${M4_COLD:-0}" = "1" ]; then COLDCACHE="$(mktemp -d)"; fi
+
   start=$(date +%s.%N)
-  ( cd "$WORK" && npm install --silent --no-audit --no-fund >/dev/null 2>&1 ) || { echo "$LABEL run$i INSTALL_FAILED" >>"$OUT"; continue; }
+  ( cd "$WORK" && ${COLDCACHE:+env npm_config_cache="$COLDCACHE"} npm install --silent --no-audit --no-fund >/dev/null 2>&1 ) || { echo "$LABEL run$i INSTALL_FAILED" >>"$OUT"; [ -n "$COLDCACHE" ] && rm -rf "$COLDCACHE"; continue; }
   inst=$(date +%s.%N)
+  # Freed here rather than at the end of the loop: every `continue` below would leak it otherwise,
+  # and nothing after install reads it.
+  [ -n "$COLDCACHE" ] && rm -rf "$COLDCACHE" && COLDCACHE=""
+
   ( cd "$WORK" && npm run build >/dev/null 2>&1 ) || { echo "$LABEL run$i BUILD_FAILED" >>"$OUT"; continue; }
   built=$(date +%s.%N)
 

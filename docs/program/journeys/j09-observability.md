@@ -1293,3 +1293,43 @@ Second, with lockfiles present the whole script cost re-measures at about **2.1 
 shape holds — TheoKit pays for lifecycle scripts and Next.js declares none — and its magnitude is
 protocol-dependent in a way that measurement did not previously state. Neither figure was ever taken
 on a cold machine, which is where a new developer actually stands.
+
+### Re-measured, 2026-08-21: cold cache, symmetric lockfiles, and the number moves the other way
+
+The annotation above said J9's metric 4 needed re-running symmetrically before its verdict meant
+what it says, and refused to correct the number by inference. This is the re-run. It uses **J9's own
+two applications**, so nothing here is inferred from another journey.
+
+Two defects were fixed before timing anything. `j09-theo` was given the `package-lock.json` it
+lacked (`npm install --package-lock-only` — resolution only, nothing installed, untimed), which
+removes the asymmetry the annotation identified. And the run is **cold**, which
+[`../dx-benchmark.md`](../dx-benchmark.md) § The four metrics has required since the metric was
+defined and which no measurement in this programme had ever done: a private empty npm cache per run,
+rather than `npm cache clean --force`, so the machine's own cache survives.
+
+| protocol | TheoKit | Next.js | intervals |
+| --- | --- | --- | --- |
+| **cold** (the stated definition) | **14.50 ± 0.72** → [13.78, 15.22] | **24.33 ± 1.55** → [22.78, 25.88] | disjoint, TheoKit 1.68x faster |
+| warm (what every earlier run did) | **11.23 ± 1.64** → [9.59, 12.88] | **16.33 ± 1.27** → [15.06, 17.60] | disjoint, TheoKit 1.45x faster |
+
+**The fear this run was built to test is refuted.** The worry was that a cold cache would expose a
+lifecycle-script penalty paid only on our side — `node-pty` compiles on `linux-x64`, `esbuild`
+fetches a binary — and would drop the eight journeys measured warm. Measured: a cold cache costs
+TheoKit **+3.27 s** and Next.js **+8.00 s**. It costs them 2.4x what it costs us.
+
+The premise was checked rather than assumed: after a real install the TheoKit lane holds
+`node_modules/node-pty/build/Release/pty.node`, with prebuilds for `darwin-x64` and `win32-x64` and
+none for `linux-x64`. The native compile is inside every TheoKit number above.
+
+**What this does not do is restore the win.** Metric 4 was the clause that retracted it, and metric 4
+now clears in our favour on both protocols — but a journey is won on four metrics and its criteria,
+and the three countable metrics have not been re-derived today. Declaring it here, from one metric,
+is precisely the move that made this section necessary: J9 was declared won and lost the win hours
+later to this exact clause. The published `30.40 ± 7.50 s` is left standing rather than edited, and
+[`../evidence/j09-metric4-cold-2026-08-21.txt`](../evidence/j09-metric4-cold-2026-08-21.txt) is what
+a reader compares it against — including the six discarded runs and the harness defect that caused
+them.
+
+The swing from `30.40` to `11.23` is **not decomposed**. Three things differ between the two runs —
+the missing lockfile, the machine's warmth, and whatever produced a σ of 7.50 on a 30 s measurement
+— and no run here isolates them.
