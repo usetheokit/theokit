@@ -212,6 +212,18 @@ Projected onto the total, TheoKit lands somewhere between 19.8 s and 27.8 s agai
 sufficient. Resolving it removes the largest term and leaves an install that is still roughly 15 s
 against 4.2 s, which is a second question nobody has asked yet: what the remaining eleven seconds are.
 
+**And the remaining eleven seconds turned out to be measurable in one command.** With
+`--ignore-scripts` the two applications install in 10.5 s against 5.4 s, so **78% of the 23.5 s gap
+is lifecycle scripts and 22% is the tree itself**. Exactly two packages in the whole TheoKit tree
+declare one — `node-pty` and `esbuild` — and the Next.js side declares **none**, because it ships its
+platform binary as `@next/swc-*` optionalDependencies that npm resolves without executing anything.
+That is the difference in one sentence: one stack downloads or compiles in a hook, twice; the other
+picks a prebuilt package by platform.
+
+So metric 4's loss is not a diffuse "TheoKit is heavier". It is two lifecycle hooks and a five-second
+tree, and both hooks have a shape the comparison already solved. `B-025` covers the larger one and
+its DoD now names the second rather than leaving it for the next person to rediscover.
+
 `B-025` carries the measurement, the attempted fix and the reason that fix was reverted — two
 well-argued rules conflict, and resolving them is a decision rather than a repair.
 
