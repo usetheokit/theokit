@@ -8,7 +8,6 @@ import {
   existsSync,
   cpSync,
   readFileSync,
-  writeFileSync,
   renameSync,
   unlinkSync,
   readdirSync,
@@ -19,6 +18,7 @@ import { resolve, join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { applyBareTransform } from './bare-transform.js'
+import { writeScaffoldFile } from './write-file.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -100,7 +100,7 @@ export function scaffold(
     const dst = join(targetDir, entry.slice(0, -'.tmpl'.length))
     const content = readFileSync(src, 'utf-8')
     const replaced = content.replace(/\{\{name\}\}/g, resolvedName)
-    writeFileSync(dst, replaced)
+    writeScaffoldFile(dst, replaced)
     unlinkSync(src)
   }
 

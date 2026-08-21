@@ -67,6 +67,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **A scaffolded write no longer follows a planted symlink.** `create-theokit` writes
+  predictably-named files into `resolve(process.cwd(), projectName)`, so running it from a
+  world-writable directory let somebody leave a symlink waiting at one of those names and have the
+  write land wherever the link pointed. Every write now refuses to follow a symlink at the final path
+  component; creating and overwriting are unchanged, which matters because four of the sites
+  legitimately rewrite a file the scaffolder just produced. The exclusive-create fix that looks
+  obvious would have refused those four and broken `--bare` and `--surface` on their first run. A
+  symlinked parent directory is still followed — Node exposes no way to refuse that — and the limit
+  is written at the call site rather than left to be inferred. (CodeQL `js/insecure-temporary-file`)
 - **The agent endpoints beside the run route are no longer invisible at the HTTP layer.** The thread
   message and stream routes, MCP, the agent card, the pending-approvals listing, the durable
   run-stream reconnect and the HITL approve route answered without ever consulting the plugin

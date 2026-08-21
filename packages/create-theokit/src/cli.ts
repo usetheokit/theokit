@@ -1,13 +1,5 @@
 import { execSync } from 'node:child_process'
-import {
-  readFileSync,
-  writeFileSync,
-  unlinkSync,
-  mkdirSync,
-  renameSync,
-  existsSync,
-  rmSync,
-} from 'node:fs'
+import { readFileSync, unlinkSync, mkdirSync, renameSync, existsSync, rmSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { cloneExample } from './clone-example.js'
@@ -18,6 +10,7 @@ import { runPrompts, getDefaults, type ProjectOptions } from './prompts.js'
 import { parseBackendFlags, scaffoldServices, type BackendKind } from './scaffold-services.js'
 import { applySurface, parseSurfaceFlags, type SurfaceKind } from './scaffold-surface.js'
 import { CLI_VERSION } from './version.js'
+import { writeScaffoldFile } from './write-file.js'
 
 import { scaffold } from './index.js'
 
@@ -263,10 +256,10 @@ function applyOptions(targetDir: string, options: ProjectOptions, opts: ApplyOpt
     pkg.scripts['lint:fix'] = 'biome check . --fix'
     pkg.scripts.format = 'biome format . --write'
     pkg.scripts['format:check'] = 'biome format .'
-    writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n')
+    writeScaffoldFile(pkgPath, JSON.stringify(pkg, null, 2) + '\n')
 
     // Write biome.json
-    writeFileSync(
+    writeScaffoldFile(
       resolve(targetDir, 'biome.json'),
       JSON.stringify(
         {
@@ -289,7 +282,7 @@ function applyOptions(targetDir: string, options: ProjectOptions, opts: ApplyOpt
     delete pkg.devDependencies.eslint
     delete pkg.devDependencies['eslint-config-prettier']
     delete pkg.devDependencies['typescript-eslint']
-    writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n')
+    writeScaffoldFile(pkgPath, JSON.stringify(pkg, null, 2) + '\n')
   }
 
   // Tailwind
@@ -298,11 +291,11 @@ function applyOptions(targetDir: string, options: ProjectOptions, opts: ApplyOpt
     pkg.devDependencies = pkg.devDependencies ?? {}
     pkg.devDependencies.tailwindcss = '^4.0.0'
     pkg.devDependencies['@tailwindcss/vite'] = '^4.0.0'
-    writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n')
+    writeScaffoldFile(pkgPath, JSON.stringify(pkg, null, 2) + '\n')
     const cssDir = existsSync(resolve(targetDir, 'src/app')) ? 'src/app' : 'app'
     const cssPath = resolve(targetDir, `${cssDir}/globals.css`)
     const existing = existsSync(cssPath) ? readFileSync(cssPath, 'utf-8') : ''
-    writeFileSync(cssPath, '@import "tailwindcss";\n\n' + existing)
+    writeScaffoldFile(cssPath, '@import "tailwindcss";\n\n' + existing)
   }
 
   // src/ directory
@@ -323,7 +316,7 @@ function applyOptions(targetDir: string, options: ProjectOptions, opts: ApplyOpt
     const tsc = JSON.parse(readFileSync(tscPath, 'utf-8'))
     tsc.compilerOptions.baseUrl = 'src'
     tsc.include = ['src/**/*.ts', 'src/**/*.tsx']
-    writeFileSync(tscPath, JSON.stringify(tsc, null, 2) + '\n')
+    writeScaffoldFile(tscPath, JSON.stringify(tsc, null, 2) + '\n')
   }
 
   // Import alias (custom or disabled)
@@ -341,7 +334,7 @@ function applyOptions(targetDir: string, options: ProjectOptions, opts: ApplyOpt
       [`${prefix}/app/*`]: ['./app/*'],
     }
   }
-  writeFileSync(tscPath, JSON.stringify(tsc, null, 2) + '\n')
+  writeScaffoldFile(tscPath, JSON.stringify(tsc, null, 2) + '\n')
 
   // AGENTS.md
   if (!options.agentsMd) {

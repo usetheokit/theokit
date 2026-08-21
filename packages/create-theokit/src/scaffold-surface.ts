@@ -6,10 +6,11 @@ import {
   rmSync,
   statSync,
   unlinkSync,
-  writeFileSync,
 } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+
+import { writeScaffoldFile } from './write-file.js'
 
 // ESM has no CJS `__dirname` global — derive it (mirrors src/index.ts + src/scaffold-services.ts). Without
 // this the published bundle throws `__dirname is not defined` at runtime (vitest provides the global, so the
@@ -178,7 +179,7 @@ function substituteTmpls(dir: string, projectName: string): void {
     }
     if (entry.endsWith('.tmpl')) {
       const content = readFileSync(full, 'utf-8').replace(/\{\{name\}\}/g, projectName)
-      writeFileSync(full.replace(/\.tmpl$/, ''), content)
+      writeScaffoldFile(full.replace(/\.tmpl$/, ''), content)
       unlinkSync(full)
     }
   }
@@ -233,7 +234,7 @@ export function applySurface(options: ApplySurfaceOptions): void {
     pkg.dependencies = { ...dropKeys(pkg.dependencies, WEB_ONLY_DEPS), ...cfg.deps }
     pkg.devDependencies = { ...dropKeys(pkg.devDependencies, WEB_ONLY_DEV_DEPS), ...cfg.devDeps }
     pkg.scripts = { ...(pkg.scripts ?? {}), ...cfg.scripts }
-    writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`)
+    writeScaffoldFile(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`)
   }
 
   // 4. Point `tsconfig.json` `include` at the surface's source (the default's `app/**` went with the web
@@ -242,7 +243,7 @@ export function applySurface(options: ApplySurfaceOptions): void {
   if (existsSync(tsconfigPath)) {
     const tsconfig = JSON.parse(readFileSync(tsconfigPath, 'utf-8')) as { include?: string[] }
     tsconfig.include = cfg.tsconfigInclude
-    writeFileSync(tsconfigPath, `${JSON.stringify(tsconfig, null, 2)}\n`)
+    writeScaffoldFile(tsconfigPath, `${JSON.stringify(tsconfig, null, 2)}\n`)
   }
 }
 

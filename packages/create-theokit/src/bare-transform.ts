@@ -28,8 +28,10 @@
  * transform never leaves the target dir in a broken state.
  */
 
-import { existsSync, readFileSync, writeFileSync, unlinkSync, rmSync } from 'node:fs'
+import { existsSync, readFileSync, unlinkSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
+
+import { writeScaffoldFile } from './write-file.js'
 
 const HELLO_PAGE = `export default function Page() {
   return <h1>Hello Theo</h1>
@@ -88,18 +90,18 @@ export function applyBareTransform(targetDir: string, options: BareTransformOpti
       delete pkg.devDependencies.postcss
       delete pkg.devDependencies.autoprefixer
     }
-    writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`)
+    writeScaffoldFile(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`)
   }
 
   // 2. Replace app/page.tsx (Hello Theo) + app/layout.tsx (unstyled shell) — the defaults compose the chat
   //    surface + import @theokit/ui, which --bare drops.
   const pagePath = join(targetDir, 'app/page.tsx')
   if (existsSync(pagePath)) {
-    writeFileSync(pagePath, HELLO_PAGE)
+    writeScaffoldFile(pagePath, HELLO_PAGE)
   }
   const layoutPath = join(targetDir, 'app/layout.tsx')
   if (existsSync(layoutPath)) {
-    writeFileSync(layoutPath, BARE_LAYOUT)
+    writeScaffoldFile(layoutPath, BARE_LAYOUT)
   }
 
   // 3. Remove the demo chat agent (the `agents/chat.ts` file + its TheoUI page)
