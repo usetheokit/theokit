@@ -3,7 +3,7 @@
   "ignore": ["**/tests/**"],
   "workspaces": {
     ".": {
-      "ignore": ["tests/**"]
+      "ignore": ["tests/**", "docs/**"]
     },
     "packages/theo": {
       "entry": [
