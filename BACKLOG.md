@@ -55,9 +55,9 @@ the two disagree, the rule wins and this one is the bug.
 
 ## Index
 
-23 items — **Open** 23 · **In flight** 0 · **Closed** 0
+24 items — **Open** 24 · **In flight** 0 · **Closed** 0
 
-### Open (23)
+### Open (24)
 
 | Item | Title | Status | Severity |
 |---|---|---|---|
@@ -84,6 +84,7 @@ the two disagree, the rule wins and this one is the bug.
 | [`B-021`](#b-021--abnormal-endings-are-reported-as-normal-ones-across-four-subsystems----) | abnormal endings are reported as normal ones, across four subsystems | `triaged` | — |
 | [`B-022`](#b-022--a-fixture-born-of-the-same-assumption-as-the-code-cannot-disagree-with-it----) | a fixture born of the same assumption as the code cannot disagree with it | `triaged` | — |
 | [`B-023`](#b-023--the-deploy-shim-buffers-a-stream-whole-across-six-of-nine-targets----) | the deploy shim buffers a stream whole, across six of nine targets | `triaged` | — |
+| [`B-024`](#b-024--two-conventions-cost-a-file-each-and-nobody-has-decided-whether-they-are-worth-it----) | two conventions cost a file each, and nobody has decided whether they are worth it | `triaged` | — |
 
 ### In flight (0)
 
@@ -447,4 +448,19 @@ dod:
   - the two double-buffering contracts are fixed or their targets are delisted — fixing the shim alone provably does not reach them
   - a test that runs a stream rather than reading the emitted module, because that gap is why this survived
 
-Next free id: **B-024**.
+## B-024 — two conventions cost a file each, and nobody has decided whether they are worth it   [ ]
+
+domain: theokit
+repo: theokit
+suggested_mode: evolve
+source: discover-review
+evidence: J2 is the only journey the benchmark loses on a countable metric, and it loses metric 1 at exactly the 2.0x bar — 4 files against 2 — twice, before and after the approval id reached the client. `docs/program/journeys/j02-hitl.md` names the two extra files precisely: the tool's own file, which the `agents/tools/` folder convention asks for, and the scaffold's `app/hooks/use-transcript.ts`, through which its architecture routes client state. Its own words: *"Neither is waste; both are cost, and the metric measures cost."* Glue closed from 62 to 42 and concepts from 7 to 5 when a real defect was fixed; files did not move, because no defect was ever what held them
+why_now: nine of the ten journeys are now measured against published builds and J9 is won, so the programme has a working method — close what a journey names, re-measure. J2 is the first case where re-measuring cannot help: there is no defect to close. The remaining distance is two decisions this project made deliberately and has never priced. Until somebody decides, J2 stays lost for a reason no amount of engineering removes, and that is different from a bug nobody has got to
+status: triaged
+dod:
+  - a decision, recorded, on whether a tool must live in its own file under the reserved `agents/<name>/tools/` folder — the convention is real (`packages/theo/src/server/scan/agent-scan.ts`) and its cost is now measured on two journeys, since J1 counts the same folder as one of its five concepts
+  - a decision, recorded, on whether the scaffold routes client state through a hook file — this one is scaffold shape rather than framework contract, so it is the cheaper of the two to change and the easier to get wrong by changing for the wrong reason
+  - whichever way each goes, an ADR states it, because a convention kept for a good reason and a convention kept by inertia are indistinguishable from the outside — and the benchmark will keep charging for it either way
+  - J2 re-measured after the decisions land, so the number reflects them
+
+Next free id: **B-025**.
