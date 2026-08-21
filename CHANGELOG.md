@@ -96,6 +96,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **The static export's fallback document now declares a language, a charset and a viewport.** When
+  an application has no `index.html`, the static adapter builds the document itself, and what it
+  built was `<!doctype html><html><body><div id="root"></div></body></html>` — no `<head>`, so a
+  screen reader had no `lang` to pick a voice from, the bytes were decoded by sniffing, and the page
+  rendered at desktop width on a phone. The branch runs when something else has already gone wrong,
+  which is an argument for holding it to the floor the framework asks applications for, not below
+  it. Every other test of this adapter writes an `index.html`, so the fallback's shape had never
+  been asserted; the regression test writes none on purpose. The language is a literal until a
+  configured or negotiated locale exists (M12). (B-033)
+
 - **The dead-code gate failed on committed evidence and on a re-export nobody imports.** `pnpm knip`
   is the only red check on this branch, and both findings are real rather than tooling noise. The J9
   benchmark harness is committed on purpose — it is the driver the metric 4 sweep was run with, and

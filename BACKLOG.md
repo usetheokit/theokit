@@ -93,7 +93,7 @@ the two disagree, the rule wins and this one is the bug.
 | [`B-030`](#b-030--a-prod-like-local-run-is-two-steps-and-the-contract-asks-for-one----) | a prod-like local run is two steps, and the contract asks for one | `triaged` | — |
 | [`B-031`](#b-031--a-relative-ogimage-ships-broken-instead-of-being-refused----) | a relative `og:image` ships broken instead of being refused | `triaged` | — |
 | [`B-032`](#b-032--image-reserves-no-space-refuses-no-bad-srcset-and-the-docs-do-not-say-what-it-will-not-do----) | `Image` reserves no space, refuses no bad `srcSet`, and the docs do not say what it will not do | `triaged` | — |
-| [`B-033`](#b-033--the-served-document-declares-no-language----) | the served document declares no language | `triaged` | — |
+| [`B-033`](#b-033--the-frameworks-own-fallback-document-declares-neither-a-head-nor-a-language----) | the framework's own fallback document declares neither a head nor a language | `triaged` | — |
 | [`B-034`](#b-034--draft-preview-is-neither-built-nor-declared-absent----) | draft preview is neither built nor declared absent | `triaged` | — |
 | [`B-035`](#b-035--the-document-preloads-nothing-so-a-routes-chunks-are-discovered-one-round-trip-late----) | the document preloads nothing, so a route's chunks are discovered one round trip late | `triaged` | — |
 | [`B-036`](#b-036--markdown-images-and-external-links-bypass-the-frameworks-own-components----) | markdown images and external links bypass the framework's own components | `triaged` | — |
@@ -601,19 +601,20 @@ dod:
   - `srcSet` declared without `sizes` fails by name at build time
   - the documentation states that no image transform and no fonts module ship, so a reader learns it from the docs rather than from a blurry logo
 
-## B-033 — the served document declares no language   [ ]
+## B-033 — the framework's own fallback document declares neither a head nor a language   [ ]
 
 domain: theokit
 repo: packages/theo
 suggested_mode: bug
 source: discover-review
-evidence: measured 2026-08-21. `lang=` appears in **no file** under `packages/theo/src`. The static adapter's own fallback document shows the shape the framework emits — `<!doctype html><html><body>…` (`packages/theo/src/adapters/static.ts:158`) — with no language attribute at any layer above it either
-why_now: M12's minimum contract (ROADMAP § M12, revised 2026-08-21) opens with it, and unlike the rest of that surface it is not an i18n feature: a screen reader picks its voice from `<html lang>`, so a monolingual English application is served wrong today. WCAG 3.1.1 is a Level A criterion, which makes this an accessibility defect rather than a missing locale layer
+evidence: **registered 2026-08-21 on a premise that was wrong, and corrected the same day before any code was written.** The original evidence read *"the served document declares no language — `lang=` appears in no file under `packages/theo/src`"*. The grep was accurate and the conclusion drawn from it was not: the document a scaffolded application serves comes from its own `index.html`, and all three templates that ship one declare `lang="en"` (`packages/create-theokit/templates/default/index.html:2`, `default/public/index.html:2`, `surfaces/desktop/frontend/index.html.tmpl:2`). Measuring the framework's source and concluding something about the served document is the gap-file failure this programme documents, committed inside the programme's own revision. What survives the correction is narrower and real: the fallback document the static adapter builds when the application has no `index.html` is `<!doctype html><html><body><div id="root"></div></body></html>` (`packages/theo/src/adapters/static.ts:158`) — no `<head>`, no `lang`, no charset, no viewport
+why_now: it is not the WCAG 3.1.1 Level A defect the first version of this item claimed, because the path that reaches a user in a scaffolded application does declare a language. It is the framework emitting a document below the floor it asks applications to meet, on the branch nobody exercises — and a fallback is by definition the branch that runs when something else already went wrong
 status: triaged
 dod:
-  - the served document carries `<html lang>` on every rendering path, including the streaming one
-  - the value is configurable, and a default is applied rather than the attribute being omitted when nothing is configured
-  - a negotiated locale, once M12 has one, sets it — the attribute is not hard-coded past the point a locale exists
+  - the fallback document carries `lang`, a charset and a viewport, so the framework's own emitted floor is the one it asks applications for
+  - a test renders the fallback branch — no `index.html` present — and asserts on the document rather than on the source, which is the check the first version of this item skipped
+  - the language of that fallback is not a second hard-coded `en` if a configured value exists by then; if none exists, it is `en` with a comment naming M12 as where that changes
+note: the M12 contract bullet "the served document carries `<html lang>`" is close to met by the scaffold already. What M12 still owns is that the value is a template literal nobody can configure and nothing negotiates — a different item, and not this one
 
 ## B-034 — draft preview is neither built nor declared absent   [ ]
 

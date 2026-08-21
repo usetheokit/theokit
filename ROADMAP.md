@@ -485,7 +485,7 @@ not itself a dependency — two milestones in the same wave may run in either or
 
 **Band: minimum contract.** Full parity on this surface is not sought. A document that does not declare its language is wrong for assistive technology regardless of how many locales ship. Locale routing, catalogues and formatting are a build nobody has asked for.
 
-**Measured 2026-08-21:** `lang=` appears in **no file** under `packages/theo/src`.
+**Measured 2026-08-21, and the first version of this line over-read its own grep.** `lang=` appears in no file under `packages/theo/src`, and the document an application serves is its own `index.html`, where all three shipped templates declare `lang="en"` (`packages/create-theokit/templates/default/index.html:2`). So the first contract bullet below is close to met already, and what this surface actually owns is that the value is a template literal nobody can configure and nothing negotiates. The framework's own fallback document declares neither head nor language, which is `B-033` and is not this milestone.
 
 **Definition of done — minimum contract (all must hold):**
 

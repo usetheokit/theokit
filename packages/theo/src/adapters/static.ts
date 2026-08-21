@@ -155,7 +155,16 @@ function createDefaultRenderHtml(cwd: string): (url: string) => Promise<string> 
     const indexPath = resolve(clientDir, 'index.html')
     const ssrEntryPath = resolve(cwd, '.theokit/server/entry-server.js')
 
-    let baseHtml = '<!doctype html><html><body><div id="root"></div></body></html>'
+    // The floor the framework asks applications for, met by the framework's own
+    // fallback (B-033). This branch runs when the application has no
+    // `index.html` — i.e. after something else already went wrong — so it is the
+    // one that should be least surprising, not the one held lower. `lang` is a
+    // literal until a configured or negotiated locale exists; that is M12's
+    // surface, and this line is where it lands when it does.
+    let baseHtml =
+      '<!doctype html><html lang="en"><head><meta charset="utf-8" />' +
+      '<meta name="viewport" content="width=device-width, initial-scale=1" />' +
+      '</head><body><div id="root"></div></body></html>'
     if (existsSync(indexPath)) {
       baseHtml = readFileSync(indexPath, 'utf-8')
     }
