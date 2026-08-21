@@ -1457,6 +1457,11 @@ exactly what that section said about them. They are recorded because a file that
 open after it was fixed misleads in the same direction as one that lists a criterion as failing after
 it passes, which is the thing this whole section exists to correct.
 
+**Four issue comments, no new issue.** Every finding here either confirms a filed one or verifies a
+fix, so nothing new was filed. #405 and #406 were commented as *verified fixed in the tree and not
+closed* — `e39ce9831` is not in `develop`, and closing on an unreleased fix would make the tracker
+claim what the acceptance rule refuses to. #389 and #404 were commented with the reproductions above.
+
 **Nothing here changes another journey.** `traceparent`, `observability` and `telemetry` appear in no
 other journey file, and the three countable metrics were not re-derived today — the diff is unchanged
 and no metric was re-measured, so the tally in `../dx-benchmark.md` is untouched on purpose.

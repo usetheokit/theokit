@@ -302,3 +302,22 @@ observe-agent-run.ts, an application supplies no chunk and no timestamp to it, a
 a caller end a span earlier. The journey file's older sentence about criterion 3 --
 "an application cannot make it pass" -- is still accurate, for a reason that has
 moved: the span used to never close, and now it closes on the wrong chunk.
+
+
+WHAT WAS FILED FROM THIS RUN
+----------------------------
+No new issue: every finding here either confirms a filed one or verifies a fix. Four
+comments were posted, each with the payload above and each stating the tree/release
+distinction rather than closing anything:
+
+  #405  verified fixed in the tree (thread route 202 and approve route 200 both emit
+        an http.request span). NOT closed -- e39ce9831 is not in develop.
+        https://github.com/usetheokit/theokit/issues/405#issuecomment-5365145375
+  #406  verified fixed in the tree (agent=chat on both routes, no filesystem path).
+        NOT closed, same reason.
+        https://github.com/usetheokit/theokit/issues/406#issuecomment-5365146872
+  #389  reproduced, with the excess isolated to the model's post-resume latency
+        rather than the tool's execution.
+        https://github.com/usetheokit/theokit/issues/389#issuecomment-5365149173
+  #404  reproduced; now the majority path, since the header case is correct everywhere.
+        https://github.com/usetheokit/theokit/issues/404#issuecomment-5365149311
