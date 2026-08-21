@@ -55,9 +55,9 @@ the two disagree, the rule wins and this one is the bug.
 
 ## Index
 
-28 items — **Open** 28 · **In flight** 0 · **Closed** 0
+34 items — **Open** 34 · **In flight** 0 · **Closed** 0
 
-### Open (28)
+### Open (34)
 
 | Item | Title | Status | Severity |
 |---|---|---|---|
@@ -89,6 +89,12 @@ the two disagree, the rule wins and this one is the bug.
 | [`B-026`](#b-026--the-security-header-half-of-the-deploy-gap-is-mechanical-and-nobody-has-done-it----) | the security-header half of the deploy gap is mechanical, and nobody has done it | `triaged` | — |
 | [`B-027`](#b-027--a-declared-rate-limit-protects-one-of-seven-targets-and-wiring-it-naively-is-worse-than-not-wiring-it----) | a declared rate limit protects one of seven targets, and wiring it naively is worse than not wiring it | `triaged` | — |
 | [`B-028`](#b-028--the-hitl-pause-span-measures-the-human-plus-the-model-and-only-the-human-was-asked-for----) | the HITL pause span measures the human plus the model, and only the human was asked for | `triaged` | — |
+| [`B-029`](#b-029--the-client-router-restores-no-scroll-position-and-the-prefetch-cost-is-undocumented----) | the client router restores no scroll position, and the prefetch cost is undocumented | `triaged` | — |
+| [`B-030`](#b-030--a-prod-like-local-run-is-two-steps-and-the-contract-asks-for-one----) | a prod-like local run is two steps, and the contract asks for one | `triaged` | — |
+| [`B-031`](#b-031--a-relative-ogimage-ships-broken-instead-of-being-refused----) | a relative `og:image` ships broken instead of being refused | `triaged` | — |
+| [`B-032`](#b-032--image-reserves-no-space-refuses-no-bad-srcset-and-the-docs-do-not-say-what-it-will-not-do----) | `Image` reserves no space, refuses no bad `srcSet`, and the docs do not say what it will not do | `triaged` | — |
+| [`B-033`](#b-033--the-served-document-declares-no-language----) | the served document declares no language | `triaged` | — |
+| [`B-034`](#b-034--draft-preview-is-neither-built-nor-declared-absent----) | draft preview is neither built nor declared absent | `triaged` | — |
 
 ### In flight (0)
 
@@ -163,6 +169,8 @@ dod:
   - two scans over the same tree created in different orders produce identical output
   - two clean builds of the same commit produce client bundles whose `sha256sum` values are equal
   - the fix matches the sibling scanner rather than inventing a second ordering rule
+  - `walkSourceFiles` sorts too — **re-measured 2026-08-21 and this is what is left.** `packages/theo/src/router/scan.ts:142` now sorts by code unit, so the site this item was opened against is fixed; the consolidated walker at `packages/theo/src/server/_internal/scan-walker.ts:36` does not, and it is the walker that three scanners share after the DRY consolidation its own header records. The item reads as half-closed and is closer to a quarter
+  - a CI job fails the build when two clean builds of one commit disagree — today no workflow under `.github/workflows/` grades reproducibility at all, so the first two bullets could regress silently
 
 ## B-005 — cache, observability, cost tracking and CSRF hardening ship with no production caller   [ ]
 
@@ -533,4 +541,88 @@ dod:
   - the comment at `packages/theo/src/server/agent/observe-agent-run.ts:241` is corrected or removed. It is not a stale comment, it is the reasoning the code implements, and it is wrong for every non-instantaneous model
 note: `hitl.resume_observed=true` and an `ok` status are real improvements that landed in `0e9e6dc04` and are NOT this item — the span now closes on resume rather than falling through to the end-of-run sweep. What it closes on is still the wrong event
 
-Next free id: **B-029**.
+## B-029 — the client router restores no scroll position, and the prefetch cost is undocumented   [ ]
+
+domain: theokit
+repo: packages/theo
+suggested_mode: review
+source: discover-review
+evidence: measured 2026-08-21. `ScrollRestoration` appears in **no file** under `packages/` — the generated entry mounts nothing, so a back navigation lands wherever the browser left the scroll offset. Prefetching itself works and is the opposite case: `packages/theo/src/client/link.tsx:4-10` documents three strategies in a source comment (`intent`, `viewport`, `none`) and no user-facing document states what each costs in requests
+why_now: M6's minimum contract (ROADMAP § M6, revised 2026-08-21) requires exactly these two — a mounted restoration or a named absence, and a documented request cost. Neither exists, and nothing tracked either
+status: triaged
+dod:
+  - a back navigation to a scrolled list returns to the offset it left, or the documentation names the omission by name so an application author wires it themselves
+  - a document outside the source names all three strategies and states, for a viewport holding N prefetchable links, how many requests each issues — `viewport` issues N, `intent` issues one per hover, `none` issues zero
+  - the default strategy is stated, because `intent` firing on hover is a request the reader did not ask for
+
+## B-030 — a prod-like local run is two steps, and the contract asks for one   [ ]
+
+domain: theokit
+repo: packages/create-theokit
+suggested_mode: evolve
+source: discover-review
+evidence: measured 2026-08-21. The scaffolded manifest exposes `dev`, `build` and `start` as three separate scripts (`packages/create-theokit/templates/default/package.json.tmpl:7-9`), so reproducing production locally is `theokit build` followed by `theokit start` — two commands, and the second silently serves whatever the first left behind when it is skipped
+why_now: M7's minimum contract (ROADMAP § M7, revised 2026-08-21) is this single bullet, and it is the whole of what that surface must ship. A stale `.theokit/` served by `start` is the failure mode that makes the two-step version worse than slow
+status: triaged
+dod:
+  - one documented command produces and serves a production build
+  - running it after a source change serves the change, rather than the previous build
+  - the two underlying steps stay separately invocable — CI builds and serves in different jobs
+
+## B-031 — a relative `og:image` ships broken instead of being refused   [ ]
+
+domain: theokit
+repo: packages/theo
+suggested_mode: review
+source: discover-review
+evidence: measured 2026-08-21. Head hoisting and the metadata component both exist (`packages/theo/src/vite-plugin/hoist-head-tags.ts`, `packages/theo/src/client/metadata.tsx`), and nothing resolves a relative `og:image` against a configured base URL or refuses one at build time. A social card whose image is `/og.png` is fetched by the crawler against its own origin, so the tag is present, well-formed and useless — the failure mode nobody sees until the link is already shared
+why_now: M9's minimum contract (ROADMAP § M9, revised 2026-08-21) names it as one of two bullets. It is also the cheapest class of defect this programme keeps finding: correct-looking output that fails only off the developer's machine
+status: triaged
+dod:
+  - with a base URL configured, the served document carries an absolute `og:image`
+  - with no base URL configured, a relative `og:image` fails the build by name, naming the file and the tag
+  - a fully-qualified value is passed through untouched, including one on another origin
+
+## B-032 — `Image` reserves no space, refuses no bad `srcSet`, and the docs do not say what it will not do   [ ]
+
+domain: theokit
+repo: packages/theo
+suggested_mode: review
+source: discover-review
+evidence: measured 2026-08-21. `packages/theo/src/client/image.tsx:8,24-25` forwards `srcSet` and `sizes` to the element and nothing else: `srcSet` without `sizes` is accepted and the browser then picks a candidate against a wrong assumed width; no dimension is required, so the page shifts when the pixels arrive. There is no transform layer anywhere — `sharp` is not a dependency — and `packages/theo/src/client/` holds no fonts module, neither of which any document states
+why_now: M10's minimum contract (ROADMAP § M10, revised 2026-08-21) is these three bullets, and the band exists precisely because parity with an image pipeline is not sought here. An undeclared absence is what turns "we do not transform images" from a met contract into a defect
+status: triaged
+dod:
+  - an image without reserved space fails by name at build time, or the component reserves it from required dimensions
+  - `srcSet` declared without `sizes` fails by name at build time
+  - the documentation states that no image transform and no fonts module ship, so a reader learns it from the docs rather than from a blurry logo
+
+## B-033 — the served document declares no language   [ ]
+
+domain: theokit
+repo: packages/theo
+suggested_mode: bug
+source: discover-review
+evidence: measured 2026-08-21. `lang=` appears in **no file** under `packages/theo/src`. The static adapter's own fallback document shows the shape the framework emits — `<!doctype html><html><body>…` (`packages/theo/src/adapters/static.ts:158`) — with no language attribute at any layer above it either
+why_now: M12's minimum contract (ROADMAP § M12, revised 2026-08-21) opens with it, and unlike the rest of that surface it is not an i18n feature: a screen reader picks its voice from `<html lang>`, so a monolingual English application is served wrong today. WCAG 3.1.1 is a Level A criterion, which makes this an accessibility defect rather than a missing locale layer
+status: triaged
+dod:
+  - the served document carries `<html lang>` on every rendering path, including the streaming one
+  - the value is configurable, and a default is applied rather than the attribute being omitted when nothing is configured
+  - a negotiated locale, once M12 has one, sets it — the attribute is not hard-coded past the point a locale exists
+
+## B-034 — draft preview is neither built nor declared absent   [ ]
+
+domain: theokit
+repo: packages/theo
+suggested_mode: evolve
+source: discover-review
+evidence: measured 2026-08-21. `noindex` and `robots` appear in **no file** under `packages/theo/src`: there is no preview credential, no bypass path, and no directive to keep a leaked preview URL out of an index. The surface is listed in `.claude/skills/draft-preview-specialist/` and in the roadmap, which is the whole problem — it is named everywhere and implemented nowhere
+why_now: M15's minimum contract (ROADMAP § M15, revised 2026-08-21) permits either answer and forbids the current one. A named surface that does not exist is what a reader plans against
+status: triaged
+dod:
+  - either an unpublished document is served only against a valid preview credential, with `noindex` on that response, and the credential expires
+  - or the documentation states that draft preview does not ship, in the shared documentation rather than a Web-only note, so a Tauri or terminal reader is not left to infer it
+  - whichever is chosen, `.claude/skills/draft-preview-specialist/` says the same thing, because a specialist skill describing a surface nobody built is the assumption this item exists to remove
+
+Next free id: **B-035**.

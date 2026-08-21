@@ -245,6 +245,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- **The parity programme is no longer sixteen surfaces held to one standard.** `ROADMAP.md` now
+  sorts them into two bands by a criterion that is written down rather than felt: a surface needs
+  **parity** when the framework's own thesis fails without it — an agent or page served wrongly or
+  unsafely, the three-target split broken, or a benchmark journey already measured as lost depending
+  on it. Five qualify (M1 security boundary, M2 rendering, M3 bundler, M8 observability, M14 build
+  adapters). The other ten get a **minimum contract**: not a lowered bar but a different one — what
+  the surface must do, document and refuse, graded the same way with no competitor's surface as the
+  reference, so *"we do not transform images"* in the docs is a met contract while the same absence
+  undocumented is a defect. M16 (multi-zone) is delisted, because a milestone nobody schedules that
+  still counts as outstanding makes the programme permanently incomplete for a reason that is not a
+  gap. Every deferred criterion is kept under *"Parity criteria — recorded, not scheduled"* rather
+  than deleted, and the three-target lines stay binding in both bands. No checkbox moved: narrowing
+  scope is the owner's call, deciding a surface is done is still `/acceptance`'s.
+
+- **The programme's completion condition follows the bands.** It was "all sixteen milestones"; it is
+  now the five parity milestones at full Definition of done plus the ten minimum contracts met, with
+  M16 not counted. The second condition — measured superiority on the agent axis — is unchanged and
+  still unmet: ten of ten journeys are now measured and none is won
+  (`docs/program/dx-benchmark.md`).
+
 - **Test runs no longer claim every core on the host.** `vitest.config.ts` capped nothing, so the default applied — `os.availableParallelism()`, one fork per core, each booting a full test environment. On a 12-thread machine a single `vitest run` therefore took the whole box, and anything else running alongside it (a second suite, a typecheck, the desktop) competed for what was left. The cap now leaves 4 cores free (`Math.max(2, cpus().length - 4)`), scaling with the runner instead of hard-coding one machine's core count. It costs no wall-clock — measured in `theokit-ui`, the full suite ran 73.96s at 4 workers against 74.36s at 12. (usetheokit/theokit-ui#51)
 
 - The four actions in the release workflow are pinned by commit SHA instead of by ref. The job

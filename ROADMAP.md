@@ -4,6 +4,10 @@ Sixteen milestones, one per framework surface. Each surface is a `*-specialist` 
 `.claude/skills/`; a milestone closes when the published packages meet that surface's contract and
 `/acceptance` says so against the released artifact.
 
+**Revised 2026-08-21: the surfaces are not held to one standard.** Five must reach parity, ten must
+meet a declared minimum contract, one is delisted. The criterion that sorts them is in § Two bands,
+and the measured state each assignment was made from is in the table below it.
+
 ## What "done" means here
 
 **The target is the specification, not a competitor's release.** Parity is measured against
@@ -60,6 +64,84 @@ and declared finished what was never built.
 **No criterion below cites a gap file.** Each cites the measurement, an issue, or a `file:line`.
 Four surfaces re-measured clean (i18n, asset-optimization, dev-experience, multi-zone) and two with
 fine corrections (navigation-prefetching, route-conventions).
+
+## Two bands — parity where it decides, a minimum contract everywhere else
+
+Revised 2026-08-21 on the owner's instruction: **every surface must be implemented; only the
+principal ones must reach parity.** Sixteen surfaces held to a single standard was the programme
+declaring an ambition rather than a plan. Ten of them hold measured defects worth fixing and no
+measured need for a competitor's full surface area — and a criterion nobody intends to schedule
+reads exactly like one nobody has got to yet, which is the failure this repository spends most of
+its gates preventing elsewhere.
+
+**The criterion that separates the bands is declared, not felt.** A surface is in the **parity
+band** when the framework's own thesis fails without it:
+
+1. an agent or a page is served **wrongly or unsafely** — a defect, not a missing convenience; or
+2. the **three-target split** (`.claude/rules/three-target-parity.md`) breaks, so a capability is
+   reachable from one target only; or
+3. a **benchmark journey already measured as lost or tied** (`docs/program/dx-benchmark.md`)
+   depends on it.
+
+Everything else is in the **minimum-contract band**. A minimum contract is not a lowered bar — it
+is a different one: what the surface must **do, document and refuse**, graded exactly the same way,
+with no competitor's surface as the reference. A surface in this band ships a working, honest
+subset and says in its own documentation what it does not do. *"We do not transform images"* in the
+docs is a met contract; the same absence undocumented is a defect.
+
+| Band | Surfaces | What closes it |
+|---|---|---|
+| **Parity required** | M1, M2, M3, M8, M14 | the full Definition of done, then `/acceptance` against the released artifact |
+| **Minimum contract** | M4, M5, M6, M7, M9, M10, M11, M12, M13, M15 | the minimum contract, then `/acceptance` against the released artifact |
+| **Delisted** | M16 | nothing — it is not scheduled and not counted |
+
+**A deferred criterion is recorded, never deleted.** Every minimum-contract milestone keeps its
+original criteria under *"Parity criteria — recorded, not scheduled"*. They are the answer to
+*"what would parity have meant here"*, and picking one up later costs a `/backlog-item` rather than
+an excavation.
+
+**The three-target lines stay binding in both bands.** `three-target-parity.md` is transversal by
+construction: a surface that works on Web only is not a smaller surface, it is a broken one. So
+`Applies to` / `Tauri` / `TUI` move **into** each minimum contract rather than into its deferred
+list.
+
+**What this revision does not do.** It flips no checkbox and closes no milestone. Narrowing scope
+is the owner's call; deciding that a surface is done is `/acceptance`'s, against a released
+artifact (`.claude/rules/cycle-acceptance.md`). Every box below is still `[ ]`.
+
+### The state each assignment was made from, measured 2026-08-21
+
+Read from source against the working tree, not from the milestone prose that preceded it. Several
+rows contradict the text of their own milestone, which is why each is dated and cited — and why the
+contradictions below are corrected in place rather than edited away.
+
+| Surface | Measured state | Evidence |
+|---|---|---|
+| M1 | CSRF default-on, server-only import gate and policy seam all present | `packages/theo/src/server/web-handler.ts:508`, `packages/theo/src/vite-plugin/server-boundary.ts`, `packages/theo/src/core/contracts/route-policy.ts:65,86` |
+| M2 | document, head and hydration script emitted; the TDZ B-002 records is gone | `packages/theo/src/router/entry-server.ts:70,226-230` |
+| M3 | the route scan sorts by code unit, **the consolidated walker does not**, and no CI job grades reproducibility | `packages/theo/src/router/scan.ts:142` vs `packages/theo/src/server/_internal/scan-walker.ts:36` |
+| M4 | per-segment precedence exists as a named comparator | `packages/theo/src/server/_internal/compare-by-code-unit.ts`, `packages/theo/src/server/scan/scan.ts:209` |
+| M5 | engine initialised at boot in `start` and `dev`; `defaults` reaches it | `packages/theo/src/server/cache-bootstrap.ts:28`, `packages/theo/src/cache/cache-engine.ts:109` |
+| M6 | `Link` prefetches on intent and viewport; `ScrollRestoration` appears in **no file** under `packages/` | `packages/theo/src/client/link.tsx:4-10` |
+| M7 | a prod-like local run is still `build` then `start` | `packages/create-theokit/templates/default/package.json.tmpl:7-9` |
+| M8 | **the trace exists now** — identity is on the span and the serializer reads it, so B-019 is closed in code | `packages/theo/src/server/observability/span.ts:9-22`, `packages/theo/src/server/observability/otlp-serializer.ts:80` |
+| M9 | head hoisting and a metadata component both exist | `packages/theo/src/vite-plugin/hoist-head-tags.ts`, `packages/theo/src/client/metadata.tsx` |
+| M10 | `srcSet`/`sizes` forwarded; **no transform pipeline, no fonts module, no `sharp`** | `packages/theo/src/client/image.tsx:8,24-25` |
+| M11 | the pipeline lives in `@theokit/ui`, outside this repository | — |
+| M12 | `lang=` appears in **no file** under `packages/theo/src` | — |
+| M13 | the published builder's shape is not the shape the runner invokes | `packages/theo/src/server/define/middleware-builder.ts:26` vs `packages/theo/src/server/http/middleware-runner.ts:35-36` |
+| M14 | streaming and security headers landed; **`agent` appears in zero adapter files** | `packages/theo/src/adapters/` |
+| M15 | `noindex` and `robots` appear in **no file** under `packages/theo/src` | — |
+| M16 | nothing to fix was ever measured | § M16 |
+
+**Two rows move a milestone's own text, and both move it in the same direction.** M8's harder half
+— the trace, not the span — is done while its criterion below still says it is not, and M5's two
+named blockers are both wired. Neither is a checkbox: implemented is not accepted, and the boxes
+stay `[ ]` until `/acceptance` runs against a released artifact.
+
+**One row is worse than its milestone claims.** M3's determinism fix landed in the route scanner and
+not in the walker three other scanners share, so the milestone reads as half-fixed and is closer to
+a quarter.
 
 ## Wave 0.5 — wire what exists, first
 
@@ -129,6 +211,10 @@ not itself a dependency — two milestones in the same wave may run in either or
 **Surface:** `.claude/skills/server-boundary-security-specialist/` — what may cross from server to client, and what must never be reachable from a browser.
 **Dependencies:** none — core surface
 
+**Band: parity required.** An unsafe boundary is a defect rather than a missing convenience, and J8 (tenant) is one of the three journeys the benchmark measures as an outright loss.
+
+**Measured 2026-08-21:** CSRF is enforced by absence (`packages/theo/src/server/web-handler.ts:508`), the server-only import gate exists (`packages/theo/src/vite-plugin/server-boundary.ts`), and the policy seam is a named contract (`packages/theo/src/core/contracts/route-policy.ts:65,86`). What is open is the advisory and the acceptance run, not the mechanism.
+
 **Definition of done (all must hold):**
 
 - [ ] the HITL approval path rejects an unauthenticated caller and an authenticated non-owner, verified against the published build; the open private security advisory is resolved and its fix released
@@ -144,6 +230,10 @@ not itself a dependency — two milestones in the same wave may run in either or
 **Surface:** `.claude/skills/rendering-pipeline-specialist/` — where markup is produced, when it streams, and what the client re-executes.
 **Dependencies:** none — core surface
 
+**Band: parity required.** Every Web criterion on every other surface is graded against the document this pillar produces. When it is malformed, nothing downstream is measurable.
+
+**Measured 2026-08-21:** The document, the head and the hydration script are emitted, and the TDZ B-002 records is gone (`packages/theo/src/router/entry-server.ts:70,226-230`). What is open is observing it over the wire, chunk by chunk.
+
 **Definition of done (all must hold):**
 
 - [ ] `curl` of the root route against a published build with `ssrStreaming: true` returns a parseable document containing both `<head>` and the hydration data script (#343)
@@ -157,6 +247,10 @@ not itself a dependency — two milestones in the same wave may run in either or
 
 **Surface:** `.claude/skills/bundler-architecture-specialist/` — how modules are graphed, split, transformed and emitted.
 **Dependencies:** none — core surface
+
+**Band: parity required.** What M14 deploys is what this emits, and reproducibility is the floor under every other measurement in the programme.
+
+**Measured 2026-08-21:** The route scan sorts by code unit (`packages/theo/src/router/scan.ts:142`) and **the consolidated walker does not** (`packages/theo/src/server/_internal/scan-walker.ts:36`), so three of the four scanners still read the filesystem in creation order. No CI job grades reproducibility, and `modulepreload` is emitted nowhere.
 
 **Definition of done (all must hold):**
 
@@ -174,62 +268,101 @@ not itself a dependency — two milestones in the same wave may run in either or
 **Surface:** `.claude/skills/route-conventions-specialist/` — how a file path becomes a URL, and what a route file is allowed to export.
 **Dependencies:** M2, M3
 
-**Definition of done (all must hold):**
+**Band: minimum contract.** Full parity on this surface is not sought. A wrong resolution serves the wrong handler, so the correctness half is kept; matching another router's full convention surface is not.
+
+**Measured 2026-08-21:** Per-segment precedence exists as a named comparator (`packages/theo/src/server/_internal/compare-by-code-unit.ts`, applied at `packages/theo/src/server/scan/scan.ts:209`). The mechanism is built; the acceptance run is not.
+
+**Definition of done — minimum contract (all must hold):**
+
+- [ ] `/api/users/settings` resolves to `/api/users/:id` rather than to `/api/:resource/settings` against a published build, and a regression test fails when the tiebreak becomes a whole-path comparison (#348)
+- [ ] the precedence rule is documented as a contract rather than left to sort order
+- [ ] Applies to: Web, Tauri, TUI — each listed target is exercised in acceptance, not merely declared
+- [ ] Tauri: reaches the same route table through the in-process caller
+- [ ] TUI: reaches the same route table through the in-process caller
+
+**Parity criteria — recorded, not scheduled.** Kept so that "what would parity have meant here" has an answer, and so picking one up later costs a `/backlog-item` rather than an excavation:
 
 - [ ] `/api/users/settings` resolves to `/api/users/:id` and not to `/api/:resource/settings` against a published build (#348)
 - [ ] precedence is compared per segment, and a regression test fails when the tiebreak is a whole-path `localeCompare`
 - [ ] route precedence is documented as a specified contract rather than left to sort order
-- [ ] Applies to: Web, Tauri, TUI — each listed target is exercised in acceptance, not merely declared
-- [ ] Tauri: reaches the same route table through the in-process caller
-- [ ] TUI: reaches the same route table through the in-process caller
 
 ### M5 — [ ] caching-revalidation
 
 **Surface:** `.claude/skills/caching-revalidation-specialist/` — what is cached, under which key, for how long, and who may invalidate it.
 **Dependencies:** M2
 
-**Definition of done (all must hold):**
+**Band: minimum contract.** Full parity on this surface is not sought. Caching is not on the agent axis: no benchmark journey grades it, and nothing about it is reachable from one target only. What it must not be is wired-but-broken.
+
+**Measured 2026-08-21:** **Both blockers this milestone was written around are closed.** The engine is initialised at boot in `start` and in `dev` (`packages/theo/src/server/cache-bootstrap.ts:28`, `packages/theo/src/cli/commands/start/index.ts:68`, `packages/theo/src/cli/commands/dev.ts:36`), and `defaults` reaches it (`packages/theo/src/cache/cache-engine.ts:109`).
+
+**Definition of done — minimum contract (all must hold):**
+
+- [ ] a scaffolded app calls `revalidateTag` against a published build without throwing (#347)
+- [ ] the cache's documented surface states which of TTL, stale-while-revalidate and tag invalidation it serves, and which it does not
+- [ ] Applies to: Web, Tauri, TUI — each listed target is exercised in acceptance, not merely declared
+- [ ] Tauri: the same cache engine runs in-process; entries are not re-implemented per target
+- [ ] TUI: the same cache engine runs in-process
+
+**Parity criteria — recorded, not scheduled.** Kept so that "what would parity have meant here" has an answer, and so picking one up later costs a `/backlog-item` rather than an excavation:
 
 - [ ] `initCacheEngine` has a production caller and a cached route serves a hit on the second request, observed through the cache signal in a published build (#347)
 - [ ] `opts.defaults` reaches the engine — a cache configured only through defaults produces the configured TTL behaviour, where today the option is destructured away
 - [ ] N concurrent requests against a stale entry trigger exactly one background refresh, counted at the route layer
 - [ ] `defineCachedFunction` refuses by name a function capturing a value that is not part of its cache key
-- [ ] Applies to: Web, Tauri, TUI — each listed target is exercised in acceptance, not merely declared
-- [ ] Tauri: the same cache engine runs in-process; entries are not re-implemented per target
-- [ ] TUI: the same cache engine runs in-process
 
 ### M6 — [ ] navigation-prefetching
 
 **Surface:** `.claude/skills/navigation-prefetching-specialist/` — what a client transition fetches, keeps, and shows in between.
 **Dependencies:** M2, M3
 
-**Definition of done (all must hold):**
+**Band: minimum contract.** Full parity on this surface is not sought. Prefetching already works; what is missing is a declared cost and an honest absence. Neither needs a competitor's budget to be graded.
+
+**Measured 2026-08-21:** `Link` prefetches on intent and on viewport (`packages/theo/src/client/link.tsx:4-10`). `ScrollRestoration` appears in **no file** under `packages/`, and no document says so.
+
+**Definition of done — minimum contract (all must hold):**
+
+- [ ] the three prefetch strategies are documented with the request cost of each
+- [ ] scroll restoration is either mounted in the generated entry or named as absent in the documentation — today it is neither
+- [ ] Applies to: Web, Tauri, TUI — each listed target is exercised in acceptance, not merely declared
+- [ ] Tauri: the same client router runs in the webview
+- [ ] TUI: *not applicable* — a terminal has no viewport to observe and no scroll position to restore
+
+**Parity criteria — recorded, not scheduled.** Kept so that "what would parity have meant here" has an answer, and so picking one up later costs a `/backlog-item` rather than an excavation:
 
 - [ ] a viewport containing N prefetchable links issues at most the configured budget of requests, counted in the network log against a published build
 - [ ] scroll position is restored on back navigation — `<ScrollRestoration/>` is mounted in the generated entry
 - [ ] the prefetch budget is a declared, documented number rather than an implicit consequence of viewport size
-- [ ] Applies to: Web, Tauri, TUI — each listed target is exercised in acceptance, not merely declared
-- [ ] Tauri: the same client router runs in the webview
-- [ ] TUI: *not applicable* — a terminal has no viewport to observe and no scroll position to restore
 
 ### M7 — [ ] dev-experience
 
 **Surface:** `.claude/skills/dev-experience-specialist/` — how fast a change is visible, what state survives it, and what an error says.
 **Dependencies:** M3
 
-**Definition of done (all must hold):**
+**Band: minimum contract.** Full parity on this surface is not sought. Developer experience is graded by its own users, not against another framework's dev server.
+
+**Measured 2026-08-21:** A prod-like local run is still two steps, `build` then `start` (`packages/create-theokit/templates/default/package.json.tmpl:7-9`).
+
+**Definition of done — minimum contract (all must hold):**
+
+- [ ] a prod-like local run is one documented command
+- [ ] Applies to: Web, Tauri, TUI — each listed target is exercised in acceptance, not merely declared
+- [ ] Tauri: the same dev server drives the desktop shell
+- [ ] TUI: the same dev server drives the terminal client
+
+**Parity criteria — recorded, not scheduled.** Kept so that "what would parity have meant here" has an answer, and so picking one up later costs a `/backlog-item` rather than an excavation:
 
 - [ ] a prod-like local run is one documented command, not two steps
 - [ ] each of the three `full-reload` sites either preserves state across HMR or emits a named reason for the reload
 - [ ] the share of errors naming the failing action does not regress below the 72% measured on 2026-08-19 (29 of a 179-error sample), and the measurement is re-run and recorded rather than assumed
-- [ ] Applies to: Web, Tauri, TUI — each listed target is exercised in acceptance, not merely declared
-- [ ] Tauri: the same dev server drives the desktop shell
-- [ ] TUI: the same dev server drives the terminal client
 
 ### M8 — [ ] observability
 
 **Surface:** `.claude/skills/observability-specialist/` — what a running application emits, and how a request is followed across a boundary.
 **Dependencies:** M1
+
+**Band: parity required.** It is the programme's own instrument: the benchmark cannot be run without it, and J9 is the journey where the largest margins the framework has produced still failed to become a win.
+
+**Measured 2026-08-21:** **The trace exists now, and this milestone's own text below says it does not.** Identity is decided when a span starts (`packages/theo/src/server/observability/span.ts:9-22`) and the serializer reads it instead of minting one (`packages/theo/src/server/observability/otlp-serializer.ts:80`), so B-019 is closed in code. The dev agent path still mints its own (`packages/theo/src/vite-plugin/agent-middleware.ts`), and only `/acceptance` may tick the box.
 
 **Definition of done (all must hold):**
 
@@ -247,27 +380,46 @@ not itself a dependency — two milestones in the same wave may run in either or
 **Surface:** `.claude/skills/metadata-specialist/` — titles, canonicals, social cards, robots directives and structured data.
 **Dependencies:** M2
 
-**Definition of done (all must hold):**
+**Band: minimum contract.** Full parity on this surface is not sought. A crawler reads the document M2 produces; the parity surface beyond that (structured data, per-route social cards) has no measured need behind it.
 
-- [ ] with streaming on, the first flushed chunk contains the resolved `<title>` and `og:` tags — the same hoist defect as #343, measured on the first chunk
-- [ ] a configured base URL makes `og:image` absolute in the served document, and a relative value is refused by name at build time rather than shipped broken
+**Measured 2026-08-21:** Head hoisting and a metadata component both exist (`packages/theo/src/vite-plugin/hoist-head-tags.ts`, `packages/theo/src/client/metadata.tsx`).
+
+**Definition of done — minimum contract (all must hold):**
+
+- [ ] the served document carries the resolved `<title>` and `og:` tags against a published build
+- [ ] a relative `og:image` under a configured base URL is refused by name at build time rather than shipped broken
 - [ ] Applies to: Web, Tauri, TUI — each listed target is exercised in acceptance, not merely declared
 - [ ] Tauri: the webview document carries the same resolved tags
 - [ ] TUI: *not applicable* — a terminal is not crawled and has no document head
+
+**Parity criteria — recorded, not scheduled.** Kept so that "what would parity have meant here" has an answer, and so picking one up later costs a `/backlog-item` rather than an excavation:
+
+- [ ] with streaming on, the first flushed chunk contains the resolved `<title>` and `og:` tags — the same hoist defect as #343, measured on the first chunk
+- [ ] a configured base URL makes `og:image` absolute in the served document, and a relative value is refused by name at build time rather than shipped broken
 
 ### M10 — [ ] asset-optimization
 
 **Surface:** `.claude/skills/asset-optimization-specialist/` — how images, fonts and static files are processed, addressed and cached.
 **Dependencies:** M3
 
-**Definition of done (all must hold):**
+**Band: minimum contract.** Full parity on this surface is not sought. Parity with an image-optimisation pipeline is explicitly not sought — there is no transform layer and building one is a product decision nobody has taken.
+
+**Measured 2026-08-21:** `Image` forwards `srcSet` and `sizes` (`packages/theo/src/client/image.tsx:8,24-25`) and nothing is resized or re-encoded: `sharp` is not a dependency, and `packages/theo/src/client/` holds no fonts module.
+
+**Definition of done — minimum contract (all must hold):**
+
+- [ ] `Image` reserves its space before the pixels arrive, so a page does not shift while it loads
+- [ ] declaring `srcSet` without `sizes` fails by name at build time
+- [ ] the documentation states that no image transform and no fonts module ship, so a reader learns it from the docs instead of from a blurry logo
+- [ ] Applies to: Web, Tauri, TUI — each listed target is exercised in acceptance, not merely declared
+- [ ] Tauri: the webview consumes the same optimized assets
+- [ ] TUI: *not applicable* — a terminal renders neither raster images nor webfonts
+
+**Parity criteria — recorded, not scheduled.** Kept so that "what would parity have meant here" has an answer, and so picking one up later costs a `/backlog-item` rather than an excavation:
 
 - [ ] a published build serves a transformed image — resized and re-encoded — for a declared source image
 - [ ] declaring `srcSet` without `sizes` fails by name at build time
 - [ ] a fonts module exists and emits preload links with the correct `crossorigin` attribute
-- [ ] Applies to: Web, Tauri, TUI — each listed target is exercised in acceptance, not merely declared
-- [ ] Tauri: the webview consumes the same optimized assets
-- [ ] TUI: *not applicable* — a terminal renders neither raster images nor webfonts
 
 ### M11 — [ ] content-pipeline
 
@@ -276,7 +428,11 @@ not itself a dependency — two milestones in the same wave may run in either or
 
 **Status:** The safe pipeline **already exists** — `@theokit/ui` in the scaffold does sanitize-then-jsx with a streaming preprocess. This milestone closes two gaps in it and must not re-plan what is built.
 
-**Definition of done (all must hold):**
+**Band: minimum contract.** Full parity on this surface is not sought. The two gaps are small and the pipeline is already safe; the rest of a content platform is not this repository's surface.
+
+**Measured 2026-08-21:** The pipeline lives in `@theokit/ui`, outside this repository, and already does sanitize-then-jsx with a streaming preprocess.
+
+**Definition of done — minimum contract (all must hold):**
 
 - [ ] markdown `![]()` renders through the framework `Image` component in a scaffolded project's published build
 - [ ] markdown `[]()` pointing at an external origin renders through `Link` and carries `rel="noopener noreferrer"`
@@ -291,27 +447,46 @@ not itself a dependency — two milestones in the same wave may run in either or
 
 **Status:** Nothing exists yet. This milestone is a build, not a repair.
 
-**Definition of done (all must hold):**
+**Band: minimum contract.** Full parity on this surface is not sought. A document that does not declare its language is wrong for assistive technology regardless of how many locales ship. Locale routing, catalogues and formatting are a build nobody has asked for.
 
-- [ ] the served document carries `<html lang>` matching the negotiated locale — today the served template has no `lang` attribute at all
-- [ ] a locale negotiated from the request is reachable both in a route handler and inside an agent run, against a published build
+**Measured 2026-08-21:** `lang=` appears in **no file** under `packages/theo/src`.
+
+**Definition of done — minimum contract (all must hold):**
+
+- [ ] the served document carries `<html lang>` matching the negotiated locale
+- [ ] the negotiated locale is reachable in a route handler
+- [ ] the documentation states that no locale routing scheme, no catalogue loading and no plural or number formatting layer ship
 - [ ] Applies to: Web, Tauri, TUI — each listed target is exercised in acceptance, not merely declared
 - [ ] Tauri: the webview document carries the same negotiated `lang`
 - [ ] TUI: negotiation is reachable in-process; `<html lang>` is *not applicable* — there is no document
+
+**Parity criteria — recorded, not scheduled.** Kept so that "what would parity have meant here" has an answer, and so picking one up later costs a `/backlog-item` rather than an excavation:
+
+- [ ] the served document carries `<html lang>` matching the negotiated locale — today the served template has no `lang` attribute at all
+- [ ] a locale negotiated from the request is reachable both in a route handler and inside an agent run, against a published build
 
 ### M13 — [ ] middleware-edge
 
 **Surface:** `.claude/skills/middleware-edge-specialist/` — what runs before a route resolves, and under which runtime constraints.
 **Dependencies:** M1
 
-**Definition of done (all must hold):**
+**Band: minimum contract.** Full parity on this surface is not sought. A published builder whose output the runner cannot invoke is a broken contract, and that half stays. Edge-runtime parity — matchers, per-runtime constraints, a transport-independent chain — is not sought; nobody has named the use case it would serve.
+
+**Measured 2026-08-21:** The builder returns `(request, next) => Response` (`packages/theo/src/server/define/middleware-builder.ts:26`) while the file-scan runner types `(req, res, next)` (`packages/theo/src/server/http/middleware-runner.ts:35-36`). The public path is unusable as published.
+
+**Definition of done — minimum contract (all must hold):**
+
+- [ ] a middleware authored with the published `middleware()` builder is invoked by the file-scan runner in a published build (#345)
+- [ ] a middleware that cannot run on a target is refused by name rather than silently skipped
+- [ ] Applies to: Web, Tauri, TUI — each listed target is exercised in acceptance, not merely declared
+- [ ] Tauri: the middleware chain is reachable off-HTTP — both runners are transport-bound today (`packages/theo/src/server/http/middleware-runner.ts:6-7`, `packages/theo/src/server/http/web-middleware-runner.ts:19`), and that is unchanged. What the authorization ADR settled is narrower than this criterion assumed: **access control** is now transport-independent and evaluated by `callProcedure`, while the middleware CHAIN stays on the transport by design — CORS, cookies and CSP are meaningless in a terminal. So this criterion is no longer waiting on that ADR; it is waiting on whatever transport-independent thing the remaining middleware use cases actually need, which nobody has yet named
+- [ ] TUI: same transport-bound blocker, same ADR; a terminal surface must not reach a route with the middleware silently skipped
+
+**Parity criteria — recorded, not scheduled.** Kept so that "what would parity have meant here" has an answer, and so picking one up later costs a `/backlog-item` rather than an excavation:
 
 - [ ] a middleware authored with the public `middleware()` builder is invoked by the file-scan runner in a published build (#345)
 - [ ] a middleware declares a path matcher and runs only for the routes it matches
 - [ ] a middleware requiring a runtime capability the target lacks is refused by name rather than skipped
-- [ ] Applies to: Web, Tauri, TUI — each listed target is exercised in acceptance, not merely declared
-- [ ] Tauri: the middleware chain is reachable off-HTTP — both runners are transport-bound today (`packages/theo/src/server/http/middleware-runner.ts:6-7`, `packages/theo/src/server/http/web-middleware-runner.ts:19`), and that is unchanged. What the authorization ADR settled is narrower than this criterion assumed: **access control** is now transport-independent and evaluated by `callProcedure`, while the middleware CHAIN stays on the transport by design — CORS, cookies and CSP are meaningless in a terminal. So this criterion is no longer waiting on that ADR; it is waiting on whatever transport-independent thing the remaining middleware use cases actually need, which nobody has yet named
-- [ ] TUI: same transport-bound blocker, same ADR; a terminal surface must not reach a route with the middleware silently skipped
 
 ## Wave 4
 
@@ -340,6 +515,10 @@ findings, and the second contains the first:
 mechanisms above. Its own header already records the posture: *"Cloudflare Workers is a future /
 opt-in compatibility surface — TheoCloud is the only end-to-end-validated deploy target."*
 
+**Band: parity required.** The thesis is that an agent ships through the same pipeline as a page, and `agent` appears in zero of the fourteen adapter files.
+
+**Measured 2026-08-21:** Streaming and the security headers landed. The decisive criterion did not: `agent` appears in zero of the files under `packages/theo/src/adapters/`, so no listed target serves the thing the framework exists to ship.
+
 **Definition of done (all must hold):**
 
 - [ ] a streaming `/api/*` route streams on every listed adapter — chunks observed arriving before the response completes — or the adapter is delisted; the `web-shim` buffering the whole response is the current blocker across six targets. **Addressed 2026-08-20** (usetheokit/theokit#382), and the measurement corrected the criterion's own count: **all six** emitted handlers buffered a second time, not two — each awaited `executeRoute` before calling `toResponse()`, and `executeRoute` does not return until it has drained the body. Measured through the shim, before and after: one chunk at millisecond 1123 of an 1123 ms run, against 9 chunks with headers at 1 ms and the first at 121 ms. **AWS Lambda is delisted for streaming**, which this bullet authorises in writing, and the delisting is audible three ways rather than silent: the build refuses by name on `ssrStreaming`, the emitted handler logs the route when it buffers a `text/event-stream`, and every one of the nine targets is now forced to declare whether it streams. `node` is exercised end to end; the other five are correct in the emitted contract and **unproven on the platform**, because no deploy exists in CI — which is what this bullet's `/acceptance` has to settle
@@ -357,22 +536,36 @@ opt-in compatibility surface — TheoCloud is the only end-to-end-validated depl
 
 **Status:** Nothing exists yet. There is no `robots` or `noindex` field anywhere in `packages/theo/src`.
 
-**Definition of done (all must hold):**
+**Band: minimum contract.** Full parity on this surface is not sought. Nothing exists, nobody has asked for it, and the honest options are to build the smallest safe version or to say it is not there. Both are gradeable; leaving it implied is not.
+
+**Measured 2026-08-21:** `noindex` and `robots` appear in **no file** under `packages/theo/src`.
+
+**Definition of done — minimum contract (all must hold):**
+
+- [ ] the surface is either implemented behind a preview credential whose response carries `noindex`, or declared unimplemented in the documentation so nobody builds on an assumption
+- [ ] Applies to: Web, Tauri, TUI — **when the first bullet is met by building it.** Met by declaring it absent, the declaration itself is what must reach all three: one sentence in the shared documentation, not a note on the Web page, so a desktop or terminal reader is not left to infer that preview exists
+- [ ] Tauri: the webview reaches preview through the same authorized path, or the declaration covers it
+- [ ] TUI: the authorization check is reachable in-process, or the declaration covers it; `noindex` is *not applicable* — a terminal is not crawled
+
+**Parity criteria — recorded, not scheduled.** Kept so that "what would parity have meant here" has an answer, and so picking one up later costs a `/backlog-item` rather than an excavation:
 
 - [ ] an unpublished document is served only to a request carrying a valid preview credential; without it the published build serves the published version or 404, never the draft
 - [ ] a preview response carries `noindex`, so a leaked preview URL is not indexed
-- [ ] Applies to: Web, Tauri, TUI — each listed target is exercised in acceptance, not merely declared
-- [ ] Tauri: the webview reaches preview through the same authorized path
-- [ ] TUI: the authorization check is reachable in-process; `noindex` is *not applicable* — a terminal is not crawled
 
 ### M16 — [ ] multi-zone
 
 **Surface:** `.claude/skills/multi-zone-specialist/` — how independently built applications compose behind one origin.
 **Dependencies:** M3
 
+**Band: delisted.** Deprioritized on 2026-08-19 and **delisted on 2026-08-21**: it is no longer
+counted in the programme's completion condition. Nothing changed about the surface — what changed is
+that a milestone nobody schedules, still counted as outstanding, makes the programme permanently
+incomplete for a reason that is not a gap. Re-list it through `/backlog-item` when a second zone
+exists.
+
 **Status:** **Deprioritized, deliberately.** No blocker was measured on 2026-08-19 — this is the one surface where measurement found nothing to fix. It stays declared so the surface is not forgotten, and it is not scheduled. Pick it up only when a second zone actually exists; until then, every criterion below grades a need nobody has.
 
-**Definition of done (all must hold):**
+**Criteria — recorded, not scheduled.** Delisted means these grade nothing until a second zone exists:
 
 - [ ] two independently built zones compose behind one origin and a client navigation across the boundary preserves the session
 - [ ] a zone boundary is declared explicitly rather than inferred from a path prefix
@@ -382,7 +575,9 @@ opt-in compatibility surface — TheoCloud is the only end-to-end-validated depl
 
 ## Programme completion
 
-Closing all sixteen milestones satisfies the **parity** condition. It does not close the programme:
+**Revised 2026-08-21.** The condition is no longer sixteen milestones: it is the five parity
+milestones at full Definition of done, the ten minimum contracts met, and M16 delisted — fifteen
+counted, one not (§ Two bands). Closing them satisfies the **parity** condition. It does not close the programme:
 the second condition is **measured superiority on the agent axis**, and it is deliberately not a
 milestone here because it spans every surface rather than any one of them.
 
