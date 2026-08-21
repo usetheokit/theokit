@@ -1333,3 +1333,67 @@ them.
 The swing from `30.40` to `11.23` is **not decomposed**. Three things differ between the two runs —
 the missing lockfile, the machine's warmth, and whatever produced a σ of 7.50 on a 30 s measurement
 — and no run here isolates them.
+
+## Criteria 3 and 6 re-exercised against the tree, 2026-08-21 — and the release limit that makes them ungraded
+
+**This is not an acceptance run, and no criterion below is closed by it.**
+[`../../../.claude/rules/cycle-acceptance.md`](../../../.claude/rules/cycle-acceptance.md)
+§ Target kinds grades a criterion against the **released** artifact, and nothing here is released.
+`develop` and `origin/main` carry the identical tree `46ac4204`, the newest `theokit` tag is
+`theokit@0.48.14` (2026-08-19), and each of the four commits that move criteria 5 and 6 —
+`2ec9180ee`, `0e9e6dc04`, `2893c8997`, `e39ce9831` — answers `NOT in develop` to
+`git merge-base --is-ancestor`. `workspace` is 88 commits ahead. So what follows says
+**the capability is present in the tree and ungraded**, and never that a criterion is satisfied.
+
+**Criterion 7 is unmeasurable here for the same reason, and is not graded.** Its wording asks for a
+*published* build started by the shipped CLI. The app below is a real build started by the real CLI —
+`theokit build && theokit start`, no vitest, no injected adapter, an HTTP client outside the process —
+but the `theokit` and `@theokit/agents` it loads are symlinks into the working tree rather than
+packages installed from a registry. A built artifact is not a published one, and stretching the word
+would be the substitution the acceptance rule exists to refuse.
+
+Everything below is bytes that arrived at a local OTLP collector over HTTP. Nothing is read from
+process memory and nothing is read from source. The instrument, the commands and the full span
+payloads are in
+[`../evidence/j09-criteria-3-and-6-tree-2026-08-21.txt`](../evidence/j09-criteria-3-and-6-tree-2026-08-21.txt),
+and the harness itself is committed beside it at
+[`../evidence/j09-harness/`](../evidence/j09-harness/) — the scratch app is not, per
+[`../../../.claude/rules/northstar-app.md`](../../../.claude/rules/northstar-app.md)'s split between
+what travels and what is disposable.
+
+### The tree under test
+
+| | |
+| --- | --- |
+| TheoKit | `workspace` @ `66964c89e`, clean tree; `theokit` 0.49.0, `@theokit/agents` 10.1.0 |
+| Since the last graded run | six commits on `packages/`, one of them observability (`e39ce9831` — #405 and #406) |
+| App | the `create-theokit` default template committed verbatim, plus the two J9 `.env.local` lines |
+| Model | a scripted Ollama-protocol server on 127.0.0.1:11533 reached through `OLLAMA_HOST`; `@theokit/sdk` 4.53.1 |
+| Collector | a `node:http` server accepting OTLP/JSON on `POST 127.0.0.1:4318/v1/traces` |
+
+`@theokit/sdk` is **4.53.1 here and 4.52.1 in § Re-measured a second time**. The drift is recorded
+rather than corrected: it is the app's own dependency, it was not pinned, and saying so is cheaper
+than a re-run that would change nothing about the two ids compared below.
+
+### Criterion 6 — the trace ids, compared as strings
+
+Three paths, three requests, each carrying a `traceparent` chosen so the comparison is unambiguous.
+
+| path | trace id sent | trace id on every exported span | spans | distinct traces | run span's parent |
+| --- | --- | --- | --- | --- | --- |
+| plain `POST /api/agents/chat` | `4bf92f3577b34da6a3ce929d0e0e4736` | `4bf92f3577b34da6a3ce929d0e0e4736` | 4 | **1** | `00f067aa0ba902b7` — the span id sent |
+| thread route (`202`, headless run) | `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab` | `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab` | 4 | **1** | `1111111111111112` — the span id sent |
+| HITL-gated run + its separate approve request | `cccccccccccccccccccccccccccccccd` | `cccccccccccccccccccccccccccccccd` | 4 | **1** | `3333333333333334` — the span id sent |
+
+The `http.request` span joins the same trace on all three, including the approve request, which is a
+second HTTP call from the client. **The behaviour the criterion describes is present in the tree on
+every path it names.**
+
+**This reproduces § Re-measured a second time rather than discovering it.** That section already
+graded criterion 6 a pass on all three paths on 2026-08-20 evening. What is new is that the result
+survives six further commits, and that the third path — the gated run's approve request — was
+compared here as well.
+
+**The limit is unchanged and no criterion sees it.** Every HITL run driven *without* a `traceparent`
+arrived as **three** disconnected traces: the run's, the initial POST's, and the approve POST's.
+A browser sends no `traceparent`. usetheokit/theokit#404, reproduced again.

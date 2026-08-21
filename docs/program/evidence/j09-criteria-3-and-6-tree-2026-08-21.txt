@@ -1,0 +1,191 @@
+J9 criteria 3 and 6 — re-exercised against the WORKING TREE, 2026-08-21
+=======================================================================
+
+WHAT THIS IS, AND WHAT IT IS NOT
+--------------------------------
+This is NOT an acceptance run. `.claude/rules/cycle-acceptance.md` § Target kinds
+grades a criterion against the RELEASED artifact, and nothing here is released:
+
+    git rev-parse --short develop        -> 3329e6b93
+    git rev-parse --short origin/main    -> 60822a48b
+    git rev-parse develop^{tree}         -> 46ac42043767f7100321ec5989f2decebfbf2449
+    git rev-parse origin/main^{tree}     -> 46ac42043767f7100321ec5989f2decebfbf2449   (identical)
+    git describe --tags --abbrev=0       -> create-theokit@1.23.8
+    latest theokit tag                   -> theokit@0.48.14 (4a4c35ea6, 2026-08-19)
+
+    git merge-base --is-ancestor <c> develop, for each observability commit:
+      2893c8997  NOT in develop
+      e39ce9831  NOT in develop
+      2ec9180ee  NOT in develop
+      0e9e6dc04  NOT in develop
+
+    git rev-list --left-right --count develop...HEAD -> 0  88
+
+develop and main carry the same tree; the four commits that move criteria 5 and 6
+are on `workspace` only, 88 commits ahead of develop. So every grade below reads
+"the capability is PRESENT IN THE TREE and UNGRADED", never "the criterion is
+satisfied".
+
+Criterion 7 ("the exported signal comes from a production path: the same
+assertions hold against a PUBLISHED build started by the shipped CLI") is
+unmeasurable for the same reason and is not graded here. The app below runs
+`theokit build` + `theokit start` — the shipped CLI on a real build — but the
+`theokit` and `@theokit/agents` it loads are symlinks into the working tree, not
+packages installed from a registry. That is a built artifact, not a published one.
+
+THE INSTRUMENT
+--------------
+  tree under test   /home/paulo/Projetos/theo/theokit-framework/theokit @ 66964c89e
+                    (workspace, `git status --porcelain` empty at run time)
+  packages          theokit 0.49.0, @theokit/agents 10.1.0 — symlinked from the tree
+                    into the app's node_modules, so the app runs THIS source
+  app               the create-theokit default template, committed verbatim, plus
+                    the two J9 `.env.local` lines and the one instrument line that
+                    points the agent at the local model. The app itself is scratch and
+                    NOT committed, per `.claude/rules/northstar-app.md`'s split: the
+                    harness and the evidence travel, the disposable app does not.
+                    Rebuild it with `create-theokit`, then symlink node_modules/theokit
+                    and node_modules/@theokit/agents at packages/theo and packages/agents.
+  model             a scripted Ollama-protocol server on 127.0.0.1:11533, reached via
+                    OLLAMA_HOST. No API key, no real model. `@theokit/sdk` 4.53.1.
+  collector         a node:http server accepting OTLP/JSON on POST 127.0.0.1:4318/v1/traces,
+                    appending every received span to JSONL. Harness, committed beside
+                    this file: docs/program/evidence/j09-harness/{collector,model,drive,
+                    drive-hitl,drive-thread,report}.mjs
+  node              v22.22.2
+  server            PORT=3199 OLLAMA_HOST=http://127.0.0.1:11533 theokit start
+                    (after `theokit build`)
+
+Every span below is bytes that ARRIVED AT THE COLLECTOR over HTTP. Nothing here is
+read from process memory and nothing is read from source.
+
+
+CRITERION 6 — a request carrying a W3C traceparent produces spans continuing that
+              trace id, compared AS STRINGS against the id the client sent
+================================================================================
+
+RUN 6.1 — the plain POST path
+-----------------------------
+  $ PORT=3199 TRACEPARENT="00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01" \
+      SESSION=c6-plain-1787285... node drive.mjs
+
+  SENT   trace id  4bf92f3577b34da6a3ce929d0e0e4736
+         span id   00f067aa0ba902b7
+  HTTP   200
+
+  $ node report.mjs spans-run1.jsonl
+agent.tool   trace=4bf92f3577b34da6a3ce929d0e0e4736 id=9973cb22f7164a3c parent=e186037a2e41c92d dur=77.000ms status=1
+             agent=chat tool=current_time toolCallId=call-0be32f99-b2a2-491c-8f84-f1647bc419b6
+agent.tool   trace=4bf92f3577b34da6a3ce929d0e0e4736 id=a96b761ec79c0af1 parent=e186037a2e41c92d dur=24.000ms status=1
+             agent=chat tool=current_time toolCallId=call-0b4ec88e-b98c-4bc7-832f-9bde8f8cfe2e
+agent.run    trace=4bf92f3577b34da6a3ce929d0e0e4736 id=e186037a2e41c92d parent=00f067aa0ba902b7 dur=258.000ms status=1
+             agent=chat cost.usd=int:0 tokens.input=int:3600 tokens.output=int:1020 tokens.total=int:4620 tokens.reasoning=int:0 tokens.cache_read=int:0 tokens.cache_write=int:0 gen_ai.request.model=ollama/j9-local
+http.request trace=4bf92f3577b34da6a3ce929d0e0e4736 id=50afaafb8ff223e8 parent=00f067aa0ba902b7 dur=494.000ms status=1
+             method=POST path=/api/agents/chat requestId=4bf92f3577b34da6a3ce929d0e0e4736 status=int:200
+
+4 spans; distinct traces: 1
+
+  STRING COMPARISON, the criterion's own oracle:
+      sent     "4bf92f3577b34da6a3ce929d0e0e4736"
+      agent.run    "4bf92f3577b34da6a3ce929d0e0e4736"   equal
+      agent.tool#1 "4bf92f3577b34da6a3ce929d0e0e4736"   equal
+      agent.tool#2 "4bf92f3577b34da6a3ce929d0e0e4736"   equal
+      http.request "4bf92f3577b34da6a3ce929d0e0e4736"   equal
+      distinct traces in the payload: 1
+      agent.run parentSpanId "00f067aa0ba902b7" == the span id the client sent
+
+
+RUN 6.2 — the thread route (202, headless run that outlives the request)
+------------------------------------------------------------------------
+  $ PORT=3199 TRACEPARENT="00-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab-1111111111111112-01" \
+      SESSION=c6-thread-1787285425 node drive-thread.mjs
+  -> {"status":202,"wallMs":32,"body":"{\"runId\":\"run-94adc81c-9995-43f1-a309-46bee3e1ebda\"}"}
+
+  $ node report.mjs spans-thread.jsonl
+http.request trace=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab id=e5eacddce9ce556f parent=1111111111111112 dur=3.000ms status=1
+             method=POST path=/api/agents/chat/threads/c6-thread-1787285425/message requestId=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab status=int:202
+agent.tool   trace=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab id=db34b46877daeec3 parent=7a0e65385a65d9ba dur=68.000ms status=1
+             agent=chat tool=current_time toolCallId=call-130f6940-c6f8-47fc-9a50-caea2b182c4a
+agent.tool   trace=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab id=db07de8d7d32dcc2 parent=7a0e65385a65d9ba dur=23.000ms status=1
+             agent=chat tool=current_time toolCallId=call-016a43e0-9e75-47c0-9456-dfd1e95c5bcd
+agent.run    trace=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab id=7a0e65385a65d9ba parent=1111111111111112 dur=136.000ms status=1
+             agent=chat sessionId=c6-thread-1787285425 cost.usd=int:0 tokens.input=int:3600 tokens.output=int:1020 tokens.total=int:4620 tokens.reasoning=int:0 tokens.cache_read=int:0 tokens.cache_write=int:0 gen_ai.request.model=ollama/j9-local
+
+4 spans; distinct traces: 1
+
+  STRING COMPARISON:
+      sent     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab"
+      all four exported spans "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab"   equal
+      distinct traces: 1
+      agent.run parentSpanId "1111111111111112" == the span id the client sent
+
+
+RUN 6.3 — the HITL-gated path, including the separate approve request
+----------------------------------------------------------------------
+  $ PORT=3199 TRACEPARENT="00-cccccccccccccccccccccccccccccccd-3333333333333334-01" \
+      HUMAN_DELAY_MS=1200 node drive-hitl.mjs      (model THINK_MS=20)
+
+  $ node report.mjs spans-hitl-tp.jsonl
+http.request trace=cccccccccccccccccccccccccccccccd id=499c3c2f26425870 parent=3333333333333334 dur=3.000ms status=1
+             method=POST path=/api/agents/chat/approve/a68abeca-3d57-441f-876b-0d7ad5e37680 requestId=cccccccccccccccccccccccccccccccd status=int:200
+agent.hitl   trace=cccccccccccccccccccccccccccccccd id=ad0149ff2ef722fb parent=c02fbab26200fd4e dur=1235.000ms status=1
+             agent=chat tool=send_notification approvalId=a68abeca-3d57-441f-876b-0d7ad5e37680 toolCallId=a68abeca-3d57-441f-876b-0d7ad5e37680 hitl.resume_observed=bool:true
+agent.tool   trace=cccccccccccccccccccccccccccccccd id=91866151b50ad1d3 parent=c02fbab26200fd4e dur=1236.000ms status=1
+             agent=chat tool=send_notification toolCallId=a68abeca-3d57-441f-876b-0d7ad5e37680
+agent.run    trace=cccccccccccccccccccccccccccccccd id=c02fbab26200fd4e parent=3333333333333334 dur=1306.000ms status=1
+             agent=chat cost.usd=int:0 tokens.input=int:2400 tokens.output=int:680 tokens.total=int:3080 tokens.reasoning=int:0 tokens.cache_read=int:0 tokens.cache_write=int:0 gen_ai.request.model=ollama/j9-local
+
+4 spans; distinct traces: 1
+
+  STRING COMPARISON:
+      sent     "cccccccccccccccccccccccccccccccd"
+      agent.run / agent.tool / agent.hitl / http.request(approve)  all equal
+      distinct traces: 1
+      The approve request is a SECOND HTTP request from the client and it carried
+      the same traceparent, so its http.request span joins the same trace.
+
+VERDICT ON CRITERION 6 (tree, ungraded)
+---------------------------------------
+The behaviour the criterion describes IS PRESENT IN THE TREE on all three paths.
+It is UNGRADED, because acceptance grades the released artifact and none of the
+four commits that produce it is on develop or main.
+
+The journey file's older § Measured — TheoKit side (2026-08-20) said criterion 6
+"has no implementable path from an application" because the OTLP serializer minted
+a traceId per span. That sentence describes a tree that no longer exists: the
+serializer now READS s.traceId (otlp-serializer.ts), SpanData carries traceId /
+spanId / parentSpanId (span.ts), and observeServedRun resolves the inbound context
+once for both served routes. § Re-measured a second time already recorded the same
+result on 2026-08-20 evening; this run is an independent reproduction on a tree six
+commits further on, one of them observability (e39ce9831).
+
+WHAT STILL FAILS AND NO CRITERION SEES IT
+------------------------------------------
+Every HITL run below WITHOUT a traceparent arrived as THREE disconnected traces —
+the run's trace, the initial POST's http.request trace, and the approve POST's
+http.request trace. A browser sends no traceparent, so the criterion grades the
+minority path. Already filed as usetheokit/theokit#404 and reproduced here.
+
+
+THE COMMITTED HARNESS IS THE ONE THAT RUNS
+------------------------------------------
+Two of the six harness files failed the repository's own eslint gate when they were
+committed: collector.mjs defaulted its output path under /tmp (a world-writable
+directory) and model.mjs swallowed a JSON parse error in an empty catch — the exact
+shape `.claude/rules/error-handling.md` § 2 forbids. Both were fixed rather than
+allowlisted: the output path is now required, and an unparseable body is reported.
+
+Because that edits the instrument after the runs above, the plain-POST comparison was
+re-run with the COMMITTED copies to show the fix changed nothing that matters:
+
+  $ node docs/program/evidence/j09-harness/collector.mjs <out.jsonl>
+  $ MODEL_PORT=11533 SCRIPT=two-tools THINK_MS=20 node docs/program/evidence/j09-harness/model.mjs
+  $ PORT=3199 TRACEPARENT="00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01" \
+      node docs/program/evidence/j09-harness/drive.mjs
+
+  agent.tool   trace=4bf92f3577b34da6a3ce929d0e0e4736 id=aa2abdeec6e78871 parent=51db881198bcbbf5 dur=77.000ms
+  agent.tool   trace=4bf92f3577b34da6a3ce929d0e0e4736 id=d0bede026e77961f parent=51db881198bcbbf5 dur=26.000ms
+  agent.run    trace=4bf92f3577b34da6a3ce929d0e0e4736 id=51db881198bcbbf5 parent=00f067aa0ba902b7 dur=149.000ms
+  http.request trace=4bf92f3577b34da6a3ce929d0e0e4736 id=3682d7cf625d4cf3 parent=00f067aa0ba902b7 dur=150.000ms
+
+  4 spans; distinct traces: 1     -- same trace id, same parentage, new span ids
