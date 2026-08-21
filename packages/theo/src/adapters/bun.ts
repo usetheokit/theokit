@@ -5,9 +5,14 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import type { TheoConfig } from '../config/schema.js'
+import type { SecurityHeadersConfig } from '../server/security/security-headers.js'
 import { assertServicesUnsupported, readManifest } from '../services/index.js'
 
 import { nodeAdapter } from './node.js'
+import {
+  describeDeployedSecurityHeaders,
+  renderSecurityHeadersConfigLiteral,
+} from './security-headers.js'
 import type { AdapterBuildContext, DeployAdapter } from './types.js'
 
 export interface BunBuildDeps {
@@ -16,7 +21,10 @@ export interface BunBuildDeps {
   ensureDir?: (path: string) => void
 }
 
-export function renderBunEntry(port: number, opts: { ssrStreaming?: boolean } = {}): string {
+export function renderBunEntry(
+  port: number,
+  opts: { ssrStreaming?: boolean; securityHeaders?: SecurityHeadersConfig } = {},
+): string {
   const streamingComment = opts.ssrStreaming
     ? `// T2.3 — ssrStreaming on; renderStreamingWeb may be consumed by app code`
     : `// (ssrStreaming off)`
@@ -50,6 +58,7 @@ export function renderBunEntry(port: number, opts: { ssrStreaming?: boolean } = 
     `import { randomUUID } from 'node:crypto'`,
     `import { scanServerRoutes, matchRoute, executeRoute, createProductionLoader } from 'theokit/server'`,
     `import { createWebShim } from 'theokit/adapters/web-shim'`,
+    `import { buildSecurityHeaders, withSecurityHeaders } from 'theokit/adapters/security-headers'`,
     `// T3.2 — WS bridge for Bun runtime`,
     `import { createBunWsBridge } from 'theokit/adapters/ws-shim'`,
     `import { scanWebSocketRoutes } from 'theokit/server'`,
@@ -58,6 +67,15 @@ export function renderBunEntry(port: number, opts: { ssrStreaming?: boolean } = 
     `const clientDir = resolve(cwd, '.theokit/client')`,
     `const serverDir = resolve(cwd, 'server')`,
     `const port = process.env.PORT ? Number(process.env.PORT) : ${port}`,
+    ``,
+    `// #410 — the security baseline \`theokit start\` puts on every response,`,
+    `// carried here as a literal because the deployed process has no`,
+    `// theo.config.ts to read. Bun is the one Web target whose own handler serves`,
+    `// the HTML document (static file + SPA fallback below), so the document gets`,
+    `// these headers too -- with a nonce-less CSP, because that HTML was written`,
+    `// at build time and carries no nonce on its script tags (EC-4).`,
+    `const SECURITY_HEADERS_CONFIG = ${renderSecurityHeadersConfigLiteral(opts.securityHeaders)}`,
+    `const SECURITY_HEADERS = buildSecurityHeaders(SECURITY_HEADERS_CONFIG, { production: true })`,
     ``,
     `const routes = existsSync(serverDir) ? scanServerRoutes(serverDir) : []`,
     `const wsRoutes = existsSync(serverDir) ? scanWebSocketRoutes(serverDir) : []`,
@@ -85,6 +103,11 @@ export function renderBunEntry(port: number, opts: { ssrStreaming?: boolean } = 
     `  port,`,
     `  websocket: wsBridge,`,
     `  async fetch(request, server) {`,
+    `    return withSecurityHeaders(await handleRequest(request), SECURITY_HEADERS)`,
+    `  },`,
+    `})`,
+    ``,
+    `async function handleRequest(request) {`,
     `    const url = new URL(request.url)`,
     `    const pathname = url.pathname`,
     ``,
@@ -113,8 +136,7 @@ export function renderBunEntry(port: number, opts: { ssrStreaming?: boolean } = 
     `    if (existsSync(indexPath)) return new Response(Bun.file(indexPath))`,
     ``,
     `    return notFoundResponse()`,
-    `  },`,
-    `})`,
+    `}`,
     ``,
     `console.log('Theo (Bun) listening on http://localhost:' + port)`,
   ].join('\n')
@@ -136,7 +158,10 @@ export async function buildBun(
   const ensureDir = deps.ensureDir ?? ((p: string) => mkdirSync(p, { recursive: true }))
   ensureDir(outputDir)
 
-  const entry = renderBunEntry(config.port, { ssrStreaming: config.ssrStreaming })
+  const entry = renderBunEntry(config.port, {
+    ssrStreaming: config.ssrStreaming,
+    securityHeaders: config.security?.headers,
+  })
   const write =
     deps.writeEntry ??
     ((p, c) => {
@@ -145,7 +170,20 @@ export async function buildBun(
   write(resolve(outputDir, 'server.mjs'), entry)
 
   // eslint-disable-next-line no-console -- CLI build progress
-  console.log('\n  ✓ Bun output → .theokit/bun/server.mjs\n')
+  console.log('\n  ✓ Bun output → .theokit/bun/server.mjs')
+  // eslint-disable-next-line no-console -- CLI build progress
+  console.log(
+    `${describeDeployedSecurityHeaders({
+      target: 'bun',
+      securityHeaders: config.security?.headers,
+      // No deploy target other than the streamed Cloudflare worker renders HTML
+      // at request time, so none of the rest can mint a nonce.
+      mintsNonce: false,
+      // Bun serves `.theokit/client` itself, so the document DOES pass through
+      // the handler these headers are attached to.
+      documentServedByPlatform: false,
+    })}\n`,
+  )
 }
 
 export const bunAdapter: DeployAdapter = {
@@ -153,10 +191,14 @@ export const bunAdapter: DeployAdapter = {
   streamsResponses: true,
   // #409 / #410 — the generated entry calls `executeRoute` with routes, loader
   // and serverDir only. CSRF, route policy, file middleware and Zod validation
-  // still run because they live inside `executeRoute`; none of the configurable
-  // concerns reach it. Declared empty rather than omitted so the gap is a
-  // statement in the source and not an absence.
-  appliesConfig: [],
+  // still run because they live inside `executeRoute`; none of the remaining
+  // configurable concerns reach it. Declared explicitly rather than omitted so
+  // the gap is a statement in the source and not an absence.
+  //
+  // `securityHeaders` IS applied: the entry carries `security.headers` as a
+  // literal and puts the built baseline on every response, the served document
+  // included.
+  appliesConfig: ['securityHeaders'],
   build(config, cwd, ctx) {
     return buildBun(config, cwd, {}, ctx)
   },

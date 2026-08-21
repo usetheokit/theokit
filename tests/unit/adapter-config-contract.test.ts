@@ -2,13 +2,19 @@
  * A build that validates configuration and then drops it says nothing.
  *
  * `theo.config.ts` declares `rateLimit`, `security.cors`, `security.csrf`,
- * `security.disallowed` and `serialization`. Every one of them parses, every
- * one of them validates, and on the six Web-standards deploy adapters not one
- * of them is applied — the generated entry builds `executeRoute`'s context
- * from a subset of its fields and the rest fall back to hard-coded defaults
- * (usetheokit/theokit#410). `security.cors` is read only by the dev server, so
- * no production target serves a CORS header at all
+ * `security.disallowed`, `security.headers` and `serialization`. Every one of
+ * them parses, every one of them validates, and on the six Web-standards deploy
+ * adapters most are still not applied — the generated entry builds
+ * `executeRoute`'s context from a subset of its fields and the rest fall back to
+ * hard-coded defaults (usetheokit/theokit#410). `security.cors` is read only by
+ * the dev server, so no production target serves a CORS header at all
  * (usetheokit/theokit#409).
+ *
+ * `security.headers` left that list on 2026-08-21 (B-026): all six entries now
+ * carry the block as a literal and apply the built baseline to every response.
+ * The proof is not this file — a declaration cannot verify itself — it is
+ * `adapter-security-headers.test.ts`, which imports each emitted entry, drives a
+ * request through it and reads the headers off the Response that comes back.
  *
  * This is the failure mode `adapters/types.ts` already names for streaming:
  * "a target silently listed for something nobody exercised". The answer there
@@ -61,19 +67,20 @@ function parseConfig(input: Record<string, unknown>): TheoConfig {
  * - the six Web adapters — the generated entry calls `createWebShim` then
  *   `executeRoute` with routes, loader and `serverDir`. CSRF, route policy,
  *   file middleware and Zod validation run because they live inside
- *   `executeRoute`; none of the five configurable concerns reach it.
+ *   `executeRoute`; none of the remaining configurable concerns reach it. Each
+ *   applies `securityHeaders` on top, at one choke point per entry.
  * - `static` — emits no request handler.
  * - `theo-cloud` — emits no request handler either, but for a different
  *   reason: the runtime is TheoCloud's and this build cannot answer for it.
  */
 const EXPECTED: Record<BuildTarget, readonly ConfigConcern[] | 'runtime-not-emitted-here'> = {
   node: ['rateLimit', 'csrf', 'disallowed', 'serialization', 'plugins', 'securityHeaders'],
-  vercel: [],
-  cloudflare: [],
-  netlify: [],
-  bun: [],
-  'deno-deploy': [],
-  'aws-lambda': [],
+  vercel: ['securityHeaders'],
+  cloudflare: ['securityHeaders'],
+  netlify: ['securityHeaders'],
+  bun: ['securityHeaders'],
+  'deno-deploy': ['securityHeaders'],
+  'aws-lambda': ['securityHeaders'],
   static: [],
   'theo-cloud': 'runtime-not-emitted-here',
 }

@@ -111,6 +111,10 @@
       "types": "./dist/react-query/index.d.ts",
       "import": "./dist/react-query/index.js"
     },
+    "./adapters/security-headers": {
+      "types": "./dist/adapters/security-headers.d.ts",
+      "import": "./dist/adapters/security-headers.js"
+    },
     "./adapters/web-shim": {
       "types": "./dist/adapters/web-shim.d.ts",
       "import": "./dist/adapters/web-shim.js"

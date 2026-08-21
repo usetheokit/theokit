@@ -7,9 +7,14 @@ import { resolve } from 'node:path'
 
 import type { TheoConfig } from '../config/schema.js'
 import { findRootDiv } from '../core/contracts/find-root-div.js'
+import type { SecurityHeadersConfig } from '../server/security/security-headers.js'
 import { assertServicesUnsupported, readManifest } from '../services/index.js'
 
 import { nodeAdapter } from './node.js'
+import {
+  describeDeployedSecurityHeaders,
+  renderSecurityHeadersConfigLiteral,
+} from './security-headers.js'
 import type { AdapterBuildContext, DeployAdapter } from './types.js'
 
 /**
@@ -58,7 +63,12 @@ function readDocumentShell(
 }
 
 export function renderCloudflareWorkerEntry(
-  opts: { ssrStreaming?: boolean; htmlHead?: string; htmlTail?: string } = {},
+  opts: {
+    ssrStreaming?: boolean
+    htmlHead?: string
+    htmlTail?: string
+    securityHeaders?: SecurityHeadersConfig
+  } = {},
 ): string {
   const streamingImport = opts.ssrStreaming
     ? `import { renderStreamingWeb } from '/@theo/entry-server'`
@@ -74,13 +84,27 @@ export function renderCloudflareWorkerEntry(
   // `JSON.stringify` and not a template literal: the shell contains quotes,
   // angle brackets and a `</script>`, and embedding it naively produces a worker
   // that fails to parse at deploy time rather than here.
+  //
+  // #410 — this is also the ONE deploy path that renders HTML at request time,
+  // so the one that can mint a per-request CSP nonce: `renderStreamingWeb`
+  // threads `options.nonce` into `renderToReadableStream` and into the hydration
+  // script (`router/entry-server.ts`). Every other response below carries the
+  // nonce-less baseline, which is what `buildSecurityHeaders` already does for a
+  // prerendered route (EC-4).
   const nonApiBranch = opts.ssrStreaming
     ? [
         `      // T2.3 — streaming SSR for non-API routes`,
-        `      return renderStreamingWeb(request, {`,
-        `        htmlHead: ${JSON.stringify(opts.htmlHead ?? '')},`,
-        `        htmlTail: ${JSON.stringify(opts.htmlTail ?? '')},`,
-        `      })`,
+        `      // The same primitive \`theokit start\` uses, not a second one:`,
+        `      // 16 bytes of Web Crypto entropy, base64.`,
+        `      const nonce = generateNonce()`,
+        `      return withSecurityHeaders(`,
+        `        await renderStreamingWeb(request, {`,
+        `          htmlHead: ${JSON.stringify(opts.htmlHead ?? '')},`,
+        `          htmlTail: ${JSON.stringify(opts.htmlTail ?? '')},`,
+        `          nonce,`,
+        `        }),`,
+        `        buildSecurityHeaders(SECURITY_HEADERS_CONFIG, { production: true }, { nonce }),`,
+        `      )`,
       ].join('\n')
     : `      return notFoundResponse()`
   // CR-006: Workers lack `process.cwd()` and the `node:*` import surface
@@ -100,6 +124,9 @@ export function renderCloudflareWorkerEntry(
     ``,
     `import { scanServerRoutes, matchRoute, executeRoute, createProductionLoader, scanWebSocketRoutes } from 'theokit/server'`,
     `import { createWebShim } from 'theokit/adapters/web-shim'`,
+    opts.ssrStreaming
+      ? `import { buildSecurityHeaders, generateNonce, withSecurityHeaders } from 'theokit/adapters/security-headers'`
+      : `import { buildSecurityHeaders, withSecurityHeaders } from 'theokit/adapters/security-headers'`,
     `// T3.4 — WS bridge for Cloudflare Workers`,
     `import { createCloudflareWsBridge } from 'theokit/adapters/ws-shim'`,
     streamingImport,
@@ -112,29 +139,24 @@ export function renderCloudflareWorkerEntry(
     `// call process.cwd() and resolving paths at runtime returned '/server'.`,
     `const serverDir = 'server'`,
     ``,
+    `// #410 — the security baseline \`theokit start\` puts on every response, carried`,
+    `// here as a literal because a Worker has no theo.config.ts to read. Same`,
+    `// function, same input, so the deployed page and the local one cannot`,
+    `// disagree about what the configuration means.`,
+    `const SECURITY_HEADERS_CONFIG = ${renderSecurityHeadersConfigLiteral(opts.securityHeaders)}`,
+    `const SECURITY_HEADERS = buildSecurityHeaders(SECURITY_HEADERS_CONFIG, { production: true })`,
+    ``,
     `function notFoundResponse() {`,
-    `  return new Response(`,
-    `    JSON.stringify({ error: { code: 'NOT_FOUND', message: 'Route not found' } }),`,
-    `    { status: 404, headers: { 'Content-Type': 'application/json' } },`,
+    `  return withSecurityHeaders(`,
+    `    new Response(`,
+    `      JSON.stringify({ error: { code: 'NOT_FOUND', message: 'Route not found' } }),`,
+    `      { status: 404, headers: { 'Content-Type': 'application/json' } },`,
+    `    ),`,
+    `    SECURITY_HEADERS,`,
     `  )`,
     `}`,
     ``,
-    `export default {`,
-    `  async fetch(request, env, ctx) {`,
-    `    const url = new URL(request.url)`,
-    ``,
-    `    // T3.4 — Detect WebSocket upgrade and delegate to the CF bridge`,
-    `    if (request.headers.get('upgrade')?.toLowerCase() === 'websocket') {`,
-    `      if (!wsRoutesCache) wsRoutesCache = scanWebSocketRoutes(serverDir)`,
-    `      if (wsRoutesCache.length === 0) return notFoundResponse()`,
-    `      const cfWs = createCloudflareWsBridge({`,
-    `        onOpen: () => {},`,
-    `        onMessage: (ws, data) => { ws.send(data) },`,
-    `        onClose: () => {},`,
-    `      })`,
-    `      return cfWs.handle(request)`,
-    `    }`,
-    ``,
+    `async function handleRequest(request, url) {`,
     `    if (!url.pathname.startsWith('/api/')) {`,
     nonApiBranch,
     `    }`,
@@ -148,15 +170,36 @@ export function renderCloudflareWorkerEntry(
     `    const { req, res, toResponse } = createWebShim(request, { trustedProxy: 'platform' })`,
     `    const requestId = crypto.randomUUID()`,
     `    const method = request.method.toUpperCase()`,
-    `    // #382 — the run is NOT awaited before returning. toResponse() settles`,
-    `    // as soon as status + headers are known and carries a live body, so the`,
-    `    // Worker starts flushing while the handler is still writing. Awaiting`,
-    `    // executeRoute() first would re-buffer the whole response here even`,
-    `    // though the shim streams.`,
-    `    return toResponse(executeRoute({`,
+    `    // #382 — the run is NOT awaited before the Response is taken. toResponse()`,
+    `    // settles as soon as status + headers are known and carries a live body, so`,
+    `    // the Worker starts flushing while the handler is still writing. Awaiting`,
+    `    // executeRoute() first would re-buffer the whole response here even though`,
+    `    // the shim streams; awaiting toResponse() does not — it settles at the head.`,
+    `    return withSecurityHeaders(await toResponse(executeRoute({`,
     `      route: match.route, method, params: match.params,`,
     `      req, res, loadModule: loaderCache, serverDir, requestId,`,
-    `    }))`,
+    `    })), SECURITY_HEADERS)`,
+    `}`,
+    ``,
+    `export default {`,
+    `  async fetch(request, env, ctx) {`,
+    `    const url = new URL(request.url)`,
+    ``,
+    `    // T3.4 — Detect WebSocket upgrade and delegate to the CF bridge.`,
+    `    // A 101 carries no document and no script, so the security baseline does`,
+    `    // not apply to it.`,
+    `    if (request.headers.get('upgrade')?.toLowerCase() === 'websocket') {`,
+    `      if (!wsRoutesCache) wsRoutesCache = scanWebSocketRoutes(serverDir)`,
+    `      if (wsRoutesCache.length === 0) return notFoundResponse()`,
+    `      const cfWs = createCloudflareWsBridge({`,
+    `        onOpen: () => {},`,
+    `        onMessage: (ws, data) => { ws.send(data) },`,
+    `        onClose: () => {},`,
+    `      })`,
+    `      return cfWs.handle(request)`,
+    `    }`,
+    ``,
+    `    return handleRequest(request, url)`,
     `  },`,
     `}`,
   ].join('\n')
@@ -183,10 +226,15 @@ export const cloudflareAdapter: DeployAdapter = {
   streamsResponses: true,
   // #409 / #410 — the generated entry calls `executeRoute` with routes, loader
   // and serverDir only. CSRF, route policy, file middleware and Zod validation
-  // still run because they live inside `executeRoute`; none of the configurable
-  // concerns reach it. Declared empty rather than omitted so the gap is a
-  // statement in the source and not an absence.
-  appliesConfig: [],
+  // still run because they live inside `executeRoute`; none of the remaining
+  // configurable concerns reach it. Declared explicitly rather than omitted so
+  // the gap is a statement in the source and not an absence.
+  //
+  // `securityHeaders` IS applied: the worker carries `security.headers` as a
+  // literal and puts the built baseline on every response it returns, including
+  // the streamed SSR document — with a per-request nonce, the only deploy path
+  // that can mint one (`adapters/security-headers.ts`).
+  appliesConfig: ['securityHeaders'],
 
   async build(config: TheoConfig, cwd: string, ctx?: AdapterBuildContext): Promise<void> {
     // Wave 2 (T2.2) — reject polyglot services on this adapter.
@@ -208,13 +256,28 @@ export const cloudflareAdapter: DeployAdapter = {
     const shell = readDocumentShell(cwd, config.ssrStreaming)
     writeFileSync(
       resolve(outputDir, 'worker.mjs'),
-      renderCloudflareWorkerEntry({ ssrStreaming: config.ssrStreaming, ...shell }),
+      renderCloudflareWorkerEntry({
+        ssrStreaming: config.ssrStreaming,
+        ...shell,
+        securityHeaders: config.security?.headers,
+      }),
     )
 
     // 3. Emit wrangler.toml (with nodejs_compat enforced)
     writeFileSync(resolve(cwd, 'wrangler.toml'), renderWranglerToml())
 
     // eslint-disable-next-line no-console -- CLI build progress
-    console.log('\n  ✓ Cloudflare output → .theokit/cloudflare/ + wrangler.toml\n')
+    console.log('\n  ✓ Cloudflare output → .theokit/cloudflare/ + wrangler.toml')
+    // eslint-disable-next-line no-console -- CLI build progress
+    console.log(
+      `${describeDeployedSecurityHeaders({
+        target: 'cloudflare',
+        securityHeaders: config.security?.headers,
+        // Only the streaming worker renders HTML per request, so only it can put
+        // the same nonce on the header and on the script tag it emits.
+        mintsNonce: config.ssrStreaming,
+        documentServedByPlatform: !config.ssrStreaming,
+      })}\n`,
+    )
   },
 }

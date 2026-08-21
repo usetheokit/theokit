@@ -34,6 +34,10 @@ export default defineConfig([
       // M44 (ADR-0053) — React-FREE agent-client entry (node; no React in the bundle).
       'client/core': 'src/client/core.ts',
       'react-query/index': 'src/client/react-query.ts',
+      // The security-header seam the six Web deploy entries import at runtime
+      // (usetheokit/theokit#410). A missing entry here is invisible until a
+      // deployed worker fails to resolve it.
+      'adapters/security-headers': 'src/adapters/security-headers.ts',
       'adapters/web-shim': 'src/adapters/web-shim.ts',
       'adapters/ws-shim': 'src/adapters/ws-shim.ts',
       // Devtools client entry — loaded dynamically in dev mode by the
