@@ -493,6 +493,7 @@ developer actually stands.
 | J5 multi-step | 11.17 ± 0.32 | 14.37 ± 1.08 | disjoint, TheoKit faster | **holds** |
 | J1 tool | 10.97 ± 1.10 | 14.47 ± 1.76 | disjoint, TheoKit faster | **holds** |
 | J10 deploy — *local path only, not the journey's criteria* | 11.37 ± 0.81 | 17.33 ± 2.78 | disjoint, TheoKit faster | **holds on the local path** |
+| J8 tenant | 11.43 ± 1.07 | 15.47 ± 0.92 | disjoint, TheoKit faster | **holds** |
 
 **The standing generalisation does not survive the first pair, and it had already not survived J7.**
 § Sequencing concluded from J9 that "the same baseline gap applies to all ten" and that "until the

@@ -986,6 +986,34 @@ application's isolation on a server that does not have any.
   scaffold's `.gitignore` covers neither `.data/` nor the SDK's transcript root.
 
 
+## Metric 4 — measured 2026-08-21
+
+Three runs per lane, alternating lane by lane, on the two applications this journey was measured on:
+
+| | Next.js | TheoKit |
+| --- | --- | --- |
+| install | 4.67 ± 0.61 | 5.40 ± 1.13 |
+| build | 10.23 ± 1.48 | **5.00 ± 0.00** |
+| start | 0.60 ± 0.00 | 1.10 ± 0.00 |
+| **total, mean ± 1σ** | **15.47 ± 0.92** → [14.54, 16.39] | **11.43 ± 1.07** → [10.36, 12.50] |
+
+**The intervals do not overlap and TheoKit is the faster side, so the "not worse" clause holds.**
+Install is level within noise on the pair where the Next.js side installs `jose` to sign its sessions
+and the TheoKit side installs nothing extra.
+
+This is the heaviest pair in the sweep by hand-written code — 9 files against 9, 193 glue lines
+against 147 — and the build times do not track that at all: 5.00 s against 10.23 s. Worth recording,
+because it is the one place a reader might expect the two to correlate and they do not. Warm npm
+cache, never cold; both lanes install from a lockfile, the TheoKit lane's generated on 2026-08-21
+because it carried a `pnpm-lock.yaml` npm ignores. In
+[the evidence file](../evidence/j08-metric4-2026-08-21.txt).
+
+**The verdict does not move and metric 4 could not have moved it.** J8 is an outright loss: glue at
+an absolute gap of 46 lines against us, concepts 13 against 11, files level. § What counts as winning
+asks for better on all three before time-to-green is reached. And the property the criteria protect
+is still not protected — the same published build returns one tenant's conversation to an
+unauthenticated caller.
+
 ## Cross-references
 
 - The benchmark this journey belongs to: `../dx-benchmark.md`
