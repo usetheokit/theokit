@@ -600,14 +600,27 @@ that path ends with a directory on the developer's disk.
 
 **A third, which is why criterion 3 sits inside this journey rather than beside it:**
 `../../../ROADMAP.md` § M14 records the shared web shim buffering whole responses across six
-targets. Criterion 3 will fail on those targets today. It stays in the criteria because a target
-that cannot stream is a target on which the agent journeys do not work, and delisting the criterion
-would let the journey pass on a deployment nobody would ship.
+targets. It stays in the criteria because a target that cannot stream is a target on which the agent
+journeys do not work, and delisting the criterion would let the journey pass on a deployment nobody
+would ship. **This blocker is stale as written (checked 2026-08-21):** `#382` is in the tree, the
+shim settles its `Response` at the headers and carries a live body
+(`packages/theo/src/adapters/web-shim.ts:401`), and all six entries take the response without
+awaiting the route (`packages/theo/src/adapters/vercel.ts:80`). What has still never been measured is
+a deployed target actually streaming, so criterion 3 remains ungraded rather than failing.
 
-**And a fourth that couples J10 to J7:** the web-standards handler the adapters are built on has no
-rate limiting (see `j07-rate-limit.md` § Current state). So the deployed target is, today, less
-protected than the developer's own machine — which is the inverse of what a deploy is supposed to
-achieve, and is recorded here so the two journeys are not measured as if they were independent.
+**And a fourth that couples J10 to J7,** re-measured on 2026-08-21 and wider than this paragraph
+first said: the six generated entries build `executeRoute`'s context from **8 of the 12 fields** it
+accepts, so a deployed app silently loses the configured CSRF mode, the `disallowed` rules, every
+plugin hook and the `serialization` transformer, on top of the limiter
+(`usetheokit/theokit#410`). They *keep* CSRF, route policy, file middleware and Zod validation, which
+live inside `executeRoute` itself — the gap is the context the entry does not build, not the executor.
+`security.cors` is read only by the dev server, so no production target serves a CORS header at all
+(`usetheokit/theokit#409`). The deployed target is therefore not simply "less protected" than the
+developer's machine; it is **configured differently without saying so**, and in one respect —
+`csrfMode` falling back to the hard-coded `'strict'` (`packages/theo/src/server/http/execute.ts:144`)
+— it is stricter than what the operator asked for. Wiring the limiter is not the small fix this
+paragraph implied: see `j07-rate-limit.md` § Correction, where five of the six targets were measured
+collapsing into a single global bucket.
 
 **Not measured:** whether issue #350 is closed on the tracker; whether any adapter's output actually
 serves when uploaded; and whether the desktop and terminal surfaces build at all, which

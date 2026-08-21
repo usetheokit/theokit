@@ -876,13 +876,86 @@ criteria describe*, and criterion 6 describes it holding on Web.
 
 The store asymmetry is **withdrawn as a reason**, with the argument above and against this document's
 own pre-committed counting rule. The `POST`-with-a-body clause is **discharged in the code and pending
-a release**. What is left is a single, cheap, entirely mechanical gap: give the Web-standards handler
-the limiter it already knows how to construct. It is the same fix `j10-deploy.md` needs, and when it
-lands, this journey has nothing left holding it open.
+a release**. What is left is a structural gap, not a mechanical one — see § Correction below, which
+measured the sentence this paragraph originally carried and refuted it.
 
 **So: J7's three countable metrics are the framework's best result, metric 4 clears its clause on both
 protocols, both sides pass every gradeable criterion, and the journey is reported as not won because
 the cheap side protects `node` and none of the six adapters built on the Web-standards handler.**
+
+### Correction, later on 2026-08-21: "cheap and mechanical" was measured and is false
+
+The verdict above originally closed on this sentence: *"What is left is a single, cheap, entirely
+mechanical gap: give the Web-standards handler the limiter it already knows how to construct."* It
+was written from a reading of the source, not from a run. It was then measured, and it is wrong in
+three places. The sentence is corrected in place and recorded here rather than deleted, because a
+verdict that quietly loses a claim it once made is a verdict nobody can audit.
+
+**First, there is no Web handler in the path.** Each generated entry wraps the request in
+`createWebShim` (`packages/theo/src/adapters/web-shim.ts:401`) and calls the **Node** `executeRoute`
+(`packages/theo/src/adapters/vercel.ts:80`). So the adapters already inherit CSRF
+(`packages/theo/src/server/http/execute.ts:242`), route policy (`:303`), file middleware (`:176`) and
+Zod validation (`:275`) — four of the executor's concerns reach every deploy target, which the
+verdict above did not credit. `createRouteRateLimiter`, the factory `theokit start` itself uses
+(`packages/theo/src/cli/commands/start/index.ts:130`), runs unaltered on the shim's `req`. The two
+Web mirrors (`packages/theo/src/server/rate-limit/rate-limit.ts:105`,
+`packages/theo/src/server/rate-limit/rate-limit-per-route.ts:295`) are not the thing to wire; they
+are the flat single-bucket shape this journey's own § The deliberately broken state scores as a
+failure.
+
+**Second, what is missing is the client address, and it is not mechanical.** The shim's default
+policy consults `cf-connecting-ip` only (`packages/theo/src/adapters/web-shim.ts:143`), and only the
+Cloudflare entry passes a policy at all (`packages/theo/src/adapters/cloudflare.ts:148`). Wiring
+`createRouteRateLimiter` naively into the other five was run rather than argued — three distinct
+clients, per-route config, against the real sources:
+
+| entry | resolved IP | third request from a *different* client |
+| --- | --- | --- |
+| vercel | `0.0.0.0` | refused |
+| netlify | `0.0.0.0` | refused |
+| aws-lambda | `0.0.0.0` | refused |
+| cloudflare | `203.0.113.7` / `198.51.100.42` | correctly separated per client |
+
+**Five of six targets collapse into one global bucket**, where any single caller exhausts the budget
+for the entire internet — the self-inflicted denial of service that
+`packages/theo/src/server/rate-limit/client-ip.ts:8` names in prose. That is worse than shipping no
+limiter. Three of the six addresses are not headers at all: Netlify's arrives in a handler `context`
+that the entry receives and drops (`packages/theo/src/adapters/netlify.ts:45`), Lambda's in
+`event.requestContext.http.sourceIp`, discarded while building the `Request`
+(`packages/theo/src/adapters/aws-lambda.ts:104`), and Bun's from `server.requestIP(request)`, in
+scope and unused (`packages/theo/src/adapters/bun.ts:87`).
+
+**Third, the configuration does not reach the entry.** The entries are string templates with no
+runtime access to `theo.config.ts`. Embedding the budget as a build-time literal meets two values
+that do not survive serialization: `keyBy` may be a function
+(`packages/theo/src/server/rate-limit/rate-limit-per-route.ts:28`) and `store` is an object (`:42`).
+That is a design decision with a named refusal, not a line of wiring.
+
+And after all of it, `InMemoryStore` is per isolate, and both factories throw for any other store
+(`packages/theo/src/server/rate-limit/rate-limit.ts:54`,
+`packages/theo/src/server/rate-limit/rate-limit-per-route.ts:162`). On Vercel, Lambda, Cloudflare and
+Netlify the honest description of the finished work is "a limiter that does not limit across
+instances".
+
+**Honest cost:** days to a week — a shared helper, six per-platform address decisions each carrying a
+trust judgement, config transport with an explicit refusal, and per-runtime tests. Not one line. The
+security-header half of the same gap *is* mechanical (`buildSecurityHeaders` is a pure function), and
+a build-time warning for configuration that is parsed and never applied is cheaper still and worth
+more than either.
+
+**What the measurement also found, against my own framing.** `createApiMiddleware` is mounted only
+from the Vite `configureServer` hook (`packages/theo/src/vite-plugin/configure-server-hook.ts:119`),
+so it is the **dev** server, not "the Node path". `theokit start` runs a separate pipeline
+(`packages/theo/src/cli/commands/start/request-handler.ts:219`) which is itself weaker than dev on
+CORS, batching and the CSP-report endpoint. There are three request paths in this framework, not two,
+and every earlier sentence in this journey that says "Node" means the third one.
+
+Filed from this measurement: `usetheokit/theokit#409` (`security.cors` is read only by the dev
+server) and `usetheokit/theokit#410` (the six entries build `executeRoute`'s context from 8 of its 12
+fields, so CSRF mode, `disallowed`, plugin hooks and the `serialization` transformer silently revert
+to defaults on every deploy target). The rate-limit and security-header halves are tracked privately
+as `GHSA-87qq-fgcr-384x`.
+
 
 ## The deliberately broken state
 
