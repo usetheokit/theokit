@@ -5,7 +5,7 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import type { TheoConfig } from '../config/schema.js'
-import type { SecurityHeadersConfig } from '../server/security/security-headers.js'
+import type { SecurityHeadersConfig } from '../core/contracts/security-headers.js'
 import { assertServicesUnsupported, readManifest } from '../services/index.js'
 
 import { nodeAdapter } from './node.js'

@@ -54,7 +54,7 @@ import {
 } from '../../packages/theo/src/adapters/security-headers.js'
 import { renderVercelFunctionEntry } from '../../packages/theo/src/adapters/vercel.js'
 import { createWebShim } from '../../packages/theo/src/adapters/web-shim.js'
-import type { SecurityHeadersConfig } from '../../packages/theo/src/server/security/security-headers.js'
+import type { SecurityHeadersConfig } from '../../packages/theo/src/core/contracts/security-headers.js'
 
 // ---------------------------------------------------------------------------
 // Harness

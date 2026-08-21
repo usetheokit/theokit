@@ -43,16 +43,18 @@
  * {@link describeDeployedSecurityHeaders}, and written down in
  * `docs/surfaces/build-adapters.md`.
  */
-import { generateNonce } from '../server/auth/nonce.js'
-import type { SecurityHeadersConfig } from '../server/security/security-headers.js'
-import { buildSecurityHeaders } from '../server/security/security-headers.js'
+import { generateNonce } from '../core/contracts/nonce.js'
+import type { SecurityHeadersConfig } from '../core/contracts/security-headers.js'
+import { buildSecurityHeaders } from '../core/contracts/security-headers.js'
 
 /**
  * Re-exported so a generated entry has ONE import for the whole concern.
  *
  * Reaching it through `theokit/server/security` would work and would also drag
  * that barrel's CSRF surface into a Worker bundle, for a function that is forty
- * lines of string concatenation.
+ * lines of string concatenation. It is defined in `core/contracts/`, which is
+ * the module every target may import from — `adapters → server` is not an edge
+ * in the DAG, and the header policy was never server code.
  */
 export { buildSecurityHeaders }
 
