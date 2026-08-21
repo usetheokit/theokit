@@ -23,6 +23,10 @@ export const theoCloudAdapter: DeployAdapter = {
   // #382 — this adapter validates the manifest and prepares a bundle; it
   // emits no request handler, so it makes no streaming claim.
   streamsResponses: false,
+  // This adapter emits no request handler -- TheoCloud's proprietary runtime
+  // serves the bundle. What that runtime applies is not knowable from here, and
+  // reporting the config as dropped would be asserting rather than measuring.
+  appliesConfig: 'runtime-not-emitted-here',
 
   build(_config: TheoConfig, cwd: string): Promise<void> {
     const manifest = readManifest(cwd)

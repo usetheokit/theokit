@@ -194,6 +194,12 @@ export async function buildNetlify(
 export const netlifyAdapter: DeployAdapter = {
   name: 'netlify',
   streamsResponses: true,
+  // #409 / #410 — the generated entry calls `executeRoute` with routes, loader
+  // and serverDir only. CSRF, route policy, file middleware and Zod validation
+  // still run because they live inside `executeRoute`; none of the configurable
+  // concerns reach it. Declared empty rather than omitted so the gap is a
+  // statement in the source and not an absence.
+  appliesConfig: [],
   build(config, cwd, ctx) {
     return buildNetlify(config, cwd, {}, ctx)
   },

@@ -171,6 +171,12 @@ export function renderVercelVcConfigJson(): {
 export const vercelAdapter: DeployAdapter = {
   name: 'vercel',
   streamsResponses: true,
+  // #409 / #410 — the generated entry calls `executeRoute` with routes, loader
+  // and serverDir only. CSRF, route policy, file middleware and Zod validation
+  // still run because they live inside `executeRoute`; none of the configurable
+  // concerns reach it. Declared empty rather than omitted so the gap is a
+  // statement in the source and not an absence.
+  appliesConfig: [],
 
   async build(config: TheoConfig, cwd: string, ctx?: AdapterBuildContext): Promise<void> {
     // Wave 2 (T2.2) — reject polyglot services on this adapter.

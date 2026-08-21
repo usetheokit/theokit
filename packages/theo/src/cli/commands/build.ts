@@ -221,6 +221,15 @@ async function runAdapterBuild(
   // CLI is closed for modification (OCP).
   const { resolveAdapter } = await import('../../adapters/registry.js')
   const adapter = await resolveAdapter(target)
+
+  // #409 / #410 — a config key that validates and is then never read makes the
+  // deployed app behave as if the operator had not written it, with nothing
+  // anywhere saying so. Name it before the build output scrolls past.
+  const { warnUnappliedConfig } = await import('../../adapters/config-support.js')
+  warnUnappliedConfig(config, adapter, target, (message) => {
+    console.log(message)
+  })
+
   await adapter.build(config, cwd, ctx)
 }
 

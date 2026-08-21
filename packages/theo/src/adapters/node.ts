@@ -19,6 +19,12 @@ export const nodeAdapter: DeployAdapter = {
   // Node server, whose writer calls res.write() per chunk
   // (server/http/execute.ts, via node-web-adapter.ts).
   streamsResponses: true,
+  // Read from `cli/commands/start/index.ts`: the executor context carries
+  // rateLimiter, csrfMode, disallowed, transformer and pluginRunner, and
+  // `request-handler.ts` applies the security headers. `security.cors` is
+  // absent on purpose -- `theokit start` contains no CORS handling at all, and
+  // only the Vite dev server does (#409).
+  appliesConfig: ['rateLimit', 'csrf', 'disallowed', 'serialization', 'plugins', 'securityHeaders'],
 
   async build(config: TheoConfig, cwd: string, ctx?: AdapterBuildContext): Promise<void> {
     // T1.1 (architecture-cleanup) — Vite plugin composition is INJECTED via `ctx.makeVitePlugins`.

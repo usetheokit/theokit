@@ -21,6 +21,19 @@ export interface AdapterBuildContext {
   makeVitePlugins?: (opts: { root: string; ssr?: boolean }) => Plugin[] | Promise<Plugin[]>
 }
 
+/**
+ * A configuration key that a request handler applies at runtime. Build-time
+ * keys are deliberately absent: a runtime cannot silently drop them.
+ */
+export type ConfigConcern =
+  | 'rateLimit'
+  | 'cors'
+  | 'csrf'
+  | 'disallowed'
+  | 'serialization'
+  | 'plugins'
+  | 'securityHeaders'
+
 export interface DeployAdapter {
   name: string
   /**
@@ -45,6 +58,25 @@ export interface DeployAdapter {
    * does not emit and which would break every API Gateway deployment of it.
    */
   streamsResponses?: boolean
+  /**
+   * Which configuration keys the handler this adapter emits actually applies.
+   *
+   * Same contract as `streamsResponses`, for the same reason: omitted means
+   * **none**, on purpose. A new adapter should have to state what it honours,
+   * because the failure mode of the opposite default is a target that parses a
+   * rate limit, validates it, and refuses nothing — with no line anywhere
+   * saying so.
+   *
+   * `'runtime-not-emitted-here'` is a third answer, not a synonym for none: it
+   * belongs to an adapter that emits no request handler at all, so this build
+   * genuinely cannot say what the runtime applies. Reporting such a target as
+   * dropping configuration would be asserting rather than measuring.
+   *
+   * The declaration is a claim, and nothing here can verify it — a wrong claim
+   * reads exactly like a right one. What it buys is that dropping a concern
+   * becomes a visible edit instead of an omission.
+   */
+  appliesConfig?: readonly ConfigConcern[] | 'runtime-not-emitted-here'
   build(config: TheoConfig, cwd: string, ctx?: AdapterBuildContext): Promise<void>
 }
 

@@ -8,6 +8,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **A build says which configuration the target it is building for will ignore.** `theo.config.ts`
+  validates `rateLimit`, `security.cors`, `security.csrf`, `security.disallowed` and `serialization`
+  for every target, and the six Web-standards deploy adapters apply none of them — the generated
+  entry builds `executeRoute`'s context from a subset of its fields, so a deployed app runs on
+  hard-coded defaults while the config file says otherwise, and `security.cors` is read only by the
+  dev server. `theokit build` now names each dropped key as it appears in the file, says the handler
+  never reads it, and says what to do. Each adapter declares what it honours, on the contract
+  `streamsResponses` already set: omitted means none, so a new adapter states its support instead of
+  inheriting a silent yes; a target that emits no handler of its own answers
+  `runtime-not-emitted-here` and is reported against nothing. A value that matches what an unwired
+  target does anyway is not reported — `csrf: 'strict'` and `serialization: 'json'` are honoured by
+  coincidence, and warning over an identical outcome only teaches operators to skip the block.
+  (usetheokit/theokit#409, usetheokit/theokit#410)
 - **A web application can render a human-in-the-loop approval prompt.** `useAgent` returns
   `pendingApprovals` — one entry per decision the run is parked on, carrying the `approvalId` that
   `approve()` takes, the gated tool's name, the arguments it is about to run with, the question

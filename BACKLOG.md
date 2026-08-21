@@ -55,9 +55,9 @@ the two disagree, the rule wins and this one is the bug.
 
 ## Index
 
-25 items — **Open** 25 · **In flight** 0 · **Closed** 0
+27 items — **Open** 27 · **In flight** 0 · **Closed** 0
 
-### Open (25)
+### Open (27)
 
 | Item | Title | Status | Severity |
 |---|---|---|---|
@@ -86,6 +86,8 @@ the two disagree, the rule wins and this one is the bug.
 | [`B-023`](#b-023--the-deploy-shim-buffers-a-stream-whole-across-six-of-nine-targets----) | the deploy shim buffers a stream whole, across six of nine targets | `triaged` | — |
 | [`B-024`](#b-024--two-conventions-cost-a-file-each-and-nobody-has-decided-whether-they-are-worth-it----) | two conventions cost a file each, and nobody has decided whether they are worth it | `triaged` | — |
 | [`B-025`](#b-025--a-web-app-compiles-a-terminal-pty-it-will-never-use-and-it-costs-the-benchmarks-fourth-metric----) | a web app compiles a terminal PTY it will never use, and it costs the benchmark's fourth metric | `triaged` | — |
+| [`B-026`](#b-026--the-security-header-half-of-the-deploy-gap-is-mechanical-and-nobody-has-done-it----) | the security-header half of the deploy gap is mechanical, and nobody has done it | `triaged` | — |
+| [`B-027`](#b-027--a-declared-rate-limit-protects-one-of-seven-targets-and-wiring-it-naively-is-worse-than-not-wiring-it----) | a declared rate limit protects one of seven targets, and wiring it naively is worse than not wiring it | `triaged` | — |
 
 ### In flight (0)
 
@@ -483,4 +485,35 @@ dod:
   - whatever shape is chosen, it does not become a second way to fail at install time — an optional dependency that silently does not install and then throws at runtime trades a slow start for `docs/adr/0002-an-abnormal-ending-is-never-reported-as-normal.md`
 note: the obvious fix was tried on 2026-08-20 and reverted, and the reason is the substance of this item. Moving `@theokit/sdk-pty` to an optional peer works and the gain is real — installing `@theokit/agents` alone went from **6.7 s to 1.4 s**, `node-pty` absent, verified by timing a packed tarball rather than by reading a manifest. It was reverted because `packages/agents/tests/unit/dependency-direction.test.ts` refuses it, for a reason that survives the measurement: `@theokit/agents` once had zero dependencies and six peers, a peer means "the host provides it", and the host is forbidden by `agents/gates/m63-boundary.test.ts` to import `@theokit/sdk*` at all. Asking a consumer to declare a package it may not import is exactly the inversion M79 fixed. **Two well-argued rules conflict and neither is wrong** — an implementation the consumer cannot import must not be a peer, and an application should not compile a terminal it will never open. The resolution is probably a third shape (a separate package owning the `/pty` subpath and its dependency), which is a decision rather than a fix, which is why this stays open instead of being closed by flipping a test
 
-Next free id: **B-026**.
+## B-026 — the security-header half of the deploy gap is mechanical, and nobody has done it   [ ]
+
+domain: theokit
+repo: packages/theo
+suggested_mode: evolve
+source: discover-review
+evidence: `theokit start` applies the configured security headers on every response (`packages/theo/src/cli/commands/start/request-handler.ts:241`), and none of the six Web-standards deploy adapters applies any — grep for `securityHeaders` under `packages/theo/src/adapters/` returns zero. Two of those targets serve HTML: Bun (`packages/theo/src/adapters/bun.ts:95`) and Cloudflare's streamed SSR (`packages/theo/src/adapters/cloudflare.ts:77`). So a deployed page carries no CSP, no `X-Frame-Options`, no HSTS and no `nosniff`, while the same page served by `theokit start` carries all four
+why_now: measured on 2026-08-21 while re-measuring J7. `buildSecurityHeaders` is a pure function of the config, so unlike the rate-limit half of the same gap this one needs no per-runtime client address, no trust decision and no config transport — the headers are known at build time and the response object is in hand. It is the cheapest real item this measurement produced, and it is the one with a security consequence
+status: triaged
+dod:
+  - a page served by each of the six adapters carries the same security headers the same app carries under `theokit start`, verified by reading a real response rather than by grepping the emitted entry
+  - the adapter's `appliesConfig` declaration gains `securityHeaders` in the same commit, so the build stops warning about a key it now applies
+  - a target that genuinely cannot set a header says so by name rather than dropping it
+
+## B-027 — a declared rate limit protects one of seven targets, and wiring it naively is worse than not wiring it   [ ]
+
+domain: theokit
+repo: packages/theo
+suggested_mode: evolve
+source: discover-review
+evidence: measured 2026-08-21 (`docs/program/journeys/j07-rate-limit.md` § Correction). `createRouteRateLimiter` runs unaltered on the shim's `req`, so the missing piece is not a Web-shaped limiter but the client address. The shim's default policy reads `cf-connecting-ip` only (`packages/theo/src/adapters/web-shim.ts:143`) and only the Cloudflare entry passes a policy (`packages/theo/src/adapters/cloudflare.ts:148`); wired naively, five of six targets resolve every caller to `0.0.0.0` and share one global bucket, so a single client exhausts the budget for everyone — the self-inflicted denial of service `packages/theo/src/server/rate-limit/client-ip.ts:8` names. Three of the six addresses are not headers: Netlify's arrives in a handler context the entry drops (`packages/theo/src/adapters/netlify.ts:45`), Lambda's is discarded while building the Request (`packages/theo/src/adapters/aws-lambda.ts:104`), Bun's is in scope and unused (`packages/theo/src/adapters/bun.ts:87`)
+why_now: J7 is the framework's best benchmark result — three countable margins outside the bar and a fourth metric that clears its clause — and this is the single claim holding it open. It was described in that journey as "a single, cheap, entirely mechanical gap"; the measurement refuted that sentence and the sentence has been corrected
+status: triaged
+dod:
+  - each of the six entries resolves a real client address from its own runtime, or refuses by name — a target that cannot identify a caller must not silently share one bucket
+  - the config reaches the generated entry, with an explicit refusal for the values that cannot survive serialization (`keyBy` may be a function, `packages/theo/src/server/rate-limit/rate-limit-per-route.ts:28`; `store` is an object, `:42`)
+  - the per-isolate limit is stated rather than implied: `InMemoryStore` holds within one instance and both factories throw for any other store, so on Vercel, Lambda, Cloudflare and Netlify the honest description of the finished work is a limiter that does not limit across instances
+  - the two Web mirrors are deleted or given a caller — `packages/theo/src/server/rate-limit/rate-limit.ts:105` and `packages/theo/src/server/rate-limit/rate-limit-per-route.ts:295` have none, and the flat shape is what J7's deliberately broken state scores as a failure
+  - J7's metric 1-4 re-derived afterwards, because the wiring adds lines somewhere and the journey is graded on how few it costs
+note: the build now names the drop rather than swallowing it (`packages/theo/src/adapters/config-support.ts`), which is a stopgap and not this item. Warning was chosen over refusing on purpose: refusing breaks every deployment that declares a limit today, while the fix is days to a week
+
+Next free id: **B-028**.
