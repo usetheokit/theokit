@@ -13,6 +13,11 @@
 #
 # The journey delta is not re-applied. J9's delta is 2 lines against 14; it cannot move a number
 # whose unit is tens of seconds, and both sides carry their own already.
+# Third lesson, paid on 2026-08-21: the probe follows redirects. J4's Next.js entry route answers
+# 307 and sends the browser to a freshly generated thread id; `curl -fsS` without `-L` reads that as
+# a failure and the lane reported NEVER_ANSWERED against a server that was serving correctly. A
+# redirect to the page the user lands on is a green serve. J7's and J9's lanes answer 200 directly,
+# so this changes none of their recorded numbers.
 set -u
 OUT="$1"; SRC="$2"; LABEL="$3"; PORT="$4"; PROBE="$5"; RUNS="${6:-3}"
 WORK="$(dirname "$OUT")/m4-$LABEL"
@@ -50,7 +55,7 @@ for i in $(seq 1 "$RUNS"); do
   ( cd "$WORK" && PORT="$RUNPORT" HOST=127.0.0.1 npm run start -- --port "$RUNPORT" >/dev/null 2>&1 & echo $! > "$WORK/.pid" )
   ok=""
   for _ in $(seq 1 180); do
-    if curl -fsS --max-time 2 "http://127.0.0.1:$RUNPORT$PROBE" >/dev/null 2>&1; then ok=1; break; fi
+    if curl -fsSL --max-time 2 "http://127.0.0.1:$RUNPORT$PROBE" >/dev/null 2>&1; then ok=1; break; fi
     sleep 0.5
   done
   green=$(date +%s.%N)

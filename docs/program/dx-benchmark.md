@@ -469,6 +469,35 @@ than to assume.
 
 Reporting a partial run as the benchmark is forbidden. Ten journeys or a stated subset with the reason — never a subset presented as the whole.
 
+## Metric 4 — the sweep, 2026-08-21
+
+Metric 4 had been run on exactly two of the ten: J9 (2026-08-20) and J7 (2026-08-21). It is the
+clause that retracted J9's win after it had been declared, so a journey whose metric 4 is unmeasured
+cannot be called won — and eight journeys were in that state. This section records the sweep that
+closed them, journey by journey, under one protocol.
+
+**The protocol, fixed before the first run and applied identically to every pair.** A lockfile on
+both sides, because both scaffolders write one and J9's asymmetry charged about 3.8 s to one lane
+only. Lanes alternate run by run, so machine drift falls on both columns. Minimum three runs per
+lane, mean and 1σ, and the test is the one § What counts as winning states: non-overlapping
+intervals at ±1σ. Metric 4's clause is **"not worse"**, so overlapping intervals *satisfy* it —
+an overlap is neither a loss nor a win. Warm npm cache throughout, stated rather than hidden: no
+measurement in this programme, this one included, has ever timed a cold cache, which is where a new
+developer actually stands.
+
+| Journey | TheoKit, mean ± 1σ | Next.js, mean ± 1σ | Intervals | "Not worse"? |
+| --- | --- | --- | --- | --- |
+| J3 streaming | 10.53 ± 1.21 | 14.00 ± 1.45 | disjoint, TheoKit faster | **holds** |
+
+**The standing generalisation does not survive the first pair, and it had already not survived J7.**
+§ Sequencing concluded from J9 that "the same baseline gap applies to all ten" and that "until the
+install cost is resolved, no journey can satisfy the winning rule's fourth clause, so no journey can
+be won." That paragraph is left standing as the record of what was concluded from the only number
+that existed. It is wrong, and the reason is protocol rather than framework: J9's TheoKit lane
+re-resolved its entire dependency graph on every run while its Next.js lane installed from a lock.
+With a lock on both sides, J3's install is level — 4.67 s against 4.47 s — against the 19.6 s against
+4.2 s J9 recorded. **The install gap was mostly the handicap, not the tree.**
+
 ## Cross-references
 
 - The obligation this satisfies: the program goal's second condition

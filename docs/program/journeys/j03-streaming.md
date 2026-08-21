@@ -643,6 +643,45 @@ a reader comparing two runs across the two encoders would be comparing two proto
 loss. The route and the header parsing were read; a lossy run was not performed. Recorded as a
 measurement to make during implementation, not as a claim.
 
+## Metric 4 — measured 2026-08-21, and it does not go the way J9's did
+
+Metric 4 was unmeasured on this journey, and § What counts as winning does not treat it as optional:
+a journey is won when TheoKit is better on the three countable metrics **and not worse on
+time-to-green**, tested by non-overlapping intervals at ±1σ over ≥ 3 runs. Three runs per lane,
+alternating lane by lane so machine drift falls on both columns:
+
+| | Next.js | TheoKit |
+| --- | --- | --- |
+| install | 4.47 ± 0.50 | 4.67 ± 0.93 |
+| build | 9.00 ± 1.01 | **4.80 ± 0.26** |
+| start | 0.60 ± 0.00 | 1.10 ± 0.00 |
+| **total, mean ± 1σ** | **14.00 ± 1.45** → [12.55, 15.45] | **10.53 ± 1.21** → [9.33, 11.74] |
+
+**The intervals do not overlap and TheoKit is the faster side**, so the "not worse" clause is
+satisfied — the clause asks only for *not worse*, and this is better. Recording it as a win on
+metric 4 would be reading a clause that is not there.
+
+**Install is level, 4.67 s against 4.47 s.** That is the fact J9's measurement could not show,
+because J9's two trees were not symmetric: its Next.js lane installed from a `package-lock.json` and
+its TheoKit lane re-resolved the whole graph on every run. With a lock on both sides — which is what
+both scaffolders write — the 15.4 s install gap J9 reported does not appear here at all. The whole
+difference on this pair is build, and it goes to TheoKit.
+
+**Two things this measurement is not.** The npm cache was warm and was not cleared, so these numbers
+are comparable to each other and not to a first-ever install; no measurement in this programme has
+ever timed a cold cache, which is where a new developer actually stands. And **the TheoKit lane does
+not carry J3's own delta** — no surviving tree does, so what was timed is the scaffold this journey
+starts from, against a Next.js lane carrying its full delta including `resumable-stream` and `redis`.
+The delta is 1 file and 6 glue lines and adds no dependency, but it is a gap, and it is the reading
+most favourable to TheoKit that the surviving trees permit. Both are recorded in
+[the evidence file](../evidence/j03-metric4-2026-08-21.txt).
+
+**The verdict does not move.** J3 is still not won, and metric 4 was never what held it open: the
+three countable margins price six lines whose trigger never fires (usetheokit/theokit#384), and the
+criteria go 5–3 to Next.js. What changes is the reason — this journey's fourth clause is now
+measured and satisfied, so the only thing standing between J3 and a win is the thing the criteria
+describe actually working.
+
 ## Cross-references
 
 - The benchmark this journey belongs to: `../dx-benchmark.md`
