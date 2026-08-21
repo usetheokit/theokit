@@ -626,6 +626,39 @@ collapsing into a single global bucket.
 serves when uploaded; and whether the desktop and terminal surfaces build at all, which
 `../three-target-parity.md` § Current state already records as unproven in CI.
 
+## Metric 4 — measured 2026-08-21 on the local path, and NOT on this journey's own terms
+
+Three runs per lane, alternating lane by lane, on the two applications this journey was measured on:
+
+| | Next.js | TheoKit |
+| --- | --- | --- |
+| install | 5.07 ± 0.80 | 5.03 ± 0.65 |
+| build | 11.67 ± 2.82 | **5.30 ± 0.70** |
+| start | 0.53 ± 0.06 | 1.03 ± 0.06 |
+| **total, mean ± 1σ** | **17.33 ± 2.78** → [14.55, 20.11] | **11.37 ± 0.81** → [10.56, 12.17] |
+
+**What that number is not.** It is the local path — install, build, start, first HTTP answer — which
+is the instrument every other journey in this sweep used, and is comparable across the sweep. It is
+**not this journey's criteria.** J10 grades a run on a target that is not the developer's machine,
+and both sides were graded in containers. Wall clock to a green run *on a deploy target* is not
+measured here and stays unmeasured, which is recorded as a gap rather than resolved by relabelling
+the local number.
+
+**A second asymmetry, declared because it favours us.** The TheoKit lane resolves four dependencies
+from vendored tarballs built from the worktree, because J10 needed an unreleased fix; those are local
+file copies rather than registry fetches. With a warm cache a registry fetch is also served locally,
+so the effect should be small — and it is: install is level at 5.03 s against 5.07 s. The strongest
+thing that can be said about the asymmetry is that it did not show up.
+
+The Next.js lane's third build is 14.9 s against 9.7 and 10.4, giving it the largest σ in the sweep.
+It is kept rather than trimmed. Everything is in
+[the evidence file](../evidence/j10-metric4-2026-08-21.txt).
+
+**The verdict does not move and metric 4 could not have moved it.** J10 is an outright loss on the
+comparison § The Next.js side fixes: 3 files, 12 glue lines and 9 concepts against a vendor platform
+that costs zero of each, with no deploy command in the framework at all. A journey that loses every
+countable metric is not rescued by the fourth one.
+
 ## Cross-references
 
 - The benchmark this journey belongs to: `../dx-benchmark.md`

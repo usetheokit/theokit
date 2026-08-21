@@ -1,0 +1,47 @@
+J10 metric 4 - time to first green run, both sides, 2026-08-21
+Harness: metric4-harness.sh, driven interleaved (one TheoKit run, one Next.js run, repeat), probe
+"/" on both lanes. Warm npm cache, stated rather than hidden; no run in this programme has ever been
+taken on a cold cache, which is where a new developer actually stands.
+Machine: Linux 6.8.0-136, Node 22.22.2, npm 10.9.7. Nothing else heavy running.
+
+Lanes - the two applications this journey was measured on, unchanged
+  TheoKit  scratchpad j10/theokit-app
+  Next.js  scratchpad j10/nextjs-app   (next 16.3.1, ai 7.0.70, @ai-sdk/react 4.0.73)
+
+TWO ASYMMETRIES, BOTH DECLARED, BOTH AGAINST THE READING BELOW BEING TAKEN AS J10's ANSWER:
+
+1. What was timed is the LOCAL path - install, build, `theokit start` / `next start`, first HTTP
+   answer - which is the same instrument every other journey in this sweep used and is therefore
+   comparable across the sweep. It is NOT this journey's criteria. J10 grades a run on a target that
+   is not the developer's machine, and both sides were graded in containers. Metric 4 on J10's own
+   terms - wall clock to a green run on a deploy target - is NOT measured here and remains
+   unmeasured. Recorded as a gap, not resolved by relabelling the local number.
+
+2. The TheoKit lane resolves four of its dependencies from vendored tarballs in .vendor
+   (theokit 0.49.0, @theokit/agents 10.1.0, @theokit/http 1.1.0, @theokit/presenter 0.7.0), built
+   from the worktree because J10 needed an unreleased fix. Those are local file copies rather than
+   registry fetches. With a warm cache a registry fetch is also served locally, so the difference is
+   smaller than it sounds, but it is not zero and it favours the TheoKit lane.
+
+Lockfiles, symmetric: both lanes carry their own tracked package-lock.json.
+
+--- Three runs per lane, interleaved ---
+
+  theokit r1 install=5.7 build= 4.8 start=1.0 total=11.5
+  nextjs  r1 install=5.9 build= 9.7 start=0.5 total=16.2
+  theokit r2 install=4.4 build= 5.0 start=1.1 total=10.5
+  nextjs  r2 install=4.3 build=10.4 start=0.6 total=15.3
+  theokit r3 install=5.0 build= 6.1 start=1.0 total=12.1
+  nextjs  r3 install=5.0 build=14.9 start=0.5 total=20.5
+
+  theokit n=3  total 11.37 +/- 0.81 -> [10.56, 12.17]   install 5.03+/-0.65  build  5.30+/-0.70  start 1.03+/-0.06
+  nextjs  n=3  total 17.33 +/- 2.78 -> [14.55, 20.11]   install 5.07+/-0.80  build 11.67+/-2.82  start 0.53+/-0.06
+
+  Intervals do NOT overlap and TheoKit is the faster side on the local path. Install is level -
+  5.03 s against 5.07 s - despite asymmetry 2, which is the strongest thing that can be said about
+  that asymmetry: it did not show up.
+
+  The Next.js lane's third build is 14.9 s against 9.7 and 10.4, and it is kept. Its sigma of 2.78
+  is the largest in the sweep and is reported rather than trimmed.
+
+No run was discarded on this journey. Nothing failed.
