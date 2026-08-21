@@ -1368,6 +1368,34 @@ recorded so the benchmark does not mistake them for the mechanism: the pending l
 **Not measured:** whether the advisory GHSA-g94h-459g-rjhj is still open upstream. The repository
 references it; the tracker was not queried.
 
+## Metric 4 — measured 2026-08-21
+
+Three runs per lane, alternating lane by lane, on the two committed trees the re-measurement above
+counted:
+
+| | Next.js | TheoKit |
+| --- | --- | --- |
+| install | 4.27 ± 0.12 | 4.10 ± 0.36 |
+| build | 8.37 ± 0.80 | **4.83 ± 0.06** |
+| start | 0.60 ± 0.00 | 1.10 ± 0.00 |
+| **total, mean ± 1σ** | **13.20 ± 0.75** → [12.45, 13.95] | **10.03 ± 0.32** → [9.71, 10.35] |
+
+**The intervals do not overlap and TheoKit is the faster side, so the "not worse" clause holds.**
+Install is level — 4.10 s against 4.27 s — on the pair where neither side installs anything the other
+does not, because `ai@7.0.70` ships tool approval as a first-class primitive rather than as a recipe
+with dependencies.
+
+One thing the lane is: the TheoKit side installs the **published** `theokit@0.48.14`, while the
+re-measurement's counts were taken against a framework built from `4411a59be`. That is deliberate —
+every lane in this sweep installs what npm serves, which is what a reader of this benchmark would
+get — and it is stated rather than left to be discovered. Warm npm cache, never cold; both lanes
+install from a lockfile. In [the evidence file](../evidence/j02-metric4-2026-08-21.txt).
+
+**The verdict does not move and metric 4 could not have moved it.** J2 is an outright loss: after the
+re-measurement, files stayed at 4 against 2 — exactly the 2× bar, so metric 1 is a loss rather than a
+tie — and § What counts as winning asks for better on all three before time-to-green is reached.
+Criterion 4 still fails to the tool's side effect against GHSA-g94h-459g-rjhj.
+
 ## Cross-references
 
 - The benchmark this journey belongs to: `../dx-benchmark.md`
