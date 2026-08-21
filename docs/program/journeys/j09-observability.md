@@ -987,12 +987,21 @@ It stays at four, and it stays flagged. **Files and glue lines do not depend on 
 
 ### The verdict
 
-**TheoKit wins all three countable metrics — 3x, 7x and 2.33x, every one outside the bar
-§ What counts as winning sets — and, for the first time on this journey, the criteria do not
-disqualify it: 6 of 7 against the Next.js side's 5 of 7. Under the rules as written, J9 is won.**
+**RETRACTED 2026-08-20, later the same day: J9 is not won.** The paragraph below was written with
+metric 4 unmeasured on both sides, and § What counts as winning requires the three countable metrics
+**and** "not worse on time-to-green". Metric 4 has since been measured, and TheoKit is worse by the
+document's own test. The full measurement is in § Metric 4 below; the verdict as originally written is
+preserved here because a retraction that edits away what it retracts teaches nobody what went wrong.
 
-It is the first won journey of the ten, and it is the most contestable sentence in this document, so
-what it rests on is stated rather than implied:
+**Original verdict, superseded:**
+
+> **TheoKit wins all three countable metrics — 3x, 7x and 2.33x, every one outside the bar
+> § What counts as winning sets — and, for the first time on this journey, the criteria do not
+> disqualify it: 6 of 7 against the Next.js side's 5 of 7. Under the rules as written, J9 is won.**
+
+The three countable metrics and the criteria still stand exactly as measured — nothing below is
+withdrawn except the conclusion, which rested on a metric nobody had run. What it rested on was stated
+rather than implied, and that is why the retraction is one measurement rather than an argument:
 
 - **Files (3x) and glue lines (7x) rest on no judgement that could flip them.** Every alternative in
   the table above leaves both outside the bar — the worst case for files is judgement 1 at exactly 2x,
@@ -1181,3 +1190,77 @@ not read.
 - The journey whose tool calls criterion 2 counts: `j05-multi-step.md`
 - Acceptance contract that grades these criteria: `../../../.claude/rules/cycle-acceptance.md`
 - Criterion shape these follow: `../../../ROADMAP.md` § Wave 1
+
+## Metric 4 — measured 2026-08-20, and it retracts the win
+
+Metric 4 was unmeasured on all ten journeys. The winning rule does not treat it as optional: a
+journey is won when TheoKit is better on the three countable metrics **and not worse on
+time-to-green**, the test for which is *"non-overlapping intervals at ±1σ over ≥ 3 runs"*. J9 was
+declared won with half of its own winning condition untested.
+
+### What was timed
+
+A clean copy of each side's committed source — the same two applications this journey was measured
+on — with no `node_modules` and no build output, through install → build → start → first successful
+HTTP response. Three runs each. Harness at `scratchpad/metric4.sh`, results written line by line so a
+partial run survives.
+
+**Warm cache, stated rather than hidden.** The npm cache is not cleared between runs: clearing it
+measures this connection's throughput to the registry more than it measures either framework, and it
+would be the same tax on both sides. The numbers are comparable to each other, not to a first-ever
+install on a new machine.
+
+**The journey delta is not re-applied.** It is 2 lines against 14 and cannot move a number whose unit
+is tens of seconds; both sides carry their own already.
+
+### The numbers
+
+| run | Next.js | TheoKit |
+| --- | --- | --- |
+| 1 | 14.8 s | 36.7 s |
+| 2 | 14.1 s | 22.1 s |
+| 3 | 15.9 s | 32.4 s |
+| **mean ± 1σ** | **14.93 ± 0.91** → [14.03, 15.84] | **30.40 ± 7.50** → [22.90, 37.90] |
+
+**The intervals do not overlap.** By § What counts as winning's own test, TheoKit is **worse** on
+time-to-green — 2.04x on the means — so the "not worse" clause fails and **J9 is not won**.
+
+The conclusion survives the most charitable reading available. Discarding run 1 as the least-warm
+leaves [19.97, 34.53] against [14.03, 15.84]: still non-overlapping, still worse.
+
+### Where the time goes, and the part that is not what anyone would guess
+
+| phase, mean | Next.js | TheoKit |
+| --- | --- | --- |
+| install | 4.2 s | **19.6 s** |
+| build | 10.2 s | **7.8 s** |
+| start | 0.6 s | 2.9 s |
+
+**TheoKit builds faster — 7.8 s against 10.2 s.** The entire loss is install: 4.7x, and it is what
+dominates the total. That is a dependency-tree cost, not a compiler cost, and it is invisible to
+files, glue lines and concepts — which is precisely why the goal lists four metrics and not three.
+A framework can be cheaper to write in every countable way and still make a person wait twice as
+long to see the first thing work.
+
+TheoKit's variance is also eight times Next.js's (σ 7.50 against 0.91). A number that unstable is
+itself a finding: the first-run experience is not reliably any particular length.
+
+### Three runs were lost to a framework defect before any number existed
+
+The first three TheoKit runs recorded `NEVER_ANSWERED`. The server was up and listening on 3000 while
+the probe knocked on the port it had been told to use: **`theokit start` does not read `PORT`** on the
+published version — the second half of usetheokit/theokit#402, confirmed earlier the same day, fix
+unreleased. `next start` reads it.
+
+So metric 4 is not symmetrically measurable on the published artifact without knowing that in advance,
+and the harness now tells each side its port the way that side accepts it. This is the third distinct
+activity that defect has obstructed in one day: J10 found a container that starts and serves nobody,
+the bind regression exposed the same missing read, and now a measurement. A defect that blocks three
+unrelated activities is not peripheral.
+
+### What this does not say
+
+It does not withdraw the three countable metrics or the criteria — those were measured against a real
+collector and stand. It says the journey is not won, because winning has four parts and the fourth was
+never run. And it applies beyond this journey: **metric 4 is still unmeasured on the other nine**, and
+the install cost measured here is a baseline both sides pay on every one of them.

@@ -175,7 +175,22 @@ said for the 3x, and it is worth nothing until usetheokit/theokit#361, #380, #38
 close. The measurement, both diffs, the collector payloads and seven declared judgements are in
 [J9's criteria file](journeys/j09-observability.md).
 
-**J9 was re-measured the same day, and it is the first won journey of the ten.** The paragraph above
+**J9 was re-measured the same day and reported as the first won journey of the ten. Later the same
+day metric 4 was measured, and it is not won** — the winning rule requires "not worse on
+time-to-green", and TheoKit is worse by the rule's own test: 30.40 ± 7.50 s against 14.93 ± 0.91 s
+over three runs each, intervals non-overlapping, 2.04x on the means. The whole loss is install (19.6 s
+against 4.2 s); TheoKit's **build is faster**, 7.8 s against 10.2 s. The measurement, its harness and
+its caveats are in [J9's criteria file](journeys/j09-observability.md) § Metric 4. The paragraph below
+is left standing as the record of what was concluded before that number existed, because a retraction
+that edits away what it retracts teaches nobody what went wrong.
+
+**And the lesson generalises past this journey: metric 4 is still unmeasured on the other nine.** The
+install cost measured here is a baseline both sides pay on every one of them, and it is invisible to
+files, glue lines and concepts — which is why the goal names four metrics and not three. A framework
+can be cheaper to write in every countable way and still make a person wait twice as long to see the
+first thing work.
+
+The paragraph above
 stands as the record of what was true when it was written; hours after it, four commits closed four of
 the five defects it named. Re-run at `91fce4761` against the same local OTLP collector — and this time
 against a **published build started by the shipped CLI**, which closes the criterion-7 asymmetry the
@@ -311,8 +326,15 @@ for a dashboard rule that fails open and is a no-op outside production — are i
 [J7's criteria file](journeys/j07-rate-limit.md).
 
 **All ten journeys are measured — four ties, three losses, one unresolved, one metric sweep and one
-that wins every countable metric without being won — and the framework has not won a single one. The
-program's second obligation is now measured in full, and it is not met.** This paragraph read "eight"
+that wins every countable metric, every criterion it needs, and still loses on the fourth metric
+nobody had run — and the framework has not won a single one. The program's second obligation is now
+measured in full, and it is not met.**
+
+**J9 was reported as won for a few hours and the report was withdrawn**, by the measurement it was
+missing rather than by an argument: metric 4, unmeasured on all ten, puts TheoKit at 30.40 ± 7.50 s
+against 14.93 ± 0.91 s, intervals non-overlapping, and the winning rule's fourth clause is "not worse
+on time-to-green". The retraction is recorded rather than edited away because the way it happened is
+the useful part — three metrics and seven criteria all agreed, and the one nobody had run disagreed. This paragraph read "eight"
 while ten of the paragraphs around it existed, because the count was updated one journey late twice
 running; a closing tally that lags the sections it summarises is the one sentence a reader trusts and
 should not, so it is corrected here rather than incremented again. The goal states "win all ten by a
