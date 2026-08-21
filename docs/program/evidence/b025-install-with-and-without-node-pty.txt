@@ -1,0 +1,5 @@
+atual run1 install=35.0s node-pty=PRESENTE
+atual run2 install=17.3s node-pty=PRESENTE
+sem-pty run1 install=16.4s node-pty=AUSENTE
+sem-pty run2 install=14.7s node-pty=AUSENTE
+FIM

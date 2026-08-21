@@ -196,9 +196,24 @@ side adds are pure JavaScript: `p-retry` on J6, `resumable-stream` and `redis` o
 The consequence is worth stating plainly rather than leaving to be inferred: **until the install cost
 is resolved, no journey can satisfy the winning rule's fourth clause, so no journey can be won.** J9
 did not lose metric 4 because of anything J9 does. It lost the scaffold's, and so would the other
-nine. The cause is one native dependency and it is registered as `B-025`, with the measurement, the
-attempted fix and the reason that fix was reverted — two well-argued rules conflict, and resolving
-them is a decision rather than a repair.
+nine.
+
+**Correction, measured the same evening: the native dependency is the largest single cost and it is
+not the whole cost.** The paragraph originally read "the cause is one native dependency", which was a
+step further than the evidence went — the 6.7 s → 1.4 s figure was for installing `@theokit/agents`
+alone, and what metric 4 times is the whole application. Measured on the scaffolded app, two runs
+each: **26.1 s as it ships against 15.5 s with `node-pty` out of the tree**, its absence verified
+rather than assumed. That is between 2.6 s and 10.6 s saved depending on which pair of runs is
+trusted — the variance is real and it is mostly on the current side, which is itself the native
+build's signature.
+
+Projected onto the total, TheoKit lands somewhere between 19.8 s and 27.8 s against Next.js's 14.9 s:
+**still 1.33x to 1.86x worse, still the wrong side of "not worse".** So `B-025` is necessary and not
+sufficient. Resolving it removes the largest term and leaves an install that is still roughly 15 s
+against 4.2 s, which is a second question nobody has asked yet: what the remaining eleven seconds are.
+
+`B-025` carries the measurement, the attempted fix and the reason that fix was reverted — two
+well-argued rules conflict, and resolving them is a decision rather than a repair.
 
 This also inverts the order of the remaining work. Closing defects a journey names and re-measuring
 is what produced J9's six-of-seven criteria, and it is the right method; it simply cannot produce a
