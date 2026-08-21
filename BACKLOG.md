@@ -55,9 +55,9 @@ the two disagree, the rule wins and this one is the bug.
 
 ## Index
 
-27 items — **Open** 27 · **In flight** 0 · **Closed** 0
+28 items — **Open** 28 · **In flight** 0 · **Closed** 0
 
-### Open (27)
+### Open (28)
 
 | Item | Title | Status | Severity |
 |---|---|---|---|
@@ -88,6 +88,7 @@ the two disagree, the rule wins and this one is the bug.
 | [`B-025`](#b-025--a-web-app-compiles-a-terminal-pty-it-will-never-use-and-it-costs-the-benchmarks-fourth-metric----) | a web app compiles a terminal PTY it will never use, and it costs the benchmark's fourth metric | `triaged` | — |
 | [`B-026`](#b-026--the-security-header-half-of-the-deploy-gap-is-mechanical-and-nobody-has-done-it----) | the security-header half of the deploy gap is mechanical, and nobody has done it | `triaged` | — |
 | [`B-027`](#b-027--a-declared-rate-limit-protects-one-of-seven-targets-and-wiring-it-naively-is-worse-than-not-wiring-it----) | a declared rate limit protects one of seven targets, and wiring it naively is worse than not wiring it | `triaged` | — |
+| [`B-028`](#b-028--the-hitl-pause-span-measures-the-human-plus-the-model-and-only-the-human-was-asked-for----) | the HITL pause span measures the human plus the model, and only the human was asked for | `triaged` | — |
 
 ### In flight (0)
 
@@ -516,4 +517,20 @@ dod:
   - J7's metric 1-4 re-derived afterwards, because the wiring adds lines somewhere and the journey is graded on how few it costs
 note: the build now names the drop rather than swallowing it (`packages/theo/src/adapters/config-support.ts`), which is a stopgap and not this item. Warning was chosen over refusing on purpose: refusing breaks every deployment that declares a limit today, while the fix is days to a week
 
-Next free id: **B-028**.
+## B-028 — the HITL pause span measures the human plus the model, and only the human was asked for   [ ]
+
+domain: theokit
+repo: packages/theo
+suggested_mode: evolve
+source: discover-review
+evidence: measured 2026-08-21 against a real `theokit build && theokit start` with an OTLP collector (`docs/program/evidence/j09-criteria-3-and-6-tree-2026-08-21.txt`). `closeToolSpan` ends the pause span on the `tool-output-available` chunk, and its comment states the premise — "the tool producing output IS the resume" (`packages/theo/src/server/agent/observe-agent-run.ts:241`). The wire refutes it: with the approval answered at ~3306 ms, that chunk arrived at 4829 ms, 1523 ms later, which is the model's post-resume latency to the millisecond. Across three runs varying only that latency, the excess over the measured human wait tracked it 1:1 — 20 ms model / +30 ms excess, 700 ms / +723 ms, 1500 ms / +1524 ms — over a 75x swing in the pause-to-run ratio. The premise holds only when the model is instantaneous, which is the one case nobody deploys
+why_now: this is the single gradeable criterion `docs/program/journeys/j09-observability.md` still fails, and its wording is explicit that the pause span must reflect "the time the human took, not the time the run took". The criterion cannot be edited to fit the measurement — `.claude/rules/cycle-acceptance.md` § Hard gates calls grading a criterion changed after seeing the result fabrication — so the code is what moves
+status: triaged
+dod:
+  - the exported `agent.hitl` span's duration is within tolerance of the delay the client measured for the human decision, with the model's post-resume latency outside it, verified by varying that latency and showing the duration does not follow
+  - the resume instant is obtained from where it actually happens. It arrives on a **different HTTP request** than the run — the approve endpoint — and the run's observer sees only `tool-input-available`, `tool-approval-request`, `tool-output-available`, `tool-output-error` and `finish`, none of which is the human answering. Closing this needs a seam that does not exist yet, not a different chunk to listen for
+  - whatever seam is chosen states its own limit. A registry keyed by approval id that lets the approve handler close the span is in-process, so it holds within one instance and not across them — the same envelope `B-027` records for the rate-limit store, and stating it is the difference between a design and a surprise
+  - the comment at `packages/theo/src/server/agent/observe-agent-run.ts:241` is corrected or removed. It is not a stale comment, it is the reasoning the code implements, and it is wrong for every non-instantaneous model
+note: `hitl.resume_observed=true` and an `ok` status are real improvements that landed in `0e9e6dc04` and are NOT this item — the span now closes on resume rather than falling through to the end-of-run sweep. What it closes on is still the wrong event
+
+Next free id: **B-029**.
