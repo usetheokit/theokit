@@ -118,6 +118,18 @@ side is measured against a vendor's hosted latency.
 
 ## Measured - TheoKit side, metrics 1-3 (2026-08-20)
 
+> **Superseded, and read no sentence below as current.** Its central claim — that criteria 3 and 6
+> are *"not reachable from an application at all"* — is **half true and half out of date**, and the
+> half that is out of date is the half a reader is most likely to quote. Criterion 6 does not fail
+> any more: `SpanData` gained `traceId` / `spanId` / `parentSpanId`, the OTLP serializer reads those
+> ids instead of minting one per span, and `extractW3CTraceContext` carries the caller's parent, so
+> the trace continues on the plain POST, the thread route and the gated path — **observed against a
+> collector twice, on 2026-08-20 and again on 2026-08-21**. The accurate sentence is: *criterion 3
+> is not reachable from an application, and criterion 6 never needed an application line — the
+> framework closed it, at the same two lines of configuration.* Criterion 5 also flipped. The
+> current grades live in § Re-measured a second time and § Criteria 3 and 6 re-exercised against the
+> tree. This section stays as the record of what was true when it was written.
+
 **Three of four metrics, one side, and the journey does not pass.** What follows is the smallest
 number in this batch attached to the largest gap: two lines of configuration buy every signal the
 framework emits, and two of the seven criteria are not reachable from an application at all. Metric 4
@@ -1427,3 +1439,24 @@ millisecond. usetheokit/theokit#389.
 name, attributes and a trace context — nothing that would let a caller end a span earlier. That
 half of § Measured — TheoKit side's sentence survives; the other half of it does not, and the next
 section says so.
+
+### What this run changed elsewhere in the file, and what it did not
+
+**Two of the three limits § The limit the criteria do not see records as open are closed in the
+tree**, observed in the payloads above rather than read from the commit that claims them
+(`e39ce9831`):
+
+| Limit as recorded | Observed on the tree, 2026-08-21 |
+| --- | --- |
+| usetheokit/theokit#405 — the thread, approve and MCP routes never reach the plugin runner, so none emits an `http.request` span | the thread route emitted `http.request path=/api/agents/chat/threads/…/message status=202`, and the approve route emitted `http.request path=/api/agents/chat/approve/… status=200`. **Closed in the tree** |
+| usetheokit/theokit#406 — the `agent` attribute is the module's absolute filesystem path on one route and a quoted label on the other | every span of both routes carries `agent=chat`. **Closed in the tree** |
+| usetheokit/theokit#404 — a request with no `traceparent` arrives as disconnected traces | reproduced again: the HITL runs without a header arrived as **three** traces. **Still open** |
+
+Neither closure moves a criterion — no criterion grades the aux routes or the `agent` label, which is
+exactly what that section said about them. They are recorded because a file that lists a defect as
+open after it was fixed misleads in the same direction as one that lists a criterion as failing after
+it passes, which is the thing this whole section exists to correct.
+
+**Nothing here changes another journey.** `traceparent`, `observability` and `telemetry` appear in no
+other journey file, and the three countable metrics were not re-derived today — the diff is unchanged
+and no metric was re-measured, so the tally in `../dx-benchmark.md` is untouched on purpose.
