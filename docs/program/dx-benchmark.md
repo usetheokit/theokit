@@ -198,6 +198,12 @@ is resolved, no journey can satisfy the winning rule's fourth clause, so no jour
 did not lose metric 4 because of anything J9 does. It lost the scaffold's, and so would the other
 nine.
 
+**That sentence is false, and it is left standing because the way it failed is the useful part.** It
+generalised from one measurement taken under a protocol that handicapped one lane. Metric 4 has since
+been run on the other eight under a symmetric protocol, and every one of them clears the clause — see
+§ Metric 4 — the sweep, 2026-08-21. Reading a paragraph in this document without checking that
+section against it will now mislead a reader on exactly the question the section answers.
+
 **Correction, measured the same evening: the native dependency is the largest single cost and it is
 not the whole cost.** The paragraph originally read "the cause is one native dependency", which was a
 step further than the evidence went — the 6.7 s → 1.4 s figure was for installing `@theokit/agents`
@@ -394,6 +400,16 @@ that wins every countable metric, every criterion it needs, and still loses on t
 nobody had run — and the framework has not won a single one. The program's second obligation is now
 measured in full, and it is not met.**
 
+**Reconciled 2026-08-21, after metric 4 was swept across the eight journeys that had never had it
+run.** The counts above are unchanged and the sentence still holds: four ties (J1, J4, J5, J6), three
+losses (J2, J8, J10), one unresolved (J3), one held open by reach rather than by a number (J7), one
+that wins every countable metric and loses metric 4 (J9) — ten, and no wins. Nothing in the sweep
+moved a journey between those buckets, because a fourth-clause result cannot rescue a journey already
+behind on a countable metric and cannot by itself win one. What moved is smaller and worth having:
+**nine of the ten now satisfy the time-to-green clause**, where before this sweep eight of them had
+no number at all, and the one that does not is the one whose number was taken under a protocol the
+other nine replaced.
+
 **J9 was reported as won for a few hours and the report was withdrawn**, by the measurement it was
 missing rather than by an argument: metric 4, unmeasured on all ten, puts TheoKit at 30.40 ± 7.50 s
 against 14.93 ± 0.91 s, intervals non-overlapping, and the winning rule's fourth clause is "not worse
@@ -495,6 +511,54 @@ developer actually stands.
 | J10 deploy — *local path only, not the journey's criteria* | 11.37 ± 0.81 | 17.33 ± 2.78 | disjoint, TheoKit faster | **holds on the local path** |
 | J8 tenant | 11.43 ± 1.07 | 15.47 ± 0.92 | disjoint, TheoKit faster | **holds** |
 | J2 HITL | 10.03 ± 0.32 | 13.20 ± 0.75 | disjoint, TheoKit faster | **holds** |
+| *J7 rate limit — measured 2026-08-21, not re-run* | 13.00 ± 1.23 | 14.72 ± 2.04 | overlapping | **holds** |
+| *J9 observability — measured 2026-08-20 under the asymmetric protocol, not re-run* | 30.40 ± 7.50 | 14.93 ± 0.91 | disjoint, Next.js faster | **fails** |
+
+**Nine of ten clear the clause. The tenth is the one measured under the protocol the other nine
+replaced.** Every journey measured with a lockfile on both lanes puts TheoKit's install between 3.83
+and 5.40 s and Next.js's between 4.27 and 5.07 s — level, on every pair, including the three where
+the Next.js side installs a dependency the TheoKit side does not (`p-retry`, `jose`,
+`resumable-stream` + `redis`). The consistent difference across all eight is **build**: 4.80–5.50 s
+against 7.37–11.67 s.
+
+**J9 is not re-run here and its verdict is not restored.** Its own annotation already refuses that
+move — "editing a measurement by inference is the move this programme refuses everywhere else" — and
+nothing in this sweep re-executes J9's two applications. What the sweep establishes is a pattern
+around J9's number, not a replacement for it: eight independent pairs, measured symmetrically, none
+of which reproduces the 15.4 s install gap. Whether J9's applications reproduce it is a question only
+running J9's applications can answer, and that run has not happened.
+
+**The sweep changed no verdict, and it was not expected to.** Seven of the eight were already losing
+or tied on a countable metric, where § What counts as winning never reaches the fourth clause; the
+eighth, J3, leads all three countable metrics and is held open by six lines whose trigger never fires.
+What the sweep changes is the *reason* the journeys are open, and it removes one reason from all
+eight: time-to-green is no longer an untested clause anywhere except J9.
+
+**One thing it does not measure, on any of the ten.** The npm cache was warm on every run recorded
+here and in both earlier measurements. Nobody has timed a cold cache, which is where a new developer
+actually stands, and the decomposition in `evidence/b025-install-decomposition-2026-08-20.txt`
+suggests that is precisely where the lifecycle-script cost would reappear — `node-pty` compiles on
+linux-x64 and `esbuild` fetches a platform binary, and neither is free when npm holds nothing
+locally. Metric 4's definition in § The four metrics says *cold cache*. **No measurement in this
+programme has met its own definition**, and that is a gap in all ten, not in eight.
+
+
+**Three declared gaps in the sweep, none of them silent.** Two journeys' TheoKit applications did
+not survive — J3's tree holds only the scaffold commit and J5's stops at J1's — so those two lanes
+were timed without their own delta. Each delta is under ten glue lines and adds no dependency, so
+install is untouched and the build differs by those lines against a number whose unit is seconds; but
+both are the reading most favourable to TheoKit that the surviving trees permit, and they are marked
+as gaps in the two evidence files rather than absorbed. And J10 was timed on the local path, which is
+not J10's criteria: that journey grades a run on a target that is not the developer's machine, and
+time-to-green on a deploy target remains unmeasured.
+
+**Why the eight were taken in this order.** Ranked by what metric 4 could actually change: J3 first,
+as the only one of the eight leading all three countable metrics by a margin outside the bar, and so
+the only one whose verdict the fourth clause could decide; then J4, the only one where both sides
+satisfy every criterion; then J6, J5 and J1, ties where a countable metric is already level or
+against us; then J10, J8 and J2, outright losses where no timing could move anything. The order is
+recorded because it is falsifiable — a sweep run in the order that produced the best headline would
+be a different instrument.
 
 **The standing generalisation does not survive the first pair, and it had already not survived J7.**
 § Sequencing concluded from J9 that "the same baseline gap applies to all ten" and that "until the
