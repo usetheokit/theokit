@@ -730,6 +730,38 @@ and how it classifies transience. It lives outside the two source packages, is l
 so that this does not need to be known in advance: they grade observed behaviour, not the
 implementation that produced it.
 
+## Metric 4 — measured 2026-08-21
+
+Three runs per lane, alternating lane by lane, on the two committed trees this journey's counts came
+from — the TheoKit side at the `j6` commit, the Next.js side at the `p-retry` commit that the counted
+headline uses rather than the hand-rolled variant:
+
+| | Next.js | TheoKit |
+| --- | --- | --- |
+| install | 4.70 ± 0.17 | 5.03 ± 0.76 |
+| build | 8.27 ± 0.35 | **5.03 ± 0.31** |
+| start | 0.60 ± 0.00 | 1.07 ± 0.06 |
+| **total, mean ± 1σ** | **13.57 ± 0.23** → [13.34, 13.80] | **11.13 ± 0.87** → [10.26, 12.01] |
+
+**The intervals do not overlap and TheoKit is the faster side, so the "not worse" clause holds.**
+
+**The `p-retry` install costs the Next.js lane nothing measurable** — install is level within noise,
+5.03 ± 0.76 against 4.70 ± 0.17, on the pair where one side installs a dependency and the other
+installs none. That is the same result § Judgement 2 reached by argument when it priced the library
+as a concept rather than as a file, and it is worth recording that the two agree, because the
+argument could have been convenient rather than right.
+
+Warm npm cache, and no measurement in this programme has ever timed a cold one, which is where a new
+developer actually stands. Both lanes install from a lockfile; the TheoKit lane's was generated on
+2026-08-21 because the captured template tree carried none. Details in
+[the evidence file](../evidence/j06-metric4-2026-08-21.txt).
+
+**The verdict does not move, and metric 4 could not have moved it.** J6 is a tie whose only
+non-level countable metric goes *against* TheoKit — 10 glue lines against 9 — and § What counts as
+winning requires better on all three before time-to-green is even reached. What still holds it open
+is that, plus criterion 2's second half: a tool that throws still reaches the caller as a successful
+result on a run that ends `done` (usetheokit/theokit#388).
+
 ## Cross-references
 
 - The benchmark this journey belongs to: `../dx-benchmark.md`
