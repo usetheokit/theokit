@@ -96,6 +96,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **The dead-code gate failed on committed evidence and on a re-export nobody imports.** `pnpm knip`
+  is the only red check on this branch, and both findings are real rather than tooling noise. The J9
+  benchmark harness is committed on purpose — it is the driver the metric 4 sweep was run with, and
+  evidence that lives on one machine is not evidence — but knip's root workspace scans `docs/`, so
+  every harness script committed there counts as an unused file. `docs/` holds measurement evidence
+  and not project code, so it is ignored as a rule rather than these six suppressed as an exception.
+  Separately, `node-web-adapter.ts` re-exported `incomingMessageToWebRequest` "so existing importers
+  of the adapter keep resolving them", and this branch moved the last two onto
+  `createWebRequestSource`; the line was in no `exports` subpath and no barrel, so it had no public
+  surface to keep. Untouched deliberately: the `DelegationBudgetExceededError|BudgetExceededError`
+  duplicate also appears in the log, is a `duplicates: warn` that never reaches the exit code, and is
+  a deprecated compatibility alias kept for one major. (usetheokit/theokit#376)
+
 - **The Vercel adapter emitted a function that could not be loaded.** `renderVercelFunctionEntry()`
   declared `const headers` twice in one scope — the request Headers, and the response header object
   added when streaming landed — so every Vercel build since 2026-08-20 shipped a module Node refuses
