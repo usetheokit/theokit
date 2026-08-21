@@ -155,6 +155,42 @@ describe('the message names what to do, not merely what is wrong', () => {
     expect(message).toContain('#410')
   })
 
+  it('does not tell a node build to deploy to node', async () => {
+    // The degenerate advice this replaced: building for `node` with only
+    // `security.cors` dropped printed "deploy to `node`, which applies all of
+    // the above except security.cors" -- an instruction to do what you are
+    // already doing, about the one key it then excepted.
+    const message = describeUnappliedConfig('node', ['cors'])
+
+    expect(message).not.toMatch(/build for `node`/)
+    expect(message).toContain('no production target applies this today')
+    expect(message).toContain('#409')
+  })
+
+  it('splits the advice when some keys have a target that applies them and one does not', () => {
+    const message = describeUnappliedConfig('vercel', ['rateLimit', 'cors'])
+
+    expect(message).toContain('rateLimit: build for `node`')
+    expect(message).toContain('security.cors: no production target applies this today')
+  })
+
+  it('the no-target list agrees with what the node adapter declares', async () => {
+    // A constant that drifts from the adapter turns correct-looking advice into
+    // a lie. Derived here rather than trusted.
+    const node = await resolveAdapter('node')
+    const applied = node.appliesConfig
+    if (applied === undefined || applied === 'runtime-not-emitted-here') {
+      throw new Error('the node adapter must declare what it applies')
+    }
+    for (const concern of CONFIG_CONCERNS) {
+      const nodeApplies = applied.includes(concern)
+      const claimedNowhere = describeUnappliedConfig('vercel', [concern]).includes(
+        'no production target applies',
+      )
+      expect(claimedNowhere).toBe(!nodeApplies)
+    }
+  })
+
   it('says nothing when nothing was dropped', () => {
     expect(describeUnappliedConfig('node', [])).toBe('')
   })

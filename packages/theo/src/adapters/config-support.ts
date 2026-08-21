@@ -40,6 +40,14 @@ export const CONFIG_CONCERNS = [
   'securityHeaders',
 ] as const satisfies readonly ConfigConcern[]
 
+/**
+ * Concerns no target applies today, so the advice cannot point anywhere.
+ * `cors` is here because `security.cors` is read only by the Vite dev server
+ * (usetheokit/theokit#409) -- `theokit start` contains no CORS handling at all.
+ * Kept in step with `nodeAdapter.appliesConfig` by a test, not by a reader.
+ */
+const APPLIED_BY_NO_TARGET: ReadonlySet<ConfigConcern> = new Set(['cors'])
+
 /** Where each concern lives in the config, for a message the operator can grep. */
 const CONFIG_KEY: Record<ConfigConcern, string> = {
   rateLimit: 'rateLimit',
@@ -105,15 +113,40 @@ export function findUnappliedConfig(
  */
 export function describeUnappliedConfig(target: string, dropped: readonly ConfigConcern[]): string {
   if (dropped.length === 0) return ''
-  const keys = dropped.map((concern) => CONFIG_KEY[concern])
-  const list = keys.map((key) => `      - ${key}`).join('\n')
+  const one = dropped.length === 1
+  const list = dropped.map((concern) => `      - ${CONFIG_KEY[concern]}`).join('\n')
+  const elsewhere = dropped.filter((concern) => !APPLIED_BY_NO_TARGET.has(concern))
+  const nowhere = dropped.filter((concern) => APPLIED_BY_NO_TARGET.has(concern))
+
+  // The advice has to change with the target, or it degenerates. Building for
+  // `node` with only `security.cors` dropped once produced "deploy to `node`,
+  // which applies all of the above except security.cors" -- an instruction to
+  // do what you are already doing, about the one key it then excepts.
+  const actions: string[] = []
+  if (elsewhere.length > 0 && target !== 'node') {
+    actions.push(
+      `    - ${elsewhere.map((c) => CONFIG_KEY[c]).join(', ')}: build for \`node\` and run \`theokit start\`,`,
+      `      which applies ${elsewhere.length === 1 ? 'it' : 'them'}; or remove ${elsewhere.length === 1 ? 'it' : 'them'} so the file states what runs.`,
+    )
+  } else if (elsewhere.length > 0) {
+    actions.push(
+      `    - ${elsewhere.map((c) => CONFIG_KEY[c]).join(', ')}: remove ${elsewhere.length === 1 ? 'it' : 'them'} so the file states what runs.`,
+    )
+  }
+  if (nowhere.length > 0) {
+    actions.push(
+      `    - ${nowhere.map((c) => CONFIG_KEY[c]).join(', ')}: no production target applies ${nowhere.length === 1 ? 'this' : 'these'} today`,
+      `      (usetheokit/theokit#409) -- terminate it in front of the app, or remove it.`,
+    )
+  }
+
   return [
-    `  ! ${String(dropped.length)} configuration ${dropped.length === 1 ? 'key is' : 'keys are'} validated and NOT applied on \`${target}\`:`,
+    `  ! ${String(dropped.length)} configuration ${one ? 'key is' : 'keys are'} validated and NOT applied on \`${target}\`:`,
     list,
-    `    The handler this target emits never reads ${dropped.length === 1 ? 'it' : 'them'}, so the deployed app`,
-    `    behaves as if ${dropped.length === 1 ? 'the key were' : 'the keys were'} absent.`,
-    `    What to do: deploy to \`node\` (\`theokit start\`), which applies all of the above except`,
-    `    security.cors; or remove it from theo.config.ts so the file states what actually runs.`,
+    `    The handler this target emits never reads ${one ? 'it' : 'them'}, so the deployed app`,
+    `    behaves as if ${one ? 'the key were' : 'the keys were'} absent.`,
+    `    What to do:`,
+    ...actions,
     `    Tracked: usetheokit/theokit#410 (deploy targets), usetheokit/theokit#409 (cors).`,
   ].join('\n')
 }
