@@ -412,6 +412,32 @@ so the benchmark does not later mistake them for part of it:
 **Not measured:** whether the scaffolded tool actually returns useful data against a live model.
 The path was measured; a run was not.
 
+## Metric 4 — measured 2026-08-21
+
+Three runs per lane, alternating lane by lane, on the two committed trees this journey's counts came
+from:
+
+| | Next.js | TheoKit |
+| --- | --- | --- |
+| install | 4.53 ± 0.25 | 4.83 ± 0.70 |
+| build | 9.40 ± 1.56 | **5.10 ± 0.53** |
+| start | 0.57 ± 0.06 | 1.03 ± 0.06 |
+| **total, mean ± 1σ** | **14.47 ± 1.76** → [12.71, 16.23] | **10.97 ± 1.10** → [9.87, 12.06] |
+
+**The intervals do not overlap and TheoKit is the faster side, so the "not worse" clause holds.**
+Install is level within noise — 4.83 s against 4.53 s — on the simplest pair of the ten, where
+neither side installs anything the other does not.
+
+Warm npm cache, and no measurement in this programme has ever timed a cold one. The Next.js lane's
+first run is its slowest build by 2.6 s and is kept rather than discarded, because the lanes
+alternate and dropping the least-warm run on one column only is how a protocol acquires a handicap.
+Both notes are in [the evidence file](../evidence/j01-metric4-2026-08-21.txt).
+
+**The verdict does not move, and metric 4 could not have moved it.** J1 is a tie in which TheoKit
+touches *more* files than the Next.js side — 3 against 2 — and § What counts as winning asks for
+better on all three countable metrics before time-to-green is reached. A journey already behind on a
+countable metric is not rescued by the fourth one.
+
 ## Cross-references
 
 - The benchmark this journey belongs to: `../dx-benchmark.md`
