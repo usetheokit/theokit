@@ -8,6 +8,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **`theokit preview` builds for production and serves the result, in one command.** Reproducing
+  production locally was `theokit build` followed by `theokit start`, and the two-step version fails
+  quietly: `start` serves whatever `.theokit/` already holds, so a skipped build serves the previous
+  one and nothing says so — worst exactly when it matters, checking whether a change works. `preview`
+  is not a third implementation: it calls the same two in order and never reaches the server when
+  the build throws. Both stay separately invocable, because CI builds and serves in different jobs.
+  The scaffold gains a matching `preview` script. (B-030)
+
+- **A back navigation returns to where the reader left off.** `ScrollRestoration` was mounted
+  nowhere, so the browser kept whatever offset it had. The generated route manifest now mounts it
+  once at the root, beside the application's own root element rather than in place of it — a layout
+  still receives `<Outlet />` as `children`. In a `createBrowserRouter` application the component
+  renders `null` on both server and client (it returns early without react-router's Framework Mode
+  context), so it emits no `<script>`, which keeps the server tree byte-identical to the client one
+  — the parity the renderer protects with `hydrate: false` after a mismatch measured CLS 0.39. The
+  restoration itself runs in `useScrollRestoration`, which needs only the data-router context.
+  (B-029)
+
 - **Every Web deploy target now serves the security headers the app configured.** `theokit start`
   applied the configured baseline to every response (`request-handler.ts`) and none of the six
   Web-standards adapters applied any, so a deployed page carried no CSP, no `X-Frame-Options`, no
@@ -95,6 +113,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   attribute rather than a guess. (B-019)
 
 ### Fixed
+
+- **The scanner order six scanners share is no longer the filesystem's.** `#346` was fixed in the
+  client-router scan and not in the walker the server scanners consolidated onto, so five of the six
+  — actions, websockets, cron, agents, jobs — still emitted whatever order `readdirSync` returned,
+  and a build was not reproducible across machines. Where that order is an execution order, it
+  decided what ran first. The walker now imposes UTF-16 code-unit order over files and directories
+  together, reusing the comparator the route scan already used.
+  (usetheokit/theokit#346, B-004)
 
 - **The static export's fallback document now declares a language, a charset and a viewport.** When
   an application has no `index.html`, the static adapter builds the document itself, and what it
@@ -254,6 +280,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   for chunk, and still reported exactly once. (usetheokit/theokit#388)
 
 ### Changed
+
+- **`<Image>` requires `width` and `height`, and accepts `srcSet` only with `sizes`.** *Breaking for
+  callers who omitted them.* The component's documentation said "width/height for CLS prevention"
+  and enforced neither — both were forwarded when present and absent when not, so the shift the
+  comment named was the default. `srcSet` without `sizes` was accepted the same way, and a browser
+  with no `sizes` resolves the candidates against `100vw`: it downloads an image picked for the
+  wrong width, usually the largest, which is the opposite of why a `srcSet` is added. Both are
+  refused by the type, so a TypeScript caller finds out at build time with the prop named; a
+  JavaScript caller gets an error naming the prop and the consequence instead of a page that shifts.
+  Migration: pass the intrinsic pixel dimensions — CSS may still resize the image. Also stated in
+  the component's own docs rather than left to inference: nothing here resizes or re-encodes an
+  image, and the framework ships no fonts module. (B-032)
 
 - **The parity programme is no longer sixteen surfaces held to one standard.** `ROADMAP.md` now
   sorts them into two bands by a criterion that is written down rather than felt: a surface needs
