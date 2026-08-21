@@ -55,9 +55,9 @@ the two disagree, the rule wins and this one is the bug.
 
 ## Index
 
-34 items — **Open** 34 · **In flight** 0 · **Closed** 0
+36 items — **Open** 36 · **In flight** 0 · **Closed** 0
 
-### Open (34)
+### Open (36)
 
 | Item | Title | Status | Severity |
 |---|---|---|---|
@@ -95,6 +95,8 @@ the two disagree, the rule wins and this one is the bug.
 | [`B-032`](#b-032--image-reserves-no-space-refuses-no-bad-srcset-and-the-docs-do-not-say-what-it-will-not-do----) | `Image` reserves no space, refuses no bad `srcSet`, and the docs do not say what it will not do | `triaged` | — |
 | [`B-033`](#b-033--the-served-document-declares-no-language----) | the served document declares no language | `triaged` | — |
 | [`B-034`](#b-034--draft-preview-is-neither-built-nor-declared-absent----) | draft preview is neither built nor declared absent | `triaged` | — |
+| [`B-035`](#b-035--the-document-preloads-nothing-so-a-routes-chunks-are-discovered-one-round-trip-late----) | the document preloads nothing, so a route's chunks are discovered one round trip late | `triaged` | — |
+| [`B-036`](#b-036--markdown-images-and-external-links-bypass-the-frameworks-own-components----) | markdown images and external links bypass the framework's own components | `triaged` | — |
 
 ### In flight (0)
 
@@ -205,6 +207,7 @@ dod:
   - `/api/users/settings` resolves to `/api/users/:id` and not to `/api/:resource/settings` against a published build
   - precedence is compared per segment, with `localeCompare` retained only as a final total-order fallback
   - a regression test fails when the tiebreak is restored to a whole-path comparison
+  - the precedence rule is written down as a contract — which segment shape wins over which, and what the final tiebreak is — because a rule that lives only in a comparator is one nobody can plan a route tree against (added 2026-08-21 with the M4 minimum contract)
 
 ## B-007 — resolve the open private security advisory   [ ]
 
@@ -247,6 +250,7 @@ dod:
   - `cache: { enabled: false }` does not take the boot down; today `packages/theo/src/cache/engine-singleton.ts:33` throws on exactly that
   - a configured `defaults.maxAge` is the fallback `defineCachedRoute` uses, in place of the hardcoded constant (`packages/theo/src/cache/validation.ts:76`)
   - the cache serves a hit on a second request, observed through a signal that survives `NODE_ENV=production` — the `X-Theo-Cache` header is dev-only today (`packages/theo/src/cache/define-cached-route.ts:368`), so M5's criterion is not observable on a published build without this
+  - the documented surface states which of TTL, stale-while-revalidate and tag invalidation the engine serves and which it does not, so an application author stops inferring it from the type signatures (added 2026-08-21 with the M5 minimum contract)
 
 ## B-010 — make the observability plugin registrable and give it the config key its registry documents   [ ]
 
@@ -625,4 +629,32 @@ dod:
   - or the documentation states that draft preview does not ship, in the shared documentation rather than a Web-only note, so a Tauri or terminal reader is not left to infer it
   - whichever is chosen, `.claude/skills/draft-preview-specialist/` says the same thing, because a specialist skill describing a surface nobody built is the assumption this item exists to remove
 
-Next free id: **B-035**.
+## B-035 — the document preloads nothing, so a route's chunks are discovered one round trip late   [ ]
+
+domain: theokit
+repo: packages/theo
+suggested_mode: review
+source: discover-review
+evidence: measured 2026-08-21. `modulepreload` appears once under `packages/theo/src`, inside a comment (`packages/theo/src/vite-plugin/inject-entry-client.ts:30`), and is emitted by nothing. The client `Link` deliberately uses `<link rel="prefetch">` over route paths instead, and says why (`packages/theo/src/client/link.tsx:9-10`) — that covers a *future* navigation and not the chunks the current document already needs, so the browser learns about them only after parsing and executing the entry
+why_now: it is M3's second criterion and the only one of that milestone's three with no registered work — B-004 covers determinism and now the CI gate, and neither touches what the document advertises. A round trip per route on first paint is the cost, and nothing measures it today
+status: triaged
+dod:
+  - the build emits an asset manifest that maps a route to the chunks it needs
+  - the served document carries `modulepreload` for the matched route's chunks, observed over the wire against a published build rather than asserted over the template string
+  - a route with no additional chunks emits no preload, so the tag means something when it is present
+
+## B-036 — markdown images and external links bypass the framework's own components   [ ]
+
+domain: theokit
+repo: packages/theo
+suggested_mode: review
+source: discover-review
+evidence: measured 2026-08-21. `BACKLOG.md` carries no item for either behaviour, and the two are M11's whole contract. The pipeline itself is not in this repository — it lives in `@theokit/ui`, which the scaffold wires — so this item's first task is to establish where the mapping belongs before changing anything
+why_now: M11 is a minimum-contract surface whose two bullets were the entire milestone, and neither was ever registered. The external-link half is a security property rather than a nicety: a markdown link opening a new context without `rel="noopener"` hands the opener reference to the destination
+status: triaged
+dod:
+  - markdown `![]()` renders through the framework `Image` component in a scaffolded project's published build, so the reserved-space and `srcSet` rules `B-032` establishes apply to authored content too
+  - markdown `[]()` pointing at an external origin renders through `Link` and carries `rel="noopener noreferrer"`
+  - the repository that owns the mapping is named in the item before work starts — if it is `@theokit/ui`, this item routes there and closes here with a pointer rather than a patch
+
+Next free id: **B-037**.

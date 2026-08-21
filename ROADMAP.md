@@ -143,6 +143,42 @@ stay `[ ]` until `/acceptance` runs against a released artifact.
 not in the walker three other scanners share, so the milestone reads as half-fixed and is closer to
 a quarter.
 
+### Coverage — every open criterion has registered work
+
+The band table above is a scope decision; on its own it guarantees nothing. What makes it a plan is
+that no criterion in it is an unowned promise. Checked 2026-08-21 against `BACKLOG.md`, and the
+check found four criteria nobody was carrying — M3's manifest, M11's two markdown bullets, and the
+documentation halves of M4 and M5. All four are registered now (`B-035`, `B-036`, and folded into
+`B-006` and `B-009`), because a finding that stays in a report and never reaches the registry is the
+orphaned-finding failure the single registry exists to prevent.
+
+| Surface | Band | Registered work |
+|---|---|---|
+| M1 | parity | `B-005`, `B-007`, `B-011`, `B-016` |
+| M2 | parity | `B-001`, `B-002` |
+| M3 | parity | `B-004`, `B-035` |
+| M4 | contract | `B-006` |
+| M5 | contract | `B-009` |
+| M6 | contract | `B-029` |
+| M7 | contract | `B-030` |
+| M8 | parity | `B-010`, `B-019`, `B-028` |
+| M9 | contract | `B-031` |
+| M10 | contract | `B-032` |
+| M11 | contract | `B-036` |
+| M12 | contract | `B-033` |
+| M13 | contract | `B-003` |
+| M14 | parity | `B-018`, `B-023`, `B-026`, `B-027` |
+| M15 | contract | `B-034` |
+| M16 | delisted | none, deliberately |
+
+**Registered is not implemented, and the table does not claim otherwise.** All thirty-six items are
+`triaged`: measured, owned, and not yet built. What the table rules out is the other failure — a
+criterion that closes by nobody noticing it was never scheduled.
+
+**`B-019` is listed while its defect is closed in code.** Its status advances when the cycle says so
+(`.claude/rules/cycle-maintenance.md`), not because a re-measurement found the code fixed. Editing
+the registry by hand is how `shipped` stops meaning anything.
+
 ## Wave 0.5 — wire what exists, first
 
 The re-measurement found a pattern rather than a gap: **subsystems built, tested, and never
