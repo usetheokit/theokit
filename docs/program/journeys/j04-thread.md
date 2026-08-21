@@ -786,6 +786,38 @@ design) or J8's (a missing noun). It needs no ADR.
 **Not measured:** the SDK's own durability guarantees behind the transcript. The framework supplies
 a directory and an id; what the SDK does with them was not read, and no claim is made about it.
 
+## Metric 4 — measured 2026-08-21
+
+The one metric this journey never had. § What counts as winning tests it with non-overlapping
+intervals at ±1σ over ≥ 3 runs; three runs per lane, alternating lane by lane, on the same two
+applications the re-measurement above graded:
+
+| | Next.js | TheoKit |
+| --- | --- | --- |
+| install | 4.33 ± 0.40 | 3.83 ± 0.06 |
+| build | 7.37 ± 0.15 | **4.80 ± 0.40** |
+| start | 0.63 ± 0.06 | 1.10 ± 0.00 |
+| **total, mean ± 1σ** | **12.33 ± 0.38** → [11.95, 12.71] | **9.70 ± 0.40** → [9.30, 10.10] |
+
+**The intervals do not overlap and TheoKit is the faster side, so the "not worse" clause holds.**
+The clause asks for *not worse* and nothing more; this is better, and better is not a fifth thing to
+win. Install is level and marginally in TheoKit's favour — 3.83 s against 4.33 s — on the pair where
+the Next.js side carries a dependency the TheoKit side does not.
+
+**Both lanes install from a lockfile, which the TheoKit lane did not previously have.** It carried a
+`pnpm-lock.yaml`; the harness installs with npm, which ignores it and would have re-resolved the
+whole graph on every run — the exact handicap J9's protocol carried, worth about 3.8 s there. A
+`package-lock.json` was generated for it on 2026-08-21 and the resolved versions were confirmed
+unchanged. Warm npm cache throughout, and no measurement in this programme has ever timed a cold
+one. Both facts are in [the evidence file](../evidence/j04-metric4-2026-08-21.txt).
+
+**The verdict does not move, and metric 4 was not what held it open.** J4 is a tie because the three
+countable margins — 1.25×, 1.25×, 1.0× — sit inside the 2× bar § What counts as winning sets, and
+that is unchanged by any number here. What this measurement removes is the *fourth* reason it is not
+won: J4 is now the first journey of the ten where both sides satisfy every criterion **and** the
+time-to-green clause is measured and satisfied. Everything still standing between it and a win is
+margin.
+
 ## Cross-references
 
 - The benchmark this journey belongs to: `../dx-benchmark.md`

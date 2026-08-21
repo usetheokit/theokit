@@ -1,0 +1,40 @@
+J4 metric 4 - time to first green run, both sides, 2026-08-21
+Harness: metric4-harness.sh, driven interleaved (one TheoKit run, one Next.js run, repeat).
+Probe: "/" on the TheoKit lane, "/chat" on the Next.js lane - each side's entry route. The Next.js
+lane has no root page and answers 404 there; "/chat" answers 307 and redirects to a freshly
+generated thread id, which is what a browser lands on. The harness now follows redirects for that
+reason; the first attempt reported NEVER_ANSWERED against a server that was serving correctly.
+Warm npm cache, stated rather than hidden. No run in this programme has ever been taken on a cold
+cache, which is where a new developer actually stands.
+Machine: Linux 6.8.0-136, Node 22.22.2, npm 10.9.7. Nothing else heavy running.
+
+Lanes - the two applications this journey was actually measured on, unchanged
+  TheoKit  scratchpad j04/tk-thread  (theokit 0.48.14 from npm, @theokit/agents 10.1.0)
+  Next.js  scratchpad j04/nx-thread  (next 16.3.1, ai 7.0.70, @ai-sdk/react 4.0.73,
+                                      @ai-sdk/openai-compatible 3.0.32)
+
+Lockfiles, symmetric: the Next.js lane installs from its own tracked package-lock.json. The TheoKit
+lane carried a pnpm-lock.yaml and no npm lockfile - the harness installs with npm, which ignores a
+pnpm lock and would have re-resolved the whole graph on every run, which is exactly the handicap
+J9's protocol carried. A package-lock.json was generated for it on 2026-08-21 with
+`npm install --package-lock-only` and the installed versions were confirmed unchanged (theokit
+0.48.14 in both the pnpm tree and the npm resolution). Both lanes now install from a lock.
+
+--- Three runs per lane, interleaved ---
+
+  theokit r1 install=3.8 build=4.4 start=1.1 total= 9.3
+  nextjs  r1 install=4.7 build=7.2 start=0.7 total=12.5
+  theokit r2 install=3.8 build=4.8 start=1.1 total= 9.7
+  nextjs  r2 install=3.9 build=7.4 start=0.6 total=11.9
+  theokit r3 install=3.9 build=5.2 start=1.1 total=10.1
+  nextjs  r3 install=4.4 build=7.5 start=0.6 total=12.6
+
+  theokit n=3  total  9.70 +/- 0.40 -> [ 9.30, 10.10]   install 3.83+/-0.06  build 4.80+/-0.40  start 1.10+/-0.00
+  nextjs  n=3  total 12.33 +/- 0.38 -> [11.95, 12.71]   install 4.33+/-0.40  build 7.37+/-0.15  start 0.63+/-0.06
+
+  Intervals do NOT overlap and TheoKit is the faster side. "Not worse on time to first green run"
+  holds. Install is level and slightly in TheoKit's favour - 3.83 s against 4.33 s - on the pair
+  where the Next.js side carries one dependency the TheoKit side does not.
+
+No run was discarded on this journey. Nothing failed apart from the first probe attempt described
+above, which was an instrument fault and produced no number.

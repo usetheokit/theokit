@@ -488,6 +488,7 @@ developer actually stands.
 | Journey | TheoKit, mean ± 1σ | Next.js, mean ± 1σ | Intervals | "Not worse"? |
 | --- | --- | --- | --- | --- |
 | J3 streaming | 10.53 ± 1.21 | 14.00 ± 1.45 | disjoint, TheoKit faster | **holds** |
+| J4 thread | 9.70 ± 0.40 | 12.33 ± 0.38 | disjoint, TheoKit faster | **holds** |
 
 **The standing generalisation does not survive the first pair, and it had already not survived J7.**
 § Sequencing concluded from J9 that "the same baseline gap applies to all ten" and that "until the
