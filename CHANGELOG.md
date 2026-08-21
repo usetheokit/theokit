@@ -8,6 +8,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **Every Web deploy target now serves the security headers the app configured.** `theokit start`
+  applied the configured baseline to every response (`request-handler.ts`) and none of the six
+  Web-standards adapters applied any, so a deployed page carried no CSP, no `X-Frame-Options`, no
+  HSTS and no `nosniff` while the same page under `theokit start` carried all four. Each emitted
+  entry now carries `security.headers` as a build-time literal, calls the same
+  `buildSecurityHeaders` the local server calls, and applies the result at one point per handler —
+  the not-found branches included, so no later edit can add a response that skips them. A header the
+  route set itself is never overruled, matching the local server's last-write-wins behaviour. Two
+  limits are named by the build rather than discovered in production: the CSP carries **no nonce**
+  except on Cloudflare with `ssrStreaming: true` — the one target that renders HTML per request and
+  can put the same value on the script tag, and which now mints one per response — and on four
+  targets the **document** is served by the platform's static host, so the headers reach `/api/*`
+  and not the page (usetheokit/theokit#412). The rate-limit half of the same gap is untouched: it
+  needs a per-runtime client address and is not a build-time value.
+  (usetheokit/theokit#410, GHSA-87qq-fgcr-384x)
+
 - **A build says which configuration the target it is building for will ignore.** `theo.config.ts`
   validates `rateLimit`, `security.cors`, `security.csrf`, `security.disallowed` and `serialization`
   for every target, and the six Web-standards deploy adapters apply none of them — the generated
@@ -79,6 +95,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   attribute rather than a guess. (B-019)
 
 ### Fixed
+
+- **The Vercel adapter emitted a function that could not be loaded.** `renderVercelFunctionEntry()`
+  declared `const headers` twice in one scope — the request Headers, and the response header object
+  added when streaming landed — so every Vercel build since 2026-08-20 shipped a module Node refuses
+  with `SyntaxError: Identifier 'headers' has already been declared`, taking the whole `/api/*`
+  surface down on that target. Twelve suites assert on these emitted entries and all twelve passed,
+  because each asserts on the string and `toContain` does not care whether the string is a program.
+  Every emitted entry is now handed to `node --check`, the parser the runtime uses.
+  (usetheokit/theokit#411, usetheokit/theokit#382)
 
 - **A scaffolded write no longer follows a planted symlink.** `create-theokit` writes
   predictably-named files into `resolve(process.cwd(), projectName)`, so running it from a
