@@ -115,11 +115,23 @@ describe('generateRouteManifest', () => {
     const code = generateRouteManifest(
       makeNode({ layout: '/app/layout.tsx', page: '/app/page.tsx' }),
     )
-    expect(code).toContain("import { Outlet } from 'react-router'")
+    // Asserts the NAME is imported rather than the line it arrives on: scroll
+    // restoration joined the same import (B-029), and pinning the spelling made
+    // this fail for a reason unrelated to what it protects.
+    expect(code).toMatch(/import\s*\{[^}]*\bOutlet\b[^}]*\}\s*from\s*'react-router'/)
   })
 
-  it('should NOT import Outlet when no layout exists', () => {
+  it('imports Outlet even with no layout, because the root now has an element', () => {
+    // This asserted the opposite until B-029. `Outlet` was imported only when a
+    // layout existed, because nothing else rendered one; the root now carries an
+    // element that mounts scroll restoration and renders its children through
+    // `Outlet`, so the name is always used. An unused import was what the old
+    // assertion protected against, and there is no longer an unused import to
+    // protect against — the guard that matters now is that the name is imported
+    // at all, since an element referencing an unimported one is a boot-time
+    // ReferenceError.
     const code = generateRouteManifest(makeNode({ page: '/app/page.tsx' }))
-    expect(code).not.toContain('Outlet')
+    expect(code).toMatch(/import\s*\{[^}]*\bOutlet\b[^}]*\}\s*from\s*'react-router'/)
+    expect(code).toContain('React.createElement(Outlet)')
   })
 })

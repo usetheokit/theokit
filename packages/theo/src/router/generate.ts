@@ -39,7 +39,6 @@ function buildRoutePath(parents: string[], segment: string): string {
 interface WalkAccumulator {
   staticImports: ImportEntry[]
   lazyPages: { varName: string; importPath: string; routePath: string }[]
-  layoutState: { found: boolean }
 }
 
 function pushIf(staticImports: ImportEntry[], filePath: string | undefined, varName: string): void {
@@ -59,7 +58,6 @@ function walkRouteTree(node: RouteNode, parents: string[], acc: WalkAccumulator)
       routePath,
     })
   }
-  if (node.layout !== undefined) acc.layoutState.found = true
   pushIf(acc.staticImports, node.layout, safeVarName(seg, 'Layout'))
   pushIf(acc.staticImports, node.error, safeVarName(seg, 'Error'))
   pushIf(acc.staticImports, node.loading, safeVarName(seg, 'Loading'))
@@ -94,12 +92,10 @@ export function generateRouteManifest(tree: RouteNode, options: RouteManifestOpt
   const acc: WalkAccumulator = {
     staticImports: [],
     lazyPages: [],
-    layoutState: { found: false },
   }
   walkRouteTree(tree, [], acc)
   const staticImports = acc.staticImports
   const lazyPages = acc.lazyPages
-  const layoutState = acc.layoutState
 
   // Phase 4 — Code-splitting + matchRoutes safeguard (EC-3).
   // PAGES are lazy. LAYOUTS / ERROR / LOADING / NOT-FOUND stay static
@@ -111,11 +107,11 @@ export function generateRouteManifest(tree: RouteNode, options: RouteManifestOpt
   // Suspense fallback fires during hydration.
   const lines: string[] = [`import React, { Suspense } from 'react'`]
 
-  if (layoutState.found) {
-    lines.push(`import { Outlet } from 'react-router'`)
-  }
-
-  lines.push('')
+  // `Outlet` was imported only when a layout existed. The root now always has an
+  // element — the one that mounts scroll restoration — and children render
+  // through `Outlet` from it, so both names are always needed. An element
+  // referencing an unimported name is a ReferenceError at boot (B-029).
+  lines.push(`import { Outlet, ScrollRestoration } from 'react-router'`, '')
 
   // Static imports first
   for (const imp of staticImports) {
@@ -207,6 +203,24 @@ export function generateRouteManifest(tree: RouteNode, options: RouteManifestOpt
     const seg = node.segment || 'root'
     const childrenArray = buildChildrenArray(node, seg)
 
+    /**
+     * Scroll restoration, mounted once at the root (B-029).
+     *
+     * It sits BESIDE the application's own root element rather than replacing
+     * it, so a layout keeps receiving `<Outlet />` as `children` — the fix
+     * regression-7 exists to protect.
+     *
+     * In a `createBrowserRouter` application this renders `null` on both sides:
+     * react-router returns early when its Framework Mode context is absent, and
+     * a data-router application has none. So it emits no `<script>`, which is
+     * what keeps the server tree byte-identical to the client one — the parity
+     * `entry-server.ts` protects with `hydrate: false` after a mismatch measured
+     * CLS 0.39. The restoration itself runs in `useScrollRestoration`, called
+     * before that early return.
+     */
+    const withScrollRestoration = (element: string): string =>
+      `React.createElement(React.Fragment, null, React.createElement(ScrollRestoration), ${element})`
+
     // Build route object
     if (node.layout) {
       const layoutVar = safeVarName(seg, 'Layout')
@@ -216,16 +230,23 @@ export function generateRouteManifest(tree: RouteNode, options: RouteManifestOpt
       // layouts that call `<Outlet />` directly (the prop is the same element,
       // ignored by the latter). Without this, Next.js-style templates render
       // empty because react-router does not pass a `children` prop by default.
-      return `{ ${pathPart}, element: React.createElement(${layoutVar}, { children: React.createElement(Outlet) }), children: ${childrenArray} }`
+      const layoutElement = `React.createElement(${layoutVar}, { children: React.createElement(Outlet) })`
+      const element = isRoot ? withScrollRestoration(layoutElement) : layoutElement
+      return `{ ${pathPart}, element: ${element}, children: ${childrenArray} }`
     }
 
     // No layout — if root, wrap in path '/'
     if (isRoot) {
+      // An element is added where there was none. A route with children and no
+      // element renders the matched child directly; an element rendering
+      // `<Outlet />` renders the same child in the same place, so the tree is
+      // unchanged apart from the restoration sitting above it.
+      const rootElement = withScrollRestoration(`React.createElement(Outlet)`)
       if (node.children.length === 0 && !node.page && !node.notFound && !node.error) {
-        return `{ path: '/', children: [] }`
+        return `{ path: '/', element: ${rootElement}, children: [] }`
       }
       // Root without layout: children are direct routes
-      return `{ path: '/', children: ${childrenArray} }`
+      return `{ path: '/', element: ${rootElement}, children: ${childrenArray} }`
     }
 
     // Child segment without layout — just a route
