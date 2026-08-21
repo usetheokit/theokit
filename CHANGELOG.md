@@ -232,6 +232,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- The release workflow disarms the local pre-commit hook before changesets commits the version
+  bump. `pnpm install` runs the root `prepare` script, which arms the secret-scan hook on the
+  runner; changesets then commits, the hook finds no `trufflehog` binary and fails closed as
+  designed, so the Version Packages pull request is never created. It has not surfaced here only
+  because the hook landed on 2026-08-20 and no version commit has run since. The compensating
+  scan still covers that content: the branch reaches `main` only through a pull request, which
+  `secret-scan.yml` scans base-to-head (#413).
+- The workflow's own analysis of the `--no-git-checks` failure carried two claims that have since
+  expired, both now corrected in place. The npm version that rejects unknown flags is 12, not 11 —
+  measured across 10.9.7, 11.5.1, 11.9.0 and 12.0.2 — so an npm satisfying both the OIDC floor
+  (11.5.1) and the flag exists, and the two requirements were never mutually exclusive. And this
+  repository is public now, so npm's refusal to attest provenance for a private source no longer
+  applies. Both reasons for staying on token authentication were true when written; neither is
+  true today (#413).
 - **`theokit` builds on Vite 7, so a scaffolded application installs one esbuild instead of two.**
   The framework pinned `vite@^6` while the same scaffold's `@tailwindcss/vite@^4` pulls `vite@7`, so
   every application resolved two Vite majors and, with them, two `esbuild` copies — 23 MB and two

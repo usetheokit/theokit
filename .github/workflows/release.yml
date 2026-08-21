@@ -43,23 +43,53 @@ jobs:
       #   npm error code EUNKNOWNCONFIG / Unknown cli flag: --git-checks
       #
       # `changeset publish` always appends `--no-git-checks` for pnpm (`@changesets/cli`, any pnpm
-      # major >= 5), pnpm forwards it verbatim to npm, and npm >= 11 REJECTS unknown flags where
-      # npm 10 only warned. The step upgraded npm past that line, so the two requirements became
-      # mutually exclusive at the pinned versions.
+      # major >= 5), pnpm forwards it verbatim to npm, and npm REJECTS unknown flags where npm 10
+      # only warned. The step upgraded npm past that line.
+      #
+      # CORRECTION (2026-08-21): that line is npm 12, not npm 11, so the two requirements are NOT
+      # mutually exclusive. Measured against one package on each version: 10.9.7 accepts, 11.5.1
+      # accepts, 11.9.0 accepts, 12.0.2 rejects. The OIDC floor is 11.5.1, so any npm in
+      # [11.5.1, 11.9.0] satisfies both. `theokit-di` runs exactly that pairing and published three
+      # packages with provenance on 2026-08-21. See usetheokit/theokit-di#32.
       #
       # The step existed to enable tokenless OIDC trusted-publisher, which is what signs provenance.
-      # It cannot pay off here: npm refuses provenance attestation for a PRIVATE source repository
-      # (E422), and this repo is private. Measured — no published version of any package in it has
-      # a non-null `dist.attestations`, going back through every release. The requirement it served
-      # was unreachable from day one.
+      # It could not pay off WHEN THIS WAS WRITTEN: npm refuses provenance attestation for a private
+      # source repository (E422), and this repository was private then. Measured at the time — no
+      # published version of any package here has a non-null `dist.attestations`.
+      #
+      # CORRECTION (2026-08-21): the repository is public now (`private: false`), so that objection
+      # has expired too. Both reasons for staying on token auth were true when written and neither
+      # is true today.
       #
       # Not "downgrade pnpm instead": measured with `npm verbose argv`, pnpm 9.15 AND 10.15 forward
-      # the flag identically, and `@changesets/cli@2.31.1` (latest) still injects it. There is no
-      # version pairing that keeps both.
+      # the flag identically, and `@changesets/cli@2.31.1` (latest) still injects it. That part
+      # holds — the pairing that works is on the npm side, not the pnpm side.
       #
-      # Same posture as the sibling `theokit-sdk`, where token-auth is validated in production.
+      # This workflow still authenticates with a token, and that token currently cannot publish:
+      # run 32370544611 failed with `E404 Not Found - PUT .../theokit` against packages this
+      # account owns, leaving `theokit` stuck at 0.48.14 while the repository is at 0.49.0. Moving
+      # to OIDC removes the credential as a variable and is now reachable — it needs a Trusted
+      # Publisher connection configured on npmjs.com per package, which cannot be done from here.
+      # Tracked in #413.
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
+
+      # `pnpm install` runs the root `prepare` script, which points core.hooksPath at `.githooks`,
+      # arming the pre-commit secret scan on this runner. changesets then runs
+      # `git commit -m "Version Packages"`, the hook fires, finds no `trufflehog` binary and fails
+      # closed as designed — so the Version Packages PR is never created. This has not bitten here
+      # yet only because the hook landed on 2026-08-20 and no version commit has run since.
+      #
+      # The hook is right to fail closed and wrong to be armed in this job: it exists for the commit
+      # a PERSON makes, where CI can only catch a credential once it is already in history. This one
+      # is a bot committing generated content onto `changeset-release/main`, which reaches `main`
+      # only through a pull request that secret-scan.yml is configured to scan base-to-head.
+      #
+      # `|| true` because --unset exits 5 when the key is absent, which is already the desired state.
+      # Diagnosed in usetheokit/theokit-di#34, where it blocked a release.
+      - name: Disarm the local pre-commit hook for the bot's version commit
+        run: git config --unset core.hooksPath || true
+
       - name: Create Release Pull Request or Publish
         uses: changesets/action@v1
         with:
