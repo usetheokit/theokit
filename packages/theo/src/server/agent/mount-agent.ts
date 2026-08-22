@@ -315,9 +315,17 @@ function trimTrailingSlashes(value: string): string {
 /**
  * SDK 4.0 (SE40) — resolve the root of the native `.jsonl` session transcript. Unlike `.theokit/`
  * discovery, persistence is NOT gated on a file-based-config opt-in — every agent session persists.
- * Root it under the app's `.data/` (git-ignored, EC-2), kept OUT of the `.theokit/` config dir so a
+ * Root it under the app's `.data/`, kept OUT of the `.theokit/` config dir so a
  * `projects/` transcript subtree never collides with `settingSources` discovery. Absent `projectRoot`
  * ⇒ `undefined` (the SDK default `~/.theokit` applies).
+ *
+ * **This directory holds conversation content and nothing here can keep it out of a repository.**
+ * That is the app's `.gitignore`, which lives in a different tree. This comment used to assert
+ * "(git-ignored, EC-2)" as though the protection were local, and the scaffold ignored `data/` —
+ * without the dot — so the assertion was false and its confidence is what stopped anyone checking
+ * (#395). The scaffold now ignores `.data/`, and `tests/unit/scaffold-ignores-what-the-framework-writes.test.ts`
+ * derives the path from THIS function rather than repeating it, so moving the transcripts breaks the
+ * test instead of leaking quietly.
  */
 export function resolveSessionBaseDir(projectRoot: string | undefined): string | undefined {
   if (projectRoot === undefined) return undefined
