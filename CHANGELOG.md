@@ -136,6 +136,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   (usetheokit/theokit#213)
 
 ### Fixed
+- **`pnpm try:scaffold` now tries this working tree instead of npm.** The script exists so the
+  repository can exercise its own scaffold, and it did the opposite: the template pins ranges —
+  correct for people scaffolding from npm — and a caret on a `0.x` version pins the minor, so
+  `^0.48.3` meant `>=0.48.3 <0.49.0` and excluded the 0.49.0 the repository had already reached.
+  Every local verification run through that path had been measuring the published package. The
+  sharp edge was not that it missed the local build but that it missed only part of it:
+  `@theokit/agents ^10.1.0` matched the workspace `10.1.0` and did link, so one scaffolded app
+  could pair a local agent runtime with a published framework — a pairing that fails in ways
+  neither version exhibits alone and that reads as a framework bug. The script now rewrites the
+  scaffolded manifest to the `workspace:` protocol, which carries no version to drift and which
+  pnpm honours explicitly, so the outcome no longer depends on `link-workspace-packages`. The
+  packages to relink are discovered from `packages/*` rather than listed, and the template itself
+  is untouched — it is copied verbatim into applications outside this monorepo, where
+  `workspace:*` resolves to nothing. The other half of the report, that nothing bumps the
+  template's pin at release time, is #424. Verified by resolving the lockfile rather than by
+  reading the manifest back: pnpm records `theokit -> link:../packages/theo` and `@theokit/agents
+  -> link:../packages/agents`, which also settles the report's open question — the `workspace:`
+  protocol links regardless of `link-workspace-packages`. The script warns that the install which
+  follows adds this scratch app to the tracked `pnpm-lock.yaml`, a hunk that must not be
+  committed. (#420)
 
 - **A local model runs without a credential for a cloud provider it never contacts.** The provider
   registry could only describe providers that hold an API key, so `ollama/llama3.2` was an

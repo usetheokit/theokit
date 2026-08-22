@@ -23,7 +23,7 @@
     "check:deps": "dependency-cruiser packages/theo/src --config .dependency-cruiser.cjs",
     "check:naming": "ls-lint",
     "check:all": "pnpm build && pnpm lint && pnpm format:check && pnpm typecheck && pnpm test:coverage && pnpm knip && pnpm check:docs",
-    "try:scaffold": "tsx packages/create-theokit/src/cli.ts my-test",
+    "try:scaffold": "tsx packages/create-theokit/src/cli.ts my-test && tsx scripts/link-scaffold-to-workspace.ts my-test",
     "try:dev": "cd my-test && npx tsx ../packages/theo/src/cli/index.ts dev",
     "try:clean": "node -e \"const fs=require('fs');fs.rmSync('my-test',{recursive:true,force:true})\"",
     "changeset": "changeset",
