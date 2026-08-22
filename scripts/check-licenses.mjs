@@ -170,7 +170,15 @@ try {
   )
 } catch (err) {
   console.error('check-licenses: `pnpm licenses list --prod --json` failed')
-  console.error(String(err?.stderr ?? err))
+  // BOTH streams, and stdout FIRST. pnpm reports a failure of this command as JSON on
+  // STDOUT — `{"error":{"code":"ERR_PNPM_…","message":"…"}}` — and leaves stderr empty.
+  // Printing only stderr therefore printed an empty line, and the gate reported that
+  // something failed while withholding the one sentence that says what.
+  const stdout = String(err?.stdout ?? '').trim()
+  const stderr = String(err?.stderr ?? '').trim()
+  if (stdout) console.error(stdout)
+  if (stderr) console.error(stderr)
+  if (!stdout && !stderr) console.error(String(err))
   process.exit(1)
 }
 
