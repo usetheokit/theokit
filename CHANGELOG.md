@@ -127,6 +127,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **Every published subpath of `theokit` resolves in dev again.** A Vite alias with a string `find`
+  matches by prefix, and each entry pointed at a file, so `theokit/client/core` was rewritten to
+  `…/client/index.ts/core` and the build failed with `ENOTDIR`; the only way round it was importing
+  the barrel, which pulls React into code written to avoid it. Barrels are exact-match now and one
+  generic rule covers the rest — the previous fix for this same defect enumerated the known subpaths
+  and left every unlisted one broken, so the list was the mechanism that failed twice. A package
+  merely *named* like ours (`theokit-anything`) was being rewritten too, and is not any more.
+  (usetheokit/theokit#377)
+
 - **The generated Cloudflare Worker no longer reaches for a filesystem it does not have.** It
   discovered routes with a `readdirSync`, loaded each module by `import()`ing a file path, and
   answered "any WebSocket routes?" with a second `readdirSync` — three calls that cannot succeed on
