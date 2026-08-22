@@ -42,6 +42,15 @@ jobs:
         with:
           node-version-file: '.nvmrc'
           cache: 'pnpm'
+          # The cache key must change when the package manager does. setup-node keys the
+          # pnpm store on the lockfile alone, so a pnpm 9 -> 10 bump leaves the key
+          # identical and the job restores a store the new pnpm reads as inconsistent —
+          # `ERR_PNPM_MISSING_PACKAGE_INDEX_FILE`, on a package the lockfile does list.
+          # package.json carries `packageManager`, so including it ties the cache to the
+          # pnpm that wrote it.
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            package.json
       - run: pnpm install --frozen-lockfile
       # The type-aware ESLint rules resolve `@theokit/agents` through its package
       # `types` field, which points at `dist/`. On a fresh checkout that directory
@@ -72,6 +81,15 @@ jobs:
         with:
           node-version-file: '.nvmrc'
           cache: 'pnpm'
+          # The cache key must change when the package manager does. setup-node keys the
+          # pnpm store on the lockfile alone, so a pnpm 9 -> 10 bump leaves the key
+          # identical and the job restores a store the new pnpm reads as inconsistent —
+          # `ERR_PNPM_MISSING_PACKAGE_INDEX_FILE`, on a package the lockfile does list.
+          # package.json carries `packageManager`, so including it ties the cache to the
+          # pnpm that wrote it.
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            package.json
       # Sibling theokit-sdk is declared as a workspace member in
       # pnpm-workspace.yaml (`../theokit-sdk/packages/{sdk,gateway,gateway-telegram}`).
       # pnpm-lock.yaml lists those packages with `link:` paths — pnpm install
@@ -123,6 +141,15 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
           cache: 'pnpm'
+          # The cache key must change when the package manager does. setup-node keys the
+          # pnpm store on the lockfile alone, so a pnpm 9 -> 10 bump leaves the key
+          # identical and the job restores a store the new pnpm reads as inconsistent —
+          # `ERR_PNPM_MISSING_PACKAGE_INDEX_FILE`, on a package the lockfile does list.
+          # package.json carries `packageManager`, so including it ties the cache to the
+          # pnpm that wrote it.
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            package.json
       # Sibling theokit-sdk: workspace member declared in pnpm-workspace.yaml.
       # `dist/` isn't committed → build after clone so type entries resolve.
       - name: Checkout + build sibling theokit-sdk (workspace dep)
@@ -170,6 +197,15 @@ jobs:
         with:
           node-version-file: '.nvmrc'
           cache: 'pnpm'
+          # The cache key must change when the package manager does. setup-node keys the
+          # pnpm store on the lockfile alone, so a pnpm 9 -> 10 bump leaves the key
+          # identical and the job restores a store the new pnpm reads as inconsistent —
+          # `ERR_PNPM_MISSING_PACKAGE_INDEX_FILE`, on a package the lockfile does list.
+          # package.json carries `packageManager`, so including it ties the cache to the
+          # pnpm that wrote it.
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            package.json
       # Sibling theokit-sdk: workspace member declared in pnpm-workspace.yaml.
       # `dist/` isn't committed → build after clone so type entries resolve.
       - name: Checkout + build sibling theokit-sdk (workspace dep)
@@ -204,6 +240,15 @@ jobs:
         with:
           node-version-file: '.nvmrc'
           cache: 'pnpm'
+          # The cache key must change when the package manager does. setup-node keys the
+          # pnpm store on the lockfile alone, so a pnpm 9 -> 10 bump leaves the key
+          # identical and the job restores a store the new pnpm reads as inconsistent —
+          # `ERR_PNPM_MISSING_PACKAGE_INDEX_FILE`, on a package the lockfile does list.
+          # package.json carries `packageManager`, so including it ties the cache to the
+          # pnpm that wrote it.
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            package.json
       # Sibling theokit-sdk: workspace member declared in pnpm-workspace.yaml.
       # `dist/` isn't committed → build after clone so type entries resolve.
       - name: Checkout + build sibling theokit-sdk (workspace dep)
@@ -229,6 +274,15 @@ jobs:
         with:
           node-version-file: '.nvmrc'
           cache: 'pnpm'
+          # The cache key must change when the package manager does. setup-node keys the
+          # pnpm store on the lockfile alone, so a pnpm 9 -> 10 bump leaves the key
+          # identical and the job restores a store the new pnpm reads as inconsistent —
+          # `ERR_PNPM_MISSING_PACKAGE_INDEX_FILE`, on a package the lockfile does list.
+          # package.json carries `packageManager`, so including it ties the cache to the
+          # pnpm that wrote it.
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            package.json
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: pnpm validate:publint
@@ -254,6 +308,15 @@ jobs:
         with:
           node-version-file: '.nvmrc'
           cache: 'pnpm'
+          # The cache key must change when the package manager does. setup-node keys the
+          # pnpm store on the lockfile alone, so a pnpm 9 -> 10 bump leaves the key
+          # identical and the job restores a store the new pnpm reads as inconsistent —
+          # `ERR_PNPM_MISSING_PACKAGE_INDEX_FILE`, on a package the lockfile does list.
+          # package.json carries `packageManager`, so including it ties the cache to the
+          # pnpm that wrote it.
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            package.json
       # `--ignore-scripts`: this job never builds or runs the tree, it only reads it. Executing
       # every dependency's install hooks to decide whether those dependencies are safe hands
       # arbitrary code to the thing under audit. `pnpm audit` works from the lockfile and
@@ -297,5 +360,14 @@ jobs:
         with:
           node-version-file: '.nvmrc'
           cache: 'pnpm'
+          # The cache key must change when the package manager does. setup-node keys the
+          # pnpm store on the lockfile alone, so a pnpm 9 -> 10 bump leaves the key
+          # identical and the job restores a store the new pnpm reads as inconsistent —
+          # `ERR_PNPM_MISSING_PACKAGE_INDEX_FILE`, on a package the lockfile does list.
+          # package.json carries `packageManager`, so including it ties the cache to the
+          # pnpm that wrote it.
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            package.json
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - run: pnpm check:licenses

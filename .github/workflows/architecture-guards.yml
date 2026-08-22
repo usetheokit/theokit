@@ -60,6 +60,15 @@ jobs:
         with:
           node-version-file: '.nvmrc'
           cache: pnpm
+          # The cache key must change when the package manager does. setup-node keys the
+          # pnpm store on the lockfile alone, so a pnpm 9 -> 10 bump leaves the key
+          # identical and the job restores a store the new pnpm reads as inconsistent —
+          # `ERR_PNPM_MISSING_PACKAGE_INDEX_FILE`, on a package the lockfile does list.
+          # package.json carries `packageManager`, so including it ties the cache to the
+          # pnpm that wrote it.
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            package.json
       - run: pnpm install --frozen-lockfile
       # The M90 surface gate (`subpath-surface.test.ts` in the package) reads `dist/*.d.ts`, not the
       # source, because the `.d.ts` is what the consumer actually sees. Without a build it dies on
@@ -85,6 +94,15 @@ jobs:
         with:
           node-version-file: '.nvmrc'
           cache: 'pnpm'
+          # The cache key must change when the package manager does. setup-node keys the
+          # pnpm store on the lockfile alone, so a pnpm 9 -> 10 bump leaves the key
+          # identical and the job restores a store the new pnpm reads as inconsistent —
+          # `ERR_PNPM_MISSING_PACKAGE_INDEX_FILE`, on a package the lockfile does list.
+          # package.json carries `packageManager`, so including it ties the cache to the
+          # pnpm that wrote it.
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            package.json
       - run: pnpm install --frozen-lockfile
       - run: pnpm check:deps
 
@@ -101,6 +119,15 @@ jobs:
         with:
           node-version-file: '.nvmrc'
           cache: 'pnpm'
+          # The cache key must change when the package manager does. setup-node keys the
+          # pnpm store on the lockfile alone, so a pnpm 9 -> 10 bump leaves the key
+          # identical and the job restores a store the new pnpm reads as inconsistent —
+          # `ERR_PNPM_MISSING_PACKAGE_INDEX_FILE`, on a package the lockfile does list.
+          # package.json carries `packageManager`, so including it ties the cache to the
+          # pnpm that wrote it.
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            package.json
       - run: pnpm install --frozen-lockfile
       - run: pnpm check:naming
 
@@ -123,6 +150,15 @@ jobs:
         with:
           node-version-file: '.nvmrc'
           cache: pnpm
+          # The cache key must change when the package manager does. setup-node keys the
+          # pnpm store on the lockfile alone, so a pnpm 9 -> 10 bump leaves the key
+          # identical and the job restores a store the new pnpm reads as inconsistent —
+          # `ERR_PNPM_MISSING_PACKAGE_INDEX_FILE`, on a package the lockfile does list.
+          # package.json carries `packageManager`, so including it ties the cache to the
+          # pnpm that wrote it.
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            package.json
       # `--ignore-scripts`: this job only builds and inspects; no lifecycle script is needed, and
       # allowing them widens the supply-chain surface for nothing.
       - run: pnpm install --frozen-lockfile --ignore-scripts
