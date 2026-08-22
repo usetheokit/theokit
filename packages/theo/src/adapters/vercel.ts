@@ -14,6 +14,7 @@ import { deployedCsrfFragment, type DeployedCsrfOptions } from './deployed-csrf.
 import { deployedTraceFragment } from './deployed-trace.js'
 import { nodeAdapter } from './node.js'
 import {
+  buildSecurityHeaders,
   describeDeployedSecurityHeaders,
   renderSecurityHeadersConfigLiteral,
 } from './security-headers.js'
@@ -201,15 +202,48 @@ export interface VercelRoutingRule {
   src?: string
   dest?: string
   handle?: string
+  /** Build Output API v3 — response headers this rule adds. */
+  headers?: Record<string, string>
+  /**
+   * Keep routing after this rule matches.
+   *
+   * Load-bearing for the header rule: without it a matching rule TERMINATES routing in Build
+   * Output v3, so every request would receive the headers and no content.
+   */
+  continue?: boolean
 }
 
-export function renderVercelConfigJson(): {
+/**
+ * The routing table, plus the security baseline for the responses this build does NOT serve.
+ *
+ * The emitted function applies the baseline to every response IT returns — and it never returns the
+ * HTML document: `{ handle: 'filesystem' }` hands the page to Vercel's static host, so the JSON was
+ * protected and the page it renders in was not (usetheokit/theokit#412).
+ *
+ * The values come from `buildSecurityHeaders`, the same function the handler calls, rather than
+ * being written out here. Two lists of headers that must agree are two lists that eventually do
+ * not.
+ *
+ * Order matters twice: the header rule sits FIRST, because a rule after `handle: 'filesystem'`
+ * never runs for a static file, and it carries `continue: true`, because a matching rule otherwise
+ * ends routing and the request would get headers with no body.
+ *
+ * What this does NOT prove: that a deployed page carries them. That needs a deployment, and this
+ * repository deploys to no Vercel project from CI. The emitted configuration is verifiable; the
+ * platform honouring it is not, and the difference is stated rather than glossed.
+ */
+export function renderVercelConfigJson(securityHeaders?: SecurityHeadersConfig): {
   version: number
   routes: VercelRoutingRule[]
 } {
   return {
     version: 3,
     routes: [
+      {
+        src: '/(.*)',
+        headers: buildSecurityHeaders(securityHeaders ?? {}, { production: true }),
+        continue: true,
+      },
       { src: '/api/(.*)', dest: '/api' },
       { handle: 'filesystem' },
       { src: '/(.*)', dest: '/index.html' },
@@ -294,7 +328,7 @@ export const vercelAdapter: DeployAdapter = {
     // 6. Emit config.json (routing)
     writeFileSync(
       resolve(outputDir, 'config.json'),
-      JSON.stringify(renderVercelConfigJson(), null, 2),
+      JSON.stringify(renderVercelConfigJson(config.security?.headers), null, 2),
     )
 
     // eslint-disable-next-line no-console -- CLI build progress

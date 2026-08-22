@@ -146,6 +146,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   (usetheokit/theokit#213)
 
 ### Fixed
+- **Vercel and Netlify are now told the security baseline for the HTML document they serve
+  themselves.** The emitted handler applies the configured headers to every response IT returns —
+  and on four targets it never returns the document: it answers `/api/*` and 404s everything else,
+  while the page comes from the platform's static host. So the JSON carried a CSP, `X-Frame-Options`
+  and `nosniff`, and the page rendering it carried none, which is the wrong half of a clickjacking
+  or MIME-sniffing defence. Both platforms read a config file this build already emits, so both now
+  carry the baseline: a `{ src: '/(.*)', headers, continue: true }` rule placed before Vercel's
+  filesystem handler — `continue` is load-bearing, since a matching rule otherwise ends routing and
+  the request would get headers with no body — and a `[[headers]] for = "/*"` block in
+  `netlify.toml`. Both derive their values from `buildSecurityHeaders`, the same function the
+  handler calls, because two lists of headers that must agree are two lists that eventually do not.
+  The Netlify block is regenerated rather than merely not duplicated: it carries configuration, so
+  leaving an existing one in place would pin the baseline to whatever the first build emitted; a
+  block the user wrote is untouched, because it does not carry the generated marker. **What this
+  does not prove:** that a deployed page carries the headers. That needs a deployment, and neither
+  platform is deployed from CI — `cloudflare` with `ssrStreaming: false`, `deno-deploy` and
+  `aws-lambda` own no config artifact this build writes and remain uncovered. (#412)
 - **All six Web deploy targets now serve the CORS the app configured.** `security.cors` had reached
   exactly one consumer — Vite's `configureServer` hook — so an app that worked cross-origin under
   `theokit dev` stopped working the moment anything else served it. `theokit start` was fixed first;
