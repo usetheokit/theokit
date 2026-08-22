@@ -137,6 +137,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **A local model runs without a credential for a cloud provider it never contacts.** The provider
+  registry could only describe providers that hold an API key, so `ollama/llama3.2` was an
+  unregistered prefix: the request fell through to a priority walk over the three cloud providers
+  and returned a 500 naming three environment variables, none of which would have helped, pointing
+  the reader at a payment page to buy a key for a model running on their own laptop. Setting any of
+  them to any value made the run succeed and talk to Ollama, never reading the value — which is the
+  proof the key was never needed. A descriptor may now omit `envKey` to say it takes no credential,
+  and `ollama` ships as a default mirroring the profile the SDK already carries. A keyless provider
+  is reachable **only** when a model id names it and never participates in the priority fallback:
+  a set environment variable is what tells that walk a human configured a provider, and a keyless
+  entry offers no equivalent signal, so including it would route every bare model id to localhost
+  the moment no cloud key was set — trading a clear "set a key" error for a confusing "Ollama is
+  not reachable". A model naming a provider the registry does not know now says so, instead of
+  answering with the payment page. Delegation is not covered — see #423. (#407)
+
 - **Registering a provider now affects the registry the server actually reads.** `registerProvider`
   is public API with a documented self-hosting example, and it mutated a module-level array — which
   gives one array per *module instance*, not per process. The bundler emits `provider-resolver` into

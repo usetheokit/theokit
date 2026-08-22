@@ -36,10 +36,33 @@ import { processSingleton } from '../_internal/process-singleton.js'
 export interface ProviderDescriptor {
   /** Stable name used internally — not exposed on the wire. */
   name: string
-  /** Environment variable that holds the API key for this provider. */
-  envKey: string
+  /**
+   * Environment variable that holds the API key for this provider.
+   *
+   * **Absent means the provider needs no credential** — a model running on the developer's own
+   * machine has nothing to authenticate against. Such a provider is reachable ONLY when a model id
+   * names it (`ollama/llama3.2`); it never participates in the priority walk, because the walk
+   * reads "this variable is set" as "a human configured this provider", and a keyless entry offers
+   * no equivalent signal. Including it would route every bare model id to localhost the moment no
+   * cloud key was set (usetheokit/theokit#407).
+   */
+  envKey?: string
   /** Base URL for the provider's OpenAI-compatible (or native) API. */
   baseUrl: string
+  /**
+   * Environment variable that OVERRIDES {@link baseUrl} when set.
+   *
+   * Scoped honestly: every caller inside this framework takes `.apiKey` from the resolved provider
+   * and discards `.baseUrl` (`cli/commands/start/handlers.ts`, `vite-plugin/api-middleware.ts`,
+   * `cli/commands/agent.ts`), so the endpoint a request actually reaches is chosen by the SDK, from
+   * its own profile — which reads `OLLAMA_HOST` itself. This field therefore does not redirect
+   * traffic today.
+   *
+   * It exists so that the `baseUrl` this function REPORTS agrees with where the request goes, for
+   * the consumers that read it — `resolveProvider` is public API, and a reported endpoint that
+   * contradicts the real one is a debugging trap rather than a harmless inaccuracy.
+   */
+  baseUrlEnv?: string
   /** Resolution priority (lower = higher priority). FIRST match wins. */
   priority: number
 }
@@ -82,6 +105,17 @@ const DEFAULT_REGISTRY: ProviderDescriptor[] = [
     envKey: 'ANTHROPIC_API_KEY',
     baseUrl: 'https://api.anthropic.com',
     priority: 3,
+  },
+  {
+    // Mirrors the profile `@theokit/sdk` already ships for this provider — same default host, same
+    // override variable — so the two cannot disagree about where ollama is listening. The SDK is
+    // what dials it (see `baseUrlEnv`); this entry's job is to stop the resolver from rejecting the
+    // model before the SDK is ever reached. No `envKey`: see that field's doc comment for why the
+    // absence also keeps this entry out of the priority walk.
+    name: 'ollama',
+    baseUrl: 'http://localhost:11434',
+    baseUrlEnv: 'OLLAMA_HOST',
+    priority: 100,
   },
 ]
 
@@ -176,12 +210,25 @@ function announce(
 ): void {
   if (announced.has(desc.name)) return
   announced.add(desc.name)
-  const line = `[theokit] provider=${desc.name} (${how}) source=${desc.envKey} baseUrl=${desc.baseUrl}`
+  const source = desc.envKey ?? 'none (this provider takes no credential)'
+  const line = `[theokit] provider=${desc.name} (${how}) source=${source} baseUrl=${baseUrlOf(desc)}`
   if (options?.announce) options.announce(line)
   // `warn` rather than `info` because the repo's lint rule allows only `warn`/`error` — and this
   // line is closer to a warning in spirit anyway: it is the one chance an operator gets to notice
   // that the provider serving their agents is not the one they expected.
   else console.warn(line)
+}
+
+/**
+ * Where this provider is listening, after any environment override.
+ *
+ * One function so the announcement line and the resolved config can never name different hosts —
+ * an operator reading a log to find out where requests went must be reading the truth.
+ */
+function baseUrlOf(desc: ProviderDescriptor): string {
+  if (desc.baseUrlEnv === undefined) return desc.baseUrl
+  const override = process.env[desc.baseUrlEnv]
+  return override !== undefined && override.length > 0 ? override : desc.baseUrl
 }
 
 /**
@@ -199,11 +246,30 @@ function providerOf(
   modelId: string | undefined,
   registered: readonly ProviderDescriptor[],
 ): ProviderDescriptor | undefined {
+  const prefix = declaredPrefixOf(modelId)
+  if (prefix === undefined) return undefined
+  return registered.find((p) => p.name === prefix)
+}
+
+/**
+ * The provider name a model id declares, registered or not.
+ *
+ * Split out of {@link providerOf} because the two questions differ exactly where the error message
+ * used to go wrong: "which registered provider is this?" answers `undefined` both for a bare id and
+ * for `groq/…`, and the resolver needs to tell those apart to say something true about the second.
+ */
+function declaredPrefixOf(modelId: string | undefined): string | undefined {
   if (modelId === undefined) return undefined
   const slash = modelId.indexOf('/')
   if (slash <= 0) return undefined
-  const prefix = modelId.slice(0, slash)
-  return registered.find((p) => p.name === prefix)
+  return modelId.slice(0, slash)
+}
+
+/** A provider that authenticates — the only kind the priority walk may select. */
+type CredentialedProvider = ProviderDescriptor & { envKey: string }
+
+function takesCredential(desc: ProviderDescriptor): desc is CredentialedProvider {
+  return desc.envKey !== undefined
 }
 
 /**
@@ -222,10 +288,17 @@ export function resolveProvider(modelId?: string, options?: ResolveOptions): Res
 
   const declared = modelId === undefined ? undefined : providerOf(modelId, sorted)
   if (declared !== undefined && modelId !== undefined) {
+    if (declared.envKey === undefined) {
+      // Keyless — a model on the developer's own machine. The empty string is the honest value and
+      // not a placeholder: the SDK's client sets an `authorization` header only when the key is
+      // non-empty, so anything else would put a meaningless credential on every local request.
+      announce(declared, 'declared by the model', options)
+      return { name: declared.name, apiKey: '', baseUrl: baseUrlOf(declared) }
+    }
     const apiKey = process.env[declared.envKey]
     if (apiKey && apiKey.length > 0) {
       announce(declared, 'declared by the model', options)
-      return { name: declared.name, apiKey, baseUrl: declared.baseUrl }
+      return { name: declared.name, apiKey, baseUrl: baseUrlOf(declared) }
     }
     // Deliberately NOT falling back to another provider's key. Silently substituting one is how
     // theokit#326 produced a 401 nobody could attribute: the request went somewhere the agent
@@ -236,19 +309,35 @@ export function resolveProvider(modelId?: string, options?: ResolveOptions): Res
     )
   }
 
-  for (const desc of sorted) {
+  // Only providers that take a credential. A keyless entry is reachable exclusively through the
+  // declared branch above; see `ProviderDescriptor.envKey` for why the walk cannot include it.
+  const credentialed = sorted.filter(takesCredential)
+
+  for (const desc of credentialed) {
     const apiKey = process.env[desc.envKey]
     if (apiKey && apiKey.length > 0) {
       announce(desc, 'by env priority', options)
       return {
         name: desc.name,
         apiKey,
-        baseUrl: desc.baseUrl,
+        baseUrl: baseUrlOf(desc),
       }
     }
   }
-  // No env var found — emit actionable error.
-  const envKeys = sorted.map((p) => p.envKey).join(' OR ')
+
+  // Nothing resolved. When the model id named a provider this registry does not know, say THAT —
+  // the generic message below sent a reader whose id read `groq/…` off to buy an OpenRouter key,
+  // which would not have helped and could not have been the fix (usetheokit/theokit#407).
+  const prefix = declaredPrefixOf(modelId)
+  if (prefix !== undefined) {
+    throw new Error(
+      `Model "${modelId}" declares provider "${prefix}", which is not registered. ` +
+        `Registered providers: ${sorted.map((p) => p.name).join(', ')}. ` +
+        `Register it with registerProvider({ name: '${prefix}', … }), or use a registered prefix.`,
+    )
+  }
+
+  const envKeys = credentialed.map((p) => p.envKey).join(' OR ')
   throw new Error(
     `No LLM provider API key found in environment. Set one of: ${envKeys}. ` +
       `Get a free OpenRouter key at https://openrouter.ai/keys (recommended — one key, many models).`,
