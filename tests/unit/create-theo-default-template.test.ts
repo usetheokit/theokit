@@ -50,8 +50,11 @@ describe('create-theokit default template — agents/chat.ts shape (M3)', () => 
   })
 
   it('template agents/chat.ts declares a model', () => {
+    // The literal is the FALLBACK now, not the whole argument: the template reads
+    // the documented LLM_MODEL override where the model is declared (#398, #408),
+    // so a scaffold still runs with no environment while honouring one that has it.
     const src = readFileSync(TEMPLATE_CHAT, 'utf-8')
-    expect(src).toMatch(/\.model\(\s*['"]/)
+    expect(src).toMatch(/\.model\([^)]*['"][\w-]+\/[\w.-]+['"]/u)
   })
 })
 

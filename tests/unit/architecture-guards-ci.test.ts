@@ -91,14 +91,21 @@ describe('architecture-guards CI (T1.1)', () => {
   // EC-2 — baseline must pass before strict CI is enabled (covered by
   // test_check_deps_passes_today above; kept as a tagged duplicate for the
   // EC traceability matrix).
-  it('test_dep_cruiser_baseline_passes (EC-2) — config matches reality', () => {
-    const stdout = execSync(
-      // eslint-disable-next-line sonarjs/no-os-command-from-path
-      'node_modules/.bin/dependency-cruiser packages/theo/src --config .dependency-cruiser.cjs --no-progress',
-      { cwd: REPO, encoding: 'utf8' },
-    )
-    expect(stdout).toMatch(/no dependency violations found/)
-  }, 30_000)
+  it(
+    'test_dep_cruiser_baseline_passes (EC-2) — config matches reality',
+    () => {
+      const stdout = execSync(
+        // eslint-disable-next-line sonarjs/no-os-command-from-path
+        'node_modules/.bin/dependency-cruiser packages/theo/src --config .dependency-cruiser.cjs --no-progress',
+        { cwd: REPO, encoding: 'utf8' },
+      )
+      expect(stdout).toMatch(/no dependency violations found/)
+      // Same budget as its two siblings above, and missed when they were fixed: this
+      // also shells out to dependency-cruiser and is starved by the concurrent tsc,
+      // so 30 s was grading the scheduler here too.
+    },
+    EXTERNAL_CLI_TIMEOUT_MS,
+  )
 
   // architecture-report cleanup Step 1 — `_internal/` privacy boundary is
   // enforced (architecture.md Invariant 3). Closes the gap where direction
