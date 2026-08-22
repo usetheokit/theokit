@@ -173,3 +173,28 @@ describe('an inline RouteConfig is untouched by the gate', () => {
     await expect(callProcedure(inlineRoute as never)).resolves.toEqual({ ok: true })
   })
 })
+
+describe('the per-file cache does not weaken the gate (#417)', () => {
+  it('refuses again on a second scan, not only on the first', () => {
+    // `scanServerRoutes` now memoises what the AST said about each file, because `theokit dev`
+    // calls it once per request. What is cached is the FACTS, never the refusal: a route with no
+    // policy that scanned once must go on refusing forever, and a cache that stored "already
+    // checked" would turn a build gate into a first-request gate.
+    touch('open.ts', `export const GET = { handler: () => ({}) }`)
+
+    expect(() => scanServerRoutes(serverDir)).toThrow(MissingRoutePolicyError)
+    expect(() => scanServerRoutes(serverDir)).toThrow(MissingRoutePolicyError)
+    expect(() => scanServerRoutes(serverDir)).toThrow(MissingRoutePolicyError)
+  })
+
+  it('accepts the file once the policy is added, without a manual invalidation', () => {
+    // The other half: a cache that never noticed the fix would make the gate unfixable without a
+    // restart, which under `theokit dev` is the whole workflow.
+    touch('later.ts', `export const GET = { handler: () => ({}) }`)
+    expect(() => scanServerRoutes(serverDir)).toThrow(MissingRoutePolicyError)
+
+    touch('later.ts', `export const GET = { policy: 'public', handler: () => ({}) }`)
+
+    expect(() => scanServerRoutes(serverDir)).not.toThrow()
+  })
+})

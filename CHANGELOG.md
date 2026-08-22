@@ -136,6 +136,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   (usetheokit/theokit#213)
 
 ### Fixed
+- **`theokit dev` stopped parsing every route file twice on every request.** `scanServerRoutes`
+  runs per request in dev, and it ran the TypeScript AST over each route file twice per call — once
+  for the exported methods, once for the route-policy gate, sharing the source string but not the
+  parse. `agent-scan.ts` had already met this problem and solved it with an mtime-keyed cache,
+  writing down why; routes, which an application has far more of, had neither the cache nor the
+  reasoning. Both scanners now share one `createFileStampCache`, keyed on the file's own
+  `mtimeMs` and `size` so an edit invalidates without anyone remembering to, and a `theokit build`
+  — one process, one scan — never notices it exists. What is cached is the FACTS, never the
+  refusal: a route with no declared policy goes on being refused on every later scan, and a file
+  that gains a policy is accepted without a restart. Both are asserted, because a cache that got
+  either wrong would turn a build gate into a first-request gate. (#417)
 - **`theokit start` now serves the CORS the app configured.** `security.cors` is a first-class,
   schema-validated config key with exactly one consumer: Vite's `configureServer` hook. So an app
   declaring it worked cross-origin under `theokit dev` and stopped working the moment `theokit

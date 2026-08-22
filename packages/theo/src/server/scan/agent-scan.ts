@@ -9,6 +9,7 @@ import { walkSourceFiles } from '../_internal/scan-walker.js'
 
 import { declaresAgentPolicy } from './detect-agent-policy.js'
 import { MissingAgentPolicyError } from './errors.js'
+import { createFileStampCache } from './file-stamp-cache.js'
 
 const AGENT_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx'])
 // Convention § 5: a co-located test file is not an agent.
@@ -95,7 +96,7 @@ export function scanAgents(projectRoot: string, agentsDirName = 'agents'): Agent
  * file's own mtime and size means an edit invalidates the entry without anyone remembering to, and
  * a `theokit build` (one process, one scan) never notices the cache exists.
  */
-const policyDeclarationCache = new Map<string, boolean>()
+const policyDeclarationCache = createFileStampCache<boolean>()
 
 /** Test seam — the module-level cache would otherwise outlive a fixture directory. */
 export function _resetAgentPolicyCacheForTests(): void {
@@ -116,12 +117,10 @@ export function _resetAgentPolicyCacheForTests(): void {
  * one.
  */
 function assertAgentDeclaresPolicy(filePath: string, agentPath: string): void {
-  const stat = statSync(filePath)
-  const key = `${filePath}:${String(stat.mtimeMs)}:${String(stat.size)}`
-  let declared = policyDeclarationCache.get(key)
-  if (declared === undefined) {
-    declared = declaresAgentPolicy(filePath, readFileSync(filePath, 'utf8'))
-    policyDeclarationCache.set(key, declared)
-  }
+  // The stamping and the `has`-vs-truthy subtlety moved into `createFileStampCache` (#417), where
+  // the route scanner shares them rather than growing a second copy keyed "the same way".
+  const declared = policyDeclarationCache.get(filePath, () =>
+    declaresAgentPolicy(filePath, readFileSync(filePath, 'utf8')),
+  )
   if (!declared) throw new MissingAgentPolicyError({ file: filePath, agentPath })
 }
