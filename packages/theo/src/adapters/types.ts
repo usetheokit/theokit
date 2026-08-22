@@ -17,8 +17,26 @@ import type { TheoConfig } from '../config/schema.js'
  *   MUST `await` the result. See `cli/commands/build.ts` for the canonical
  *   invocation.
  */
+/** One server route, flattened to what an adapter can bake into an emitted entry (#369). */
+export interface AdapterRoute {
+  /** Path relative to the project root — both the import specifier and the executor's lookup key. */
+  filePath: string
+  routePath: string
+  methods: readonly string[]
+}
+
 export interface AdapterBuildContext {
   makeVitePlugins?: (opts: { root: string; ssr?: boolean }) => Plugin[] | Promise<Plugin[]>
+  /**
+   * Scan the project's routes, INJECTED for the same reason `makeVitePlugins` is (#369).
+   *
+   * A Worker has no filesystem, so the Cloudflare entry has to bake its routes at build time
+   * instead of scanning for them at request time. Importing the scanner here would put an
+   * `adapters → server` edge in the graph — the layering inversion ADR-0001 v3 removed for
+   * `vite-plugin`, and the one `adapters-may-only-depend-on-core-router-services` refuses. The CLI
+   * already imports both sides, so it composes this and passes it in.
+   */
+  scanRoutes?: (serverDir: string) => { routes: AdapterRoute[]; wsRoutes: string[] }
 }
 
 /**

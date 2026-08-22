@@ -127,6 +127,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **The generated Cloudflare Worker no longer reaches for a filesystem it does not have.** It
+  discovered routes with a `readdirSync`, loaded each module by `import()`ing a file path, and
+  answered "any WebSocket routes?" with a second `readdirSync` — three calls that cannot succeed on
+  Workers. Routes are scanned on the build machine now and baked in: a static `import` per module, a
+  literal table, and a loader that serves only what the build bundled and refuses anything else by
+  name. Static because Wrangler follows those imports; `wrangler.toml` uploads `.theokit/client` and
+  never `server/`, so a module not bundled into the worker is not on the platform. The scanner is
+  injected through `AdapterBuildContext.scanRoutes` rather than imported, keeping `adapters/` off
+  `server/`. Precedence is unchanged — the same `compilePattern` on the same `routePath`. **Not
+  verified on the platform**: no deploy runs in CI, so what is proven is the absence of three
+  impossible calls and that the emitted module parses. (usetheokit/theokit#369)
+
 - **The HITL pause span measures the human's wait rather than the human plus the model.**
   `agent.hitl` ended when the gated tool produced output, on the premise the code stated — "the tool
   producing output IS the resume". Measured, that premise fails by exactly the model's post-resume

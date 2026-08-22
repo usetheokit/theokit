@@ -64,6 +64,7 @@ interface HarnessBridge {
   scanServerRoutes: () => unknown[]
   scanWebSocketRoutes: () => unknown[]
   matchRoute: (pathname: string, routes: unknown[]) => unknown
+  compilePattern: (routePath: string) => { pattern: RegExp; paramNames: string[] }
   createProductionLoader: () => () => Record<string, unknown>
   executeRoute: (args: { res: ShimLikeResponse }) => Promise<void>
   createWebShim: typeof createWebShim
@@ -94,6 +95,7 @@ const b = () => globalThis.__THEO_ADAPTER_HARNESS__
 export const scanServerRoutes = (...a) => b().scanServerRoutes(...a)
 export const scanWebSocketRoutes = (...a) => b().scanWebSocketRoutes(...a)
 export const matchRoute = (...a) => b().matchRoute(...a)
+export const compilePattern = (...a) => b().compilePattern(...a)
 export const createProductionLoader = (...a) => b().createProductionLoader(...a)
 export const executeRoute = (...a) => b().executeRoute(...a)
 export const createWebShim = (...a) => b().createWebShim(...a)
@@ -115,6 +117,12 @@ const bridge: HarnessBridge = {
   scanServerRoutes: () => [ROUTE],
   scanWebSocketRoutes: () => [],
   matchRoute: (pathname) => (pathname === '/api/hello' ? { route: ROUTE, params: {} } : null),
+  // #369 — the Cloudflare worker compiles its baked route table at module scope now, instead of
+  // scanning a directory it cannot read. The stub answers with the shape `matchRoute` consumes.
+  compilePattern: (routePath: string) => ({
+    pattern: new RegExp(`^${routePath}$`, 'u'),
+    paramNames: [],
+  }),
   createProductionLoader: () => () => ({}),
   executeRoute: ({ res }) => {
     res.writeHead(200, { 'content-type': 'application/json' })
