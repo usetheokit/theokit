@@ -55,9 +55,9 @@ the two disagree, the rule wins and this one is the bug.
 
 ## Index
 
-36 items — **Open** 36 · **In flight** 0 · **Closed** 0
+37 items — **Open** 37 · **In flight** 0 · **Closed** 0
 
-### Open (36)
+### Open (37)
 
 | Item | Title | Status | Severity |
 |---|---|---|---|
@@ -97,6 +97,7 @@ the two disagree, the rule wins and this one is the bug.
 | [`B-034`](#b-034--draft-preview-is-neither-built-nor-declared-absent----) | draft preview is neither built nor declared absent | `triaged` | — |
 | [`B-035`](#b-035--the-document-preloads-nothing-so-a-routes-chunks-are-discovered-one-round-trip-late----) | the document preloads nothing, so a route's chunks are discovered one round trip late | `triaged` | — |
 | [`B-036`](#b-036--markdown-images-and-external-links-bypass-the-frameworks-own-components----) | markdown images and external links bypass the framework's own components | `triaged` | — |
+| [`B-037`](#b-037--scroll-restoration-restores-the-document-and-the-scaffolds-own-layout-scrolls-an-inner-element----) | scroll restoration restores the document, and the scaffold's own layout scrolls an inner element | `triaged` | — |
 
 ### In flight (0)
 
@@ -718,4 +719,19 @@ dod:
   - markdown `[]()` pointing at an external origin renders through `Link` and carries `rel="noopener noreferrer"`
   - the repository that owns the mapping is named in the item before work starts — if it is `@theokit/ui`, this item routes there and closes here with a pointer rather than a patch
 
-Next free id: **B-037**.
+## B-037 — scroll restoration restores the document, and the scaffold's own layout scrolls an inner element   [ ]
+
+domain: theokit
+repo: packages/theo
+suggested_mode: live-test
+source: discover-live-test
+evidence: measured 2026-08-22 in Chrome against a real build — scaffolded app, `theokit preview`, ssr + ssrStreaming on. `window.history.scrollRestoration` reads `manual`, so the `ScrollRestoration` mounted for `B-029` IS running. It restores `window.scrollY`, and in this app the document never scrolls: `document.documentElement.scrollHeight` equals `window.innerHeight` (876), while the scrolling element is the scaffold's own `<main class="flex h-full flex-col overflow-hidden">` at `scrollHeight` 8120 / `clientHeight` 823. Journey: inner `scrollTop` set to 2400 → client-side navigation to `/about` → `history.back()` to `/tall` → inner `scrollTop` reads **0**. Not restored
+why_now: `B-029` shipped the mount and the README sentence I wrote with it claimed restoration works with no application code. That is false for the layout the framework itself scaffolds, which is the first layout every user meets. The claim is corrected in the README as part of registering this; what is not decided is whether the framework should restore a designated container rather than only the document
+status: triaged
+dod:
+  - either the framework restores the scroll offset of the element the application actually scrolls, or the documentation states the condition and the scaffold's layout is changed to let the document scroll
+  - a browser-driven test covers the positive case, which this measurement could NOT: `window.scrollY` never left 0 here, so nothing in this app can demonstrate a successful restore
+  - whichever is chosen, the scaffold and the documentation agree — the defect registered here is that they did not
+note: not a regression. Nothing restored scroll before `B-029` either; what changed is that the documentation began promising it
+
+Next free id: **B-038**.

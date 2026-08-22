@@ -401,6 +401,13 @@ the page rather than with what the reader does.
 Scroll position is restored on back navigation — the router mounts scroll
 restoration at the root, and no application code is needed.
 
+**It restores the *document's* scroll position.** An application whose layout
+scrolls an inner element instead — `h-full` with `overflow-hidden` on a wrapper,
+which is what the default scaffold ships — keeps a document that never scrolls,
+so there is no offset to save and nothing is restored. Measured in a browser
+against a real build on 2026-08-22: the offset of an inner container was not
+restored across a back navigation. Let the document scroll if you want this.
+
 ## Auth
 
 ```typescript
