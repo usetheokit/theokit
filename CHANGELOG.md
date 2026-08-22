@@ -200,6 +200,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **A freshly scaffolded app passes its own `typecheck` again.** The template typed its transcript
+  as `@theokit/ui`'s `UIMessage` and filled it from `useAgent()`, which returns the framework's wire
+  message — two types that are deliberately different (the wire's parts stay open so a `data-*` or a
+  future part kind survives the trip; the renderer's are a closed union it can draw) and that cannot
+  be made assignable to each other without one giving up what it is for. So `tsc --noEmit` was red on
+  commit zero, in a file the template wrote. The app now types against what it RECEIVES and converts
+  at the one place that renders, through `app/lib/renderable.ts` — a real projection that checks each
+  part and drops what this version of the library cannot draw, not a cast. This is the third time the
+  class shipped (#80, #396), so it is now gated two ways: a repo test pinning the rule offline, and a
+  CI job that scaffolds the template and runs `tsc` against the packages a real user installs. (#396)
+
 - **The Cloudflare Worker serves the page again, with the security baseline on it.** With
   `ssrStreaming: false` every non-API request returned 404 while `wrangler.toml` declared a
   `[site]` bucket that nothing read — no `ASSETS` binding, no `kv-asset-handler` anywhere — so a

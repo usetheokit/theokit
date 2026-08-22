@@ -184,6 +184,52 @@ jobs:
       - run: pnpm test
       - run: pnpm test:types
 
+  scaffold-typecheck:
+    # usetheokit/theokit#396 — a freshly scaffolded app must pass its own `typecheck` script.
+    #
+    # This gate exists because the same defect shipped twice: #80 in `app/page.tsx`, then #396 in
+    # `app/hooks/use-transcript.ts`. Both were the template naming a type from a package the
+    # repository does not install, so no test here could see it — the only thing that catches it is
+    # scaffolding the template and running `tsc` against the packages a real user gets.
+    #
+    # Verified locally before it was written: the recipe below is the one that reaches
+    # `tsc --noEmit` exit 0 on a clean tree. `pnpm try:scaffold` is deliberately NOT used — it omits
+    # `--yes` and prompts, so it fails under CI with no TTY.
+    name: Scaffolded app typechecks
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'pnpm'
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            package.json
+      - name: Checkout + build sibling theokit-sdk (workspace dep)
+        run: |
+          git clone --depth 1 https://github.com/usetheokit/theokit-sdk.git ../theokit-sdk
+          (cd ../theokit-sdk && pnpm install --no-frozen-lockfile && pnpm --filter "./packages/*" build)
+      - run: pnpm install --frozen-lockfile
+      # The scaffold links against this working tree, so the packages must be built first —
+      # otherwise `tsc` reads a stale `dist` and reports errors that belong to neither the template
+      # nor the source. That exact confusion cost a debugging pass while this job was being written.
+      - run: pnpm build:packages
+      - name: Scaffold the default template
+        run: node_modules/.bin/tsx packages/create-theokit/src/cli.ts my-test --yes --use-pnpm --disable-git
+      - name: Point it at this working tree, not at npm (#420)
+        run: node_modules/.bin/tsx scripts/link-scaffold-to-workspace.ts my-test
+      # `my-test` is a declared workspace member, so the ROOT install is what links it and pulls the
+      # app's own dependencies — `@theokit/ui` among them, which is the package the template names
+      # and this repository otherwise never installs.
+      - run: pnpm install --no-frozen-lockfile
+      - name: tsc --noEmit on the untouched scaffold
+        run: cd my-test && ../node_modules/.bin/tsc --noEmit
+
   coverage:
     name: Coverage gate (>=80%)
     runs-on: ubuntu-latest
