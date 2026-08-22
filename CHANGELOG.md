@@ -148,6 +148,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **A release that publishes nothing now fails instead of reporting success.** On 2026-08-20 the
+  pipeline ran green and nothing reached npm — and the run before it was green for a worse reason:
+  the same credential was already missing, but every local version was already on the registry, so
+  there was nothing to publish and nothing failed. "Nothing to publish" and "published" produced the
+  same visible result, which is what hid an absent secret for at least one release.
+  `verify-release-published.mjs` runs after `changeset publish` and asserts that every version this
+  repository declares is on the registry — the mirror of the guard that already runs before it and
+  refuses to cut a version the registry already has. The baseline is deliberately different: by the
+  time this runs the version commit has merged, so comparing against `origin/main` would make it a
+  no-op exactly when it matters. An unreachable registry fails rather than passing. It does not
+  claim more than it measures: the tarball's contents, the provenance attestation and the publishing
+  identity are all outside what it can see. (#366)
+
 - **The release now points the scaffold's template at the versions it publishes.** The template
   pinned `"theokit": "^0.48.3"` while the repository was at `0.49.0`, and a caret on a `0.x` version
   pins the minor — so that range excluded every 0.49 build, and nothing moved it. `changeset

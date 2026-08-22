@@ -28,7 +28,7 @@
     "try:clean": "node -e \"const fs=require('fs');fs.rmSync('my-test',{recursive:true,force:true})\"",
     "changeset": "changeset",
     "version-packages": "changeset version && node scripts/sync-template-pins.mjs && node scripts/verify-version-not-published.mjs",
-    "release": "pnpm build && node scripts/check-pack-no-workspace.mjs && changeset publish",
+    "release": "pnpm build && node scripts/check-pack-no-workspace.mjs && changeset publish && node scripts/verify-release-published.mjs",
     "prepare": "git config core.hooksPath .githooks || true",
     "check:pack-no-workspace": "node scripts/check-pack-no-workspace.mjs",
     "verify:version-collision": "node scripts/verify-version-not-published.mjs",
