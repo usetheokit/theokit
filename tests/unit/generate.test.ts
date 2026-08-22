@@ -181,7 +181,10 @@ describe('theo generate', () => {
       // M31 builder-only: the scaffold emits `route()...build()` (was `defineRoute({...})`).
       expect(content).toContain('route()')
       expect(content).toContain('.build()')
-      expect(content).toContain("import { route } from 'theokit/server'")
+      // The property is where `route` comes from, not the exact spelling of the import
+      // statement — #416 added `type AccessDecision` to the same line, and an assertion on the
+      // whole line failed for a change that left the property untouched.
+      expect(content).toMatch(/import \{[^}]*\broute\b[^}]*\} from 'theokit\/server'/u)
     } finally {
       process.chdir(orig)
       rmSync(dir, { recursive: true, force: true })

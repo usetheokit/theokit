@@ -136,6 +136,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   (usetheokit/theokit#213)
 
 ### Fixed
+- **A generated route now refuses instead of being open to the internet.** ADR 0001 made an
+  undeclared `policy` a build error because a route nobody had thought about was indistinguishable
+  from one deliberately left open — and then `theo generate resource` wrote `'public'` on five
+  methods that read and write a database table. The generated file was the not-thought-about case
+  wearing the deliberate value, which is exactly the state the gate exists to make impossible, and
+  `theo build` accepted it because the gate asks whether a policy was declared, not which one.
+  `theo generate route` did the same. Both now emit a named `undecidedPolicy` that denies, and the
+  denial names its own file, so a forgotten route says where to go on the first request rather than
+  after a deploy. It is an `AccessDecision` and not `() => false` because the evaluator maps a bare
+  `false` to the generic "access denied by route policy", while the contract already states that a
+  denial carries its reason. One named const rather than five inline lambdas: `grep -rn
+  undecidedPolicy` now counts the routes still awaiting a decision, which is the number ADR 0001
+  wanted greppable and which `grep -c "policy('public')"` could not give once generated
+  placeholders were mixed in with real ones. The author still has to write the answer down — that
+  was never the part being removed; only the value standing in until they do has changed, from the
+  open one to the safe one. (#416)
 - **`pnpm try:scaffold` now tries this working tree instead of npm.** The script exists so the
   repository can exercise its own scaffold, and it did the opposite: the template pins ranges —
   correct for people scaffolding from npm — and a caret on a `0.x` version pins the minor, so

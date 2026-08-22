@@ -1,6 +1,10 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 
+import {
+  UNDECIDED_POLICY_IDENT,
+  undecidedPolicyDeclaration,
+} from './generate-policy-placeholder.js'
 import { generateResource } from './generate-resource.js'
 import {
   VALID_TYPES,
@@ -66,13 +70,16 @@ function toCamelCase(name: string): string {
 
 function generateRouteTemplate(name: string): string {
   return [
-    `import { route } from 'theokit/server'`,
+    `import { route, type AccessDecision } from 'theokit/server'`,
     `import { z } from 'zod'`,
     ``,
+    ...undecidedPolicyDeclaration(
+      `server/routes/${name}.ts`,
+      'a stub today is a real handler tomorrow',
+    ),
+    ``,
     `export const GET = route()`,
-    `  // TODO(policy): every route declares who may call it (ADR 0001). This stub returns a`,
-    `  // literal, so it is open; change it before the route serves real data.`,
-    `  .policy('public')`,
+    `  .policy(${UNDECIDED_POLICY_IDENT})`,
     `  .handler(({ ctx }) => {`,
     `    return { message: 'TODO: implement ${name} GET' }`,
     `  })`,
