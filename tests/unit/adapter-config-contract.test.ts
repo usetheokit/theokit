@@ -81,13 +81,18 @@ function parseConfig(input: Record<string, unknown>): TheoConfig {
  * - `theo-cloud` — emits no request handler either, but for a different
  *   reason: the runtime is TheoCloud's and this build cannot answer for it.
  */
+// #425 — cloudflare, bun and deno-deploy carry `plugins`; vercel, netlify and aws-lambda do not,
+// and the split is not arbitrary. The first three BUNDLE their output from the project, so a static
+// import the build emits reaches the app's own module. The other three receive a standalone
+// function directory and never see the app's source, so for them the named report
+// `findUnappliedConfig` already prints stays the honest answer.
 const EXPECTED: Record<BuildTarget, readonly ConfigConcern[] | 'runtime-not-emitted-here'> = {
   node: ['rateLimit', 'csrf', 'disallowed', 'serialization', 'plugins', 'securityHeaders', 'cors'],
   vercel: ['securityHeaders', 'csrf', 'disallowed', 'cors', 'serialization'],
-  cloudflare: ['securityHeaders', 'csrf', 'disallowed', 'cors', 'serialization'],
+  cloudflare: ['securityHeaders', 'csrf', 'disallowed', 'cors', 'serialization', 'plugins'],
   netlify: ['securityHeaders', 'csrf', 'disallowed', 'cors', 'serialization'],
-  bun: ['securityHeaders', 'csrf', 'disallowed', 'cors', 'serialization'],
-  'deno-deploy': ['securityHeaders', 'csrf', 'disallowed', 'cors', 'serialization'],
+  bun: ['securityHeaders', 'csrf', 'disallowed', 'cors', 'serialization', 'plugins'],
+  'deno-deploy': ['securityHeaders', 'csrf', 'disallowed', 'cors', 'serialization', 'plugins'],
   'aws-lambda': ['securityHeaders', 'csrf', 'disallowed', 'cors', 'serialization'],
   static: [],
   'theo-cloud': 'runtime-not-emitted-here',

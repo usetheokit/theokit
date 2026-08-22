@@ -200,6 +200,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **Plugin lifecycle hooks fire on a deployed app, on the three targets that can carry them.**
+  `onRequest`, `preHandler`, `onResponse` and `onError` were all dead on every Web-standards
+  deployment while firing locally, so observability and auth plugins were inert in production with
+  nothing saying so. A plugin declared by module specifier is now imported by a module the build
+  writes beside the entry, on `cloudflare`, `bun` and `deno-deploy` — the three whose output is
+  bundled from the project, so a static import reaches the app's own module. `vercel`, `netlify`
+  and `aws-lambda` receive a standalone function directory that never sees the app's source; they
+  keep declaring the concern unapplied, which `findUnappliedConfig` names. A CONSTRUCTED plugin
+  handed to one of the three that can carry it is refused at build time, naming the plugin and
+  showing the specifier form, rather than being dropped in silence. (#425)
+
 - **`serialization: 'superjson'` now survives a deploy, on all six Web-standards targets.** The
   generated entry built its request context without a transformer, so `sendJson` fell back to
   `JSON.stringify` and the `x-theo-transformer` response header was never emitted: an app

@@ -12,6 +12,7 @@ import { assertServicesUnsupported, readManifest } from '../services/index.js'
 
 import { deployedCorsFragment, type DeployedCorsOptions } from './deployed-cors.js'
 import { deployedCsrfFragment, type DeployedCsrfOptions } from './deployed-csrf.js'
+import { planDeployedPlugins } from './deployed-plugins-module.js'
 import {
   deployedRuntimeConfigFragment,
   type DeployedRuntimeConfigOptions,
@@ -367,7 +368,7 @@ export const cloudflareAdapter: DeployAdapter = {
   // literal and puts the built baseline on every response it returns, including
   // the streamed SSR document — with a per-request nonce, the only deploy path
   // that can mint one (`adapters/security-headers.ts`).
-  appliesConfig: ['securityHeaders', 'csrf', 'disallowed', 'cors', 'serialization'],
+  appliesConfig: ['securityHeaders', 'csrf', 'disallowed', 'cors', 'serialization', 'plugins'],
 
   async build(config: TheoConfig, cwd: string, ctx?: AdapterBuildContext): Promise<void> {
     // Wave 2 (T2.2) — reject polyglot services on this adapter.
@@ -398,6 +399,13 @@ export const cloudflareAdapter: DeployAdapter = {
     // with no routes rather than falling back to a runtime scan — the fallback IS the defect.
     const scanned = ctx?.scanRoutes?.(config.serverDir) ?? { routes: [], wsRoutes: [] }
 
+    const pluginsPlan = planDeployedPlugins(config.plugins, 'cloudflare')
+    if (pluginsPlan !== undefined) {
+      // Beside the worker, so the emitted import is a sibling. Wrangler bundles from here, which is
+      // what lets the static import reach the app's own module at all (#425).
+      writeFileSync(resolve(outputDir, 'theo.plugins.mjs'), pluginsPlan.source)
+    }
+
     writeFileSync(
       resolve(outputDir, 'worker.mjs'),
       renderCloudflareWorkerEntry({
@@ -409,6 +417,10 @@ export const cloudflareAdapter: DeployAdapter = {
         cors: config.security?.cors,
         // #425 — a selector, not a transformer, so it rides as a literal like the values above.
         serialization: config.serialization,
+        // #425 — the ONE concern that is not a literal. A closure cannot be baked, so a plugin
+        // declared by module specifier is imported by the emitted module instead; a constructed one
+        // is refused by name at build time rather than dropped in silence.
+        runtimeConfigModule: pluginsPlan?.moduleSpecifier,
         routes: scanned.routes,
         wsRoutes: scanned.wsRoutes,
       }),

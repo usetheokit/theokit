@@ -10,6 +10,7 @@ import { assertServicesUnsupported, readManifest } from '../services/index.js'
 
 import { deployedCorsFragment, type DeployedCorsOptions } from './deployed-cors.js'
 import { deployedCsrfFragment, type DeployedCsrfOptions } from './deployed-csrf.js'
+import { planDeployedPlugins } from './deployed-plugins-module.js'
 import {
   deployedRuntimeConfigFragment,
   type DeployedRuntimeConfigOptions,
@@ -193,6 +194,7 @@ export async function buildBun(
   const ensureDir = deps.ensureDir ?? ((p: string) => mkdirSync(p, { recursive: true }))
   ensureDir(outputDir)
 
+  const pluginsPlan = planDeployedPlugins(config.plugins, 'bun')
   const entry = renderBunEntry(config.port, {
     ssrStreaming: config.ssrStreaming,
     securityHeaders: config.security?.headers,
@@ -201,12 +203,21 @@ export async function buildBun(
     cors: config.security?.cors,
     // #425 — a selector, not a transformer, so it rides as a literal like the values above.
     serialization: config.serialization,
+    // #425 — the ONE concern that is not a literal. A closure cannot be baked, so a plugin
+    // declared by module specifier is imported by the emitted module instead; a constructed one
+    // is refused by name at build time rather than dropped in silence.
+    runtimeConfigModule: pluginsPlan?.moduleSpecifier,
   })
   const write =
     deps.writeEntry ??
     ((p, c) => {
       writeFileSync(p, c)
     })
+  if (pluginsPlan !== undefined) {
+    // Beside the entry, so the emitted import is a sibling. Written through the same seam as
+    // the entry so a test that captures one captures both (#425).
+    write(resolve(outputDir, 'theo.plugins.mjs'), pluginsPlan.source)
+  }
   write(resolve(outputDir, 'server.mjs'), entry)
 
   // eslint-disable-next-line no-console -- CLI build progress
@@ -238,7 +249,7 @@ export const bunAdapter: DeployAdapter = {
   // `securityHeaders` IS applied: the entry carries `security.headers` as a
   // literal and puts the built baseline on every response, the served document
   // included.
-  appliesConfig: ['securityHeaders', 'csrf', 'disallowed', 'cors', 'serialization'],
+  appliesConfig: ['securityHeaders', 'csrf', 'disallowed', 'cors', 'serialization', 'plugins'],
   build(config, cwd, ctx) {
     return buildBun(config, cwd, {}, ctx)
   },
