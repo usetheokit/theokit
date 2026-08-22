@@ -118,18 +118,25 @@ require.
 **Gap files are not evidence.** Eleven of the sixteen `theokit-gap.md` files came back materially
 wrong on re-measurement. No item below cites one; each cites an issue and a `file:line`.
 
-**The tracker disagrees with the code too, and in the same direction.** Checked 2026-08-22: of the
-nineteen issues these items cite, sixteen are OPEN and several name defects that no longer exist —
-`#352`, `#353`, `#355`, `#356`, `#361`, `#363`, `#364`, `#365`, `#368` among them. That is the same
-drift as the status column below, one system over.
+**The tracker had drifted the same way, and was reconciled on 2026-08-22.** Of the twenty issues
+these items cite, sixteen were open and most named defects that no longer existed. Each was
+re-measured against the tree, commented with the `file:line` that closes it and what the closure does
+NOT cover, and **eighteen are now closed**. Two stay open because they are still true:
 
-It is NOT closeable by re-measurement, and finding out cost a mistake worth recording. `#382` was
-verified fixed, commented with the evidence and closed; ten minutes later `git branch --contains`
-put its commit on `workspace` alone, with `origin/main` still at `60822a48b`. Nothing had been
-released, so a closed issue told any reader the defect was gone from something installable. It was
-reopened with a correction. **Closing belongs to the release, not to the commit** — the same line the
-status column below draws, and the same one `.claude/rules/cycle-acceptance.md` draws for a
-checkbox.
+- `#345` — the published `middleware()` builder still is not invocable by the file-scan runner. What
+  landed makes the mismatch audible instead of silent, which is strictly better and is not the fix.
+  The comment also corrects the report: there are three middleware contracts here, not two.
+- `#369` — the Cloudflare worker still discovers routes by reading a directory at runtime, and no
+  adapter serves an agent at all. The comment promotes that second half, which the title buries.
+
+**On when a closure is honest, recorded because I got it wrong first.** `#382` was verified, commented
+and closed; ten minutes later `git branch --contains` put its commit on `workspace` alone, with
+`origin/main` at `60822a48b`. Nothing had been released, so the closed issue told a reader the defect
+was gone from something installable. It was reopened with a correction, and then closed again — with
+the rest — on the maintainer's explicit decision to close against the code. Every closing comment
+states the release position rather than leaving it implied, so the tracker says what it means. The
+status column below still does not move: that one advances on a cycle verdict
+(`.claude/rules/cycle-maintenance.md`), and a tracker decision is not one.
 
 **Thirteen items carry a `remeasured 2026-08-21` line saying the defect is closed in code, and all
 thirteen still read `triaged`.** That is not an oversight and the count is worth stating plainly,
