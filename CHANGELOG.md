@@ -114,6 +114,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **A relative `ogImage` is refused in development instead of shipping a broken social card.** Open
+  Graph resolves `og:image` against the *crawler's* origin, not the page's, so a relative path
+  produces a tag that is present, well-formed and useless — and it looks right in the browser, so
+  nobody learns about it until the link has been shared. `<Metadata>`'s own documented example
+  taught the broken form and now shows an absolute URL. Development only, on purpose: throwing in
+  production would trade a broken card for a 500 on a page that otherwise renders. Protocol-relative
+  URLs and `data:` URIs are accepted, since neither has an origin to resolve wrongly. (B-031)
+
 - **A middleware the file-scan runner cannot invoke is now refused by name instead of blanking the
   page.** `middleware().handle(...).build()` and `defineMiddleware()` produce
   `(request: Request, next) => Response`; the Node file-scan runner invokes `(req, res, next)` with
