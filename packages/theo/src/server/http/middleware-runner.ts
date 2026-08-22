@@ -7,6 +7,7 @@ import { existsSync } from 'node:fs'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { join } from 'node:path'
 
+import { WEB_SHAPED_MIDDLEWARE } from '../define/define-middleware.js'
 import { scanMiddlewares } from '../scan/middleware-scan.js'
 import type { LoadModule } from '../scan/module-loader.js'
 
@@ -54,6 +55,39 @@ function getCachedScan(serverDir: string): MiddlewareCacheEntry {
   return cached
 }
 
+/**
+ * Refuse, by name, a middleware this runner cannot invoke (usetheokit/theokit#345).
+ *
+ * `middleware().handle(...).build()` and `defineMiddleware` resolve to
+ * `(request: Request, next: (request) => Promise<Response>) => Response`. This runner calls
+ * `mw(req, res, next)`, so such a handler receives Node's `req` as its `request` and Node's `res`
+ * as its `next`. Calling `next(request)` then calls `res(...)`; returning a `Response` instead
+ * leaves this runner's own `next` uncalled, which aborts the request and writes nothing. A blank
+ * page from a middleware that reads as correct is the worst of the two.
+ *
+ * Refusing is not the end state. Converging the three middleware contracts in this repository — the
+ * published one, this runner's, and `WebMiddleware` — is a design decision nobody has taken;
+ * `web-middleware-runner.ts` records it as deferred. Until it is taken, saying so beats guessing,
+ * which is the discipline the route scanner already applies when it rejects a filename it cannot
+ * parse instead of parsing it wrongly.
+ */
+function refuseIncompatibleShape(mw: MiddlewareFn, filePath: string): void {
+  if (!(WEB_SHAPED_MIDDLEWARE in mw)) return
+
+  throw new Error(
+    `${filePath} default-exports a Web-shaped middleware — ` +
+      `\`(request: Request, next) => Response\`, the shape \`middleware()\` and ` +
+      `\`defineMiddleware()\` produce. This runner invokes \`(req, res, next)\` with Node's ` +
+      `IncomingMessage and ServerResponse, so it cannot call it: the handler would receive ` +
+      `\`res\` as its \`next\`.\n\n` +
+      `  Export \`(req, res, next)\` instead, and call \`next()\` to continue:\n` +
+      `    export default (req, res, next) => { req.headers['x-seen'] = '1'; next() }\n\n` +
+      `The Web-shaped contract is not yet reachable from this path. Converging the two is tracked ` +
+      `at usetheokit/theokit#345; this refusal exists so the mismatch is loud rather than a blank ` +
+      `response.`,
+  )
+}
+
 async function runOneMiddleware(
   mw: MiddlewareFn,
   req: IncomingMessage,
@@ -92,6 +126,7 @@ export async function runMiddlewareAndContext(
       const mod = await loadModule(mwPath)
       const mw = mod.default as MiddlewareFn | undefined
       if (typeof mw !== 'function') continue
+      refuseIncompatibleShape(mw, mwPath)
 
       const { nextCalled } = await runOneMiddleware(mw, req, res)
       if (!nextCalled || res.writableEnded) {
@@ -105,6 +140,7 @@ export async function runMiddlewareAndContext(
     const mod = await loadModule(singleFilePath)
     const mw = mod.default as MiddlewareFn | undefined
     if (typeof mw === 'function') {
+      refuseIncompatibleShape(mw, singleFilePath)
       const { nextCalled } = await runOneMiddleware(mw, req, res)
       if (!nextCalled || res.writableEnded) {
         return { ctx: {}, aborted: true }

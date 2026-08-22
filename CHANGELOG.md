@@ -114,6 +114,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **A middleware the file-scan runner cannot invoke is now refused by name instead of blanking the
+  page.** `middleware().handle(...).build()` and `defineMiddleware()` produce
+  `(request: Request, next) => Response`; the Node file-scan runner invokes `(req, res, next)` with
+  `IncomingMessage` and `ServerResponse`. Both are functions, so the `typeof` screen passed and the
+  handler was called with `res` as its `next` — calling it raised a `TypeError` from inside
+  framework code, and returning a `Response` instead left the runner's own `next` uncalled, which
+  aborted the request and wrote **nothing**. A blank response from a middleware that reads as
+  correct. The runner now names the file, the shape it declares, the shape being invoked, and what
+  to export instead. Detection is a mark recorded where the shape is declared, not arity: a
+  hand-written Node middleware that ignores `next` also has two parameters, and refusing that would
+  break more than the check protects. Converging the three middleware contracts in this repository
+  remains a design decision nobody has taken — this makes the mismatch loud, it does not resolve it.
+  (usetheokit/theokit#345, B-003)
+
 - **The scanner order six scanners share is no longer the filesystem's.** `#346` was fixed in the
   client-router scan and not in the walker the server scanners consolidated onto, so five of the six
   — actions, websockets, cron, agents, jobs — still emitted whatever order `readdirSync` returned,
