@@ -127,6 +127,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **Conversation transcripts stop landing in git.** The framework writes every conversation to
+  `<app>/.data/agent-sessions/…/<sessionId>.jsonl` and the scaffold's ignore file listed `data/`,
+  without the dot — matching nothing the framework writes. Running a scaffolded app once and
+  committing put every prompt, answer, tool input and tool result into version control. The scaffold
+  ignores `.data/` now. What kept it alive is also fixed: the comment above `resolveSessionBaseDir`
+  asserted the directory was git-ignored, so the protection read as handled — and nothing in the
+  framework can provide it, because the ignore file lives in the app's tree. The regression test
+  calls `resolveSessionBaseDir` and asks whether the template covers the answer, rather than
+  repeating the path. (usetheokit/theokit#395)
+
+- **The scaffold's documented `LLM_MODEL` override is read.** `.env.example` offered it and nothing
+  read it, so setting a model there produced the one `agents/chat.ts` already declared — a no-op
+  indistinguishable from success. The generated agent reads it where the model is declared,
+  `.model(process.env.LLM_MODEL ?? 'openai/gpt-4o-mini')`, rather than the framework growing an
+  override path for a value one file decides. The comment beside it named `ModelCapability`, which a
+  scaffolded app cannot reach; it names `agents/chat.ts` now.
+  (usetheokit/theokit#398, usetheokit/theokit#408)
+
 - **Every published subpath of `theokit` resolves in dev again.** A Vite alias with a string `find`
   matches by prefix, and each entry pointed at a file, so `theokit/client/core` was rewritten to
   `…/client/index.ts/core` and the build failed with `ENOTDIR`; the only way round it was importing
