@@ -40,7 +40,25 @@ const ENTRIES: Record<string, () => string> = {
   bun: () => renderBunEntry(3000),
   'deno-deploy': () => renderDenoEntry(3000),
   'aws-lambda': () => renderAwsLambdaEntry(),
+
+  // #425 — the same six with the runtime-config module the build emits for an app that declares
+  // `plugins` or `serialization`. That entry grows a top-level import, two module-scope constants
+  // and an `await` inside the `executeRoute` literal; each is a place a template can produce
+  // something that no longer parses, and none of them is exercised by the variants above.
+  'cloudflare (runtime config)': () =>
+    renderCloudflareWorkerEntry({ ssrStreaming: false, runtimeConfigModule: RUNTIME_CONFIG }),
+  'vercel (runtime config)': () =>
+    renderVercelFunctionEntry({ runtimeConfigModule: RUNTIME_CONFIG }),
+  'netlify (runtime config)': () => renderNetlifyFunction({ runtimeConfigModule: RUNTIME_CONFIG }),
+  'bun (runtime config)': () => renderBunEntry(3000, { runtimeConfigModule: RUNTIME_CONFIG }),
+  'deno-deploy (runtime config)': () =>
+    renderDenoEntry(3000, { runtimeConfigModule: RUNTIME_CONFIG }),
+  'aws-lambda (runtime config)': () =>
+    renderAwsLambdaEntry({ runtimeConfigModule: RUNTIME_CONFIG }),
 }
+
+/** What the build writes beside the entry; the specifier is what the emitted source imports. */
+const RUNTIME_CONFIG = './theo.runtime-config.mjs'
 
 describe('every emitted deploy entry parses as an ES module', () => {
   const dir = mkdtempSync(join(tmpdir(), 'theo-adapter-parse-'))
