@@ -115,6 +115,22 @@ function dataPart(type: string, data: Record<string, unknown>): UIMessageChunk {
  * code when the failure arrives. In the other order it would have to handle the error first and only
  * then learn which one it was.
  */
+/**
+ * What the browser is told a failure was.
+ *
+ * Masked by default (usetheokit/theokit#390): the server's raw text — a driver's message, an HTTP
+ * client's, a filesystem call's — reached the client verbatim, and `ai@7` on the same protocol
+ * masks by default for the reason its own comment gives, "prevent leaking server error details to
+ * the client by default".
+ *
+ * The full text is NOT lost: it reaches the server's logs and the `agent.run` span, and it reaches
+ * this hook. What stops is it reaching the browser unless a host decides otherwise.
+ */
+export type MaskError = (error: { message: string; code?: string }) => string
+
+/** The default. A fixed string, matching `ai@7`'s wording so an app moving between them is unsurprised. */
+const MASK_ERROR: MaskError = () => 'An error occurred.'
+
 function* errorChunks(errorText: string, code: string | undefined): Generator<UIMessageChunk> {
   if (code !== undefined) yield dataPart(ERROR_CODE_DATA_PART, { code })
   yield { type: 'error', errorText }
@@ -187,9 +203,10 @@ function correlateToolIds(
 
 export async function* presentUIMessageStream(
   events: AsyncIterable<AgentStreamEvent>,
-  opts: { textId: string },
+  opts: { textId: string; onError?: MaskError },
 ): AsyncGenerator<UIMessageChunk, void, unknown> {
-  const presenter = new UIMessageStreamPresenter({ textId: opts.textId })
+  const onError = opts.onError ?? MASK_ERROR
+  const presenter = new UIMessageStreamPresenter({ textId: opts.textId, onError })
   const correlation = new HitlCallCorrelation()
   yield { type: 'start' }
   let turnMetadata: AgentTurnMetadata | undefined
@@ -245,7 +262,10 @@ export async function* presentUIMessageStream(
         continue
       }
       if (event.type === 'error') {
-        yield* errorChunks(event.message, (event as { code?: string }).code)
+        {
+          const code = (event as { code?: string }).code
+          yield* errorChunks(onError({ message: event.message, code }), code)
+        }
         break
       }
       if (event.type === 'done') {
@@ -256,7 +276,8 @@ export async function* presentUIMessageStream(
     }
   } catch (err) {
     const code = (err as { code?: string }).code
-    yield* errorChunks(String(err), typeof code === 'string' ? code : undefined)
+    const codeOrUndefined = typeof code === 'string' ? code : undefined
+    yield* errorChunks(onError({ message: String(err), code: codeOrUndefined }), codeOrUndefined)
   }
   yield* presenter.finish(turnMetadata)
 }

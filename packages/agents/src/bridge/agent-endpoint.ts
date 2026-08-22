@@ -21,7 +21,7 @@ import type { StreamEvent } from './agent-sse-handler.js'
 import type { AgentStreamEvent } from './agent-stream-events.js'
 import { compileAgentDefinition, isAgentDefinition } from './define-agent.js'
 import { createHitlPlugin, type HitlWiring } from './hitl-plugin.js'
-import { presentUIMessageStream } from './present-ui-message-stream.js'
+import { presentUIMessageStream, type MaskError } from './present-ui-message-stream.js'
 import { createSdkAgentStream, type RuntimeOverrides } from './sdk-adapter.js'
 
 /** Thrown when an `agents/` file default-exports neither a `defineAgent` value nor an `@Agent` class. */
@@ -172,6 +172,15 @@ interface StreamHitlOptions {
 interface StreamAgentOptions {
   message: string
   sessionId: string
+  /**
+   * What the browser is told a failure was (usetheokit/theokit#390).
+   *
+   * Absent ⇒ masked to a fixed string. The server's raw error text — a driver's message, an HTTP
+   * client's, a filesystem call's — used to reach the client verbatim, and `ai@7` on the same
+   * protocol masks by default for the reason its own comment gives. The full text still reaches
+   * the logs and the `agent.run` span; what stops is it reaching a browser unless a host decides.
+   */
+  onError?: MaskError
   /** M35 (multimodal) — images to send alongside the text. Absent ⇒ the string send path is unchanged. */
   images?: RuntimeOverrides['images']
   /** Enable human-in-the-loop tool approval (M4). Absent ⇒ the M2 non-HITL path, byte-unchanged. */
@@ -296,5 +305,5 @@ export function streamAgentUIMessages(
   // don't retroactively promise a resume handle the agent never asked to advertise).
   const durableCheckpoint = compiled.checkpoint?.storage === 'filesystem'
   const events = durableCheckpoint ? appendCheckpointSaved(source, input.sessionId) : source
-  return presentUIMessageStream(events, { textId })
+  return presentUIMessageStream(events, { textId, onError: input.onError })
 }

@@ -90,7 +90,9 @@ describe('presentUIMessageStream — text (M0)', () => {
         durationMs: 1,
       },
     ]
-    const chunks = await collect(presentUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const chunks = await collect(
+      presentUIMessageStream(fromArray(events), { textId: TEXT_ID, onError: (e) => e.message }),
+    )
     expect(chunks).toEqual([
       { type: 'start' },
       { type: 'text-start', id: TEXT_ID },
@@ -120,7 +122,9 @@ describe('presentUIMessageStream — text (M0)', () => {
         cost: 0.0021,
       },
     ]
-    const chunks = await collect(presentUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const chunks = await collect(
+      presentUIMessageStream(fromArray(events), { textId: TEXT_ID, onError: (e) => e.message }),
+    )
     const finish = chunks.at(-1)
     expect(finish?.type).toBe('finish')
     expect((finish as { messageMetadata?: unknown }).messageMetadata).toEqual({
@@ -145,7 +149,9 @@ describe('presentUIMessageStream — text (M0)', () => {
     const schema = uiMessageChunkSchema()
     const validate = schema.validate
     if (!validate) throw new Error('uiMessageChunkSchema has no validate method')
-    const chunks = await collect(presentUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const chunks = await collect(
+      presentUIMessageStream(fromArray(events), { textId: TEXT_ID, onError: (e) => e.message }),
+    )
     const finish = chunks.at(-1)
     expect((finish as { messageMetadata?: unknown }).messageMetadata).toBeDefined()
     for (const chunk of chunks) {
@@ -159,13 +165,17 @@ describe('presentUIMessageStream — text (M0)', () => {
     const events: AgentStreamEvent[] = [
       { type: 'error', code: 'provider_error', message: 'boom', retryable: false },
     ]
-    const chunks = await collect(presentUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const chunks = await collect(
+      presentUIMessageStream(fromArray(events), { textId: TEXT_ID, onError: (e) => e.message }),
+    )
     expect(chunks.at(-1)).toEqual({ type: 'finish' })
   })
 
   it('test_run_started_only_emits_no_orphan_text', async () => {
     const events: AgentStreamEvent[] = [{ type: 'run_started', runId: 'r1', agentName: 'echo' }]
-    const chunks = await collect(presentUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const chunks = await collect(
+      presentUIMessageStream(fromArray(events), { textId: TEXT_ID, onError: (e) => e.message }),
+    )
     expect(chunks).toEqual([{ type: 'start' }, { type: 'finish' }])
   })
 
@@ -174,7 +184,9 @@ describe('presentUIMessageStream — text (M0)', () => {
       { type: 'text_delta', content: 'partial' },
       { type: 'error', code: 'provider_error', message: 'boom', retryable: false },
     ]
-    const chunks = await collect(presentUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const chunks = await collect(
+      presentUIMessageStream(fromArray(events), { textId: TEXT_ID, onError: (e) => e.message }),
+    )
     expect(chunks).toEqual([
       { type: 'start' },
       { type: 'text-start', id: TEXT_ID },
@@ -191,7 +203,10 @@ describe('presentUIMessageStream — text (M0)', () => {
     // Must NOT reject — the boundary surfaces the underlying stream error as an
     // error chunk and closes the open text gracefully (failure-scenario row).
     const chunks = await collect(
-      presentUIMessageStream(yieldThenThrow(events), { textId: TEXT_ID }),
+      presentUIMessageStream(yieldThenThrow(events), {
+        textId: TEXT_ID,
+        onError: (e) => e.message,
+      }),
     )
     expect(chunks).toEqual([
       { type: 'start' },
@@ -207,7 +222,9 @@ describe('presentUIMessageStream — text (M0)', () => {
     const events: AgentStreamEvent[] = [
       { type: 'error', code: 'provider_error', message: 'boom', retryable: false },
     ]
-    const chunks = await collect(presentUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const chunks = await collect(
+      presentUIMessageStream(fromArray(events), { textId: TEXT_ID, onError: (e) => e.message }),
+    )
     expect(chunks).toEqual([
       { type: 'start' },
       codeChunk('provider_error'),
@@ -231,7 +248,9 @@ describe('presentUIMessageStream — text (M0)', () => {
     const schema = uiMessageChunkSchema()
     const validate = schema.validate
     if (!validate) throw new Error('uiMessageChunkSchema has no validate method')
-    const chunks = await collect(presentUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const chunks = await collect(
+      presentUIMessageStream(fromArray(events), { textId: TEXT_ID, onError: (e) => e.message }),
+    )
     for (const chunk of chunks) {
       const result = await validate(chunk)
       expect(result.success, `chunk ${JSON.stringify(chunk)} must validate`).toBe(true)
@@ -246,7 +265,9 @@ describe('presentUIMessageStream — text (M0)', () => {
     const schema = uiMessageChunkSchema()
     const validate = schema.validate
     if (!validate) throw new Error('uiMessageChunkSchema has no validate method')
-    const chunks = await collect(presentUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const chunks = await collect(
+      presentUIMessageStream(fromArray(events), { textId: TEXT_ID, onError: (e) => e.message }),
+    )
     // Prove the run actually produced BOTH halves of the failure, then validate every chunk.
     //
     // The pre-condition runs FIRST and `expect` throws, so a stale pre-condition disables the
@@ -281,7 +302,9 @@ describe('presentUIMessageStream — reasoning + open-block state machine (M1 / 
         durationMs: 1,
       },
     ]
-    const chunks = await collect(presentUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const chunks = await collect(
+      presentUIMessageStream(fromArray(events), { textId: TEXT_ID, onError: (e) => e.message }),
+    )
     const rid = reasoningIdOf(chunks)
     // Exactly one reasoning block (single -start/-end) wrapping N deltas (EC-3).
     expect(chunks).toEqual([
@@ -299,7 +322,9 @@ describe('presentUIMessageStream — reasoning + open-block state machine (M1 / 
       { type: 'text_delta', content: 'hi' },
       { type: 'thinking', content: 'hmm' },
     ]
-    const chunks = await collect(presentUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const chunks = await collect(
+      presentUIMessageStream(fromArray(events), { textId: TEXT_ID, onError: (e) => e.message }),
+    )
     const rid = reasoningIdOf(chunks)
     // EC-2: the open text block is closed (text-end) before the reasoning block opens.
     expect(chunks).toEqual([
@@ -321,7 +346,9 @@ describe('presentUIMessageStream — reasoning + open-block state machine (M1 / 
       { type: 'thinking', content: 'r' },
       { type: 'text_delta', content: 'b' },
     ]
-    const chunks = await collect(presentUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const chunks = await collect(
+      presentUIMessageStream(fromArray(events), { textId: TEXT_ID, onError: (e) => e.message }),
+    )
     const rid = reasoningIdOf(chunks)
     expect(chunks).toEqual([
       { type: 'start' },
@@ -348,7 +375,9 @@ describe('presentUIMessageStream — reasoning + open-block state machine (M1 / 
         durationMs: 1,
       },
     ]
-    const chunks = await collect(presentUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const chunks = await collect(
+      presentUIMessageStream(fromArray(events), { textId: TEXT_ID, onError: (e) => e.message }),
+    )
     const rid = reasoningIdOf(chunks)
     // reasoning-end precedes finish; no orphan open block.
     expect(chunks.slice(-2)).toEqual([{ type: 'reasoning-end', id: rid }, FINISH_ZERO_USAGE])
@@ -357,7 +386,9 @@ describe('presentUIMessageStream — reasoning + open-block state machine (M1 / 
   it('test_reasoning_id_is_a_uuid_not_math_random', async () => {
     // G8: id minted via crypto.randomUUID() — assert RFC-4122 v4 shape.
     const events: AgentStreamEvent[] = [{ type: 'thinking', content: 'x' }]
-    const chunks = await collect(presentUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const chunks = await collect(
+      presentUIMessageStream(fromArray(events), { textId: TEXT_ID, onError: (e) => e.message }),
+    )
     expect(reasoningIdOf(chunks)).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
     )
@@ -378,7 +409,9 @@ describe('presentUIMessageStream — reasoning + open-block state machine (M1 / 
     const schema = uiMessageChunkSchema()
     const validate = schema.validate
     if (!validate) throw new Error('uiMessageChunkSchema has no validate method')
-    const chunks = await collect(presentUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const chunks = await collect(
+      presentUIMessageStream(fromArray(events), { textId: TEXT_ID, onError: (e) => e.message }),
+    )
     for (const chunk of chunks) {
       const result = await validate(chunk)
       expect(result.success, `chunk ${JSON.stringify(chunk)} must validate`).toBe(true)
@@ -392,7 +425,9 @@ describe('presentUIMessageStream — reasoning + open-block state machine (M1 / 
       { type: 'thinking', content: 'let me think' },
       { type: 'error', code: 'provider_error', message: 'boom', retryable: false },
     ]
-    const chunks = await collect(presentUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const chunks = await collect(
+      presentUIMessageStream(fromArray(events), { textId: TEXT_ID, onError: (e) => e.message }),
+    )
     const rid = reasoningIdOf(chunks)
     expect(chunks).toEqual([
       { type: 'start' },
@@ -410,7 +445,10 @@ describe('presentUIMessageStream — reasoning + open-block state machine (M1 / 
     // the boundary. errorText mirrors the thrown-iterable format (String(err)).
     const events: AgentStreamEvent[] = [{ type: 'thinking', content: 'partial reasoning' }]
     const chunks = await collect(
-      presentUIMessageStream(yieldThenThrow(events), { textId: TEXT_ID }),
+      presentUIMessageStream(yieldThenThrow(events), {
+        textId: TEXT_ID,
+        onError: (e) => e.message,
+      }),
     )
     const rid = reasoningIdOf(chunks)
     expect(chunks).toEqual([
@@ -431,7 +469,9 @@ describe('presentUIMessageStream — reasoning + open-block state machine (M1 / 
       { type: 'tool_call', callId: 'c1', toolName: 'search', input: {} },
       { type: 'thinking', content: 'second' },
     ]
-    const chunks = await collect(presentUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const chunks = await collect(
+      presentUIMessageStream(fromArray(events), { textId: TEXT_ID, onError: (e) => e.message }),
+    )
     const starts = chunks.filter((c) => c.type === 'reasoning-start')
     const ends = chunks.filter((c) => c.type === 'reasoning-end')
     expect(starts).toHaveLength(2)
@@ -463,7 +503,9 @@ describe('presentUIMessageStream — tool chunks (M1 / T1.2)', () => {
         durationMs: 1,
       },
     ]
-    const chunks = await collect(presentUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const chunks = await collect(
+      presentUIMessageStream(fromArray(events), { textId: TEXT_ID, onError: (e) => e.message }),
+    )
     // dynamic:true (EC-1) so the consumer produces a dynamic-tool part whose
     // toolName survives to the parsed part (ui-messages.ts:384-396).
     expect(chunks).toEqual([
@@ -493,7 +535,9 @@ describe('presentUIMessageStream — tool chunks (M1 / T1.2)', () => {
         isError: true,
       },
     ]
-    const chunks = await collect(presentUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const chunks = await collect(
+      presentUIMessageStream(fromArray(events), { textId: TEXT_ID, onError: (e) => e.message }),
+    )
     expect(chunks).toEqual([
       { type: 'start' },
       {
@@ -522,7 +566,9 @@ describe('presentUIMessageStream — tool chunks (M1 / T1.2)', () => {
         isError: false,
       },
     ]
-    const chunks = await collect(presentUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const chunks = await collect(
+      presentUIMessageStream(fromArray(events), { textId: TEXT_ID, onError: (e) => e.message }),
+    )
     expect(chunks).toEqual([
       { type: 'start' },
       {
@@ -543,7 +589,9 @@ describe('presentUIMessageStream — tool chunks (M1 / T1.2)', () => {
       { type: 'text_delta', content: 'thinking about it' },
       { type: 'tool_call', callId: 'c1', toolName: 'search', input: { q: 'x' } },
     ]
-    const chunks = await collect(presentUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const chunks = await collect(
+      presentUIMessageStream(fromArray(events), { textId: TEXT_ID, onError: (e) => e.message }),
+    )
     expect(chunks).toEqual([
       { type: 'start' },
       { type: 'text-start', id: TEXT_ID },
@@ -583,7 +631,9 @@ describe('presentUIMessageStream — tool chunks (M1 / T1.2)', () => {
     const schema = uiMessageChunkSchema()
     const validate = schema.validate
     if (!validate) throw new Error('uiMessageChunkSchema has no validate method')
-    const chunks = await collect(presentUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const chunks = await collect(
+      presentUIMessageStream(fromArray(events), { textId: TEXT_ID, onError: (e) => e.message }),
+    )
     for (const chunk of chunks) {
       const result = await validate(chunk)
       expect(result.success, `chunk ${JSON.stringify(chunk)} must validate`).toBe(true)
@@ -608,7 +658,9 @@ describe('presentUIMessageStream — HITL approval (M4)', () => {
         timeoutMs: 300_000,
       },
     ]
-    const chunks = await collect(presentUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const chunks = await collect(
+      presentUIMessageStream(fromArray(events), { textId: TEXT_ID, onError: (e) => e.message }),
+    )
     expect(chunks).toEqual([
       { type: 'start' },
       {
@@ -656,7 +708,9 @@ describe('presentUIMessageStream — HITL approval (M4)', () => {
         timeoutMs: 1000,
       },
     ]
-    const chunks = await collect(presentUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const chunks = await collect(
+      presentUIMessageStream(fromArray(events), { textId: TEXT_ID, onError: (e) => e.message }),
+    )
     for (const chunk of chunks) {
       const result = await validate(chunk)
       expect(result.success, `chunk ${JSON.stringify(chunk)} must validate`).toBe(true)
@@ -679,7 +733,9 @@ describe('presentUIMessageStream — @Checkpoint (M4)', () => {
         cost: 0,
       },
     ]
-    const chunks = await collect(presentUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const chunks = await collect(
+      presentUIMessageStream(fromArray(events), { textId: TEXT_ID, onError: (e) => e.message }),
+    )
     expect(chunks).toContainEqual({
       type: 'data-checkpoint',
       data: { checkpointId: 'chk-1', resumeToken: 's1', step: 0 },
@@ -698,7 +754,9 @@ describe('presentUIMessageStream — @Checkpoint (M4)', () => {
     const events: AgentStreamEvent[] = [
       { type: 'checkpoint_saved', checkpointId: 'chk-1', step: 2, resumeToken: 's1' },
     ]
-    const chunks = await collect(presentUIMessageStream(fromArray(events), { textId: TEXT_ID }))
+    const chunks = await collect(
+      presentUIMessageStream(fromArray(events), { textId: TEXT_ID, onError: (e) => e.message }),
+    )
     for (const chunk of chunks) {
       const result = await validate(chunk)
       expect(result.success, `chunk ${JSON.stringify(chunk)} must validate`).toBe(true)

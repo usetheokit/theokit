@@ -243,6 +243,9 @@ async function serveAgent(options: { gate: boolean }): Promise<string> {
         message: 'deploy please',
         sessionId: 'sess-1',
         ...(options.gate ? { hitl } : {}),
+        // #390 masks a failure's text before it reaches a browser. These cases assert WHICH chunk a
+        // failure produces and under which id — not what it says — so they opt out explicitly.
+        onError: (e) => e.message,
       })) {
         res.write(`data: ${JSON.stringify(chunk)}\n\n`)
       }

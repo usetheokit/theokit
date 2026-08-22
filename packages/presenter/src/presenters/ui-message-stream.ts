@@ -37,20 +37,41 @@ export interface TurnMetadata {
   readonly cost?: number
 }
 
+/**
+ * What the browser is told a failure was (usetheokit/theokit#390).
+ *
+ * Scoped to THIS presenter on purpose: `terminal` and `json` render for the operator's own console
+ * and their own process, where masking would remove the text from the one place it belongs. This
+ * one produces the browser's copy, and that is the copy the default protects.
+ */
+export type MaskError = (error: { message: string; code?: string }) => string
+
 export interface UIMessageStreamPresenterOptions {
   /** A single shared id for every text block — injected for deterministic tests (D3). */
   readonly textId: string
+  /**
+   * Masks a failure's text before it reaches the browser. Defaults to a fixed string.
+   *
+   * Applied to a TOOL failure as well as a run's, and that is not an oversight. This presenter is
+   * DOWNSTREAM of the SDK loop: the model's copy of a tool result travelled inside that loop and
+   * has already been consumed, so masking here costs the model nothing and protects the only copy
+   * that reaches a browser. Two different defaults for "server text reaching a browser" would be a
+   * rule nobody could remember.
+   */
+  readonly onError?: MaskError
 }
 
 export class UIMessageStreamPresenter implements Presenter<UIMessageChunk> {
   readonly surface = 'ui-message-stream'
   readonly #textId: string
+  readonly #onError: MaskError
   #openBlock: 'text' | 'reasoning' | null = null
   #reasoningId: string | null = null
   readonly #seen = new Set<string>()
 
   constructor(options: UIMessageStreamPresenterOptions) {
     this.#textId = options.textId
+    this.#onError = options.onError ?? (() => 'An error occurred.')
   }
 
   /** Emit the opening `start` chunk (exactly once, before any event). */
@@ -76,7 +97,8 @@ export class UIMessageStreamPresenter implements Presenter<UIMessageChunk> {
         ]
       case 'error':
         // Surface the failure as an ai-sdk error chunk (fail-clear); the host stops and calls finish().
-        return [{ type: 'error', errorText: event.message }]
+        // Masked by default — see `onError` (usetheokit/theokit#390).
+        return [{ type: 'error', errorText: this.#onError({ message: event.message }) }]
       // `partial-tool-call` streams incremental args — the current web path emits no chunk for it
       // (args are shown on the committed `tool-call`); `finish` / `status` are handled by finish()/host.
       default:
@@ -182,7 +204,13 @@ export class UIMessageStreamPresenter implements Presenter<UIMessageChunk> {
     // The canonical tool-result carries a serialized string `result` (from `fromSdk`).
     const output = typeof result === 'string' ? result : ''
     if (isError) {
-      out.push({ type: 'tool-output-error', toolCallId: callId, errorText: output })
+      // The tool's own stderr reached the browser verbatim until #390. See `onError` for why the
+      // model does not lose anything by this being masked.
+      out.push({
+        type: 'tool-output-error',
+        toolCallId: callId,
+        errorText: this.#onError({ message: output }),
+      })
     } else {
       out.push({ type: 'tool-output-available', toolCallId: callId, output })
     }

@@ -177,6 +177,9 @@ async function wire(): Promise<WireChunk[]> {
   for await (const chunk of streamAgentUIMessages(compiled, 'test-key', {
     message: 'look up order A-9999',
     sessionId: `sess-${Math.random()}`,
+    // #390 masks a failure's text before it reaches a browser. These cases assert WHICH chunk a
+    // failure produces and under which id — not what it says — so they opt out explicitly.
+    onError: (e) => e.message,
   })) {
     chunks.push(chunk)
   }

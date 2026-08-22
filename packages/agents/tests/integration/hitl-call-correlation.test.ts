@@ -229,6 +229,9 @@ async function runGated(options: {
     message: 'deploy please',
     sessionId: `sess-${Math.random()}`,
     hitl,
+    // #390 masks a failure's text before it reaches a browser. These cases assert WHICH chunk a
+    // failure produces and under which id — not what it says — so they opt out explicitly.
+    onError: (e) => e.message,
   })) {
     chunks.push(chunk)
     if (chunk.type === 'tool-approval-request') {

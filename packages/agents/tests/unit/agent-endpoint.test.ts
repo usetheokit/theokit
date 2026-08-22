@@ -150,7 +150,13 @@ describe('streamAgentUIMessages (M2)', () => {
     const compiled = compileAgentModule(defineAgent({ model: 'm' }))
 
     const chunks: WireChunk[] = []
-    for await (const c of streamAgentUIMessages(compiled, 'k', { message: 'x', sessionId: 's' })) {
+    // #390 masks a failure's text before it reaches a browser. This case is about the SDK's error
+    // event SURFACING as an error chunk, not about what the chunk says, so it opts out explicitly.
+    for await (const c of streamAgentUIMessages(compiled, 'k', {
+      message: 'x',
+      sessionId: 's',
+      onError: (e) => e.message,
+    })) {
       chunks.push(c)
     }
     expect(chunks.some((c) => c.type === 'error' && c.errorText === 'kaboom')).toBe(true)

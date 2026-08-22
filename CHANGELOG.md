@@ -146,6 +146,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   (usetheokit/theokit#213)
 
 ### Fixed
+- **The server's raw error text no longer reaches the browser by default.** Every failure reported
+  to a browser carried the server's own words — a tool handler's stderr verbatim in
+  `tool-output-error.errorText`, a run failure's message verbatim in `error.errorText`, including
+  whatever a driver, an HTTP client or a filesystem call put in the exception. `ai@7`, on the same
+  UIMessage protocol, masks by default and says why in its own comment; there was no equivalent
+  here and no seam to add one. Both are masked now through one `onError` hook on the serving
+  boundary, defaulting to a fixed string, with the full text still reaching the logs, the
+  `agent.run` span and the hook. A tool's text masks by the same default as a run's — the deciding
+  fact being that the presenter is downstream of the SDK loop, so the copy masked is the browser's
+  and the model has already consumed its own. The failure `code` keeps travelling on its own data
+  part, so consumers still distinguish failures without matching on text. Declared on the
+  in-process entry point as well as the HTTP one, because a masking default that depended on the
+  transport is the asymmetry the parity gate exists to refuse — and that gate caught it. (#390)
 - **Vercel and Netlify are now told the security baseline for the HTML document they serve
   themselves.** The emitted handler applies the configured headers to every response IT returns —
   and on four targets it never returns the document: it answers `/api/*` and 404s everything else,
