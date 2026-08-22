@@ -7,6 +7,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Added
+- **`HttpTransport` accepts a `runIdStore`, so a reload can still reach a run the server holds.**
+  The reconnect key lived in a private in-memory field, so a reloaded page built a fresh transport
+  with an empty cell and `reconnectToStream` returned `null` before it reached the network — while
+  the server still held the run in its cache and would have replayed it. The whole durable-reconnect
+  machinery was built and reachable, and this one link made it unusable in the case with the highest
+  user cost. The store defaults to an in-memory cell, which is exactly what the private field was,
+  so nothing changes for a caller who passes nothing. The medium is the consumer's decision on
+  purpose: a client library writing to browser storage nobody asked it to write to has privacy and
+  SSR consequences, so the seam is injected and the package stores nothing it was not handed a place
+  for. Reconnecting automatically on load is deliberately not included — this makes a cached run
+  reachable; reaching for it is a product decision nobody has asked for. (#387)
 
 - **`pnpm check:licenses:published` says whether the registry serves the licence this repository
   declares.** The licence gate this project already had audits what it CONSUMES; nothing audited
