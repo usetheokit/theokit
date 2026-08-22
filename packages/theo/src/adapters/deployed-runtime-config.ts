@@ -1,5 +1,5 @@
 /**
- * The configuration a deployed entry cannot carry as a literal (usetheokit/theokit#425).
+ * The configuration a deployed entry could not apply (usetheokit/theokit#425).
  *
  * ## Why this is not another literal renderer
  *
@@ -7,8 +7,16 @@
  * because `csrf` is an enum and `disallowed` is a `{ routes, behavior }` object — plain data, and a
  * deployed function has no `theo.config.ts` to read.
  *
- * `plugins` and `serialization.transformer` carry FUNCTIONS. There is no literal for a closure. So
- * the entry has to reach the app's own module instead, and the only question left is WHEN.
+ * The two concerns left over from #410 turn out to be different from each other, and the difference
+ * is the whole design:
+ *
+ * - **`serialization` is plain data too.** The config field is `z.enum(['json', 'superjson'])`
+ *   (`config/schema.ts:147`) — a selector, not a transformer. `resolveTransformer` turns it into the
+ *   functions, and it already ships from `theokit/server`. So this half is a literal like the rest,
+ *   and the deployed entry resolves it exactly the way `theokit start` does
+ *   (`cli/commands/start/index.ts:108`), from the same string, through the same function.
+ * - **`plugins` genuinely carries functions.** A plugin is constructed in `theo.config.ts` and there
+ *   is no literal for a closure, so this half needs the entry to import a module instead.
  *
  * ## Static import, not `import()` in the request path
  *
@@ -22,12 +30,16 @@
  * bundler can see through it, and a plugin that needs an API the target lacks fails the build
  * rather than the first request.
  *
- * ## Why the module is optional
+ * ## Why each half is optional
  *
  * An app that declares neither concern must produce the entry it produced before this existed.
  * Importing a module the build did not emit fails at load, and spreading an empty object costs an
- * allocation per request for nothing. So `undefined` renders to nothing at all, and the caller's
- * `executeRoute` literal is unchanged.
+ * allocation per request for nothing. So an empty request renders to nothing at all, and the
+ * caller's `executeRoute` literal is unchanged.
+ *
+ * The halves are independent on purpose: an app that only picks `superjson` must not be made to
+ * carry a plugins module, and an app with plugins and default JSON must not gain a transformer
+ * lookup. Coupling them would have made the common case pay for the rare one.
  */
 
 /**
@@ -38,10 +50,18 @@
  */
 export interface DeployedRuntimeConfigOptions {
   /**
-   * Specifier of the runtime-config module the build wrote beside the entry, or `undefined` when
-   * the app declared neither `plugins` nor `serialization` and the build wrote none.
+   * Specifier of the plugins module the build wrote beside the entry, or `undefined` when the app
+   * declares no plugins and the build wrote none.
    */
   runtimeConfigModule?: string
+  /**
+   * The app's `serialization` selector, carried as a literal.
+   *
+   * `'json'` and `undefined` both mean the default, and neither emits anything: `executeRoute`
+   * already falls back to `JSON.stringify`, and the `x-theo-transformer` header is deliberately
+   * absent for the default so a client is told only when there is something to be told.
+   */
+  serialization?: 'json' | 'superjson'
 }
 
 /** The three places an entry has to grow to carry non-serialisable configuration. */
@@ -71,28 +91,46 @@ const EMPTY: DeployedRuntimeConfigFragment = {
  *   entry, or `undefined` when the app declared neither concern and the build emitted none.
  */
 export function deployedRuntimeConfigFragment(
-  moduleSpecifier: string | undefined,
+  options: DeployedRuntimeConfigOptions | undefined,
 ): DeployedRuntimeConfigFragment {
-  if (moduleSpecifier === undefined) return EMPTY
+  const pluginsModule = options?.runtimeConfigModule
+  // 'json' is the default and emits nothing — see `serialization` above.
+  const serialization = options?.serialization === 'superjson' ? 'superjson' : undefined
+  if (pluginsModule === undefined && serialization === undefined) return EMPTY
 
-  return {
-    imports: [
+  const imports: string[] = []
+  const declarations: string[] = []
+  const spread: string[] = []
+
+  if (pluginsModule !== undefined) {
+    imports.push(
       `import { createPluginRunnerFromConfig } from 'theokit/server'`,
-      `// #425 — the app's own config, resolved on the build machine and written beside this entry.`,
+      `// #425 — the app's own plugins, resolved on the build machine and written beside this entry.`,
       `// A closure has no literal, so this is an import rather than a baked value.`,
-      `import theoRuntimeConfig from '${moduleSpecifier}'`,
-    ],
-    declarations: [
+      `import theoRuntimeConfig from '${pluginsModule}'`,
+    )
+    declarations.push(
       `// Built ONCE, at module load. A runner rebuilt per request would re-run every plugin's`,
       `// \`register\`, which is where a plugin allocates the state its hooks then read.`,
       `const THEO_PLUGIN_RUNNER = createPluginRunnerFromConfig(theoRuntimeConfig.plugins)`,
-      `// T1.2 — a named transformer is also what makes \`executeRoute\` emit \`x-theo-transformer\`,`,
-      `// so a client is told which serialisation it is reading rather than left to guess.`,
-      `const THEO_TRANSFORMER = theoRuntimeConfig.serialization?.transformer`,
-    ],
+    )
     // Awaited, not passed along: `createPluginRunnerFromConfig` is async because `register` is, and
     // a pending promise handed to `executeRoute` is a truthy object with none of the runner's
     // methods — every hook would silently not fire, which is this issue's own defect one layer in.
-    executeRouteSpread: `pluginRunner: await THEO_PLUGIN_RUNNER, transformer: THEO_TRANSFORMER,`,
+    spread.push(`pluginRunner: await THEO_PLUGIN_RUNNER`)
   }
+
+  if (serialization !== undefined) {
+    imports.push(`import { resolveTransformer } from 'theokit/server'`)
+    declarations.push(
+      `// #425 — a literal, because \`config.serialization\` is a SELECTOR and not a transformer.`,
+      `// Same string, same function \`theokit start\` calls, so the deployed response and the local`,
+      `// one cannot disagree about what the app asked for — including the \`x-theo-transformer\``,
+      `// header, whose absence is what made this a data bug rather than a formatting one.`,
+      `const THEO_TRANSFORMER = resolveTransformer('${serialization}')`,
+    )
+    spread.push(`transformer: THEO_TRANSFORMER`)
+  }
+
+  return { imports, declarations, executeRouteSpread: `${spread.join(', ')},` }
 }

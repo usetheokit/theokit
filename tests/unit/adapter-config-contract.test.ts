@@ -83,12 +83,12 @@ function parseConfig(input: Record<string, unknown>): TheoConfig {
  */
 const EXPECTED: Record<BuildTarget, readonly ConfigConcern[] | 'runtime-not-emitted-here'> = {
   node: ['rateLimit', 'csrf', 'disallowed', 'serialization', 'plugins', 'securityHeaders', 'cors'],
-  vercel: ['securityHeaders', 'csrf', 'disallowed', 'cors'],
-  cloudflare: ['securityHeaders', 'csrf', 'disallowed', 'cors'],
-  netlify: ['securityHeaders', 'csrf', 'disallowed', 'cors'],
-  bun: ['securityHeaders', 'csrf', 'disallowed', 'cors'],
-  'deno-deploy': ['securityHeaders', 'csrf', 'disallowed', 'cors'],
-  'aws-lambda': ['securityHeaders', 'csrf', 'disallowed', 'cors'],
+  vercel: ['securityHeaders', 'csrf', 'disallowed', 'cors', 'serialization'],
+  cloudflare: ['securityHeaders', 'csrf', 'disallowed', 'cors', 'serialization'],
+  netlify: ['securityHeaders', 'csrf', 'disallowed', 'cors', 'serialization'],
+  bun: ['securityHeaders', 'csrf', 'disallowed', 'cors', 'serialization'],
+  'deno-deploy': ['securityHeaders', 'csrf', 'disallowed', 'cors', 'serialization'],
+  'aws-lambda': ['securityHeaders', 'csrf', 'disallowed', 'cors', 'serialization'],
   static: [],
   'theo-cloud': 'runtime-not-emitted-here',
 }
@@ -116,14 +116,20 @@ describe('a declared concern the target drops is named, not swallowed', () => {
 
   it('reports every dropped concern on a Web adapter', async () => {
     const adapter = await resolveAdapter('vercel')
-    // `csrf` and `disallowed` left this list in #410 and `cors` in #409: all three are data the
-    // build bakes into the emitted entry. `rateLimit` and `serialization` remain for the same
-    // reason `plugins` does — they carry FUNCTIONS a literal cannot express (#425). `cors` is the
-    // interesting one: its `origins` MAY be a callback, and that case is refused by name at build
-    // time rather than dropped, so the concern is applied for every shape that can travel.
+    // `csrf` and `disallowed` left this list in #410, `cors` in #409, `serialization` in #425.
+    //
+    // `serialization` is worth a line, because it sat here on a wrong premise: it was grouped with
+    // `plugins` as carrying functions a literal cannot express. It does not. The config field is
+    // `z.enum(['json','superjson'])` (`config/schema.ts:147`) — a SELECTOR — and `resolveTransformer`
+    // turns it into the functions at runtime, on the deployed target exactly as under
+    // `theokit start`. Only `plugins` genuinely holds a closure.
+    //
+    // `rateLimit` remains because a limiter needs a store. `cors` is the interesting one: its
+    // `origins` MAY be a callback, and that case is refused by name at build time rather than
+    // dropped, so the concern is applied for every shape that can travel.
     expect(
       [...findUnappliedConfig(fullConfig, adapter)].sort((a, b) => a.localeCompare(b)),
-    ).toEqual(['rateLimit', 'serialization'])
+    ).toEqual(['rateLimit'])
   })
 
   it('reports nothing on node, which now applies every concern it parses', async () => {

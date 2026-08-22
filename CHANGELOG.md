@@ -188,6 +188,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **`serialization: 'superjson'` now survives a deploy, on all six Web-standards targets.** The
+  generated entry built its request context without a transformer, so `sendJson` fell back to
+  `JSON.stringify` and the `x-theo-transformer` response header was never emitted: an app
+  serialised one way locally and another in production, and the client was told nothing — which is
+  what made it a data bug rather than a formatting one. The concern was believed to be
+  unbakeable because it "carries functions"; it does not. `serialization` is a selector
+  (`'json' | 'superjson'`), and the deployed entry now resolves it through the same
+  `resolveTransformer` that `theokit start` calls, from the same string. `plugins` is the half that
+  genuinely holds a closure and stays declared as unapplied. (#425)
+
 - **A request nobody traced upstream now reaches the collector as one trace, not two.** The
   `http.request` span and the `agent.run` span both decided which trace they belonged to by reading
   the inbound `traceparent` header — independently. That agrees only while the header is there, and

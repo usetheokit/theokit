@@ -33,16 +33,25 @@ import { renderDenoEntry } from '../../packages/theo/src/adapters/deno-deploy.js
 import { renderNetlifyFunction } from '../../packages/theo/src/adapters/netlify.js'
 import { renderVercelFunctionEntry } from '../../packages/theo/src/adapters/vercel.js'
 
-const RUNTIME_CONFIG = './theo.runtime-config.mjs'
-
 /** Every target, rendered with and without the module the build emits. */
-const TARGETS: Record<string, (runtimeConfigModule?: string) => string> = {
-  cloudflare: (m) => renderCloudflareWorkerEntry({ ssrStreaming: false, runtimeConfigModule: m }),
-  vercel: (m) => renderVercelFunctionEntry({ runtimeConfigModule: m }),
-  netlify: (m) => renderNetlifyFunction({ runtimeConfigModule: m }),
-  bun: (m) => renderBunEntry(3000, { runtimeConfigModule: m }),
-  'deno-deploy': (m) => renderDenoEntry(3000, { runtimeConfigModule: m }),
-  'aws-lambda': (m) => renderAwsLambdaEntry({ runtimeConfigModule: m }),
+interface Carried {
+  runtimeConfigModule?: string
+  serialization?: 'json' | 'superjson'
+}
+
+const TARGETS: Record<string, (carried: Carried) => string> = {
+  cloudflare: (c) => renderCloudflareWorkerEntry({ ssrStreaming: false, ...c }),
+  vercel: (c) => renderVercelFunctionEntry(c),
+  netlify: (c) => renderNetlifyFunction(c),
+  bun: (c) => renderBunEntry(3000, c),
+  'deno-deploy': (c) => renderDenoEntry(3000, c),
+  'aws-lambda': (c) => renderAwsLambdaEntry(c),
+}
+
+/** Everything an app can carry, so a target that drops one of them is visible. */
+const CARRIES_BOTH: Carried = {
+  runtimeConfigModule: './theo.runtime-config.mjs',
+  serialization: 'superjson',
 }
 
 /**
@@ -61,7 +70,6 @@ export default {
       },
     },
   ],
-  serialization: { transformer: { name: 'superjson', serialize: (v) => v, deserialize: (v) => v } },
 }
 `
 
@@ -88,6 +96,7 @@ export const extractTraceIdFromRequest = () => 't'
 export const TRACE_HEADER = 'x-trace-id'
 export const createCorsWebHandler = () => null
 export const executeRoute = (...a) => b().executeRoute(...a)
+export const resolveTransformer = (...a) => b().resolveTransformer(...a)
 export const createPluginRunnerFromConfig = async (plugins) => {
   if (!Array.isArray(plugins) || plugins.length === 0) return undefined
   const hooks = []
@@ -124,6 +133,9 @@ beforeAll(() => {
   writeFileSync(join(root, 'theo.runtime-config.mjs'), RUNTIME_CONFIG_SOURCE)
   ;(globalThis as Record<string, unknown>).__THEO_PLUGIN_HARNESS__ = {
     matchRoute: () => ({ route: { filePath: 'r.ts' }, params: {} }),
+    // The REAL `resolveTransformer` maps the selector to the built-in; the stub only has to prove
+    // the entry called it with what the config declared.
+    resolveTransformer: (selector: string) => ({ name: selector }),
     compilePattern: () => ({}),
     createWebShim: () => ({
       req: {},
@@ -149,7 +161,7 @@ afterAll(() => {
 
 describe('a deployed Worker runs the app plugins (usetheokit/theokit#425)', () => {
   it('test_an_onRequest_hook_declared_in_the_app_config_fires_on_a_deployed_request', async () => {
-    const mod = await loadEntry(TARGETS.cloudflare(RUNTIME_CONFIG))
+    const mod = await loadEntry(TARGETS.cloudflare(CARRIES_BOTH))
     const worker = mod.default as {
       fetch: (r: Request, e: unknown, c: unknown) => Promise<Response>
     }
@@ -166,7 +178,7 @@ describe('a deployed Worker runs the app plugins (usetheokit/theokit#425)', () =
 
   it('test_the_transformer_declared_in_the_app_config_reaches_executeRoute', async () => {
     const before = seen.length
-    const mod = await loadEntry(TARGETS.cloudflare(RUNTIME_CONFIG))
+    const mod = await loadEntry(TARGETS.cloudflare(CARRIES_BOTH))
     const worker = mod.default as {
       fetch: (r: Request, e: unknown, c: unknown) => Promise<Response>
     }
@@ -185,7 +197,7 @@ describe('a deployed Worker runs the app plugins (usetheokit/theokit#425)', () =
 describe('every Web-standards target carries both concerns into executeRoute', () => {
   for (const [name, render] of Object.entries(TARGETS)) {
     it(`test_${name.replace(/-/g, '_')}_passes_the_runner_and_the_transformer`, () => {
-      const withConfig = render(RUNTIME_CONFIG)
+      const withConfig = render(CARRIES_BOTH)
 
       // Asserted on the emitted source rather than by driving all six: each target has its own
       // handler signature, and what regressed is the same one line in each — whether the two values
@@ -196,11 +208,12 @@ describe('every Web-standards target carries both concerns into executeRoute', (
     })
 
     it(`test_${name.replace(/-/g, '_')}_stays_unchanged_when_the_app_declares_neither`, () => {
-      const bare = render(undefined)
+      const bare = render({})
 
       // An app carrying neither concern must not gain an import of a module the build never wrote.
       expect(bare).not.toMatch(/theo\.runtime-config/)
       expect(bare).not.toMatch(/THEO_PLUGIN_RUNNER/)
+      expect(bare).not.toMatch(/THEO_TRANSFORMER/)
     })
   }
 })
