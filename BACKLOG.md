@@ -55,9 +55,9 @@ the two disagree, the rule wins and this one is the bug.
 
 ## Index
 
-38 items — **Open** 38 · **In flight** 0 · **Closed** 0
+38 items — **Open** 37 · **In flight** 0 · **Closed** 1
 
-### Open (38)
+### Open (37)
 
 | Item | Title | Status | Severity |
 |---|---|---|---|
@@ -98,15 +98,16 @@ the two disagree, the rule wins and this one is the bug.
 | [`B-035`](#b-035--the-document-preloads-nothing-so-a-routes-chunks-are-discovered-one-round-trip-late----) | the document preloads nothing, so a route's chunks are discovered one round trip late | `triaged` | — |
 | [`B-036`](#b-036--markdown-images-and-external-links-bypass-the-frameworks-own-components----) | markdown images and external links bypass the framework's own components | `triaged` | — |
 | [`B-037`](#b-037--scroll-restoration-restores-the-document-and-the-scaffolds-own-layout-scrolls-an-inner-element----) | scroll restoration restores the document, and the scaffold's own layout scrolls an inner element | `triaged` | — |
-| [`B-038`](#b-038--pnpm-tryscaffold-produces-an-app-that-exercises-npm-not-this-repository----) | `pnpm try:scaffold` produces an app that exercises npm, not this repository | `triaged` | — |
 
 ### In flight (0)
 
 _None._
 
-### Closed (0)
+### Closed (1)
 
-_None._
+| Item | Title | Status | Severity |
+|---|---|---|---|
+| [`B-038`](#b-038--pnpm-tryscaffold-produces-an-app-that-exercises-npm-not-this-repository---x) | `pnpm try:scaffold` produces an app that exercises npm, not this repository | `shipped` | — |
 
 <!-- BACKLOG-INDEX:END -->
 
@@ -735,7 +736,7 @@ dod:
   - whichever is chosen, the scaffold and the documentation agree — the defect registered here is that they did not
 note: not a regression. Nothing restored scroll before `B-029` either; what changed is that the documentation began promising it
 
-## B-038 — `pnpm try:scaffold` produces an app that exercises npm, not this repository   [ ]
+## B-038 — `pnpm try:scaffold` produces an app that exercises npm, not this repository   [x]
 
 domain: theokit
 repo: packages/create-theokit
@@ -743,11 +744,17 @@ suggested_mode: bug
 source: discover-live-test
 evidence: filed as usetheokit/theokit#420. Measured 2026-08-22 while standing up a real app for the `B-029` browser run. The root script `try:scaffold` (`package.json:26`) exists to try the scaffold locally, and `my-test` is a declared workspace member (`pnpm-workspace.yaml`). The template pins `"theokit": "^0.48.3"` (`packages/create-theokit/templates/default/package.json.tmpl`) and the workspace package is **0.49.0** — a caret range on a `0.x` version pins the minor, so `^0.48.3` means `>=0.48.3 <0.49.0` and **excludes** the local build. Compared every template dependency against its workspace version: `theokit` is out of range; `@theokit/agents ^10.1.0` matches `10.1.0` and would link. Getting the scaffolded app onto local code required editing its manifest to `workspace:*` by hand and then symlinking, neither of which a person following the script would do
 why_now: this is the repository's own path for trying its own code, and it silently tries someone else's. Worse than testing nothing: with `agents` in range and `theokit` out of it, one `try:scaffold` app can mix a **local agent runtime against a published framework**, which fails in ways neither version exhibits alone. It surfaced only because a browser run needed a real app — every unit test in this repo imports `packages/*/src` directly and never meets the scaffold's resolution at all
-status: triaged
+status: shipped
 dod:
   - `pnpm try:scaffold` produces an app whose `theokit` resolves to `packages/theo`, verified by reading the resolved version from the scaffolded app rather than by inspecting the range
   - the check does not rot the next time the version moves — a range that must be bumped in lockstep with every release is the mechanism that failed here, so pin by `workspace:*` for the local path, or assert the resolution in a test
   - the mixed case is covered: an app must not end up with one workspace package and one from the registry
-unverified: whether pnpm 10's `link-workspace-packages` default would link even a MATCHING range. `pnpm config get link-workspace-packages` reports `undefined` and there is no `.npmrc`, so the built-in default governs and I did not confirm which it is — an install to find out would have purged the workspace `node_modules` while another session was using it. If the default is `false`, the version range is not the only cause and `@theokit/agents` does not link either; the item's first DoD bullet is written to measure the outcome rather than the mechanism, so it holds either way
+shipped: `2e749cdaf` on `workspace` (unreleased — the npm publish is blocked on usetheokit/theokit#413). `try:scaffold` rewrites the scaffolded manifest to the `workspace:` protocol, discovering the packages from `packages/*` rather than listing them, and leaves the TEMPLATE untouched because it is copied verbatim into apps outside this monorepo where `workspace:*` resolves to nothing. All three DoD bullets hold: verified by `pnpm install --lockfile-only`, which records `theokit -> link:../packages/theo` and `@theokit/agents -> link:../packages/agents` — the RESOLVED versions, not the declared ranges — and the mixed case is closed by the same fact, since both are linked. The second bullet is met by removing the version from the local path entirely rather than by asserting a range.
+
+  The report's other half — that nothing bumps the template's pin at release time, so every scaffold after 0.49.0 publishes keeps installing the 0.48 line — is separate and filed as usetheokit/theokit#424. The obvious guard for it ("the template range admits the workspace version") is WRONG and was written and removed: between a bump and its publish the workspace is legitimately ahead of npm, so that rule would ship a template that cannot install at all.
+
+  Also surfaced by the verification: `my-test` is gitignored but IS a workspace member, so an install after `try:scaffold` writes it into the TRACKED `pnpm-lock.yaml` — a hunk that must never be committed, since a lockfile naming a project a fresh clone lacks fails `--frozen-lockfile` in CI. The script now says so on the way out, and `knip.json` ignores the directory.
+
+unverified: whether pnpm 10's `link-workspace-packages` default would link even a MATCHING range. `pnpm config get link-workspace-packages` reports `undefined` and there is no `.npmrc`, so the built-in default governs and I did not confirm which it is — an install to find out would have purged the workspace `node_modules` while another session was using it. **Resolved by the fix rather than by measurement:** the `workspace:` protocol is explicit, so pnpm links regardless of what that default happens to be, and the question no longer bears on the outcome
 
 Next free id: **B-039**.
