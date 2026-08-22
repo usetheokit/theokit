@@ -159,7 +159,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   time this runs the version commit has merged, so comparing against `origin/main` would make it a
   no-op exactly when it matters. An unreachable registry fails rather than passing. It does not
   claim more than it measures: the tarball's contents, the provenance attestation and the publishing
-  identity are all outside what it can see. (#366)
+  identity are all outside what it can see. The release workflow calls `pnpm release` rather than
+  `changeset publish` directly, because otherwise both of the script's guards — this one and the
+  `workspace:*`-in-a-tarball check that already existed — sat on the local path only, which is the
+  path a release does not take. Wiring a detector into a script CI does not run is how a detector
+  becomes decoration. (#366)
 
 - **The release now points the scaffold's template at the versions it publishes.** The template
   pinned `"theokit": "^0.48.3"` while the repository was at `0.49.0`, and a caret on a `0.x` version

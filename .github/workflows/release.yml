@@ -147,7 +147,18 @@ jobs:
       - name: Create Release Pull Request or Publish
         uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1.9.0
         with:
-          publish: pnpm changeset publish
+          # `pnpm release`, not `changeset publish` directly. The script wraps the publish in two
+          # guards, and calling the CLI here left BOTH of them on the local path — the path a
+          # release does not normally take:
+          #
+          #   check-pack-no-workspace.mjs      before  — no `workspace:*` escapes into a tarball
+          #   verify-release-published.mjs     after   — every declared version is ON the registry
+          #
+          # The second is what #366 asked for, and wiring it into `pnpm release` while CI called
+          # `changeset publish` would have made it decorative: the run that publishes nothing would
+          # have gone on reporting success, which is the entire defect. Same reasoning
+          # `theokit-sdk`'s workflow already records for its own guard.
+          publish: pnpm release
           version: pnpm version-packages
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
