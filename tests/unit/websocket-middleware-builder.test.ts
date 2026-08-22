@@ -27,20 +27,20 @@ describe('websocket() builder', () => {
 
 describe('middleware() builder', () => {
   it('emits the MiddlewareHandler function from .handle()', async () => {
-    const fn = async (
-      request: Request,
-      next: (req: Request) => Promise<Response>,
-    ): Promise<Response> => {
-      const res = await next(request)
-      res.headers.set('x-mw', '1')
-      return res
+    // The published contract is `(request, context) => Response | void` (usetheokit/theokit#345).
+    // It replaced a continuation shape that no runner implemented, so this used to assert an
+    // invocation nothing in the framework could ever make.
+    const fn = (request: Request, context: Record<string, unknown>): undefined => {
+      context.path = new URL(request.url).pathname
+      return undefined
     }
     const built = middleware().handle(fn).build()
     const legacy = defineMiddleware(fn)
     expect(built).toBe(legacy)
 
-    const res = await built(new Request('http://x/'), async () => new Response('ok'))
-    expect(res.headers.get('x-mw')).toBe('1')
+    const context: Record<string, unknown> = {}
+    expect(await built(new Request('http://x/some/path'), context)).toBeUndefined()
+    expect(context.path).toBe('/some/path')
   })
 
   it('build() before .handle() throws at runtime (fail-fast for JS callers)', () => {

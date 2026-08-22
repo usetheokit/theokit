@@ -7,9 +7,12 @@ import { existsSync } from 'node:fs'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { join } from 'node:path'
 
-import { WEB_SHAPED_MIDDLEWARE } from '../define/define-middleware.js'
+import { WEB_SHAPED_MIDDLEWARE, type MiddlewareHandler } from '../define/define-middleware.js'
 import { scanMiddlewares } from '../scan/middleware-scan.js'
 import type { LoadModule } from '../scan/module-loader.js'
+
+import { createWebRequestSource } from './node-request.js'
+import { writeWebResponseToServerResponse } from './node-web-adapter.js'
 
 export interface MiddlewareResult {
   ctx: unknown
@@ -56,36 +59,62 @@ function getCachedScan(serverDir: string): MiddlewareCacheEntry {
 }
 
 /**
- * Refuse, by name, a middleware this runner cannot invoke (usetheokit/theokit#345).
+ * Run a Web-shaped middleware — the one `middleware()` and `defineMiddleware()` produce (#345).
  *
- * `middleware().handle(...).build()` and `defineMiddleware` resolve to
- * `(request: Request, next: (request) => Promise<Response>) => Response`. This runner calls
- * `mw(req, res, next)`, so such a handler receives Node's `req` as its `request` and Node's `res`
- * as its `next`. Calling `next(request)` then calls `res(...)`; returning a `Response` instead
- * leaves this runner's own `next` uncalled, which aborts the request and writes nothing. A blank
- * page from a middleware that reads as correct is the worst of the two.
+ * This used to REFUSE the shape by name, because the runner could only invoke `(req, res, next)`
+ * and calling a Web handler that way hands it `res` as its `next`. Refusing was better than the
+ * blank response it replaced, and it was never the end state: the README documented the builder as
+ * the way to write middleware, so the documented path was loud instead of silent, but still broken.
  *
- * Refusing is not the end state. Converging the three middleware contracts in this repository — the
- * published one, this runner's, and `WebMiddleware` — is a design decision nobody has taken;
- * `web-middleware-runner.ts` records it as deferred. Until it is taken, saying so beats guessing,
- * which is the discipline the route scanner already applies when it rejects a filename it cannot
- * parse instead of parsing it wrongly.
+ * It runs now because the published contract became the one that fits this model:
+ * `(request, context) => Response | void`. No continuation is needed — returning a `Response`
+ * answers the request, returning nothing continues — which is exactly what a runner that executes
+ * BEFORE routing can honestly offer.
+ *
+ * The `Request` is built by the same converter the agent and action branches use, so a middleware
+ * reads the request the way every other Web-shaped surface in the framework does.
  */
-function refuseIncompatibleShape(mw: MiddlewareFn, filePath: string): void {
-  if (!(WEB_SHAPED_MIDDLEWARE in mw)) return
+async function runWebShapedMiddleware(
+  mw: MiddlewareHandler,
+  req: IncomingMessage,
+  res: ServerResponse,
+  context: Record<string, unknown>,
+): Promise<{ shortCircuited: boolean }> {
+  const request = createWebRequestSource(req).toRequest()
+  const result = await mw(request, context)
+  if (!(result instanceof Response)) return { shortCircuited: false }
 
-  throw new Error(
-    `${filePath} default-exports a Web-shaped middleware — ` +
-      `\`(request: Request, next) => Response\`, the shape \`middleware()\` and ` +
-      `\`defineMiddleware()\` produce. This runner invokes \`(req, res, next)\` with Node's ` +
-      `IncomingMessage and ServerResponse, so it cannot call it: the handler would receive ` +
-      `\`res\` as its \`next\`.\n\n` +
-      `  Export \`(req, res, next)\` instead, and call \`next()\` to continue:\n` +
-      `    export default (req, res, next) => { req.headers['x-seen'] = '1'; next() }\n\n` +
-      `The Web-shaped contract is not yet reachable from this path. Converging the two is tracked ` +
-      `at usetheokit/theokit#345; this refusal exists so the mismatch is loud rather than a blank ` +
-      `response.`,
-  )
+  // Written here rather than returned upward: a short-circuit that only ABORTED would leave the
+  // client with a blank response, which is the failure this whole issue is about.
+  await writeWebResponseToServerResponse(result, res)
+  return { shortCircuited: true }
+}
+
+/** Whether a loaded default export declared the Web-shaped contract. */
+function isWebShaped(mw: object): mw is MiddlewareHandler {
+  return WEB_SHAPED_MIDDLEWARE in mw
+}
+
+/**
+ * Run ONE scanned middleware, whichever shape it declared, and say whether the request is over.
+ *
+ * One dispatcher rather than a branch at each load site: `server/middleware/` and the single
+ * `server/middleware.ts` are two entry points to the same semantics, and this file has already
+ * watched them drift — the single-file arm kept `refuseIncompatibleShape` only because someone
+ * remembered to add it twice.
+ */
+async function runScannedMiddleware(
+  mw: MiddlewareFn,
+  req: IncomingMessage,
+  res: ServerResponse,
+  context: Record<string, unknown>,
+): Promise<{ aborted: boolean }> {
+  if (isWebShaped(mw)) {
+    const { shortCircuited } = await runWebShapedMiddleware(mw, req, res, context)
+    return { aborted: shortCircuited }
+  }
+  const { nextCalled } = await runOneMiddleware(mw, req, res)
+  return { aborted: !nextCalled || res.writableEnded }
 }
 
 async function runOneMiddleware(
@@ -112,6 +141,11 @@ export async function runMiddlewareAndContext(
   const { singleFilePath, singleFileExists, dirMiddlewares } = getCachedScan(serverDir)
   const dirExists = dirMiddlewares.length > 0
 
+  // #345 — what a Web-shaped middleware decorates. Before this, file middleware contributed NOTHING
+  // to `ctx` (only `server/context.ts` did), so an app that wanted a middleware to pass a value to
+  // a route had nowhere to put it.
+  const middlewareCtx: Record<string, unknown> = {}
+
   // 1. Ambiguity check — both file and directory is a configuration error
   if (singleFileExists && dirExists) {
     throw new Error(
@@ -126,12 +160,12 @@ export async function runMiddlewareAndContext(
       const mod = await loadModule(mwPath)
       const mw = mod.default as MiddlewareFn | undefined
       if (typeof mw !== 'function') continue
-      refuseIncompatibleShape(mw, mwPath)
 
-      const { nextCalled } = await runOneMiddleware(mw, req, res)
-      if (!nextCalled || res.writableEnded) {
-        return { ctx: {}, aborted: true }
-      }
+      // Both shapes run, in FILENAME order. Running one family before the other would make the
+      // `01-`/`02-` prefixes mean nothing the moment an app mixed them, and the prefixes are the
+      // only ordering contract this directory has.
+      const { aborted } = await runScannedMiddleware(mw, req, res, middlewareCtx)
+      if (aborted) return { ctx: middlewareCtx, aborted: true }
     }
   }
 
@@ -140,16 +174,21 @@ export async function runMiddlewareAndContext(
     const mod = await loadModule(singleFilePath)
     const mw = mod.default as MiddlewareFn | undefined
     if (typeof mw === 'function') {
-      refuseIncompatibleShape(mw, singleFilePath)
-      const { nextCalled } = await runOneMiddleware(mw, req, res)
-      if (!nextCalled || res.writableEnded) {
-        return { ctx: {}, aborted: true }
-      }
+      const { aborted } = await runScannedMiddleware(mw, req, res, middlewareCtx)
+      if (aborted) return { ctx: middlewareCtx, aborted: true }
     }
   }
 
-  // 4. Create context (if exists)
-  return { ctx: await createServerContext(req, res, loadModule, serverDir), aborted: false }
+  // 4. Create context (if exists), on top of what middleware decorated.
+  //
+  // The factory wins on a key collision, matching the precedent one layer up: `execute.ts` re-applies
+  // plugin decorations over the middleware ctx for the same reason — the later, more specific
+  // producer is the one that meant to set it.
+  const factoryCtx = await createServerContext(req, res, loadModule, serverDir)
+  if (factoryCtx === null || typeof factoryCtx !== 'object') {
+    return { ctx: middlewareCtx, aborted: false }
+  }
+  return { ctx: { ...middlewareCtx, ...(factoryCtx as Record<string, unknown>) }, aborted: false }
 }
 
 /**

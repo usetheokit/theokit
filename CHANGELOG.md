@@ -200,6 +200,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **A middleware written the way the README says now runs where the README says to put it.**
+  `middleware()` produced a handler the file-scan runner could not invoke: it called
+  `(req, res, next)` with Node objects, so a handler authored as documented received `res` as its
+  `next` and `request.headers.get(...)` was not a function. The sharper half only showed up on
+  measurement — the published `MiddlewareHandler` type had **zero runtime consumers** anywhere,
+  because its `(request, next) => Response` shape describes a continuation pipeline nothing
+  implements: the runner executes before routing and has no downstream response to hand back. The
+  builder was documented API that nothing could call. The contract is now
+  `(request, context) => Response | void` — return a `Response` to answer the request, return
+  nothing to continue — which needs no continuation and is the shape `executeWebRequest` already
+  ran, so two of the framework's three middleware contracts converge instead of a fourth appearing.
+  Express-style `(req, res, next)` files keep working, and both shapes run in filename order, so the
+  `01-`/`02-` prefixes still mean what they say. File middleware can now decorate the route's
+  `ctx`, which it never could. (#345)
+
 - **A freshly scaffolded app passes its own `typecheck` again.** The template typed its transcript
   as `@theokit/ui`'s `UIMessage` and filled it from `useAgent()`, which returns the framework's wire
   message — two types that are deliberately different (the wire's parts stay open so a `data-*` or a

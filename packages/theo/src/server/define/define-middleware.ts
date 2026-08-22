@@ -1,22 +1,43 @@
+/**
+ * A middleware, as the framework's own builder produces it (usetheokit/theokit#345).
+ *
+ * `(request, context)`: read the request as a Web `Request`, decorate `context` for the route that
+ * follows, and RETURN a `Response` to answer the request yourself. Returning nothing continues to
+ * the next middleware, and then to the route.
+ *
+ * ## Why not `(request, next) => Response`
+ *
+ * That was this type's first shape, and it described a continuation pipeline nothing in this
+ * repository implements: the file-scan runner runs BEFORE routing, so it has no downstream
+ * `Response` to hand back from `next(request)`. The consequence was measured rather than
+ * theorised — `MiddlewareHandler` had **zero runtime consumers**, while `README.md` documented the
+ * builder that produces it as the way to write middleware. A published builder whose output nothing
+ * can call is worse than a missing one, because it reads as supported.
+ *
+ * This shape is the one that fits the model AND already runs: `executeWebRequest` has invoked
+ * `(request, context) => Response | void` since T3.2 (`http/web-middleware-runner.ts`). Adopting it
+ * here converges two of the three middleware contracts instead of adding a fourth.
+ *
+ * The Express-style `(req, res, next)` export keeps working in `server/middleware/*.ts`. It is
+ * Node-bound — which is why it cannot be the framework's contract — but evicting it would break
+ * every app that has one.
+ */
 export type MiddlewareHandler = (
   request: Request,
-  next: (request: Request) => Promise<Response>,
-) => Response | Promise<Response>
+  context: Record<string, unknown>,
+  // `void` is deliberate: returning nothing is how a middleware says "continue". The runner only
+  // inspects `instanceof Response`, so there is nothing to distinguish from `undefined`.
+  // eslint-disable-next-line @typescript-eslint/no-invalid-void-type
+) => Response | undefined | void | Promise<Response | undefined | void>
 
 /**
  * Marks a handler as declaring the Web-shaped contract above.
  *
- * The file-scan runner invokes `(req, res, next)` against Node's `IncomingMessage`
- * and `ServerResponse`. Both shapes are functions, so a `typeof` screen cannot
- * tell them apart, and the mismatch used to surface as a TypeError from inside
- * framework code or — worse — as a blank response, because a handler that
- * returns a `Response` never calls the runner's `next` and the request aborts
- * with nothing written (usetheokit/theokit#345).
- *
- * Arity cannot decide it either: a hand-written Node middleware that ignores
- * `next` also has length 2, and refusing that would break more than the check
- * protects. So the shape is recorded where it is declared rather than guessed
- * where it is consumed.
+ * `server/middleware/*.ts` may export either shape, and both are plain functions, so a `typeof`
+ * screen cannot tell them apart. Arity cannot either: a hand-written Node middleware that ignores
+ * `next` also has length 2, and treating that as Web-shaped would hand it a `Request` it does not
+ * expect. So the shape is RECORDED where it is declared rather than guessed where it is consumed,
+ * and the runner dispatches on the brand (usetheokit/theokit#345).
  *
  * @internal
  */
