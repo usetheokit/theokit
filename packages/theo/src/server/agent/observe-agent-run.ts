@@ -33,6 +33,8 @@ import type {
 } from '../observability/adapters/types.js'
 import { newSpanId, newTraceId } from '../observability/trace-context-propagation.js'
 
+import { closePauseSpan, registerPauseSpan } from './hitl-pause-spans.js'
+
 export interface AgentRunSpanContext {
   /** The agent being run, as the attribute an operator will group by. */
   agent: string
@@ -186,7 +188,8 @@ function recordTokenUsage(span: SpanHandle, metadata: unknown): void {
 interface RunSpans {
   run: SpanHandle
   tools: Map<string, SpanHandle>
-  pauses: Map<string, SpanHandle>
+  /** toolCallId → approvalId. The span itself lives in `hitl-pause-spans.ts` (B-028). */
+  pauses: Map<string, string>
   toolNames: Map<string, string>
   agent: string
   /**
@@ -219,37 +222,35 @@ function openPauseSpan(state: RunSpans, adapter: ObservabilityAdapter, chunk: Ob
   const id = chunk.toolCallId
   const approvalId = chunk.approvalId
   if (id === undefined || approvalId === undefined) return
-  state.pauses.set(
-    id,
-    adapter.startSpan(
-      'agent.hitl',
-      {
-        agent: state.agent,
-        tool: state.toolNames.get(id) ?? 'unknown',
-        approvalId,
-        toolCallId: id,
-      },
-      childOf(state),
-    ),
+  const pauseSpan = adapter.startSpan(
+    'agent.hitl',
+    {
+      agent: state.agent,
+      tool: state.toolNames.get(id) ?? 'unknown',
+      approvalId,
+      toolCallId: id,
+    },
+    childOf(state),
   )
+  state.pauses.set(id, approvalId)
+  // Handed to the registry both sides reach: the resume arrives on the approve endpoint, which this
+  // observer never sees (B-028).
+  registerPauseSpan(approvalId, pauseSpan)
 }
 
 function closeToolSpan(state: RunSpans, chunk: ObservedChunk): void {
   const id = chunk.toolCallId
   if (id === undefined) return
 
-  // The tool producing output IS the resume: it is what "the human answered and
-  // the run continued" looks like on the wire. It closes here rather than in the
-  // end-of-run sweep because the result now arrives under the id the approval was
-  // announced with (usetheokit/theokit#361) — until that landed, the two ids never
-  // matched and every pause span fell through to the sweep below.
-  const pause = state.pauses.get(id)
-  if (pause !== undefined) {
-    // Said positively so the duration is self-describing: an operator reading this
-    // span knows the number is the human's wait rather than a sweep's leftover.
-    pause.setAttribute('hitl.resume_observed', true)
-    pause.setStatus('ok')
-    pause.end()
+  // FALLBACK, and no longer the normal path (B-028). "The tool producing output IS the resume" was
+  // this file's stated premise, and it was wrong by the model's post-resume latency — measured at
+  // +1523 ms on a run whose human answered at 3306 ms. The approve endpoint now closes the span at
+  // the instant the human answers; this closes it for transports that settle an approval without
+  // one, the terminal prompt among them. `closePauseSpan` drops the handle on close, so whichever
+  // arrives second cannot overwrite a duration the first got right.
+  const pausedApprovalId = state.pauses.get(id)
+  if (pausedApprovalId !== undefined) {
+    closePauseSpan(pausedApprovalId, { resumeObserved: true })
     state.pauses.delete(id)
   }
 
@@ -298,7 +299,7 @@ export async function* observeAgentRun<T>(
   function closeAll(status: 'ok' | 'error', message?: string): void {
     if (settled) return
     settled = true
-    for (const span of state.pauses.values()) {
+    for (const approvalId of state.pauses.values()) {
       // A pause span reaching the sweep was never observed to resume, so its
       // duration approximates the whole run rather than the time a human took.
       // Saying so is not a nicety: an operator reading a four-minute pause span
@@ -312,9 +313,7 @@ export async function* observeAgentRun<T>(
       // reaches it is a pause that genuinely never resumed: the client
       // disconnected while a human was deciding, the approval timed out into an
       // aborted run, or the stream failed mid-pause.
-      span.setAttribute('hitl.resume_observed', false)
-      span.setStatus('error', 'HITL pause never observed to resume; duration is not the human wait')
-      span.end()
+      closePauseSpan(approvalId, { resumeObserved: false })
     }
     for (const span of state.tools.values()) {
       span.setStatus(status, message)

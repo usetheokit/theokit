@@ -14,6 +14,7 @@ import { validateCsrfRequest, type CsrfMode } from '../security/csrf.js'
 
 import { admitAgentRequest, agentAccessDenied, type AgentSubjectResolver } from './agent-access.js'
 import type { ApprovalDecision, ApprovalRegistry } from './approval-registry.js'
+import { closePauseSpan } from './hitl-pause-spans.js'
 
 /** The path segment separating the agent name from the approval id. */
 const APPROVE_SEGMENT = '/approve/'
@@ -192,6 +193,13 @@ export async function handleAgentApproval(
   if (!resolved) {
     return jsonError(404, 'NOT_PENDING', `No pending approval for id '${approvalId}'.`)
   }
+
+  // THIS is the resume instant, and it is why the span could not be closed correctly before
+  // (B-028). The run's observer never sees this request; it saw the tool's output arriving later
+  // and closed the pause there, so the recorded wait was the human's plus the model's — measured at
+  // +1523 ms on a run whose human answered at 3306 ms. Closing here, on the request that carries
+  // the answer, makes the duration the human's by construction rather than by subtraction.
+  closePauseSpan(approvalId, { resumeObserved: true })
   return new Response(JSON.stringify({ resolved: true }), {
     status: 200,
     headers: { 'content-type': 'application/json' },
