@@ -148,6 +148,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **The release now points the scaffold's template at the versions it publishes.** The template
+  pinned `"theokit": "^0.48.3"` while the repository was at `0.49.0`, and a caret on a `0.x` version
+  pins the minor — so that range excluded every 0.49 build, and nothing moved it. `changeset
+  version` bumps real package manifests; a `.tmpl` is not one it manages, so the pin had to be
+  edited by someone who remembered. Once a version published, `create-theokit` would keep
+  scaffolding apps on the previous line: the install succeeds, the app runs, and it is simply not
+  the framework anyone thinks they installed. `sync-template-pins.mjs` runs inside
+  `version-packages`, after the new numbers are set and before they are sent — deliberately a
+  release step and not a test, because between a bump and its publish the workspace is legitimately
+  ahead of npm, and a test enforcing agreement would ship a template that cannot install at all. The
+  template travels inside `create-theokit`, which publishes in the same run, so a user can never
+  receive a template pointing at a version that is not there yet. (#424)
+
 - **A gate refuses a publishable package that grants no licence, or the wrong one.** An npm package
   with no `license` field is all rights reserved by default — the repository's LICENSE does not
   travel in the tarball, so the manifest is the only grant an installer receives, and three of our
