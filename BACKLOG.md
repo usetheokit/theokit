@@ -195,6 +195,8 @@ status: triaged
 dod:
   - a middleware authored with the public `middleware()` builder is invoked by the file-scan runner in a published build
   - a regression test covers the builder-to-runner boundary rather than the builder alone
+  - **the convergence is decided.** `docs/adr/0003-one-middleware-contract-that-wraps-the-downstream.md` proposes the wrapping contract as the only one, with both runners folding the chain around route execution; it is `Proposed` and needs the project owner. Nothing above it can be built until that is answered, because "make the builder work" has three possible meanings and they are not equivalent
+remeasured 2026-08-22: **the report named two contracts and there are three** — the published one, the Node runner's, and `WebMiddleware`, whose own header records the convergence as deferred. What shipped in `095c786d1` is a refusal by name, so the mismatch is audible instead of a blank page; that is the correct interim and it is not the fix. The failure mode was also worse than filed: both shapes are functions, so the handler is called with `res` as its `next`, and returning a `Response` leaves the runner's own `next` uncalled — the request aborts and writes nothing
 
 ## B-004 — `readdirSync` is unsorted, so the client build is not reproducible   [ ]
 
