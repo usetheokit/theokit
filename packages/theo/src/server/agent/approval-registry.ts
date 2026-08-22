@@ -15,6 +15,8 @@
 // rather than re-declaring the union, so the two can never drift.
 import type { TimeoutAction } from '@theokit/agents'
 
+import { processSingleton } from '../_internal/process-singleton.js'
+
 export interface RegisterOptions {
   /** Milliseconds before the approval auto-settles per `onTimeout`. */
   timeoutMs: number
@@ -109,10 +111,13 @@ interface Pending {
  * swaps this accessor for a shared-store impl (ADR 0038 / plan Drawback 2) without touching callers.
  * Tests use {@link createInProcessApprovalRegistry} directly — never this singleton.
  */
-let serverRegistry: ApprovalRegistry | undefined
 export function getApprovalRegistry(): ApprovalRegistry {
-  serverRegistry ??= createInProcessApprovalRegistry()
-  return serverRegistry
+  // Per PROCESS, not per module instance (usetheokit/theokit#401). The paragraph above calls a
+  // single instance "not a convenience but a correctness requirement", and a module-level `let`
+  // does not deliver that: it gives one instance per MODULE INSTANCE, and this module is emitted
+  // into two chunks of the published bundle. A run awaiting an approval and the route resolving it
+  // could hold different objects, and the symptom would be a HITL pause that never resumes.
+  return processSingleton('approval-registry', () => createInProcessApprovalRegistry())
 }
 
 export function createInProcessApprovalRegistry(): ApprovalRegistry {

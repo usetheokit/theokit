@@ -137,6 +137,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **Registering a provider now affects the registry the server actually reads.** `registerProvider`
+  is public API with a documented self-hosting example, and it mutated a module-level array — which
+  gives one array per *module instance*, not per process. The bundler emits `provider-resolver` into
+  two chunks of the published build, and one of them is tree-shaken to `resolveProvider` without
+  `resetProviderRegistry`, so the halves genuinely diverge: the application registered into one
+  array while `theokit start` resolved against the other, and the resulting error listed the
+  defaults as though nothing had been registered. The HITL approval registry had the same shape in
+  two chunks, and there the stakes are higher — its own source calls a single instance "not a
+  convenience but a correctness requirement", because a run awaiting an approval and the route
+  resolving it must hold the same object or the pause never resumes. Both now resolve through one
+  `processSingleton` helper keyed on `Symbol.for`, so identity no longer depends on how the bundler
+  chose to split the graph. Chunking is a heuristic that changes with the import graph; a fix that
+  merely nudged it would hold until the next import. (#401)
+
 - **`create-theokit … --use-pnpm` stops reporting a failure on a successful install.** pnpm 10 no
   longer reads the `pnpm` field in `package.json` — it says so in the first line of every run — and
   that is where the template declared which dependencies may run install scripts. The list was

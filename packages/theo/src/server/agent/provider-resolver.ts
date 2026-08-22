@@ -1,3 +1,5 @@
+import { processSingleton } from '../_internal/process-singleton.js'
+
 /**
  * Provider Resolver — Strategy + Registry pattern (FAANG-grade).
  *
@@ -86,8 +88,16 @@ const DEFAULT_REGISTRY: ProviderDescriptor[] = [
 /**
  * Runtime registry — copy of DEFAULT_REGISTRY mutable via registerProvider().
  * Sorted by priority on every resolve (stable, O(n log n) — n <= ~10 providers).
+ *
+ * Held per PROCESS rather than per module instance (usetheokit/theokit#401). As a module-level
+ * `const` it was one array per chunk, and the bundler emits this module into two of them: an
+ * application calling `registerProvider` mutated one array while `theokit start` resolved against
+ * another, so the call had no effect and the resulting error listed the defaults while the
+ * registered provider sat in an object nobody read.
  */
-const registry: ProviderDescriptor[] = [...DEFAULT_REGISTRY]
+function registryOf(): ProviderDescriptor[] {
+  return processSingleton('provider-registry', () => [...DEFAULT_REGISTRY])
+}
 
 /**
  * Providers already announced, so a boot line does not become a per-request line.
@@ -126,6 +136,7 @@ export interface ResolveOptions {
  */
 export function registerProvider(descriptor: ProviderDescriptor): void {
   // Idempotent — replace existing by name.
+  const registry = registryOf()
   const idx = registry.findIndex((p) => p.name === descriptor.name)
   if (idx >= 0) registry[idx] = descriptor
   else registry.push(descriptor)
@@ -137,6 +148,7 @@ export function registerProvider(descriptor: ProviderDescriptor): void {
  * @public
  */
 export function resetProviderRegistry(): void {
+  const registry = registryOf()
   registry.length = 0
   registry.push(...DEFAULT_REGISTRY)
 }
@@ -147,7 +159,7 @@ export function resetProviderRegistry(): void {
  * @public
  */
 export function listProviders(): readonly ProviderDescriptor[] {
-  return [...registry].sort((a, b) => a.priority - b.priority)
+  return [...registryOf()].sort((a, b) => a.priority - b.priority)
 }
 
 /**
@@ -206,7 +218,7 @@ function providerOf(
  * @public
  */
 export function resolveProvider(modelId?: string, options?: ResolveOptions): ResolvedProvider {
-  const sorted = [...registry].sort((a, b) => a.priority - b.priority)
+  const sorted = [...registryOf()].sort((a, b) => a.priority - b.priority)
 
   const declared = modelId === undefined ? undefined : providerOf(modelId, sorted)
   if (declared !== undefined && modelId !== undefined) {
