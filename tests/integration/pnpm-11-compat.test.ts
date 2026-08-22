@@ -185,9 +185,12 @@ describe.skipIf(!infraReady)('pnpm 11 compat — scaffold + install + dev boot',
         )
         expect(existsSync(appDir)).toBe(true)
 
-        // Step 2: verify pnpm.onlyBuiltDependencies hint shipped
-        const pkg = JSON.parse(readFileSync(join(appDir, 'package.json'), 'utf-8'))
-        expect(pkg.pnpm?.onlyBuiltDependencies).toContain('esbuild')
+        // Step 2: the build approvals ship where pnpm READS them. This asserted
+        // `pkg.pnpm.onlyBuiltDependencies` until #397, and pnpm 10+ announces in the
+        // first line of every run that it no longer reads that field — so the
+        // assertion was passing on a hint the tool ignored.
+        const workspaceYaml = readFileSync(join(appDir, 'pnpm-workspace.yaml'), 'utf-8')
+        expect(workspaceYaml).toMatch(/^\s*esbuild:\s*true\s*$/mu)
 
         // Step 3: install via pnpm 11 (env-scoped). pnpm 11 exits non-zero on
         // ERR_PNPM_IGNORED_BUILDS even when install completed. Check by file
@@ -214,6 +217,17 @@ describe.skipIf(!infraReady)('pnpm 11 compat — scaffold + install + dev boot',
           `pnpm install did not produce node_modules/theokit.\n` +
             `${unpublishedPinNote(appDir)}pnpm stderr:\n${installStderr.slice(-2000)}`,
         ).toBe(true)
+
+        // The title's promise, asserted. Until #397 this test tolerated
+        // ERR_PNPM_IGNORED_BUILDS — the comment above says a non-zero exit is
+        // "EXPECTED" — while its name said "without". It was accommodating the
+        // defect #397 reports rather than catching it, which is why a green suite
+        // coexisted with a scaffolder that failed on its first command.
+        expect(
+          installStderr,
+          `pnpm refused to run a build script. The approvals ship in pnpm-workspace.yaml; if pnpm ` +
+            `stopped reading them there, that is the finding.\npnpm stderr:\n${installStderr.slice(-2000)}`,
+        ).not.toContain('ERR_PNPM_IGNORED_BUILDS')
 
         // Step 4: boot dev via theokit binary direct (bypass pnpm wrapper's
         // deps-status-check that re-trips ERR_PNPM_IGNORED_BUILDS)
