@@ -196,7 +196,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   the resume got right. Transports that settle without an approve request, the terminal prompt among
   them, keep the previous behaviour through that same path. In-process only, and a pause that never
   resumes is still marked `hitl.resume_observed=false` instead of reporting a duration it did not
-  measure. (usetheokit/theokit#361 follow-up, B-028)
+  measure. The registry exposes exactly two functions — register and close. A third, "drop the handle
+  without ending it", shipped in the first draft of this entry and was deleted before release: every
+  path that removes a pause span also has an answer for it, so a handle dropped without one is a
+  span that silently never arrives, which is what this module exists to prevent.
+  (usetheokit/theokit#361 follow-up, usetheokit/theokit#419, B-028)
 
 - **A relative `ogImage` is refused in development instead of shipping a broken social card.** Open
   Graph resolves `og:image` against the *crawler's* origin, not the page's, so a relative path
