@@ -43,7 +43,12 @@ export const policy = 'public'
 
 export default AgentBuilder.create()
   .input(z.object({ message: z.string() }))
-  .model('openai/gpt-4o-mini')
+  // `LLM_MODEL` is honoured HERE, not by the framework, because this is where the model is
+  // declared and this file is yours. `.env.example` documented the variable and nothing read it,
+  // so setting it changed the model to exactly what it already was (#398, #408). One expression is
+  // cheaper than an override path through the framework, and it keeps the value visible in the file
+  // that decides it. The literal stays as the fallback: a scaffold has to run with no environment.
+  .model(process.env.LLM_MODEL ?? 'openai/gpt-4o-mini')
   .system(BASE_INSTRUCTIONS)
   .tool(weatherTool)
   .tool(currentTimeTool)

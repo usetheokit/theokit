@@ -115,7 +115,31 @@ describe('create-theokit default template — agent surface (T3.1)', () => {
 
   it('M31: agents/chat.ts declares a model', () => {
     const agent = read('agents/chat.ts')
-    expect(agent).toMatch(/\.model\(\s*['"]/)
+    // The literal is still there as the fallback — a scaffold must run with no
+    // environment at all.
+    expect(agent).toMatch(/\.model\([^)]*['"][\w-]+\/[\w.-]+['"]/u)
+  })
+
+  it('the documented LLM_MODEL override is actually read (#398, #408)', () => {
+    // `.env.example` offered this knob and nothing in the framework read it, so
+    // setting it changed the model to exactly what it had been — silently.
+    //
+    // The fix is not a framework feature: the model is declared in THIS file,
+    // which the developer owns and edits, so the scaffold reads the variable
+    // where the value already lives. Adding an override path to the framework
+    // for a knob a template can honour in one expression is the abstraction
+    // nobody asked for.
+    const agent = read('agents/chat.ts')
+    expect(agent).toContain('process.env.LLM_MODEL')
+    expect(agent).toMatch(/process\.env\.LLM_MODEL\s*\?\?/u)
+  })
+
+  it('.env.example does not name a concept the app author cannot reach', () => {
+    // The comment pointed at `ModelCapability`, which exists only in the agents
+    // package's source and its tests. A scaffolded app never sees it, so it
+    // sends the reader looking for a file that is not in their project.
+    const env = read('.env.example')
+    expect(env).not.toContain('ModelCapability')
   })
 
   it('M3: agents/chat.ts does NOT reference the removed proprietary surface', () => {
