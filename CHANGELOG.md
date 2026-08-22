@@ -136,6 +136,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   (usetheokit/theokit#213)
 
 ### Fixed
+- **The scaffolded desktop sidecar stops emitting a second, non-conformant approval frame.**
+  `runTurnToJsonl` writes every chunk the in-process turn produces, and a gated tool produces the
+  real `tool-approval-request` carrying the `toolCallId` readers key a tool part by. The template's
+  own `awaitApproval` callback then wrote another line by hand, shaped
+  `{ type, approvalId, toolName }` — a shape the framework's own `wireChunkSchema` refuses. It was
+  inert rather than broken, because the transport parses pushed lines without validating and the
+  reader drops an approval naming a call it never saw; what it cost is that the file every desktop
+  app is generated from taught a frame the framework rejects, and a future reader that validates —
+  or that keys approvals by `approvalId` — would inherit a duplicate with no rule for it. The
+  callback now registers the resolver and writes nothing. (#403)
 - **A streaming answer that is cut off no longer arrives as a complete one.** A route handler whose
   streaming body failed part-way through was delivered as a normal `200` with a short body: the
   executor caught the stream error, logged it, ran the `onError` hook — and then reached the same
