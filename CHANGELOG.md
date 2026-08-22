@@ -146,6 +146,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   asks, and each entry says what the package is and why it runs code at install time.
   (usetheokit/theokit#397)
 
+- **The agent SSE response tells the path not to buffer it.** It sent two headers, so any
+  intermediary that buffers by default — nginx, a compressing reverse proxy, a CDN edge — could hold
+  a whole run and deliver it as one block at the end, while the server streamed correctly and told
+  nobody. `cache-control: no-cache` and `x-accel-buffering: no` now ship on the encoder, the thread
+  route and the reconnect replay. `connection: keep-alive`, the fifth header the AI SDK sends, is
+  deliberately absent: it is hop-by-hop, redundant on HTTP/1, and dropped by Node on HTTP/2 with a
+  warning per response. (usetheokit/theokit#383)
+
 - **Conversation transcripts stop landing in git.** The framework writes every conversation to
   `<app>/.data/agent-sessions/…/<sessionId>.jsonl` and the scaffold's ignore file listed `data/`,
   without the dot — matching nothing the framework writes. Running a scaffolded app once and

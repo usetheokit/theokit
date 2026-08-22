@@ -18,9 +18,26 @@ import type { RunEventCache } from './run-event-cache.js'
  * still `end`ed in the cache and `[DONE]` is flushed — never left hanging.
  */
 
-/** The UIMessageStream SSE base headers — shared by the encoder + reconnect handler (DRY). */
+/**
+ * The UIMessageStream SSE base headers — shared by the encoder, the thread route and the reconnect
+ * handler (DRY), so a response cannot stream on one path and be buffered on another.
+ *
+ * `cache-control` and `x-accel-buffering` are what tell the PATH not to hold the run
+ * (usetheokit/theokit#383). The server streamed correctly and said nothing downstream, so any
+ * intermediary that buffers by default — nginx, a compressing reverse proxy, a CDN edge — was free
+ * to deliver the whole run as one block at the end. That breaks where it is hardest to notice:
+ * behind someone else's proxy, in production, looking correct.
+ *
+ * The Vercel AI SDK, whose wire this mirrors, sends a fifth — `connection: keep-alive`. It is
+ * deliberately absent, on measurement rather than preference: it is hop-by-hop, Node manages
+ * keep-alive itself on HTTP/1, and on HTTP/2 Node drops it with
+ * `UnsupportedWarning: The provided connection header is not valid` — so it would buy nothing on
+ * one protocol and print a warning per response on the other.
+ */
 export const SSE_BASE_HEADERS = {
   'content-type': 'text/event-stream',
+  'cache-control': 'no-cache',
+  'x-accel-buffering': 'no',
   'x-vercel-ai-ui-message-stream': 'v1',
 } as const
 
