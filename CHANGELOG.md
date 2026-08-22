@@ -7,6 +7,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Added
+- **`mcpInventory()` answers what the agent's MCP servers are DOING, not what the file says.**
+  `loadMcpJson` reads the configuration, and a `/mcp` command built on it shows what is configured —
+  which is not the question a user opens the command to ask. They open it to find the server that
+  failed its handshake, or the one they wrote down that never came up. The new function projects the
+  configured map and the observed failures into one per-server status (`loaded` / `failed` /
+  `ignored`), each carrying its reason. It is a composition of two things this package already held,
+  not a second source of truth, and the turn semantics stay in the health sink rather than being
+  copied. The tool-level inventory is deliberately NOT claimed: that table exists only inside the
+  SDK's agent loop and no run event carries it, so the type says so instead of leaving its absence to
+  be discovered. (#192)
+
 - **`config.plugins` accepts a module specifier, not only a constructed plugin.**
   `plugins: ['./src/plugins/audit.ts', inlinePlugin()]` — a string is resolved to that module's
   default export, by `theokit start` and the Vite dev server alike, so one declaration serves both.
