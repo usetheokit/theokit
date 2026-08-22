@@ -7,6 +7,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Added
+- **`config.plugins` accepts a module specifier, not only a constructed plugin.**
+  `plugins: ['./src/plugins/audit.ts', inlinePlugin()]` — a string is resolved to that module's
+  default export, by `theokit start` and the Vite dev server alike, so one declaration serves both.
+  The reason is not ergonomics: a constructed plugin closes over state and has no literal, which is
+  why no generated deploy entry could carry one and why every lifecycle hook was dead on a deployed
+  app while firing locally. Naming the module lets a build emit a static import for that module and
+  nothing else — bundling the whole `theo.config.ts` was measured and rejected, because it silently
+  drops `theo.config.<NODE_ENV>.ts` and pulls every module the config imports into the deploy
+  bundle. Purely additive: an app passing objects is unaffected. A specifier that cannot be loaded,
+  or whose module has no default export, fails by name with its index rather than being skipped.
+  (#425)
+
 - **`HttpTransport` accepts a `runIdStore`, so a reload can still reach a run the server holds.**
   The reconnect key lived in a private in-memory field, so a reloaded page built a fresh transport
   with an empty cell and `reconnectToStream` returned `null` before it reached the network — while

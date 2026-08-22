@@ -17,6 +17,7 @@ import { join, resolve } from 'node:path'
 
 import { loadConfig } from '../../../config/load-config.js'
 import { loadEnv } from '../../../config/load-env.js'
+import { resolvePluginSpecifiers } from '../../../config/resolve-plugin-specifiers.js'
 import { initCacheEngineFromConfig } from '../../../server/cache-bootstrap.js'
 import { createCronScheduler } from '../../../server/cron/cron-runtime-node.js'
 import { defineHealthRoute } from '../../../server/define/health-route.js'
@@ -100,10 +101,11 @@ export async function startCommand(options: StartOptions): Promise<void> {
   // also runs first, so the span closes just before the tail of the chain. Head
   // coverage matters more — auth and rate-limit hooks live there.
   const observabilityPlugin = createObservabilityPluginFromConfig(config.observability, process.env)
+  // #425 — a `plugins` entry MAY be a module specifier, so the same declaration the build bakes
+  // into a deployed entry is the one this server registers. Constructed plugins pass through.
+  const declaredPlugins = await resolvePluginSpecifiers(config.plugins ?? [], cwd)
   const pluginRunner = await createPluginRunnerFromConfig(
-    observabilityPlugin === undefined
-      ? config.plugins
-      : [observabilityPlugin, ...(config.plugins ?? [])],
+    observabilityPlugin === undefined ? declaredPlugins : [observabilityPlugin, ...declaredPlugins],
   )
   const transformer = resolveTransformer(config.serialization)
 
