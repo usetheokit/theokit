@@ -476,6 +476,7 @@ dod:
   - a written convention says where a fixture's shape must come from — the published `.d.ts`, the producer's own builder, a recorded payload — and it lives somewhere a reviewer will cite
   - the mocks standing in for a published interface declare that interface, so a signature change breaks them instead of drifting past
   - at least one existing suite is re-checked against the convention and the result is reported, pass or fail
+remeasured 2026-08-21: **two fresh instances, both caught before they landed, both in work done the same day.** A name-based test for the scan walker PASSED before the sort existed, because this machine's ext4 happened to return those four names already ordered — the test and the code had observed the same accidental order and could not disagree. It was replaced with an injected reader handing back a hostile order, and verified by removing the sort and watching 3 of 4 go red. Separately, the linter called `<Image>`'s runtime guards impossible because the types prove the props are present; deleting them on that argument would have left the comment describing a check that no longer existed, so they read through a widened view of what an untyped caller can actually pass. Neither is a new finding, and that is the point of recording them: the item describes a shape that recurs, and a count of recurrences is what tells anyone whether it is getting rarer
 
 ## B-023 — the deploy shim buffers a stream whole, across six of nine targets   [ ]
 
@@ -556,6 +557,7 @@ dod:
   - the per-isolate limit is stated rather than implied: `InMemoryStore` holds within one instance and both factories throw for any other store, so on Vercel, Lambda, Cloudflare and Netlify the honest description of the finished work is a limiter that does not limit across instances
   - the two Web mirrors are deleted or given a caller — `packages/theo/src/server/rate-limit/rate-limit.ts:105` and `packages/theo/src/server/rate-limit/rate-limit-per-route.ts:295` have none, and the flat shape is what J7's deliberately broken state scores as a failure
   - J7's metric 1-4 re-derived afterwards, because the wiring adds lines somewhere and the journey is graded on how few it costs
+remeasured 2026-08-21: **not started, and the reason is scope rather than difficulty.** The item's own warning holds on re-reading the adapters: wiring the limiter without per-runtime address resolution gives five of six targets a single shared bucket keyed on `0.0.0.0`, which is a self-inflicted denial of service rather than a partial fix. Three of the six addresses are not headers and must be threaded through generated entries that currently drop them, so this is a change to what each adapter emits, not a call site. Left whole deliberately: a slice that wires the two easy targets would put the framework's best benchmark result on a limiter that protects some callers and starves the rest
 note: the build now names the drop rather than swallowing it (`packages/theo/src/adapters/config-support.ts`), which is a stopgap and not this item. Warning was chosen over refusing on purpose: refusing breaks every deployment that declares a limit today, while the fix is days to a week
 
 ## B-028 — the HITL pause span measures the human plus the model, and only the human was asked for   [ ]
@@ -672,6 +674,11 @@ dod:
   - the build emits an asset manifest that maps a route to the chunks it needs
   - the served document carries `modulepreload` for the matched route's chunks, observed over the wire against a published build rather than asserted over the template string
   - a route with no additional chunks emits no preload, so the tag means something when it is present
+note: **design measured 2026-08-21, and the obstacle is not effort.** The consuming seam exists and is clean — `withHoistedHead` injects tags into the template head per request (`packages/theo/src/cli/commands/start/request-handler.ts:110`), and React 19 already hoists a `<link>` rendered anywhere in the tree, which is the mechanism `client/metadata.tsx` runs on. Emitting the manifest is one line: the client build passes `build: { outDir, emptyOutDir }` with no `manifest: true` (`packages/theo/src/adapters/node.ts:47-50`).
+
+  What blocks it is ordering plus a target. Chunk names are known only AFTER bundling, so the route→chunk map cannot be a literal in the route manifest the plugin generates before it. Reading `.vite/manifest.json` from disk at render time solves it for every target that has a filesystem and breaks the one that does not — the Cloudflare worker, where a runtime `readdirSync` is already the open defect `B-018` records. So the map has to be injected into each emitted entry at build time, per adapter, which makes this a change to the adapter contract rather than a change to the renderer.
+
+  Recorded rather than attempted: this is an M3 parity criterion, and a half-wired version of it would be the shape this programme keeps finding.
 
 ## B-036 — markdown images and external links bypass the framework's own components   [ ]
 
