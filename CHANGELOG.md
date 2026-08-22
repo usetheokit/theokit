@@ -187,6 +187,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   (usetheokit/theokit#213)
 
 ### Fixed
+
+- **A request nobody traced upstream now reaches the collector as one trace, not two.** The
+  `http.request` span and the `agent.run` span both decided which trace they belonged to by reading
+  the inbound `traceparent` header — independently. That agrees only while the header is there, and
+  a browser sends none, so on the majority path each side minted a trace of its own and one request
+  arrived as two disconnected traces, neither naming the other. The request's trace is now resolved
+  once and shared, and the run hangs under the HTTP span this process opened instead of beside it,
+  so the waterfall shows the shape of the request rather than a flat pair of roots. A run with no
+  HTTP span in scope stays the root of its own trace: pointing it at a span nobody emitted would
+  read as a span lost in transit, which is a worse report than an honest root. (#404)
+
 - **A local model can delegate.** `createDelegateTool` refused to construct when a target was a
   `SubAgentSpec` and `defaults.apiKey` was empty, and `delegate()` refused the same way deeper in
   its own stack — both reading "non-empty string" as the definition of authenticated. That was safe

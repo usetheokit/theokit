@@ -37,7 +37,7 @@
  * alternative reading ("the trace of the live request") is wrong and would look
  * identical in the payload.
  */
-import { extractW3CTraceContext } from '../http/trace-context.js'
+import { requestTrace } from '../observability/request-trace.js'
 import { getObservabilityAdapter } from '../observability-bootstrap.js'
 
 import { observeAgentRun, type AgentRunSpanContext } from './observe-agent-run.js'
@@ -84,13 +84,19 @@ export function observeServedRun<T>(
   const adapter = getObservabilityAdapter()
   if (adapter === undefined) return stream
 
-  const inbound = extractW3CTraceContext(options.request)
-  const context: AgentRunSpanContext = { agent: options.agentName }
+  // The request's trace, resolved once for the whole request rather than re-read from the header
+  // here (usetheokit/theokit#404). Reading the header was the same answer only while a header was
+  // there; without one, this side minted a trace of its own and the request split in two.
+  const trace = requestTrace(options.request)
+  const context: AgentRunSpanContext = { agent: options.agentName, traceId: trace.traceId }
   if (options.sessionId !== undefined) context.sessionId = options.sessionId
-  if (inbound !== undefined) {
-    context.traceId = inbound.traceId
-    if (inbound.parentSpanId !== undefined) context.parentSpanId = inbound.parentSpanId
-  }
+
+  // Under the span this process opened for the request when there is one; otherwise under the
+  // caller's, which is the pre-existing behaviour for a traced request that reached a route with no
+  // HTTP span. With neither, the run is the honest root of its own trace — naming a span nobody
+  // emitted would read as a span lost in transit.
+  const parentSpanId = trace.outermostSpanId ?? trace.parentSpanId
+  if (parentSpanId !== undefined) context.parentSpanId = parentSpanId
 
   return observeAgentRun(stream, adapter, context)
 }

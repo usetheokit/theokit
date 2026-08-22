@@ -259,6 +259,75 @@ describe('the http.request span joins the caller trace (usetheokit/theokit#385)'
   })
 })
 
+/**
+ * The majority path (usetheokit/theokit#404).
+ *
+ * Every assertion above hands the request a `traceparent`, so both consumers read one id off the
+ * wire and agree by reading the same header — not by sharing anything. A browser sends no
+ * `traceparent`, and neither does `curl` or an uninstrumented `fetch`, so the common request took
+ * the branch nothing covered: `inboundContext` minted a trace at the door, `observeServedRun`
+ * minted another for the run, and one request reached the collector as two disconnected traces.
+ *
+ * These read the exported payload for a request with NO header, which is the only difference from
+ * the sibling assertions above and was the entire difference between working and broken.
+ */
+describe('a request nobody traced upstream is still ONE trace (usetheokit/theokit#404)', () => {
+  it('test_an_untraced_request_that_runs_an_agent_reaches_the_collector_as_ONE_trace', async () => {
+    const probe = createExportProbe()
+    const plugin = createObservabilityPluginFromConfig({ provider: probe.adapter }, {})
+    const { app, fire } = createFakeApp()
+    await plugin?.register(app as never)
+
+    const request = agentPost()
+    const ctx = httpContext(request)
+    await fire('onRequest', ctx)
+    await drain(await mountAgent({}, request, 'sk-test', { csrfMode: 'off', source: 'chat' }))
+    await fire('onResponse', ctx)
+
+    const spans = await probe.exported()
+    // The defect, in one assertion: this was a set of TWO minted ids for one request.
+    expect(new Set(spans.map((s) => s.traceId)).size).toBe(1)
+    expect(spans.map((s) => s.name).sort((a, b) => a.localeCompare(b))).toEqual([
+      'agent.run',
+      'agent.tool',
+      'http.request',
+    ])
+  })
+
+  it('test_the_untraced_run_hangs_under_the_http_span_this_process_opened', async () => {
+    const probe = createExportProbe()
+    const plugin = createObservabilityPluginFromConfig({ provider: probe.adapter }, {})
+    const { app, fire } = createFakeApp()
+    await plugin?.register(app as never)
+
+    const request = agentPost()
+    const ctx = httpContext(request)
+    await fire('onRequest', ctx)
+    await drain(await mountAgent({}, request, 'sk-test', { csrfMode: 'off', source: 'chat' }))
+    await fire('onResponse', ctx)
+
+    const spans = await probe.exported()
+    // With no caller span to name, the only honest parent is the outermost span this process
+    // opened for the request. Sharing a trace id without this leaves the run a second root and
+    // the waterfall flat.
+    expect(spanNamed(spans, 'agent.run').parentSpanId).toBe(spanNamed(spans, 'http.request').spanId)
+  })
+
+  it('test_a_run_with_no_http_span_in_scope_names_no_parent_that_never_existed', async () => {
+    const probe = createExportProbe()
+    // No plugin registered, so nothing opens an `http.request` span. A run here is legitimately the
+    // root of its own trace; pointing it at a span id this process never emitted would be worse
+    // than the two-trace defect, because a dangling parent looks like a lost span.
+    createObservabilityPluginFromConfig({ provider: probe.adapter }, {})
+
+    await drain(await mountAgent({}, agentPost(), 'sk-test', { csrfMode: 'off', source: 'chat' }))
+
+    const run = spanNamed(await probe.exported(), 'agent.run')
+    expect(run.traceId).toMatch(HEX32)
+    expect(run.parentSpanId).toBeUndefined()
+  })
+})
+
 describe('a run trace does not depend on which endpoint started it (usetheokit/theokit#381)', () => {
   it('test_the_thread_route_run_continues_the_trace_the_client_sent', async () => {
     const probe = createExportProbe()

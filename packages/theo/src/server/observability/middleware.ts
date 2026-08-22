@@ -35,11 +35,11 @@
  * exporter carrying the reason it was cut — trading a memory leak for a silent
  * hole in the trace would be the worse bargain.
  */
-import { extractW3CTraceContext } from '../http/trace-context.js'
 import type { PluginContext, PluginErrorContext, TheoApp, TheoPlugin } from '../plugin-types.js'
 
 import type { ObservabilityAdapter, SpanContextInput, SpanHandle } from './adapters/types.js'
-import { newTraceId } from './trace-context-propagation.js'
+import { recordOutermostSpan, requestTrace } from './request-trace.js'
+import { newSpanId } from './trace-context-propagation.js'
 
 /**
  * How many requests may be in flight with an unclosed span before the oldest is
@@ -75,8 +75,9 @@ export function createObservabilityPlugin(
   }
 
   /**
-   * Where the request's span sits: in the caller's trace, under the caller's
-   * span, when the caller sent a `traceparent` (usetheokit/theokit#385).
+   * Where the request's span sits: in the request's trace — the caller's when the caller sent a
+   * `traceparent` (usetheokit/theokit#385), a freshly minted one otherwise — under the caller's
+   * span when there is one.
    *
    * This is the OUTERMOST span of a request, which makes it precisely the caller
    * `startSpan`'s optional `context` was written for — and precisely the caller
@@ -88,16 +89,22 @@ export function createObservabilityPlugin(
    * carried, and written to a field no tracing backend correlates on.
    *
    * No `traceparent` (or a malformed one) mints a fresh trace, which is the
-   * correct answer for a request nothing upstream traced. `extractW3CTraceContext`
+   * correct answer for a request nothing upstream traced — and it is minted by
+   * `requestTrace`, ONCE, so the run joins that trace instead of minting a
+   * second one of its own (usetheokit/theokit#404). The extraction there
    * deliberately refuses `x-request-id` and dashed UUIDs: those are fine
    * correlation keys and are not trace ids.
    */
-  function inboundContext(request: Request): SpanContextInput {
-    const inbound = extractW3CTraceContext(request)
-    if (inbound === undefined) return { traceId: newTraceId() }
-    return inbound.parentSpanId === undefined
-      ? { traceId: inbound.traceId }
-      : { traceId: inbound.traceId, parentSpanId: inbound.parentSpanId }
+  function requestSpanContext(request: Request): SpanContextInput {
+    const trace = requestTrace(request)
+    // Pinned rather than left to the adapter, because this id is what everything else the request
+    // causes hangs under — `SpanContextInput.spanId` exists for exactly this caller. Recording it
+    // is what makes the run a child instead of a second root (usetheokit/theokit#404).
+    const spanId = newSpanId()
+    recordOutermostSpan(request, spanId)
+    return trace.parentSpanId === undefined
+      ? { traceId: trace.traceId, spanId }
+      : { traceId: trace.traceId, spanId, parentSpanId: trace.parentSpanId }
   }
 
   /** Take the span for a request, if one is still open. */
@@ -123,7 +130,7 @@ export function createObservabilityPlugin(
             path: new URL(ctx.request.url).pathname,
             requestId: ctx.requestId,
           },
-          inboundContext(ctx.request),
+          requestSpanContext(ctx.request),
         )
         activeSpans.set(ctx.requestId, span)
       })
