@@ -16,8 +16,31 @@
  * invoke it only on a path they are about to answer, which is the same discipline theokit#400
  * imposed on `source.toRequest()` for the same dispatcher.
  *
- * Callers on the Node path MUST invoke it before converting the request to a Web `Request`:
- * the conversion drains the Node readable, and `createContext` receives the Node `req`.
+ * ## What `createContext` can read here, and what it cannot (usetheokit/theokit#415)
+ *
+ * **Headers and cookies: yes. The request body: no.**
+ *
+ * This used to state the opposite as a MUST — "invoke it before converting the request to a Web
+ * `Request`" — and no caller could honour it. The laziness argued for directly above is what makes
+ * it unsatisfiable: the invocation necessarily happens INSIDE the handler, and the handler is
+ * entered after `serveThroughPluginLifecycle` has already called `source.toRequest()` at the top of
+ * its bracket. `incomingMessageToWebRequest` attaches the Node readable as the request body
+ * (`body: webStream, duplex: 'half'`), so by the time an application's `createContext` receives
+ * that `IncomingMessage`, the stream is consumed.
+ *
+ * The contract was written for an EAGER resolver and kept when the resolver became lazy. Both
+ * decisions were right on their own; the sentence joining them was not, and it pointed callers at
+ * something impossible while implying a capability that does not exist.
+ *
+ * Practically this costs little — identity is overwhelmingly a header or a cookie, and both survive
+ * the conversion untouched. What it costs an application that resolves identity from the BODY is an
+ * empty read or a wait for an `'end'` that already fired, which is why saying so plainly matters
+ * more than the frequency suggests.
+ *
+ * Restoring body access would mean resolving eagerly — running the application's `createContext`
+ * twice on every route request, which is exactly what the laziness exists to prevent — or buffering
+ * every agent request body to replay it, which is a cost paid by every caller for a case almost
+ * none has.
  */
 import type { IncomingMessage, ServerResponse } from 'node:http'
 

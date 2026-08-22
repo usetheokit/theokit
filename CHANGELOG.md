@@ -146,6 +146,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   (usetheokit/theokit#213)
 
 ### Fixed
+- **The agent subject resolver stops documenting a rule none of its callers can follow.** Its
+  docstring stated a MUST — "invoke it before converting the request to a Web `Request`" — that the
+  laziness argued for two paragraphs above makes unsatisfiable: the invocation happens inside the
+  handler, and the handler is entered after the plugin bracket has already converted, attaching the
+  Node readable as the request body. So an application's `createContext` receives a stream that is
+  already consumed. Both decisions were right on their own; the sentence joining them was written
+  for an eager resolver and kept when the resolver became lazy. The contract now says what holds —
+  headers and cookies reach `createContext`, the request body does not — with the two ways to
+  restore body access named and costed rather than left as an implied capability. Pinned by a test,
+  so the prose cannot drift back. (#415)
 - **A denied HITL approval no longer captures the next call of the same tool.** The correlation
   that pairs an approval id with the SDK's runtime call id does so by tool name, FIFO, on the
   reasoning that "an approval is outstanding only while the call it gates is outstanding". That
