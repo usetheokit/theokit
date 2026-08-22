@@ -157,6 +157,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   (usetheokit/theokit#213)
 
 ### Fixed
+- **A local model can delegate.** `createDelegateTool` refused to construct when a target was a
+  `SubAgentSpec` and `defaults.apiKey` was empty, and `delegate()` refused the same way deeper in
+  its own stack — both reading "non-empty string" as the definition of authenticated. That was safe
+  while every provider held a key and stopped being safe once a keyless provider became reachable,
+  because an empty key is exactly what one resolves to. `apiKey: null` declares that the provider
+  takes no credential, deliberately distinct from `''`: an empty string is also what an unset
+  environment variable produces, and folding the two together would turn a typo into an
+  unauthenticated run. `undefined` is still refused, still at startup rather than at the model's
+  first call, and the refusal now names the keyless option instead of leaving the reader to choose
+  between a fabricated value and giving up. (#423)
 - **The agent subject resolver stops documenting a rule none of its callers can follow.** Its
   docstring stated a MUST — "invoke it before converting the request to a Web `Request`" — that the
   laziness argued for two paragraphs above makes unsatisfiable: the invocation happens inside the
