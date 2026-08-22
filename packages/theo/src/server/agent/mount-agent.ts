@@ -133,6 +133,40 @@ interface MountAgentOptions {
  *
  * @returns the parsed input, or the `Response` that refuses the request.
  */
+/**
+ * Wrap a subject resolver so one request resolves at most once (B-016).
+ *
+ * The gate needs the caller's identity, and so does the approval ledger when the run pauses on a
+ * gated tool. Resolving twice would double whatever the application's `server/context.ts` does — a
+ * session lookup, a token verification, a query — for a value that cannot change inside one request.
+ */
+function memoizeSubject(
+  resolveSubject: AgentSubjectResolver | undefined,
+): AgentSubjectResolver | undefined {
+  if (resolveSubject === undefined) return undefined
+  let resolved: { subject: Awaited<ReturnType<AgentSubjectResolver>> } | undefined
+  return async () => {
+    resolved ??= { subject: await resolveSubject() }
+    return resolved.subject
+  }
+}
+
+/**
+ * Who owns the approvals this run raises, or `undefined` (B-016).
+ *
+ * Recorded only when the agent DECLARES a policy. An agent declaring `'public'` — or declaring
+ * nothing — is one where identity does not govern access, and attributing its approvals would start
+ * refusing callers the declaration admits: a behaviour change dressed as a bug fix. So the ledger
+ * stays empty there and the approve route behaves exactly as before.
+ */
+async function resolveApprovalOwner(
+  declaredPolicy: RoutePolicy | undefined,
+  resolveOnce: AgentSubjectResolver | undefined,
+): Promise<string | undefined> {
+  if (declaredPolicy === undefined || declaredPolicy === 'public') return undefined
+  return ((await resolveOnce?.()) ?? undefined)?.id
+}
+
 async function admitRequest(
   request: Request,
   policy: RoutePolicy | undefined,
@@ -201,12 +235,11 @@ export async function mountAgent(
   // always has; both convention routes name one, which is why neither exports a path any more.
   const identity = agentName ?? source
 
-  const admitted = await admitRequest(
-    request,
-    policy ?? readAgentPolicy(mod, source),
-    resolveSubject,
-    identity,
-  )
+  const declaredPolicy = policy ?? readAgentPolicy(mod, source)
+
+  const resolveOnce = memoizeSubject(resolveSubject)
+
+  const admitted = await admitRequest(request, declaredPolicy, resolveOnce, identity)
   if (admitted instanceof Response) return admitted
   const input = admitted
 
@@ -227,7 +260,7 @@ export async function mountAgent(
   // registers a pending approval in the shared registry (the Promise that PAUSES the run); the
   // approve route (`handleAgentApproval`) resolves it. No gated tools ⇒ the M2 stream path unchanged.
   // Extracted to `build-agent-streamer.ts` (M39 / DRY — the thread routes reuse the same wiring).
-  const hitl = buildAgentHitl(compiled)
+  const hitl = buildAgentHitl(compiled, await resolveApprovalOwner(declaredPolicy, resolveOnce))
 
   // M37 (ADR-0046) — mint a transport runId + stream through the durable layer:
   // each SSE frame is cached + `id:`-tagged so a dropped client can reconnect

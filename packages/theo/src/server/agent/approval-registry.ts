@@ -28,6 +28,18 @@ export interface RegisterOptions {
   /** M14 — the approval question, surfaced by `list()` (optional). */
   question?: string
   /**
+   * Who the run belongs to — the `RouteSubject.id` admitted for it (B-016).
+   *
+   * Absent when the run had no identity to record, which is the `'public'` agent path:
+   * `admitAgentRequest` deliberately does not resolve a subject when the policy is absent or
+   * `'public'`, so there is nothing to attribute the approval to. Absent therefore means "no owner
+   * was established", never "anyone", and the caller must branch on the difference — a rule that
+   * refused when it is absent would start turning public agents away.
+   *
+   * Deliberately NOT surfaced by `list()`: that listing feeds a UI, and owner ids are identity.
+   */
+  owner?: string
+  /**
    * M20 — an optional JSON-schema descriptor of the custom payload the approver may attach. Carried
    * verbatim into `list()` + the `approval_required` event so the UI knows what to collect. Kept as
    * a plain JSON object (not a live Zod schema) so the registry stays serializable and SDK-free.
@@ -70,12 +82,22 @@ export interface ApprovalRegistry {
   resolve(approvalId: string, decision: boolean | ApprovalDecision): boolean
   /** M14 — list the currently-pending approvals (process-wide; single-process contract). */
   list(): PendingApproval[]
+  /**
+   * Who owns the pending approval `approvalId`, or `undefined` (B-016).
+   *
+   * `undefined` covers three cases the caller treats identically — never registered, already
+   * settled, and registered without an owner — because in all three there is nothing to compare a
+   * caller against.
+   */
+  ownerOf(approvalId: string): string | undefined
 }
 
 interface Pending {
   settle: (decision: ApprovalDecision) => void
   timer: ReturnType<typeof setTimeout>
   info: PendingApproval
+  /** Held beside `info` rather than inside it, so `list()` cannot leak it (B-016). */
+  owner?: string
 }
 
 /**
@@ -117,7 +139,12 @@ export function createInProcessApprovalRegistry(): ApprovalRegistry {
           expiresAt: Date.now() + opts.timeoutMs,
           ...(opts.payloadSchema !== undefined ? { payloadSchema: opts.payloadSchema } : {}),
         }
-        pending.set(approvalId, { settle, timer, info })
+        pending.set(approvalId, {
+          settle,
+          timer,
+          info,
+          ...(opts.owner !== undefined ? { owner: opts.owner } : {}),
+        })
       })
     },
     resolve(approvalId, decision) {
@@ -129,6 +156,11 @@ export function createInProcessApprovalRegistry(): ApprovalRegistry {
     },
     list() {
       return [...pending.values()].map((p) => p.info)
+    },
+    ownerOf(approvalId) {
+      // `settle` deletes the entry, so an approval that has been answered or timed out reports no
+      // owner — which is what stops a later registration of the same id from inheriting one.
+      return pending.get(approvalId)?.owner
     },
   }
 }

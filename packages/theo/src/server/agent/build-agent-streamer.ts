@@ -25,7 +25,7 @@ type Compiled = ReturnType<typeof compileAgentModule>
  * when the agent has no `@HumanInTheLoop`-gated tools. Extracted verbatim from
  * `mountAgent` so both the plain POST and the thread routes wire HITL identically.
  */
-export function buildAgentHitl(compiled: Compiled) {
+export function buildAgentHitl(compiled: Compiled, owner?: string) {
   const gated = compiled.hitl
   if (gated === undefined || gated.size === 0) return undefined
   const registry = getApprovalRegistry()
@@ -33,6 +33,7 @@ export function buildAgentHitl(compiled: Compiled) {
     gated,
     awaitApproval: (approvalId: string, opts: HumanInTheLoopOptions, toolName: string) =>
       registry.register(approvalId, {
+        ...(owner !== undefined ? { owner } : {}),
         timeoutMs: opts.timeout ?? 300_000,
         onTimeout: opts.onTimeout ?? 'abort',
         toolName,
@@ -85,6 +86,9 @@ export function makeThreadStartRun(
         )
         if (enabled !== undefined) compiled.skills = { enabled, autoInject: true }
       }
+      // No owner on this path, and that is a stated limit rather than an oversight (B-016). A thread
+      // continuation runs headless — there is no request whose identity could be resolved — so an
+      // approval it raises records nobody, and the approve route treats it exactly as it did before.
       const hitl = buildAgentHitl(compiled)
       // Now that the model is known, let the caller pick the credential for THAT provider.
       const resolvedApiKey = typeof apiKey === 'function' ? apiKey(compiled.model) : apiKey

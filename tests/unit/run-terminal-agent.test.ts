@@ -45,7 +45,15 @@ function captureStdout() {
 
 /** A fake registry with spies — the wiring test asserts on resolve() without a live pause. */
 function fakeRegistry() {
-  return { register: vi.fn(), resolve: vi.fn().mockReturnValue(true), list: vi.fn(() => []) }
+  // `ownerOf` reports nobody: the terminal path registers no owner (B-016), because a terminal run
+  // has no request whose identity could be resolved. Returning `undefined` is what that path does in
+  // production, not a stub standing in for behaviour the fake declines to model.
+  return {
+    register: vi.fn(),
+    resolve: vi.fn().mockReturnValue(true),
+    list: vi.fn(() => []),
+    ownerOf: vi.fn(() => undefined),
+  }
 }
 
 const GATED = {

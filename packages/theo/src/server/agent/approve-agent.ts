@@ -95,12 +95,17 @@ export function parseApprovalBody(body: unknown): ApprovalDecision | null {
  * Reproduced before the policy existed: a process holding no cookie and no credential read a
  * pending id off the listing, POSTed here, and the gated tool ran.
  *
- * What the policy CANNOT decide here, and it is worth being exact about: whether this approval
- * belongs to this caller. `ApprovalRegistry` keys by a bare id and records no owner, so the
- * strongest question available is "may this subject touch this agent's approvals" —
- * `params.approvalId` is passed so an application holding its own owner map can answer more, and
- * the framework holds none. An authenticated tenant can still settle another tenant's approval on
- * an agent both are admitted to.
+ * Ownership, which this endpoint could NOT decide until B-016 and now can, within a stated scope.
+ * `mountAgent` records the run's subject on each approval it registers, for agents that DECLARE a
+ * policy, and this route refuses a caller whose identity does not match. Before it, an
+ * authenticated tenant could settle another tenant's approval on an agent both were admitted to —
+ * the policy was the only thing between them, and the policy cannot see whose approval it is.
+ *
+ * Two limits, stated rather than implied. An agent that declares `'public'` records no owner, since
+ * attributing approvals there would start refusing callers the declaration admits. And a thread
+ * continuation runs headless, with no request whose identity could be resolved, so its approvals
+ * record nobody. In both cases the endpoint behaves exactly as it did — `params.approvalId` is
+ * still passed so an application holding its own owner map can answer more than the framework does.
  *
  * Returns:
  *   403 CSRF_FAILED  — strict CSRF check failed
@@ -109,6 +114,39 @@ export function parseApprovalBody(body: unknown): ApprovalDecision | null {
  *   404 NOT_PENDING  — the id is unknown or already settled (idempotent double-submit)
  *   200 { resolved:true } — the approval was settled by this call
  */
+/**
+ * Refuse a caller who does not own this approval, where the ledger knows the owner (B-016).
+ *
+ * The agent's policy answers "may this subject touch this agent's approvals". It cannot answer "is
+ * this approval theirs", because it is never told — which is why an authenticated tenant could
+ * settle another tenant's approval on an agent both were admitted to. `mountAgent` now records the
+ * run's subject on each approval it registers, for agents that DECLARE a policy, and this reads it.
+ *
+ * `undefined` from `ownerOf` covers three cases the endpoint treats identically — never registered,
+ * already settled, and registered with no owner — and in all three there is nothing to compare a
+ * caller against, so the endpoint behaves exactly as it did. The check only ever narrows.
+ */
+async function refuseIfNotOwner(
+  registry: ApprovalRegistry,
+  approvalId: string,
+  resolveSubject: AgentSubjectResolver | undefined,
+  params: Parameters<typeof agentAccessDenied>[1],
+): Promise<Response | undefined> {
+  const owner = registry.ownerOf(approvalId)
+  if (owner === undefined) return undefined
+
+  const subject = resolveSubject === undefined ? null : await resolveSubject()
+  if (subject?.id === owner) return undefined
+
+  // An unidentifiable caller is refused, deliberately. An approval that HAS an owner must not be
+  // settleable by whoever reaches the endpoint without an identity — admitting there would make the
+  // guarantee depend on how the host wired its resolver rather than on who is asking.
+  return agentAccessDenied(
+    { allowed: false, reason: 'the approval belongs to another subject' },
+    params,
+  )
+}
+
 export async function handleAgentApproval(
   request: Request,
   urlPath: string,
@@ -135,6 +173,9 @@ export async function handleAgentApproval(
   }
   const decision = await admitAgentRequest(access.policy, access.resolveSubject, params)
   if (!decision.allowed) return agentAccessDenied(decision, params)
+
+  const notOwner = await refuseIfNotOwner(registry, approvalId, access.resolveSubject, params)
+  if (notOwner !== undefined) return notOwner
 
   let body: unknown = null
   try {

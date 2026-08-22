@@ -112,6 +112,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   receive it over the same path a browser does, and a producer that reports no model records no
   attribute rather than a guess. (B-019)
 
+### Security
+
+- **An approval belongs to someone, and only they can settle it.** The HITL ledger keyed approvals by
+  a bare id and recorded no owner, so an agent's policy could answer *"may this subject touch this
+  agent's approvals"* and never *"is this approval theirs"* — an authenticated tenant could settle
+  another tenant's approval on an agent both were admitted to. `mountAgent` now records the run's
+  subject on each approval it registers, and the approve endpoint refuses a caller whose identity
+  does not match, including a caller who cannot be identified at all. The check only ever narrows:
+  an agent declaring `'public'` records no owner, since attributing its approvals would start
+  refusing callers the declaration admits, and a headless thread continuation has no identity to
+  record — both behave exactly as before. Owner ids are not exposed through the pending-approval
+  listing. `ApprovalRegistry` gains `ownerOf(approvalId)`. (B-016)
+
 ### Fixed
 
 - **A relative `ogImage` is refused in development instead of shipping a broken social card.** Open
