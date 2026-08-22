@@ -146,6 +146,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   (usetheokit/theokit#213)
 
 ### Fixed
+- **A `TheoApp`-mounted agent route no longer delivers zero chunks to `useAgent`.** The framework
+  shipped two SSE encoders for agent runs and they did not speak the same wire: the durable one
+  writes `data: <UIMessageChunk>` with a terminal `data: [DONE]`, and the other wrote
+  `event: <type>` + `data: <framework StreamEvent>` — snake_case agent events, not kebab-case wire
+  chunks — with no terminator at all. `parseWireStream` validates each `data:` payload and discards
+  what fails through a warn whose default sink is a no-op, so an app mounted through `agentRuntime`
+  served a route none of its own clients could read: no assistant message, and a run reporting
+  success with an empty answer. The events go through the same translator `mountAgent` uses now, so
+  there is one wire and one place that produces it — and it terminates, closing the same gap #384
+  fixed for the durable encoder, whose fix keys on the `finish` chunk this one never sent. (#386)
 - **The server's raw error text no longer reaches the browser by default.** Every failure reported
   to a browser carried the server's own words — a tool handler's stderr verbatim in
   `tool-output-error.errorText`, a run failure's message verbatim in `error.errorText`, including

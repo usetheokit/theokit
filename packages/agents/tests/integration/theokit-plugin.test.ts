@@ -88,8 +88,13 @@ describe('agentsPlugin()', () => {
       expect(res.headers.get('content-type')).toBe('text/event-stream')
 
       const text = await res.text()
-      expect(text).toContain('event: text_delta')
+
+      // #386 — this asserted `event: text_delta`, the framework vocabulary, which is a wire none of
+      // this framework's clients can read. What matters is that the plugin's route delivers the
+      // agent's words in the shipped one.
+      expect(text).toContain('"type":"text-delta"')
       expect(text).toContain('Hi from agent!')
+      expect(text.trimEnd().endsWith('data: [DONE]')).toBe(true)
     } finally {
       server.close()
     }
