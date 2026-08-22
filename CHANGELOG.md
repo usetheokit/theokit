@@ -8,6 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **`pnpm check:licenses:published` says whether the registry serves the licence this repository
+  declares.** The licence gate this project already had audits what it CONSUMES; nothing audited
+  what it PUBLISHES, and the gap is not hypothetical — `@theokit/http@1.1.0` and
+  `@theokit/presenter@0.7.0` are `MIT` on npm and `Apache-2.0` here, the same version numbers
+  carrying two different licences depending on where the code came from. Deliberately a report and
+  not a release gate: the mismatch lives on an already-published version, which is immutable, so a
+  gate in the release chain would block the one action that corrects it. A package the registry has
+  never seen is skipped; an unreachable registry fails rather than passing, because "I could not
+  check" and "there is no mismatch" are different facts. (#422)
+
 - **`theokit preview` builds for production and serves the result, in one command.** Reproducing
   production locally was `theokit build` followed by `theokit start`, and the two-step version fails
   quietly: `start` serves whatever `.theokit/` already holds, so a skipped build serves the previous

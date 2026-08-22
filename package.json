@@ -33,6 +33,7 @@
     "check:pack-no-workspace": "node scripts/check-pack-no-workspace.mjs",
     "verify:version-collision": "node scripts/verify-version-not-published.mjs",
     "check:licenses": "node scripts/check-licenses.mjs",
+    "check:licenses:published": "node scripts/verify-published-license-matches.mjs",
     "check:docs": "node scripts/check-doc-citations.mjs",
     "check:audit": "pnpm audit --prod --audit-level=high",
     "typecheck:fast": "tsc --noEmit"
