@@ -136,6 +136,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   (usetheokit/theokit#213)
 
 ### Fixed
+- **A streaming answer that is cut off no longer arrives as a complete one.** A route handler whose
+  streaming body failed part-way through was delivered as a normal `200` with a short body: the
+  executor caught the stream error, logged it, ran the `onError` hook — and then reached the same
+  `res.end()` a successful stream makes. Status 200, chunked encoding terminated correctly, and a
+  reader that sees `done: true`. Nothing on the wire distinguished "the answer finished" from "the
+  answer was cut off", which for an agent framework is the worst shape a truncation can take: the
+  user reads a plausible half-answer and every available signal says it is complete. The response
+  now ends abnormally — a destroyed socket aborting the chunked encoding for a Node consumer, an
+  errored body stream for a Web one, so `read()` rejects instead of reporting `done`. This is the
+  shared executor, so it reaches every streaming route on every target rather than one adapter. The
+  Web half needed no new logic: the shim's `failResponse` had said the right thing, citing the same
+  ADR, since it was written, and had exactly one caller — a path the executor's own `catch`
+  prevented from ever running. (#391)
 - **An approval that expired no longer reports itself as a human pressing Deny.** The two outcomes
   were byte-identical on the wire — `Tool 'send_email' denied by human approver` for both an
   explicit denial with no reason and a window that closed with nobody watching. The framework did

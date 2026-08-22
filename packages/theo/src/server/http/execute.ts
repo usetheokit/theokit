@@ -78,12 +78,18 @@ async function waitForDrain(res: ServerResponse): Promise<void> {
  * errors after headers are sent cannot change the response status, but
  * MUST be logged + reported (CR-004 fix). Extracted from `executeRoute`
  * to keep that function's nesting under the max-depth ceiling.
+ *
+ * @returns whether the body was delivered IN FULL. `false` means the response has been destroyed
+ * and the caller must not end it — a short body closed cleanly is an abnormal ending reported as a
+ * normal one (`docs/adr/0002-*`, usetheokit/theokit#391). Logging the failure and then calling
+ * `res.end()` anyway was exactly that: status 200, chunked encoding terminated correctly, and a
+ * reader that sees `done: true` on a half-answer.
  */
 async function pipeWebStreamToResponse(
   body: ReadableStream<Uint8Array>,
   res: ServerResponse,
   ctx: StreamPipeCtx,
-): Promise<void> {
+): Promise<boolean> {
   const reader = body.getReader()
   try {
     let done = false
@@ -111,6 +117,12 @@ async function pipeWebStreamToResponse(
         // onError plugins must never destabilize the response close.
       }
     }
+    // The one signal left once the head has gone out. On a real `ServerResponse` this destroys the
+    // socket, aborting the chunked encoding; on the Web shim it errors the body stream the
+    // `Response` already carries, so a consumer's `read()` rejects instead of reporting `done`.
+    // Both are what the six adapters' own generated pumps already do, citing the same ADR.
+    res.destroy(streamErr instanceof Error ? streamErr : new Error(String(streamErr)))
+    return false
   } finally {
     try {
       reader.releaseLock()
@@ -118,6 +130,7 @@ async function pipeWebStreamToResponse(
       /* lock may already be released by abort */
     }
   }
+  return true
 }
 
 // sendError moved to send-response.ts (T5.1) — re-exported above.
@@ -347,8 +360,9 @@ export async function executeRoute(ctx: ExecuteRouteContext): Promise<void> {
       }
       res.writeHead(handlerResult.status, headersBag)
 
+      let bodyCompleted = true
       if (handlerResult.body) {
-        await pipeWebStreamToResponse(handlerResult.body, res, {
+        bodyCompleted = await pipeWebStreamToResponse(handlerResult.body, res, {
           buildPluginCtx,
           ctx,
           method,
@@ -358,7 +372,10 @@ export async function executeRoute(ctx: ExecuteRouteContext): Promise<void> {
         })
       }
 
-      res.end()
+      // Ending a destroyed response is a no-op on both transports, so this guard is not what makes
+      // the fix work — it is what makes the intent readable. `end()` here is the call a SUCCESSFUL
+      // stream makes, and reaching it on a truncated one is how #391 happened.
+      if (bodyCompleted) res.end()
       if (pluginRunner) await pluginRunner.runOnResponse(buildPluginCtx(ctx))
       return
     }

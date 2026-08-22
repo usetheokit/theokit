@@ -62,6 +62,20 @@ export interface ShimResponse {
   writeHead: (status: number, headers?: Record<string, string>) => void
   /** Throws once the headers have been handed out (Node: `ERR_HTTP_HEADERS_SENT`). */
   setHeader: (key: string, value: string) => void
+  /**
+   * End the response ABNORMALLY — Node's `ServerResponse.destroy(err)`, in the terms a Web
+   * consumer can observe (usetheokit/theokit#391).
+   *
+   * A Node consumer learns of a truncation from a destroyed socket aborting the chunked encoding.
+   * There is no socket here, so the equivalent is erroring the body stream the `Response` already
+   * carries: the consumer's `read()` rejects instead of reporting `done: true`.
+   *
+   * The machinery existed — `failResponse` has said so, citing ADR-0002, since the shim was
+   * written — and had exactly one caller: a `toResponse(pending)` whose promise rejected. The
+   * executor caught its own stream errors and resolved normally, so that path never ran and a
+   * truncated body was delivered as a complete one.
+   */
+  destroy: (err?: unknown) => void
   getHeader: (key: string) => string | undefined
   /**
    * Enqueue `chunk` onto the body stream the `Response` already carries.
@@ -332,6 +346,9 @@ function createResponseSide(): {
     statusCode: 200,
     headersSent: false,
     writableEnded: false,
+    destroy(err) {
+      failResponse(err ?? new Error('response destroyed before the body was complete'))
+    },
     writeHead(status, headers) {
       if (this.headersSent) refuseFrozenHeader('writeHead', String(status))
       this.statusCode = status
