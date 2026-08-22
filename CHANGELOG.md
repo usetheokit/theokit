@@ -136,6 +136,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   (usetheokit/theokit#213)
 
 ### Fixed
+- **A deployed app now enforces the CSRF mode it declared, instead of always the strictest one.**
+  The six Web-standards adapter entries built `executeRoute`'s context from an eight-field literal,
+  and neither `csrfMode` nor `disallowed` was among the eight. `executeRoute` defaults an absent
+  mode to `'strict'`, so an app declaring `security: { csrf: 'off' }` — or `'warn'` — got `'strict'`
+  on every deploy target: a `POST` that works under `theokit dev` and `theokit start` answers
+  `403 CSRF_INVALID` on Vercel, naming a mechanism the operator had switched off. The config still
+  validated and the build still succeeded; only the behaviour changed. The per-route `disallowed`
+  escalation travelled with it and never applied. Both now ship as build-time literals, the same
+  way `security.headers` already does, because a deployed function has no `theo.config.ts` to read.
+  Not via `JSON.stringify`: `disallowed.routes` accepts RegExp entries, which JSON renders as `{}`,
+  and since `matchDisallowed` checks `instanceof RegExp` that would read in the emitted file as a
+  configured rule while matching nothing — the same defect one layer down. An absent value stays
+  absent so the executor's own default still governs, rather than the emitted file becoming a
+  second place for it to drift. The six adapters now declare `csrf` and `disallowed` in
+  `appliesConfig`, so `findUnappliedConfig` stops reporting them as dropped. `plugins` and
+  `serialization` are still dropped and still reported: both carry functions that no literal can
+  express, which is a build-graph decision tracked as #425. (#410)
 - **A generated route now refuses instead of being open to the internet.** ADR 0001 made an
   undeclared `policy` a build error because a route nobody had thought about was indistinguishable
   from one deliberately left open — and then `theo generate resource` wrote `'public'` on five

@@ -10,6 +10,7 @@ import { findRootDiv } from '../core/contracts/find-root-div.js'
 import type { SecurityHeadersConfig } from '../core/contracts/security-headers.js'
 import { assertServicesUnsupported, readManifest } from '../services/index.js'
 
+import { deployedCsrfFragment, type DeployedCsrfOptions } from './deployed-csrf.js'
 import { nodeAdapter } from './node.js'
 import {
   describeDeployedSecurityHeaders,
@@ -156,7 +157,7 @@ export function renderCloudflareWorkerEntry(
     routes?: readonly { filePath: string; routePath: string; methods?: readonly string[] }[]
     /** WebSocket route files, scanned on the build machine. Only their presence is used (#369). */
     wsRoutes?: readonly string[]
-  } = {},
+  } & DeployedCsrfOptions = {},
 ): string {
   const streamingImport = opts.ssrStreaming
     ? `import { renderStreamingWeb } from '/@theo/entry-server'`
@@ -236,6 +237,8 @@ export function renderCloudflareWorkerEntry(
     `// disagree about what the configuration means.`,
     `const SECURITY_HEADERS_CONFIG = ${renderSecurityHeadersConfigLiteral(opts.securityHeaders)}`,
     `const SECURITY_HEADERS = buildSecurityHeaders(SECURITY_HEADERS_CONFIG, { production: true })`,
+    ``,
+    ...deployedCsrfFragment(opts, 'a Worker'),
     `// #369 — whether this project declares a WebSocket route, decided at build time. It used`,
     `// to answer it with \`scanWebSocketRoutes\`, which is the same readdirSync.`,
     `const HAS_WS_ROUTES = ${String((opts.wsRoutes ?? []).length > 0)}`,
@@ -250,6 +253,21 @@ export function renderCloudflareWorkerEntry(
     `  )`,
     `}`,
     ``,
+    ...cloudflareHandleRequestFragment(nonApiBranch),
+  ].join('\n')
+}
+
+/**
+ * The Worker's request handler, as generated source.
+ *
+ * Extracted for the reason `vercel.ts` extracts its own fragments: the emitter is one array
+ * literal, so every line the entry gains counts against `max-lines-per-function`, and #410 added
+ * the CSRF literal to an emitter already sitting exactly at the ceiling.
+ *
+ * @param nonApiBranch - what a non-`/api/` request gets, which differs with `ssrStreaming`
+ */
+function cloudflareHandleRequestFragment(nonApiBranch: string): string[] {
+  return [
     `async function handleRequest(request, url) {`,
     `    if (!url.pathname.startsWith('/api/')) {`,
     nonApiBranch,
@@ -268,7 +286,7 @@ export function renderCloudflareWorkerEntry(
     `    // the shim streams; awaiting toResponse() does not — it settles at the head.`,
     `    return withSecurityHeaders(await toResponse(executeRoute({`,
     `      route: match.route, method, params: match.params,`,
-    `      req, res, loadModule, serverDir, requestId,`,
+    `      req, res, loadModule, serverDir, requestId, ...CSRF_CONFIG,`,
     `    })), SECURITY_HEADERS)`,
     `}`,
     ``,
@@ -292,7 +310,7 @@ export function renderCloudflareWorkerEntry(
     `    return handleRequest(request, url)`,
     `  },`,
     `}`,
-  ].join('\n')
+  ]
 }
 
 export function renderWranglerToml(): string {
@@ -324,7 +342,7 @@ export const cloudflareAdapter: DeployAdapter = {
   // literal and puts the built baseline on every response it returns, including
   // the streamed SSR document — with a per-request nonce, the only deploy path
   // that can mint one (`adapters/security-headers.ts`).
-  appliesConfig: ['securityHeaders'],
+  appliesConfig: ['securityHeaders', 'csrf', 'disallowed'],
 
   async build(config: TheoConfig, cwd: string, ctx?: AdapterBuildContext): Promise<void> {
     // Wave 2 (T2.2) — reject polyglot services on this adapter.
@@ -361,6 +379,8 @@ export const cloudflareAdapter: DeployAdapter = {
         ssrStreaming: config.ssrStreaming,
         ...shell,
         securityHeaders: config.security?.headers,
+        csrf: config.security?.csrf,
+        disallowed: config.security?.disallowed,
         routes: scanned.routes,
         wsRoutes: scanned.wsRoutes,
       }),

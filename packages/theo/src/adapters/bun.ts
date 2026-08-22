@@ -8,6 +8,7 @@ import type { TheoConfig } from '../config/schema.js'
 import type { SecurityHeadersConfig } from '../core/contracts/security-headers.js'
 import { assertServicesUnsupported, readManifest } from '../services/index.js'
 
+import { deployedCsrfFragment, type DeployedCsrfOptions } from './deployed-csrf.js'
 import { nodeAdapter } from './node.js'
 import {
   describeDeployedSecurityHeaders,
@@ -23,7 +24,10 @@ export interface BunBuildDeps {
 
 export function renderBunEntry(
   port: number,
-  opts: { ssrStreaming?: boolean; securityHeaders?: SecurityHeadersConfig } = {},
+  opts: {
+    ssrStreaming?: boolean
+    securityHeaders?: SecurityHeadersConfig
+  } & DeployedCsrfOptions = {},
 ): string {
   const streamingComment = opts.ssrStreaming
     ? `// T2.3 — ssrStreaming on; renderStreamingWeb may be consumed by app code`
@@ -77,6 +81,8 @@ export function renderBunEntry(
     `const SECURITY_HEADERS_CONFIG = ${renderSecurityHeadersConfigLiteral(opts.securityHeaders)}`,
     `const SECURITY_HEADERS = buildSecurityHeaders(SECURITY_HEADERS_CONFIG, { production: true })`,
     ``,
+    ...deployedCsrfFragment(opts),
+    ``,
     `const routes = existsSync(serverDir) ? scanServerRoutes(serverDir) : []`,
     `const wsRoutes = existsSync(serverDir) ? scanWebSocketRoutes(serverDir) : []`,
     `const loadModule = createProductionLoader()`,
@@ -107,6 +113,19 @@ export function renderBunEntry(
     `  },`,
     `})`,
     ``,
+    ...bunHandleRequestFragment(),
+  ].join('\n')
+}
+
+/**
+ * The request handler, as generated source.
+ *
+ * Extracted for the reason `vercel.ts` extracts its own fragments: the emitter is one array
+ * literal, so every line the entry gains counts against `max-lines-per-function`, and #410 added
+ * the CSRF literal to an emitter that was already sitting exactly at the ceiling.
+ */
+function bunHandleRequestFragment(): string[] {
+  return [
     `async function handleRequest(request) {`,
     `    const url = new URL(request.url)`,
     `    const pathname = url.pathname`,
@@ -128,7 +147,7 @@ export function renderBunEntry(
     `      const method = request.method.toUpperCase()`,
     `      // #382 — not awaited: toResponse() settles at the headers and carries`,
     `      // a live body, so Bun.serve streams while the handler writes.`,
-    `      return toResponse(executeRoute({ route: match.route, method, params: match.params, req, res, loadModule, serverDir, requestId }))`,
+    `      return toResponse(executeRoute({ route: match.route, method, params: match.params, req, res, loadModule, serverDir, requestId, ...CSRF_CONFIG }))`,
     `    }`,
     ``,
     `    // 3) SPA fallback`,
@@ -139,7 +158,7 @@ export function renderBunEntry(
     `}`,
     ``,
     `console.log('Theo (Bun) listening on http://localhost:' + port)`,
-  ].join('\n')
+  ]
 }
 
 export async function buildBun(
@@ -161,6 +180,8 @@ export async function buildBun(
   const entry = renderBunEntry(config.port, {
     ssrStreaming: config.ssrStreaming,
     securityHeaders: config.security?.headers,
+    csrf: config.security?.csrf,
+    disallowed: config.security?.disallowed,
   })
   const write =
     deps.writeEntry ??
@@ -198,7 +219,7 @@ export const bunAdapter: DeployAdapter = {
   // `securityHeaders` IS applied: the entry carries `security.headers` as a
   // literal and puts the built baseline on every response, the served document
   // included.
-  appliesConfig: ['securityHeaders'],
+  appliesConfig: ['securityHeaders', 'csrf', 'disallowed'],
   build(config, cwd, ctx) {
     return buildBun(config, cwd, {}, ctx)
   },

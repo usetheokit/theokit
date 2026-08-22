@@ -65,22 +65,30 @@ function parseConfig(input: Record<string, unknown>): TheoConfig {
  *   and `request-handler.ts` applies the security headers. It contains no
  *   reference to CORS at all, which is why `cors` is absent from its list.
  * - the six Web adapters — the generated entry calls `createWebShim` then
- *   `executeRoute` with routes, loader and `serverDir`. CSRF, route policy,
- *   file middleware and Zod validation run because they live inside
- *   `executeRoute`; none of the remaining configurable concerns reach it. Each
- *   applies `securityHeaders` on top, at one choke point per entry.
+ *   `executeRoute` with routes, loader and `serverDir`. Route policy, file
+ *   middleware and Zod validation run because they live inside `executeRoute`.
+ *   Each applies `securityHeaders` on top, at one choke point per entry, and
+ *   since #410 each carries the declared `csrf` mode and `disallowed`
+ *   escalation as build-time literals — CSRF enforcement always ran, but at
+ *   the executor's `'strict'` default rather than at the configured mode, so a
+ *   `csrf: 'off'` app answered 403 on a deploy target and 200 locally.
+ *
+ *   `serialization` and `plugins` are still absent, and not by oversight: both
+ *   carry FUNCTIONS from `theo.config.ts`, which a literal cannot express and a
+ *   deployed function has no config file to load. Closing them needs the entry
+ *   to import app modules, which is a build-graph decision of its own (#425).
  * - `static` — emits no request handler.
  * - `theo-cloud` — emits no request handler either, but for a different
  *   reason: the runtime is TheoCloud's and this build cannot answer for it.
  */
 const EXPECTED: Record<BuildTarget, readonly ConfigConcern[] | 'runtime-not-emitted-here'> = {
   node: ['rateLimit', 'csrf', 'disallowed', 'serialization', 'plugins', 'securityHeaders'],
-  vercel: ['securityHeaders'],
-  cloudflare: ['securityHeaders'],
-  netlify: ['securityHeaders'],
-  bun: ['securityHeaders'],
-  'deno-deploy': ['securityHeaders'],
-  'aws-lambda': ['securityHeaders'],
+  vercel: ['securityHeaders', 'csrf', 'disallowed'],
+  cloudflare: ['securityHeaders', 'csrf', 'disallowed'],
+  netlify: ['securityHeaders', 'csrf', 'disallowed'],
+  bun: ['securityHeaders', 'csrf', 'disallowed'],
+  'deno-deploy': ['securityHeaders', 'csrf', 'disallowed'],
+  'aws-lambda': ['securityHeaders', 'csrf', 'disallowed'],
   static: [],
   'theo-cloud': 'runtime-not-emitted-here',
 }
@@ -108,9 +116,13 @@ describe('a declared concern the target drops is named, not swallowed', () => {
 
   it('reports every dropped concern on a Web adapter', async () => {
     const adapter = await resolveAdapter('vercel')
+    // `csrf` and `disallowed` left this list in #410: both are plain data, so the build bakes
+    // them into the emitted entry as literals. `cors`, `rateLimit` and `serialization` remain —
+    // the last two for the same reason `plugins` does, that they carry FUNCTIONS a literal cannot
+    // express (#425).
     expect(
       [...findUnappliedConfig(fullConfig, adapter)].sort((a, b) => a.localeCompare(b)),
-    ).toEqual(['cors', 'csrf', 'disallowed', 'rateLimit', 'serialization'])
+    ).toEqual(['cors', 'rateLimit', 'serialization'])
   })
 
   it('reports only cors on node, which is the one everybody assumes it has', async () => {
