@@ -137,6 +137,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **`create-theokit … --use-pnpm` stops reporting a failure on a successful install.** pnpm 10 no
+  longer reads the `pnpm` field in `package.json` — it says so in the first line of every run — and
+  that is where the template declared which dependencies may run install scripts. The list was
+  dropped, `esbuild` and `node-pty` were refused, `ERR_PNPM_IGNORED_BUILDS` set a non-zero exit, and
+  the scaffolder rendered it as `✗ Failed to install dependencies`. The approvals ship in
+  `pnpm-workspace.yaml` now, with booleans rather than the placeholder sentence pnpm writes when it
+  asks, and each entry says what the package is and why it runs code at install time.
+  (usetheokit/theokit#397)
+
 - **Conversation transcripts stop landing in git.** The framework writes every conversation to
   `<app>/.data/agent-sessions/…/<sessionId>.jsonl` and the scaffold's ignore file listed `data/`,
   without the dot — matching nothing the framework writes. Running a scaffolded app once and
