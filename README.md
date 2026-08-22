@@ -398,15 +398,24 @@ link is free. `viewport` on a long index page is the case worth thinking about:
 it is the fastest option for the reader and the only one whose cost scales with
 the page rather than with what the reader does.
 
-Scroll position is restored on back navigation — the router mounts scroll
-restoration at the root, and no application code is needed.
+Scroll position is restored on back navigation. The router mounts restoration at
+the root, and the document needs no application code.
 
-**It restores the *document's* scroll position.** An application whose layout
-scrolls an inner element instead — `h-full` with `overflow-hidden` on a wrapper,
-which is what the default scaffold ships — keeps a document that never scrolls,
-so there is no offset to save and nothing is restored. Measured in a browser
-against a real build on 2026-08-22: the offset of an inner container was not
-restored across a back navigation. Let the document scroll if you want this.
+**An element that scrolls has to say so.** A layout that scrolls an inner element
+instead of the document — `h-full` with `overflow-hidden` on a wrapper, which is
+what the default scaffold ships — leaves the document with no offset to save, and
+browsers and react-router alike restore only the document. Mark the element and
+its offset is restored too:
+
+```tsx
+<main data-theo-scroll="main" className="overflow-y-auto">…</main>
+```
+
+The attribute's value is the id, so a page with two scrollers stays unambiguous.
+It is declared rather than detected on purpose: walking the DOM for
+`overflow: auto` picks one container silently, and picks a different one as the
+layout changes. Measured in a browser on 2026-08-22, before this existed: the
+offset of an inner container was not restored across a back navigation.
 
 ## Auth
 

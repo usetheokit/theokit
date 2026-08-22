@@ -111,7 +111,14 @@ export function generateRouteManifest(tree: RouteNode, options: RouteManifestOpt
   // element — the one that mounts scroll restoration — and children render
   // through `Outlet` from it, so both names are always needed. An element
   // referencing an unimported name is a ReferenceError at boot (B-029).
-  lines.push(`import { Outlet, ScrollRestoration } from 'react-router'`, '')
+  lines.push(
+    `import { Outlet, ScrollRestoration } from 'react-router'`,
+    // #421 — react-router restores the DOCUMENT. The layout this framework scaffolds scrolls an
+    // inner element, so the restoration that was mounted and running restored nothing. Both are
+    // emitted: one owns the document, the other owns the elements the app marked.
+    `import { ElementScrollRestoration } from 'theokit/router/element-scroll-restoration'`,
+    '',
+  )
 
   // Static imports first
   for (const imp of staticImports) {
@@ -219,7 +226,8 @@ export function generateRouteManifest(tree: RouteNode, options: RouteManifestOpt
      * before that early return.
      */
     const withScrollRestoration = (element: string): string =>
-      `React.createElement(React.Fragment, null, React.createElement(ScrollRestoration), ${element})`
+      `React.createElement(React.Fragment, null, React.createElement(ScrollRestoration), ` +
+      `React.createElement(ElementScrollRestoration), ${element})`
 
     // Build route object
     if (node.layout) {

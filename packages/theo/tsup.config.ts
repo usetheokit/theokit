@@ -39,6 +39,7 @@ export default defineConfig([
       // deployed worker fails to resolve it.
       // Published beside the other generated-entry doors; sourced from `server/` because
       // `adapters/` may not depend on `server/` (#367).
+      'router/element-scroll-restoration': 'src/router/element-scroll-restoration.tsx',
       'adapters/agent-mount': 'src/server/generated-entry.ts',
       'adapters/security-headers': 'src/adapters/security-headers.ts',
       'adapters/web-shim': 'src/adapters/web-shim.ts',

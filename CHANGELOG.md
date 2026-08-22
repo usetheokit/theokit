@@ -7,6 +7,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Added
+- **Scroll restoration now covers the element your layout actually scrolls.** The router mounted
+  react-router's restoration, which restores the DOCUMENT — and the layout this framework scaffolds
+  scrolls an inner element, so the restoration was mounted, running, and restoring nothing. Mark the
+  element with `data-theo-scroll="<id>"` and its offset is saved and restored across a back
+  navigation, alongside the document. Declared rather than detected on purpose: walking the DOM for
+  `overflow: auto` picks one container silently and picks a different one as the layout changes,
+  which is why no router does it — TanStack requires an explicit key for the same reason. The
+  attribute's value is the id, so a page with two scrollers stays unambiguous. The default scaffold's
+  `<main>` now carries it. (#421)
+
 - **`mcpInventory()` answers what the agent's MCP servers are DOING, not what the file says.**
   `loadMcpJson` reads the configuration, and a `/mcp` command built on it shows what is configured —
   which is not the question a user opens the command to ask. They open it to find the server that

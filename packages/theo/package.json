@@ -115,6 +115,10 @@
       "types": "./dist/adapters/security-headers.d.ts",
       "import": "./dist/adapters/security-headers.js"
     },
+    "./router/element-scroll-restoration": {
+      "types": "./dist/router/element-scroll-restoration.d.ts",
+      "import": "./dist/router/element-scroll-restoration.js"
+    },
     "./adapters/agent-mount": {
       "types": "./dist/adapters/agent-mount.d.ts",
       "import": "./dist/adapters/agent-mount.js"
