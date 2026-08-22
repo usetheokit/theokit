@@ -118,6 +118,22 @@ require.
 **Gap files are not evidence.** Eleven of the sixteen `theokit-gap.md` files came back materially
 wrong on re-measurement. No item below cites one; each cites an issue and a `file:line`.
 
+**Thirteen items carry a `remeasured 2026-08-21` line saying the defect is closed in code, and all
+thirteen still read `triaged`.** That is not an oversight and the count is worth stating plainly,
+because a reader who takes the status column at face value will believe thirty-six things are
+outstanding when roughly a third are built and waiting on a release.
+
+Status advances on a cycle verdict, never on a re-measurement (`.claude/rules/cycle-maintenance.md`).
+Editing the column here by hand is how `shipped` stops meaning anything, and the registry would then
+have exactly the defect it exists to prevent. So the measurement is recorded where a reader will meet
+it — on the block, dated, with the evidence — and the transition stays the cycle's to make.
+
+The re-measurement was not a formality: two items came back changed rather than closed. `B-005`
+shrank from five findings to two, and the two that remain describe something different from what was
+filed — `csrf-multi-header` is exported now, and the finding is that nothing calls it. `B-033` was
+registered on a premise that turned out to be wrong and was rewritten the same day rather than
+quietly dropped.
+
 ## B-001 — ssrStreaming serves a document with no `<head>` and no hydration data   [ ]
 
 domain: theokit
@@ -130,6 +146,7 @@ status: triaged
 dod:
   - `curl` of the root route against a published build with `ssrStreaming: true` returns a parseable document containing `<head>` and the hydration data script
   - a regression test executes the generated entry against a real `Request` rather than asserting `toContain` over the template string
+remeasured 2026-08-21: **closed in code.** The streamed document is assembled by `streamingDocumentHelpers` in `packages/theo/src/router/entry-server.ts`, which writes the head as its own chunk before React produces a byte and appends the hydration script before the tail; `tests/unit/cloudflare-streaming-shell.test.ts:29` asserts `<head>` on the emitted entry. Status stays `triaged`: only a cycle verdict advances it, never a re-measurement
 
 ## B-002 — `renderStreamingWeb` throws `ReferenceError` on every request (TDZ on `url`)   [ ]
 
@@ -144,6 +161,7 @@ dod:
   - a test executes the generated web entry against a real `Request` and fails today with `ReferenceError`
   - the declaration is hoisted above the preload block and that test passes
   - the fix is a separate atomic commit citing the issue
+remeasured 2026-08-21: **closed in code.** `const url = new URL(request.url)` is declared before its use at `packages/theo/src/router/entry-server.ts:229-230`, and the comment above it records why hoisting alone would have traded the TDZ for a TypeError. Status unchanged by design
 
 ## B-003 — the public `middleware()` builder produces a handler the runner cannot invoke   [ ]
 
@@ -193,6 +211,7 @@ dod:
     condition this bullet named. The umbrella stays open with its evidence intact and keeps
     what none of the four took: `trackAgentRun` (`packages/theo/src/server/cost/track-agent-run.ts:49`)
     is exported from `packages/theo/src/server/cost/index.ts:11` and still has no production caller
+remeasured 2026-08-21: **three of five closed, and the remaining two changed shape.** The cache engine boots (`packages/theo/src/server/cache-bootstrap.ts:28`), the observability plugin is registrable and registered (`packages/theo/src/server/observability/middleware.ts:114`), and `trackAgentRun` has a production caller (`packages/theo/src/server/http/action-execute.ts`). `csrf-multi-header` is no longer unexported — `packages/theo/src/server/security/index.ts:4` re-exports it — but `evaluateCsrfMultiHeaderRequest` has **zero production callers**, so the defect moved from an absent door to a door nobody walks through, which is a different finding and the one that survives. `action-encryption` was deliberately given a public subpath (B-M74-01, `packages/http/src/index.ts:21-26`); a published utility with no internal caller is the intended shape, not an orphan
 
 ## B-006 — dynamic route precedence uses a whole-path `localeCompare`, so the less specific route wins   [ ]
 
@@ -208,6 +227,7 @@ dod:
   - precedence is compared per segment, with `localeCompare` retained only as a final total-order fallback
   - a regression test fails when the tiebreak is restored to a whole-path comparison
   - the precedence rule is written down as a contract — which segment shape wins over which, and what the final tiebreak is — because a rule that lives only in a comparator is one nobody can plan a route tree against (added 2026-08-21 with the M4 minimum contract)
+remeasured 2026-08-21: **closed in code.** Precedence is compared per segment (`packages/theo/src/server/scan/scan.ts:183,215`) with a code-unit final tiebreak (`packages/theo/src/server/_internal/compare-by-code-unit.ts`), so the whole-path `localeCompare` this item was opened against is gone. The documentation half added to the DoD on 2026-08-21 is still open
 
 ## B-007 — resolve the open private security advisory   [ ]
 
@@ -251,6 +271,7 @@ dod:
   - a configured `defaults.maxAge` is the fallback `defineCachedRoute` uses, in place of the hardcoded constant (`packages/theo/src/cache/validation.ts:76`)
   - the cache serves a hit on a second request, observed through a signal that survives `NODE_ENV=production` — the `X-Theo-Cache` header is dev-only today (`packages/theo/src/cache/define-cached-route.ts:368`), so M5's criterion is not observable on a published build without this
   - the documented surface states which of TTL, stale-while-revalidate and tag invalidation the engine serves and which it does not, so an application author stops inferring it from the type signatures (added 2026-08-21 with the M5 minimum contract)
+remeasured 2026-08-21: **closed in code.** `initCacheEngineFromConfig` is called at boot and in dev (`packages/theo/src/server/cache-bootstrap.ts:28`, `packages/theo/src/cli/commands/start/index.ts:68`, `packages/theo/src/cli/commands/dev.ts:36`) and `defaults` reaches the engine (`packages/theo/src/cache/cache-engine.ts:109`). The production-observable cache signal and the documented-surface bullet remain open
 
 ## B-010 — make the observability plugin registrable and give it the config key its registry documents   [ ]
 
@@ -267,6 +288,7 @@ dod:
   - a run emits spans that reach an exporter from a production path, read back on the collector side
   - `activeSpans` (`packages/theo/src/server/observability/middleware.ts:28`) carries a cap or a TTL — without one, every agent run holding a stream open leaks a span permanently
   - `flushIntervalMs` (`packages/theo/src/server/observability/adapters/theo-cloud.ts:21`, `:34`) either implements the timer or stops being accepted; today it promises behaviour that does not exist
+remeasured 2026-08-21: **closed in code.** The plugin returns `{ name, register }` (`packages/theo/src/server/observability/middleware.ts:114`) and the `observability` key exists in the config schema (`packages/theo/src/config/schema.ts:198`)
 
 ## B-011 — the Web executor honours the `csrf: false` opt-out the public contract promises   [ ]
 
@@ -282,6 +304,7 @@ dod:
   - a cross-origin POST with no token is rejected by a build that configures no CSRF option at all
   - both holes in the multi-header gate are closed BEFORE it is exported
   - the public-API break is recorded under `Changed` in `CHANGELOG.md` and in `MIGRATION.md`
+remeasured 2026-08-21: **closed in code.** `shouldEnforceCsrf` reads absence as enforced and returns `config?.csrf !== false`, so the documented opt-out is honoured by the Web executor (`packages/theo/src/server/web-handler.ts:508-516`)
 
 ## B-012 — decide the fate of the fourth orphan in `@theokit/http`   [ ]
 
@@ -302,6 +325,7 @@ Seven more registered 2026-08-20, from the DX benchmark and the re-measurement o
 surfaces, against eight issues — B-018 takes two of them, and says inside the item why they are
 one change. They are `triaged` for the same reason the batch above is: each arrives with an
 issue and a `file:line`, so intake had nothing left to ask.
+remeasured 2026-08-21: **closed by deletion.** `packages/http/src/action-handler.ts` no longer exists, so the fourth orphan's fate was decided the cheapest way available
 
 ## B-013 — a gated tool appears on the wire twice, under two ids, so the pause never correlates with the resume   [ ]
 
@@ -317,6 +341,7 @@ dod:
   - the `agent.hitl` span closes on the resume with `hitl.resume_observed` true, and its duration bounds the human wait rather than the run
   - which of the two ids becomes canonical is decided and recorded, together with what happens to the `approve/${approvalId}` callback URL (`packages/agents/src/bridge/hitl-plugin.ts:96`) under that choice — this is a wire change for every consumer already reading these chunks
   - J9 criterion 3 passes against a published build
+remeasured 2026-08-21: **closed in code.** A tool event is folded to the one id the wire uses for its logical call, so the second announcement of a gated call is not emitted again (`packages/agents/src/bridge/present-ui-message-stream.ts:163`, citing this item's issue). B-028 is the separate defect in what the pause span MEASURES, and it is open
 
 ## B-014 — the fluent `AgentBuilder` cannot declare a step ceiling, and it is the path the scaffold generates   [ ]
 
@@ -331,6 +356,7 @@ dod:
   - measure first whether a run served by `mountAgent` reaches `runReflectiveLoop` at all; that decides whether the finite default already protects a scaffolded agent, and therefore whether this is a DX gap or a containment gap. #363 records it as unmeasured and it changes what the fix has to be
   - a builder method feeds the same `maxIterations` the decorator feeds — one mechanism, not a second one alongside it
   - a test drives an agent whose tool keeps asking for another round and asserts the run stops with `step_limit` (`packages/agents/src/loop/loop-strategy.ts:23`) rather than by exhausting something else
+remeasured 2026-08-21: **closed in code.** The fluent builder exposes `maxIterations` (`packages/agents/src/bridge/agent-builder.ts:158`, threaded at `:321`), so the ceiling is reachable from the path the scaffold generates
 
 ## B-015 — a conversation does not survive a reload: `#chatId` is private, drawn in the constructor, and can be neither supplied nor read   [ ]
 
@@ -407,6 +433,7 @@ dod:
   - the run span is the parent of the tool and HITL spans, verified by reading the exported payload rather than the in-process objects
   - some span records the model identifier, so tokens convert to cost: J9 criterion 5 allows cost, or tokens, or a cost attribute, and without the model the token route does not close
 note: four of the five criteria landed on 2026-08-20 in `2ec9180ee` — `SpanData` carries the three ids, the serializer reads them, `startSpan` takes a parent context (forwarded by `defineObservabilityAdapter` too), `mountAgent` continues an incoming `traceparent`, and the run span parents the tool and HITL spans. The fifth landed the same day: the `agent.run` span records `gen_ai.request.model` (the OpenTelemetry GenAI semantic-conventions name, read from `open-telemetry/semantic-conventions-genai`), carrying the EFFECTIVE model — a per-run override beats the declared one, and an agent that declared none reports the default it ran on. It travels on the turn's `finish` metadata, so the in-process targets get it over the same path the served ones do. Filed alongside it: usetheokit/theokit#385 (the `http.request` span joined no trace) and #381 (the thread route dropped the `traceparent`), both of which had to close for the third criterion to hold on more than one of three served paths. All five read-back criteria are asserted against the serialized OTLP payload, not against a live collector — the collector run that graded J9 is what would settle that, and it has not been re-run
+remeasured 2026-08-21: **closed in code.** Trace identity is decided when a span starts and carries a parent (`packages/theo/src/server/observability/span.ts:9-22`); the serializer reads it instead of minting one (`packages/theo/src/server/observability/otlp-serializer.ts:80`). A run therefore reaches a collector as one trace. The dev agent path still mints its own trace id, which is M8's remaining half and not this item
 
 ## B-020 — an acceptance record is evidence nobody outside this machine can read   [ ]
 
@@ -463,6 +490,7 @@ dod:
   - a streaming route observed delivering a chunk before the response completes, on each listed target, or the target is delisted for streaming
   - the two double-buffering contracts are fixed or their targets are delisted — fixing the shim alone provably does not reach them
   - a test that runs a stream rather than reading the emitted module, because that gap is why this survived
+remeasured 2026-08-21: **closed in code.** `res.write()` enqueues into a `ReadableStream` the `Response` already carries, so bytes are observable before the handler returns (`packages/theo/src/adapters/web-shim.ts:10-12`). AWS Lambda is delisted for streaming by name rather than silently
 
 ## B-024 — two conventions cost a file each, and nobody has decided whether they are worth it   [ ]
 
@@ -511,6 +539,7 @@ dod:
   - a page served by each of the six adapters carries the same security headers the same app carries under `theokit start`, verified by reading a real response rather than by grepping the emitted entry
   - the adapter's `appliesConfig` declaration gains `securityHeaders` in the same commit, so the build stops warning about a key it now applies
   - a target that genuinely cannot set a header says so by name rather than dropping it
+remeasured 2026-08-21: **closed in code.** All six Web-standards adapters call `buildSecurityHeaders` (`packages/theo/src/adapters/security-headers.ts` + `cloudflare|vercel|bun|netlify|deno-deploy|aws-lambda`). The rate-limit half of the same gap is `B-027` and is open
 
 ## B-027 — a declared rate limit protects one of seven targets, and wiring it naively is worse than not wiring it   [ ]
 
