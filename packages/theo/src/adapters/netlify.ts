@@ -308,7 +308,7 @@ export async function buildNetlify(
       target: 'netlify',
       securityHeaders: config.security?.headers,
       mintsNonce: false,
-      documentServedByPlatform: true,
+      documentHeaders: 'platform-configured',
     })}\n`,
   )
 }

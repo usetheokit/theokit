@@ -126,7 +126,23 @@ export interface DeployedSecurityHeaderLimits {
    * handler this build emits? True wherever the emitted handler answers
    * `/api/*` and returns 404 for everything else.
    */
-  documentServedByPlatform: boolean
+  /**
+   * Who puts the security headers on the HTML DOCUMENT — a different question from who serves it,
+   * and the two used to be collapsed into one boolean (usetheokit/theokit#412).
+   *
+   * - `handler` — this target's own handler returns the document, so it carries the same baseline
+   *   every API response carries. No caveat.
+   * - `platform-configured` — the platform's static host serves the document, AND this build emits
+   *   the configuration that puts the headers on it (`.vercel/output/config.json`, `netlify.toml`).
+   *   Still worth stating, because nothing here has seen a deployed response.
+   * - `platform-unmanaged` — the platform serves it and this build owns no artifact that could
+   *   configure it. This is the real remaining gap, and it stays named.
+   *
+   * The two-value version reported `platform-configured` targets with the same message as
+   * `platform-unmanaged` ones, telling an operator to go and do work the build had already done —
+   * and a stale limitation reads exactly like a current one.
+   */
+  documentHeaders: 'handler' | 'platform-configured' | 'platform-unmanaged'
 }
 
 /**
@@ -163,12 +179,20 @@ export function describeDeployedSecurityHeaders(limits: DeployedSecurityHeaderLi
       `      while you migrate.`,
     )
   }
-  if (limits.documentServedByPlatform) {
+  if (limits.documentHeaders === 'platform-configured') {
+    lines.push(
+      `    - The HTML document is served by the platform's static host, and reaches`,
+      `      the browser with these headers through config this build emits. That`,
+      `      path is not verified by a deploy from here — the values come from the`,
+      `      same function the handler uses, but no response has been read back.`,
+    )
+  }
+  if (limits.documentHeaders === 'platform-unmanaged') {
     lines.push(
       `    - The HTML document does NOT pass through this handler — the platform's`,
       `      static host serves it — so these headers reach \`/api/*\` responses and`,
-      `      not the page. Configure the document's headers on the platform`,
-      `      (usetheokit/theokit#412).`,
+      `      not the page. This build emits no artifact that could configure it, so`,
+      `      set the document's headers on the platform (usetheokit/theokit#412).`,
     )
   }
   return lines.join('\n')

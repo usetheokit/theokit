@@ -584,7 +584,7 @@ describe('the per-request nonce: reachable on exactly one deploy path', () => {
       target: 'bun',
       securityHeaders: undefined,
       mintsNonce: false,
-      documentServedByPlatform: false,
+      documentHeaders: 'handler',
     })
 
     expect(message).toContain('bun')
@@ -600,7 +600,7 @@ describe('the per-request nonce: reachable on exactly one deploy path', () => {
         target: 'cloudflare',
         securityHeaders: undefined,
         mintsNonce: true,
-        documentServedByPlatform: false,
+        documentHeaders: 'handler',
       }),
     ).not.toContain('no nonce')
   })
@@ -612,7 +612,7 @@ describe('the per-request nonce: reachable on exactly one deploy path', () => {
       target: 'vercel',
       securityHeaders: { hsts: false, csp: false, permissionsPolicy: false },
       mintsNonce: false,
-      documentServedByPlatform: false,
+      documentHeaders: 'handler',
     })
 
     expect(off).not.toContain('Strict-Transport-Security')
@@ -622,25 +622,42 @@ describe('the per-request nonce: reachable on exactly one deploy path', () => {
     expect(off).toContain('X-Frame-Options')
   })
 
-  it('a target whose document the platform serves is named, not implied', () => {
+  it('a target whose document nobody here can configure is named, not implied', () => {
     const message = describeDeployedSecurityHeaders({
-      target: 'vercel',
+      target: 'aws-lambda',
       securityHeaders: undefined,
       mintsNonce: false,
-      documentServedByPlatform: true,
+      documentHeaders: 'platform-unmanaged',
     })
 
     expect(message).toContain('does NOT pass through this handler')
     expect(message).toContain('#412')
   })
+
+  it('a target whose document THIS build configures is not told to go configure it', () => {
+    // This assertion moved with the truth. `vercel` used to print the message above; the build now
+    // emits the header rules its platform reads, so repeating the instruction sends an operator to
+    // do work that is already done — and a stale limitation reads exactly like a current one.
+    const message = describeDeployedSecurityHeaders({
+      target: 'vercel',
+      securityHeaders: undefined,
+      mintsNonce: false,
+      documentHeaders: 'platform-configured',
+    })
+
+    expect(message).not.toContain('does NOT pass through this handler')
+    expect(message).toMatch(/config this build emits/)
+    // And it still refuses to overclaim: no deployed response has been read back.
+    expect(message).toMatch(/not verified by a deploy/i)
+  })
 })
 
 describe('the served HTML document, where the handler serves it', () => {
   it('bun puts the baseline on the page it serves itself', async () => {
-    // Bun is the one Web target whose own handler answers a non-API path, so it
-    // is the one target where "a page carries the headers" is observable here at
-    // all. On the other five the document comes from a platform static host
-    // (usetheokit/theokit#412).
+    // Bun answers a non-API path from its own handler. Cloudflare now does too (#412), and has
+    // its own assertions in `cloudflare-serves-the-document.test.ts`; on the remaining four the
+    // document comes from a platform static host, which is why this is asserted here and not for
+    // all six.
     const clientDir = join(root, 'bun-app', '.theokit', 'client')
     mkdirSync(clientDir, { recursive: true })
     writeFileSync(join(clientDir, 'index.html'), '<!doctype html><html><body>page</body></html>')

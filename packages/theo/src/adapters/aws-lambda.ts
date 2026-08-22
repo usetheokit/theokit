@@ -300,7 +300,7 @@ export async function buildAwsLambda(
       target: 'aws-lambda',
       securityHeaders: config.security?.headers,
       mintsNonce: false,
-      documentServedByPlatform: true,
+      documentHeaders: 'platform-unmanaged',
     })}\n`,
   )
 }

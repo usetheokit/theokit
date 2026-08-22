@@ -200,6 +200,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **The Cloudflare Worker serves the page again, with the security baseline on it.** With
+  `ssrStreaming: false` every non-API request returned 404 while `wrangler.toml` declared a
+  `[site]` bucket that nothing read — no `ASSETS` binding, no `kv-asset-handler` anywhere — so a
+  deploy answered 404 for its own document rather than serving it unprotected. The config now
+  declares an `[assets]` binding with SPA fallback, the worker returns the asset through it, and the
+  response carries the same headers every API response carries. A `wrangler.toml` that predates the
+  binding still 404s instead of crashing, which is the answer that target already gave. (#412)
+
+- **The build stops telling you to configure something it configured.** The per-target security
+  notice had one boolean for "the platform serves the document", so the two targets whose header
+  config this build now emits (`vercel`, `netlify`) were printed the same instruction as the two it
+  owns no artifact for (`deno-deploy`, `aws-lambda`). A stale limitation reads exactly like a
+  current one. The signal now distinguishes the handler serving the document, a platform this build
+  configures — stated, and honest that no deployed response was read back — and a platform nobody
+  here can configure, which stays named. (#412)
+
 - **An agent can be served from a deploy target.** It could not be, anywhere: `grep -rc "agent"`
   over the 14 adapter files returned nothing, because agents are a different scan served by a
   different function than file routes, and every generated entry routed `/api/` through the route

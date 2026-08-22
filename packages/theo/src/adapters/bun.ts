@@ -241,7 +241,7 @@ export async function buildBun(
       mintsNonce: false,
       // Bun serves `.theokit/client` itself, so the document DOES pass through
       // the handler these headers are attached to.
-      documentServedByPlatform: false,
+      documentHeaders: 'handler',
     })}\n`,
   )
 }

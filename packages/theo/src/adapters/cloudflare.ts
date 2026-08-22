@@ -218,7 +218,17 @@ export function renderCloudflareWorkerEntry(
         `        buildSecurityHeaders(SECURITY_HEADERS_CONFIG, { production: true }, { nonce }),`,
         `      )`,
       ].join('\n')
-    : `      return notFoundResponse()`
+    : [
+        `      // #412 — the document, served by the worker so it carries the same baseline every`,
+        `      // API response carries. It used to return 404 here while wrangler.toml declared a`,
+        `      // \`[site]\` bucket nothing read, so the page was missing rather than unprotected.`,
+        `      const assets = env?.ASSETS`,
+        `      // A wrangler.toml that predates this binding has no ASSETS. Reading .fetch off`,
+        `      // undefined would turn every page request into a 500; 404 is what this target`,
+        `      // answered before, which is the honest fallback rather than a new failure.`,
+        `      if (assets === undefined) return notFoundResponse()`,
+        `      return withSecurityHeaders(await assets.fetch(request), SECURITY_HEADERS)`,
+      ].join('\n')
   // CR-006: Workers lack `process.cwd()` and the `node:*` import surface
   // is brittle even under `nodejs_compat`. We use the Web Crypto
   // `crypto.randomUUID()` instead of `node:crypto.randomUUID`, and embed
@@ -310,7 +320,7 @@ function cloudflareHandleRequestFragment(
   agentBranch: readonly string[],
 ): string[] {
   return [
-    `async function handleRequest(request, url) {`,
+    `async function handleRequest(request, url, env) {`,
     `    if (!url.pathname.startsWith('/api/')) {`,
     nonApiBranch,
     `    }`,
@@ -357,7 +367,7 @@ function cloudflareHandleRequestFragment(
     `    const preflight = corsPreflight(request)`,
     `    if (preflight !== null) return withSecurityHeaders(preflight, SECURITY_HEADERS)`,
     ``,
-    `    return withCors(request, await handleRequest(request, url))`,
+    `    return withCors(request, await handleRequest(request, url, env))`,
     `  },`,
     `}`,
   ]
@@ -371,8 +381,18 @@ export function renderWranglerToml(): string {
     `compatibility_date = "2025-09-01"`,
     `compatibility_flags = ["nodejs_compat"]`,
     ``,
-    `[site]`,
-    `bucket = ".theokit/client"`,
+    `# #412 — \`[assets]\` with a BINDING, not the legacy \`[site]\` bucket.`,
+    `#`,
+    `# \`[site]\` uploads to KV and is read through \`kv-asset-handler\` and a`,
+    `# \`__STATIC_CONTENT\` binding — neither of which this worker has ever had. So the`,
+    `# bucket was declared, uploaded, and consumed by nothing: with ssrStreaming off, a`,
+    `# deploy answered 404 for its own page. This binding is what the worker calls.`,
+    `[assets]`,
+    `directory = ".theokit/client"`,
+    `binding = "ASSETS"`,
+    `# A client-routed app asks for /dashboard, which is no file. Without this the asset`,
+    `# handler 404s a deep link and the SPA never boots.`,
+    `not_found_handling = "single-page-application"`,
     ``,
     `# Environment variables are set via wrangler secret or dashboard`,
     `# Example: wrangler secret put DATABASE_URL`,
@@ -466,7 +486,9 @@ export const cloudflareAdapter: DeployAdapter = {
         // Only the streaming worker renders HTML per request, so only it can put
         // the same nonce on the header and on the script tag it emits.
         mintsNonce: config.ssrStreaming,
-        documentServedByPlatform: !config.ssrStreaming,
+        // #412 — either way the worker returns the document now: streamed by
+        // `renderStreamingWeb`, or from the ASSETS binding it finally calls.
+        documentHeaders: 'handler',
       })}\n`,
     )
   },

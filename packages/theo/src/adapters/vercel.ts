@@ -349,7 +349,7 @@ export const vercelAdapter: DeployAdapter = {
         target: 'vercel',
         securityHeaders: config.security?.headers,
         mintsNonce: false,
-        documentServedByPlatform: true,
+        documentHeaders: 'platform-configured',
       })}\n`,
     )
   },

@@ -193,7 +193,7 @@ export async function buildDeno(
       target: 'deno-deploy',
       securityHeaders: config.security?.headers,
       mintsNonce: false,
-      documentServedByPlatform: true,
+      documentHeaders: 'platform-unmanaged',
     })}\n`,
   )
 }
