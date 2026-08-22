@@ -108,6 +108,37 @@ export class HitlCallCorrelation {
       this.#announcedAs.delete(callId)
       return announced
     }
+
+    // A result for a gated tool whose approval is STILL QUEUED can only be the veto's
+    // (usetheokit/theokit#414). The SDK vetoes in `pre_tool_call`, so a denied or expired approval
+    // never becomes a runtime tool call — `announceToolCall` never claimed it, and nothing else
+    // ever would. The id stayed queued for the lifetime of the stream and was then claimed by a
+    // later, unrelated call of the same tool: that call's own `tool-call` chunk was suppressed as a
+    // duplicate, and its result arrived under the denied approval's id.
+    //
+    // The class's soundness argument — "an approval is outstanding only while the call it gates is
+    // outstanding" — holds on the approve path and breaks here, because the call it gated never
+    // became outstanding at all. This is the settle event it was missing, and it arrives on an
+    // event the presenter already delivers rather than needing a new feed.
+    //
+    // It DROPS the stale id and does not claim it, and that restraint is the whole of the design
+    // decision here. Claiming would have put the refusal under an approval id — right in the common
+    // case, and actively wrong in a mixed concurrent round. Measured: with A1 and A2 outstanding and
+    // only the second call approved, `announceToolCall` claims A1 for it (FIFO by name), so claiming
+    // here would land the FIRST call's refusal on A2 — settling the card of a call that was
+    // approved. A hanging card is bad; a card that shows a refusal for something the human allowed
+    // is worse, and that mispairing is pre-existing rather than something to amplify.
+    //
+    // Dropping fixes both consequences the report names: the next call of this tool is no longer
+    // captured by the dead id, so its own `tool-call` chunk reaches the wire and its result carries
+    // its own approval.
+    //
+    // What remains: a mixed concurrent round still mispairs, because name + FIFO cannot tell which
+    // of two outstanding approvals settled. That needs a per-call handle both sides can see — the
+    // report's option (b) — and `PreToolCallContext` carries `name`, `args`, `agentId` and `runId`
+    // but no call id, which is why the correlation exists at all.
+    // `claim` removes the oldest and returns it; the value is deliberately discarded.
+    claim(this.#unclaimedApprovals, toolName)
     // Ungated, or gated and already paired: either way this call is over, so a LATER approval for
     // the same tool name must not pair with it.
     forget(this.#unclaimedCalls, toolName, callId)

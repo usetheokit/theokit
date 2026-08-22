@@ -146,6 +146,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   (usetheokit/theokit#213)
 
 ### Fixed
+- **A denied HITL approval no longer captures the next call of the same tool.** The correlation
+  that pairs an approval id with the SDK's runtime call id does so by tool name, FIFO, on the
+  reasoning that "an approval is outstanding only while the call it gates is outstanding". That
+  holds on the approve path and breaks on the deny one: the SDK vetoes in `pre_tool_call`, so the
+  call the approval gated never becomes outstanding, and the id stayed queued for the lifetime of
+  the stream. A later call of the same tool then claimed it — its own `tool-call` chunk was
+  suppressed as a duplicate and never reached the wire, and its result arrived under the denied
+  approval's id, so a client grouping by `toolCallId` attached it to the refused card. The stale id
+  is dropped now, on an event the presenter already delivers. It is **dropped and not claimed**,
+  which is the deliberate half: claiming would put the refusal under an approval id — right in the
+  common case and wrong in a mixed concurrent round, where it would settle the card of a call the
+  human allowed. A mixed round still mispairs; that needs a per-call handle both sides can see, and
+  the plugin's hook context carries no call id, which is why the correlation exists at all. (#414)
 - **A `TheoApp`-mounted agent route no longer delivers zero chunks to `useAgent`.** The framework
   shipped two SSE encoders for agent runs and they did not speak the same wire: the durable one
   writes `data: <UIMessageChunk>` with a terminal `data: [DONE]`, and the other wrote
