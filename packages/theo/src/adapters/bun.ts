@@ -9,6 +9,7 @@ import type { SecurityHeadersConfig } from '../core/contracts/security-headers.j
 import { assertServicesUnsupported, readManifest } from '../services/index.js'
 
 import { deployedCsrfFragment, type DeployedCsrfOptions } from './deployed-csrf.js'
+import { deployedTraceFragment } from './deployed-trace.js'
 import { nodeAdapter } from './node.js'
 import {
   describeDeployedSecurityHeaders,
@@ -59,8 +60,7 @@ export function renderBunEntry(
     ``,
     `import { resolve, join } from 'node:path'`,
     `import { existsSync } from 'node:fs'`,
-    `import { randomUUID } from 'node:crypto'`,
-    `import { scanServerRoutes, matchRoute, executeRoute, createProductionLoader } from 'theokit/server'`,
+    `import { scanServerRoutes, matchRoute, executeRoute, createProductionLoader, extractTraceIdFromRequest, TRACE_HEADER } from 'theokit/server'`,
     `import { createWebShim } from 'theokit/adapters/web-shim'`,
     `import { buildSecurityHeaders, withSecurityHeaders } from 'theokit/adapters/security-headers'`,
     `// T3.2 — WS bridge for Bun runtime`,
@@ -143,7 +143,7 @@ function bunHandleRequestFragment(): string[] {
     `      const match = matchRoute(pathname, routes)`,
     `      if (!match) return notFoundResponse()`,
     `      const { req, res, toResponse } = createWebShim(request)`,
-    `      const requestId = randomUUID()`,
+    ...deployedTraceFragment('request', '      '),
     `      const method = request.method.toUpperCase()`,
     `      // #382 — not awaited: toResponse() settles at the headers and carries`,
     `      // a live body, so Bun.serve streams while the handler writes.`,

@@ -55,6 +55,10 @@ import {
 import { renderVercelFunctionEntry } from '../../packages/theo/src/adapters/vercel.js'
 import { createWebShim } from '../../packages/theo/src/adapters/web-shim.js'
 import type { SecurityHeadersConfig } from '../../packages/theo/src/core/contracts/security-headers.js'
+import {
+  extractTraceIdFromRequest,
+  TRACE_HEADER,
+} from '../../packages/theo/src/server/http/trace-context.js'
 
 // ---------------------------------------------------------------------------
 // Harness
@@ -75,6 +79,9 @@ interface HarnessBridge {
   createCloudflareWsBridge: () => unknown
   createDenoWsBridge: () => unknown
   renderStreamingWeb: (request: Request, options: { nonce?: string }) => Response
+  // #410 — every entry now resolves the caller's trace id instead of minting one.
+  extractTraceIdFromRequest: typeof extractTraceIdFromRequest
+  TRACE_HEADER: string
 }
 
 /** The subset of the shim's `res` this file's fake handler writes through. */
@@ -106,6 +113,8 @@ export const createBunWsBridge = (...a) => b().createBunWsBridge(...a)
 export const createCloudflareWsBridge = (...a) => b().createCloudflareWsBridge(...a)
 export const createDenoWsBridge = (...a) => b().createDenoWsBridge(...a)
 export const renderStreamingWeb = (...a) => b().renderStreamingWeb(...a)
+export const extractTraceIdFromRequest = (...a) => b().extractTraceIdFromRequest(...a)
+export const TRACE_HEADER = b().TRACE_HEADER
 `
 
 /** The nonce the streaming renderer was handed, so the header can be matched to it. */
@@ -133,6 +142,10 @@ const bridge: HarnessBridge = {
   buildSecurityHeaders,
   generateNonce,
   withSecurityHeaders,
+  // The real resolver, not a stub: the point of driving the emitted artifact is that the
+  // trace precedence (traceparent → validated x-request-id → fresh UUID) is the shipped one.
+  extractTraceIdFromRequest,
+  TRACE_HEADER,
   createBunWsBridge: () => ({ open: () => {}, message: () => {}, close: () => {} }),
   createCloudflareWsBridge: () => ({ handle: () => new Response(null, { status: 101 }) }),
   createDenoWsBridge: () => ({ handle: () => new Response(null, { status: 101 }) }),
@@ -189,10 +202,15 @@ async function driveCloudflare(headers?: SecurityHeadersConfig): Promise<Headers
   return (await worker.fetch(new Request(API_URL), {}, {})).headers
 }
 
-async function driveNetlify(headers?: SecurityHeadersConfig): Promise<Headers> {
+async function driveNetlify(
+  headers?: SecurityHeadersConfig,
+  requestHeaders?: HeadersInit,
+): Promise<Headers> {
   const mod = await loadEntry(renderNetlifyFunction({ securityHeaders: headers }))
   const fn = mod.default as (r: Request, c: unknown) => Promise<Response>
-  return (await fn(new Request(API_URL), {})).headers
+  // `requestHeaders` exists for #410: the id a caller sends has to survive the trip, and that
+  // cannot be observed from a request that sends none.
+  return (await fn(new Request(API_URL, { headers: requestHeaders }), {})).headers
 }
 
 class BunFile extends Blob {
@@ -336,6 +354,47 @@ describe('a real response from every Web deploy target carries the security base
       expect(headers.get('Strict-Transport-Security')).toBeNull()
     })
   }
+})
+
+describe('a real response from every Web deploy target carries a correlation id (#410)', () => {
+  // Every entry minted a fresh `randomUUID()` and set NO correlation header on a success path,
+  // while both Node paths resolve the incoming `traceparent` / `x-request-id` and echo the result
+  // under both names. A trace crossing into a deployed function started over, and the response
+  // carried nothing to correlate against — so a production failure could not be tied back to the
+  // client that caused it, which is the one job the id has.
+  for (const [target, drive] of Object.entries(TARGETS)) {
+    it(`${target} echoes the id under both names`, async () => {
+      const headers = await drive()
+
+      const requestId = headers.get('x-request-id')
+      expect(requestId, `${target} sent no x-request-id`).toBeTruthy()
+      // Both names, matching `theokit start`: `x-request-id` is what existing consumers read,
+      // `x-trace-id` is the canonical one. One without the other is a half-migration.
+      expect(headers.get('x-trace-id'), `${target} sent no x-trace-id`).toBe(requestId)
+    })
+  }
+})
+
+describe("a caller's own trace id survives the trip (#410)", () => {
+  it('echoes the id the client sent, instead of a fresh one', async () => {
+    const sent = '3f2504e0-4f89-11d3-9a0c-0305e82c3301'
+
+    const headers = await driveNetlify(undefined, { 'x-request-id': sent })
+
+    expect(headers.get('x-request-id')).toBe(sent)
+    expect(headers.get('x-trace-id')).toBe(sent)
+  })
+
+  it('prefers a W3C traceparent over the caller-controlled x-request-id', async () => {
+    // Precedence is the shipped resolver's, not this test's: `traceparent` is the standard and
+    // `x-request-id` is validated before it is trusted because it ends up in logs.
+    const headers = await driveNetlify(undefined, {
+      traceparent: '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01',
+      'x-request-id': '3f2504e0-4f89-11d3-9a0c-0305e82c3301',
+    })
+
+    expect(headers.get('x-request-id')).toBe('4bf92f3577b34da6a3ce929d0e0e4736')
+  })
 })
 
 describe('the deployed baseline is the same one theokit start applies', () => {

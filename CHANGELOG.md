@@ -136,6 +136,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   (usetheokit/theokit#213)
 
 ### Fixed
+- **A trace crossing into a deployed function no longer starts over.** Every generated entry minted
+  a fresh `randomUUID()` per request and set no correlation header at all on a success path, while
+  both Node paths resolve the incoming `traceparent` / `x-request-id` through `extractTraceId` and
+  echo the result under both `x-request-id` and `x-trace-id`. The caller's id was discarded and the
+  response carried nothing to correlate against — so a request that failed in production could not
+  be tied to the client that made it, which is the one situation the id exists for. All six Web
+  targets now resolve the id from the request, with the shipped precedence (`traceparent`, then a
+  validated `x-request-id`, then a fresh UUID), and echo it under both names. The echo is a
+  `setHeader` before the handler runs, exactly as `theokit start` does it: the shim's `writeHead`
+  merges rather than replaces, so a handler that sets its own id still wins, and no branch has to
+  remember to add it. Verified against a real response from each of the six, including that a
+  caller-supplied id survives the trip and that a W3C `traceparent` outranks it. (#410)
 - **A deployed app now enforces the CSRF mode it declared, instead of always the strictest one.**
   The six Web-standards adapter entries built `executeRoute`'s context from an eight-field literal,
   and neither `csrfMode` nor `disallowed` was among the eight. `executeRoute` defaults an absent

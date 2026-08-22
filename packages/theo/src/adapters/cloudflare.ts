@@ -11,6 +11,7 @@ import type { SecurityHeadersConfig } from '../core/contracts/security-headers.j
 import { assertServicesUnsupported, readManifest } from '../services/index.js'
 
 import { deployedCsrfFragment, type DeployedCsrfOptions } from './deployed-csrf.js'
+import { deployedTraceFragment } from './deployed-trace.js'
 import { nodeAdapter } from './node.js'
 import {
   describeDeployedSecurityHeaders,
@@ -215,7 +216,7 @@ export function renderCloudflareWorkerEntry(
     `//     so Wrangler bundles theokit and its transitive deps`,
     `//   - Deploy: wrangler deploy`,
     ``,
-    `import { matchRoute, executeRoute, compilePattern } from 'theokit/server'`,
+    `import { matchRoute, executeRoute, compilePattern, extractTraceIdFromRequest, TRACE_HEADER } from 'theokit/server'`,
     `import { createWebShim } from 'theokit/adapters/web-shim'`,
     opts.ssrStreaming
       ? `import { buildSecurityHeaders, generateNonce, withSecurityHeaders } from 'theokit/adapters/security-headers'`
@@ -277,7 +278,7 @@ function cloudflareHandleRequestFragment(nonApiBranch: string): string[] {
     `    if (!match) return notFoundResponse()`,
     ``,
     `    const { req, res, toResponse } = createWebShim(request, { trustedProxy: 'platform' })`,
-    `    const requestId = crypto.randomUUID()`,
+    ...deployedTraceFragment('request', '    '),
     `    const method = request.method.toUpperCase()`,
     `    // #382 — the run is NOT awaited before the Response is taken. toResponse()`,
     `    // settles as soon as status + headers are known and carries a live body, so`,

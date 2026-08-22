@@ -9,6 +9,7 @@ import type { SecurityHeadersConfig } from '../core/contracts/security-headers.j
 import { assertServicesUnsupported, readManifest } from '../services/index.js'
 
 import { deployedCsrfFragment, type DeployedCsrfOptions } from './deployed-csrf.js'
+import { deployedTraceFragment } from './deployed-trace.js'
 import { nodeAdapter } from './node.js'
 import {
   describeDeployedSecurityHeaders,
@@ -165,7 +166,7 @@ function awsLambdaHandlerFragment(): string[] {
     ``,
     `  const request = eventV2ToRequest(event)`,
     `  const { req, res, toResponse } = createWebShim(request)`,
-    `  const requestId = randomUUID()`,
+    ...deployedTraceFragment('request', '  '),
     `  const method = request.method.toUpperCase()`,
     `  return toResponse(executeRoute({ route: match.route, method, params: match.params, req, res, loadModule: loaderCache, serverDir, requestId, ...CSRF_CONFIG }))`,
     `}`,
@@ -180,8 +181,7 @@ export function renderAwsLambdaEntry(
     `// Use with API Gateway HTTP API v2 (default).`,
     ``,
     `import { resolve } from 'node:path'`,
-    `import { randomUUID } from 'node:crypto'`,
-    `import { scanServerRoutes, matchRoute, executeRoute, createProductionLoader } from 'theokit/server'`,
+    `import { scanServerRoutes, matchRoute, executeRoute, createProductionLoader, extractTraceIdFromRequest, TRACE_HEADER } from 'theokit/server'`,
     `import { createWebShim } from 'theokit/adapters/web-shim'`,
     `import { buildSecurityHeaders, withSecurityHeaders } from 'theokit/adapters/security-headers'`,
     ``,

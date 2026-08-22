@@ -9,6 +9,7 @@ import type { SecurityHeadersConfig } from '../core/contracts/security-headers.j
 import { assertServicesUnsupported, readManifest } from '../services/index.js'
 
 import { deployedCsrfFragment, type DeployedCsrfOptions } from './deployed-csrf.js'
+import { deployedTraceFragment } from './deployed-trace.js'
 import { nodeAdapter } from './node.js'
 import {
   describeDeployedSecurityHeaders,
@@ -38,7 +39,7 @@ export function renderDenoEntry(
     ``,
     `// Use npm: specifier so Deno resolves theokit from the user's package.json`,
     `// equivalent (works in both local 'deno run' and Deno Deploy).`,
-    `import { scanServerRoutes, matchRoute, executeRoute, createProductionLoader, scanWebSocketRoutes } from 'npm:theokit/server'`,
+    `import { scanServerRoutes, matchRoute, executeRoute, createProductionLoader, scanWebSocketRoutes, extractTraceIdFromRequest, TRACE_HEADER } from 'npm:theokit/server'`,
     `import { createWebShim } from 'npm:theokit/adapters/web-shim'`,
     `import { buildSecurityHeaders, withSecurityHeaders } from 'npm:theokit/adapters/security-headers'`,
     `// T3.3 — WS bridge for Deno runtime`,
@@ -101,7 +102,7 @@ export function renderDenoEntry(
     `  if (!match) return notFound()`,
     ``,
     `  const { req, res, toResponse } = createWebShim(request)`,
-    `  const requestId = crypto.randomUUID()`,
+    ...deployedTraceFragment('request', '  '),
     `  const method = request.method.toUpperCase()`,
     `  // #382 — not awaited: toResponse() settles at the headers and carries a`,
     `  // live body, so Deno.serve streams while the handler writes.`,
