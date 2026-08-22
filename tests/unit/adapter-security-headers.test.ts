@@ -55,6 +55,9 @@ import {
 import { renderVercelFunctionEntry } from '../../packages/theo/src/adapters/vercel.js'
 import { createWebShim } from '../../packages/theo/src/adapters/web-shim.js'
 import type { SecurityHeadersConfig } from '../../packages/theo/src/core/contracts/security-headers.js'
+// The real handlers, not stubs: what these tests exercise is the shipped behaviour — the trace
+// precedence, and the CORS matching including that an unconfigured origin gets nothing.
+import { createCorsWebHandler } from '../../packages/theo/src/server/http/cors.js'
 import {
   extractTraceIdFromRequest,
   TRACE_HEADER,
@@ -82,6 +85,8 @@ interface HarnessBridge {
   // #410 — every entry now resolves the caller's trace id instead of minting one.
   extractTraceIdFromRequest: typeof extractTraceIdFromRequest
   TRACE_HEADER: string
+  // #409 — every entry now builds a CORS handler from a baked literal.
+  createCorsWebHandler: typeof createCorsWebHandler
 }
 
 /** The subset of the shim's `res` this file's fake handler writes through. */
@@ -115,6 +120,7 @@ export const createDenoWsBridge = (...a) => b().createDenoWsBridge(...a)
 export const renderStreamingWeb = (...a) => b().renderStreamingWeb(...a)
 export const extractTraceIdFromRequest = (...a) => b().extractTraceIdFromRequest(...a)
 export const TRACE_HEADER = b().TRACE_HEADER
+export const createCorsWebHandler = (...a) => b().createCorsWebHandler(...a)
 `
 
 /** The nonce the streaming renderer was handed, so the header can be matched to it. */
@@ -146,6 +152,7 @@ const bridge: HarnessBridge = {
   // trace precedence (traceparent → validated x-request-id → fresh UUID) is the shipped one.
   extractTraceIdFromRequest,
   TRACE_HEADER,
+  createCorsWebHandler,
   createBunWsBridge: () => ({ open: () => {}, message: () => {}, close: () => {} }),
   createCloudflareWsBridge: () => ({ handle: () => new Response(null, { status: 101 }) }),
   createDenoWsBridge: () => ({ handle: () => new Response(null, { status: 101 }) }),
@@ -194,23 +201,48 @@ afterAll(() => {
 
 const API_URL = 'https://app.example.test/api/hello'
 
-async function driveCloudflare(headers?: SecurityHeadersConfig): Promise<Headers> {
-  const mod = await loadEntry(
-    renderCloudflareWorkerEntry({ ssrStreaming: false, securityHeaders: headers }),
-  )
-  const worker = mod.default as { fetch: (r: Request, e: unknown, c: unknown) => Promise<Response> }
-  return (await worker.fetch(new Request(API_URL), {}, {})).headers
+/**
+ * What a driver may vary about the request and the build.
+ *
+ * Added for #409: CORS is the first concern here whose answer depends on what the CALLER sent, so
+ * a driver that could only vary the build could not observe it.
+ */
+interface DriveOptions {
+  /** Baked into the emitted entry. */
+  cors?: CorsOptions
+  /** Sent by the caller — an `origin`, a preflight's `access-control-request-method`. */
+  requestHeaders?: HeadersInit
+  /** The request method, for a preflight. */
+  method?: string
 }
 
-async function driveNetlify(
+type CorsOptions = Parameters<typeof renderNetlifyFunction>[0] extends infer O
+  ? O extends { cors?: infer C }
+    ? C
+    : never
+  : never
+
+function req(o: DriveOptions | undefined): Request {
+  return new Request(API_URL, { method: o?.method ?? 'GET', headers: o?.requestHeaders })
+}
+
+async function driveCloudflare(
   headers?: SecurityHeadersConfig,
-  requestHeaders?: HeadersInit,
+  o?: DriveOptions,
 ): Promise<Headers> {
-  const mod = await loadEntry(renderNetlifyFunction({ securityHeaders: headers }))
+  const mod = await loadEntry(
+    renderCloudflareWorkerEntry({ ssrStreaming: false, securityHeaders: headers, cors: o?.cors }),
+  )
+  const worker = mod.default as { fetch: (r: Request, e: unknown, c: unknown) => Promise<Response> }
+  return (await worker.fetch(req(o), {}, {})).headers
+}
+
+async function driveNetlify(headers?: SecurityHeadersConfig, o?: DriveOptions): Promise<Headers> {
+  const mod = await loadEntry(renderNetlifyFunction({ securityHeaders: headers, cors: o?.cors }))
   const fn = mod.default as (r: Request, c: unknown) => Promise<Response>
-  // `requestHeaders` exists for #410: the id a caller sends has to survive the trip, and that
-  // cannot be observed from a request that sends none.
-  return (await fn(new Request(API_URL, { headers: requestHeaders }), {})).headers
+  // `DriveOptions.requestHeaders` exists for #410 and #409: an id the caller sends and an `origin`
+  // the caller sends are both unobservable from a request that sends neither.
+  return (await fn(req(o), {})).headers
 }
 
 class BunFile extends Blob {
@@ -229,6 +261,7 @@ class BunFile extends Blob {
  */
 async function loadBunEntry(
   headers?: SecurityHeadersConfig,
+  cors?: CorsOptions,
 ): Promise<(r: Request) => Promise<Response>> {
   let fetchHandler: ((r: Request) => Promise<Response>) | undefined
   ;(globalThis as Record<string, unknown>).Bun = {
@@ -241,7 +274,7 @@ async function loadBunEntry(
   const previousEnv = process.env.NODE_ENV
   process.env.NODE_ENV = 'production'
   try {
-    await loadEntry(renderBunEntry(3000, { securityHeaders: headers }))
+    await loadEntry(renderBunEntry(3000, { securityHeaders: headers, cors }))
   } finally {
     process.env.NODE_ENV = previousEnv
   }
@@ -249,12 +282,12 @@ async function loadBunEntry(
   return fetchHandler
 }
 
-async function driveBun(headers?: SecurityHeadersConfig): Promise<Headers> {
-  const fetchHandler = await loadBunEntry(headers)
-  return (await fetchHandler(new Request(API_URL))).headers
+async function driveBun(headers?: SecurityHeadersConfig, o?: DriveOptions): Promise<Headers> {
+  const fetchHandler = await loadBunEntry(headers, o?.cors)
+  return (await fetchHandler(req(o))).headers
 }
 
-async function driveDeno(headers?: SecurityHeadersConfig): Promise<Headers> {
+async function driveDeno(headers?: SecurityHeadersConfig, o?: DriveOptions): Promise<Headers> {
   let handler: ((r: Request) => Promise<Response>) | undefined
   ;(globalThis as Record<string, unknown>).Deno = {
     env: { get: () => undefined },
@@ -263,14 +296,16 @@ async function driveDeno(headers?: SecurityHeadersConfig): Promise<Headers> {
       handler = h
     },
   }
-  const mod = await loadEntry(renderDenoEntry(3000, { securityHeaders: headers }))
+  const mod = await loadEntry(renderDenoEntry(3000, { securityHeaders: headers, cors: o?.cors }))
   expect(mod).toBeDefined()
   if (!handler) throw new Error('the Deno entry never called Deno.serve')
-  return (await handler(new Request(API_URL))).headers
+  return (await handler(req(o))).headers
 }
 
-async function driveVercel(headers?: SecurityHeadersConfig): Promise<Headers> {
-  const mod = await loadEntry(renderVercelFunctionEntry({ securityHeaders: headers }))
+async function driveVercel(headers?: SecurityHeadersConfig, o?: DriveOptions): Promise<Headers> {
+  const mod = await loadEntry(
+    renderVercelFunctionEntry({ securityHeaders: headers, cors: o?.cors }),
+  )
   const handler = mod.default as (req: unknown, res: unknown) => Promise<void>
   const written = new Headers()
   const nodeRes = {
@@ -284,24 +319,28 @@ async function driveVercel(headers?: SecurityHeadersConfig): Promise<Headers> {
     destroy: () => {},
   }
   await handler(
-    { url: '/api/hello', method: 'GET', headers: { host: 'app.example.test' } },
+    {
+      url: '/api/hello',
+      method: o?.method ?? 'GET',
+      headers: { host: 'app.example.test', ...Object.fromEntries(new Headers(o?.requestHeaders)) },
+    },
     nodeRes,
   )
   return written
 }
 
-async function driveAwsLambda(headers?: SecurityHeadersConfig): Promise<Headers> {
-  const mod = await loadEntry(renderAwsLambdaEntry({ securityHeaders: headers }))
+async function driveAwsLambda(headers?: SecurityHeadersConfig, o?: DriveOptions): Promise<Headers> {
+  const mod = await loadEntry(renderAwsLambdaEntry({ securityHeaders: headers, cors: o?.cors }))
   const handler = mod.handler as (e: unknown) => Promise<{ headers: Record<string, string> }>
   const result = await handler({
     version: '2.0',
-    requestContext: { http: { method: 'GET', path: '/api/hello' } },
-    headers: { host: 'app.example.test' },
+    requestContext: { http: { method: o?.method ?? 'GET', path: '/api/hello' } },
+    headers: { host: 'app.example.test', ...Object.fromEntries(new Headers(o?.requestHeaders)) },
   })
   return new Headers(result.headers)
 }
 
-const TARGETS: Record<string, (h?: SecurityHeadersConfig) => Promise<Headers>> = {
+const TARGETS: Record<string, (h?: SecurityHeadersConfig, o?: DriveOptions) => Promise<Headers>> = {
   cloudflare: driveCloudflare,
   vercel: driveVercel,
   netlify: driveNetlify,
@@ -379,7 +418,7 @@ describe("a caller's own trace id survives the trip (#410)", () => {
   it('echoes the id the client sent, instead of a fresh one', async () => {
     const sent = '3f2504e0-4f89-11d3-9a0c-0305e82c3301'
 
-    const headers = await driveNetlify(undefined, { 'x-request-id': sent })
+    const headers = await driveNetlify(undefined, { requestHeaders: { 'x-request-id': sent } })
 
     expect(headers.get('x-request-id')).toBe(sent)
     expect(headers.get('x-trace-id')).toBe(sent)
@@ -389,12 +428,61 @@ describe("a caller's own trace id survives the trip (#410)", () => {
     // Precedence is the shipped resolver's, not this test's: `traceparent` is the standard and
     // `x-request-id` is validated before it is trusted because it ends up in logs.
     const headers = await driveNetlify(undefined, {
-      traceparent: '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01',
-      'x-request-id': '3f2504e0-4f89-11d3-9a0c-0305e82c3301',
+      requestHeaders: {
+        traceparent: '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01',
+        'x-request-id': '3f2504e0-4f89-11d3-9a0c-0305e82c3301',
+      },
     })
 
     expect(headers.get('x-request-id')).toBe('4bf92f3577b34da6a3ce929d0e0e4736')
   })
+})
+
+describe('a real response from every Web deploy target serves the configured CORS (#409)', () => {
+  // `security.cors` reached exactly one consumer — Vite's `configureServer` hook — so an app that
+  // worked cross-origin under `theokit dev` stopped working on every deploy target, with no error
+  // and no warning. Driven per target rather than once, because the entries are six independent
+  // emitters and a test covering one would pass on five that dropped it.
+  const ALLOWED = 'https://other.example'
+  const CORS = { origins: ALLOWED, credentials: false, maxAge: 600 } as unknown as CorsOptions
+
+  for (const [target, drive] of Object.entries(TARGETS)) {
+    it(`${target} puts the header on an ordinary response`, async () => {
+      const headers = await drive(undefined, { cors: CORS, requestHeaders: { origin: ALLOWED } })
+
+      expect(headers.get('access-control-allow-origin'), `${target} dropped it`).toBe(ALLOWED)
+    })
+
+    it(`${target} answers a preflight before the router sees it`, async () => {
+      const headers = await drive(undefined, {
+        cors: CORS,
+        method: 'OPTIONS',
+        requestHeaders: { origin: ALLOWED, 'access-control-request-method': 'GET' },
+      })
+
+      expect(headers.get('access-control-allow-origin')).toBe(ALLOWED)
+      expect(headers.get('access-control-allow-methods')).toContain('GET')
+    })
+
+    it(`${target} gives an unconfigured origin nothing`, async () => {
+      // The counter-proof, and the one that matters: a fix that echoed every origin would pass the
+      // two above and hand the app a wildcard nobody asked for.
+      const headers = await drive(undefined, {
+        cors: CORS,
+        requestHeaders: { origin: 'https://evil.example' },
+      })
+
+      expect(headers.get('access-control-allow-origin')).toBeNull()
+    })
+
+    it(`${target} sends no CORS header when the app declared none`, async () => {
+      // Absence still means absence. An entry that defaulted to permissive would be a worse bug
+      // than the one being fixed.
+      const headers = await drive(undefined, { requestHeaders: { origin: ALLOWED } })
+
+      expect(headers.get('access-control-allow-origin')).toBeNull()
+    })
+  }
 })
 
 describe('the deployed baseline is the same one theokit start applies', () => {

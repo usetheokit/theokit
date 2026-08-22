@@ -146,6 +146,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   (usetheokit/theokit#213)
 
 ### Fixed
+- **All six Web deploy targets now serve the CORS the app configured.** `security.cors` had reached
+  exactly one consumer — Vite's `configureServer` hook — so an app that worked cross-origin under
+  `theokit dev` stopped working the moment anything else served it. `theokit start` was fixed first;
+  the deploy targets carry it now too, as a build-time literal, since a deployed function has no
+  `theo.config.ts` to read. The preflight is answered before anything routes, because an `OPTIONS`
+  the router handles is an `OPTIONS` the browser never gets a CORS answer to, and the headers go on
+  at the one place the security baseline already uses — including the 404s, which a browser reads
+  without them as a CORS failure rather than as the 404 it is. Nothing reimplements the matching:
+  `createCorsWebHandler` had been written, tested and never called. **A callback `origins` is
+  refused by name at build time**, naming the target and both ways forward, rather than dropped:
+  baking only the serialisable shapes would deploy an app whose CORS silently allowed nothing —
+  this issue's own defect, produced by the fix for it. RegExp origins are emitted as regex literals
+  for the same reason `disallowed.routes` is. (#409)
 - **The scaffolded desktop sidecar stops emitting a second, non-conformant approval frame.**
   `runTurnToJsonl` writes every chunk the in-process turn produces, and a gated tool produces the
   real `tool-approval-request` carrying the `toolCallId` readers key a tool part by. The template's

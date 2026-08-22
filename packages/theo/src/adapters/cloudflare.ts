@@ -10,6 +10,7 @@ import { findRootDiv } from '../core/contracts/find-root-div.js'
 import type { SecurityHeadersConfig } from '../core/contracts/security-headers.js'
 import { assertServicesUnsupported, readManifest } from '../services/index.js'
 
+import { deployedCorsFragment, type DeployedCorsOptions } from './deployed-cors.js'
 import { deployedCsrfFragment, type DeployedCsrfOptions } from './deployed-csrf.js'
 import { deployedTraceFragment } from './deployed-trace.js'
 import { nodeAdapter } from './node.js'
@@ -158,7 +159,8 @@ export function renderCloudflareWorkerEntry(
     routes?: readonly { filePath: string; routePath: string; methods?: readonly string[] }[]
     /** WebSocket route files, scanned on the build machine. Only their presence is used (#369). */
     wsRoutes?: readonly string[]
-  } & DeployedCsrfOptions = {},
+  } & DeployedCsrfOptions &
+    DeployedCorsOptions = {},
 ): string {
   const streamingImport = opts.ssrStreaming
     ? `import { renderStreamingWeb } from '/@theo/entry-server'`
@@ -216,7 +218,7 @@ export function renderCloudflareWorkerEntry(
     `//     so Wrangler bundles theokit and its transitive deps`,
     `//   - Deploy: wrangler deploy`,
     ``,
-    `import { matchRoute, executeRoute, compilePattern, extractTraceIdFromRequest, TRACE_HEADER } from 'theokit/server'`,
+    `import { matchRoute, executeRoute, compilePattern, extractTraceIdFromRequest, TRACE_HEADER, createCorsWebHandler } from 'theokit/server'`,
     `import { createWebShim } from 'theokit/adapters/web-shim'`,
     opts.ssrStreaming
       ? `import { buildSecurityHeaders, generateNonce, withSecurityHeaders } from 'theokit/adapters/security-headers'`
@@ -240,6 +242,8 @@ export function renderCloudflareWorkerEntry(
     `const SECURITY_HEADERS = buildSecurityHeaders(SECURITY_HEADERS_CONFIG, { production: true })`,
     ``,
     ...deployedCsrfFragment(opts, 'a Worker'),
+    ``,
+    ...deployedCorsFragment(opts.cors, 'cloudflare'),
     `// #369 — whether this project declares a WebSocket route, decided at build time. It used`,
     `// to answer it with \`scanWebSocketRoutes\`, which is the same readdirSync.`,
     `const HAS_WS_ROUTES = ${String((opts.wsRoutes ?? []).length > 0)}`,
@@ -308,7 +312,13 @@ function cloudflareHandleRequestFragment(nonApiBranch: string): string[] {
     `      return cfWs.handle(request)`,
     `    }`,
     ``,
-    `    return handleRequest(request, url)`,
+    `    // #409 — the preflight is answered BEFORE anything routes: an OPTIONS the router handles`,
+    `    // is an OPTIONS the browser never gets a CORS answer to. The WebSocket upgrade above is`,
+    `    // deliberately upstream of it — a 101 is not a CORS-governed response.`,
+    `    const preflight = corsPreflight(request)`,
+    `    if (preflight !== null) return withSecurityHeaders(preflight, SECURITY_HEADERS)`,
+    ``,
+    `    return withCors(request, await handleRequest(request, url))`,
     `  },`,
     `}`,
   ]
@@ -343,7 +353,7 @@ export const cloudflareAdapter: DeployAdapter = {
   // literal and puts the built baseline on every response it returns, including
   // the streamed SSR document — with a per-request nonce, the only deploy path
   // that can mint one (`adapters/security-headers.ts`).
-  appliesConfig: ['securityHeaders', 'csrf', 'disallowed'],
+  appliesConfig: ['securityHeaders', 'csrf', 'disallowed', 'cors'],
 
   async build(config: TheoConfig, cwd: string, ctx?: AdapterBuildContext): Promise<void> {
     // Wave 2 (T2.2) — reject polyglot services on this adapter.
@@ -382,6 +392,7 @@ export const cloudflareAdapter: DeployAdapter = {
         securityHeaders: config.security?.headers,
         csrf: config.security?.csrf,
         disallowed: config.security?.disallowed,
+        cors: config.security?.cors,
         routes: scanned.routes,
         wsRoutes: scanned.wsRoutes,
       }),

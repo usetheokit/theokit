@@ -8,6 +8,7 @@ import type { TheoConfig } from '../config/schema.js'
 import type { SecurityHeadersConfig } from '../core/contracts/security-headers.js'
 import { assertServicesUnsupported, readManifest } from '../services/index.js'
 
+import { deployedCorsFragment, type DeployedCorsOptions } from './deployed-cors.js'
 import { deployedCsrfFragment, type DeployedCsrfOptions } from './deployed-csrf.js'
 import { deployedTraceFragment } from './deployed-trace.js'
 import { nodeAdapter } from './node.js'
@@ -28,7 +29,8 @@ export function renderBunEntry(
   opts: {
     ssrStreaming?: boolean
     securityHeaders?: SecurityHeadersConfig
-  } & DeployedCsrfOptions = {},
+  } & DeployedCsrfOptions &
+    DeployedCorsOptions = {},
 ): string {
   const streamingComment = opts.ssrStreaming
     ? `// T2.3 — ssrStreaming on; renderStreamingWeb may be consumed by app code`
@@ -60,7 +62,7 @@ export function renderBunEntry(
     ``,
     `import { resolve, join } from 'node:path'`,
     `import { existsSync } from 'node:fs'`,
-    `import { scanServerRoutes, matchRoute, executeRoute, createProductionLoader, extractTraceIdFromRequest, TRACE_HEADER } from 'theokit/server'`,
+    `import { scanServerRoutes, matchRoute, executeRoute, createProductionLoader, extractTraceIdFromRequest, TRACE_HEADER, createCorsWebHandler } from 'theokit/server'`,
     `import { createWebShim } from 'theokit/adapters/web-shim'`,
     `import { buildSecurityHeaders, withSecurityHeaders } from 'theokit/adapters/security-headers'`,
     `// T3.2 — WS bridge for Bun runtime`,
@@ -82,6 +84,8 @@ export function renderBunEntry(
     `const SECURITY_HEADERS = buildSecurityHeaders(SECURITY_HEADERS_CONFIG, { production: true })`,
     ``,
     ...deployedCsrfFragment(opts),
+    ``,
+    ...deployedCorsFragment(opts.cors, 'bun'),
     ``,
     `const routes = existsSync(serverDir) ? scanServerRoutes(serverDir) : []`,
     `const wsRoutes = existsSync(serverDir) ? scanWebSocketRoutes(serverDir) : []`,
@@ -109,7 +113,11 @@ export function renderBunEntry(
     `  port,`,
     `  websocket: wsBridge,`,
     `  async fetch(request, server) {`,
-    `    return withSecurityHeaders(await handleRequest(request), SECURITY_HEADERS)`,
+    `    // #409 — the preflight is answered BEFORE anything routes: an OPTIONS the router`,
+    `    // handles is an OPTIONS the browser never gets a CORS answer to.`,
+    `    const preflight = corsPreflight(request)`,
+    `    if (preflight !== null) return withSecurityHeaders(preflight, SECURITY_HEADERS)`,
+    `    return withCors(request, withSecurityHeaders(await handleRequest(request), SECURITY_HEADERS))`,
     `  },`,
     `})`,
     ``,
@@ -182,6 +190,7 @@ export async function buildBun(
     securityHeaders: config.security?.headers,
     csrf: config.security?.csrf,
     disallowed: config.security?.disallowed,
+    cors: config.security?.cors,
   })
   const write =
     deps.writeEntry ??
@@ -219,7 +228,7 @@ export const bunAdapter: DeployAdapter = {
   // `securityHeaders` IS applied: the entry carries `security.headers` as a
   // literal and puts the built baseline on every response, the served document
   // included.
-  appliesConfig: ['securityHeaders', 'csrf', 'disallowed'],
+  appliesConfig: ['securityHeaders', 'csrf', 'disallowed', 'cors'],
   build(config, cwd, ctx) {
     return buildBun(config, cwd, {}, ctx)
   },
