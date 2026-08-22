@@ -37,24 +37,45 @@ describe('architecture-guards CI (T1.1)', () => {
     expect(pkg.scripts['check:naming']).toMatch(/ls-lint/)
   })
 
-  // EC-2 baseline: run dep-cruiser + ls-lint directly. Both can take ≥5s on
-  // first run (CLI bootstrap + node binary scan); per-test timeout = 30s.
+  /**
+   * EC-2 baseline: run dep-cruiser + ls-lint directly.
+   *
+   * The budget is 240 s and the work is seconds — measured 2026-08-22: `ls-lint` takes 2 s and
+   * `dependency-cruiser` 1 s from a shell. Under a full run the same `ls-lint` call blew a 30 s
+   * budget and reported 115 s, and the cause is not this file: with `--typecheck.enabled=false` the
+   * whole file finishes in 5.87 s, and with typecheck on it passes 120 s. A concurrent `tsc` starves
+   * these `execSync` children, and the per-test clock counts the starvation.
+   *
+   * Raising a timeout to quiet a red test is usually the wrong move, so the reason it is right here
+   * is worth stating: the assertion is unaffected either way — the linters report violations or they
+   * do not — and a 30 s budget was measuring the scheduler rather than the source. The same reading
+   * that gave `BUILD_HOOK_TIMEOUT_MS` its 240 s.
+   */
+  const EXTERNAL_CLI_TIMEOUT_MS = 240_000
   // Binaries invoked via explicit relative path (node_modules/.bin), not PATH.
-  it('test_check_deps_passes_today — current source has 0 dep violations', () => {
-    const stdout = execSync(
-      // eslint-disable-next-line sonarjs/no-os-command-from-path
-      'node_modules/.bin/dependency-cruiser packages/theo/src --config .dependency-cruiser.cjs --no-progress',
-      { cwd: REPO, encoding: 'utf8' },
-    )
-    expect(stdout).toMatch(/no dependency violations found/)
-  }, 30_000)
+  it(
+    'test_check_deps_passes_today — current source has 0 dep violations',
+    () => {
+      const stdout = execSync(
+        // eslint-disable-next-line sonarjs/no-os-command-from-path
+        'node_modules/.bin/dependency-cruiser packages/theo/src --config .dependency-cruiser.cjs --no-progress',
+        { cwd: REPO, encoding: 'utf8' },
+      )
+      expect(stdout).toMatch(/no dependency violations found/)
+    },
+    EXTERNAL_CLI_TIMEOUT_MS,
+  )
 
-  it('test_check_naming_passes_today — current source has 0 naming violations', () => {
-    expect(() => {
-      // eslint-disable-next-line sonarjs/no-os-command-from-path -- explicit relative path
-      execSync('node_modules/.bin/ls-lint', { cwd: REPO, stdio: 'pipe' })
-    }).not.toThrow()
-  }, 30_000)
+  it(
+    'test_check_naming_passes_today — current source has 0 naming violations',
+    () => {
+      expect(() => {
+        // eslint-disable-next-line sonarjs/no-os-command-from-path -- explicit relative path
+        execSync('node_modules/.bin/ls-lint', { cwd: REPO, stdio: 'pipe' })
+      }).not.toThrow()
+    },
+    EXTERNAL_CLI_TIMEOUT_MS,
+  )
 
   it('test_dep_cruiser_config_has_no_circular_rule', async () => {
     const content = await readFile(resolve(REPO, '.dependency-cruiser.cjs'), 'utf8')
