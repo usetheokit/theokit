@@ -63,10 +63,14 @@ export function closePauseSpan(
   span.end()
 }
 
-/** Drop the handle without ending it — the run is gone and nobody will resume. */
-export function forgetPauseSpan(approvalId: string): void {
-  pauseSpans.delete(approvalId)
-}
+/**
+ * There is deliberately no "forget without ending" (#419).
+ *
+ * One shipped with the first version of this module and nothing called it: every path that removes a
+ * pause span also has an answer for the span — the approve endpoint and the tool result close it as
+ * resumed, the end-of-run sweep closes it as never resumed. A handle dropped without an answer would
+ * be a span that silently never arrives, which is the shape this module exists to remove.
+ */
 
 /** @internal test seam — the map is process-wide and tests must not inherit each other's. */
 export function _resetPauseSpansForTests(): void {
