@@ -90,6 +90,13 @@
     "zod": "^4.4.3"
   },
   "pnpm": {
+    "onlyBuiltDependencies": [
+      "@swc/core",
+      "better-sqlite3",
+      "esbuild",
+      "node-pty",
+      "unrs-resolver"
+    ],
     "overrides": {
       "zod": "^4.0.0",
       "eslint-plugin-sonarjs>minimatch": "^10.2.3",

@@ -127,6 +127,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **The HITL pause span measures the human's wait rather than the human plus the model.**
+  `agent.hitl` ended when the gated tool produced output, on the premise the code stated — "the tool
+  producing output IS the resume". Measured, that premise fails by exactly the model's post-resume
+  latency: with the approval answered at ~3306 ms the chunk arrived at 4829 ms, and across three
+  runs varying only that latency the excess tracked it 1:1. The resume arrives on a different
+  request — the approve endpoint — which the run's observer never sees, so the span handle now lives
+  in a registry both reach and the endpoint closes it when the answer lands. Idempotent by
+  construction: the registry drops the handle, so the later tool result cannot overwrite a duration
+  the resume got right. Transports that settle without an approve request, the terminal prompt among
+  them, keep the previous behaviour through that same path. In-process only, and a pause that never
+  resumes is still marked `hitl.resume_observed=false` instead of reporting a duration it did not
+  measure. (usetheokit/theokit#361 follow-up, B-028)
+
 - **A relative `ogImage` is refused in development instead of shipping a broken social card.** Open
   Graph resolves `og:image` against the *crawler's* origin, not the page's, so a relative path
   produces a tag that is present, well-formed and useless — and it looks right in the browser, so

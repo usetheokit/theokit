@@ -16,17 +16,15 @@
 # Both are pinned to a digest for the same reason the workflows they audit are.
 name: Workflow Lint
 
+# NO `paths:` filter, deliberately. A path-filtered workflow does not run when a pull
+# request touches nothing it matches — and a check that never runs never reports, so
+# making one REQUIRED deadlocks every unrelated pull request permanently. The job takes
+# about a minute; running it always is cheaper than the class of bug the filter invites.
 on:
   push:
     branches: [main, develop, workspace]
-    paths:
-      - '.github/workflows/**'
-      - '.github/actionlint.yaml'
   pull_request:
     branches: [main, develop]
-    paths:
-      - '.github/workflows/**'
-      - '.github/actionlint.yaml'
   workflow_dispatch:
 
 permissions:
