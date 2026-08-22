@@ -125,6 +125,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   record — both behave exactly as before. Owner ids are not exposed through the pending-approval
   listing. `ApprovalRegistry` gains `ownerOf(approvalId)`. (B-016)
 
+### Added
+
+- **A gate refuses a publishable package that grants no licence, or the wrong one.** An npm package
+  with no `license` field is all rights reserved by default — the repository's LICENSE does not
+  travel in the tarball, so the manifest is the only grant an installer receives, and three of our
+  packages shipped without one. The gate also asserts the declared licence *matches* the
+  repository's LICENSE, which is the sharper half: an absent field reads as "ask us", while a wrong
+  one is a grant somebody may rely on and cannot be taken back once published.
+  (usetheokit/theokit#213)
+
 ### Fixed
 
 - **Conversation transcripts stop landing in git.** The framework writes every conversation to
