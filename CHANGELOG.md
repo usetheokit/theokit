@@ -200,6 +200,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **An agent can be served from a deploy target.** It could not be, anywhere: `grep -rc "agent"`
+  over the 14 adapter files returned nothing, because agents are a different scan served by a
+  different function than file routes, and every generated entry routed `/api/` through the route
+  table alone. So `/api/agents/<name>` answered 404 on every target, and an agent was delivered by
+  no pipeline at all outside a machine running `theokit start` — in a framework whose stated reason
+  to exist is that the agent ships through the same pipeline as the page. `cloudflare`, `bun` and
+  `deno-deploy` now route the agent prefix to `mountAgent`: the Worker bakes its agent modules as
+  static imports because it has no filesystem, while Bun and Deno scan at request time exactly as
+  they already scan their routes. An unknown agent name is a 404 rather than a crash, and the agent
+  NAME is carried through so the deployed run is labelled and policed like the local one. Every
+  adapter now declares `servesAgents`, so a target that drops them says so instead of being assumed
+  to serve them. (#367)
+
 - **Plugin lifecycle hooks fire on a deployed app, on the three targets that can carry them.**
   `onRequest`, `preHandler`, `onResponse` and `onError` were all dead on every Web-standards
   deployment while firing locally, so observability and auth plugins were inert in production with

@@ -25,6 +25,10 @@ export const nodeAdapter: DeployAdapter = {
   // handler. `cors` used to be absent here for an honest reason -- `theokit start`
   // contained no CORS handling at all, and only the Vite dev server did, so an app
   // that worked cross-origin in development stopped working when this command served it.
+  // #367 — `theokit start` has always served agents (`cli/commands/start/handlers.ts`
+  // `tryServeAgent`); it was the ONLY thing that did. Declared here so the capability is stated
+  // rather than inferred from the fact that it is the default target.
+  servesAgents: true,
   appliesConfig: [
     'rateLimit',
     'csrf',

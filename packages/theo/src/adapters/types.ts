@@ -2,6 +2,8 @@ import type { Plugin } from 'vite'
 
 import type { TheoConfig } from '../config/schema.js'
 
+import type { DeployedAgent } from './deployed-agents.js'
+
 /**
  * Build context injected by the CLI into adapter.build.
  *
@@ -36,7 +38,16 @@ export interface AdapterBuildContext {
    * `vite-plugin`, and the one `adapters-may-only-depend-on-core-router-services` refuses. The CLI
    * already imports both sides, so it composes this and passes it in.
    */
-  scanRoutes?: (serverDir: string) => { routes: AdapterRoute[]; wsRoutes: string[] }
+  scanRoutes?: (serverDir: string) => {
+    routes: AdapterRoute[]
+    wsRoutes: string[]
+    /**
+     * The app's agents (#367). A different scan from the routes, served by a different function —
+     * which is precisely why no adapter had ever heard of them and every deployed
+     * `/api/agents/<name>` was a 404.
+     */
+    agents?: DeployedAgent[]
+  }
 }
 
 /**
@@ -94,6 +105,20 @@ export interface DeployAdapter {
    * reads exactly like a right one. What it buys is that dropping a concern
    * becomes a visible edit instead of an omission.
    */
+  /**
+   * #367 — can the handler this adapter emits serve an AGENT?
+   *
+   * Same contract as `streamsResponses` and `appliesConfig`, for the same reason: omitted means
+   * **no**, on purpose. The gap this answers went unnoticed because nothing in this layer had ever
+   * heard of agents — `grep -rc "agent"` over the 14 adapter files returned nothing — so an agent
+   * was served by no pipeline at all outside a machine running `theokit start`, in a framework
+   * whose stated reason to exist is that the agent ships through the same pipeline as the page.
+   *
+   * `true` claims the emitted entry routes `/api/agents/<name>` to `mountAgent`. It is a claim
+   * nothing here can verify, exactly like the other two; what it buys is that a target which drops
+   * agents has to say so rather than be silently assumed to serve them.
+   */
+  servesAgents?: boolean
   appliesConfig?: readonly ConfigConcern[] | 'runtime-not-emitted-here'
   build(config: TheoConfig, cwd: string, ctx?: AdapterBuildContext): Promise<void>
 }

@@ -285,3 +285,31 @@ describe('the build emits the warning, and stays quiet when there is nothing to 
     expect(lines).toEqual([])
   })
 })
+
+describe('every deploy target says whether it serves an agent (usetheokit/theokit#367)', () => {
+  // The measurement that opened #367 was `grep -rc "agent"` over the 14 adapter files returning
+  // nothing: the notion did not exist in this layer, so an agent reached no deployed target and no
+  // file anywhere said so. `servesAgents` is what makes the remaining gap a declaration.
+  const SERVES: Record<string, boolean> = {
+    cloudflare: true,
+    bun: true,
+    'deno-deploy': true,
+    // These three receive a standalone function directory that never sees the app's modules, and
+    // serving an agent means importing the agent's own module. Same wall as plugins (#425).
+    vercel: false,
+    netlify: false,
+    'aws-lambda': false,
+    // Emits no request handler at all.
+    static: false,
+    'theo-cloud': false,
+    // Already served agents before any of this: it is the path `theokit start` runs.
+    node: true,
+  }
+
+  for (const target of VALID_TARGETS) {
+    it(`${target} declares servesAgents`, async () => {
+      const adapter = await resolveAdapter(target)
+      expect(adapter.servesAgents ?? false).toBe(SERVES[target])
+    })
+  }
+})

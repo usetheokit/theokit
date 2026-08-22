@@ -55,10 +55,24 @@ const ENTRIES: Record<string, () => string> = {
     renderDenoEntry(3000, { runtimeConfigModule: RUNTIME_CONFIG }),
   'aws-lambda (runtime config)': () =>
     renderAwsLambdaEntry({ runtimeConfigModule: RUNTIME_CONFIG }),
+
+  'cloudflare (with an agent)': () =>
+    renderCloudflareWorkerEntry({ ssrStreaming: false, agents: AGENTS }),
+  // Bun and Deno take no `agents`: they scan at request time, as they already do for routes, so
+  // their entry carries the branch unconditionally and an agent added later needs no rebuild.
+  'bun (agent branch)': () => renderBunEntry(3000),
+  'deno-deploy (agent branch)': () => renderDenoEntry(3000),
 }
 
 /** What the build writes beside the entry; the specifier is what the emitted source imports. */
 const RUNTIME_CONFIG = './theo.runtime-config.mjs'
+
+/**
+ * One agent, as the build scans it (#367). The three targets that can serve one each grow a static
+ * import, a name→module table and a branch ahead of the route table; every one of those is a place
+ * a template can emit something that no longer parses.
+ */
+const AGENTS = [{ filePath: 'agents/chat.ts', agentPath: '/api/agents/chat', name: 'chat' }]
 
 describe('every emitted deploy entry parses as an ES module', () => {
   const dir = mkdtempSync(join(tmpdir(), 'theo-adapter-parse-'))

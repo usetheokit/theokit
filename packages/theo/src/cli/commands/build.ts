@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs'
-import { relative, resolve, sep } from 'node:path'
+import { dirname, relative, resolve, sep } from 'node:path'
 
 // T1.1 (architecture-medium-deferrals) — nodeAdapter no longer static-imported.
 // All adapters dispatch via `adapterRegistry` (lazy-imported within runAdapterBuild).
@@ -18,6 +18,7 @@ import { writeCronManifest } from '../../server/cron/cron-manifest.js'
 import { scanCronDirs } from '../../server/cron/cron-scan.js'
 import { writeJobManifest } from '../../server/jobs/job-manifest.js'
 import { scanJobs } from '../../server/jobs/job-scan.js'
+import { scanAgents } from '../../server/scan/agent-scan.js'
 import { generateManifest, writeManifest } from '../../server/scan/manifest.js'
 import { scanServerRoutes } from '../../server/scan/scan.js'
 import { scanWebSocketRoutes } from '../../server/scan/ws-scan.js'
@@ -237,6 +238,15 @@ async function runAdapterBuild(
         wsRoutes: scanWebSocketRoutes(abs).map((ws) =>
           toProjectRelative(typeof ws === 'string' ? ws : ws.filePath),
         ),
+        // #367 — agents are a DIFFERENT scan served by a DIFFERENT function, which is why no
+        // adapter had ever heard of them: the entries route `/api/` through `scanServerRoutes` +
+        // `executeRoute` alone, so `/api/agents/<name>` matched nothing and 404'd on every target.
+        // Scanned here, beside the routes, because the same inversion argument applies verbatim.
+        agents: scanAgents(dirname(abs), config.agentsDir).map((agent) => ({
+          filePath: toProjectRelative(agent.filePath),
+          agentPath: agent.agentPath,
+          name: agent.name,
+        })),
       }
     },
   }

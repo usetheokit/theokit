@@ -121,6 +121,12 @@ export const renderStreamingWeb = (...a) => b().renderStreamingWeb(...a)
 export const extractTraceIdFromRequest = (...a) => b().extractTraceIdFromRequest(...a)
 export const TRACE_HEADER = b().TRACE_HEADER
 export const createCorsWebHandler = (...a) => b().createCorsWebHandler(...a)
+// #367 — the entries now route the agent prefix. This harness is about the security baseline, so
+// the agent path is stubbed to never match: \`scanAgents\` answering [] makes every request fall
+// through to the route table, which is what these assertions are measuring.
+export const mountAgent = async () => new Response('agent')
+export const resolveProvider = () => ({ apiKey: 'sk-test' })
+export const scanAgents = () => []
 `
 
 /** The nonce the streaming renderer was handed, so the header can be matched to it. */
