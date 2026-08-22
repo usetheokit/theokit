@@ -1,12 +1,4 @@
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  rmSync,
-  statSync,
-  utimesSync,
-  writeFileSync,
-} from 'node:fs'
+import { mkdirSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -57,7 +49,30 @@ import {
  * remove, and taking four unrelated test files down with it in the same run. Shared cross-process
  * state is not something a test may borrow, however briefly.
  */
-const MARKER = resolve(mkdtempSync(join(tmpdir(), 'theokit-build-marker-')), 'validated.json')
+const SANDBOX = mkdtempSync(join(tmpdir(), 'theokit-build-marker-'))
+const MARKER = resolve(SANDBOX, 'validated.json')
+
+/**
+ * A stand-in for `packages/theo/dist/index.d.ts`, isolated for the same reason MARKER is.
+ *
+ * The marker was isolated and the DIST was not (usetheokit/theokit#375), so every assertion below
+ * ran against a real file that another worker could be rewriting at that instant — which is how a
+ * guard against a dist race came to lose one. It also forced three cases into
+ * `if (existsSync(dts)) return`, where they exercised nothing and reported success, and made a
+ * fourth stamp the mtime of the real build output.
+ */
+const DIST_TYPES = resolve(SANDBOX, 'index.d.ts')
+
+/** Present, with a chosen age. `ageMs` of 0 is "just built". */
+function distExists(ageMs = 0): void {
+  writeFileSync(DIST_TYPES, 'export {}', 'utf8')
+  const at = new Date(Date.now() - ageMs)
+  utimesSync(DIST_TYPES, at, at)
+}
+
+function distMissing(): void {
+  rmSync(DIST_TYPES, { force: true })
+}
 
 beforeEach(() => {
   __resetBuildDecisionForTests()
@@ -76,13 +91,14 @@ it('test_the_shared_marker_path_is_the_one_the_helper_defaults_to', () => {
 
 describe('the marker identifies the RUN, not a moment in time', () => {
   it('test_a_marker_from_THIS_run_makes_dist_usable_regardless_of_age', () => {
+    // Dist is old enough that the window alone would refuse it — so a pass can only come from the
+    // marker, which is the behaviour under test.
+    distExists(60 * 60 * 1000)
     markDistValidatedForThisRun(MARKER)
-    // Age the marker well past any window. Same run ⇒ still usable: this is the exact case the
-    // per-process memo could not cover, because the later worker never saw the earlier decision.
     const old = new Date(Date.now() - 60 * 60 * 1000)
     utimesSync(MARKER, old, old)
 
-    expect(isDistUsableWithoutRebuilding(MARKER)).toBe(true)
+    expect(isDistUsableWithoutRebuilding(MARKER, DIST_TYPES)).toBe(true)
   })
 
   it('test_a_marker_from_ANOTHER_run_hands_the_decision_back_to_the_window', () => {
@@ -101,17 +117,26 @@ describe('the marker identifies the RUN, not a moment in time', () => {
     const old = new Date(Date.now() - 60 * 60 * 1000)
     utimesSync(MARKER, old, old)
 
-    const dts = resolve(__dirname, '../../packages/theo/dist/index.d.ts')
-    const windowSays = existsSync(dts) && Date.now() - statSync(dts).mtimeMs < FRESH_WINDOW_MS
-    expect(isDistUsableWithoutRebuilding(MARKER)).toBe(windowSays)
+    // Was `windowSays`, computed from the real dist: an assertion that adapts to whatever the
+    // machine happens to hold proves only that the two readings agree. With the dist isolated the
+    // claim can be absolute — a foreign marker does not vouch, the window decides, and here the
+    // window says no.
+    distExists(60 * 60 * 1000)
+    expect(isDistUsableWithoutRebuilding(MARKER, DIST_TYPES)).toBe(false)
+
+    // ...and the same foreign marker over a FRESH dist is accepted, which is the other half of
+    // "hands the decision back to the window" and was previously unassertable.
+    distExists(0)
+    expect(isDistUsableWithoutRebuilding(MARKER, DIST_TYPES)).toBe(true)
   })
 
   it('test_a_marker_from_another_run_over_a_MISSING_dist_is_not_usable', () => {
     // The absolute half of the claim above, expressed where it holds unconditionally.
     writeFileSync(MARKER, JSON.stringify({ runId: process.ppid + 100_000 }), 'utf8')
-    const dts = resolve(__dirname, '../../packages/theo/dist/index.d.ts')
-    if (existsSync(dts)) return // cannot exercise without deleting real build output
-    expect(isDistUsableWithoutRebuilding(MARKER)).toBe(false)
+    // Previously `if (existsSync(dts)) return` — so on any machine with a build, this case
+    // exercised nothing and reported success.
+    distMissing()
+    expect(isDistUsableWithoutRebuilding(MARKER, DIST_TYPES)).toBe(false)
   })
 
   it('test_with_NO_marker_a_freshly_built_dist_is_still_accepted', () => {
@@ -128,22 +153,20 @@ describe('the marker identifies the RUN, not a moment in time', () => {
     // Stamping the mtime is benign in direction: it can only make dist look fresher, and dist IS
     // valid here — no sibling asserts the STALE side (the one that could is written against the
     // same window and adapts).
-    const dts = resolve(__dirname, '../../packages/theo/dist/index.d.ts')
-    if (!existsSync(dts)) return // nothing built here; the assertion below has no subject
+    // This used to stamp the mtime of the REAL `packages/theo/dist/index.d.ts` — a test writing to
+    // the state its siblings read, in a file whose header warns against exactly that.
+    distExists(0)
 
-    const now = new Date()
-    utimesSync(dts, now, now)
-
-    expect(Date.now() - statSync(dts).mtimeMs).toBeLessThan(FRESH_WINDOW_MS)
-    expect(isDistUsableWithoutRebuilding(MARKER)).toBe(true)
+    expect(Date.now() - statSync(DIST_TYPES).mtimeMs).toBeLessThan(FRESH_WINDOW_MS)
+    expect(isDistUsableWithoutRebuilding(MARKER, DIST_TYPES)).toBe(true)
   })
 
   it('test_a_missing_dist_is_never_usable_even_with_a_marker_from_this_run', () => {
     // The marker vouches for a validation, not for the existence of files. If dist is genuinely
     // gone, trusting the marker would hand the reader a directory that is not there.
     markDistValidatedForThisRun(MARKER)
-    const dts = resolve(__dirname, '../../packages/theo/dist/index.d.ts')
-    if (existsSync(dts)) return // cannot exercise without deleting real build output
-    expect(isDistUsableWithoutRebuilding(MARKER)).toBe(false)
+    // Previously skipped whenever a build existed, which is most of the time.
+    distMissing()
+    expect(isDistUsableWithoutRebuilding(MARKER, DIST_TYPES)).toBe(false)
   })
 })

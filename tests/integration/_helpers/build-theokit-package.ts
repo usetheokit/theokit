@@ -112,11 +112,22 @@ export const markDistValidatedForThisRun = (markerPath: string = VALIDATION_MARK
  * The marker vouches for a validation, never for the existence of files — so a missing `index.d.ts`
  * is unusable no matter which run wrote the marker. Otherwise: same run ⇒ trust it; another run ⇒
  * the freshness window decides.
+ *
+ * `distTypesPath` is injectable for the same reason `markerPath` already was, and its absence was
+ * the whole of usetheokit/theokit#375. The tests isolated the marker and then asserted against the
+ * REAL `packages/theo/dist/index.d.ts` — shared, cross-worker, and being rewritten by whichever
+ * suite happened to be building at that moment. So the guard that exists to end a dist race lost
+ * one: it passed alone and failed intermittently in the full suite. Three of its cases also
+ * degraded to `if (existsSync(dts)) return`, silently exercising nothing, and a fourth stamped the
+ * mtime of the real build output — a test writing to the state its siblings read.
  */
-export const isDistUsableWithoutRebuilding = (markerPath: string = VALIDATION_MARKER): boolean => {
-  if (!existsSync(INDEX_DTS)) return false
+export const isDistUsableWithoutRebuilding = (
+  markerPath: string = VALIDATION_MARKER,
+  distTypesPath: string = INDEX_DTS,
+): boolean => {
+  if (!existsSync(distTypesPath)) return false
   if (markerRunId(markerPath) === runId()) return true
-  return Date.now() - statSync(INDEX_DTS).mtimeMs < FRESH_WINDOW_MS
+  return Date.now() - statSync(distTypesPath).mtimeMs < FRESH_WINDOW_MS
 }
 
 const hasFreshBuild = isDistUsableWithoutRebuilding
