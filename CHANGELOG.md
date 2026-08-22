@@ -136,6 +136,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   (usetheokit/theokit#213)
 
 ### Fixed
+- **An approval that expired no longer reports itself as a human pressing Deny.** The two outcomes
+  were byte-identical on the wire — `Tool 'send_email' denied by human approver` for both an
+  explicit denial with no reason and a window that closed with nobody watching. The framework did
+  not merely fail to say what went wrong; it asserted something else went right, namely that an
+  approver decided. That is the one distinction a HITL gate exists to record, and an operator
+  auditing a gated action could not make it. The registry already held every value the message
+  needed — the budget, the configured `onTimeout`, the expiry — and none of it survived the settle.
+  A settled decision now carries `settledBy: 'timeout'` and a reason naming both the window and
+  which of the three `onTimeout` values applied, so `'retry'` (which denies, because the registry
+  implements no retry semantics) stops collapsing into the same sentence as `'abort'`. The veto the
+  model sees names the expiry and the option that would widen it, instead of inventing an actor.
+  The marker is set on the ALLOW side too: `onTimeout: 'proceed'` permits the tool *because* nobody
+  answered, and recording that as a plain approval is the same fabrication with the opposite sign —
+  and the more dangerous of the two. (#393)
 - **`theokit dev` stopped parsing every route file twice on every request.** `scanServerRoutes`
   runs per request in dev, and it ran the TypeScript AST over each route file twice per call — once
   for the exported methods, once for the route-policy gate, sharing the source string but not the

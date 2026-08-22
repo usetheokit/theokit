@@ -58,6 +58,23 @@ export interface ApprovalDecision {
   approved: boolean
   reason?: string
   payload?: unknown
+  /**
+   * What settled this, when it was not a person (usetheokit/theokit#393).
+   *
+   * Absent means the decision arrived through `resolve()` — a human, or whatever the application
+   * wired to that route. `'timeout'` means the window closed with nobody deciding and `onTimeout`
+   * was applied.
+   *
+   * The distinction is the whole point of a HITL gate: without it an expired approval and an
+   * explicit deny are byte-identical on the wire, and the sentence the caller gets — "denied by
+   * human approver" — asserts a fact that did not happen. It is marked on the ALLOW side too:
+   * `onTimeout: 'proceed'` permits the tool BECAUSE nobody answered, and recording that as a plain
+   * approval is the same fabrication with the opposite sign.
+   *
+   * One member rather than `timedOut: boolean`, because the question is what settled it; a second
+   * cause (a cancel, a shutdown) joins the union instead of adding another boolean.
+   */
+  settledBy?: 'timeout'
 }
 
 /** M14 — a pending approval as surfaced by {@link ApprovalRegistry.list}. */
@@ -135,7 +152,15 @@ export function createInProcessApprovalRegistry(): ApprovalRegistry {
         }
         // 'proceed' → allow on timeout; 'abort'/'retry' → deny on timeout.
         const timer = setTimeout(() => {
-          settle({ approved: opts.onTimeout === 'proceed' })
+          settle({
+            approved: opts.onTimeout === 'proceed',
+            settledBy: 'timeout',
+            // Every value in this sentence was already here and none of it used to survive the
+            // settle. `onTimeout` is named because all three of its values reach this line and two
+            // of them deny — an operator who wrote `'retry'` and got a denial had nothing to read
+            // that mentioned retry.
+            reason: `no decision within ${String(opts.timeoutMs)} ms; onTimeout: '${opts.onTimeout}' was applied`,
+          })
         }, opts.timeoutMs)
         const info: PendingApproval = {
           approvalId,
