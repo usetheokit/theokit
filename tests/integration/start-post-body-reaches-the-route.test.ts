@@ -140,6 +140,10 @@ async function startProductionServer(): Promise<void> {
         rateLimiter: null,
       }),
       securityHeadersConfig: {},
+      // #409 made this required rather than optional: the defect was that nobody wired
+      // CORS into this handler, and an optional field is one a new call site can forget
+      // the same way. `null` is this test's answer — it exercises no cross-origin path.
+      corsHandler: null,
       ssrRender: null,
       ssrRenderStreaming: null,
       ssrStreamingEnabled: false,

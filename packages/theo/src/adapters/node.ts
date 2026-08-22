@@ -21,10 +21,19 @@ export const nodeAdapter: DeployAdapter = {
   streamsResponses: true,
   // Read from `cli/commands/start/index.ts`: the executor context carries
   // rateLimiter, csrfMode, disallowed, transformer and pluginRunner, and
-  // `request-handler.ts` applies the security headers. `security.cors` is
-  // absent on purpose -- `theokit start` contains no CORS handling at all, and
-  // only the Vite dev server does (#409).
-  appliesConfig: ['rateLimit', 'csrf', 'disallowed', 'serialization', 'plugins', 'securityHeaders'],
+  // `request-handler.ts` applies the security headers and, since #409, the CORS
+  // handler. `cors` used to be absent here for an honest reason -- `theokit start`
+  // contained no CORS handling at all, and only the Vite dev server did, so an app
+  // that worked cross-origin in development stopped working when this command served it.
+  appliesConfig: [
+    'rateLimit',
+    'csrf',
+    'disallowed',
+    'serialization',
+    'plugins',
+    'securityHeaders',
+    'cors',
+  ],
 
   async build(config: TheoConfig, cwd: string, ctx?: AdapterBuildContext): Promise<void> {
     // T1.1 (architecture-cleanup) — Vite plugin composition is INJECTED via `ctx.makeVitePlugins`.

@@ -82,7 +82,7 @@ function parseConfig(input: Record<string, unknown>): TheoConfig {
  *   reason: the runtime is TheoCloud's and this build cannot answer for it.
  */
 const EXPECTED: Record<BuildTarget, readonly ConfigConcern[] | 'runtime-not-emitted-here'> = {
-  node: ['rateLimit', 'csrf', 'disallowed', 'serialization', 'plugins', 'securityHeaders'],
+  node: ['rateLimit', 'csrf', 'disallowed', 'serialization', 'plugins', 'securityHeaders', 'cors'],
   vercel: ['securityHeaders', 'csrf', 'disallowed'],
   cloudflare: ['securityHeaders', 'csrf', 'disallowed'],
   netlify: ['securityHeaders', 'csrf', 'disallowed'],
@@ -125,9 +125,12 @@ describe('a declared concern the target drops is named, not swallowed', () => {
     ).toEqual(['cors', 'rateLimit', 'serialization'])
   })
 
-  it('reports only cors on node, which is the one everybody assumes it has', async () => {
+  it('reports nothing on node, which now applies every concern it parses', async () => {
+    // This read `['cors']` until #409, and that was the honest answer: `security.cors` had one
+    // consumer, Vite's `configureServer` hook, so an app that worked cross-origin under
+    // `theokit dev` stopped working the moment `theokit start` served it.
     const adapter = await resolveAdapter('node')
-    expect(findUnappliedConfig(fullConfig, adapter)).toEqual(['cors'])
+    expect(findUnappliedConfig(fullConfig, adapter)).toEqual([])
   })
 
   it('does not report a key whose declared value equals the deployed fallback', async () => {
@@ -175,27 +178,37 @@ describe('the message names what to do, not merely what is wrong', () => {
   })
 
   it('does not tell a node build to deploy to node', async () => {
-    // The degenerate advice this replaced: building for `node` with only
-    // `security.cors` dropped printed "deploy to `node`, which applies all of
-    // the above except security.cors" -- an instruction to do what you are
-    // already doing, about the one key it then excepted.
+    // The degenerate advice this replaced: building for `node` with a dropped key printed
+    // "deploy to `node`, which applies all of the above except …" -- an instruction to do what you
+    // are already doing.
+    //
+    // The example used to be `security.cors`, because until #409 NO production target applied it.
+    // `node` does now, so `APPLIED_BY_NO_TARGET` is empty and that phrasing is unreachable by
+    // construction. The mechanism is kept rather than deleted because the state it describes is
+    // reachable again the moment a concern is dropped everywhere -- and the assertion that
+    // survives is the one this test is actually named for.
     const message = describeUnappliedConfig('node', ['cors'])
 
     expect(message).not.toMatch(/build for `node`/)
-    expect(message).toContain('no production target applies this today')
-    expect(message).toContain('#409')
   })
 
-  it('splits the advice when some keys have a target that applies them and one does not', () => {
+  it('points a Web target at the one that does apply the key', () => {
     const message = describeUnappliedConfig('vercel', ['rateLimit', 'cors'])
 
-    expect(message).toContain('rateLimit: build for `node`')
-    expect(message).toContain('security.cors: no production target applies this today')
+    // Grouped into one sentence because both keys now have the same answer. `security.cors`
+    // joined it in #409 — before that the advice for a Vercel build had nowhere to point, because
+    // the key reached no production target at all, and it was rendered in a separate clause.
+    expect(message).toContain('rateLimit, security.cors: build for `node`')
   })
 
-  it('the no-target list agrees with what the node adapter declares', async () => {
-    // A constant that drifts from the adapter turns correct-looking advice into
-    // a lie. Derived here rather than trusted.
+  it("the advice's claim about node matches what node declares", async () => {
+    // This guarded a hand-maintained `APPLIED_BY_NO_TARGET` constant against drifting from the
+    // adapter, which #409 removed by deriving the answer from `nodeAdapter.appliesConfig` instead.
+    //
+    // It is NOT vacuous now that both read the same source: what it still catches is the
+    // derivation reaching the message inverted or not at all — a rendering bug rather than a
+    // drift one. Stated here because a test whose comment describes a purpose it no longer serves
+    // is worse than no comment.
     const node = await resolveAdapter('node')
     const applied = node.appliesConfig
     if (applied === undefined || applied === 'runtime-not-emitted-here') {

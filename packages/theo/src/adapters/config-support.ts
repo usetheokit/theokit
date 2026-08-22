@@ -5,9 +5,9 @@
  * `security.disallowed` and `serialization` for every target. Applying them is
  * the handler's job, and the six Web-standards adapters build `executeRoute`'s
  * context from a subset of its fields, so the rest fall back to hard-coded
- * defaults on a deployed app (usetheokit/theokit#410). `security.cors` is read
- * only by the dev server and reaches no production target at all
- * (usetheokit/theokit#409).
+ * defaults on a deployed app (usetheokit/theokit#410). `security.cors` was read
+ * only by the dev server until #409 wired it into `theokit start`; the six Web
+ * targets still drop it.
  *
  * This module does not fix that. It makes it **audible at build time**: a
  * config key that is parsed and then dropped is named, with the target that
@@ -23,6 +23,7 @@
  */
 import type { TheoConfig } from '../config/schema.js'
 
+import { nodeAdapter } from './node.js'
 import type { ConfigConcern, DeployAdapter } from './types.js'
 
 /**
@@ -41,12 +42,22 @@ export const CONFIG_CONCERNS = [
 ] as const satisfies readonly ConfigConcern[]
 
 /**
- * Concerns no target applies today, so the advice cannot point anywhere.
- * `cors` is here because `security.cors` is read only by the Vite dev server
- * (usetheokit/theokit#409) -- `theokit start` contains no CORS handling at all.
- * Kept in step with `nodeAdapter.appliesConfig` by a test, not by a reader.
+ * Does any production target apply this concern?
+ *
+ * DERIVED from what the `node` adapter declares, rather than listed. This was a hand-maintained
+ * `APPLIED_BY_NO_TARGET` set holding `cors`, kept in step with `nodeAdapter.appliesConfig` by a
+ * test — and #409, which taught `theokit start` to apply `cors`, emptied it. An empty hardcoded
+ * set is not merely redundant: it makes the branch below provably unreachable, which the linter
+ * says out loud (`sonarjs/no-empty-collection`).
+ *
+ * Deriving keeps the branch honest AND reachable: the moment a concern is added that `node` does
+ * not apply, the advice stops claiming a target exists for it, with nothing to remember.
  */
-const APPLIED_BY_NO_TARGET: ReadonlySet<ConfigConcern> = new Set(['cors'])
+function appliedByNoTarget(concern: ConfigConcern): boolean {
+  const applied = nodeAdapter.appliesConfig
+  if (applied === undefined || applied === 'runtime-not-emitted-here') return true
+  return !applied.includes(concern)
+}
 
 /** Where each concern lives in the config, for a message the operator can grep. */
 const CONFIG_KEY: Record<ConfigConcern, string> = {
@@ -115,8 +126,8 @@ export function describeUnappliedConfig(target: string, dropped: readonly Config
   if (dropped.length === 0) return ''
   const one = dropped.length === 1
   const list = dropped.map((concern) => `      - ${CONFIG_KEY[concern]}`).join('\n')
-  const elsewhere = dropped.filter((concern) => !APPLIED_BY_NO_TARGET.has(concern))
-  const nowhere = dropped.filter((concern) => APPLIED_BY_NO_TARGET.has(concern))
+  const elsewhere = dropped.filter((concern) => !appliedByNoTarget(concern))
+  const nowhere = dropped.filter(appliedByNoTarget)
 
   // The advice has to change with the target, or it degenerates. Building for
   // `node` with only `security.cors` dropped once produced "deploy to `node`,

@@ -20,6 +20,7 @@ import { loadEnv } from '../../../config/load-env.js'
 import { initCacheEngineFromConfig } from '../../../server/cache-bootstrap.js'
 import { createCronScheduler } from '../../../server/cron/cron-runtime-node.js'
 import { defineHealthRoute } from '../../../server/define/health-route.js'
+import { createCorsHandler } from '../../../server/http/cors.js'
 import { createObservabilityPluginFromConfig } from '../../../server/observability-bootstrap.js'
 import { createPluginRunnerFromConfig } from '../../../server/plugins/load-plugins.js'
 import { createRouteRateLimiter } from '../../../server/rate-limit/rate-limit-per-route.js'
@@ -160,6 +161,10 @@ export async function startCommand(options: StartOptions): Promise<void> {
         rateLimiter,
       }),
       securityHeadersConfig: config.security?.headers ?? {},
+      // #409 — built once at startup, like the security headers beside it. Declaring `cors` and
+      // being served by this command used to mean no CORS at all, which reads in a browser as a
+      // blocked fetch and in the config as a setting that is present and validated.
+      corsHandler: config.security?.cors ? createCorsHandler(config.security.cors) : null,
       ssrRender: ssr.render,
       ssrRenderStreaming: ssr.renderStreaming,
       ssrStreamingEnabled: ssr.streamingEnabled,

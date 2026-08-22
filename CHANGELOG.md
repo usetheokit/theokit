@@ -136,6 +136,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   (usetheokit/theokit#213)
 
 ### Fixed
+- **`theokit start` now serves the CORS the app configured.** `security.cors` is a first-class,
+  schema-validated config key with exactly one consumer: Vite's `configureServer` hook. So an app
+  declaring it worked cross-origin under `theokit dev` and stopped working the moment `theokit
+  start` served it — same config, same code, no error and no warning, surfacing in a browser as a
+  blocked fetch three layers from the key that had quietly stopped being read. The handler is built
+  once at startup, beside the security headers it belongs with, and applied in the same order the
+  dev middleware uses: the preflight is answered before routing, because an `OPTIONS` the router
+  handles is an `OPTIONS` the browser never gets a CORS answer to. No new logic — `createCorsHandler`
+  already existed and was already tested. The field is required rather than optional on the handler
+  context, because the defect was that nobody wired it and an optional field is one a new call site
+  can forget the same way. The six Web deploy targets still drop it and still say so. (#409)
 - **A trace crossing into a deployed function no longer starts over.** Every generated entry minted
   a fresh `randomUUID()` per request and set no correlation header at all on a success path, while
   both Node paths resolve the incoming `traceparent` / `x-request-id` through `extractTraceId` and
