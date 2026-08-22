@@ -118,6 +118,19 @@ require.
 **Gap files are not evidence.** Eleven of the sixteen `theokit-gap.md` files came back materially
 wrong on re-measurement. No item below cites one; each cites an issue and a `file:line`.
 
+**The tracker disagrees with the code too, and in the same direction.** Checked 2026-08-22: of the
+nineteen issues these items cite, sixteen are OPEN and several name defects that no longer exist —
+`#352`, `#353`, `#355`, `#356`, `#361`, `#363`, `#364`, `#365`, `#368` among them. That is the same
+drift as the status column below, one system over.
+
+It is NOT closeable by re-measurement, and finding out cost a mistake worth recording. `#382` was
+verified fixed, commented with the evidence and closed; ten minutes later `git branch --contains`
+put its commit on `workspace` alone, with `origin/main` still at `60822a48b`. Nothing had been
+released, so a closed issue told any reader the defect was gone from something installable. It was
+reopened with a correction. **Closing belongs to the release, not to the commit** — the same line the
+status column below draws, and the same one `.claude/rules/cycle-acceptance.md` draws for a
+checkbox.
+
 **Thirteen items carry a `remeasured 2026-08-21` line saying the defect is closed in code, and all
 thirteen still read `triaged`.** That is not an oversight and the count is worth stating plainly,
 because a reader who takes the status column at face value will believe thirty-six things are
@@ -211,7 +224,9 @@ dod:
     condition this bullet named. The umbrella stays open with its evidence intact and keeps
     what none of the four took: `trackAgentRun` (`packages/theo/src/server/cost/track-agent-run.ts:49`)
     is exported from `packages/theo/src/server/cost/index.ts:11` and still has no production caller
-remeasured 2026-08-21: **three of five closed, and the remaining two changed shape.** The cache engine boots (`packages/theo/src/server/cache-bootstrap.ts:28`), the observability plugin is registrable and registered (`packages/theo/src/server/observability/middleware.ts:114`), and `trackAgentRun` has a production caller (`packages/theo/src/server/http/action-execute.ts`). `csrf-multi-header` is no longer unexported — `packages/theo/src/server/security/index.ts:4` re-exports it — but `evaluateCsrfMultiHeaderRequest` has **zero production callers**, so the defect moved from an absent door to a door nobody walks through, which is a different finding and the one that survives. `action-encryption` was deliberately given a public subpath (B-M74-01, `packages/http/src/index.ts:21-26`); a published utility with no internal caller is the intended shape, not an orphan
+remeasured 2026-08-21: **three of five closed, and the remaining two changed shape.** The cache engine boots (`packages/theo/src/server/cache-bootstrap.ts:28`), the observability plugin is registrable and registered (`packages/theo/src/server/observability/middleware.ts:114`), and `trackAgentRun` has a production caller (`packages/theo/src/server/http/action-execute.ts`). `csrf-multi-header` is no longer unexported — `packages/theo/src/server/security/index.ts:4` re-exports it — and the follow-up reading of it, made hours later the same day, corrects the one above rather than replacing it silently. It was first written here as "zero production callers, so the door is one nobody walks through". That was measured and wrong in its conclusion: `./server/security` is a **published subpath** (`packages/theo/package.json:86`), and the function's own docstring says what it is for — *"available to `executeWebRequest` consumers who want an origin-based policy alongside the custom-header `validateCsrfRequest`"*. The intended caller is the application, not the framework, so no internal caller is the CORRECT state for it, exactly as for `action-encryption`'s public subpath (B-M74-01, `packages/http/src/index.ts:21-26`). Counting a published opt-in API as an orphan because the framework does not call it would argue for deleting every utility a consumer is meant to reach.
+
+**So all five findings of this item are resolved**: three wired, two deliberate public API. What is left is a status transition, which belongs to a cycle
 
 ## B-006 — dynamic route precedence uses a whole-path `localeCompare`, so the less specific route wins   [ ]
 
