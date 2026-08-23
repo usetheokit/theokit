@@ -10,7 +10,7 @@
  * Security: XSS-safe HTML escaping, CSP header for CDN host, GET-only,
  * 10MB filesize cap, path-traversal defense on specFilePath.
  */
-import { existsSync, readFileSync, statSync } from 'node:fs'
+import { closeSync, existsSync, fstatSync, openSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 export interface OpenApiDocsOptions {
@@ -116,8 +116,17 @@ function serveSpecFile(filePath: string): Response {
     })
   }
 
+  // #428 — one descriptor measured and read. Sizing by path and then reading by path lets the
+  // file grow between the two, which is the 413 cap being bypassed rather than enforced.
+  let fd: number
   try {
-    const stat = statSync(filePath)
+    fd = openSync(filePath, 'r')
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to read OpenAPI spec file'
+    return jsonResponse(500, { error: { code: 'OPENAPI_READ_FAILED', message } })
+  }
+  try {
+    const stat = fstatSync(fd)
     if (stat.size > MAX_SPEC_BYTES) {
       return jsonResponse(413, {
         error: {
@@ -127,7 +136,7 @@ function serveSpecFile(filePath: string): Response {
       })
     }
 
-    const content = readFileSync(filePath, 'utf-8')
+    const content = readFileSync(fd, 'utf-8')
     return new Response(content, {
       status: 200,
       headers: { 'content-type': 'application/json', 'cache-control': 'no-cache' },
@@ -137,6 +146,8 @@ function serveSpecFile(filePath: string): Response {
     return jsonResponse(500, {
       error: { code: 'OPENAPI_READ_FAILED', message },
     })
+  } finally {
+    closeSync(fd)
   }
 }
 
