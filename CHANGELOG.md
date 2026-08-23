@@ -232,6 +232,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **The release guard is now proven to fire.** `verify-release-published.mjs` exists because the
+  pipeline ran green twice while publishing nothing — and it had no test of its own, which is the
+  same property the defect had: a step that reports success without doing anything. It is now
+  exercised as a program, in a fixture repository with the registry replaced at the process
+  boundary, covering a release that published everything, one that published nothing, one that
+  published only some, an unreachable registry (which fails rather than passing), and a repository
+  with nothing publishable (which fails rather than reporting a vacuous green). Verified by
+  neutralising the guard's own `exit 1` and watching the three load-bearing assertions go red. (#366)
+
 - **The production module loader no longer depends on a hook it never registers.**
   `createProductionLoader` — what `theokit start` uses to read routes, agents and
   `server/context.ts` off disk — called `import()` directly, and worked only because the CLI bin
