@@ -1,11 +1,14 @@
 import { describe, it, expect } from 'vitest'
-import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync } from 'node:fs'
-import { resolve, join } from 'node:path'
+import { existsSync, readFileSync, writeFileSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { generateCommand } from '../../packages/theo/src/cli/commands/generate.js'
 
 function createTempProject(): string {
-  const dir = resolve(tmpdir(), `theo-gen-test-${Date.now()}`)
+  // `mkdtempSync`, not a name built from a clock or a counter: this directory is WRITTEN to, and
+  // a name another process can predict is a window to pre-create it as a symlink and redirect
+  // every write (CodeQL `js/insecure-temporary-file`).
+  const dir = mkdtempSync(join(tmpdir(), 'theo-gen-test-'))
   mkdirSync(dir, { recursive: true })
   mkdirSync(join(dir, 'app'), { recursive: true })
   mkdirSync(join(dir, 'server/routes'), { recursive: true })
@@ -289,7 +292,7 @@ describe('theo generate', () => {
   })
 
   it('should reject when not in Theo project (EC-1)', async () => {
-    const dir = resolve(tmpdir(), `not-theo-${Date.now()}`)
+    const dir = mkdtempSync(join(tmpdir(), 'not-theo-'))
     mkdirSync(dir, { recursive: true })
     const orig = process.cwd()
     process.chdir(dir)

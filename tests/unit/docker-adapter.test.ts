@@ -1,11 +1,14 @@
 import { describe, it, expect } from 'vitest'
-import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync } from 'node:fs'
-import { resolve, join } from 'node:path'
+import { existsSync, readFileSync, writeFileSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { join } from 'node:path'
 import { dockerCommand } from '../../packages/theo/src/cli/commands/docker.js'
 import { tmpdir } from 'node:os'
 
 function createTempProject(lockfile = 'pnpm-lock.yaml'): string {
-  const dir = resolve(tmpdir(), `theo-docker-test-${Date.now()}`)
+  // `mkdtempSync`, not a name built from a clock or a counter: this directory is WRITTEN to, and
+  // a name another process can predict is a window to pre-create it as a symlink and redirect
+  // every write (CodeQL `js/insecure-temporary-file`).
+  const dir = mkdtempSync(join(tmpdir(), 'theo-docker-test-'))
   mkdirSync(dir, { recursive: true })
   writeFileSync(join(dir, 'package.json'), '{}')
   writeFileSync(join(dir, lockfile), '')

@@ -1,4 +1,4 @@
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -13,8 +13,10 @@ import { detectPackage } from '../../packages/theo/src/vite-plugin/auto-detect.j
 let tmpDir: string
 
 function makeTmp(): string {
-  const d = join(tmpdir(), `__detect_${Date.now()}_${Math.random().toString(36).slice(2)}`)
-  mkdirSync(d, { recursive: true })
+  // `mkdtempSync`, not a name built from a clock or a counter: this directory is WRITTEN to, and
+  // a name another process can predict is a window to pre-create it as a symlink and redirect
+  // every write (CodeQL `js/insecure-temporary-file`).
+  const d = mkdtempSync(join(tmpdir(), '__detect_'))
   return d
 }
 

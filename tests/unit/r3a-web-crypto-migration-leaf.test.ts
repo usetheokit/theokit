@@ -29,7 +29,7 @@
  * (csrf.ts, execute.ts, body-parser.ts, fs/path consumers, etc.) require
  * dedicated future iterations (T5a.1b through T5a.1N).
  */
-import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
@@ -181,9 +181,14 @@ describe('T5a.1a — leaf-file Web Crypto migration (node:crypto → globalThis.
     const serverDir = resolve(REPO_ROOT, 'packages/theo/src/server')
     let count = 0
     const walk = (dir: string): void => {
-      for (const entry of readdirSync(dir)) {
-        const full = join(dir, entry)
-        if (statSync(full).isDirectory()) {
+      // `withFileTypes` answers the type from the directory entry the read already returned.
+      // Asking `statSync` about the path a second time is a second resolution of the same
+      // name, which is what CodeQL reports as `js/file-system-race`. Equivalent here: these
+      // trees are checked into git and carry no symlinks, which `statSync` would follow and
+      // a dirent would not.
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const full = join(dir, entry.name)
+        if (entry.isDirectory()) {
           walk(full)
         } else if (full.endsWith('.ts') || full.endsWith('.tsx')) {
           const src = readFileSync(full, 'utf8')
@@ -223,9 +228,14 @@ describe('T5a.1a — leaf-file Web Crypto migration (node:crypto → globalThis.
     const serverDir = resolve(REPO_ROOT, 'packages/theo/src/server')
     const offenders: string[] = []
     const walk = (dir: string): void => {
-      for (const entry of readdirSync(dir)) {
-        const full = join(dir, entry)
-        if (statSync(full).isDirectory()) {
+      // `withFileTypes` answers the type from the directory entry the read already returned.
+      // Asking `statSync` about the path a second time is a second resolution of the same
+      // name, which is what CodeQL reports as `js/file-system-race`. Equivalent here: these
+      // trees are checked into git and carry no symlinks, which `statSync` would follow and
+      // a dirent would not.
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const full = join(dir, entry.name)
+        if (entry.isDirectory()) {
           walk(full)
         } else if (full.endsWith('.ts') || full.endsWith('.tsx')) {
           const src = readFileSync(full, 'utf8')
@@ -340,9 +350,14 @@ describe('T5a.1a — leaf-file Web Crypto migration (node:crypto → globalThis.
     const serverDir = resolve(REPO_ROOT, 'packages/theo/src/server')
     const offenders: string[] = []
     const walk = (dir: string): void => {
-      for (const entry of readdirSync(dir)) {
-        const full = join(dir, entry)
-        if (statSync(full).isDirectory()) {
+      // `withFileTypes` answers the type from the directory entry the read already returned.
+      // Asking `statSync` about the path a second time is a second resolution of the same
+      // name, which is what CodeQL reports as `js/file-system-race`. Equivalent here: these
+      // trees are checked into git and carry no symlinks, which `statSync` would follow and
+      // a dirent would not.
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const full = join(dir, entry.name)
+        if (entry.isDirectory()) {
           walk(full)
         } else if (full.endsWith('.ts') || full.endsWith('.tsx')) {
           const src = readFileSync(full, 'utf8')

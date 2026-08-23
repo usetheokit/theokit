@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import {
@@ -92,10 +92,10 @@ describe('scanServerRoutes catch-all', () => {
   let serverDir: string
 
   beforeEach(() => {
-    const base = join(
-      tmpdir(),
-      `theo-catchall-scan-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    )
+    // `mkdtempSync`, not a name built from a clock or a counter: this directory is WRITTEN to, and
+    // a name another process can predict is a window to pre-create it as a symlink and redirect
+    // every write (CodeQL `js/insecure-temporary-file`).
+    const base = mkdtempSync(join(tmpdir(), 'theo-catchall-scan-'))
     serverDir = join(base, 'server')
     mkdirSync(join(serverDir, 'routes'), { recursive: true })
   })
