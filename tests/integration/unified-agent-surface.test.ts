@@ -17,6 +17,8 @@
  * same call; the wire correctness is what this asserts.
  */
 import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+
+import { markEsmProject } from '../lib/fixture-project.js'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
@@ -56,6 +58,11 @@ beforeAll(() => {
   mkdirSync(join(projectDir, 'server', 'routes'), { recursive: true })
   // Resolve the agent file's imports as a real app would: @theokit/agents (workspace
   // package; its Symbol.for brand matches the src instance mountAgent uses) + zod.
+  // #418 — without this the tsx fallback compiles `echo.ts` as CommonJS, so the bare import of
+  // `@theokit/agents` becomes a `require` — and that package's `"."` export declares only `import`,
+  // so Node answers `No "exports" main defined`. Invisible above Node 22.18, where the native type
+  // stripping means the fallback never runs.
+  markEsmProject(projectDir)
   mkdirSync(join(projectDir, 'node_modules', '@theokit'), { recursive: true })
   symlinkSync(
     resolve(REPO, 'packages/agents'),
