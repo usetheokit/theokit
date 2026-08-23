@@ -232,6 +232,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **The release workflow stops asking for a permission this organization withholds.**
+  `changesets/action` opens a pull request on the version branch, and Actions here may not create
+  one — measured on all ten repositories AND at the org level, so it is policy rather than a
+  per-repo oversight. With 53 changesets pending, the next release would have failed there and never
+  reached the publish step at all. The workflow now decides for itself: pending changesets produce
+  the "Version Packages" commit on a branch and a notice with the link to open the PR; a person
+  opens it, which is a stronger review gate than a bot doing so. No secret is involved — the job
+  already carries `contents: write` — where the alternative was a personal access token with an
+  owner who can leave. The publish path is untouched, byte for byte. (#191)
+
+- **A gate that walked a live directory failed intermittently.** `vitest-projects-cover-every-test`
+  walks `tests/` while sibling tests create and remove scratch trees inside it, so a path could
+  vanish between `readdirSync` and `statSync` and take the whole file down with an `ENOENT`. It now
+  tolerates the race, which is honest rather than defensive: a directory that disappears mid-walk is
+  scratch output and holds no test the gate could be missing.
+
 - **The published-licence report is now proven to fire too.** `check:licenses:published` exists
   because two packages are `MIT` on npm while this repository licenses them `Apache-2.0` — and it
   had no test, which for this one is worse than usual: run against the real registry it reports

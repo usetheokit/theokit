@@ -144,7 +144,40 @@ jobs:
       - name: Disarm the local pre-commit hook for the bot's version commit
         run: git config --unset core.hooksPath || true
 
+      # usetheokit/theokit#191 — the version half, WITHOUT asking for a permission this
+      # organization deliberately withholds.
+      #
+      # `changesets/action` decides internally between versioning and publishing, and on the version
+      # branch it tries to OPEN A PULL REQUEST. That is forbidden here: measured 2026-08-23,
+      # `can_approve_pull_request_reviews=false` on all ten repositories AND at the org level, so the
+      # setting is not a per-repo oversight to flip — it is policy. The run failed there and never
+      # reached publish.
+      #
+      # The two paths are mutually exclusive in a single run, so pre-empting the version case leaves
+      # the publish path — the delicate one, carrying the trusted-publishing migration of #366/#413 —
+      # byte-for-byte untouched below.
+      #
+      # A PAT (the issue's option b) would buy the capability back at the cost of a secret with an
+      # owner. Pushing a branch needs no secret: the job already declares `contents: write`, and a
+      # PERSON opens the PR from the link, which is the Rule 4 gate rather than a bot approving one.
+      - name: Are there changesets waiting?
+        id: pending
+        run: echo "value=$(node scripts/pending-changesets.mjs)" >> "$GITHUB_OUTPUT"
+
+      - name: Version Packages onto a branch
+        if: steps.pending.outputs.value == 'true'
+        run: |
+          set -euo pipefail
+          pnpm version-packages
+          git config user.name  'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git switch -C changeset-release/main
+          git commit -am 'Version Packages'
+          git push --force-with-lease -u origin changeset-release/main
+          echo "::notice title=Version Packages::Ready to review — open the PR at https://github.com/${GITHUB_REPOSITORY}/compare/main...changeset-release/main?expand=1"
+
       - name: Create Release Pull Request or Publish
+        if: steps.pending.outputs.value != 'true'
         uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1.9.0
         with:
           # `pnpm release`, not `changeset publish` directly. The script wraps the publish in two
