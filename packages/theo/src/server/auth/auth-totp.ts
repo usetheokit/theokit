@@ -50,11 +50,18 @@ const DEFAULT_ALGORITHM: TotpAlgorithm = 'SHA-1'
 /** Decode base32 (RFC 4648, no padding) to bytes. Throws on invalid input. */
 function base32Decode(s: string): Uint8Array {
   const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'
-  // Trailing `=` is bounded by spec to 0..6 chars; `\s+` collapses runs
-  // of whitespace. Input length is the user's TOTP secret (10..50 chars
-  // typical), so super-linear backtracking cannot escalate.
-  // eslint-disable-next-line sonarjs/slow-regex -- bounded inputs (TOTP secrets are short)
-  const clean = s.toUpperCase().replace(/=+$/, '').replace(/\s+/g, '')
+  // Padding is stripped by scanning back from the end rather than with `/=+$/`. An anchored `+`
+  // retries from every start position, so a long run of `=` followed by anything else costs
+  // O(n^2) (CodeQL `js/polynomial-redos`). The previous note argued the input was short enough
+  // for that not to matter — "10..50 chars typical" is an expectation, not a bound, and this is an
+  // authentication path. A scan needs no such argument.
+  //
+  // The `slow-regex` suppression this line used to carry is gone with it: `\s+` on its own never
+  // tripped the rule, so the suppression was only ever covering `=+$`.
+  const upper = s.toUpperCase()
+  let end = upper.length
+  while (end > 0 && upper.charCodeAt(end - 1) === 0x3d /* '=' */) end -= 1
+  const clean = upper.slice(0, end).replace(/\s+/g, '')
   if (!/^[A-Z2-7]+$/.test(clean)) {
     throw new Error('Invalid base32 secret')
   }

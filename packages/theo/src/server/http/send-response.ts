@@ -30,6 +30,11 @@ export function sendJson(
   res.end(body)
 }
 
+/** Render anything that would end the log line as a visible escape, so one call logs one line. */
+function oneLine(value: string): string {
+  return value.replace(/\r/g, '\\r').replace(/\n/g, '\\n')
+}
+
 export interface SendErrorOptions {
   custom404Html?: string
   custom500Html?: string
@@ -98,7 +103,11 @@ export function sendError(
       : message
 
   if (code === 'INTERNAL_ERROR') {
-    console.error(`[${requestId ?? 'no-id'}] ${message}`)
+    // One log entry per call, whatever the message contains. An exception message can be built
+    // from request data and can therefore carry a newline; unescaped, that lets a caller append
+    // whatever lines it likes to the log — including a plausible entry attributed to something
+    // else (CodeQL `js/log-injection`).
+    console.error(`[${oneLine(requestId ?? 'no-id')}] ${oneLine(message)}`)
   }
 
   if (status === 404 && options?.custom404Html) {
@@ -173,7 +182,11 @@ export function buildErrorResponse(input: SendErrorInput): Response {
       : message
 
   if (code === 'INTERNAL_ERROR') {
-    console.error(`[${requestId ?? 'no-id'}] ${message}`)
+    // One log entry per call, whatever the message contains. An exception message can be built
+    // from request data and can therefore carry a newline; unescaped, that lets a caller append
+    // whatever lines it likes to the log — including a plausible entry attributed to something
+    // else (CodeQL `js/log-injection`).
+    console.error(`[${oneLine(requestId ?? 'no-id')}] ${oneLine(message)}`)
   }
 
   const headers: Record<string, string> = {}

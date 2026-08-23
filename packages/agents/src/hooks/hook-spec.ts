@@ -392,7 +392,7 @@ export function fenceHookOutput(output: string): string {
   const close = `</hook-output nonce="${nonce}">`
   // Escape any attempt to close the fence early — including the exact nonce, on the theory that it
   // leaked somehow. Cheap, and the alternative is trusting that it did not.
-  const escaped = output.replaceAll(close, close.replace('<', '&lt;'))
+  const escaped = output.replaceAll(close, close.replaceAll('<', '&lt;'))
   return `${open}\n${escaped}\n${close}`
 }
 
