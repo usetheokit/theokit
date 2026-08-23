@@ -7,6 +7,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Added
+- **`readThreadHistory()` stops reporting a transcript it could not read as a thread with no
+  history.** An application reading a thread must catch — a brand-new thread has no file, and raising
+  there would 500 the first turn of every conversation. That catch is mandatory and it swallowed
+  every other read failure with it, so a corrupt or unreadable transcript came back as the same
+  empty, successful, warm greeting. The new read is three-valued (`present` / `absent` /
+  `unreadable`, with the reason), the shape `liveness-oracle` already uses one file over and for the
+  same stated reason. What it deliberately does NOT claim is on the type: `absent` does not separate
+  a LOST conversation from a NEW one, because the thread id is minted client-side and nothing records
+  that it was issued — that distinction belongs to whoever knows whether the id was restored from
+  storage or just minted. (#399)
+
 - **Scroll restoration now covers the element your layout actually scrolls.** The router mounted
   react-router's restoration, which restores the DOCUMENT — and the layout this framework scaffolds
   scrolls an inner element, so the restoration was mounted, running, and restoring nothing. Mark the
