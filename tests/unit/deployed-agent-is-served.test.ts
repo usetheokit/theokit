@@ -23,8 +23,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { renderCloudflareWorkerEntry } from '../../packages/theo/src/adapters/cloudflare.js'
 
 const AGENTS = [
-  { filePath: 'agents/chat.ts', agentPath: '/api/agents/chat', name: 'chat' },
-  { filePath: 'agents/triage.ts', agentPath: '/api/agents/triage', name: 'triage' },
+  { filePath: 'agents/chat.js', agentPath: '/api/agents/chat', name: 'chat' },
+  { filePath: 'agents/triage.js', agentPath: '/api/agents/triage', name: 'triage' },
 ]
 
 const STUB_SOURCE = `
@@ -57,9 +57,14 @@ beforeAll(() => {
   stubUrl = pathToFileURL(join(root, 'theo-stub.mjs')).href
 
   // The app's own agent modules, at the path the emitted import names.
+  //
+  // `.js` and not `.ts` (#418): the emitted worker is a plain `.mjs` that Node imports directly, and
+  // a `.ts` sibling only resolves on Node >= 22.18, where type stripping is native. The specifier is
+  // whatever the build was handed, so the extension is not what this test is about — and pinning
+  // `.ts` made it fail on the version `engines` declares.
   mkdirSync(join(root, 'agents'), { recursive: true })
-  writeFileSync(join(root, 'agents', 'chat.ts'), `export const marker = 'chat-module'\n`)
-  writeFileSync(join(root, 'agents', 'triage.ts'), `export const marker = 'triage-module'\n`)
+  writeFileSync(join(root, 'agents', 'chat.js'), `export const marker = 'chat-module'\n`)
+  writeFileSync(join(root, 'agents', 'triage.js'), `export const marker = 'triage-module'\n`)
   ;(globalThis as Record<string, unknown>).__THEO_AGENT_HARNESS__ = {
     resolveProvider: () => ({ apiKey: 'sk-test' }),
     mountAgent: (

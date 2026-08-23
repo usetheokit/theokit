@@ -14,10 +14,14 @@ import { _resetEnvCache } from '../../packages/theo/src/config/load-env.js'
 
 const KEYS_TO_CLEAN = ['SECRET', 'TEST_VAR', '__THEOKIT_USER_NODE_ENV', '__THEOKIT_PROCESSED_ENV']
 
+import { markEsmProject } from '../lib/fixture-project.js'
+
 function makeTmp(): string {
   const dir = join(tmpdir(), `__loadconfig_${Date.now()}_${Math.random().toString(36).slice(2)}`)
   mkdirSync(dir, { recursive: true })
-  return dir
+  // #418 — a fixture without this is compiled as CJS by the tsx fallback, and the framework's own
+  // loader then throws `__filename is not defined` on the Node version `engines` declares.
+  return markEsmProject(dir)
 }
 
 describe('T1.3 — loadConfig loads env first', () => {

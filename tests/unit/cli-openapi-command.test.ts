@@ -8,8 +8,8 @@
  * Tests: source-level assertions on registration + unit test of the
  * command itself with stub loader.
  */
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { makeFixtureProject } from '../lib/fixture-project.js'
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -38,7 +38,7 @@ describe('T2.3 — cli/index.ts registers `openapi` command', () => {
 let tmpDir: string
 
 beforeEach(() => {
-  tmpDir = mkdtempSync(join(tmpdir(), 'theokit-g2-openapi-cmd-'))
+  tmpDir = makeFixtureProject('theokit-g2-openapi-cmd-')
 })
 
 afterEach(() => {

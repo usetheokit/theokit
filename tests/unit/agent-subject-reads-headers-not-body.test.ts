@@ -11,9 +11,13 @@
  * The contract is stated honestly now, and this pins it so the prose cannot drift back: headers and
  * cookies reach `createContext`; the body does not.
  */
+// #418 — the PRODUCT loads user `.ts` through `importUserModule`, whose tsx fallback is what
+// makes it work below Node 22.18. A harness calling `import()` directly tests a path the
+// framework never takes, and fails on the version `engines` declares.
+import { makeFixtureProject } from '../lib/fixture-project.js'
+import { importUserModule } from '../../packages/theo/src/config/import-user-module.js'
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { afterEach, describe, expect, it } from 'vitest'
@@ -27,7 +31,7 @@ afterEach(() => {
 
 /** An app whose `server/context.ts` resolves identity from a header, the common case. */
 function projectWithContext(source: string): string {
-  const dir = mkdtempSync(join(tmpdir(), 'theo-subject-'))
+  const dir = makeFixtureProject('theo-subject-')
   dirs.push(dir)
   writeFileSync(join(dir, 'context.ts'), source, 'utf8')
   return dir
@@ -62,7 +66,7 @@ describe('agent identity reads what survives the conversion (#415)', () => {
     const resolve = createAgentSubjectResolver({
       req: drainedRequest({ 'x-user-id': 'u-42' }),
       res: RES,
-      loadModule: async (p: string) => (await import(p)) as Record<string, unknown>,
+      loadModule: importUserModule,
       serverDir,
       pluginRunner: undefined,
     })
@@ -84,7 +88,7 @@ describe('agent identity reads what survives the conversion (#415)', () => {
     const resolve = createAgentSubjectResolver({
       req: drainedRequest({}),
       res: RES,
-      loadModule: async (p: string) => (await import(p)) as Record<string, unknown>,
+      loadModule: importUserModule,
       serverDir,
       pluginRunner: undefined,
     })
@@ -100,7 +104,7 @@ describe('agent identity reads what survives the conversion (#415)', () => {
     const resolve = createAgentSubjectResolver({
       req: drainedRequest({ 'x-user-id': 'u-42' }),
       res: RES,
-      loadModule: async (p: string) => (await import(p)) as Record<string, unknown>,
+      loadModule: importUserModule,
       serverDir: undefined,
       pluginRunner: undefined,
     })
@@ -119,7 +123,7 @@ describe('agent identity reads what survives the conversion (#415)', () => {
     const resolve = createAgentSubjectResolver({
       req: drainedRequest({}),
       res: RES,
-      loadModule: async (p: string) => (await import(p)) as Record<string, unknown>,
+      loadModule: importUserModule,
       serverDir,
       pluginRunner: undefined,
     })

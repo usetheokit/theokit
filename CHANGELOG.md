@@ -221,6 +221,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **The production module loader no longer depends on a hook it never registers.**
+  `createProductionLoader` — what `theokit start` uses to read routes, agents and
+  `server/context.ts` off disk — called `import()` directly, and worked only because the CLI bin
+  starts with `import "tsx/esm"`. Any other caller (a test booting the real handler, an app
+  embedding the framework) got `ERR_UNKNOWN_FILE_EXTENSION` for a `.ts` file, or
+  `__filename is not defined in ES module scope` from tsx's CommonJS output. It now delegates to the
+  importer that already had the fallback; production keeps the identical fast path, because that
+  importer tries the native import first. Invisible above Node 22.18, where native type stripping
+  loads the file regardless — which is how it survived on a project declaring
+  `engines.node: ">=22.12.0"`. (#418)
+
 - **A middleware written the way the README says now runs where the README says to put it.**
   `middleware()` produced a handler the file-scan runner could not invoke: it called
   `(req, res, next)` with Node objects, so a handler authored as documented received `res` as its

@@ -5,9 +5,17 @@ import path from 'node:path'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 
+import { markEsmProject } from '../lib/fixture-project.js'
+
 const TEMP_DIR = path.join(tmpdir(), `theo-env-test-${Date.now()}`)
 
 beforeAll(() => {
+  // #418 — one marker at the root covers every fixture below it: the nearest-`package.json` lookup
+  // walks up. Without it tsx compiles these configs as CJS and evaluating the output as ESM throws
+  // `__filename is not defined` — invisible above Node 22.18, and a failure on the declared floor.
+  mkdirSync(TEMP_DIR, { recursive: true })
+  markEsmProject(TEMP_DIR)
+
   // Base config only (no env file)
   const baseOnly = path.join(TEMP_DIR, 'base-only')
   mkdirSync(baseOnly, { recursive: true })

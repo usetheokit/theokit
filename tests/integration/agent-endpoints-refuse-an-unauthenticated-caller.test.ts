@@ -119,6 +119,10 @@ let origin: string
 
 async function startProductionServer(): Promise<void> {
   projectRoot = await mkdtemp(join(tmpdir(), 'tk365-'))
+  // #418 — `server/context.ts` is loaded off disk by the framework's own importer, whose tsx
+  // fallback compiles it as CJS without this. The output then references `__filename`, which throws
+  // when evaluated as ESM — on the Node version `engines` declares, and nowhere above 22.18.
+  await writeFile(join(projectRoot, 'package.json'), '{ "type": "module" }')
   const serverDir = join(projectRoot, 'server')
   await mkdir(serverDir, { recursive: true })
   // The application's identity seam — the same file every `route()` already reaches. A real app

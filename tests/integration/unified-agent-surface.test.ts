@@ -44,6 +44,7 @@ vi.mock('../../packages/agents/src/bridge/sdk-adapter.js', () => ({
 
 const { generateManifest } = await import('../../packages/theo/src/server/scan/manifest.js')
 const { mountAgent } = await import('../../packages/theo/src/server/agent/mount-agent.js')
+const { importUserModule } = await import('../../packages/theo/src/config/import-user-module.js')
 const { consumeUIMessageStream } =
   await import('../../packages/agents/src/client/consume-ui-message-stream.js')
 
@@ -96,7 +97,8 @@ describe('agents/*.ts convention — end to end (M2)', () => {
 
   it('test_convention_serves_uimessagestream_parsed_by_ai_consumer', async () => {
     // Load the on-disk module exactly as the prod loader (tsx) would.
-    const mod = (await import(join(projectDir, 'agents', 'echo.ts'))) as unknown
+    // #418 — the same importer `mountAgent`'s caller uses in production.
+    const mod = (await importUserModule(join(projectDir, 'agents', 'echo.ts'))) as unknown
 
     const request = new Request('http://localhost/api/agents/echo', {
       method: 'POST',
