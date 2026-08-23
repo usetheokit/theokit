@@ -5,15 +5,34 @@
 - **Deciders:** program coordinator; requires the project owner's acceptance
 - **Blocks:** M13 (middleware-edge) first minimum-contract criterion; usetheokit/theokit#345
 
+## ⚠️ Code shipped against this ADR, and it needs the owner's ruling
+
+**2026-08-23.** `ab56b3888` closed #345 by adopting **`(request, context) => Response | void`** — the
+exact alternative the *Alternatives considered* section below **rejects**. That commit did not
+address this ADR's argument, and this ADR was never accepted. The conflict is recorded here rather
+than resolved, because resolving it is the owner's call.
+
+The two positions, stated fairly:
+
+| | This ADR | What shipped (`ab56b3888`) |
+| --- | --- | --- |
+| Contract | `(request, next) => Response` — wraps the downstream | `(request, context) => Response \| void` — runs before it |
+| Argument | *"A contract that cannot express 'around' is not a middleware contract; it is a before-hook."* Timing, `try`/`catch`, retry and after-the-fact headers are capabilities the published builder already promises | Measured: the wrapping shape had **zero runtime consumers**, and honouring it requires folding the chain around route execution — which this ADR itself calls "the substantial half of the work" |
+| Cost | Restructures both runners; breaking for every `server/middleware/` file | Non-breaking for `(req, res, next)` files; the builder's type changes, and nothing was using it |
+
+Both are defensible and they are not compatible. What shipped is reversible: the contract change is a
+type plus a dispatcher, not a pipeline. If this ADR is accepted, the fold replaces it; if it is
+rejected, this section becomes the record of why.
+
 ## Context
 
 This repository has **three** middleware contracts. The report that opened #345 named two.
 
 | Where | Shape | Can it wrap the downstream? |
 | --- | --- | --- |
-| Published builder — `middleware()`, `defineMiddleware` (`server/define/define-middleware.ts:1`) | `(request: Request, next: (request) => Promise<Response>) => Response` | Yes |
-| Node file-scan runner (`server/http/middleware-runner.ts:36`) | `(req: IncomingMessage, res: ServerResponse, next: () => void) => void` | No |
-| Web runner — `WebMiddleware` (`server/http/web-middleware-runner.ts:19`) | `(request: Request, context) => Response \| void` | No |
+| Published builder — `middleware()`, `defineMiddleware` (`packages/theo/src/server/define/define-middleware.ts:1`) | `(request: Request, next: (request) => Promise<Response>) => Response` | Yes |
+| Node file-scan runner (`packages/theo/src/server/http/middleware-runner.ts:36`) | `(req: IncomingMessage, res: ServerResponse, next: () => void) => void` | No |
+| Web runner — `WebMiddleware` (`packages/theo/src/server/http/web-middleware-runner.ts:19`) | `(request: Request, context) => Response \| void` | No |
 
 The published one — the shape the documentation teaches and the builder produces — is invoked by
 **neither runner**. `web-middleware-runner.ts` records the situation in its own header: *"this is its
