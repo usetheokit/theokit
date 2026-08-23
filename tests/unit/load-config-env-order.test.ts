@@ -1,5 +1,4 @@
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -14,14 +13,16 @@ import { _resetEnvCache } from '../../packages/theo/src/config/load-env.js'
 
 const KEYS_TO_CLEAN = ['SECRET', 'TEST_VAR', '__THEOKIT_USER_NODE_ENV', '__THEOKIT_PROCESSED_ENV']
 
-import { markEsmProject } from '../lib/fixture-project.js'
+import { makeFixtureProject } from '../lib/fixture-project.js'
 
 function makeTmp(): string {
-  const dir = join(tmpdir(), `__loadconfig_${Date.now()}_${Math.random().toString(36).slice(2)}`)
-  mkdirSync(dir, { recursive: true })
-  // #418 — a fixture without this is compiled as CJS by the tsx fallback, and the framework's own
-  // loader then throws `__filename is not defined` on the Node version `engines` declares.
-  return markEsmProject(dir)
+  // #418 — the `package.json` is what stops the tsx fallback compiling the fixture as CJS, which
+  // makes the framework's own loader throw `__filename is not defined` on the declared Node floor.
+  //
+  // `makeFixtureProject` uses `mkdtempSync`, which also closes CodeQL's
+  // `js/insecure-temporary-file`: a temp path built from a predictable name and then written to is
+  // a window another process can win.
+  return makeFixtureProject('__loadconfig_')
 }
 
 describe('T1.3 — loadConfig loads env first', () => {
