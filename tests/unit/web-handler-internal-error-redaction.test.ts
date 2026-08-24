@@ -14,7 +14,10 @@ import { defineRoute } from '../../packages/theo/src/server/define/define-route.
 import { executeWebRequest } from '../../packages/theo/src/server/web-handler.js'
 import { buildErrorResponse } from '../../packages/theo/src/server/http/send-response.js'
 
-const LEAK = 'pg://theo:hunter2@10.0.3.14:5432/prod — connection refused'
+// Shaped like an internal failure without being shaped like a credential: a `user:pass@host`
+// URL here is indistinguishable from a real leak to a secret scanner, and a test fixture that
+// trips the repository's own gate teaches everyone to skim past it.
+const LEAK = 'upstream billing-db.internal:5432 refused the connection'
 
 function req(): Request {
   return new Request('http://localhost/api/test', { method: 'GET' })
@@ -40,7 +43,7 @@ describe('Web runner — an internal error discloses no more than the Node runne
 
     expect(response.status).toBe(500)
     expect(body).not.toContain(LEAK)
-    expect(body).not.toContain('10.0.3.14')
+    expect(body).not.toContain('billing-db.internal')
   })
 
   it('Given production, When a handler throws, Then `cause` is not in the body either', async () => {
