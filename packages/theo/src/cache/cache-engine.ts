@@ -250,14 +250,12 @@ export function createCacheEngine(opts: CacheEngineOptions): CacheEngine {
 
     // EC-9: validate during write
     if (options.validate) {
-      let isValid = true
       try {
-        isValid = options.validate(value)
+        if (!options.validate(value)) return value
       } catch (err) {
         onError?.(err, { phase: 'set', key })
         return value
       }
-      if (!isValid) return value
     }
 
     // EC-10: undefined return → warn-once + skip cache

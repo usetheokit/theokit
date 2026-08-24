@@ -99,10 +99,14 @@ async function readAll(res: Response): Promise<string> {
   return out
 }
 
-function getReq(lastEventId?: string): Request {
-  const headers = new Headers()
-  if (lastEventId !== undefined) headers.set('last-event-id', lastEventId)
-  return new Request('http://x/api/agents/a/runs/r/stream', { headers })
+/**
+ * A reconnect with NO `last-event-id` — the full-replay case this file is about. The helper used to
+ * take an optional id and set the header when given one, and nothing ever gave it one, so the
+ * branch could not execute. Resume-from-a-point is covered by `handle-agent-run-reconnect.test.ts`
+ * and `serve-aux-routes-run-stream.test.ts`; a parameter here only suggested this file covered it.
+ */
+function getReq(): Request {
+  return new Request('http://x/api/agents/a/runs/r/stream', { headers: new Headers() })
 }
 
 /** Expected SSE bytes for an ordered chunk list: `id: <seq>\ndata: <json>\n\n` … + `[DONE]`. */

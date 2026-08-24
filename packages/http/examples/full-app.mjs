@@ -191,43 +191,15 @@ class UsersController {
 }
 
 Controller('api/users')(UsersController)
-Get()(
-  UsersController.prototype,
-  'findAll',
-  Object.getOwnPropertyDescriptor(UsersController.prototype, 'findAll'),
-)
-Get(':id')(
-  UsersController.prototype,
-  'findById',
-  Object.getOwnPropertyDescriptor(UsersController.prototype, 'findById'),
-)
-Post()(
-  UsersController.prototype,
-  'create',
-  Object.getOwnPropertyDescriptor(UsersController.prototype, 'create'),
-)
-Delete(':id')(
-  UsersController.prototype,
-  'remove',
-  Object.getOwnPropertyDescriptor(UsersController.prototype, 'remove'),
-)
-HttpCode(204)(
-  UsersController.prototype,
-  'remove',
-  Object.getOwnPropertyDescriptor(UsersController.prototype, 'remove'),
-)
-Get('stats')(
-  UsersController.prototype,
-  'stats',
-  Object.getOwnPropertyDescriptor(UsersController.prototype, 'stats'),
-)
+Get()(UsersController.prototype, 'findAll')
+Get(':id')(UsersController.prototype, 'findById')
+Post()(UsersController.prototype, 'create')
+Delete(':id')(UsersController.prototype, 'remove')
+HttpCode(204)(UsersController.prototype, 'remove')
+Get('stats')(UsersController.prototype, 'stats')
 UseGuards(ApiKeyGuard)(UsersController.prototype, 'stats')
 UseGuards(AdminGuard)(UsersController.prototype, 'stats')
-Header('X-Service', 'users')(
-  UsersController.prototype,
-  'findAll',
-  Object.getOwnPropertyDescriptor(UsersController.prototype, 'findAll'),
-)
+Header('X-Service', 'users')(UsersController.prototype, 'findAll')
 
 // Wire params
 function wp(ctrl, method, idx, src, key) {
@@ -268,36 +240,12 @@ class ProductsController {
 }
 
 Controller('api/products')(ProductsController)
-Get()(
-  ProductsController.prototype,
-  'findAll',
-  Object.getOwnPropertyDescriptor(ProductsController.prototype, 'findAll'),
-)
-Get('search')(
-  ProductsController.prototype,
-  'search',
-  Object.getOwnPropertyDescriptor(ProductsController.prototype, 'search'),
-)
-Get(':id')(
-  ProductsController.prototype,
-  'findById',
-  Object.getOwnPropertyDescriptor(ProductsController.prototype, 'findById'),
-)
-Post()(
-  ProductsController.prototype,
-  'create',
-  Object.getOwnPropertyDescriptor(ProductsController.prototype, 'create'),
-)
-Delete(':id')(
-  ProductsController.prototype,
-  'remove',
-  Object.getOwnPropertyDescriptor(ProductsController.prototype, 'remove'),
-)
-HttpCode(204)(
-  ProductsController.prototype,
-  'remove',
-  Object.getOwnPropertyDescriptor(ProductsController.prototype, 'remove'),
-)
+Get()(ProductsController.prototype, 'findAll')
+Get('search')(ProductsController.prototype, 'search')
+Get(':id')(ProductsController.prototype, 'findById')
+Post()(ProductsController.prototype, 'create')
+Delete(':id')(ProductsController.prototype, 'remove')
+HttpCode(204)(ProductsController.prototype, 'remove')
 UseGuards(ApiKeyGuard)(ProductsController.prototype, 'create')
 
 wp(ProductsController, 'search', 0, 'query', 'q')
@@ -327,11 +275,7 @@ class HealthController {
   }
 }
 Controller('api/health')(HealthController)
-Get()(
-  HealthController.prototype,
-  'check',
-  Object.getOwnPropertyDescriptor(HealthController.prototype, 'check'),
-)
+Get()(HealthController.prototype, 'check')
 
 // ═══════════════════════════════════════════════════════
 // BOOT — createDecoratorServer com DI container
