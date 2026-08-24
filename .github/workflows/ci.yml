@@ -219,8 +219,15 @@ jobs:
       # otherwise `tsc` reads a stale `dist` and reports errors that belong to neither the template
       # nor the source. That exact confusion cost a debugging pass while this job was being written.
       - run: pnpm build:packages
+      # `--skip-install` because the CLI's own install runs BEFORE the link step below and resolves
+      # the template's pins from npm. After `changeset version` bumps `theokit` to the version the
+      # release is about to publish, that install cannot succeed — which deadlocked the release,
+      # since this is a required check and publishing needs the merge it blocks (#438). The root
+      # install two steps down is what actually links `my-test`, so the CLI's was always redundant
+      # here; it was only ever passing because the previous pin happened to resolve, which meant
+      # this job measured the PUBLISHED package rather than this tree — the defect #420 reports.
       - name: Scaffold the default template
-        run: node_modules/.bin/tsx packages/create-theokit/src/cli.ts my-test --yes --use-pnpm --disable-git
+        run: node_modules/.bin/tsx packages/create-theokit/src/cli.ts my-test --yes --use-pnpm --disable-git --skip-install
       - name: Point it at this working tree, not at npm (#420)
         run: node_modules/.bin/tsx scripts/link-scaffold-to-workspace.ts my-test
       # `my-test` is a declared workspace member, so the ROOT install is what links it and pulls the
