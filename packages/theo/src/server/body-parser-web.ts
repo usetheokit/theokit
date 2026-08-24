@@ -6,9 +6,11 @@
  * cache via WeakMap so multiple parse calls on the same Request are idempotent.
  */
 
+import { appendField } from './multipart-fields.js'
+
 interface ParsedWebBody {
   json?: unknown
-  fields: Record<string, string>
+  fields: Record<string, string | string[]>
   files: {
     fieldName: string
     filename: string
@@ -71,12 +73,12 @@ async function parseImpl(request: Request, options: WebBodyParserOptions): Promi
 
   if (ct.includes('multipart/form-data')) {
     const form = await request.formData()
-    const fields: Record<string, string> = {}
+    const fields: Record<string, string | string[]> = {}
     const files: ParsedWebBody['files'] = []
     let fileCount = 0
     for (const [key, value] of form.entries()) {
       if (typeof value === 'string') {
-        fields[key] = value
+        appendField(fields, key, value)
       } else {
         if (++fileCount > maxFiles) {
           throw new Error(`Too many files: max ${maxFiles}`)

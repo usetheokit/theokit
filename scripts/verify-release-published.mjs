@@ -62,8 +62,10 @@ function publishablePackages() {
 
 function registryState({ name, version }) {
   try {
+    // `--prefer-online` because `npm view` will otherwise answer from the local metadata
+    // cache, which in a release job was populated moments before the publish.
     // eslint-disable-next-line sonarjs/no-os-command-from-path -- toolchain binary, fixed argv
-    const out = execFileSync('npm', ['view', `${name}@${version}`, 'version'], {
+    const out = execFileSync('npm', ['view', `${name}@${version}`, 'version', '--prefer-online'], {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
     })
@@ -84,19 +86,65 @@ if (packages.length === 0) {
   process.exit(1)
 }
 
-let missing = 0
+/**
+ * npmjs is eventually consistent: a publish that has already succeeded answers E404 on the read
+ * path for a few seconds, and `npm view` reports that identically to a version nobody published.
+ *
+ * Run 32771822392 (2026-08-24) is the demonstration. `changeset publish` wrote five packages at
+ * 20:06:49; this guard read at 20:06:52 and failed the release naming all five as unpublished. All
+ * five were on the registry. The single package it passed — `@theokit/tauri@0.1.2` — was the only
+ * one NOT published in that run, so it had propagated long before.
+ *
+ * So `absent` is retried before it is believed. `unknown` is not: an unreachable registry is an
+ * infrastructure fault, and the honest response is to say so now rather than after half a minute
+ * of waiting for a network that is down.
+ *
+ * The budget is bounded and the delays are overridable so the suite can exercise the retry without
+ * sleeping through it. A guard that retried forever would hang a release; one that never retried
+ * fails a good one.
+ */
+const RETRY_DELAYS_MS = (process.env.THEO_RELEASE_VERIFY_DELAYS_MS ?? '2000,4000,8000,16000')
+  .split(',')
+  .map((n) => Number(n.trim()))
+  .filter((n) => Number.isFinite(n) && n >= 0)
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
 let unknown = 0
+let pending = []
 for (const pkg of packages) {
   const state = registryState(pkg)
   if (state === 'published') {
     console.log(`✓ ${pkg.name}@${pkg.version} is on the registry`)
   } else if (state === 'absent') {
-    missing++
-    console.error(`✗ ${pkg.name}@${pkg.version} was NOT published`)
+    pending.push(pkg)
   } else {
     unknown++
     console.error(`? ${pkg.name}@${pkg.version} could not be checked — ${state}`)
   }
+}
+
+for (const delay of RETRY_DELAYS_MS) {
+  if (pending.length === 0) break
+  console.log(
+    `… ${String(pending.length)} version(s) not visible yet; the registry is eventually ` +
+      `consistent, so waiting ${String(delay)}ms and re-reading before calling them unpublished`,
+  )
+  await sleep(delay)
+  const stillPending = []
+  for (const pkg of pending) {
+    if (registryState(pkg) === 'published') {
+      console.log(`✓ ${pkg.name}@${pkg.version} is on the registry (after a retry)`)
+    } else {
+      stillPending.push(pkg)
+    }
+  }
+  pending = stillPending
+}
+
+const missing = pending.length
+for (const pkg of pending) {
+  console.error(`✗ ${pkg.name}@${pkg.version} was NOT published`)
 }
 
 if (missing > 0 || unknown > 0) {
