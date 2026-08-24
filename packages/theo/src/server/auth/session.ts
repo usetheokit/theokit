@@ -89,6 +89,26 @@ function normalizeSecrets(input: string | string[]): string[] {
 }
 
 /**
+ * The single answer to "is this secret usable?", asked by both session managers.
+ *
+ * #429 — `assertProductionSecret` existed, was exported, was covered by ten unit assertions, and
+ * was called by nothing. `normalizeSecrets` was the only check on the path, and it enforces a
+ * length floor that knows nothing about placeholders — so a 32-character `CHANGE_ME…` booted in
+ * production, while the warning promising that production "will REFUSE to boot" sat inside the
+ * uncalled function, unreachable by the developer it was written for.
+ *
+ * Both checks now run, in this order, from one place. The order is deliberate: `normalizeSecrets`
+ * speaks first so a short secret keeps the message it has always had, and only then does the
+ * production guard get its say. Two constructors calling one function is also why this cannot
+ * regress into one of them being wired and the other not.
+ */
+function resolveSecrets(input: string | string[]): string[] {
+  const secrets = normalizeSecrets(input)
+  assertProductionSecret(secrets)
+  return secrets
+}
+
+/**
  * T5a.2 Phase D slice 3/3 — module-level pure helpers extracted so
  * `createSessionManager` (IncomingMessage path) and
  * `createSessionManagerWeb` (Web path) share the same encryption +
@@ -134,7 +154,7 @@ async function decryptSessionWithFallback<TSession>(
 }
 
 export function createSessionManager<TSession>(config: SessionConfig): SessionManager<TSession> {
-  const secrets = normalizeSecrets(config.secret)
+  const secrets = resolveSecrets(config.secret)
   const cookieName = config.cookieName ?? 'theo_session'
   const maxAge = config.maxAge ?? 604800 // 7 days
 
@@ -217,7 +237,7 @@ export interface SessionManagerWeb<TSession> {
 export function createSessionManagerWeb<TSession>(
   config: SessionConfig,
 ): SessionManagerWeb<TSession> {
-  const secrets = normalizeSecrets(config.secret)
+  const secrets = resolveSecrets(config.secret)
   const cookieName = config.cookieName ?? 'theo_session'
   const maxAge = config.maxAge ?? 604800 // 7 days
 
