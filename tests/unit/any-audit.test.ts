@@ -1,19 +1,35 @@
 import { describe, it, expect } from 'vitest'
-import { execSync } from 'node:child_process'
+import { readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 
 const srcDir = path.resolve(import.meta.dirname, '../../packages/theo/src')
 
+/**
+ * Count matching lines under `srcDir`.
+ *
+ * This used to shell out to `grep ... | wc -l`. The pipe forced a shell, the shell parsed an
+ * absolute path built from wherever the repository sits, and dropping the shell only moved the
+ * problem to `PATH` resolving the name `grep`. A walk needs neither, and an audit that reads the
+ * tree in-process cannot be told a different story by the environment it runs in.
+ */
 function grepCount(pattern: string): number {
-  try {
-    // eslint-disable-next-line sonarjs/os-command -- developer-local audit test running grep over the framework's own src tree
-    const result = execSync(`grep -rn '${pattern}' ${srcDir} --include="*.ts" | wc -l`, {
-      encoding: 'utf-8',
-    })
-    return parseInt(result.trim(), 10)
-  } catch {
-    return 0
+  const re = new RegExp(pattern)
+  let count = 0
+  const walk = (dir: string): void => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name)
+      if (entry.isDirectory()) {
+        walk(full)
+        continue
+      }
+      if (!full.endsWith('.ts')) continue
+      for (const line of readFileSync(full, 'utf-8').split('\n')) {
+        if (re.test(line)) count += 1
+      }
+    }
   }
+  walk(srcDir)
+  return count
 }
 
 describe('Any Audit — Zero any in production code', () => {
