@@ -163,7 +163,17 @@ Measured, not assumed:
 | Merging with the check red | `TruffleHog` is a required check on `develop` with `enforce_admins: true`. Not available, deliberately. |
 | Rewriting the message | Forbidden. Not negotiated around. |
 
-## The decision
+## The decision — and it has already expired
+
+> **Resolved on 2026-08-24.** `bbdfc15d6` reached `main` with the release in #432, so it left every
+> future scan range and the exclusion lost its reason. The self-retirement guard below is what
+> noticed: it failed on the first suite run after the merge and named the file to edit. The
+> `--exclude-detectors=postgres` flag and the guard file are both gone; the Postgres detector is
+> fully active again, and a scan of the range reports zero secrets without it.
+>
+> What follows is kept as the record of why the exclusion existed and what it cost, because a
+> decision that leaves no trace is one the next person has to make again from scratch.
+
 
 `--exclude-detectors=postgres`, **temporarily**, with two guards attached — because turning a
 detector off is only defensible if it stops being possible when it stops being necessary, and if

@@ -322,7 +322,10 @@ describe('scaffold (integration — real template)', () => {
     // Rules
     expect(existsSync(join(targetDir, '.claude/rules/theokit-conventions.md'))).toBe(true)
 
-    // 5 skills
+    // One skill per surface a scaffolded app actually has. `theokit-gateways` was missing while the
+    // gateway packages existed and shipped: a new user's scaffold said nothing about them, and the
+    // gateways' own README said nothing about the framework (theokit-gateways B-011).
+    expect(existsSync(join(targetDir, '.claude/skills/theokit-gateways/SKILL.md'))).toBe(true)
     expect(existsSync(join(targetDir, '.claude/skills/theokit-routes/SKILL.md'))).toBe(true)
     expect(existsSync(join(targetDir, '.claude/skills/theokit-agents/SKILL.md'))).toBe(true)
     expect(existsSync(join(targetDir, '.claude/skills/theokit-database/SKILL.md'))).toBe(true)
