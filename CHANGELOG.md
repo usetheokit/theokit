@@ -7,6 +7,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Added
+- **The webhook signature validators are reachable from the package.** `handleChannelWebhook` takes
+  a required `validators` map and its own docblock demonstrates `{ slack: slack({...}), telegram:
+  telegram({...}) }` — while `server/webhook` re-exported none of the six providers sitting beside
+  it. Nothing shipped: the published bundle carried no `providers/` file, and the string
+  `x-telegram-bot-api-secret-token` appeared nowhere in `dist/`. So the channel-webhook seam could
+  not be wired by a consumer of the package at all — the parameter was required and no value for it
+  existed. The framework's own test imports them by relative source path, which is why nothing
+  noticed. Found while writing the `theokit-gateways` scaffold skill, trying to show the wiring
+  (theokit-gateways B-011)
+- **`create-theokit` scaffolds a `theokit-gateways` skill.** A new app got six skills — agents,
+  config, database, frontend, routes, ui — and none for receiving a message from a platform, while
+  the `@theokit/gateway-*` packages existed and shipped. Measured from the other side: the gateways'
+  own README did not name this framework either, so the seam between them was documented only in
+  `dist/server/agent/index.d.ts`, which is where someone already inside the type looks. The skill
+  states which package owns which half, the four statuses the route answers, and why a throw out of
+  `onMessage` is not free (theokit-gateways B-011)
 - **`readThreadHistory()` stops reporting a transcript it could not read as a thread with no
   history.** An application reading a thread must catch — a brand-new thread has no file, and raising
   there would 500 the first turn of every conversation. That catch is mandatory and it swallowed
