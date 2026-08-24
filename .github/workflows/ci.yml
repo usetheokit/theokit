@@ -430,3 +430,100 @@ jobs:
             package.json
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - run: pnpm check:licenses
+
+  pr-report:
+    name: Quality report (PR comment)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # `always()`: the report is most useful precisely when something failed. Without it the job is
+    # skipped on the runs a reader most wants a summary of.
+    #
+    # The fork guard is not optional: a `pull_request` from a fork gets a read-only token, so
+    # `pull-requests: write` is not granted and the comment step would fail on every external
+    # contribution. Skipping is honest; the alternative (`pull_request_target`) would run this with
+    # write permissions against untrusted code, which is the vulnerability that trigger is known for.
+    if: >-
+      always() && github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    needs:
+      - lint-and-format
+      - typecheck-build
+      - test
+      - scaffold-typecheck
+      - coverage
+      - dead-code
+      - package-validation
+      - dependency-audit
+      - doc-citations
+      - license-compliance
+    permissions:
+      contents: read
+      # The only write this job needs, and the only one it gets.
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: '.nvmrc'
+
+      # Real numbers or none. The `coverage` job uploads this; if it failed there is no artifact,
+      # and the report says it could not read one rather than printing a figure from somewhere else.
+      - name: Download coverage report
+        continue-on-error: true
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: coverage-report
+          path: coverage
+
+      # The gates live across six workflows, so job results from `needs` would cover only this one.
+      # Asking the API for every check run on the head SHA is the complete picture, and it does not
+      # have to know any job's name. Bounded: after the wait, whatever is still running is REPORTED
+      # as running — never assumed to have passed.
+      - name: Collect check runs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+          SELF: Quality report (PR comment)
+        run: |
+          set -euo pipefail
+          for _ in $(seq 1 30); do
+            gh api "repos/${GITHUB_REPOSITORY}/commits/${SHA}/check-runs?per_page=100" > checks.json
+            remaining=$(jq --arg self "$SELF" \
+              '[.check_runs[] | select(.name != $self and .status != "completed")] | length' checks.json)
+            [ "$remaining" = "0" ] && break
+            echo "aguardando $remaining check(s)…"
+            sleep 20
+          done
+
+      - name: Render report
+        env:
+          SHA: ${{ github.event.pull_request.head.sha }}
+          # This job is itself a check run, and necessarily unfinished while it renders.
+          SELF: Quality report (PR comment)
+        run: |
+          node scripts/pr-quality-report.mjs \
+            --checks checks.json \
+            --coverage coverage/coverage-summary.json \
+            --sha "${SHA:0:9}" \
+            --self "$SELF" > report.md
+          cat report.md >> "$GITHUB_STEP_SUMMARY"
+
+      # One comment, updated in place. A new comment per push turns a long PR into a wall of stale
+      # reports, and the stale ones are indistinguishable from the current one at a glance.
+      - name: Post or update the report comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          existing=$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR}/comments?per_page=100" \
+            --jq 'map(select(.body | contains("<!-- theokit:quality-report -->"))) | .[0].id // empty')
+          if [ -n "$existing" ]; then
+            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${existing}" \
+              -F body=@report.md > /dev/null
+            echo "comentário $existing atualizado"
+          else
+            gh pr comment "$PR" --body-file report.md
+          fi

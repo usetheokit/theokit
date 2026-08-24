@@ -15,3 +15,17 @@ export type {
   VerifyFn,
   VerifyResult,
 } from './webhook-types.js'
+
+// The signature validators `handleChannelWebhook` requires. They existed beside this file from the
+// start and were never re-exported, so no consumer of the published package could supply the
+// `validators` map the function demands — its own docblock shows `telegram({...})`, and `telegram`
+// was unreachable. The framework's own tests import them by relative source path, which is exactly
+// why nothing caught it (theokit-gateways B-011).
+export { discord, github, slack, stripe, telegram } from './providers/index.js'
+export type {
+  DiscordWebhookOptions,
+  GitHubWebhookOptions,
+  SlackWebhookOptions,
+  StripeWebhookOptions,
+  TelegramWebhookOptions,
+} from './providers/index.js'
