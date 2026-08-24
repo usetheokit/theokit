@@ -19,18 +19,42 @@ fi
 
 set -e
 
-if [ -s "$HOME/.nvm/nvm.sh" ]; then
+# Node 22.12+ gate — theokit is validated only in its declared engine.
+#
+# The check runs BEFORE any nvm switch, and the switch happens only if the
+# check fails. `nvm use` used to run unconditionally, and it does not merely
+# satisfy the gate — it REPLACES the caller's toolchain with whatever .nvmrc
+# names. A developer on a newer 22.x that satisfies the engine was moved onto
+# 22.12.0, which is a different prefix with its own global bin, and pnpm
+# installed under the first one is simply not there under the second. The hook
+# then failed on a toolchain it had created itself.
+node_major_of() { echo "$1" | sed -E 's/^v([0-9]+)\..*/\1/'; }
+
+node_version="$(node --version 2>/dev/null || echo "v0.0.0")"
+if [ "$(node_major_of "$node_version")" -lt 22 ] && [ -s "$HOME/.nvm/nvm.sh" ]; then
   # shellcheck source=/dev/null
   . "$HOME/.nvm/nvm.sh" >/dev/null 2>&1 || true
   nvm use --silent >/dev/null 2>&1 || true
+  node_version="$(node --version 2>/dev/null || echo "v0.0.0")"
 fi
 
-# Node 22.12+ gate — theokit is validated only in its declared engine.
-node_version="$(node --version 2>/dev/null || echo "v0.0.0")"
-node_major="$(echo "$node_version" | sed -E 's/^v([0-9]+)\..*/\1/')"
-if [ "${node_major:-0}" -lt 22 ]; then
+if [ "$(node_major_of "$node_version")" -lt 22 ]; then
   echo "✗ pre-push: Node ${node_version} detected, but >=v22.12.0 is required (see engines)."
   echo "  Run: nvm use   (respects .nvmrc)"
+  exit 1
+fi
+
+if ! command -v pnpm >/dev/null 2>&1; then
+  echo ""
+  echo "✗ pre-push: pnpm is not on PATH inside the hook — NOTHING was verified."
+  echo "  This is not a build failure. The build never ran. Git hooks get a"
+  echo "  minimal environment, so a version manager's shims may be absent — and"
+  echo "  from here that is indistinguishable from a real break unless one of"
+  echo "  them says so. Reporting 'build failed' for a build that never started"
+  echo "  is how a gate stops meaning anything."
+  echo ""
+  echo "  Install pnpm for the active Node, or verify by hand and then push:"
+  echo "    pnpm build:packages && pnpm typecheck && git push --no-verify"
   exit 1
 fi
 
