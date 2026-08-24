@@ -2,9 +2,19 @@ import { defineConfig } from 'tsup'
 
 export default defineConfig({
   entry: ['src/index.ts', 'src/wire/index.ts'],
-  // `zod` is a peer — bundling it would put a second zod instance in a consumer's process, and two
-  // zod instances disagree on `instanceof` checks in ways that are miserable to diagnose.
-  external: ['zod', '@theokit/sdk'],
+  // One `external`, deliberately. There were two keys in this literal, and the second silently won
+  // (CodeQL `js/overwritten-property`, alert 258): `external: ['zod', '@theokit/sdk']` here and
+  // `external: ['@theokit/sdk', 'ai']` below. So the line naming `zod` had no effect at all.
+  //
+  // It did not break, and the reason it did not is worth writing down: `zod` is a peerDependency,
+  // and tsup externalises peers by default — so the built output imports `zod` rather than bundling
+  // it, protected by a mechanism nobody was relying on. Move `zod` out of `peerDependencies` and it
+  // would start bundling with nothing to say so.
+  //
+  // Why that matters: a second `zod` instance in a consumer's process disagrees with the first on
+  // `instanceof` checks, in ways that are miserable to diagnose. `ai` and `@theokit/sdk` are peers
+  // consumed through types and provided by the host.
+  external: ['zod', '@theokit/sdk', 'ai'],
   format: ['esm'],
   dts: true,
   sourcemap: true,
@@ -22,6 +32,4 @@ export default defineConfig({
     options.sourcesContent = false
   },
   clean: true,
-  // Peer — consumed via types, provided by the host.
-  external: ['@theokit/sdk', 'ai'],
 })

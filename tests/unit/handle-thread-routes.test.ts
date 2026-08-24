@@ -13,7 +13,7 @@ import {
   type ThreadRunRegistry,
 } from '../../packages/theo/src/server/agent/thread-run-registry.js'
 import { getRunEventCache } from '../../packages/theo/src/server/agent/run-event-cache.js'
-import { serveAgentAuxRoute } from '../../packages/theo/src/server/agent/serve-aux-routes.js'
+import { dispatchAuxRoute, sourceOf } from '../lib/web-request-source.js'
 
 /**
  * M39 (ADR-0048) — the thread HTTP routes. Deterministic: the message route is
@@ -64,6 +64,7 @@ describe('M39 — POST thread message', () => {
       sessionId: 'sess-400',
       request: post({}),
       source: 'agent "bot"',
+      agentName: 'bot',
       csrfMode: 'off',
     })
     expect(res.status).toBe(400)
@@ -76,6 +77,7 @@ describe('M39 — POST thread message', () => {
       sessionId: 'sess-403',
       request: post({ message: 'hi' }),
       source: 'agent "bot"',
+      agentName: 'bot',
       csrfMode: 'strict',
     })
     expect(res.status).toBe(403)
@@ -97,6 +99,7 @@ describe('M39 — POST thread message', () => {
         body: JSON.stringify({ message: 'follow up' }),
       }),
       source: 'agent "bot"',
+      agentName: 'bot',
       csrfMode: 'off',
     })
     expect(res.status).toBe(202)
@@ -178,13 +181,13 @@ describe('M39 — serveThreadRoute dispatch (LOW-1)', () => {
 
   it('GET thread stream falls through (null) on an unknown agent', async () => {
     const req = new Request('http://x/api/agents/nope/threads/s/stream')
-    const res = await serveAgentAuxRoute(req, '/api/agents/nope/threads/s/stream', baseDeps)
+    const res = await dispatchAuxRoute(sourceOf(req), '/api/agents/nope/threads/s/stream', baseDeps)
     expect(res).toBeNull()
   })
 
   it('POST thread message with a wrong method falls through (null)', async () => {
     const req = new Request('http://x/api/agents/bot/threads/s/message', { method: 'GET' })
-    const res = await serveAgentAuxRoute(req, '/api/agents/bot/threads/s/message', baseDeps)
+    const res = await dispatchAuxRoute(sourceOf(req), '/api/agents/bot/threads/s/message', baseDeps)
     expect(res).toBeNull()
   })
 
@@ -195,7 +198,11 @@ describe('M39 — serveThreadRoute dispatch (LOW-1)', () => {
       body: '{}',
     })
     const { resolveApiKey: _omit, ...depsNoKey } = baseDeps
-    const res = await serveAgentAuxRoute(req, '/api/agents/bot/threads/s/message', depsNoKey)
+    const res = await dispatchAuxRoute(
+      sourceOf(req),
+      '/api/agents/bot/threads/s/message',
+      depsNoKey,
+    )
     expect(res?.status).toBe(501)
   })
 })

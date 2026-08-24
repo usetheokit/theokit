@@ -95,9 +95,15 @@ function assertUsableRoster(
   }
 
   const needsCredential = roster.some((entry) => !isPort(entry.target))
-  if (needsCredential && !defaults?.apiKey) {
+  // `null` is an ANSWER — "this provider takes no credential" — and not an omission
+  // (usetheokit/theokit#423). Only `undefined` and `''` are omissions: the first is a caller who
+  // said nothing, the second is what an unset environment variable produces, and folding either
+  // into the keyless case would turn a typo into an unauthenticated run.
+  if (needsCredential && defaults?.apiKey !== null && !defaults?.apiKey) {
     throw new DelegateToolConfigError(
-      "createDelegateTool: a SubAgentSpec target requires defaults.apiKey — delegate() refuses an empty key, and without this check the failure would surface at the model's first call instead of at startup.",
+      'createDelegateTool: a SubAgentSpec target requires defaults.apiKey — delegate() refuses an ' +
+        "empty key, and without this check the failure would surface at the model's first call " +
+        'instead of at startup. Pass `apiKey: null` when the provider takes no credential.',
       'missing_api_key',
     )
   }

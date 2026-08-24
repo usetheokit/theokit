@@ -41,7 +41,12 @@ describe('CI Workflow', () => {
     // no matrix entry may sit below the floor the package itself declares. Adding Node 24 needs no
     // edit here; lowering the floor legitimately would let an older version back in on its own.
     const workflow = loadWorkflow('ci.yml')
-    const matrix = workflow.jobs.test.strategy.matrix['node-version'] as number[]
+    // Entries may be numbers (`22`) or strings (`'22.12'`). They became strings when the matrix
+    // started pinning a minor, and this guard read them as numbers, so `toBeGreaterThanOrEqual`
+    // received a string and threw `TypeError` instead of grading anything — a guard that fails for
+    // a reason unrelated to the property it protects, which is the same failure as freezing the
+    // literal, one layer down.
+    const matrix = workflow.jobs.test.strategy.matrix['node-version'] as (number | string)[]
     expect(matrix.length, 'the matrix must test at least one version').toBeGreaterThan(0)
 
     const engines = (
@@ -49,15 +54,32 @@ describe('CI Workflow', () => {
         engines: { node: string }
       }
     ).engines.node
-    const floorMajor = Number(/(\d+)/.exec(engines)?.[1])
+
+    /** `'22.12'` → `[22, 12]`; `'22'` → `[22, undefined]` — an absent minor is absent, not zero. */
+    const parts = (value: number | string): [number, number | undefined] => {
+      const [major, minor] = String(value).split('.')
+      return [Number(major), minor === undefined ? undefined : Number(minor)]
+    }
+
+    const [floorMajor, floorMinorRaw] = parts(/[\d.]+/.exec(engines)?.[0] ?? '')
+    const floorMinor = floorMinorRaw ?? 0
     expect(floorMajor, `engines.node not recognised: ${engines}`).toBeGreaterThan(0)
 
     for (const version of matrix) {
-      expect(
-        version,
-        `the matrix tests Node ${version}, below the floor \`${engines}\` that the CLI enforces at ` +
-          `runtime — every test that invokes it fails there by design`,
-      ).toBeGreaterThanOrEqual(floorMajor)
+      const [major, minor] = parts(version)
+      const below = `the matrix tests Node ${String(version)}, below the floor \`${engines}\` that the CLI enforces at runtime — every test that invokes it fails there by design`
+
+      // How an entry is graded depends on what it declares, because that is what setup-node
+      // resolves it to. A bare major (`'22'`) means "the newest 22.x", so it clears a `>=22.12.0`
+      // floor whenever its major does — reading it as `22.0` would fail a configuration that is
+      // correct, and a guard that fails correct configuration gets weakened rather than heeded.
+      // An entry that pins a minor (`'22.12'`) resolves to that line, so both parts are compared:
+      // `'22.0'` sits below the floor and must be caught, which grading by major alone would miss.
+      if (minor === undefined) {
+        expect(major, below).toBeGreaterThanOrEqual(floorMajor)
+      } else {
+        expect(major * 1000 + minor, below).toBeGreaterThanOrEqual(floorMajor * 1000 + floorMinor)
+      }
     }
   })
 

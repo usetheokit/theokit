@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import { proxyFetch } from '../../packages/theo/src/services/index.js'
 
 function makeMockFetch(response: Response): typeof fetch {
@@ -232,5 +232,49 @@ describe('T1.3 — proxyFetch', () => {
     })
     expect(res.status).toBe(302)
     expect(res.headers.get('location')).toBe('/elsewhere')
+  })
+})
+
+/**
+ * A failed upstream `fetch` reports why it failed, and the reason names the upstream: its host,
+ * its port, sometimes its credentials. That description belongs in the server's log, not in the
+ * 502 an external caller reads — the same rule the rest of the framework applies to an internal
+ * failure's message (`core/contracts/client-safe-error.ts`).
+ */
+describe('proxyFetch — an unreachable upstream does not describe itself to the caller', () => {
+  const INTERNAL = 'connect ECONNREFUSED 10.0.3.14:5432 (billing-db.internal)'
+
+  function failingFetch(): typeof fetch {
+    return vi.fn(async () => {
+      throw new Error(INTERNAL)
+    }) as unknown as typeof fetch
+  }
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  it('Given production, Then the 502 body carries no upstream detail', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    const response = await proxyFetch(new Request('http://localhost/api/x'), {
+      target: 'http://billing-db.internal/x',
+      customFetch: failingFetch(),
+    })
+
+    expect(response.status).toBe(502)
+    const body = await response.text()
+    expect(body).not.toContain(INTERNAL)
+    expect(body).not.toContain('10.0.3.14')
+    expect(body).toContain('SERVICE_UNAVAILABLE')
+  })
+
+  it('Given development, Then the detail is still there to debug with', async () => {
+    vi.stubEnv('NODE_ENV', 'development')
+    const response = await proxyFetch(new Request('http://localhost/api/x'), {
+      target: 'http://billing-db.internal/x',
+      customFetch: failingFetch(),
+    })
+
+    expect(await response.text()).toContain(INTERNAL)
   })
 })

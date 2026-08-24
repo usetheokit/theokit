@@ -17,9 +17,11 @@ import { join, resolve } from 'node:path'
 
 import { loadConfig } from '../../../config/load-config.js'
 import { loadEnv } from '../../../config/load-env.js'
+import { resolvePluginSpecifiers } from '../../../config/resolve-plugin-specifiers.js'
 import { initCacheEngineFromConfig } from '../../../server/cache-bootstrap.js'
 import { createCronScheduler } from '../../../server/cron/cron-runtime-node.js'
 import { defineHealthRoute } from '../../../server/define/health-route.js'
+import { createCorsHandler } from '../../../server/http/cors.js'
 import { createObservabilityPluginFromConfig } from '../../../server/observability-bootstrap.js'
 import { createPluginRunnerFromConfig } from '../../../server/plugins/load-plugins.js'
 import { createRouteRateLimiter } from '../../../server/rate-limit/rate-limit-per-route.js'
@@ -38,6 +40,7 @@ import { installGracefulShutdown } from './graceful-shutdown.js'
 import type { RequestHandlerCtx } from './handlers.js'
 import { loadRoutesAndActions } from './manifest-loader.js'
 import { createRequestHandler } from './request-handler.js'
+import { describeListenTarget, resolveListenTarget } from './resolve-listen-host.js'
 import { setupSsr } from './ssr-setup.js'
 import { attachWebSocketHandler } from './websocket-handler.js'
 
@@ -86,16 +89,23 @@ export async function startCommand(options: StartOptions): Promise<void> {
 
   const indexHtml = readFileSync(join(clientDir, 'index.html'), 'utf-8')
   const loadModule = createProductionLoader()
-  const port = options.port ?? config.port
+  // `PORT` is what every container platform injects, and `theo start` read only
+  // the config — so an image told to listen on the platform's port listened on
+  // 3000 instead, and the platform's health check found nothing
+  // (usetheokit/theokit#402). Explicit flag beats environment beats config: the
+  // flag is a person typing now, the environment is where the process was put.
+  const envPort = Number.parseInt(process.env.PORT ?? '', 10)
+  const port = options.port ?? (Number.isInteger(envPort) ? envPort : undefined) ?? config.port
   // #353 — observability is registered FIRST when configured, so its span brackets
   // the user's own hooks. The honest cost of one ordered list: its `onResponse`
   // also runs first, so the span closes just before the tail of the chain. Head
   // coverage matters more — auth and rate-limit hooks live there.
   const observabilityPlugin = createObservabilityPluginFromConfig(config.observability, process.env)
+  // #425 — a `plugins` entry MAY be a module specifier, so the same declaration the build bakes
+  // into a deployed entry is the one this server registers. Constructed plugins pass through.
+  const declaredPlugins = await resolvePluginSpecifiers(config.plugins ?? [], cwd)
   const pluginRunner = await createPluginRunnerFromConfig(
-    observabilityPlugin === undefined
-      ? config.plugins
-      : [observabilityPlugin, ...(config.plugins ?? [])],
+    observabilityPlugin === undefined ? declaredPlugins : [observabilityPlugin, ...declaredPlugins],
   )
   const transformer = resolveTransformer(config.serialization)
 
@@ -153,6 +163,10 @@ export async function startCommand(options: StartOptions): Promise<void> {
         rateLimiter,
       }),
       securityHeadersConfig: config.security?.headers ?? {},
+      // #409 — built once at startup, like the security headers beside it. Declaring `cors` and
+      // being served by this command used to mean no CORS at all, which reads in a browser as a
+      // blocked fetch and in the config as a setting that is present and validated.
+      corsHandler: config.security?.cors ? createCorsHandler(config.security.cors) : null,
       ssrRender: ssr.render,
       ssrRenderStreaming: ssr.renderStreaming,
       ssrStreamingEnabled: ssr.streamingEnabled,
@@ -176,9 +190,17 @@ export async function startCommand(options: StartOptions): Promise<void> {
     createCronScheduler(cronDefinitions).start()
   }
 
-  server.listen(port, () => {
+  // `config.host` was never passed here, and `listen(port)` with no address binds
+  // every interface — so the server listened wider than its own configuration,
+  // whose default says `localhost`. Passing it broke containers, where `localhost`
+  // means nobody, so `HOST` now gets a say (usetheokit/theokit#402).
+  const listenTarget = resolveListenTarget(config.host)
+  server.listen(port, listenTarget.host, () => {
     console.log(`\n  Theo production server`)
-    console.log(`  → http://localhost:${String(port)}\n`)
+    // The line states the bound address, because it used to print `localhost`
+    // either way — so a container serving everyone and one serving nobody were
+    // indistinguishable in the log.
+    console.log(`${describeListenTarget(listenTarget, port)}\n`)
     if (cronDefinitions.length > 0) {
       console.log(`  Crons: ${String(cronDefinitions.length)} scheduled in-process\n`)
     }

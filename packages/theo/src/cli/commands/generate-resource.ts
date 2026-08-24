@@ -1,6 +1,10 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 
+import {
+  UNDECIDED_POLICY_IDENT,
+  undecidedPolicyDeclaration,
+} from './generate-policy-placeholder.js'
 import type { GenerateResult } from './generate-types.js'
 
 // --- Field parsing ---
@@ -93,16 +97,23 @@ function generateSchemaEntry(resourceName: string, fields: ResourceField[]): str
 function generateRouteIndex(resourceName: string, fields: ResourceField[]): string {
   const bodyFields = fields.map((f) => `    ${f.name}: ${f.zodType},`).join('\n')
   return [
-    `import { route } from 'theokit/server/define'`,
+    `import { route, type AccessDecision } from 'theokit/server/define'`,
     `import { z } from 'zod'`,
     `import { db } from '../../db/index.js'`,
     `import { ${resourceName} } from '../../db/schema.js'`,
     ``,
+    ...undecidedPolicyDeclaration(
+      `server/routes/${resourceName}/index.ts`,
+      'these methods read and write a table',
+    ),
+    ``,
     `export const GET = route()`,
+    `  .policy(${UNDECIDED_POLICY_IDENT})`,
     `  .handler(() => db.select().from(${resourceName}).all())`,
     `  .build()`,
     ``,
     `export const POST = route()`,
+    `  .policy(${UNDECIDED_POLICY_IDENT})`,
     `  .body(`,
     `    z.object({`,
     bodyFields,
@@ -121,13 +132,19 @@ function generateRouteIndex(resourceName: string, fields: ResourceField[]): stri
 function generateRouteId(resourceName: string, fields: ResourceField[]): string {
   const updateFields = fields.map((f) => `    ${f.name}: ${f.zodType}.optional(),`).join('\n')
   return [
-    `import { route } from 'theokit/server/define'`,
+    `import { route, type AccessDecision } from 'theokit/server/define'`,
     `import { z } from 'zod'`,
     `import { db } from '../../db/index.js'`,
     `import { ${resourceName} } from '../../db/schema.js'`,
     `import { eq } from 'drizzle-orm'`,
     ``,
+    ...undecidedPolicyDeclaration(
+      `server/routes/${resourceName}/[id].ts`,
+      'these methods read, update and delete rows of a table',
+    ),
+    ``,
     `export const GET = route()`,
+    `  .policy(${UNDECIDED_POLICY_IDENT})`,
     `  .params(z.object({ id: z.coerce.number() }))`,
     `  .handler(({ params }) => {`,
     `    const item = db.select().from(${resourceName}).where(eq(${resourceName}.id, params.id)).get()`,
@@ -137,6 +154,7 @@ function generateRouteId(resourceName: string, fields: ResourceField[]): string 
     `  .build()`,
     ``,
     `export const PUT = route()`,
+    `  .policy(${UNDECIDED_POLICY_IDENT})`,
     `  .params(z.object({ id: z.coerce.number() }))`,
     `  .body(`,
     `    z.object({`,
@@ -151,6 +169,7 @@ function generateRouteId(resourceName: string, fields: ResourceField[]): string 
     `  .build()`,
     ``,
     `export const DELETE = route()`,
+    `  .policy(${UNDECIDED_POLICY_IDENT})`,
     `  .params(z.object({ id: z.coerce.number() }))`,
     `  .status(204)`,
     `  .handler(({ params }) => {`,

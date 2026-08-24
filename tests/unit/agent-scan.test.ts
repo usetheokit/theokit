@@ -23,6 +23,15 @@ function setupFixture(structure: Record<string, string>): void {
   }
 }
 
+/**
+ * A minimal agent file that the scanner accepts.
+ *
+ * usetheokit/theokit#365 — `scanAgents` refuses an agent that declares no access policy, so a
+ * fixture without one no longer describes a valid app. `'public'` is the declaration; what these
+ * tests are about is path derivation, not who may call.
+ */
+const AGENT = "export const policy = 'public'\nexport default {}"
+
 describe('scanAgents (M2)', () => {
   beforeEach(() => {
     rmSync(TMP_DIR, { recursive: true, force: true })
@@ -34,8 +43,8 @@ describe('scanAgents (M2)', () => {
 
   it('test_scanAgents_maps_file_to_route_and_name', () => {
     setupFixture({
-      'agents/support.ts': 'export default {}',
-      'agents/echo.ts': 'export default {}',
+      'agents/support.ts': AGENT,
+      'agents/echo.ts': AGENT,
     })
     const agents = scanAgents(TMP_DIR)
     const byName = Object.fromEntries(agents.map((a) => [a.name, a]))
@@ -47,7 +56,7 @@ describe('scanAgents (M2)', () => {
 
   it('test_scanAgents_skips_test_files', () => {
     setupFixture({
-      'agents/echo.ts': 'export default {}',
+      'agents/echo.ts': AGENT,
       'agents/echo.test.ts': 'export default {}',
       'agents/echo.spec.ts': 'export default {}',
     })
@@ -59,7 +68,7 @@ describe('scanAgents (M2)', () => {
     // Folder-semantic discovery: the agent file lives alongside the folders it composes; those
     // conventional sub-folders (tools/skills/prompts/lib/…) are that concern, NOT routed agents.
     setupFixture({
-      'agents/chat.ts': 'export default {}',
+      'agents/chat.ts': AGENT,
       'agents/tools/weather.ts': 'export const weatherTool = {}',
       'agents/skills/getting-started.ts': 'export const skill = {}',
       'agents/prompts/instructions.ts': 'export const BASE = ""',
@@ -81,7 +90,7 @@ describe('scanAgents (M2)', () => {
   it('test_scanAgents_agent_may_also_be_a_folder_with_index', () => {
     // A nested named agent (`agents/<name>/index.ts`) still works, and its own composition folders skip.
     setupFixture({
-      'agents/support/index.ts': 'export default {}',
+      'agents/support/index.ts': AGENT,
       'agents/support/tools/ticket.ts': 'export const t = {}',
     })
     const agents = scanAgents(TMP_DIR)
@@ -92,8 +101,8 @@ describe('scanAgents (M2)', () => {
     // A flat file literally named `tools.ts` is still a valid agent — the reserved names guard
     // intermediate DIRECTORIES, never the agent file itself.
     setupFixture({
-      'agents/tools.ts': 'export default {}',
-      'agents/chat.ts': 'export default {}',
+      'agents/tools.ts': AGENT,
+      'agents/chat.ts': AGENT,
       'agents/chat/tools/x.ts': 'export const x = {}',
     })
     const agents = scanAgents(TMP_DIR)

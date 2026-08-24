@@ -17,6 +17,8 @@
  * same call; the wire correctness is what this asserts.
  */
 import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+
+import { markEsmProject } from '../lib/fixture-project.js'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
@@ -44,6 +46,7 @@ vi.mock('../../packages/agents/src/bridge/sdk-adapter.js', () => ({
 
 const { generateManifest } = await import('../../packages/theo/src/server/scan/manifest.js')
 const { mountAgent } = await import('../../packages/theo/src/server/agent/mount-agent.js')
+const { importUserModule } = await import('../../packages/theo/src/config/import-user-module.js')
 const { consumeUIMessageStream } =
   await import('../../packages/agents/src/client/consume-ui-message-stream.js')
 
@@ -55,6 +58,11 @@ beforeAll(() => {
   mkdirSync(join(projectDir, 'server', 'routes'), { recursive: true })
   // Resolve the agent file's imports as a real app would: @theokit/agents (workspace
   // package; its Symbol.for brand matches the src instance mountAgent uses) + zod.
+  // #418 — without this the tsx fallback compiles `echo.ts` as CommonJS, so the bare import of
+  // `@theokit/agents` becomes a `require` — and that package's `"."` export declares only `import`,
+  // so Node answers `No "exports" main defined`. Invisible above Node 22.18, where the native type
+  // stripping means the fallback never runs.
+  markEsmProject(projectDir)
   mkdirSync(join(projectDir, 'node_modules', '@theokit'), { recursive: true })
   symlinkSync(
     resolve(REPO, 'packages/agents'),
@@ -68,6 +76,9 @@ beforeAll(() => {
     [
       `import { AgentBuilder } from '@theokit/agents'`,
       `import { z } from 'zod'`,
+      // usetheokit/theokit#365 — the scanner refuses an agent that declares no access policy.
+      // `'public'` is the declaration; what this file measures is the wire, not who may call.
+      `export const policy = 'public'`,
       `export default AgentBuilder.create()`,
       `  .input(z.object({ message: z.string() }))`,
       `  .model('test-model')`,
@@ -93,7 +104,8 @@ describe('agents/*.ts convention — end to end (M2)', () => {
 
   it('test_convention_serves_uimessagestream_parsed_by_ai_consumer', async () => {
     // Load the on-disk module exactly as the prod loader (tsx) would.
-    const mod = (await import(join(projectDir, 'agents', 'echo.ts'))) as unknown
+    // #418 — the same importer `mountAgent`'s caller uses in production.
+    const mod = (await importUserModule(join(projectDir, 'agents', 'echo.ts'))) as unknown
 
     const request = new Request('http://localhost/api/agents/echo', {
       method: 'POST',

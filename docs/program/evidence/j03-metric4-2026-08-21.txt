@@ -1,0 +1,49 @@
+J3 metric 4 - time to first green run, both sides, 2026-08-21
+Harness: metric4-harness.sh, driven interleaved (one TheoKit run, one Next.js run, repeat), probe "/"
+on both lanes. Warm npm cache, stated rather than hidden: the cache is not cleared between runs, so
+these numbers are comparable to each other and NOT to a first-ever install on a new machine. No run
+in this programme has ever been taken on a cold cache, which is where a new developer actually
+stands.
+Machine: Linux 6.8.0-136, Node 22.22.2, npm 10.9.7. Nothing else heavy running.
+
+Lanes
+  TheoKit  scratchpad j03/app @ c5786c0 - "scaffold output, unedited". package.json.tmpl renamed to
+           package.json (the only rendering the template needed; the {{name}} placeholder is left
+           as the scaffolder itself leaves it, verified against j2-theokit's real scaffold output).
+  Next.js  scratchpad my-ai-app @ 5b45340 - "j3: resume a dropped stream (official AI SDK
+           chatbot-resume-streams example)", which carries resumable-stream@2.2.12 and redis, and
+           beneath them the j1 and j5 tool commits, because that side's history is cumulative.
+
+DECLARED GAP: the TheoKit lane does NOT carry J3's own delta. No surviving tree does - j03/app holds
+only the scaffold commit. The delta is 1 file and 6 glue lines and adds no dependency, so install is
+unaffected and the build differs by six lines against a number whose unit is seconds. It is recorded
+as a gap rather than waved away: this lane measures the scaffold both sides start from plus the
+Next.js side's full delta, and it is therefore the reading most favourable to TheoKit that the
+surviving trees permit.
+
+Lockfiles, symmetric: the Next.js lane installs from its own tracked package-lock.json; the TheoKit
+lane's was generated on 2026-08-21 with `npm install --package-lock-only` because the scaffold copy
+carried none. Both scaffolders write a lockfile, so a lock on both sides is the normal tree. J9's
+protocol - lock on one side only - is not used here.
+
+--- Three runs per lane, interleaved ---
+
+  theokit r1 install=3.9 build=4.5 start=1.1 total= 9.4
+  nextjs  r1 install=4.0 build=7.9 start=0.6 total=12.5
+  theokit r2 install=4.4 build=4.9 start=1.1 total=10.4
+  nextjs  r2 install=5.0 build=9.9 start=0.6 total=15.4
+  theokit r3 install=5.7 build=5.0 start=1.1 total=11.8
+  nextjs  r3 install=4.4 build=9.2 start=0.6 total=14.1
+
+  theokit n=3  total 10.53 +/- 1.21 -> [ 9.33, 11.74]   install 4.67+/-0.93  build 4.80+/-0.26  start 1.10+/-0.00
+  nextjs  n=3  total 14.00 +/- 1.45 -> [12.55, 15.45]   install 4.47+/-0.50  build 9.00+/-1.01  start 0.60+/-0.00
+
+  Intervals do NOT overlap, and TheoKit is the faster side. "Not worse on time to first green run"
+  holds, with room. The whole difference is build: 4.80 s against 9.00 s. Install is level -
+  4.67 s against 4.47 s - which is the fact J9's number could not show, because J9's TheoKit lane
+  re-resolved its whole dependency graph on every run while its Next.js lane installed from a lock.
+
+No run was discarded on this journey. Nothing failed.
+
+Harness note: the probe now follows redirects (`curl -fsSL`). It does not matter on this pair, where
+both entry routes answer 200 directly; it was added for J4, whose Next.js entry route answers 307.

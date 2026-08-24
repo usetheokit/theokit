@@ -26,6 +26,15 @@ on:
   schedule:
     - cron: '23 5 * * 1' # weekly, Monday 05:23 UTC
 
+permissions:
+  contents: read
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  # A cancelled run on an integration branch leaves the commit with no verdict,
+  # which reads the same as a passing one. Only supersede elsewhere.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/develop' }}
+
 jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
@@ -46,22 +55,26 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # CodeQL only reads the tree.
+          persist-credentials: false
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@c16c0f3f2812ec4bb3750a5ed64873fe2ce0fbef # codeql-bundle-v2.26.3
         with:
           languages: ${{ matrix.language }}
           queries: security-extended,security-and-quality
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@c16c0f3f2812ec4bb3750a5ed64873fe2ce0fbef # codeql-bundle-v2.26.3
         with:
           category: '/language:${{ matrix.language }}'
 
   sast-status:
     name: SAST status
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     # ALWAYS runs. Its whole job is to make the absence visible: a checks list with no SAST entry
     # reads as "SAST is not configured", which is a different and worse claim than "SAST is
     # configured and cannot report here".

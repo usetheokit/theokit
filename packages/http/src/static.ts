@@ -126,7 +126,9 @@ async function readFileBun(fullPath: string): Promise<FileResult | null> {
   const file = BunRT.file(fullPath)
   if (!(await file.exists())) return null
   const buf = await file.arrayBuffer()
-  return { content: new Uint8Array(buf), size: file.size }
+  // Length of the bytes actually read, never a size sampled by a separate call — the two disagree
+  // whenever the file changes in between, and it is `content-length` that would then be wrong.
+  return { content: new Uint8Array(buf), size: buf.byteLength }
 }
 
 async function readFileDeno(fullPath: string): Promise<FileResult | null> {
@@ -146,22 +148,55 @@ async function readFileDeno(fullPath: string): Promise<FileResult | null> {
 }
 
 async function readFileNode(fullPath: string): Promise<FileResult | null> {
+  const fs = await import('node:fs/promises')
+  let handle
   try {
-    const fs = await import('node:fs/promises')
-    const stat = await fs.stat(fullPath)
-    if (stat.isDirectory()) return null
-    const content = await fs.readFile(fullPath)
-    return { content: new Uint8Array(content), size: stat.size }
+    handle = await fs.open(fullPath, 'r')
   } catch {
     return null
   }
+  // One descriptor for both the type check and the bytes: re-opening by path between them lets the
+  // file that was checked differ from the file that is served (CodeQL js/file-system-race).
+  try {
+    if ((await handle.stat()).isDirectory()) return null
+    const content = await handle.readFile()
+    return { content: new Uint8Array(content), size: content.byteLength }
+  } catch {
+    return null
+  } finally {
+    await handle.close()
+  }
 }
 
-async function readFile(fullPath: string): Promise<FileResult | null> {
+/**
+ * Resolves `fullPath` through the filesystem and returns it only when it genuinely lives under
+ * `root`.
+ *
+ * #428 — `isSafePath` rejects `..` and `//` in the request pathname, but a symlink puts the
+ * traversal in the filesystem rather than in the URL, so the regex never sees it and the read
+ * leaves the served tree. `realpath` is what asks the filesystem the question the string check
+ * cannot answer. Symlinks that stay inside `root` keep working: it is leaving that is refused.
+ */
+async function containedRealPath(fullPath: string, root: string): Promise<string | null> {
+  const { sep } = await import('node:path')
+  const fs = await import('node:fs/promises')
+  try {
+    const realPath = await fs.realpath(fullPath)
+    const realRoot = await fs.realpath(root)
+    if (realPath !== realRoot && !realPath.startsWith(realRoot + sep)) return null
+    return realPath
+  } catch {
+    return null // missing, unreadable, or a broken link — all "not served"
+  }
+}
+
+async function readFile(fullPath: string, root: string): Promise<FileResult | null> {
+  const safePath = await containedRealPath(fullPath, root)
+  if (safePath === null) return null
   const g = globalThis as Record<string, unknown>
-  if (g.Bun) return readFileBun(fullPath)
-  if (g.Deno) return readFileDeno(fullPath)
-  return readFileNode(fullPath)
+  if (g.Bun) return readFileBun(safePath)
+  if (g.Deno) return readFileDeno(safePath)
+  return readFileNode(safePath)
 }
 
 // ── Resolve root to absolute path ──────────────────────
@@ -221,10 +256,10 @@ export function createStaticHandler(
     let fullPath = join(resolvedRoot, pathname)
 
     // Directory → try index.html
-    let result = await readFile(fullPath)
+    let result = await readFile(fullPath, resolvedRoot)
     if (!result && (pathname.endsWith('/') || !pathname.includes('.'))) {
       fullPath = join(fullPath, 'index.html')
-      result = await readFile(fullPath)
+      result = await readFile(fullPath, resolvedRoot)
     }
 
     if (!result) return null

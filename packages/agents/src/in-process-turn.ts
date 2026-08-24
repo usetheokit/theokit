@@ -44,6 +44,17 @@ export type InProcessAwaitApproval = (
 export interface StreamAgentTurnInProcessInput {
   message: string
   /**
+   * What a consumer is told a failure was (usetheokit/theokit#390).
+   *
+   * Declared here as well as on the HTTP entry point because the parity gate is right: a masking
+   * default that applied over HTTP and not in-process would make "does the server's raw text
+   * escape?" depend on which transport the caller picked — a rule nobody could hold, and the exact
+   * asymmetry `rules/three-target-parity.md` exists to refuse.
+   *
+   * Absent ⇒ masked to a fixed string, the same default the HTTP path takes.
+   */
+  onError?: Parameters<typeof streamAgentUIMessages>[2]['onError']
+  /**
    * M35 (multimodal) — images to send alongside the text. Threaded to the SDK's structured
    * `SDKUserMessage { text, images }` send form. Absent ⇒ the string send path is byte-unchanged.
    */
@@ -206,6 +217,9 @@ export function streamAgentTurnInProcess(
       hitl,
       signal: input.signal,
       ...(input.onRunEvent !== undefined ? { onRunEvent: input.onRunEvent } : {}),
+      // #390 — absent is meaningful: it selects the masking default, and it must select the SAME
+      // one here as over HTTP.
+      ...(input.onError !== undefined ? { onError: input.onError } : {}),
     })
   })()
 }

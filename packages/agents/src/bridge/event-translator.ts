@@ -22,6 +22,33 @@ function asString(value: unknown, fallback: string): string {
 }
 
 /**
+ * usetheokit/theokit#388 — the SDK's ONLY failure signal for a tool call, read from the payload
+ * rather than from the lifecycle `status`.
+ *
+ * Measured against the installed `@theokit/sdk@4.52.1` bundle, not against its documentation:
+ * `runHandlerTool` catches everything a custom handler throws and returns
+ * `{stdout: '', stderr: message, exitCode: 1}`; a vetoed call returns `126`, an unknown tool `127`,
+ * an aborted/timed-out one `124`. Every one of those is then shipped by `buildToolUseCompleted`
+ * with `status: 'completed'` — the string is a hardcoded literal there, so `status: 'error'` is
+ * unreachable for a throwing tool and the branch that reads it never fires.
+ *
+ * `SDKToolUseMessage.result` is declared `unknown` ("NOT part of the stable schema"), so this reads
+ * defensively and reports failure ONLY on a present, numeric, non-zero code. An absent field is not
+ * evidence of success, but it is not evidence of failure either, and inventing one from the shape of
+ * the text is the heuristic this ecosystem already paid for once (M93).
+ */
+function toolResultExitCode(value: unknown): number | undefined {
+  if (typeof value !== 'object' || value === null) return undefined
+  const code = (value as { exitCode?: unknown }).exitCode
+  return typeof code === 'number' ? code : undefined
+}
+
+/** Whether a tool result reports a failure. Absent or zero exit code ⇒ no failure reported. */
+function reportsToolFailure(result: unknown): boolean {
+  return (toolResultExitCode(result) ?? 0) !== 0
+}
+
+/**
  * Serialize a tool's `result` into the `string` wire contract of ToolResultEvent.output (#41).
  * String passthrough; null/undefined → fallback; otherwise JSON (String() on throw — BigInt/circular).
  */
@@ -92,7 +119,9 @@ function translateToolCallEvent(msg: SdkMessage): StreamEvent[] {
         toolName,
         output: serializeToolOutput(msg.result, ''),
         durationMs: 0,
-        isError: false,
+        // #388 — `completed` is the SDK's word for "the call is over", not for "the call worked".
+        // The exit code is the part that says which, and it was being thrown away here.
+        isError: reportsToolFailure(msg.result),
       },
     ]
   }
@@ -275,7 +304,13 @@ export function translateInteractionUpdate(update: InteractionUpdate): StreamEve
           toolName: update.toolCall.name,
           output: serializeToolOutput(update.toolCall.result, ''),
           durationMs: 0,
-          isError: false,
+          // #388 — the same predicate, and on this shape it answers `false` for a reason rather
+          // than by decree: `ToolCall` (`@theokit/sdk/dist/types/updates.d.ts`) declares only
+          // `{callId, name, args?, result?}`, and the SDK fills `result` with `renderToolResult()`
+          // — a rendered string — so the exit code structurally cannot travel here. The message-
+          // shaped report of the same call is the one that carries it, and `dedupeTools` is what
+          // lets it contribute (`sdk-timeline.ts`).
+          isError: reportsToolFailure(update.toolCall.result),
         },
       ]
     case 'shell-output-delta':

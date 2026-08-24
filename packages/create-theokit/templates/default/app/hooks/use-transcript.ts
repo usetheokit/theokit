@@ -1,7 +1,6 @@
 'use client'
 
-import { type UIMessage } from '@theokit/ui'
-import { useAgent } from 'theokit/client'
+import { useAgent, type UIMessage } from 'theokit/client'
 
 import { GREETING } from '../lib/constants'
 
@@ -12,7 +11,14 @@ import { GREETING } from '../lib/constants'
  * hand-rolled transcript (local history + commit-once effect + inflight-merge) is gone — the store owns it.
  */
 export interface ChatTranscript {
-  /** The full transcript to render (greeting + committed history + the in-flight reply while streaming). */
+  /**
+   * The full transcript (greeting + committed history + the in-flight reply while streaming).
+   *
+   * Typed as the framework's `UIMessage` — the shape `useAgent` actually returns — and NOT as the
+   * component library's. Two earlier versions of this template typed it as the renderer's type and
+   * a fresh scaffold failed its own `typecheck` (usetheokit/theokit#80, #396). `app/lib/renderable.ts`
+   * converts at the one place that renders.
+   */
   thread: UIMessage[]
   isStreaming: boolean
   hasError: boolean

@@ -11,13 +11,19 @@
  */
 import { compileAgentModule, resolveEnabledSkills, streamAgentUIMessages } from '@theokit/agents'
 
-import { getObservabilityAdapter } from '../observability-bootstrap.js'
+import type { RoutePolicy } from '../../core/contracts/route-policy.js'
 import { validateCsrfRequest, type CsrfMode } from '../security/csrf.js'
 
+import {
+  admitAgentRequest,
+  agentAccessDenied,
+  readAgentPolicy,
+  type AgentSubjectResolver,
+} from './agent-access.js'
 import type { ApiKeyResolver } from './api-key-resolver.js'
 import { buildAgentHitl } from './build-agent-streamer.js'
 import { durableUiMessageStreamResponse } from './durable-ui-message-stream-response.js'
-import { observeAgentRun } from './observe-agent-run.js'
+import { observeServedRun } from './observe-served-run.js'
 import { getRunEventCache, mintRunId } from './run-event-cache.js'
 
 // Re-exported so existing importers keep working. It is declared in its own module because
@@ -83,6 +89,107 @@ interface MountAgentOptions {
    * `.theokit/` file-based config (`.settingSources([...])`), discovery points here, NOT `process.cwd()`.
    */
   projectRoot?: string
+  /**
+   * The agent's name, as the scanner discovered it. Reported to the policy under
+   * `params.agent` and named in a refusal. Defaults to {@link MountAgentOptions.source}.
+   */
+  agentName?: string
+  /**
+   * Who may run this agent, and against which conversation (ADR 0001,
+   * usetheokit/theokit#365).
+   *
+   * NORMALLY ABSENT, and that is the fix rather than an omission: the policy is read from the
+   * agent module's own `export const policy`, so it travels with the agent instead of depending
+   * on every caller remembering to pass it. This option exists for a host that resolved the
+   * decision itself (an `@Expose`-bound controller, an embedder), and it OVERRIDES the module's
+   * declaration when given.
+   *
+   * Evaluated against the parsed request body, so a policy can ask who owns the
+   * conversation being resumed. Absent on both ends ⇒ not evaluated, matching the route
+   * executors: absence means "not declared" and is not reinterpreted as denial. Absence is
+   * refused at scan time instead, where the file that omitted it can be named.
+   */
+  policy?: RoutePolicy
+  /**
+   * Resolve the authenticated caller. Invoked at most once, and only when a policy exists — an
+   * agent declaring `'public'` never pays for the application's `createContext`.
+   */
+  resolveSubject?: AgentSubjectResolver
+}
+
+/**
+ * Read the body and decide whether this caller may run the agent at all.
+ *
+ * Both gates live here, and both run BEFORE the module is compiled and long
+ * before the SDK is reached — the same reason the CSRF gate upstream runs first:
+ * an agent run spends real tokens, so a malformed request and an unauthorized one
+ * are turned away before any of that is paid for. A policy evaluated after the
+ * run began is a cost gate that costs.
+ *
+ * The policy sees the PARSED body, so it can ask who owns the conversation the
+ * request is trying to resume — which is the whole point, since the endpoint
+ * accepts a caller-supplied session id and the durable store resumes whatever it
+ * names (usetheokit/theokit#365).
+ *
+ * @returns the parsed input, or the `Response` that refuses the request.
+ */
+/**
+ * Wrap a subject resolver so one request resolves at most once (B-016).
+ *
+ * The gate needs the caller's identity, and so does the approval ledger when the run pauses on a
+ * gated tool. Resolving twice would double whatever the application's `server/context.ts` does — a
+ * session lookup, a token verification, a query — for a value that cannot change inside one request.
+ */
+function memoizeSubject(
+  resolveSubject: AgentSubjectResolver | undefined,
+): AgentSubjectResolver | undefined {
+  if (resolveSubject === undefined) return undefined
+  let resolved: { subject: Awaited<ReturnType<AgentSubjectResolver>> } | undefined
+  return async () => {
+    resolved ??= { subject: await resolveSubject() }
+    return resolved.subject
+  }
+}
+
+/**
+ * Who owns the approvals this run raises, or `undefined` (B-016).
+ *
+ * Recorded only when the agent DECLARES a policy. An agent declaring `'public'` — or declaring
+ * nothing — is one where identity does not govern access, and attributing its approvals would start
+ * refusing callers the declaration admits: a behaviour change dressed as a bug fix. So the ledger
+ * stays empty there and the approve route behaves exactly as before.
+ */
+async function resolveApprovalOwner(
+  declaredPolicy: RoutePolicy | undefined,
+  resolveOnce: AgentSubjectResolver | undefined,
+): Promise<string | undefined> {
+  if (declaredPolicy === undefined || declaredPolicy === 'public') return undefined
+  return ((await resolveOnce?.()) ?? undefined)?.id
+}
+
+async function admitRequest(
+  request: Request,
+  policy: RoutePolicy | undefined,
+  resolveSubject: AgentSubjectResolver | undefined,
+  agentName: string,
+): Promise<AgentRequestInput | Response> {
+  let body: unknown = null
+  try {
+    body = await request.json()
+  } catch {
+    /* invalid/empty JSON → a 400 below */
+  }
+
+  const input = parseAgentRequestBody(body)
+  if (input === null) {
+    return jsonError(400, 'BAD_REQUEST', 'Request must contain a non-empty message or messages[].')
+  }
+
+  const params = { agent: agentName, endpoint: 'run' as const, sessionId: input.sessionId }
+  const decision = await admitAgentRequest(policy, resolveSubject, params, input)
+  if (!decision.allowed) return agentAccessDenied(decision, params)
+
+  return input
 }
 
 /**
@@ -99,7 +206,14 @@ export async function mountAgent(
   mod: unknown,
   request: Request,
   apiKey: string | ApiKeyResolver,
-  { source = 'agent module', csrfMode = 'strict', projectRoot }: MountAgentOptions = {},
+  {
+    source = 'agent module',
+    csrfMode = 'strict',
+    projectRoot,
+    agentName,
+    policy,
+    resolveSubject,
+  }: MountAgentOptions = {},
 ): Promise<Response> {
   // Enforce CSRF BEFORE any work — an agent run spends real LLM tokens, so a cross-origin
   // POST must be rejected before it reaches the SDK (parity with actions/routes). The custom
@@ -111,6 +225,23 @@ export async function mountAgent(
       return jsonError(403, 'CSRF_FAILED', `CSRF check failed: ${csrf.reason}`)
     }
   }
+
+  // The declaration travels with the agent, not with the caller — see `agent-access.ts`. An
+  // explicit option still wins, for a host that already took the decision.
+  // ONE identity for the agent, resolved once: the gate judges it and the spans are labelled with
+  // it. They used to be two — `agentName` for the policy, `source` for the telemetry — and the two
+  // disagreed on the plain route, where `source` is the module's absolute path
+  // (usetheokit/theokit#406). A caller that names no agent still gets `source`, as the policy
+  // always has; both convention routes name one, which is why neither exports a path any more.
+  const identity = agentName ?? source
+
+  const declaredPolicy = policy ?? readAgentPolicy(mod, source)
+
+  const resolveOnce = memoizeSubject(resolveSubject)
+
+  const admitted = await admitRequest(request, declaredPolicy, resolveOnce, identity)
+  if (admitted instanceof Response) return admitted
+  const input = admitted
 
   const compiled = compileAgentModule(mod, source)
 
@@ -125,23 +256,11 @@ export async function mountAgent(
     if (enabled !== undefined) compiled.skills = { enabled, autoInject: true }
   }
 
-  let body: unknown = null
-  try {
-    body = await request.json()
-  } catch {
-    /* invalid/empty JSON → handled below as a 400 */
-  }
-
-  const input = parseAgentRequestBody(body)
-  if (input === null) {
-    return jsonError(400, 'BAD_REQUEST', 'Request must contain a non-empty message or messages[].')
-  }
-
   // When the agent has @HumanInTheLoop-gated tools (M4), wire the pause: the plugin's `awaitApproval`
   // registers a pending approval in the shared registry (the Promise that PAUSES the run); the
   // approve route (`handleAgentApproval`) resolves it. No gated tools ⇒ the M2 stream path unchanged.
   // Extracted to `build-agent-streamer.ts` (M39 / DRY — the thread routes reuse the same wiring).
-  const hitl = buildAgentHitl(compiled)
+  const hitl = buildAgentHitl(compiled, await resolveApprovalOwner(declaredPolicy, resolveOnce))
 
   // M37 (ADR-0046) — mint a transport runId + stream through the durable layer:
   // each SSE frame is cached + `id:`-tagged so a dropped client can reconnect
@@ -159,9 +278,16 @@ export async function mountAgent(
   // read off the chunk stream the agent already emits. Absent adapter ⇒ the
   // stream is passed through untouched, so an app that configured no telemetry
   // pays nothing (usetheokit/theokit#353).
-  const adapter = getObservabilityAdapter()
+  //
+  // The trace the spans join is decided inside `observeServedRun`, from this
+  // request — the same function the thread route calls, so the two endpoints
+  // cannot drift into producing different telemetry for the same agent
+  // (usetheokit/theokit#381). What that function could not decide was the agent
+  // LABEL, which arrives from here: this call used to pass `source`, so every
+  // span of every run on this route carried the module's absolute path
+  // (usetheokit/theokit#406).
   return durableUiMessageStreamResponse(
-    adapter === undefined ? stream : observeAgentRun(stream, adapter, { agent: source }),
+    observeServedRun(stream, { agentName: identity, request }),
     { runId, cache: getRunEventCache() },
   )
 }
@@ -189,9 +315,17 @@ function trimTrailingSlashes(value: string): string {
 /**
  * SDK 4.0 (SE40) — resolve the root of the native `.jsonl` session transcript. Unlike `.theokit/`
  * discovery, persistence is NOT gated on a file-based-config opt-in — every agent session persists.
- * Root it under the app's `.data/` (git-ignored, EC-2), kept OUT of the `.theokit/` config dir so a
+ * Root it under the app's `.data/`, kept OUT of the `.theokit/` config dir so a
  * `projects/` transcript subtree never collides with `settingSources` discovery. Absent `projectRoot`
  * ⇒ `undefined` (the SDK default `~/.theokit` applies).
+ *
+ * **This directory holds conversation content and nothing here can keep it out of a repository.**
+ * That is the app's `.gitignore`, which lives in a different tree. This comment used to assert
+ * "(git-ignored, EC-2)" as though the protection were local, and the scaffold ignored `data/` —
+ * without the dot — so the assertion was false and its confidence is what stopped anyone checking
+ * (#395). The scaffold now ignores `.data/`, and `tests/unit/scaffold-ignores-what-the-framework-writes.test.ts`
+ * derives the path from THIS function rather than repeating it, so moving the transcripts breaks the
+ * test instead of leaking quietly.
  */
 export function resolveSessionBaseDir(projectRoot: string | undefined): string | undefined {
   if (projectRoot === undefined) return undefined

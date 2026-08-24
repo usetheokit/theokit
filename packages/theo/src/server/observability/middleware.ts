@@ -37,7 +37,9 @@
  */
 import type { PluginContext, PluginErrorContext, TheoApp, TheoPlugin } from '../plugin-types.js'
 
-import type { ObservabilityAdapter, SpanHandle } from './adapters/types.js'
+import type { ObservabilityAdapter, SpanContextInput, SpanHandle } from './adapters/types.js'
+import { recordOutermostSpan, requestTrace } from './request-trace.js'
+import { newSpanId } from './trace-context-propagation.js'
 
 /**
  * How many requests may be in flight with an unclosed span before the oldest is
@@ -72,6 +74,39 @@ export function createObservabilityPlugin(
     }
   }
 
+  /**
+   * Where the request's span sits: in the request's trace — the caller's when the caller sent a
+   * `traceparent` (usetheokit/theokit#385), a freshly minted one otherwise — under the caller's
+   * span when there is one.
+   *
+   * This is the OUTERMOST span of a request, which makes it precisely the caller
+   * `startSpan`'s optional `context` was written for — and precisely the caller
+   * that went on passing the two-argument form. The consequence was worse than
+   * "the HTTP span is a root": once `mountAgent` learned to continue an incoming
+   * trace, one request that ran an agent reached the collector as TWO
+   * disconnected traces, and the caller's trace id was present on the HTTP span
+   * as the `requestId` attribute rather than as its `traceId` — resolved,
+   * carried, and written to a field no tracing backend correlates on.
+   *
+   * No `traceparent` (or a malformed one) mints a fresh trace, which is the
+   * correct answer for a request nothing upstream traced — and it is minted by
+   * `requestTrace`, ONCE, so the run joins that trace instead of minting a
+   * second one of its own (usetheokit/theokit#404). The extraction there
+   * deliberately refuses `x-request-id` and dashed UUIDs: those are fine
+   * correlation keys and are not trace ids.
+   */
+  function requestSpanContext(request: Request): SpanContextInput {
+    const trace = requestTrace(request)
+    // Pinned rather than left to the adapter, because this id is what everything else the request
+    // causes hangs under — `SpanContextInput.spanId` exists for exactly this caller. Recording it
+    // is what makes the run a child instead of a second root (usetheokit/theokit#404).
+    const spanId = newSpanId()
+    recordOutermostSpan(request, spanId)
+    return trace.parentSpanId === undefined
+      ? { traceId: trace.traceId, spanId }
+      : { traceId: trace.traceId, spanId, parentSpanId: trace.parentSpanId }
+  }
+
   /** Take the span for a request, if one is still open. */
   function claim(requestId: string): SpanHandle | undefined {
     const span = activeSpans.get(requestId)
@@ -86,13 +121,17 @@ export function createObservabilityPlugin(
     register(app: TheoApp): void {
       app.addHook('onRequest', (ctx: PluginContext) => {
         evictUntilRoom()
-        const span = adapter.startSpan('http.request', {
-          method: ctx.request.method,
-          // `ctx.request.url` is absolute, because that is what a Web `Request`
-          // carries (`plugin-types.ts` says so, at length, for this reason).
-          path: new URL(ctx.request.url).pathname,
-          requestId: ctx.requestId,
-        })
+        const span = adapter.startSpan(
+          'http.request',
+          {
+            method: ctx.request.method,
+            // `ctx.request.url` is absolute, because that is what a Web `Request`
+            // carries (`plugin-types.ts` says so, at length, for this reason).
+            path: new URL(ctx.request.url).pathname,
+            requestId: ctx.requestId,
+          },
+          requestSpanContext(ctx.request),
+        )
         activeSpans.set(ctx.requestId, span)
       })
 

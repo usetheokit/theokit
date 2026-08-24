@@ -98,7 +98,12 @@ export async function runConfigureServer(
   // (mirrors the action prefix). Agents live at <projectRoot>/agents (LOCKED naming).
   // CSRF is enforced in `mountAgent` (shared dev+prod point) at the same mode as routes.
   server.middlewares.use(
-    createAgentMiddleware(server, ctx.projectRoot, ctx.csrfMode, ctx.agentsDir, ctx.pluginRunner),
+    createAgentMiddleware(server, ctx.projectRoot, ctx.csrfMode, ctx.agentsDir, {
+      pluginRunner: ctx.pluginRunner,
+      // usetheokit/theokit#365 — the same backend root the route middleware scans, so an agent's
+      // declared policy is judged against the identity `server/context.ts` establishes.
+      serverDir,
+    }),
   )
   // Wave 2 completion — services-proxy prefixes flow through to the
   // api-middleware so it can call `next()` for paths that should be

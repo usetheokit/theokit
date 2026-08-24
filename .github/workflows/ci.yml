@@ -19,17 +19,38 @@ on:
 env:
   NODE_OPTIONS: --max-old-space-size=8192
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  # A cancelled run on an integration branch leaves the commit with no verdict,
+  # which reads the same as a passing one. Only supersede elsewhere.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/develop' }}
+
 jobs:
   lint-and-format:
     name: Lint + Format
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          node-version: 22
+          persist-credentials: false
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: '.nvmrc'
           cache: 'pnpm'
+          # The cache key must change when the package manager does. setup-node keys the
+          # pnpm store on the lockfile alone, so a pnpm 9 -> 10 bump leaves the key
+          # identical and the job restores a store the new pnpm reads as inconsistent —
+          # `ERR_PNPM_MISSING_PACKAGE_INDEX_FILE`, on a package the lockfile does list.
+          # package.json carries `packageManager`, so including it ties the cache to the
+          # pnpm that wrote it.
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            package.json
       - run: pnpm install --frozen-lockfile
       # The type-aware ESLint rules resolve `@theokit/agents` through its package
       # `types` field, which points at `dist/`. On a fresh checkout that directory
@@ -50,13 +71,25 @@ jobs:
   typecheck-build:
     name: Typecheck + Build
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          node-version: 22
+          persist-credentials: false
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: '.nvmrc'
           cache: 'pnpm'
+          # The cache key must change when the package manager does. setup-node keys the
+          # pnpm store on the lockfile alone, so a pnpm 9 -> 10 bump leaves the key
+          # identical and the job restores a store the new pnpm reads as inconsistent —
+          # `ERR_PNPM_MISSING_PACKAGE_INDEX_FILE`, on a package the lockfile does list.
+          # package.json carries `packageManager`, so including it ties the cache to the
+          # pnpm that wrote it.
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            package.json
       # Sibling theokit-sdk is declared as a workspace member in
       # pnpm-workspace.yaml (`../theokit-sdk/packages/{sdk,gateway,gateway-telegram}`).
       # pnpm-lock.yaml lists those packages with `link:` paths — pnpm install
@@ -81,6 +114,7 @@ jobs:
   test:
     name: Unit + Type tests
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     strategy:
       matrix:
         # Node 20 was dropped (backlog B-M67-19).
@@ -97,14 +131,25 @@ jobs:
         #
         # Restoring a second version means first deciding to support it: lower the floor in `engines`,
         # or the leg is theatre.
-        node-version: [22]
+        node-version: ['22.12', '22']
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: ${{ matrix.node-version }}
           cache: 'pnpm'
+          # The cache key must change when the package manager does. setup-node keys the
+          # pnpm store on the lockfile alone, so a pnpm 9 -> 10 bump leaves the key
+          # identical and the job restores a store the new pnpm reads as inconsistent —
+          # `ERR_PNPM_MISSING_PACKAGE_INDEX_FILE`, on a package the lockfile does list.
+          # package.json carries `packageManager`, so including it ties the cache to the
+          # pnpm that wrote it.
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            package.json
       # Sibling theokit-sdk: workspace member declared in pnpm-workspace.yaml.
       # `dist/` isn't committed → build after clone so type entries resolve.
       - name: Checkout + build sibling theokit-sdk (workspace dep)
@@ -139,16 +184,74 @@ jobs:
       - run: pnpm test
       - run: pnpm test:types
 
+  scaffold-typecheck:
+    # usetheokit/theokit#396 — a freshly scaffolded app must pass its own `typecheck` script.
+    #
+    # This gate exists because the same defect shipped twice: #80 in `app/page.tsx`, then #396 in
+    # `app/hooks/use-transcript.ts`. Both were the template naming a type from a package the
+    # repository does not install, so no test here could see it — the only thing that catches it is
+    # scaffolding the template and running `tsc` against the packages a real user gets.
+    #
+    # Verified locally before it was written: the recipe below is the one that reaches
+    # `tsc --noEmit` exit 0 on a clean tree. `pnpm try:scaffold` is deliberately NOT used — it omits
+    # `--yes` and prompts, so it fails under CI with no TTY.
+    name: Scaffolded app typechecks
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'pnpm'
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            package.json
+      - name: Checkout + build sibling theokit-sdk (workspace dep)
+        run: |
+          git clone --depth 1 https://github.com/usetheokit/theokit-sdk.git ../theokit-sdk
+          (cd ../theokit-sdk && pnpm install --no-frozen-lockfile && pnpm --filter "./packages/*" build)
+      - run: pnpm install --frozen-lockfile
+      # The scaffold links against this working tree, so the packages must be built first —
+      # otherwise `tsc` reads a stale `dist` and reports errors that belong to neither the template
+      # nor the source. That exact confusion cost a debugging pass while this job was being written.
+      - run: pnpm build:packages
+      - name: Scaffold the default template
+        run: node_modules/.bin/tsx packages/create-theokit/src/cli.ts my-test --yes --use-pnpm --disable-git
+      - name: Point it at this working tree, not at npm (#420)
+        run: node_modules/.bin/tsx scripts/link-scaffold-to-workspace.ts my-test
+      # `my-test` is a declared workspace member, so the ROOT install is what links it and pulls the
+      # app's own dependencies — `@theokit/ui` among them, which is the package the template names
+      # and this repository otherwise never installs.
+      - run: pnpm install --no-frozen-lockfile
+      - name: tsc --noEmit on the untouched scaffold
+        run: cd my-test && ../node_modules/.bin/tsc --noEmit
+
   coverage:
     name: Coverage gate (>=80%)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          node-version: 22
+          persist-credentials: false
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: '.nvmrc'
           cache: 'pnpm'
+          # The cache key must change when the package manager does. setup-node keys the
+          # pnpm store on the lockfile alone, so a pnpm 9 -> 10 bump leaves the key
+          # identical and the job restores a store the new pnpm reads as inconsistent —
+          # `ERR_PNPM_MISSING_PACKAGE_INDEX_FILE`, on a package the lockfile does list.
+          # package.json carries `packageManager`, so including it ties the cache to the
+          # pnpm that wrote it.
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            package.json
       # Sibling theokit-sdk: workspace member declared in pnpm-workspace.yaml.
       # `dist/` isn't committed → build after clone so type entries resolve.
       - name: Checkout + build sibling theokit-sdk (workspace dep)
@@ -164,7 +267,7 @@ jobs:
         run: pnpm test:coverage
       - name: Upload coverage report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: coverage-report
           path: coverage/
@@ -173,13 +276,25 @@ jobs:
   dead-code:
     name: Dead code (Knip)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          node-version: 22
+          persist-credentials: false
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: '.nvmrc'
           cache: 'pnpm'
+          # The cache key must change when the package manager does. setup-node keys the
+          # pnpm store on the lockfile alone, so a pnpm 9 -> 10 bump leaves the key
+          # identical and the job restores a store the new pnpm reads as inconsistent —
+          # `ERR_PNPM_MISSING_PACKAGE_INDEX_FILE`, on a package the lockfile does list.
+          # package.json carries `packageManager`, so including it ties the cache to the
+          # pnpm that wrote it.
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            package.json
       # Sibling theokit-sdk: workspace member declared in pnpm-workspace.yaml.
       # `dist/` isn't committed → build after clone so type entries resolve.
       - name: Checkout + build sibling theokit-sdk (workspace dep)
@@ -194,14 +309,26 @@ jobs:
   package-validation:
     name: Package validation (publint + ATTW + smoke)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: [lint-and-format, typecheck-build, test]
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          node-version: 22
+          persist-credentials: false
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: '.nvmrc'
           cache: 'pnpm'
+          # The cache key must change when the package manager does. setup-node keys the
+          # pnpm store on the lockfile alone, so a pnpm 9 -> 10 bump leaves the key
+          # identical and the job restores a store the new pnpm reads as inconsistent —
+          # `ERR_PNPM_MISSING_PACKAGE_INDEX_FILE`, on a package the lockfile does list.
+          # package.json carries `packageManager`, so including it ties the cache to the
+          # pnpm that wrote it.
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            package.json
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: pnpm validate:publint
@@ -215,15 +342,27 @@ jobs:
   dependency-audit:
     name: Dependency audit (production, high+)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       # SHA-pinned, unlike the tag references elsewhere in this file. A supply-chain gate that
       # resolves its own tooling through a movable tag can be silenced by whoever moves the tag.
-      - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
-      - uses: actions/setup-node@v4
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 22
+          node-version-file: '.nvmrc'
           cache: 'pnpm'
+          # The cache key must change when the package manager does. setup-node keys the
+          # pnpm store on the lockfile alone, so a pnpm 9 -> 10 bump leaves the key
+          # identical and the job restores a store the new pnpm reads as inconsistent —
+          # `ERR_PNPM_MISSING_PACKAGE_INDEX_FILE`, on a package the lockfile does list.
+          # package.json carries `packageManager`, so including it ties the cache to the
+          # pnpm that wrote it.
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            package.json
       # `--ignore-scripts`: this job never builds or runs the tree, it only reads it. Executing
       # every dependency's install hooks to decide whether those dependencies are safe hands
       # arbitrary code to the thing under audit. `pnpm audit` works from the lockfile and
@@ -242,24 +381,52 @@ jobs:
   doc-citations:
     name: Doc citations (file:line resolve)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          node-version: 22
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: '.nvmrc'
       # No install: the gate reads the working tree with node's stdlib only.
       - run: node scripts/check-doc-citations.mjs
 
   license-compliance:
     name: License compliance (production tree)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      # Pinned and script-free for the same reason as `dependency-audit` above.
-      - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          node-version: 22
+          persist-credentials: false
+      # Pinned and script-free for the same reason as `dependency-audit` above.
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          # NOT .nvmrc, and this is the one job where that is right. `rollup` carries
+          # `@napi-rs/lzma-linux-x64-gnu` as an optionalDependency, and that package
+          # declares `engines: node ^22.20 || ^24.12 || >=25`. On the 22.12.0 floor pnpm
+          # correctly SKIPS it — optional dependencies exist for exactly that — and then
+          # `pnpm licenses list` fails reading an index for a package it was told about
+          # but never fetched.
+          #
+          # A licence audit run against a tree with packages missing audits less than the
+          # consumer installs, so this job wants the COMPLETE tree, not the floor. The
+          # floor is still exercised by the test matrix, which is where it belongs.
+          #
+          # `--no-optional` was measured and rejected as the fix: it takes the audit from
+          # 551 packages to 163.
+          node-version: '22'
           cache: 'pnpm'
+          # The cache key must change when the package manager does. setup-node keys the
+          # pnpm store on the lockfile alone, so a pnpm 9 -> 10 bump leaves the key
+          # identical and the job restores a store the new pnpm reads as inconsistent —
+          # `ERR_PNPM_MISSING_PACKAGE_INDEX_FILE`, on a package the lockfile does list.
+          # package.json carries `packageManager`, so including it ties the cache to the
+          # pnpm that wrote it.
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            package.json
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - run: pnpm check:licenses

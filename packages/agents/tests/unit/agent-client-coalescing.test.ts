@@ -44,6 +44,10 @@ const transportWithDeltas = (n: number): unknown => ({
               },
             })
           }
+          // theokit#384 — the terminal chunk every framework producer ends on. Without it the store
+          // now (correctly) reports the turn as cut off; the emit COUNT is unchanged either way,
+          // since a metadata-free `finish` reconstructs to no message and schedules no emit.
+          controller.enqueue({ type: 'finish' })
           controller.close()
         },
       }),
@@ -182,17 +186,26 @@ describe('M92 — the committed prefix is materialized once per write', () => {
    *    field; the trick does not work, and `#committed` stayed empty.
    *
    * The only way `#committed` grows is the real one: a turn that **reaches `done`** and a following
-   * `send()`. The fake transport returns a stream that closes immediately, so the turn ends cleanly.
+   * `send()`.
+   *
+   * theokit#384 — the fixture used to be a stream that closed with NO chunks at all, described here
+   * as "the turn ends cleanly". It was not clean; it was a producer that accepted the request and
+   * then said nothing, which the store now reports as an interruption rather than as an answer. The
+   * terminal `finish` chunk is what makes the turn end cleanly, and it is what every framework
+   * producer emits (`presentUIMessageStream` yields it on every path, including the error one).
    */
-  const emptyStream = (): ReadableStream =>
+  const finishedTurnStream = (): ReadableStream =>
     new ReadableStream({
       start(controller) {
+        controller.enqueue({ type: 'finish' })
         controller.close()
       },
     })
 
   const clientWithHistory = async (): Promise<AgentClient> => {
-    const c = new AgentClient({ sendMessages: () => Promise.resolve(emptyStream()) } as never)
+    const c = new AgentClient({
+      sendMessages: () => Promise.resolve(finishedTurnStream()),
+    } as never)
     c.send('first' as never)
     // Lets the stream drain and the status become `done`.
     await vi.waitFor(() => {

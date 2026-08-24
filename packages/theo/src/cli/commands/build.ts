@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { dirname, relative, resolve, sep } from 'node:path'
 
 // T1.1 (architecture-medium-deferrals) — nodeAdapter no longer static-imported.
 // All adapters dispatch via `adapterRegistry` (lazy-imported within runAdapterBuild).
@@ -18,7 +18,10 @@ import { writeCronManifest } from '../../server/cron/cron-manifest.js'
 import { scanCronDirs } from '../../server/cron/cron-scan.js'
 import { writeJobManifest } from '../../server/jobs/job-manifest.js'
 import { scanJobs } from '../../server/jobs/job-scan.js'
+import { scanAgents } from '../../server/scan/agent-scan.js'
 import { generateManifest, writeManifest } from '../../server/scan/manifest.js'
+import { scanServerRoutes } from '../../server/scan/scan.js'
+import { scanWebSocketRoutes } from '../../server/scan/ws-scan.js'
 import {
   buildManifest as buildServicesManifest,
   writeManifest as writeServicesManifest,
@@ -214,6 +217,38 @@ async function runAdapterBuild(
           agentsDir: config.agentsDir,
         })),
       ].flat(),
+
+    // #369 — the same inversion, for the same reason. A Worker has no filesystem, so the Cloudflare
+    // entry bakes its routes at build time; importing the scanner from `adapters/` would add the
+    // `adapters → server` edge that `adapters-may-only-depend-on-core-router-services` refuses. The
+    // CLI already imports both sides, so it composes the scan and hands over the result.
+    //
+    // Paths are made relative to the project root here, where `cwd` is known: that string is both
+    // the emitted import specifier and the key the executor looks a module up by, and the scanners
+    // return absolute paths.
+    scanRoutes: (serverDir) => {
+      const abs = resolve(cwd, serverDir)
+      const toProjectRelative = (p: string): string => relative(cwd, p).split(sep).join('/')
+      return {
+        routes: scanServerRoutes(abs).map((route) => ({
+          filePath: toProjectRelative(route.filePath),
+          routePath: route.routePath,
+          methods: route.methods ?? [],
+        })),
+        wsRoutes: scanWebSocketRoutes(abs).map((ws) =>
+          toProjectRelative(typeof ws === 'string' ? ws : ws.filePath),
+        ),
+        // #367 — agents are a DIFFERENT scan served by a DIFFERENT function, which is why no
+        // adapter had ever heard of them: the entries route `/api/` through `scanServerRoutes` +
+        // `executeRoute` alone, so `/api/agents/<name>` matched nothing and 404'd on every target.
+        // Scanned here, beside the routes, because the same inversion argument applies verbatim.
+        agents: scanAgents(dirname(abs), config.agentsDir).map((agent) => ({
+          filePath: toProjectRelative(agent.filePath),
+          agentPath: agent.agentPath,
+          name: agent.name,
+        })),
+      }
+    },
   }
 
   // T1.1 (architecture-medium-deferrals, ADR D1) — Adapter Registry replaces
@@ -221,6 +256,15 @@ async function runAdapterBuild(
   // CLI is closed for modification (OCP).
   const { resolveAdapter } = await import('../../adapters/registry.js')
   const adapter = await resolveAdapter(target)
+
+  // #409 / #410 — a config key that validates and is then never read makes the
+  // deployed app behave as if the operator had not written it, with nothing
+  // anywhere saying so. Name it before the build output scrolls past.
+  const { warnUnappliedConfig } = await import('../../adapters/config-support.js')
+  warnUnappliedConfig(config, adapter, target, (message) => {
+    console.log(message)
+  })
+
   await adapter.build(config, cwd, ctx)
 }
 

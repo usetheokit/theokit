@@ -8,7 +8,7 @@
  * ```ts
  * const datadogAdapter = defineObservabilityAdapter({
  *   name: 'datadog',
- *   startSpan: (name, attrs) => { ... },
+ *   startSpan: (name, attrs, context) => { ... },
  *   counter: (name, value) => { ... },
  *   histogram: (name, value) => { ... },
  *   log: (level, message) => { ... },
@@ -22,11 +22,25 @@
  * })
  * ```
  */
-import type { ObservabilityAdapter, SpanHandle, SpanAttributes } from './adapters/types.js'
+import type {
+  ObservabilityAdapter,
+  SpanHandle,
+  SpanAttributes,
+  SpanContextInput,
+} from './adapters/types.js'
 
 interface DefineAdapterConfig {
   name: string
-  startSpan(name: string, attributes?: SpanAttributes): SpanHandle
+  /**
+   * `context` is optional to implement and NOT optional to receive: the wrapper
+   * forwards it verbatim. An adapter that ignores it still works — it simply
+   * exports spans with identities of its own — but one that wants to place a
+   * span in a trace is not prevented from doing so by this seam. Dropping the
+   * argument here would have made the built-in adapters trace-aware and every
+   * custom one permanently trace-blind, with nothing in the types saying so
+   * (usetheokit/theokit#368).
+   */
+  startSpan(name: string, attributes?: SpanAttributes, context?: SpanContextInput): SpanHandle
   counter(name: string, value: number, attributes?: SpanAttributes): void
   histogram(name: string, value: number, attributes?: SpanAttributes): void
   log(
@@ -41,7 +55,7 @@ interface DefineAdapterConfig {
 export function defineObservabilityAdapter(config: DefineAdapterConfig): ObservabilityAdapter {
   return {
     name: config.name,
-    startSpan: (name, attrs) => config.startSpan(name, attrs),
+    startSpan: (name, attrs, context) => config.startSpan(name, attrs, context),
     counter: (name, value, attrs) => {
       config.counter(name, value, attrs)
     },

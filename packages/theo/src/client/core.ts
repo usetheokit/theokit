@@ -12,6 +12,9 @@ export { createAgentClient } from './create-agent-client.js'
 export type { AgentClientHandle, CreateAgentClientOptions } from './create-agent-client.js'
 export { AgentClient } from '@theokit/agents/client'
 export type { AgentClientState, UseAgentStatus } from '@theokit/agents/client'
+// theokit#384 — a run whose connection dropped settles `status: 'error'` carrying THIS error. It is
+// the only way to tell a resumable interruption from a real failure without matching message text.
+export { AgentStreamInterruptedError } from '@theokit/agents/client'
 
 // The transport seam + the three shipped transports (identical to the React entry's exports).
 export type { AgentTransport, ApprovalDecision, RequestContext } from '@theokit/agents/client'

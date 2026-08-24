@@ -12,6 +12,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 
 import { generateNonce } from '../../../server/auth/nonce.js'
 import { type ReservedRoutes, serveReservedRoute } from '../../../server/define/health-route.js'
+import type { CorsHandler } from '../../../server/http/cors.js'
 import { sendError } from '../../../server/http/send-response.js'
 import { TRACE_HEADER, extractTraceId } from '../../../server/http/trace-context.js'
 import { buildSecurityHeaders } from '../../../server/security/security-headers.js'
@@ -42,6 +43,13 @@ interface RequestHandlerContext {
     startTime: number,
   ) => RequestHandlerCtx
   securityHeadersConfig: Parameters<typeof buildSecurityHeaders>[0]
+  /**
+   * #409 — `security.cors` had exactly one consumer, Vite's `configureServer` hook, so an app that
+   * worked cross-origin under `theokit dev` stopped working the moment this command served it:
+   * same config, same code, no error and no warning. `null` when the app declared no `cors` block,
+   * which is what it meant before and still means — no headers, not permissive ones.
+   */
+  corsHandler: CorsHandler | null
   ssrRender: SsrRender | null
   ssrRenderStreaming: SsrRenderStreaming | null
   ssrStreamingEnabled: boolean
@@ -236,6 +244,12 @@ export function createRequestHandler(
       // consumers read, `x-trace-id` is the canonical one.
       res.setHeader('x-request-id', requestId)
       res.setHeader(TRACE_HEADER, requestId)
+
+      // Preflight before anything else, and it answers rather than routing — the same order the
+      // dev middleware uses (`vite-plugin/api-middleware.ts`), because an OPTIONS the router
+      // handles is an OPTIONS the browser never gets a CORS answer to.
+      if (ctx.corsHandler?.handlePreflight(req, res) === true) return
+      ctx.corsHandler?.applyHeaders(req, res)
 
       const nonce = generateNonce()
       const securityHeaders = buildSecurityHeaders(

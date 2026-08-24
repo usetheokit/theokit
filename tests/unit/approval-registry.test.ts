@@ -42,7 +42,9 @@ describe('createInProcessApprovalRegistry (M4)', () => {
       const reg = createInProcessApprovalRegistry()
       const pending = reg.register('a4', { timeoutMs: 1000, onTimeout: 'abort' })
       vi.advanceTimersByTime(1001)
-      await expect(pending).resolves.toEqual({ approved: false }) // abort → deny
+      // The allow/deny bit is the property; `toEqual` on the whole object pinned the shape and
+      // broke when #393 added the marker that says a human did NOT decide this.
+      await expect(pending).resolves.toMatchObject({ approved: false, settledBy: 'timeout' })
     } finally {
       vi.useRealTimers()
     }
@@ -56,7 +58,7 @@ describe('createInProcessApprovalRegistry (M4)', () => {
       const reg = createInProcessApprovalRegistry()
       const pending = reg.register('a4b', { timeoutMs: 1000, onTimeout: 'retry' })
       vi.advanceTimersByTime(1001)
-      await expect(pending).resolves.toEqual({ approved: false })
+      await expect(pending).resolves.toMatchObject({ approved: false, settledBy: 'timeout' })
     } finally {
       vi.useRealTimers()
     }
@@ -68,7 +70,7 @@ describe('createInProcessApprovalRegistry (M4)', () => {
       const reg = createInProcessApprovalRegistry()
       const pending = reg.register('a5', { timeoutMs: 1000, onTimeout: 'proceed' })
       vi.advanceTimersByTime(1001)
-      await expect(pending).resolves.toEqual({ approved: true }) // proceed → approve
+      await expect(pending).resolves.toMatchObject({ approved: true, settledBy: 'timeout' }) // proceed → approve
     } finally {
       vi.useRealTimers()
     }

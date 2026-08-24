@@ -20,6 +20,60 @@ export interface HttpTransportOptions {
   headers?: HeadersResolver
   /** Override fetch (primarily for tests / non-browser hosts) — static; resolved once at construction. */
   fetch?: typeof fetch
+  /**
+   * Where the server-minted run id lives between requests — the key `reconnectToStream` needs
+   * (usetheokit/theokit#387).
+   *
+   * Defaults to an in-memory cell, which is what this transport always did and what keeps a
+   * reconnect working within one page lifetime. That default is also why a RELOAD could not
+   * reconnect: the new page builds a fresh transport with an empty cell, so `reconnectToStream`
+   * returns `null` before it reaches the network — while the server still holds the run in its
+   * cache and would replay it.
+   *
+   * The medium is the CONSUMER's decision, not this package's. `sessionStorage` matches a run's
+   * lifetime better than `localStorage`, and either would be a client library writing to browser
+   * storage nobody asked it to write to, with privacy and SSR consequences. So the seam is injected
+   * and the package stores nothing it was not handed a place for:
+   *
+   * ```ts
+   * new HttpTransport({
+   *   api: '/api/agents/support',
+   *   runIdStore: {
+   *     get: () => sessionStorage.getItem('theo.runId') ?? undefined,
+   *     set: (id) => {
+   *       if (id === undefined) sessionStorage.removeItem('theo.runId')
+   *       else sessionStorage.setItem('theo.runId', id)
+   *     },
+   *   },
+   * })
+   * ```
+   *
+   * Deliberately NOT included: reconnecting automatically on load. This makes a cached run
+   * REACHABLE; reaching for it is a product decision nobody has asked for.
+   */
+  runIdStore?: RunIdStore
+}
+
+/**
+ * Where the reconnect key is kept.
+ *
+ * Two methods rather than a storage object, so a consumer can back it with `sessionStorage`, a
+ * cookie, a router param, or a test double — the transport never learns which.
+ */
+export interface RunIdStore {
+  get: () => string | undefined
+  set: (runId: string | undefined) => void
+}
+
+/** The default: one cell in memory, which is exactly what the private field used to be. */
+function inMemoryRunIdStore(): RunIdStore {
+  let runId: string | undefined
+  return {
+    get: () => runId,
+    set: (next) => {
+      runId = next
+    },
+  }
 }
 
 /** Normalize `ai`'s `Record | Headers | undefined` header option into a plain record. */
@@ -50,8 +104,8 @@ export class HttpTransport implements AgentTransport {
   readonly #api: string
   readonly #headers: HeadersResolver
   readonly #fetch: typeof fetch
-  /** Server-minted id of the last run (from `x-theokit-run-id`) — the reconnect key. */
-  #lastRunId: string | undefined
+  /** Where the server-minted id of the last run (from `x-theokit-run-id`) is kept. */
+  readonly #runIds: RunIdStore
 
   constructor(options: HttpTransportOptions) {
     this.#api = options.api
@@ -60,6 +114,7 @@ export class HttpTransport implements AgentTransport {
     // invoked as a method (`this.#fetch(...)` would set `this` to this transport instance, not the window).
     // An injected fetch (tests / non-browser hosts) is a plain function and is used as-is.
     this.#fetch = options.fetch ?? globalThis.fetch.bind(globalThis)
+    this.#runIds = options.runIdStore ?? inMemoryRunIdStore()
   }
 
   /** Resolve the configured headers per request (a resolver evaluates now — dynamic auth is never stale). */
@@ -97,22 +152,23 @@ export class HttpTransport implements AgentTransport {
         `Agent request to ${this.#api} failed: ${response.status} ${response.statusText}`,
       )
     }
-    this.#lastRunId = response.headers.get('x-theokit-run-id') ?? undefined
+    this.#runIds.set(response.headers.get('x-theokit-run-id') ?? undefined)
     return responseToChunkStream(response)
   }
 
   async reconnectToStream(
     options: Parameters<ChatTransport['reconnectToStream']>[0],
   ): Promise<ReadableStream<UIMessageChunk> | null> {
-    if (this.#lastRunId === undefined) return null
-    const response = await this.#fetch(`${this.#api}/runs/${this.#lastRunId}/stream`, {
+    const runId = this.#runIds.get()
+    if (runId === undefined) return null
+    const response = await this.#fetch(`${this.#api}/runs/${runId}/stream`, {
       method: 'GET',
       headers: { ...this.#resolveHeaders(), ...toRecord(options.headers) },
     })
     if (response.status === 404) return null
     if (!response.ok) {
       throw new Error(
-        `Agent reconnect to run ${this.#lastRunId} failed: ${response.status} ${response.statusText}`,
+        `Agent reconnect to run ${runId} failed: ${response.status} ${response.statusText}`,
       )
     }
     return responseToChunkStream(response)

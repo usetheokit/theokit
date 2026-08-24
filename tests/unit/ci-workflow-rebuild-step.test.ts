@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 
 /**
@@ -28,10 +28,13 @@ interface WorkflowFile {
 
 function loadWorkflows(): WorkflowFile[] {
   const out: WorkflowFile[] = []
-  for (const name of readdirSync(WORKFLOWS_DIR)) {
+  // `withFileTypes`: the type comes from the entry the read already returned, instead of resolving
+  // the same name a second time with `statSync` (CodeQL `js/file-system-race`).
+  for (const entry of readdirSync(WORKFLOWS_DIR, { withFileTypes: true })) {
+    const name = entry.name
     if (!name.endsWith('.yml') && !name.endsWith('.yaml')) continue
     const full = join(WORKFLOWS_DIR, name)
-    if (!statSync(full).isFile()) continue
+    if (!entry.isFile()) continue
     const content = readFileSync(full, 'utf8')
     const runsTests =
       /\bpnpm\s+(test|vitest|exec\s+vitest|test:coverage|test:types|test:e2e)\b/.test(content)

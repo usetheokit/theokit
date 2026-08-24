@@ -15,7 +15,11 @@ import type { StdioStreams } from '../../packages/theo/src/server/agent/mcp-stdi
 async function scaffoldAgent(name: string): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'mcp-cmd-'))
   await mkdir(join(root, 'agents'), { recursive: true })
-  await writeFile(join(root, 'agents', `${name}.ts`), `export default {}\n`)
+  // usetheokit/theokit#365 - the scanner refuses an agent file that declares no policy.
+  await writeFile(
+    join(root, 'agents', `${name}.ts`),
+    `export const policy = 'public'\nexport default {}\n`,
+  )
   return root
 }
 

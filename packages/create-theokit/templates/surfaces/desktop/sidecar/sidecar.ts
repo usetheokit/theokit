@@ -41,10 +41,14 @@ const write = (line: string): void => {
   process.stdout.write(line)
 }
 
-await runTurnToJsonl(chatAgent, apiKey, message, write, ({ approvalId, toolName }) => {
+await runTurnToJsonl(chatAgent, apiKey, message, write, ({ approvalId }) => {
+  // Register the resolver and write NOTHING. The approval frame is already on the wire:
+  // `runTurnToJsonl` writes every chunk the in-process turn produces, and a gated tool produces a
+  // `tool-approval-request` carrying the `toolCallId` readers key a tool part by. A second,
+  // hand-written line here was a duplicate the framework's own wire schema refuses
+  // (usetheokit/theokit#403).
   return new Promise<boolean>((resolve) => {
     pending.set(approvalId, resolve)
-    write(`${JSON.stringify({ type: 'tool-approval-request', approvalId, toolName })}\n`)
   })
 })
 

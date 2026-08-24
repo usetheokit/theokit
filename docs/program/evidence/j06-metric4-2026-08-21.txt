@@ -1,0 +1,41 @@
+J6 metric 4 - time to first green run, both sides, 2026-08-21
+Harness: metric4-harness.sh, driven interleaved (one TheoKit run, one Next.js run, repeat), probe
+"/" on both lanes. Warm npm cache, stated rather than hidden; no run in this programme has ever been
+taken on a cold cache, which is where a new developer actually stands.
+Machine: Linux 6.8.0-136, Node 22.22.2, npm 10.9.7. Nothing else heavy running.
+
+Lanes - both carry this journey's own committed delta
+  TheoKit  scratchpad j06b/app @ dd44a07 "j6: retry the order-lookup dependency, transient only",
+           on top of d33ae24 (J1's tool) and the unedited scaffold. The tree is the create-theokit
+           template as captured, so package.json.tmpl was renamed to package.json; the {{name}}
+           placeholder is left exactly as the scaffolder leaves it, verified against a real
+           scaffold output (j2-theokit's package.json carries the same literal).
+  Next.js  scratchpad my-ai-app @ bb8f8d0 "j6: retry the order-lookup dependency, transient only",
+           on top of 713fa38 (the p-retry install, priced by this page as a concept and not as a
+           file) and the j1/j5 tool commits, because that side's history is cumulative.
+           Dependencies: next 16.3.1, ai 7.0.70, @ai-sdk/react 4.0.73, p-retry 8.0.0, zod 4.4.3.
+           This is the p-retry lane, the one the counted headline uses - not the hand-rolled variant.
+
+Lockfiles, symmetric: the Next.js lane installs from its own tracked package-lock.json; the TheoKit
+lane's was generated on 2026-08-21 with `npm install --package-lock-only`, the template copy having
+carried none. Both scaffolders write a lockfile, so a lock on both sides is the normal tree.
+
+--- Three runs per lane, interleaved ---
+
+  theokit r1 install=5.9 build=5.1 start=1.0 total=12.1
+  nextjs  r1 install=4.8 build=7.9 start=0.6 total=13.3
+  theokit r2 install=4.7 build=4.7 start=1.1 total=10.4
+  nextjs  r2 install=4.5 build=8.6 start=0.6 total=13.7
+  theokit r3 install=4.5 build=5.3 start=1.1 total=10.9
+  nextjs  r3 install=4.8 build=8.3 start=0.6 total=13.7
+
+  theokit n=3  total 11.13 +/- 0.87 -> [10.26, 12.01]   install 5.03+/-0.76  build 5.03+/-0.31  start 1.07+/-0.06
+  nextjs  n=3  total 13.57 +/- 0.23 -> [13.34, 13.80]   install 4.70+/-0.17  build 8.27+/-0.35  start 0.60+/-0.00
+
+  Intervals do NOT overlap and TheoKit is the faster side. "Not worse on time to first green run"
+  holds. Install is level within noise - 5.03 +/- 0.76 against 4.70 +/- 0.17 - on the pair where the
+  Next.js side installs p-retry and the TheoKit side installs nothing extra. The p-retry install
+  costs the Next.js lane nothing measurable, which is the same result this page reached by argument
+  when it priced the library as a concept rather than as a cost.
+
+No run was discarded on this journey. Nothing failed.

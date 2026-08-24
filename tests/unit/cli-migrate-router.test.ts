@@ -37,7 +37,10 @@ afterEach(async () => {
   }
 })
 
-function touch(relativePath: string, content = 'export const GET = { handler: () => ({}) }') {
+function touch(
+  relativePath: string,
+  content = "export const GET = { policy: 'public', handler: () => ({}) }",
+) {
   const full = join(routesDir, relativePath)
   mkdirSync(join(full, '..'), { recursive: true })
   writeFileSync(full, content)
@@ -53,8 +56,11 @@ describe('G6 T2.1 — routerMigrateCommand (CLI wrapper)', () => {
   })
 
   it('test_dotted_routes_renamed_end_to_end: 2 dotted files migrate, tree matches expected', async () => {
-    touch('auth.[provider].login.ts', 'export const POST = { handler: () => ({}) }')
-    touch('posts.[id].ts', 'export const GET = { handler: () => ({}) }')
+    touch(
+      'auth.[provider].login.ts',
+      "export const POST = { policy: 'public', handler: () => ({}) }",
+    )
+    touch('posts.[id].ts', "export const GET = { policy: 'public', handler: () => ({}) }")
 
     const result = await routerMigrateCommand({ routesDir, force: true, silent: true })
     expect(result.alreadyClean).toBe(false)
@@ -101,10 +107,10 @@ describe('G6 T2.1 — routerMigrateCommand (CLI wrapper)', () => {
     // Sibling reference: routes/admin.sdk-config.ts imports './chat' which is
     // a sibling routes/chat.ts. After moving to routes/admin/sdk-config.ts,
     // the import must become '../chat'.
-    touch('chat.ts', 'export const GET = { handler: () => ({}) }')
+    touch('chat.ts', "export const GET = { policy: 'public', handler: () => ({}) }")
     touch(
       'admin.sdk-config.ts',
-      `import { defineRoute } from "theokit/server";\nimport { foo } from "./chat";\nimport { z } from "zod";\nexport const GET = defineRoute({ handler: () => ({}) });`,
+      `import { defineRoute } from "theokit/server";\nimport { foo } from "./chat";\nimport { z } from "zod";\nexport const GET = defineRoute({ policy: 'public', handler: () => ({}) });`,
     )
 
     const result = await routerMigrateCommand({ routesDir, force: true, silent: true })

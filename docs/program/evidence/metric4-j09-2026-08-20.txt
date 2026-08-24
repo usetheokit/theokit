@@ -1,0 +1,11 @@
+nextjs run1 install=4.2 build=10.0 start=0.6 total=14.8
+nextjs run2 install=4.3 build=9.3 start=0.6 total=14.1
+nextjs run3 install=4.0 build=11.3 start=0.6 total=15.9
+theokit run1 NEVER_ANSWERED
+theokit run2 NEVER_ANSWERED
+theokit run3 NEVER_ANSWERED
+DONE
+theokit run1 install=30.2 build=5.4 start=1.0 total=36.7
+theokit run2 install=14.9 build=6.1 start=1.1 total=22.1
+theokit run3 install=13.8 build=11.9 start=6.7 total=32.4
+DONE2

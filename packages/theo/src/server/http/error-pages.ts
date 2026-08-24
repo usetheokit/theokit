@@ -14,7 +14,7 @@
  * is always the build output of the current project. The names are fixed
  * literals (`'404.html'` / `'500.html'`) — no HTTP input.
  */
-import { existsSync, readFileSync, statSync } from 'node:fs'
+import { closeSync, fstatSync, openSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 export const MAX_ERROR_HTML_BYTES = 1_048_576 // 1MB
@@ -26,19 +26,33 @@ export interface CustomErrorPages {
 
 function loadIfSafe(dir: string, name: string): string | undefined {
   const path = resolve(dir, name)
-  if (!existsSync(path)) return undefined
+  // #428 — one descriptor measured and read. Sizing by path and then reading by path lets the
+  // file grow between the two, which is the size cap being bypassed rather than enforced.
+  let fd: number
   try {
-    const stat = statSync(path)
+    fd = openSync(path, 'r')
+  } catch (err) {
+    // Absent is the ordinary case (custom pages are optional) and stays silent; anything else
+    // is a real problem worth saying out loud.
+    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+      console.warn(`[theokit] Failed to read ${name}: ${(err as Error).message}`)
+    }
+    return undefined
+  }
+  try {
+    const stat = fstatSync(fd)
     if (stat.size > MAX_ERROR_HTML_BYTES) {
       console.warn(
         `[theokit] Custom error page ${name} is ${stat.size} bytes (max ${MAX_ERROR_HTML_BYTES}); skipping.`,
       )
       return undefined
     }
-    return readFileSync(path, 'utf-8')
+    return readFileSync(fd, 'utf-8')
   } catch (err) {
     console.warn(`[theokit] Failed to read ${name}: ${(err as Error).message}`)
     return undefined
+  } finally {
+    closeSync(fd)
   }
 }
 

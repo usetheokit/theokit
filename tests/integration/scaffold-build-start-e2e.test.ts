@@ -11,7 +11,7 @@
  * EC-207: install precondition (skip the start phase if pnpm install isn't run)
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { execSync } from 'node:child_process'
+import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -20,6 +20,11 @@ import { scaffold } from '../../packages/create-theokit/src/index.js'
 
 const REPO = resolve(__dirname, '../..')
 const CLI = resolve(REPO, 'packages/theo/src/cli/index.ts')
+// The local `tsx` by absolute path rather than `npx`: a bare command name is resolved through
+// `PATH`, and `PATH` on a developer machine contains directories the developer can write to
+// (sonarjs `no-os-command-from-path`). The binary this repository installed is the one meant to
+// run, and naming it says so.
+const TSX = resolve(REPO, 'node_modules/.bin/tsx')
 
 let projectDir: string
 
@@ -81,7 +86,7 @@ describe('T7.4 Sub-phase D — scaffold → build → start E2E', () => {
     // dogfood-regressions-fix-plan v1.1 — `npx tsx` from a clean tmpdir
     // can't find tsx (no local install, no global), so we inject the repo's
     // `node_modules/.bin` into PATH explicitly. Same env tsx that other
-    // tests rely on; just routes execSync's PATH lookup to it.
+    // tests rely on; just routes the PATH lookup to it.
     const repoBinPath = resolve(REPO, 'node_modules/.bin')
     const envWithBin = {
       ...process.env,
@@ -93,8 +98,11 @@ describe('T7.4 Sub-phase D — scaffold → build → start E2E', () => {
       THEOKIT_SKIP_NATIVE_PREFLIGHT: '1',
     }
     try {
-      // eslint-disable-next-line sonarjs/os-command -- developer-local E2E running our own CLI
-      execSync(`npx tsx ${CLI} build`, {
+      // `execFileSync` with an argv array, not a command string: the paths interpolated here are
+      // absolute and come from wherever the repository happens to sit, so a directory with a
+      // space (or anything the shell treats as syntax) changed what ran. No shell, no parsing
+      // (CodeQL `js/shell-command-injection-from-environment`).
+      execFileSync(TSX, [CLI, 'build'], {
         cwd: projectDir,
         stdio: 'pipe',
         encoding: 'utf8',

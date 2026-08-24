@@ -52,6 +52,14 @@ export interface HitlDecision {
   approved: boolean
   reason?: string
   payload?: unknown
+  /**
+   * What settled this, when it was not a person (usetheokit/theokit#393).
+   *
+   * Mirrors `ApprovalDecision.settledBy` in `theokit`, for the reason the comment above this
+   * interface gives: this package must not import from `theokit`. Absent means the decision came
+   * through the approve route; `'timeout'` means the window closed with nobody deciding.
+   */
+  settledBy?: 'timeout'
 }
 
 /** Injected wiring — the harness (mount-agent) supplies these; the plugin stays pure. */
@@ -103,8 +111,19 @@ export function createHitlPlugin(wiring: HitlWiring): HitlPlugin {
         const decision: HitlDecision = typeof raw === 'boolean' ? { approved: raw } : raw
         if (decision.approved) return undefined
         // On denial, surface the approver's reason + payload to the model so it can self-correct.
-        let message = `Tool '${c.name}' denied by human approver`
-        if (decision.reason) message += `: ${decision.reason}`
+        //
+        // An expiry is NOT a denial by a person, and saying so was #393: both produced
+        // `Tool 'x' denied by human approver`, so an operator auditing a gated action could not
+        // tell "a reviewer refused this" from "nobody was watching and the window closed" — the
+        // one distinction a HITL gate exists to record. The registry's `reason` already names the
+        // budget and which `onTimeout` applied; this only has to stop inventing the actor and
+        // point at the knob.
+        let message =
+          decision.settledBy === 'timeout'
+            ? `Tool '${c.name}' was not approved: ${decision.reason ?? 'the approval window expired with no decision'}. ` +
+              `Decide within the window, or raise 'timeout' on the tool's approval options.`
+            : `Tool '${c.name}' denied by human approver`
+        if (decision.settledBy !== 'timeout' && decision.reason) message += `: ${decision.reason}`
         if (decision.payload !== undefined) {
           message += ` (payload: ${JSON.stringify(decision.payload)})`
         }

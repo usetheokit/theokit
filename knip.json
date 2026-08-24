@@ -1,9 +1,10 @@
 {
   "$schema": "https://unpkg.com/knip@5/schema.json",
   "ignore": ["**/tests/**"],
+  "ignoreWorkspaces": ["my-test"],
   "workspaces": {
     ".": {
-      "ignore": ["tests/**"]
+      "ignore": ["tests/**", "docs/**"]
     },
     "packages/theo": {
       "entry": [

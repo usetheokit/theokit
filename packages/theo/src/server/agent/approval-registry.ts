@@ -15,6 +15,8 @@
 // rather than re-declaring the union, so the two can never drift.
 import type { TimeoutAction } from '@theokit/agents'
 
+import { processSingleton } from '../_internal/process-singleton.js'
+
 export interface RegisterOptions {
   /** Milliseconds before the approval auto-settles per `onTimeout`. */
   timeoutMs: number
@@ -27,6 +29,18 @@ export interface RegisterOptions {
   toolName?: string
   /** M14 — the approval question, surfaced by `list()` (optional). */
   question?: string
+  /**
+   * Who the run belongs to — the `RouteSubject.id` admitted for it (B-016).
+   *
+   * Absent when the run had no identity to record, which is the `'public'` agent path:
+   * `admitAgentRequest` deliberately does not resolve a subject when the policy is absent or
+   * `'public'`, so there is nothing to attribute the approval to. Absent therefore means "no owner
+   * was established", never "anyone", and the caller must branch on the difference — a rule that
+   * refused when it is absent would start turning public agents away.
+   *
+   * Deliberately NOT surfaced by `list()`: that listing feeds a UI, and owner ids are identity.
+   */
+  owner?: string
   /**
    * M20 — an optional JSON-schema descriptor of the custom payload the approver may attach. Carried
    * verbatim into `list()` + the `approval_required` event so the UI knows what to collect. Kept as
@@ -44,6 +58,23 @@ export interface ApprovalDecision {
   approved: boolean
   reason?: string
   payload?: unknown
+  /**
+   * What settled this, when it was not a person (usetheokit/theokit#393).
+   *
+   * Absent means the decision arrived through `resolve()` — a human, or whatever the application
+   * wired to that route. `'timeout'` means the window closed with nobody deciding and `onTimeout`
+   * was applied.
+   *
+   * The distinction is the whole point of a HITL gate: without it an expired approval and an
+   * explicit deny are byte-identical on the wire, and the sentence the caller gets — "denied by
+   * human approver" — asserts a fact that did not happen. It is marked on the ALLOW side too:
+   * `onTimeout: 'proceed'` permits the tool BECAUSE nobody answered, and recording that as a plain
+   * approval is the same fabrication with the opposite sign.
+   *
+   * One member rather than `timedOut: boolean`, because the question is what settled it; a second
+   * cause (a cancel, a shutdown) joins the union instead of adding another boolean.
+   */
+  settledBy?: 'timeout'
 }
 
 /** M14 — a pending approval as surfaced by {@link ApprovalRegistry.list}. */
@@ -70,12 +101,22 @@ export interface ApprovalRegistry {
   resolve(approvalId: string, decision: boolean | ApprovalDecision): boolean
   /** M14 — list the currently-pending approvals (process-wide; single-process contract). */
   list(): PendingApproval[]
+  /**
+   * Who owns the pending approval `approvalId`, or `undefined` (B-016).
+   *
+   * `undefined` covers three cases the caller treats identically — never registered, already
+   * settled, and registered without an owner — because in all three there is nothing to compare a
+   * caller against.
+   */
+  ownerOf(approvalId: string): string | undefined
 }
 
 interface Pending {
   settle: (decision: ApprovalDecision) => void
   timer: ReturnType<typeof setTimeout>
   info: PendingApproval
+  /** Held beside `info` rather than inside it, so `list()` cannot leak it (B-016). */
+  owner?: string
 }
 
 /**
@@ -87,10 +128,13 @@ interface Pending {
  * swaps this accessor for a shared-store impl (ADR 0038 / plan Drawback 2) without touching callers.
  * Tests use {@link createInProcessApprovalRegistry} directly — never this singleton.
  */
-let serverRegistry: ApprovalRegistry | undefined
 export function getApprovalRegistry(): ApprovalRegistry {
-  serverRegistry ??= createInProcessApprovalRegistry()
-  return serverRegistry
+  // Per PROCESS, not per module instance (usetheokit/theokit#401). The paragraph above calls a
+  // single instance "not a convenience but a correctness requirement", and a module-level `let`
+  // does not deliver that: it gives one instance per MODULE INSTANCE, and this module is emitted
+  // into two chunks of the published bundle. A run awaiting an approval and the route resolving it
+  // could hold different objects, and the symptom would be a HITL pause that never resumes.
+  return processSingleton('approval-registry', () => createInProcessApprovalRegistry())
 }
 
 export function createInProcessApprovalRegistry(): ApprovalRegistry {
@@ -108,7 +152,15 @@ export function createInProcessApprovalRegistry(): ApprovalRegistry {
         }
         // 'proceed' → allow on timeout; 'abort'/'retry' → deny on timeout.
         const timer = setTimeout(() => {
-          settle({ approved: opts.onTimeout === 'proceed' })
+          settle({
+            approved: opts.onTimeout === 'proceed',
+            settledBy: 'timeout',
+            // Every value in this sentence was already here and none of it used to survive the
+            // settle. `onTimeout` is named because all three of its values reach this line and two
+            // of them deny — an operator who wrote `'retry'` and got a denial had nothing to read
+            // that mentioned retry.
+            reason: `no decision within ${String(opts.timeoutMs)} ms; onTimeout: '${opts.onTimeout}' was applied`,
+          })
         }, opts.timeoutMs)
         const info: PendingApproval = {
           approvalId,
@@ -117,7 +169,12 @@ export function createInProcessApprovalRegistry(): ApprovalRegistry {
           expiresAt: Date.now() + opts.timeoutMs,
           ...(opts.payloadSchema !== undefined ? { payloadSchema: opts.payloadSchema } : {}),
         }
-        pending.set(approvalId, { settle, timer, info })
+        pending.set(approvalId, {
+          settle,
+          timer,
+          info,
+          ...(opts.owner !== undefined ? { owner: opts.owner } : {}),
+        })
       })
     },
     resolve(approvalId, decision) {
@@ -129,6 +186,11 @@ export function createInProcessApprovalRegistry(): ApprovalRegistry {
     },
     list() {
       return [...pending.values()].map((p) => p.info)
+    },
+    ownerOf(approvalId) {
+      // `settle` deletes the entry, so an approval that has been answered or timed out reports no
+      // owner — which is what stops a later registration of the same id from inheriting one.
+      return pending.get(approvalId)?.owner
     },
   }
 }

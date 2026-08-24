@@ -148,6 +148,12 @@ export const theoConfigSchema = z
     // Plugins are validated structurally at runtime by createPluginRunnerFromConfig.
     // Zod only checks the shape minimally (must be array). Type-level safety is
     // provided through defineConfig at the user surface.
+    //
+    // #425 — an entry MAY also be a module SPECIFIER (a string), resolved to that module's default
+    // export by `config/resolve-plugin-specifiers.ts`. A constructed plugin closes over state and
+    // therefore has no literal, so it is the string form — and only the string form — that a
+    // generated deploy entry can carry. Both shapes are accepted here for the same reason they are
+    // accepted at runtime: one declaration has to serve the local server and the deployed one.
     plugins: z.array(z.unknown()).optional(),
     /** Enable client-side batching of theoFetch calls and the
      * /api/__theo_batch__ server endpoint. */

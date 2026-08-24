@@ -4,7 +4,10 @@ import type { AgentOutputEvent } from '../src/agent-output-event.js'
 import { UIMessageStreamPresenter } from '../src/presenters/ui-message-stream.js'
 
 const TEXT_ID = 't-fixed'
-const make = () => new UIMessageStreamPresenter({ textId: TEXT_ID })
+// #390 masks a failure's text before it reaches a browser. These cases are about WHICH chunk a
+// failure produces and in what order, not about what the text says, so they opt out explicitly:
+// the pass-through makes the subject visible instead of leaving it to a default.
+const make = () => new UIMessageStreamPresenter({ textId: TEXT_ID, onError: (e) => e.message })
 
 /** Drive a whole event list through the presenter (start → present* → finish) and collect the chunks. */
 function run(events: AgentOutputEvent[], meta?: Parameters<UIMessageStreamPresenter['finish']>[0]) {

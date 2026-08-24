@@ -31,17 +31,25 @@ interface RecordedSpan {
   status?: string
   message?: string
   ended: boolean
+  /**
+   * The third argument of `startSpan`. Recorded because the recorder used to
+   * drop it, and a recorder that drops an argument cannot disagree with code
+   * that never passes it — which is how a run emitted spans belonging to no
+   * common trace while nine tests stayed green (usetheokit/theokit#368).
+   */
+  context?: { traceId: string; spanId?: string; parentSpanId?: string }
 }
 
 function createRecorder() {
   const spans: RecordedSpan[] = []
   const adapter: ObservabilityAdapter = {
     name: 'recorder',
-    startSpan(name, attrs) {
+    startSpan(name, attrs, context) {
       const span: RecordedSpan = {
         name,
         attrs: { ...attrs } as Record<string, unknown>,
         ended: false,
+        context,
       }
       spans.push(span)
       const handle: SpanHandle = {
@@ -135,6 +143,43 @@ describe('agent run observability (M8)', () => {
     expect(tools.every((s) => s.ended)).toBe(true)
   })
 
+  it('test_a_pause_never_observed_to_resume_says_so_instead_of_reporting_a_duration', async () => {
+    const { adapter, byName } = createRecorder()
+
+    // The stream ends with the pause still open and no output for the gated call:
+    // the client disconnected while a human was deciding, or the run failed
+    // mid-pause. Nothing on the wire says how long the human took, so the sweep
+    // must not report a duration as if it did.
+    //
+    // This fixture used to send the resume under a DIFFERENT id than the approval,
+    // because that is what the wire did for every gated call (#361). It was the
+    // normal path then; it is not a path at all now that the two ids correlate
+    // (`packages/agents/src/bridge/hitl-call-correlation.ts`), so the test would
+    // have gone on describing a shape the producer can no longer emit.
+    await drain(
+      observeAgentRun(
+        chunks(
+          { type: 'start' },
+          {
+            type: 'tool-input-available',
+            toolCallId: 'call-1',
+            toolName: 'deploy',
+            input: {},
+          },
+          { type: 'tool-approval-request', approvalId: 'approval-uuid', toolCallId: 'call-1' },
+          { type: 'finish' },
+        ),
+        adapter,
+        { agent: 'chat' },
+      ),
+    )
+
+    const pause = byName('agent.hitl')[0]
+    expect(pause.attrs['hitl.resume_observed']).toBe(false)
+    expect(pause.status).toBe('error')
+    expect(pause.ended).toBe(true)
+  })
+
   it('test_a_hitl_pause_opens_a_span_that_the_resume_closes', async () => {
     const { adapter, byName } = createRecorder()
 
@@ -159,6 +204,11 @@ describe('agent run observability (M8)', () => {
     expect(pauses[0].attrs.approvalId).toBe('a1')
     expect(pauses[0].attrs.tool).toBe('deploy')
     expect(pauses[0].ended).toBe(true)
+    // Stated positively, so the duration is self-describing. An operator filtering
+    // on the negative case only learns which spans are useless; this is what says
+    // the rest of them are the human's wait.
+    expect(pauses[0].attrs['hitl.resume_observed']).toBe(true)
+    expect(pauses[0].status).toBe('ok')
   })
 
   it('test_token_usage_from_the_finish_chunk_lands_on_the_run_span', async () => {
@@ -193,6 +243,72 @@ describe('agent run observability (M8)', () => {
     expect(run.attrs['tokens.total']).toBe(46)
     expect(run.attrs['tokens.reasoning']).toBe(5)
     expect(run.attrs['cost.usd']).toBe(0.0021)
+  })
+
+  it('test_the_stop_reason_from_the_finish_chunk_lands_on_the_run_span', async () => {
+    // usetheokit/theokit#379 — a run the SDK cut still ends on `finish`, so without this attribute
+    // the trace of a truncated run is identical to the trace of a finished one. The fixture is the
+    // producer's shape (`AgentTurnMetadata.stopReason`), not an invented one.
+    const { adapter, byName } = createRecorder()
+
+    await drain(
+      observeAgentRun(
+        chunks(
+          { type: 'start' },
+          {
+            type: 'finish',
+            messageMetadata: {
+              usage: { inputTokens: 1, outputTokens: 2, totalTokens: 3 },
+              durationMs: 900,
+              stopReason: 'step_limit',
+            },
+          },
+        ),
+        adapter,
+        { agent: 'chat' },
+      ),
+    )
+
+    const run = byName('agent.run')[0]
+    expect(run.attrs['stop.reason']).toBe('step_limit')
+    // A reached ceiling is a declared outcome, not a failure. Marking it an error would put every
+    // capped run in an operator's error budget.
+    expect(run.status).toBe('ok')
+  })
+
+  it('test_a_clean_finish_leaves_the_run_span_without_a_stop_reason', async () => {
+    // Absence is the finished case, on the span exactly as on the wire: an operator filtering on
+    // `stop.reason` must see only the runs that were actually cut.
+    const { adapter, byName } = createRecorder()
+
+    await drain(
+      observeAgentRun(
+        chunks(
+          { type: 'start' },
+          { type: 'finish', messageMetadata: { usage: { inputTokens: 1 }, durationMs: 9 } },
+        ),
+        adapter,
+        { agent: 'chat' },
+      ),
+    )
+
+    expect(byName('agent.run')[0].attrs['stop.reason']).toBeUndefined()
+  })
+
+  it('test_an_unknown_stop_reason_is_not_passed_through', async () => {
+    // The attribute is what a dashboard groups by. Forwarding an arbitrary string would let a value
+    // this framework never produces create a bucket nobody can explain.
+    const { adapter, byName } = createRecorder()
+
+    await drain(
+      observeAgentRun(
+        chunks({ type: 'start' }, { type: 'finish', messageMetadata: { stopReason: 'whatever' } }),
+        adapter,
+        { agent: 'chat' },
+      ),
+    )
+
+    expect(byName('agent.run')[0].attrs['stop.reason']).toBeUndefined()
   })
 
   it('test_a_flat_metadata_shape_is_NOT_read_as_usage', async () => {
@@ -245,5 +361,68 @@ describe('agent run observability (M8)', () => {
     for await (const _ of stream) break
 
     expect(byName('agent.run')[0].ended).toBe(true)
+  })
+})
+
+describe('a run is one trace (usetheokit/theokit#368)', () => {
+  const HEX32 = /^[0-9a-f]{32}$/
+  const HEX16 = /^[0-9a-f]{16}$/
+
+  const toolRun = () =>
+    chunks(
+      { type: 'start' },
+      { type: 'tool-input-available', toolCallId: 'c1', toolName: 'lookup' },
+      { type: 'tool-approval-request', toolCallId: 'c1', approvalId: 'a1' },
+      { type: 'tool-output-available', toolCallId: 'c1' },
+      { type: 'finish' },
+    )
+
+  it('test_every_span_of_a_run_shares_one_trace_id', async () => {
+    const { adapter, spans } = createRecorder()
+
+    await drain(observeAgentRun(toolRun(), adapter, { agent: 'chat' }))
+
+    expect(spans.length).toBeGreaterThan(1)
+    const traces = new Set(spans.map((s) => s.context?.traceId))
+    expect(traces.size).toBe(1)
+    expect([...traces][0]).toMatch(HEX32)
+  })
+
+  it('test_tool_and_hitl_spans_hang_under_the_run_span', async () => {
+    const { adapter, spans, byName } = createRecorder()
+
+    await drain(observeAgentRun(toolRun(), adapter, { agent: 'chat' }))
+
+    const runSpanId = byName('agent.run')[0].context?.spanId
+    expect(runSpanId).toMatch(HEX16)
+
+    // The run is the root; everything else names it. A flat list of siblings
+    // renders at a collector as a run with no tool calls in it.
+    for (const span of spans.filter((s) => s.name !== 'agent.run')) {
+      expect(span.context?.parentSpanId).toBe(runSpanId)
+    }
+    expect(byName('agent.run')[0].context?.parentSpanId).toBeUndefined()
+  })
+
+  it('test_two_runs_do_not_share_a_trace', async () => {
+    const first = createRecorder()
+    const second = createRecorder()
+
+    await drain(observeAgentRun(toolRun(), first.adapter, { agent: 'chat' }))
+    await drain(observeAgentRun(toolRun(), second.adapter, { agent: 'chat' }))
+
+    expect(first.spans[0].context?.traceId).not.toBe(second.spans[0].context?.traceId)
+  })
+
+  it('test_a_caller_with_a_trace_keeps_it_so_the_request_and_the_run_are_one_thing', async () => {
+    const { adapter, spans } = createRecorder()
+    const incoming = 'abcdefabcdefabcdefabcdefabcdefab'
+
+    await drain(observeAgentRun(toolRun(), adapter, { agent: 'chat', traceId: incoming }))
+
+    // An agent invoked from an HTTP request belongs to that request's trace.
+    // Minting a new one here would file the cause and the effect as two
+    // unrelated things that happened at the same time.
+    expect(new Set(spans.map((s) => s.context?.traceId))).toEqual(new Set([incoming]))
   })
 })

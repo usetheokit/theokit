@@ -25,8 +25,11 @@ pnpm-debug.log*
 *.pem
 *.tsbuildinfo
 
-# database
-data/
+# framework-written app data — conversation transcripts (.data/agent-sessions/**/*.jsonl)
+# and the local SQLite DB both live here. This said `data/`, without the dot, and
+# matched nothing the framework writes: every prompt, answer, tool input and tool
+# result went into version control on the first commit after the first run (#395).
+.data/
 
 # editors
 .vscode/

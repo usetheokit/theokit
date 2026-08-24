@@ -12,6 +12,7 @@
  */
 
 import { loadConfig } from '../config/load-config.js'
+import { resolvePluginSpecifiers } from '../config/resolve-plugin-specifiers.js'
 import {
   createPluginRunnerFromConfig,
   type AuditLogger,
@@ -78,10 +79,14 @@ export async function resolvePluginConfig(projectRoot: string): Promise<Resolved
       userConfig.observability,
       process.env,
     )
+    // #425 — the dev server resolves module specifiers exactly as `theokit start` does. If only one
+    // of them did, the same `theo.config.ts` would register a different set of plugins depending on
+    // which command was running, which is the drift the shared declaration exists to prevent.
+    const declaredPlugins = await resolvePluginSpecifiers(userConfig.plugins ?? [], projectRoot)
     const pluginRunner = await createPluginRunnerFromConfig(
       observabilityPlugin === undefined
-        ? userConfig.plugins
-        : [observabilityPlugin, ...(userConfig.plugins ?? [])],
+        ? declaredPlugins
+        : [observabilityPlugin, ...declaredPlugins],
     )
     const transformer = resolveTransformer(userConfig.serialization)
 

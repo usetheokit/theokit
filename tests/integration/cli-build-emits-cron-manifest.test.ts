@@ -8,12 +8,17 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs'
-import { execSync } from 'node:child_process'
+import { execFileSync } from 'node:child_process'
 import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 
 const REPO = resolve(__dirname, '../..')
 const CLI = resolve(REPO, 'packages/theo/src/cli/index.ts')
+// The local `tsx` by absolute path rather than `npx`: a bare command name is resolved through
+// `PATH`, and `PATH` on a developer machine contains directories the developer can write to
+// (sonarjs `no-os-command-from-path`). The binary this repository installed is the one meant to
+// run, and naming it says so.
+const TSX = resolve(REPO, 'node_modules/.bin/tsx')
 
 let projectDir: string
 
@@ -52,7 +57,7 @@ export default defineCron('${name}', { schedule: '${schedule}', handler: () => {
   )
 }
 
-const runBuild = (args = ''): { stdout: string; exitCode: number } => {
+const runBuild = (args: string[] = []): { stdout: string; exitCode: number } => {
   try {
     // T5a.2 prerequisite: THEOKIT_SKIP_NATIVE_PREFLIGHT=1 tells the CLI to
     // skip the native-binding ABI check. Test fixtures don't install
@@ -60,8 +65,11 @@ const runBuild = (args = ''): { stdout: string; exitCode: number } => {
     // exercise audit-log / LanceDB / etc. The env-var escape hatch is the
     // production-grade fix for this fixture infrastructure issue (per
     // § Test infrastructure prerequisites Option B).
-    // eslint-disable-next-line sonarjs/os-command -- developer-local integration test invoking the framework's own CLI
-    const stdout = execSync(`npx tsx ${CLI} build ${args}`, {
+    // `execFileSync` with an argv array, not a command string: the paths interpolated here are
+    // absolute and come from wherever the repository happens to sit, so a directory with a
+    // space (or anything the shell treats as syntax) changed what ran. No shell, no parsing
+    // (CodeQL `js/shell-command-injection-from-environment`).
+    const stdout = execFileSync(TSX, [CLI, 'build', ...args], {
       cwd: projectDir,
       encoding: 'utf8',
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -122,7 +130,7 @@ describe('CLI build emits cron manifest (T1.1)', { timeout: 30_000 }, () => {
     // Manifests emit BEFORE Vite/adapter — verify manifest regardless of
     // adapter outcome (test fixture lacks node_modules → Vite fails, but
     // cron+job artifacts must be present).
-    runBuild('--target=vercel')
+    runBuild(['--target=vercel'])
     const vercelJson = join(projectDir, 'vercel.json')
     expect(existsSync(vercelJson)).toBe(true)
     const json = JSON.parse(readFileSync(vercelJson, 'utf8')) as {
@@ -138,7 +146,7 @@ describe('CLI build emits cron manifest (T1.1)', { timeout: 30_000 }, () => {
     // Manifests emit BEFORE Vite/adapter — verify manifest regardless of
     // adapter outcome (test fixture lacks node_modules → Vite fails, but
     // cron+job artifacts must be present).
-    runBuild('--target=cloudflare')
+    runBuild(['--target=cloudflare'])
     const wrangler = join(projectDir, 'wrangler.toml')
     expect(existsSync(wrangler)).toBe(true)
     const content = readFileSync(wrangler, 'utf8')
@@ -152,7 +160,7 @@ describe('CLI build emits cron manifest (T1.1)', { timeout: 30_000 }, () => {
     // Manifests emit BEFORE Vite/adapter — verify manifest regardless of
     // adapter outcome (test fixture lacks node_modules → Vite fails, but
     // cron+job artifacts must be present).
-    const { stdout } = runBuild('--target=bun')
+    const { stdout } = runBuild(['--target=bun'])
     expect(stdout.toLowerCase()).toMatch(/cron.*skip|cron.*not supported|warn/)
   })
 
@@ -167,7 +175,7 @@ describe('CLI build emits cron manifest (T1.1)', { timeout: 30_000 }, () => {
         headers: [{ source: '/(.*)', headers: [{ key: 'X-Foo', value: 'bar' }] }],
       }),
     )
-    runBuild('--target=vercel')
+    runBuild(['--target=vercel'])
     const json = JSON.parse(readFileSync(join(projectDir, 'vercel.json'), 'utf8')) as Record<
       string,
       unknown
@@ -181,7 +189,7 @@ describe('CLI build emits cron manifest (T1.1)', { timeout: 30_000 }, () => {
   it('EC-201: --target flag is authoritative over config.adapters[]', () => {
     writeConfig(`adapters: ['cloudflare']`)
     writeCron('foo', '0 0 * * *')
-    const { stdout } = runBuild('--target=vercel')
+    const { stdout } = runBuild(['--target=vercel'])
     // ONLY vercel.json should be created
     expect(existsSync(join(projectDir, 'vercel.json'))).toBe(true)
     // wrangler.toml should NOT be created (CF not targeted this build)

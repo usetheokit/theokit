@@ -49,6 +49,19 @@ export {
 export { transcriptRootHint } from './transcript-root-hint.js'
 
 /**
+ * usetheokit/theokit#399 — reading one thread's history WITHOUT folding "could not read it" into
+ * "there is none". Three-valued for the same reason `liveness-oracle` below is: a caller acts on
+ * the answer, and an application's mandatory `catch` for a brand-new thread was swallowing every
+ * other read failure with it.
+ */
+export {
+  readThreadHistory,
+  type ReadThreadHistoryOptions,
+  type ThreadHistory,
+  type ThreadHistoryState,
+} from './thread-history.js'
+
+/**
  * T3.2 — is the project behind an encoded transcript directory still there?
  *
  * Framework-owned for the same reason as the hint above: the question is only hard because

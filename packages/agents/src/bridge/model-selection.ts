@@ -46,6 +46,21 @@ export function buildModelSelection(
 }
 
 /**
+ * The model's ID, whichever of the two accepted shapes it arrived in.
+ *
+ * Lives beside {@link buildModelSelection} because this module already owns the projection between
+ * `string | ModelSelection` and the SDK's `{ id, params }` — a second reader of that union
+ * elsewhere is the drift M95 already paid for once, when `buildModelSelection` was the only site
+ * that had been widened and every other caller still assumed `string`.
+ *
+ * The caller wanting this is telemetry: a span records the model as a name, not as a selection
+ * object (usetheokit/theokit#368's fifth criterion). Pure.
+ */
+export function modelIdOf(model: string | ModelSelection): string {
+  return typeof model === 'string' ? model : model.id
+}
+
+/**
  * Read the reasoning effort back out of a model selection — the inverse of
  * {@link buildModelSelection}, and the reason this module owns the param key.
  *

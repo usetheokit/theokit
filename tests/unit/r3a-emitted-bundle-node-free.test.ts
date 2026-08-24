@@ -23,7 +23,7 @@
  * adapter-scope per ADR-0028. The allowlist is identical to the source-
  * level invariant guard in `r3a-web-crypto-migration-leaf.test.ts`.
  */
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 
 import { describe, expect, it, beforeAll } from 'vitest'
@@ -82,9 +82,14 @@ describe('R3a emitted-bundle runtime-portability (Phase 5a audit Category A proo
     // surface MUST be clean.
     const offenders: string[] = []
     const walk = (dir: string): void => {
-      for (const entry of readdirSync(dir)) {
-        const full = join(dir, entry)
-        if (statSync(full).isDirectory()) {
+      // `withFileTypes` answers the type from the directory entry the read already returned.
+      // Asking `statSync` about the path a second time is a second resolution of the same
+      // name, which is what CodeQL reports as `js/file-system-race`. Equivalent here: these
+      // trees are checked into git and carry no symlinks, which `statSync` would follow and
+      // a dirent would not.
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const full = join(dir, entry.name)
+        if (entry.isDirectory()) {
           walk(full)
           continue
         }
@@ -94,7 +99,7 @@ describe('R3a emitted-bundle runtime-portability (Phase 5a audit Category A proo
         const src = readFileSync(full, 'utf8')
         if (!src.includes('node:http')) continue
         // Found a match — check if file is allowlisted.
-        const basename = entry.replace(/-[A-Z0-9]{6,}\.js$/, '.js') // tsup hashes
+        const basename = entry.name.replace(/-[A-Z0-9]{6,}\.js$/, '.js') // tsup hashes
         if (!DIST_NODE_ONLY_ALLOWLIST.has(basename)) {
           offenders.push(full.replace(ROOT + '/', ''))
         }
@@ -157,9 +162,14 @@ describe('R3a emitted-bundle runtime-portability (Phase 5a audit Category A proo
     // this test surfaces the drift. Bound is generous (≤ allowlist size).
     let count = 0
     const walk = (dir: string): void => {
-      for (const entry of readdirSync(dir)) {
-        const full = join(dir, entry)
-        if (statSync(full).isDirectory()) {
+      // `withFileTypes` answers the type from the directory entry the read already returned.
+      // Asking `statSync` about the path a second time is a second resolution of the same
+      // name, which is what CodeQL reports as `js/file-system-race`. Equivalent here: these
+      // trees are checked into git and carry no symlinks, which `statSync` would follow and
+      // a dirent would not.
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const full = join(dir, entry.name)
+        if (entry.isDirectory()) {
           walk(full)
           continue
         }

@@ -327,9 +327,13 @@ function renderTreeNode(node: TreeNode, indent: string, _isRoot: boolean): strin
   }
   // Children
   for (const [name, child] of node.children) {
+    // Backslash first, then the quote: escaping the quote while leaving the escape character
+    // untouched means `back\` emits as `'back\'`, whose trailing backslash escapes the closing
+    // quote and swallows the rest of the line. A backslash is a legal POSIX filename character, so
+    // it reaches here from `server/routes/`.
     const propKey = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(name)
       ? name
-      : `'${name.replace(/'/g, "\\'")}'`
+      : `'${name.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`
     lines.push(`${indent}  ${propKey}: ${renderTreeNode(child, indent + '  ', false)}`)
   }
   lines.push(`${indent}}`)

@@ -48,6 +48,7 @@
     "theokit": "workspace:*"
   },
   "publishConfig": {
+    "provenance": true,
     "access": "public"
   },
   "engines": {

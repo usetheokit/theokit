@@ -13,11 +13,9 @@ import {
 } from '@theokit/agents'
 import type { WireChunk as UIMessageChunk } from '@theokit/presenter/wire'
 
-import { getObservabilityAdapter } from '../observability-bootstrap.js'
-
 import type { ApiKeyResolver } from './api-key-resolver.js'
 import { getApprovalRegistry } from './approval-registry.js'
-import { observeAgentRun } from './observe-agent-run.js'
+import { observeServedRun } from './observe-served-run.js'
 
 type Compiled = ReturnType<typeof compileAgentModule>
 
@@ -27,7 +25,7 @@ type Compiled = ReturnType<typeof compileAgentModule>
  * when the agent has no `@HumanInTheLoop`-gated tools. Extracted verbatim from
  * `mountAgent` so both the plain POST and the thread routes wire HITL identically.
  */
-export function buildAgentHitl(compiled: Compiled) {
+export function buildAgentHitl(compiled: Compiled, owner?: string) {
   const gated = compiled.hitl
   if (gated === undefined || gated.size === 0) return undefined
   const registry = getApprovalRegistry()
@@ -35,6 +33,7 @@ export function buildAgentHitl(compiled: Compiled) {
     gated,
     awaitApproval: (approvalId: string, opts: HumanInTheLoopOptions, toolName: string) =>
       registry.register(approvalId, {
+        ...(owner !== undefined ? { owner } : {}),
         timeoutMs: opts.timeout ?? 300_000,
         onTimeout: opts.onTimeout ?? 'abort',
         toolName,
@@ -56,11 +55,26 @@ export function buildAgentHitl(compiled: Compiled) {
  * The caller resolved before that, so an agent declaring `anthropic/…` was handed whichever key
  * env priority picked first and every follow-up died with `auth_failed`. Fixed on the agent
  * endpoint by #327; this is the same defect on the thread route (theokit#328).
+ *
+ * `request` is REQUIRED, and required is the point (usetheokit/theokit#381). The trace the run's
+ * spans join lives in that request's `traceparent`, and the previous signature had no parameter
+ * that could carry it — so the value was dropped at the call site, silently, while
+ * `handleThreadMessage` held the `Request` two lines away. An optional parameter would have left
+ * the same omission available; a required one makes the call site state what it is doing.
+ *
+ * `agentName` is required for the same reason, one defect later (usetheokit/theokit#406). There was
+ * one string here, `source`, and it was doing two jobs: labelling a fail-fast `AgentDefinitionError`
+ * and labelling every span of the run. This route's caller passes `agent "chat"` — good prose in an
+ * error message, and not a name — while the plain route passes the module's absolute file path. Two
+ * parameters because they are two values; the compile label may stay human-readable precisely
+ * because it is no longer the key an operator groups by.
  */
 export function makeThreadStartRun(
   mod: unknown,
   apiKey: string | ApiKeyResolver,
   source: string,
+  agentName: string,
+  request: Request,
 ): (sessionId: string, message: string) => AsyncIterable<UIMessageChunk> {
   return (sessionId, message) =>
     (async function* () {
@@ -72,16 +86,23 @@ export function makeThreadStartRun(
         )
         if (enabled !== undefined) compiled.skills = { enabled, autoInject: true }
       }
+      // No owner on this path, and that is a stated limit rather than an oversight (B-016). A thread
+      // continuation runs headless — there is no request whose identity could be resolved — so an
+      // approval it raises records nobody, and the approve route treats it exactly as it did before.
       const hitl = buildAgentHitl(compiled)
       // Now that the model is known, let the caller pick the credential for THAT provider.
       const resolvedApiKey = typeof apiKey === 'function' ? apiKey(compiled.model) : apiKey
       const stream = streamAgentUIMessages(compiled, resolvedApiKey, { message, sessionId, hitl })
       // M8 — the thread route runs the same agent and must produce the same
       // spans. Instrumenting only the plain POST would make a run's telemetry
-      // depend on which endpoint reached it (usetheokit/theokit#353).
-      const adapter = getObservabilityAdapter()
-      yield* adapter === undefined
-        ? stream
-        : observeAgentRun(stream, adapter, { agent: source, sessionId })
+      // depend on which endpoint reached it (usetheokit/theokit#353) — and for
+      // the trace id that is exactly what happened, until both routes were made
+      // to go through one function (usetheokit/theokit#381). The trace continued
+      // is the one of the request that STARTED this run, which outlives it:
+      // `observe-served-run.ts` says why that is the right answer. The `agent`
+      // attribute took a second pass to converge (usetheokit/theokit#406): it was
+      // `source`, so this route labelled every span `agent "chat"` while the plain
+      // route labelled its own with a file path.
+      yield* observeServedRun(stream, { agentName, sessionId, request })
     })()
 }

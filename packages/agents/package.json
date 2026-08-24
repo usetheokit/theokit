@@ -137,5 +137,9 @@
     "@theokit/sdk": "^4.52.1",
     "@theokit/sdk-pty": ">=0.2.0 <1.0.0",
     "@theokit/sdk-tools": "^0.26.1"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   }
 }

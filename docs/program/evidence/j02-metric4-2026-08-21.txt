@@ -1,0 +1,39 @@
+J2 metric 4 - time to first green run, both sides, 2026-08-21
+Harness: metric4-harness.sh, driven interleaved (one TheoKit run, one Next.js run, repeat), probe
+"/" on both lanes. Warm npm cache, stated rather than hidden; no run in this programme has ever been
+taken on a cold cache, which is where a new developer actually stands.
+Machine: Linux 6.8.0-136, Node 22.22.2, npm 10.9.7. Nothing else heavy running.
+
+Lanes - both carry this journey's own committed delta
+  TheoKit  scratchpad j2-theokit @ 6b9d867 "J2: gate send_email, render the pending approvals the
+           store publishes" - the re-measured implementation, on top of acf378e (J1's tool) and the
+           verbatim scaffold. Its package.json pins the published ranges, so the lane installs
+           theokit 0.48.14 from npm. The re-measurement's counts were taken against a framework
+           built from 4411a59be; what is timed here is the published artifact, which is what every
+           other lane in this sweep installs and what a reader of the benchmark would get.
+  Next.js  scratchpad nx @ f30481d "J2: gate send_email behind a human approval", on top of the
+           quickstart chat stage and J1's tool. Dependencies: next 16.3.1, ai 7.0.70,
+           @ai-sdk/react 4.0.73, zod 4.4.3 - the AI SDK's own toolApproval primitive, no extra
+           dependency.
+
+Lockfiles, symmetric: the Next.js lane's package-lock.json is present in its working tree but not
+tracked by its git history, so it was carried across with the export rather than regenerated. The
+TheoKit lane's was generated on 2026-08-21 with `npm install --package-lock-only`.
+
+--- Three runs per lane, interleaved ---
+
+  theokit r1 install=4.5 build=4.8 start=1.1 total=10.4
+  nextjs  r1 install=4.4 build=8.3 start=0.6 total=13.3
+  theokit r2 install=3.8 build=4.9 start=1.1 total= 9.8
+  nextjs  r2 install=4.2 build=7.6 start=0.6 total=12.4
+  theokit r3 install=4.0 build=4.8 start=1.1 total= 9.9
+  nextjs  r3 install=4.2 build=9.2 start=0.6 total=13.9
+
+  theokit n=3  total 10.03 +/- 0.32 -> [ 9.71, 10.35]   install 4.10+/-0.36  build 4.83+/-0.06  start 1.10+/-0.00
+  nextjs  n=3  total 13.20 +/- 0.75 -> [12.45, 13.95]   install 4.27+/-0.12  build 8.37+/-0.80  start 0.60+/-0.00
+
+  Intervals do NOT overlap and TheoKit is the faster side. "Not worse on time to first green run"
+  holds. Install is level - 4.10 s against 4.27 s - on the pair where neither side installs anything
+  the other does not, because ai@7.0.70 ships tool approval as a first-class primitive.
+
+No run was discarded on this journey. Nothing failed.

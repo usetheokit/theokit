@@ -1,13 +1,23 @@
 import { describe, it, expect, beforeAll, afterEach } from 'vitest'
 import { loadConfig, TheoConfigError } from 'theokit'
 import { deepMerge } from 'theokit'
-import path from 'node:path'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import path, { join } from 'node:path'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 
-const TEMP_DIR = path.join(tmpdir(), `theo-env-test-${Date.now()}`)
+import { markEsmProject } from '../lib/fixture-project.js'
+
+// `mkdtempSync`, not `join(tmpdir(), <predictable>)`: the directory is WRITTEN to, and a
+// name another process can guess is a symlink-swap window (CodeQL `js/insecure-temporary-file`).
+// `mkdtempSync` creates it atomically with a random suffix, which is what the sibling helper does.
+const TEMP_DIR = mkdtempSync(join(tmpdir(), 'theo-env-test-'))
 
 beforeAll(() => {
+  // #418 — one marker at the root covers every fixture below it: the nearest-`package.json` lookup
+  // walks up. Without it tsx compiles these configs as CJS and evaluating the output as ESM throws
+  // `__filename is not defined` — invisible above Node 22.18, and a failure on the declared floor.
+  markEsmProject(TEMP_DIR)
+
   // Base config only (no env file)
   const baseOnly = path.join(TEMP_DIR, 'base-only')
   mkdirSync(baseOnly, { recursive: true })

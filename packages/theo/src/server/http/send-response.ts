@@ -1,5 +1,6 @@
 import type { ServerResponse } from 'node:http'
 
+import { clientSafeErrorMessage } from '../../core/contracts/client-safe-error.js'
 import type { TheoTransformer } from '../transformer.js'
 
 /**
@@ -28,6 +29,11 @@ export function sendJson(
     'Content-Length': Buffer.byteLength(body),
   })
   res.end(body)
+}
+
+/** Render anything that would end the log line as a visible escape, so one call logs one line. */
+function oneLine(value: string): string {
+  return value.replace(/[\r\n]/g, '\\n')
 }
 
 export interface SendErrorOptions {
@@ -67,9 +73,9 @@ export function sendError(
   requestId?: string,
   options?: SendErrorOptions,
 ): void
-/* eslint-disable-next-line max-params, complexity -- delegates to two
-   surface overloads above; the branch density mirrors the back-compat
-   contract, not internal complexity. */
+/* eslint-disable-next-line max-params -- delegates to two surface overloads above; the parameter
+   count mirrors the back-compat contract, not internal complexity. The `complexity` half of this
+   suppression went away when the redaction rule stopped being restated inline. */
 export function sendError(
   res: ServerResponse,
   codeOrInput: string | SendErrorInput,
@@ -92,13 +98,14 @@ export function sendError(
     requestId = codeOrInput.requestId
     options = codeOrInput.options
   }
-  const errorMessage =
-    code === 'INTERNAL_ERROR' && process.env.NODE_ENV === 'production'
-      ? 'Internal server error'
-      : message
+  const errorMessage = clientSafeErrorMessage(code, message)
 
   if (code === 'INTERNAL_ERROR') {
-    console.error(`[${requestId ?? 'no-id'}] ${message}`)
+    // One log entry per call, whatever the message contains. An exception message can be built
+    // from request data and can therefore carry a newline; unescaped, that lets a caller append
+    // whatever lines it likes to the log — including a plausible entry attributed to something
+    // else (CodeQL `js/log-injection`).
+    console.error(`[${oneLine(requestId ?? 'no-id')}] ${oneLine(message)}`)
   }
 
   if (status === 404 && options?.custom404Html) {
@@ -167,13 +174,14 @@ export function buildJsonResponse(
 
 export function buildErrorResponse(input: SendErrorInput): Response {
   const { code, message, status, issues, requestId, options } = input
-  const errorMessage =
-    code === 'INTERNAL_ERROR' && process.env.NODE_ENV === 'production'
-      ? 'Internal server error'
-      : message
+  const errorMessage = clientSafeErrorMessage(code, message)
 
   if (code === 'INTERNAL_ERROR') {
-    console.error(`[${requestId ?? 'no-id'}] ${message}`)
+    // One log entry per call, whatever the message contains. An exception message can be built
+    // from request data and can therefore carry a newline; unescaped, that lets a caller append
+    // whatever lines it likes to the log — including a plausible entry attributed to something
+    // else (CodeQL `js/log-injection`).
+    console.error(`[${oneLine(requestId ?? 'no-id')}] ${oneLine(message)}`)
   }
 
   const headers: Record<string, string> = {}

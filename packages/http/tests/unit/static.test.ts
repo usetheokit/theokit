@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest'
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, symlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { getMimeType, isSafePath, createStaticHandler } from '../../src/static.js'
@@ -59,6 +59,41 @@ describe('createStaticHandler', () => {
       rmSync(tempDir, { recursive: true, force: true })
       tempDir = undefined
     }
+  })
+
+  // #428 — `UNSAFE_PATH_RE` rejects `..` and `//` in the request pathname, but this exploit contains
+  // neither: the traversal is in the filesystem, not the URL. The regex cannot see it.
+  it('test_handler_refuses_symlink_escaping_root', async () => {
+    // Arrange
+    tempDir = mkdtempSync(join(tmpdir(), 'theokit-static-'))
+    const root = join(tempDir, 'pub')
+    mkdirSync(root)
+    writeFileSync(join(tempDir, 'secret.txt'), 'HTTP-PKG-SECRET-OUTSIDE-ROOT')
+    symlinkSync(join(tempDir, 'secret.txt'), join(root, 'leak.txt'))
+    const handler = createStaticHandler({ root })
+
+    // Act
+    const response = await handler(new Request('http://localhost:3000/leak.txt'))
+
+    // Assert — unhandled, so the caller falls through to its own 404.
+    expect(response).toBeNull()
+  })
+
+  // Containment must reject the escape, not symlinks as a feature.
+  it('test_handler_serves_symlink_that_stays_inside_root', async () => {
+    // Arrange
+    tempDir = mkdtempSync(join(tmpdir(), 'theokit-static-'))
+    writeFileSync(join(tempDir, 'real.txt'), 'inside the root')
+    symlinkSync(join(tempDir, 'real.txt'), join(tempDir, 'alias.txt'))
+    const handler = createStaticHandler({ root: tempDir })
+
+    // Act
+    const response = await handler(new Request('http://localhost:3000/alias.txt'))
+
+    // Assert
+    expect(response).not.toBeNull()
+    expect(response!.status).toBe(200)
+    expect(await response!.text()).toBe('inside the root')
   })
 
   it('test_handler_serves_existing_file', async () => {

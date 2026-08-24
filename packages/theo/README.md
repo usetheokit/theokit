@@ -47,6 +47,7 @@ missing:
 import { route, action, websocket, middleware, tool, plugin } from 'theokit/server'
 
 export const GET = route()
+  .policy('public')
   .query(z.object({ search: z.string().optional() }))
   .handler(({ query }) => ({ results: search(query.search) }))
   .build()

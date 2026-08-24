@@ -1,0 +1,21 @@
+# Build scripts this project allows its dependencies to run.
+#
+# pnpm 10 refuses to run a dependency's install script unless it is approved here,
+# and it stopped reading the `pnpm` field in package.json — where this list used to
+# live, silently doing nothing while every install printed a warning about it
+# (usetheokit/theokit#397). Without these entries, `pnpm install` ends in
+# ERR_PNPM_IGNORED_BUILDS with esbuild and node-pty unbuilt.
+#
+# Each entry is a decision, not boilerplate: an install script runs arbitrary code
+# on your machine. These are the ones this scaffold needs.
+allowBuilds:
+  # The bundler behind `theokit dev` and `theokit build`; ships a platform binary.
+  esbuild: true
+  # A native terminal, reached through @theokit/agents. Compiles or downloads a
+  # prebuild on install. A web-only app never opens one — see usetheokit/theokit#25
+  # if you would rather not pay for it.
+  node-pty: true
+  # Present only if you add them; harmless entries otherwise, and here so the
+  # decision is already made the day you do.
+  better-sqlite3: true
+  workerd: true

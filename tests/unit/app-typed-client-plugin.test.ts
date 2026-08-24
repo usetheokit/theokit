@@ -34,7 +34,7 @@ function writeRoute(rel: string, content: string): void {
 
 describe('appTypedClientPlugin (Vite plugin)', () => {
   it('emits .theokit/client.d.ts on initial configResolved', () => {
-    writeRoute('users.ts', 'export const GET = () => ({})\n')
+    writeRoute('users.ts', "export const GET = { policy: 'public' }\n")
     const plugin = appTypedClientPlugin({ cwd: sandbox, serverDir, distDir })
     ;(plugin.configResolved as any)({} as any)
     const dts = join(distDir, 'client.d.ts')
@@ -64,7 +64,7 @@ describe('appTypedClientPlugin (Vite plugin)', () => {
   })
 
   it('emitClientDts is idempotent — repeat write reports changed=false when content unchanged', async () => {
-    writeRoute('a.ts', 'export const GET = () => ({})\n')
+    writeRoute('a.ts', "export const GET = { policy: 'public' }\n")
     const opts = { cwd: sandbox, serverDir, distDir }
     const r1 = await emitClientDts(opts)
     expect(r1.changed).toBe(true)
@@ -73,10 +73,10 @@ describe('appTypedClientPlugin (Vite plugin)', () => {
   })
 
   it('emitClientDts detects route file additions on subsequent calls', async () => {
-    writeRoute('a.ts', 'export const GET = () => ({})\n')
+    writeRoute('a.ts', "export const GET = { policy: 'public' }\n")
     const opts = { cwd: sandbox, serverDir, distDir }
     await emitClientDts(opts)
-    writeRoute('b.ts', 'export const POST = () => ({})\n')
+    writeRoute('b.ts', "export const POST = { policy: 'public' }\n")
     const r2 = await emitClientDts(opts)
     expect(r2.changed).toBe(true)
     const dts = readFileSync(join(distDir, 'client.d.ts'), 'utf-8')
@@ -85,11 +85,11 @@ describe('appTypedClientPlugin (Vite plugin)', () => {
   })
 
   it('EC-6: write is atomic via tmp + rename (no half-written file under rapid succession)', async () => {
-    writeRoute('a.ts', 'export const GET = () => ({})\n')
+    writeRoute('a.ts', "export const GET = { policy: 'public' }\n")
     const opts = { cwd: sandbox, serverDir, distDir }
     // Trigger 5 rapid emits — each must leave a parseable file behind.
     for (let i = 0; i < 5; i++) {
-      writeRoute('a.ts', `export const GET = () => ({ tick: ${i} })\n`)
+      writeRoute('a.ts', `export const GET = { policy: 'public', tick: ${i} }\n`)
       await emitClientDts(opts)
       const content = readFileSync(join(distDir, 'client.d.ts'), 'utf-8')
       // Final file must always end with the closing `}` of the declared module.
@@ -99,7 +99,7 @@ describe('appTypedClientPlugin (Vite plugin)', () => {
   })
 
   it('no .tmp files remain after writes (rename succeeded)', async () => {
-    writeRoute('a.ts', 'export const GET = () => ({})\n')
+    writeRoute('a.ts', "export const GET = { policy: 'public' }\n")
     await emitClientDts({ cwd: sandbox, serverDir, distDir })
     const dts = join(distDir, 'client.d.ts')
     // Check no sibling .tmp file lingers.

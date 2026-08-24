@@ -29,7 +29,9 @@ describe('scanWebSocketRoutes', () => {
       'ws/notifications.ts': WS_HANDLER,
       'ws/README.md': '# not a route\n',
     })
-    withoutWs = makeServerDir({ 'routes/health.ts': 'export function GET() {}\n' })
+    withoutWs = makeServerDir({
+      'routes/health.ts': "export const GET = { policy: 'public', handler: () => ({}) }\n",
+    })
   })
 
   afterAll(() => {

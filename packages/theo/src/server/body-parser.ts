@@ -32,6 +32,55 @@ const DEFAULT_MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
 const DEFAULT_MAX_FILES = 10
 const DEFAULT_MAX_FIELD_SIZE = 1 * 1024 * 1024 // 1MB
 
+/**
+ * theokit#400 — the request body was consumed before the parser could read it.
+ *
+ * A Node `IncomingMessage` is a single-use stream. Once something drains it, `'end'` has fired and
+ * cannot fire again, so a parser that attaches its listeners afterwards waits for an event that
+ * will never come: the request hangs with no status, no error, and no timeout — the failure family
+ * of `docs/adr/0002`, in its least readable form, since nothing terminates at all.
+ *
+ * That is a framework bug wherever it happens (a dispatcher converting the request before deciding
+ * it owns the path, a middleware reading the stream and not passing the value on), so this reports
+ * it by name instead of waiting. A 500 that says which request lost its body is recoverable
+ * information; silence is not.
+ */
+export class RequestBodyConsumedError extends Error {
+  readonly code = 'REQUEST_BODY_CONSUMED'
+  readonly status = 500
+  constructor(method: string, url: string | undefined) {
+    super(
+      `Request body for ${method} ${url ?? '(unknown url)'} was already consumed before the body ` +
+        `parser ran, so it can never arrive. Something upstream read the request stream — a route ` +
+        `dispatcher, a middleware, or an adapter that converted the request — without passing the ` +
+        `parsed body on.`,
+    )
+    this.name = 'RequestBodyConsumedError'
+  }
+}
+
+/**
+ * Was the request declared to carry no bytes at all? `content-length: 0` is the one case where an
+ * already-ended stream is honestly empty rather than eaten, and it must stay an `undefined` body
+ * instead of an error — an empty POST is legal.
+ */
+function declaresEmptyBody(req: IncomingMessage): boolean {
+  return (req.headers['content-length'] ?? '') === '0'
+}
+
+/**
+ * True once the stream has emitted `'end'` — which, at the moment the parser is about to attach,
+ * means somebody else drained it. A stream nobody has read yet reports `false` here even when Node
+ * has already buffered every byte, because `'end'` only fires on consumption.
+ *
+ * Read as a plain truthiness check on purpose: the type says `boolean`, but the suite's request
+ * doubles are plain emitters carrying `headers` and no `readableEnded` at all, and `undefined` must
+ * take the untouched-stream path exactly as `false` does.
+ */
+function bodyAlreadyConsumed(req: IncomingMessage): boolean {
+  return req.readableEnded && !declaresEmptyBody(req)
+}
+
 export class FileTooLargeError extends Error {
   readonly code = 'FILE_TOO_LARGE'
   readonly status = 413
@@ -62,6 +111,17 @@ function stashBodyPreview(req: IncomingMessage, body: unknown): void {
 
 function parseJsonBody(req: IncomingMessage): Promise<unknown> {
   return new Promise((resolve, reject) => {
+    // theokit#400 — an ended stream re-emits nothing, so attaching here would wait forever. A
+    // declared-empty body resolves as the absent body it is; anything else was eaten upstream and
+    // is reported rather than awaited.
+    if (req.readableEnded) {
+      if (declaresEmptyBody(req)) {
+        resolve(undefined)
+        return
+      }
+      reject(new RequestBodyConsumedError(req.method ?? 'POST', req.url))
+      return
+    }
     const chunks: Buffer[] = []
     req.on('data', (chunk: Buffer) => chunks.push(chunk))
     req.on('end', () => {
@@ -90,6 +150,14 @@ function parseMultipartBody(
   // EC-3: Validate boundary exists.
   if (!contentType.includes('boundary=')) {
     return Promise.reject(new Error('Missing multipart boundary'))
+  }
+
+  // theokit#400 — the multipart arm fails differently and no better. Piping an already-drained
+  // stream into busboy rejects with `Unexpected end of form` (measured), which
+  // `parseQueryAndBody` maps to a 400 VALIDATION_ERROR: the caller is told to fix a request that
+  // was correct, and the framework's own mistake reads as theirs. Same cause, so the same name.
+  if (bodyAlreadyConsumed(req)) {
+    return Promise.reject(new RequestBodyConsumedError(req.method ?? 'POST', req.url))
   }
 
   return new Promise((resolve, reject) => {

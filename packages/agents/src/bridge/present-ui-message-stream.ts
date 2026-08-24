@@ -1,8 +1,10 @@
 import { UIMessageStreamPresenter } from '@theokit/presenter'
 import type { AgentOutputEvent } from '@theokit/presenter'
+import { WIRE_APPROVAL_DETAIL_PART } from '@theokit/presenter/wire'
 import type { WireChunk as UIMessageChunk } from '@theokit/presenter/wire'
 
 import type { AgentStreamEvent, AgentTurnMetadata, DoneEvent } from './agent-stream-events.js'
+import { HitlCallCorrelation } from './hitl-call-correlation.js'
 
 /**
  * M49 — the web surface, composed over `@theokit/presenter`. Replaces the inline `translateToUIMessageStream`.
@@ -37,11 +39,27 @@ function toAgentOutputEvent(e: AgentStreamEvent): AgentOutputEvent | null {
   }
 }
 
-/** Project the `done` event's authoritative totals into the finish chunk's metadata (unchanged from M1). */
+/**
+ * Project the `done` event's authoritative totals into the finish chunk's metadata.
+ *
+ * theokit#379 adds `stopReason` to what travels, and usetheokit/theokit#368 adds `model`. Every
+ * optional field is spread conditionally rather than assigned as `undefined`: this object IS the
+ * `messageMetadata` a client reconstructs onto `UIMessage.metadata`, so a key holding `undefined`
+ * would appear on every clean turn. A turn whose producer reported neither therefore produces
+ * exactly the metadata it produced before.
+ *
+ * `model` travels for the same reason `usage` does, one question further on: the token counts say
+ * how much was consumed and only the model says what that costs. A span carrying tokens and no
+ * model answers "how much" with a number nobody can price.
+ */
 function doneToMetadata(event: DoneEvent): AgentTurnMetadata {
-  return event.cost === undefined
-    ? { usage: event.usage, durationMs: event.durationMs }
-    : { usage: event.usage, durationMs: event.durationMs, cost: event.cost }
+  return {
+    usage: event.usage,
+    durationMs: event.durationMs,
+    ...(event.cost === undefined ? {} : { cost: event.cost }),
+    ...(event.stopReason === undefined ? {} : { stopReason: event.stopReason }),
+    ...(event.model === undefined ? {} : { model: event.model }),
+  }
 }
 
 /** The data-part name carrying the failure `code`. Public in effect: the consumer matches on it. */
@@ -97,6 +115,22 @@ function dataPart(type: string, data: Record<string, unknown>): UIMessageChunk {
  * code when the failure arrives. In the other order it would have to handle the error first and only
  * then learn which one it was.
  */
+/**
+ * What the browser is told a failure was.
+ *
+ * Masked by default (usetheokit/theokit#390): the server's raw text — a driver's message, an HTTP
+ * client's, a filesystem call's — reached the client verbatim, and `ai@7` on the same protocol
+ * masks by default for the reason its own comment gives, "prevent leaking server error details to
+ * the client by default".
+ *
+ * The full text is NOT lost: it reaches the server's logs and the `agent.run` span, and it reaches
+ * this hook. What stops is it reaching the browser unless a host decides otherwise.
+ */
+export type MaskError = (error: { message: string; code?: string }) => string
+
+/** The default. A fixed string, matching `ai@7`'s wording so an app moving between them is unsurprised. */
+const MASK_ERROR: MaskError = () => 'An error occurred.'
+
 function* errorChunks(errorText: string, code: string | undefined): Generator<UIMessageChunk> {
   if (code !== undefined) yield dataPart(ERROR_CODE_DATA_PART, { code })
   yield { type: 'error', errorText }
@@ -113,8 +147,9 @@ function* errorChunks(errorText: string, code: string | undefined): Generator<UI
  * repetition of `closeBlock()` at each branch was an invitation to forget it at the fifth.
  *
  * `checkpoint_saved` joins them because it always was one of these; only its name predates the
- * pattern. `approval_required` stays inline: it emits TWO chunks and consults presenter state, so
- * it is genuinely a different shape rather than the same one spelled differently.
+ * pattern. `approval_required` stays inline: it emits THREE chunks (the synthesised tool input, its
+ * own detail part, and the gate) and consults presenter state, so it is genuinely a different shape
+ * rather than the same one spelled differently.
  */
 function diagnosticDataPart(event: AgentStreamEvent): UIMessageChunk | null {
   switch (event.type) {
@@ -141,35 +176,83 @@ function diagnosticDataPart(event: AgentStreamEvent): UIMessageChunk | null {
   }
 }
 
+/**
+ * Reduce a tool event to the ONE id the wire uses for its logical call — usetheokit/theokit#361.
+ *
+ * A HITL-gated call is announced by whichever of its two producers reaches the wire first (see
+ * {@link HitlCallCorrelation}). This folds the other one into that id: `null` means the event is a
+ * second announcement of a call already on the wire and must not be emitted again.
+ *
+ * Non-tool events and ungated tools pass through untouched — the correlation is identity for a call
+ * no approval ever claims, which is what keeps the non-HITL wire byte-unchanged.
+ */
+function correlateToolIds(
+  correlation: HitlCallCorrelation,
+  output: AgentOutputEvent,
+): AgentOutputEvent | null {
+  if (output.type === 'tool-call') {
+    return correlation.announceToolCall(output.name, output.callId) === 'already-announced'
+      ? null
+      : output
+  }
+  if (output.type === 'tool-result') {
+    return { ...output, callId: correlation.resultToolCallId(output.name, output.callId) }
+  }
+  return output
+}
+
 export async function* presentUIMessageStream(
   events: AsyncIterable<AgentStreamEvent>,
-  opts: { textId: string },
+  opts: { textId: string; onError?: MaskError },
 ): AsyncGenerator<UIMessageChunk, void, unknown> {
-  const presenter = new UIMessageStreamPresenter({ textId: opts.textId })
+  const onError = opts.onError ?? MASK_ERROR
+  const presenter = new UIMessageStreamPresenter({ textId: opts.textId, onError })
+  const correlation = new HitlCallCorrelation()
   yield { type: 'start' }
   let turnMetadata: AgentTurnMetadata | undefined
   try {
     for await (const event of events) {
       const output = toAgentOutputEvent(event)
       if (output !== null) {
-        yield* presenter.present(output)
+        const correlated = correlateToolIds(correlation, output)
+        if (correlated !== null) yield* presenter.present(correlated)
         continue
       }
       if (event.type === 'approval_required') {
         // A framework chunk must not sit inside an open text/reasoning block — close it first (as the
-        // original translator did), then synthesize the tool-input (EC-1) once, then the approval.
+        // original translator did), then synthesize the tool-input (EC-1) once, then the detail part
+        // and the approval.
         yield* presenter.closeBlock()
-        if (!presenter.hasSeen(event.callId)) {
-          presenter.markSeen(event.callId)
+        // #361 — the call this gates, under the id the wire uses for it. That is the runtime's own
+        // tool-call id when the SDK already announced it, and the approval id when it did not; the
+        // `approvalId` below stays the plugin's, so `approve/${approvalId}` keeps resolving.
+        const toolCallId = correlation.approvalToolCallId(event.toolName, event.callId)
+        if (!presenter.hasSeen(toolCallId)) {
+          presenter.markSeen(toolCallId)
           yield {
             type: 'tool-input-available',
-            toolCallId: event.callId,
+            toolCallId,
             toolName: event.toolName,
             input: event.input ?? {},
             dynamic: true,
           }
         }
-        yield { type: 'tool-approval-request', approvalId: event.callId, toolCallId: event.callId }
+        // #394 — the gate says what it is ASKING, and it says it here rather than on the approval
+        // frame for the reason `errorChunks` above already documents in full: ai's chunk schema is
+        // strict, so a field added to a shared variant does not degrade an ai-sdk client's prompt,
+        // it deletes the frame for that client. Same protocol, same right place — a data part.
+        //
+        // `toolName` and `input` are NOT repeated: the `tool-input-available` above carries them
+        // under this same `toolCallId`, and both readers fold the frames into one part.
+        //
+        // BEFORE the frame it describes, like the error code and for the same reason: a sequential
+        // consumer already holds the detail when the thing it describes arrives.
+        yield dataPart(WIRE_APPROVAL_DETAIL_PART, {
+          approvalId: event.callId,
+          question: event.question,
+          timeoutMs: event.timeoutMs,
+        })
+        yield { type: 'tool-approval-request', approvalId: event.callId, toolCallId }
         continue
       }
       const diagnostic = diagnosticDataPart(event)
@@ -179,7 +262,10 @@ export async function* presentUIMessageStream(
         continue
       }
       if (event.type === 'error') {
-        yield* errorChunks(event.message, (event as { code?: string }).code)
+        {
+          const code = (event as { code?: string }).code
+          yield* errorChunks(onError({ message: event.message, code }), code)
+        }
         break
       }
       if (event.type === 'done') {
@@ -190,7 +276,8 @@ export async function* presentUIMessageStream(
     }
   } catch (err) {
     const code = (err as { code?: string }).code
-    yield* errorChunks(String(err), typeof code === 'string' ? code : undefined)
+    const codeOrUndefined = typeof code === 'string' ? code : undefined
+    yield* errorChunks(onError({ message: String(err), code: codeOrUndefined }), codeOrUndefined)
   }
   yield* presenter.finish(turnMetadata)
 }

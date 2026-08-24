@@ -10,4 +10,9 @@
  * it installed; anyone who does already has it, because a hook only runs inside a component.
  */
 export { useAgent } from './client/use-agent.js'
-export type { UseAgentReturn, UseAgentOptions, UseAgentStatus } from './client/use-agent.js'
+export type {
+  PendingApproval,
+  UseAgentReturn,
+  UseAgentOptions,
+  UseAgentStatus,
+} from './client/use-agent.js'

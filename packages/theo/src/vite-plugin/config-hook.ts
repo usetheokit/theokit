@@ -77,42 +77,56 @@ export function runConfigHook(ctx: ConfigHookCtx): Record<string, unknown> {
     },
     resolve: {
       alias: [
-        // Order matters: most-specific first so `theokit/X` doesn't
-        // get matched by the bare `theokit` alias.
-        { find: 'theokit/server', replacement: resolve(ctx.theoSrcDir, `server/index${ext}`) },
-        { find: 'theokit/client', replacement: resolve(ctx.theoSrcDir, `client/index${ext}`) },
+        // Order still matters — first match wins — but the entries below are
+        // EXACT (#377). A Vite alias whose `find` is a string matches by prefix,
+        // and every replacement here points at a FILE, so the old string form
+        // rewrote `theokit/client/core` into `…/client/index.ts/core` and the
+        // build died with ENOTDIR. It did that for every subpath nobody had
+        // listed, which made the failure open-ended rather than a typo.
+        { find: /^theokit\/server$/u, replacement: resolve(ctx.theoSrcDir, `server/index${ext}`) },
+        { find: /^theokit\/client$/u, replacement: resolve(ctx.theoSrcDir, `client/index${ext}`) },
         {
           // T2.1 (M5 lonely folders) moved the source from
           // `react-query/index.ts` into `client/react-query.ts` (sibling of
           // `client/index.ts`). The package.json export `./react-query`
           // still points at the build artifact `./dist/react-query/index.{js,d.ts}`,
           // but the dev-time source alias must follow the new location.
-          find: 'theokit/react-query',
+          find: /^theokit\/react-query$/u,
           replacement: resolve(ctx.theoSrcDir, `client/react-query${ext}`),
         },
         {
-          find: 'theokit/vite-plugin',
+          find: /^theokit\/vite-plugin$/u,
           replacement: resolve(ctx.theoSrcDir, `vite-plugin/index${ext}`),
         },
         {
-          find: 'theokit/adapters/web-shim',
+          find: /^theokit\/adapters\/web-shim$/u,
           replacement: resolve(ctx.theoSrcDir, `adapters/web-shim${ext}`),
         },
         {
-          find: 'theokit/adapters/ws-shim',
+          find: /^theokit\/adapters\/ws-shim$/u,
           replacement: resolve(ctx.theoSrcDir, `adapters/ws-shim${ext}`),
         },
         // T1.2 — devtools entry (DEV only; tree-shaken in build).
         // Source layout: src/devtools/dom/entry.tsx (has /dom/ segment)
         // Dist layout:   dist/devtools/entry.js    (tsup flattens /dom/)
         {
-          find: 'theokit/devtools/entry',
+          find: /^theokit\/devtools\/entry$/u,
           replacement: resolve(
             ctx.theoSrcDir,
             ext === '.ts' ? 'devtools/dom/entry.tsx' : 'devtools/entry.js',
           ),
         },
-        { find: 'theokit', replacement: resolve(ctx.theoSrcDir, `index${ext}`) },
+        // Everything else under the package, by one rule rather than a list that
+        // has to grow with the exports map. The source layout mirrors the
+        // subpath, so `theokit/cache` is `<src>/cache` and Vite's own extension
+        // resolution finds the file. The two entries above that do NOT mirror it
+        // — react-query moved to a sibling, devtools' source carries a `/dom/`
+        // segment the dist flattens — are matched before this and keep their
+        // mapping.
+        { find: /^theokit\/(.+)$/u, replacement: resolve(ctx.theoSrcDir, '$1') },
+        // Exact, so a package merely NAMED like ours — `theokit-anything` — is
+        // left alone. The prefix form ate those too.
+        { find: /^theokit$/u, replacement: resolve(ctx.theoSrcDir, `index${ext}`) },
       ],
     },
   }

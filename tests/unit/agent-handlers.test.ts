@@ -5,7 +5,10 @@
  * built-server E2E; these assert the routing DECISIONS unique to each caller (prefix
  * ownership, agent-not-found fall-through, method enforcement) without the SDK.
  */
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { Readable } from 'node:stream'
 
 import { describe, expect, it } from 'vitest'
@@ -25,6 +28,10 @@ function fakeRes(): ServerResponse & { _status: number; _ended: boolean } {
       this._status = status
       this.statusCode = status
       return this
+    },
+    // A response with a body reaches `write` — the aux routes answer with JSON and SSE frames.
+    write() {
+      return true
     },
     end() {
       this._ended = true
@@ -179,5 +186,55 @@ describe('createAgentMiddleware (M2 dev factory)', () => {
       nextCalled = true
     })
     expect(nextCalled).toBe(true)
+  })
+})
+
+/**
+ * The dev middleware used to carry its own list of which aux paths to dispatch — the approvals
+ * listing and MCP — while the dispatcher's table held six. So `theokit dev` 404'd the durable
+ * run-stream reconnect and both thread routes that `theokit start` served, and nothing compared the
+ * two lists (usetheokit/theokit#405). It now asks the table.
+ *
+ * The run-stream route is the one exercised here because it answers immediately for an unknown
+ * runId; the thread stream would hold an SSE connection open for its idle window.
+ */
+describe('theokit dev serves the aux routes theokit start serves (usetheokit/theokit#405)', () => {
+  /** A real `agents/` directory, so the dev scanner finds an agent the way it does in a project. */
+  const devRoot = mkdtempSync(join(tmpdir(), 'theokit-dev-aux-'))
+  mkdirSync(join(devRoot, 'agents'))
+  writeFileSync(join(devRoot, 'agents', 'chat.ts'), "export const policy = 'public'\n")
+
+  /** Drive the middleware and settle when it either answered or handed the url on. */
+  async function drive(url: string, pluginRunner?: unknown) {
+    const fakeVite = { config: { server: {} }, ssrLoadModule: async () => ({}) } as never
+    const mw = createAgentMiddleware(fakeVite, devRoot, 'off', 'agents', {
+      pluginRunner: pluginRunner as never,
+    })
+    const res = fakeRes()
+    let nextCalled = false
+    mw({ url, method: 'GET', headers: { host: 'localhost' } } as IncomingMessage, res, () => {
+      nextCalled = true
+    })
+    for (let i = 0; i < 200 && !nextCalled && !res._ended && res._status === 0; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 5))
+    }
+    return { res, nextCalled }
+  }
+
+  it('test_the_durable_run_stream_route_is_dispatched_in_dev', async () => {
+    const { res, nextCalled } = await drive('/api/agents/chat/runs/run-unknown/stream')
+
+    // Before: `next()`, and the api-middleware 404'd a route the framework serves in production.
+    expect(nextCalled).toBe(false)
+    expect(res._status).toBe(404) // the dispatcher's own answer for an unknown runId
+  })
+
+  it('test_an_aux_route_runs_the_plugin_lifecycle_in_dev', async () => {
+    const seen: string[] = []
+
+    await drive('/api/agents/chat/runs/run-unknown/stream', fakeRunner(seen))
+
+    expect(seen).toContain('onRequest')
+    expect(seen).toContain('onResponse')
   })
 })

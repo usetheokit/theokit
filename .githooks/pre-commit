@@ -18,8 +18,32 @@ ROOT="$(git rev-parse --show-toplevel)"
 "$ROOT/.githooks/secret-scan.sh"
 
 # GATE 2 — lint-staged, ESLint + Prettier on staged files only.
+#
+# The index is recorded BEFORE and compared AFTER, because this gate has been observed
+# to widen the commit it was meant to check (usetheokit/theokit#378). With a partially
+# staged file in the tree — index content differing from the worktree, which is what
+# `git add -p` produces and what two people editing the same CHANGELOG produce — the
+# stash/restore cycle around the formatters restored the whole working tree into the
+# index. A commit that named six paths carried fourteen, and the eight extra belonged to
+# somebody else's unfinished work.
+#
+# The check is exact rather than heuristic: lint-staged may legitimately REWRITE a staged
+# file (that is what `prettier --write` does, and it re-adds the result), but it has no
+# business ADDING a path the author never staged. So the set of staged paths may shrink
+# or stay equal; growing is the defect, and the hook refuses.
+#
+# Deliberately a post-condition and not a ban on partial staging: staging one hunk is a
+# legitimate, common thing to do, and a gate that forbade it would trade a rare silent
+# loss for a constant obstruction.
 if [ -f "$ROOT/node_modules/.bin/lint-staged" ]; then
-  cd "$ROOT" && ./node_modules/.bin/lint-staged
+  cd "$ROOT"
+  STAGED_BEFORE="$(mktemp)"
+  STAGED_AFTER="$(mktemp)"
+  trap 'rm -f "$STAGED_BEFORE" "$STAGED_AFTER"' EXIT
+  git diff --cached --name-only | sort >"$STAGED_BEFORE"
+  ./node_modules/.bin/lint-staged
+  git diff --cached --name-only | sort >"$STAGED_AFTER"
+  "$ROOT/.githooks/assert-no-unstaged-sneaked-in.sh" "$STAGED_BEFORE" "$STAGED_AFTER"
 else
   echo "WARNING: lint-staged not installed — skipping lint/format step."
   echo "Run 'pnpm install' to enable the full pre-commit gate."

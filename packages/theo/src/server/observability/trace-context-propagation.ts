@@ -76,10 +76,27 @@ export function injectTraceContext(headers: Headers, ctx: TraceContext): void {
  */
 export function generateNewTraceContext(): TraceContext {
   return {
-    trace_id: randomHex(16), // 16 bytes = 32 hex chars
-    span_id: randomHex(8), //  8 bytes = 16 hex chars
+    trace_id: newTraceId(),
+    span_id: newSpanId(),
     flags: '01',
   }
+}
+
+/**
+ * A fresh 128-bit trace id, 32 hex chars, never the reserved all-zeros.
+ *
+ * Exported next to its span-id sibling because span identity needs the two
+ * halves separately: a child span mints only an id and inherits the trace, and
+ * a caller that had to mint a whole `TraceContext` to get one span id would be
+ * discarding a trace id it never used. `span.ts` is the consumer.
+ */
+export function newTraceId(): string {
+  return randomHex(16) // 16 bytes = 32 hex chars
+}
+
+/** A fresh 64-bit span id, 16 hex chars, never the reserved all-zeros. */
+export function newSpanId(): string {
+  return randomHex(8) // 8 bytes = 16 hex chars
 }
 
 function randomHex(bytes: number): string {

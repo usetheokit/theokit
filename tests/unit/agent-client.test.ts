@@ -90,6 +90,10 @@ describe('AgentClient (M41)', () => {
         pull(controller) {
           return new Promise<void>((resolve) => {
             gates.push(() => {
+              // theokit#384 — the terminal chunk. Released, this stream stands for a turn that
+              // ENDED; without it the store now reports the release as a dropped connection, which
+              // is a different subject than the stale-drive guard under test here.
+              controller.enqueue({ type: 'finish' } as UIMessageChunk)
               controller.close()
               resolve()
             })
@@ -133,6 +137,10 @@ describe('AgentClient (M41)', () => {
               if (errors) {
                 controller.enqueue({ type: 'start' } as UIMessageChunk)
                 controller.enqueue({ type: 'error', errorText: 'stale boom' } as UIMessageChunk)
+              } else {
+                // theokit#384 — the LIVE stream ends on its terminal chunk, which is what makes it
+                // a clean close rather than a dropped connection.
+                controller.enqueue({ type: 'finish' } as UIMessageChunk)
               }
               controller.close()
               resolve()
@@ -348,6 +356,9 @@ describe('AgentClient — conversation thread (M46)', () => {
         pull(controller) {
           return new Promise<void>((resolve) => {
             gates.push(() => {
+              // theokit#384 — released, this stream stands for a turn that ENDED; the terminal
+              // chunk is what says so.
+              controller.enqueue({ type: 'finish' } as UIMessageChunk)
               controller.close()
               resolve()
             })
