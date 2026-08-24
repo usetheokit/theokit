@@ -206,14 +206,23 @@ async function readActionBody(
 }
 
 /**
- * Build a FormData instance from the body-parser's `ParsedBody`. Fields become
- * string entries; files become Blob entries with the original filename. Used
+ * Build a FormData instance from the body-parser's `ParsedBody`. A scalar field
+ * becomes one string entry and a repeated field becomes one entry per value;
+ * files become Blob entries with the original filename. Used
  * only when `accept === 'form'` to feed `formDataToObject`.
  */
 function synthesizeFormData(parsed: ParsedBody): FormData {
   const fd = new FormData()
   for (const [name, value] of Object.entries(parsed.fields)) {
-    fd.append(name, value)
+    // A repeated field arrives as an array (theokit#430). Appending it whole
+    // would stringify to `'a,b'` — the same data loss the parser fix removed,
+    // one layer later. `append` per value is what FormData already models, and
+    // is what `formDataToObject` reads back with `getAll`.
+    if (Array.isArray(value)) {
+      for (const single of value) fd.append(name, single)
+    } else {
+      fd.append(name, value)
+    }
   }
   for (const file of parsed.files) {
     const blob = new Blob([file.buffer as unknown as ArrayBuffer], {

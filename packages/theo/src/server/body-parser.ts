@@ -3,6 +3,8 @@ import { basename } from 'node:path'
 
 import Busboy from 'busboy'
 
+import { appendField } from './multipart-fields.js'
+
 // --- Types ---
 
 export interface UploadedFile {
@@ -15,7 +17,7 @@ export interface UploadedFile {
 }
 
 export interface ParsedBody {
-  fields: Record<string, string>
+  fields: Record<string, string | string[]>
   files: UploadedFile[]
   json?: unknown
 }
@@ -146,7 +148,7 @@ function parseMultipartBody(
   req: IncomingMessage,
   contentType: string,
   options: Required<Pick<BodyParserOptions, 'maxFileSize' | 'maxFiles' | 'maxFieldSize'>>,
-): Promise<{ fields: Record<string, string>; files: UploadedFile[] }> {
+): Promise<{ fields: Record<string, string | string[]>; files: UploadedFile[] }> {
   // EC-3: Validate boundary exists.
   if (!contentType.includes('boundary=')) {
     return Promise.reject(new Error('Missing multipart boundary'))
@@ -161,7 +163,7 @@ function parseMultipartBody(
   }
 
   return new Promise((resolve, reject) => {
-    const fields: Record<string, string> = {}
+    const fields: Record<string, string | string[]> = {}
     const files: UploadedFile[] = []
     // CR-010: track filenames that were truncated mid-stream. The previous
     // implementation skipped truncated files from `files` and relied on
@@ -180,7 +182,7 @@ function parseMultipartBody(
     })
 
     bb.on('field', (name: string, value: string) => {
-      fields[name] = value
+      appendField(fields, name, value)
     })
 
     bb.on(
