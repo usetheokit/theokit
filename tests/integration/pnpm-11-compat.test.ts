@@ -4,6 +4,8 @@ import { mkdtempSync, rmSync, existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir as osTmpdir } from 'node:os'
 
+import { unpublishedPins } from '../../scripts/unpublished-pins.js'
+
 /**
  * theokit-evolution-ci-and-dx Phase 1C — pnpm 11+ compat gate.
  *
@@ -38,35 +40,32 @@ const LOCAL_CLI = join(import.meta.dirname, '../../packages/create-theokit/dist/
  * That window is real and the red is honest, so the test does not skip it. It just says so, instead
  * of leaving the reader with `expected false to be true`. Backlog B-M67-08.
  */
-function unpublishedPinNote(appDir: string): string {
-  let deps: Record<string, string>
+/**
+ * The first-party pins the registry does not have, or an empty list.
+ *
+ * The decision lives in `scripts/unpublished-pins.ts` so it can be tested without a network; this
+ * reads the manifest and probes npm for it.
+ */
+function unpublishedPinsOf(appDir: string): string[] {
+  let deps: Record<string, string> | undefined
   try {
     deps = (
       JSON.parse(readFileSync(join(appDir, 'package.json'), 'utf-8')) as {
         dependencies?: Record<string, string>
       }
-    ).dependencies!
+    ).dependencies
   } catch {
-    return ''
+    return []
   }
-  const missing: string[] = []
-  for (const [name, range] of Object.entries(deps ?? {})) {
-    if (!name.startsWith('theokit') && !name.startsWith('@theokit/')) continue
-    const version = /^\^?(\d+\.\d+\.\d+)$/.exec(range)?.[1]
-    if (version === undefined) continue
+  return unpublishedPins(deps, (spec) => {
     try {
       // eslint-disable-next-line sonarjs/no-os-command-from-path -- integration test probes the registry
-      execFileSync('npm', ['view', `${name}@${version}`, 'version'], { stdio: 'pipe' })
+      execFileSync('npm', ['view', spec, 'version'], { stdio: 'pipe' })
+      return true
     } catch {
-      missing.push(`${name}@${version}`)
+      return false
     }
-  }
-  if (missing.length === 0) return ''
-  return (
-    `The template pins ${missing.join(', ')}, which the registry does not have yet — this is the ` +
-    `window between \`changeset version\` and \`changeset publish\`, not a pnpm-11 defect. ` +
-    `Publish the pending release and re-run.\n`
-  )
+  })
 }
 
 function hasCorepack(): boolean {
@@ -200,7 +199,7 @@ describe.skipIf(!infraReady)('pnpm 11 compat — scaffold + install + dev boot',
     const tpl = TEMPLATES[i]!
     const port = 5000 + i // 5000-5004
 
-    it(`template ${tpl} installs + boots dev via pnpm 11 without ERR_PNPM_IGNORED_BUILDS`, async () => {
+    it(`template ${tpl} installs + boots dev via pnpm 11 without ERR_PNPM_IGNORED_BUILDS`, async (ctx) => {
       // v1.1 EC-7 pre-flight: port collision check actionable
       if (await isPortBusy(port)) {
         throw new Error(`Port ${port} busy. Free it: lsof -ti :${port} | xargs kill -9`)
@@ -230,6 +229,19 @@ describe.skipIf(!infraReady)('pnpm 11 compat — scaffold + install + dev boot',
         const workspaceYaml = readFileSync(join(appDir, 'pnpm-workspace.yaml'), 'utf-8')
         expect(workspaceYaml).toMatch(/^\s*esbuild:\s*true\s*$/mu)
 
+        // The release window is not this test's subject. Between `changeset version` and
+        // `changeset publish` the template pins a version the registry does not have, so the
+        // install cannot succeed for a reason that has nothing to do with pnpm 11's build
+        // approvals. Failing here deadlocked the release (#438): this is a REQUIRED check on
+        // `main`, and its own message asked for the publish that the failing check prevents.
+        const pending = unpublishedPinsOf(appDir)
+        if (pending.length > 0) {
+          ctx.skip(
+            `template pins ${pending.join(', ')}, which the registry does not have yet — the ` +
+              `window between \`changeset version\` and \`changeset publish\`, not a pnpm-11 defect`,
+          )
+        }
+
         // Step 3: install via pnpm 11 (env-scoped). pnpm 11 exits non-zero on
         // ERR_PNPM_IGNORED_BUILDS even when install completed. Check by file
         // presence, not exit code.
@@ -252,8 +264,7 @@ describe.skipIf(!infraReady)('pnpm 11 compat — scaffold + install + dev boot',
         }
         expect(
           existsSync(join(appDir, 'node_modules/theokit')),
-          `pnpm install did not produce node_modules/theokit.\n` +
-            `${unpublishedPinNote(appDir)}pnpm stderr:\n${installStderr.slice(-2000)}`,
+          `pnpm install did not produce node_modules/theokit.\npnpm stderr:\n${installStderr.slice(-2000)}`,
         ).toBe(true)
 
         // The title's promise, asserted. Until #397 this test tolerated
