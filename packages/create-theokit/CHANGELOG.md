@@ -1,5 +1,155 @@
 # create-theo
 
+## 1.23.10
+
+### Patch Changes
+
+- 91fce47: An agent now declares who may run it, and every endpoint it exposes obeys that declaration.
+
+  An agent file exports a `policy` — the string `'public'`, or a function over
+  `{ subject, body, params }` — and the run endpoint, the thread routes, the pending-approval listing,
+  the approve route and MCP all evaluate it, through the same function the route executors and the
+  in-process caller use. `params` carries `{ agent, endpoint, sessionId?, approvalId? }`, so one
+  declaration can answer the endpoints differently. `requireOwner` is the primitive for the owner
+  check, the same one routes use.
+
+  Identity comes from `ctx.subject`, produced by the application's own `server/context.ts`. That seam
+  is the one every `route()` already reads and no agent URL ever reached: the agent endpoints are
+  dispatched before route matching, so no route, no `server/middleware/` and no `server/context.ts`
+  observed those URLs, and the endpoints resume the conversation the caller names. The check runs
+  before the module is compiled and long before the SDK — an agent run spends real tokens, so a caller
+  who may not run it is turned away before any of that is paid for.
+
+  **Breaking.** The agent scanner refuses a file under `agents/` that declares nothing, so
+  `theo build`, `theo start` and `theo dev` fail until each agent says something. The error names the
+  file, the URL it serves and the two ways out. This is the same gate the route scanner applies, and
+  absence had to stop meaning open here for a sharper reason than it did there: no runtime default is
+  both safe and non-breaking, because refusing every caller-supplied session id breaks multi-turn chat
+  and admitting them is the defect. `'public'` is still an answer — it says out loud that the app runs
+  a capability model, where holding an id is the whole of the permission. Nothing changes for an agent
+  module built in memory and handed to `mountAgent` directly; that value never passes a scanner.
+
+  Also breaking: `GET /api/agents/<name>/approvals` is gated by the same declaration and 404s for an
+  agent that does not exist, and a refusal from any agent endpoint no longer repeats which check
+  refused it — the wire gets one fixed message naming what to supply, and the reason goes to the
+  server log.
+
+  The scaffold's agent declares `export const policy = 'public'`, with the owner check written out
+  above it. `MIGRATION.md` has the guide.
+
+- 8080434: Scroll restoration now covers the element your layout scrolls, not only the document.
+
+  The router mounted react-router's `<ScrollRestoration>`, which restores `window.scrollY`. A layout
+  that scrolls an inner element — which is what the default scaffold ships — leaves the document with
+  no offset to save, so restoration ran and restored nothing.
+
+  Mark the element with `data-theo-scroll="<id>"` and its offset is restored on back navigation. The
+  value is the id, so a page with two scrollers stays unambiguous. Declared rather than detected:
+  walking the DOM for `overflow: auto` picks a container silently, and a different one as the layout
+  changes.
+
+- 6982cfa: Reproducing production locally is one command, and a back navigation returns to where the reader left off.
+
+  `theokit preview` builds and then serves, in that order, stopping at the first failure. It replaces
+  `theokit build && theokit start`, whose failure mode is silent: `start` serves whatever `.theokit/`
+  already holds, so a skipped or failed build serves the previous one and nothing says so — worst
+  exactly when the two-step version is being used, which is to check whether a change works. It is not
+  a third implementation of either step; both stay separately invocable, because CI builds and serves
+  in different jobs. Scaffolded projects gain a matching `preview` script.
+
+  `ScrollRestoration` is mounted once at the root of the generated route manifest. It was mounted
+  nowhere, so a back navigation landed wherever the browser had left the offset. It sits beside the
+  application's own root element rather than replacing it, so a layout still receives `<Outlet />` as
+  its `children`.
+
+  Mounting it costs nothing at render time and nothing in the document. In a `createBrowserRouter`
+  application the component returns early — react-router's Framework Mode context is absent — so it
+  renders `null` on the server and on the client alike, emits no `<script>` and needs no CSP nonce.
+  That is what keeps the server tree byte-identical to the client one, the parity the renderer already
+  protects with `hydrate: false` after a tree mismatch measured CLS 0.39. The restoration itself runs
+  in `useScrollRestoration`, which needs only the data-router context `RouterProvider` supplies.
+
+  One assertion changed shape rather than intent: the manifest imported `Outlet` only when a layout
+  existed, and now always imports it, because the root's new element renders children through it.
+
+- 15f81f7: `create-theokit … --use-pnpm` stops reporting a failure on a successful install.
+
+  pnpm 10 no longer reads the `pnpm` field in `package.json` — it says so in the first line of every
+  run — and that is where the template declared which dependencies may run install scripts. The list
+  was dropped, `esbuild` and `node-pty` were refused, `ERR_PNPM_IGNORED_BUILDS` set a non-zero exit,
+  and the scaffolder turned that into `✗ Failed to install dependencies with pnpm`. The very first
+  command in the quickstart reported failure on a directory that was complete.
+
+  The state it left behind was worse than the message: pnpm wrote a `pnpm-workspace.yaml` whose values
+  are the sentence _"set this to true or false"_, so the project began life with a config file that
+  reads like an unanswered question.
+
+  The scaffold now ships `pnpm-workspace.yaml` with the approvals already decided, and drops the field
+  from `package.json` — leaving it there costs a warning on every install for a setting that does
+  nothing.
+
+  Each entry says what the package is and why it needs to run code at install time, because approving
+  a build script is a decision about running arbitrary code on your machine, not boilerplate.
+
+- d7f8d8d: The scaffold's documented `LLM_MODEL` override is read.
+
+  `.env.example` offered the variable and nothing in the framework read it, so a developer who
+  uncommented it, set a model and restarted got the model `agents/chat.ts` declares — silently. The
+  outcome is indistinguishable from the override working and picking the same value, which sends the
+  reader looking for the cause somewhere else entirely.
+
+  The generated agent now reads it where the model is already declared:
+
+  ```ts
+  .model(process.env.LLM_MODEL ?? 'openai/gpt-4o-mini')
+  ```
+
+  No framework surface was added. The model lives in a file the developer owns and edits, so a knob a
+  template can honour in one expression does not need an override path threaded through the
+  framework — and the value stays visible in the file that decides it. The literal remains as the
+  fallback, because a scaffold has to run with no environment at all.
+
+  The comment beside it named `ModelCapability`, a concept that exists only inside the agents package
+  and its tests and appears nowhere a scaffolded app can reach. It now names `agents/chat.ts`, which
+  is a file the reader has.
+
+- 19185b2: Conversation transcripts stop landing in git.
+
+  Every conversation a TheoKit app serves is written to `<app>/.data/agent-sessions/…/<sessionId>.jsonl`.
+  The scaffold's ignore file listed `data/` — without the leading dot — which matched nothing the
+  framework writes. A developer who ran the app once and committed put the full transcript of every
+  turn into version control: prompts, answers, tool inputs, tool results, and then into whatever
+  repository they pushed to.
+
+  The scaffold ignores `.data/` now, which covers the transcripts and the local SQLite database that
+  lives beside them.
+
+  What let this survive is worth naming: the comment above `resolveSessionBaseDir` asserted the
+  directory was "git-ignored", so the protection looked already handled to anyone reading the code.
+  Nothing in the framework can make that true — the ignore file is in a different tree — and the
+  comment now says so.
+
+  The regression test derives the path from `resolveSessionBaseDir` rather than repeating `.data/`, so
+  moving the transcripts breaks a test instead of quietly leaking again.
+
+- 171f4e3: A freshly scaffolded app passes `tsc --noEmit` again. The template typed its transcript as
+  `@theokit/ui`'s `UIMessage` while filling it from `useAgent()`, which returns the framework's wire
+  message; the two are deliberately different types and neither can be assignable to the other.
+
+  The app now types against what it receives and converts at the render boundary, in
+  `app/lib/renderable.ts` — a projection that validates each part and drops what the installed
+  component library has no renderer for, with no casts. A new CI job scaffolds the template and
+  typechecks it against the packages a real user installs, which is what neither #80 nor #396 had.
+
+- 46fb9d6: Scaffolded files are written with `O_NOFOLLOW`, so a symlink planted at a predictable name in the
+  target directory no longer redirects the write. Creating and overwriting behave exactly as before.
+- 4fd8f48: The `tui` and `desktop` surfaces declare their own `build` script. Both inherited the default
+  template's `theokit build`, whose first act is to require the `app/` directory the same scaffold
+  removes — so `npm run build` failed immediately on a correctly scaffolded project. `desktop` now
+  builds with `tauri build` (whose `beforeBuildCommand` already chains the frontend and the sidecar),
+  and `tui` typechecks with `tsc --noEmit`, because a terminal app runs from source and has no artifact
+  to bundle. (usetheokit/theokit#374)
+
 ## 1.23.9
 
 ### Patch Changes

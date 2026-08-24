@@ -1,5 +1,861 @@
 # theo
 
+## 0.50.0
+
+### Minor Changes
+
+- bfeaebe: A placeholder session secret no longer boots in production.
+
+  `assertProductionSecret` has always been exported, always been documented as the production guard,
+  and — until now — was called by nothing. `createSessionManager` and `createSessionManagerWeb` both
+  validated their secret through `normalizeSecrets`, which enforces a 32-character floor in every
+  environment and knows nothing about placeholders. The gap between the two functions was exactly the
+  placeholder check, so a 32-or-more character `CHANGE_ME…` sailed through into production.
+
+  The dev-time warning was in the same position. The sentence telling a developer that "the
+  production server will REFUSE to boot until you replace it" lived inside the uncalled function, so
+  the developer never saw the warning and the refusal never fired. A promise made by unreachable code
+  reads as a guarantee.
+
+  Both session managers now resolve their secret through one function that runs both checks. The
+  order is deliberate: the length floor speaks first, so a short secret keeps the message it has
+  always had, and only then does the production guard get its say.
+
+  **This can refuse a boot that previously succeeded** — which is the entire point, and is why it is
+  a minor rather than a patch. If your deployment starts refusing, the secret it is refusing is one
+  of:
+
+  - shorter than 32 characters, or
+  - matching `CHANGE_ME`, `demo-`, `demo_` or `placeholder` (case-insensitive)
+
+  Replace it with a real one — `openssl rand -hex 32` — rather than working around the refusal.
+  Outside production nothing is refused; you get the warning instead, which is now actually reachable.
+
+- 91fce47: An agent now declares who may run it, and every endpoint it exposes obeys that declaration.
+
+  An agent file exports a `policy` — the string `'public'`, or a function over
+  `{ subject, body, params }` — and the run endpoint, the thread routes, the pending-approval listing,
+  the approve route and MCP all evaluate it, through the same function the route executors and the
+  in-process caller use. `params` carries `{ agent, endpoint, sessionId?, approvalId? }`, so one
+  declaration can answer the endpoints differently. `requireOwner` is the primitive for the owner
+  check, the same one routes use.
+
+  Identity comes from `ctx.subject`, produced by the application's own `server/context.ts`. That seam
+  is the one every `route()` already reads and no agent URL ever reached: the agent endpoints are
+  dispatched before route matching, so no route, no `server/middleware/` and no `server/context.ts`
+  observed those URLs, and the endpoints resume the conversation the caller names. The check runs
+  before the module is compiled and long before the SDK — an agent run spends real tokens, so a caller
+  who may not run it is turned away before any of that is paid for.
+
+  **Breaking.** The agent scanner refuses a file under `agents/` that declares nothing, so
+  `theo build`, `theo start` and `theo dev` fail until each agent says something. The error names the
+  file, the URL it serves and the two ways out. This is the same gate the route scanner applies, and
+  absence had to stop meaning open here for a sharper reason than it did there: no runtime default is
+  both safe and non-breaking, because refusing every caller-supplied session id breaks multi-turn chat
+  and admitting them is the defect. `'public'` is still an answer — it says out loud that the app runs
+  a capability model, where holding an id is the whole of the permission. Nothing changes for an agent
+  module built in memory and handed to `mountAgent` directly; that value never passes a scanner.
+
+  Also breaking: `GET /api/agents/<name>/approvals` is gated by the same declaration and 404s for an
+  agent that does not exist, and a refusal from any agent endpoint no longer repeats which check
+  refused it — the wire gets one fixed message naming what to supply, and the reason goes to the
+  server log.
+
+  The scaffold's agent declares `export const policy = 'public'`, with the owner check written out
+  above it. `MIGRATION.md` has the guide.
+
+- 5f90ddd: A run that was cut short says so. The terminal `done` frame and the turn metadata a client reads off
+  `UIMessage.metadata` now carry an optional `stopReason` — `'step_limit'` when the loop ran out of
+  tool-calling turns while the model still wanted more, `'no_progress'` when the doom-loop guard
+  stopped it repeating identical tool calls. The observability span `agent.run` records the same value
+  as `stop.reason`.
+
+  Both outcomes reached the caller as an ordinary `done` before this, identical in every field to a run
+  that finished on its own, so a surface could not tell "the agent answered" from "the agent was cut off
+  with a tool call still pending". The SDK reported both on its `RunResult`; the adapter's locally-typed
+  `wait()` declared no field to read them from, so nothing read them.
+
+  This is not the rare case it looks like: the SDK's iteration budget defaults to 8, so every served run
+  needing a ninth tool-calling turn was being truncated and reported as finished — including runs of
+  agents that never declared a ceiling.
+
+  Two reasons rather than a `truncated` flag, because they demand opposite reactions: `step_limit` means
+  re-sending continues the work, `no_progress` means re-sending repeats the loop that was just cut.
+  Nothing here re-sends — the SDK owns continuation; this reports the outcome.
+
+  A run that finishes on its own is unchanged: the field is absent, not `undefined`, so absence keeps
+  meaning "the agent finished" and a consumer that has never heard of `stopReason` receives exactly what
+  it received before.
+
+- c131170: A run whose connection drops mid-answer is reported as interrupted instead of finished. The agent
+  client used to settle a dropped stream in `status: 'done'` with `error` undefined and half a sentence
+  on screen — the spinner stopped, the error surface stayed empty, and the truncated turn was committed
+  to the thread as a completed one. `reconnect()` and the durable replay route were fully built and
+  unreachable, because the only trigger a consumer has for them is a status that never arrived.
+
+  `consumeChunkStream` (and `consumeUIMessageStream`) now return a `ChunkStreamOutcome` saying whether
+  the stream carried its terminal `finish` chunk and how many chunks crossed. When it did not,
+  `AgentClient` settles `status: 'error'` with an `AgentStreamInterruptedError` — a `TheokitAgentError`
+  with `code: 'AGENT_STREAM_INTERRUPTED'` and `isRetryable: true`, so `isTransientError` sees it and a
+  consumer decides on the type instead of on message text. The text already received stays on screen,
+  and `send()`'s existing rule keeps the truncated turn out of history.
+
+  The status is `'error'` rather than a new `'interrupted'` member on purpose: a new member fixes the
+  lie only for consumers who update their switch, while every other surface keeps rendering a finished
+  turn. Reusing `'error'` fixes it for all of them at once, and the reason for it lives in the typed
+  error where this framework already puts error discrimination.
+
+  This is a different axis from `stopReason` (#379), not another member of it. `stopReason` says why the
+  RUN stopped and rides the terminal frame's metadata; an interruption is the absence of that frame,
+  where the client cannot know why the run stopped because it never heard.
+
+  A stream that ends on its terminal `finish` chunk is unchanged, down to the fields on the snapshot.
+  A custom transport that never emitted `finish` — which no framework producer does, since
+  `presentUIMessageStream` emits it on every path including the error one — will now be reported as
+  interrupted, which is what it always was.
+
+- 03bd8f8: An approval belongs to someone, and only they can settle it.
+
+  The HITL ledger keyed approvals by a bare id and recorded no owner. The agent's policy could answer
+  _"may this subject touch this agent's approvals"_ and never _"is this approval theirs"_, so an
+  authenticated tenant could settle another tenant's approval on an agent both were admitted to — the
+  policy was the only thing between them, and it cannot see whose approval it is. The gap was
+  documented in `agent-access.ts` as real and open; this closes it within a stated scope.
+
+  `mountAgent` now records the run's subject on each approval it registers, and the approve endpoint
+  refuses a caller whose identity does not match. A caller who cannot be identified at all is refused
+  too: an approval that has an owner must not be settleable by whoever reaches the endpoint without an
+  identity, or the guarantee would depend on how the host wired its resolver rather than on who is
+  asking.
+
+  **The check only ever narrows, and two paths are deliberately untouched.** An agent that declares
+  `'public'` records no owner — attributing its approvals would start refusing callers the declaration
+  admits, which is a behaviour change dressed as a bug fix. And a thread continuation runs headless,
+  with no request whose identity could be resolved, so its approvals record nobody. In both cases the
+  endpoint behaves exactly as before, and `params.approvalId` is still passed to the policy so an
+  application holding its own owner map can answer more than the framework does.
+
+  Owner ids are not exposed through the pending-approval listing: that listing feeds a UI, and who
+  else is waiting on an agent is identity rather than status.
+
+  `ApprovalRegistry` gains `ownerOf(approvalId)`. A custom implementation of that interface must add
+  it.
+
+- 577bcd0: The generated Cloudflare Worker no longer reaches for a filesystem it does not have.
+
+  The emitted worker discovered its routes by calling `scanServerRoutes` — a `readdirSync` — against a
+  directory that does not exist on Workers, then loaded each module through `import()` of a file path
+  via `pathToFileURL`. It answered "are there WebSocket routes?" with a second `readdirSync`. Three
+  calls, none of which can succeed there.
+
+  Routes are now scanned on the build machine and baked into the worker: a static `import` per route
+  module, a literal route table, and a loader that serves only what the build bundled. Static because
+  Wrangler's bundler follows those imports — `wrangler.toml` uploads `.theokit/client` and has never
+  uploaded `server/`, so a module not bundled _into_ the worker is not on the platform at all.
+
+  This is the road the adapter already took for the document shell one function away, for the same
+  stated reason: a Worker has no filesystem at request time.
+
+  The scanner is injected through `AdapterBuildContext.scanRoutes` rather than imported, because
+  importing it would add an `adapters → server` edge — the layering inversion ADR-0001 v3 removed for
+  `vite-plugin`. An adapter given no scanner emits a worker with no routes rather than falling back to
+  a runtime scan: the fallback is the defect.
+
+  Route precedence is unchanged — the pattern is recompiled from the same `routePath` the scanner
+  produced, through the same `compilePattern`, so one function decides precedence on every target.
+
+  **Not verified on the platform.** No deploy runs in CI. What is proven is that the emitted worker no
+  longer calls three APIs that cannot exist there, and that it parses as an ES module.
+
+- 54bc00f: The deploy shim delivers bytes as the handler produces them, instead of collecting the whole
+  response and handing it over at the end.
+
+  `createWebShim`'s `res.write()` now enqueues into a `ReadableStream` that the `Response` already
+  carries, and `toResponse()` settles the moment status and headers are known — at `writeHead()`, or
+  at the first `write()`/`end()` when the caller never called `writeHead()`. It used to settle only
+  inside `end()`, from a single concatenation of every chunk, so no byte was observable before the
+  handler returned. Measured through the shim, a run emitting a chunk every 120 ms arrived as one
+  chunk at the millisecond the run ended; on the served Node path the same run arrived as eight.
+
+  Fixing the shim alone would not have reached the wire. Every emitted handler awaited `executeRoute()`
+  before asking for the Response, which re-buffered the whole body in the handler — a second buffering
+  point, one per target. All six now pass the in-flight run into `toResponse(executeRoute({ … }))`.
+  The Vercel function additionally drained the Response into a string; it now writes chunk by chunk
+  into the Node response and its `.vc-config.json` declares `supportsResponseStreaming`, without which
+  the platform buffers regardless of how the handler writes.
+
+  Three contract points the caller has to know about:
+
+  - **Headers freeze at the first byte.** `setHeader()`/`writeHead()` after the Response has been
+    handed out now throw, naming the header, the way Node's own `ServerResponse` raises
+    `ERR_HTTP_HEADERS_SENT`. They cannot be honoured once bytes are moving, and silently dropping them
+    is a lie the caller never sees.
+  - **Backpressure is reported.** `write()` returns `false` once the outbound queue passes 64 KiB and
+    `once('drain', cb)` fires when the consumer makes room; the framework's own stream writer honours
+    both, so a slow consumer no longer lets the queue grow without bound.
+  - **A failure after the first byte cannot become a status code.** `toResponse(pending)` rejects when
+    the run fails before the headers are out, and errors the body stream when it fails after — so the
+    consumer sees a broken stream rather than a short body that looks complete.
+
+  `aws-lambda` is delisted for response streaming rather than fixed. Its v2 result object carries the
+  body as a string, so nothing can leave the function before the run ends; streaming would need
+  `awslambda.streamifyResponse` and a Function URL in `RESPONSE_STREAM` invoke mode, which this adapter
+  does not emit and which would break every API Gateway deployment of it. The build now refuses by name
+  when `ssrStreaming` is on, and the emitted handler logs the route by name when it buffers a
+  `text/event-stream` response. `DeployAdapter` gained `streamsResponses` so every target states its
+  answer instead of being listed for something nobody exercised.
+
+- cbc1714: Every Web deploy target now serves the security headers the app configured.
+
+  `theokit start` applied the configured baseline to every response it wrote, and none of the six
+  Web-standards deploy adapters applied any. A page served from Vercel, Cloudflare, Netlify, Bun,
+  Deno Deploy or AWS Lambda carried no Content-Security-Policy, no `X-Frame-Options`, no
+  `Strict-Transport-Security` and no `X-Content-Type-Options`, while the same page under
+  `theokit start` carried all four. Clickjacking and MIME-sniffing defences an operator had declared
+  existed only in development.
+
+  Each emitted entry now carries `security.headers` as a build-time literal, calls the same
+  `buildSecurityHeaders` the local server calls, and applies the result at one point per handler —
+  including the not-found branches, so a later edit cannot add a response that skips them. A header
+  the route set itself is never overruled, matching how the local server lets a handler win.
+
+  Two limits are stated rather than left to be found in production, and the build prints both:
+
+  - **The CSP carries no nonce**, except on Cloudflare with `ssrStreaming: true`. A nonce is minted
+    per response and cannot survive a build-time literal, so only a target that renders the HTML at
+    request time can put the same value on the header and on the script tag. The streamed Cloudflare
+    worker does exactly that and gets a per-request nonce; everywhere else an inline `<script>` is
+    refused by `script-src 'self'` — the same answer the framework already gives a prerendered route.
+  - **On four targets the HTML document is served by the platform's static host**, not by the handler
+    these headers are attached to, so they reach `/api/*` and not the page. Configuring the
+    document's headers on the platform is tracked separately.
+
+  The rate-limit half of the same deployment gap is untouched: it needs a per-runtime client address
+  and is not a build-time value.
+
+- 44edd0f: A build now names every configuration key the chosen deploy target validates and then never applies.
+
+  `theo.config.ts` parses `rateLimit`, `security.cors`, `security.csrf`, `security.disallowed` and
+  `serialization` for every target, and the six Web-standards adapters build `executeRoute`'s context
+  from a subset of its fields — so on a deployed app the rest fall back to hard-coded defaults, and
+  `security.cors` reaches no production target at all. An operator who declared a rate limit got none,
+  and nothing anywhere said so.
+
+  Each adapter now declares which of those concerns the handler it emits actually applies, following
+  the contract `streamsResponses` already established: omitted means none, on purpose, so a new
+  adapter has to state what it honours rather than inherit a silent yes. An adapter that emits no
+  request handler answers `runtime-not-emitted-here`, which is a different fact from "drops
+  everything" and is reported as neither.
+
+  `theokit build` prints the difference before it builds, naming the keys as they appear in the config
+  file and what to do about each. It warns rather than refuses: refusing would break every deployment
+  that declares a rate limit today, while the fix those keys are waiting for is not a build away.
+
+  Nothing is dropped when the declared value equals what an unwired target does anyway —
+  `csrf: 'strict'` and `serialization: 'json'` are honoured by coincidence, and a warning over an
+  identical outcome only teaches operators to skip the block.
+
+- 19dd55f: Agents are served on the `cloudflare`, `bun` and `deno-deploy` deploy targets. They were served on
+  none: every generated entry routed `/api/` through the file-route table alone, so `/api/agents/<name>`
+  answered 404 everywhere and an agent reached production only on a machine running `theokit start`.
+
+  Cloudflare bakes its agent modules as static imports (a Worker has no filesystem); Bun and Deno scan
+  at request time, the same way they already scan routes. `vercel`, `netlify` and `aws-lambda` receive
+  a standalone function directory that never sees the app's modules and cannot serve an agent by this
+  road — every adapter now declares `servesAgents` so the gap is stated rather than assumed.
+
+  New subpath `theokit/adapters/agent-mount`, the door generated entries use to reach `mountAgent`.
+  `theokit/server` still does not export it: ADR 0041's boundary is about what an application may
+  import, and a generated entry is this framework's own code.
+
+- faba80b: Plugin lifecycle hooks now fire on a deployed app for the `cloudflare`, `bun` and `deno-deploy`
+  targets. They were dead on every Web-standards deployment while firing locally, so observability and
+  auth plugins were inert in production with nothing saying so.
+
+  A plugin declared by module specifier (`plugins: ['./src/plugins/audit.ts']`) is imported by a module
+  the build writes beside the entry. Those three targets bundle their output from the project, so the
+  static import reaches the app's own module; `vercel`, `netlify` and `aws-lambda` receive a standalone
+  function directory that never sees the app's source and keep declaring the concern unapplied.
+
+  A constructed plugin handed to a target that can carry a named one now fails the build, naming the
+  plugin and showing the specifier form. This is deliberate: it was previously dropped in silence.
+
+- 8080434: Scroll restoration now covers the element your layout scrolls, not only the document.
+
+  The router mounted react-router's `<ScrollRestoration>`, which restores `window.scrollY`. A layout
+  that scrolls an inner element — which is what the default scaffold ships — leaves the document with
+  no offset to save, so restoration ran and restored nothing.
+
+  Mark the element with `data-theo-scroll="<id>"` and its offset is restored on back navigation. The
+  value is the id, so a page with two scrollers stays unambiguous. Declared rather than detected:
+  walking the DOM for `overflow: auto` picks a container silently, and a different one as the layout
+  changes.
+
+- e884903: The HITL pause span measures the human's wait, not the human plus the model.
+
+  `agent.hitl` was ended when the gated tool produced output, on the premise — stated in the code —
+  that "the tool producing output IS the resume". The wire refuted it: with the approval answered at
+  ~3306 ms, that chunk arrived at 4829 ms, and across three runs varying only the model's post-resume
+  latency the excess tracked it 1:1 (20 ms → +30 ms, 700 ms → +723 ms, 1500 ms → +1524 ms). The
+  premise holds only when the model is instantaneous, which is the one case nobody deploys.
+
+  The resume happens on a different HTTP request — the approve endpoint — which the run's observer
+  never sees. The span handle now lives in a registry keyed by approval id that both reach, and the
+  approve endpoint closes it at the instant the answer arrives, so the duration is the human's by
+  construction rather than by subtraction.
+
+  Closing is idempotent because the registry drops the handle: the tool result arriving seconds later
+  cannot re-close a span the approval already ended, which would have reintroduced the defect through
+  the fallback path. That fallback still runs for transports that settle an approval without an
+  approve request — the terminal prompt among them — so their behaviour is unchanged.
+
+  In-process, like the approval registry it shadows: the handle is a live object, so pause and resume
+  must be in one process. A multi-instance deploy resumes on whichever instance the approve request
+  reaches, and elsewhere the span falls through to the end-of-run sweep and is marked
+  `hitl.resume_observed=false` rather than reporting a duration it did not measure.
+
+- 7dfedb8: `theokit/server/http` exports sixteen symbols that previously existed only behind the deprecated
+  `theokit/server` umbrella: `executeWebRequest`, `callProcedure`, `ProcedureInputError`,
+  `ProcedureOutputError`, `validateRouteInput`, `parseRequestBody`, `FileTooLargeError`,
+  `jsonTransformer`, `superjsonTransformer`, `resolveTransformer`, `createOpenApiHandler`,
+  `ActionError`, `ActionInputError`, `isActionError`, `isInputError` and `extractUniversalIssues`. The
+  umbrella's own deprecation message tells consumers to move to a subpath, and for these there was
+  none.
+- 6982cfa: `<Image>` now reserves its space, and refuses a `srcSet` that cannot be resolved. **Breaking for callers who omitted dimensions.**
+
+  The component's own documentation said "width/height for CLS prevention" and enforced neither: both
+  were forwarded when present and absent when not, so the shift the comment named was the default
+  behaviour. `srcSet` was accepted without `sizes` the same way, and a browser given no `sizes`
+  resolves the candidates against `100vw` — it downloads an image picked for the wrong width, usually
+  the largest, which is the opposite of what adding a `srcSet` was meant to achieve.
+
+  `width` and `height` are now required, and `srcSet` and `sizes` travel together or not at all. Both
+  are expressed in the type, so a TypeScript caller finds out at build time with the prop named, at no
+  runtime cost. A JavaScript caller gets a thrown error naming the prop and the consequence rather
+  than a page that shifts.
+
+  Migration: pass the intrinsic pixel dimensions. CSS may still resize the image — the attributes give
+  the browser the aspect ratio to reserve, they do not fix the rendered size. If a `srcSet` was
+  declared without `sizes`, add `sizes`; the candidates were being resolved against `100vw` until now,
+  so the picked image is likely to change, and that is the fix rather than a regression.
+
+  Still explicitly out of scope, and now stated in the component's documentation instead of being left
+  to inference: nothing here resizes or re-encodes an image, and the framework ships no fonts module.
+
+- cf40254: `<Metadata>` refuses a relative `ogImage` in development.
+
+  Open Graph resolves `og:image` against the **crawler's** origin, not the page's, so a relative path
+  produces a tag that is present, well-formed and broken. It renders correctly in the browser, which
+  is why nobody finds out until the link has been shared — the one moment the card exists to serve.
+  The component's own documented example taught the broken form, and now shows an absolute URL.
+
+  The check runs in development only, and the asymmetry is deliberate rather than a compromise.
+  Throwing in production would turn a broken social card into a 500 on a page that otherwise renders,
+  trading a defect for an outage. Throwing in development puts the failure in front of the only person
+  who can fix it, at the moment they wrote it, and costs a production page nothing.
+
+  Protocol-relative URLs (`//cdn.example.com/og.png`) and `data:` URIs are accepted: neither has an
+  origin a crawler can resolve wrongly.
+
+  Migration: pass an absolute URL. If your `ogImage` is relative today, the card is already broken for
+  everyone but you.
+
+- ab56b38: **Breaking (types):** `MiddlewareHandler` — what `middleware().handle(fn).build()` and
+  `defineMiddleware(fn)` accept — changed from `(request, next) => Response` to
+  `(request, context) => Response | void`. Return a `Response` to answer the request; return nothing to
+  continue to the next middleware and then the route.
+
+  The old shape described a continuation pipeline nothing in the framework implements, and it had zero
+  runtime consumers: a middleware authored through the documented builder could not be invoked by the
+  runner that loads `server/middleware/*.ts`. Any code written against the old signature never ran, so
+  the compile error this raises is the first honest signal it could get.
+
+  Express-style `(req, res, next)` middleware files are unaffected and keep working; both shapes now
+  run, in filename order. Web-shaped middleware can also decorate the route's `ctx`, which no file
+  middleware could do before.
+
+- ed18294: `config.plugins` accepts a module specifier alongside a constructed plugin:
+  `plugins: ['./src/plugins/audit.ts', inlinePlugin()]`. A string is resolved to that module's default
+  export by both `theokit start` and the Vite dev server, so one declaration serves both.
+
+  This exists because a constructed plugin closes over state and has no literal, which is why no
+  generated deploy entry could ever carry one. Naming the module lets the build emit a static import
+  for that module and nothing else. Purely additive — an app passing objects is unaffected.
+
+  A specifier that cannot be loaded, or whose module has no default export, fails by name with its
+  index. Skipping it would leave an app running with one fewer plugin than it declared and nothing
+  saying so.
+
+- 6982cfa: Reproducing production locally is one command, and a back navigation returns to where the reader left off.
+
+  `theokit preview` builds and then serves, in that order, stopping at the first failure. It replaces
+  `theokit build && theokit start`, whose failure mode is silent: `start` serves whatever `.theokit/`
+  already holds, so a skipped or failed build serves the previous one and nothing says so — worst
+  exactly when the two-step version is being used, which is to check whether a change works. It is not
+  a third implementation of either step; both stay separately invocable, because CI builds and serves
+  in different jobs. Scaffolded projects gain a matching `preview` script.
+
+  `ScrollRestoration` is mounted once at the root of the generated route manifest. It was mounted
+  nowhere, so a back navigation landed wherever the browser had left the offset. It sits beside the
+  application's own root element rather than replacing it, so a layout still receives `<Outlet />` as
+  its `children`.
+
+  Mounting it costs nothing at render time and nothing in the document. In a `createBrowserRouter`
+  application the component returns early — react-router's Framework Mode context is absent — so it
+  renders `null` on the server and on the client alike, emits no `<script>` and needs no CSP nonce.
+  That is what keeps the server tree byte-identical to the client one, the parity the renderer already
+  protects with `hydrate: false` after a tree mismatch measured CLS 0.39. The restoration itself runs
+  in `useScrollRestoration`, which needs only the data-router context `RouterProvider` supplies.
+
+  One assertion changed shape rather than intent: the manifest imported `Outlet` only when a layout
+  existed, and now always imports it, because the root's new element renders children through it.
+
+- 4b6d612: Every route file declares who may call it, and absence stops meaning open.
+
+  **Breaking**, for every application with routes under `server/routes/`. The route scanner refuses a
+  file whose HTTP export declares no `policy`, so `theo build`, `theo start`, `theo dev`, `theo routes`
+  and every deployment adapter fail until each route says something. The error names the file, the URL
+  it serves and the methods that are silent.
+
+  `RouteConfig.policy` shipped optional in 0.49.0, and optional meant a route nobody had thought about
+  was indistinguishable from a route deliberately left open: both had no policy, and both were served
+  to anyone. ADR 0001 calls that the fail-open-by-omission class and closes it by making the absence a
+  build error rather than a silent default. `'public'` is still an answer — it is just an answer
+  somebody has to write down, which is what turns "how much of this app is open" into a number you can
+  `grep` for.
+
+  ```diff
+    export const GET = route()
+  +   .policy('public')
+      .handler(() => ({ status: 'ok' }))
+      .build()
+  ```
+
+  `route()` gained `.policy()` in this release and `defineRoute({ policy, handler })` takes the same
+  value; `requireOwner` from `theokit/server/define` is the per-record answer. Detection reads the
+  export's AST, so a `policy` mentioned in a comment or a doc block declares nothing, and a re-export
+  across a module boundary (`export { GET } from './shared'`) cannot be seen through — both come back
+  undeclared, which is the deliberate direction: the cost is one explicit declaration, and the
+  alternative cost is a route reported as protected because the scanner guessed.
+
+  The gate is on file-scanned routes only. A `RouteConfig` built in memory and handed to
+  `executeWebRequest` or `callProcedure` never passes a scanner and is untouched — the runtime still
+  treats an undeclared policy as "not declared" rather than as denial. Refusing at request time
+  instead would have turned every existing route in every consumer into a 403 with no build step in
+  between, arriving one request at a time in production. `MIGRATION.md` has the per-situation guide.
+
+- 2893c89: The exported `agent.run` span records the model the run used, as `gen_ai.request.model` — the
+  attribute name OpenTelemetry's GenAI semantic conventions give it. Token counts alone convert to no
+  cost, because price is per model, so a run whose provider reported no cost was unpriceable from its
+  own trace. The value is the model that actually ran, resolved where a per-run override wins over the
+  declared one and an agent that declared none reports the default it fell back to, and it travels on
+  the turn's `finish` metadata — so Tauri and terminal surfaces receive it over the same path the web
+  does. A producer that reports no model records no attribute rather than a guess.
+- 59150e7: `theokit build` refuses a server-only module in the client bundle, and the error names both the
+  module and the file that imported it.
+
+  Three things are now server-only in the client graph: the `theokit/server` umbrella, every
+  `theokit/server/*` subpath the package publishes, and every module under the project's own
+  `serverDir` — except `actions/schemas/**`, which the `@theo/actions` facade deliberately bundles so
+  a form can validate against the same zod schema the server does.
+
+  The build already failed on these imports. It failed with `"resolve" is not exported by
+"__vite-browser-external"`, pointing at a framework chunk, after thirty lines of externalisation
+  warnings — the bundler's difficulty rather than the author's mistake. It also failed by accident:
+  the cause was Node builtins not existing in a browser, so server code that imported none of them
+  would have bundled and shipped. And `theokit/server/define` failed differently again, with `ENOTDIR`
+  on a path built by string concatenation.
+
+  This is a build-time behaviour change: a project whose client graph reaches server code fails where
+  it may previously have built. That is the point of it, and the message says what to write instead.
+
+- 2ec9180: An agent run reaches the collector as one trace instead of one trace per span. Spans now carry the
+  trace they belong to and their own id, decided when the span starts; `agent.tool` and `agent.hitl`
+  hang under the `agent.run` that opened them, and a request carrying a `traceparent` is continued
+  rather than replaced. `ObservabilityAdapter.startSpan` takes an optional third argument placing the
+  span in a trace — existing callers are unaffected, and `defineObservabilityAdapter` forwards it so a
+  custom adapter is not trace-blind by construction.
+- d635f7f: `theokit` now depends on `vite@^7`. It pinned `vite@^6` while the default scaffold's
+  `@tailwindcss/vite@^4` pulls `vite@7`, so applications resolved two Vite majors and two `esbuild`
+  copies — two `postinstall` binary downloads for one framework. With one major in the tree, one of
+  each remains. An application using a Vite plugin built for v6 needs that plugin's v7 line.
+- 4b6d612: `executeWebRequest` enforces CSRF unless you turn it off.
+
+  **Breaking**, for anyone calling `executeWebRequest` from `theokit/server/http` directly. Routes
+  served by `theo dev` or `theo start` go through `executeRoute`, whose CSRF gate has defaulted to
+  strict all along, and are unaffected.
+
+  `ExecuteWebRequestOptions.csrfMode` had no default. Both of the executor's gates compared the value
+  against `'strict'`, so omitting the option meant no CSRF check ran on `POST`, `PUT`, `PATCH` or
+  `DELETE`. Omitting it now enforces, and `'off'` is the only value that disables the gate.
+
+  ```diff
+  - // no csrfMode → no CSRF check
+  - await executeWebRequest(request, routeModule)
+  + // no csrfMode → gate enforced
+  + await executeWebRequest(request, routeModule)
+  +
+  + // opt out explicitly, only if you have another defense
+  + await executeWebRequest(request, routeModule, { csrfMode: 'off' })
+  ```
+
+  A route that legitimately receives third-party POSTs — a Stripe or GitHub webhook, an OAuth
+  callback — declares `csrf: false` on its own config, which the Web executor now honours and
+  previously ignored. Browsers using the generated action client need no change: it already sends
+  `X-Theo-Action: 1`.
+
+  The option existed, the safe value existed, and the default was the unsafe one, so the check ran
+  only for a caller who already knew to ask — and this executor is the boundary the Cloudflare, Bun
+  and Deno adapters are built on, each of them a caller that would have had to remember. Honest size
+  of it: there is no production caller of the unsafe default in this repository today, so this closes
+  a future boundary rather than a live exposure.
+
+### Patch Changes
+
+- e39ce98: Every agent endpoint now emits an HTTP span, and one agent is one series.
+
+  **The aux and approve routes were invisible at the HTTP layer.** `POST /api/agents/<name>` ran the
+  plugin lifecycle; the six routes beside it did not, in production or in dev. So the thread message
+  and stream routes, MCP, the agent card, the pending-approvals listing, the durable run-stream
+  reconnect and the HITL approve route answered without `onRequest` / `onResponse` / `onError` — no
+  `http.request` span, no `http.requests`, no `http.errors`. Two of those spend tokens and one settles
+  a human decision, and an operator watching latency or error rate saw no traffic for them, which
+  reads exactly like no traffic. The thread route's `agent.run` spans did arrive, so a trace showed a
+  run with no request above it.
+
+  The lifecycle bracket is now one function (`serveThroughPluginLifecycle`) applied by every agent
+  branch in both surfaces, and the aux dispatcher decides ownership (`matchAgentAuxRoute`) before it
+  answers (`serveMatchedAuxRoute`) — which is what makes a bracket possible without converting a
+  request in order to learn whose path it is. A seventh aux route added later inherits the lifecycle
+  instead of having to remember it.
+
+  **`theokit dev` also stopped 404ing four routes `theokit start` serves.** The dev middleware kept a
+  hand-maintained subset of the dispatcher's route table (approvals and MCP), so the two thread routes
+  and the durable run-stream reconnect were production-only. It now asks the table.
+
+  **The `agent` span attribute is the agent's name on every route.** It was the agent module's
+  absolute filesystem path on `POST /api/agents/<name>` and the string `agent "chat"` on the thread
+  route, so the same agent split into two series on a dashboard, the path form changed with every
+  deploy and directory rename, and the server's directory layout — on a developer machine, the user's
+  account name — was exported to the telemetry backend on every span of every run. The compile label
+  that names a fail-fast `AgentDefinitionError` stays human-readable; it is simply no longer the key
+  an operator groups by. The module path is not emitted under another name either: if it is ever
+  wanted, `code.filepath` is the registry spelling and it is an opt-in, not a default.
+
+- 1410b93: The Cloudflare adapter now serves the HTML document, with the security baseline on it. With
+  `ssrStreaming: false` it returned 404 for every non-API request while `wrangler.toml` declared a
+  `[site]` bucket nothing read — so the page was missing, not merely unprotected. The config declares
+  an `[assets]` binding with SPA fallback and the worker returns the asset through it.
+
+  The per-target security notice also stops instructing you to configure `vercel` and `netlify`
+  document headers, which this build has emitted since #412's first half; it now distinguishes a
+  handler-served document, a platform this build configures, and a platform it owns no artifact for.
+
+- ad3bcf6: `serialization: 'superjson'` now applies on the six Web-standards deploy targets (vercel,
+  cloudflare, netlify, bun, deno-deploy, aws-lambda). The generated entry carried no transformer, so a
+  deployed app fell back to `JSON.stringify` and never emitted `x-theo-transformer` — serialising one
+  way locally and another in production without telling the client. The entry now resolves the
+  selector through the same `resolveTransformer` the local server uses. `config.plugins` remains
+  declared as unapplied on those targets: it holds constructed objects, which no literal can express.
+- c8022db: Four separate defects the SAST gate was reporting, each fixed at its cause.
+
+  **A generated property key could not contain a backslash.** The typed app-client emits a route
+  segment that is not a plain identifier as a quoted key, escaping the quote but not the escape
+  character — so a segment ending in `\` produced `'trail\'`, whose trailing backslash escapes the
+  closing quote and swallows the rest of the emitted line. A backslash is a legal POSIX filename
+  character, so it reaches this code from `server/routes/`.
+
+  **An internal error could forge log entries.** `sendError` logs an `INTERNAL_ERROR` with its
+  message and request id, and an exception message can be built from request data. A newline inside
+  it reached the log verbatim, which is enough to append lines of one's own — a fabricated entry
+  sitting in the log looking exactly like a real one. Both values are now rendered as one line.
+
+  **Stripping TOTP padding was quadratic.** `base32Decode` removed trailing `=` with an anchored
+  `/=+$/`, which retries from every start position, so a long run of `=` followed by anything else
+  costs O(n²) — on an authentication path. The comment defending it argued the input was short
+  enough ("10..50 chars typical"), which is an expectation rather than a bound. A scan back from the
+  end is linear and needs no such argument.
+
+  **The hook-output fence escaped only the first `<`.** `fenceHookOutput` neutralises an early
+  fence-close by escaping its `<`, using a form of `replace` that stops at the first occurrence. The
+  fence contains exactly one today, so nothing was wrong — and nothing said so, which made the
+  correctness of a prompt-injection guard depend on a property of a string literal several lines
+  away. `replaceAll` removes the dependency.
+
+  Behaviour is otherwise unchanged: an identifier-safe key, a message without newlines, a normal
+  base32 secret and a well-formed hook output all produce exactly what they produced before.
+
+- 0e9e6dc: A human-in-the-loop tool call is one call on the wire again. A `@HumanInTheLoop` tool used to cross
+  as TWO `tool-input-available` chunks under two different `toolCallId`s — the approval id the HITL
+  plugin mints for its `approve/${approvalId}` callback, and the runtime tool-call id the SDK mints
+  when it dispatches the tool. Neither producer can adopt the other's id: the SDK's `pre_tool_call`
+  context carries `name`, `args`, `agentId` and `runId` and no call id at all, so the plugin has
+  nothing to key on, and the approval has to be published before the tool exists.
+
+  The translator correlates them now, so one logical call is announced once and its result carries the
+  same id. `tool-approval-request` keeps the plugin's id in `approvalId` — the callback URL is
+  unchanged and the same value still resolves the pause — and names the call it gates in `toolCallId`,
+  which is what that field was always for.
+
+  What this was costing: a consumer counting tool calls counted two, a UI grouping blocks by
+  `toolCallId` rendered two cards for one call and left a permanently pending approval part next to the
+  completed one, and the `agent.hitl` observability span opened on the approval id was never closed by
+  a result arriving under the runtime id — so its duration approximated the whole run instead of the
+  human's wait. That span now closes at the resume and carries `hitl.resume_observed: true`; the
+  end-of-run sweep that marks the opposite is back to being the exceptional path it describes, reached
+  when a pause genuinely never resumes (the client disconnected, the run failed mid-pause).
+
+  Ungated tools are untouched — the correlation is identity for a call no approval ever claims.
+
+- 4411a59: A web application can now render a human-in-the-loop approval prompt. `useAgent` returns
+  `pendingApprovals` — one entry per decision the run is parked on, carrying the `approvalId` that
+  `approve()` takes, the gated tool's name, the arguments it is about to run with, the question
+  declared on the gate, and the window before it settles itself.
+
+  Before this the hook exposed the settle half of the gate and no way to reach the other half. The
+  store dropped the `tool-approval-request` frame on the way in, so its whole snapshot while a human
+  was deciding was `messages`, `thread`, `status: 'streaming'` and `error` — and the paused tool sat in
+  `state: 'input-available'`, which is exactly what an ungated tool looks like while it runs. An
+  application could not tell "working" from "waiting for you", and could not have named the decision if
+  it could. The only path left was polling `GET /api/agents/<name>/approvals` out of band.
+
+  The transcript carries it too: the gated call's own part moves to `state: 'approval-requested'` with
+  the id under `approval.id` while the decision is outstanding, and leaves that state when it is
+  settled. That is the ai-sdk reader's own vocabulary, not a new one — the differential oracle compares
+  the two readers on the paused run and the denied run and they reconstruct identically.
+
+  What the gate is asking travels as a transient `data-approval` part rather than on the approval frame
+  itself. The frame is shared vocabulary and `ai`'s validator for it is strict: a `question` added
+  there would not give an ai-sdk client a poorer prompt, it would delete the whole approval frame for
+  that client and re-create this defect on the other side of the wire. The tool's name and its
+  resolved input are not repeated anywhere — the `tool-input-available` frame already announces both
+  under the same call id, and both readers fold the frames into one part.
+
+  `approve(approvalId, decision)` is unchanged; what changes is that the store now hands the id over.
+  A tool with no gate produces exactly the same frames and exactly the same snapshot as before, with
+  `pendingApprovals` empty.
+
+- 2893c89: The `http.request` span joins the caller's trace instead of minting one of its own. A request
+  carrying a W3C `traceparent` produced two disconnected traces once the agent run learned to continue
+  it: the run joined the caller, the HTTP span did not, and the caller's trace id reached the collector
+  as the `requestId` attribute rather than as the span's `traceId`. The span now continues the inbound
+  trace on every route and names the caller's span as its parent; a request with no `traceparent`, or
+  one carrying only an `x-request-id`, still roots a freshly minted trace as before.
+- ca8156e: Three more places where a path was resolved twice now open one descriptor and answer both questions
+  through it.
+
+  `serveSpecFile` asked whether the OpenAPI spec existed and then opened it by name, so the file that
+  answered the first question need not be the one that answered the second — which is the `413` cap
+  being bypassable rather than enforced. `openSync` answers both at once: absent is `ENOENT` and keeps
+  its own `503`, anything else keeps its `500`, and the size is now measured on the descriptor that is
+  read.
+
+  `.env` loading inspected the path for the symlink transparency note and then read it by name, so the
+  note could describe a different file from the one whose values were loaded. The note is now produced
+  after the descriptor is open, and the bytes come from that descriptor.
+
+  `sendError`'s log escaping collapsed to a single exhaustive pass over both line terminators, which is
+  the same guarantee stated once instead of twice.
+
+  No response, no log line and no loaded value changes for a file that is not being swapped underneath
+  the process.
+
+- 7489975: An internal failure now discloses the same amount over every transport.
+
+  The Node runner replaces an `INTERNAL_ERROR`'s message with a generic one in production, and so
+  does the Web runner's error builder. An exception escaping a Web handler travelled through neither:
+  it reached the client through a third path that built its `Response` by hand from the error
+  envelope, shipping `err.message` and `err.cause` verbatim. The same route, failing the same way,
+  disclosed a connection string over one transport and `"Internal server error"` over another — the
+  `rules/three-target-parity.md` "one contract, three transports" rule broken by duplication rather
+  than by design.
+
+  The rule is now stated once, in `core/contracts/client-safe-error.ts`, and all three paths ask it.
+  When it redacts, `cause`, `meta` and `ext` go with the message: they exist to describe the failure,
+  and the point is that this failure is not describable to the caller. The code stays, so a client
+  can still branch on it.
+
+  `proxyFetch` had the same shape in its own corner: a failed upstream `fetch` reports why it failed,
+  and the reason names the upstream — host, port, sometimes credentials — which it returned to the
+  caller as the `detail` of a 502. It now redacts in production too. It states the rule locally
+  rather than importing it, because `services/` is a declared leaf with no intra-package dependencies
+  (ADR-0001 v3); reaching across that boundary to save two lines would trade a real architectural
+  regression for a cosmetic one.
+
+  Development behaviour is deliberately unchanged everywhere: the message is what makes a framework
+  debuggable, and taking it away outside production buys nothing.
+
+- da46294: A request with no inbound `traceparent` now produces ONE trace instead of two. The HTTP span and the
+  agent run each resolved the request's trace by reading the header independently, which agrees only
+  while a header is present — the common request (a browser, `curl`, an uninstrumented `fetch`) sent
+  none, so each side minted its own and the request reached the collector split in half. The trace is
+  now resolved once per request and shared, and the run hangs under the HTTP span rather than beside
+  it.
+- d15f888: OTLP span attributes with a fractional value are serialized as `doubleValue` instead of `intValue`.
+  `cost.usd` was the attribute this broke: it reached the collector as `{"intValue":"0.0031"}`, a
+  string that is not an integer in the field reserved for integers. Integral values are unchanged.
+- c4a3b4d: A `POST` carrying a JSON body reaches its `/api` route under `theokit start`. Every such request hung
+  forever — no status, no error, no timeout, the connection simply stayed open and the handler was
+  never called — while `theokit dev` answered the identical request in single-digit milliseconds.
+
+  The agent auxiliary branch ran for every URL and built a Web `Request` from the Node one _before_
+  asking whether it owned the path. That conversion wraps the Node readable with `Readable.toWeb()`,
+  which drains it, and a Node stream drains once. The API branch then reached `parseJsonBody`, attached
+  an `'end'` listener to a readable that had already ended, and waited for an event that cannot fire
+  twice. `theokit dev` was unaffected because its middleware matches the aux paths before it converts.
+
+  `serveAgentAuxRoute` now takes a deferred `WebRequestSource` instead of a `Request`: it answers every
+  fall-through from the URL, the method and the agent table alone, and calls `toRequest()` only on a
+  path it is about to answer. The same ordering fault reached agent routes (`POST /api/agents/<name>`)
+  and controller routes as a silently empty body rather than a hang; both are fixed by the same change.
+  Actions (`/api/__actions/…`) were never affected — they matched their prefix before the aux branch
+  ran.
+
+  Second layer, so the next occurrence is legible rather than silent: `parseRequestBody` refuses a
+  stream that has already ended, with a named `RequestBodyConsumedError` and a 500 — the framework
+  drank the body, so it is not the caller's 400 to fix. A declared-empty body (`content-length: 0`)
+  stays the absent body it is.
+
+- 4f87d93: `createProductionLoader` now loads user-authored `.ts` modules through the importer that carries the
+  tsx fallback, instead of calling `import()` and relying on the CLI bin having registered a global
+  `tsx/esm` hook. A caller that reached it any other way — a test booting the real request handler, an
+  application embedding the framework — failed with `ERR_UNKNOWN_FILE_EXTENSION`, or with
+  `__filename is not defined in ES module scope`.
+
+  Production is unchanged in cost: the importer tries the native import first, so with the hook
+  registered it takes exactly the path it took before.
+
+- b099d6d: The agent SSE response tells the path not to buffer it.
+
+  It sent two headers, so any intermediary that buffers by default — nginx, a compressing reverse
+  proxy, a CDN edge — was free to hold an entire agent run and hand the user one block at the end. The
+  server streamed correctly and told nobody downstream, which breaks exactly where it is hardest to
+  notice: behind someone else's proxy, in production, looking correct.
+
+  `cache-control: no-cache` and `x-accel-buffering: no` now ship on every SSE response — the encoder,
+  the thread route and the reconnect replay, which already shared one constant.
+
+  The Vercel AI SDK, whose wire this mirrors, sends a fifth header that is deliberately not included:
+  `connection: keep-alive` is hop-by-hop, Node manages keep-alive itself on HTTP/1, and on HTTP/2 Node
+  drops it with `UnsupportedWarning: The provided connection header is not valid`. It would buy
+  nothing on one protocol and print a warning per response on the other.
+
+- 4205c22: `theo start` reads `HOST` and `PORT`, so a container built from the documented path is reachable and
+  listens where its platform put it. Explicit `config.host` still wins, and `host: false` outranks the
+  environment. The startup line now states the bound address instead of always printing `localhost` —
+  a server bound to every interface and one bound to the loopback used to log the same thing.
+- d222546: Both static-file servers now refuse to serve a file that lives outside the directory they were
+  configured to serve, and each of them reads the file it checked rather than re-resolving the path.
+
+  The traversal guards were operating on the path _string_ while the read operated on the
+  _filesystem_, and a symlink is exactly the case where those two disagree. `serveStaticFile` resolved
+  to absolute and compared the result against `clientDir`; `createStaticHandler` rejected `..` and `//`
+  segments in the request pathname. Neither touches the disk, so an entry inside the served directory
+  that pointed somewhere else passed both checks and the server returned the target's contents — any
+  file the server process could open, to an unauthenticated `GET`. Serving a directory that also
+  receives uploads, or unpacking an archive that carries a symlink, is enough to put one there.
+
+  Containment is now decided by `realpath`, which asks the filesystem the question the string check
+  cannot answer. Symlinks are not banned: one whose target stays inside the served tree is ordinary and
+  is still served. Leaving is what is refused, and it is refused as "not here" rather than `403`, so
+  the response does not confirm what exists outside. A URL that walks out with `..` still gets its
+  `403`.
+
+  The same lines carried a second defect. Each server resolved the path more than once — check the
+  existence, stat the type or the size, then read the bytes — so what was checked was not necessarily
+  what was served. Each now opens one descriptor and does both through it. Where a size _limit_ was
+  enforced this was the limit being bypassable rather than enforced: the custom error pages
+  (`MAX_ERROR_HTML_BYTES`) and the OpenAPI spec endpoint (`MAX_SPEC_BYTES`) both measured one file and
+  could read another. `@theokit/http` additionally reported `content-length` from a separately sampled
+  `stat.size` while the body came from its own read, so a file that changed size between the two
+  produced a response whose declared length disagreed with its body; the length now comes from the
+  bytes that were actually read.
+
+  A path that stays inside its root behaves exactly as before — same status, same headers, same bytes.
+
+- ad7078f: Every published subpath of `theokit` resolves in dev again.
+
+  A Vite alias whose `find` is a **string** matches by prefix, and every entry in the plugin's alias
+  cascade pointed at a _file_. So `theokit/client` → `client/index.ts` rewrote `theokit/client/core`
+  into `…/client/index.ts/core`, and the build died with `ENOTDIR`. The only way around it was to
+  import the barrel instead, which pulls React into code that was written to avoid it.
+
+  The barrels are exact-match now, and one generic rule resolves everything else under the package.
+  That is the part that matters: the previous fix for this same defect enumerated the known subpaths
+  and put the bare alias last, which repaired the listed ones and left every unlisted one broken. A
+  list that must grow with the exports map is the mechanism that failed twice.
+
+  Two subpaths do not mirror the source layout and stay explicit — `theokit/react-query` (moved to a
+  sibling file) and `theokit/devtools/entry` (source carries a `/dom/` segment the dist flattens).
+
+  Also fixed by the same change: a package merely _named_ like ours — `theokit-anything` — was being
+  rewritten by the bare prefix alias.
+
+- fea9c59: The release gate can pass again.
+
+  `changeset version` bumps the scaffold template's `theokit` pin to the version the Version Packages
+  PR is what publishes, so in the window between the bump and the publish every job that installs a
+  scaffolded app failed on `ERR_PNPM_NO_MATCHING_VERSION`. Three of those are required checks on
+  `main`, which has `enforce_admins: true` — so the release could not be merged by anyone, and the
+  integration test's own failure message asked for the impossible: "publish the pending release and
+  re-run", when publishing requires the merge the failing check refuses.
+
+  Two changes. The `Scaffolded app typechecks` job scaffolds with `--skip-install`: the CLI's install
+  ran BEFORE the step that points the app at this working tree, so it resolved from npm — which also
+  means the job had been measuring the published package rather than this tree whenever the pin
+  happened to resolve, the defect #420 reports. The root install two steps later is what actually
+  links the app, so the CLI's was redundant here.
+
+  `tests/integration/pnpm-11-compat.test.ts` now skips that window instead of failing it, with the
+  pins named in the skip reason. Its subject is pnpm 11's build-approval behaviour, and a dependency
+  that cannot be resolved is not that subject. The decision is a pure function in
+  `scripts/unpublished-pins.ts` with six unit tests, deliberately narrow: only first-party names, and
+  only a range that names exactly one version — a missing third-party package still fails, and a range
+  it cannot parse is never read as missing.
+
+- 2893c89: A run's trace no longer depends on which endpoint started it. The thread message route
+  (`POST /api/agents/<name>/threads/<sessionId>/message`) dropped the incoming `traceparent`, so the
+  same header produced the caller's trace on the plain POST and a freshly minted one on the thread
+  route. Both endpoints now open their spans through one function, so the trace continued is the trace
+  of the request that started the run — including for a follow-up queued behind an active run, which
+  outlives the request that queued it.
+- 7606af3: The webhook signature validators are reachable from the package.
+
+  `handleChannelWebhook(request, path, { validators, onMessage })` takes a REQUIRED `validators` map,
+  and its own docblock demonstrates `{ slack: slack({...}), telegram: telegram({...}) }` — while
+  `server/webhook` re-exported none of the six providers sitting beside it. Nothing shipped: the
+  published bundle carried no `providers/` file, and the string `x-telegram-bot-api-secret-token`
+  appeared nowhere in `dist/`.
+
+  So the channel-webhook seam could not be wired by a consumer at all: the parameter was required and
+  no value for it existed. The framework's own test imports the providers by relative source path,
+  which is why nothing noticed — it proves the function works and says nothing about whether anyone
+  can call it.
+
+  `discord`, `github`, `slack`, `stripe` and `telegram` are now exported from `theokit/server/webhook`
+  with their options types, covered by a test that failed with `expected 'undefined' to be 'function'`
+  before the change. Found while writing the `theokit-gateways` scaffold skill and failing to write
+  its example (theokit-gateways B-011).
+
+- Updated dependencies [a896e4a]
+- Updated dependencies [d9e98e0]
+- Updated dependencies [da4db56]
+- Updated dependencies [3762c7d]
+- Updated dependencies [5f90ddd]
+- Updated dependencies [c131170]
+- Updated dependencies [bbdfc15]
+- Updated dependencies [c8022db]
+- Updated dependencies [0e9e6dc]
+- Updated dependencies [4411a59]
+- Updated dependencies [e29e22e]
+- Updated dependencies [d4da51b]
+- Updated dependencies [d222546]
+- Updated dependencies [a5c6353]
+- Updated dependencies [3126e58]
+  - @theokit/agents@11.0.0
+  - @theokit/presenter@0.8.0
+  - @theokit/http@1.1.1
+
 ## 0.49.0
 
 ### Minor Changes

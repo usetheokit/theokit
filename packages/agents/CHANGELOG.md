@@ -1,5 +1,317 @@
 # @theokit/agents
 
+## 11.0.0
+
+### Major Changes
+
+- bbdfc15: The server's raw error text no longer reaches the browser by default.
+
+  Every failure the framework reported to a browser carried the server's own words: a tool handler's
+  stderr verbatim in `tool-output-error.errorText`, a run failure's message verbatim in
+  `error.errorText` — whatever a driver, an HTTP client or a filesystem call put in the exception.
+  `ai@7`, speaking the same UIMessage protocol, masks by default and says why in its own comment:
+  "prevent leaking server error details to the client by default". There was no equivalent here, and
+  no seam to add one.
+
+  Both are masked now, through one `onError` hook on the serving boundary
+  (`streamAgentUIMessages`, `streamAgentTurnInProcess`, and `mountAgent` by pass-through), defaulting
+  to a fixed string. The full text is not lost: it still reaches the server's logs and the
+  `agent.run` span, and the hook receives it — what stops is it reaching a browser unless the host
+  decides otherwise.
+
+  **A tool's error text masks by the same default as a run's**, which the report that raised this
+  deliberately left open. The deciding fact is that masking costs the model nothing: the presenter is
+  downstream of the SDK loop, observing events the model has already consumed, so the copy being
+  masked is the browser's and only the browser's. Two different defaults for "server text reaching a
+  browser" would be a rule nobody could hold.
+
+  The failure `code` keeps travelling on its own data part, so consumers still distinguish failures
+  without matching on text — masking that removed the discriminator would push them back into the
+  habit that part exists to have removed.
+
+  **Breaking** for `@theokit/agents`: an application that read the server's message out of
+  `errorText` now reads `'An error occurred.'`. Pass `onError: (e) => e.message` to restore the old
+  behaviour explicitly, which is the point — it becomes a decision instead of a default.
+
+- d4da51b: The agent route `generateAgentRoutes` mounts now speaks the wire this framework's clients read.
+
+  There were TWO SSE encoders for agent runs and they did not agree. The durable one writes
+  `data: <UIMessageChunk>` and a terminal `data: [DONE]`; this one wrote
+  `event: <type>` + `data: <framework StreamEvent>` — snake_case agent events rather than kebab-case
+  wire chunks — and no terminator at all.
+
+  `parseWireStream` validates each `data:` payload against `wireChunkSchema` and drops what fails
+  through a `warn` whose default sink is a no-op. So a `TheoApp` app mounted with `agentRuntime`
+  served `POST {route}/chat` in a format none of its own clients could read: zero chunks, no
+  assistant message, and a run reporting success with an empty answer — silent at every layer.
+
+  The events go through `presentUIMessageStream` now, the same translator `mountAgent` uses, so there
+  is one wire and one place that produces it. It also terminates: the missing `finish` chunk is what
+  a client keys "completed" on, so without it a finished run and a dropped connection were
+  indistinguishable there too.
+
+  **Breaking** for anyone who built their own reader against the old framework-event format on this
+  route. That is the trade the fix makes: a wire only a bespoke consumer could read, for the one every
+  client in this framework already speaks.
+
+### Minor Changes
+
+- a896e4a: A conversation survives a reload: `chatId` can be supplied and read.
+
+  `AgentClient` drew `#chatId` in its field declaration and offered no way to supply one or to read
+  the one it drew. The id is not decorative — the HTTP transport sends it as the top-level `id`, which
+  the server reads as the session id — so every `new AgentClient(...)` started a new conversation, and
+  reloading the page silently abandoned the thread the server still held.
+
+  ```ts
+  const client = new AgentClient(transport, undefined, {
+    chatId: localStorage.getItem('chat') ?? undefined,
+  })
+  localStorage.setItem('chat', client.chatId)
+  ```
+
+  Both halves matter. Reading without supplying lets an application persist an id it can never
+  restore; supplying without reading leaves it nothing to persist.
+
+  The default is unchanged and deliberately so: two clients built with no id are still two
+  conversations. Sharing one by default would let two unrelated tabs write into the same thread, which
+  is the opposite defect and the more dangerous one.
+
+- d9e98e0: A model that takes no credential can delegate.
+
+  `createDelegateTool` refused to construct when any target was a `SubAgentSpec` and
+  `defaults.apiKey` was empty, and `delegate()` refused the same way deeper in its own call stack.
+  Both read "non-empty string" as the definition of authenticated — a safe reading while every
+  provider held a key, and no longer one now that a keyless provider (a model on the developer's own
+  machine) is reachable.
+
+  `apiKey: null` says the provider takes no credential. It is a distinct value from `''` on purpose:
+  an empty string is also what an unset environment variable produces, so accepting THAT would turn a
+  typo into an unauthenticated run. `undefined` still means the caller supplied nothing and is still
+  refused — at startup rather than at the model's first call, which is what the guard was for.
+
+  The refusal now names the option, so a reader who hits it is not left choosing between a fabricated
+  value and giving up.
+
+- da4db56: A run the server still holds can be reached after a page reload.
+
+  The whole durable-reconnect machinery — sequence ids on every frame, the `RunEventCache`, the
+  `Last-Event-ID` replay, the `x-theokit-run-id` header — was built and reachable, and one link made
+  it unusable in the case with the highest user cost. The reconnect key lived in a private in-memory
+  field, so a reloaded page built a fresh transport with an empty cell and `reconnectToStream`
+  returned `null` before it reached the network. The run was alive, cached, replayable, and
+  unreachable; the user got an empty thread instead of the answer the server had already finished.
+
+  `HttpTransport` takes a `runIdStore` now — `{ get(): string | undefined; set(id): void }` —
+  defaulting to an in-memory cell, which is exactly what the private field was. Nothing changes for a
+  caller who passes nothing, including the reconnect-within-one-page-lifetime case that already
+  worked.
+
+  The MEDIUM is deliberately the consumer's decision. `sessionStorage` matches a run's lifetime better
+  than `localStorage`, and either would be a client library writing to browser storage nobody asked it
+  to write to, with privacy and SSR consequences. So the seam is injected and the package stores
+  nothing it was not handed a place for.
+
+  Deliberately NOT included: reconnecting automatically on load. This makes a cached run _reachable_;
+  reaching for it is a product decision nobody has asked for.
+
+- 3762c7d: An agent can declare a ceiling on the tool-calling turns of a single run, and the served agent obeys
+  it. `AgentBuilder.create().maxIterations(5)` and `defineAgent({ maxIterations: 5 })` are new; the
+  ceiling `@Agent({ maxIterations })` and `@MainLoop({ maxIterations })` already accepted now reaches
+  the runtime as well.
+
+  The number was written by every authoring path and read by none of them once the agent was served:
+  the only code enforcing a ceiling was the reflective loop, which no served path calls. The adapter
+  now lowers `CompiledAgentOptions.maxIterations` to the SDK's `SendOptions.maxIterations` — its
+  documented per-send ceiling — on both the streaming path and the handle `toAgentFactory` serves,
+  where a caller's own value still wins for that turn.
+
+  An agent that declares no ceiling is untouched: the key is omitted entirely, so the SDK's own default
+  still applies and nothing about that run changes. A value that is not a positive integer is refused
+  where it was written rather than at the first send.
+
+- 5f90ddd: A run that was cut short says so. The terminal `done` frame and the turn metadata a client reads off
+  `UIMessage.metadata` now carry an optional `stopReason` — `'step_limit'` when the loop ran out of
+  tool-calling turns while the model still wanted more, `'no_progress'` when the doom-loop guard
+  stopped it repeating identical tool calls. The observability span `agent.run` records the same value
+  as `stop.reason`.
+
+  Both outcomes reached the caller as an ordinary `done` before this, identical in every field to a run
+  that finished on its own, so a surface could not tell "the agent answered" from "the agent was cut off
+  with a tool call still pending". The SDK reported both on its `RunResult`; the adapter's locally-typed
+  `wait()` declared no field to read them from, so nothing read them.
+
+  This is not the rare case it looks like: the SDK's iteration budget defaults to 8, so every served run
+  needing a ninth tool-calling turn was being truncated and reported as finished — including runs of
+  agents that never declared a ceiling.
+
+  Two reasons rather than a `truncated` flag, because they demand opposite reactions: `step_limit` means
+  re-sending continues the work, `no_progress` means re-sending repeats the loop that was just cut.
+  Nothing here re-sends — the SDK owns continuation; this reports the outcome.
+
+  A run that finishes on its own is unchanged: the field is absent, not `undefined`, so absence keeps
+  meaning "the agent finished" and a consumer that has never heard of `stopReason` receives exactly what
+  it received before.
+
+- c131170: A run whose connection drops mid-answer is reported as interrupted instead of finished. The agent
+  client used to settle a dropped stream in `status: 'done'` with `error` undefined and half a sentence
+  on screen — the spinner stopped, the error surface stayed empty, and the truncated turn was committed
+  to the thread as a completed one. `reconnect()` and the durable replay route were fully built and
+  unreachable, because the only trigger a consumer has for them is a status that never arrived.
+
+  `consumeChunkStream` (and `consumeUIMessageStream`) now return a `ChunkStreamOutcome` saying whether
+  the stream carried its terminal `finish` chunk and how many chunks crossed. When it did not,
+  `AgentClient` settles `status: 'error'` with an `AgentStreamInterruptedError` — a `TheokitAgentError`
+  with `code: 'AGENT_STREAM_INTERRUPTED'` and `isRetryable: true`, so `isTransientError` sees it and a
+  consumer decides on the type instead of on message text. The text already received stays on screen,
+  and `send()`'s existing rule keeps the truncated turn out of history.
+
+  The status is `'error'` rather than a new `'interrupted'` member on purpose: a new member fixes the
+  lie only for consumers who update their switch, while every other surface keeps rendering a finished
+  turn. Reusing `'error'` fixes it for all of them at once, and the reason for it lives in the typed
+  error where this framework already puts error discrimination.
+
+  This is a different axis from `stopReason` (#379), not another member of it. `stopReason` says why the
+  RUN stopped and rides the terminal frame's metadata; an interruption is the absence of that frame,
+  where the client cannot know why the run stopped because it never heard.
+
+  A stream that ends on its terminal `finish` chunk is unchanged, down to the fields on the snapshot.
+  A custom transport that never emitted `finish` — which no framework producer does, since
+  `presentUIMessageStream` emits it on every path including the error one — will now be reported as
+  interrupted, which is what it always was.
+
+- e29e22e: `mcpInventory()`, from `@theokit/agents/mcp-health`: the per-server status of the agent's MCP
+  servers — `loaded`, `failed` or `ignored`, each with its reason.
+
+  `loadMcpJson` reads the configuration file; this reads what was observed. A server that failed its
+  handshake and a server the loader refused both appear, which is what a `/mcp`-style command needs and
+  what a configuration read cannot give.
+
+  Tool-level enumeration is not included and is not planned here: the resolved tool table lives inside
+  `@theokit/sdk`'s agent loop and no run event carries it.
+
+- a5c6353: `readThreadHistory()` from `@theokit/agents/session`: read one thread's stored history with three
+  answers — `present`, `absent`, or `unreadable` with the reason.
+
+  Applications had two. Catching for a brand-new thread (which has no transcript yet) is mandatory, and
+  that catch also swallowed parse and permission failures, so a damaged conversation rendered as an
+  empty successful one.
+
+  `absent` still does not distinguish a lost conversation from a new one, and the type says so: the
+  thread id is minted client-side and nothing records that it was issued. That distinction belongs to
+  the caller who knows whether the id was restored from storage or freshly minted.
+
+### Patch Changes
+
+- c8022db: Four separate defects the SAST gate was reporting, each fixed at its cause.
+
+  **A generated property key could not contain a backslash.** The typed app-client emits a route
+  segment that is not a plain identifier as a quoted key, escaping the quote but not the escape
+  character — so a segment ending in `\` produced `'trail\'`, whose trailing backslash escapes the
+  closing quote and swallows the rest of the emitted line. A backslash is a legal POSIX filename
+  character, so it reaches this code from `server/routes/`.
+
+  **An internal error could forge log entries.** `sendError` logs an `INTERNAL_ERROR` with its
+  message and request id, and an exception message can be built from request data. A newline inside
+  it reached the log verbatim, which is enough to append lines of one's own — a fabricated entry
+  sitting in the log looking exactly like a real one. Both values are now rendered as one line.
+
+  **Stripping TOTP padding was quadratic.** `base32Decode` removed trailing `=` with an anchored
+  `/=+$/`, which retries from every start position, so a long run of `=` followed by anything else
+  costs O(n²) — on an authentication path. The comment defending it argued the input was short
+  enough ("10..50 chars typical"), which is an expectation rather than a bound. A scan back from the
+  end is linear and needs no such argument.
+
+  **The hook-output fence escaped only the first `<`.** `fenceHookOutput` neutralises an early
+  fence-close by escaping its `<`, using a form of `replace` that stops at the first occurrence. The
+  fence contains exactly one today, so nothing was wrong — and nothing said so, which made the
+  correctness of a prompt-injection guard depend on a property of a string literal several lines
+  away. `replaceAll` removes the dependency.
+
+  Behaviour is otherwise unchanged: an identifier-safe key, a message without newlines, a normal
+  base32 secret and a well-formed hook output all produce exactly what they produced before.
+
+- 0e9e6dc: A human-in-the-loop tool call is one call on the wire again. A `@HumanInTheLoop` tool used to cross
+  as TWO `tool-input-available` chunks under two different `toolCallId`s — the approval id the HITL
+  plugin mints for its `approve/${approvalId}` callback, and the runtime tool-call id the SDK mints
+  when it dispatches the tool. Neither producer can adopt the other's id: the SDK's `pre_tool_call`
+  context carries `name`, `args`, `agentId` and `runId` and no call id at all, so the plugin has
+  nothing to key on, and the approval has to be published before the tool exists.
+
+  The translator correlates them now, so one logical call is announced once and its result carries the
+  same id. `tool-approval-request` keeps the plugin's id in `approvalId` — the callback URL is
+  unchanged and the same value still resolves the pause — and names the call it gates in `toolCallId`,
+  which is what that field was always for.
+
+  What this was costing: a consumer counting tool calls counted two, a UI grouping blocks by
+  `toolCallId` rendered two cards for one call and left a permanently pending approval part next to the
+  completed one, and the `agent.hitl` observability span opened on the approval id was never closed by
+  a result arriving under the runtime id — so its duration approximated the whole run instead of the
+  human's wait. That span now closes at the resume and carries `hitl.resume_observed: true`; the
+  end-of-run sweep that marks the opposite is back to being the exceptional path it describes, reached
+  when a pause genuinely never resumes (the client disconnected, the run failed mid-pause).
+
+  Ungated tools are untouched — the correlation is identity for a call no approval ever claims.
+
+- 4411a59: A web application can now render a human-in-the-loop approval prompt. `useAgent` returns
+  `pendingApprovals` — one entry per decision the run is parked on, carrying the `approvalId` that
+  `approve()` takes, the gated tool's name, the arguments it is about to run with, the question
+  declared on the gate, and the window before it settles itself.
+
+  Before this the hook exposed the settle half of the gate and no way to reach the other half. The
+  store dropped the `tool-approval-request` frame on the way in, so its whole snapshot while a human
+  was deciding was `messages`, `thread`, `status: 'streaming'` and `error` — and the paused tool sat in
+  `state: 'input-available'`, which is exactly what an ungated tool looks like while it runs. An
+  application could not tell "working" from "waiting for you", and could not have named the decision if
+  it could. The only path left was polling `GET /api/agents/<name>/approvals` out of band.
+
+  The transcript carries it too: the gated call's own part moves to `state: 'approval-requested'` with
+  the id under `approval.id` while the decision is outstanding, and leaves that state when it is
+  settled. That is the ai-sdk reader's own vocabulary, not a new one — the differential oracle compares
+  the two readers on the paused run and the denied run and they reconstruct identically.
+
+  What the gate is asking travels as a transient `data-approval` part rather than on the approval frame
+  itself. The frame is shared vocabulary and `ai`'s validator for it is strict: a `question` added
+  there would not give an ai-sdk client a poorer prompt, it would delete the whole approval frame for
+  that client and re-create this defect on the other side of the wire. The tool's name and its
+  resolved input are not repeated anywhere — the `tool-input-available` frame already announces both
+  under the same call id, and both readers fold the frames into one part.
+
+  `approve(approvalId, decision)` is unchanged; what changes is that the store now hands the id over.
+  A tool with no gate produces exactly the same frames and exactly the same snapshot as before, with
+  `pendingApprovals` empty.
+
+- 3126e58: A tool that failed reaches the caller as a tool that failed.
+
+  A tool whose handler threw — including one that threw on every attempt until its retries ran out —
+  crossed the wire as `tool-output-available`, the SUCCESS part of the UIMessage protocol, with the
+  error message sitting in the field a UI renders as the tool's answer, on a run that terminated with
+  an ordinary `done`. Nothing on the wire told a failed call from a call that worked, so a consumer
+  watching for a failure never fired, and a UI printed the failure as the result.
+
+  The failure signal was in hand the whole time. `@theokit/sdk` catches whatever a handler throws and
+  reports the call with `{stdout, stderr, exitCode}` — a non-zero code for a throw, a hook block, a
+  human denial, a timeout or an unknown tool — under `status: 'completed'`, which is the SDK's word
+  for "the call is over", not for "the call worked". Both translation sites read the status and
+  hardcoded `isError: false`, and the timeline dedup then dropped the only report carrying the exit
+  code as a duplicate of the report that structurally cannot carry one: the completion delta's payload
+  is a rendered string, and the message carrying the code always arrives second.
+
+  The exit code now travels. A failed call reaches the wire as `tool-output-error` with the message in
+  `errorText` — the presenter branch that emits it already existed and was never reachable from a
+  served run. A completion is held for one report rather than emitted immediately, so the second report
+  can contribute its exit code to the first instead of being discarded; exactly one result per call
+  still reaches the wire, and one that ends the run is flushed rather than held forever.
+
+  A call that succeeded is unchanged, chunk for chunk: it emits `tool-output-available` with the same
+  rendered output, under the same id, exactly once. A completion nobody reported an exit code for is
+  not called a failure — the `[stderr]` prefix in the rendered text is a string convention, and
+  classifying failures by matching error text is a mistake this codebase has already paid for once.
+
+- Updated dependencies [bbdfc15]
+- Updated dependencies [4411a59]
+  - @theokit/presenter@0.8.0
+
 ## 10.1.0
 
 ### Minor Changes
