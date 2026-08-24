@@ -61,6 +61,24 @@ describe('summarise — a pending check is not a passing one', () => {
   })
 })
 
+describe('summarise — the report does not count itself', () => {
+  // Caught by reading the first report this job ever posted: it listed its own check run as
+  // `in_progress` and therefore announced "Not green" while every real gate had passed. A report
+  // that can never say green is a report people stop reading.
+  it('Given the reporting job itself is running, Then it is excluded entirely', () => {
+    const s = summarise([passing('Lint'), running('Quality report (PR comment)')], {
+      self: 'Quality report (PR comment)',
+    })
+    expect(s).toMatchObject({ passed: 1, pending: 0, ok: true })
+    expect(s.outstanding).toEqual([])
+  })
+
+  it('Given no self name, Then nothing is excluded', () => {
+    const s = summarise([passing('Lint'), running('Quality report (PR comment)')])
+    expect(s.pending).toBe(1)
+  })
+})
+
 describe('renderReport — it prints what it read, and says when it read nothing', () => {
   it('Given coverage, Then every axis is rendered with its measured ratio', () => {
     const md = renderReport({ checkRuns: [passing('Lint')], coverage: COVERAGE, sha: 'abc123def' })
@@ -98,6 +116,17 @@ describe('renderReport — it prints what it read, and says when it read nothing
   it('Given a sha, Then the report states which commit it measured', () => {
     const md = renderReport({ checkRuns: [passing('Lint')], coverage: COVERAGE, sha: 'abc123def' })
     expect(md).toContain('abc123def')
+  })
+
+  it('Given the reporting job itself, Then it is absent from the rendered table', () => {
+    const md = renderReport({
+      checkRuns: [passing('Lint'), running('Quality report (PR comment)')],
+      coverage: COVERAGE,
+      sha: 'abc123def',
+      self: 'Quality report (PR comment)',
+    })
+    expect(md).not.toContain('Quality report (PR comment)')
+    expect(md).toContain('gates passed')
   })
 
   it('Always carries the marker the workflow uses to update in place', () => {

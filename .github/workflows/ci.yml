@@ -500,11 +500,14 @@ jobs:
       - name: Render report
         env:
           SHA: ${{ github.event.pull_request.head.sha }}
+          # This job is itself a check run, and necessarily unfinished while it renders.
+          SELF: Quality report (PR comment)
         run: |
           node scripts/pr-quality-report.mjs \
             --checks checks.json \
             --coverage coverage/coverage-summary.json \
-            --sha "${SHA:0:9}" > report.md
+            --sha "${SHA:0:9}" \
+            --self "$SELF" > report.md
           cat report.md >> "$GITHUB_STEP_SUMMARY"
 
       # One comment, updated in place. A new comment per push turns a long PR into a wall of stale
