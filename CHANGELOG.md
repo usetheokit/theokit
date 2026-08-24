@@ -179,6 +179,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Security
 
+- **A placeholder session secret no longer boots in production.** `assertProductionSecret` was
+  exported, documented as the production guard, covered by ten unit assertions — and called by
+  nothing. Both session managers validated through `normalizeSecrets`, which enforces a 32-character
+  floor in every environment and knows nothing about placeholders, so the gap between the two
+  functions was exactly the placeholder check and a 32-or-more character `CHANGE_ME…` sailed into
+  production. The dev-time warning sat in the same position: the sentence telling a developer that
+  "the production server will REFUSE to boot until you replace it" lived inside the uncalled
+  function, so the developer never saw the warning and the refusal never fired — a promise made by
+  unreachable code still reads as a guarantee. Both managers now resolve their secret through one
+  function that runs both checks, the length floor speaking first so a short secret keeps the message
+  it has always had. **This can refuse a boot that previously succeeded**, which is the point: the
+  secret it refuses is either shorter than 32 characters or matches `CHANGE_ME` / `demo-` / `demo_` /
+  `placeholder`. Replace it (`openssl rand -hex 32`) rather than working around the refusal; outside
+  production nothing is refused and the warning is now reachable. (#429)
+
 - **Both static-file servers stopped serving files from outside the directory they were given.**
   `serveStaticFile` (`theokit`) and `createStaticHandler` (`@theokit/http`) returned the contents of
   whatever a symlink inside the served root pointed at — any file the server process could open, to
