@@ -15,6 +15,7 @@
  *  - Set-Cookie stripped from upstream response by default (EC-25 / ref doc §8)
  *  - stripBase + isPathInScope guard against GHSA-5w89-w975-hf9q
  */
+
 import { isPathInScope } from './path-scope.js'
 
 // RFC 2616 §13.5.1 — hop-by-hop headers MUST NOT be forwarded by intermediaries.
@@ -122,13 +123,20 @@ export async function proxyFetch(request: Request, options: ProxyOptions): Promi
     const f = options.customFetch ?? fetch
     upstreamResponse = await f(outgoingRequest)
   } catch (err) {
+    // The reason a fetch failed names the upstream — host, port, sometimes credentials. That
+    // belongs in the server's log, not in the 502 an external caller reads; in development it is
+    // the whole value of the field, so it stays.
+    //
+    // `core/contracts/client-safe-error.ts` states the same rule for the rest of the framework,
+    // and this deliberately does NOT import it: `services/` is declared a leaf with zero intra-
+    // package dependencies (ADR-0001 v3, enforced by `services-depends-on-nothing-intra`).
+    // Restating two lines is the price of that boundary; reaching across it would be a real
+    // architectural regression traded for a cosmetic one. Keep the wording in step by hand.
+    const reason = err instanceof Error ? err.message : String(err)
+    const detail = process.env.NODE_ENV === 'production' ? 'Internal server error' : reason
     return new Response(
       JSON.stringify({
-        error: {
-          code: 'SERVICE_UNAVAILABLE',
-          message: 'upstream service unreachable',
-          detail: err instanceof Error ? err.message : String(err),
-        },
+        error: { code: 'SERVICE_UNAVAILABLE', message: 'upstream service unreachable', detail },
       }),
       { status: 502, headers: { 'content-type': 'application/json' } },
     )

@@ -39,6 +39,7 @@
  */
 import type { z } from 'zod'
 
+import { clientSafeErrorEnvelope } from '../core/contracts/client-safe-error.js'
 import { envelopeCodeToStatus } from '../core/contracts/envelope-code-to-status.js'
 import type { TheoErrorEnvelope } from '../core/contracts/error-envelope.js'
 import {
@@ -319,7 +320,10 @@ function toResponse(result: unknown, status?: number): Response {
  * FileTooLarge, etc.) get mapped to canonical envelope codes.
  */
 function handlerErrorResponse(err: unknown): Response {
-  const envelope = serverErrorToEnvelope(err)
+  // An exception escaping a handler reaches the client through here, and only here — not through
+  // `buildErrorResponse`. Without this call it shipped `err.message` and `err.cause` verbatim,
+  // while the Node runner and the Web error builder both redact an internal failure in production.
+  const envelope = clientSafeErrorEnvelope(serverErrorToEnvelope(err))
   // Map envelope code → HTTP status when possible. Default to 500 for
   // INTERNAL_SERVER_ERROR. Other codes map per HTTP semantics.
   const status = envelopeCodeToStatus(envelope.code)

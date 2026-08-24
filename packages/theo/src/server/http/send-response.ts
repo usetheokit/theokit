@@ -1,5 +1,6 @@
 import type { ServerResponse } from 'node:http'
 
+import { clientSafeErrorMessage } from '../../core/contracts/client-safe-error.js'
 import type { TheoTransformer } from '../transformer.js'
 
 /**
@@ -72,9 +73,9 @@ export function sendError(
   requestId?: string,
   options?: SendErrorOptions,
 ): void
-/* eslint-disable-next-line max-params, complexity -- delegates to two
-   surface overloads above; the branch density mirrors the back-compat
-   contract, not internal complexity. */
+/* eslint-disable-next-line max-params -- delegates to two surface overloads above; the parameter
+   count mirrors the back-compat contract, not internal complexity. The `complexity` half of this
+   suppression went away when the redaction rule stopped being restated inline. */
 export function sendError(
   res: ServerResponse,
   codeOrInput: string | SendErrorInput,
@@ -97,10 +98,7 @@ export function sendError(
     requestId = codeOrInput.requestId
     options = codeOrInput.options
   }
-  const errorMessage =
-    code === 'INTERNAL_ERROR' && process.env.NODE_ENV === 'production'
-      ? 'Internal server error'
-      : message
+  const errorMessage = clientSafeErrorMessage(code, message)
 
   if (code === 'INTERNAL_ERROR') {
     // One log entry per call, whatever the message contains. An exception message can be built
@@ -176,10 +174,7 @@ export function buildJsonResponse(
 
 export function buildErrorResponse(input: SendErrorInput): Response {
   const { code, message, status, issues, requestId, options } = input
-  const errorMessage =
-    code === 'INTERNAL_ERROR' && process.env.NODE_ENV === 'production'
-      ? 'Internal server error'
-      : message
+  const errorMessage = clientSafeErrorMessage(code, message)
 
   if (code === 'INTERNAL_ERROR') {
     // One log entry per call, whatever the message contains. An exception message can be built
