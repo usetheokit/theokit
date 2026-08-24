@@ -18,7 +18,7 @@
  *   `process.env.NODE_ENV`. Stashed in `__THEOKIT_USER_NODE_ENV` instead.
  */
 
-import { lstatSync, readFileSync, realpathSync, statSync } from 'node:fs'
+import { closeSync, lstatSync, openSync, readFileSync, realpathSync, statSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import dotenv from 'dotenv'
@@ -67,23 +67,33 @@ function readEnvFile(path: string): Record<string, string> | null {
     return null
   }
 
-  // EC-13 — symlink transparency. Don't refuse; just log.
+  // Open first, then describe, then read — all through the one descriptor. Reading by name after
+  // inspecting the name resolves it twice, so the file the transparency note describes need not be
+  // the file whose values are loaded (CodeQL `js/file-system-race`).
+  let fd: number
   try {
-    const lstat = lstatSync(path)
-    if (lstat.isSymbolicLink()) {
-      const real = realpathSync(path)
-      // eslint-disable-next-line no-console -- intentional transparency log on a build-time tool
-      console.info(`[theokit] .env at ${path} is a symlink → ${real}`)
-    }
+    fd = openSync(path, 'r')
   } catch {
-    // lstat failure is non-fatal — fall through to read.
+    return null
   }
 
   try {
-    const content = readFileSync(path, 'utf-8')
-    return dotenv.parse(content)
+    // EC-13 — symlink transparency. Don't refuse; just say so.
+    try {
+      if (lstatSync(path).isSymbolicLink()) {
+        const real = realpathSync(path)
+        // eslint-disable-next-line no-console -- intentional transparency log on a build-time tool
+        console.info(`[theokit] .env at ${path} is a symlink → ${real}`)
+      }
+    } catch {
+      // The note is informational; failing to produce it must not fail the load.
+    }
+
+    return dotenv.parse(readFileSync(fd, 'utf-8'))
   } catch {
     return null
+  } finally {
+    closeSync(fd)
   }
 }
 

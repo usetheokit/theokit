@@ -179,6 +179,48 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Security
 
+- **Both static-file servers stopped serving files from outside the directory they were given.**
+  `serveStaticFile` (`theokit`) and `createStaticHandler` (`@theokit/http`) returned the contents of
+  whatever a symlink inside the served root pointed at — any file the server process could open, to
+  an unauthenticated `GET`. Each had a traversal guard, and each guard compared the path *string*
+  while the read touched the *filesystem*; a symlink is exactly where those two disagree, so a URL
+  containing no `..` at all walked straight out. Serving a directory that also receives uploads, or
+  unpacking an archive that carries a symlink, is enough to put one there. Containment is now decided
+  by `realpath`. A symlink whose target stays inside the root is ordinary and is still served — only
+  leaving is refused, and refused as "not here" rather than `403`, so the response does not confirm
+  what exists outside. A URL that walks out with `..` keeps its `403`. (#428)
+
+- **A size limit is now measured on the file that gets read.** The same lines carried a second
+  defect: each server resolved its path several times — check existence, stat the type or the size,
+  then read the bytes — so what was checked need not be what was served. Where a *limit* was being
+  enforced this made the limit bypassable: the custom error pages (`MAX_ERROR_HTML_BYTES`), the
+  OpenAPI spec endpoint (`MAX_SPEC_BYTES`), and `@theokit/http`, which reported `content-length` from
+  a separately sampled `stat.size` while the body came from its own read. Every site now opens one
+  descriptor and answers both questions through it; `.env` loading and the OpenAPI endpoint were
+  brought to the same shape. Responses are byte-for-byte what they were for any file that is not
+  changing underneath the server. (#428)
+
+- **An internal failure discloses the same amount over every transport.** The Node runner replaced an
+  `INTERNAL_ERROR`'s message with a generic one in production, and so did the Web runner's error
+  builder — but an exception escaping a Web handler travelled through neither. It reached the client
+  through a third path that built its response by hand from the error envelope, shipping `err.message`
+  and `err.cause` verbatim; the same route failing the same way returned a connection string over one
+  transport and `"Internal server error"` over another. The rule now lives in one place and all three
+  paths ask it. When it redacts, `cause`, `meta` and `ext` go with the message — they exist to
+  describe a failure that is, by definition, not describable to the caller — while the code stays so a
+  client can still branch on it. `proxyFetch` had the same shape in its own corner: a failed upstream
+  fetch names host, port and sometimes credentials, and that string was the `detail` of its `502`.
+  Development behaviour is deliberately unchanged everywhere. (#376)
+
+- **An error message can no longer forge log entries, and TOTP padding is no longer quadratic.** Two
+  smaller findings from the same sweep. `sendError` logged an `INTERNAL_ERROR`'s message unescaped,
+  and an exception message can be built from request data — a newline in it appended lines to the log
+  that read exactly like real ones; both the message and the request id are now rendered on one line.
+  `base32Decode` stripped trailing `=` with an anchored `/=+$/`, which retries from every start
+  position and costs O(n²) on a long run of `=`, in an authentication path; a scan back from the end
+  is linear. The comment defending the regex argued the input was short enough — an expectation, not
+  a bound. (#376)
+
 - **An approval belongs to someone, and only they can settle it.** The HITL ledger keyed approvals by
   a bare id and recorded no owner, so an agent's policy could answer *"may this subject touch this
   agent's approvals"* and never *"is this approval theirs"* — an authenticated tenant could settle
@@ -231,6 +273,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   (usetheokit/theokit#213)
 
 ### Fixed
+
+- **A route whose name contains a backslash no longer breaks the generated client types.** The typed
+  app-client emits a route segment that is not a plain identifier as a quoted property key, escaping
+  the quote but not the escape character — so a segment ending in `\` emitted `'trail\'`, whose
+  trailing backslash escapes the closing quote and runs the rest of the line into the next token. A
+  backslash is a legal POSIX filename character, so it reaches this code from `server/routes/`. The
+  `@theokit/http` examples were also calling every decorator with a third argument computed by
+  `Object.getOwnPropertyDescriptor(...)` and then discarded — no decorator in that package reads a
+  descriptor — which taught readers a step that does nothing. (#376)
 
 - **The release workflow stops asking for a permission this organization withholds.**
   `changesets/action` opens a pull request on the version branch, and Actions here may not create

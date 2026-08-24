@@ -33,7 +33,7 @@ export function sendJson(
 
 /** Render anything that would end the log line as a visible escape, so one call logs one line. */
 function oneLine(value: string): string {
-  return value.replace(/\r/g, '\\r').replace(/\n/g, '\\n')
+  return value.replace(/[\r\n]/g, '\\n')
 }
 
 export interface SendErrorOptions {

@@ -13,9 +13,9 @@
  * route policy". The report's own Expected asks for "a message naming the file to edit", and the
  * contract already carries one: "A denial carries its reason so the caller can say it."
  */
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
@@ -26,7 +26,10 @@ import {
 } from '../../packages/theo/src/core/contracts/route-policy.js'
 
 function createTempProject(): string {
-  const dir = resolve(tmpdir(), `theo-policy-gen-${process.pid}-${globalThis.performance.now()}`)
+  // `mkdtempSync`, not a name built from pid and a clock: this directory is WRITTEN to, and a
+  // name another process can predict is a window to pre-create it as a symlink and take every
+  // write with it (CodeQL `js/insecure-temporary-file`).
+  const dir = mkdtempSync(join(tmpdir(), 'theo-policy-gen-'))
   mkdirSync(join(dir, 'server/routes'), { recursive: true })
   mkdirSync(join(dir, 'server/actions'), { recursive: true })
   mkdirSync(join(dir, 'app'), { recursive: true })
