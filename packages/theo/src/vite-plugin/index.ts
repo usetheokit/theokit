@@ -238,11 +238,22 @@ export async function theoPluginAsync(
     serverDir: serverDirAbs,
   })
 
+  // M1 (usetheokit/theokit#373) — refuse a server-only module in the CLIENT graph, by name.
+  // Wired here rather than inside `theoPlugin()` because `enforce: 'pre'` is what puts it ahead
+  // of the `theokit/server` string alias `config-hook.ts` installs, and because this factory is
+  // the one `theokit build` and `theokit dev` both go through.
+  const { serverOnlyImportBoundary } = await import('./server-boundary.js')
+  const serverBoundaryPlugin = serverOnlyImportBoundary({
+    projectRoot,
+    serverDir: serverDirAbs,
+  })
+
   return [
     theoPlugin(rootOrOptions),
     ...uiPlugins,
     ...studioPlugins,
     ...servicesPlugins,
+    serverBoundaryPlugin,
     // #122 — swc-compile controllers/** (enforce:'pre'; order-independent).
     controllerTransformPlugin,
     appClientPlugin,

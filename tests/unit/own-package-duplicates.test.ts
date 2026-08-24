@@ -86,16 +86,35 @@ function workspacePackageNames(): Set<string> {
   return names
 }
 
-/** Published copies of our own packages present in the production tree. */
-function publishedCopiesOfOwnPackages(): Map<string, string[]> {
+/**
+ * Published copies of our own packages present in the production tree.
+ *
+ * Returns `null` when the tree cannot be enumerated because an optional dependency was
+ * legitimately skipped. `rollup` carries `@napi-rs/lzma-linux-x64-gnu`, which declares
+ * `engines: node ^22.20 || ^24.12 || >=25`; on the 22.12.0 floor pnpm correctly does not
+ * fetch it, and `pnpm licenses list` then fails reading an index for a package it knows
+ * about but never downloaded.
+ *
+ * That is not a duplicate-package finding and must not be reported as one. The caller
+ * skips instead, saying so — a test that cannot run should say that, not fail with an
+ * error about something else.
+ */
+function publishedCopiesOfOwnPackages(): Map<string, string[]> | null {
   const own = workspacePackageNames()
-  const byLicense = JSON.parse(
+  let raw: string
+  try {
     // eslint-disable-next-line sonarjs/no-os-command-from-path -- the repo's own pnpm
-    execFileSync('pnpm', ['licenses', 'list', '--prod', '--json'], {
+    raw = execFileSync('pnpm', ['licenses', 'list', '--prod', '--json'], {
       encoding: 'utf8',
       maxBuffer: 1 << 26,
-    }),
-  ) as Record<string, { name: string; versions?: string[] }[]>
+    })
+  } catch (err) {
+    // pnpm reports this failure as JSON on stdout and leaves stderr empty.
+    const out = String((err as { stdout?: unknown })?.stdout ?? '')
+    if (out.includes('ERR_PNPM_MISSING_PACKAGE_INDEX_FILE')) return null
+    throw err
+  }
+  const byLicense = JSON.parse(raw) as Record<string, { name: string; versions?: string[] }[]>
 
   const found = new Map<string, string[]>()
   for (const packages of Object.values(byLicense)) {
@@ -109,7 +128,7 @@ function publishedCopiesOfOwnPackages(): Map<string, string[]> {
 }
 
 describe('own packages are not installed alongside themselves', () => {
-  it('test_no_published_copy_of_a_package_we_build_is_in_the_production_tree', () => {
+  it('test_no_published_copy_of_a_package_we_build_is_in_the_production_tree', (ctx) => {
     // Zero, flatly. This assertion was impossible to satisfy until B-M67-21 removed the cause, so
     // it used to be phrased against a declared allowlist — the assertion was about CHANGE, because
     // demanding zero would have been red by default and a gate nobody can satisfy is one nobody
@@ -120,9 +139,20 @@ describe('own packages are not installed alongside themselves', () => {
     // made three of the five assertions here vacuous. The day a real exemption is needed, it
     // arrives with its own reason attached; that is a better trade than carrying the mechanism
     // empty and pretending it still guards something.
-    const found = [...publishedCopiesOfOwnPackages().entries()].map(
-      ([name, versions]) => `${name}@${versions.join(',')}`,
-    )
+    const copies = publishedCopiesOfOwnPackages()
+    if (copies === null) {
+      // The tree could not be enumerated because an optional dependency was skipped for
+      // this Node version — see the helper. Skipping loudly beats failing with an error
+      // about a different subject, and beats passing on an empty result, which would be a
+      // gate certifying that it did not run.
+      ctx.skip(
+        'production tree not enumerable on this Node: an optional dependency of rollup ' +
+          'requires node ^22.20 and was correctly skipped, which stops `pnpm licenses list`. ' +
+          'The audit runs on the complete tree in the License compliance job.',
+      )
+      return
+    }
+    const found = [...copies.entries()].map(([name, versions]) => `${name}@${versions.join(',')}`)
     expect(
       found,
       'a published copy of a package this repo builds is in the production tree. Two versions of ' +

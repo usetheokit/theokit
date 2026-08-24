@@ -6,6 +6,10 @@ import { route } from 'theokit/server'
  * tests/unit/cli-env-wiring.test.ts.
  */
 export const GET = route()
+  // Public because this fixture exists to prove the env auto-load ran, and the
+  // values it reports are fixture values. A route shaped like this in a real app
+  // would not be public: it reads process env into a response body.
+  .policy('public')
   .handler(() => {
     return {
       openRouterKey: process.env.OPENROUTER_API_KEY ?? null,

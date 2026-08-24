@@ -41,6 +41,20 @@ export interface DefineAgentConfig<TInput extends z.ZodType = z.ZodType> {
   /** Extended-thinking effort. */
   reasoningEffort?: ReasoningEffort
   /**
+   * theokit#363 — hard ceiling on the agent's tool-calling turns within ONE run. Reaching it ends
+   * the turn instead of letting the model keep calling tools; absent ⇒ the SDK's own ceiling (8).
+   *
+   * Named `maxIterations`, not `maxSteps`, because the concept already has exactly one name here —
+   * `@Agent({ maxIterations })`, `@MainLoop({ maxIterations })`, `AgentRunner.stream({ maxIterations })`,
+   * `delegate({ maxIterations })` — and one name in the SDK it lowers to (`SendOptions.maxIterations`).
+   * A second name would be the only place needing translation, and the translation is invisible where
+   * it costs most: the SDK rejects an invalid value with a message naming `SendOptions.maxIterations`,
+   * which an author who typed `.maxSteps()` has no way to connect to what they wrote. Familiarity
+   * argues for the ai-sdk spelling, but ai-sdk's own name is `stopWhen: stepCountIs(n)` — borrowing
+   * "steps" would buy recognition of a word, not of an API.
+   */
+  maxIterations?: number
+  /**
    * Pre-built tools. Accepts the `@theokit/sdk` `CustomTool` that `defineAgentTool`
    * (theokit/server) and every `@theokit/sdk-tools` factory return (issue #81) — they are
    * normalized to the internal {@link CompiledTool} shape at compile time.
@@ -153,7 +167,26 @@ export type InferAgentToolNames<T> = T extends AgentDefinition<z.ZodType, infer 
 export function defineAgent<TInput extends z.ZodType = z.ZodType>(
   config: DefineAgentConfig<TInput>,
 ): AgentDefinition<TInput> {
+  assertValidMaxIterations(config.maxIterations)
   return { ...config, [AGENT_BRAND]: true }
+}
+
+/**
+ * Validate the declared step ceiling at the AUTHORING boundary (error-handling.md § 3), for both
+ * `defineAgent({ maxIterations })` and `AgentBuilder.maxIterations()` — the builder's `.build()`
+ * lands here, so one check covers both surfaces.
+ *
+ * The SDK rejects the same values, but only when the run reaches its `send`, and with a message
+ * naming `SendOptions.maxIterations` — a surface the author never wrote. Failing here names what
+ * they did write, before the value travels.
+ */
+function assertValidMaxIterations(value: number | undefined): void {
+  if (value === undefined) return
+  if (!Number.isInteger(value) || value < 1) {
+    throw new Error(
+      `[@theokit/agents] maxIterations must be a positive integer, got ${String(value)}.`,
+    )
+  }
 }
 
 /** Brand-check: is `value` a {@link defineAgent} result? */
@@ -218,6 +251,9 @@ export function compileAgentDefinition(def: AgentDefinition): CompiledAgentOptio
     ...(def.context !== undefined ? { runContext: def.context } : {}),
     // M9 — guardrails flow through unchanged; the runner applies them at the input boundary.
     ...(def.guardrails !== undefined ? { guardrails: def.guardrails } : {}),
+    // theokit#363 — the declared step ceiling reaches `CompiledAgentOptions.maxIterations`, which the
+    // adapter lowers to `SendOptions.maxIterations`. Absent ⇒ no key, so the SDK default is untouched.
+    ...(def.maxIterations !== undefined ? { maxIterations: def.maxIterations } : {}),
     // M14 — HITL approvals compile into the same `hitl` map the decorator path produces.
     ...(def.approvals !== undefined ? { hitl: compileApprovals(def) } : {}),
     // M13 — skills: a static list → SDK skills.enabled; a resolver → carried for the request path.

@@ -28,7 +28,7 @@ function writeRoute(rel: string, content: string): void {
 describe('Decorator → Client Bridge (G1 integration)', () => {
   it('generates .d.ts with BOTH file-routes AND extraRoutes in same AppClient', async () => {
     // File-based route
-    writeRoute('users.ts', 'export const GET = () => ({})\n')
+    writeRoute('users.ts', "export const GET = { policy: 'public' }\n")
 
     // Controller file (needs to exist for import-path resolution in .d.ts)
     writeFileSync(
@@ -113,7 +113,7 @@ describe('Decorator → Client Bridge (G1 integration)', () => {
   })
 
   it('works with file-routes-only (no extraRoutes) — backward compat', async () => {
-    writeRoute('health.ts', 'export const GET = () => ({})\n')
+    writeRoute('health.ts', "export const GET = { policy: 'public' }\n")
 
     const plugin = appTypedClientPlugin({
       cwd: sandbox,

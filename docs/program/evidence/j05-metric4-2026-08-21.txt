@@ -1,0 +1,40 @@
+J5 metric 4 - time to first green run, both sides, 2026-08-21
+Harness: metric4-harness.sh, driven interleaved (one TheoKit run, one Next.js run, repeat), probe
+"/" on both lanes. Warm npm cache, stated rather than hidden; no run in this programme has ever been
+taken on a cold cache, which is where a new developer actually stands.
+Machine: Linux 6.8.0-136, Node 22.22.2, npm 10.9.7. Nothing else heavy running.
+
+Lanes
+  TheoKit  scratchpad j05/app @ b414a37 - "J1 implementation (baseline for J5, not counted here)",
+           on top of the unedited scaffold. Template capture, so package.json.tmpl was renamed to
+           package.json; the {{name}} placeholder is left as the scaffolder leaves it.
+  Next.js  scratchpad my-ai-app @ 6ed4477 - "j5: second tool whose input is the first tool's output
+           (official quickstart 'Add another tool' stage)", on top of the j1 commit.
+
+DECLARED GAP: the TheoKit lane does NOT carry J5's own delta. No surviving tree does - j05/app stops
+at the J1 commit, and the J5 work was done against a tree that no longer exists. The delta is 9 glue
+lines in one file and adds no dependency, so install is unaffected and the build differs by nine
+lines against a number whose unit is seconds. It is recorded as a gap rather than waved away: what
+was timed is J1's TheoKit application against J5's Next.js application, which is the reading most
+favourable to TheoKit the surviving trees permit.
+
+Lockfiles, symmetric: the Next.js lane installs from its own tracked package-lock.json; the TheoKit
+lane's was generated on 2026-08-21 with `npm install --package-lock-only`.
+
+--- Three runs per lane, interleaved ---
+
+  theokit r1 install=4.0 build= 5.8 start=1.1 total=10.8
+  nextjs  r1 install=5.0 build= 8.4 start=0.6 total=13.9
+  theokit r2 install=5.1 build= 5.3 start=1.1 total=11.4
+  nextjs  r2 install=4.8 build= 8.3 start=0.6 total=13.6
+  theokit r3 install=4.8 build= 5.4 start=1.1 total=11.3
+  nextjs  r3 install=4.9 build=10.1 start=0.6 total=15.6
+
+  theokit n=3  total 11.17 +/- 0.32 -> [10.85, 11.49]   install 4.63+/-0.57  build 5.50+/-0.26  start 1.10+/-0.00
+  nextjs  n=3  total 14.37 +/- 1.08 -> [13.29, 15.45]   install 4.90+/-0.10  build 8.93+/-1.01  start 0.60+/-0.00
+
+  Intervals do NOT overlap and TheoKit is the faster side. "Not worse on time to first green run"
+  holds. Install is level - 4.63 s against 4.90 s - on two applications whose dependency sets differ
+  by nothing this journey added.
+
+No run was discarded on this journey. Nothing failed.

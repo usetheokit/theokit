@@ -4,9 +4,10 @@ The tenth of the ten benchmark journeys (`../dx-benchmark.md`). Criteria written
 implementation exists; a journey whose criteria change after code exists is void and must be re-run
 from scratch.
 
-**Scheduling status:** blocked. `../dx-benchmark.md` § Sequencing holds J10 on issue #350 until that
-issue is verified closed rather than until someone remembers it was fixed. § Current state below
-records what is present in the tree and what remains unverified.
+**Scheduling status:** measured, and lost. The hold `../dx-benchmark.md` § Sequencing placed on issue
+#350 is discharged — the tracker query it demanded was performed and #350 is closed. Both sides were
+then built, containerised and run; see § Measured - both sides, end to end. § Current state below is
+kept as the record of what was true before that run.
 
 ## What the journey requires
 
@@ -118,6 +119,434 @@ a non-build machine. Cold cache, at least three runs, mean and standard deviatio
 provisioning is inside the measurement on both sides — it is what the developer waits for — and the
 report separates it from local build time so a slow platform is not read as a slow framework.
 
+## Measured - TheoKit side, metrics 1-3 (2026-08-20)
+
+**Three of four metrics, one side, and two numbers rather than one - because the two honest targets
+fail different criteria.** Metric 4 and the whole Next.js side are unmeasured, and the subsection
+below says why. The hold this page records on issue #350 is unchanged: nothing here verifies it.
+
+Obtained from a real diff, not an estimate: the scaffold template was copied verbatim, committed as
+an untouched baseline, and the journey implemented on top. The counts are `git diff --numstat` over
+that commit.
+
+**Read the numbers with the failures attached to them.** A platform target costs the developer no
+files and cannot serve the agent this framework exists to serve; the container path can serve it and
+is not documented anywhere, which is what criterion 6 grades. Reporting either number alone would
+report a deployment that does not do the journey.
+
+| Metric | TheoKit | How it was counted |
+| --- | --- | --- |
+| Files touched | **2** for `node` in a container, **0** for `cloudflare` | `Dockerfile` and `.dockerignore` added for the first; for the second the adapter emits `worker.mjs` and `wrangler.toml` itself (`packages/theo/src/adapters/cloudflare.ts:198`, `:204`), which the rule above excludes as generated output |
+| Glue lines | **11**, then **0** | this journey declares business logic the empty set; the diff did not contradict it |
+| Concepts required | **7**, then **4** | node: the `node` target, `theokit build`, `theokit start`, the `.theokit` output directory, the `.env.local` convention that must be kept out of the image, the Dockerfile format, and a registry or host account. cloudflare: the `cloudflare` target, `wrangler.toml`, `wrangler deploy`, and a Cloudflare account |
+| Time to first green run | **not measured, and on eight of the nine targets there is no green run to time** | see below |
+
+**The 11 added lines, classified.** Published because the glue split is the metric most open to being
+argued after the fact, and a table nobody can check is not evidence - least of all one published by
+the side it favours.
+
+`Dockerfile`, 8 lines, all glue: the base image, `WORKDIR`, the `package.json` copy, the install, the
+source copy, `npm run build`, `EXPOSE`, and `CMD ["npm", "start"]`.
+
+`.dockerignore`, 3 lines, all glue: `node_modules`, `.theokit`, and `.env.local`. The third is
+load-bearing rather than tidy - it is what criterion 5 buys, since without it the developer's local
+secret is copied into the image and the criterion's grep finds it.
+
+**No adapter serves an agent route, and that is the finding of this measurement.** The string `agent`
+does not occur in any of the fourteen files under `packages/theo/src/adapters/`. The generated
+Cloudflare worker branches on `/api/` and resolves the request through `scanServerRoutes` and
+`executeRoute` (`packages/theo/src/adapters/cloudflare.ts:138`, `:142`), which are the *file* routes;
+agents are a separate scan (`packages/theo/src/cli/commands/start/manifest-loader.ts:58`) served by
+`mountAgent`, which is exported only from the internal contract
+(`packages/theo/src/server/internal-api.ts:43`, a file whose own header states it is not the public
+API). So criterion 2 - J1's tool call against the deployed URL - fails on all eight adapter targets,
+and it fails without a supported workaround: an application cannot mount its own agent endpoint.
+`streamAgentTurnInProcess` is public (`packages/theo/src/server/agent/index.ts:29`) and is a
+lower-level seam; what rebuilding the run endpoint on top of it would cost was **not measured,
+because its shape is not determined** - the same "no number, because no path" this programme
+recorded for J4's criterion 1.
+
+**The one target that can pass criterion 2 passes it by not deploying an artifact.** `theokit start`
+serves the project rather than a bundle: it reads the manifest and dynamically imports the scanned
+source paths at request time (`packages/theo/src/cli/commands/start/manifest-loader.ts:41`,
+`packages/theo/src/server/scan/module-loader.ts:11`). The container therefore ships the repository,
+which is why the Dockerfile copies everything and builds inside the image.
+
+**Four judgement calls, stated rather than buried.**
+
+1. **Two targets were measured rather than one.** § The Next.js side says comparing each side's best
+   target is the honest comparison, and on this side "best" splits: cloudflare is cheapest and cannot
+   run the journey, node is dearest and can. Reporting only the first gives a **0** that means the
+   developer wrote nothing for a deployment that answers no agent request; reporting only the second
+   hides that the platform targets exist. Both are reported, with what each fails.
+2. **The platform manifest was not counted, so 2 is a floor.** No host was chosen: a compose file, a
+   `fly.toml` or a Kubernetes manifest is at least one more file, and picking one would measure that
+   platform rather than this framework.
+3. **The generated `wrangler.toml` was not counted**, per the rule that generated deployment output
+   is not counted unless hand-edited. It would need editing for a custom domain or a secret binding;
+   that edit was not made, and if it were it would be counted with the reason recorded.
+4. **Criterion 6 was graded, not skipped, and it fails by construction.** The documented path is
+   `README.md:466`, which lists the nine targets and `theokit build --target <name>` and stops. Every
+   step after it - the base image, the install, the port, the process to run, where the secret comes
+   from - was invented here rather than followed, and the criterion says in its own words that a step
+   the operator had to discover is a defect of the criterion. The entire 11-line diff is that defect.
+
+**Two fixes landed today, both real, and neither unblocks this journey.** The static adapter no
+longer emits a meta refresh for every exported page - the redirect fallback now runs only for a
+genuine redirect (`packages/theo/src/adapters/static.ts:192`, with the previous behaviour recorded at
+`:173`) - and the Cloudflare worker no longer serves a document with no `<head>`: the shell is read
+from the built `index.html` and the build refuses by name when it is missing
+(`packages/theo/src/adapters/cloudflare.ts:38`, read at `:197`). Both concern what a *page* looks
+like. Criterion 2 concerns whether an agent endpoint exists at all, and on the adapter targets it
+does not.
+
+**A third finding, recorded because it is deploy-shaped:** the production server never binds the
+configured host. `server.listen(port, …)` passes no address
+(`packages/theo/src/cli/commands/start/index.ts:179`) while the schema defaults `host` to
+`localhost` (`packages/theo/src/config/schema.ts:116`). The effect is convenient in a container and
+wrong as a contract - a declared bind address does nothing, in either direction.
+
+### What is still unmeasured, and why
+
+**Nothing was deployed.** No image was built, no worker was published, no request was issued from a
+second machine. Every claim above is read from source, and criterion 1 - the whole journey, in one
+line - is untouched by a measurement that never left this machine.
+
+**Criterion 3 was not exercised and is expected to fail on six targets.** The Web shim still collects
+every chunk and constructs the `Response` inside `end()`
+(`packages/theo/src/adapters/web-shim.ts:194`), which is what `../../../ROADMAP.md` § M14 records.
+The `node` path does not go through that shim, so the container measured here is the one target where
+criterion 3 has a chance, and it was not run.
+
+**Criterion 4 - build twice, deploy twice - was not run.** That is the criterion the #350 hold is
+about, and this page still does not get to close it by reading a changelog.
+
+**Whether `theokit start` can import the sources it scans inside a container image was not tested.**
+The loader performs a plain dynamic `import()` of the manifest's path
+(`packages/theo/src/server/scan/module-loader.ts:11`), and those paths are TypeScript sources.
+Whether that resolves on the image's Node build - and therefore whether the container serves at all -
+is exactly the class of question this journey exists to ask, and it was not asked here.
+
+**Metric 4 (time to first green run) needs a live model call for criterion 2**, at least three times,
+cold cache, plus platform provisioning inside the clock. That spends real credits and a platform
+account, and the number is only meaningful measured identically on both sides.
+
+**The Next.js side does not exist yet.** Until it does, nothing here is a comparison, and the winning
+rule cannot be applied. § The Next.js side already recorded that the asymmetry favours the other
+stack; a 0 and a 2 on this side do not change that and do not settle it.
+
+**The three-target criteria cannot be exercised in this repository.** The Tauri and TUI lines need
+`@theokit/tui` and `@theokit/ui`, which live outside it (`.claude/rules/three-target-parity.md`
+records the same limit). The TUI line is explicit that *not applicable* is unavailable to it, so both
+remain open rather than excused.
+
+**So: J10 is not won, not tied, and not run.** It is the second journey in this programme whose cost
+cannot be reduced to a number, and the reason is not that the work is large - it is that on eight of
+nine targets there is no path from the artifact to the journey's own agent.
+
+## Measured - both sides, end to end (2026-08-20, second measurement)
+
+**The first J10 measurement never left the build machine, and this one does not either - but for a
+different reason, and it got a great deal further.** Both stacks were containerised, run, and
+answered a full agent turn with a tool call and a progressively streamed reply; a request issued from
+a machine that is not this one reached both and returned the value randomized into the build. What
+still did not happen is a deploy to a machine that is not this one, on either side, because **no
+platform account was obtainable non-interactively** - not on any of our nine targets and not on
+theirs. That blocker belongs to the measurement, not to either framework, and it is symmetric.
+
+The section above is left standing as the record of what was true when it was written. Where a run
+refuted it, the refutation is here rather than edited into it.
+
+### The blocker this page was held on is discharged
+
+`../dx-benchmark.md` § Sequencing held J10 on issue #350 "until that issue is verified closed rather
+than until someone remembers it was fixed". The tracker query that section demanded was performed:
+**#350 is CLOSED**, at `2026-08-20T12:45:57Z`. The criterion it guarded was then exercised rather
+than inferred - see criterion 4 below. **J10 is unblocked, and this is the measurement.**
+
+### Three claims about today's changes, verified rather than believed
+
+| Claim | How it was checked | Result |
+| --- | --- | --- |
+| The deploy shim no longer buffers a whole response | `createWebShim` driven directly by a probe that writes 8 chunks 120 ms apart and times the `Response` body | **Confirmed.** Headers at **1 ms**, **9 network chunks**, first chunk at 1 ms, gaps 120-122 ms, completion 967 ms, ratio **0.001**. J3 measured the same instrument before the fix at 1 chunk and ratio 0.999 |
+| `aws-lambda` is delisted for streaming, audibly | read the three declarations | **Confirmed.** The build refuses by name when `ssrStreaming` is on (`packages/theo/src/adapters/aws-lambda.ts:209`), the emitted handler warns by route when it buffers a `text/event-stream`, and the adapter answers `streamsResponses: false` (`packages/theo/src/adapters/aws-lambda.ts:243`) against a contract that makes all nine state one (`packages/theo/src/adapters/types.ts:47`) |
+| #367 - no adapter serves an agent | `grep -ric agent` over `packages/theo/src/adapters/`, and over the **emitted** Cloudflare worker | **Confirmed, twice.** Zero occurrences across all 14 adapter files. Zero occurrences in the `worker.mjs` a real `theokit build --target cloudflare` produced. #367 is still open, and it is the finding that decides this journey |
+
+The #382 mechanism is fixed and the emitted contract carries it: the generated worker returns
+`toResponse(executeRoute({…}))` without awaiting the run (`packages/theo/src/adapters/cloudflare.ts:156`).
+**The issue is nonetheless still open on the tracker** (`state: OPEN`, `closedAt: null`, checked the
+same day). The code is repaired; the record has not caught up, and this page reports the tracker as
+it found it rather than as it expected it.
+
+### The two baselines, declared
+
+Neither application is committed here; the evidence is the counts and the published diffs, as J3 and
+J6 did.
+
+**TheoKit.** `create-theokit` 1.23.9 with `--yes`, then J1's tool substituted for the scaffolded one
+and wired onto the agent, then committed untouched. `theokit` 0.49.0 **packed from the worktree at
+`6e4102775` with `pnpm pack`** and installed from the tarball - because the shim fix under
+measurement is not published: npm serves 0.48.14, and measuring that would measure a framework that
+no longer exists. Node 22.22.2, Docker 29.3.0.
+
+**Next.js.** `create-next-app` 16.3.1 (TypeScript, App Router, Tailwind), then `npm install ai
+@ai-sdk/react zod`, then the AI SDK App Router quickstart's route handler and page, then J1's tool -
+the same baseline J1 argued for and chose, so the two measurements compose. Installed: `next@16.3.1`,
+`ai@7.0.70`, `@ai-sdk/react@4.0.73`, `zod@4.4.3` - identical to J1's row.
+
+**J10's delta is measured from there**: from a working local application to a serving remote one.
+J1's tool sits in the baseline on both sides and is charged to neither.
+
+### The instrument, and what it cost to get a run
+
+Counted on neither side.
+
+**The model.** A scripted local server answering `POST /v1/chat/completions` in OpenAI's SSE dialect:
+one `tool_calls` frame on the first turn, then the final answer as 9 text deltas 120 ms apart. The
+Next.js lane uses `MockLanguageModelV4` + `simulateReadableStream` scripted to the identical shape,
+in-process, which is what J6 established. Both lanes therefore stream at the same rate from the same
+script, and what the two numbers differ by is the stack.
+
+**One thing the framework charged that J6's instrument did not.** `registerProvider` is public from
+`theokit/server` and documented as the way to point at a self-hosted endpoint. Calling it from
+`agents/chat.ts` had **no effect on the served run**: the announcement read
+`provider=openai (declared by the model) source=OPENAI_API_KEY baseUrl=https://api.openai.com/v1` -
+the built-in base URL, not the registered one - and the request went to the real api.openai.com and
+401'd. The provider registry is duplicated across two bundle chunks; the copy an application mutates
+is not the copy the served path reads. Already filed as usetheokit/theokit#401 by another
+measurement the same day; this run corroborated it on **0.49.0 built from the worktree** (so it is
+not only the published build) and on an **existing** provider name (so it is not only new entries),
+and both facts were posted to that issue. The measurement proceeded behind a `--import` preload that
+rewrites the origin on `globalThis.fetch` - instrument-grade, and not something an application should
+have to write.
+
+### Metrics 1-3
+
+Four columns, because two of the four are targets that cannot do the journey and one is a target
+nobody could reach. Reporting a single pair here would pick the answer.
+
+| Metric | TheoKit, `node` container | TheoKit, the eight adapter targets | Next.js, container (official example) | Next.js, Vercel |
+| --- | --- | --- | --- | --- |
+| Files touched | **3** | **no path** | **3** | **0** |
+| Glue lines | **12** | **no path** | **247** | **0** |
+| Concepts required | **9** | **no path** | **13** | **5** |
+| Time to first green run | not measured | - | not measured | not measured |
+| Was it run? | **yes** - built, served, agent turn completed | build only | **yes** - built, served, agent turn completed | **no** - no account |
+
+**"No path" is the entry J5 fixed the rule for, and it is the honest one here.** The eight adapter
+targets cost the developer nothing because they emit their own manifest and handler, and a **0** in
+those cells would price a deployment that answers no agent request. `theokit build --target
+cloudflare` was run: it emits `worker.mjs` and `wrangler.toml`, and the word `agent` does not occur
+in either. There is also no upload step in the framework at all - the CLI stops at `build`, and the
+adapter contract returns void (`packages/theo/src/adapters/types.ts:48`), so nothing reports or ships
+what was emitted. A cost of zero for a journey with no route to its own agent is not a win; it is a
+missing row.
+
+**Vercel's 0 is documented and unverified, and it is reported as both.** Vercel's own docs are
+explicit that a Next.js deploy is zero-configuration and that `vercel.json` is an override rather
+than a requirement, so the file and line counts are 0 by the platform's inference - the case
+§ How the four metrics are counted here says must be visible rather than folded into a total. What
+could not be done is the deploy: the CLI authenticates from `VERCEL_TOKEN` or an interactive login,
+and no account exists here to mint one. The concepts are counted anyway, because a developer must
+still learn them: `vercel` the CLI, `vercel link` and the `.vercel` directory it creates,
+`vercel deploy --prod`, `vercel env add`, and a Vercel account.
+
+### Both diffs, published
+
+The reason J1 and J3 published theirs: the glue split is the metric most open to being argued after
+the fact, and a table nobody can check is not evidence - least of all one published by the side it
+favours. This journey declares business logic the empty set, so every line below is glue.
+
+**TheoKit - 3 files, 12 lines.**
+
+```diff
++++ b/Dockerfile
++FROM node:22-slim
++WORKDIR /app
++COPY .vendor ./.vendor          <- instrument, not counted (see below)
++COPY package.json package-lock.json ./
++RUN npm ci --no-audit --no-fund
++COPY . .
++RUN npm run build
++EXPOSE 3000
++CMD ["npm", "start"]
+
++++ b/.dockerignore
++node_modules
++.theokit
++.env.local
+
+--- a/theo.config.ts
++++ b/theo.config.ts
+-export default config().build()
++export default config().host('0.0.0.0').build()
+```
+
+`Dockerfile` 9 lines of which **8 count**; the `COPY .vendor` line exists only because the framework
+under test is unpublished, and a real application installs from the registry. `.dockerignore` 3
+lines, all glue, and the third is load-bearing rather than tidy - it is what criterion 5 buys.
+`theo.config.ts` 1 changed line, and **that line is the whole difference between a container that
+serves and a container that does not** - see the finding below.
+
+**Next.js - 3 files, 247 lines.** `next.config.ts` gains `output: "standalone"` (1 line). `Dockerfile`
+is the official `vercel/next.js` `examples/with-docker` file, copied verbatim: **112 lines** = 25
+blank, 44 comment, 43 directive, three stages, BuildKit cache mounts, lockfile detection for three
+package managers, a non-root user. `.dockerignore` is that example's, also verbatim: **134 lines** =
+14 blank, 18 comment, **102 entries**.
+
+### Counting judgements, stated rather than buried
+
+Six. The first one decides the whole of metric 2, and it was settled by running both answers rather
+than by arguing.
+
+| # | The judgement | Decided as | The other way |
+| --- | --- | --- | --- |
+| 1 | Is the Next.js side charged for the **official 112-line Dockerfile**, or for one of the same shape as ours? | **The official example.** § Why the protocol comes before the measurement says an official example must be used where one exists, and one does | A minimal 9-line Dockerfile plus a 3-line `.dockerignore` was **written, built and run** on the Next.js side to price this: it serves the static root, the agent turn, the tool call and the stream. That count is **3 files, 13 glue lines, 9 concepts** - so glue lines go from **20.6x to 1.08x** and concepts from 1.44x to 1.0x. This is the single most consequential number in this measurement |
+| 2 | Does judgement 1 overcharge the other side for ceremony? | **No, and the artifact says so.** The official image is **290 MB**; the minimal one built from the same source is **1.09 GB**. Those 112 lines buy a 3.8x smaller image, and our 8-line Dockerfile has no equivalent - ours is **612 MB** and ships the whole repository, because `theokit start` imports the scanned sources at request time | Were the size ignored, judgement 1 would look like padding rather than like work |
+| 3 | Is the `theo.config.ts` host line J10's, or J1's? | **J10's.** Nothing local needs it; it exists solely so the container serves | 12 glue lines to 11, 9 concepts to 8. No effect on any verdict |
+| 4 | Is the generated `wrangler.toml` counted? | **No** - generated deployment output, per this page's own rule, and not hand-edited. It was emitted by the run and left alone | It would need editing for a custom domain or a secret binding, and that edit would be counted |
+| 5 | Is a container on this machine a "target that is not the developer's machine"? | **No.** Criterion 1 is graded FAIL on both sides for that reason, however far the runs got | Grading it PASS would let both sides pass the journey's central sentence on a technicality, which is the failure this protocol exists to stop |
+| 6 | Is multi-stage building a concept separate from "Dockerfile format"? | **Yes** - `AS`, `COPY --from` and BuildKit cache mounts are three things a reader must know that our path never asks for | Next.js concepts 13 to 10; the verdict does not move |
+
+### The criteria, graded against the runs
+
+| # | Criterion | TheoKit | Next.js + AI SDK |
+| --- | --- | --- | --- |
+| 1 | request from a non-build machine, randomized value | **FAIL**, and the oracle passed. The container was exposed through a third-party tunnel and fetched by a machine that is not this one; it returned `{"buildMark":"J10-2568E92A7C",…}`, the value randomized into the build. The application still ran here, so the journey's own sentence is unmet | **FAIL**, identically and for the same reason. Same fetch, same marker, same tunnel. No account was obtainable to deploy either side anywhere |
+| 2 | the agent journey works there - J1's tool call against the deployed URL | **PASS on the `node` container.** `POST /api/agents/chat` returned `tool-input-available` for `order_lookup`, `tool-output-available` carrying the randomized `SHIP-4F72B7`, and a final answer quoting it. **FAIL on all eight adapter targets** - #367, confirmed in the emitted worker as well as in the source | **PASS**, both container variants. `tool-input-available` for `orderLookup`, output `SHIP-4F72B7`, answer quoting it |
+| 3 | streaming survives the target - J3's two-chunk-50 ms oracle | **PASS**, measured through the container: 12 network chunks, 9 text-bearing, gaps **118-121 ms**, first text at 0.20 of the run. **PASS through a real third-party proxy** too: gaps 90-201 ms. The response still carries **no** `x-accel-buffering` (#383) - this proxy did not buffer, which is not proof the next one will not | **PASS**: 16 chunks, 9 text-bearing, gaps **119-123 ms**, ratio 0.276. Through the proxy, gaps 22-256 ms. The response carries `x-accel-buffering: no`, which the SDK sets and ours does not |
+| 4 | build twice, deploy twice | **PASS**, and stronger than asked. Three consecutive `theokit build` runs, all exit 0, all producing a deployable artifact; two `theokit build --target cloudflare` runs produced **byte-identical** `worker.mjs` and `wrangler.toml` (md5 equal). `.theokit/manifest.json` differs run to run, which is `../../../ROADMAP.md` § M3's criterion and deliberately not this one | **PASS**. Three consecutive `next build` runs, all exit 0, all producing `.next/standalone/server.js` |
+| 5 | secret from the target's mechanism, absent from the artifact | **PASS.** A randomized key was set in `.env.local` locally and supplied to the container with `-e`; `grep` for its value across the running image returns nothing, `.env.local` is absent from the image, and the app served. The `.dockerignore` line is what buys it | **PASS.** Same test, same result; the official `.dockerignore` covers `.env*.local` among its 102 entries |
+| 6 | documented path followed verbatim | **FAIL, and it is the same failure the first measurement graded.** `README.md:468` lists nine targets and `theokit build --target <name>` and stops. The base image, the install, the build, the port, the process to run, where the secret comes from **and the host binding** were all invented here. The criterion says a step the operator had to discover is a defect of the criterion; the entire 12-line diff is that defect | **PASS.** `nextjs.org/docs/app/guides/self-hosting` plus the `vercel/next.js` `examples/with-docker` directory supply the Dockerfile, the `.dockerignore`, a `compose.yml` and the one config setting. Nothing was discovered; three files were copied |
+| 7-9 | Web, Tauri, TUI | **not exercisable here** - `@theokit/tui` and `@theokit/ui` live outside this repository (`../../../.claude/rules/three-target-parity.md` records the same limit). The TUI line's own text says *not applicable* is unavailable to it, so both stay open | **not applicable** - a Route Handler serves one target |
+
+**Criteria satisfied: 4 of 6 gradeable against 5 of 6.** Ours fails 1 and 6; theirs fails 1.
+
+### The fifth metric, and it goes our way
+
+Per `../dx-benchmark.md` § The fifth, which is pass/fail and not a number. The break this page
+specified - a missing environment variable at the target - was run on both sides, in the same shape:
+a container started with no provider key, then asked for a run.
+
+| | What reached the caller | Verdict |
+| --- | --- | --- |
+| TheoKit | `Model "openai/gpt-4o-mini" declares provider "openai", but OPENAI_API_KEY is not set. Set OPENAI_API_KEY, or change the model's provider prefix.` | **Names the action.** The variable, the model, the provider and both ways out. It does not name why it worked locally, which this page's exemplar asked for, and that is the gap |
+| Next.js + AI SDK | `data: {"type":"error","errorText":"An error occurred."}` | **Does not name the action.** The actionable text - `Unauthenticated. Configure AI_GATEWAY_API_KEY or use a provider module`, with a URL - exists, and it exists **only in the server log**. On a platform that is precisely this page's own "does not name the action" column: a 500 on the first request with the real cause somewhere the developer has to go and find |
+
+**The tension worth recording:** the same design that wins here lost J6's criterion 2. Ours puts the
+failure text on the wire; J6 measured that as a defect because a *tool* failure arrived that way on a
+run reported `done` (#388). Putting the cause where the caller can read it is right; reporting the
+run as successful anyway is what was wrong. J10 sees the good half of that decision and J6 saw the
+bad half, and neither reading cancels the other.
+
+**A second break was graded in the same session and it is worse than either.** See below.
+
+### The finding: a container that reports success and serves nobody
+
+**The seventh instance of the family this programme has now found six times in one day, and the first
+one that is a deploy.**
+
+A container built by following the documented path starts, exits nothing, logs
+
+```
+  Theo production server
+  → http://localhost:3000
+```
+
+and refuses every request from outside with `Recv failure: Connection reset by peer`. The listener is
+on IPv6 loopback and nothing else: `/proc/net/tcp` inside the container is empty and `/proc/net/tcp6`
+holds one row for `::1:3000`. A request issued **from inside the container** to `127.0.0.1:3000`
+fails too.
+
+The cause is one line: `resolveListenHost` maps an absent `config.host` to `'localhost'`
+(`packages/theo/src/cli/commands/start/resolve-listen-host.ts:19`), and that is what `listen` is
+given (`packages/theo/src/cli/commands/start/index.ts:183`) against a schema whose default is the
+same (`packages/theo/src/config/schema.ts:116`).
+
+**And it is a regression from a fix that landed today.** The first J10 measurement recorded the
+opposite defect - `listen(port)` with no address, binding every interface, "convenient in a container
+and wrong as a contract". That has been corrected, and the correction made every containerised
+deployment unreachable by default. The new file's own docstring states the reasoning: *"Narrow is the
+safe choice to make silently; binding every interface is a decision someone should have to write
+down."* That is right for a laptop and wrong for a container, and nothing at runtime distinguishes
+the two.
+
+**The audible half is the worse half.** The success line substitutes the word `localhost` for
+`0.0.0.0` when printing (`packages/theo/src/cli/commands/start/index.ts:187`), so two images built
+from the same source - one with the host line, one without - print **byte-identical** logs. One
+serves a full agent run; the other serves nobody. Verified by running both. Filed as
+usetheokit/theokit#402.
+
+**A second gap on the same two lines, folded into that issue:** `theokit start` never reads
+`process.env.PORT` - `const port = options.port ?? config.port`
+(`packages/theo/src/cli/commands/start/index.ts:90`), the flag or the file and nothing else. Every
+platform that injects `PORT` will be served on the wrong one. The single place in the tree that
+honours it is the Bun adapter's emitted entry (`packages/theo/src/adapters/bun.ts:60`). The
+contrast is exact: the official Next.js image sets `PORT` and `HOSTNAME` as environment variables
+because the server it starts reads both.
+
+### What is still unmeasured, and why
+
+**Nothing was deployed to a machine that is not this one, on either side.** No platform account could
+be created non-interactively: Vercel's CLI needs a token minted on an account page, `wrangler` needs
+a Cloudflare login, and the same holds for Netlify, Fly and Deno Deploy. A tunnel let a genuinely
+remote machine issue the request, which grades the oracle and not the journey. **This is the honest
+limit of this measurement and it is symmetric** - neither side got a platform, so neither side's
+number is a claim about the other's platform.
+
+**Metric 4 is still not measured, on either side.** It needs platform provisioning inside the clock,
+which needs the account above; and a number measured against a scripted local model measures the
+harness, as J6 already recorded.
+
+**Whether the five remaining shim targets stream on their platforms is still unproven.** The shim was
+measured and the emitted contract read; the adapter agent's own limit stands - `node` is exercised
+end to end, and Cloudflare, Vercel, Netlify, Bun and Deno Deploy are correct in the emitted contract
+and unproven on the platform, because there is no deploy in CI.
+
+**#383 was not settled by the proxy hop.** One third-party proxy passed both streams through. nginx
+with default buffering is the case the header exists for, and it was not tried.
+
+**Criteria 7 to 9 cannot be exercised in this repository**, unchanged from the first measurement.
+
+**Neither application is committed.** `../dx-benchmark.md` § Evidence asks for both under
+`docs/program/evidence/jN-<journey>/`; that directory still does not exist, and this measurement did
+not create it. Recorded as an open gap, as J1, J3 and J4 recorded it.
+
+### The verdict, and the margin
+
+| Metric | TheoKit (`node` container) | Next.js (Vercel, documented) | Better | Ratio | Verdict under § What counts as winning |
+| --- | --- | --- | --- | --- | --- |
+| Files touched | 3 | **0** | Next.js | unbounded | **Loss** |
+| Glue lines | 12 | **0** | Next.js | unbounded | **Loss** |
+| Concepts required | 9 | **5** | Next.js | 1.8x | **Tie** - inside the 2x bar, and TheoKit is the worse side |
+
+| Metric | TheoKit (`node` container) | Next.js (container, official) | Better | Ratio | Verdict |
+| --- | --- | --- | --- | --- | --- |
+| Files touched | 3 | 3 | - | 1.0x | **Tie** |
+| Glue lines | **12** | 247 | TheoKit | 20.6x | **TheoKit**, far outside the bar |
+| Concepts required | **9** | 13 | TheoKit | 1.44x | **Tie** |
+
+**J10 is lost.** The rule this journey wrote for itself is that each side is measured on its best
+target and the report says which - and that restricting both to a container "would produce a
+fairer-looking number that measures something neither side's users do". Their best target takes a
+scaffolded application to a public URL with **zero files and zero lines**; ours has no deploy command
+at all, and the one target of nine that can serve an agent gets there by shipping the repository into
+a container the developer had to design. A journey is won by costing less to build the thing the
+criteria describe. Here we cost more to build less.
+
+**The container comparison is a tie, and its 20.6x is the most fragile number this programme has
+produced.** It survives only judgement 1, and judgement 1 was tested by building the other answer:
+charge the Next.js side a Dockerfile of the same shape as ours and the three metrics read 1.0x,
+1.08x, 1.0x - level on all three. The official file earns its 112 lines (judgement 2: a 3.8x smaller
+image), so charging them is right; but a margin that a defensible re-implementation of the loser
+closes completely is, by § What counts as winning's own words, not a margin.
+
+**What this journey actually establishes is not in either table.** Both stacks were run, and both
+served the agent turn the criteria describe - which is more than J3 or J9 could say about the margins
+they reported. Ours got there through the one target that does not deploy an artifact, after an
+invented Dockerfile, past a public extension point that does nothing, and over a default that makes
+the container answer no one while saying it is up.
+
 ## The deliberately broken state
 
 Per `../dx-benchmark.md` § The fifth, which is pass/fail and not a number. The break for J10 is a
@@ -171,18 +600,64 @@ that path ends with a directory on the developer's disk.
 
 **A third, which is why criterion 3 sits inside this journey rather than beside it:**
 `../../../ROADMAP.md` § M14 records the shared web shim buffering whole responses across six
-targets. Criterion 3 will fail on those targets today. It stays in the criteria because a target
-that cannot stream is a target on which the agent journeys do not work, and delisting the criterion
-would let the journey pass on a deployment nobody would ship.
+targets. It stays in the criteria because a target that cannot stream is a target on which the agent
+journeys do not work, and delisting the criterion would let the journey pass on a deployment nobody
+would ship. **This blocker is stale as written (checked 2026-08-21):** `#382` is in the tree, the
+shim settles its `Response` at the headers and carries a live body
+(`packages/theo/src/adapters/web-shim.ts:401`), and all six entries take the response without
+awaiting the route (`packages/theo/src/adapters/vercel.ts:80`). What has still never been measured is
+a deployed target actually streaming, so criterion 3 remains ungraded rather than failing.
 
-**And a fourth that couples J10 to J7:** the web-standards handler the adapters are built on has no
-rate limiting (see `j07-rate-limit.md` § Current state). So the deployed target is, today, less
-protected than the developer's own machine — which is the inverse of what a deploy is supposed to
-achieve, and is recorded here so the two journeys are not measured as if they were independent.
+**And a fourth that couples J10 to J7,** re-measured on 2026-08-21 and wider than this paragraph
+first said: the six generated entries build `executeRoute`'s context from **8 of the 12 fields** it
+accepts, so a deployed app silently loses the configured CSRF mode, the `disallowed` rules, every
+plugin hook and the `serialization` transformer, on top of the limiter
+(`usetheokit/theokit#410`). They *keep* CSRF, route policy, file middleware and Zod validation, which
+live inside `executeRoute` itself — the gap is the context the entry does not build, not the executor.
+`security.cors` is read only by the dev server, so no production target serves a CORS header at all
+(`usetheokit/theokit#409`). The deployed target is therefore not simply "less protected" than the
+developer's machine; it is **configured differently without saying so**, and in one respect —
+`csrfMode` falling back to the hard-coded `'strict'` (`packages/theo/src/server/http/execute.ts:144`)
+— it is stricter than what the operator asked for. Wiring the limiter is not the small fix this
+paragraph implied: see `j07-rate-limit.md` § Correction, where five of the six targets were measured
+collapsing into a single global bucket.
 
 **Not measured:** whether issue #350 is closed on the tracker; whether any adapter's output actually
 serves when uploaded; and whether the desktop and terminal surfaces build at all, which
 `../three-target-parity.md` § Current state already records as unproven in CI.
+
+## Metric 4 — measured 2026-08-21 on the local path, and NOT on this journey's own terms
+
+Three runs per lane, alternating lane by lane, on the two applications this journey was measured on:
+
+| | Next.js | TheoKit |
+| --- | --- | --- |
+| install | 5.07 ± 0.80 | 5.03 ± 0.65 |
+| build | 11.67 ± 2.82 | **5.30 ± 0.70** |
+| start | 0.53 ± 0.06 | 1.03 ± 0.06 |
+| **total, mean ± 1σ** | **17.33 ± 2.78** → [14.55, 20.11] | **11.37 ± 0.81** → [10.56, 12.17] |
+
+**What that number is not.** It is the local path — install, build, start, first HTTP answer — which
+is the instrument every other journey in this sweep used, and is comparable across the sweep. It is
+**not this journey's criteria.** J10 grades a run on a target that is not the developer's machine,
+and both sides were graded in containers. Wall clock to a green run *on a deploy target* is not
+measured here and stays unmeasured, which is recorded as a gap rather than resolved by relabelling
+the local number.
+
+**A second asymmetry, declared because it favours us.** The TheoKit lane resolves four dependencies
+from vendored tarballs built from the worktree, because J10 needed an unreleased fix; those are local
+file copies rather than registry fetches. With a warm cache a registry fetch is also served locally,
+so the effect should be small — and it is: install is level at 5.03 s against 5.07 s. The strongest
+thing that can be said about the asymmetry is that it did not show up.
+
+The Next.js lane's third build is 14.9 s against 9.7 and 10.4, giving it the largest σ in the sweep.
+It is kept rather than trimmed. Everything is in
+[the evidence file](../evidence/j10-metric4-2026-08-21.txt).
+
+**The verdict does not move and metric 4 could not have moved it.** J10 is an outright loss on the
+comparison § The Next.js side fixes: 3 files, 12 glue lines and 9 concepts against a vendor platform
+that costs zero of each, with no deploy command in the framework at all. A journey that loses every
+countable metric is not rescued by the fourth one.
 
 ## Cross-references
 

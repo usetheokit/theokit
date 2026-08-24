@@ -131,6 +131,42 @@ async function probeAllPortsFree(): Promise<boolean> {
   return true
 }
 
+/**
+ * Does the pnpm 11 this test exists to exercise actually RUN on the Node it is running on? (#418)
+ *
+ * Measured, not compared against a hardcoded version. pnpm **11** requires Node >= 22.13, and this
+ * repository declares `engines.node: ">=22.12.0"`. On the floor the product supports, pnpm 11 exits
+ * before installing anything, and this test reported
+ * `pnpm install did not produce node_modules/theokit` — a message about theokit, for a limit that
+ * has nothing to do with theokit. (The repository's own pinned pnpm 10.34 runs fine at 22.12;
+ * measured. It is pnpm 11, which this test opts into deliberately, that does not.)
+ *
+ * The probe runs OUTSIDE the repository on purpose: in the repo root corepack honours the local
+ * `packageManager` field and would answer for pnpm 10, which is not the version under test.
+ *
+ * A version comparison would need updating every time pnpm moves its own floor, and would be wrong
+ * in the window before anyone noticed. Asking pnpm is the answer that cannot go stale.
+ */
+function probePnpm11RunsHere(): string | undefined {
+  const probeDir = mkdtempSync(join(osTmpdir(), 'theokit-pnpm11-probe-'))
+  try {
+    // eslint-disable-next-line sonarjs/no-os-command-from-path -- same probe as `hasCorepack` above: an integration test asking the runner's own corepack whether it can run pnpm 11 here
+    execFileSync('corepack', ['pnpm', '--version'], {
+      stdio: 'pipe',
+      env: PNPM_ENV,
+      cwd: probeDir,
+      timeout: 60_000,
+    })
+    return undefined
+  } catch (err) {
+    const stderr = (err as { stderr?: Buffer }).stderr?.toString() ?? ''
+    const refusal = /requires at least Node\.js[^\n]*/.exec(stderr)?.[0]
+    return refusal ?? 'corepack could not run pnpm 11'
+  } finally {
+    rmSync(probeDir, { recursive: true, force: true })
+  }
+}
+
 async function probeNpxReachable(): Promise<boolean> {
   try {
     // eslint-disable-next-line sonarjs/no-os-command-from-path -- integration test probes runner PATH for npx
@@ -142,13 +178,15 @@ async function probeNpxReachable(): Promise<boolean> {
 }
 
 const hasCorepackBin = hasCorepack()
+const pnpmRefusal = hasCorepackBin ? probePnpm11RunsHere() : undefined
 const portsFree = hasCorepackBin && (await probeAllPortsFree())
 const npxAvailable = hasCorepackBin && (await probeNpxReachable())
-const infraReady = hasCorepackBin && portsFree && npxAvailable
+const infraReady = hasCorepackBin && pnpmRefusal === undefined && portsFree && npxAvailable
 
 if (!infraReady) {
   const reasons: string[] = []
   if (!hasCorepackBin) reasons.push('corepack not in PATH')
+  if (pnpmRefusal !== undefined) reasons.push(`pnpm 11 will not run here — ${pnpmRefusal}`)
   if (!portsFree) reasons.push('ports 5000-5004 not all free')
   if (!npxAvailable) reasons.push('npx not reachable')
   process.stderr.write(
@@ -185,9 +223,12 @@ describe.skipIf(!infraReady)('pnpm 11 compat — scaffold + install + dev boot',
         )
         expect(existsSync(appDir)).toBe(true)
 
-        // Step 2: verify pnpm.onlyBuiltDependencies hint shipped
-        const pkg = JSON.parse(readFileSync(join(appDir, 'package.json'), 'utf-8'))
-        expect(pkg.pnpm?.onlyBuiltDependencies).toContain('esbuild')
+        // Step 2: the build approvals ship where pnpm READS them. This asserted
+        // `pkg.pnpm.onlyBuiltDependencies` until #397, and pnpm 10+ announces in the
+        // first line of every run that it no longer reads that field — so the
+        // assertion was passing on a hint the tool ignored.
+        const workspaceYaml = readFileSync(join(appDir, 'pnpm-workspace.yaml'), 'utf-8')
+        expect(workspaceYaml).toMatch(/^\s*esbuild:\s*true\s*$/mu)
 
         // Step 3: install via pnpm 11 (env-scoped). pnpm 11 exits non-zero on
         // ERR_PNPM_IGNORED_BUILDS even when install completed. Check by file
@@ -214,6 +255,17 @@ describe.skipIf(!infraReady)('pnpm 11 compat — scaffold + install + dev boot',
           `pnpm install did not produce node_modules/theokit.\n` +
             `${unpublishedPinNote(appDir)}pnpm stderr:\n${installStderr.slice(-2000)}`,
         ).toBe(true)
+
+        // The title's promise, asserted. Until #397 this test tolerated
+        // ERR_PNPM_IGNORED_BUILDS — the comment above says a non-zero exit is
+        // "EXPECTED" — while its name said "without". It was accommodating the
+        // defect #397 reports rather than catching it, which is why a green suite
+        // coexisted with a scaffolder that failed on its first command.
+        expect(
+          installStderr,
+          `pnpm refused to run a build script. The approvals ship in pnpm-workspace.yaml; if pnpm ` +
+            `stopped reading them there, that is the finding.\npnpm stderr:\n${installStderr.slice(-2000)}`,
+        ).not.toContain('ERR_PNPM_IGNORED_BUILDS')
 
         // Step 4: boot dev via theokit binary direct (bypass pnpm wrapper's
         // deps-status-check that re-trips ERR_PNPM_IGNORED_BUILDS)

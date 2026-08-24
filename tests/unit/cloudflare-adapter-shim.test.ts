@@ -23,9 +23,18 @@ describe('renderCloudflareWorkerEntry — template (T2.1)', () => {
     expect(out).not.toMatch(/_headers: \{\}/)
   })
 
-  it('caches routes at cold start (no scan per request)', () => {
-    const out = renderCloudflareWorkerEntry()
-    expect(out).toMatch(/routesCache|let.+routes/)
+  it('resolves routes without scanning, at cold start or ever (#369)', () => {
+    // This asserted a cold-start CACHE, which was the best available answer while
+    // the worker scanned a directory: cache the scan so it happens once instead of
+    // per request. The scan cannot happen at all on Workers — there is no
+    // filesystem — so the routes are baked at build time and there is nothing left
+    // to cache. The property that survives is the one the cache was approximating.
+    const out = renderCloudflareWorkerEntry({
+      routes: [{ filePath: 'server/routes/hello.ts', routePath: '/api/hello', methods: ['GET'] }],
+    })
+
+    expect(out).not.toMatch(/scanServerRoutes\(/u)
+    expect(out).toMatch(/^const routes = \[$/mu)
   })
 
   it('emits requirements header block (EC-3)', () => {

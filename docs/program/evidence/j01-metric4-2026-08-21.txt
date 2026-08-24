@@ -1,0 +1,38 @@
+J1 metric 4 - time to first green run, both sides, 2026-08-21
+Harness: metric4-harness.sh, driven interleaved (one TheoKit run, one Next.js run, repeat), probe
+"/" on both lanes. Warm npm cache, stated rather than hidden; no run in this programme has ever been
+taken on a cold cache, which is where a new developer actually stands.
+Machine: Linux 6.8.0-136, Node 22.22.2, npm 10.9.7. Nothing else heavy running.
+
+Lanes - both carry this journey's own committed delta
+  TheoKit  scratchpad j06b/app @ d33ae24 "j1: typed order-lookup tool replacing the scaffolded
+           weather tool", on top of the unedited scaffold. Template capture, so package.json.tmpl
+           was renamed to package.json; the {{name}} placeholder is left as the scaffolder leaves it.
+  Next.js  scratchpad my-ai-app @ 5d43a93 "j1 (normalized): typed order-lookup tool called by the
+           agent, result used in the answer", on top of the quickstart pre-tools baseline.
+           Dependencies: next 16.3.1, ai 7.0.70, @ai-sdk/react 4.0.73, zod 4.4.3.
+
+Lockfiles, symmetric: the Next.js lane installs from its own tracked package-lock.json; the TheoKit
+lane's was generated on 2026-08-21 with `npm install --package-lock-only`.
+
+--- Three runs per lane, interleaved ---
+
+  theokit r1 install=4.9 build= 4.7 start=1.0 total=10.6
+  nextjs  r1 install=4.8 build=11.2 start=0.6 total=16.5
+  theokit r2 install=4.1 build= 4.9 start=1.1 total=10.1
+  nextjs  r2 install=4.3 build= 8.6 start=0.5 total=13.4
+  theokit r3 install=5.5 build= 5.7 start=1.0 total=12.2
+  nextjs  r3 install=4.5 build= 8.4 start=0.6 total=13.5
+
+  theokit n=3  total 10.97 +/- 1.10 -> [ 9.87, 12.06]   install 4.83+/-0.70  build 5.10+/-0.53  start 1.03+/-0.06
+  nextjs  n=3  total 14.47 +/- 1.76 -> [12.71, 16.23]   install 4.53+/-0.25  build 9.40+/-1.56  start 0.57+/-0.06
+
+  Intervals do NOT overlap and TheoKit is the faster side. "Not worse on time to first green run"
+  holds. Install is level within noise - 4.83 s against 4.53 s - on the simplest pair of the ten,
+  where neither side installs anything the other does not.
+
+  The Next.js lane's first run is the slowest build of the three (11.2 s against 8.6 and 8.4). It is
+  kept rather than discarded: the lanes alternate, run 1 of the TheoKit lane sits beside it, and
+  dropping the least-warm run on one column only is how a protocol acquires a handicap.
+
+No run was discarded on this journey. Nothing failed.

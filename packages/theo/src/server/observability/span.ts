@@ -3,10 +3,25 @@
  *
  * Used by console and theo-cloud adapters. Noop adapter uses NoopSpan.
  */
-import type { SpanHandle, SpanAttributes } from './adapters/types.js'
+import type { SpanHandle, SpanAttributes, SpanContextInput } from './adapters/types.js'
+import { newSpanId, newTraceId } from './trace-context-propagation.js'
 
 export interface SpanData {
   name: string
+  /**
+   * The trace this span belongs to, and the span's own id within it.
+   *
+   * These used to not exist, and the OTLP serializer minted a `traceId` per span
+   * at export time. Every export was well-formed and every span was an island: a
+   * five-span agent run reached the collector as five unrelated single-span
+   * traces, so "read the run back from an exported trace" had nothing to read
+   * (usetheokit/theokit#368). Identity belongs to the span, decided when it
+   * starts, not to the exporter, guessed when it leaves.
+   */
+  traceId: string
+  spanId: string
+  /** Absent on the root span of a trace. */
+  parentSpanId?: string
   attributes: Record<string, string | number | boolean>
   status: 'ok' | 'error'
   statusMessage?: string
@@ -19,13 +34,16 @@ export class SpanImpl implements SpanHandle {
   private readonly data: SpanData
   private ended = false
 
-  constructor(name: string, attributes?: SpanAttributes) {
+  constructor(name: string, attributes?: SpanAttributes, context?: SpanContextInput) {
     this.data = {
       name,
+      traceId: context?.traceId ?? newTraceId(),
+      spanId: context?.spanId ?? newSpanId(),
       attributes: {},
       status: 'ok',
       startTimeMs: Date.now(),
     }
+    if (context?.parentSpanId !== undefined) this.data.parentSpanId = context.parentSpanId
     if (attributes) {
       for (const [k, v] of Object.entries(attributes)) {
         if (v !== undefined) this.data.attributes[k] = v

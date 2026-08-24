@@ -1,4 +1,4 @@
-import { beforeEach, describe, it, expect } from 'vitest'
+import { beforeEach, describe, it, expect, vi } from 'vitest'
 
 import {
   _resetObservabilityAdapter,
@@ -79,6 +79,36 @@ describe('observability wiring decision (B-010)', () => {
     expect(createObservabilityPluginFromConfig({}, { NODE_ENV: 'development' })?.name).toBe(
       'theokit:observability',
     )
+  })
+
+  it('test_asking_for_telemetry_and_getting_none_is_said_out_loud', () => {
+    // The failure this guards is silence: a config that validates, a boot that
+    // passes, and no spans — with nothing to search for. Same shape as #321.
+    const warned: string[] = []
+    const spy = vi.spyOn(console, 'warn').mockImplementation((...args: unknown[]) => {
+      warned.push(args.map(String).join(' '))
+    })
+
+    createObservabilityPluginFromConfig({}, {})
+
+    spy.mockRestore()
+    const text = warned.join('\n')
+    expect(text).toContain('no exporter resolved')
+    // The fifth benchmark metric: the message names what to do.
+    expect(text).toContain('THEO_CLOUD_INGEST_URL')
+    expect(text).toContain('observability.provider')
+  })
+
+  it('test_an_app_that_asked_for_nothing_is_not_warned_at', () => {
+    const warned: string[] = []
+    const spy = vi.spyOn(console, 'warn').mockImplementation((...args: unknown[]) => {
+      warned.push(args.map(String).join(' '))
+    })
+
+    createObservabilityPluginFromConfig(undefined, {})
+
+    spy.mockRestore()
+    expect(warned.join('\n')).not.toContain('no exporter resolved')
   })
 
   it('test_a_provider_that_resolves_to_noop_wires_nothing', () => {

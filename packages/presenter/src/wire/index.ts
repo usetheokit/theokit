@@ -8,6 +8,7 @@
  */
 
 export {
+  WIRE_APPROVAL_DETAIL_PART,
   WIRE_CHUNK_TYPES,
   WIRE_DATA_PART_PREFIX,
   wireChunkSchema,
@@ -31,5 +32,6 @@ export type {
   WireMessageRole,
   WireReconnectOptions,
   WireSendOptions,
+  WireToolApproval,
   WireTransport,
 } from './types.js'

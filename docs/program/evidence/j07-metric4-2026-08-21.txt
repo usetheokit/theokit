@@ -1,0 +1,96 @@
+J7 metric 4 — time to first green run, both sides, 2026-08-21
+Harness: metric4-harness.sh, probe = "/" on both lanes. Warm npm cache (stated, not hidden).
+Machine: Linux 6.8.0-136, Node 22.22.2, npm 10.9.7.
+
+Versions under test
+  TheoKit  create-theokit@latest -> theokit@0.48.14 (npm), @theokit/agents@10.1.0, @theokit/ui@1.4.1
+  Next.js  next@16.3.1, @upstash/ratelimit@2.0.8, @upstash/redis@1.38.2, ai@7.0.71, @ai-sdk/react@4.0.74
+  Worktree lanes: theokit@0.49.0 packed from d635f7fe9, together with @theokit/agents packed from the
+  same tree. The first attempt paired worktree theokit with published @theokit/agents@10.1.0 and every
+  run recorded BUILD_FAILED: 0.49.0's client imports AgentStreamInterruptedError, which the published
+  10.1.0 does not export although it carries the same version number. Those six runs are discarded and
+  recorded here rather than deleted.
+
+--- With each tree's own package-lock.json (six runs per side, runs 4-6 interleaved) ---
+
+  nextjs   run1 install=4.7 build=7.7  start=0.6 total=12.9
+  nextjs   run2 install=5.4 build=7.9  start=0.6 total=13.9
+  nextjs   run3 install=5.0 build=10.2 start=0.6 total=15.7
+  nextjs   run4 install=4.4 build=8.1  start=0.6 total=13.0
+  nextjs   run5 install=5.3 build=8.6  start=0.6 total=14.5
+  nextjs   run6 install=6.3 build=11.2 start=0.9 total=18.3
+  theokit  run1 install=5.7 build=6.0  start=1.0 total=12.7
+  theokit  run2 install=7.0 build=6.4  start=1.0 total=14.5
+  theokit  run3 install=7.2 build=6.3  start=1.0 total=14.5
+  theokit  run4 install=5.2 build=5.2  start=1.1 total=11.5
+  theokit  run5 install=5.7 build=5.4  start=1.1 total=12.3
+  theokit  run6 install=6.0 build=5.3  start=1.1 total=12.5
+
+  nextjs   n=6  total 14.72 +/- 2.04  -> [12.68, 16.75]   install 5.18+/-0.66  build 8.95+/-1.42  start 0.65+/-0.12
+  theokit  n=6  total 13.00 +/- 1.23  -> [11.77, 14.23]   install 6.13+/-0.79  build 5.77+/-0.53  start 1.05+/-0.05
+
+  Intervals overlap; TheoKit's mean is lower. "Not worse on time to first green run" holds.
+
+--- Without a lockfile on either side (J9's protocol, applied symmetrically) ---
+
+  tk-nolock run1 install=16.4 build=5.9 start=1.1 total=23.4
+  tk-nolock run2 install=15.9 build=5.6 start=1.1 total=22.6
+  tk-nolock run3 install=13.0 build=5.5 start=1.1 total=19.5
+  nx-nolock run1 install=12.2 build=8.1 start=0.6 total=20.9
+  nx-nolock run2 install= 9.7 build=8.9 start=0.6 total=19.2
+  nx-nolock run3 install= 9.1 build=8.7 start=0.6 total=18.4
+
+  tk-nolock n=3  total 21.83 +/- 2.06 -> [19.77, 23.89]   install 15.10+/-1.84
+  nx-nolock n=3  total 19.50 +/- 1.28 -> [18.22, 20.78]   install 10.33+/-1.64
+
+  Intervals still overlap (19.77 < 20.78). Same conclusion under either protocol.
+  Cost of removing the lockfile: TheoKit +8.97 s of install, Next.js +5.15 s.
+
+  J9's two trees were not symmetric on this point: j09-next carries a package-lock.json and j09-theo
+  does not, so one side installed from a lock and the other re-resolved on every run.
+
+--- Vite 6 vs Vite 7, isolated (same app, two theokit tarballs differing in one manifest field) ---
+
+  wt-vite6 run1 install=6.0 build=5.9 start=1.1 total=13.0
+  wt-vite6 run2 install=5.2 build=5.0 start=1.1 total=11.3
+  wt-vite6 run3 install=5.0 build=5.0 start=1.1 total=11.1
+  wt-vite7 run1 install=4.9 build=4.9 start=1.1 total=10.8
+  wt-vite7 run2 install=4.6 build=5.2 start=1.1 total=10.8
+  wt-vite7 run3 install=5.5 build=6.1 start=1.1 total=12.7
+
+  wt-vite6 n=3  total 11.80 +/- 1.04   install 5.40+/-0.53   packages installed: 386
+  wt-vite7 n=3  total 11.43 +/- 1.10   install 5.00+/-0.46   packages installed: 383
+
+  Tree claim confirmed: vite majors 2 -> 1, esbuild copies 2 -> 1.
+  Time claim: 0.37 s on the total, 0.40 s on install, against sigma near 1 s. Inside noise.
+  Not measured: the same pair on a cold npm cache, where the second esbuild's postinstall would
+  fetch its platform binary over the network instead of unpacking one npm already holds.
+
+--- Install decomposition, with lockfiles (two runs per cell) ---
+
+                        with scripts    --ignore-scripts    scripts cost
+  theokit               5.0 s, 5.3 s    3.1 s, 3.1 s        ~2.1 s
+  next.js               4.7 s, 5.9 s    5.1 s, 4.1 s        ~0 s (declares none)
+
+  b025-install-decomposition-2026-08-20.txt reports 30.3 / 10.5 / 19.8 s for the same three cells on
+  the TheoKit side, measured on a tree with no lockfile and a colder machine. The shape survives;
+  the magnitude is protocol-dependent. Neither figure was taken on a cold machine.
+
+  node-pty@1.1.0 ships prebuilds for darwin-arm64, darwin-x64, win32-arm64, win32-x64 and none for
+  linux-x64, so `node scripts/prebuild.js || node-gyp rebuild` compiles here on every install. It is
+  fast because the node-gyp header cache is already local, not because it is skipped.
+
+--- theokit#400, paired, three runs each ---
+
+  One POST carrying {"hello":"world"} to an /api file route, bounded at 8 s.
+
+  theokit@0.48.14 (npm)      run1 no response, aborted at 8001 ms
+  theokit@0.49.0  (worktree) run1 200 in 5 ms, body echoed
+  theokit@0.48.14 (npm)      run2 no response, aborted at 8001 ms
+  theokit@0.49.0  (worktree) run2 200 in 5 ms, body echoed
+  theokit@0.48.14 (npm)      run3 no response, aborted at 8000 ms
+  theokit@0.49.0  (worktree) run3 200 in 5 ms, body echoed
+
+  GET on the same published server answers 200 in 3 ms throughout, so the server is up and the hang
+  is specific to a request carrying a body. c4a3b4d is dated after both the 0.48.14 release npm
+  serves and the unpublished 0.49.0 release commit; usetheokit/theokit#400 is still open.

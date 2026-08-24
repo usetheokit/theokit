@@ -125,16 +125,94 @@ describe('readMessageStream — reconstruction', () => {
   })
 
   it('test_transport_signals_do_not_enter_the_transcript', async () => {
-    // `tool-approval-request` and `data-*` are framework signals consumed elsewhere; putting them
-    // in the transcript would render protocol plumbing as if it were assistant content.
+    // A `transient` data part and an approval for a call this message never announced both stay
+    // out: the first is plumbing, the second names a part that does not exist. Neither becomes a
+    // part of its own — an approval is a STATE of the call it gates (see the two tests below), so
+    // synthesising a part here would render a prompt for a tool whose name and input nobody has.
     const out = await collect([
       { type: 'start' },
-      { type: 'tool-approval-request', approvalId: 'a1', toolCallId: 'c1' },
+      { type: 'tool-approval-request', approvalId: 'a1', toolCallId: 'never-announced' },
       { type: 'data-checkpoint', data: { handle: 'h' }, transient: true },
       { type: 'text-start', id: 't' },
       { type: 'text-delta', id: 't', delta: 'hi' },
     ])
     expect(out.at(-1)?.parts).toHaveLength(1)
+  })
+
+  it('test_an_approval_marks_the_call_it_gates_as_awaiting_a_decision', async () => {
+    // usetheokit/theokit#392 — the reported defect, as an assertion. The gated tool used to sit in
+    // `input-available`, which is what an UNGATED tool looks like while it runs, so no surface could
+    // tell "working" from "waiting for you", and the id `approve()` needs was nowhere.
+    const out = await collect([
+      { type: 'start' },
+      {
+        type: 'tool-input-available',
+        toolCallId: 'c1',
+        toolName: 'send_email',
+        input: { to: 'ops@example.com' },
+        dynamic: true,
+      },
+      // What the gate is ASKING rides a transient `data-*` part, not the approval frame: ai's chunk
+      // schema is strict and an ai-sdk client drops any frame carrying a key it does not declare
+      // (usetheokit/theokit#394, `chunk-schema.ts`). The reader folds the two into one part.
+      {
+        type: 'data-approval',
+        data: { approvalId: 'ap-1', question: 'Send this email?', timeoutMs: 2_000 },
+        transient: true,
+      },
+      { type: 'tool-approval-request', approvalId: 'ap-1', toolCallId: 'c1' },
+    ])
+
+    expect(out.at(-1)?.parts).toEqual([
+      {
+        type: 'dynamic-tool',
+        toolName: 'send_email',
+        toolCallId: 'c1',
+        state: 'approval-requested',
+        input: { to: 'ops@example.com' },
+        approval: { id: 'ap-1', question: 'Send this email?', timeoutMs: 2_000 },
+      },
+    ])
+  })
+
+  it('test_a_settled_approval_leaves_no_part_awaiting_a_decision', async () => {
+    // The other half of the same claim: `approval-requested` is a state the call LEAVES. If it did
+    // not, a surface keyed on it would show a prompt for a decision already made, and the store's
+    // derived `pendingApprovals` would never empty.
+    const out = await collect([
+      { type: 'start' },
+      {
+        type: 'tool-input-available',
+        toolCallId: 'c1',
+        toolName: 'send_email',
+        input: {},
+        dynamic: true,
+      },
+      { type: 'tool-approval-request', approvalId: 'ap-1', toolCallId: 'c1' },
+      { type: 'tool-output-available', toolCallId: 'c1', output: 'sent' },
+    ])
+
+    expect(out.at(-2)?.parts[0]).toMatchObject({ state: 'approval-requested' })
+    expect(out.at(-1)?.parts[0]).toMatchObject({ state: 'output-available', output: 'sent' })
+  })
+
+  it('test_an_approval_without_a_question_carries_only_the_id', async () => {
+    // The ai-sdk's own frame carries neither `question` nor `timeoutMs`, and this wire is readable
+    // by an ai-sdk server. Absent must mean absent — not a key whose value is `undefined`, which is
+    // what a consumer doing `'question' in approval` would trip over.
+    const out = await collect([
+      { type: 'start' },
+      {
+        type: 'tool-input-available',
+        toolCallId: 'c1',
+        toolName: 'send_email',
+        input: {},
+        dynamic: true,
+      },
+      { type: 'tool-approval-request', approvalId: 'ap-1', toolCallId: 'c1' },
+    ])
+
+    expect(out.at(-1)?.parts[0]?.approval).toEqual({ id: 'ap-1' })
   })
 })
 

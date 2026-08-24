@@ -1,7 +1,10 @@
 // @vitest-environment jsdom
 import { render, screen } from '@testing-library/react'
 import { describe, it, expect } from 'vitest'
-import { ChatThread, ChatMessage, type UIMessage } from '@theokit/ui'
+import { ChatThread, ChatMessage } from '@theokit/ui'
+import { type UIMessage } from 'theokit/client'
+
+import { toRenderable } from './lib/renderable'
 import Page from './page'
 
 /**
@@ -22,7 +25,10 @@ describe('default chat page', () => {
     expect(screen.getByLabelText('New chat')).toBeDefined()
   })
 
-  it('ChatMessage accepts a UIMessage and renders its message container (auto-dispatch)', () => {
+  it('a streamed message renders through the conversion the app actually uses', () => {
+    // Typed as what `useAgent()` RETURNS, not as what `<ChatMessage>` takes. Those are different
+    // types on purpose, and a scaffold that conflated them failed its own typecheck twice
+    // (usetheokit/theokit#80, #396). `toRenderable` is the seam, and this is what exercises it.
     const assistant: UIMessage = {
       id: 'a-0',
       role: 'assistant',
@@ -30,7 +36,7 @@ describe('default chat page', () => {
     }
     const { container } = render(
       <ChatThread>
-        <ChatMessage message={assistant} />
+        <ChatMessage message={toRenderable(assistant)} />
       </ChatThread>,
     )
     expect(container.querySelector('[data-slot="chat-message"]')).not.toBeNull()

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from 'vitest'
-import { execSync } from 'node:child_process'
+import { execSync, execFileSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import {
@@ -157,11 +157,18 @@ describe('Smoke: Import Validation from dist/', () => {
   })
 
   it('should run CLI --help without error', () => {
-    // eslint-disable-next-line sonarjs/os-command -- launches local CLI bin; smoke test only
-    const output = execSync(`node ${resolve(theoDistDir, 'cli/index.js')} --help`, {
-      encoding: 'utf-8',
-      stdio: ['pipe', 'pipe', 'pipe'],
-    })
+    // `execFileSync` with an argv array, not a command string: the paths interpolated here are
+    // absolute and come from wherever the repository happens to sit, so a directory with a
+    // space (or anything the shell treats as syntax) changed what ran. No shell, no parsing
+    // (CodeQL `js/shell-command-injection-from-environment`).
+    const output = execFileSync(
+      process.execPath,
+      [resolve(theoDistDir, 'cli/index.js'), '--help'],
+      {
+        encoding: 'utf-8',
+        stdio: ['pipe', 'pipe', 'pipe'],
+      },
+    )
     expect(output).toContain('theo')
   })
 })

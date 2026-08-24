@@ -23,10 +23,15 @@ import { applyPosture, type ApprovalPosture } from './approval-posture.js'
 import { type AgentDefinition as TheokitAgentDefinition } from './define-agent.js'
 import { type DefinitionOrThunk, resolveProjection } from './definition-or-thunk.js'
 import { type SdkMessage } from './event-translator.js'
-import { buildModelSelection } from './model-selection.js'
+import { buildModelSelection, modelIdOf } from './model-selection.js'
 import { assembleM8CreateOptions, realUsageDone } from './sdk-adapter-create-options.js'
 import { sdkErrorEvent } from './sdk-error.js'
-import { createToolSeen, type SdkTimelineEvent, translateTimelineEvent } from './sdk-timeline.js'
+import {
+  createToolSeen,
+  flushPendingToolResults,
+  type SdkTimelineEvent,
+  translateTimelineEvent,
+} from './sdk-timeline.js'
 import { extractThinkTagStream } from './think-tag-extractor.js'
 import { stripToolDialectStream } from './tool-dialect-stripper.js'
 
@@ -172,6 +177,42 @@ function buildExtraCreateOptions(
   return extra
 }
 
+/**
+ * theokit#363 — put the DECLARED step ceiling on the send the served agent actually makes.
+ *
+ * `compiled.maxIterations` was written by every authoring path (`@Agent`, `@MainLoop`, `defineAgent`,
+ * the builder) and read by none of them on this path: `runReflectiveLoop` enforces a ceiling, and
+ * `runReflectiveLoop` has zero call sites under `packages/theo/src`. So a served agent that declared
+ * a cap ran to the SDK's own default instead, and the declaration was decoration.
+ *
+ * ## Why `SendOptions.maxIterations` and not a `budgetTracker`
+ *
+ * `Agent.create({ budgetTracker })` looks like the seam — `createCounterBudgetTracker({ maxIterations })`
+ * exists, and the compiled loop does call `check()` / `nextIteration()`. Two things rule it out, both
+ * read off the published contract rather than the bundle:
+ *
+ * 1. The `.d.ts` for `AgentOptions.budgetTracker` states the option is "wired to the type surface
+ *    only" and that consumers passing a tracker "get the type guarantee but NOT runtime enforcement".
+ *    The shipped bundle enforces it anyway, but building the framework's step cap on behavior the
+ *    contract disclaims makes a silent no-op one SDK patch away.
+ * 2. A tracker is stateful and lives on the AGENT, and `Agent.getOrCreate` returns a CACHED agent
+ *    (options ignored on a hit). Its iteration counter therefore accumulates across turns of a
+ *    session — `toAgentFactory`'s handle is exactly that shape — so an agent declaring 5 would hard-
+ *    fail partway through a conversation rather than cap each turn. And its limit sets the run's
+ *    status to `error`; a step cap that is REACHED is not a failure.
+ *
+ * `SendOptions.maxIterations` is the SDK's documented per-send ceiling on tool-calling turns,
+ * validated at its own boundary, and reaching it ends the run cleanly with `stoppedAtIterationLimit`.
+ * That is what a step cap means. It also needs no runtime symbol, so no optional-peer guard: an older
+ * SDK that predates the option simply ignores an extra field instead of the adapter degrading.
+ *
+ * NO NEW DEFAULT: when nothing was declared the key is omitted entirely, so the SDK's own ceiling
+ * (8, unchanged) still applies and every agent that never asked for a cap runs byte-identically.
+ */
+function applyStepCeiling(sendOptions: SendOptions, maxIterations: number | undefined): void {
+  if (maxIterations !== undefined) sendOptions.maxIterations = maxIterations
+}
+
 /** The `@theokit/sdk` `Agent` surface the adapter drives (dynamic-import shape, kept minimal). */
 interface SdkAgentApi {
   getOrCreate: (
@@ -191,6 +232,11 @@ interface SdkAgentApi {
       stream: () => AsyncGenerator<SdkMessage>
       // V4-N.1: the SDK Run's terminal await — carries the real per-run token usage + cost.
       // V4-O: usage also carries optional reasoning/cache buckets (forwarded by realUsageDone).
+      // theokit#379: it ALSO carries why the run stopped. This shape declared three fields, so
+      // `realUsageDone` had no status to read even had it wanted one — the boundary, not the SDK,
+      // is what dropped the outcome. Both flags are optional, so an SDK that predates them (or one
+      // that finished cleanly) reads `undefined` rather than breaking — the same optional-peer
+      // discipline `applyStepCeiling` uses for the ceiling travelling the other way.
       wait: () => Promise<{
         result?: string
         usage?: {
@@ -201,6 +247,8 @@ interface SdkAgentApi {
           cacheWriteTokens?: number
         }
         cost?: { amount?: number }
+        stoppedAtIterationLimit?: boolean
+        stoppedByDoomLoop?: boolean
       }>
     }>
     dispose: () => Promise<void>
@@ -524,6 +572,7 @@ async function* streamSdkAgent(
     const state = { sawError: false, lastEventType: '' }
     const sendOptions: SendOptions = {}
     if (factoryOpts?.disableTools === true) sendOptions.toolChoice = 'none'
+    applyStepCeiling(sendOptions, compiled.maxIterations)
     // theokit#132 — hand the caller's sink to the SDK. Set only when supplied: an `onRunEvent:
     // undefined` riding along would still change what the SDK receives on the non-opted-in path,
     // and back-compat here is a floor, not a preference.
@@ -543,8 +592,8 @@ async function* streamSdkAgent(
         events: () => AsyncGenerator<SdkTimelineEvent>
       }
       const seen = createToolSeen()
-      for await (const ev of run.events()) {
-        for (const event of translateTimelineEvent(ev, runId, seen)) {
+      const emit = function* (events: StreamEvent[]): Generator<StreamEvent> {
+        for (const event of events) {
           if (event.type === 'error') state.sawError = true
           // #142 — the SDK's `done` stays suppressed here, on the promise that the tail block below
           // emits the terminal frame (a real-usage `done`, or an `error` when the turn failed).
@@ -553,6 +602,13 @@ async function* streamSdkAgent(
           yield event
         }
       }
+      for await (const ev of run.events()) {
+        yield* emit(translateTimelineEvent(ev, runId, seen))
+      }
+      // #388 — a tool result held for a second report the run never sent still belongs on the wire.
+      // Without this, a turn whose last act was a tool call would drop it: the hold is released by
+      // the next timeline event, and a run that ends has none.
+      yield* emit(flushPendingToolResults(seen))
     }
     for await (const event of applyTextTransforms(timeline(), {
       parseThinkTags,
@@ -583,7 +639,10 @@ async function* streamSdkAgent(
         }
       }
     } else {
-      yield realUsageDone(await (await sendPromise).wait(), t0)
+      // `modelIdOf(model)` and not `compiled.model`: `model` here is the RESOLVED value
+      // (`overrides.model ?? compiled.model ?? 'openai/gpt-4o-mini'`), which is what actually ran
+      // and therefore what a cost is computed against (usetheokit/theokit#368).
+      yield realUsageDone(await (await sendPromise).wait(), t0, modelIdOf(model))
     }
   } finally {
     await agent.dispose()
@@ -689,7 +748,10 @@ export function toAgentFactory(
       ...m8,
       ...extra,
     })
-    return withGuardrails(agent as unknown as SdkAgentHandle, compiled.guardrails)
+    return withGuardrails(
+      withStepCeiling(agent as unknown as SdkAgentHandle, compiled.maxIterations),
+      compiled.guardrails,
+    )
   }
 }
 
@@ -724,6 +786,33 @@ export function toAgentFactory(
  * blocked — it is simply not blocked mid-token. Closing that needs a streaming seam on the handle,
  * which is a change to the served contract and belongs to its own slice.
  */
+/**
+ * theokit#363 — carry the declared step ceiling onto the handle {@link toAgentFactory} serves.
+ *
+ * The streaming path owns its own `send`, so `applyStepCeiling` reaches it directly. This path hands
+ * the agent to someone else (ACP, the delegation surfaces) and never sees their `send` call, so the
+ * ceiling has to travel as a DEFAULT on the handle. Without it, the same definition capped on
+ * `mountAgent` ran uncapped over ACP — the shape of bypass theokit#139 fixed for guardrails.
+ *
+ * The caller's own `maxIterations` WINS (spread last): a host asking for a different ceiling on one
+ * turn is the per-run override this layer already honors for `model` and `reasoningEffort`.
+ */
+function withStepCeiling(
+  handle: SdkAgentHandle,
+  maxIterations: number | undefined,
+): SdkAgentHandle {
+  // Nothing declared ⇒ the original handle, untouched — no wrapper, no key, the SDK default stands.
+  if (maxIterations === undefined) return handle
+  return {
+    get agentId() {
+      return handle.agentId
+    },
+    dispose: () => handle.dispose(),
+    send: (msg: string, sendOpts?: SdkSendOptions) =>
+      handle.send(msg, { maxIterations, ...sendOpts }),
+  }
+}
+
 function withGuardrails(
   handle: SdkAgentHandle,
   guardrails: readonly Guardrail[] | undefined,

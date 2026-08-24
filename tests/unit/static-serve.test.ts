@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, symlinkSync } from 'node:fs'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -57,16 +57,24 @@ function makeMockReq(url: string): IncomingMessage {
 
 describe('serveStaticFile', () => {
   let clientDir: string
+  // `clientDir` is itself the mkdtemp root in this suite, so the escape target needs a root of its
+  // own — a sibling the server was never pointed at.
+  let escapeRoot: string
 
   beforeAll(() => {
+    escapeRoot = mkdtempSync(join(tmpdir(), 'serve-static-outside-'))
+    writeFileSync(join(escapeRoot, 'secret.txt'), 'TOP-SECRET-OUTSIDE-CLIENTDIR')
     clientDir = mkdtempSync(join(tmpdir(), 'serve-static-'))
     writeFileSync(join(clientDir, 'index.html'), '<!doctype html><title>x</title>')
     writeFileSync(join(clientDir, 'app.unknownext'), 'raw bytes')
     mkdirSync(join(clientDir, 'subdir'))
+    symlinkSync(join(escapeRoot, 'secret.txt'), join(clientDir, 'leak.txt'))
+    symlinkSync(join(clientDir, 'index.html'), join(clientDir, 'alias.html'))
   })
 
   afterAll(() => {
     rmSync(clientDir, { recursive: true, force: true })
+    rmSync(escapeRoot, { recursive: true, force: true })
   })
 
   it('Given a known extension, Then serves with correct MIME', () => {
@@ -90,6 +98,28 @@ describe('serveStaticFile', () => {
     const handled = serveStaticFile(makeMockReq('/does-not-exist.css'), res, clientDir)
     expect(handled).toBe(false)
     expect(getBody().byteLength).toBe(0)
+  })
+
+  // #428 — the traversal guard compares strings that `path.resolve` produced, and `resolve` never
+  // touches the disk. A symlink is exactly the case where the path and the file disagree, so the
+  // guard passes and the read leaves the directory the server was told to serve.
+  it('Given a symlink pointing outside clientDir, Then refuses to serve its target', () => {
+    const outside = join(escapeRoot, 'secret.txt')
+    const { res, getBody } = makeMockRes()
+    const handled = serveStaticFile(makeMockReq('/leak.txt'), res, clientDir)
+    expect(handled).toBe(false)
+    expect(getBody().toString()).not.toContain('TOP-SECRET')
+    expect(outside).toBeTruthy()
+  })
+
+  // The containment fix must not outlaw symlinks as such — only the ones that leave. A build step
+  // that links one asset to another inside the served tree is ordinary and must keep working.
+  it('Given a symlink whose target stays inside clientDir, Then serves it', () => {
+    const { res, getStatus, getBody } = makeMockRes()
+    const handled = serveStaticFile(makeMockReq('/alias.html'), res, clientDir)
+    expect(handled).toBe(true)
+    expect(getStatus()).toBe(200)
+    expect(getBody().toString()).toContain('<title>x</title>')
   })
 
   it('Given a directory path, Then returns false (not a regular file)', () => {

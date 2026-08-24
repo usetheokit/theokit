@@ -3,7 +3,7 @@
   "private": true,
   "license": "Apache-2.0",
   "type": "module",
-  "packageManager": "pnpm@9.15.0",
+  "packageManager": "pnpm@10.34.1+sha512.b58fbde6dca66a929538021581f648b4570b6ca19b18e7cbd7f2c07a7b24454155388dacdf08f2af3678e88a6d1fe04f9d609df24bf51735a060ea041b374ab7",
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
@@ -23,16 +23,17 @@
     "check:deps": "dependency-cruiser packages/theo/src --config .dependency-cruiser.cjs",
     "check:naming": "ls-lint",
     "check:all": "pnpm build && pnpm lint && pnpm format:check && pnpm typecheck && pnpm test:coverage && pnpm knip && pnpm check:docs",
-    "try:scaffold": "tsx packages/create-theokit/src/cli.ts my-test",
+    "try:scaffold": "tsx packages/create-theokit/src/cli.ts my-test && tsx scripts/link-scaffold-to-workspace.ts my-test",
     "try:dev": "cd my-test && npx tsx ../packages/theo/src/cli/index.ts dev",
     "try:clean": "node -e \"const fs=require('fs');fs.rmSync('my-test',{recursive:true,force:true})\"",
     "changeset": "changeset",
-    "version-packages": "changeset version && node scripts/verify-version-not-published.mjs",
-    "release": "pnpm build && node scripts/check-pack-no-workspace.mjs && changeset publish",
+    "version-packages": "changeset version && node scripts/sync-template-pins.mjs && node scripts/verify-version-not-published.mjs",
+    "release": "pnpm build && node scripts/check-pack-no-workspace.mjs && changeset publish && node scripts/verify-release-published.mjs",
     "prepare": "git config core.hooksPath .githooks || true",
     "check:pack-no-workspace": "node scripts/check-pack-no-workspace.mjs",
     "verify:version-collision": "node scripts/verify-version-not-published.mjs",
     "check:licenses": "node scripts/check-licenses.mjs",
+    "check:licenses:published": "node scripts/verify-published-license-matches.mjs",
     "check:docs": "node scripts/check-doc-citations.mjs",
     "check:audit": "pnpm audit --prod --audit-level=high",
     "typecheck:fast": "tsc --noEmit"
@@ -90,16 +91,27 @@
     "zod": "^4.4.3"
   },
   "pnpm": {
+    "onlyBuiltDependencies": [
+      "@swc/core",
+      "better-sqlite3",
+      "esbuild",
+      "node-pty",
+      "unrs-resolver"
+    ],
     "overrides": {
       "zod": "^4.0.0",
       "eslint-plugin-sonarjs>minimatch": "^10.2.3",
       "react-router@>=7.12.0 <7.18.2": ">=7.18.2",
       "postcss@<8.5.18": ">=8.5.18",
       "nanoid@<3.3.17": ">=3.3.17"
+    },
+    "patchedDependencies": {
+      "@vitest/utils@4.1.9": "patches/@vitest__utils@4.1.9.patch"
     }
   },
   "engines": {
-    "node": ">=22.12.0"
+    "node": ">=22.12.0",
+    "pnpm": ">=10.34.1"
   },
   "peerDependencies": {
     "@theokit/sdk": "^4.49.0"

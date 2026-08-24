@@ -40,7 +40,10 @@ async function chunksOf(events: unknown[]): Promise<Chunk[]> {
     for (const e of events) yield e
   })()
   const out: Chunk[] = []
-  for await (const c of presentUIMessageStream(source as never, { textId: 't' }))
+  for await (const c of presentUIMessageStream(source as never, {
+    textId: 't',
+    onError: (e) => e.message,
+  }))
     out.push(c as Chunk)
   return out
 }

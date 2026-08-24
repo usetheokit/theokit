@@ -1,11 +1,16 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { execSync } from 'node:child_process'
+import { execFileSync } from 'node:child_process'
 import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 
 const REPO = resolve(__dirname, '../..')
 const CLI = resolve(REPO, 'packages/theo/src/cli/index.ts')
+// The local `tsx` by absolute path rather than `npx`: a bare command name is resolved through
+// `PATH`, and `PATH` on a developer machine contains directories the developer can write to
+// (sonarjs `no-os-command-from-path`). The binary this repository installed is the one meant to
+// run, and naming it says so.
+const TSX = resolve(REPO, 'node_modules/.bin/tsx')
 
 let projectDir: string
 
@@ -50,8 +55,11 @@ export default defineJob('${name}', { ${inputField}maxAttempts: 3, handler: asyn
 const runBuild = (): { stdout: string; exitCode: number } => {
   try {
     // T5a.2 prerequisite — see cli-build-emits-cron-manifest.test.ts rationale.
-    // eslint-disable-next-line sonarjs/os-command -- developer-local integration test invoking the framework's own CLI
-    const stdout = execSync(`npx tsx ${CLI} build`, {
+    // `execFileSync` with an argv array, not a command string: the paths interpolated here are
+    // absolute and come from wherever the repository happens to sit, so a directory with a
+    // space (or anything the shell treats as syntax) changed what ran. No shell, no parsing
+    // (CodeQL `js/shell-command-injection-from-environment`).
+    const stdout = execFileSync(TSX, [CLI, 'build'], {
       cwd: projectDir,
       encoding: 'utf8',
       stdio: ['pipe', 'pipe', 'pipe'],

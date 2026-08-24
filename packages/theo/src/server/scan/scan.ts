@@ -2,13 +2,16 @@
  * Build-time scanner: walks `serverDir/routes/` derived from cwd.
  * No HTTP input ever reaches these fs calls.
  */
-import { existsSync, statSync } from 'node:fs'
+import { existsSync, readFileSync, statSync } from 'node:fs'
 import { basename, extname, join, relative } from 'node:path'
 
+import type { HttpMethod } from '../../core/contracts/http-methods.js'
 import { walkSourceFiles } from '../_internal/scan-walker.js'
 
 import { detectExportedHttpMethods } from './detect-http-methods.js'
-import { RouterConventionError } from './errors.js'
+import { detectMethodsWithDeclaredPolicy } from './detect-route-policy.js'
+import { MissingRoutePolicyError, RouterConventionError } from './errors.js'
+import { createFileStampCache } from './file-stamp-cache.js'
 import { compilePattern, type ServerRouteNode } from './match.js'
 
 const ROUTE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx'])
@@ -77,6 +80,77 @@ function assertNoDottedSegment(filePath: string, routesDir: string): void {
   }
 }
 
+/**
+ * ADR 0001, Decision point 5 — a route declares its policy explicitly, `public`
+ * included, and absence stops meaning open.
+ *
+ * The refusal lives here, next to the dotted-basename refusal, because this is
+ * the one place every entry point passes through: `theo build`, `theo start`,
+ * `theo dev`, `theo routes` and each deployment adapter all reach routes by
+ * calling `scanServerRoutes`. A gate wired into the build command instead would
+ * have to be remembered by six adapters that generate their own entry file, and
+ * a gate you can forget to call is a gate that reports on the routes somebody
+ * remembered.
+ *
+ * The blast radius stops at the file system. A `RouteConfig` built in memory and
+ * handed to `executeWebRequest` or `callProcedure` never passed a scanner, so it
+ * never reaches this function — the runtime still treats an undeclared policy as
+ * "not declared", exactly as `evaluateRoutePolicy` documents. Absence is refused
+ * where an application DECLARES its routes, not where a caller passes one.
+ */
+function assertEveryMethodDeclaresPolicy(
+  filePath: string,
+  routePath: string,
+  { methods, declaredPolicy }: RouteSourceFacts,
+): void {
+  if (methods.length === 0) return
+  const missing = methods.filter((method) => !declaredPolicy.has(method))
+  if (missing.length === 0) return
+  throw new MissingRoutePolicyError({ file: filePath, routePath, methods: missing })
+}
+
+/** What the two AST passes over a route file answer, together. */
+interface RouteSourceFacts {
+  methods: HttpMethod[]
+  /** The subset of `methods` that declared a `policy`. Empty when there are no methods. */
+  declaredPolicy: Set<HttpMethod>
+}
+
+/**
+ * Per-file facts, recomputed only when the file changes (usetheokit/theokit#417).
+ *
+ * `theokit dev` calls `scanServerRoutes` on EVERY request, and this function parsed each route
+ * file with the TypeScript AST TWICE per call — once for the exported methods, once for the policy
+ * gate, sharing the source string but not the parse. `agent-scan.ts` had solved exactly this for
+ * agent files and wrote down why; routes, which an application has far more of, had neither the
+ * cache nor the reasoning.
+ *
+ * The refusal is deliberately NOT cached — only the facts are. A scan that found a missing policy
+ * once must go on refusing on every later scan, so `assertEveryMethodDeclaresPolicy` re-derives the
+ * set difference (cheap, no parse) from the cached facts each time.
+ */
+const routeFactsCache = createFileStampCache<RouteSourceFacts>()
+
+/** Test seam — the module-level cache would otherwise outlive a fixture directory. */
+export function _resetRouteScanCacheForTests(): void {
+  routeFactsCache.clear()
+}
+
+function routeSourceFacts(absPath: string): RouteSourceFacts {
+  return routeFactsCache.get(absPath, () => {
+    const source = readFileSync(absPath, 'utf-8')
+    const methods = detectExportedHttpMethods(absPath, source)
+    // Kept lazy exactly as the early return in the assert made it: a file exporting no HTTP method
+    // has nothing for the policy gate to check, and parsing it a second time to learn that was the
+    // cost this cache exists to remove.
+    const declaredPolicy =
+      methods.length === 0
+        ? new Set<HttpMethod>()
+        : detectMethodsWithDeclaredPolicy(absPath, source)
+    return { methods, declaredPolicy }
+  })
+}
+
 function fileToRoutePath(filePath: string, routesDir: string): string {
   let rel = relative(routesDir, filePath)
   // Strip extension
@@ -116,7 +190,9 @@ export function scanServerRoutes(serverDir: string): ServerRouteNode[] {
 
     const routePath = fileToRoutePath(absPath, routesDir)
     const { pattern, paramNames } = compilePattern(routePath)
-    const methods = detectExportedHttpMethods(absPath)
+    const facts = routeSourceFacts(absPath)
+    const { methods } = facts
+    assertEveryMethodDeclaresPolicy(absPath, routePath, facts)
     results.push({
       filePath: absPath,
       routePath,

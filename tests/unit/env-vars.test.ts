@@ -27,11 +27,21 @@ describe('Env Vars: THEO_PUBLIC_* prefix', () => {
   })
 
   it('should preserve resolve aliases alongside envPrefix', () => {
-    const resolve = config.resolve as { alias: Array<{ find: string }> }
+    // Matches the SPECIFIER rather than the `find` value. The entries became
+    // exact-match regexes in #377, because a string `find` matches by prefix and
+    // was concatenating subpaths onto barrel filenames. What this test is about
+    // is that the aliases survive next to `envPrefix`, and that survives the
+    // representation change.
+    const resolve = config.resolve as { alias: Array<{ find: string | RegExp }> }
+    const matches = (id: string): boolean =>
+      resolve.alias.some((a) =>
+        typeof a.find === 'string' ? id.startsWith(a.find) : a.find.test(id),
+      )
+
     expect(resolve.alias).toBeDefined()
     expect(resolve.alias.length).toBeGreaterThanOrEqual(2)
-    expect(resolve.alias.some((a) => a.find === 'theokit')).toBe(true)
-    expect(resolve.alias.some((a) => a.find === 'theokit/server')).toBe(true)
+    expect(matches('theokit')).toBe(true)
+    expect(matches('theokit/server')).toBe(true)
   })
 
   it('should have both envPrefix and resolve in config', () => {

@@ -1,6 +1,6 @@
-import type { WireChunk } from './chunk-schema.js'
+import { WIRE_APPROVAL_DETAIL_PART, type WireChunk } from './chunk-schema.js'
 import { WireStreamError } from './parse-wire-stream.js'
-import type { WireMessage } from './types.js'
+import type { WireMessage, WireToolApproval } from './types.js'
 
 /**
  * Chunks → reconstructed assistant messages. Replaces `ai`'s `readUIMessageStream`.
@@ -23,6 +23,16 @@ interface OpenState {
   readonly blocks: Map<string, number>
   /** Tool call ids → index of the tool part. */
   readonly tools: Map<string, number>
+  /**
+   * Approval ids → what the `data-approval` part said the gate is asking (theokit#394).
+   *
+   * Held aside rather than applied on arrival because the detail part names an APPROVAL and the
+   * part it belongs to is found by TOOL CALL — the two ids are only equal by coincidence
+   * (`hitl-call-correlation.ts` calls the equality a race, and the approval frame carries both
+   * precisely because it cannot be assumed). The producer emits the detail immediately before the
+   * frame that resolves it, so the map holds at most the gates of one round.
+   */
+  readonly approvalDetails: Map<string, Omit<WireToolApproval, 'id'>>
 }
 
 function snapshot(message: WireMessage): WireMessage {
@@ -37,6 +47,7 @@ function open(messageId: string | undefined): OpenState {
     message: { id: messageId ?? '', role: 'assistant', parts: [] },
     blocks: new Map(),
     tools: new Map(),
+    approvalDetails: new Map(),
   }
 }
 
@@ -130,13 +141,37 @@ function applyChunk(state: OpenState, chunk: WireChunk): boolean {
       return applyBlock(state, parts, chunk)
 
     case 'tool-input-available':
+    case 'tool-approval-request':
     case 'tool-output-available':
     case 'tool-output-error':
       return applyTool(state, parts, chunk)
 
+    case WIRE_APPROVAL_DETAIL_PART:
+      rememberApprovalDetail(state, chunk)
+      // Never a snapshot of its own: this part exists to be merged into the approval that follows.
+      return false
+
     default:
       return applyDataPart(parts, chunk)
   }
+}
+
+/**
+ * Stash a `data-approval` part for the approval frame that follows it (theokit#394).
+ *
+ * A detail nobody claims simply expires with the message, and an approval frame that arrives without
+ * one still reconstructs carrying its id and nothing else — which is exactly what an ai-sdk server's
+ * stream looks like. So a malformed detail is dropped rather than raised: it can only ever subtract
+ * from a prompt, never break the gate.
+ */
+function rememberApprovalDetail(state: OpenState, chunk: WireChunk): void {
+  const data = (chunk as { data?: Record<string, unknown> }).data
+  const approvalId = data?.approvalId
+  if (typeof approvalId !== 'string') return
+  state.approvalDetails.set(approvalId, {
+    ...(typeof data?.question === 'string' ? { question: data.question } : {}),
+    ...(typeof data?.timeoutMs === 'number' ? { timeoutMs: data.timeoutMs } : {}),
+  })
 }
 
 /** Text and reasoning runs: `*-start` opens a part, `*-delta` appends, `*-end` seals it. */
@@ -171,6 +206,7 @@ function applyTool(state: OpenState, parts: MutablePart[], chunk: WireChunk): bo
     input?: unknown
     output?: unknown
     errorText?: string
+    approvalId?: string
   }
   if (chunk.type === 'tool-input-available') {
     state.tools.set(c.toolCallId, parts.length)
@@ -186,6 +222,33 @@ function applyTool(state: OpenState, parts: MutablePart[], chunk: WireChunk): bo
 
   const at = state.tools.get(c.toolCallId)
   if (at === undefined) return false
+  // usetheokit/theokit#392 — the gate mutates the call's OWN part rather than being dropped.
+  //
+  // Until this arm existed the chunk fell through to `applyDataPart`, which returned `false`, and a
+  // tool parked in an awaited approval sat in `state: 'input-available'` — byte-identical to an
+  // ungated tool while it runs. A surface reading the transcript could not tell "working" from
+  // "waiting for you", and `approve(approvalId, …)` asked for an id the transcript never carried.
+  //
+  // `approval-requested` is NOT a state invented here: it is what the ai-sdk's own reader produces
+  // for this frame, so the mirror reproduces the oracle instead of coining a fourth vocabulary
+  // (`tests/wire/differential.test.ts` covers the shape). The `approval` object is what the
+  // settle call needs, next to the `toolName`/`input` the part already holds — which is why the
+  // frame does not repeat those two (`chunk-schema.ts`). `question`/`timeoutMs` are merged from
+  // the `data-approval` part that preceded it, when the producer sent one (theokit#394).
+  //
+  // A gate for a call this message never announced is DROPPED, not synthesised into a part: the
+  // producer always emits `tool-input-available` first, so an orphan means the transcript is
+  // already missing the call, and inventing a part would render an approval for a tool whose name
+  // and input nobody has. The oracle drops it too.
+  if (chunk.type === 'tool-approval-request') {
+    const approvalId = String(c.approvalId)
+    Object.assign(parts[at], {
+      state: 'approval-requested',
+      approval: { id: approvalId, ...state.approvalDetails.get(approvalId) },
+    })
+    state.approvalDetails.delete(approvalId)
+    return true
+  }
   if (chunk.type === 'tool-output-error') {
     Object.assign(parts[at], { state: 'output-error', errorText: c.errorText })
     return true
@@ -204,8 +267,11 @@ function applyTool(state: OpenState, parts: MutablePart[], chunk: WireChunk): bo
  * was `agent-client-coalescing.test.ts`, whose fixture pushes 30 `data-message` chunks and expects
  * 30 emissions; it saw 2. A gate is only as good as the cases someone thought to add.
  *
- * `tool-approval-request` falls through to `false`: it IS transport-level, gating a tool call, and
- * never renders as assistant content.
+ * `tool-approval-request` no longer reaches here — it is folded into the tool part it gates by
+ * `applyTool`. It used to fall through to `false` on the reasoning that it "never renders as
+ * assistant content", which was half right and wholly costly: the chunk is not a part of its own,
+ * but the pause it announces IS the state of a part that renders, and dropping it left the only
+ * channel the client store has with no trace of an outstanding decision (usetheokit/theokit#392).
  */
 function applyDataPart(parts: MutablePart[], chunk: WireChunk): boolean {
   if (!chunk.type.startsWith('data-')) return false

@@ -10,7 +10,7 @@
  * Security: XSS-safe HTML escaping, CSP header for CDN host, GET-only,
  * 10MB filesize cap, path-traversal defense on specFilePath.
  */
-import { existsSync, readFileSync, statSync } from 'node:fs'
+import { closeSync, fstatSync, openSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 export interface OpenApiDocsOptions {
@@ -107,17 +107,28 @@ function renderScalarHtml(title: string, specUrl: string, cdnUrl: string): strin
 // ── Spec file server ──
 
 function serveSpecFile(filePath: string): Response {
-  if (!existsSync(filePath)) {
-    return jsonResponse(503, {
-      error: {
-        code: 'OPENAPI_NOT_EMITTED',
-        message: 'OpenAPI spec not generated yet. Start the dev server and visit a route first.',
-      },
-    })
-  }
-
+  // #428 — one descriptor, opened once, measured and read through. Asking whether the file exists
+  // and then opening it by name resolves the same path twice, so the file that answered the first
+  // question need not be the one that answers the second — which is the 413 cap being bypassable
+  // rather than enforced. `openSync` answers both questions at once: absent is `ENOENT` and keeps
+  // its own 503, anything else keeps the 500.
+  let fd: number
   try {
-    const stat = statSync(filePath)
+    fd = openSync(filePath, 'r')
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+      return jsonResponse(503, {
+        error: {
+          code: 'OPENAPI_NOT_EMITTED',
+          message: 'OpenAPI spec not generated yet. Start the dev server and visit a route first.',
+        },
+      })
+    }
+    const message = err instanceof Error ? err.message : 'Failed to read OpenAPI spec file'
+    return jsonResponse(500, { error: { code: 'OPENAPI_READ_FAILED', message } })
+  }
+  try {
+    const stat = fstatSync(fd)
     if (stat.size > MAX_SPEC_BYTES) {
       return jsonResponse(413, {
         error: {
@@ -127,7 +138,7 @@ function serveSpecFile(filePath: string): Response {
       })
     }
 
-    const content = readFileSync(filePath, 'utf-8')
+    const content = readFileSync(fd, 'utf-8')
     return new Response(content, {
       status: 200,
       headers: { 'content-type': 'application/json', 'cache-control': 'no-cache' },
@@ -137,6 +148,8 @@ function serveSpecFile(filePath: string): Response {
     return jsonResponse(500, {
       error: { code: 'OPENAPI_READ_FAILED', message },
     })
+  } finally {
+    closeSync(fd)
   }
 }
 

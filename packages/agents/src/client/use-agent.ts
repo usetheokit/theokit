@@ -1,7 +1,7 @@
 import type { WireMessage as UIMessage } from '@theokit/presenter/wire'
 import { useMemo, useRef, useSyncExternalStore } from 'react'
 
-import { AgentClient, type UseAgentStatus } from './agent-client.js'
+import { AgentClient, type PendingApproval, type UseAgentStatus } from './agent-client.js'
 import { type AgentHandle, isAgentHandle } from './agent-handle.js'
 import { HttpTransport } from './http-transport.js'
 import type { AgentTransport, ApprovalDecision, RequestContext } from './transport.js'
@@ -17,7 +17,7 @@ import type { AgentTransport, ApprovalDecision, RequestContext } from './transpo
  * generated `@theo/agents` module types `send` to the agent's `input` schema — inferred end-to-end
  * from the server `defineAgent({ input })` with ZERO manual wiring.
  */
-export type { UseAgentStatus }
+export type { PendingApproval, UseAgentStatus }
 
 export interface UseAgentReturn<TInput = unknown, TToolNames extends string = string> {
   /** The CURRENT turn's assistant messages (per-turn; reset each `send`). Back-compat since M41. */
@@ -37,6 +37,28 @@ export interface UseAgentReturn<TInput = unknown, TToolNames extends string = st
   abort: () => void
   /** Clear messages + error, back to idle. */
   reset: () => void
+  /**
+   * The HITL decisions this turn is parked on — empty whenever nothing is outstanding
+   * (usetheokit/theokit#392).
+   *
+   * Each entry carries the id `approve` takes plus what a prompt needs to name the action: the
+   * tool, its resolved input, the declared question and the window. Render it directly:
+   *
+   * ```tsx
+   * {pendingApprovals.map((a) => (
+   *   <div key={a.approvalId}>
+   *     {a.question ?? `Run ${a.toolName}?`}
+   *     <button onClick={() => void approve(a.approvalId, { approved: true })}>Approve</button>
+   *     <button onClick={() => void approve(a.approvalId, { approved: false })}>Deny</button>
+   *   </div>
+   * ))}
+   * ```
+   *
+   * The same decision is on the transcript too — the gated tool's part sits in
+   * `state: 'approval-requested'` with the id under `approval.id` — so a surface that renders tool
+   * parts inline can read it there instead. This field exists so one does not have to.
+   */
+  pendingApprovals: PendingApproval[]
   /** Settle a paused HITL approval (HTTP `POST /approve/<id>` for web; the inline callback in-process). */
   approve: (approvalId: string, decision: ApprovalDecision) => Promise<void>
   /** Resume an interrupted stream (M37 durable transport for web; a no-op in-process). */
@@ -117,6 +139,7 @@ export function useAgent<TInput = unknown>(
     thread: state.thread,
     status: state.status,
     error: state.error,
+    pendingApprovals: state.pendingApprovals,
     send: client.send,
     abort: client.abort,
     reset: client.reset,

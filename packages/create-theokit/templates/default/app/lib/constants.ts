@@ -1,4 +1,5 @@
-import { type UIMessage, type QuickAction } from '@theokit/ui'
+import { type QuickAction } from '@theokit/ui'
+import { type UIMessage } from 'theokit/client'
 import { Sparkles } from 'lucide-react'
 
 import { AGENT } from '../../shared/agent'

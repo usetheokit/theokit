@@ -30,8 +30,9 @@ describe('generateManifest', () => {
   it('should scan routes and return manifest with correct routePaths and paramNames', () => {
     const serverDir = join(TMP_DIR, 'server')
     setupFixture({
-      'server/routes/health.ts': 'export const GET = { handler: () => ({ ok: true }) }',
-      'server/routes/users/[id].ts': 'export const GET = { handler: () => ({}) }',
+      'server/routes/health.ts':
+        "export const GET = { policy: 'public', handler: () => ({ ok: true }) }",
+      'server/routes/users/[id].ts': "export const GET = { policy: 'public', handler: () => ({}) }",
     })
 
     const manifest = generateManifest(serverDir)
@@ -75,8 +76,9 @@ describe('generateManifest', () => {
   it('should scan top-level agents/ and include in manifest (M2)', () => {
     const serverDir = join(TMP_DIR, 'server')
     setupFixture({
-      'server/routes/health.ts': 'export const GET = { handler: () => ({}) }',
-      'agents/support.ts': 'export default {}',
+      'server/routes/health.ts': "export const GET = { policy: 'public', handler: () => ({}) }",
+      // usetheokit/theokit#365 - the scanner refuses an agent file that declares no policy.
+      'agents/support.ts': "export const policy = 'public'\nexport default {}",
     })
 
     const manifest = generateManifest(serverDir)

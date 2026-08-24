@@ -1,0 +1,38 @@
+J8 metric 4 - time to first green run, both sides, 2026-08-21
+Harness: metric4-harness.sh, driven interleaved (one TheoKit run, one Next.js run, repeat), probe
+"/" on both lanes. Warm npm cache, stated rather than hidden; no run in this programme has ever been
+taken on a cold cache, which is where a new developer actually stands.
+Machine: Linux 6.8.0-136, Node 22.22.2, npm 10.9.7. Nothing else heavy running.
+
+Lanes - the two applications this journey was measured on, unchanged
+  TheoKit  scratchpad j08/tk-tenant  (theokit 0.48.14 from npm, @theokit/agents 10.1.0)
+  Next.js  scratchpad j08/nx-tenant  (next 16.3.1, ai 7.0.70, @ai-sdk/react 4.0.73,
+                                      @ai-sdk/openai-compatible 3.0.32, jose 6.2.9)
+
+Lockfiles, symmetric: the Next.js lane installs from its own tracked package-lock.json. The TheoKit
+lane carried a pnpm-lock.yaml and no npm lockfile; npm ignores a pnpm lock and would have re-resolved
+the whole graph on every run, which is the handicap J9's protocol carried. A package-lock.json was
+generated for it on 2026-08-21 with `npm install --package-lock-only`, resolving to the same
+theokit 0.48.14 the pnpm tree already held.
+
+--- Three runs per lane, interleaved ---
+
+  theokit r1 install=6.1 build= 5.0 start=1.1 total=12.1
+  nextjs  r1 install=5.2 build= 8.6 start=0.6 total=14.4
+  theokit r2 install=6.0 build= 5.0 start=1.1 total=12.0
+  nextjs  r2 install=4.0 build=11.5 start=0.6 total=16.0
+  theokit r3 install=4.1 build= 5.0 start=1.1 total=10.2
+  nextjs  r3 install=4.8 build=10.6 start=0.6 total=16.0
+
+  theokit n=3  total 11.43 +/- 1.07 -> [10.36, 12.50]   install 5.40+/-1.13  build  5.00+/-0.00  start 1.10+/-0.00
+  nextjs  n=3  total 15.47 +/- 0.92 -> [14.54, 16.39]   install 4.67+/-0.61  build 10.23+/-1.48  start 0.60+/-0.00
+
+  Intervals do NOT overlap and TheoKit is the faster side. "Not worse on time to first green run"
+  holds. Install is level within noise - 5.40 +/- 1.13 against 4.67 +/- 0.61 - on the pair where the
+  Next.js side installs `jose` to sign its sessions and the TheoKit side installs nothing extra.
+
+  This is the largest pair in the sweep on the countable metrics: 9 files against 9, 193 glue lines
+  against 147. The build times do not track that at all - 5.00 s against 10.23 s - which is worth
+  recording because it is the one place a reader might expect the two to correlate.
+
+No run was discarded on this journey. Nothing failed.

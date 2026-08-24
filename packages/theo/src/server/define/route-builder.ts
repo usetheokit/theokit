@@ -15,6 +15,7 @@
 import type { z } from 'zod'
 
 import type { RouteConfig } from '../../core/contracts/route-config.js'
+import type { RoutePolicy } from '../../core/contracts/route-policy.js'
 
 import { defineRoute } from './define-route.js'
 
@@ -54,6 +55,18 @@ export interface RouteBuilder<
   /** Opt out of CSRF enforcement for this route (webhooks / OAuth callbacks). */
   csrf(disabled: false): RouteBuilder<TQuery, TBody, TParams, TCtx, TResponse, THandlerSet>
   /**
+   * Declare who may call this route (ADR 0001). Required — the scanner refuses a
+   * route file whose HTTP export declares no policy, and `'public'` is a
+   * declaration rather than a default.
+   *
+   * The policy is evaluated by the Node executor, the Web executor and
+   * `callProcedure` from one implementation, so a browser, a desktop shell and a
+   * terminal all get the same answer.
+   */
+  policy(
+    policy: RoutePolicy<z.infer<TQuery>, z.infer<TBody>, z.infer<TParams>>,
+  ): RouteBuilder<TQuery, TBody, TParams, TCtx, TResponse, THandlerSet>
+  /**
    * Set the handler. Its `ctx` infers `query/body/params` from the schemas set above. Required
    * before `.build()`.
    */
@@ -89,6 +102,7 @@ interface RouteSpecAccumulator {
   response?: z.ZodType
   status?: number
   csrf?: false
+  policy?: RoutePolicy
   handler?: AnyRouteConfig['handler']
 }
 
@@ -100,6 +114,7 @@ function makeRouteBuilder(spec: RouteSpecAccumulator): RouteBuilder {
     response: (schema: z.ZodType) => makeRouteBuilder({ ...spec, response: schema }),
     status: (code: number) => makeRouteBuilder({ ...spec, status: code }),
     csrf: (disabled: false) => makeRouteBuilder({ ...spec, csrf: disabled }),
+    policy: (policy: RoutePolicy) => makeRouteBuilder({ ...spec, policy }),
     handler: (fn: AnyRouteConfig['handler']) => makeRouteBuilder({ ...spec, handler: fn }),
     build: (): AnyRouteConfig => {
       // Fail-fast for untyped (JS) callers — the type-state guard makes this unreachable from TS.
@@ -113,6 +128,7 @@ function makeRouteBuilder(spec: RouteSpecAccumulator): RouteBuilder {
         ...(spec.response !== undefined ? { response: spec.response } : {}),
         ...(spec.status !== undefined ? { status: spec.status } : {}),
         ...(spec.csrf !== undefined ? { csrf: spec.csrf } : {}),
+        ...(spec.policy !== undefined ? { policy: spec.policy } : {}),
         handler: spec.handler,
       }
       return defineRoute(config)
@@ -122,8 +138,9 @@ function makeRouteBuilder(spec: RouteSpecAccumulator): RouteBuilder {
 }
 
 /**
- * Start a fluent route definition. Chain `.query/.body/.params/.response/.status/.csrf` (all
- * optional), then `.handler()` (required) and `.build()` for the `RouteConfig`.
+ * Start a fluent route definition. Chain `.query/.body/.params/.response/.status/.csrf`, declare
+ * `.policy()` (which the route scanner requires), then `.handler()` and `.build()` for the
+ * `RouteConfig`.
  */
 export function route(): RouteBuilder {
   return makeRouteBuilder({})

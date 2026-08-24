@@ -1,0 +1,19 @@
+diff --git a/dist/source-map/node.js b/dist/source-map/node.js
+index b1e322a10c7a47f3c7a5d0e72d04a80a3be705e1..0f32857068f0f1c5c02c914a8576aa23a4a0e295 100644
+--- a/dist/source-map/node.js
++++ b/dist/source-map/node.js
+@@ -5,8 +5,12 @@ import convertSourceMap from 'convert-source-map';
+ // based on vite
+ // https://github.com/vitejs/vite/blob/84079a84ad94de4c1ef4f1bdb2ab448ff2c01196/packages/vite/src/node/server/sourcemap.ts#L149
+ function extractSourcemapFromFile(code, filePath) {
+-	const map = (convertSourceMap.fromSource(code) || convertSourceMap.fromMapFileSource(code, createConvertSourceMapReadMap(filePath)))?.toObject();
+-	return map ? { map } : undefined;
++	try {
++		const map = (convertSourceMap.fromSource(code) || convertSourceMap.fromMapFileSource(code, createConvertSourceMapReadMap(filePath)))?.toObject();
++		return map ? { map } : undefined;
++	} catch {
++		return undefined;
++	}
+ }
+ function createConvertSourceMapReadMap(originalFileName) {
+ 	return (filename) => {

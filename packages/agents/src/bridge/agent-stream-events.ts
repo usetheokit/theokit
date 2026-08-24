@@ -113,6 +113,42 @@ export interface ErrorEvent {
   retryable: boolean
 }
 
+/**
+ * Why a run stopped short of finishing on its own — theokit#379.
+ *
+ * ## Why it is an enum and not a `truncated: boolean`
+ *
+ * The two members demand OPPOSITE reactions from the caller, and a boolean cannot carry the
+ * difference:
+ *
+ *  - `'step_limit'` — the loop ran out of tool-calling turns while the model still wanted more.
+ *    The work is unfinished but progressing; re-sending is the sane continuation.
+ *  - `'no_progress'` — the doom-loop guard stopped the model repeating IDENTICAL tool calls. The
+ *    SDK's own wording: "a controlled stop, NOT a truncation to re-send". Re-sending repeats the
+ *    loop that was just cut.
+ *
+ * A caller that reads `truncated: true` and re-sends does the right thing in the first case and
+ * feeds the doom loop in the second.
+ *
+ * ## Why these spellings
+ *
+ * Both sides of the boundary had already agreed on them before this field existed: the framework's
+ * own `LoopFinishReason` (`../loop/loop-strategy.ts`) spells the outer-loop terminals `step_limit`
+ * and `no_progress`, and so does the SDK's continuation driver
+ * (`RunToCompletionResult.terminal: "done" | "step_limit" | "no_progress"`). Inventing a third
+ * vocabulary for the same two outcomes was the only way to get this wrong.
+ *
+ * ## Why there is no `'finished'` member
+ *
+ * A clean run carries NO `stopReason` at all — absence is the finished case. Stamping every
+ * ordinary turn with a new field would change what every existing consumer receives in order to
+ * describe the one case that was already correct. A consumer that has never heard of `stopReason`
+ * therefore keeps receiving byte-identical frames for every run that finishes on its own, and for a
+ * truncated one it receives one extra optional key it ignores — the same degradation the ai-sdk
+ * `finish` chunk already allows, since its `messageMetadata` is `unknown`.
+ */
+export type AgentStopReason = 'step_limit' | 'no_progress'
+
 /** Agent completed with a final result. */
 export interface DoneEvent {
   type: 'done'
@@ -129,6 +165,33 @@ export interface DoneEvent {
   durationMs: number
   /** Total cost in USD for this agent run (EC-2: added for budget tracking). */
   cost?: number
+  /**
+   * theokit#379 — why the run stopped, when it did NOT stop because the agent was done.
+   *
+   * ABSENT on a clean finish. Present only when the SDK reports that the run was cut: the terminal
+   * frame is a `done` either way (a reached ceiling is not an error — see `sdk-adapter.ts`'s
+   * `applyStepCeiling`), so without this field a cut run and a finished one are the same event.
+   *
+   * Read from `RunResult.stoppedByDoomLoop` / `RunResult.stoppedAtIterationLimit` at the adapter
+   * boundary. See {@link AgentStopReason} for why the caller needs to tell the two apart.
+   */
+  stopReason?: AgentStopReason
+  /**
+   * The model this turn actually ran on — the EFFECTIVE id, not the declared one.
+   *
+   * It is resolved at the one place that knows: `createSdkAgentStream`, where
+   * `overrides.model ?? compiled.model ?? 'openai/gpt-4o-mini'` is decided. A consumer reading
+   * `CompiledAgentOptions.model` instead would be wrong twice — it misses a per-run override, and
+   * it reads `undefined` for an agent that declared no model and still ran one.
+   *
+   * Tokens are on this event already, and tokens alone convert to no cost: price is per model.
+   * This is the other half of that question, and the reason it travels rather than staying inside
+   * the adapter (usetheokit/theokit#368's fifth criterion).
+   *
+   * Optional so a producer that predates it — or one building a `done` from a source with no model
+   * to report — degrades to absence rather than to a fabricated id.
+   */
+  model?: string
 }
 
 /**
@@ -143,6 +206,20 @@ export interface AgentTurnMetadata {
   /** Total cost in USD for the turn (present iff the SDK reported it). */
   cost?: number
   durationMs: number
+  /**
+   * theokit#379 — mirrors {@link DoneEvent.stopReason} so a surface that only ever sees the wire
+   * (a web client reading `UIMessage.metadata`, the observability translator reading the `finish`
+   * chunk) can tell a cut turn from a finished one without a second transport. Absent on a clean
+   * finish, exactly as on `DoneEvent`.
+   */
+  stopReason?: AgentStopReason
+  /**
+   * Mirrors {@link DoneEvent.model} — the model the turn ran on, carried to whoever only ever sees
+   * the wire. The observability translator is the caller that needs it: it reads the `finish`
+   * chunk and records the model beside the token counts, which is what makes a cost answerable
+   * from a trace at all. Absent when the producer reported none.
+   */
+  model?: string
 }
 
 /** Agent run started. */

@@ -71,7 +71,11 @@ describe('M20 — registry carries the decision (approved + reason + payload)', 
   it('a timeout resolves to a decision object (proceed → approved:true)', async () => {
     const reg = createInProcessApprovalRegistry()
     const decision = await reg.register('id-3', { timeoutMs: 1, onTimeout: 'proceed' })
-    expect(decision).toEqual({ approved: true })
+    // `toMatchObject`, not `toEqual`: what this case is named for is that a timeout resolves to a
+    // decision OBJECT with the right bit. Pinning the whole shape broke when #393 added the marker
+    // recording that nobody actually approved this — which on the proceed path is the fact most
+    // worth having.
+    expect(decision).toMatchObject({ approved: true, settledBy: 'timeout' })
   })
 
   it('list() surfaces a declared payloadSchema', () => {

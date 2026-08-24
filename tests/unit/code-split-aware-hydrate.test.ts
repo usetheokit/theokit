@@ -193,7 +193,10 @@ describe('Phase 4 — backward compatibility', () => {
 
   it('Outlet is still imported when any layout is present', () => {
     const out = generateRouteManifest(singlePageTree())
-    expect(out).toContain("import { Outlet } from 'react-router'")
+    // Asserts the NAME is imported rather than the line it arrives on: scroll
+    // restoration joined the same import (B-029), and pinning the spelling made
+    // this fail for a reason unrelated to what it protects.
+    expect(out).toMatch(/import\s*\{[^}]*\bOutlet\b[^}]*\}\s*from\s*'react-router'/)
   })
 
   it('Layouts still wrap with children: <Outlet /> (regression — black page fix from 2026-05-18)', () => {

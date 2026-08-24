@@ -1,13 +1,16 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { scaffold } from '../../packages/create-theokit/src/index.js'
-import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
 let tempBase: string
 
 beforeEach(() => {
-  tempBase = join(tmpdir(), `theo-scaffold-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+  // `mkdtempSync`, not a name built from a clock or a counter: this directory is WRITTEN to, and
+  // a name another process can predict is a window to pre-create it as a symlink and redirect
+  // every write (CodeQL `js/insecure-temporary-file`).
+  tempBase = mkdtempSync(join(tmpdir(), 'theo-scaffold-'))
   mkdirSync(tempBase, { recursive: true })
 })
 

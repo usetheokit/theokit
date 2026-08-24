@@ -1,8 +1,9 @@
 import { ChatThread, ChatMessage, AgentStreaming, QuickActionChips } from '@theokit/ui'
-import { type UIMessage } from '@theokit/ui'
 import { ScrollArea } from '@usetheo/ui'
+import { type UIMessage } from 'theokit/client'
 
 import { MODEL_NAME, STARTERS } from '../lib/constants'
+import { toRenderable } from '../lib/renderable'
 
 /**
  * The scrolling transcript: the message thread + a live streaming indicator + the starter prompts (shown
@@ -25,7 +26,7 @@ export function ChatPanel({
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-6 py-6">
         <ChatThread>
           {thread.map((message) => (
-            <ChatMessage key={message.id} message={message} />
+            <ChatMessage key={message.id} message={toRenderable(message)} />
           ))}
           {isStreaming && <AgentStreaming model={MODEL_NAME} />}
         </ChatThread>

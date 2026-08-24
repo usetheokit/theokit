@@ -18,17 +18,34 @@ describe('Bundle size regression', () => {
    * It sits there by a decision recorded in M56, and shuffling an unrelated module to fit a ceiling
    * would be paying for this change with someone else's design.
    *
-   * The new ceiling is 36 500 — the measured 35 483 plus about a kilobyte of headroom, stated so the
+   * The ceiling was 36 500 — the measured 35 483 plus about a kilobyte of headroom, stated so the
    * next milestone that adds barrel surface still meets a guard rather than a formality.
+   *
+   * ## Raised again to 37 500 for #390 — measured the same way
+   *
+   * Masking a failure's text before it reaches a browser cost **215 bytes**, attributed by building
+   * the barrel with and without the change (36 285 → 36 500), which is exactly ON the old ceiling
+   * and therefore failing. The bytes are the `MaskError` type's default and the hook threaded to
+   * both entry points; removing them restores a wire that publishes a driver's own words to a
+   * browser, which is the defect.
+   *
+   * Attributed rather than assumed: the same measurement showed #386 — routing the second SSE
+   * encoder through the shared translator — cost **zero**, because the translator was already
+   * reachable from this barrel through `streamAgentUIMessages`. It would have been easy to blame
+   * the larger-looking change.
+   *
+   * The alternative considered and rejected: shrink by dropping the in-process entry's copy of the
+   * option. That is the half the parity gate had just refused, and paying for a security default
+   * with a transport-dependent one is not a saving.
    */
-  it('agents main bundle under 36.5KB', () => {
+  it('agents main bundle under 37.5KB', () => {
     const path = resolve(distDir, 'index.js')
     if (!existsSync(path)) {
       console.log('  SKIP: dist/index.js not found (run pnpm build first)')
       return
     }
     const size = statSync(path).size
-    expect(size).toBeLessThan(36_500)
+    expect(size).toBeLessThan(37_500)
     console.log(`  agents/dist/index.js: ${(size / 1024).toFixed(1)} KB`)
   })
 

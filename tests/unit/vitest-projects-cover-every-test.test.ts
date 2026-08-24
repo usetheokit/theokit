@@ -42,14 +42,37 @@ import { describe, expect, it } from 'vitest'
 
 const ROOT = resolve(__dirname, '../..')
 
-/** Every test file on disk under `tests/`, the way the filesystem sees it. */
+/**
+ * Every test file on disk under `tests/`, the way the filesystem sees it.
+ *
+ * The walk tolerates an entry that vanishes between `readdirSync` and `statSync`. That is not
+ * defensive padding: `tests/` is a LIVE directory while the suite runs — sibling tests create and
+ * remove scratch trees there (`tests/__tmp_manifest_test__/`, `tests/.tmp-middleware/`), and this
+ * gate walks it concurrently. Without the guard the whole file fails with an `ENOENT` on a path
+ * that existed a millisecond earlier, intermittently, which is the flakiness this repository's own
+ * testing rules call a bug.
+ *
+ * A directory that disappears mid-walk holds no test file this gate could be missing: it is scratch
+ * output, by construction.
+ */
 function testFilesOnDisk(dir: string): string[] {
   const found: string[] = []
   for (const entry of readdirSync(dir)) {
     if (entry === 'node_modules' || entry === 'fixtures') continue
     const full = join(dir, entry)
-    if (statSync(full).isDirectory()) {
-      found.push(...testFilesOnDisk(full))
+    let isDirectory: boolean
+    try {
+      isDirectory = statSync(full).isDirectory()
+    } catch {
+      continue
+    }
+    if (isDirectory) {
+      // The recursion can race too — the directory may go while its children are being listed.
+      try {
+        found.push(...testFilesOnDisk(full))
+      } catch {
+        continue
+      }
     } else if (/\.test(-d)?\.tsx?$/.test(entry)) {
       found.push(relative(ROOT, full))
     }

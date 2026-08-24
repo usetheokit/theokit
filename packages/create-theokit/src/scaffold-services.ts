@@ -13,17 +13,11 @@
  *   - Injects services config into the user's `theo.config.ts`
  *   - Injects `@hey-api/client-fetch` into the user's package.json (EC-10)
  */
-import {
-  cpSync,
-  existsSync,
-  readFileSync,
-  readdirSync,
-  statSync,
-  writeFileSync,
-  unlinkSync,
-} from 'node:fs'
+import { cpSync, existsSync, readFileSync, readdirSync, statSync, unlinkSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+
+import { writeScaffoldFile } from './write-file.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -101,7 +95,7 @@ function substituteTmpls(dir: string, projectName: string): void {
     if (entry.endsWith('.tmpl')) {
       const content = readFileSync(full, 'utf-8').replace(/\{\{name\}\}/g, projectName)
       const dest = full.replace(/\.tmpl$/, '')
-      writeFileSync(dest, content)
+      writeScaffoldFile(dest, content)
       unlinkSync(full)
     }
   }
@@ -215,7 +209,7 @@ export function scaffoldServices(options: ScaffoldServicesOptions): void {
     const snippet = buildServicesSnippet(selections)
     const updated = injectServicesIntoConfig(cfgSrc, snippet)
     if (updated !== cfgSrc) {
-      writeFileSync(configPath, updated)
+      writeScaffoldFile(configPath, updated)
     }
   }
 
@@ -224,7 +218,7 @@ export function scaffoldServices(options: ScaffoldServicesOptions): void {
   if (existsSync(pkgPath)) {
     const pkgSrc = readFileSync(pkgPath, 'utf-8')
     const updated = injectHeyApiDep(pkgSrc)
-    writeFileSync(pkgPath, updated)
+    writeScaffoldFile(pkgPath, updated)
   }
 
   // Rename .gitignore for services if needed (none currently shipped, but reserved hook)

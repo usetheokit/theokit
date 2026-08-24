@@ -117,10 +117,32 @@ describe('agent-route-generator', () => {
       })
 
       const text = await res.text()
-      expect(text).toContain('event: run_started')
-      expect(text).toContain('event: text_delta')
-      expect(text).toContain('event: done')
-      expect(text).toContain('"agentName":"support"')
+
+      // #386 — this asserted the FRAMEWORK vocabulary (`event: run_started`, `event: text_delta`,
+      // `"agentName":"support"`), which is a wire none of this framework's clients can read:
+      // `parseWireStream` validates each `data:` payload against `wireChunkSchema` and silently
+      // discards what fails. The route speaks the shipped wire now, so the test asserts that a
+      // client would actually receive the turn.
+      const payloads = text
+        .split('\n')
+        .filter((l) => l.startsWith('data: '))
+        .map((l) => l.slice('data: '.length))
+
+      const { wireChunkSchema } = await import('@theokit/presenter/wire')
+      const chunks = payloads
+        .filter((p) => p !== '[DONE]')
+        .map((p) => JSON.parse(p) as { type: string; delta?: string })
+      for (const chunk of chunks) {
+        expect(wireChunkSchema.safeParse(chunk).success, `unreadable frame: ${chunk.type}`).toBe(
+          true,
+        )
+      }
+
+      expect(chunks.map((c) => c.type)).toContain('text-delta')
+      expect(chunks.some((c) => c.delta === 'Hello!')).toBe(true)
+      // Terminated, so a completed run is distinguishable from a dropped connection (#384).
+      expect(chunks.map((c) => c.type)).toContain('finish')
+      expect(payloads.at(-1)).toBe('[DONE]')
     } finally {
       server.close()
     }

@@ -2,7 +2,8 @@
 
 exports[`generateRouteManifest dynamic emission (T2.2) > test_generate_static_output_unchanged (golden guard, EC-13) 1`] = `
 "import React, { Suspense } from 'react'
-import { Outlet } from 'react-router'
+import { Outlet, ScrollRestoration } from 'react-router'
+import { ElementScrollRestoration } from 'theokit/router/element-scroll-restoration'
 
 import Layout_about from '/app/about/layout.tsx'
 const Page_blog = React.lazy(() => import('/app/blog/page.tsx'))
@@ -25,5 +26,5 @@ export function __theoPreloadPathsFor(matches) {
   return out.filter((p) => p in __theoPreloadMap)
 }
 
-export const routes = [{ path: '/', children: [{ path: 'blog', element: React.createElement(Suspense, { fallback: null }, React.createElement(Page_blog)) }, { path: 'about', element: React.createElement(Layout_about, { children: React.createElement(Outlet) }), children: [{ index: true, element: React.createElement(Suspense, { fallback: null }, React.createElement(Page_about)) }] }] }]"
+export const routes = [{ path: '/', element: React.createElement(React.Fragment, null, React.createElement(ScrollRestoration), React.createElement(ElementScrollRestoration), React.createElement(Outlet)), children: [{ path: 'blog', element: React.createElement(Suspense, { fallback: null }, React.createElement(Page_blog)) }, { path: 'about', element: React.createElement(Layout_about, { children: React.createElement(Outlet) }), children: [{ index: true, element: React.createElement(Suspense, { fallback: null }, React.createElement(Page_about)) }] }] }]"
 `;

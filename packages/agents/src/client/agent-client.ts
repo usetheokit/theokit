@@ -1,9 +1,104 @@
-import type { WireMessage as UIMessage, WireChunk as UIMessageChunk } from '@theokit/presenter/wire'
+import type {
+  WireMessage as UIMessage,
+  WireChunk as UIMessageChunk,
+  WireToolApproval,
+} from '@theokit/presenter/wire'
+import { TheokitAgentError } from '@theokit/sdk/errors'
 
 import { consumeChunkStream } from './consume-ui-message-stream.js'
 import type { AgentTransport, ApprovalDecision, RequestContext } from './transport.js'
 
 export type UseAgentStatus = 'idle' | 'streaming' | 'done' | 'error'
+
+/**
+ * The stream ended before the run did — theokit#384.
+ *
+ * ## Why the status is `'error'` and not a new `'interrupted'` member
+ *
+ * `UseAgentStatus` is published, and every surface in and out of this repo switches on it. Adding a
+ * member fixes the lie only for the consumers who then update their switch; for everyone else the
+ * new value falls through to the same "not streaming, not an error" branch that shows a finished
+ * turn — the exact symptom, preserved. Reusing `'error'` fixes it for all of them at once, and it
+ * is already the value the rest of this store treats correctly: `send()` refuses to commit a turn
+ * that did not settle on `'done'`, so a half-answer stops being written into history as complete,
+ * and the reconnect wiring the issue found disabled (`status === 'error'` → `reconnect()`) starts
+ * firing without the consumer changing a line.
+ *
+ * ## Why the discrimination is a typed error rather than a status
+ *
+ * "The provider refused" and "the connection died" want opposite reactions — one is a failure to
+ * report, the other is a turn that can be resumed — and this framework already has a place for that
+ * difference: `TheokitAgentError`'s `code` + `isRetryable`, which `isTransientError` reads. A class
+ * outside that hierarchy is invisible to it and leaves the consumer matching on message text (M80).
+ *
+ * ## Why this is NOT a `stopReason` (theokit#379)
+ *
+ * The two are orthogonal, and collapsing them would be a category error. `stopReason` says why the
+ * RUN stopped and rides the `finish` chunk's metadata — it exists only when a terminal frame
+ * arrived. An interruption is the ABSENCE of that frame: the run may still be going, and this
+ * client cannot know why it stopped, because it never heard. Spelling it as a third `stopReason`
+ * member would put a value on a `done` turn that no producer produced, and would reintroduce the
+ * defect it fixes — a truncated run reported through the field that means "the agent finished".
+ * Transport termination and execution termination are separate axes; this is the transport one.
+ */
+export class AgentStreamInterruptedError extends TheokitAgentError {
+  override readonly name = 'AgentStreamInterruptedError'
+  constructor(readonly chunksReceived: number) {
+    super(
+      `The agent stream ended after ${String(chunksReceived)} chunk(s) without its terminal frame — ` +
+        `the connection dropped mid-run, so the answer on screen is incomplete.`,
+      {
+        // A dropped connection is the definition of transient: the run may still be alive on the
+        // server, and `AgentClient.reconnect()` is the affordance built for it. DECLARED, because a
+        // default here would be a retry policy nobody chose.
+        isRetryable: true,
+        code: 'AGENT_STREAM_INTERRUPTED',
+      },
+    )
+  }
+}
+
+/**
+ * One HITL decision the run is parked on, flattened for the surface that renders it
+ * (usetheokit/theokit#392).
+ *
+ * ## Why the store publishes this at all, when the part already carries it
+ *
+ * `approve()` needs an id. Before this field the snapshot had four keys and none of them was that
+ * id, so an application had two options: scan every part of every message for `state ===
+ * 'approval-requested'`, or poll `GET /api/agents/<name>/approvals` out of band — which is what the
+ * measured J2 client did, at twelve lines and two React primitives, through an endpoint under a
+ * security advisory. Publishing the id is what removes the reason to reach for either.
+ *
+ * ## Why it is DERIVED and not accumulated
+ *
+ * It is computed from the current turn's parts on each emit, never written by a second reducer. A
+ * separate list would need its own settle path and could then disagree with the transcript about
+ * whether a decision is outstanding — and the transcript is what renders. Deriving makes the two
+ * unable to drift: a settled gate leaves `approval-requested` on the same chunk that fills in the
+ * output, so it leaves this array in the same step.
+ *
+ * ## Why plural
+ *
+ * The SDK dispatches a round's calls concurrently (`mapWithConcurrency`), so two gated calls of the
+ * same tool can be outstanding at once — pinned by
+ * `tests/integration/hitl-call-correlation.test.ts`. A singular field would have to pick one and
+ * would be silently wrong exactly when a human has two things to decide.
+ */
+export interface PendingApproval {
+  /** The id `approve()` settles. */
+  readonly approvalId: string
+  /** The call this gate holds — the same id `tool-input-available` announced. */
+  readonly toolCallId: string
+  /** The gated tool's name, off the part. `undefined` only if the producer announced none. */
+  readonly toolName: string | undefined
+  /** The resolved arguments the human is authorising, off the part. */
+  readonly input: unknown
+  /** The question declared on the gate, when the producer sent one. */
+  readonly question?: string
+  /** The window before the gate settles itself, in ms, when the producer sent one. */
+  readonly timeoutMs?: number
+}
 
 /** The observable state the store exposes (stable reference between emits — `useSyncExternalStore` contract). */
 export interface AgentClientState {
@@ -17,6 +112,45 @@ export interface AgentClientState {
   thread: UIMessage[]
   status: UseAgentStatus
   error: Error | undefined
+  /**
+   * The HITL decisions this turn is parked on, newest last. Empty whenever nothing is outstanding.
+   * Each entry carries the id `approve()` takes plus what the prompt needs to name the action.
+   */
+  pendingApprovals: PendingApproval[]
+}
+
+/** The empty array served whenever no gate is outstanding — one allocation, not one per emit. */
+const NO_PENDING_APPROVALS: PendingApproval[] = []
+
+/**
+ * Project the current turn's parts into the outstanding decisions (see {@link PendingApproval}).
+ *
+ * Scans `messages` (the current turn) and not `thread`: a turn only reaches `#committed` on `done`,
+ * and a run cannot finish while parked inside the awaited approval hook, so a committed turn has no
+ * live gate to find. Scanning the whole thread would re-walk every historical part on every token
+ * delta for a result that cannot change.
+ */
+function derivePendingApprovals(messages: UIMessage[]): PendingApproval[] {
+  let pending: PendingApproval[] | undefined
+  for (const message of messages) {
+    for (const part of message.parts) {
+      if (part.state !== 'approval-requested') continue
+      const approval = part.approval as WireToolApproval | undefined
+      // A part in this state without an id would be a reader defect, not a decision a human can
+      // settle — skipped rather than published as an entry whose `approve()` call cannot work.
+      if (typeof approval?.id !== 'string') continue
+      pending ??= []
+      pending.push({
+        approvalId: approval.id,
+        toolCallId: String(part.toolCallId),
+        toolName: typeof part.toolName === 'string' ? part.toolName : undefined,
+        input: part.input,
+        ...(approval.question !== undefined ? { question: approval.question } : {}),
+        ...(approval.timeoutMs !== undefined ? { timeoutMs: approval.timeoutMs } : {}),
+      })
+    }
+  }
+  return pending ?? NO_PENDING_APPROVALS
 }
 
 /** Derive the turn text from a typed input: `input.message` when present, else the serialized input. */
@@ -61,11 +195,26 @@ export interface AgentClientOptions {
    * change the observable behaviour of anyone counting emits or depending on first-token latency.
    */
   readonly emitIntervalMs?: number
+
+  /**
+   * The conversation this client continues. Absent = a fresh one is drawn.
+   *
+   * The id is not decorative: the HTTP transport sends it as the top-level `id`, which the server
+   * reads as the session id (`client/http-transport.ts:88-92`). It used to be drawn in the field
+   * declaration with no way to supply or read it, so every `new AgentClient(...)` was a new
+   * conversation and a page reload silently abandoned the thread the server still held
+   * (usetheokit/theokit#364).
+   *
+   * Supply it to resume; read `client.chatId` to persist it. Both halves are needed: reading without
+   * supplying lets an application store an id it can never restore, and supplying without reading
+   * leaves it nothing to store.
+   */
+  readonly chatId?: string
 }
 
 export class AgentClient<TInput = unknown> {
   readonly #transport: AgentTransport
-  readonly #chatId = crypto.randomUUID()
+  readonly #chatId: string
   readonly #listeners = new Set<() => void>()
   /** M43 — resolves per-request context (evaluated on every send/reconnect — dynamic, never stale). */
   readonly #contextResolver: (() => RequestContext | undefined) | undefined
@@ -81,7 +230,13 @@ export class AgentClient<TInput = unknown> {
   #currentUser: UIMessage | undefined
   /** A stable id for the current turn's assistant (the SDK leaves it empty — we fabricate one). */
   #currentAssistantId = ''
-  #snapshot: AgentClientState = { messages: [], thread: [], status: 'idle', error: undefined }
+  #snapshot: AgentClientState = {
+    messages: [],
+    thread: [],
+    status: 'idle',
+    error: undefined,
+    pendingApprovals: NO_PENDING_APPROVALS,
+  }
 
   /**
    * M92 — the committed prefix, materialized ONCE per write instead of once per token delta.
@@ -113,6 +268,19 @@ export class AgentClient<TInput = unknown> {
     this.#transport = transport
     this.#contextResolver = contextResolver
     this.#emitIntervalMs = options?.emitIntervalMs ?? 0
+    // A fresh draw stays the default: two clients built with no id must be two conversations, or
+    // two unrelated tabs would share a thread — the opposite defect, and the more dangerous one.
+    this.#chatId = options?.chatId ?? crypto.randomUUID()
+  }
+
+  /**
+   * The conversation this client is on — the id the server keys the session by.
+   *
+   * Readable so an application can persist it and pass it back through
+   * {@link AgentClientOptions.chatId} after a reload (usetheokit/theokit#364).
+   */
+  get chatId(): string {
+    return this.#chatId
   }
 
   /** Subscribe to state changes; returns an unsubscribe fn. */
@@ -150,7 +318,13 @@ export class AgentClient<TInput = unknown> {
     // constant, not in the order.
     const tail = this.#currentUser ? [this.#currentUser, ...this.#messages] : this.#messages
     const thread = this.#committedPrefix.concat(tail)
-    this.#snapshot = { messages: this.#messages, thread, status: this.#status, error: this.#error }
+    this.#snapshot = {
+      messages: this.#messages,
+      thread,
+      status: this.#status,
+      error: this.#error,
+      pendingApprovals: derivePendingApprovals(this.#messages),
+    }
     for (const listener of this.#listeners) listener()
   }
 
@@ -202,7 +376,7 @@ export class AgentClient<TInput = unknown> {
         this.#emit()
         return
       }
-      await consumeChunkStream(stream, (message) => {
+      const outcome = await consumeChunkStream(stream, (message) => {
         if (aborted()) return
         // The SDK leaves the assistant message id empty — fabricate a stable per-turn id so every chunk
         // upserts into the SAME message and the committed copy has a collision-free key (M46).
@@ -213,6 +387,17 @@ export class AgentClient<TInput = unknown> {
         this.#scheduleEmit()
       })
       if (aborted()) return
+      // theokit#384 — a stream that RAN OUT is not a stream that FINISHED. Until this branch existed
+      // there were only two outcomes here, "the reader threw" and "it did not", and a dropped socket
+      // reports neither: `reader.read()` says `done`, nothing rejects, and a run cut mid-word settled
+      // as an ordinary `done`. The messages already delivered are kept — the user is told the answer
+      // is incomplete, not shown an empty turn.
+      if (!outcome.terminated) {
+        this.#error = new AgentStreamInterruptedError(outcome.chunksReceived)
+        this.#status = 'error'
+        this.#emit()
+        return
+      }
       this.#status = 'done'
       this.#emit()
     } catch (err) {
@@ -314,7 +499,15 @@ export class AgentClient<TInput = unknown> {
     this.#emit()
   }
 
-  /** Settle a paused HITL approval via the transport's HITL path (HTTP POST or inline callback). */
+  /**
+   * Settle a paused HITL approval via the transport's HITL path (HTTP POST or inline callback).
+   *
+   * The signature is unchanged by usetheokit/theokit#392, deliberately. What that issue reported was
+   * not that `approve` takes an id — it was that nothing HANDED the caller one, so the id had to be
+   * mined out of band. `pendingApprovals` hands it over, and taking the entry instead of its
+   * `approvalId` would save no line while adding a second accepted shape to a published method that
+   * surfaces outside this repository (`@theokit/tui`, `@theokit/ui`).
+   */
   approve = async (approvalId: string, decision: ApprovalDecision): Promise<void> => {
     await this.#transport.approve?.(approvalId, decision)
   }

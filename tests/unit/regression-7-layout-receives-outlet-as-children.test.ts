@@ -58,7 +58,10 @@ describe('regression — layout receives <Outlet /> as children prop', () => {
   it('Given a tree with a layout, When inspecting the output, Then Outlet is imported from react-router', () => {
     const tree = makeTree('/app/layout.tsx')
     const out = generateRouteManifest(tree)
-    expect(out).toContain("import { Outlet } from 'react-router'")
+    // Asserts the NAME is imported rather than the line it arrives on: scroll
+    // restoration joined the same import (B-029), and pinning the spelling made
+    // this fail for a reason unrelated to what it protects.
+    expect(out).toMatch(/import\s*\{[^}]*\bOutlet\b[^}]*\}\s*from\s*'react-router'/)
   })
 
   it('regression — Next-style layout ({ children }) must receive a defined children prop', () => {

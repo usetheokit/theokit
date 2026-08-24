@@ -58,12 +58,24 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { resolve } from 'node:path'
-import { tmpdir } from 'node:os'
+import { tmpdir, userInfo } from 'node:os'
 
 const ROOT = resolve(__dirname, '../../..')
 const DIST = resolve(ROOT, 'packages/theo/dist')
 const INDEX_DTS = resolve(DIST, 'index.d.ts')
-const LOCK_DIR = resolve(tmpdir(), 'theokit-test-locks')
+/**
+ * Unlike every other temp path in this repository this one MUST be predictable: it is the
+ * rendezvous concurrent vitest workers use to agree on who builds `dist`. `mkdtemp` would hand each
+ * worker a lock of its own, and a lock nobody else can see is not a lock.
+ *
+ * Predictable inside a world-writable `/tmp` is precisely what CodeQL reports as
+ * `js/insecure-temporary-file`, and the report is fair: another account on the same machine could
+ * pre-create the directory as a symlink and take the run's writes with it, or plant the lock file
+ * and stall every worker. So the name is scoped to this uid and the directory is created `0o700` —
+ * predictability is kept where it is load-bearing, and the exposure it costs is paid for. (Windows
+ * reports `uid` as -1, where `tmpdir()` is already per-user.)
+ */
+const LOCK_DIR = resolve(tmpdir(), `theokit-test-locks-${String(userInfo().uid)}`)
 const LOCK_FILE = resolve(LOCK_DIR, 'packages-theo-build.lock')
 /** The window a build stays trusted when no marker from this run vouches for it. Exported so a
  * test asserts against the SAME number the decision uses — a duplicated literal is how a test ends
@@ -102,7 +114,7 @@ const markerRunId = (markerPath: string): number | undefined => {
  * cross-process state is not something a test may borrow.
  */
 export const markDistValidatedForThisRun = (markerPath: string = VALIDATION_MARKER): void => {
-  mkdirSync(resolve(markerPath, '..'), { recursive: true })
+  mkdirSync(resolve(markerPath, '..'), { recursive: true, mode: 0o700 })
   writeFileSync(markerPath, JSON.stringify({ runId: runId() }), 'utf8')
 }
 
@@ -112,11 +124,22 @@ export const markDistValidatedForThisRun = (markerPath: string = VALIDATION_MARK
  * The marker vouches for a validation, never for the existence of files — so a missing `index.d.ts`
  * is unusable no matter which run wrote the marker. Otherwise: same run ⇒ trust it; another run ⇒
  * the freshness window decides.
+ *
+ * `distTypesPath` is injectable for the same reason `markerPath` already was, and its absence was
+ * the whole of usetheokit/theokit#375. The tests isolated the marker and then asserted against the
+ * REAL `packages/theo/dist/index.d.ts` — shared, cross-worker, and being rewritten by whichever
+ * suite happened to be building at that moment. So the guard that exists to end a dist race lost
+ * one: it passed alone and failed intermittently in the full suite. Three of its cases also
+ * degraded to `if (existsSync(dts)) return`, silently exercising nothing, and a fourth stamped the
+ * mtime of the real build output — a test writing to the state its siblings read.
  */
-export const isDistUsableWithoutRebuilding = (markerPath: string = VALIDATION_MARKER): boolean => {
-  if (!existsSync(INDEX_DTS)) return false
+export const isDistUsableWithoutRebuilding = (
+  markerPath: string = VALIDATION_MARKER,
+  distTypesPath: string = INDEX_DTS,
+): boolean => {
+  if (!existsSync(distTypesPath)) return false
   if (markerRunId(markerPath) === runId()) return true
-  return Date.now() - statSync(INDEX_DTS).mtimeMs < FRESH_WINDOW_MS
+  return Date.now() - statSync(distTypesPath).mtimeMs < FRESH_WINDOW_MS
 }
 
 const hasFreshBuild = isDistUsableWithoutRebuilding
@@ -131,7 +154,7 @@ const hasFreshBuild = isDistUsableWithoutRebuilding
 let distDecidedUsable: boolean | undefined
 
 const acquireLock = (): number | null => {
-  mkdirSync(LOCK_DIR, { recursive: true })
+  mkdirSync(LOCK_DIR, { recursive: true, mode: 0o700 })
   try {
     return openSync(LOCK_FILE, 'wx')
   } catch {

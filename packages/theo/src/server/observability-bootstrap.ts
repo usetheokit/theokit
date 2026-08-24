@@ -31,6 +31,7 @@ import { observabilitySchema } from '../config/schemas/index.js'
 
 import { resolveAdapter } from './observability/adapter-registry.js'
 import type { ObservabilityAdapter } from './observability/adapters/types.js'
+import { warnOnce } from './observability/logger.js'
 import { createObservabilityPlugin } from './observability/middleware.js'
 import type { TheoPlugin } from './plugin-types.js'
 
@@ -80,7 +81,25 @@ export function createObservabilityPluginFromConfig(
 
   // The registry never fails; it falls back to noop. Wiring a plugin whose every
   // hook is a no-op would cost a runner on the request path and buy nothing.
-  if (adapter.name === 'noop') return undefined
+  if (adapter.name === 'noop') {
+    // Silence here is the defect. An application that WROTE `observability: {}`
+    // asked for telemetry, and returning quietly gives it a passing boot, no
+    // spans, and nothing to search for — the config-validates-and-does-nothing
+    // shape usetheokit/theokit#321 recorded for `rateLimit`.
+    //
+    // Only when it was asked for: an application that configured nothing is not
+    // owed a warning about a thing it never requested.
+    if (parsed !== undefined) {
+      warnOnce('observability.no_exporter', {
+        event: 'observability.no_exporter',
+        message:
+          'observability is configured but no exporter resolved, so no spans will be recorded. ' +
+          'Set THEO_CLOUD_INGEST_URL and THEO_CLOUD_API_KEY, or pass observability.provider with ' +
+          'your own adapter. In development, NODE_ENV=development resolves the console exporter.',
+      })
+    }
+    return undefined
+  }
 
   activeAdapter = adapter
   return createObservabilityPlugin(adapter)

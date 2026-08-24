@@ -73,8 +73,15 @@ export interface DelegateOptions {
    * this option exists to remove.
    */
   parentHooks?: HookHandlers
-  /** LLM API key (inherited from parent). */
-  apiKey?: string
+  /**
+   * LLM API key (inherited from parent).
+   *
+   * `null` says the provider takes NO credential — a model on the developer's own machine
+   * (usetheokit/theokit#423). It is a distinct value from `''` on purpose: an empty string is what
+   * an unset environment variable produces, and treating the two alike is how a typo becomes an
+   * unauthenticated run. `undefined` still means the caller supplied nothing and is still refused.
+   */
+  apiKey?: string | null
   /** Session ID override (default: crypto.randomUUID for isolation). */
   sessionId?: string
   /** Cancellation — aborts stop the reflective loop from re-entering. */
@@ -124,11 +131,27 @@ export interface DelegateOptions {
   streamFactory?: RoundStreamFactory
 }
 
-/** Validate API key and throw DelegationError if missing. */
+/**
+ * The credential to delegate with, or a refusal.
+ *
+ * Three states, not two (usetheokit/theokit#423). This read `!apiKey`, which folded "the provider
+ * takes no credential" into "the caller forgot one" — so a local model, whose provider resolves to
+ * an empty key by design, could not delegate at all. The fix is not to accept `''`: an empty string
+ * is also what an unset environment variable produces, and accepting it would turn a typo into an
+ * unauthenticated run. The keyless case says so explicitly instead.
+ */
 function requireApiKey(opts: DelegateOptions, agentName: string): string {
+  // `null` — declared keyless. The SDK's client sends an `authorization` header only for a
+  // non-empty key, so the empty string it receives here is the honest value rather than a
+  // placeholder.
+  if (opts.apiKey === null) return ''
   const apiKey = opts.apiKey ?? ''
   if (!apiKey) {
-    throw new DelegationError(agentName, 'No API key provided. Pass apiKey in DelegateOptions.')
+    throw new DelegationError(
+      agentName,
+      'No API key provided. Pass apiKey in DelegateOptions, or `apiKey: null` when the provider ' +
+        'takes no credential (a local model).',
+    )
   }
   return apiKey
 }

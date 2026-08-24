@@ -15,9 +15,19 @@ on:
       - 'tests/integration/job-backend-postgres-real.test.ts'
       - '.github/workflows/postgres-jobs-ci.yml'
 
+permissions:
+  contents: read
+
+concurrency:
+  group: postgres-jobs-${{ github.ref }}
+  # A cancelled run on an integration branch leaves the commit with no verdict,
+  # which reads the same as a passing one. Only supersede elsewhere.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/develop' }}
+
 jobs:
   postgres-integration:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     env:
       # Ephemeral Postgres service credentials. Default image creds for
@@ -43,12 +53,23 @@ jobs:
           --health-retries 10
 
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          node-version: '22.12.0'
+          persist-credentials: false
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: '.nvmrc'
           cache: pnpm
+          # The cache key must change when the package manager does. setup-node keys the
+          # pnpm store on the lockfile alone, so a pnpm 9 -> 10 bump leaves the key
+          # identical and the job restores a store the new pnpm reads as inconsistent —
+          # `ERR_PNPM_MISSING_PACKAGE_INDEX_FILE`, on a package the lockfile does list.
+          # package.json carries `packageManager`, so including it ties the cache to the
+          # pnpm that wrote it.
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            package.json
       - run: pnpm install --frozen-lockfile
       # dogfood-regressions-fix-plan v1.1 T4.2 — defense in depth.
       # Even Node-pinned workflows benefit: pnpm cache could carry a

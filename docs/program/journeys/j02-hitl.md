@@ -4,9 +4,14 @@ The second of the ten benchmark journeys (`../dx-benchmark.md`). Criteria writte
 implementation exists; a journey whose criteria change after code exists is void and must be re-run
 from scratch.
 
-**Scheduling status:** hold, and the hold shrank on 2026-08-20. `../dx-benchmark.md` § Sequencing
-holds J2 until the authorization ADR lands; ADR 0001's core guarantee has since been implemented and
-verified, and § Current state and blockers below re-measures what that leaves.
+**Scheduling status:** measured on 2026-08-20, and **lost** — see the dated section below. The hold
+`../dx-benchmark.md` § Sequencing placed on this journey was released the same day: ADR 0001's core
+guarantee shipped, § Current state and blockers re-measured what that left, and the measurement then
+ran with criterion 4's failure recorded rather than waited out. It is recorded against the private
+advisory, not in a public issue. **Re-measured the same day**, because the defect that priced the
+loss was fixed (`4411a59be`) — glue lines 62 → 42, concepts 7 → 5, criteria 3 of 5 → 4 of 5, and
+**still lost**, because files touched did not move. Both measurements stand; the second says what
+changed between them.
 
 ## What the journey requires
 
@@ -107,6 +112,1166 @@ silently if unknown — see the current-state note below.
 assertions pass. Cold cache, at least three runs, mean and standard deviation. The human decision
 is scripted, not typed by a person: an unautomated pause would measure typing speed.
 
+## Measured — both sides, metrics 1-3, and the five criteria exercised (2026-08-20)
+
+Everything above is left exactly as it was written, including § Current state and blockers, which was
+measured earlier the same day against the same tree. This section does not repair it; where a run
+contradicts a source read, both stand and the difference is named.
+
+**The criteria did not move** (`../dx-benchmark.md` § Why the protocol comes before the measurement).
+This is the journey the benchmark exists to make hardest to argue with, because it is the one where
+the framework's advantage was expected to be structural rather than incremental — so the rule the
+other five journeys fixed applies here without softening: a criterion satisfied in principle is not
+satisfied, and a metric won on lines that price an unsatisfied criterion is not won.
+
+**Two headlines, and they point in opposite directions.**
+
+The first is that the structural advantage is real and was measured, not asserted: **TheoKit's run
+genuinely pauses and Next.js's does not.** With the gate removed the run terminates in 42-102 ms;
+with the gate in place and a scripted 1000 ms decision it terminates at 1053-1056 ms, three runs each.
+The Next.js run carries its terminal `finish` frame **20 ms** into the gated request, because
+`streamText` does not pause — it completes and returns the approval request, and the human decision
+happens between two independent calls. No amount of application code closes that gap on their side.
+
+The second is that **TheoKit loses this journey on cost, and loses a metric outside the noise bar for
+the first time in the programme.** Files 4 against 2, glue lines 62 against 38, concepts 7 against 6 —
+every one of the three going the other way, with files at exactly the 2x bar
+§ What counts as winning sets. And the criteria are level at 3 of 5 each, failing in opposite halves.
+
+**Neither side ran against a live model, and no criterion grades one.** Both lanes ran end to end
+against a local scripted model; the instrument is described below and is counted on neither side.
+
+### Versions and commits under test
+
+| | |
+| --- | --- |
+| TheoKit | worktree at `98fb281a2` on `workspace`, with `0e9e6dc04` (the #361 fix) confirmed an ancestor. `theokit` 0.49.0, `@theokit/agents` 10.1.0, `@theokit/presenter` 0.7.0, `@theokit/sdk` 4.52.1 (real, not mocked), `zod` 4.4.3, Node 22.22.2 |
+| Next.js | `next@16.3.1`, `ai@7.0.70`, `@ai-sdk/react@4.0.73`, `zod@4.4.3`, Node 22.22.2 — J1's versions, unchanged, and `ai@7.0.70` is still `latest` on npm |
+
+**#361 was confirmed by a run, not by reading this page.** The gated tool crosses once, and the
+approval names the same id the call was announced under:
+
+```json
+{"type":"tool-input-available","toolCallId":"8551ed9e-53bc-4126-9d0c-e0303795f92f","toolName":"send_email","input":{"to":"ops@example.com","subject":"Q3 report","body":"Attached."}}
+{"type":"tool-approval-request","approvalId":"8551ed9e-53bc-4126-9d0c-e0303795f92f","toolCallId":"8551ed9e-53bc-4126-9d0c-e0303795f92f"}
+```
+
+One `tool-input-available`, one id. The two-calls-two-ids defect this journey was warned about is
+gone, and § Current state and blockers' description of the mechanism is otherwise confirmed by run.
+
+### The version-specific facts, confirmed against the source
+
+§ The Next.js side above deferred three questions. All three answers diverge from the supposition,
+and the first divergence is the one that reframes the journey.
+
+| Deferred question | Answer | Read from | Diverged? |
+| --- | --- | --- | --- |
+| Is the omit-`execute` mechanism still the documented one? | **No, and it is no longer a recipe at all.** `ai@7.0.70` ships a first-class approval primitive: `toolApproval` on `streamText`/`generateText`/`ToolLoopAgent`, taking `'user-approval'` per tool. The tool-level `needsApproval` is present and marked `@deprecated`: *"Tool approval is handled on a `generateText` / `streamText` level now"* | `node_modules/@ai-sdk/provider-utils/dist/index.d.ts` (the `Tool` type), `node_modules/ai/dist/index.d.ts` (the `streamText` signature), and https://ai-sdk.dev/docs/agents/tool-approvals | **Yes, materially.** This page's § The Next.js side says an equivalent exists "as a documented recipe rather than a framework primitive". As of `ai@7.0.70` it is a framework primitive, and that distinction — which this page said "is itself part of what this journey measures" — no longer favours us |
+| What is the current name of the client-side function that submits a tool result? | For an approval it is **`addToolApprovalResponse({ id, approved, reason? })`**, on the `Chat` class and surfaced by `useChat`. Separately, `addToolResult` is now `@deprecated` in favour of `addToolOutput` | `node_modules/ai/dist/index.d.ts`, the `Chat` class members and `ChatAddToolApproveResponseFunction` | **Yes** — the prediction assumed the tool-result path; approvals have their own |
+| Does the cookbook address persistence of the pending state across a reload? | **No.** Neither the cookbook entry nor the Tool Approvals page mentions storage, reload or resumption of a pending approval | https://ai-sdk.dev/cookbook/next/human-in-the-loop and https://ai-sdk.dev/docs/agents/tool-approvals | **No** — the prediction was that it might not, and it does not. Per this page's own instruction that is a finding about the recipe, not a licence to build a stronger version here; ours is not durable either (§ Current state and blockers, and J4) |
+
+**A fourth fact nobody deferred, and it is the one that decides criterion 4.** `ai@7.0.70` HMAC-signs
+approval requests. `ToolApprovalRequestOutput` carries an optional `signature` documented as *"HMAC-SHA256
+signature binding this approval request to its tool call"*, enabled by
+`experimental_toolApprovalSecret` on the call — *"the server signs each approval request at issuance
+and verifies the signature when the approval is replayed, preventing client-forged approvals."* The
+SDK also ships named errors for the failure modes — `InvalidToolApprovalSignatureError`,
+`ToolCallNotFoundForApprovalError`, `InvalidToolApprovalError`. Nothing on our side corresponds to any
+of it.
+
+**A fifth fact nobody deferred, and it lands on the baseline rather than on J2.** In `ai@7.0.70`
+`convertToModelMessages` returns `Promise<ModelMessage[]>`. The J1-shaped baseline route does not
+typecheck without `await`, and `next build` fails on it. The `await` was added in **both** rungs of
+the ladder, so it is inside the uncounted baseline and moves no J2 number. The same release nests
+`LanguageModelV4Usage` — `inputTokens` is now `{ total, noCache, cacheRead, cacheWrite }` — which
+matters only to the instrument.
+
+### The baselines, declared
+
+J5's ladder, reused rather than rebuilt: a journey measured from a bare scaffold re-counts work
+another journey already counted, so every rung below J2's own is committed and **uncounted**.
+
+| Step | TheoKit | Next.js |
+| --- | --- | --- |
+| 1 | `create-theokit` default template, copied verbatim with `_gitignore`, `package.json.tmpl` and `README.md.tmpl` renamed exactly as the scaffolder renames them | `create-next-app` (TypeScript, App Router, Tailwind) + `npm install ai @ai-sdk/react zod`, then the quickstart's pre-tools chat stage. J1's declared baseline and its argument for choosing it are not re-litigated here |
+| 2 | J1's diff — the scaffolded `weather.ts` replaced by `order_lookup`, registered on the agent | J1's diff — the `order_lookup` tool, `stopWhen: stepCountIs(5)`, the client's `case 'tool-order_lookup':` branch |
+| 3 | **J2's delta — counted.** `9525421..e4a6aee` | **J2's delta — counted.** `23d4159..f30481d` |
+
+Both throwaway repositories are disposable; the diffs and the counts below are the evidence.
+
+**One formatting control**, unchanged from J1: both sides' diffs are formatted with the
+`create-theokit` template's Prettier config (`packages/create-theokit/templates/default/.prettierrc`
+— `printWidth: 100`, `semi: false`), copied into the Next.js app root so the two sides are counted
+with the same ruler.
+
+**One asymmetry inside the baseline that must be declared before the numbers, because it is the
+largest single favour this measurement does TheoKit.** The scaffold **already ships a gated tool** —
+`.approval('send_notification', { question: 'Send this notification?' })` at
+`packages/create-theokit/templates/default/agents/chat.ts:29`. § The four metrics excludes scaffolder
+output not edited by hand, so had this journey gated *that* tool, the gate line would have been free.
+It does not, because `send_notification` has no side effect outside the process and J2's criteria
+grade the side effect rather than the response body — and this page's own counting rule says that if
+the tool had to change to be gatable, the change is counted. So a new side-effecting tool is
+introduced on **both** sides, symmetrically, and the gate line is charged on both. Judgement 1 below
+carries the number the other way.
+
+### Metrics 1-3
+
+| Metric | TheoKit | Next.js + AI SDK | Better | Ratio | Verdict under § What counts as winning |
+| --- | --- | --- | --- | --- | --- |
+| Files touched | 4 | **2** | Next.js | 2.0x | **Loss** — Next.js is better by exactly the bar, and this is the first metric in the programme to land outside it against us |
+| Glue lines | 62 | **38** | Next.js | 1.63x | **Tie** — inside the bar, and Next.js is the better side |
+| Concepts required | 7 | **6** | Next.js | 1.17x | **Tie** — inside the bar, and Next.js is the better side |
+| Time to first green run | not measured | not measured | — | — | not applicable |
+| Criteria satisfied | 3 of 5 | 3 of 5 | neither | — | not a countable metric, and the most important line |
+
+Added lines: 76 against 46. Files: 4 against 2. The two extra files on our side are the tool's own
+file, which the framework's `agents/tools/` folder convention asks for, and the scaffold's
+`use-transcript.ts`, through which its architecture routes client state. Neither is waste; both are
+cost, and the metric measures cost.
+
+### The two diffs, published
+
+The glue split is the metric most open to being argued after the fact, and a table nobody can check
+is not evidence. Both are `git diff` between the two commits named in the ladder, verbatim. The
+lockfiles are omitted on both sides and the omission is stated; neither side added a dependency.
+
+**TheoKit — `9525421..e4a6aee`, 4 files, 76 added, 3 removed.**
+
+```diff
+diff --git a/agents/chat.ts b/agents/chat.ts
+@@ -4,6 +4,7 @@ import { z } from 'zod'
+ import { BASE_INSTRUCTIONS } from './prompts/instructions.js'
+ import { dailyBriefingSkill } from './skills/daily-briefing.js'
+ import { currentTimeTool } from './tools/current-time.js'
++import { sendEmailTool } from './tools/send-email.js'
+ import { sendNotificationTool } from './tools/send-notification.js'
+ import { orderLookupTool } from './tools/order-lookup.js'
+@@ -25,10 +26,12 @@ export default AgentBuilder.create()
+   .tool(orderLookupTool)
+   .tool(currentTimeTool)
+   .tool(sendNotificationTool)
++  .tool(sendEmailTool)
+   .approval('send_notification', { question: 'Send this notification?' })
++  .approval('send_email', { question: 'Send this email?', timeout: 2_000, onTimeout: 'abort' })
+   .skills([dailyBriefingSkill])
+   .build()
+
+diff --git a/agents/tools/send-email.ts b/agents/tools/send-email.ts
+@@ -0,0 +1,22 @@
++import { tool } from 'theokit/server/define'
++import { z } from 'zod'
++
++export const sendEmailTool = tool('send_email')
++  .describe('Send an email. A gated action — a human approves it before it runs.')
++  .input(
++    z.object({
++      to: z.string().describe('Recipient address.'),
++      subject: z.string().describe('Subject line.'),
++      body: z.string().describe('Message body.'),
++    }),
++  )
++  .execute(async ({ to, subject, body }) => {
++    const res = await fetch('http://localhost:4311/send', {
++      method: 'POST',
++      headers: { 'content-type': 'application/json' },
++      body: JSON.stringify({ to, subject, body }),
++    })
++    const { messageId } = (await res.json()) as { messageId: string }
++    return `Sent to ${to} as ${messageId}`
++  })
++  .build()
+
+diff --git a/app/hooks/use-transcript.ts b/app/hooks/use-transcript.ts
+@@ -1,6 +1,7 @@
+ 'use client'
+
+ import { type UIMessage } from '@theokit/ui'
++import { useEffect, useState } from 'react'
+ import { useAgent } from 'theokit/client'
+@@ -11,6 +12,12 @@ import { GREETING } from '../lib/constants'
++export interface PendingApproval {
++  approvalId: string
++  toolName?: string
++  question?: string
++}
++
+ export interface ChatTranscript {
+@@ -23,10 +30,31 @@ export interface ChatTranscript {
+   reset: () => void
++  /** The HITL decision the run is waiting on, or `undefined`. */
++  pendingApproval: PendingApproval | undefined
++  /** Settle the pending decision. */
++  decide: (approved: boolean) => void
+ }
+
+ export function useChatTranscript(): ChatTranscript {
+-  const { thread, send, status, reset, error } = useAgent<{ message: string }>('/api/agents/chat')
++  const { thread, send, status, reset, error, approve } = useAgent<{ message: string }>(
++    '/api/agents/chat',
++  )
++  const [pendingApproval, setPendingApproval] = useState<PendingApproval | undefined>()
++
++  useEffect(() => {
++    if (status !== 'streaming') {
++      setPendingApproval(undefined)
++      return
++    }
++    const timer = setInterval(() => {
++      void fetch('/api/agents/chat/approvals')
++        .then((res) => res.json() as Promise<{ approvals: PendingApproval[] }>)
++        .then((body) => setPendingApproval(body.approvals[0]))
++    }, 200)
++    return () => clearInterval(timer)
++  }, [status])
++
+   return {
+@@ -35,5 +63,9 @@ export function useChatTranscript(): ChatTranscript {
+     sendMessage: (text) => send({ message: text }),
+     reset,
++    pendingApproval,
++    decide: (approved) => {
++      if (pendingApproval) void approve(pendingApproval.approvalId, { approved })
++    },
+   }
+ }
+
+diff --git a/app/page.tsx b/app/page.tsx
+@@ -21,8 +21,17 @@ import { useChatTranscript } from './hooks/use-transcript'
+ export default function Page() {
+   const [composerValue, setComposerValue] = useState('')
+-  const { thread, isStreaming, hasError, error, onlyGreeting, sendMessage, reset } =
+-    useChatTranscript()
++  const {
++    thread,
++    isStreaming,
++    hasError,
++    error,
++    onlyGreeting,
++    sendMessage,
++    reset,
++    pendingApproval,
++    decide,
++  } = useChatTranscript()
+@@ -45,6 +54,13 @@ export default function Page() {
+         onStarter={handleSubmit}
+       />
++      {pendingApproval && (
++        <div>
++          {pendingApproval.question ?? `Run ${pendingApproval.toolName}?`}
++          <button onClick={() => decide(true)}>Approve</button>
++          <button onClick={() => decide(false)}>Deny</button>
++        </div>
++      )}
+       <Composer
+```
+
+**Next.js + AI SDK — `23d4159..f30481d`, 2 files, 46 added, 1 removed.**
+
+```diff
+diff --git a/app/api/chat/route.ts b/app/api/chat/route.ts
+@@ -15,12 +15,31 @@ export async function POST(req: Request) {
+   const result = streamText({
+     model,
+     stopWhen: stepCountIs(5),
++    toolApproval: { send_email: 'user-approval' },
++    experimental_toolApprovalSecret: process.env.TOOL_APPROVAL_SECRET,
+     tools: {
+       order_lookup: tool({
+         description: 'Look up the shipping reference for an order id.',
+         inputSchema: z.object({ orderId: z.string() }),
+         execute: async ({ orderId }) => SHIPPING_REFERENCES[orderId] ?? 'unknown',
+       }),
++      send_email: tool({
++        description: 'Send an email. A gated action — a human approves it before it runs.',
++        inputSchema: z.object({
++          to: z.string().describe('Recipient address.'),
++          subject: z.string().describe('Subject line.'),
++          body: z.string().describe('Message body.'),
++        }),
++        execute: async ({ to, subject, body }) => {
++          const res = await fetch('http://localhost:4311/send', {
++            method: 'POST',
++            headers: { 'content-type': 'application/json' },
++            body: JSON.stringify({ to, subject, body }),
++          })
++          const { messageId } = (await res.json()) as { messageId: string }
++          return `Sent to ${to} as ${messageId}`
++        },
++      }),
+     },
+     messages: await convertToModelMessages(messages),
+   })
+
+diff --git a/app/page.tsx b/app/page.tsx
+@@ -1,11 +1,14 @@
+ 'use client'
+
+ import { useChat } from '@ai-sdk/react'
++import { lastAssistantMessageIsCompleteWithApprovalResponses } from 'ai'
+ import { useState } from 'react'
+
+ export default function Chat() {
+   const [input, setInput] = useState('')
+-  const { messages, sendMessage } = useChat()
++  const { messages, sendMessage, addToolApprovalResponse } = useChat({
++    sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses,
++  })
+@@ -18,6 +21,29 @@
+                 return <div key={`${message.id}-${i}`}>{part.text}</div>
+               case 'tool-order_lookup':
+                 return <div key={`${message.id}-${i}`}>looked up</div>
++              case 'tool-send_email':
++                if (part.state === 'approval-requested' && !part.approval.isAutomatic) {
++                  return (
++                    <div key={`${message.id}-${i}`}>
++                      Send this email? {JSON.stringify(part.input)}
++                      <button
++                        onClick={() =>
++                          addToolApprovalResponse({ id: part.approval.id, approved: true })
++                        }
++                      >
++                        Approve
++                      </button>
++                      <button
++                        onClick={() =>
++                          addToolApprovalResponse({ id: part.approval.id, approved: false })
++                        }
++                      >
++                        Deny
++                      </button>
++                    </div>
++                  )
++                }
++                return null
+               default:
+                 return null
+```
+
+### The added lines, classified
+
+Business logic on this journey is what § How the four metrics are counted here says it is and nothing
+else: *"the decision **policy** — which tools are gated, and what the timeout does"*, plus the gated
+tool's own body. Everything else is glue, including the client component and the ownership plumbing.
+
+| Class | TheoKit | Next.js + AI SDK |
+| --- | --- | --- |
+| Glue | **62** | **38** |
+| Business logic | 8 | 8 |
+| Comments | 2 | 0 |
+| Blank | 4 | 0 |
+| **Added lines** | **76** | **46** |
+
+**The business logic is 8 on each side and it is the same 8**, which is the check that the tool was
+introduced symmetrically: the gate declaration (`.approval('send_email', …)` against
+`toolApproval: { send_email: 'user-approval' }`) and the seven lines of the `execute` body, which are
+byte-identical apart from indentation.
+
+**TheoKit's 62 glue lines.** `agents/chat.ts` (2): the import and `.tool(sendEmailTool)`.
+`agents/tools/send-email.ts` (14): the two imports, `tool('send_email')`, `.describe(…)`, the six
+lines of `.input(…)` with its schema, the `.execute(` and closing lines, and `.build()`.
+`app/hooks/use-transcript.ts` (28): the React import, the six-line `PendingApproval` interface, the
+two fields on `ChatTranscript`, the three-line `useAgent` destructure and its reflow, the `useState`,
+the twelve-line polling effect, and the four lines returning `pendingApproval` and `decide`.
+`app/page.tsx` (18): the eleven-line destructure and the seven-line prompt.
+
+**Next.js's 38 glue lines.** `route.ts` (11): `experimental_toolApprovalSecret`, and the ten lines of
+tool registration and schema around the body. `page.tsx` (27): the import, the three-line `useChat`
+call with `sendAutomaticallyWhen`, and the twenty-three lines of the `tool-send_email` branch.
+
+**The whole difference is on the client, and it is one number.** Server-side the two sides are within
+a line of each other: 16 glue lines against 11, and the five-line gap is the `agents/tools/` file's
+own imports and terminator. Client-side it is 46 against 27, and the reason is not styling — it is
+that TheoKit's client has no way to learn that a decision is outstanding. That is criterion 1's
+finding and it is priced here.
+
+### The concepts, derived from the diffs
+
+Derived from the imports and APIs each committed diff uses, not from a list written in advance.
+Seven against six.
+
+| # | TheoKit | Next.js + AI SDK |
+| --- | --- | --- |
+| 1 | `tool()` and its builder chain, terminated by `.build()` | `tool()` with `inputSchema` and `execute` |
+| 2 | `.approval(toolName, options)` on `AgentBuilder` | `toolApproval` on `streamText`, and that `'user-approval'` is the status that gates |
+| 3 | `HumanInTheLoopOptions`' `timeout` and `onTimeout`, and that `'abort'` settles as a **denial** rather than an abort (`packages/theo/src/server/agent/approval-registry.ts:22`) | `experimental_toolApprovalSecret`, and that unset means unsigned |
+| 4 | `approve(approvalId, { approved })` on `useAgent` | `addToolApprovalResponse({ id, approved })` on `useChat` |
+| 5 | `GET /api/agents/<name>/approvals` — its path shape and its `{ approvals: [{ approvalId, toolName, question, expiresAt }] }` body | `sendAutomaticallyWhen` with `lastAssistantMessageIsCompleteWithApprovalResponses` — and that without it the run never resumes, because the resume is a second request |
+| 6 | `useState` | the `tool-<name>` part's `state: 'approval-requested'`, and `part.approval.id` / `part.approval.isAutomatic` / `part.input` |
+| 7 | `useEffect`, and the cleanup contract a `setInterval` needs | — |
+
+Rows 5 to 7 are the concept cost of the same defect the glue lines priced. Ours charges the reader
+for an out-of-band endpoint and two React primitives, because the pending decision has to be
+discovered; theirs charges for a part state, because the pending decision is in the message the
+client already holds. Row 3 is the one place ours is charged for something genuinely richer — a
+timeout policy — and § The break this journey was held on shows what that policy currently reports.
+
+### The instrument, and why this journey could be run without credits
+
+J6's instrument, reused with one substitution and one addition, and counted on neither side.
+
+**The model.** `@theokit/sdk` 4.52.1's `provider-catalog.json` carries local profiles with
+`authType: "none"`. J6 used `ollama` on `:11434`; that port was occupied by another process on this
+machine, so this measurement used the sibling profile `lmstudio` — `authType: "none"`,
+`apiMode: "chat_completions"`, `baseUrl: "http://localhost:1234/v1"`, `supportsToolUse: true`. The two
+profiles differ in port and display name and in nothing this journey touches. **A correction to J6's
+instrument note, recorded rather than quietly relied on:** J6 describes the `ollama` profile as
+speaking *"Ollama's own `POST /api/chat` NDJSON protocol"*. The catalog entry is
+`apiMode: "chat_completions"` with `baseUrl` ending `/v1`, i.e. the OpenAI-compatible route. The
+instrument here serves both and logs which is called; only `POST /v1/chat/completions` was ever hit.
+
+**The other side** uses the AI SDK's own `MockLanguageModelV4` driven by `simulateReadableStream`,
+scripted to the same shape, consumed through the `streamText` the measured route calls. J6's trap was
+avoided — `finishReason` is `{ unified, raw }`, not a string — and a new one was found and is recorded
+under the version facts above: `LanguageModelV4Usage` nests its token counts in `ai@7.0.70`.
+
+**The dependency** is a local HTTP recorder on `:4311`, byte-identical for both sides, whose
+append-only log is the oracle for every criterion that grades the side effect. Reading the log back is
+what makes "did the tool run" an artefact outside both frameworks rather than a claim about a response
+body.
+
+**The TheoKit lane** is served by a harness composing the three modules the shipped servers dispatch
+to — `mountAgent` (`packages/theo/src/server/agent/mount-agent.ts:167`), `handleAgentApproval` and
+`handleListApprovals` — with `csrfMode` left at the shipped `strict` default, so the probes must send
+what the shipped `HttpTransport` sends. **The Next.js lane** is a published build: `next build`, then
+`next start`, driven from outside the process. That asymmetry is named again under § Where the
+comparison is not apples to apples.
+
+**Tolerances declared before the grading run**, closing J9's own recorded protocol miss: the control
+is three runs of the same agent with the gate removed, timed to the terminal `finish` frame on the
+client; criterion 1's window is 2x the **maximum** control run; the scripted human delay is 1000 ms
+for the window test and 300 ms elsewhere; the approval window is configured to `timeout: 2_000` so
+criterion 5 is exercisable, and the configured value is recorded here per J6's rule.
+
+### The five criteria, graded against the runs
+
+| # | Criterion | TheoKit | Next.js + AI SDK |
+| --- | --- | --- | --- |
+| 1 | approval-request event carries an id; the run does not complete while the decision is outstanding | **partial** — the pause is real and measured; the event's payload is two ids and nothing else | **partial** — the payload is complete; the run does not pause at all |
+| 2 | approving resumes the same run; the side effect lands after the approval; the answer carries the output | **PASS** | **PASS** |
+| 3 | rejecting does not run it; the side effect is absent; the caller can read a refusal | **PASS** | **PASS** |
+| 4 | the approval id is not sufficient to decide | **FAIL** — a second process, holding nothing, discovered the id and ran the tool | **PASS** — invented id, captured id without signature, and tampered input all refused, side effect absent |
+| 5 | a decision after the timeout is refused by name; the timeout outcome is the documented one | **PASS** | **FAIL** — there is no window, so a signed approval replays and executes |
+| 6-8 | Web, Tauri, TUI | **not exercisable here** — `@theokit/tui` and `@theokit/ui` live outside this repository (`.claude/rules/three-target-parity.md` records the same limit) | **not applicable** — a route handler serves one target |
+
+**Criteria satisfied: 3 of 5 against 3 of 5.** Level, and level for opposite reasons, which is the
+most interesting sentence this journey produces.
+
+**Criterion 1 splits, and each side owns one half.** The pause half is ours and it is measured rather
+than argued: control runs terminate at 102, 42 and 43 ms, so the window is 204 ms; the gated runs with
+a scripted 1000 ms decision terminate at 1056, 1056 and 1053 ms, and the excess over control tracks
+the scripted delay to within 43 ms. Next.js fails the same half outright — the gated request carries
+`start`, `start-step`, `tool-input-available`, `tool-approval-request`, `finish-step`, `finish` and
+completes in **20 ms**. Nothing is withheld. The payload half is theirs: their approval part carries
+the tool name in its own type (`tool-send_email`), the resolved `input`, `isAutomatic` and a
+`signature`; ours carries `approvalId` and `toolCallId` and nothing else, because the wire schema
+declares nothing else (`packages/presenter/src/wire/chunk-schema.ts:85`) even though the producer
+emits the tool name, the question, the input, the callback URL and the timeout
+(`packages/agents/src/bridge/hitl-plugin.ts:89`). This page folded "the approval event carries the
+tool name and the resolved input" into criterion 1's payload deliberately, and on our side that fold
+comes out empty ([#394](https://github.com/usetheokit/theokit/issues/394)).
+
+**Criterion 2 passes on both, on the side effect and on the clock.** Ours: the recorder is empty when
+the approval arrives, the decision is posted at 347 ms, the recorder's entry is stamped 348 ms, and
+`tool-output-available` carries `Sent to ops@example.com as msg_1` at 357 ms. Theirs: empty at the
+approval, decision at 432 ms, recorder entry at 469 ms, part settles `output-available` with
+`approved: true`.
+
+**Criterion 3 passes on both, and the two refusals are not of the same quality.** Both keep the
+recorder empty for the whole life of the run — `[]` at the terminal frame on both sides. Theirs emits
+a **dedicated frame type**, `tool-output-denied`. Ours emits `tool-output-error` whose `errorText` is
+a serialised process result:
+`{"stdout":"","stderr":"Tool 'send_email' denied by human approver: not authorised","exitCode":126}`.
+The refusal is readable and the approver's reason survives, so the criterion holds; a raw `stderr`
+blob reaching the browser is the surface [#390](https://github.com/usetheokit/theokit/issues/390)
+describes, met here rather than sought.
+
+**Criterion 4 is the one this journey was held on, and it fails exactly as § Current state and
+blockers predicted — now demonstrated to the side effect rather than to the status code.** Client A
+opened the run and held it paused. Client B was a **separate OS process** with its own session, given
+nothing but the host and port:
+
+```json
+{"at":32,"kind":"A-sees-approval","detail":{"id":"e82b309f-af18-4057-91c7-0e6e64f6c8b9"}}
+{"at":84,"kind":"B-result","detail":"{\"B_discovered\":\"e82b309f-af18-4057-91c7-0e6e64f6c8b9\",\"B_status\":200,\"B_body\":\"{\\\"resolved\\\":true}\"}"}
+{"at":84,"kind":"tool-part","detail":{"type":"tool-output-available","output":"Sent to ops@example.com as msg_1"}}
+{"at":87,"kind":"side-effects-final","detail":[{"at":1787250748734,"body":{"to":"ops@example.com","subject":"Q3 report","body":"Attached."}}]}
+```
+
+B discovered the id from `GET /api/agents/chat/approvals`, which answered `200` with the id, the tool
+name, the question and the expiry to a caller carrying no credential
+(`packages/theo/src/server/agent/list-approvals-handler.ts:19` filters nothing), then settled it
+through an endpoint whose only controls are CSRF, a path parse and a body-shape check
+(`packages/theo/src/server/agent/approve-agent.ts:89`). **The gated tool ran**, and the recorder holds
+the message. This is a security finding on a path already covered by a private advisory, so it is
+recorded there and not in a public issue; the advisory's own text closed with *"Not exercised: settling
+a real pending approval end to end, which needs a live model provider"*, and this run closes that gap
+without one.
+
+The other side passes, and the reason is architectural rather than diligent: there is no server-side
+pending registry to attack, because the approval travels in the message history the client replays,
+and `experimental_toolApprovalSecret` binds it. Three shots, all refused with the recorder empty — an
+invented id, a captured id posted without its signature, and a captured id whose signature was kept
+while the input was changed to `attacker@example.com`. All three returned
+`{"type":"error","errorText":"An error occurred."}` and ran nothing.
+
+**Criterion 5 goes the other way, and it is the only countable thing on this journey that does.**
+Ours: a decision posted 3.5 s into a 2 s window is refused —
+`{"error":{"code":"NOT_PENDING","message":"No pending approval for id '11d35819-…'."}}` — and the
+outcome the run applied is the documented `onTimeout` default. Theirs: there is no window at all, so
+nothing is ever refused for arriving late; the fourth shot of the forge probe replayed an
+intact signed approval from a **different session** and the tool executed, recorder entry and all.
+Neither the cookbook nor the Tool Approvals page names an expiry. That is a real gap on their side and
+it is the mirror of ours: we have a window and misreport its expiry, they report nothing because there
+is nothing to report.
+
+**Ours passes criterion 5 and fails the fifth metric on the same behaviour**, which is why the two are
+graded in different places; see the next section.
+
+### The break this journey was held on, reproduced
+
+§ The deliberately broken state names J2's break as **absent approval** — the decision never arrives —
+and says the worst outcome is not an unhelpful message but a tool that runs anyway. The tool does not
+run anyway; the recorder is empty. What happens instead is the other failure this repository has now
+found five times.
+
+| | |
+| --- | --- |
+| The message § The deliberately broken state asks for | `approval "ap_9f2" for tool "sendEmail" expired after 300s with no decision; the run was aborted. Decide within the window, or raise timeoutMs on the tool's approval options.` |
+| The message the run produces | `Tool 'send_email' denied by human approver` |
+| The message an explicit **Deny with no reason** produces | `Tool 'send_email' denied by human approver` |
+
+Byte-identical. Both arrive as `tool-output-error` with `exitCode: 126`, and the terminal `finish`
+frame carries only usage and a duration, so nothing later disambiguates them.
+
+**Metric 5 is therefore a FAIL on our side, and it fails one step worse than "does not name the
+action": it names a different one.** Nobody denied anything. The registry knows it timed out, knows
+the configured `onTimeout`, and knows `expiresAt`; none of it survives
+`settle({ approved: opts.onTimeout === 'proceed' })`
+(`packages/theo/src/server/agent/approval-registry.ts:111`), and the plugin then writes
+``let message = `Tool '${c.name}' denied by human approver` ``
+(`packages/agents/src/bridge/hitl-plugin.ts:106`). A third configuration collapses into the same
+sentence: `onTimeout: 'retry'` is also a denial, as the registry's own comment says
+(`packages/theo/src/server/agent/approval-registry.ts:22`).
+
+This is the fifth instance of the family after #379, #384, #382 and #388, and the ADR proposed for it
+now exists (`../../adr/0002-an-abnormal-ending-is-never-reported-as-normal.md`). Filed as
+[#393](https://github.com/usetheokit/theokit/issues/393).
+
+**On the Next.js side the break does not exist to be handled**, because there is no window to expire.
+Per J5's rule the honest entry is *"no path"*, and it is **not** a pass: the reason they cannot report
+an expiry badly is the same reason they fail criterion 1's pause half and criterion 5 outright.
+
+### Counting judgements, stated rather than buried
+
+Seven, each with the effect of deciding it the other way. **Two of them change which side wins a
+metric, and neither inversion produces a TheoKit win** — the strongest of them only converts a loss
+into a tie.
+
+| # | The judgement | Decided as | The other way |
+| --- | --- | --- | --- |
+| 1 | The scaffold already gates a tool. Should the journey have gated `send_notification` and taken the gate for free? | **No.** Its handler returns a string and touches nothing outside the process, and J2's criteria grade the side effect. This page's own rule says a tool that had to change to be gatable is counted, so the change would have been charged anyway | TheoKit files 4 to **3** and glue 62 to **60**, if the tool file disappears entirely. Files then 3 against 2 — 1.5x, inside the bar, so metric 1 becomes a **tie** rather than a loss. This is the single most consequential judgement in the count and it is the one most favourable to us |
+| 2 | Is the tool's own file forced, or chosen? The Next.js side declares its tool inline inside `streamText` | **Forced enough to count.** The scaffold's `agents/tools/` convention is what J1 was charged a concept for knowing, and every scaffolded tool lives in its own file. Declaring it inline in `chat.ts` is possible and is not what the framework asks for | TheoKit files 4 to **3**, glue unchanged (the lines move, they do not vanish). Files 3 against 2 — 1.5x, metric 1 a **tie** |
+| 3 | Is `app/hooks/use-transcript.ts` J2's cost or the scaffold's? The Next.js page calls `useChat` directly and pays no such hop | **J2's cost.** The scaffold routes all client state through that hook; bypassing it to call `useAgent` in `page.tsx` would move the same lines and break the architecture the scaffold ships | TheoKit files 4 to **3** and glue roughly unchanged. Same effect as judgement 2 — metric 1 a **tie** — and it cannot be combined with judgement 2, since the two describe different files |
+| 4 | Is `.approval('send_email', { … })` glue or business logic? | **Business logic**, and not by preference — § How the four metrics are counted here fixed it before either implementation existed: *"the decision policy — which tools are gated, and what the timeout does"* | Both sides move together: TheoKit glue 63, Next.js 39. Ratio 1.62x. No effect on the comparison |
+| 5 | Does `experimental_toolApprovalSecret` belong to J2 on the Next.js side, given nothing on ours corresponds to it? | **Counted as glue on their side.** It is what criterion 4 passes on, and this page's rule says the ownership check is glue *"even though it is security-relevant"* — the metric measures cost, and a check the framework should have supplied costs lines on whichever side writes it | Next.js glue 38 to **37**. Ratio 1.68x, still a tie, still their metric |
+| 6 | The eleven-line destructure in `page.tsx` is a reflow the 100-column printer forced by adding two fields | **Counted as `numstat` reports it**, per J3's judgement 2 | Counting substance rather than lines gives 9 for that hunk: TheoKit glue 62 to **60**. Ratio 1.58x, still a tie |
+| 7 | Is the polling effect the *shortest correct* client, or a strawman? An application could pass `part.toolCallId` to `approve()`, since #361 usually makes the two ids equal | **The polling effect is counted.** "Usually" is the correlation module's own word: *"Which id wins is decided by which side reached the wire first, not by a preference"* (`packages/agents/src/bridge/hitl-call-correlation.ts`). Building on a documented race is not a path, and the store gives no way to tell a paused tool from a running one either. **This half is a source read** — I did not force the other ordering | If the shortcut were counted as legitimate, TheoKit's client drops the twelve-line effect and the endpoint concept: glue 62 to **50**, concepts 7 to **6**. Ratio 1.32x and 1.0x — both still ties, and files unmoved, so metric 1 is still a loss |
+
+**Judgements 1, 2 and 3 all point at the same soft spot and none of them rescues the journey.** Any one
+of them decided the other way turns metric 1 from a loss into a tie; none turns it into a win, and
+none touches glue lines or concepts, where Next.js also leads. That is stated because it is the check
+that matters: a margin a single decision can flip is not a margin, and here no single decision — nor
+all three together — produces a TheoKit win on anything.
+
+### The verdict
+
+**J2 is lost, and it is the first journey in the programme where a countable metric goes against
+TheoKit outside the noise bar.**
+
+- **Files touched: Next.js, 2 against 4 — 2.0x, outside the bar.** A loss, not a tie.
+- **Glue lines: Next.js, 38 against 62 — 1.63x.** A tie by the bar, with Next.js the better side.
+- **Concepts required: Next.js, 6 against 7 — 1.17x.** A tie by the bar, with Next.js the better side.
+- **Criteria satisfied: 3 of 5 each.** Level.
+
+The claim under test is that building this costs less in TheoKit. On this journey it costs more, on
+every metric that was counted, and the thing that costs more is not the pause — the pause is one line
+on each side — but the client that has to find out the pause happened.
+
+**And the journey the framework loses on cost is the one it wins on capability, which is the sentence
+this page has to hold in one piece.** The pause is real: measured against a control, our run withholds
+its terminal frame for as long as the human takes, and theirs cannot, because `streamText` returns
+rather than waits. That is a genuine architectural difference and no application code closes it. It is
+also worth **zero** on this benchmark's three metrics, because a capability that costs the same number
+of lines as its absence is free to declare and free to skip.
+
+**What actually decided the numbers was neither side's approval design.** It was that the AI SDK puts
+the pending decision in the message the client already holds, and TheoKit drops it before the client
+sees it. `readMessageStream` returns `false` for `tool-approval-request` by design
+(`packages/presenter/src/wire/read-message-stream.ts:207`), so the store's snapshot has four keys —
+`messages`, `thread`, `status`, `error` — and none of them is the id that the store's own
+`approve(approvalId, …)` requires (`packages/agents/src/client/use-agent.ts:41`). Observed, not read:
+while the decision was outstanding, the paused tool sat in `state: 'input-available'`, which is what an
+**ungated** tool looks like while it runs. Every extra line and every extra concept on our side is
+downstream of that ([#392](https://github.com/usetheokit/theokit/issues/392)).
+
+**Two of the five journeys measured before this one produced their largest margins on code that did not
+work.** This one produces its margins against us on code that does, on both sides, and that is the more
+useful result: there is nothing here to discount.
+
+### Where the comparison is not apples to apples
+
+Named rather than adjusted for, because adjusting a count until it evens out is what the protocol
+forbids.
+
+- **The Next.js lane ran as a published build (`next build` + `next start`); the TheoKit lane ran
+  through a harness composing `mountAgent`, `handleAgentApproval` and `handleListApprovals`.** Those
+  are the modules the shipped dev and prod servers dispatch to
+  (`packages/theo/src/cli/commands/start/handlers.ts:246`,
+  `packages/theo/src/vite-plugin/agent-middleware.ts:83`) and CSRF was left at the shipped default, but
+  it is not `theokit start`, and J9 recorded the same asymmetry the same way.
+- **The client was exercised as a store, not as a rendered surface.** Both sides' `page.tsx` were
+  written, typechecked on the Next.js side by `next build`, and their logic was driven through the
+  underlying client objects — `AgentClient` on ours, `Chat` on theirs. No browser was opened. The
+  criteria's oracle is the event stream and the side effect, not the pixels, so this does not move a
+  grade; it does mean neither prompt was seen by a human.
+- **Only the Web target was measured, on both sides.** Criteria 7 and 8 ask specifically whether the
+  Tauri and TUI paths reuse the same seam and the same ownership check, and those packages live outside
+  this repository. A route handler serves one target, so the Next.js side cannot lose that dimension —
+  the comparison silently gives it away.
+- **The TheoKit tool's file is charged to J2 and the Next.js tool's lines are not**, because one side's
+  convention is a file and the other's is an object literal. Judgement 2 carries the number.
+- **The approval window was configured to 2 s** so criterion 5 could be exercised in a run rather than
+  waited out; the shipped default is 300 s
+  (`packages/theo/src/server/agent/build-agent-streamer.ts:38`). Nothing about the timeout's *reporting*
+  depends on the value.
+
+### What is still unmeasured, and why
+
+- **Metric 4, time to first green run, on both sides.** It needs at least three cold-cache runs per side
+  from the create command, and the figure is only meaningful measured identically on each — so it is
+  recorded as not measured rather than estimated.
+- **Criteria 6 to 8, the three-target obligation.** Not exercisable in this repository; what settles
+  them is the north-star app, which does not exist.
+- **Durability across a reload or a second instance**, on either side. Ours is a process-local map by an
+  explicit YAGNI decision; theirs is the client's message array and the cookbook does not mention
+  reloads. Both fail for their own reasons and no criterion here grades it — J4 owns that boundary.
+- **Whether the `toolCallId`/`approvalId` correlation can be forced to disagree.** Judgement 7 depends
+  on the correlation module's own statement that the ordering is a race; I did not construct the losing
+  ordering, and the judgement is labelled a source read because of it.
+- **`docs/program/evidence/j2-hitl/` still does not exist.** § Evidence requires both implementations to
+  be committed under it. The diffs and the counts are published here instead, which satisfies the
+  checkability the clause exists for and does not satisfy the clause. Recorded again as an open gap
+  rather than resolved by editing the protocol to match what was done — now for the sixth document.
+- **J9's open gap against its own instruction is now closable, and this section is the notice.** J9
+  pre-committed to counting hand-written HITL span lines on the Next.js side and deliberately did not,
+  because *"neither baseline has an approval flow at all"* and building one on one side alone would
+  compare an implemented feature against an absent one. Both sides now have an approval flow, measured
+  and published above, so that reason has expired.
+
+### Three issues and one advisory update from this measurement
+
+- [#392](https://github.com/usetheokit/theokit/issues/392) — `useAgent` exposes `approve(approvalId)`
+  and no way to obtain the `approvalId`; the store drops `tool-approval-request` and a paused gated
+  tool is indistinguishable from a running one. This is the defect the glue-line and concept gaps
+  price.
+- [#393](https://github.com/usetheokit/theokit/issues/393) — a HITL approval that expires is reported
+  as `denied by human approver`, byte-identical to a human pressing Deny. The fifth instance of the
+  #379/#384/#382/#388 family, and the metric-5 failure above.
+- [#394](https://github.com/usetheokit/theokit/issues/394) — the `tool-approval-request` chunk carries
+  only two ids; the tool name, question and input the producer emits are dropped at the wire schema.
+  This is criterion 1's payload half.
+- **GHSA-g94h-459g-rjhj** — updated, not re-filed. Criterion 4's failure is a security finding on a
+  path already under a private advisory, so the end-to-end reproduction is attached there. It closes
+  the advisory's own labelled gap: the earlier report could only infer that an unauthenticated caller
+  would reach `200 {"resolved":true}`; this run reached it, and the gated tool executed.
+
+## Re-measured — TheoKit side, after the pending approval reached the client (2026-08-20)
+
+**The same journey, the same criteria, a different TheoKit.** The measurement above lost this journey
+and named its cause in one sentence: the client store dropped the approval chunk, so an application
+holding `useAgent` got `approve(approvalId, …)` and no way to obtain the id, and paid twelve lines of
+`setInterval` against an unauthenticated listing endpoint to find one. Hours later that was fixed —
+`4411a59be`, closing [#392](https://github.com/usetheokit/theokit/issues/392) and
+[#394](https://github.com/usetheokit/theokit/issues/394) — and this section re-runs the TheoKit half
+against it.
+
+Everything above is left exactly as it was written, including its verdict. It records what was true
+when it was written; where a number here contradicts one there, both stand and the difference is
+named. **The criteria did not move** (`../dx-benchmark.md` § Why the protocol comes before the
+measurement): the target is the same, the framework is not.
+
+**The Next.js side is not re-measured and not re-argued.** Nothing on it changed, its numbers are
+reused verbatim from § Metrics 1-3 above, and re-deriving a published count to fit a new comparison
+is precisely what publishing the diffs was meant to make impossible.
+
+**The headline, stated before the tables so it cannot be assembled out of them: J2 is still lost.**
+Files touched are still 4 against 2 — 2.0x, exactly the bar § What counts as winning sets — so
+metric 1 is a loss for the second time, and a journey is won on three metrics, not two. What the fix
+bought is real and smaller than a verdict: glue lines fall from 62 to **42**, concepts from 7 to
+**5**, and the framework satisfies **four** of the five criteria instead of three.
+
+### What changed in the framework
+
+| | Before `4411a59be` | After |
+| --- | --- | --- |
+| `readMessageStream` on a `tool-approval-request` | returned `false` — the frame was dropped, and the paused tool sat in `state: 'input-available'`, byte-identical to an ungated tool while it runs | folds the gate into the tool part it names: `state: 'approval-requested'` with the id under `approval.id` (`packages/presenter/src/wire/read-message-stream.ts:243`) |
+| The store's snapshot | four keys — `messages`, `thread`, `status`, `error` — none of them the id `approve()` requires | a fifth, `pendingApprovals`, **derived** from the current turn's parts on every emit (`packages/agents/src/client/agent-client.ts:133`, applied at `:298`) |
+| What the client can name | nothing: an out-of-band `GET /api/agents/<name>/approvals` was the only path to the id | `approvalId`, `toolCallId`, `toolName`, the resolved `input`, the declared `question` and the window, on one object (`packages/agents/src/client/agent-client.ts:88`) |
+| `useAgent`'s return | `approve` with no id source | `pendingApprovals` next to it (`packages/agents/src/client/use-agent.ts:61`), and the type is public on the entry point the scaffold imports (`packages/theo/src/client/index.ts:36`) |
+| The question and the window on the wire | emitted by the producer, dropped at the wire schema | a transient `data-approval` part emitted immediately before the gate (`packages/agents/src/bridge/present-ui-message-stream.ts:227`, named once at `packages/presenter/src/wire/chunk-schema.ts:198`) |
+| `approve(approvalId, decision)` | unchanged | unchanged — the signature was never what was missing |
+
+**#394 was not closed the way it was filed, and the difference is load-bearing for criterion 1.** The
+issue asked for the `tool-approval-request` frame to be widened with the tool name, the question and
+the input. It was not widened: `ai`'s `uiMessageChunkSchema` is strict, so a key added to a shared
+variant does not degrade an ai-sdk client's prompt — it deletes the frame for that client and
+re-creates #392's symptom on the other side of the wire. Instead the tool name and input are read off
+the `tool-input-available` frame the producer already emits under the same call id, and the question
+and window travel as a `data-approval` part. Both readers fold the three frames into **one part**.
+That is the same construction the AI SDK uses, and grading it differently on the two sides would be
+choosing a standard by its result — judgement 8 below states the strict reading and prices it.
+
+### The wire, captured
+
+The three frames a gated call now produces, from a real request against the harness, verbatim:
+
+```json
+{"type":"tool-input-available","toolCallId":"cda91848-ac9e-4e38-b209-c44c5bf51068","toolName":"send_email","input":{"to":"ops@example.com","subject":"Q3 report","body":"Attached."},"dynamic":true}
+{"type":"data-approval","data":{"approvalId":"cda91848-ac9e-4e38-b209-c44c5bf51068","question":"Send this email?","timeoutMs":2000},"transient":true}
+{"type":"tool-approval-request","approvalId":"cda91848-ac9e-4e38-b209-c44c5bf51068","toolCallId":"cda91848-ac9e-4e38-b209-c44c5bf51068"}
+```
+
+And the part the store reconstructs from them, read out of `getSnapshot()` while the human had not
+decided — this is what `pendingApprovals` is derived from:
+
+```json
+{"type":"dynamic-tool","toolName":"send_email","toolCallId":"8cc79e07-…","state":"approval-requested",
+ "input":{"to":"ops@example.com","subject":"Q3 report","body":"Attached."},
+ "approval":{"id":"8cc79e07-…","question":"Send this email?","timeoutMs":2000}}
+```
+
+**The array empties in the same emit that fills in the output**, observed rather than assumed:
+`pendingApprovals.length` goes 0 → 1 when the gate opens and 1 → 0 on the tick the part settles to
+`output-available` (approve run) or `output-error` (deny run). A prompt built on it cannot linger
+after the gate is gone.
+
+**One observation recorded rather than filed.** The part's type is `dynamic-tool`, not
+`tool-send_email`, because the synthesised input chunk carries `dynamic: true`
+(`packages/agents/src/bridge/present-ui-message-stream.ts:214`). Nothing in this journey reads the
+part type — the measured client reads `pendingApprovals` — so no criterion and no count moves on it.
+It is named because a client written to the ai-sdk idiom (`case 'tool-send_email':`, which is what
+this journey's Next.js side does) would not match, and that is worth knowing before someone meets it
+in another journey. It is not filed because it is a consequence of a documented design decision
+rather than a defect this run can demonstrate.
+
+### The ladder, and what was rebuilt
+
+The rungs are the ones § The baselines, declared fixed. The throwaway TheoKit repository was rebuilt
+from the scaffold rather than patched, so the count comes from a `git diff --numstat` over a diff
+produced for this section:
+
+| Step | TheoKit |
+| --- | --- |
+| 1 | `create-theokit` default template, copied verbatim with `_gitignore`, `package.json.tmpl` and `README.md.tmpl` renamed exactly as the scaffolder renames them — committed untouched |
+| 2 | J1's diff — the scaffolded `weather.ts` replaced by `order_lookup`, registered on the agent — committed |
+| 3 | **J2's delta — counted.** 4 files, 53 added, 4 removed |
+
+The formatting control is unchanged: the diff is formatted with the template's own Prettier config
+(`packages/create-theokit/templates/default/.prettierrc` — `printWidth: 100`, `semi: false`), the
+same ruler both sides were counted with. The Next.js repository was not rebuilt and its diff is not
+re-run.
+
+### The new diff, published
+
+`agents/chat.ts` and `agents/tools/send-email.ts` are byte-identical to the measurement above. Only
+the client changed, and the whole change is that nothing has to be discovered.
+
+```diff
+diff --git a/agents/chat.ts b/agents/chat.ts
+@@ -4,6 +4,7 @@ import { z } from 'zod'
+ import { BASE_INSTRUCTIONS } from './prompts/instructions.js'
+ import { dailyBriefingSkill } from './skills/daily-briefing.js'
+ import { currentTimeTool } from './tools/current-time.js'
++import { sendEmailTool } from './tools/send-email.js'
+ import { sendNotificationTool } from './tools/send-notification.js'
+ import { orderLookupTool } from './tools/order-lookup.js'
+@@ -25,10 +26,12 @@ export default AgentBuilder.create()
+   .tool(orderLookupTool)
+   .tool(currentTimeTool)
+   .tool(sendNotificationTool)
++  .tool(sendEmailTool)
+   .approval('send_notification', { question: 'Send this notification?' })
++  .approval('send_email', { question: 'Send this email?', timeout: 2_000, onTimeout: 'abort' })
+   .skills([dailyBriefingSkill])
+   .build()
+
+diff --git a/agents/tools/send-email.ts b/agents/tools/send-email.ts
+@@ -0,0 +1,22 @@
++import { tool } from 'theokit/server/define'
++import { z } from 'zod'
++
++export const sendEmailTool = tool('send_email')
++  .describe('Send an email. A gated action — a human approves it before it runs.')
++  .input(
++    z.object({
++      to: z.string().describe('Recipient address.'),
++      subject: z.string().describe('Subject line.'),
++      body: z.string().describe('Message body.'),
++    }),
++  )
++  .execute(async ({ to, subject, body }) => {
++    const res = await fetch('http://localhost:4311/send', {
++      method: 'POST',
++      headers: { 'content-type': 'application/json' },
++      body: JSON.stringify({ to, subject, body }),
++    })
++    const { messageId } = (await res.json()) as { messageId: string }
++    return `Sent to ${to} as ${messageId}`
++  })
++  .build()
+
+diff --git a/app/hooks/use-transcript.ts b/app/hooks/use-transcript.ts
+@@ -4 +4 @@ import { type UIMessage } from '@theokit/ui'
+-import { useAgent } from 'theokit/client'
++import { type PendingApproval, useAgent } from 'theokit/client'
+@@ -25,0 +26,4 @@ export interface ChatTranscript {
++  /** The HITL decisions the run is waiting on. */
++  pendingApprovals: PendingApproval[]
++  /** Settle a pending decision. */
++  approve: (approvalId: string, decision: { approved: boolean }) => Promise<void>
+@@ -29 +33,3 @@ export function useChatTranscript(): ChatTranscript {
+-  const { thread, send, status, reset, error } = useAgent<{ message: string }>('/api/agents/chat')
++  const { thread, send, status, reset, error, pendingApprovals, approve } = useAgent<{
++    message: string
++  }>('/api/agents/chat')
+@@ -37,0 +44,2 @@ export function useChatTranscript(): ChatTranscript {
++    pendingApprovals,
++    approve,
+
+diff --git a/app/page.tsx b/app/page.tsx
+@@ -24,2 +24,11 @@ export default function Page() {
+-  const { thread, isStreaming, hasError, error, onlyGreeting, sendMessage, reset } =
+-    useChatTranscript()
++  const {
++    thread,
++    isStreaming,
++    hasError,
++    error,
++    onlyGreeting,
++    sendMessage,
++    reset,
++    pendingApprovals,
++    approve,
++  } = useChatTranscript()
+@@ -47,0 +57,7 @@ export default function Page() {
++      {pendingApprovals.map((a) => (
++        <div key={a.approvalId}>
++          {a.question ?? `Run ${a.toolName}?`}
++          <button onClick={() => void approve(a.approvalId, { approved: true })}>Approve</button>
++          <button onClick={() => void approve(a.approvalId, { approved: false })}>Deny</button>
++        </div>
++      ))}
+```
+
+**The hook is now a pass-through**: it forwards `pendingApprovals` and `approve` and projects
+nothing, because there is nothing left to project. Judgement 9 states why that shape is the one
+counted and what the alternative costs.
+
+### The 53 added lines, classified
+
+The rule is the one § How the four metrics are counted here fixed before either implementation
+existed, applied unchanged.
+
+| Class | TheoKit (re-measured) | TheoKit (first) | Next.js + AI SDK (unchanged) |
+| --- | --- | --- | --- |
+| Glue | **42** | 62 | **38** |
+| Business logic | 8 | 8 | 8 |
+| Comments | 2 | 2 | 0 |
+| Blank | 1 | 4 | 0 |
+| **Added lines** | **53** | 76 | **46** |
+
+**TheoKit's 42 glue lines.** `agents/chat.ts` (2): the import and `.tool(sendEmailTool)`.
+`agents/tools/send-email.ts` (14): the two imports, `tool('send_email')`, `.describe(…)`, the seven
+lines of `.input(…)` with its schema and its closing paren, the `.execute(` and closing lines, and
+`.build()`. `app/hooks/use-transcript.ts` (**8**, was 28): the modified `theokit/client` import, the
+two fields on `ChatTranscript`, the three-line `useAgent` destructure the 100-column printer forces,
+and the two lines forwarding `pendingApprovals` and `approve`. `app/page.tsx` (18): the eleven-line
+destructure and the seven-line prompt.
+
+**The business logic is the same 8 it was**, on both sides: the gate declaration and the seven lines
+of the `execute` body.
+
+**The whole difference was one number, and the number crossed over.** The first measurement's
+sharpest sentence was that server-side the two sides were within a line of each other — 16 glue
+against 11 — and client-side it was 46 against 27. Server-side is unchanged at 16 against 11.
+Client-side is now **26 against 27**: after the fix, the TheoKit client that renders a HITL decision
+is one line *shorter* than the AI SDK one. The 4-line gap that remains is a 5-line server-side
+deficit — the `agents/tools/` file's own imports and terminator, which judgement 2 carries — minus
+that one line back on the client.
+
+### Metrics 1-3, re-counted
+
+| Metric | TheoKit (re-measured) | How it was counted |
+| --- | --- | --- |
+| Files touched | **4** | unchanged — `agents/chat.ts` edited, `agents/tools/send-email.ts` added, `app/hooks/use-transcript.ts` edited, `app/page.tsx` edited. The fix removes lines from a file the diff already touches, which is exactly why it moves nothing here |
+| Glue lines | **42** | of 53 added lines; 8 are business logic, 2 comments, 1 blank |
+| Concepts required | **5** | see the table below |
+| Time to first green run | **not measured** | unchanged, and unchanged in its reason |
+
+### The concepts, re-derived from the diff
+
+Derived from the imports and APIs the committed diff uses, not from the previous list edited down.
+Five against six, and the direction is new.
+
+| # | TheoKit (re-measured) | Next.js + AI SDK (unchanged) |
+| --- | --- | --- |
+| 1 | `tool()` and its builder chain, terminated by `.build()` | `tool()` with `inputSchema` and `execute` |
+| 2 | `.approval(toolName, options)` on `AgentBuilder` | `toolApproval` on `streamText`, and that `'user-approval'` is the status that gates |
+| 3 | `HumanInTheLoopOptions`' `timeout` and `onTimeout`, and that `'abort'` settles as a **denial** rather than an abort (`packages/theo/src/server/agent/approval-registry.ts:22`) | `experimental_toolApprovalSecret`, and that unset means unsigned |
+| 4 | `approve(approvalId, { approved })` on `useAgent` | `addToolApprovalResponse({ id, approved })` on `useChat` |
+| 5 | `pendingApprovals` on `useAgent` and the `PendingApproval` shape it publishes — `approvalId`, `toolName`, `input`, `question` | `sendAutomaticallyWhen` with `lastAssistantMessageIsCompleteWithApprovalResponses` — and that without it the run never resumes, because the resume is a second request |
+| 6 | — | the `tool-<name>` part's `state: 'approval-requested'`, and `part.approval.id` / `part.approval.isAutomatic` / `part.input` |
+
+**Three concepts were retired and one added.** Gone: the `GET /api/agents/<name>/approvals` endpoint
+with its path shape and body, `useState`, and `useEffect` with the cleanup contract a `setInterval`
+needs. Added: `pendingApprovals` and the shape it hands over, counted as **one** concept for the same
+reason their row 6 bundles a part state with three field reads — one thing a reader has to learn,
+looked up in one place.
+
+**The reversal is worth naming rather than banking.** TheoKit now leads concepts 5 to 6 where it
+trailed 7 to 6, and 1.2x is inside the noise bar, so the row is a tie either way. The lead exists
+because three names stopped being necessary, not because a name got better.
+
+### Before and after, on one table
+
+| Metric | First measurement | Re-measurement | Next.js (unchanged) | Moved | Verdict now |
+| --- | --- | --- | --- | --- | --- |
+| Files touched | 4 | **4** | **2** | no | **Loss** — 2.0x, on the bar, for the second time |
+| Glue lines | 62 | **42** | **38** | **yes**, −20 | **Tie** — 1.11x, and Next.js is still the better side |
+| Concepts required | 7 | **5** | 6 | **yes**, −2 | **Tie** — 1.2x, and TheoKit is now the better side |
+| Criteria satisfied | 3 of 5 | **4 of 5** | 3 of 5 | **yes**, +1 | not a countable metric, and the most important line |
+
+**Gaining the capability cost nothing on this journey**, which is the opposite of what J5's
+re-measurement recorded and is worth saying in the same breath as it. There, shipping a missing
+capability spent the only metric the framework led, because a ceiling nobody can declare is also a
+name nobody has to learn. Here the missing thing was not something to declare but something to
+*find*, and the cost of finding it was carried entirely by the application. Removing it removed
+twenty glue lines and two concepts and added none. The trade was free because the defect was pure
+overhead — and the journey is still lost, which is the part no table can soften.
+
+### The five criteria, re-graded against the runs
+
+Every row below was exercised end to end against a local scripted model and a real HTTP recorder;
+none is a source read. The instrument is unchanged from the first measurement and is described again
+below.
+
+| # | Criterion | First measurement | Now | Next.js (unchanged) |
+| --- | --- | --- | --- | --- |
+| 1 | approval-request event carries an id; the run does not complete while the decision is outstanding | **partial** — the pause was real; the payload was two ids | **PASS** — the pause is measured again, and the payload half now holds by the same reading applied to their side | **partial** — payload complete, no pause at all |
+| 2 | approving resumes the same run; the side effect lands after the approval; the answer carries the output | PASS | **PASS** | PASS |
+| 3 | rejecting does not run it; the side effect is absent; the caller can read a refusal | PASS | **PASS** | PASS |
+| 4 | the approval id is not sufficient to decide | FAIL | **FAIL — reproduced, unchanged** | PASS |
+| 5 | a decision after the timeout is refused by name; the timeout outcome is the documented one | PASS | **PASS** | FAIL |
+| 6-8 | Web, Tauri, TUI | not exercisable here | **unchanged** — `@theokit/tui` and `@theokit/ui` live outside this repository | not applicable |
+
+**Criteria satisfied: 4 of 5 against 3 of 5.** The first time on this journey the framework leads
+that row, and the row is not a countable metric.
+
+**Criterion 1's pause half, measured again against a control.** Three runs of the same agent with the
+gate removed terminate at **132, 116 and 101 ms** on the client's own clock, so the window is
+2 × 132 = **264 ms**. Three gated runs with a scripted 1000 ms decision terminate at **1165, 1107 and
+1122 ms** — every one far beyond the window, with the excess over the slowest control tracking the
+scripted delay. Next.js fails this half exactly as recorded above: `streamText` returns rather than
+waits, and its terminal `finish` frame arrives 20 ms into the gated request.
+
+**Criterion 1's payload half, and why it now holds.** The clause being graded is the one
+§ Acceptance criteria folded into criterion 1 rather than claiming separately: *the approval event
+carries the tool name and the resolved input*. The counted client's prompt now reads
+`question: "Send this email?"`, `toolName: "send_email"` and the full resolved `input` off a single
+object the framework hands it, with no second request. It reads them off a **part** assembled from
+three frames, not off the approval frame alone — which is exactly how the published grading of the
+Next.js side reached its pass, because `ai`'s approval frame carries `id`, `isAutomatic` and
+`signature` and gets `input` from the tool-input frames the same way. Judgement 8 states the strict
+reading and what it costs.
+
+**Criterion 2 passes on the side effect and on the clock.** The recorder is empty when the prompt
+renders (`[]` at 528 ms), the decision is posted at 806 ms, the recorder's entry is stamped 854 ms,
+the part settles `output-available` carrying `Sent to ops@example.com as msg_1` at 908 ms, and the
+final answer reads `Done: Sent to ops@example.com as msg_1` — the tool's own output, in the answer.
+
+**Criterion 3 passes, and the refusal is of the same quality it was.** The recorder is `[]` at the
+terminal frame. The refusal still arrives as `tool-output-error` whose `errorText` is a serialised
+process result —
+`{"stdout":"","stderr":"Tool 'send_email' denied by human approver","exitCode":126}` — so the raw
+`stderr` blob reaching the browser that [#390](https://github.com/usetheokit/theokit/issues/390)
+describes is met here again, unchanged. The criterion holds because the refusal is readable; the
+surface is still the wrong one.
+
+**Criterion 4 fails, reproduced to the side effect, and nothing in `4411a59be` touches it.** Client A
+opened the run and held it paused, on a harness whose approval window was widened to 30 s so the test
+measures authorization rather than the clock. Client B was a separate OS process with its own
+session, given nothing but the host and port:
+
+```
+B: GET /api/agents/chat/approvals
+   200 {"approvals":[{"approvalId":"dd51371d-…","toolName":"send_email","question":"Send this email?","expiresAt":1787256500265}]}
+B: POST /api/agents/chat/approve/dd51371d-…  {"approved":true}
+   200 {"resolved":true}
+A: tool-part → output-available "Sent to ops@example.com as msg_1"
+A: side-effects-final [{"body":{"to":"ops@example.com","subject":"Q3 report","body":"Attached."}}]
+```
+
+The listing still filters nothing (`packages/theo/src/server/agent/list-approvals-handler.ts:19`) and
+the settle endpoint's only controls are still CSRF, a path parse and a body-shape check
+(`packages/theo/src/server/agent/approve-agent.ts:89`). **The gated tool ran.** This is a security
+finding on a path already under the private advisory **GHSA-g94h-459g-rjhj**, so the reproduction is
+recorded there and not in a public issue — the same finding the first measurement attached, run again
+against the current tree and unchanged.
+
+**One thing the fix makes harder to see, and it has to be said out loud.** The application no longer
+needs `GET /approvals`, so the counted client no longer calls it. That removes twelve lines from the
+count and removes nothing from the attack surface: the endpoint still answers `200` with every
+pending approval in the process to a caller carrying no credential. A defect that stops costing lines
+has not stopped existing, and three of this journey's four metrics can only see the lines.
+
+**Criterion 5 passes, and the fifth metric fails on the same behaviour, exactly as before.** A
+decision posted 3.5 s into a 2 s window is refused by name —
+`404 {"error":{"code":"NOT_PENDING","message":"No pending approval for id '8cc79e07-…'."}}` — and the
+recorder is `[]`. The outcome the run applied is the documented `onTimeout: 'abort'`, which the
+registry settles as a denial (`packages/theo/src/server/agent/approval-registry.ts:22`).
+
+### The break this journey is held on, reproduced again
+
+The message the timeout produces is still byte-identical to the message an explicit Deny produces —
+both `tool-output-error` with `exitCode: 126` and the text
+`Tool 'send_email' denied by human approver`, captured in this section's timeout run at 2072 ms and
+its deny run at 413 ms. Nobody denied anything.
+[#393](https://github.com/usetheokit/theokit/issues/393) still describes the code it cites, and
+metric 5 is still a **FAIL** on our side for the reason it was: it does not fail to name the action,
+it names a different one.
+
+### The counting judgements, re-run rather than copied
+
+Seven were declared. What each does *now*, against TheoKit 4 / 42 / 5 and Next.js 2 / 38 / 6:
+
+| # | The judgement | Still stands? | What the other way does now | What it did before |
+| --- | --- | --- | --- | --- |
+| 1 | the scaffold already gates a tool; should the journey have taken that gate for free? | yes, on its own reasoning — `send_notification` touches nothing outside the process, and J2 grades the side effect | files 4 → **3**, glue 42 → **26** (the tool file's 14 lines and `chat.ts`'s 2 go with it). Files 3 against 2 is 1.5x, so metric 1 becomes a **tie**; glue 26 against 38 puts TheoKit ahead at 1.46x, inside the bar. **Still not a win**, because a tie on files is not *better* on files | the same inversion of metric 1, with a glue figure that did not follow from its own premise — see the correction below |
+| 2 | is the tool's own file forced, or chosen? | yes — the scaffold's `agents/tools/` convention is what J1 was charged a concept for knowing | files 4 → **3**, glue unchanged (the lines move, they do not vanish). 1.5x, metric 1 a **tie** | identical |
+| 3 | is `app/hooks/use-transcript.ts` J2's cost or the scaffold's? | yes — the scaffold routes all client state through that hook | files 4 → **3**, glue roughly unchanged. Metric 1 a **tie**, and it cannot be combined with judgement 2 | identical, except that it now moves **eight** glue lines instead of twenty-eight — the judgement survived, its weight collapsed |
+| 4 | is `.approval('send_email', …)` glue or business logic? | yes — § How the four metrics are counted here fixed it before either implementation existed | both sides move together: TheoKit glue 43, Next.js 39. Ratio 1.10x. No effect on the comparison | identical |
+| 5 | does `experimental_toolApprovalSecret` belong to J2 on the Next.js side? | yes — it is what criterion 4 passes on, and this page's rule says the ownership check is glue | Next.js glue 38 → **37**. Ratio 1.14x, still a tie, still their metric | identical |
+| 6 | the eleven-line destructure in `page.tsx` is a reflow the 100-column printer forced | yes, counted as `numstat` reports it | counting substance gives 9 for that hunk: TheoKit glue 42 → **40**. Ratio 1.05x, still a tie | identical |
+| 7 | is the polling effect the shortest correct client, or a strawman? | **void** — there is no polling effect. The shortcut it argued about (`part.toolCallId` passed to `approve()`, on a documented race) is superseded: the id is published | superseded. What it would have bought — glue 62 → 50, concepts 7 → 6 — is beaten outright by the supported path at 42 and 5 | it was the largest single reduction available to the first measurement, and it was declined |
+
+**Judgement 7 is void and two new judgements replace it**, because the thing it described stopped
+being true and the thing that replaced it needs a declaration of its own:
+
+| # | The judgement | Decided as | The other way |
+| --- | --- | --- | --- |
+| 8 | criterion 1's payload clause says *the approval **event** carries the tool name and the resolved input*. Ours carries them on the **part**, folded from three frames. Is that the clause? | **Yes.** The published grading of the Next.js side read the same clause off a part assembled the same way — their approval frame carries `id`, `isAutomatic` and `signature`, and `input` comes from the tool-input frames. A frame-level reading applied to one side and a part-level reading to the other is a standard chosen by its result | criterion 1 stays **partial** on our side and TheoKit is back to **3 of 5**, level with Next.js. **It moves no countable metric** — files, glue and concepts are unchanged, and the journey is lost on metric 1 either way. This is the most consequential judgement in the re-grading and the one most favourable to us |
+| 9 | the hook forwards `pendingApprovals` and `approve` unchanged, and `app/page.tsx` maps over the array. The first measurement's hook projected a singular `pendingApproval` and exposed a `decide(approved)`. Which shape is counted? | **The pass-through**, because it was built both ways and measured: pass-through is 8 glue lines in the hook and 18 in the page; the singular projection is 11 and 18. It is also the shape `useAgent`'s own documentation shows, and it is more correct — the SDK dispatches a round's calls concurrently, so an array is what can be outstanding | the singular projection: TheoKit glue **45**, ratio 1.18x. Still a tie, still Next.js's metric, and a worse number for us — which is why counting it would have been the easy choice and is not the honest one. It would also have kept `app/page.tsx` byte-identical to the first measurement, which is a presentational convenience and not a reason |
+
+**No judgement, taken either way, turns this journey into a win.** Judgements 1, 2 and 3 each convert
+metric 1 from a loss into a tie and none converts it into a win; judgement 1 is the only one that
+also puts TheoKit ahead on glue, and it buys that by declining to build the tool the criteria grade.
+Judgement 8 the other way costs a criterion and moves no number. That is the check this table exists
+to make possible, and it lands where the first measurement's did.
+
+### Three corrections to the measurement above, stated as corrections
+
+Re-deriving the count independently confirmed the published **numbers** in § Metrics 1-3 and § The
+added lines, classified — 62 = 2 + 14 + 28 + 18, and 76 = 62 + 8 + 2 + 4 — and found three places
+where the published text disagrees with them. Two are prose; one is arithmetic:
+
+1. **Prose.** § The added lines, classified enumerates `agents/tools/send-email.ts`'s 14 glue lines
+   as thirteen items — the `)` that closes `.input(` is missing from the list. The total 14 is right;
+   the enumeration is one short. This section's enumeration says "seven lines of `.input(…)`" rather
+   than six for that reason.
+2. **Prose.** The same paragraph enumerates `use-transcript.ts`'s 28 glue lines as a list that sums
+   to 29, by calling the `PendingApproval` interface six lines. It spans six diff lines, one of which
+   is the blank counted in the Blank row, so it contributes five. The total 28 is right.
+3. **Arithmetic, and it matters.** Judgement 1's counterfactual reads *"TheoKit files 4 to 3 and glue
+   62 to 60, if the tool file disappears entirely."* If the file disappears, its **14** glue lines
+   disappear with it, along with the two `chat.ts` lines that import and register it: 62 − 16 = **46**,
+   not 60. The correction runs **in TheoKit's favour** and still does not reach a win — 46 against 38
+   is a 1.21x glue lead inside the bar, while files stay 3 against 2. Under this section's count the
+   same counterfactual is 3 files and **26** glue lines.
+
+### The verdict, re-stated
+
+| Metric | TheoKit | Next.js + AI SDK | Better | Ratio | Verdict under § What counts as winning |
+| --- | --- | --- | --- | --- | --- |
+| Files touched | 4 | **2** | Next.js | 2.0x | **Loss** — on the bar, unmoved |
+| Glue lines | 42 | **38** | Next.js | 1.11x | **Tie** — inside the bar, Next.js the better side |
+| Concepts required | **5** | 6 | TheoKit | 1.2x | **Tie** — inside the bar, TheoKit the better side |
+| Time to first green run | not measured | not measured | — | — | not applicable |
+| Criteria satisfied | **4 of 5** | 3 of 5 | TheoKit | — | not a countable metric, and still the most important line |
+
+**J2 is still lost, and it is lost on the one metric the fix could not reach.** Winning requires
+better on all three countable metrics by a margin outside noise. TheoKit is worse on files by exactly
+the bar, worse on glue inside it, and better on concepts inside it. Two of the three margins moved
+and the verdict did not, because the verdict was never a function of the margins — it is a function
+of the worst one.
+
+**What changed is the shape of the loss, and it is a better shape.** The first measurement could say
+that every extra line and every extra concept on our side was downstream of one defect. That sentence
+is no longer available: the defect is fixed and the count is still against us. What remains is
+smaller and more ordinary — a tool that lives in its own file because the framework's convention asks
+for it, and a hook the scaffold routes client state through. Judgements 2 and 3 are the whole of
+metric 1's gap, they are both about *where* TheoKit puts code rather than how much of it there is,
+and neither is a defect anybody can file. That is a harder loss to argue away and a less interesting
+one to fix.
+
+**The capability premise is unchanged and still measured.** Our run pauses; theirs does not. That
+difference is still worth zero on the three metrics, and it now sits next to a criteria row of 4
+against 3. A journey is won by costing less to build the thing the criteria describe. On this one
+TheoKit builds more of that thing and still costs more to do it.
+
+### What is still unmeasured, and why — mostly unchanged
+
+- **Metric 4, time to first green run, on both sides.** Unchanged and unmeasured, for the reason
+  given above.
+- **Criteria 6 to 8, the three-target obligation.** Unchanged — those packages live outside this
+  repository.
+- **Durability across a reload or a second instance.** Unchanged on both sides; J4 owns that
+  boundary. `pendingApprovals` is derived from the current turn's parts in memory, so a reload loses
+  it here too.
+- **The client was again exercised as a store, not as a rendered surface.** `app/page.tsx` was
+  written and its logic driven through `AgentClient` — the object `useAgent` binds to — rather than
+  in a browser. What was additionally checked this time is that the counted hook's **types** resolve
+  from the entry point the scaffold imports: `import { type PendingApproval, useAgent } from
+  'theokit/client'` typechecks under `--strict --noUncheckedIndexedAccess`, and indexing
+  `pendingApprovals` narrows to `PendingApproval | undefined`.
+- **The TheoKit lane again ran through a harness composing `mountAgent`, `handleAgentApproval` and
+  `handleListApprovals`** at the shipped `strict` CSRF default, not through `theokit start`. Same
+  asymmetry, named again.
+- **The model was again local and scripted** — the SDK's `lmstudio` profile (`authType: "none"`,
+  `apiMode: "chat_completions"`, `http://localhost:1234/v1`), served by a scripted server that asks
+  for the gated tool on the first turn and echoes the tool's own output on the second, so criterion
+  2's *the answer carries the output* is graded on an answer rather than a canned string. Counted on
+  neither side.
+- **Whether an ai-sdk client still parses the widened stream.** The `data-approval` part is claimed
+  to validate and then be discarded by `ai`'s reader (`packages/presenter/src/wire/chunk-schema.ts:198`
+  records that measurement); this section did not re-run it, and no criterion here grades it.
+- **`docs/program/evidence/j2-hitl/` still does not exist.** § Evidence's clause is open for this
+  journey for the second time. The new diff and the new counts are published above instead, which
+  satisfies the checkability the clause exists for and does not satisfy the clause.
+
+### Issues from this re-measurement
+
+**None filed, and that is the result rather than an omission.** Every defect this run met is already
+tracked: [#390](https://github.com/usetheokit/theokit/issues/390) for the serialised `stderr` blob
+reaching the browser on a denial, [#393](https://github.com/usetheokit/theokit/issues/393) for the
+expired approval reported as a human denial, and **GHSA-g94h-459g-rjhj** for criterion 4, reproduced
+again and recorded there rather than in a public issue.
+[#392](https://github.com/usetheokit/theokit/issues/392) and
+[#394](https://github.com/usetheokit/theokit/issues/394) are the two this re-measurement exists to
+re-measure. `4411a59be` carries `Closes` for both; the tracker still shows them **open**, because the
+commit is on `workspace` and nothing has promoted it yet. The verification is posted on each issue
+with the evidence above rather than asserted here, and this section does not close them.
+
 ## The deliberately broken state
 
 Per `../dx-benchmark.md` § The fifth, which is pass/fail and not a number. The break for J2 is the
@@ -203,6 +1368,34 @@ recorded so the benchmark does not mistake them for the mechanism: the pending l
 **Not measured:** whether the advisory GHSA-g94h-459g-rjhj is still open upstream. The repository
 references it; the tracker was not queried.
 
+## Metric 4 — measured 2026-08-21
+
+Three runs per lane, alternating lane by lane, on the two committed trees the re-measurement above
+counted:
+
+| | Next.js | TheoKit |
+| --- | --- | --- |
+| install | 4.27 ± 0.12 | 4.10 ± 0.36 |
+| build | 8.37 ± 0.80 | **4.83 ± 0.06** |
+| start | 0.60 ± 0.00 | 1.10 ± 0.00 |
+| **total, mean ± 1σ** | **13.20 ± 0.75** → [12.45, 13.95] | **10.03 ± 0.32** → [9.71, 10.35] |
+
+**The intervals do not overlap and TheoKit is the faster side, so the "not worse" clause holds.**
+Install is level — 4.10 s against 4.27 s — on the pair where neither side installs anything the other
+does not, because `ai@7.0.70` ships tool approval as a first-class primitive rather than as a recipe
+with dependencies.
+
+One thing the lane is: the TheoKit side installs the **published** `theokit@0.48.14`, while the
+re-measurement's counts were taken against a framework built from `4411a59be`. That is deliberate —
+every lane in this sweep installs what npm serves, which is what a reader of this benchmark would
+get — and it is stated rather than left to be discovered. Warm npm cache, never cold; both lanes
+install from a lockfile. In [the evidence file](../evidence/j02-metric4-2026-08-21.txt).
+
+**The verdict does not move and metric 4 could not have moved it.** J2 is an outright loss: after the
+re-measurement, files stayed at 4 against 2 — exactly the 2× bar, so metric 1 is a loss rather than a
+tie — and § What counts as winning asks for better on all three before time-to-green is reached.
+Criterion 4 still fails to the tool's side effect against GHSA-g94h-459g-rjhj.
+
 ## Cross-references
 
 - The benchmark this journey belongs to: `../dx-benchmark.md`
@@ -211,3 +1404,10 @@ references it; the tracker was not queried.
 - The journey whose durability boundary this shares: `j04-thread.md`
 - Acceptance contract that grades these criteria: `../../../.claude/rules/cycle-acceptance.md`
 - Criterion shape these follow: `../../../ROADMAP.md` § Wave 1
+- The ADR the timeout's misreport is an instance of:
+  `../../adr/0002-an-abnormal-ending-is-never-reported-as-normal.md`
+- Defects this measurement found and filed: #392 (the client cannot obtain the approval id), #393 (an
+  expired approval is reported as a human denial), #394 (the approval chunk carries only two ids)
+- The journey re-measured the same day for the same reason, and the model for recording a
+  re-measurement without erasing the first: `j05-multi-step.md`
+- The commit the re-measurement runs against, closing #392 and #394: `4411a59be`

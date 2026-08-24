@@ -33,21 +33,31 @@ import {
  */
 
 describe('the build decision is made once per process', () => {
-  it('test_a_second_call_does_not_rebuild', () => {
-    // The property, stated as the thing a reader depends on: once this run has decided dist/ is
-    // usable, nothing later in the same run may replace it. mtime is the evidence — a rebuild
-    // necessarily moves it.
-    buildTheokitPackageOnce()
-    const first = statSync(resolve(THEOKIT_DIST, 'index.d.ts')).mtimeMs
+  it(
+    'test_a_second_call_does_not_rebuild',
+    () => {
+      // The property, stated as the thing a reader depends on: once this run has decided dist/ is
+      // usable, nothing later in the same run may replace it. mtime is the evidence — a rebuild
+      // necessarily moves it.
+      buildTheokitPackageOnce()
+      const first = statSync(resolve(THEOKIT_DIST, 'index.d.ts')).mtimeMs
 
-    buildTheokitPackageOnce()
-    buildTheokitPackageOnce()
+      buildTheokitPackageOnce()
+      buildTheokitPackageOnce()
 
-    expect(
-      statSync(resolve(THEOKIT_DIST, 'index.d.ts')).mtimeMs,
-      'dist/ was rebuilt by a later caller in the same run — the exact race B-M72-01 measured',
-    ).toBe(first)
-  })
+      expect(
+        statSync(resolve(THEOKIT_DIST, 'index.d.ts')).mtimeMs,
+        'dist/ was rebuilt by a later caller in the same run — the exact race B-M72-01 measured',
+      ).toBe(first)
+    },
+    // The FIRST call here builds when dist/ is stale — which is every run that touched
+    // `packages/theo/src`, and is exactly when this test matters. It was left on the default 30 s
+    // while its sibling below took `BUILD_HOOK_TIMEOUT_MS` for the same reason, so a source change
+    // plus a loaded machine timed it out at 32 s: red in a full run, green in isolation against the
+    // dist/ the previous run had already built. That is the shape this file's own docblock
+    // describes, reproduced by the budget rather than by the race.
+    BUILD_HOOK_TIMEOUT_MS,
+  )
 
   it(
     'test_the_memo_is_what_short_circuits_and_not_merely_a_fast_filesystem',

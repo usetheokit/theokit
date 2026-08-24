@@ -78,47 +78,15 @@ class CatsController {
 
 // Wire decorators imperatively (= identical to @syntax compiled by tsc)
 Controller('api/cats')(CatsController)
-Get()(
-  CatsController.prototype,
-  'findAll',
-  Object.getOwnPropertyDescriptor(CatsController.prototype, 'findAll'),
-)
-Get('search')(
-  CatsController.prototype,
-  'search',
-  Object.getOwnPropertyDescriptor(CatsController.prototype, 'search'),
-)
-Get(':id')(
-  CatsController.prototype,
-  'findOne',
-  Object.getOwnPropertyDescriptor(CatsController.prototype, 'findOne'),
-)
-Post()(
-  CatsController.prototype,
-  'create',
-  Object.getOwnPropertyDescriptor(CatsController.prototype, 'create'),
-)
-Delete(':id')(
-  CatsController.prototype,
-  'remove',
-  Object.getOwnPropertyDescriptor(CatsController.prototype, 'remove'),
-)
-HttpCode(204)(
-  CatsController.prototype,
-  'remove',
-  Object.getOwnPropertyDescriptor(CatsController.prototype, 'remove'),
-)
-Get('stats')(
-  CatsController.prototype,
-  'stats',
-  Object.getOwnPropertyDescriptor(CatsController.prototype, 'stats'),
-)
+Get()(CatsController.prototype, 'findAll')
+Get('search')(CatsController.prototype, 'search')
+Get(':id')(CatsController.prototype, 'findOne')
+Post()(CatsController.prototype, 'create')
+Delete(':id')(CatsController.prototype, 'remove')
+HttpCode(204)(CatsController.prototype, 'remove')
+Get('stats')(CatsController.prototype, 'stats')
 UseGuards(ApiKeyGuard)(CatsController.prototype, 'stats')
-Header('X-Powered-By', '@theokit/http-decorators')(
-  CatsController.prototype,
-  'findAll',
-  Object.getOwnPropertyDescriptor(CatsController.prototype, 'findAll'),
-)
+Header('X-Powered-By', '@theokit/http-decorators')(CatsController.prototype, 'findAll')
 
 // Wire params
 function wp(ctrl, method, idx, src, key) {
@@ -140,11 +108,7 @@ class HealthController {
   }
 }
 Controller('health')(HealthController)
-Get()(
-  HealthController.prototype,
-  'check',
-  Object.getOwnPropertyDescriptor(HealthController.prototype, 'check'),
-)
+Get()(HealthController.prototype, 'check')
 
 // ── Boot + Test ────────────────────────────────────────
 

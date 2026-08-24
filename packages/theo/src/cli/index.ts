@@ -51,6 +51,24 @@ cli
   })
 
 cli
+  .command('preview', 'Build for production, then serve it — one step (B-030)')
+  .option('--port <port>', 'Port number')
+  .option('--target <target>', 'Deploy target (node, vercel, cloudflare)')
+  .action(async (options: CliOptions) => {
+    try {
+      const { previewCommand } = await import('./commands/preview.js')
+      await previewCommand({
+        port: options.port ? Number(options.port) : undefined,
+        target: options.target,
+      })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error(`\n  ✗ ${msg}\n`)
+      process.exit(1)
+    }
+  })
+
+cli
   .command(
     'generate <type> <name> [...fields]',
     'Scaffold a route, action, page, ws, controller, agent, toolbox, workflow, eval, sandbox, schedule, memory, or resource (resource accepts field:type args)',

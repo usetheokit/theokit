@@ -1,0 +1,94 @@
+J9 metric 4 re-measured -- cold cache, symmetric lockfiles, 2026-08-21
+=====================================================================
+
+Why this run exists
+-------------------
+Metric 4 is defined in docs/program/dx-benchmark.md § The four metrics as "Cold cache, >=3 runs,
+mean +/- sigma reported". No measurement in this programme had ever met that definition: J9
+(2026-08-20), J7 (2026-08-21) and the eight-journey sweep (2026-08-21) were all warm. Ten journeys
+were graded against a rule none of them followed.
+
+The second defect this run corrects is J9's own: j09-next carried a package-lock.json and j09-theo
+did not, so one lane installed from a lock and the other re-resolved the whole graph on every run.
+Both scaffolders write a lockfile, so the tree without one was the anomaly. A lockfile was generated
+for j09-theo with `npm install --package-lock-only` (resolution only, nothing installed, untimed).
+
+Machine: Linux 6.8.0-136, Node 22.22.2, npm 10.9.7. Same pair of applications J9 was measured on
+(j09-theo, j09-next), each carrying its own journey delta. Lanes alternated run by run.
+Cold = a private empty npm cache per run (`npm_config_cache` at a fresh temp dir, removed after
+install). The machine's own cache is never destroyed; a measurement that can wipe a developer's
+cache is a measurement nobody will run twice.
+
+Six discarded runs, recorded rather than deleted
+------------------------------------------------
+The first cold attempt reported INSTALL_FAILED on all six runs. The fault was in the harness, not in
+either tree: `${COLDCACHE:+npm_config_cache="$COLDCACHE"} npm install` puts an assignment produced
+BY EXPANSION in command position, and bash does not recognise that as an assignment prefix -- it
+tried to execute a command named `npm_config_cache=/tmp/...`. Fixed with an explicit `env`. The six
+runs are void, and they are listed here because a discarded run that is deleted instead of recorded
+is how a measurement stops being falsifiable.
+
+  tk-cold-r1 INSTALL_FAILED   nx-cold-r1 INSTALL_FAILED
+  tk-cold-r2 INSTALL_FAILED   nx-cold-r2 INSTALL_FAILED
+  tk-cold-r3 INSTALL_FAILED   nx-cold-r3 INSTALL_FAILED
+
+--- COLD cache, both lanes, three runs each, interleaved ---
+
+  tk-cold run1 install=8.2 build=4.7 start=1.0 total=13.9
+  nx-cold run1 install=14.0 build=9.0 start=0.7 total=23.7
+  tk-cold run2 install=8.7 build=4.6 start=1.1 total=14.3
+  nx-cold run2 install=14.2 build=11.3 start=0.6 total=26.1
+  tk-cold run3 install=8.7 build=5.6 start=1.0 total=15.3
+  nx-cold run3 install=13.9 build=8.7 start=0.6 total=23.2
+
+  theokit  n=3  total 14.50 +/- 0.72  -> [13.78, 15.22]
+  nextjs   n=3  total 24.33 +/- 1.55  -> [22.78, 25.88]
+
+  Intervals do NOT overlap. TheoKit is faster by 1.68x on the programme's own definition of the
+  metric.
+
+--- WARM cache, same trees, same day, three runs each, interleaved ---
+
+  tk-warm run1 install=5.0 build=4.6 start=1.1 total=10.6
+  nx-warm run1 install=4.1 build=10.9 start=0.6 total=15.6
+  tk-warm run2 install=6.9 build=5.2 start=1.0 total=13.1
+  nx-warm run2 install=5.4 build=11.8 start=0.6 total=17.8
+  tk-warm run3 install=4.2 build=4.7 start=1.0 total=10.0
+  nx-warm run3 install=4.2 build=10.9 start=0.6 total=15.6
+
+  theokit  n=3  total 11.23 +/- 1.64  -> [ 9.59, 12.88]
+  nextjs   n=3  total 16.33 +/- 1.27  -> [15.06, 17.60]
+
+  Intervals do NOT overlap either. Same direction, 1.45x.
+
+  Cost of a cold cache: TheoKit +3.27 s, Next.js +8.00 s. The fear this run was built to test --
+  that a cold cache would reveal a lifecycle-script penalty paid only on the TheoKit side -- is
+  refuted. The cold cache costs Next.js 2.4x what it costs us.
+
+The premise was checked rather than assumed
+-------------------------------------------
+node-pty is genuinely installed and genuinely compiled in the TheoKit lane: after a real install,
+node_modules/node-pty/build/Release/pty.node exists, alongside prebuilds for darwin-x64 and win32-x64
+and none for linux-x64. So the native compile is inside every TheoKit number above, cold and warm.
+
+What this settles, and what it does not
+---------------------------------------
+It settles that on J9's own applications, measured today, symmetric on both sides, TheoKit reaches a
+first green run faster than Next.js on BOTH protocols, with non-overlapping intervals. That is
+stronger than metric 4's clause, which only asks for "not worse".
+
+It does NOT decompose the swing from J9's published 30.40 +/- 7.50 s. Three things differ between
+that run and this one -- the missing lockfile, the machine's warmth, and whatever variance produced
+a sigma of 7.50 on a 30 s measurement -- and no run here isolates them. The published number is not
+edited; this file is what a reader compares it against.
+
+It does NOT by itself restore J9's win. Metric 4 was the clause that retracted it, and metric 4 now
+clears in our favour. The three countable metrics and the criteria have not been re-derived today,
+and a journey is won on all four plus its criteria. Declaring the win here, from one metric, would
+repeat exactly the failure that made this file necessary.
+
+Still not measured
+------------------
+A first-ever install on a machine that has never seen these packages -- npm's cache is cold here,
+but the OS page cache, the node-gyp header cache and the DNS resolver are not. The node-gyp headers
+in particular are already local, and a machine without them pays a download this run does not.

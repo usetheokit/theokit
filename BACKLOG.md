@@ -55,9 +55,9 @@ the two disagree, the rule wins and this one is the bug.
 
 ## Index
 
-12 items — **Open** 12 · **In flight** 0 · **Closed** 0
+38 items — **Open** 37 · **In flight** 0 · **Closed** 1
 
-### Open (12)
+### Open (37)
 
 | Item | Title | Status | Severity |
 |---|---|---|---|
@@ -73,14 +73,41 @@ the two disagree, the rule wins and this one is the bug.
 | [`B-010`](#b-010--make-the-observability-plugin-registrable-and-give-it-the-config-key-its-registry-documents----) | make the observability plugin registrable and give it the config key its registry documents | `triaged` | — |
 | [`B-011`](#b-011--the-web-executor-honours-the-csrf-false-opt-out-the-public-contract-promises----) | the Web executor honours the `csrf: false` opt-out the public contract promises | `triaged` | — |
 | [`B-012`](#b-012--decide-the-fate-of-the-fourth-orphan-in-theokithttp----) | decide the fate of the fourth orphan in `@theokit/http` | `triaged` | — |
+| [`B-013`](#b-013--a-gated-tool-appears-on-the-wire-twice-under-two-ids-so-the-pause-never-correlates-with-the-resume----) | a gated tool appears on the wire twice, under two ids, so the pause never correlates with the resume | `triaged` | — |
+| [`B-014`](#b-014--the-fluent-agentbuilder-cannot-declare-a-step-ceiling-and-it-is-the-path-the-scaffold-generates----) | the fluent `AgentBuilder` cannot declare a step ceiling, and it is the path the scaffold generates | `triaged` | — |
+| [`B-015`](#b-015--a-conversation-does-not-survive-a-reload-chatid-is-private-drawn-in-the-constructor-and-can-be-neither-supplied-nor-read----) | a conversation does not survive a reload: `#chatId` is private, drawn in the constructor, and can be neither supplied nor read | `triaged` | — |
+| [`B-016`](#b-016--the-agent-endpoint-resumes-any-conversation-by-id-with-no-owner-check----) | the agent endpoint resumes any conversation by id, with no owner check | `triaged` | — |
+| [`B-017`](#b-017--the-release-workflow-reports-success-publishing-nothing----) | the release workflow reports success publishing nothing | `triaged` | — |
+| [`B-018`](#b-018--the-cloudflare-worker-scans-disk-at-runtime-and-no-adapter-serves-an-agent----) | the Cloudflare worker scans disk at runtime, and no adapter serves an agent | `triaged` | — |
+| [`B-019`](#b-019--there-is-no-trace-the-otlp-serializer-draws-a-traceid-per-span----) | there is no trace: the OTLP serializer draws a `traceId` per span | `triaged` | — |
+| [`B-020`](#b-020--an-acceptance-record-is-evidence-nobody-outside-this-machine-can-read----) | an acceptance record is evidence nobody outside this machine can read | `triaged` | — |
+| [`B-021`](#b-021--abnormal-endings-are-reported-as-normal-ones-across-four-subsystems----) | abnormal endings are reported as normal ones, across four subsystems | `triaged` | — |
+| [`B-022`](#b-022--a-fixture-born-of-the-same-assumption-as-the-code-cannot-disagree-with-it----) | a fixture born of the same assumption as the code cannot disagree with it | `triaged` | — |
+| [`B-023`](#b-023--the-deploy-shim-buffers-a-stream-whole-across-six-of-nine-targets----) | the deploy shim buffers a stream whole, across six of nine targets | `triaged` | — |
+| [`B-024`](#b-024--two-conventions-cost-a-file-each-and-nobody-has-decided-whether-they-are-worth-it----) | two conventions cost a file each, and nobody has decided whether they are worth it | `triaged` | — |
+| [`B-025`](#b-025--a-web-app-compiles-a-terminal-pty-it-will-never-use-and-it-costs-the-benchmarks-fourth-metric----) | a web app compiles a terminal PTY it will never use, and it costs the benchmark's fourth metric | `triaged` | — |
+| [`B-026`](#b-026--the-security-header-half-of-the-deploy-gap-is-mechanical-and-nobody-has-done-it----) | the security-header half of the deploy gap is mechanical, and nobody has done it | `triaged` | — |
+| [`B-027`](#b-027--a-declared-rate-limit-protects-one-of-seven-targets-and-wiring-it-naively-is-worse-than-not-wiring-it----) | a declared rate limit protects one of seven targets, and wiring it naively is worse than not wiring it | `triaged` | — |
+| [`B-028`](#b-028--the-hitl-pause-span-measures-the-human-plus-the-model-and-only-the-human-was-asked-for----) | the HITL pause span measures the human plus the model, and only the human was asked for | `triaged` | — |
+| [`B-029`](#b-029--the-client-router-restores-no-scroll-position-and-the-prefetch-cost-is-undocumented----) | the client router restores no scroll position, and the prefetch cost is undocumented | `triaged` | — |
+| [`B-030`](#b-030--a-prod-like-local-run-is-two-steps-and-the-contract-asks-for-one----) | a prod-like local run is two steps, and the contract asks for one | `triaged` | — |
+| [`B-031`](#b-031--a-relative-ogimage-ships-broken-instead-of-being-refused----) | a relative `og:image` ships broken instead of being refused | `triaged` | — |
+| [`B-032`](#b-032--image-reserves-no-space-refuses-no-bad-srcset-and-the-docs-do-not-say-what-it-will-not-do----) | `Image` reserves no space, refuses no bad `srcSet`, and the docs do not say what it will not do | `triaged` | — |
+| [`B-033`](#b-033--the-frameworks-own-fallback-document-declares-neither-a-head-nor-a-language----) | the framework's own fallback document declares neither a head nor a language | `triaged` | — |
+| [`B-034`](#b-034--draft-preview-is-neither-built-nor-declared-absent----) | draft preview is neither built nor declared absent | `triaged` | — |
+| [`B-035`](#b-035--the-document-preloads-nothing-so-a-routes-chunks-are-discovered-one-round-trip-late----) | the document preloads nothing, so a route's chunks are discovered one round trip late | `triaged` | — |
+| [`B-036`](#b-036--markdown-images-and-external-links-bypass-the-frameworks-own-components----) | markdown images and external links bypass the framework's own components | `triaged` | — |
+| [`B-037`](#b-037--scroll-restoration-restores-the-document-and-the-scaffolds-own-layout-scrolls-an-inner-element----) | scroll restoration restores the document, and the scaffold's own layout scrolls an inner element | `triaged` | — |
 
 ### In flight (0)
 
 _None._
 
-### Closed (0)
+### Closed (1)
 
-_None._
+| Item | Title | Status | Severity |
+|---|---|---|---|
+| [`B-038`](#b-038--pnpm-tryscaffold-produces-an-app-that-exercises-npm-not-this-repository---x) | `pnpm try:scaffold` produces an app that exercises npm, not this repository | `shipped` | — |
 
 <!-- BACKLOG-INDEX:END -->
 
@@ -94,6 +121,42 @@ require.
 **Gap files are not evidence.** Eleven of the sixteen `theokit-gap.md` files came back materially
 wrong on re-measurement. No item below cites one; each cites an issue and a `file:line`.
 
+**The tracker had drifted the same way, and was reconciled on 2026-08-22.** Of the twenty issues
+these items cite, sixteen were open and most named defects that no longer existed. Each was
+re-measured against the tree, commented with the `file:line` that closes it and what the closure does
+NOT cover, and **eighteen are now closed**. Two stay open because they are still true:
+
+- `#345` — the published `middleware()` builder still is not invocable by the file-scan runner. What
+  landed makes the mismatch audible instead of silent, which is strictly better and is not the fix.
+  The comment also corrects the report: there are three middleware contracts here, not two.
+- `#369` — the Cloudflare worker still discovers routes by reading a directory at runtime, and no
+  adapter serves an agent at all. The comment promotes that second half, which the title buries.
+
+**On when a closure is honest, recorded because I got it wrong first.** `#382` was verified, commented
+and closed; ten minutes later `git branch --contains` put its commit on `workspace` alone, with
+`origin/main` at `60822a48b`. Nothing had been released, so the closed issue told a reader the defect
+was gone from something installable. It was reopened with a correction, and then closed again — with
+the rest — on the maintainer's explicit decision to close against the code. Every closing comment
+states the release position rather than leaving it implied, so the tracker says what it means. The
+status column below still does not move: that one advances on a cycle verdict
+(`.claude/rules/cycle-maintenance.md`), and a tracker decision is not one.
+
+**Thirteen items carry a `remeasured 2026-08-21` line saying the defect is closed in code, and all
+thirteen still read `triaged`.** That is not an oversight and the count is worth stating plainly,
+because a reader who takes the status column at face value will believe thirty-six things are
+outstanding when roughly a third are built and waiting on a release.
+
+Status advances on a cycle verdict, never on a re-measurement (`.claude/rules/cycle-maintenance.md`).
+Editing the column here by hand is how `shipped` stops meaning anything, and the registry would then
+have exactly the defect it exists to prevent. So the measurement is recorded where a reader will meet
+it — on the block, dated, with the evidence — and the transition stays the cycle's to make.
+
+The re-measurement was not a formality: two items came back changed rather than closed. `B-005`
+shrank from five findings to two, and the two that remain describe something different from what was
+filed — `csrf-multi-header` is exported now, and the finding is that nothing calls it. `B-033` was
+registered on a premise that turned out to be wrong and was rewritten the same day rather than
+quietly dropped.
+
 ## B-001 — ssrStreaming serves a document with no `<head>` and no hydration data   [ ]
 
 domain: theokit
@@ -106,6 +169,7 @@ status: triaged
 dod:
   - `curl` of the root route against a published build with `ssrStreaming: true` returns a parseable document containing `<head>` and the hydration data script
   - a regression test executes the generated entry against a real `Request` rather than asserting `toContain` over the template string
+remeasured 2026-08-21: **closed in code.** The streamed document is assembled by `streamingDocumentHelpers` in `packages/theo/src/router/entry-server.ts`, which writes the head as its own chunk before React produces a byte and appends the hydration script before the tail; `tests/unit/cloudflare-streaming-shell.test.ts:29` asserts `<head>` on the emitted entry. Status stays `triaged`: only a cycle verdict advances it, never a re-measurement
 
 ## B-002 — `renderStreamingWeb` throws `ReferenceError` on every request (TDZ on `url`)   [ ]
 
@@ -120,6 +184,7 @@ dod:
   - a test executes the generated web entry against a real `Request` and fails today with `ReferenceError`
   - the declaration is hoisted above the preload block and that test passes
   - the fix is a separate atomic commit citing the issue
+remeasured 2026-08-21: **closed in code.** `const url = new URL(request.url)` is declared before its use at `packages/theo/src/router/entry-server.ts:229-230`, and the comment above it records why hoisting alone would have traded the TDZ for a TypeError. Status unchanged by design
 
 ## B-003 — the public `middleware()` builder produces a handler the runner cannot invoke   [ ]
 
@@ -133,6 +198,8 @@ status: triaged
 dod:
   - a middleware authored with the public `middleware()` builder is invoked by the file-scan runner in a published build
   - a regression test covers the builder-to-runner boundary rather than the builder alone
+  - **the convergence is decided.** `docs/adr/0003-one-middleware-contract-that-wraps-the-downstream.md` proposes the wrapping contract as the only one, with both runners folding the chain around route execution; it is `Proposed` and needs the project owner. Nothing above it can be built until that is answered, because "make the builder work" has three possible meanings and they are not equivalent
+remeasured 2026-08-22: **the report named two contracts and there are three** — the published one, the Node runner's, and `WebMiddleware`, whose own header records the convergence as deferred. What shipped in `095c786d1` is a refusal by name, so the mismatch is audible instead of a blank page; that is the correct interim and it is not the fix. The failure mode was also worse than filed: both shapes are functions, so the handler is called with `res` as its `next`, and returning a `Response` leaves the runner's own `next` uncalled — the request aborts and writes nothing
 
 ## B-004 — `readdirSync` is unsorted, so the client build is not reproducible   [ ]
 
@@ -147,6 +214,8 @@ dod:
   - two scans over the same tree created in different orders produce identical output
   - two clean builds of the same commit produce client bundles whose `sha256sum` values are equal
   - the fix matches the sibling scanner rather than inventing a second ordering rule
+  - `walkSourceFiles` sorts too — **re-measured 2026-08-21 and this is what is left.** `packages/theo/src/router/scan.ts:142` now sorts by code unit, so the site this item was opened against is fixed; the consolidated walker at `packages/theo/src/server/_internal/scan-walker.ts:36` does not, and **six scanners consume it** (routes, actions, websockets, cron, agents, jobs) rather than the three its own header names — the consolidation grew after that comment was written. Only `packages/theo/src/server/scan/scan.ts:173` re-orders afterwards, by route specificity with a code-unit fallback (`:209`), so routes are already order-independent and the other five are not. The item reads as half-closed and is closer to a quarter
+  - a CI job fails the build when two clean builds of one commit disagree — today no workflow under `.github/workflows/` grades reproducibility at all, so the first two bullets could regress silently
 
 ## B-005 — cache, observability, cost tracking and CSRF hardening ship with no production caller   [ ]
 
@@ -167,6 +236,9 @@ dod:
     condition this bullet named. The umbrella stays open with its evidence intact and keeps
     what none of the four took: `trackAgentRun` (`packages/theo/src/server/cost/track-agent-run.ts:49`)
     is exported from `packages/theo/src/server/cost/index.ts:11` and still has no production caller
+remeasured 2026-08-21: **three of five closed, and the remaining two changed shape.** The cache engine boots (`packages/theo/src/server/cache-bootstrap.ts:28`), the observability plugin is registrable and registered (`packages/theo/src/server/observability/middleware.ts:114`), and `trackAgentRun` has a production caller (`packages/theo/src/server/http/action-execute.ts`). `csrf-multi-header` is no longer unexported — `packages/theo/src/server/security/index.ts:4` re-exports it — and the follow-up reading of it, made hours later the same day, corrects the one above rather than replacing it silently. It was first written here as "zero production callers, so the door is one nobody walks through". That was measured and wrong in its conclusion: `./server/security` is a **published subpath** (`packages/theo/package.json:86`), and the function's own docstring says what it is for — *"available to `executeWebRequest` consumers who want an origin-based policy alongside the custom-header `validateCsrfRequest`"*. The intended caller is the application, not the framework, so no internal caller is the CORRECT state for it, exactly as for `action-encryption`'s public subpath (B-M74-01, `packages/http/src/index.ts:21-26`). Counting a published opt-in API as an orphan because the framework does not call it would argue for deleting every utility a consumer is meant to reach.
+
+**So all five findings of this item are resolved**: three wired, two deliberate public API. What is left is a status transition, which belongs to a cycle
 
 ## B-006 — dynamic route precedence uses a whole-path `localeCompare`, so the less specific route wins   [ ]
 
@@ -181,6 +253,8 @@ dod:
   - `/api/users/settings` resolves to `/api/users/:id` and not to `/api/:resource/settings` against a published build
   - precedence is compared per segment, with `localeCompare` retained only as a final total-order fallback
   - a regression test fails when the tiebreak is restored to a whole-path comparison
+  - the precedence rule is written down as a contract — which segment shape wins over which, and what the final tiebreak is — because a rule that lives only in a comparator is one nobody can plan a route tree against (added 2026-08-21 with the M4 minimum contract)
+remeasured 2026-08-21: **closed in code.** Precedence is compared per segment (`packages/theo/src/server/scan/scan.ts:183,215`) with a code-unit final tiebreak (`packages/theo/src/server/_internal/compare-by-code-unit.ts`), so the whole-path `localeCompare` this item was opened against is gone. The documentation half added to the DoD on 2026-08-21 is still open
 
 ## B-007 — resolve the open private security advisory   [ ]
 
@@ -223,6 +297,8 @@ dod:
   - `cache: { enabled: false }` does not take the boot down; today `packages/theo/src/cache/engine-singleton.ts:33` throws on exactly that
   - a configured `defaults.maxAge` is the fallback `defineCachedRoute` uses, in place of the hardcoded constant (`packages/theo/src/cache/validation.ts:76`)
   - the cache serves a hit on a second request, observed through a signal that survives `NODE_ENV=production` — the `X-Theo-Cache` header is dev-only today (`packages/theo/src/cache/define-cached-route.ts:368`), so M5's criterion is not observable on a published build without this
+  - the documented surface states which of TTL, stale-while-revalidate and tag invalidation the engine serves and which it does not, so an application author stops inferring it from the type signatures (added 2026-08-21 with the M5 minimum contract)
+remeasured 2026-08-21: **closed in code.** `initCacheEngineFromConfig` is called at boot and in dev (`packages/theo/src/server/cache-bootstrap.ts:28`, `packages/theo/src/cli/commands/start/index.ts:68`, `packages/theo/src/cli/commands/dev.ts:36`) and `defaults` reaches the engine (`packages/theo/src/cache/cache-engine.ts:109`). The production-observable cache signal and the documented-surface bullet remain open
 
 ## B-010 — make the observability plugin registrable and give it the config key its registry documents   [ ]
 
@@ -239,6 +315,7 @@ dod:
   - a run emits spans that reach an exporter from a production path, read back on the collector side
   - `activeSpans` (`packages/theo/src/server/observability/middleware.ts:28`) carries a cap or a TTL — without one, every agent run holding a stream open leaks a span permanently
   - `flushIntervalMs` (`packages/theo/src/server/observability/adapters/theo-cloud.ts:21`, `:34`) either implements the timer or stops being accepted; today it promises behaviour that does not exist
+remeasured 2026-08-21: **closed in code.** The plugin returns `{ name, register }` (`packages/theo/src/server/observability/middleware.ts:114`) and the `observability` key exists in the config schema (`packages/theo/src/config/schema.ts:198`)
 
 ## B-011 — the Web executor honours the `csrf: false` opt-out the public contract promises   [ ]
 
@@ -254,6 +331,7 @@ dod:
   - a cross-origin POST with no token is rejected by a build that configures no CSRF option at all
   - both holes in the multi-header gate are closed BEFORE it is exported
   - the public-API break is recorded under `Changed` in `CHANGELOG.md` and in `MIGRATION.md`
+remeasured 2026-08-21: **closed in code.** `shouldEnforceCsrf` reads absence as enforced and returns `config?.csrf !== false`, so the documented opt-out is honoured by the Web executor (`packages/theo/src/server/web-handler.ts:508-516`)
 
 ## B-012 — decide the fate of the fourth orphan in `@theokit/http`   [ ]
 
@@ -270,4 +348,413 @@ dod:
   - **REWRITTEN 2026-08-20, after measurement refuted its premise.** The original bullet asked for `server-inserted-html` and `css-resource` to be wired into `packages/http/src/stream-renderer.ts:58` or deleted. Neither is right there: `renderToStream` owns only the front of the stream, so `</head>` ships in React's first chunk before any component can call `add()` and the manager read there is always empty; and `css-resource` is redundant under React 19, which hoists `<link rel="stylesheet" precedence>` into `<head>` itself. The real seam was born next door in `dd010c516` (`packages/theo/src/router/entry-server.ts`), which assembles the document around the stream. What closes this bullet is an ADR deciding whether the server-inserted-html capability is wanted at all, before someone tries again to wire it where it cannot go
   - `action-encryption` stays a published subpath rather than being deleted with `action-handler.ts`: the two were never connected in either direction, so the premise in `why_now` is false for that pair. Recorded rather than corrected in place, because the item was planned on it
 
-Next free id: **B-013**.
+Seven more registered 2026-08-20, from the DX benchmark and the re-measurement of the sixteen
+surfaces, against eight issues — B-018 takes two of them, and says inside the item why they are
+one change. They are `triaged` for the same reason the batch above is: each arrives with an
+issue and a `file:line`, so intake had nothing left to ask.
+remeasured 2026-08-21: **closed by deletion.** `packages/http/src/action-handler.ts` no longer exists, so the fourth orphan's fate was decided the cheapest way available
+
+## B-013 — a gated tool appears on the wire twice, under two ids, so the pause never correlates with the resume   [ ]
+
+domain: theokit
+repo: packages/agents
+suggested_mode: bug
+source: discover-review
+evidence: usetheokit/theokit#361 — the bridge marks the approval UUID as seen (`packages/agents/src/bridge/present-ui-message-stream.ts:163`) and emits `tool-input-available` under it (`:165`); the SDK's own `callId` arrives later unseen, so a second `tool-input-available` goes out under a different id (`packages/presenter/src/presenters/ui-message-stream.ts:175`). The UUID cannot be the SDK's: it is drawn in the plugin (`packages/agents/src/bridge/hitl-plugin.ts:89`) inside a `pre_tool_call` hook whose context carries `name`, `args`, `agentId` and `runId` and no tool-call id (`packages/agents/src/bridge/hitl-plugin.ts:20-24`)
+why_now: the HITL pause span was built on this defect and is already reporting around it — `observe-agent-run.ts:108` opens `agent.hitl`, the resume never reaches it under the same id, and `:169` now sets `hitl.resume_observed: false` so an operator does not read a whole run as the human thinking. That makes the span honest, not correct, and J9 criterion 3 grades the number that is still unavailable
+status: triaged
+dod:
+  - a test drives a gated tool from approval to result and asserts exactly one `tool-input-available` per logical call
+  - the `agent.hitl` span closes on the resume with `hitl.resume_observed` true, and its duration bounds the human wait rather than the run
+  - which of the two ids becomes canonical is decided and recorded, together with what happens to the `approve/${approvalId}` callback URL (`packages/agents/src/bridge/hitl-plugin.ts:96`) under that choice — this is a wire change for every consumer already reading these chunks
+  - J9 criterion 3 passes against a published build
+remeasured 2026-08-21: **closed in code.** A tool event is folded to the one id the wire uses for its logical call, so the second announcement of a gated call is not emitted again (`packages/agents/src/bridge/present-ui-message-stream.ts:163`, citing this item's issue). B-028 is the separate defect in what the pause span MEASURES, and it is open
+
+## B-014 — the fluent `AgentBuilder` cannot declare a step ceiling, and it is the path the scaffold generates   [ ]
+
+domain: theokit
+repo: packages/agents
+suggested_mode: bug
+source: discover-review
+evidence: usetheokit/theokit#363 — `packages/agents/src/bridge/agent-builder.ts` exposes fifteen methods, from `model` (`:143`) to `mcp` (`:279`), and none reaches the ceiling. The machine exists on the other path: `maxIterations` is a field of the loop contract (`packages/agents/src/loop/loop-strategy.ts:49`) with a finite default (`:54`), is carried by the compiled agent (`packages/agents/src/bridge/agent-compiler.ts:287`) and is fed by `@MainLoop` (`packages/agents/src/bridge/agent-orchestrator.ts:184`). The scaffold writes the builder path (`packages/create-theokit/templates/default/agents/chat.ts:21`)
+why_now: two authoring paths ship one containment guarantee, and the half without it is the half `create-theokit` generates — so the default agent in a fresh project is the one that cannot cap its own spend. J5 criteria 4-5 grade that path
+status: triaged
+dod:
+  - measure first whether a run served by `mountAgent` reaches `runReflectiveLoop` at all; that decides whether the finite default already protects a scaffolded agent, and therefore whether this is a DX gap or a containment gap. #363 records it as unmeasured and it changes what the fix has to be
+  - a builder method feeds the same `maxIterations` the decorator feeds — one mechanism, not a second one alongside it
+  - a test drives an agent whose tool keeps asking for another round and asserts the run stops with `step_limit` (`packages/agents/src/loop/loop-strategy.ts:23`) rather than by exhausting something else
+remeasured 2026-08-21: **closed in code.** The fluent builder exposes `maxIterations` (`packages/agents/src/bridge/agent-builder.ts:158`, threaded at `:321`), so the ceiling is reachable from the path the scaffold generates
+
+## B-015 — a conversation does not survive a reload: `#chatId` is private, drawn in the constructor, and can be neither supplied nor read   [ ]
+
+domain: theokit
+repo: packages/agents
+suggested_mode: evolve
+source: discover-review
+evidence: usetheokit/theokit#364 — `packages/agents/src/client/agent-client.ts:68` initialises `readonly #chatId = crypto.randomUUID()` in the field, so every `new AgentClient(...)` draws a fresh one; `AgentClientOptions` (`:56`) has no field for it and the constructor (`:108-112`) takes only `transport`, `contextResolver` and `options`. It is sent as the top-level `id` (`packages/agents/src/client/http-transport.ts:92`) and read by the server as the session id
+why_now: the server keeps the previous conversation on disk under the discarded id, so the history is unreachable rather than lost: full cost, no value. **Corrected 2026-08-20** — this line read "J4 criterion 1 does not have an expensive path, it has no path", and the J4 re-measurement refuted it: an application pins the id at the public transport seam and reads history back through `@theokit/agents/persistence`, and all five of J4's web criteria pass at 4 files and 59 glue lines (`docs/program/journeys/j04-thread.md`). The item stays open because that is a workaround for an option the client declines to take, which is a DX gap rather than a missing capability
+status: triaged
+dod:
+  - the form is decided and recorded as an ADR **before** any client change lands, because the two candidate answers have different blast radii: an id accepted in `AgentClientOptions` leaves every application to invent where it lives, while a framework-owned URL convention does not. J4 criterion 4 constrains the choice — surviving a storage wipe is satisfied only by the URL
+  - the ADR states the ordering against B-016 explicitly: an id the caller supplies is an id the caller chooses, so shipping this before the owner check trades a DX gap for an authorization one
+  - a test constructs a second client with a persisted id and continues the same history, and fails on the current code
+  - the default stays the random draw, so a consumer that supplies nothing sees no change
+
+## B-016 — the agent endpoint resumes any conversation by id, with no owner check   [ ]
+
+domain: theokit
+repo: packages/theo
+suggested_mode: bug
+source: discover-review
+evidence: usetheokit/theokit#365 — the session id arrives in the request body in both accepted shapes (`packages/theo/src/server/agent/mount-agent.ts:66`, `:72-73`) and keys the durable conversation the SDK resumes (`packages/agents/src/bridge/agent-compiler.ts:297`, `packages/agents/src/bridge/agent-endpoint.ts:154`). The only gate on the path authenticates nobody: CSRF refuses a cross-origin POST (`packages/theo/src/server/agent/mount-agent.ts:182-186`) and identifies no caller. `08c277c12` did give `mountAgent` the policy seam (`packages/theo/src/server/agent/mount-agent.ts:105-107`, evaluated at `:143`) and absence is deliberately not denial, but the production handler passes neither `policy` nor `subject` (`packages/theo/src/cli/commands/start/handlers.ts:372-376`), so the served path still has no owner check
+why_now: B-015's natural fix puts the id in the URL, and the moment it is there it is shareable and lands in `Referer`, proxy logs, browser history and screenshots — a latent capability model becomes an exposed one. The seam that would close this was built on 2026-08-19 and no serving path uses it, so the code today states neither model
+status: triaged
+dod:
+  - the choice is recorded: a conversation belongs to an authenticated subject, or the capability model is the declared design. Both are defensible; only the current silence is not
+  - if ownership wins, the production agent handler (`packages/theo/src/cli/commands/start/handlers.ts:372`) supplies `subject` and a policy, and a request carrying another session's id is refused with 403 against a published build
+  - if the capability model wins, it is documented where a consumer reads it before B-015 puts the id anywhere a capability may not go
+  - the thread routes (`packages/theo/src/server/agent/handle-thread-routes.ts`) are measured against the same question; #365 records them as unmeasured and they may carry a different surface
+
+## B-017 — the release workflow reports success publishing nothing   [ ]
+
+domain: theokit
+repo: theokit
+suggested_mode: bug
+source: discover-review
+evidence: usetheokit/theokit#366 — run 32370544611 on `main` @ `60822a48b` logged `No NPM_TOKEN found, but OIDC is available` and then `E404 Not Found - PUT` for both `theokit` and `create-theokit`, which already exist on the registry, so it is permission and not a free name. `.github/workflows/release.yml:84` passes `NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}` and the secret resolves empty; the comment directly above it (`:79-83`) records that the tokenless path cannot pay here while the repository is private. The run before it (32286443293) was green with the same missing-token line and no `is being published` line at all
+why_now: this blocks the whole of condition 1 — with no published artifact, `/acceptance` does not run against any of the sixteen surfaces. The secret has been absent for at least one run, most plausibly since the `usetheodev` to `usetheokit` transfer, and the first release carrying real content is what exposed it
+status: triaged
+dod:
+  - the pending version is on the npm registry, its tag exists, and the GitHub release is created
+  - a run that should have published and did not fails instead of reporting success: after the publish step, a version section in `CHANGELOG.md` with no matching version on the registry is an error
+  - `/acceptance` runs against the published artifact for at least one surface — which is the thing this unblocks, and the only proof the publish is real
+
+## B-018 — the Cloudflare worker scans disk at runtime, and no adapter serves an agent   [ ]
+
+domain: theokit
+repo: packages/theo
+suggested_mode: live-test
+source: discover-review
+evidence: usetheokit/theokit#369 and usetheokit/theokit#367. The generated worker discovers routes with `scanServerRoutes(serverDir)` (`packages/theo/src/adapters/cloudflare.ts:142`, the directory a build-time literal at `:113`) and loads modules with `createProductionLoader`, which is `import(pathToFileURL(path).href)` (`packages/theo/src/server/scan/module-loader.ts:11-15`) — a filesystem read and a runtime-computed dynamic import, neither of which a Worker has; and `server/` is not even uploaded, since the generated `wrangler.toml` declares `bucket = ".theokit/client"` (`packages/theo/src/adapters/cloudflare.ts:170`). Separately, `command grep -rc agent packages/theo/src/adapters/*.ts` returns no file with a hit across all fourteen: agents are a second scan (`packages/theo/src/cli/commands/start/manifest-loader.ts:16`, `:58`) served by `mountAgent`, which only the internal contract exports (`packages/theo/src/server/internal-api.ts:43`). #369 is marked `[NEEDS-REPRO]` — static inference from three agreeing sites, no deploy
+why_now: **one item, and the merge is the finding.** Both close on one change: the build has to emit a server manifest of static imports the bundler can see, which is exactly what the client route manifest already does for pages. Once server modules reach the bundle, agents arrive through the same door, because `mountAgent` is already Web-shaped — `Request` in, `Response` out. Split in two, neither DoD is gradeable on its own: an agent cannot be shown to be served on a target where no server module loads, and once one loads the agent is another entry in the same manifest. What changed here is that the programme spent the week closing surface gaps — cache, streaming, observability, CSRF, access policy — every one of them on the Node path, and this is the item that measures how far those guarantees actually travel
+status: triaged
+dod:
+  - **the repro comes first**, because #369 is inference: `wrangler deploy` of a scaffolded app, then a `curl` of one `/api/*` route, recorded. That either confirms the failure or kills half this item before anyone builds a manifest
+  - a file route under `/api/*` answers from a deployed Worker, with no directory read and no path-computed `import()` on the request path
+  - an agent answers on that same deployed target — the M14 criterion this item exists for, and the one the word count in the adapters says nobody has
+  - the other eight targets are checked against those same two requests, and a target failing both is delisted rather than documented as supported, which is M14's own criterion. #369 measured only Cloudflare and #367 measured only the absence of the word, so the per-target answer is written down rather than generalised from one
+
+## B-019 — there is no trace: the OTLP serializer draws a `traceId` per span   [ ]
+
+domain: theokit
+repo: packages/theo
+suggested_mode: bug
+source: discover-review
+evidence: usetheokit/theokit#368 — `packages/theo/src/server/observability/otlp-serializer.ts:65` sets `traceId: randomHex(32)` inside a per-span `map` (`:64`), and the data has nowhere to carry a relation: `SpanData` (`packages/theo/src/server/observability/span.ts:8-16`) has no `traceId`, `spanId` or `parentSpanId`, and `startSpan(name, attributes?)` (`packages/theo/src/server/observability/adapters/types.ts:29`) accepts no parent, so an adapter written by an application cannot recover the correlation either. The incoming `traceparent` is resolved at the door (`packages/theo/src/cli/commands/start/request-handler.ts:233`) and dies there, though the W3C primitives already exist (`packages/theo/src/server/http/trace-context.ts:1`). No span records the model id — the run span carries `agent` and `sessionId` only (`packages/theo/src/server/agent/observe-agent-run.ts:139-140`)
+why_now: the four spans M8 asks for were implemented on 2026-08-20 and they do exist, drain to an exporter, and do not relate to one another — a run reaches a collector as three unlinked records. Reporting M8 as 4/4 on that would be counting spans rather than counting usable telemetry, and J9 criteria 5-6 grade the second
+status: triaged
+dod:
+  - `SpanData` carries `traceId`, `spanId` and `parentSpanId`, and the serializer reads them instead of drawing one
+  - `startSpan` takes a parent context, so a custom adapter can build the tree too
+  - a request carrying a W3C `traceparent` produces spans continuing that trace id, read back on the collector side — M8's first criterion, unreachable by construction today
+  - the run span is the parent of the tool and HITL spans, verified by reading the exported payload rather than the in-process objects
+  - some span records the model identifier, so tokens convert to cost: J9 criterion 5 allows cost, or tokens, or a cost attribute, and without the model the token route does not close
+note: four of the five criteria landed on 2026-08-20 in `2ec9180ee` — `SpanData` carries the three ids, the serializer reads them, `startSpan` takes a parent context (forwarded by `defineObservabilityAdapter` too), `mountAgent` continues an incoming `traceparent`, and the run span parents the tool and HITL spans. The fifth landed the same day: the `agent.run` span records `gen_ai.request.model` (the OpenTelemetry GenAI semantic-conventions name, read from `open-telemetry/semantic-conventions-genai`), carrying the EFFECTIVE model — a per-run override beats the declared one, and an agent that declared none reports the default it ran on. It travels on the turn's `finish` metadata, so the in-process targets get it over the same path the served ones do. Filed alongside it: usetheokit/theokit#385 (the `http.request` span joined no trace) and #381 (the thread route dropped the `traceparent`), both of which had to close for the third criterion to hold on more than one of three served paths. All five read-back criteria are asserted against the serialized OTLP payload, not against a live collector — the collector run that graded J9 is what would settle that, and it has not been re-run
+remeasured 2026-08-21: **closed in code.** Trace identity is decided when a span starts and carries a parent (`packages/theo/src/server/observability/span.ts:9-22`); the serializer reads it instead of minting one (`packages/theo/src/server/observability/otlp-serializer.ts:80`). A run therefore reaches a collector as one trace. The dev agent path still mints its own trace id, which is M8's remaining half and not this item
+
+## B-020 — an acceptance record is evidence nobody outside this machine can read   [ ]
+
+domain: theokit
+repo: theokit
+suggested_mode: evolve
+source: discover-review
+evidence: the first acceptance run of this programme wrote `.claude/knowledge-base/acceptance/M1-2026-08-20.md` plus sixteen evidence files, and `git ls-files .claude | wc -l` returns 0 — `.gitignore:84` excludes `.claude/` wholesale. `.claude/rules/knowledge-base-location.md` makes that directory canonical, so the record is in the right place and untracked at the same time
+why_now: before 2026-08-20 no acceptance record existed, so the collision between "canonical location" and "ignored path" had never been reached. It has now, and the programme goal closes each of the sixteen surfaces "by `/acceptance`" — a verdict that lives on one developer's disk cannot close anything for anyone else. `docs/surfaces/` already solved the identical problem for the sixteen gap measurements by versioning a copy under `docs/`, and its README says why: a measurement readable by one person is auditable by nobody
+status: triaged
+dod:
+  - an acceptance record and its evidence are readable from a fresh clone, without the machine that produced them
+  - `cycle-acceptance`'s `## Output` section names the tracked location, so the next run does not have to rediscover this
+  - the arrangement does not fork into two copies that drift — the failure `B-008` and `docs/surfaces/README.md` both register for their own artifacts
+
+## B-021 — abnormal endings are reported as normal ones, across four subsystems   [ ]
+
+domain: theokit
+repo: packages/agents
+suggested_mode: review
+source: discover-review
+evidence: four defects measured on 2026-08-20 by exercising benchmark journeys against real bytes rather than reading source. usetheokit/theokit#379 — the agent loop hit its iteration ceiling and emitted an ordinary `done`; the SDK default is 8 turns (`IterationBudget`, `maxIterations ?? 8`), so it fired for agents declaring nothing. #384 — a dropped connection settled the client at `status: 'done'`, `error: null`, answer cut mid-word. #382 — the deploy shim delivered 659 bytes as one chunk at millisecond 1123 of an 1123 ms run and reported success. #388 — an exhausted retry emitted `tool-output-available`, the success part type, carrying the error text; the SDK ships `status: "completed"` as a hardcoded literal, so the translator's `status === 'error'` branch was dead code. Recorded as `docs/adr/0002-an-abnormal-ending-is-never-reported-as-normal.md`
+why_now: three of the four were fixed on 2026-08-20 and the rule they share was written down the same day, but the ADR is Proposed and nothing enforces it. The next producer to add a terminal event has no gate telling it that absence must mean success — which is exactly how four subsystems arrived here independently. The suite could not find any of the four: in every case the code did what its author intended and the tests asserted that intention
+status: triaged
+dod:
+  - the ADR is accepted or rejected by the project owner — a Proposed rule binds nobody
+  - a gate names a terminal event that carries no way to distinguish an abnormal ending, or the ADR states in writing that this one is unmechanizable and why
+  - #382 is closed or its adapters are delisted; it is the only one of the four still open, and the only one needing a contract change rather than a field
+
+## B-022 — a fixture born of the same assumption as the code cannot disagree with it   [ ]
+
+domain: theokit
+repo: theokit
+suggested_mode: review
+source: discover-review
+evidence: five occurrences on 2026-08-20 alone. Token attributes were read from a flat object invented for the test, and the code read the same invented shape. The `observeAgentRun` recorder dropped `startSpan`'s third argument, so it could not disagree with a caller that passed none. The OTLP serializer's only numeric fixture was `201`, which happens to be an integer, so `{"intValue":"0.0031"}` shipped (usetheokit/theokit#380). Four stream fixtures ended without a terminal chunk while calling themselves clean turns. And the `ai` oracle test in `hitl-harness.test.ts` **passed because of** the defect — it read the final message, where a permanently pending approval part hung beside the completed one
+why_now: all five were found on the same day, by measurement rather than by the suite, and four of them were found only because a benchmark journey graded output bytes instead of reading source. A sixth was caught hours later by the pre-push typecheck: an inferred adapter mock whose `attrs` was required where the interface declares it optional. The rate is the finding — this is not five unrelated slips
+status: triaged
+dod:
+  - a written convention says where a fixture's shape must come from — the published `.d.ts`, the producer's own builder, a recorded payload — and it lives somewhere a reviewer will cite
+  - the mocks standing in for a published interface declare that interface, so a signature change breaks them instead of drifting past
+  - at least one existing suite is re-checked against the convention and the result is reported, pass or fail
+remeasured 2026-08-21: **two fresh instances, both caught before they landed, both in work done the same day.** A name-based test for the scan walker PASSED before the sort existed, because this machine's ext4 happened to return those four names already ordered — the test and the code had observed the same accidental order and could not disagree. It was replaced with an injected reader handing back a hostile order, and verified by removing the sort and watching 3 of 4 go red. Separately, the linter called `<Image>`'s runtime guards impossible because the types prove the props are present; deleting them on that argument would have left the comment describing a check that no longer existed, so they read through a widened view of what an untyped caller can actually pass. Neither is a new finding, and that is the point of recording them: the item describes a shape that recurs, and a count of recurrences is what tells anyone whether it is getting rarer
+
+## B-023 — the deploy shim buffers a stream whole, across six of nine targets   [ ]
+
+domain: theokit
+repo: packages/theo
+suggested_mode: bug
+source: discover-review
+evidence: usetheokit/theokit#382. `createWebShim` accumulates every write into an array and concatenates once at `end()` (`packages/theo/src/adapters/web-shim.ts:157,190,194`), so no byte is observable before the handler returns. Measured through it, a run that streams 8 chunks 120 ms apart on the served path arrives as **one chunk at the instant it completes** — ratio 0.999 against criterion 3's 0.5 bar. Six of the nine registry entries consume it: cloudflare, vercel, netlify, bun, deno-deploy, aws-lambda. **Two of the six buffer a second time in their own emitted contract** (`vercel.ts:86` `await webResponse.text()`, `aws-lambda.ts:142` `body: await response.text()`), so a fixed shim still leaves those two non-streaming
+why_now: `ROADMAP.md § M14` has named this blocker in its Definition of done since the surface was measured, and it carried no issue number until 2026-08-20 — so nothing could comment on it, and nothing could close it. It also decides J3's criterion 4 and is the last of the four `docs/adr/0002` instances still open. The adapter streaming tests could not catch it: they grep the **generated source text** for `onShellReady` and never run a stream
+status: triaged
+dod:
+  - a streaming route observed delivering a chunk before the response completes, on each listed target, or the target is delisted for streaming
+  - the two double-buffering contracts are fixed or their targets are delisted — fixing the shim alone provably does not reach them
+  - a test that runs a stream rather than reading the emitted module, because that gap is why this survived
+remeasured 2026-08-21: **closed in code.** `res.write()` enqueues into a `ReadableStream` the `Response` already carries, so bytes are observable before the handler returns (`packages/theo/src/adapters/web-shim.ts:10-12`). AWS Lambda is delisted for streaming by name rather than silently
+
+## B-024 — two conventions cost a file each, and nobody has decided whether they are worth it   [ ]
+
+domain: theokit
+repo: theokit
+suggested_mode: evolve
+source: discover-review
+evidence: J2 is the only journey the benchmark loses on a countable metric, and it loses metric 1 at exactly the 2.0x bar — 4 files against 2 — twice, before and after the approval id reached the client. `docs/program/journeys/j02-hitl.md` names the two extra files precisely: the tool's own file, which the `agents/tools/` folder convention asks for, and the scaffold's `app/hooks/use-transcript.ts`, through which its architecture routes client state. Its own words: *"Neither is waste; both are cost, and the metric measures cost."* Glue closed from 62 to 42 and concepts from 7 to 5 when a real defect was fixed; files did not move, because no defect was ever what held them
+why_now: nine of the ten journeys are now measured against published builds and J9 is won, so the programme has a working method — close what a journey names, re-measure. J2 is the first case where re-measuring cannot help: there is no defect to close. The remaining distance is two decisions this project made deliberately and has never priced. Until somebody decides, J2 stays lost for a reason no amount of engineering removes, and that is different from a bug nobody has got to
+status: triaged
+dod:
+  - a decision, recorded, on whether a tool must live in its own file under the reserved `agents/<name>/tools/` folder — the convention is real (`packages/theo/src/server/scan/agent-scan.ts`) and its cost is now measured on two journeys, since J1 counts the same folder as one of its five concepts
+  - a decision, recorded, on whether the scaffold routes client state through a hook file — this one is scaffold shape rather than framework contract, so it is the cheaper of the two to change and the easier to get wrong by changing for the wrong reason
+  - whichever way each goes, an ADR states it, because a convention kept for a good reason and a convention kept by inertia are indistinguishable from the outside — and the benchmark will keep charging for it either way
+  - J2 re-measured after the decisions land, so the number reflects them
+
+## B-025 — a web app compiles a terminal PTY it will never use, and it costs the benchmark's fourth metric   [ ]
+
+domain: theokit
+repo: packages/agents
+suggested_mode: evolve
+source: discover-review
+evidence: metric 4 measured on 2026-08-20 (`docs/program/evidence/metric4-j09-2026-08-20.txt`) puts a scaffolded TheoKit app at 30.40 ± 7.50 s to first green run against Next.js at 14.93 ± 0.91 s — intervals non-overlapping, which is the test `docs/program/dx-benchmark.md` § What counts as winning sets, and the clause that retracted J9's win. The whole gap is install: 19.6 s against 4.2 s, while TheoKit's **build is faster** (7.8 s against 10.2 s). It is not tree size — measured, TheoKit installs **fewer** packages and less bytes: 230 packages / 404 MB against 285 / 644 MB. It is one dependency: `node-pty` declares `"install": "node scripts/prebuild.js || node-gyp rebuild"`, a native step that downloads a prebuild or falls back to a C++ compile, which also explains a variance eight times the Next.js side's. The chain is `@theokit/agents` → `@theokit/sdk-pty` → `node-pty`, and `sdk-pty` is a hard `dependencies` entry of `@theokit/agents` (`packages/agents/package.json`), reached by exactly one source file, `packages/agents/src/pty-entry.ts`, which exists to re-export it
+why_now: metric 4 went unmeasured on all ten journeys until 2026-08-20 and was assumed not to matter. It decided one: J9 won three countable metrics and six of seven criteria and is still not won, because the fourth clause is "not worse on time-to-green". This is the first cost the benchmark has surfaced that none of the other three metrics can see — files, glue lines and concepts are all blind to what a person waits for — and it is paid by every application on every journey, whether or not it ever opens a terminal
+status: triaged
+dod:
+  - a scaffolded web app installs without running a native build step, verified by timing rather than by reading the manifest
+  - `theokit dev` and `theokit start` still work for an app that does want the PTY backend, and how it opts in is documented
+  - metric 4 re-measured on J9 afterwards, because the number is the point and the manifest is not — and note that this item alone will **not** close it: measured on the scaffolded app, 26.1 s as it ships against 15.5 s with `node-pty` out of the tree, which projects to 19.8-27.8 s total against Next.js's 14.9 s. Necessary, not sufficient
+  - the remaining install is accounted for. **Measured 2026-08-20, so it is no longer an open question** (`docs/program/evidence/b025-install-decomposition-2026-08-20.txt`): with `--ignore-scripts` the two applications install in 10.5 s against 5.4 s, so **78% of the 23.5 s gap is lifecycle scripts and 22% is the tree itself**. Exactly two packages in the whole tree declare one — `node-pty` and `esbuild` — and the Next.js side declares none, because it ships its platform binary as `@next/swc-*` optionalDependencies that npm resolves without running anything. So this item removes the larger of two scripts and leaves the other plus a 5.1 s floor
+  - `esbuild`'s `postinstall` is decided too, or the decision records why it stays. It is the second half of the same cost and the same shape — a binary fetched by a lifecycle hook where the comparison ships one as a resolved dependency
+  - **the second `esbuild` is gone.** Measured (`docs/program/evidence/b025-two-vite-majors-2026-08-20.txt`): a scaffolded app installs `esbuild` **twice**, 0.28.2 and 0.25.12, 23 MB, because `packages/theo` pins `vite@^6.4.3` while the same scaffold's `@tailwindcss/vite@^4.0.0` pulls `vite@7`. Two majors, two `postinstall` binary fetches. This one is not the price of choosing Vite — which the programme's scope endorses — it is a skew between what the framework pins and what its own template pulls, and it is the cheapest thing on this list to fix
+  - whatever shape is chosen, it does not become a second way to fail at install time — an optional dependency that silently does not install and then throws at runtime trades a slow start for `docs/adr/0002-an-abnormal-ending-is-never-reported-as-normal.md`
+note: the obvious fix was tried on 2026-08-20 and reverted, and the reason is the substance of this item. Moving `@theokit/sdk-pty` to an optional peer works and the gain is real — installing `@theokit/agents` alone went from **6.7 s to 1.4 s**, `node-pty` absent, verified by timing a packed tarball rather than by reading a manifest. It was reverted because `packages/agents/tests/unit/dependency-direction.test.ts` refuses it, for a reason that survives the measurement: `@theokit/agents` once had zero dependencies and six peers, a peer means "the host provides it", and the host is forbidden by `agents/gates/m63-boundary.test.ts` to import `@theokit/sdk*` at all. Asking a consumer to declare a package it may not import is exactly the inversion M79 fixed. **Two well-argued rules conflict and neither is wrong** — an implementation the consumer cannot import must not be a peer, and an application should not compile a terminal it will never open. The resolution is probably a third shape (a separate package owning the `/pty` subpath and its dependency), which is a decision rather than a fix, which is why this stays open instead of being closed by flipping a test
+
+## B-026 — the security-header half of the deploy gap is mechanical, and nobody has done it   [ ]
+
+domain: theokit
+repo: packages/theo
+suggested_mode: evolve
+source: discover-review
+evidence: `theokit start` applies the configured security headers on every response (`packages/theo/src/cli/commands/start/request-handler.ts:241`), and none of the six Web-standards deploy adapters applies any — grep for `securityHeaders` under `packages/theo/src/adapters/` returns zero. Two of those targets serve HTML: Bun (`packages/theo/src/adapters/bun.ts:95`) and Cloudflare's streamed SSR (`packages/theo/src/adapters/cloudflare.ts:77`). So a deployed page carries no CSP, no `X-Frame-Options`, no HSTS and no `nosniff`, while the same page served by `theokit start` carries all four
+why_now: measured on 2026-08-21 while re-measuring J7. `buildSecurityHeaders` is a pure function of the config, so unlike the rate-limit half of the same gap this one needs no per-runtime client address, no trust decision and no config transport — the headers are known at build time and the response object is in hand. It is the cheapest real item this measurement produced, and it is the one with a security consequence
+status: triaged
+dod:
+  - a page served by each of the six adapters carries the same security headers the same app carries under `theokit start`, verified by reading a real response rather than by grepping the emitted entry
+  - the adapter's `appliesConfig` declaration gains `securityHeaders` in the same commit, so the build stops warning about a key it now applies
+  - a target that genuinely cannot set a header says so by name rather than dropping it
+remeasured 2026-08-21: **closed in code.** All six Web-standards adapters call `buildSecurityHeaders` (`packages/theo/src/adapters/security-headers.ts` + `cloudflare|vercel|bun|netlify|deno-deploy|aws-lambda`). The rate-limit half of the same gap is `B-027` and is open
+
+## B-027 — a declared rate limit protects one of seven targets, and wiring it naively is worse than not wiring it   [ ]
+
+domain: theokit
+repo: packages/theo
+suggested_mode: evolve
+source: discover-review
+evidence: measured 2026-08-21 (`docs/program/journeys/j07-rate-limit.md` § Correction). `createRouteRateLimiter` runs unaltered on the shim's `req`, so the missing piece is not a Web-shaped limiter but the client address. The shim's default policy reads `cf-connecting-ip` only (`packages/theo/src/adapters/web-shim.ts:143`) and only the Cloudflare entry passes a policy (`packages/theo/src/adapters/cloudflare.ts:148`); wired naively, five of six targets resolve every caller to `0.0.0.0` and share one global bucket, so a single client exhausts the budget for everyone — the self-inflicted denial of service `packages/theo/src/server/rate-limit/client-ip.ts:8` names. Three of the six addresses are not headers: Netlify's arrives in a handler context the entry drops (`packages/theo/src/adapters/netlify.ts:45`), Lambda's is discarded while building the Request (`packages/theo/src/adapters/aws-lambda.ts:104`), Bun's is in scope and unused (`packages/theo/src/adapters/bun.ts:87`)
+why_now: J7 is the framework's best benchmark result — three countable margins outside the bar and a fourth metric that clears its clause — and this is the single claim holding it open. It was described in that journey as "a single, cheap, entirely mechanical gap"; the measurement refuted that sentence and the sentence has been corrected
+status: triaged
+dod:
+  - each of the six entries resolves a real client address from its own runtime, or refuses by name — a target that cannot identify a caller must not silently share one bucket
+  - the config reaches the generated entry, with an explicit refusal for the values that cannot survive serialization (`keyBy` may be a function, `packages/theo/src/server/rate-limit/rate-limit-per-route.ts:28`; `store` is an object, `:42`)
+  - the per-isolate limit is stated rather than implied: `InMemoryStore` holds within one instance and both factories throw for any other store, so on Vercel, Lambda, Cloudflare and Netlify the honest description of the finished work is a limiter that does not limit across instances
+  - the two Web mirrors are deleted or given a caller — `packages/theo/src/server/rate-limit/rate-limit.ts:105` and `packages/theo/src/server/rate-limit/rate-limit-per-route.ts:295` have none, and the flat shape is what J7's deliberately broken state scores as a failure
+  - J7's metric 1-4 re-derived afterwards, because the wiring adds lines somewhere and the journey is graded on how few it costs
+remeasured 2026-08-21: **not started, and the reason is scope rather than difficulty.** The item's own warning holds on re-reading the adapters: wiring the limiter without per-runtime address resolution gives five of six targets a single shared bucket keyed on `0.0.0.0`, which is a self-inflicted denial of service rather than a partial fix. Three of the six addresses are not headers and must be threaded through generated entries that currently drop them, so this is a change to what each adapter emits, not a call site. Left whole deliberately: a slice that wires the two easy targets would put the framework's best benchmark result on a limiter that protects some callers and starves the rest
+note: the build now names the drop rather than swallowing it (`packages/theo/src/adapters/config-support.ts`), which is a stopgap and not this item. Warning was chosen over refusing on purpose: refusing breaks every deployment that declares a limit today, while the fix is days to a week
+
+## B-028 — the HITL pause span measures the human plus the model, and only the human was asked for   [ ]
+
+domain: theokit
+repo: packages/theo
+suggested_mode: evolve
+source: discover-review
+evidence: measured 2026-08-21 against a real `theokit build && theokit start` with an OTLP collector (`docs/program/evidence/j09-criteria-3-and-6-tree-2026-08-21.txt`). `closeToolSpan` ends the pause span on the `tool-output-available` chunk, and its comment states the premise — "the tool producing output IS the resume" (`packages/theo/src/server/agent/observe-agent-run.ts:241`). The wire refutes it: with the approval answered at ~3306 ms, that chunk arrived at 4829 ms, 1523 ms later, which is the model's post-resume latency to the millisecond. Across three runs varying only that latency, the excess over the measured human wait tracked it 1:1 — 20 ms model / +30 ms excess, 700 ms / +723 ms, 1500 ms / +1524 ms — over a 75x swing in the pause-to-run ratio. The premise holds only when the model is instantaneous, which is the one case nobody deploys
+why_now: this is the single gradeable criterion `docs/program/journeys/j09-observability.md` still fails, and its wording is explicit that the pause span must reflect "the time the human took, not the time the run took". The criterion cannot be edited to fit the measurement — `.claude/rules/cycle-acceptance.md` § Hard gates calls grading a criterion changed after seeing the result fabrication — so the code is what moves
+status: triaged
+dod:
+  - the exported `agent.hitl` span's duration is within tolerance of the delay the client measured for the human decision, with the model's post-resume latency outside it, verified by varying that latency and showing the duration does not follow
+  - the resume instant is obtained from where it actually happens. It arrives on a **different HTTP request** than the run — the approve endpoint — and the run's observer sees only `tool-input-available`, `tool-approval-request`, `tool-output-available`, `tool-output-error` and `finish`, none of which is the human answering. Closing this needs a seam that does not exist yet, not a different chunk to listen for
+  - whatever seam is chosen states its own limit. A registry keyed by approval id that lets the approve handler close the span is in-process, so it holds within one instance and not across them — the same envelope `B-027` records for the rate-limit store, and stating it is the difference between a design and a surprise
+  - the comment at `packages/theo/src/server/agent/observe-agent-run.ts:241` is corrected or removed. It is not a stale comment, it is the reasoning the code implements, and it is wrong for every non-instantaneous model
+note: `hitl.resume_observed=true` and an `ok` status are real improvements that landed in `0e9e6dc04` and are NOT this item — the span now closes on resume rather than falling through to the end-of-run sweep. What it closes on is still the wrong event
+
+## B-029 — the client router restores no scroll position, and the prefetch cost is undocumented   [ ]
+
+domain: theokit
+repo: packages/theo
+suggested_mode: review
+source: discover-review
+evidence: measured 2026-08-21. `ScrollRestoration` appears in **no file** under `packages/` — the generated entry mounts nothing, so a back navigation lands wherever the browser left the scroll offset. Prefetching itself works and is the opposite case: `packages/theo/src/client/link.tsx:4-10` documents three strategies in a source comment (`intent`, `viewport`, `none`) and no user-facing document states what each costs in requests
+why_now: M6's minimum contract (ROADMAP § M6, revised 2026-08-21) requires exactly these two — a mounted restoration or a named absence, and a documented request cost. Neither exists, and nothing tracked either
+status: triaged
+dod:
+  - a back navigation to a scrolled list returns to the offset it left, or the documentation names the omission by name so an application author wires it themselves
+  - a document outside the source names all three strategies and states, for a viewport holding N prefetchable links, how many requests each issues — `viewport` issues N, `intent` issues one per hover, `none` issues zero
+  - the default strategy is stated, because `intent` firing on hover is a request the reader did not ask for
+
+## B-030 — a prod-like local run is two steps, and the contract asks for one   [ ]
+
+domain: theokit
+repo: packages/create-theokit
+suggested_mode: evolve
+source: discover-review
+evidence: measured 2026-08-21. The scaffolded manifest exposes `dev`, `build` and `start` as three separate scripts (`packages/create-theokit/templates/default/package.json.tmpl:7-9`), so reproducing production locally is `theokit build` followed by `theokit start` — two commands, and the second silently serves whatever the first left behind when it is skipped
+why_now: M7's minimum contract (ROADMAP § M7, revised 2026-08-21) is this single bullet, and it is the whole of what that surface must ship. A stale `.theokit/` served by `start` is the failure mode that makes the two-step version worse than slow
+status: triaged
+dod:
+  - one documented command produces and serves a production build
+  - running it after a source change serves the change, rather than the previous build
+  - the two underlying steps stay separately invocable — CI builds and serves in different jobs
+
+## B-031 — a relative `og:image` ships broken instead of being refused   [ ]
+
+domain: theokit
+repo: packages/theo
+suggested_mode: review
+source: discover-review
+evidence: measured 2026-08-21. Head hoisting and the metadata component both exist (`packages/theo/src/vite-plugin/hoist-head-tags.ts`, `packages/theo/src/client/metadata.tsx`), and nothing resolves a relative `og:image` against a configured base URL or refuses one at build time. A social card whose image is `/og.png` is fetched by the crawler against its own origin, so the tag is present, well-formed and useless — the failure mode nobody sees until the link is already shared
+why_now: M9's minimum contract (ROADMAP § M9, revised 2026-08-21) names it as one of two bullets. It is also the cheapest class of defect this programme keeps finding: correct-looking output that fails only off the developer's machine
+status: triaged
+dod:
+  - with a base URL configured, the served document carries an absolute `og:image`
+  - with no base URL configured, a relative `og:image` fails the build by name, naming the file and the tag
+  - a fully-qualified value is passed through untouched, including one on another origin
+
+## B-032 — `Image` reserves no space, refuses no bad `srcSet`, and the docs do not say what it will not do   [ ]
+
+domain: theokit
+repo: packages/theo
+suggested_mode: review
+source: discover-review
+evidence: measured 2026-08-21. `packages/theo/src/client/image.tsx:8,24-25` forwards `srcSet` and `sizes` to the element and nothing else: `srcSet` without `sizes` is accepted and the browser then picks a candidate against a wrong assumed width; no dimension is required, so the page shifts when the pixels arrive. There is no transform layer anywhere — `sharp` is not a dependency — and `packages/theo/src/client/` holds no fonts module, neither of which any document states
+why_now: M10's minimum contract (ROADMAP § M10, revised 2026-08-21) is these three bullets, and the band exists precisely because parity with an image pipeline is not sought here. An undeclared absence is what turns "we do not transform images" from a met contract into a defect
+status: triaged
+dod:
+  - an image without reserved space fails by name at build time, or the component reserves it from required dimensions
+  - `srcSet` declared without `sizes` fails by name at build time
+  - the documentation states that no image transform and no fonts module ship, so a reader learns it from the docs rather than from a blurry logo
+
+## B-033 — the framework's own fallback document declares neither a head nor a language   [ ]
+
+domain: theokit
+repo: packages/theo
+suggested_mode: bug
+source: discover-review
+evidence: **registered 2026-08-21 on a premise that was wrong, and corrected the same day before any code was written.** The original evidence read *"the served document declares no language — `lang=` appears in no file under `packages/theo/src`"*. The grep was accurate and the conclusion drawn from it was not: the document a scaffolded application serves comes from its own `index.html`, and all three templates that ship one declare `lang="en"` (`packages/create-theokit/templates/default/index.html:2`, `default/public/index.html:2`, `surfaces/desktop/frontend/index.html.tmpl:2`). Measuring the framework's source and concluding something about the served document is the gap-file failure this programme documents, committed inside the programme's own revision. What survives the correction is narrower and real: the fallback document the static adapter builds when the application has no `index.html` is `<!doctype html><html><body><div id="root"></div></body></html>` (`packages/theo/src/adapters/static.ts:158`) — no `<head>`, no `lang`, no charset, no viewport
+why_now: it is not the WCAG 3.1.1 Level A defect the first version of this item claimed, because the path that reaches a user in a scaffolded application does declare a language. It is the framework emitting a document below the floor it asks applications to meet, on the branch nobody exercises — and a fallback is by definition the branch that runs when something else already went wrong
+status: triaged
+dod:
+  - the fallback document carries `lang`, a charset and a viewport, so the framework's own emitted floor is the one it asks applications for
+  - a test renders the fallback branch — no `index.html` present — and asserts on the document rather than on the source, which is the check the first version of this item skipped
+  - the language of that fallback is not a second hard-coded `en` if a configured value exists by then; if none exists, it is `en` with a comment naming M12 as where that changes
+note: the M12 contract bullet "the served document carries `<html lang>`" is close to met by the scaffold already. What M12 still owns is that the value is a template literal nobody can configure and nothing negotiates — a different item, and not this one
+
+## B-034 — draft preview is neither built nor declared absent   [ ]
+
+domain: theokit
+repo: packages/theo
+suggested_mode: evolve
+source: discover-review
+evidence: measured 2026-08-21. `noindex` and `robots` appear in **no file** under `packages/theo/src`: there is no preview credential, no bypass path, and no directive to keep a leaked preview URL out of an index. The surface is listed in `.claude/skills/draft-preview-specialist/` and in the roadmap, which is the whole problem — it is named everywhere and implemented nowhere
+why_now: M15's minimum contract (ROADMAP § M15, revised 2026-08-21) permits either answer and forbids the current one. A named surface that does not exist is what a reader plans against
+status: triaged
+dod:
+  - either an unpublished document is served only against a valid preview credential, with `noindex` on that response, and the credential expires
+  - or the documentation states that draft preview does not ship, in the shared documentation rather than a Web-only note, so a Tauri or terminal reader is not left to infer it
+  - whichever is chosen, `.claude/skills/draft-preview-specialist/` says the same thing, because a specialist skill describing a surface nobody built is the assumption this item exists to remove
+
+## B-035 — the document preloads nothing, so a route's chunks are discovered one round trip late   [ ]
+
+domain: theokit
+repo: packages/theo
+suggested_mode: review
+source: discover-review
+evidence: measured 2026-08-21. `modulepreload` appears once under `packages/theo/src`, inside a comment (`packages/theo/src/vite-plugin/inject-entry-client.ts:30`), and is emitted by nothing. The client `Link` deliberately uses `<link rel="prefetch">` over route paths instead, and says why (`packages/theo/src/client/link.tsx:9-10`) — that covers a *future* navigation and not the chunks the current document already needs, so the browser learns about them only after parsing and executing the entry
+why_now: it is M3's second criterion and the only one of that milestone's three with no registered work — B-004 covers determinism and now the CI gate, and neither touches what the document advertises. A round trip per route on first paint is the cost, and nothing measures it today
+status: triaged
+dod:
+  - the build emits an asset manifest that maps a route to the chunks it needs
+  - the served document carries `modulepreload` for the matched route's chunks, observed over the wire against a published build rather than asserted over the template string
+  - a route with no additional chunks emits no preload, so the tag means something when it is present
+note: **design measured 2026-08-21, and the obstacle is not effort.** The consuming seam exists and is clean — `withHoistedHead` injects tags into the template head per request (`packages/theo/src/cli/commands/start/request-handler.ts:110`), and React 19 already hoists a `<link>` rendered anywhere in the tree, which is the mechanism `client/metadata.tsx` runs on. Emitting the manifest is one line: the client build passes `build: { outDir, emptyOutDir }` with no `manifest: true` (`packages/theo/src/adapters/node.ts:47-50`).
+
+  What blocks it is ordering plus a target. Chunk names are known only AFTER bundling, so the route→chunk map cannot be a literal in the route manifest the plugin generates before it. Reading `.vite/manifest.json` from disk at render time solves it for every target that has a filesystem and breaks the one that does not — the Cloudflare worker, where a runtime `readdirSync` is already the open defect `B-018` records. So the map has to be injected into each emitted entry at build time, per adapter, which makes this a change to the adapter contract rather than a change to the renderer.
+
+  Recorded rather than attempted: this is an M3 parity criterion, and a half-wired version of it would be the shape this programme keeps finding.
+
+## B-036 — markdown images and external links bypass the framework's own components   [ ]
+
+domain: theokit
+repo: packages/theo
+suggested_mode: review
+source: discover-review
+evidence: measured 2026-08-21. `BACKLOG.md` carries no item for either behaviour, and the two are M11's whole contract. The pipeline itself is not in this repository — it lives in `@theokit/ui`, which the scaffold wires — so this item's first task is to establish where the mapping belongs before changing anything
+why_now: M11 is a minimum-contract surface whose two bullets were the entire milestone, and neither was ever registered. The external-link half is a security property rather than a nicety: a markdown link opening a new context without `rel="noopener"` hands the opener reference to the destination
+status: triaged
+dod:
+  - markdown `![]()` renders through the framework `Image` component in a scaffolded project's published build, so the reserved-space and `srcSet` rules `B-032` establishes apply to authored content too
+  - markdown `[]()` pointing at an external origin renders through `Link` and carries `rel="noopener noreferrer"`
+  - the repository that owns the mapping is named in the item before work starts — if it is `@theokit/ui`, this item routes there and closes here with a pointer rather than a patch
+
+## B-037 — scroll restoration restores the document, and the scaffold's own layout scrolls an inner element   [ ]
+
+domain: theokit
+repo: packages/theo
+suggested_mode: live-test
+source: discover-live-test
+evidence: filed as usetheokit/theokit#421. Measured 2026-08-22 in Chrome against a real build — scaffolded app, `theokit preview`, ssr + ssrStreaming on. `window.history.scrollRestoration` reads `manual`, so the `ScrollRestoration` mounted for `B-029` IS running. It restores `window.scrollY`, and in this app the document never scrolls: `document.documentElement.scrollHeight` equals `window.innerHeight` (876), while the scrolling element is the scaffold's own `<main class="flex h-full flex-col overflow-hidden">` at `scrollHeight` 8120 / `clientHeight` 823. Journey: inner `scrollTop` set to 2400 → client-side navigation to `/about` → `history.back()` to `/tall` → inner `scrollTop` reads **0**. Not restored
+why_now: `B-029` shipped the mount and the README sentence I wrote with it claimed restoration works with no application code. That is false for the layout the framework itself scaffolds, which is the first layout every user meets. The claim is corrected in the README as part of registering this; what is not decided is whether the framework should restore a designated container rather than only the document
+status: triaged
+dod:
+  - either the framework restores the scroll offset of the element the application actually scrolls, or the documentation states the condition and the scaffold's layout is changed to let the document scroll
+  - a browser-driven test covers the positive case, which this measurement could NOT: `window.scrollY` never left 0 here, so nothing in this app can demonstrate a successful restore
+  - whichever is chosen, the scaffold and the documentation agree — the defect registered here is that they did not
+note: not a regression. Nothing restored scroll before `B-029` either; what changed is that the documentation began promising it
+
+## B-038 — `pnpm try:scaffold` produces an app that exercises npm, not this repository   [x]
+
+domain: theokit
+repo: packages/create-theokit
+suggested_mode: bug
+source: discover-live-test
+evidence: filed as usetheokit/theokit#420. Measured 2026-08-22 while standing up a real app for the `B-029` browser run. The root script `try:scaffold` (`package.json:26`) exists to try the scaffold locally, and `my-test` is a declared workspace member (`pnpm-workspace.yaml`). The template pins `"theokit": "^0.48.3"` (`packages/create-theokit/templates/default/package.json.tmpl`) and the workspace package is **0.49.0** — a caret range on a `0.x` version pins the minor, so `^0.48.3` means `>=0.48.3 <0.49.0` and **excludes** the local build. Compared every template dependency against its workspace version: `theokit` is out of range; `@theokit/agents ^10.1.0` matches `10.1.0` and would link. Getting the scaffolded app onto local code required editing its manifest to `workspace:*` by hand and then symlinking, neither of which a person following the script would do
+why_now: this is the repository's own path for trying its own code, and it silently tries someone else's. Worse than testing nothing: with `agents` in range and `theokit` out of it, one `try:scaffold` app can mix a **local agent runtime against a published framework**, which fails in ways neither version exhibits alone. It surfaced only because a browser run needed a real app — every unit test in this repo imports `packages/*/src` directly and never meets the scaffold's resolution at all
+status: shipped
+dod:
+  - `pnpm try:scaffold` produces an app whose `theokit` resolves to `packages/theo`, verified by reading the resolved version from the scaffolded app rather than by inspecting the range
+  - the check does not rot the next time the version moves — a range that must be bumped in lockstep with every release is the mechanism that failed here, so pin by `workspace:*` for the local path, or assert the resolution in a test
+  - the mixed case is covered: an app must not end up with one workspace package and one from the registry
+shipped: `2e749cdaf` on `workspace` (unreleased — the npm publish is blocked on usetheokit/theokit#413). `try:scaffold` rewrites the scaffolded manifest to the `workspace:` protocol, discovering the packages from `packages/*` rather than listing them, and leaves the TEMPLATE untouched because it is copied verbatim into apps outside this monorepo where `workspace:*` resolves to nothing. All three DoD bullets hold: verified by `pnpm install --lockfile-only`, which records `theokit -> link:../packages/theo` and `@theokit/agents -> link:../packages/agents` — the RESOLVED versions, not the declared ranges — and the mixed case is closed by the same fact, since both are linked. The second bullet is met by removing the version from the local path entirely rather than by asserting a range.
+
+  The report's other half — that nothing bumps the template's pin at release time, so every scaffold after 0.49.0 publishes keeps installing the 0.48 line — is separate and filed as usetheokit/theokit#424. The obvious guard for it ("the template range admits the workspace version") is WRONG and was written and removed: between a bump and its publish the workspace is legitimately ahead of npm, so that rule would ship a template that cannot install at all.
+
+  Also surfaced by the verification: `my-test` is gitignored but IS a workspace member, so an install after `try:scaffold` writes it into the TRACKED `pnpm-lock.yaml` — a hunk that must never be committed, since a lockfile naming a project a fresh clone lacks fails `--frozen-lockfile` in CI. The script now says so on the way out, and `knip.json` ignores the directory.
+
+unverified: whether pnpm 10's `link-workspace-packages` default would link even a MATCHING range. `pnpm config get link-workspace-packages` reports `undefined` and there is no `.npmrc`, so the built-in default governs and I did not confirm which it is — an install to find out would have purged the workspace `node_modules` while another session was using it. **Resolved by the fix rather than by measurement:** the `workspace:` protocol is explicit, so pnpm links regardless of what that default happens to be, and the question no longer bears on the outcome
+
+Next free id: **B-039**.

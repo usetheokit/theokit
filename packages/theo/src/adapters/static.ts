@@ -137,13 +137,34 @@ const defaultLoadStaticPaths: LoadStaticPaths = async (paramsFilePath) => {
  * is present (so the static adapter still emits something usable even without
  * SSR enabled).
  */
+/**
+ * Serialize the router's hydration data the way the server paths do.
+ *
+ * Without it a static export ships markup the client router cannot adopt, so it
+ * re-fetches on load everything the export already contains. `<` is escaped
+ * because the only sequence that can break out of a script element is `</script`.
+ */
+function hydrationScript(hydrationData: unknown): string {
+  const json = JSON.stringify(hydrationData).replace(/</g, '\\u003c')
+  return `<script>window.__staticRouterHydrationData=${json}</script>`
+}
+
 function createDefaultRenderHtml(cwd: string): (url: string) => Promise<string> {
   return async (url: string): Promise<string> => {
     const clientDir = resolve(cwd, '.theokit/client')
     const indexPath = resolve(clientDir, 'index.html')
     const ssrEntryPath = resolve(cwd, '.theokit/server/entry-server.js')
 
-    let baseHtml = '<!doctype html><html><body><div id="root"></div></body></html>'
+    // The floor the framework asks applications for, met by the framework's own
+    // fallback (B-033). This branch runs when the application has no
+    // `index.html` — i.e. after something else already went wrong — so it is the
+    // one that should be least surprising, not the one held lower. `lang` is a
+    // literal until a configured or negotiated locale exists; that is M12's
+    // surface, and this line is where it lands when it does.
+    let baseHtml =
+      '<!doctype html><html lang="en"><head><meta charset="utf-8" />' +
+      '<meta name="viewport" content="width=device-width, initial-scale=1" />' +
+      '</head><body><div id="root"></div></body></html>'
     if (existsSync(indexPath)) {
       baseHtml = readFileSync(indexPath, 'utf-8')
     }
@@ -156,21 +177,52 @@ function createDefaultRenderHtml(cwd: string): (url: string) => Promise<string> 
     }
 
     try {
+      // The generated entry returns `{ html, hydrationData }` — see
+      // `router/entry-server.ts`, where `render` resolves with that object. This
+      // caller typed it as `string | { redirect }` and tested `typeof result ===
+      // 'string'`, which has been false for as long as the contract has held. So
+      // the render branch was dead and EVERY page fell through to the redirect
+      // fallback below: `build --target static` emitted a meta refresh for the
+      // whole site, and `/index.html` refreshed to itself
+      // (usetheokit/theokit#362). The other two callers were updated when the
+      // contract changed; this one was missed, and no test could see it because
+      // every existing test injects `renderHtml` over this function.
+      // `render` is typed as returning `unknown` and narrowed below, deliberately.
+      // The previous declaration asserted a union the module does not honour, and
+      // TypeScript then proved a branch dead that was in fact the live one. A
+      // dynamically imported artifact is not a thing this file can typecheck, and
+      // saying so keeps the narrowing honest rather than decorative.
       const mod = (await import(pathToFileURL(ssrEntryPath).href)) as {
-        render?: (u: string) => Promise<string | { redirect: Response }>
+        render?: (u: string) => Promise<unknown>
       }
       if (typeof mod.render !== 'function') return baseHtml
-      const result = await mod.render(url)
-      if (typeof result === 'string') {
-        const rootMatch = findRootDivLegacyShape(baseHtml)
-        if (rootMatch) {
-          const splitIdx = baseHtml.indexOf(rootMatch[0]) + rootMatch[0].length
-          return baseHtml.slice(0, splitIdx) + result + baseHtml.slice(splitIdx)
-        }
-        return baseHtml.replace('</body>', result + '</body>')
+      const result: unknown = await mod.render(url)
+
+      if (result !== null && typeof result === 'object' && 'redirect' in result) {
+        // A genuine redirect. Static hosting cannot send a 3xx, so a meta refresh
+        // is the honest degradation — for THIS case, which is the only one it was
+        // ever meant to cover.
+        return `<!doctype html><meta http-equiv="refresh" content="0; url=/" />`
       }
-      // redirect — emit a meta refresh fallback for static export
-      return `<!doctype html><meta http-equiv="refresh" content="0; url=/" />`
+
+      const shape = result as { html?: unknown; hydrationData?: unknown }
+      // Only a string `html` is used. Anything else means the entry returned a
+      // shape this adapter does not understand, and emitting `[object Object]`
+      // into a published page would be worse than emitting the shell.
+      let rendered = ''
+      if (typeof result === 'string') rendered = result
+      else if (typeof shape.html === 'string') rendered = shape.html
+      const hydration =
+        typeof result === 'string' || shape.hydrationData === undefined
+          ? ''
+          : hydrationScript(shape.hydrationData)
+
+      const rootMatch = findRootDivLegacyShape(baseHtml)
+      if (rootMatch) {
+        const splitIdx = baseHtml.indexOf(rootMatch[0]) + rootMatch[0].length
+        return baseHtml.slice(0, splitIdx) + rendered + hydration + baseHtml.slice(splitIdx)
+      }
+      return baseHtml.replace('</body>', rendered + hydration + '</body>')
     } catch (err) {
       throw new StaticRenderError(url, err)
     }
@@ -228,6 +280,8 @@ export async function buildStatic(
 
 export const staticAdapter: DeployAdapter = {
   name: 'static',
+  // #382 — no server at all; there is nothing to stream from.
+  streamsResponses: false,
   build(config, cwd, ctx) {
     return buildStatic(config, cwd, {}, ctx)
   },

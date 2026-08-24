@@ -6,10 +6,11 @@ import {
   rmSync,
   statSync,
   unlinkSync,
-  writeFileSync,
 } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+
+import { writeScaffoldFile } from './write-file.js'
 
 // ESM has no CJS `__dirname` global — derive it (mirrors src/index.ts + src/scaffold-services.ts). Without
 // this the published bundle throws `__dirname is not defined` at runtime (vitest provides the global, so the
@@ -80,6 +81,12 @@ const SURFACE_CONFIG: Record<Exclude<SurfaceKind, 'web'>, SurfaceConfig> = {
       start: 'tsx tui/main.tsx',
       // A visual reference of every tool render state (pending/running/success/failed/…) — no agent needed.
       'demo:tools': 'tsx tui/tool-variations.tsx',
+      // A terminal app runs from source through `tsx` and has no artifact to bundle, so `build`
+      // means "typecheck" here. It is SET rather than left alone because the default template's
+      // `theokit build` requires `app/`, which `WEB_ONLY_FILES` removes two steps later — leaving a
+      // script whose first act is to demand a directory this scaffold just deleted
+      // (usetheokit/theokit#374).
+      build: 'tsc --noEmit',
     },
     tsconfigInclude: [
       'tui/**/*.ts',
@@ -113,6 +120,11 @@ const SURFACE_CONFIG: Record<Exclude<SurfaceKind, 'web'>, SurfaceConfig> = {
     scripts: {
       dev: 'tauri dev',
       tauri: 'tauri',
+      // The real build, and the reason it must be declared: the inherited `theokit build` requires
+      // `app/`, which this surface removes (usetheokit/theokit#374). `tauri.conf.json`'s
+      // `beforeBuildCommand` already chains the frontend and the sidecar, so this is the whole
+      // build rather than a shortcut past two of its steps.
+      build: 'tauri build',
       'build:frontend': 'vite build frontend',
       // Generates the Tauri externalBin launcher (src-tauri/binaries/theo-sidecar-<triple>) the Rust
       // shell spawns. Wired into tauri.conf.json beforeDev/BuildCommand — regenerated each launch.
@@ -167,7 +179,7 @@ function substituteTmpls(dir: string, projectName: string): void {
     }
     if (entry.endsWith('.tmpl')) {
       const content = readFileSync(full, 'utf-8').replace(/\{\{name\}\}/g, projectName)
-      writeFileSync(full.replace(/\.tmpl$/, ''), content)
+      writeScaffoldFile(full.replace(/\.tmpl$/, ''), content)
       unlinkSync(full)
     }
   }
@@ -222,7 +234,7 @@ export function applySurface(options: ApplySurfaceOptions): void {
     pkg.dependencies = { ...dropKeys(pkg.dependencies, WEB_ONLY_DEPS), ...cfg.deps }
     pkg.devDependencies = { ...dropKeys(pkg.devDependencies, WEB_ONLY_DEV_DEPS), ...cfg.devDeps }
     pkg.scripts = { ...(pkg.scripts ?? {}), ...cfg.scripts }
-    writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`)
+    writeScaffoldFile(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`)
   }
 
   // 4. Point `tsconfig.json` `include` at the surface's source (the default's `app/**` went with the web
@@ -231,7 +243,7 @@ export function applySurface(options: ApplySurfaceOptions): void {
   if (existsSync(tsconfigPath)) {
     const tsconfig = JSON.parse(readFileSync(tsconfigPath, 'utf-8')) as { include?: string[] }
     tsconfig.include = cfg.tsconfigInclude
-    writeFileSync(tsconfigPath, `${JSON.stringify(tsconfig, null, 2)}\n`)
+    writeScaffoldFile(tsconfigPath, `${JSON.stringify(tsconfig, null, 2)}\n`)
   }
 }
 

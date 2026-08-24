@@ -129,12 +129,20 @@ describe('Provider Resolver — Strategy + Registry (FAANG-grade)', () => {
   })
 
   describe('Registry — extension point', () => {
-    it('listProviders() returns default 3 providers sorted by priority', () => {
+    it('listProviders() returns every provider sorted by priority', () => {
       const list = listProviders()
-      expect(list.length).toBe(3)
-      expect(list[0]?.name).toBe('openrouter') // priority 1
-      expect(list[1]?.name).toBe('openai') // priority 2
-      expect(list[2]?.name).toBe('anthropic') // priority 3
+
+      // The invariant, asserted over whatever the registry holds. This read `length === 3` until
+      // #407 added a fourth default, which is the shape of assertion that fails on every
+      // legitimate addition while proving nothing about the ordering it is named for.
+      const priorities = list.map((p) => p.priority)
+      expect(priorities).toStrictEqual([...priorities].sort((a, b) => a - b))
+
+      // The documented cloud order, stated as relative position so a new entry anywhere in the
+      // table cannot break it.
+      const names = list.map((p) => p.name)
+      expect(names.indexOf('openrouter')).toBeLessThan(names.indexOf('openai'))
+      expect(names.indexOf('openai')).toBeLessThan(names.indexOf('anthropic'))
     })
 
     it('registerProvider() adds new provider at specified priority', () => {
@@ -144,9 +152,10 @@ describe('Provider Resolver — Strategy + Registry (FAANG-grade)', () => {
         baseUrl: 'https://llm.internal.acme.com/v1',
         priority: 0, // highest
       }
+      const before = listProviders().length
       registerProvider(custom)
       const list = listProviders()
-      expect(list.length).toBe(4)
+      expect(list.length).toBe(before + 1)
       expect(list[0]?.name).toBe('self-hosted') // priority 0 wins
 
       // Resolve respects new priority
@@ -171,16 +180,22 @@ describe('Provider Resolver — Strategy + Registry (FAANG-grade)', () => {
       expect(list.find((p) => p.name === 'custom')?.baseUrl).toBe('https://v2.acme.com')
     })
 
-    it('resetProviderRegistry() restores default 3-provider state', () => {
+    it('resetProviderRegistry() restores the defaults exactly', () => {
+      const defaults = listProviders().map((p) => p.name)
+
       registerProvider({
         name: 'temp',
         envKey: 'TEMP_KEY',
         baseUrl: 'https://temp.com',
         priority: 99,
       })
-      expect(listProviders().length).toBe(4)
+      expect(listProviders().map((p) => p.name)).toContain('temp')
+
       resetProviderRegistry()
-      expect(listProviders().length).toBe(3)
+
+      // Identity with the pre-registration set, not a count: this catches a reset that drops a
+      // default alongside the temporary entry, which a length check would call success.
+      expect(listProviders().map((p) => p.name)).toStrictEqual(defaults)
     })
   })
 })

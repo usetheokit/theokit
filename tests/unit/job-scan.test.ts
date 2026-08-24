@@ -1,14 +1,14 @@
+import { makeFixtureProject } from '../lib/fixture-project.js'
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { tmpdir } from 'node:os'
 
 import { scanJobs } from '../../packages/theo/src/server/jobs/job-scan.js'
 
 let root: string
 
 beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), 'theokit-job-scan-'))
+  root = makeFixtureProject('theokit-job-scan-')
   mkdirSync(join(root, 'server', 'jobs'), { recursive: true })
 })
 

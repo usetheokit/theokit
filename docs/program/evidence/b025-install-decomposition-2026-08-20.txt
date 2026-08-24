@@ -1,0 +1,30 @@
+Install cost decomposition — J9's two applications, 2026-08-20
+Single run per cell; warm npm cache; same machine, same session.
+
+                        with scripts   --ignore-scripts   scripts cost
+  theokit (j09-theo)        30.3 s          10.5 s           19.8 s
+  next.js (j09-next)         6.8 s           5.4 s            1.4 s
+  ------------------------------------------------------------------
+  gap                       23.5 s           5.1 s           18.4 s
+
+  78% of the gap is lifecycle scripts.  22% is the tree itself.
+
+Packages declaring an install/postinstall script, whole tree, both sides:
+
+  theokit:  node-pty   install: node scripts/prebuild.js || node-gyp rebuild
+                       postinstall: node scripts/post-install.js
+            esbuild    postinstall: node install.js
+
+  next.js:  (none of either)
+
+Next.js ships its platform binary as a set of optionalDependencies resolved by
+platform (@next/swc-*) — no script runs. TheoKit's chain downloads or compiles
+in a lifecycle hook twice.
+
+Removing node-pty alone (measured separately, b025-install-with-and-without-node-pty.txt):
+  26.1 s -> 15.5 s mean over two runs each.  Necessary, not sufficient: esbuild's
+  postinstall and the 5.1 s tree floor survive it.
+
+Caveat stated rather than buried: one run per cell here, and the with-scripts
+side is the one with real variance (35.0 s and 17.3 s on the earlier pair). The
+decomposition's shape is robust; its third decimal is not.

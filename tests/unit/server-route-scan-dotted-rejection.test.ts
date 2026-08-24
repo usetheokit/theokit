@@ -28,7 +28,10 @@ beforeEach(() => {
   mkdirSync(join(serverDir, 'routes'), { recursive: true })
 })
 
-function touch(relativePath: string, content = 'export const GET = { handler: () => ({}) }') {
+function touch(
+  relativePath: string,
+  content = "export const GET = { policy: 'public', handler: () => ({}) }",
+) {
   const full = join(serverDir, 'routes', relativePath)
   mkdirSync(join(full, '..'), { recursive: true })
   writeFileSync(full, content)

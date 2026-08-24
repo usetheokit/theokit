@@ -39,6 +39,9 @@ export type { RateLimitConfig } from './rate-limit/rate-limit.js'
 // --- scan ---
 export { scanServerActions, scanServerActionsEnriched } from './scan/action-scan.js'
 export type { ActionManifestEntry } from './scan/action-scan.js'
+// The isomorphic-schema convention, named once. The server-only import boundary in the Vite plugin
+// must not refuse the one directory the actions facade deliberately bundles into the client.
+export { ACTION_SCHEMAS_DIR } from './scan/action-scan.js'
 export { scanAgents } from './scan/agent-scan.js'
 export { mountAgent } from './agent/mount-agent.js'
 export { resolveProvider } from './agent/provider-resolver.js'

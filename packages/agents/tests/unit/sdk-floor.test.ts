@@ -1,6 +1,7 @@
-import { createRequire } from 'node:module'
+import { spawnSync } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
-import { join } from 'node:path'
+import { createRequire } from 'node:module'
+import { dirname, join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
@@ -82,6 +83,36 @@ function workspaceManifests(): string[] {
   return [...dirs]
     .map((dir) => (dir === '' ? 'package.json' : `${dir}/package.json`))
     .filter((manifest) => existsSync(join(REPO_ROOT, manifest)))
+    .filter((manifest) => !isScratch(manifest))
+}
+
+/**
+ * Is this member scratch rather than part of the repository?
+ *
+ * `pnpm-workspace.yaml` declares `my-test`, which is gitignored output of `pnpm try:scaffold`, and
+ * `examples/*`, which are fixtures. Those are CONSUMERS of the framework, not packages it ships —
+ * and this gate's own assertion says "the three packages must load ONE sdk". A scaffolded app that
+ * installed a newer sdk from npm therefore failed a gate about the framework's internal
+ * consistency: measured 2026-08-22, `my-test/node_modules/@theokit/sdk` resolved `4.53.1` against
+ * `4.52.1` everywhere else, purely because the app was scaffolded and installed from the registry.
+ *
+ * The predicate is "git ignores it" rather than a hardcoded `my-test`, because that is the actual
+ * reason — the member is not part of this repository — and it covers whatever scratch member comes
+ * next without another edit here. When `git` cannot be consulted the answer is `false`, keeping the
+ * wider scope: a gate that quietly narrowed itself is the failure this file was written to prevent.
+ */
+function isScratch(manifest: string): boolean {
+  if (manifest === 'package.json') return false
+  try {
+    // `git` from PATH is the point, as in `tests/lint/task-marker.test.ts`: the question is what
+    // THIS repository ignores, and an absolute path would break outside Linux while closing no
+    // threat in a test already running with the invoker's privileges.
+    // eslint-disable-next-line sonarjs/no-os-command-from-path -- see above
+    const status = spawnSync('git', ['check-ignore', '-q', dirname(manifest)], { cwd: REPO_ROOT })
+    return status.status === 0
+  } catch {
+    return false
+  }
 }
 
 /** Workspace manifests that declare `@theokit/sdk` in any dependency section. */

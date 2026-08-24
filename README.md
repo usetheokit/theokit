@@ -381,6 +381,42 @@ const data = await theoFetch<typeof GET>('/api/users', {
 `theokit/client` also ships `Link` (with route prefetch), `Metadata`, `Image`,
 `useAgent`, and the `theokit/react-query` adapter.
 
+### Navigation
+
+`Link` prefetches the route it points at. The strategy decides how many requests
+that costs, so it is stated here rather than left to be discovered in a network
+panel — for a viewport holding **N** prefetchable links:
+
+| `prefetch` | Requests | When they fire |
+|---|---|---|
+| `intent` *(default)* | one per link the reader hovers or focuses | ~200 ms before a click, so a click that never happens still cost a request |
+| `viewport` | **N** — every link visible | as each link enters the viewport |
+| `none` | zero | never |
+
+Each URL is fetched at most once per session, so a second hover over the same
+link is free. `viewport` on a long index page is the case worth thinking about:
+it is the fastest option for the reader and the only one whose cost scales with
+the page rather than with what the reader does.
+
+Scroll position is restored on back navigation. The router mounts restoration at
+the root, and the document needs no application code.
+
+**An element that scrolls has to say so.** A layout that scrolls an inner element
+instead of the document — `h-full` with `overflow-hidden` on a wrapper, which is
+what the default scaffold ships — leaves the document with no offset to save, and
+browsers and react-router alike restore only the document. Mark the element and
+its offset is restored too:
+
+```tsx
+<main data-theo-scroll="main" className="overflow-y-auto">…</main>
+```
+
+The attribute's value is the id, so a page with two scrollers stays unambiguous.
+It is declared rather than detected on purpose: walking the DOM for
+`overflow: auto` picks one container silently, and picks a different one as the
+layout changes. Measured in a browser on 2026-08-22, before this existed: the
+offset of an inner container was not restored across a back navigation.
+
 ## Auth
 
 ```typescript
@@ -424,7 +460,8 @@ export default websocket()
 ```bash
 theokit dev                              # Dev server with HMR
 theokit build                            # Production build (--target <adapter>)
-theokit start                            # Production server
+theokit start                            # Production server (serves the last build)
+theokit preview                          # Build, then serve it — one step
 theokit generate page dashboard          # Scaffold a page
 theokit generate route users             # Scaffold an API route
 theokit generate agent support           # Scaffold an agent

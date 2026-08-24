@@ -6,7 +6,7 @@
  */
 import { SpanImpl, NoopSpan, type SpanData } from '../span.js'
 
-import type { ObservabilityAdapter, SpanHandle, SpanAttributes } from './types.js'
+import type { ObservabilityAdapter, SpanHandle, SpanAttributes, SpanContextInput } from './types.js'
 
 interface ConsoleAdapterOptions {
   /** Writer function — defaults to process.stderr.write. */
@@ -23,9 +23,9 @@ export class ConsoleObservabilityAdapter implements ObservabilityAdapter {
     this.write = options.write ?? ((line: string) => process.stderr.write(line + '\n'))
   }
 
-  startSpan(name: string, attributes?: SpanAttributes): SpanHandle {
+  startSpan(name: string, attributes?: SpanAttributes, context?: SpanContextInput): SpanHandle {
     if (this.isShutdown) return new NoopSpan()
-    const span = new SpanImpl(name, attributes)
+    const span = new SpanImpl(name, attributes, context)
     this.spans.push(span)
     return {
       setAttribute: (k, v) => {

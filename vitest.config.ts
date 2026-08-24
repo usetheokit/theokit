@@ -1,3 +1,4 @@
+import { cpus } from 'node:os'
 import path from 'node:path'
 
 import { defineConfig } from 'vitest/config'
@@ -128,6 +129,21 @@ export default defineConfig({
     // contention ever appears inside `tests/unit`, the file belongs in `root-serial`, not this
     // setting back at the top.
     fileParallelism: false,
+    // Declared at the TOP level, not per package, and that placement is load-bearing.
+    //
+    // Vitest 4 refuses to start when two projects sharing a `sequence.groupOrder` resolve to
+    // different `maxWorkers` ("Projects \"create-theokit\" and \"root\" have different
+    // 'maxWorkers'"). Capping the six `packages/*/vitest.config.ts` files individually — which
+    // they need for their own standalone `vitest run` — produced exactly that, because the inline
+    // `root` project kept the default. Setting it here instead gives every project the same value
+    // through `extends: true`, and the package files keep their own copy for standalone runs.
+    //
+    // The value caps the `root` project measured at 30.1 s above: vitest's default is one fork per
+    // core, each booting a full environment, so a run claims the whole machine and anything beside
+    // it starves. Leaving 4 cores free scales with the runner rather than hard-coding one host's
+    // core count; measured in `theokit-ui`, the suite ran 73.96 s at 4 workers against 74.36 s at
+    // 12, so the parallelism above the cap was already noise.
+    maxWorkers: Math.max(2, cpus().length - 4),
     // `testTimeout` covers the wall-clock for individual assertions.
     // Integration tests spawning `theokit dev` need >5s under load.
     // 30s is generous but bounded — a real hang surfaces well within this window.

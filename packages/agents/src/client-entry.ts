@@ -48,10 +48,16 @@ export type {
 
 export { AgentClient } from './client/agent-client.js'
 export type { AgentClientState } from './client/agent-client.js'
+// usetheokit/theokit#392 — the outstanding HITL decision the snapshot publishes. Exported because a
+// non-React surface (TUI, desktop, a plain script) reads it off `getState()` and needs to type it.
+export type { PendingApproval } from './client/agent-client.js'
 // M92 — without these the consumer cannot turn on coalescing nor tell an aborted approval from a
 // denied one; the capability would exist and be unreachable across the boundary.
 export type { AgentClientOptions } from './client/agent-client.js'
 export { ApprovalAbortedError } from './client/in-process-transport.js'
+// theokit#384 — the class a consumer needs to tell "the connection dropped" (resumable) from any
+// other `status: 'error'` (not). Unexported, the only recourse left is matching on message text.
+export { AgentStreamInterruptedError } from './client/agent-client.js'
 
 export { agentHandle, isAgentHandle } from './client/agent-handle.js'
 export type { AgentHandle } from './client/agent-handle.js'
@@ -61,6 +67,9 @@ export {
   responseToChunkStream,
   consumeChunkStream,
 } from './client/consume-ui-message-stream.js'
+// theokit#384 — a custom transport reading the wire itself needs the same distinction the store
+// makes, and it is the reader's return type.
+export type { ChunkStreamOutcome } from './client/consume-ui-message-stream.js'
 
 export { extractLastUserText } from './client/last-user-text.js'
 

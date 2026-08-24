@@ -110,6 +110,10 @@ describe('generateRouteManifest dynamic emission (T2.2)', () => {
     expect(out).not.toContain("'[...path]'")
   })
 
+  // Updated once, deliberately, for usetheokit/theokit#421: the root now mounts
+  // `<ElementScrollRestoration>` beside react-router's `<ScrollRestoration>`, so the emitted module
+  // gained one import and one sibling element. The diff was read before the snapshot moved — the
+  // point of this guard is that a change to static emission is noticed, not that it never happens.
   it('test_generate_static_output_unchanged (golden guard, EC-13)', () => {
     const staticTree: RouteNode = {
       segment: '',

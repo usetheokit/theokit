@@ -29,7 +29,7 @@
  * (csrf.ts, execute.ts, body-parser.ts, fs/path consumers, etc.) require
  * dedicated future iterations (T5a.1b through T5a.1N).
  */
-import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
@@ -181,9 +181,14 @@ describe('T5a.1a — leaf-file Web Crypto migration (node:crypto → globalThis.
     const serverDir = resolve(REPO_ROOT, 'packages/theo/src/server')
     let count = 0
     const walk = (dir: string): void => {
-      for (const entry of readdirSync(dir)) {
-        const full = join(dir, entry)
-        if (statSync(full).isDirectory()) {
+      // `withFileTypes` answers the type from the directory entry the read already returned.
+      // Asking `statSync` about the path a second time is a second resolution of the same
+      // name, which is what CodeQL reports as `js/file-system-race`. Equivalent here: these
+      // trees are checked into git and carry no symlinks, which `statSync` would follow and
+      // a dirent would not.
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const full = join(dir, entry.name)
+        if (entry.isDirectory()) {
           walk(full)
         } else if (full.endsWith('.ts') || full.endsWith('.tsx')) {
           const src = readFileSync(full, 'utf8')
@@ -223,9 +228,14 @@ describe('T5a.1a — leaf-file Web Crypto migration (node:crypto → globalThis.
     const serverDir = resolve(REPO_ROOT, 'packages/theo/src/server')
     const offenders: string[] = []
     const walk = (dir: string): void => {
-      for (const entry of readdirSync(dir)) {
-        const full = join(dir, entry)
-        if (statSync(full).isDirectory()) {
+      // `withFileTypes` answers the type from the directory entry the read already returned.
+      // Asking `statSync` about the path a second time is a second resolution of the same
+      // name, which is what CodeQL reports as `js/file-system-race`. Equivalent here: these
+      // trees are checked into git and carry no symlinks, which `statSync` would follow and
+      // a dirent would not.
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const full = join(dir, entry.name)
+        if (entry.isDirectory()) {
           walk(full)
         } else if (full.endsWith('.ts') || full.endsWith('.tsx')) {
           const src = readFileSync(full, 'utf8')
@@ -253,7 +263,19 @@ describe('T5a.1a — leaf-file Web Crypto migration (node:crypto → globalThis.
       'packages/theo/src/server/scan/middleware-scan.ts',
       'packages/theo/src/server/scan/ws-scan.ts',
       'packages/theo/src/server/scan/detect-http-methods.ts',
+      // Sibling of detect-http-methods: same TS-compiler-API load via
+      // `node:module`'s createRequire, same build-time-only boundary.
+      'packages/theo/src/server/scan/detect-route-policy.ts',
+      // Same again for the agent surface (usetheokit/theokit#365): one export-name
+      // question, answered on the TS AST at scan time, never at request time.
+      'packages/theo/src/server/scan/detect-agent-policy.ts',
       'packages/theo/src/server/scan/module-loader.ts',
+      // The memo the scanners above share (usetheokit/theokit#417). Node-only by nature rather
+      // than by implementation: its key IS a filesystem fact — `mtimeMs` and `size` — so there is
+      // no Web-Standards version of it to migrate to. It runs where its callers run: `theokit
+      // build`, `theokit start` and `theokit dev`, all Node. A Worker never reaches it, because
+      // #369 bakes the route table at build time rather than scanning a disk it does not have.
+      'packages/theo/src/server/scan/file-stamp-cache.ts',
       'packages/theo/src/server/jobs/job-scan.ts',
       'packages/theo/src/server/cron/cron-scan.ts',
       // Terminal harness — CLI-only render surface (theokit-ai-first M5).
@@ -328,9 +350,14 @@ describe('T5a.1a — leaf-file Web Crypto migration (node:crypto → globalThis.
     const serverDir = resolve(REPO_ROOT, 'packages/theo/src/server')
     const offenders: string[] = []
     const walk = (dir: string): void => {
-      for (const entry of readdirSync(dir)) {
-        const full = join(dir, entry)
-        if (statSync(full).isDirectory()) {
+      // `withFileTypes` answers the type from the directory entry the read already returned.
+      // Asking `statSync` about the path a second time is a second resolution of the same
+      // name, which is what CodeQL reports as `js/file-system-race`. Equivalent here: these
+      // trees are checked into git and carry no symlinks, which `statSync` would follow and
+      // a dirent would not.
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const full = join(dir, entry.name)
+        if (entry.isDirectory()) {
           walk(full)
         } else if (full.endsWith('.ts') || full.endsWith('.tsx')) {
           const src = readFileSync(full, 'utf8')

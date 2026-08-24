@@ -278,6 +278,14 @@ async function tryControllerFallthrough(ctx: {
     requestId: ctx.requestId,
     // M47 — serve @Expose-bound agent routes via the ONE runtime (mountAgent). CSRF is already enforced
     // once at the controller-dispatch boundary (G5), so mountAgent runs with csrfMode 'off' (no double gate).
+    //
+    // usetheokit/theokit#365 gated the CONVENTION endpoints (`agents/<name>.ts`) and deliberately
+    // left this one to the decorator stack: an `@Expose` route is a controller method, so its
+    // access decision is the controller's `@Guard` chain, which the dispatcher already runs before
+    // it gets here. Passing a policy as well would give this one surface two authorization
+    // mechanisms and no rule for which wins. What is NOT solved by that: an `@Expose`d agent shares
+    // the conversation store with the convention endpoints, so a guard that admits a caller admits
+    // them to whatever `sessionId` the body names — see the advisory.
     serveAgent: (agent: unknown, request: Request) =>
       mountAgent(agent, request, (model) => resolveProvider(model).apiKey, {
         source: 'expose',
