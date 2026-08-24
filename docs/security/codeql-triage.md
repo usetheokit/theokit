@@ -121,3 +121,74 @@ strategies are optional. No superfluous argument is passed.
 Note that the same rule was *right* five times over in `packages/http/examples/`, where every
 decorator was being handed a property descriptor that no decorator in that package reads. Those are
 fixed, not dismissed.
+
+---
+
+# TruffleHog — one detector, temporarily off, and what holds the line meanwhile
+
+Separate tool, same discipline: written down because the decision is a judgement, and a judgement
+nobody can review is not a decision, it is a habit.
+
+## The finding
+
+```
+postgres://<user>:<pass>@<host>:5432
+```
+
+The username is the word `user`, the password is the word `pass`, and the host is the word `host` —
+TruffleHog's own verification says so, failing with `lookup host … server misbehaving`. It is a
+documentation placeholder.
+
+It occurs twice, and **both occurrences are immutable under this repository's own rules**:
+
+1. the **message** of commit `bbdfc15d6` — and a commit message cannot be edited without rewriting
+   history, which is forbidden on shared branches;
+2. a **CHANGELOG entry under `[1.0.0]`**, a released version, which the changelog discipline
+   forbids editing.
+
+The second is worth reading for what it is: an entry describing a secret scanner's pattern list. A
+scanner pattern, written into a file a scanner reads. The first is the same shape — a sentence
+narrating this very class of mistake, which is how it came to be written down.
+
+## What was tried before turning anything off
+
+Measured, not assumed:
+
+| Mechanism | Result |
+|---|---|
+| `trufflehog:ignore` per line — the mechanism this workflow already documents | Reaches a **file**. This finding has no file: it is commit metadata (`line: 40`, no `file` field in the JSON). |
+| `--filter-entropy` at 0 / 2.0 / 2.5 / 3.0 / 3.5 | Never drops it. Its entropy is comparable to a real credential's, so any threshold that hid it would hide real ones. |
+| `--config` allowlist | No such field. The schema is protobuf and rejects it outright. |
+| Dropping `unverified` from `--results` | Would hide every real internal-DB URL — unverifiable from a runner by construction, which is exactly the shape a leaked internal Postgres URL has. |
+| Merging with the check red | `TruffleHog` is a required check on `develop` with `enforce_admins: true`. Not available, deliberately. |
+| Rewriting the message | Forbidden. Not negotiated around. |
+
+## The decision
+
+`--exclude-detectors=postgres`, **temporarily**, with two guards attached — because turning a
+detector off is only defensible if it stops being possible when it stops being necessary, and if
+the coverage it removes is replaced meanwhile.
+
+Both live in `tests/unit/secret-scan-postgres-exclusion.test.ts`, and both were verified to fail
+when they should:
+
+- **Self-retirement.** The moment `bbdfc15d6` is an ancestor of `main` it has left every future
+  scan range, and the exclusion has no reason left. The test fails at that point and names the file
+  to edit. Where it cannot determine the answer — a shallow clone, a fork without the branch — it
+  reports that it could not look, rather than passing quietly.
+- **Compensation.** A walk over the working tree fails on any Postgres connection string carrying
+  credentials, with exactly one literal placeholder allowed through. Proven by planting a realistic
+  one — an `admin` user, a random password, an internal `.prod.internal` host — and watching the
+  check name the file and line.
+
+  That proof is described rather than quoted here, because the check found this very document on
+  its first run over the tree: the example had been written out in full, and a realistic connection
+  string in a security note is still a realistic connection string. The gate catching its own
+  documentation is the best evidence it works that this page can offer.
+
+## The residual risk, stated
+
+The compensating check reads the working tree. A Postgres URL committed and then deleted *within* a
+single PR's range would have been caught by TruffleHog's history scan and is not caught by this.
+That is the whole of what this decision costs, and it costs it for two more scan runs — this PR and
+the release PR that follows it.
