@@ -20,6 +20,22 @@ export interface ParsedBody {
   fields: Record<string, string | string[]>
   files: UploadedFile[]
   json?: unknown
+  /**
+   * The exact bytes of a JSON body, as they arrived.
+   *
+   * Kept so the `Request` a route handler receives can carry a readable body. Without it
+   * `ctx.request` reaches the handler with no body at all, and any framework API that takes a
+   * `Request` and reads it — `handleChannelWebhook` among them — answers 400 on a request whose
+   * body was valid (usetheokit/theokit#445).
+   *
+   * The RAW bytes rather than the parsed value re-serialised, because every platform that signs a
+   * webhook computes its HMAC over what it sent: `JSON.stringify(JSON.parse(x))` moves key order,
+   * whitespace and number formatting, and would verify against nothing.
+   *
+   * Absent for multipart, where the parsed `fields`/`files` are the interface and the raw form has
+   * no second consumer, and absent when no body arrived.
+   */
+  raw?: string
 }
 
 export interface BodyParserOptions {
@@ -111,7 +127,8 @@ function stashBodyPreview(req: IncomingMessage, body: unknown): void {
   }
 }
 
-function parseJsonBody(req: IncomingMessage): Promise<unknown> {
+/** The parsed JSON and the bytes it came from, or undefined when no body arrived. */
+function parseJsonBody(req: IncomingMessage): Promise<{ json: unknown; raw: string } | undefined> {
   return new Promise((resolve, reject) => {
     // theokit#400 — an ended stream re-emits nothing, so attaching here would wait forever. A
     // declared-empty body resolves as the absent body it is; anything else was eaten upstream and
@@ -133,7 +150,7 @@ function parseJsonBody(req: IncomingMessage): Promise<unknown> {
         return
       }
       try {
-        resolve(JSON.parse(raw))
+        resolve({ json: JSON.parse(raw), raw })
       } catch {
         reject(new Error('Invalid JSON body'))
       }
@@ -269,6 +286,18 @@ function parseMultipartBody(
  */
 export const DEVTOOLS_BODY_PREVIEW = Symbol('theo:devtools:bodyPreview')
 
+/**
+ * A JSON body as a {@link ParsedBody}, keeping the bytes it arrived as.
+ *
+ * Its own function so `parseRequestBody` stays under the complexity budget: the raw-bytes branch
+ * added by #445 is a third thing that shape was already doing.
+ */
+async function parseJsonRequest(req: IncomingMessage): Promise<ParsedBody> {
+  const parsed = await parseJsonBody(req)
+  stashBodyPreview(req, parsed?.json)
+  return { fields: {}, files: [], json: parsed?.json, raw: parsed?.raw }
+}
+
 export async function parseRequestBody(
   req: IncomingMessage,
   options?: BodyParserOptions,
@@ -282,9 +311,7 @@ export async function parseRequestBody(
 
   // JSON
   if (contentType.includes('application/json')) {
-    const json = await parseJsonBody(req)
-    stashBodyPreview(req, json)
-    return { fields: {}, files: [], json }
+    return await parseJsonRequest(req)
   }
 
   // Multipart

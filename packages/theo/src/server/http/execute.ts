@@ -282,7 +282,7 @@ export async function executeRoute(ctx: ExecuteRouteContext): Promise<void> {
 
     const parseResult = await parseQueryAndBody(req, res, requestId)
     if (!parseResult.ok) return
-    const { query } = parseResult.data
+    const { query, raw } = parseResult.data
     let { body } = parseResult.data
 
     const validationResult = runZodValidation(rc, res, requestId, { query, body, params })
@@ -336,7 +336,26 @@ export async function executeRoute(ctx: ExecuteRouteContext): Promise<void> {
     // `createSessionManagerWeb.getSession(ctx.request)`) threw at runtime even though it type-checked
     // (`ctx.request` is declared `Request`). Body is exposed via `ctx.body`, so the request carries
     // headers/url/method only (the Node stream is already drained by `parseQueryAndBody`).
-    const handlerResult = await callableHandler({ query, body, params, request: webRequest, ctx })
+    // #445 — the handler's Request carries the body it arrived with. `webRequest` above is built
+    // before the body is read and is shared with the plugin hooks, so it stays as it is; this is a
+    // second Request over the same bytes, for the one caller that may read them. Without it any
+    // framework API taking a `Request` — `handleChannelWebhook` among them — reads an empty stream
+    // and reports a valid body as malformed.
+    const handlerRequest =
+      raw === undefined
+        ? webRequest
+        : new Request(webRequest.url, {
+            method: webRequest.method,
+            headers: webRequest.headers,
+            body: raw,
+          })
+    const handlerResult = await callableHandler({
+      query,
+      body,
+      params,
+      request: handlerRequest,
+      ctx,
+    })
 
     // Handle result
     if (handlerResult === undefined || handlerResult === null) {
