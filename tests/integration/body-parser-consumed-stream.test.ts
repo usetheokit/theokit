@@ -154,7 +154,10 @@ describe('parseRequestBody — a stream consumed upstream fails by name', () => 
     )
 
     expect(outcome.ok).toBe(true)
-    expect(outcome.value).toEqual({ fields: {}, files: [], json: { a: 1 } })
+    // `raw` joined the shape with #445: the bytes are kept so a route handler's `Request` can carry
+    // a readable body. Asserted here rather than loosened away — this test exists to pin the shape
+    // an ordinary request produces, and the shape genuinely changed.
+    expect(outcome.value).toEqual({ fields: {}, files: [], json: { a: 1 }, raw: '{"a":1}' })
   })
 
   it('test_a_declared_empty_json_body_is_an_absent_body_not_an_error', async () => {
