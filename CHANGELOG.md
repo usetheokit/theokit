@@ -7,6 +7,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Fixed
+- **The generated `@theo/client` returned `any` for every call.** Inside a `declare module` block a
+  relative `import type`, aliased and then fed to an external package's conditional type, resolves
+  to `any` with no error — so the app compiled, and the developer believed they were writing against
+  a typed client. Route exports are named inline as `typeof import('...').GET` now, the form
+  measured to survive, and no aliased relative import is left in the generated output. The scaffold
+  `tsconfig.json` also includes `.theokit/**/*.d.ts`, the directory the framework generates into;
+  leaving it out of `include` meant those types were never loaded, which hid the collapse from
+  anyone who went looking (#469, #466)
 
 - **`theoFetch` could not send a POST.** The options type omitted `method` while the implementation
   read it and defaulted to `GET`, so the documented call did not compile and the call that did
