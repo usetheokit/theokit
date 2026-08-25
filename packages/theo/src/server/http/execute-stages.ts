@@ -27,15 +27,17 @@ export async function parseQueryAndBody(
   req: IncomingMessage,
   res: ServerResponse,
   requestId: string | undefined,
-): Promise<StageResult<{ query: Record<string, string>; body: unknown }>> {
+): Promise<StageResult<{ query: Record<string, string>; body: unknown; raw?: string }>> {
   // Query
   const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`)
   const query: Record<string, string> = Object.fromEntries(url.searchParams)
 
   // Body (JSON + multipart/form-data)
   let body: unknown
+  let raw: string | undefined
   try {
     const parsed = await parseRequestBody(req)
+    raw = parsed.raw
     if (parsed.json !== undefined) {
       body = parsed.json
     } else if (parsed.files.length > 0 || Object.keys(parsed.fields).length > 0) {
@@ -56,7 +58,7 @@ export async function parseQueryAndBody(
     return { ok: false }
   }
 
-  return { ok: true, data: { query, body } }
+  return { ok: true, data: { query, body, raw } }
 }
 
 /**
