@@ -399,6 +399,24 @@ jobs:
       # No install: the gate reads the working tree with node's stdlib only.
       - run: node scripts/check-doc-citations.mjs
 
+  changelog-current:
+    name: Release record (no release newer than the record)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # The gate compares the newest RELEASE TAG against the newest dated section, so the
+          # tags have to be here. A shallow checkout fetches none, and the gate would report that
+          # it could not measure — which is honest, and useless as a gate.
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: '.nvmrc'
+      # No install: node's stdlib plus `git tag`.
+      - run: node scripts/check-changelog-current.mjs
+
   license-compliance:
     name: License compliance (production tree)
     runs-on: ubuntu-latest
