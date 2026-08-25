@@ -67,7 +67,7 @@ function functionDeclarationDeclaresPolicy(stmt: TS.FunctionDeclaration): boolea
  * True when the file has a top-level export named `policy`.
  *
  * `content` is passed in rather than read here so the caller reads each file once — the same
- * contract `detectMethodsWithDeclaredPolicy` follows.
+ * contract `detectRoutePolicyKinds` follows.
  */
 export function declaresAgentPolicy(filePath: string, content: string): boolean {
   const sourceFile = ts.createSourceFile(

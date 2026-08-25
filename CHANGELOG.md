@@ -8,6 +8,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Security
 
+- **`HOST` now reaches the listener, so a container can actually be served.** The variable was added
+  (#402) because inside a container `localhost` means nobody — the image starts, prints a URL and
+  refuses every request including its own. It never worked: the config schema defaulted `host` to
+  the string `'localhost'`, and an explicit host outranks the environment by design, so every app
+  looked like it had decided and the env branch was unreachable. The default is gone; the loopback
+  fallback lives where "nobody said" is still distinguishable from "somebody said localhost". An
+  explicit `host: 'localhost'` still wins over `HOST`, and `host: false` still refuses it (#488)
+
+- **`theo start` refuses to bind a public interface while write routes are unauthenticated.** ADR
+  0001 made every route declare who may call it and stopped absence from meaning open — and
+  `'public'` is a declaration too, so a table where every entry says it passed the build gate
+  perfectly while protecting nothing. Nothing downstream could tell the two apart, because the
+  policy value never left the module. The scanner now records it, and a non-loopback bind with an
+  unauthenticated POST / PUT / PATCH / DELETE stops the server with each offending route named,
+  rather than serving it. Public GETs are deliberately untouched: read endpoints are ordinary, and a
+  gate that fired on them would be switched off within a day. Override with
+  `security.allowUnauthenticatedWrites: true`, which keeps the routes open and re-lists them on
+  every start. A manifest built before this reports `unverified` and still boots — reading absence
+  as safety is the failure the gate exists to prevent (#487)
+
+- **Identity established by a plugin's `onRequest` hook now survives to the route policy.** The
+  executor documented in-source that "any identity established upstream (middleware, plugin hooks)
+  is on `ctx` by the time the policy reads it". It held only for apps with no `server/` directory:
+  with one, the middleware stage REPLACED the context object and everything a hook had written was
+  discarded three lines before `evaluateRoutePolicy` read it. A plugin that authenticated a request
+  was then not believed, so an app could not use a real policy at all — the workaround being to
+  declare `'public'` and check by hand in each handler. Routes now merge, as the action executor
+  beside them always did (#486)
+
 - **A deploy target claiming to apply `rateLimit` is now checked against what it emits.** The
   declaration in `appliesConfig` is what silences the build warning, so adding `'rateLimit'` to an
   adapter's list without wiring anything would tell the operator they are protected and remove the
