@@ -61,6 +61,25 @@ export function modelIdOf(model: string | ModelSelection): string {
 }
 
 /**
+ * The DECLARED context window of a model selection, in tokens, or `undefined`.
+ *
+ * Lives beside {@link modelIdOf} for the same reason: this module owns the projection between
+ * `string | ModelSelection` and the SDK's shape, and a second reader of that union elsewhere is the
+ * drift M95 already paid for once.
+ *
+ * `undefined` for a bare-string model id is the honest answer, not a gap to fill.
+ * `resolveModelCapabilities(id).maxContextTokens` looks like the missing half, and is not: its own
+ * contract says an unknown model gets "conservative defaults (all false, minimum tokens)" and it
+ * returns nothing to say which branch answered, so a catalog MISS is indistinguishable from a hit.
+ * The SDK's own `resolveEffectiveContextWindow` keeps the two apart by taking them as separate
+ * inputs (`override` vs `catalog`) and reporting a `source`; a caller that wants the catalog's guess
+ * can reach for that function, which will tell it that is what it got. Pure.
+ */
+export function contextWindowOf(model: string | ModelSelection): number | undefined {
+  return typeof model === 'string' ? undefined : model.contextWindow
+}
+
+/**
  * Read the reasoning effort back out of a model selection — the inverse of
  * {@link buildModelSelection}, and the reason this module owns the param key.
  *

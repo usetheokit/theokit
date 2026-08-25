@@ -217,6 +217,30 @@ interface StreamAgentOptions {
    * the stream is byte-identical to before.
    */
   onRunEvent?: RuntimeOverrides['onRunEvent']
+  /**
+   * theokit#474 — per-turn transient retry.
+   *
+   * `AgentRunnerRunOptions.retry` has existed since V4-P, and it belongs to the OTHER runtime: the
+   * reflective loop, whose round factory is allowed to throw. This entry point runs one SDK turn,
+   * and the SDK reports a provider failure as the run's terminal `error` EVENT rather than as a
+   * rejection — so the option could not simply be forwarded, and a wrapper that only caught throws
+   * would have been inert. See `turn-retry.ts`.
+   *
+   * Absent ⇒ the key is omitted from the SDK call entirely and the turn is a single attempt, exactly
+   * as before.
+   */
+  retry?: RuntimeOverrides['retry']
+  /**
+   * theokit#475 — expose the run's REAL token usage to tool handlers as `ctx.usage`.
+   *
+   * The seam a `get_context_remaining`-style tool needs: without it the only figure reachable from
+   * inside a handler is a character-count estimate over `ctx.messages`. Read it with `readRunUsage`
+   * from `@theokit/agents/usage`.
+   *
+   * Absent ⇒ handlers receive exactly the ctx they did before and the SDK receives no tracker it
+   * was not already given.
+   */
+  exposeUsageToTools?: RuntimeOverrides['exposeUsageToTools']
 }
 
 /**
@@ -241,6 +265,16 @@ export function streamAgentUIMessages(
   if (input.images !== undefined) overrides.images = input.images
   // theokit#132 — thread the RunEvent sink so it reaches `SendOptions.onRunEvent`.
   if (input.onRunEvent !== undefined) overrides.onRunEvent = input.onRunEvent
+  // theokit#474 — thread the retry policy, defaulting its abort signal to the run's own. Without
+  // that default an aborted turn would keep sleeping out its backoff before noticing, which is the
+  // same `retry.signal ?? signal` the reflective loop's `startRound` already applies.
+  if (input.retry !== undefined) {
+    overrides.retry = { ...input.retry, signal: input.retry.signal ?? input.signal }
+  }
+  // theokit#475 — thread the usage opt-in so tool handlers receive `ctx.usage`.
+  if (input.exposeUsageToTools !== undefined) {
+    overrides.exposeUsageToTools = input.exposeUsageToTools
+  }
 
   let source: AsyncGenerator<AgentStreamEvent>
   if (!input.hitl || input.hitl.gated.size === 0) {
