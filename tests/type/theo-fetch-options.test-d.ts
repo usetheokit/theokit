@@ -40,6 +40,32 @@ const _POST_with_query_and_body = defineRoute({
 })
 type POST_both = typeof _POST_with_query_and_body
 
+/**
+ * A querystring flag with a default and a transform — the shape usetheokit/theokit#490 was about.
+ *
+ * Everything on a querystring is a string, so a boolean flag has to be declared as the strings it
+ * can arrive as and transformed after. `z.coerce.boolean()` cannot do it: `Boolean('false')` is
+ * `true`, so the flag would never turn off.
+ */
+const _GET_flag = defineRoute({
+  query: z.object({
+    status: z.enum(['captured', 'triaged']).optional(),
+    clustered: z
+      .enum(['true', 'false', '1', '0'])
+      .default('false')
+      .transform((v) => v === 'true' || v === '1'),
+  }),
+  handler: ({ query: _q }) => ({ items: [] as string[] }),
+})
+type GET_flag = typeof _GET_flag
+
+/** A body with a defaulted field — same question, on the other side of the request. */
+const _POST_defaulted_body = defineRoute({
+  body: z.object({ name: z.string(), tags: z.array(z.string()).default([]) }),
+  handler: ({ body: _b }) => ({ id: 'new' }),
+})
+type POST_defaulted_body = typeof _POST_defaulted_body
+
 describe('TheoFetchOptions<T> — discrimination on query/body presence', () => {
   it('GET without query schema: TheoFetchOptions has query field undefined (key may not be set)', () => {
     type Opts = TheoFetchOptions<GET_no_query>
@@ -129,5 +155,65 @@ describe('TheoFetchOptions<T> — discrimination on query/body presence', () => 
     // @ts-expect-error - GET_no_query has no body schema; body field is `never`
     const _opts: TheoFetchOptions<GET_no_query> = { body: { anything: 1 } }
     expectTypeOf(_opts).toBeObject()
+  })
+})
+
+/**
+ * The caller sends the INPUT — usetheokit/theokit#490.
+ *
+ * `InferQuery`/`InferBody` used `z.infer`, which is `z.output`: the value the handler receives
+ * after parsing. A client sends what goes on the wire, before defaults are filled and transforms
+ * run. Typing the request with the output made two correct schemas uncallable:
+ *
+ *   - a `.default()` field became required at the call site;
+ *   - a `.transform()` field asked for the post-transform type — a `boolean` for a value that has
+ *     to travel as a string.
+ *
+ * For a schema with neither, input and output are the same type, which is why every test above
+ * this block passes unchanged and why the defect stayed invisible until a schema used them.
+ */
+describe('InferQuery/InferBody describe what the caller sends, not what the handler receives', () => {
+  it('a defaulted query field is OPTIONAL — that is what a default means', () => {
+    const _omitted: TheoFetchOptions<GET_flag> = { query: {} }
+    expectTypeOf(_omitted).toBeObject()
+
+    const _partial: TheoFetchOptions<GET_flag> = { query: { status: 'captured' } }
+    expectTypeOf(_partial).toBeObject()
+  })
+
+  it('a transformed query field takes the value that travels, not the parsed one', () => {
+    const _wire: TheoFetchOptions<GET_flag> = { query: { clustered: 'false' } }
+    expectTypeOf(_wire).toBeObject()
+  })
+
+  it('NEGATIVE — the post-transform type is no longer accepted, because it never travels', () => {
+    // @ts-expect-error - `clustered` reaches the server as a string; the boolean is what parsing produces
+    const _parsed: TheoFetchOptions<GET_flag> = { query: { clustered: false } }
+    expectTypeOf(_parsed).toBeObject()
+  })
+
+  it('NEGATIVE — a value outside the declared strings still fails', () => {
+    // @ts-expect-error - 'maybe' is not one of the four accepted strings
+    const _bad: TheoFetchOptions<GET_flag> = { query: { clustered: 'maybe' } }
+    expectTypeOf(_bad).toBeObject()
+  })
+
+  it('a defaulted BODY field is optional too — a JSON body is serialised before it is parsed', () => {
+    const _omitted: TheoFetchOptions<POST_defaulted_body> = {
+      method: 'POST',
+      body: { name: 'ada' },
+    }
+    expectTypeOf(_omitted).toBeObject()
+
+    const _given: TheoFetchOptions<POST_defaulted_body> = {
+      method: 'POST',
+      body: { name: 'ada', tags: ['x'] },
+    }
+    expectTypeOf(_given).toBeObject()
+  })
+
+  it('a schema with no default and no transform is unchanged — input and output coincide', () => {
+    expectTypeOf<InferQuery<GET_with_query>>().toEqualTypeOf<{ search: string; page: number }>()
+    expectTypeOf<InferBody<POST_with_body>>().toEqualTypeOf<{ name: string; email: string }>()
   })
 })
