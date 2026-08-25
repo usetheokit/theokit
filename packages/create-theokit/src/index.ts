@@ -76,10 +76,16 @@ export function scaffold(
 
   cpSync(templateDir, targetDir, { recursive: true })
 
-  const gitignoreSrc = join(targetDir, '_gitignore')
-  const gitignoreDest = join(targetDir, '.gitignore')
-  if (existsSync(gitignoreSrc)) {
-    renameSync(gitignoreSrc, gitignoreDest)
+  // npm strips a leading dot from files in a published package, so the template ships them
+  // prefixed and the scaffold restores the name.
+  for (const [from, to] of [
+    ['_gitignore', '.gitignore'],
+    ['_prettierignore', '.prettierignore'],
+  ]) {
+    const src = join(targetDir, from)
+    if (existsSync(src)) {
+      renameSync(src, join(targetDir, to))
+    }
   }
 
   // dot-claude/ → .claude/ (npm ignores dotfolders in published packages)
