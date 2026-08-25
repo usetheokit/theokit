@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Security
+
+- **A deploy target claiming to apply `rateLimit` is now checked against what it emits.** The
+  declaration in `appliesConfig` is what silences the build warning, so adding `'rateLimit'` to an
+  adapter's list without wiring anything would tell the operator they are protected and remove the
+  one line that said otherwise — #321 one level up, with the operator's attention removed too. The
+  contract test that introduced the declaration named this hole about itself ("a wrong claim here is
+  indistinguishable from a right one"); for the six Web-standards targets the handler is emitted as
+  source, so the claim is now compared against it. `node` is out of scope by construction and says
+  so: it applies the limit in `theokit start`, not in an emitted file (#461)
+
 ### Changed
 
 - **A tool handler may return an object; it no longer throws on the model's first call.** The
