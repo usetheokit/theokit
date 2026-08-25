@@ -3,22 +3,22 @@ name: theokit-frontend
 description: TheoKit frontend — file-based routing, layouts, theoFetch typed client, useAgent, React patterns
 user-invocable: false
 paths:
-  - "app/**"
+  - 'app/**'
 ---
 
 # TheoKit Frontend (React + File-Based Routing)
 
 ## File-Based Routing
 
-| File | URL | Purpose |
-|------|-----|---------|
-| `app/page.tsx` | `/` | Home page |
-| `app/layout.tsx` | (wrapper) | Root layout (wraps all pages) |
-| `app/error.tsx` | (error) | Error boundary |
-| `app/loading.tsx` | (loading) | Suspense fallback |
-| `app/not-found.tsx` | (404) | Not found page |
-| `app/about/page.tsx` | `/about` | Nested route |
-| `app/tasks/[id]/page.tsx` | `/tasks/:id` | Dynamic route |
+| File                      | URL          | Purpose                       |
+| ------------------------- | ------------ | ----------------------------- |
+| `app/page.tsx`            | `/`          | Home page                     |
+| `app/layout.tsx`          | (wrapper)    | Root layout (wraps all pages) |
+| `app/error.tsx`           | (error)      | Error boundary                |
+| `app/loading.tsx`         | (loading)    | Suspense fallback             |
+| `app/not-found.tsx`       | (404)        | Not found page                |
+| `app/about/page.tsx`      | `/about`     | Nested route                  |
+| `app/tasks/[id]/page.tsx` | `/tasks/:id` | Dynamic route                 |
 
 ## Typed API Client (theoFetch)
 
@@ -98,7 +98,7 @@ consumeUIMessageStream(response, (message) => {
 ## Path Aliases
 
 ```typescript
-import { db } from '@/server/db'          // @/ = project root
+import { db } from '@/server/db' // @/ = project root
 import { tasks } from '@/server/db/schema'
 ```
 

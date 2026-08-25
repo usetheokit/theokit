@@ -1,15 +1,15 @@
 ---
 name: theokit-ui
-description: "@theokit/ui AI-native component library — AI-agent surfaces (ChatThread, ChatMessage, ChatComposer, ToolCallCard, AgentStream), theming, providers; generic primitives (CodeBlock, Sidebar, Button) come from @usetheo/ui"
+description: '@theokit/ui AI-native component library — AI-agent surfaces (ChatThread, ChatMessage, ChatComposer, ToolCallCard, AgentStream), theming, providers; generic primitives (CodeBlock, Sidebar, Button) come from @usetheo/ui'
 user-invocable: false
 paths:
-  - "app/**"
-  - "**/*Chat*"
-  - "**/*chat*"
-  - "**/*Sidebar*"
-  - "**/*sidebar*"
-  - "**/*theme*"
-  - "**/*Theme*"
+  - 'app/**'
+  - '**/*Chat*'
+  - '**/*chat*'
+  - '**/*Sidebar*'
+  - '**/*sidebar*'
+  - '**/*theme*'
+  - '**/*Theme*'
 ---
 
 # @theokit/ui — AI-native Component Library (AI-agent surfaces)
@@ -99,31 +99,32 @@ function ChatPage() {
 
 ### AI-agent-surface components (from `@theokit/ui`)
 
-| Component | Purpose | Key Props |
-|-----------|---------|-----------|
-| `ChatThread` | Scrollable message container | `children` (ChatMessage elements) |
-| `ChatMessage` | Single message bubble | `role: 'user' \| 'assistant'`, `children` |
-| `ChatMessageContent` | Markdown + code rendering | `markdown: string` (handles streaming partial) |
-| `ChatComposer` | Message input + submit | `onSubmit: (text) => void`, `disabled?: boolean` |
-| `ToolCallCard` | Display agent tool invocations | — |
-| `AgentStream` | Lower-level stream renderer | — |
+| Component            | Purpose                        | Key Props                                        |
+| -------------------- | ------------------------------ | ------------------------------------------------ |
+| `ChatThread`         | Scrollable message container   | `children` (ChatMessage elements)                |
+| `ChatMessage`        | Single message bubble          | `role: 'user' \| 'assistant'`, `children`        |
+| `ChatMessageContent` | Markdown + code rendering      | `markdown: string` (handles streaming partial)   |
+| `ChatComposer`       | Message input + submit         | `onSubmit: (text) => void`, `disabled?: boolean` |
+| `ToolCallCard`       | Display agent tool invocations | —                                                |
+| `AgentStream`        | Lower-level stream renderer    | —                                                |
 
 ### Generic primitives (from `@usetheo/ui`)
 
 Moved out of `@theokit/ui` in the 2026-07-03 AI-exclusive pivot. Import these from `@usetheo/ui`.
 
-| Component | Purpose | Key Props |
-|-----------|---------|-----------|
-| `CodeBlock` | Syntax-highlighted code | `code: string`, `language?: string` (uses shiki, lazy-loaded) |
-| `PageShell` | App layout with sidebar slot | `sidebar?: ReactNode`, `children` |
-| `Sidebar` | Collapsible side panel | `children` |
-| `Button`, `Input`, `Textarea` | Form primitives (themed) | — |
-| `Avatar` | User/agent avatar | — |
-| `Alert` | Status messages | — |
+| Component                     | Purpose                      | Key Props                                                     |
+| ----------------------------- | ---------------------------- | ------------------------------------------------------------- |
+| `CodeBlock`                   | Syntax-highlighted code      | `code: string`, `language?: string` (uses shiki, lazy-loaded) |
+| `PageShell`                   | App layout with sidebar slot | `sidebar?: ReactNode`, `children`                             |
+| `Sidebar`                     | Collapsible side panel       | `children`                                                    |
+| `Button`, `Input`, `Textarea` | Form primitives (themed)     | —                                                             |
+| `Avatar`                      | User/agent avatar            | —                                                             |
+| `Alert`                       | Status messages              | —                                                             |
 
 ## Peer Dependencies (install only what you use)
 
 **Chat/markdown path** (most apps need these):
+
 ```bash
 npm install mdast-util-from-markdown mdast-util-to-hast mdast-util-gfm \
   hast-util-to-jsx-runtime hast-util-sanitize hast-util-from-html \
@@ -131,6 +132,7 @@ npm install mdast-util-from-markdown mdast-util-to-hast mdast-util-gfm \
 ```
 
 **DO NOT install** unless you use the specific components:
+
 - `mermaid` — only for diagram rendering components
 - `katex` — only for math/LaTeX rendering
 - `roughjs` / `perfect-freehand` — only for whiteboard/drawing components

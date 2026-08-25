@@ -1,0 +1,13 @@
+# Generated output. Prettier's built-in ignore list is essentially `node_modules`, and
+# `format:check` is `prettier --check .` — so without this file the lockfile and the build
+# directory are checked, and a fresh app fails its own format gate the moment it builds.
+#
+# `.gitignore` already knows what is generated here, and neither Prettier nor ESLint reads it.
+# Three lists, one fact: keep them in step.
+node_modules
+dist
+coverage
+.theokit
+pnpm-lock.yaml
+package-lock.json
+yarn.lock
