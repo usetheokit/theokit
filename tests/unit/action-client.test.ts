@@ -111,6 +111,51 @@ describe('ActionClient — errors arrive typed', () => {
     expect((error as ActionInputError).fields).toEqual({ email: ['Invalid email'] })
   })
 
+  it('keeps the field map of a validation error that arrived without its issues', async () => {
+    // The wire carries BOTH `issues` and `fields` (server/http/serialize-action-result.ts:60),
+    // and `ActionError.fromJson` reads `issues`. A hand-written action — or a test fixture — that
+    // produces the field map directly is the shape that has no issues to read, and dropping it
+    // turned a validation failure into INTERNAL_SERVER_ERROR with the map gone. `fields` is the
+    // whole reason a form library subscribes to this error, so losing it silently is the worst
+    // available outcome. Found by @theokit/plugin-forms' own suite.
+    const client = new ActionClient(
+      envelopeAction({
+        error: {
+          type: 'TheoActionInputError',
+          code: 'VALIDATION_ERROR',
+          status: 422,
+          fields: { email: ['Email is already taken'] },
+        },
+      }),
+    )
+
+    await expect(client.mutateAsync({})).rejects.toBeInstanceOf(ActionInputError)
+
+    const error = client.getSnapshot().error
+    expect(error).toBeInstanceOf(ActionInputError)
+    expect((error as ActionInputError).fields).toEqual({ email: ['Email is already taken'] })
+  })
+
+  it('rebuilds a nested field path from the map, dots and array indices intact', async () => {
+    const client = new ActionClient(
+      envelopeAction({
+        error: {
+          type: 'TheoActionInputError',
+          fields: { 'items.0.name': ['Required'], '': ['Form is invalid'] },
+        },
+      }),
+    )
+
+    await expect(client.mutateAsync({})).rejects.toThrow()
+
+    // Root errors key on the empty string and array indices stay numeric segments — the
+    // convention `buildFieldsMap` documents. A naive split/join would lose one of them.
+    expect(client.getSnapshot().error).toHaveProperty('fields', {
+      'items.0.name': ['Required'],
+      '': ['Form is invalid'],
+    })
+  })
+
   it('keeps the message of an error whose code the protocol does not define', async () => {
     // The generated facade answers `{code:'NETWORK_ERROR', message:'fetch failed'}` when `fetch`
     // itself rejects. NETWORK_ERROR is not an ActionErrorCode, so the code is normalized — but

@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- **`useAction` kept the code of a validation error and dropped its `fields`.** The wire carries
+  both `issues` and the derived map, and `ActionError.fromJson` reads `issues` — so an error that
+  arrived with only the map fell through to `INTERNAL_SERVER_ERROR` and lost the one thing a form
+  library subscribes to it for. The map is inverted back into the issues it came from, and
+  `ActionInputError` re-derives an identical one. Found by `@theokit/plugin-forms`' own suite,
+  an hour after the hook shipped (#453)
+
 ### Added
 - **`useAction` — the client half of the action contract, which lived outside this repository.**
   `theokit/client` shipped `useAgent`, `Link`, `Image` and `Metadata`, and no way to call a server

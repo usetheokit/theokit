@@ -156,6 +156,40 @@ describe('Smoke: Import Validation from dist/', () => {
     expect(typeof mod.TheoFetchError).toBe('function')
   })
 
+  // The action surface #453 added, asserted on the BUILT entry rather than on `src/`.
+  // `client-action-surface.test.ts` covers the source barrel; it cannot see a symbol that the
+  // bundler drops on the way to `dist/`, and the consumer only ever holds `dist/`. Each name is
+  // checked one at a time, matching the two above, so a failure says which one went missing.
+  it('should import useAction from theo/client dist', async () => {
+    const mod = (await import('../../packages/theo/dist/client/index.js')) as {
+      useAction: unknown
+    }
+    expect(typeof mod.useAction).toBe('function')
+  })
+
+  it('should import ActionClient from theo/client dist', async () => {
+    const mod = (await import('../../packages/theo/dist/client/index.js')) as {
+      ActionClient: unknown
+    }
+    expect(typeof mod.ActionClient).toBe('function')
+  })
+
+  // The error hierarchy travels with the hook: `useAction` hands back an `ActionError`, and a
+  // component narrowing it must not have to import the SERVER barrel into a browser bundle to do
+  // so. A dropped re-export here would put it back in that position silently.
+  it('should import the action error hierarchy from theo/client dist', async () => {
+    const mod = (await import('../../packages/theo/dist/client/index.js')) as {
+      ActionError: unknown
+      ActionInputError: unknown
+      isActionError: unknown
+      isInputError: unknown
+    }
+    expect(typeof mod.ActionError).toBe('function')
+    expect(typeof mod.ActionInputError).toBe('function')
+    expect(typeof mod.isActionError).toBe('function')
+    expect(typeof mod.isInputError).toBe('function')
+  })
+
   it('should run CLI --help without error', () => {
     // `execFileSync` with an argv array, not a command string: the paths interpolated here are
     // absolute and come from wherever the repository happens to sit, so a directory with a
