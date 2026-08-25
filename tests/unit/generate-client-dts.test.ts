@@ -50,8 +50,12 @@ describe('generateClientDts', () => {
       serverDir: SERVER_DIR,
     })
     expect(out).toContain('users:')
-    expect(out).toMatch(/get:.+typeof _r0_GET/)
-    expect(out).toContain("import type { GET as _r0_GET } from '../server/routes/users'")
+    // The route export is named INLINE, not through an alias declared at the top of the block.
+    // The alias form was pinned here for months and silently produced `any` (#469) — a string
+    // assertion cannot tell a type that works from one that collapses, which is why
+    // `generated-client-types-survive.test.ts` compiles the output instead of matching it.
+    expect(out).toMatch(/get:.+typeof import\('\.\.\/server\/routes\/users'\)\.GET/)
+    expect(out).not.toContain('import type { GET as')
   })
 
   it('renders GET + POST on the same route as `users.get` + `users.post`', () => {
@@ -67,8 +71,8 @@ describe('generateClientDts', () => {
       dtsOutPath: DTS_OUT,
       serverDir: SERVER_DIR,
     })
-    expect(out).toMatch(/get:.+typeof _r0_GET/)
-    expect(out).toMatch(/post:.+typeof _r0_POST/)
+    expect(out).toMatch(/get:.+typeof import\([^)]+\)\.GET/)
+    expect(out).toMatch(/post:.+typeof import\([^)]+\)\.POST/)
   })
 
   it('renders dynamic params with proper `params: { id: string }` type', () => {
@@ -151,10 +155,12 @@ describe('generateClientDts', () => {
       dtsOutPath: DTS_OUT,
       serverDir: SERVER_DIR,
     })
-    expect(out).toContain("from '../server/routes/posts'")
+    // The path still has to be relative to the `.d.ts`; it just travels inside `import('...')`
+    // now rather than in a separate import line.
+    expect(out).toContain("import('../server/routes/posts')")
   })
 
-  it('EC-2: normalizes kebab-case segments to camelCase', () => {
+  it('EC-2: keeps a kebab-case segment literal, as a bracket key', () => {
     const out = generateClientDts({
       manifest: mkManifest([
         {
@@ -167,8 +173,12 @@ describe('generateClientDts', () => {
       dtsOutPath: DTS_OUT,
       serverDir: SERVER_DIR,
     })
-    expect(out).toContain('userProfiles:')
-    expect(out).not.toContain('user-profiles:')
+    // It camelCased until #470. The runtime Proxy builds the URL from the key it is handed, so
+    // `userProfiles` requested `/api/userProfiles` while the route was served at
+    // `/api/user-profiles` — the call compiled and answered 404. The key mirrors the URL now;
+    // `generated-client-reaches-its-routes.test.ts` is what holds the two together.
+    expect(out).toContain("'user-profiles':")
+    expect(out).not.toContain('userProfiles:')
   })
 
   it('EC-2: unsafe segments (digit-leading) emit as bracket-access key', () => {
@@ -217,7 +227,7 @@ describe('generateClientDts', () => {
       serverDir: SERVER_DIR,
     })
     expect(out).not.toContain('\\\\')
-    expect(out).toMatch(/from '\.\.\/server\/routes\/posts'/)
+    expect(out).toMatch(/import\('\.\.\/server\/routes\/posts'\)/)
   })
 
   it('skips routes whose methods array is empty', () => {

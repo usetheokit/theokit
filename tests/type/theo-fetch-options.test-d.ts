@@ -83,6 +83,42 @@ describe('TheoFetchOptions<T> — discrimination on query/body presence', () => 
     expectTypeOf<Opts>().toHaveProperty('headers')
   })
 
+  // usetheokit/theokit#465 — `method` was omitted from the options type while `buildRequestInit`
+  // read `opts.method` and defaulted to GET. So the documented POST call did not compile, and the
+  // call that DID compile sent a GET with a JSON body and no `X-Theo-Action` header: the POST route
+  // was never reached, and nothing said so until someone opened the network panel.
+  it('accepts an explicit method on a route with no body schema', () => {
+    const _opts: TheoFetchOptions<GET_no_query> = { method: 'DELETE' }
+    expectTypeOf(_opts).toBeObject()
+  })
+
+  it('REQUIRES a method when the route declares a body — the silent GET is what this prevents', () => {
+    const _ok: TheoFetchOptions<POST_with_body> = {
+      method: 'POST',
+      body: { name: 'ada', email: 'a@b.test' },
+    }
+    expectTypeOf(_ok).toBeObject()
+
+    // @ts-expect-error - a body without a method used to compile and go out as GET
+    const _missing: TheoFetchOptions<POST_with_body> = { body: { name: 'ada', email: 'a@b.test' } }
+    expectTypeOf(_missing).toBeObject()
+  })
+
+  it('NEGATIVE — a body route cannot declare a safe method', () => {
+    // Single line on purpose: `@ts-expect-error` suppresses the NEXT line only, and TypeScript
+    // reports a bad property on the property's own line, not on the declaration's.
+    // prettier-ignore
+    // @ts-expect-error - GET carries no body; `buildRequestInit` skips the CSRF header for it
+    const _opts: TheoFetchOptions<POST_with_body> = { method: 'GET', body: { name: 'ada', email: 'a@b.test' } }
+    expectTypeOf(_opts).toBeObject()
+  })
+
+  it('NEGATIVE — a misspelled method fails to compile', () => {
+    // @ts-expect-error - not a member of HttpMethod
+    const _opts: TheoFetchOptions<GET_no_query> = { method: 'POTS' }
+    expectTypeOf(_opts).toBeObject()
+  })
+
   it('NEGATIVE — passing wrong query shape (number where string) fails to compile', () => {
     // @ts-expect-error - search must be string, not boolean
     const _opts: TheoFetchOptions<GET_with_query> = { query: { search: true, page: 1 } }

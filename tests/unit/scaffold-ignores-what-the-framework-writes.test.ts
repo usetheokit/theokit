@@ -100,6 +100,21 @@ const prettierIgnore = readFileSync(resolve(TEMPLATE_ROOT, '_prettierignore'), '
   .map((l) => l.trim())
   .filter((l) => l.length > 0 && !l.startsWith('#'))
 
+// usetheokit/theokit#466 — the mirror of the rule below, and it has to be stated separately
+// because it points the other way: `.theokit/` is ignored by every TOOL and must be loaded by the
+// COMPILER. It holds the generated `client.d.ts`, so leaving it out of `include` means the typed
+// client the framework generates never reaches the app that asked for it — and nothing fails,
+// because an ambient module that is not loaded just leaves the import unresolved or `any`.
+describe('what the framework writes is ignored by the tools AND loaded by the compiler', () => {
+  it('the template tsconfig includes the directory the framework generates types into', () => {
+    const tsconfig = JSON.parse(readFileSync(resolve(TEMPLATE_ROOT, 'tsconfig.json'), 'utf-8')) as {
+      include: string[]
+    }
+
+    expect(tsconfig.include).toContain('.theokit/**/*.d.ts')
+  })
+})
+
 describe('what the framework writes is ignored by every list, not just git', () => {
   it.each(GENERATED_BY_THE_FRAMEWORK)('git ignores %s', (dir) => {
     expect(isIgnored(`${dir}/anything`)).toBe(true)

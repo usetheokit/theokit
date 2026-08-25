@@ -6,6 +6,57 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Security
+
+- **A deploy target claiming to apply `rateLimit` is now checked against what it emits.** The
+  declaration in `appliesConfig` is what silences the build warning, so adding `'rateLimit'` to an
+  adapter's list without wiring anything would tell the operator they are protected and remove the
+  one line that said otherwise — #321 one level up, with the operator's attention removed too. The
+  contract test that introduced the declaration named this hole about itself ("a wrong claim here is
+  indistinguishable from a right one"); for the six Web-standards targets the handler is emitted as
+  source, so the claim is now compared against it. `node` is out of scope by construction and says
+  so: it applies the limit in `theokit start`, not in an emitted file (#461)
+
+### Changed
+
+- **A tool handler may return an object; it no longer throws on the model's first call.** The
+  runtime demanded a string or a `toModelOutput`, and the type said nothing — so the failure arrived
+  inside an agent run, with a provider key and tokens already spent, for something the compiler had
+  the information to catch. Returning an object is the natural shape, so this was the common path:
+  one report had 15 tools, all objects, all of which would have failed in execution. Non-string
+  results are JSON-serialized now, `toModelOutput` still wins when the model should see a different
+  shape, and the explicit error survives for the results no default can serialize — a cycle, a
+  `BigInt`, a function — naming which one it hit (#464)
+
+### Fixed
+
+- **A route with a hyphen in its name was unreachable through the generated client.** The generator
+  camelCased the segment (`agents-config` → `client.agentsConfig`) while the runtime Proxy builds the
+  URL from the key it is handed — so the call compiled, asked for `/api/agentsConfig`, and the route
+  at `/api/agents-config` answered 404. Kebab-case file names are the scaffold's own convention, so
+  this appeared on the first route with two words in its name. Segments are literal now:
+  `client['agents-config'].get()`. Both halves had tests and neither could see it; the new one takes
+  the key out of the generated type and drives the real Proxy with it (#470)
+
+- **The generated `@theo/client` returned `any` for every call.** Inside a `declare module` block a
+  relative `import type`, aliased and then fed to an external package's conditional type, resolves
+  to `any` with no error — so the app compiled, and the developer believed they were writing against
+  a typed client. Route exports are named inline as `typeof import('...').GET` now, the form
+  measured to survive, and no aliased relative import is left in the generated output. The scaffold
+  `tsconfig.json` also includes `.theokit/**/*.d.ts`, the directory the framework generates into;
+  leaving it out of `include` meant those types were never loaded, which hid the collapse from
+  anyone who went looking (#469, #466)
+
+- **`theoFetch` could not send a POST.** The options type omitted `method` while the implementation
+  read it and defaulted to `GET`, so the documented call did not compile and the call that did
+  compile sent a GET with a JSON body and no CSRF header — the POST route was never reached, and
+  the only place it showed was the network panel. `method` is now part of the type, typed as the
+  framework's own `HttpMethod` union, and **required** when the route declares a body: a route with
+  a body schema is not a GET, so the type says so instead of the request saying it silently at
+  runtime (#465)
+
+## [theokit 0.52.1] - 2026-08-25
+
 ### Fixed
 
 - **`useAction` kept the code of a validation error and dropped its `fields`.** The wire carries
@@ -15,7 +66,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `ActionInputError` re-derives an identical one. Found by `@theokit/plugin-forms`' own suite,
   an hour after the hook shipped (#453)
 
+## [theokit 0.52.0, create-theokit 1.23.11] - 2026-08-25
+
 ### Added
+
 - **`useAction` — the client half of the action contract, which lived outside this repository.**
   `theokit/client` shipped `useAgent`, `Link`, `Image` and `Metadata`, and no way to call a server
   action from a component — even though `core/contracts/action-protocol.ts` opens by calling itself
@@ -26,6 +80,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   protocol's own `ActionError`, meaning a validation failure keeps its `fields` map; those classes
   are exported from `theokit/client` too, so narrowing a client hook's error no longer requires
   importing the server barrel into a browser bundle (#453)
+
+### Fixed
+
+- **A freshly scaffolded app failed its own `lint` and `format:check`.** `theokit build` writes
+  generated `.d.ts` into `.theokit/`, which the template's ESLint config did not ignore, so the
+  first lint after the first build reported around 1800 findings in code nobody wrote. And the
+  template shipped no `.prettierignore` at all, so `format:check` failed on the lockfile and on
+  eleven markdown files the template itself ships. Recorded late: it shipped in
+  `create-theokit@1.23.11` without an entry here, which is the drift #462 is about (#444)
+
+## [theokit 0.50.0] - 2026-08-24
+
+These entries were in `[Unreleased]` when `theokit@0.50.0` was tagged, and are promoted here as
+that release. Three versions cut after it — `0.50.1`, `0.50.2` and `0.51.0` — added nothing to this
+file, so they have no section of their own; their per-version detail is in
+`packages/theo/CHANGELOG.md`, which Changesets maintains and which never drifted. Recovering a
+version-by-version split of the entries below would be invention, not reconstruction, so it is not
+attempted here (#462).
+
+### Added
+
 - **The webhook signature validators are reachable from the package.** `handleChannelWebhook` takes
   a required `validators` map and its own docblock demonstrates `{ slack: slack({...}), telegram:
   telegram({...}) }` — while `server/webhook` re-exported none of the six providers sitting beside
@@ -35,6 +110,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   existed. The framework's own test imports them by relative source path, which is why nothing
   noticed. Found while writing the `theokit-gateways` scaffold skill, trying to show the wiring
   (theokit-gateways B-011)
+
 - **`create-theokit` scaffolds a `theokit-gateways` skill.** A new app got six skills — agents,
   config, database, frontend, routes, ui — and none for receiving a message from a platform, while
   the `@theokit/gateway-*` packages existed and shipped. Measured from the other side: the gateways'
@@ -42,6 +118,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `dist/server/agent/index.d.ts`, which is where someone already inside the type looks. The skill
   states which package owns which half, the four statuses the route answers, and why a throw out of
   `onMessage` is not free (theokit-gateways B-011)
+
 - **`readThreadHistory()` stops reporting a transcript it could not read as a thread with no
   history.** An application reading a thread must catch — a brand-new thread has no file, and raising
   there would 500 the first turn of every conversation. That catch is mandatory and it swallowed
@@ -155,6 +232,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   target does anyway is not reported — `csrf: 'strict'` and `serialization: 'json'` are honoured by
   coincidence, and warning over an identical outcome only teaches operators to skip the block.
   (usetheokit/theokit#409, usetheokit/theokit#410)
+
 - **A web application can render a human-in-the-loop approval prompt.** `useAgent` returns
   `pendingApprovals` — one entry per decision the run is parked on, carrying the `approvalId` that
   `approve()` takes, the gated tool's name, the arguments it is about to run with, the question
@@ -166,6 +244,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   moves to `state: 'approval-requested'` with the id under `approval.id`, and leaves that state when
   the decision is settled. A tool with no gate is unchanged, with `pendingApprovals` empty.
   (usetheokit/theokit#392)
+
 - **An approval says what it is asking.** The question declared on `.approval(name, { question })`
   and the timeout the gate expires in now reach the client, as a transient `data-approval` part
   emitted alongside the approval frame. They were dropped between the producer and the surface, so
@@ -175,6 +254,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   client instead of merely giving it a poorer prompt. The tool's name and its resolved input are not
   duplicated: the preceding `tool-input-available` frame already announces both under the same call
   id, and both readers fold the two frames into one part. (usetheokit/theokit#394)
+
 - **An agent declares who may run it, and every one of its endpoints obeys that declaration.** An
   agent file exports a `policy` — `'public'`, or a function over `{ subject, body, params }` — and
   the run endpoint, the thread routes, the pending-approval listing, the approve route and MCP all
@@ -187,12 +267,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   away before any of that is paid for. The `policy` option `mountAgent` gained earlier in this cycle
   stays, for a host that resolved the decision itself, and overrides the file's declaration.
   (usetheokit/theokit#365)
+
 - **An agent can declare how many steps it is allowed to take, and the served agent obeys it.**
   `AgentBuilder.create().maxIterations(5)` and `defineAgent({ maxIterations: 5 })` cap the tool-calling
   turns of a single run, and the ceiling `@Agent`/`@MainLoop` already accepted now reaches the runtime
   too. Every authoring path wrote the number and nothing on the served path read it, so an agent that
   declared a limit ran without one. An agent that declares no ceiling is unchanged. A value that is
   not a positive integer is refused where it is written, not mid-run. (usetheokit/theokit#363)
+
 - **A run that was cut short says so.** The terminal `done` frame and the turn metadata a client
   reads off `UIMessage.metadata` carry an optional `stopReason` — `'step_limit'` when the run ran out
   of tool-calling turns while the model still wanted more, `'no_progress'` when the doom-loop guard
@@ -202,6 +284,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   step ceiling defaults to 8, so any run needing a ninth tool-calling turn was cut in silence, agents
   that declared no ceiling included. A run that finishes on its own carries no `stopReason` at all.
   (usetheokit/theokit#379)
+
 - **A recorded run says which model it ran on, so its tokens convert to a cost.** The exported
   `agent.run` span carries `gen_ai.request.model` — the attribute name OpenTelemetry's GenAI
   semantic conventions give it — alongside the token counts it already recorded. Tokens alone price
@@ -211,78 +294,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   reporting nothing. It travels on the turn's `finish` metadata, so a Tauri app and a terminal
   receive it over the same path a browser does, and a producer that reports no model records no
   attribute rather than a guess. (B-019)
-
-### Security
-
-- **A placeholder session secret no longer boots in production.** `assertProductionSecret` was
-  exported, documented as the production guard, covered by ten unit assertions — and called by
-  nothing. Both session managers validated through `normalizeSecrets`, which enforces a 32-character
-  floor in every environment and knows nothing about placeholders, so the gap between the two
-  functions was exactly the placeholder check and a 32-or-more character `CHANGE_ME…` sailed into
-  production. The dev-time warning sat in the same position: the sentence telling a developer that
-  "the production server will REFUSE to boot until you replace it" lived inside the uncalled
-  function, so the developer never saw the warning and the refusal never fired — a promise made by
-  unreachable code still reads as a guarantee. Both managers now resolve their secret through one
-  function that runs both checks, the length floor speaking first so a short secret keeps the message
-  it has always had. **This can refuse a boot that previously succeeded**, which is the point: the
-  secret it refuses is either shorter than 32 characters or matches `CHANGE_ME` / `demo-` / `demo_` /
-  `placeholder`. Replace it (`openssl rand -hex 32`) rather than working around the refusal; outside
-  production nothing is refused and the warning is now reachable. (#429)
-
-- **Both static-file servers stopped serving files from outside the directory they were given.**
-  `serveStaticFile` (`theokit`) and `createStaticHandler` (`@theokit/http`) returned the contents of
-  whatever a symlink inside the served root pointed at — any file the server process could open, to
-  an unauthenticated `GET`. Each had a traversal guard, and each guard compared the path *string*
-  while the read touched the *filesystem*; a symlink is exactly where those two disagree, so a URL
-  containing no `..` at all walked straight out. Serving a directory that also receives uploads, or
-  unpacking an archive that carries a symlink, is enough to put one there. Containment is now decided
-  by `realpath`. A symlink whose target stays inside the root is ordinary and is still served — only
-  leaving is refused, and refused as "not here" rather than `403`, so the response does not confirm
-  what exists outside. A URL that walks out with `..` keeps its `403`. (#428)
-
-- **A size limit is now measured on the file that gets read.** The same lines carried a second
-  defect: each server resolved its path several times — check existence, stat the type or the size,
-  then read the bytes — so what was checked need not be what was served. Where a *limit* was being
-  enforced this made the limit bypassable: the custom error pages (`MAX_ERROR_HTML_BYTES`), the
-  OpenAPI spec endpoint (`MAX_SPEC_BYTES`), and `@theokit/http`, which reported `content-length` from
-  a separately sampled `stat.size` while the body came from its own read. Every site now opens one
-  descriptor and answers both questions through it; `.env` loading and the OpenAPI endpoint were
-  brought to the same shape. Responses are byte-for-byte what they were for any file that is not
-  changing underneath the server. (#428)
-
-- **An internal failure discloses the same amount over every transport.** The Node runner replaced an
-  `INTERNAL_ERROR`'s message with a generic one in production, and so did the Web runner's error
-  builder — but an exception escaping a Web handler travelled through neither. It reached the client
-  through a third path that built its response by hand from the error envelope, shipping `err.message`
-  and `err.cause` verbatim; the same route failing the same way returned a connection string over one
-  transport and `"Internal server error"` over another. The rule now lives in one place and all three
-  paths ask it. When it redacts, `cause`, `meta` and `ext` go with the message — they exist to
-  describe a failure that is, by definition, not describable to the caller — while the code stays so a
-  client can still branch on it. `proxyFetch` had the same shape in its own corner: a failed upstream
-  fetch names host, port and sometimes credentials, and that string was the `detail` of its `502`.
-  Development behaviour is deliberately unchanged everywhere. (#376)
-
-- **An error message can no longer forge log entries, and TOTP padding is no longer quadratic.** Two
-  smaller findings from the same sweep. `sendError` logged an `INTERNAL_ERROR`'s message unescaped,
-  and an exception message can be built from request data — a newline in it appended lines to the log
-  that read exactly like real ones; both the message and the request id are now rendered on one line.
-  `base32Decode` stripped trailing `=` with an anchored `/=+$/`, which retries from every start
-  position and costs O(n²) on a long run of `=`, in an authentication path; a scan back from the end
-  is linear. The comment defending the regex argued the input was short enough — an expectation, not
-  a bound. (#376)
-
-- **An approval belongs to someone, and only they can settle it.** The HITL ledger keyed approvals by
-  a bare id and recorded no owner, so an agent's policy could answer *"may this subject touch this
-  agent's approvals"* and never *"is this approval theirs"* — an authenticated tenant could settle
-  another tenant's approval on an agent both were admitted to. `mountAgent` now records the run's
-  subject on each approval it registers, and the approve endpoint refuses a caller whose identity
-  does not match, including a caller who cannot be identified at all. The check only ever narrows:
-  an agent declaring `'public'` records no owner, since attributing its approvals would start
-  refusing callers the declaration admits, and a headless thread continuation has no identity to
-  record — both behave exactly as before. Owner ids are not exposed through the pending-approval
-  listing. `ApprovalRegistry` gains `ownerOf(approvalId)`. (B-016)
-
-### Added
 
 - **A release that publishes nothing now fails instead of reporting success.** On 2026-08-20 the
   pipeline ran green and nothing reached npm — and the run before it was green for a worse reason:
@@ -321,6 +332,118 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   repository's LICENSE, which is the sharper half: an absent field reads as "ask us", while a wrong
   one is a grant somebody may rely on and cannot be taken back once published.
   (usetheokit/theokit#213)
+
+### Changed
+
+- **`<Image>` requires `width` and `height`, and accepts `srcSet` only with `sizes`.** *Breaking for
+  callers who omitted them.* The component's documentation said "width/height for CLS prevention"
+  and enforced neither — both were forwarded when present and absent when not, so the shift the
+  comment named was the default. `srcSet` without `sizes` was accepted the same way, and a browser
+  with no `sizes` resolves the candidates against `100vw`: it downloads an image picked for the
+  wrong width, usually the largest, which is the opposite of why a `srcSet` is added. Both are
+  refused by the type, so a TypeScript caller finds out at build time with the prop named; a
+  JavaScript caller gets an error naming the prop and the consequence instead of a page that shifts.
+  Migration: pass the intrinsic pixel dimensions — CSS may still resize the image. Also stated in
+  the component's own docs rather than left to inference: nothing here resizes or re-encodes an
+  image, and the framework ships no fonts module. (B-032)
+
+- **The parity programme is no longer sixteen surfaces held to one standard.** `ROADMAP.md` now
+  sorts them into two bands by a criterion that is written down rather than felt: a surface needs
+  **parity** when the framework's own thesis fails without it — an agent or page served wrongly or
+  unsafely, the three-target split broken, or a benchmark journey already measured as lost depending
+  on it. Five qualify (M1 security boundary, M2 rendering, M3 bundler, M8 observability, M14 build
+  adapters). The other ten get a **minimum contract**: not a lowered bar but a different one — what
+  the surface must do, document and refuse, graded the same way with no competitor's surface as the
+  reference, so *"we do not transform images"* in the docs is a met contract while the same absence
+  undocumented is a defect. M16 (multi-zone) is delisted, because a milestone nobody schedules that
+  still counts as outstanding makes the programme permanently incomplete for a reason that is not a
+  gap. Every deferred criterion is kept under *"Parity criteria — recorded, not scheduled"* rather
+  than deleted, and the three-target lines stay binding in both bands. No checkbox moved: narrowing
+  scope is the owner's call, deciding a surface is done is still `/acceptance`'s.
+
+- **The programme's completion condition follows the bands.** It was "all sixteen milestones"; it is
+  now the five parity milestones at full Definition of done plus the ten minimum contracts met, with
+  M16 not counted. The second condition — measured superiority on the agent axis — is unchanged and
+  still unmet: ten of ten journeys are now measured and none is won
+  (`docs/program/dx-benchmark.md`).
+
+- **Test runs no longer claim every core on the host.** `vitest.config.ts` capped nothing, so the default applied — `os.availableParallelism()`, one fork per core, each booting a full test environment. On a 12-thread machine a single `vitest run` therefore took the whole box, and anything else running alongside it (a second suite, a typecheck, the desktop) competed for what was left. The cap now leaves 4 cores free (`Math.max(2, cpus().length - 4)`), scaling with the runner instead of hard-coding one machine's core count. It costs no wall-clock — measured in `theokit-ui`, the full suite ran 73.96s at 4 workers against 74.36s at 12. (usetheokit/theokit-ui#51)
+
+- The four actions in the release workflow are pinned by commit SHA instead of by ref. The job
+  publishes as this organization, so a moving ref decides what runs in it. `changesets/action@v1`
+  was the sharpest edge: `v1` is not a tag in that repository but a **branch** — the tag lookup
+  returns 404 — so any push to it changed the code running with those credentials, with no release
+  and no version bump to notice. Each pin carries the version it resolved to, read from the
+  action's own tags. Majors are unchanged: this freezes what already runs rather than upgrading it
+  (#413).
+
+- The release workflow disarms the local pre-commit hook before changesets commits the version
+  bump. `pnpm install` runs the root `prepare` script, which arms the secret-scan hook on the
+  runner; changesets then commits, the hook finds no `trufflehog` binary and fails closed as
+  designed, so the Version Packages pull request is never created. It has not surfaced here only
+  because the hook landed on 2026-08-20 and no version commit has run since. The compensating
+  scan still covers that content: the branch reaches `main` only through a pull request, which
+  `secret-scan.yml` scans base-to-head (#413).
+
+- The workflow's own analysis of the `--no-git-checks` failure carried two claims that have since
+  expired, both now corrected in place. The npm version that rejects unknown flags is 12, not 11 —
+  measured across 10.9.7, 11.5.1, 11.9.0 and 12.0.2 — so an npm satisfying both the OIDC floor
+  (11.5.1) and the flag exists, and the two requirements were never mutually exclusive. And this
+  repository is public now, so npm's refusal to attest provenance for a private source no longer
+  applies. Both reasons for staying on token authentication were true when written; neither is
+  true today (#413).
+
+- **`theokit` builds on Vite 7, so a scaffolded application installs one esbuild instead of two.**
+  The framework pinned `vite@^6` while the same scaffold's `@tailwindcss/vite@^4` pulls `vite@7`, so
+  every application resolved two Vite majors and, with them, two `esbuild` copies — 23 MB and two
+  `postinstall` binary fetches for one framework. Measured: with a single major in the tree, one
+  `vite` and one `esbuild` remain. Eighteen of the twenty files that touch the Vite API import only
+  types; the two that call it at runtime are the node adapter's `build` and `theokit dev`'s
+  `createServer`, and both are unchanged. An application using a Vite plugin built for v6 will need
+  that plugin's v7 line. (`B-025`)
+
+- **Importing server code from a client page fails the build with an error that names both.** The
+  client bundle now refuses `theokit/server`, any `theokit/server/*` subpath, and any module under
+  your own `server/` directory, naming the module, the file whose import crossed the line, and the
+  three ways out — the typed client, the actions facade, or a type-only import. The build already
+  failed on this mistake, but with `"resolve" is not exported by "__vite-browser-external"` pointing
+  at a framework chunk: a bundler's difficulty, not the author's, and an accident of Node builtins
+  not existing in a browser rather than a rule. `server/actions/schemas/**` still reaches the client,
+  which is what it is for. (usetheokit/theokit#373)
+
+- **BREAKING: an agent file that declares no `policy` fails the build, naming the file.** The agent
+  scanner refuses a file under `agents/` with no access declaration, so `theo build`, `theo start`
+  and `theo dev` stop before serving an agent nobody decided about — the same gate the route scanner
+  applies, for the same reason and with the same shape of message: the file, the URL it serves, and
+  the two ways out. Absence used to mean open, and on this surface open means more than it does on a
+  route: the endpoints resume the conversation the CALLER names, so anyone holding a session id read
+  and continued it. `'public'` is still an answer and now says out loud that the app runs a
+  capability model. One declaration covers every endpoint the agent exposes. Nothing changes for an
+  agent module built in memory and passed straight to `mountAgent`. See `MIGRATION.md`.
+  (usetheokit/theokit#365)
+
+- **A refusal from an agent endpoint no longer repeats which check refused.** The wire gets one fixed
+  message naming what the caller must supply; the specific reason goes to the server log. The
+  owner primitive distinguishes "no recorded owner" from "not the owner", and returning that pair
+  would let an unauthenticated caller tell an existing conversation from one that never existed.
+  (usetheokit/theokit#365)
+
+- **BREAKING: `GET /api/agents/<name>/approvals` requires the agent's policy to admit the caller,
+  and 404s for an agent that does not exist.** It answered `200` with every pending approval id to
+  anyone who asked, and it lost its last in-tree caller when the pending approval started reaching
+  the client over the stream (usetheokit/theokit#392). It also no longer serves the process-wide
+  ledger under a name no agent has. (usetheokit/theokit#365)
+
+- **BREAKING: a route file that declares no `policy` fails the build, naming the file.** The route
+  scanner refuses an HTTP export with no access policy, so `theo build`, `theo start`, `theo dev`,
+  `theo routes` and every deployment adapter stop before serving a route nobody decided about.
+  Absence used to mean "not declared", which every reader had to interpret as open — a route
+  deliberately left public and a route nobody thought about looked identical. `'public'` is still an
+  answer; it is now an answer somebody writes down, and one you can count. The error names the file,
+  the URL it serves, the methods that are silent, and the two ways out. `route().policy(...)` is the
+  builder form. Nothing changes for a `RouteConfig` built in memory and passed straight to
+  `executeWebRequest` or `callProcedure`: that value never passes a scanner. See `MIGRATION.md`.
+  (ADR 0001, Decision point 5)
 
 ### Fixed
 
@@ -475,6 +598,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   unauthenticated run. `undefined` is still refused, still at startup rather than at the model's
   first call, and the refusal now names the keyless option instead of leaving the reader to choose
   between a fabricated value and giving up. (#423)
+
 - **The agent subject resolver stops documenting a rule none of its callers can follow.** Its
   docstring stated a MUST — "invoke it before converting the request to a Web `Request`" — that the
   laziness argued for two paragraphs above makes unsatisfiable: the invocation happens inside the
@@ -485,6 +609,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   headers and cookies reach `createContext`, the request body does not — with the two ways to
   restore body access named and costed rather than left as an implied capability. Pinned by a test,
   so the prose cannot drift back. (#415)
+
 - **A denied HITL approval no longer captures the next call of the same tool.** The correlation
   that pairs an approval id with the SDK's runtime call id does so by tool name, FIFO, on the
   reasoning that "an approval is outstanding only while the call it gates is outstanding". That
@@ -498,6 +623,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   common case and wrong in a mixed concurrent round, where it would settle the card of a call the
   human allowed. A mixed round still mispairs; that needs a per-call handle both sides can see, and
   the plugin's hook context carries no call id, which is why the correlation exists at all. (#414)
+
 - **A `TheoApp`-mounted agent route no longer delivers zero chunks to `useAgent`.** The framework
   shipped two SSE encoders for agent runs and they did not speak the same wire: the durable one
   writes `data: <UIMessageChunk>` with a terminal `data: [DONE]`, and the other wrote
@@ -508,6 +634,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   success with an empty answer. The events go through the same translator `mountAgent` uses now, so
   there is one wire and one place that produces it — and it terminates, closing the same gap #384
   fixed for the durable encoder, whose fix keys on the `finish` chunk this one never sent. (#386)
+
 - **The server's raw error text no longer reaches the browser by default.** Every failure reported
   to a browser carried the server's own words — a tool handler's stderr verbatim in
   `tool-output-error.errorText`, a run failure's message verbatim in `error.errorText`, including
@@ -521,6 +648,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   part, so consumers still distinguish failures without matching on text. Declared on the
   in-process entry point as well as the HTTP one, because a masking default that depended on the
   transport is the asymmetry the parity gate exists to refuse — and that gate caught it. (#390)
+
 - **Vercel and Netlify are now told the security baseline for the HTML document they serve
   themselves.** The emitted handler applies the configured headers to every response IT returns —
   and on four targets it never returns the document: it answers `/api/*` and 404s everything else,
@@ -538,6 +666,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   does not prove:** that a deployed page carries the headers. That needs a deployment, and neither
   platform is deployed from CI — `cloudflare` with `ssrStreaming: false`, `deno-deploy` and
   `aws-lambda` own no config artifact this build writes and remain uncovered. (#412)
+
 - **All six Web deploy targets now serve the CORS the app configured.** `security.cors` had reached
   exactly one consumer — Vite's `configureServer` hook — so an app that worked cross-origin under
   `theokit dev` stopped working the moment anything else served it. `theokit start` was fixed first;
@@ -551,6 +680,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   baking only the serialisable shapes would deploy an app whose CORS silently allowed nothing —
   this issue's own defect, produced by the fix for it. RegExp origins are emitted as regex literals
   for the same reason `disallowed.routes` is. (#409)
+
 - **The scaffolded desktop sidecar stops emitting a second, non-conformant approval frame.**
   `runTurnToJsonl` writes every chunk the in-process turn produces, and a gated tool produces the
   real `tool-approval-request` carrying the `toolCallId` readers key a tool part by. The template's
@@ -561,6 +691,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   app is generated from taught a frame the framework rejects, and a future reader that validates —
   or that keys approvals by `approvalId` — would inherit a duplicate with no rule for it. The
   callback now registers the resolver and writes nothing. (#403)
+
 - **A streaming answer that is cut off no longer arrives as a complete one.** A route handler whose
   streaming body failed part-way through was delivered as a normal `200` with a short body: the
   executor caught the stream error, logged it, ran the `onError` hook — and then reached the same
@@ -574,6 +705,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   Web half needed no new logic: the shim's `failResponse` had said the right thing, citing the same
   ADR, since it was written, and had exactly one caller — a path the executor's own `catch`
   prevented from ever running. (#391)
+
 - **An approval that expired no longer reports itself as a human pressing Deny.** The two outcomes
   were byte-identical on the wire — `Tool 'send_email' denied by human approver` for both an
   explicit denial with no reason and a window that closed with nobody watching. The framework did
@@ -588,6 +720,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   The marker is set on the ALLOW side too: `onTimeout: 'proceed'` permits the tool *because* nobody
   answered, and recording that as a plain approval is the same fabrication with the opposite sign —
   and the more dangerous of the two. (#393)
+
 - **`theokit dev` stopped parsing every route file twice on every request.** `scanServerRoutes`
   runs per request in dev, and it ran the TypeScript AST over each route file twice per call — once
   for the exported methods, once for the route-policy gate, sharing the source string but not the
@@ -599,6 +732,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   refusal: a route with no declared policy goes on being refused on every later scan, and a file
   that gains a policy is accepted without a restart. Both are asserted, because a cache that got
   either wrong would turn a build gate into a first-request gate. (#417)
+
 - **`theokit start` now serves the CORS the app configured.** `security.cors` is a first-class,
   schema-validated config key with exactly one consumer: Vite's `configureServer` hook. So an app
   declaring it worked cross-origin under `theokit dev` and stopped working the moment `theokit
@@ -610,6 +744,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   already existed and was already tested. The field is required rather than optional on the handler
   context, because the defect was that nobody wired it and an optional field is one a new call site
   can forget the same way. The six Web deploy targets still drop it and still say so. (#409)
+
 - **A trace crossing into a deployed function no longer starts over.** Every generated entry minted
   a fresh `randomUUID()` per request and set no correlation header at all on a success path, while
   both Node paths resolve the incoming `traceparent` / `x-request-id` through `extractTraceId` and
@@ -622,6 +757,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   merges rather than replaces, so a handler that sets its own id still wins, and no branch has to
   remember to add it. Verified against a real response from each of the six, including that a
   caller-supplied id survives the trip and that a W3C `traceparent` outranks it. (#410)
+
 - **A deployed app now enforces the CSRF mode it declared, instead of always the strictest one.**
   The six Web-standards adapter entries built `executeRoute`'s context from an eight-field literal,
   and neither `csrfMode` nor `disallowed` was among the eight. `executeRoute` defaults an absent
@@ -639,6 +775,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `appliesConfig`, so `findUnappliedConfig` stops reporting them as dropped. `plugins` and
   `serialization` are still dropped and still reported: both carry functions that no literal can
   express, which is a build-graph decision tracked as #425. (#410)
+
 - **A generated route now refuses instead of being open to the internet.** ADR 0001 made an
   undeclared `policy` a build error because a route nobody had thought about was indistinguishable
   from one deliberately left open — and then `theo generate resource` wrote `'public'` on five
@@ -655,6 +792,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   placeholders were mixed in with real ones. The author still has to write the answer down — that
   was never the part being removed; only the value standing in until they do has changed, from the
   open one to the safe one. (#416)
+
 - **`pnpm try:scaffold` now tries this working tree instead of npm.** The script exists so the
   repository can exercise its own scaffold, and it did the opposite: the template pins ranges —
   correct for people scaffolding from npm — and a caret on a `0.x` version pins the minor, so
@@ -849,6 +987,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   obvious would have refused those four and broken `--bare` and `--surface` on their first run. A
   symlinked parent directory is still followed — Node exposes no way to refuse that — and the limit
   is written at the call site rather than left to be inferred. (CodeQL `js/insecure-temporary-file`)
+
 - **The agent endpoints beside the run route are no longer invisible at the HTTP layer.** The thread
   message and stream routes, MCP, the agent card, the pending-approvals listing, the durable
   run-stream reconnect and the HITL approve route answered without ever consulting the plugin
@@ -862,6 +1001,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   it, `theokit dev` stopped 404ing the two thread routes and the run-stream reconnect that
   `theokit start` serves: the dev middleware kept a hand-written subset of the dispatcher's route
   table, and now asks the table. (usetheokit/theokit#405)
+
 - **A dashboard grouped by agent stops splitting one agent in two, and server paths stop reaching
   the telemetry backend.** The `agent` attribute on `agent.run`, `agent.tool` and `agent.hitl` was
   the agent module's absolute filesystem path when the run started on `POST /api/agents/<name>` and
@@ -872,6 +1012,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   routes now report the agent's name, the same string the URL carries and the same one its access
   policy is judged under. The module path is not exported under another attribute either; that would
   be a deliberate opt-in, and it was never one. (usetheokit/theokit#406)
+
 - **One request that runs an agent arrives as one trace instead of two.** The `http.request` span
   joined no trace: it minted a fresh one on every route, while the agent run it contained continued
   the caller's `traceparent`. The caller's trace id was on the HTTP span all along — as the
@@ -880,6 +1021,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   finds what the agent did about it. A request with no `traceparent`, or one carrying only an
   `x-request-id`, still roots a freshly minted trace: a correlation key exported as a `traceId` is a
   malformed span. (usetheokit/theokit#385)
+
 - **A run's trace no longer depends on which endpoint started it.** The thread message route dropped
   the incoming `traceparent`, so the same header produced the caller's trace on
   `POST /api/agents/<name>` and an unrelated one on `POST /api/agents/<name>/threads/<id>/message`.
@@ -887,6 +1029,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   again. A thread follow-up is headless and outlives the request that queued it; the trace it joins
   is that request's, which is the answer that gets an operator from "the client sent this" to "here
   is what the agent did". (usetheokit/theokit#381)
+
 - **A container built from the documented path is reachable, and the log says which it is.**
   `config.host` had been declared, defaulted to `localhost` and never passed to `listen`, so the
   server bound every interface while its own default said otherwise. Passing it fixed that and broke
@@ -897,6 +1040,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   the bound address and, when nobody chose one, what to write to change it: it used to print
   `localhost` either way, so a container serving everyone and a container serving nobody produced
   byte-identical output. (usetheokit/theokit#402)
+
 - **A `POST` carrying a JSON body reaches its `/api` route under `theokit start`.** Every such
   request hung forever: no status, no error, no timeout — the connection simply stayed open and the
   handler was never called, while `theokit dev` answered the identical request in single-digit
@@ -908,12 +1052,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   ordering fault reached agent routes (`POST /api/agents/<name>`) and controller routes as an empty
   body rather than a hang; both are fixed by the same change. Actions (`/api/__actions/…`) were never
   affected — they matched their prefix before the aux branch ran. (usetheokit/theokit#400)
+
 - **A request body consumed before the parser runs is reported instead of awaited.** `parseJsonBody`
   waited on an `'end'` that a drained stream can never emit again, so any future middleware or
   adapter that reads the stream without passing the value on would reproduce the same silence. It now
   fails with a named `RequestBodyConsumedError` and a 500 — the framework drank the body, so it is
   not the caller's 400 to fix. A declared-empty body (`content-length: 0`) stays the absent body it
   is. (usetheokit/theokit#400)
+
 - **A streaming response reaches the client as it is produced, on every deploy target that emits a
   handler.** The deploy shim collected every `res.write()` into an array and built the `Response`
   from one concatenation inside `end()`, so `toResponse()` could not settle before the handler
@@ -927,6 +1073,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   rather than dropped; `write()` reports backpressure instead of always accepting; a run that fails
   after the first byte breaks the body stream rather than closing it as if it had finished.
   (usetheokit/theokit#382)
+
 - **AWS Lambda no longer claims a streaming it cannot do.** The Lambda v2 result object carries the
   body as a string, so the response cannot exist before the run ends. The target is delisted for
   response streaming: the build refuses by name when `ssrStreaming` is on, and the emitted handler
@@ -944,6 +1091,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   plugin's id in `approvalId` so the callback URL still resolves the pause. The pause span closes at
   the resume and says so with `hitl.resume_observed`. Ungated tools are untouched.
   (usetheokit/theokit#361)
+
 - **A run whose connection drops mid-answer is reported as interrupted instead of finished.** The
   agent client settled a dropped stream in `status: 'done'` with no error, so the spinner stopped,
   the error surface stayed empty, and half a sentence was committed to the thread as a completed
@@ -953,6 +1101,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   (`code: 'AGENT_STREAM_INTERRUPTED'`, `isRetryable: true`), the text already received stays on
   screen, and the truncated turn is not written into history as finished. A stream that ends on its
   terminal frame is unchanged, down to the snapshot's fields. (usetheokit/theokit#384)
+
 - **A tool that failed reaches the caller as a tool that failed.** A tool whose handler threw — and a
   tool that threw again on every retry until the retries ran out — crossed the wire as
   `tool-output-available`, the SUCCESS part, carrying the error message in the field a UI renders as
@@ -965,122 +1114,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   hook, which the SDK also completes with a non-zero code. A call that succeeded is unchanged, chunk
   for chunk, and still reported exactly once. (usetheokit/theokit#388)
 
-### Changed
-
-- **`<Image>` requires `width` and `height`, and accepts `srcSet` only with `sizes`.** *Breaking for
-  callers who omitted them.* The component's documentation said "width/height for CLS prevention"
-  and enforced neither — both were forwarded when present and absent when not, so the shift the
-  comment named was the default. `srcSet` without `sizes` was accepted the same way, and a browser
-  with no `sizes` resolves the candidates against `100vw`: it downloads an image picked for the
-  wrong width, usually the largest, which is the opposite of why a `srcSet` is added. Both are
-  refused by the type, so a TypeScript caller finds out at build time with the prop named; a
-  JavaScript caller gets an error naming the prop and the consequence instead of a page that shifts.
-  Migration: pass the intrinsic pixel dimensions — CSS may still resize the image. Also stated in
-  the component's own docs rather than left to inference: nothing here resizes or re-encodes an
-  image, and the framework ships no fonts module. (B-032)
-
-- **The parity programme is no longer sixteen surfaces held to one standard.** `ROADMAP.md` now
-  sorts them into two bands by a criterion that is written down rather than felt: a surface needs
-  **parity** when the framework's own thesis fails without it — an agent or page served wrongly or
-  unsafely, the three-target split broken, or a benchmark journey already measured as lost depending
-  on it. Five qualify (M1 security boundary, M2 rendering, M3 bundler, M8 observability, M14 build
-  adapters). The other ten get a **minimum contract**: not a lowered bar but a different one — what
-  the surface must do, document and refuse, graded the same way with no competitor's surface as the
-  reference, so *"we do not transform images"* in the docs is a met contract while the same absence
-  undocumented is a defect. M16 (multi-zone) is delisted, because a milestone nobody schedules that
-  still counts as outstanding makes the programme permanently incomplete for a reason that is not a
-  gap. Every deferred criterion is kept under *"Parity criteria — recorded, not scheduled"* rather
-  than deleted, and the three-target lines stay binding in both bands. No checkbox moved: narrowing
-  scope is the owner's call, deciding a surface is done is still `/acceptance`'s.
-
-- **The programme's completion condition follows the bands.** It was "all sixteen milestones"; it is
-  now the five parity milestones at full Definition of done plus the ten minimum contracts met, with
-  M16 not counted. The second condition — measured superiority on the agent axis — is unchanged and
-  still unmet: ten of ten journeys are now measured and none is won
-  (`docs/program/dx-benchmark.md`).
-
-- **Test runs no longer claim every core on the host.** `vitest.config.ts` capped nothing, so the default applied — `os.availableParallelism()`, one fork per core, each booting a full test environment. On a 12-thread machine a single `vitest run` therefore took the whole box, and anything else running alongside it (a second suite, a typecheck, the desktop) competed for what was left. The cap now leaves 4 cores free (`Math.max(2, cpus().length - 4)`), scaling with the runner instead of hard-coding one machine's core count. It costs no wall-clock — measured in `theokit-ui`, the full suite ran 73.96s at 4 workers against 74.36s at 12. (usetheokit/theokit-ui#51)
-
-- The four actions in the release workflow are pinned by commit SHA instead of by ref. The job
-  publishes as this organization, so a moving ref decides what runs in it. `changesets/action@v1`
-  was the sharpest edge: `v1` is not a tag in that repository but a **branch** — the tag lookup
-  returns 404 — so any push to it changed the code running with those credentials, with no release
-  and no version bump to notice. Each pin carries the version it resolved to, read from the
-  action's own tags. Majors are unchanged: this freezes what already runs rather than upgrading it
-  (#413).
-- The release workflow disarms the local pre-commit hook before changesets commits the version
-  bump. `pnpm install` runs the root `prepare` script, which arms the secret-scan hook on the
-  runner; changesets then commits, the hook finds no `trufflehog` binary and fails closed as
-  designed, so the Version Packages pull request is never created. It has not surfaced here only
-  because the hook landed on 2026-08-20 and no version commit has run since. The compensating
-  scan still covers that content: the branch reaches `main` only through a pull request, which
-  `secret-scan.yml` scans base-to-head (#413).
-- The workflow's own analysis of the `--no-git-checks` failure carried two claims that have since
-  expired, both now corrected in place. The npm version that rejects unknown flags is 12, not 11 —
-  measured across 10.9.7, 11.5.1, 11.9.0 and 12.0.2 — so an npm satisfying both the OIDC floor
-  (11.5.1) and the flag exists, and the two requirements were never mutually exclusive. And this
-  repository is public now, so npm's refusal to attest provenance for a private source no longer
-  applies. Both reasons for staying on token authentication were true when written; neither is
-  true today (#413).
-- **`theokit` builds on Vite 7, so a scaffolded application installs one esbuild instead of two.**
-  The framework pinned `vite@^6` while the same scaffold's `@tailwindcss/vite@^4` pulls `vite@7`, so
-  every application resolved two Vite majors and, with them, two `esbuild` copies — 23 MB and two
-  `postinstall` binary fetches for one framework. Measured: with a single major in the tree, one
-  `vite` and one `esbuild` remain. Eighteen of the twenty files that touch the Vite API import only
-  types; the two that call it at runtime are the node adapter's `build` and `theokit dev`'s
-  `createServer`, and both are unchanged. An application using a Vite plugin built for v6 will need
-  that plugin's v7 line. (`B-025`)
-- **Importing server code from a client page fails the build with an error that names both.** The
-  client bundle now refuses `theokit/server`, any `theokit/server/*` subpath, and any module under
-  your own `server/` directory, naming the module, the file whose import crossed the line, and the
-  three ways out — the typed client, the actions facade, or a type-only import. The build already
-  failed on this mistake, but with `"resolve" is not exported by "__vite-browser-external"` pointing
-  at a framework chunk: a bundler's difficulty, not the author's, and an accident of Node builtins
-  not existing in a browser rather than a rule. `server/actions/schemas/**` still reaches the client,
-  which is what it is for. (usetheokit/theokit#373)
-- **BREAKING: an agent file that declares no `policy` fails the build, naming the file.** The agent
-  scanner refuses a file under `agents/` with no access declaration, so `theo build`, `theo start`
-  and `theo dev` stop before serving an agent nobody decided about — the same gate the route scanner
-  applies, for the same reason and with the same shape of message: the file, the URL it serves, and
-  the two ways out. Absence used to mean open, and on this surface open means more than it does on a
-  route: the endpoints resume the conversation the CALLER names, so anyone holding a session id read
-  and continued it. `'public'` is still an answer and now says out loud that the app runs a
-  capability model. One declaration covers every endpoint the agent exposes. Nothing changes for an
-  agent module built in memory and passed straight to `mountAgent`. See `MIGRATION.md`.
-  (usetheokit/theokit#365)
-- **A refusal from an agent endpoint no longer repeats which check refused.** The wire gets one fixed
-  message naming what the caller must supply; the specific reason goes to the server log. The
-  owner primitive distinguishes "no recorded owner" from "not the owner", and returning that pair
-  would let an unauthenticated caller tell an existing conversation from one that never existed.
-  (usetheokit/theokit#365)
-- **BREAKING: `GET /api/agents/<name>/approvals` requires the agent's policy to admit the caller,
-  and 404s for an agent that does not exist.** It answered `200` with every pending approval id to
-  anyone who asked, and it lost its last in-tree caller when the pending approval started reaching
-  the client over the stream (usetheokit/theokit#392). It also no longer serves the process-wide
-  ledger under a name no agent has. (usetheokit/theokit#365)
-- **BREAKING: a route file that declares no `policy` fails the build, naming the file.** The route
-  scanner refuses an HTTP export with no access policy, so `theo build`, `theo start`, `theo dev`,
-  `theo routes` and every deployment adapter stop before serving a route nobody decided about.
-  Absence used to mean "not declared", which every reader had to interpret as open — a route
-  deliberately left public and a route nobody thought about looked identical. `'public'` is still an
-  answer; it is now an answer somebody writes down, and one you can count. The error names the file,
-  the URL it serves, the methods that are silent, and the two ways out. `route().policy(...)` is the
-  builder form. Nothing changes for a `RouteConfig` built in memory and passed straight to
-  `executeWebRequest` or `callProcedure`: that value never passes a scanner. See `MIGRATION.md`.
-  (ADR 0001, Decision point 5)
-
-### Deprecated
-
-### Removed
-
-### Fixed
-
 - **A fractional span attribute reaches the collector as a number.** Every numeric attribute was
   serialized under OTLP's `intValue`, so `cost.usd` — the one attribute that answers what a run cost —
   arrived as `{"intValue":"0.0031"}`: a string that is not an integer, in the field reserved for
   integers. A collector may reject it, coerce it to zero, or store the string; none of those is the
   number. Fractional values now use `doubleValue`; integers are unchanged, so token counts and status
   codes keep aggregating as integers. (usetheokit/theokit#380)
+
 - **The pre-commit gate refuses a commit that grew paths nobody staged.** With a partially staged
   file in the tree, the lint/format step restored the whole working tree into the index: a commit
   that named six paths carried fourteen, and the eight extra belonged to unfinished work elsewhere in
@@ -1088,6 +1128,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   the paths that appeared and how to recover. Shrinking still passes — a formatter may leave a file
   byte-identical — and partial staging is not banned, because forbidding it would trade a rare silent
   loss for a constant obstruction. (usetheokit/theokit#378)
+
 - **The deprecation on `theokit/server` now names destinations that exist.** Importing the umbrella
   prints "use sub-paths" and schedules removal for `0.x+2`, and 58 of its 272 symbols had no subpath
   to migrate to — the instruction could not be followed. Sixteen HTTP-boundary symbols, including
@@ -1096,6 +1137,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   The remaining families — cache, config, instructions, context pressure, trust — need subpaths that
   do not exist yet and are named in the issue; a test asserts the invariant so the next symbol cannot
   arrive orphaned unnoticed. (usetheokit/theokit#372)
+
 - **An agent run reaches the collector as one trace instead of one trace per span.** Spans carried no
   identity, so the OTLP serializer minted a `traceId` for each one at export time. Every export was
   well-formed and every span was an island: a run with three tool calls arrived as five unrelated
@@ -1105,12 +1147,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   replaced — so the request that invoked an agent and the run it caused are one thing that happened,
   not two. `startSpan` takes an optional third argument for callers that open several spans for one
   operation; existing callers and custom adapters are unaffected. (usetheokit/theokit#368)
+
 - **The release workflow hands npm the credential under the name it looks for.** `changesets/action`
   reads an environment variable called `NPM_TOKEN`; the workflow exported the secret only as
   `NODE_AUTH_TOKEN`, so the action reported `No NPM_TOKEN found` and fell back to OIDC trusted
   publishing, which nothing had configured. The log line read like a missing secret and was not one:
   the secret exists and resolved. Whether this alone explains the `E404` that stopped `0.49.0` from
   publishing is settled by the next release, not by this change. (usetheokit/theokit#366)
+
 - **`theo start` binds the address its configuration names.** `config.host` was declared, defaulted to
   `localhost`, documented as the way to open a server to the LAN — and never passed to `listen`. Node
   with no address binds every interface, so the production server listened WIDER than its own
@@ -1155,6 +1199,74 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   until the two ids correlate. (usetheokit/theokit#361)
 
 ### Security
+
+- **A placeholder session secret no longer boots in production.** `assertProductionSecret` was
+  exported, documented as the production guard, covered by ten unit assertions — and called by
+  nothing. Both session managers validated through `normalizeSecrets`, which enforces a 32-character
+  floor in every environment and knows nothing about placeholders, so the gap between the two
+  functions was exactly the placeholder check and a 32-or-more character `CHANGE_ME…` sailed into
+  production. The dev-time warning sat in the same position: the sentence telling a developer that
+  "the production server will REFUSE to boot until you replace it" lived inside the uncalled
+  function, so the developer never saw the warning and the refusal never fired — a promise made by
+  unreachable code still reads as a guarantee. Both managers now resolve their secret through one
+  function that runs both checks, the length floor speaking first so a short secret keeps the message
+  it has always had. **This can refuse a boot that previously succeeded**, which is the point: the
+  secret it refuses is either shorter than 32 characters or matches `CHANGE_ME` / `demo-` / `demo_` /
+  `placeholder`. Replace it (`openssl rand -hex 32`) rather than working around the refusal; outside
+  production nothing is refused and the warning is now reachable. (#429)
+
+- **Both static-file servers stopped serving files from outside the directory they were given.**
+  `serveStaticFile` (`theokit`) and `createStaticHandler` (`@theokit/http`) returned the contents of
+  whatever a symlink inside the served root pointed at — any file the server process could open, to
+  an unauthenticated `GET`. Each had a traversal guard, and each guard compared the path *string*
+  while the read touched the *filesystem*; a symlink is exactly where those two disagree, so a URL
+  containing no `..` at all walked straight out. Serving a directory that also receives uploads, or
+  unpacking an archive that carries a symlink, is enough to put one there. Containment is now decided
+  by `realpath`. A symlink whose target stays inside the root is ordinary and is still served — only
+  leaving is refused, and refused as "not here" rather than `403`, so the response does not confirm
+  what exists outside. A URL that walks out with `..` keeps its `403`. (#428)
+
+- **A size limit is now measured on the file that gets read.** The same lines carried a second
+  defect: each server resolved its path several times — check existence, stat the type or the size,
+  then read the bytes — so what was checked need not be what was served. Where a *limit* was being
+  enforced this made the limit bypassable: the custom error pages (`MAX_ERROR_HTML_BYTES`), the
+  OpenAPI spec endpoint (`MAX_SPEC_BYTES`), and `@theokit/http`, which reported `content-length` from
+  a separately sampled `stat.size` while the body came from its own read. Every site now opens one
+  descriptor and answers both questions through it; `.env` loading and the OpenAPI endpoint were
+  brought to the same shape. Responses are byte-for-byte what they were for any file that is not
+  changing underneath the server. (#428)
+
+- **An internal failure discloses the same amount over every transport.** The Node runner replaced an
+  `INTERNAL_ERROR`'s message with a generic one in production, and so did the Web runner's error
+  builder — but an exception escaping a Web handler travelled through neither. It reached the client
+  through a third path that built its response by hand from the error envelope, shipping `err.message`
+  and `err.cause` verbatim; the same route failing the same way returned a connection string over one
+  transport and `"Internal server error"` over another. The rule now lives in one place and all three
+  paths ask it. When it redacts, `cause`, `meta` and `ext` go with the message — they exist to
+  describe a failure that is, by definition, not describable to the caller — while the code stays so a
+  client can still branch on it. `proxyFetch` had the same shape in its own corner: a failed upstream
+  fetch names host, port and sometimes credentials, and that string was the `detail` of its `502`.
+  Development behaviour is deliberately unchanged everywhere. (#376)
+
+- **An error message can no longer forge log entries, and TOTP padding is no longer quadratic.** Two
+  smaller findings from the same sweep. `sendError` logged an `INTERNAL_ERROR`'s message unescaped,
+  and an exception message can be built from request data — a newline in it appended lines to the log
+  that read exactly like real ones; both the message and the request id are now rendered on one line.
+  `base32Decode` stripped trailing `=` with an anchored `/=+$/`, which retries from every start
+  position and costs O(n²) on a long run of `=`, in an authentication path; a scan back from the end
+  is linear. The comment defending the regex argued the input was short enough — an expectation, not
+  a bound. (#376)
+
+- **An approval belongs to someone, and only they can settle it.** The HITL ledger keyed approvals by
+  a bare id and recorded no owner, so an agent's policy could answer *"may this subject touch this
+  agent's approvals"* and never *"is this approval theirs"* — an authenticated tenant could settle
+  another tenant's approval on an agent both were admitted to. `mountAgent` now records the run's
+  subject on each approval it registers, and the approve endpoint refuses a caller whose identity
+  does not match, including a caller who cannot be identified at all. The check only ever narrows:
+  an agent declaring `'public'` records no owner, since attributing its approvals would start
+  refusing callers the declaration admits, and a headless thread continuation has no identity to
+  record — both behave exactly as before. Owner ids are not exposed through the pending-approval
+  listing. `ApprovalRegistry` gains `ownerOf(approvalId)`. (B-016)
 
 ## [theokit 0.49.0] - 2026-08-20
 
