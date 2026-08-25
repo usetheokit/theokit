@@ -4,7 +4,11 @@
  * Per plan g3-server-actions-and-useaction v1.2 § Phase 0 / T0.1, ADRs D1 (encoding)
  * + D6 (full dot-notation path) + D7 (PII mask) — types and runtime referenced
  * by server (`server/http/action-execute.ts`, `server/define/define-action.ts`)
- * and client (`@theokit/react/useAction`, `vite-plugin/actions-virtual-module`).
+ * and client (`client/use-action.ts`, `vite-plugin/actions-virtual-module`).
+ *
+ * That client pointer named `@theokit/react/useAction` until #453 — a package published outside
+ * this repository, with one version and a `@theokit/sdk ^1.1.0` peer against a published 4.x. The
+ * hook lives beside the contract now, in `theokit/client`.
  *
  * Lives in `core/contracts/` per architecture.md v3.1 exception — cross-module
  * deep imports ALLOWED for this file. Core depends on NOTHING intra-monorepo;
