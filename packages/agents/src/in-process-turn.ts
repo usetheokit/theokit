@@ -95,6 +95,38 @@ export interface StreamAgentTurnInProcessInput {
    * before.
    */
   onRunEvent?: Parameters<typeof streamAgentUIMessages>[2]['onRunEvent']
+  /**
+   * theokit#474 — per-turn transient retry: a 429/5xx/network blip that kills the turn before it
+   * produced anything is recovered instead of ending it.
+   *
+   * The same shape as theokit#189 above, and one layer deeper. `AgentRunnerRunOptions.retry` has
+   * carried this option since V4-P, so a reader of the package concludes the capability exists —
+   * but it belongs to the reflective loop, and an EMBEDDED surface does not run one: a TUI and a CLI
+   * both come through here, one SDK turn at a time, and had no way to ask for a second attempt. A
+   * transient ended the turn, and the person at the keyboard retyped the prompt.
+   *
+   * It is not the same hop `onRunEvent` was. There the far end already accepted the field and the
+   * middle simply did not pass it; here `streamAgentUIMessages` had no `retry` parameter and the SDK
+   * reports a provider failure as the run's terminal `error` EVENT rather than as a rejection, so
+   * the wrapper the loop uses would have compiled, shipped, and never fired. What was added is in
+   * `turn-retry.ts`, along with the invariant that makes retrying safe: the window closes on the
+   * FIRST event, so nothing has reached the caller and no tool has run.
+   *
+   * Absent ⇒ the key is omitted from the SDK call entirely, so the stream is byte-identical to
+   * before and the turn is a single attempt.
+   */
+  retry?: Parameters<typeof streamAgentUIMessages>[2]['retry']
+  /**
+   * theokit#475 — expose the run's REAL token usage to tool handlers as `ctx.usage`, so a tool can
+   * answer "how much context is left?" from the provider's own numbers.
+   *
+   * Read it with `readRunUsage` from `@theokit/agents/usage`. It reports `undefined` until the first
+   * provider report arrives: "not known yet" and "zero tokens" are different facts, and only one of
+   * them is ever true.
+   *
+   * Absent ⇒ handlers receive exactly the ctx they did before.
+   */
+  exposeUsageToTools?: Parameters<typeof streamAgentUIMessages>[2]['exposeUsageToTools']
 }
 
 /** Injectable stream fn (defaults to the real SDK bridge) — lets tests drive a deterministic stream. */
@@ -217,6 +249,12 @@ export function streamAgentTurnInProcess(
       hitl,
       signal: input.signal,
       ...(input.onRunEvent !== undefined ? { onRunEvent: input.onRunEvent } : {}),
+      // theokit#474 / #475 — omitted when absent, for the same reason as the sink above: a key set
+      // to `undefined` still changes what the far end receives on the non-opted-in path.
+      ...(input.retry !== undefined ? { retry: input.retry } : {}),
+      ...(input.exposeUsageToTools !== undefined
+        ? { exposeUsageToTools: input.exposeUsageToTools }
+        : {}),
       // #390 — absent is meaningful: it selects the masking default, and it must select the SAME
       // one here as over HTTP.
       ...(input.onError !== undefined ? { onError: input.onError } : {}),

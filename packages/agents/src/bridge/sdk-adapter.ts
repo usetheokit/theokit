@@ -12,10 +12,12 @@
 // When `sdk-adapter.ts` is split, the directive goes with it.
 // prettier-ignore
 import type { AgentDefinition, BudgetTracker, CustomTool, InlineSkill, InteractionUpdate, ModelSelection, Plugin, PluginsSettings, ProviderRoutingSettings, RunEventSink, SendOptions } from '@theokit/sdk'
+import type { RetryOptions } from '@theokit/sdk/retry'
 
 import { debugLog } from '../debug-log.js'
 import { runInputGuards, runOutputGuards, type Guardrail } from '../guardrails/index.js'
 import type { ReasoningEffort } from '../types.js'
+import { createRunUsageMeter, type RunUsageMeter } from '../usage/run-usage.js'
 
 import type { CompiledAgentOptions, CompiledTool } from './agent-compiler.js'
 import type { StreamEvent } from './agent-sse-handler.js'
@@ -23,7 +25,7 @@ import { applyPosture, type ApprovalPosture } from './approval-posture.js'
 import { type AgentDefinition as TheokitAgentDefinition } from './define-agent.js'
 import { type DefinitionOrThunk, resolveProjection } from './definition-or-thunk.js'
 import { type SdkMessage } from './event-translator.js'
-import { buildModelSelection, modelIdOf } from './model-selection.js'
+import { buildModelSelection, contextWindowOf, modelIdOf } from './model-selection.js'
 import { assembleM8CreateOptions, realUsageDone } from './sdk-adapter-create-options.js'
 import { sdkErrorEvent } from './sdk-error.js'
 import {
@@ -33,7 +35,9 @@ import {
   translateTimelineEvent,
 } from './sdk-timeline.js'
 import { extractThinkTagStream } from './think-tag-extractor.js'
+import { withInjectedToolContext, type ToolContextInjection } from './tool-context-injection.js'
 import { stripToolDialectStream } from './tool-dialect-stripper.js'
+import { runTurnWithRetry, type TurnOutcome } from './turn-retry.js'
 
 /**
  * Per-request overrides forwarded into `Agent.create` (V4-L.2 + V4-L.3). Bundled into
@@ -124,6 +128,32 @@ export interface RuntimeOverrides {
    * why the key is omitted entirely rather than set to `undefined` when absent.
    */
   onRunEvent?: RunEventSink
+  /**
+   * theokit#474 — per-turn transient retry, opt-in.
+   *
+   * When set, the START of the turn (the SDK handshake plus its first event, before anything is
+   * yielded) is wrapped in the SDK `Retry`, so a 429/5xx/network blip that kills the turn before it
+   * produced anything is recovered instead of ending it. Absent ⇒ a single attempt, and the key is
+   * omitted from every downstream call, so the stream is byte-identical to before.
+   *
+   * See `turn-retry.ts` for why a rejection-shaped retry would have been inert on this path, and
+   * for the invariant that closes the retry window on the first event.
+   */
+  retry?: RetryOptions
+  /**
+   * theokit#475 — expose the run's REAL token usage to tool handlers as `ctx.usage`, opt-in.
+   *
+   * When true, the adapter installs a {@link RunUsageMeter} as the run's `budgetTracker` (wrapping
+   * the caller's own, when there is one) and hands every tool handler a snapshot of what the
+   * provider has reported so far. A tool can then answer "how much context is left?" from a
+   * measurement instead of a character-count estimate. See `usage/run-usage.ts`.
+   *
+   * Opt-in rather than always-on because installing a `budgetTracker` changes what `Agent.create`
+   * receives for every run that never asked for it, and the back-compat floor here is a floor, not
+   * a preference. Absent ⇒ handlers are wrapped exactly as before (`ctx.usage` does not exist) and
+   * the SDK receives no tracker it was not already given.
+   */
+  exposeUsageToTools?: boolean
 }
 
 /**
@@ -249,6 +279,14 @@ interface SdkAgentApi {
         cost?: { amount?: number }
         stoppedAtIterationLimit?: boolean
         stoppedByDoomLoop?: boolean
+        /**
+         * theokit#474 — the run's failure detail, whose `cause` is the TYPED error the loop threw
+         * (`script.errorDetail.cause`). It is the only place the error's CLASS survives: the event
+         * stream reports the same failure as a `status: "ERROR"` message carrying text alone.
+         * Optional, so an SDK that predates it reads `undefined` rather than breaking — the same
+         * optional-peer discipline the two flags above use.
+         */
+        error?: { message?: string; code?: string; cause?: unknown }
       }>
     }>
     dispose: () => Promise<void>
@@ -336,29 +374,13 @@ function hasZodInputSchema(schema: unknown): boolean {
 }
 
 /**
- * M7 — wrap a tool handler so it receives the run-context as `ctx.context`, injected from a closure
- * over `runContext`. theokit owns the run-context concern (the `defineAgent({ context })` /
- * `AgentBuilder.create().context()` API is theokit's), so it injects it at THIS adapter layer instead of relying
- * on the SDK to forward it — decoupling the framework from the SDK's tool-call internals. The
- * incoming `ctx.signal` (from the SDK) is preserved; `context` is set to the agent's run-context.
- */
-function withRunContext(
-  handler: CustomTool['handler'],
-  runContext: unknown,
-): CustomTool['handler'] {
-  // Forward the FULL ctx (SE12 `messages` transcript projection + `signal` + any future
-  // field) and override ONLY `context` with the run value. Dropping `messages` here would
-  // silently break a tool that reads the turn transcript — so spread, don't cherry-pick.
-  return (input, ctx) => handler(input, { ...ctx, context: runContext })
-}
-
-/**
  * Build the SDK tool list: `@Tool`s (Zod `inputSchema`) lowered via `defineTool`; `defineAgentTool`
  * results (already SDK-ready `CustomTool`s with a JSON-Schema `inputSchema`) and any pre-built
  * `sdkTools` appended RAW — must NOT re-run through `defineTool` (V4-Q). Extracted for G6.
  *
- * When `runContext` is set, every tool handler is wrapped to receive it as `ctx.context` (M7);
- * `undefined` ⇒ handlers are passed through unwrapped (byte-identical to pre-M7).
+ * When `runContext` is set, every tool handler is wrapped to receive it as `ctx.context` (M7); when
+ * `meter` is set, the same wrapper adds `ctx.usage` (theokit#475). With NEITHER, handlers are passed
+ * through unwrapped and by the same reference — byte-identical to pre-M7.
  */
 function buildSdkTools(
   compiledTools: CompiledTool[],
@@ -370,8 +392,15 @@ function buildSdkTools(
   }) => unknown,
   extraSdkTools: readonly CustomTool[] = [],
   runContext?: unknown,
+  meter?: RunUsageMeter,
 ): unknown[] {
-  const has = runContext !== undefined
+  const injection: ToolContextInjection = {
+    ...(runContext !== undefined ? { runContext: { value: runContext } } : {}),
+    ...(meter !== undefined ? { meter } : {}),
+  }
+  const has = injection.runContext !== undefined || injection.meter !== undefined
+  const inject = (h: CustomTool['handler']): CustomTool['handler'] =>
+    has ? withInjectedToolContext(h, injection) : h
   return [
     ...compiledTools.map((t) => {
       if (hasZodInputSchema(t.inputSchema)) {
@@ -379,16 +408,14 @@ function buildSdkTools(
           name: t.name,
           description: t.description,
           inputSchema: t.inputSchema,
-          handler: has ? withRunContext(t.handler, runContext) : t.handler,
+          handler: inject(t.handler),
         })
       }
       // Already an SDK-ready CustomTool (JSON-Schema inputSchema) — forward RAW (same reference)
-      // unless a run-context must be injected into its handler.
-      return has ? { ...t, handler: withRunContext(t.handler, runContext) } : t
+      // unless this layer must inject something into its handler.
+      return has ? { ...t, handler: inject(t.handler) } : t
     }),
-    ...extraSdkTools.map((t) =>
-      has ? { ...t, handler: withRunContext(t.handler, runContext) } : t,
-    ),
+    ...extraSdkTools.map((t) => (has ? { ...t, handler: inject(t.handler) } : t)),
   ]
 }
 
@@ -442,8 +469,26 @@ export function createSdkAgentStream(
         return
       }
 
+      // theokit#475 — one meter per turn, opt-in. It is both the `budgetTracker` the SDK reports
+      // real usage to and the reader every tool handler is handed, so the two halves cannot drift.
+      // The window is the DECLARED one (`ModelSelection.contextWindow`) or absent — see
+      // `contextWindowOf` for why the model catalog is not consulted here.
+      const usageMeter =
+        overrides.exposeUsageToTools === true
+          ? createRunUsageMeter({
+              contextWindowTokens: contextWindowOf(model),
+              delegate: overrides.budgetTracker,
+            })
+          : undefined
+
       // M7 — pass the resolved run-context so every tool handler receives it as `ctx.context`.
-      const sdkTools = buildSdkTools(compiledTools, rt.defineTool, overrides.sdkTools, runContext)
+      const sdkTools = buildSdkTools(
+        compiledTools,
+        rt.defineTool,
+        overrides.sdkTools,
+        runContext,
+        usageMeter,
+      )
 
       // Auto-wire `skill_read` for inline skills (`defineAgent({ skills: [inlineSkill] })`). An inline
       // skill lists in the `<skills>` block by name + description only — its body is unreachable to the
@@ -474,20 +519,34 @@ export function createSdkAgentStream(
         keys: runContext !== undefined ? Object.keys(runContext) : [],
       })
 
+      const turnOpts: StreamSdkAgentOpts = {
+        apiKey: await resolverApiKey(apiKey),
+        model,
+        reasoningEffort,
+        overrides,
+        parseThinkTags,
+        stripToolDialect,
+        sessionId,
+        message,
+        factoryOpts,
+        runId,
+        t0,
+        ...(usageMeter !== undefined ? { usageMeter } : {}),
+      }
       try {
-        yield* streamSdkAgent(rt, compiled, sdkTools, {
-          apiKey: await resolverApiKey(apiKey),
-          model,
-          reasoningEffort,
-          overrides,
-          parseThinkTags,
-          stripToolDialect,
-          sessionId,
-          message,
-          factoryOpts,
-          runId,
-          t0,
-        })
+        // theokit#474 — with no `retry` declared, `runTurnWithRetry` returns the single attempt it
+        // always made, with the same arguments; the retry machinery exists only for a caller that
+        // asked for it.
+        yield* runTurnWithRetry(
+          (outcome) =>
+            streamSdkAgent(
+              rt,
+              compiled,
+              sdkTools,
+              outcome === undefined ? turnOpts : { ...turnOpts, outcome },
+            ),
+          overrides.retry,
+        )
       } catch (err) {
         yield sdkErrorEvent(err)
       }
@@ -512,6 +571,14 @@ interface StreamSdkAgentOpts {
   factoryOpts: { disableTools?: boolean } | undefined
   runId: string
   t0: number
+  /** theokit#475 — present when the run opted into exposing usage to tools; it IS the tracker. */
+  usageMeter?: RunUsageMeter
+  /**
+   * theokit#474 — where a turn that fails BEFORE yielding anything reports its typed error, so the
+   * retry policy can ask `isTransientError` instead of guessing from the event's text. Present only
+   * when a `retry` was declared; absent ⇒ the failure lookup below never runs.
+   */
+  outcome?: TurnOutcome
 }
 
 /**
@@ -547,6 +614,11 @@ async function* streamSdkAgent(
   // (mount-agent threads it), so sessions persist per-app; unset ⇒ SDK default (`~/.theokit`).
   if (overrides.baseDir !== undefined) m8.local = { ...m8.local, baseDir: overrides.baseDir }
   const extra = buildExtraCreateOptions(overrides, compiled)
+  // theokit#475 — the meter REPLACES the tracker key set just above, because it already wraps that
+  // same caller tracker (`createRunUsageMeter({ delegate })`). `Agent.create` takes one tracker;
+  // handing it the wrapper is what makes the SDK's per-completion `track()` reach both the caller's
+  // budget gate and the snapshot a tool reads.
+  if (opts.usageMeter !== undefined) extra.budgetTracker = opts.usageMeter.tracker
   if (applied.length > 0) {
     // Wiring triad — runtime metric: observable proof the decorators fired (opt-in via THEOKIT_DEBUG).
     debugLog('[THEO_AGENT_M8_RUNTIME_APPLIED]', {
@@ -603,7 +675,21 @@ async function* streamSdkAgent(
         }
       }
       for await (const ev of run.events()) {
-        yield* emit(translateTimelineEvent(ev, runId, seen))
+        const translated = translateTimelineEvent(ev, runId, seen)
+        // theokit#474 — recover the run's TYPED failure, but ONLY for a turn that failed before
+        // yielding anything (`lastEventType === ''`), which is the one case the retry seam can act
+        // on. Bounded that tightly for two reasons: every other run pays nothing, and in this case
+        // `wait()` is already resolved — the SDK yields a `status: "ERROR"` message only from
+        // `terminalErrorEvent()`, i.e. after `transitionTo("error")` resolved the termination
+        // promise. Awaiting it for a NON-terminal error would be a way to hang the stream.
+        if (
+          opts.outcome !== undefined &&
+          state.lastEventType === '' &&
+          translated.some((e) => e.type === 'error')
+        ) {
+          opts.outcome.failure = (await (await sendPromise).wait()).error?.cause
+        }
+        yield* emit(translated)
       }
       // #388 — a tool result held for a second report the run never sent still belongs on the wire.
       // Without this, a turn whose last act was a tool call would drop it: the hold is released by
