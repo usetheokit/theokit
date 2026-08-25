@@ -100,7 +100,9 @@ function cannotAnswer(routes: readonly ServerRouteNode[]): boolean {
 function refusalMessage(exposures: readonly Exposure[], host: string): string {
   const list = exposures.map((e) => `    ${e.method} ${e.routePath}`).join('\n')
   return [
-    `Refusing to bind ${host}: ${String(exposures.length)} write route${exposures.length === 1 ? '' : 's'} accept unauthenticated requests.`,
+    exposures.length === 1
+      ? `Refusing to bind ${host}: 1 write route accepts unauthenticated requests.`
+      : `Refusing to bind ${host}: ${String(exposures.length)} write routes accept unauthenticated requests.`,
     '',
     list,
     '',

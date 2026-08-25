@@ -50,6 +50,7 @@ describe('the gate judges what the scanner actually found', () => {
     expect(verdict.kind).toBe('refused')
     if (verdict.kind !== 'refused') throw new Error('unreachable')
     expect(verdict.exposures).toEqual([{ routePath: '/api/email/send', method: 'POST' }])
+    expect(verdict.message).toContain('1 write route accepts unauthenticated requests')
   })
 
   it('allows a public bind when the real POST carries a real guard', () => {

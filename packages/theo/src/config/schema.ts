@@ -113,7 +113,15 @@ export const theoConfigSchema = z
       .optional(),
     port: z.number().int().min(1).max(65535).default(3000),
     /** Listen on all addresses (0.0.0.0) for LAN/mobile testing. */
-    host: z.union([z.string(), z.boolean()]).default('localhost'),
+    /**
+     * Deliberately NOT defaulted. `resolveListenTarget` ranks an explicit `host` above `HOST`,
+     * because a value written into the project is a decision and an environment variable is a
+     * deployment detail — and a default applied here made every app look like it had decided.
+     * `HOST` was therefore inert everywhere, which is the opposite of what it was added for
+     * (containers, #402). The loopback default lives in `resolveListenTarget`, where "nobody said"
+     * is still distinguishable from "somebody said localhost".
+     */
+    host: z.union([z.string(), z.boolean()]).optional(),
     /** Automatically open browser on `theokit dev`. */
     open: z.union([z.boolean(), z.string()]).default(false),
     /** Exit if port is already in use instead of trying next available. */

@@ -56,7 +56,9 @@ describe('assessPublicExposure', () => {
       { routePath: '/api/email/send', method: 'POST' },
       { routePath: '/api/artifacts', method: 'POST' },
     ])
-    // The message has to be actionable at 3am, not merely correct.
+    // The message has to be actionable at 3am, not merely correct — and grammatical, since the
+    // first version read "1 write route accept" for the singular case the binary hits most.
+    expect(verdict.message).toContain('2 write routes accept unauthenticated requests')
     expect(verdict.message).toContain('/api/email/send')
     expect(verdict.message).toContain('allowUnauthenticatedWrites')
   })

@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Security
 
+- **`HOST` now reaches the listener, so a container can actually be served.** The variable was added
+  (#402) because inside a container `localhost` means nobody — the image starts, prints a URL and
+  refuses every request including its own. It never worked: the config schema defaulted `host` to
+  the string `'localhost'`, and an explicit host outranks the environment by design, so every app
+  looked like it had decided and the env branch was unreachable. The default is gone; the loopback
+  fallback lives where "nobody said" is still distinguishable from "somebody said localhost". An
+  explicit `host: 'localhost'` still wins over `HOST`, and `host: false` still refuses it (#488)
+
 - **`theo start` refuses to bind a public interface while write routes are unauthenticated.** ADR
   0001 made every route declare who may call it and stopped absence from meaning open — and
   `'public'` is a declaration too, so a table where every entry says it passed the build gate

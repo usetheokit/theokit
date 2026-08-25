@@ -226,8 +226,9 @@ export async function startCommand(options: StartOptions): Promise<void> {
     if (exposure.kind === 'allowed-by-override') {
       // The override permits the exposure; it does not make it quiet. Each start names what is
       // open, so `allowUnauthenticatedWrites: true` cannot be forgotten in a config nobody reopens.
+      const n = exposure.exposures.length
       console.warn(
-        `  security.allowUnauthenticatedWrites is on — ${String(exposure.exposures.length)} unauthenticated write route(s) are reachable:`,
+        `  security.allowUnauthenticatedWrites is on — ${String(n)} unauthenticated write ${n === 1 ? 'route is' : 'routes are'} reachable:`,
       )
       for (const e of exposure.exposures) console.warn(`    ${e.method} ${e.routePath}`)
       console.warn('')

@@ -106,7 +106,7 @@ export const securitySchema = z.object({
   /**
    * Permit binding a public network interface while write routes still declare `policy('public')`.
    *
-   * Defaults to `false`, and the default is the point: `theo start` refuses that combination rather
+   * Absent means `false`, and that is the point: `theo start` refuses that combination rather
    * than serving it, because an unauthenticated POST reachable from a network is an open endpoint
    * whether or not anyone meant it to be. See `cli/commands/start/public-exposure-gate.ts` for what
    * is refused and — equally important — what is not.
@@ -114,6 +114,11 @@ export const securitySchema = z.object({
    * Setting it to `true` is a decision, not a switch: the routes stay open, the startup log goes on
    * naming every one of them, and this line in `theo.config.ts` is what an auditor finds when they
    * ask who agreed to it.
+   *
+   * `.optional()` rather than `.default(false)`: a Zod default lands in the OUTPUT type, so every
+   * caller constructing a `SecurityConfig` literal would have to name a field they do not care
+   * about. The reader supplies the fallback (`?? false`), which keeps absent and false identical
+   * where it matters and keeps the type unchanged for everyone else.
    */
-  allowUnauthenticatedWrites: z.boolean().default(false),
+  allowUnauthenticatedWrites: z.boolean().optional(),
 })
