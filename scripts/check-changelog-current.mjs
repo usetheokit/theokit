@@ -40,23 +40,27 @@ const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 /** `theokit@0.52.1`, `create-theokit@1.23.11`, `@theokit/agents@11.0.0` — not `v1.0.0`. */
 const RELEASE_TAG = /^(?:@[a-z0-9-]+\/)?[a-z0-9-]+@\d+\.\d+\.\d+/
 
+/** `git tag` argv, hoisted so the call below fits on one line — see the directive there. */
+const TAG_ARGV = ['tag', '--sort=-creatordate', '--format=%(refname:short) %(creatordate:short)']
+
 /** The newest release tag and the day it was created, or null when git cannot answer. */
 function newestReleaseTag() {
+  const opts = { cwd: REPO_ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }
   let raw
   try {
+    // The directive must sit on the line IMMEDIATELY above the command literal. It did not: with
+    // the argv inline, prettier split the call and `'git'` landed two lines down, so the directive
+    // covered nothing and the rule fired anyway — two errors where the intent was zero.
     // eslint-disable-next-line sonarjs/no-os-command-from-path -- toolchain binary, fixed argv
-    raw = execFileSync(
-      'git',
-      ['tag', '--sort=-creatordate', '--format=%(refname:short) %(creatordate:short)'],
-      {
-        cwd: REPO_ROOT,
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'ignore'],
-      },
-    )
+    raw = execFileSync('git', TAG_ARGV, opts)
   } catch {
     return null
   }
+  return firstReleaseTag(raw)
+}
+
+/** The first line of `git tag` output that names a release tag. */
+function firstReleaseTag(raw) {
   for (const line of raw.split('\n')) {
     const [name, date] = line.trim().split(/\s+/)
     if (name && date && RELEASE_TAG.test(name)) return { name, date }
