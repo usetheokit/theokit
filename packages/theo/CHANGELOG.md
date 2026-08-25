@@ -1,5 +1,51 @@
 # theo
 
+## 0.53.0
+
+### Minor Changes
+
+- 2be3a2f: A route whose name contains a hyphen is reachable through the generated client. It was not.
+
+  The generator camelCased the segment — `agents-config` became `client.agentsConfig` — while the runtime Proxy builds the URL from the key it is handed and knows nothing of the transformation. So the call compiled, requested `/api/agentsConfig`, and the route served at `/api/agents-config` answered 404. Kebab-case file names are the scaffold's own convention, so the trap appeared on the first route with two words in its name.
+
+  Segments are kept literal now: `client['agents-config'].get()`. Bracket access for a hyphenated segment is the honest cost of a client that mirrors its URLs, and the machinery was already there for segments that cannot be identifiers at all.
+
+  Translating back inside the Proxy would have kept the prettier key at the cost of a second source of truth for every segment name — and a generated client is worth more as a faithful mirror.
+
+  **To upgrade:** a call on a hyphenated route becomes bracket access. Every such call is currently answering 404, so nothing that works today changes.
+
+- 2be3a2f: `theoFetch` can send a POST. It could not.
+
+  `TheoFetchOptions<T>` omitted `method` while `buildRequestInit` read `opts.method` and defaulted to `'GET'`. So the two calls available to a consumer were both wrong: the one the docs teach did not compile, and the one that did compile went out as a **GET carrying a JSON body and no `X-Theo-Action` header** — the POST route was never reached, and nothing said so until someone opened the network panel.
+
+  `method` is part of the options type now, typed as the framework's own `HttpMethod` union so a typo fails to compile. When the route declares a `body` it is **required**, and narrowed to the mutating methods — a route with a body schema is not a GET, and saying that in the type is what removes the silent failure rather than merely unblocking it.
+
+  Nothing that works today breaks: no call carrying a body compiles at present.
+
+- 8730bed: A tool handler that returns an object works, instead of throwing on the model's first call.
+
+  It threw: _"handler returned a non-string; provide toModelOutput to map it to a string."_ The message was right and the moment was the worst available — the first time the **model** calls the tool, inside an agent run, with a provider key and tokens already spent, for a failure the compiler had the information to catch.
+
+  And returning an object is the natural shape: a tool answering `{ id, status, note }` serves a model better than one concatenating a string by hand. So this was the common path, not an edge — one report had 15 tools, all returning objects, all of which would have failed in execution.
+
+  A non-string result is JSON-serialized now. `toModelOutput` still wins whenever the shape the model should see differs from the shape the app wants; the default only decides what happens when nobody said.
+
+  Requiring it in the **type** was the other candidate. It keeps the ceremony: every consumer's correction was the same single line, `.toModelOutput((r) => JSON.stringify(r))`, and a default that every caller overrides identically is a default on the wrong side.
+
+  The explicit error survives for exactly the results no default can serialize — a circular structure, a `BigInt`, a function — and now names which one it hit, because asking for a `toModelOutput` there is advice that does not help.
+
+### Patch Changes
+
+- 2be3a2f: The generated `@theo/client` produces real types instead of `any`.
+
+  Inside a `declare module` block, a relative `import type` aliased at the top and then fed to an external package's conditional type resolves to `any` — silently, with no error, which is what made it invisible. Every call through the generated client returned `any` while the app compiled and the developer believed they were using a typed client.
+
+  Route exports are now named inline as `typeof import('../server/routes/x').GET`, the form measured to survive. No aliased relative import is left in the generated output: the controller path moved to the same shape, because the alias resolved correctly in one block and to `any` in another with nothing in the file to say which.
+
+  The scaffold's `tsconfig.json` also includes `.theokit/**/*.d.ts` now. It listed `types/**/*.d.ts` and not the directory the framework writes into, so the generated client types were never loaded at all — which hid the defect above from anyone who looked.
+
+  The tests that pinned the old output matched the emitted string, down to the alias. A string assertion cannot tell a type that works from one that collapses; the new test compiles the generated file and asserts the compiler rejects a wrong assignment.
+
 ## 0.52.1
 
 ### Patch Changes
