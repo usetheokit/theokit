@@ -1,4 +1,4 @@
-import { ActionError, isActionError } from '../core/contracts/action-protocol.js'
+import { ActionError, ActionInputError, isActionError } from '../core/contracts/action-protocol.js'
 
 /**
  * usetheokit/theokit#453 — the framework-agnostic store behind {@link useAction}.
@@ -80,6 +80,16 @@ function toActionError(raw: unknown): ActionError {
   }
 
   const obj = raw as Record<string, unknown>
+  if (obj.type === 'TheoActionInputError' && !Array.isArray(obj.issues)) {
+    // `ActionError.fromJson` reads `issues`, and the wire carries both it and the derived `fields`
+    // (`server/http/serialize-action-result.ts`). An error that arrives with only the map — a
+    // hand-written action, or a test fixture — has nothing for `fromJson` to read, and falling
+    // through would answer INTERNAL_SERVER_ERROR with the map gone. `fields` is the entire reason
+    // a form library subscribes to this error, so it is rebuilt into the issues it was derived
+    // from and `ActionInputError` re-derives an identical map.
+    const rebuilt = issuesFromFields(obj.fields)
+    if (rebuilt !== undefined) return new ActionInputError(rebuilt)
+  }
   if (obj.type === 'TheoActionInputError' || obj.type === 'TheoActionError') {
     return ActionError.fromJson(raw)
   }
@@ -90,6 +100,34 @@ function toActionError(raw: unknown): ActionError {
   // it through `fromJson` would replace "fetch failed" with "INTERNAL_SERVER_ERROR".
   const message = typeof obj.message === 'string' ? obj.message : undefined
   return new ActionError({ code: 'INTERNAL_SERVER_ERROR', message })
+}
+
+/**
+ * Invert `buildFieldsMap`: turn a `{ 'user.address.zip': ['Required'] }` map back into the issues it
+ * was derived from, so `ActionInputError` can re-derive an identical map.
+ *
+ * The key convention is the protocol's (`core/contracts/action-protocol.ts`): dot-notation full
+ * path, array indices as numeric segments (`items.0.name`), root as the empty string. Splitting on
+ * `.` reverses all three — the empty key becoming `[]` rather than `['']` is the one that needs
+ * saying, because `''.split('.')` returns `['']` and would key the rebuilt map on `'.'`-joined
+ * nothing instead of on root.
+ *
+ * Returns `undefined` when the value is not a field map, so the caller falls through rather than
+ * inventing a validation error out of an unrelated shape.
+ */
+function issuesFromFields(raw: unknown): { path: string[]; message: string }[] | undefined {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return undefined
+
+  const issues: { path: string[]; message: string }[] = []
+  for (const [key, messages] of Object.entries(raw as Record<string, unknown>)) {
+    if (!Array.isArray(messages)) return undefined
+    const path = key === '' ? [] : key.split('.')
+    for (const message of messages) {
+      if (typeof message !== 'string') return undefined
+      issues.push({ path, message })
+    }
+  }
+  return issues.length > 0 ? issues : undefined
 }
 
 /** Is this an `{data, error}` envelope, or a bare value the caller means as data? */

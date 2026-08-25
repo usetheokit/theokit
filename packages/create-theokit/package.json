@@ -1,6 +1,6 @@
 {
   "name": "create-theokit",
-  "version": "1.23.10",
+  "version": "1.23.11",
   "type": "module",
   "description": "Scaffold a new TheoKit project",
   "repository": {
