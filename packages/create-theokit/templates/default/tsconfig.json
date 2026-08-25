@@ -19,6 +19,7 @@
     "server/**/*.ts",
     "agents/**/*.ts",
     "shared/**/*.ts",
+    ".theokit/**/*.d.ts",
     "types/**/*.d.ts"
   ]
 }

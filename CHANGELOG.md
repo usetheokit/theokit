@@ -7,6 +7,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Fixed
+- **A route with a hyphen in its name was unreachable through the generated client.** The generator
+  camelCased the segment (`agents-config` → `client.agentsConfig`) while the runtime Proxy builds the
+  URL from the key it is handed — so the call compiled, asked for `/api/agentsConfig`, and the route
+  at `/api/agents-config` answered 404. Kebab-case file names are the scaffold's own convention, so
+  this appeared on the first route with two words in its name. Segments are literal now:
+  `client['agents-config'].get()`. Both halves had tests and neither could see it; the new one takes
+  the key out of the generated type and drives the real Proxy with it (#470)
+- **The generated `@theo/client` returned `any` for every call.** Inside a `declare module` block a
+  relative `import type`, aliased and then fed to an external package's conditional type, resolves
+  to `any` with no error — so the app compiled, and the developer believed they were writing against
+  a typed client. Route exports are named inline as `typeof import('...').GET` now, the form
+  measured to survive, and no aliased relative import is left in the generated output. The scaffold
+  `tsconfig.json` also includes `.theokit/**/*.d.ts`, the directory the framework generates into;
+  leaving it out of `include` meant those types were never loaded, which hid the collapse from
+  anyone who went looking (#469, #466)
+
+- **`theoFetch` could not send a POST.** The options type omitted `method` while the implementation
+  read it and defaulted to `GET`, so the documented call did not compile and the call that did
+  compile sent a GET with a JSON body and no CSRF header — the POST route was never reached, and
+  the only place it showed was the network panel. `method` is now part of the type, typed as the
+  framework's own `HttpMethod` union, and **required** when the route declares a body: a route with
+  a body schema is not a GET, so the type says so instead of the request saying it silently at
+  runtime (#465)
+
+### Fixed
 
 - **`useAction` kept the code of a validation error and dropped its `fields`.** The wire carries
   both `issues` and the derived map, and `ActionError.fromJson` reads `issues` — so an error that

@@ -45,6 +45,30 @@ describe('theoFetch', () => {
     expect((init.headers as Record<string, string>)['Content-Type']).toBe('application/json')
   })
 
+  // usetheokit/theokit#465 — the behaviour half of the type fix. `method` was omitted from the
+  // options type while `buildRequestInit` read it, so the call a consumer could actually write
+  // produced a GET carrying a JSON body and no `X-Theo-Action`: the POST route was never reached,
+  // and the only place it showed was the network panel.
+  it('sends the method it was given, with the CSRF header a mutating request needs', async () => {
+    mockFetch.mockResolvedValue(jsonResponse({ id: '1' }))
+
+    await theoFetch('/api/users', { method: 'POST', body: { name: 'bob' } } as never)
+
+    const init = mockFetch.mock.calls[0][1] as RequestInit
+    expect(init.method).toBe('POST')
+    expect((init.headers as Record<string, string>)['X-Theo-Action']).toBe('1')
+  })
+
+  it('leaves a GET without the CSRF header, so it stays cacheable', async () => {
+    mockFetch.mockResolvedValue(jsonResponse({ users: [] }))
+
+    await theoFetch('/api/users')
+
+    const init = mockFetch.mock.calls[0][1] as RequestInit
+    expect(init.method).toBeUndefined()
+    expect((init.headers as Record<string, string>)['X-Theo-Action']).toBeUndefined()
+  })
+
   it('should return parsed JSON on success', async () => {
     mockFetch.mockResolvedValue(jsonResponse({ users: [{ name: 'alice' }] }))
     const result = await theoFetch('/api/users')
