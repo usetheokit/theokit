@@ -24,6 +24,12 @@ export interface ManifestRoute {
   /** HTTP methods (uppercase) the route file exports. Optional — manifests
    * generated before G1 omit this; loaders treat absence as "unknown". */
   methods?: string[]
+  /**
+   * The subset of `methods` declaring `policy('public')`. Optional for the same reason `methods`
+   * is: a manifest written before the field existed has none, and `public-exposure-gate.ts` reads
+   * that absence as "not measured" rather than as "nothing is public".
+   */
+  publicMethods?: string[]
 }
 
 export interface ManifestAction {
@@ -84,6 +90,7 @@ export function generateManifest(
       routePath: r.routePath,
       paramNames: r.paramNames,
       ...(r.methods !== undefined ? { methods: r.methods } : {}),
+      ...(r.publicMethods !== undefined ? { publicMethods: r.publicMethods } : {}),
     })),
     actions: actions.map((a) => ({
       filePath: relative(serverDir, a.filePath),
@@ -129,6 +136,7 @@ export function loadManifest(distDir: string, serverDir: string): LoadedManifest
       paramNames,
       pattern,
       ...(r.methods !== undefined ? { methods: r.methods } : {}),
+      ...(r.publicMethods !== undefined ? { publicMethods: r.publicMethods } : {}),
     }
   })
 

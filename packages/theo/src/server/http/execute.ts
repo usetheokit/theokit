@@ -188,7 +188,17 @@ export async function executeRoute(ctx: ExecuteRouteContext): Promise<void> {
     if (serverDir) {
       const result = await runMiddlewareAndContext(req, res, loadModule, serverDir)
       if (result.aborted) return
-      ctx = (result.ctx ?? {}) as Record<string, unknown>
+      // MERGE, never replace. `runMiddlewareAndContext` builds its own fresh object, so assigning
+      // it here discarded everything an `onRequest` hook had written — including the one thing the
+      // policy is about to read. A plugin that authenticated the request was then not believed by
+      // `evaluateRoutePolicy` three lines later, in every app with a `server/` directory (which is
+      // every real app; the executor's own tests pass no `serverDir`, which is why it held).
+      // Middleware wins on a key collision because it runs later — last writer, as before.
+      // That the replace was a slip rather than a decision is visible without archaeology:
+      // `action-execute.ts` — the sibling executor, same lifecycle, same question — already wrote
+      // `Object.assign(p.ctx, result.ctx ?? {})`. Actions merged; routes replaced; nothing recorded
+      // a reason for the difference, and only one of the two can be right.
+      ctx = { ...ctx, ...((result.ctx ?? {}) as Record<string, unknown>) }
       // Re-apply decorations on top of middleware-produced ctx so plugin
       // decorations win when middleware did not set the same key.
       if (pluginRunner) pluginRunner.applyDecorations(ctx)

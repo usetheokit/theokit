@@ -9,7 +9,7 @@ import type { HttpMethod } from '../../core/contracts/http-methods.js'
 import { walkSourceFiles } from '../_internal/scan-walker.js'
 
 import { detectExportedHttpMethods } from './detect-http-methods.js'
-import { detectMethodsWithDeclaredPolicy } from './detect-route-policy.js'
+import { detectRoutePolicyKinds, type RoutePolicyKind } from './detect-route-policy.js'
 import {
   MissingRoutePolicyError,
   RedundantApiSegmentError,
@@ -139,6 +139,8 @@ interface RouteSourceFacts {
   methods: HttpMethod[]
   /** The subset of `methods` that declared a `policy`. Empty when there are no methods. */
   declaredPolicy: Set<HttpMethod>
+  /** What each declaring method declared. Keys are exactly `declaredPolicy`. */
+  policyKinds: Map<HttpMethod, RoutePolicyKind>
 }
 
 /**
@@ -168,11 +170,13 @@ function routeSourceFacts(absPath: string): RouteSourceFacts {
     // Kept lazy exactly as the early return in the assert made it: a file exporting no HTTP method
     // has nothing for the policy gate to check, and parsing it a second time to learn that was the
     // cost this cache exists to remove.
-    const declaredPolicy =
+    const policyKinds =
       methods.length === 0
-        ? new Set<HttpMethod>()
-        : detectMethodsWithDeclaredPolicy(absPath, source)
-    return { methods, declaredPolicy }
+        ? new Map<HttpMethod, RoutePolicyKind>()
+        : detectRoutePolicyKinds(absPath, source)
+    // One parse, one source of truth: the gate's set is a projection of the map, so the build gate
+    // ("did it declare?") and the exposure gate ("what did it declare?") cannot drift apart.
+    return { methods, declaredPolicy: new Set(policyKinds.keys()), policyKinds }
   })
 }
 
@@ -225,6 +229,12 @@ export function scanServerRoutes(serverDir: string): ServerRouteNode[] {
       paramNames,
       pattern,
       methods,
+      // Always set, even when empty — `public-exposure-gate.ts` reads the FIELD's presence as
+      // "this was measured" and its absence as "this predates the check". A scanned route was
+      // measured by definition, so it never reports the second.
+      publicMethods: [...facts.policyKinds]
+        .filter(([, kind]) => kind === 'public')
+        .map(([method]) => method),
     })
   })
 

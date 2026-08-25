@@ -7,6 +7,14 @@ export interface ServerRouteNode {
    * compatibility with manifests generated before G1. Empty array means the
    * file has no HTTP exports (util-only); undefined means "not detected". */
   methods?: string[]
+  /**
+   * The subset of `methods` whose policy is the literal `'public'` (ADR 0001).
+   *
+   * `undefined` means "not detected" — a manifest built before the field existed — and is NOT the
+   * same as `[]`, which means "detected, and nothing is public". `public-exposure-gate.ts` depends
+   * on that distinction: reading absence as safety is the failure it exists to prevent.
+   */
+  publicMethods?: string[]
 }
 
 export function compilePattern(routePath: string): {
