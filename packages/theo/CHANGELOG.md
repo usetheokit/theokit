@@ -1,5 +1,25 @@
 # theo
 
+## 0.50.1
+
+### Patch Changes
+
+- 8ec8681: A multipart form field that appears more than once now delivers every value instead of only the last.
+
+  Posting `tags=a`, `tags=b`, `tags=c` — what a `<select multiple>` or a group of checkboxes sends — reached the action's schema as the single string `'c'`. Nothing errored: the shape was plausible, just missing two thirds of the submission, so a `z.array(z.string())` field either failed validation or silently recorded one answer.
+
+  Both parsers were affected (the Node/Busboy path and the Web/Fetch one), and so was the step that rebuilds a `FormData` for `accept: 'form'` actions, where an array would have stringified to `'a,b'`.
+
+  A field that appears once is still a plain string, so `input.name.trim()` in existing actions is unchanged. Only a repeated field becomes an array — which is the shape `z.array(...)` already expected.
+
+  Also fixed while here: a field named `constructor`, `toString` or `__proto__` was matched against `Object.prototype` rather than against the fields collected so far. Field names come off the wire.
+
+- 0c8dcfd: The release guard no longer fails a successful release because npm had not caught up yet.
+
+  `npm view` answers E404 for a few seconds after a publish that already succeeded — the registry's read path is eventually consistent. The guard read three seconds after `changeset publish` wrote, and reported five packages as never published when all five were on the registry. It then pointed the reader at a missing credential, for a release with no credential problem at all.
+
+  Absent versions are now re-read on a bounded schedule before being called unpublished. A version that genuinely never published still fails, and an unreachable registry still fails immediately rather than waiting out the budget.
+
 ## 0.50.0
 
 ### Minor Changes
