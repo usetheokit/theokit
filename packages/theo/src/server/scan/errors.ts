@@ -224,3 +224,63 @@ export class MissingAgentPolicyError extends Error {
     this.migrationUrl = migrationUrl
   }
 }
+
+interface RedundantApiSegmentErrorOptions {
+  /** Absolute path of the offending route file. */
+  file: string
+  /** The path it resolves to today, with the doubled prefix. */
+  doubledRoutePath: string
+  /** Where the file belongs, relative and ready to copy. */
+  suggestion: string
+  /** The typed-client chain it produces today, with the redundant segment. */
+  doubledClientChain: string
+}
+
+/**
+ * Thrown by `scanServerRoutes` when a route file sits under `routes/api/`.
+ *
+ * `routes/` is already served under `/api`, so the directory doubles the prefix — and it does so
+ * in two places at once, which is why this is an error rather than a lint.
+ *
+ * The URL is the visible half: `routes/api/auth/callback.ts` answers at `/api/api/auth/callback`,
+ * which is not the redirect URI anybody registered with an identity provider. The second half
+ * survives a reader's attention: `.theokit/client.d.ts` mirrors the file tree into the typed
+ * client, so the same file produces `client.api.auth.callback.get()` — an `api` segment that reads
+ * as a typo and is not one.
+ *
+ * Refusing rather than silently stripping the segment is deliberate. Collapsing would swap one
+ * silent behaviour for another, and would let `routes/api/foo.ts` and `routes/foo.ts` resolve to
+ * one URL — a collision needing its own error anyway.
+ *
+ * The `/api` prefix itself is not the defect. It is the boundary between what the server answers
+ * and what the SPA answers, and three framework namespaces live under it (`/api/__actions/`,
+ * `/api/agents/`, `/api/__theo_batch__`).
+ */
+export class RedundantApiSegmentError extends Error {
+  override readonly name = 'RedundantApiSegmentError'
+  readonly file: string
+  readonly doubledRoutePath: string
+  readonly suggestion: string
+
+  constructor(opts: RedundantApiSegmentErrorOptions) {
+    const message = [
+      `Redundant 'api' directory: routes/ is already served under /api.`,
+      ``,
+      `  File:    ${opts.file}`,
+      `  Answers: ${opts.doubledRoutePath}`,
+      `  Client:  ${opts.doubledClientChain}`,
+      ``,
+      `Move it up one level:`,
+      ``,
+      `  ${opts.suggestion}`,
+      ``,
+      `Both halves are wrong from one cause. The URL is not the one you would register with an`,
+      `identity provider or call from anywhere, and the generated typed client in`,
+      `.theokit/client.d.ts carries the same redundant segment.`,
+    ].join('\n')
+    super(message)
+    this.file = opts.file
+    this.doubledRoutePath = opts.doubledRoutePath
+    this.suggestion = opts.suggestion
+  }
+}

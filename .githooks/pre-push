@@ -58,25 +58,57 @@ if ! command -v pnpm >/dev/null 2>&1; then
   exit 1
 fi
 
+# A command that was KILLED did not fail — it never finished.
+#
+# Exit codes above 128 are `128 + signal`: 137 is SIGKILL (the OOM killer, almost always) and 143
+# is SIGTERM. Both mean the machine ran out of room or something reached in and stopped the
+# process; neither means the code is broken. `tsc` and `tsup` on this repo hold a large heap, so a
+# laptop with a browser open reaches that state routinely.
+#
+# Reporting it as "build failed" sends a developer to look for a defect that does not exist, and —
+# worse — trains them to reach for --no-verify on a message that will one day be true. Same
+# distinction as the pnpm guard above, and the same reason.
+report_stage_failure() {
+  stage="$1"
+  code="$2"
+  echo ""
+  if [ "$code" -gt 128 ]; then
+    signal=$((code - 128))
+    name="signal ${signal}"
+    [ "$signal" = "9" ] && name="SIGKILL — the OOM killer, almost certainly"
+    [ "$signal" = "15" ] && name="SIGTERM"
+    echo "✗ pre-push: ${stage} was KILLED (${name}), not failed — NOTHING was verified."
+    echo "  The process did not finish, so it reported no defect. This repo's build and"
+    echo "  typecheck hold a large heap; a machine short on memory reaches this routinely."
+    echo ""
+    echo "  Free some memory and push again, or verify by hand and then push:"
+    echo "    pnpm build:packages && pnpm typecheck && git push --no-verify"
+  else
+    echo "✗ pre-push: ${stage} failed (see error above)."
+    echo "  A break must NOT reach develop. Fix it, or push anyway"
+    echo "  (emergencies only): git push --no-verify"
+  fi
+  exit 1
+}
+
 echo "→ pre-push: build (--filter ./packages/*) + typecheck (~30-90s). Full suite runs in CI."
 echo ""
 
 # Build first — this is the gate that catches a dropped export / fabricated
 # symbol (tsup DTS = tsc fails). Filter to packages/* so `pnpm -r build`
 # does not walk examples/.
-if ! pnpm build:packages; then
-  echo ""
-  echo "✗ pre-push: package build failed (see error above)."
-  echo "  A build break must NOT reach develop. Fix it, or push anyway"
-  echo "  (emergencies only): git push --no-verify"
-  exit 1
+# The status is captured BEFORE any test, because `$?` inside `if ! cmd; then` is the status of
+# the NEGATION — always 0 — not of the command. Measured, after writing it the wrong way first.
+pnpm build:packages
+build_status=$?
+if [ "$build_status" -ne 0 ]; then
+  report_stage_failure "package build" "$build_status"
 fi
 
-if ! pnpm typecheck; then
-  echo ""
-  echo "✗ pre-push: typecheck failed (see error above)."
-  echo "  To push anyway (emergencies only): git push --no-verify"
-  exit 1
+pnpm typecheck
+typecheck_status=$?
+if [ "$typecheck_status" -ne 0 ]; then
+  report_stage_failure "typecheck" "$typecheck_status"
 fi
 
 echo ""

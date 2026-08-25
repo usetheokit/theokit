@@ -10,7 +10,11 @@ import { walkSourceFiles } from '../_internal/scan-walker.js'
 
 import { detectExportedHttpMethods } from './detect-http-methods.js'
 import { detectMethodsWithDeclaredPolicy } from './detect-route-policy.js'
-import { MissingRoutePolicyError, RouterConventionError } from './errors.js'
+import {
+  MissingRoutePolicyError,
+  RedundantApiSegmentError,
+  RouterConventionError,
+} from './errors.js'
 import { createFileStampCache } from './file-stamp-cache.js'
 import { compilePattern, type ServerRouteNode } from './match.js'
 
@@ -63,6 +67,27 @@ function buildDirectoryNestedSuggestion(filePath: string, routesDir: string): st
   const withoutExt = rel.slice(0, -ext.length)
   const segments = withoutExt.split('/').flatMap(splitDottedSegmentOutsideBrackets)
   return `routes/${segments.join('/')}${ext}`
+}
+
+/**
+ * `routes/api/…` doubles the prefix `fileToRoutePath` adds unconditionally.
+ *
+ * Checked on the FIRST segment only. A file merely named `api-keys.ts` or `apiary.ts` is the
+ * author's to choose and resolves fine; what doubles is the DIRECTORY, because it prefixes every
+ * file beneath it — and carries the same redundant segment into the generated typed client.
+ */
+function assertNoRedundantApiSegment(filePath: string, routesDir: string): void {
+  const rel = relative(routesDir, filePath).replace(/\\/g, '/')
+  const [first, ...rest] = rel.split('/')
+  if (first !== 'api' || rest.length === 0) return
+
+  const withoutExt = rel.slice(0, -extname(rel).length)
+  throw new RedundantApiSegmentError({
+    file: filePath,
+    doubledRoutePath: `/api/${withoutExt}`,
+    doubledClientChain: `client.${withoutExt.split('/').join('.')}`,
+    suggestion: `routes/${rest.join('/')}`,
+  })
 }
 
 function assertNoDottedSegment(filePath: string, routesDir: string): void {
@@ -186,6 +211,7 @@ export function scanServerRoutes(serverDir: string): ServerRouteNode[] {
 
     // G6 T1.1: reject dotted basenames (legacy convention that produced wrong
     // paramNames due to greedy `:(?:\.\.\.)?([^/]+)` regex in compilePattern).
+    assertNoRedundantApiSegment(absPath, routesDir)
     assertNoDottedSegment(absPath, routesDir)
 
     const routePath = fileToRoutePath(absPath, routesDir)
