@@ -92,17 +92,64 @@ export interface DefineAgentToolSpec<T extends z.ZodType, R = string> {
    * read it for shared config like `projectRoot` instead of baking it into the factory.
    * `ctx.signal` is the abort signal. Optional so existing one-arg handlers keep working.
    *
-   * M18 — the handler may return RICH data `R` (not just a string) when `toModelOutput` is
-   * provided to map it to the model-visible string.
+   * M18 — the handler may return RICH data `R`, not just a string. Without a `toModelOutput` the
+   * result is JSON-serialized for the model (#464); provide one when the model should see a
+   * different shape than the app does.
    */
   handler: (input: z.infer<T>, ctx?: ToolHandlerContext) => R | Promise<R>
   /**
-   * M18 — map the rich handler result `R` to the string the model sees. Required (in practice)
-   * when `handler` returns a non-string; absent ⇒ the handler must return a string.
+   * M18 — map the rich handler result `R` to the string the model sees.
+   *
+   * Optional. Without it a non-string result is JSON-serialized (#464); this is for when the shape
+   * the model should see differs from the shape the app wants — a summary line instead of the whole
+   * record. The docblock said "required (in practice)" and that parenthesis was the defect: the
+   * type never said it, only the first live tool call did.
    */
   toModelOutput?: (result: R) => string
   /** M18 — per-target formatters (`display` / `transcript`) for the app, applied by {@link applyTransform}. */
   transform?: ToolTransform<R>
+}
+
+/**
+ * The string the model sees when the tool declares no `toModelOutput`.
+ *
+ * A non-string result used to throw, asking for a `toModelOutput` (#464). The message was right and
+ * the moment was the worst available: the first time the MODEL calls the tool, inside an agent run,
+ * with a provider key and tokens already spent. And returning an object is the natural shape — a
+ * tool answering `{ id, status, note }` serves a model better than one concatenating a string by
+ * hand — so it was the common path, not an edge.
+ *
+ * Requiring it in the TYPE was the other candidate, and it keeps the ceremony: every consumer's
+ * correction was the same single line, `.toModelOutput((r) => JSON.stringify(r))`. A default that
+ * every caller overrides identically is a default on the wrong side. `toModelOutput` still wins
+ * whenever the shape matters — this only decides what happens when nobody said.
+ *
+ * The throw survives for exactly the results no default can serialize, and says which one it hit.
+ * Asking for a `toModelOutput` there would be advice that does not help: it cannot rescue a cycle.
+ */
+function toModelString(toolName: string, result: unknown): string {
+  if (typeof result === 'string') return result
+
+  // Checked on the INPUT, not on `JSON.stringify`'s return. TypeScript types that as `string` and
+  // it is not — a function, a symbol or `undefined` yields `undefined` — so a guard on the output
+  // reads as dead code to a type-aware linter and invites deletion, which would put the crash back
+  // in the consumer's agent run. These three are the whole set JSON cannot represent at the top
+  // level.
+  if (result === undefined || typeof result === 'function' || typeof result === 'symbol') {
+    throw new Error(
+      `defineAgentTool(${JSON.stringify(toolName)}): the handler result could not be serialized for the model — JSON has no representation for ${typeof result}. Return a string, or add toModelOutput to map it.`,
+    )
+  }
+
+  try {
+    return JSON.stringify(result)
+  } catch (cause) {
+    // Circular structures and BigInt both land here.
+    throw new Error(
+      `defineAgentTool(${JSON.stringify(toolName)}): the handler result could not be serialized for the model (${cause instanceof Error ? cause.message : String(cause)}). Return a string, or add toModelOutput to map it.`,
+      { cause },
+    )
+  }
 }
 
 const TOOL_NAME_REGEX = /^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/
@@ -185,12 +232,7 @@ export function defineAgentTool<T extends z.ZodType, R = string>(
       const result = await spec.handler(parsed, ctx)
       // M18 — shape the (possibly rich) result into the model-visible string.
       if (spec.toModelOutput) return spec.toModelOutput(result)
-      if (typeof result !== 'string') {
-        throw new Error(
-          `defineAgentTool(${JSON.stringify(spec.name)}): handler returned a non-string; provide toModelOutput to map it to a string for the model.`,
-        )
-      }
-      return result
+      return toModelString(spec.name, result)
     },
     // M18 — carry the per-target formatters for the app (ignored by the SDK wire).
     ...(spec.transform !== undefined ? { transform: spec.transform as ToolTransform } : {}),

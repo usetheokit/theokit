@@ -16,6 +16,67 @@ import {
   defineAgentTool,
 } from '../../packages/theo/src/server/define/define-agent-tool.js'
 
+describe('usetheokit/theokit#464 — a handler that returns an object', () => {
+  // It threw: "handler returned a non-string; provide toModelOutput to map it to a string". The
+  // message was good and the moment was the worst available — the first time the MODEL calls the
+  // tool, inside an agent run, with a provider key and tokens already spent. Returning an object is
+  // the natural shape (`{ id, status, note }` serves a model better than a hand-concatenated
+  // string), so it was the common path, not an edge.
+  //
+  // The fix is the default rather than the type. Every consumer's correction was the same single
+  // line — `.toModelOutput((r) => JSON.stringify(r))` — and a default that every caller overrides
+  // the same way is a default on the wrong side. `toModelOutput` still wins when the shape matters.
+  it('serializes a JSON-serializable result instead of refusing it', async () => {
+    const tool = defineAgentTool({
+      name: 'lookup',
+      description: 'returns a record',
+      inputSchema: z.object({ id: z.string() }),
+      handler: ({ id }) => ({ id, ok: true }),
+    })
+
+    expect(await tool.handler({ id: 'x' })).toBe('{"id":"x","ok":true}')
+  })
+
+  it('still prefers toModelOutput when one is given', async () => {
+    const tool = defineAgentTool({
+      name: 'lookup',
+      description: 'returns a record',
+      inputSchema: z.object({ id: z.string() }),
+      handler: ({ id }) => ({ id, ok: true }),
+      toModelOutput: (r) => `found ${r.id}`,
+    })
+
+    expect(await tool.handler({ id: 'x' })).toBe('found x')
+  })
+
+  // The explicit error survives for exactly the results no default can serialize, and it now says
+  // what actually happened — asking for a `toModelOutput` would not have rescued a cycle.
+  it('refuses a circular result, naming the reason', async () => {
+    const circular: Record<string, unknown> = { name: 'loop' }
+    circular.self = circular
+    const tool = defineAgentTool({
+      name: 'cyclic',
+      description: 'returns a cycle',
+      inputSchema: z.object({}),
+      handler: () => circular,
+    })
+
+    await expect(tool.handler({})).rejects.toThrow(/cyclic/)
+    await expect(tool.handler({})).rejects.toThrow(/could not be serialized/i)
+  })
+
+  it('refuses a result JSON cannot represent at all', async () => {
+    const tool = defineAgentTool({
+      name: 'opaque',
+      description: 'returns a function',
+      inputSchema: z.object({}),
+      handler: () => (() => 'nope') as unknown as Record<string, unknown>,
+    })
+
+    await expect(tool.handler({})).rejects.toThrow(/could not be serialized/i)
+  })
+})
+
 describe('M18 — toModelOutput', () => {
   it('returns a string handler result unchanged when no toModelOutput (backward-compatible)', async () => {
     const tool = defineAgentTool({
