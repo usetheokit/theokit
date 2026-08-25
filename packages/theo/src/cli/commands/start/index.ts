@@ -39,6 +39,7 @@ import { loadCronDefinitions } from './cron-bootstrap.js'
 import { installGracefulShutdown } from './graceful-shutdown.js'
 import type { RequestHandlerCtx } from './handlers.js'
 import { loadRoutesAndActions } from './manifest-loader.js'
+import { assessPublicExposure } from './public-exposure-gate.js'
 import { createRequestHandler } from './request-handler.js'
 import { describeListenTarget, resolveListenTarget } from './resolve-listen-host.js'
 import { setupSsr } from './ssr-setup.js'
@@ -195,12 +196,42 @@ export async function startCommand(options: StartOptions): Promise<void> {
   // whose default says `localhost`. Passing it broke containers, where `localhost`
   // means nobody, so `HOST` now gets a say (usetheokit/theokit#402).
   const listenTarget = resolveListenTarget(config.host)
+
+  // Deciding WHERE to listen settled reachability; this settles consequence. The refusal happens
+  // BEFORE `listen` because a server that binds and then complains has already accepted the first
+  // request — the log entry would arrive after the exposure it describes.
+  const exposure = assessPublicExposure({
+    routes: cachedRoutes,
+    target: listenTarget,
+    allowUnauthenticatedWrites: config.security?.allowUnauthenticatedWrites ?? false,
+  })
+  if (exposure.kind === 'refused') {
+    console.error(`\n  ${exposure.message}\n`)
+    // Non-zero: an orchestrator restarting this container must see a failure, not a clean exit that
+    // reads as "the process decided to stop" (docs/adr/0002 — an abnormal ending is never reported
+    // as normal).
+    process.exitCode = 1
+    return
+  }
+  if (exposure.kind === 'unverified') {
+    console.warn(`\n  ${exposure.message}\n`)
+  }
+
   server.listen(port, listenTarget.host, () => {
     console.log(`\n  Theo production server`)
     // The line states the bound address, because it used to print `localhost`
     // either way — so a container serving everyone and one serving nobody were
     // indistinguishable in the log.
     console.log(`${describeListenTarget(listenTarget, port)}\n`)
+    if (exposure.kind === 'allowed-by-override') {
+      // The override permits the exposure; it does not make it quiet. Each start names what is
+      // open, so `allowUnauthenticatedWrites: true` cannot be forgotten in a config nobody reopens.
+      console.warn(
+        `  security.allowUnauthenticatedWrites is on — ${String(exposure.exposures.length)} unauthenticated write route(s) are reachable:`,
+      )
+      for (const e of exposure.exposures) console.warn(`    ${e.method} ${e.routePath}`)
+      console.warn('')
+    }
     if (cronDefinitions.length > 0) {
       console.log(`  Crons: ${String(cronDefinitions.length)} scheduled in-process\n`)
     }

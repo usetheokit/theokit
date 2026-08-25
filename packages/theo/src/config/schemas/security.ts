@@ -103,4 +103,17 @@ export const securitySchema = z.object({
   disallowed: disallowedConfigSchema.optional(),
   /** T1.2 — Cross-Origin Resource Sharing. Single global config; runs first in pipeline. */
   cors: corsSchema.optional(),
+  /**
+   * Permit binding a public network interface while write routes still declare `policy('public')`.
+   *
+   * Defaults to `false`, and the default is the point: `theo start` refuses that combination rather
+   * than serving it, because an unauthenticated POST reachable from a network is an open endpoint
+   * whether or not anyone meant it to be. See `cli/commands/start/public-exposure-gate.ts` for what
+   * is refused and — equally important — what is not.
+   *
+   * Setting it to `true` is a decision, not a switch: the routes stay open, the startup log goes on
+   * naming every one of them, and this line in `theo.config.ts` is what an auditor finds when they
+   * ask who agreed to it.
+   */
+  allowUnauthenticatedWrites: z.boolean().default(false),
 })

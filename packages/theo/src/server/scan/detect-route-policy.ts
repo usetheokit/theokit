@@ -82,13 +82,43 @@ function propertyNameIsPolicy(name: TS.PropertyName | undefined): boolean {
   return false
 }
 
+/**
+ * What a route said about who may call it.
+ *
+ * `'public'` is the string literal ADR 0001 gives a meaning to; everything else is a function this
+ * pass cannot evaluate, and is reported `'guarded'`. That asymmetry is deliberate — see
+ * `policyKindOfArgument`.
+ */
+export type RoutePolicyKind = 'public' | 'guarded'
+
+/**
+ * The kind an argument in the `policy` position declares.
+ *
+ * Only the bare literal `'public'` is read as open. An identifier, a property access, a call, a
+ * template — anything this pass cannot evaluate — comes back `'guarded'`.
+ *
+ * The two mistakes are not symmetric. Labelling an open route `'guarded'` costs a gate that fails
+ * to fire on a route somebody left open on purpose. Labelling a guarded route `'public'` would put
+ * a protected route on a list of exposures and, worse, train a reader to disbelieve the list. Only
+ * the literal is legible, so only the literal is believed.
+ */
+function policyKindOfArgument(expression: TS.Expression): RoutePolicyKind {
+  const arg = unwrap(expression)
+  return ts.isStringLiteral(arg) && arg.text === 'public' ? 'public' : 'guarded'
+}
+
 /** A `policy` key at the TOP level of a config object literal. Never deeper. */
-function objectDeclaresPolicy(literal: TS.ObjectLiteralExpression): boolean {
+function objectPolicyKind(literal: TS.ObjectLiteralExpression): RoutePolicyKind | undefined {
   for (const property of literal.properties) {
     if (ts.isSpreadAssignment(property)) continue
-    if (propertyNameIsPolicy(property.name)) return true
+    if (!propertyNameIsPolicy(property.name)) continue
+    // `{ policy: x }` carries an initializer; `{ policy }` shorthand does not, and a shorthand
+    // reference is exactly the unreadable case that takes the safe label.
+    return ts.isPropertyAssignment(property)
+      ? policyKindOfArgument(property.initializer)
+      : 'guarded'
   }
-  return false
+  return undefined
 }
 
 /**
@@ -98,27 +128,32 @@ function objectDeclaresPolicy(literal: TS.ObjectLiteralExpression): boolean {
  * checks the arguments each call receives, which is where the object form puts
  * its config. Nothing else is visited.
  */
-function declaresPolicy(expression: TS.Expression): boolean {
+function policyKind(expression: TS.Expression): RoutePolicyKind | undefined {
   const expr = unwrap(expression)
 
-  if (ts.isObjectLiteralExpression(expr)) return objectDeclaresPolicy(expr)
+  if (ts.isObjectLiteralExpression(expr)) return objectPolicyKind(expr)
 
-  if (!ts.isCallExpression(expr)) return false
+  if (!ts.isCallExpression(expr)) return undefined
 
   const callee = unwrap(expr.expression)
 
-  if (ts.isPropertyAccessExpression(callee) && callee.name.text === POLICY_KEY) return true
+  if (ts.isPropertyAccessExpression(callee) && callee.name.text === POLICY_KEY) {
+    // `.policy()` with no argument declares the key and says nothing readable.
+    return expr.arguments.length === 0 ? 'guarded' : policyKindOfArgument(expr.arguments[0])
+  }
 
   for (const argument of expr.arguments) {
     const arg = unwrap(argument)
-    if (ts.isObjectLiteralExpression(arg) && objectDeclaresPolicy(arg)) return true
+    if (!ts.isObjectLiteralExpression(arg)) continue
+    const kind = objectPolicyKind(arg)
+    if (kind !== undefined) return kind
   }
 
   // Keep walking the chain: `route().policy(p).handler(h).build()` reaches
   // `.policy` only by stepping left through `.build` and `.handler`.
-  if (ts.isPropertyAccessExpression(callee)) return declaresPolicy(callee.expression)
+  if (ts.isPropertyAccessExpression(callee)) return policyKind(callee.expression)
 
-  return false
+  return undefined
 }
 
 /** Every top-level `const x = <expr>` in the file, so `export { x as GET }` can be resolved. */
@@ -136,13 +171,16 @@ function collectLocalInitializers(sourceFile: TS.SourceFile): Map<string, TS.Exp
 }
 
 /** `export const GET = ...` */
-function collectFromVariableStatement(stmt: TS.VariableStatement, declared: Set<HttpMethod>): void {
+function collectFromVariableStatement(
+  stmt: TS.VariableStatement,
+  declared: Map<HttpMethod, RoutePolicyKind>,
+): void {
   if (!hasExportModifier(ts.getModifiers(stmt))) return
   for (const decl of stmt.declarationList.declarations) {
     if (!ts.isIdentifier(decl.name) || !HTTP_METHOD_NAMES.has(decl.name.text)) continue
-    if (decl.initializer !== undefined && declaresPolicy(decl.initializer)) {
-      declared.add(decl.name.text as HttpMethod)
-    }
+    if (decl.initializer === undefined) continue
+    const kind = policyKind(decl.initializer)
+    if (kind !== undefined) declared.set(decl.name.text as HttpMethod, kind)
   }
 }
 
@@ -153,23 +191,23 @@ function collectFromVariableStatement(stmt: TS.VariableStatement, declared: Set<
 function collectFromExportDeclaration(
   stmt: TS.ExportDeclaration,
   locals: Map<string, TS.Expression>,
-  declared: Set<HttpMethod>,
+  declared: Map<HttpMethod, RoutePolicyKind>,
 ): void {
   if (stmt.moduleSpecifier !== undefined) return
   if (!stmt.exportClause || !ts.isNamedExports(stmt.exportClause)) return
   for (const spec of stmt.exportClause.elements) {
     if (!HTTP_METHOD_NAMES.has(spec.name.text)) continue
     const local = locals.get((spec.propertyName ?? spec.name).text)
-    if (local !== undefined && declaresPolicy(local)) {
-      declared.add(spec.name.text as HttpMethod)
-    }
+    if (local === undefined) continue
+    const kind = policyKind(local)
+    if (kind !== undefined) declared.set(spec.name.text as HttpMethod, kind)
   }
 }
 
 function collectFromStatement(
   stmt: TS.Statement,
   locals: Map<string, TS.Expression>,
-  declared: Set<HttpMethod>,
+  declared: Map<HttpMethod, RoutePolicyKind>,
 ): void {
   if (ts.isVariableStatement(stmt)) {
     collectFromVariableStatement(stmt, declared)
@@ -192,6 +230,21 @@ export function detectMethodsWithDeclaredPolicy(
   filePath: string,
   content: string,
 ): Set<HttpMethod> {
+  return new Set(detectRoutePolicyKinds(filePath, content).keys())
+}
+
+/**
+ * What each HTTP-method export of this file declared — `'public'` or `'guarded'`.
+ *
+ * The map's KEYS are exactly what `detectMethodsWithDeclaredPolicy` returns (that export is now a
+ * projection of this one, so the build gate and the exposure gate can never disagree about which
+ * methods declared something). The VALUES are the half ADR 0001 left unanswered at scan time:
+ * whether the declaration protects anything.
+ */
+export function detectRoutePolicyKinds(
+  filePath: string,
+  content: string,
+): Map<HttpMethod, RoutePolicyKind> {
   const sourceFile = ts.createSourceFile(
     filePath,
     content,
@@ -200,7 +253,7 @@ export function detectMethodsWithDeclaredPolicy(
     ts.ScriptKind.TS,
   )
   const locals = collectLocalInitializers(sourceFile)
-  const declared = new Set<HttpMethod>()
+  const declared = new Map<HttpMethod, RoutePolicyKind>()
   for (const stmt of sourceFile.statements) {
     collectFromStatement(stmt, locals, declared)
   }
