@@ -3,8 +3,8 @@ name: theokit-config
 description: TheoKit configuration — defineConfig, plugins, security, storage, agents, build targets
 user-invocable: false
 paths:
-  - "theo.config*"
-  - "**/*config*"
+  - 'theo.config*'
+  - '**/*config*'
 ---
 
 # TheoKit Configuration
@@ -16,16 +16,16 @@ import { defineConfig } from 'theokit'
 
 export default defineConfig({
   // Basic
-  name: 'my-app',            // DNS-1123 format (lowercase + hyphens)
-  port: 3000,                // Dev + production port
+  name: 'my-app', // DNS-1123 format (lowercase + hyphens)
+  port: 3000, // Dev + production port
 
   // SSR (default: false)
   ssr: false,
 
   // Security (defaults are secure)
   security: {
-    csrf: true,               // CSRF protection (default: true)
-    csp: 'report-only',       // Content Security Policy
+    csrf: true, // CSRF protection (default: true)
+    csp: 'report-only', // Content Security Policy
   },
 
   // Agent runtime

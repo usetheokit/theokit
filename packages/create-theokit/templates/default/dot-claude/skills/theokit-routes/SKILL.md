@@ -3,8 +3,8 @@ name: theokit-routes
 description: TheoKit server routes — defineRoute, Zod validation, HTTP methods, dynamic params, error handling
 user-invocable: false
 paths:
-  - "server/routes/**"
-  - "server/actions/**"
+  - 'server/routes/**'
+  - 'server/actions/**'
 ---
 
 # TheoKit Routes
@@ -50,10 +50,9 @@ Required on every exported method. The scanner refuses a route file that omits i
 file, so absence is a build error rather than a route silently open to everyone.
 
 ```typescript
-policy: 'public'                                          // open, and said out loud
-policy: ({ subject }) => subject !== null                 // any authenticated caller
-policy: ({ subject, params }) =>
-  requireOwner(subject, ownerOf(params.id))               // this subject owns this record
+policy: 'public' // open, and said out loud
+policy: ({ subject }) => subject !== null // any authenticated caller
+policy: ({ subject, params }) => requireOwner(subject, ownerOf(params.id)) // this subject owns this record
 ```
 
 `requireOwner` comes from `theokit/server`. The policy is evaluated identically over HTTP and
@@ -62,12 +61,12 @@ headers and no cookies: identity arrives as `subject`, established by the transp
 
 ## File-to-URL Mapping
 
-| File path | URL | Notes |
-|-----------|-----|-------|
-| `server/routes/health.ts` | `GET /api/health` | Static route |
-| `server/routes/tasks/index.ts` | `/api/tasks` | Index route (GET + POST) |
-| `server/routes/tasks/[id].ts` | `/api/tasks/:id` | Dynamic param |
-| `server/routes/users/[...slug].ts` | `/api/users/*` | Catch-all |
+| File path                          | URL               | Notes                    |
+| ---------------------------------- | ----------------- | ------------------------ |
+| `server/routes/health.ts`          | `GET /api/health` | Static route             |
+| `server/routes/tasks/index.ts`     | `/api/tasks`      | Index route (GET + POST) |
+| `server/routes/tasks/[id].ts`      | `/api/tasks/:id`  | Dynamic param            |
+| `server/routes/users/[...slug].ts` | `/api/users/*`    | Catch-all                |
 
 ## defineAction (Server Actions)
 

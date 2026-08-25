@@ -3,11 +3,11 @@ name: theokit-database
 description: TheoKit database — Drizzle ORM, SQLite schema, migrations, seeds, db commands
 user-invocable: false
 paths:
-  - "**/*schema*"
-  - "**/*db*"
-  - "**/drizzle*"
-  - "**/*migration*"
-  - "**/*seed*"
+  - '**/*schema*'
+  - '**/*db*'
+  - '**/drizzle*'
+  - '**/*migration*'
+  - '**/*seed*'
 ---
 
 # TheoKit Database (Drizzle + SQLite)
@@ -22,7 +22,9 @@ export const tasks = sqliteTable('tasks', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   title: text('title').notNull(),
   done: integer('done', { mode: 'boolean' }).notNull().default(false),
-  createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  createdAt: text('created_at')
+    .notNull()
+    .default(sql`CURRENT_TIMESTAMP`),
 })
 
 export const users = sqliteTable('users', {
@@ -74,10 +76,13 @@ db.delete(tasks).where(eq(tasks.id, 1)).run()
 import { db } from './index.js'
 import { tasks } from './schema.js'
 
-await db.insert(tasks).values([
-  { title: 'Learn TheoKit', done: false },
-  { title: 'Build an agent', done: false },
-]).run()
+await db
+  .insert(tasks)
+  .values([
+    { title: 'Learn TheoKit', done: false },
+    { title: 'Build an agent', done: false },
+  ])
+  .run()
 
 console.log('Seeded database')
 ```

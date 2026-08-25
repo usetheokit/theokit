@@ -3,17 +3,17 @@ name: theokit-agents
 description: TheoKit agent/LLM integration — agents/*.ts convention (defineAgent), @Agent decorator (advanced/DI), defineAgentTool, useAgent client hook
 user-invocable: false
 paths:
-  - "**/*agent*"
-  - "**/*Agent*"
-  - "**/*tool*"
-  - "**/*Tool*"
-  - "**/*toolbox*"
-  - "**/*Toolbox*"
+  - '**/*agent*'
+  - '**/*Agent*'
+  - '**/*tool*'
+  - '**/*Tool*'
+  - '**/*toolbox*'
+  - '**/*Toolbox*'
 ---
 
 # TheoKit Agents & Tools
 
-## Server Surface — agents/*.ts (zero-config convention)
+## Server Surface — agents/\*.ts (zero-config convention)
 
 Create an `agents/<name>.ts` file at the project root. It is automatically served at
 `POST /api/agents/<name>` (dev + build) with no manual route wiring.
@@ -162,12 +162,12 @@ consumeUIMessageStream(response, (message) => {
 
 Before writing custom tools, check if they already exist:
 
-| Package | What it provides | When to use |
-|---------|-----------------|-------------|
-| `@theokit/sdk` | `Agent.create()`, `Tool.create()` (primitive), `Run.stream()` | Core agent runtime — always installed |
+| Package              | What it provides                                                                                                                 | When to use                                                        |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `@theokit/sdk`       | `Agent.create()`, `Tool.create()` (primitive), `Run.stream()`                                                                    | Core agent runtime — always installed                              |
 | `@theokit/sdk-tools` | Ready-made tools: `createReadFileTool`, `createWriteFileTool`, `createSearchTextTool`, `createGlobTool`, `createShellTool`, etc. | **Check here FIRST** before writing custom tools for coding agents |
-| `@theokit/di-agent` | DI-powered agent with decorator injection | When using dependency injection pattern |
-| `@theokit/di` | Core DI container (`@Injectable`, `@Inject`) | When `@theokit/di-agent` needs explicit bindings |
+| `@theokit/di-agent`  | DI-powered agent with decorator injection                                                                                        | When using dependency injection pattern                            |
+| `@theokit/di`        | Core DI container (`@Injectable`, `@Inject`)                                                                                     | When `@theokit/di-agent` needs explicit bindings                   |
 
 **`Tool.create()` in `@theokit/sdk` is the primitive API.** For coding agents, `@theokit/sdk-tools` has batteries-included tools that wrap `Tool.create()` with file system access, search, shell execution, etc. Don't reimplement what `sdk-tools` already provides.
 

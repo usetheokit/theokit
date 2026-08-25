@@ -3,21 +3,21 @@ name: theokit-gateways
 description: Receiving messages from Telegram, WhatsApp, Slack and other platforms — handleChannelWebhook, the @theokit/gateway-* adapters, signature validation, the onMessage seam
 user-invocable: false
 paths:
-  - "server/routes/**"
-  - "server/channels/**"
-  - "**/*gateway*"
-  - "**/*webhook*"
+  - 'server/routes/**'
+  - 'server/channels/**'
+  - '**/*gateway*'
+  - '**/*webhook*'
 ---
 
 # TheoKit Gateways
 
 Receiving a message from a messaging platform spans three packages, and each owns one part of it.
 
-| Package | Its half |
-|---|---|
-| `theokit` (here) | The HTTP route and the signature check. `handleChannelWebhook` verifies the signature, parses the body, and hands your app the parsed JSON as `payload: unknown` |
-| `@theokit/gateway-*` | Translating that payload into a canonical event, so your app never re-declares a platform's wire format |
-| `@theokit/sdk` | Not involved in this path today |
+| Package              | Its half                                                                                                                                                         |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `theokit` (here)     | The HTTP route and the signature check. `handleChannelWebhook` verifies the signature, parses the body, and hands your app the parsed JSON as `payload: unknown` |
+| `@theokit/gateway-*` | Translating that payload into a canonical event, so your app never re-declares a platform's wire format                                                          |
+| `@theokit/sdk`       | Not involved in this path today                                                                                                                                  |
 
 ## Wiring one
 
@@ -26,14 +26,14 @@ returns the `Response` your route must return.
 
 ```typescript
 import { handleChannelWebhook } from 'theokit/server/agent'
-import { telegram } from 'theokit/server/webhook'   // also: discord, slack, github, stripe
+import { telegram } from 'theokit/server/webhook' // also: discord, slack, github, stripe
 import { parseInbound } from '@theokit/gateway-telegram'
 
 const response = await handleChannelWebhook(request, new URL(request.url).pathname, {
   validators: { telegram: telegram({ secretToken: process.env.TELEGRAM_SECRET_TOKEN! }) },
   onMessage: async ({ agent, platform, payload }) => {
     const event = parseInbound(payload)
-    if (event === null) return          // not a message this adapter handles — see below
+    if (event === null) return // not a message this adapter handles — see below
     // hand `event` to your agent
   },
 })
