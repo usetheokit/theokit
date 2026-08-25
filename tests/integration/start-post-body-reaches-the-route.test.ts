@@ -67,6 +67,35 @@ export const POST = {
 }
 `
 
+/**
+ * The same POST, read the way a MOUNTED LIBRARY reads it: off the Web `Request`, not off the
+ * parsed `body` the framework hands alongside it.
+ *
+ * This is a different property from the one above and nothing asserted it. `ctx.body` arriving
+ * does not imply `ctx.request` still carries the bytes — the executor parses the Node stream, and
+ * a Request rebuilt without them reports `body: null` while `bodyUsed` stays `false`, which is a
+ * Request that misreports its own state.
+ *
+ * It matters because handing back handlers is a published pattern rather than a curiosity:
+ * `@theokit/plugin-canvas`'s `createArtifactRouteHandlers` says in its own docblock that it
+ * returns handlers "for the application to mount" precisely because a plugin cannot register a
+ * route, and `handleChannelWebhook` — the seam for Telegram, Slack and Discord — is the same
+ * shape. Both take a `Request` and read it themselves.
+ */
+const READS_THE_REQUEST_ROUTE = `
+export const POST = {
+  handler: async ({ request }) => {
+    const text = await request.text()
+    return {
+      bodyIsNull: request.body === null,
+      bodyUsedBeforeRead: false,
+      text,
+      parsed: text.length > 0 ? JSON.parse(text) : null,
+    }
+  },
+}
+`
+
 /** How long a request may take before we call it a hang. The passing path answers in single digits. */
 const RESPONSE_BUDGET_MS = 2000
 
@@ -91,10 +120,20 @@ async function startProductionServer(): Promise<void> {
   projectRoot = await mkdtemp(join(tmpdir(), 'tk400-'))
   const routeFile = join(projectRoot, 'probe.route.mjs')
   await writeFile(routeFile, PROBE_ROUTE, 'utf8')
+  const readsRequestFile = join(projectRoot, 'reads-request.route.mjs')
+  await writeFile(readsRequestFile, READS_THE_REQUEST_ROUTE, 'utf8')
 
   const { pattern, paramNames } = compilePattern('/api/probe')
+  const readsRequest = compilePattern('/api/reads-request')
   const routes: ServerRouteNode[] = [
     { filePath: routeFile, routePath: '/api/probe', pattern, paramNames, methods: ['POST'] },
+    {
+      filePath: readsRequestFile,
+      routePath: '/api/reads-request',
+      pattern: readsRequest.pattern,
+      paramNames: readsRequest.paramNames,
+      methods: ['POST'],
+    },
   ]
 
   // One event-loop turn between the aux branch and the body parser — see the header. Any real app
@@ -239,6 +278,22 @@ describe('theokit start — a POST body survives the dispatch chain', () => {
     expect(status).toBe(200)
     expect(json).toMatchObject({ jsonrpc: '2.0', id: 7 })
     expect(json).not.toMatchObject({ error: { code: -32600 } })
+  })
+
+  it('test_a_handler_that_reads_the_request_itself_gets_the_bytes_it_was_sent', async () => {
+    // The property a MOUNTED library depends on, which `echo: body` above does not cover: a
+    // handler reading `request` rather than `body` must find the bytes there.
+    //
+    // Before usetheokit/theokit#445 this answered `body: null` and an empty string — while
+    // `bodyUsed` stayed `false`, so a caller asking whether the body was still available was told
+    // yes and then handed nothing. `@theokit/plugin-canvas` reported `INVALID_BODY` for a valid
+    // JSON body on exactly this path, in a real app, which is how it was found again.
+    const { status, json } = await postJson('/api/reads-request', { a: 1, nested: { b: 2 } })
+
+    expect(status).toBe(200)
+    expect(json).toMatchObject({ bodyIsNull: false, parsed: { a: 1, nested: { b: 2 } } })
+    // The exact bytes, not a re-serialisation: a signature check computes over what arrived.
+    expect((json as { text: string }).text).toBe(JSON.stringify({ a: 1, nested: { b: 2 } }))
   })
 
   it('test_a_post_to_an_unknown_api_route_still_reports_a_404_rather_than_hanging', async () => {
