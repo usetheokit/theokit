@@ -8,6 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **`theoFetch` could not send a POST.** The options type omitted `method` while the implementation
+  read it and defaulted to `GET`, so the documented call did not compile and the call that did
+  compile sent a GET with a JSON body and no CSRF header — the POST route was never reached, and
+  the only place it showed was the network panel. `method` is now part of the type, typed as the
+  framework's own `HttpMethod` union, and **required** when the route declares a body: a route with
+  a body schema is not a GET, so the type says so instead of the request saying it silently at
+  runtime (#465)
+
+### Fixed
+
 - **`useAction` kept the code of a validation error and dropped its `fields`.** The wire carries
   both `issues` and the derived map, and `ActionError.fromJson` reads `issues` — so an error that
   arrived with only the map fell through to `INTERNAL_SERVER_ERROR` and lost the one thing a form

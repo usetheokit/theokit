@@ -2,6 +2,7 @@ import superjson from 'superjson'
 import type { z } from 'zod'
 
 import type { TheoErrorCode, TheoErrorEnvelope } from '../core/contracts/error-envelope.js'
+import type { HttpMethod } from '../core/contracts/http-methods.js'
 
 import { getGlobalBatcher } from './batch-transport.js'
 
@@ -83,10 +84,29 @@ export type InferBody<T> = [ExtractBody<T>] extends [never]
     ? undefined
     : z.infer<ExtractBody<T>>
 
-/** Build the options type based on what schemas the route has */
+/**
+ * The methods that carry a body — the complement of the safe set `buildRequestInit` deliberately
+ * skips the `X-Theo-Action` header for, because those are the ones that stay cacheable.
+ */
+export type MutatingHttpMethod = Exclude<HttpMethod, 'GET' | 'HEAD' | 'OPTIONS'>
+
+/**
+ * Build the options type based on what schemas the route has.
+ *
+ * `method` is part of it (usetheokit/theokit#465). It used to be omitted while `buildRequestInit`
+ * read `opts.method` and defaulted to `'GET'`, which made the two available calls both wrong: the
+ * documented POST did not compile, and the one that did compile went out as a GET carrying a JSON
+ * body and no `X-Theo-Action` header — so the POST route was never reached and nothing said so.
+ *
+ * It is REQUIRED when the route declares a body, and narrowed to the mutating set there. A route
+ * with a body schema is not a GET, so the type can say that instead of letting the request say it
+ * silently at runtime.
+ */
 export type TheoFetchOptions<T> = Omit<RequestInit, 'body' | 'method'> &
   (InferQuery<T> extends undefined ? { query?: never } : { query: InferQuery<T> }) &
-  (InferBody<T> extends undefined ? { body?: never } : { body: InferBody<T> })
+  (InferBody<T> extends undefined
+    ? { body?: never; method?: HttpMethod }
+    : { body: InferBody<T>; method: MutatingHttpMethod })
 
 // --- Error Class ---
 
