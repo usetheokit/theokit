@@ -23,7 +23,7 @@ interface AppClient {
     id: { get: (opts: { params: { id: string } }) => Promise<any> }
   }
   health: { get: () => Promise<any> }
-  userProfiles: { get: () => Promise<any> }
+  'user-profiles': { get: () => Promise<any> }
 }
 
 describe('createAppClient — Proxy facade over theoFetch', () => {
@@ -144,12 +144,16 @@ describe('createAppClient — Proxy facade over theoFetch', () => {
     expect(JSON.stringify({ a: (client as any).toJSON })).toBe('{}')
   })
 
-  it('EC-2 wire-through: route registered as `user-profiles` reaches `client.userProfiles`', async () => {
-    // codegen handles kebab→camel (Phase 2 test). Runtime simply walks
-    // whatever property name the codegen produced.
+  it('walks the key verbatim, so a hyphenated segment reaches its own path', async () => {
+    // This test used to assert `client.userProfiles.get()` → `/api/userProfiles`, with a comment
+    // saying "codegen handles kebab→camel; runtime simply walks whatever property name the codegen
+    // produced." Both halves of that were true and the conclusion was never drawn: a route
+    // registered as `user-profiles` is SERVED at `/api/user-profiles`, so the URL it asserted was a
+    // 404 (#470). The codegen keeps the segment literal now; the runtime's contract — walk the key
+    // it is given — was never the wrong half and is what this pins.
     const { impl, calls } = makeMockFetch()
     const client = createAppClient<AppClient>({ fetchImpl: impl as any })
-    await client.userProfiles.get()
-    expect(calls[0].url).toBe('/api/userProfiles')
+    await client['user-profiles'].get()
+    expect(calls[0].url).toBe('/api/user-profiles')
   })
 })

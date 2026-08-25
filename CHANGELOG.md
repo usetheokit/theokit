@@ -7,6 +7,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Fixed
+- **A route with a hyphen in its name was unreachable through the generated client.** The generator
+  camelCased the segment (`agents-config` → `client.agentsConfig`) while the runtime Proxy builds the
+  URL from the key it is handed — so the call compiled, asked for `/api/agentsConfig`, and the route
+  at `/api/agents-config` answered 404. Kebab-case file names are the scaffold's own convention, so
+  this appeared on the first route with two words in its name. Segments are literal now:
+  `client['agents-config'].get()`. Both halves had tests and neither could see it; the new one takes
+  the key out of the generated type and drives the real Proxy with it (#470)
 - **The generated `@theo/client` returned `any` for every call.** Inside a `declare module` block a
   relative `import type`, aliased and then fed to an external package's conditional type, resolves
   to `any` with no error — so the app compiled, and the developer believed they were writing against

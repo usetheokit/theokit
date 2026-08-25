@@ -14,7 +14,7 @@
  *
  * Implementation notes:
  *  - Pure (1) is unit-testable without Vite or a filesystem (see G1-P2 tests).
- *  - EC-2: kebab-case segments → camelCase; unsafe chars → bracket-access.
+ *  - EC-2: segments are kept literal; anything not a valid identifier is a bracket key (#470).
  *  - EC-3: collision between HTTP method name and sub-segment name → method
  *    wins; a sub-segment gets a `_` suffix + a warning comment.
  *  - EC-6: the write is `writeFileSync(tmp) + renameSync(tmp, final)` (POSIX atomic).
@@ -89,7 +89,7 @@ function makeNode(): TreeNode {
 
 /**
  * Normalize a path segment to a valid TS identifier when possible.
- * EC-2: kebab-case → camelCase; pure dynamic (`:name`) → identifier `name`;
+ * EC-2: the segment is kept literal; pure dynamic (`:name`) → identifier `name`;
  * starts with digit or unsafe char → emit as bracket-access key.
  */
 function normalizeSegment(raw: string): { identifier: string; bracket: boolean } {
@@ -98,14 +98,19 @@ function normalizeSegment(raw: string): { identifier: string; bracket: boolean }
   if (s.startsWith(':...')) s = s.slice(4)
   else if (s.startsWith(':')) s = s.slice(1)
 
-  // kebab → camel
-  const camel = s.replace(/-([a-z0-9])/gi, (_, c: string) => c.toUpperCase())
-
-  // Valid TS identifier (cannot start with digit, must be [a-zA-Z_$][a-zA-Z0-9_$]*)
-  if (/^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(camel)) {
-    return { identifier: camel, bracket: false }
+  // The segment is kept LITERAL (#470). It used to be camelCased — `agents-config` became
+  // `agentsConfig` — while the runtime Proxy builds the URL from the key it was handed and knows
+  // nothing of the transformation. So the type offered `client.agentsConfig.get()`, the request
+  // went to `/api/agentsConfig`, and the route served at `/api/agents-config` answered 404. The
+  // call compiled; the failure arrived at runtime.
+  //
+  // Translating back in the Proxy would have kept the prettier key, at the cost of a second source
+  // of truth for every segment name. A generated client is worth more as a faithful mirror of the
+  // URLs: bracket access for a hyphenated segment is the honest cost, and the machinery for it was
+  // already here for segments that cannot be identifiers at all (`2fa`).
+  if (/^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(s)) {
+    return { identifier: s, bracket: false }
   }
-  // Fallback: bracket-access (keep raw form intact for JSON-string key)
   return { identifier: s, bracket: true }
 }
 

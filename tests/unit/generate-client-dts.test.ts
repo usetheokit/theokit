@@ -160,7 +160,7 @@ describe('generateClientDts', () => {
     expect(out).toContain("import('../server/routes/posts')")
   })
 
-  it('EC-2: normalizes kebab-case segments to camelCase', () => {
+  it('EC-2: keeps a kebab-case segment literal, as a bracket key', () => {
     const out = generateClientDts({
       manifest: mkManifest([
         {
@@ -173,8 +173,12 @@ describe('generateClientDts', () => {
       dtsOutPath: DTS_OUT,
       serverDir: SERVER_DIR,
     })
-    expect(out).toContain('userProfiles:')
-    expect(out).not.toContain('user-profiles:')
+    // It camelCased until #470. The runtime Proxy builds the URL from the key it is handed, so
+    // `userProfiles` requested `/api/userProfiles` while the route was served at
+    // `/api/user-profiles` — the call compiled and answered 404. The key mirrors the URL now;
+    // `generated-client-reaches-its-routes.test.ts` is what holds the two together.
+    expect(out).toContain("'user-profiles':")
+    expect(out).not.toContain('userProfiles:')
   })
 
   it('EC-2: unsafe segments (digit-leading) emit as bracket-access key', () => {
