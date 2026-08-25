@@ -70,7 +70,7 @@ export interface ExposureAssessment {
 }
 
 /** Does this address reach anything beyond this machine? */
-export function isPubliclyBound(host: string): boolean {
+function isPubliclyBound(host: string): boolean {
   return !LOOPBACK_HOSTS.has(host.toLowerCase())
 }
 

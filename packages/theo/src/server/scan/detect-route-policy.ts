@@ -221,25 +221,14 @@ function collectFromStatement(
 }
 
 /**
- * The set of HTTP-method exports in this file that declare an access policy.
- *
- * `content` is passed in rather than read here so the scanner reads each route
- * file once and hands the same source to both detectors.
- */
-export function detectMethodsWithDeclaredPolicy(
-  filePath: string,
-  content: string,
-): Set<HttpMethod> {
-  return new Set(detectRoutePolicyKinds(filePath, content).keys())
-}
-
-/**
  * What each HTTP-method export of this file declared — `'public'` or `'guarded'`.
  *
- * The map's KEYS are exactly what `detectMethodsWithDeclaredPolicy` returns (that export is now a
- * projection of this one, so the build gate and the exposure gate can never disagree about which
- * methods declared something). The VALUES are the half ADR 0001 left unanswered at scan time:
- * whether the declaration protects anything.
+ * The KEYS answer the question ADR 0001 asks at build time: which methods declared a policy at all.
+ * The VALUES answer the half it left open until now: whether the declaration protects anything.
+ * One map, so the build gate and the exposure gate cannot disagree about which methods declared.
+ *
+ * `content` is passed in rather than read here so the scanner reads each route file once and hands
+ * the same source to both detectors.
  */
 export function detectRoutePolicyKinds(
   filePath: string,
