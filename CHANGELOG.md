@@ -7,6 +7,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Added
+- **`useAction` — the client half of the action contract, which lived outside this repository.**
+  `theokit/client` shipped `useAgent`, `Link`, `Image` and `Metadata`, and no way to call a server
+  action from a component — even though `core/contracts/action-protocol.ts` opens by calling itself
+  the contract for "`defineAction` + `useAction`" and points the client half at `@theokit/react`.
+  That package has one version, published once in June, no `repository` field, and a
+  `@theokit/sdk ^1.1.0` peer against a published 4.x — so `@theokit/plugin-forms`, which depends on
+  it, cannot be installed without an unmet peer nobody can fix. A failure now arrives as the
+  protocol's own `ActionError`, meaning a validation failure keeps its `fields` map; those classes
+  are exported from `theokit/client` too, so narrowing a client hook's error no longer requires
+  importing the server barrel into a browser bundle (#453)
 - **The webhook signature validators are reachable from the package.** `handleChannelWebhook` takes
   a required `validators` map and its own docblock demonstrates `{ slack: slack({...}), telegram:
   telegram({...}) }` — while `server/webhook` re-exported none of the six providers sitting beside

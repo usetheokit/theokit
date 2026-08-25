@@ -31,6 +31,25 @@ export {
   responseToChunkStream,
   consumeChunkStream,
 } from '@theokit/agents/client'
+// usetheokit/theokit#453 — the action half of the client surface. `core/contracts/action-protocol.ts`
+// has always described itself as the contract for "defineAction + useAction" and pointed the client
+// half at a package published outside this repository; this is that half arriving beside `useAgent`.
+export { useAction } from './use-action.js'
+export type { UseActionResult } from './use-action.js'
+export { ActionClient } from './action-client.js'
+export type { ActionCallable, ActionEnvelope, ActionState, ActionStatus } from './action-client.js'
+// The error hierarchy the hook hands back, re-exported here so a component can narrow it without
+// importing from `theokit/server` — which would pull the server barrel into a browser bundle to
+// read a class defined in `core/contracts/`, a module that depends on nothing.
+export {
+  ActionError,
+  ActionInputError,
+  isActionError,
+  isInputError,
+  type ActionErrorCode,
+  type ActionResult,
+} from '../core/contracts/action-protocol.js'
+
 export { useAgent } from '@theokit/agents/client/react'
 export type {
   PendingApproval,
