@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- **A tool handler may return an object; it no longer throws on the model's first call.** The
+  runtime demanded a string or a `toModelOutput`, and the type said nothing — so the failure arrived
+  inside an agent run, with a provider key and tokens already spent, for something the compiler had
+  the information to catch. Returning an object is the natural shape, so this was the common path:
+  one report had 15 tools, all objects, all of which would have failed in execution. Non-string
+  results are JSON-serialized now, `toModelOutput` still wins when the model should see a different
+  shape, and the explicit error survives for the results no default can serialize — a cycle, a
+  `BigInt`, a function — naming which one it hit (#464)
+
 ### Fixed
 - **A route with a hyphen in its name was unreachable through the generated client.** The generator
   camelCased the segment (`agents-config` → `client.agentsConfig`) while the runtime Proxy builds the
