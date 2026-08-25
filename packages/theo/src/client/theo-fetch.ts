@@ -70,19 +70,41 @@ type ExtractQuery<T> = T extends { query?: infer Q } ? (Q extends z.ZodType ? Q 
 /** Extract the body Zod schema type, handling optional properties */
 type ExtractBody<T> = T extends { body?: infer B } ? (B extends z.ZodType ? B : never) : never
 
-/** Infer query type from a route's query Zod schema */
+/**
+ * Infer the query type a CALLER passes, from a route's query Zod schema.
+ *
+ * `z.input`, not `z.infer` — and the difference is the whole point (usetheokit/theokit#490).
+ * `z.infer` is `z.output`: the value the handler receives AFTER parsing, with defaults filled in
+ * and transforms applied. A client sends the value BEFORE any of that. Typing the request with the
+ * output inverted the two, in two ways that both punished correct schemas:
+ *
+ *   `.default('false')` — a field the querystring may omit became REQUIRED at the call site, which
+ *   is the opposite of what declaring a default means.
+ *
+ *   `.transform(v => v === 'true')` — the caller was asked for the post-transform type, a
+ *   `boolean`, for a value that has to reach the server as a string. The type described something
+ *   that never travels.
+ *
+ * The handler side keeps `z.output`, which is correct there: it reads what parsing produced.
+ */
 export type InferQuery<T> = [ExtractQuery<T>] extends [never]
   ? undefined
   : ExtractQuery<T> extends z.ZodUndefined
     ? undefined
-    : z.infer<ExtractQuery<T>>
+    : z.input<ExtractQuery<T>>
 
-/** Infer body type from a route's body Zod schema */
+/**
+ * Infer the body type a CALLER passes, from a route's body Zod schema.
+ *
+ * Same reasoning as {@link InferQuery}: a JSON body is serialised before it is parsed, so the
+ * caller supplies the input side. For a schema with no `.default()` and no `.transform()` the two
+ * are identical, which is why this only ever shows up on the schemas that use them.
+ */
 export type InferBody<T> = [ExtractBody<T>] extends [never]
   ? undefined
   : ExtractBody<T> extends z.ZodUndefined
     ? undefined
-    : z.infer<ExtractBody<T>>
+    : z.input<ExtractBody<T>>
 
 /**
  * The methods that carry a body — the complement of the safe set `buildRequestInit` deliberately
