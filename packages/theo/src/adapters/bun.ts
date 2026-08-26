@@ -13,6 +13,11 @@ import { deployedCorsFragment, type DeployedCorsOptions } from './deployed-cors.
 import { deployedCsrfFragment, type DeployedCsrfOptions } from './deployed-csrf.js'
 import { planDeployedPlugins } from './deployed-plugins-module.js'
 import {
+  deployedRateLimitFragment,
+  rateLimitCheckFragment,
+  type DeployedRateLimitOptions,
+} from './deployed-rate-limit.js'
+import {
   deployedRuntimeConfigFragment,
   type DeployedRuntimeConfigOptions,
 } from './deployed-runtime-config.js'
@@ -37,7 +42,8 @@ export function renderBunEntry(
     securityHeaders?: SecurityHeadersConfig
   } & DeployedCsrfOptions &
     DeployedRuntimeConfigOptions &
-    DeployedCorsOptions = {},
+    DeployedCorsOptions &
+    DeployedRateLimitOptions = {},
 ): string {
   const streamingComment = opts.ssrStreaming
     ? `// T2.3 — ssrStreaming on; renderStreamingWeb may be consumed by app code`
@@ -74,7 +80,7 @@ export function renderBunEntry(
     ``,
     `import { resolve, join } from 'node:path'`,
     `import { existsSync } from 'node:fs'`,
-    `import { scanServerRoutes, matchRoute, executeRoute, createProductionLoader, extractTraceIdFromRequest, TRACE_HEADER, createCorsWebHandler } from 'theokit/server'`,
+    `import { scanServerRoutes, matchRoute, executeRoute, createProductionLoader, extractTraceIdFromRequest, TRACE_HEADER, createCorsWebHandler${opts.rateLimit === undefined ? '' : ', createRateLimiterWeb'} } from 'theokit/server'`,
     `import { createWebShim } from 'theokit/adapters/web-shim'`,
     `import { buildSecurityHeaders, withSecurityHeaders } from 'theokit/adapters/security-headers'`,
     `// T3.2 — WS bridge for Bun runtime`,
@@ -102,6 +108,8 @@ export function renderBunEntry(
     ...deployedCsrfFragment(opts),
     ``,
     ...deployedCorsFragment(opts.cors, 'bun'),
+    ``,
+    ...deployedRateLimitFragment(opts.rateLimit, 'bun', 'server.requestIP(request)?.address'),
     ``,
     `const routes = existsSync(serverDir) ? scanServerRoutes(serverDir) : []`,
     `const wsRoutes = existsSync(serverDir) ? scanWebSocketRoutes(serverDir) : []`,
@@ -133,6 +141,7 @@ export function renderBunEntry(
     `    // handles is an OPTIONS the browser never gets a CORS answer to.`,
     `    const preflight = corsPreflight(request)`,
     `    if (preflight !== null) return withSecurityHeaders(preflight, SECURITY_HEADERS)`,
+    ...rateLimitCheckFragment(opts.rateLimit, '    '),
     `    return withCors(request, withSecurityHeaders(await handleRequest(request), SECURITY_HEADERS))`,
     `  },`,
     `})`,
@@ -259,7 +268,18 @@ export const bunAdapter: DeployAdapter = {
   // literal and puts the built baseline on every response, the served document
   // included.
   servesAgents: true,
-  appliesConfig: ['securityHeaders', 'csrf', 'disallowed', 'cors', 'serialization', 'plugins'],
+  appliesConfig: [
+    'securityHeaders',
+    'csrf',
+    'disallowed',
+    'cors',
+    'serialization',
+    'plugins',
+    // #508 — bun is the first Web target to ENFORCE a declared limit rather than refuse the
+    // build: `Bun.serve` is long-lived, so the in-process counter survives, and its handler
+    // already receives `server`, whose `requestIP` gives the peer address without a header.
+    'rateLimit',
+  ],
   build(config, cwd, ctx) {
     return buildBun(config, cwd, {}, ctx)
   },

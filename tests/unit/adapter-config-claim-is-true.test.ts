@@ -32,15 +32,30 @@ import { renderNetlifyFunction } from '../../packages/theo/src/adapters/netlify.
 import { renderVercelFunctionEntry } from '../../packages/theo/src/adapters/vercel.js'
 import { resolveAdapter } from '../../packages/theo/src/adapters/registry.js'
 
-/** The targets whose handler is emitted as source, keyed by the name `resolveAdapter` takes. */
-const EMITTED_ENTRIES: Record<string, () => string> = {
+/**
+ * The targets whose handler is emitted as source, keyed by the name `resolveAdapter` takes.
+ *
+ * Each renderer takes the rate limit to declare, because #508 made the distinction matter: a target
+ * that ENFORCES a declared limit emits its limiter only when one is declared, and emitting one
+ * unconditionally would be dead code in every app that declares none. Rendering with an empty
+ * config could not tell "this target has no such capability" from "this app asked for nothing",
+ * and read the second as the first.
+ */
+const EMITTED_ENTRIES: Record<string, (rateLimit?: RateLimit) => string> = {
   vercel: () => renderVercelFunctionEntry({}),
   netlify: () => renderNetlifyFunction({}),
-  bun: () => renderBunEntry(3000, {}),
+  bun: (rateLimit) => renderBunEntry(3000, { rateLimit }),
   'deno-deploy': () => renderDenoEntry(3000, {}),
   'aws-lambda': () => renderAwsLambdaEntry({}),
   cloudflare: () => renderCloudflareWorkerEntry({ ssrStreaming: false }),
 }
+
+/** A limit any target claiming the capability must be able to carry. */
+interface RateLimit {
+  windowMs: number
+  max: number
+}
+const DECLARED_LIMIT: RateLimit = { windowMs: 60_000, max: 100 }
 
 /**
  * What reaching a limiter looks like in an emitted entry.
@@ -51,6 +66,25 @@ const EMITTED_ENTRIES: Record<string, () => string> = {
  */
 const LIMITER_MARKER = /rateLimit|rate-limit|RateLimiter|rateLimiter/
 
+/**
+ * The emitted entry with its import lines removed, which is what the marker is applied to.
+ *
+ * An import is a declaration of intent; wiring is a call. Left in, `import { createRateLimiterWeb }`
+ * alone satisfies a marker looking for `RateLimiter` — so a target could claim the capability,
+ * import the symbol, never call it, and pass. That is precisely the "declaration with nothing
+ * behind it" this file exists to catch, and it was reachable here until #508 made the import
+ * conditional and exposed it.
+ *
+ * The marker stays deliberately broad for the reason stated above it; narrowing the TEXT rather
+ * than the PATTERN keeps that breadth while restoring what the assertion can fail on.
+ */
+function emittedBody(source: string): string {
+  return source
+    .split('\n')
+    .filter((line) => !/^\s*import\b/.test(line))
+    .join('\n')
+}
+
 describe.each(Object.entries(EMITTED_ENTRIES))('%s', (target, render) => {
   it('emits a limiter when it claims to apply rateLimit, and none when it does not', async () => {
     const adapter = await resolveAdapter(target as Parameters<typeof resolveAdapter>[0])
@@ -60,14 +94,24 @@ describe.each(Object.entries(EMITTED_ENTRIES))('%s', (target, render) => {
       declared !== 'runtime-not-emitted-here' &&
       declared.includes('rateLimit')
 
-    const emitted = render()
-    const wiresLimiter = LIMITER_MARKER.test(emitted)
+    // Rendered WITH a limit declared: that is the only state in which the claim is testable.
+    const wiresLimiter = LIMITER_MARKER.test(emittedBody(render(DECLARED_LIMIT)))
 
     expect(
       wiresLimiter,
       claimsRateLimit
-        ? `${target} declares rateLimit in appliesConfig, so the build stays SILENT about it — but its emitted entry reaches no limiter. An operator reading that silence believes the limit applies.`
+        ? `${target} declares rateLimit in appliesConfig, so the build stays SILENT about it — but its emitted entry reaches no limiter even when one is declared. An operator reading that silence believes the limit applies.`
         : `${target} does not declare rateLimit, yet its emitted entry mentions one. Either wire it and add the claim, or remove what is there — the build warning and the code must say the same thing.`,
     ).toBe(claimsRateLimit)
+
+    // The other half of the same honesty, and the reason the renderer takes an argument: a target
+    // that CAN enforce must emit nothing when the app declared nothing. Otherwise every app carries
+    // an inert limiter, and the next reader cannot tell an unused one from a broken one.
+    if (claimsRateLimit) {
+      expect(
+        LIMITER_MARKER.test(emittedBody(render(undefined))),
+        `${target} emits a limiter even though the app declared none — inert code an operator may read as protection.`,
+      ).toBe(false)
+    }
   })
 })
