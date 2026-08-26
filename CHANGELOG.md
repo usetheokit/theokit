@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- **A controller returning binary no longer corrupts it.** Audio, images, PDFs, gzip — anything a controller answered with was decoded as UTF-8 on its way to the client, so every byte `>= 0x80` became the replacement character. A 55 296-byte MP3 arrived as 76 790 bytes that no player would open, under a `200` and a correct `content-type`; the damage was invisible until someone opened the file. File routes were never affected, so this was a silent divergence between two paths meant to be at parity. (#518)
+
 ### Added
 
 - **Usage survives a restart.** `UsageStorageAdapter` was an interface whose every implementation in

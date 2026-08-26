@@ -135,7 +135,23 @@ export async function createControllerDispatcher(opts: {
   }
 }
 
-/** Write a buffered Web `Response` (controllers never stream) to a Node response. */
+/**
+ * Write a controller's Web `Response` to a Node response, byte for byte.
+ *
+ * The body used to be read with `await response.text()`, under a comment asserting that controllers
+ * never stream. The comment was true of this path and hid the real problem: `text()` decodes as
+ * UTF-8, so every byte >= 0x80 became `U+FFFD`. A payload of all 256 byte values arrived as 512
+ * bytes; a 55 296-byte MPEG from `@theokit/plugin-voice` arrived as 76 790 bytes beginning
+ * `ef bf bd`. Status 200, correct content-type, plausible length — invisible until someone opens
+ * the file. File routes were never affected: `executeRoute` pumps the stream, so this was a silent
+ * divergence between two paths meant to be at parity.
+ *
+ * `arrayBuffer()` fixes it without changing anything else. This path stays BUFFERED, exactly as
+ * before — a controller returning a streamed body still has it collected here, so a plugin that
+ * promises progressive delivery does not get it through a controller. That is a real limitation and
+ * a separate change: making it stream alters when bytes reach the client, which is behaviour beyond
+ * the corruption this repairs.
+ */
 async function writeControllerResponse(res: ServerResponse, response: Response): Promise<void> {
   const headersBag: Record<string, string> = {}
   for (const [k, v] of response.headers) {
@@ -144,8 +160,10 @@ async function writeControllerResponse(res: ServerResponse, response: Response):
   const setCookies = response.headers.getSetCookie()
   if (setCookies.length > 0) res.setHeader('Set-Cookie', setCookies)
   res.writeHead(response.status, headersBag)
-  const body = response.body ? await response.text() : ''
-  res.end(body || undefined)
+  // `Buffer.from(ArrayBuffer)` views the bytes as they are. Any string in between is a decode, and
+  // a decode of arbitrary bytes is a loss.
+  const body = response.body ? Buffer.from(await response.arrayBuffer()) : undefined
+  res.end(body !== undefined && body.length > 0 ? body : undefined)
 }
 
 /**
