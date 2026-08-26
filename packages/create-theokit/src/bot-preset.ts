@@ -87,8 +87,18 @@ export function applyBotPreset(options: BotPresetOptions): void {
 /** A section, appended — the template's README is the app's, and this adds to it rather than replacing it. */
 function appendBotReadme(targetDir: string): void {
   const path = join(targetDir, 'README.md')
-  if (!existsSync(path)) return
-  const current = readFileSync(path, 'utf-8')
+  let current: string
+  try {
+    current = readFileSync(path, 'utf-8')
+  } catch (error) {
+    // ENOENT is the one case that means "this template ships no README", and appending to
+    // nothing is a no-op rather than a failure. Every other code (EACCES, EISDIR) is a real
+    // fault: returning on those would scaffold a bot app whose README silently lacks the
+    // section that documents it. Reading straight into the catch also removes the
+    // existsSync-then-read window CodeQL flags as js/file-system-race (CWE-367).
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return
+    throw error
+  }
   writeFileSync(path, `${current}\n${BOT_README_SECTION}`, 'utf-8')
 }
 

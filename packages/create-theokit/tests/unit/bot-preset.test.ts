@@ -13,7 +13,7 @@
  * partial copy is refused rather than shipped, and that it stays a LAYER rather than becoming a
  * second template to keep in sync.
  */
-import { mkdtempSync, existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs'
+import { mkdtempSync, existsSync, rmSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -70,6 +70,17 @@ describe('applyBotPreset', () => {
     // The two things a reader must change first, named where they will look.
     expect(readme).toContain('server/delivery.ts')
     expect(readme).toContain('UTC')
+  })
+
+  it('propagates a README that exists but cannot be read, instead of skipping the section', () => {
+    // The absent-README case is a legitimate no-op, so the append is guarded. The guard used to be
+    // `existsSync(path) || return`, which answered "unreadable" and "absent" with the same silence:
+    // a bot app would scaffold with a README missing the only section documenting its bots, and
+    // nothing would say so. Only ENOENT means absent; every other code is a fault that must surface.
+    const dir = scaffoldedApp()
+    rmSync(join(dir, 'README.md'))
+    mkdirSync(join(dir, 'README.md')) // reading a directory yields EISDIR, not ENOENT
+    expect(() => applyBotPreset({ targetDir: dir })).toThrow()
   })
 
   it('scaffolds two bots, not three — delegation without becoming a demo app', () => {
