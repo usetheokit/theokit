@@ -20,6 +20,7 @@ export type {
 } from './cost-types.js'
 
 export { InMemoryUsageStorage } from './usage-storage-memory.js'
+export { SqliteUsageStorage } from './usage-storage-sqlite.js'
 
 export { trackAgentTools } from './track-agent-tools.js'
 export type {
