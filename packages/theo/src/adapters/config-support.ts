@@ -178,3 +178,54 @@ export function warnUnappliedConfig(
   if (dropped.length === 0) return
   log(`\n${describeUnappliedConfig(target, dropped)}\n`)
 }
+
+/**
+ * A declared rate limit the chosen target cannot enforce.
+ *
+ * Its own class so a caller can distinguish it from a configuration typo — this is not the build
+ * failing to understand the file, it is the build understanding it and refusing the combination.
+ */
+export class UnenforceableRateLimitError extends Error {
+  override readonly name = 'UnenforceableRateLimitError'
+  constructor(readonly target: string) {
+    super(
+      [
+        `Refusing to build for \`${target}\`: theo.config.ts declares a rate limit and this target does not enforce one.`,
+        ``,
+        `  The config reads as protection the deploy will not have. Nothing at runtime reports the`,
+        `  absence, so the first sign is abuse — which is why this refuses rather than warns.`,
+        ``,
+        `  Two honest ways forward:`,
+        `    • build for \`node\` and run \`theokit start\`, which applies the limit; or`,
+        `    • remove \`rateLimit\` from theo.config.ts, so the file states what actually runs.`,
+        ``,
+        `  There is deliberately no flag to keep the key and skip the check: a config that stays`,
+        `  while doing nothing is the state this refusal exists to end (usetheokit/theokit#461).`,
+      ].join('\n'),
+    )
+  }
+}
+
+/**
+ * Refuse a build whose target drops a DECLARED rate limit.
+ *
+ * Only `rateLimit`, and the narrowness is the design. A dropped `cors` or `serialization` degrades
+ * where someone can see it, and `describeUnappliedConfig`'s warning is proportionate for those.
+ * `rateLimit` is the one whose absence looks exactly like success, which is the same reasoning
+ * `MissingRoutePolicyError` applies to an undeclared route policy: refuse where silence would be
+ * read as safety.
+ *
+ * `'runtime-not-emitted-here'` is not judged. That adapter's runtime is someone else's and this
+ * build cannot answer for it; refusing there would be asserting something unmeasured.
+ */
+export function assertRateLimitEnforceable(
+  config: TheoConfig,
+  adapter: Pick<DeployAdapter, 'appliesConfig'>,
+  target: string,
+): void {
+  const applied = adapter.appliesConfig ?? []
+  if (applied === 'runtime-not-emitted-here') return
+  if (!isDeclared(config, 'rateLimit')) return
+  if (applied.includes('rateLimit')) return
+  throw new UnenforceableRateLimitError(target)
+}

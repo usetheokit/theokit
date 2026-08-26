@@ -134,3 +134,97 @@ describe('create-theokit theokit-agents SKILL — defineAgentTool signature (iss
     expect(call).not.toMatch(/\bexecute:/)
   })
 })
+
+const TEMPLATE_FRONTEND_SKILL = resolve(
+  ROOT,
+  'packages/create-theokit/templates/default/dot-claude/skills/theokit-frontend/SKILL.md',
+)
+
+/**
+ * The scaffold ships this skill, so an agent reads it and writes what it says. It taught
+ *
+ *     theoFetch('/api/tasks/:id', { params: { id: 1 } })
+ *
+ * and `TheoFetchOptions` has no `params` — its keys are `RequestInit` minus body/method, plus a
+ * conditional `query` and `body`. The call did not compile, and had it compiled it would have
+ * fetched the literal `:id` (#472).
+ *
+ * `params` is real, but only on the GENERATED client, which knows the route tree. That is exactly
+ * why the wrong example was plausible, and why the guard is per-API rather than a ban on the word.
+ */
+describe('create-theokit theokit-frontend SKILL — the two clients are not the same API (#472)', () => {
+  function skill(): string {
+    return readFileSync(TEMPLATE_FRONTEND_SKILL, 'utf-8')
+  }
+
+  /** The fenced block introduced by a heading, so each API's examples are judged on their own. */
+  function blockUnder(heading: string): string {
+    const md = skill()
+    const at = md.indexOf(heading)
+    expect(at, `SKILL.md must document "${heading}"`).toBeGreaterThan(-1)
+    const open = md.indexOf('```', at)
+    const close = md.indexOf('```', open + 3)
+    expect(close).toBeGreaterThan(open)
+    return md.slice(open, close)
+  }
+
+  it('never offers `params` to theoFetch — the option does not exist there', () => {
+    expect(blockUnder('## Typed API Client (theoFetch)')).not.toMatch(/\bparams\s*:/)
+  })
+
+  it('shows a dynamic route being built into the URL, since nothing interpolates it', () => {
+    expect(blockUnder('## Typed API Client (theoFetch)')).toMatch(/\$\{|\+ *id/)
+  })
+
+  it('uses the generated client with the casing the generator emits', () => {
+    const block = blockUnder('## App Client (proxy-based)')
+    // Measured against `generateClientDts` for `app/tasks/[id]`: `tasks: { id: { get: (opts: {
+    // params: { id: string } } & TheoFetchOptions<…>) } }`.
+    expect(block, 'methods on the generated client are lowercase').not.toMatch(
+      /\.(GET|POST|PUT|DELETE|PATCH)\(/,
+    )
+    expect(block).toMatch(/\.get\(|\.post\(/)
+  })
+
+  it('does not reach a dynamic segment by its colon form', () => {
+    // The generator strips the colon: `client.tasks.id`, never `client.tasks[':id']`.
+    expect(blockUnder('## App Client (proxy-based)')).not.toMatch(/\[['"]:/)
+  })
+})
+
+const TEMPLATE_LAYOUT = resolve(ROOT, 'packages/create-theokit/templates/default/app/layout.tsx')
+const TEMPLATE_CHAT_PAGE = resolve(ROOT, 'packages/create-theokit/templates/default/app/page.tsx')
+
+/**
+ * The shell pins itself to the viewport, so the document never scrolls and SOMETHING inside must.
+ *
+ * `<main>` used to be `overflow-hidden`, which is right for the chat — the log scrolls inside, the
+ * composer pins — and wrong for every page after it: content below the fold was unreachable with
+ * nothing to explain it. Measured in a real app: 2240px of 3090px, nine of eleven cards (#484).
+ *
+ * The default now serves the ordinary page, and the chat declares its own requirement. Both halves
+ * are asserted, because either alone re-creates a bug: a scrolling `<main>` without the chat's
+ * container unpins the composer; the container without the scrolling `<main>` is the old defect.
+ */
+describe('create-theokit shell — an ordinary page scrolls without ceremony (#484)', () => {
+  it('<main> is a scroll container, with the min-h-0 that makes overflow work at all', () => {
+    // `\s+[^>]` requires at least one attribute, so this matches the ELEMENT and not the bare
+    // `<main>` the comment above it mentions in prose. The first draft matched the comment and
+    // failed against a correct layout — a guard reading the documentation it is meant to outlive.
+    const main = readFileSync(TEMPLATE_LAYOUT, 'utf-8').match(/<main\s+[^>]+>/)?.[0] ?? ''
+    expect(main, 'layout.tsx must render a <main>').not.toBe('')
+    expect(main).toMatch(/overflow-y-auto/)
+    // A grid/flex child defaults to `min-height: auto` and refuses to shrink below its content, so
+    // `overflow-y-auto` alone does nothing. Dropping this is the silent half of the regression.
+    expect(main).toMatch(/min-h-0/)
+    expect(main, 'the shell must not clip its routed page').not.toMatch(/overflow-hidden/)
+  })
+
+  it('the chat page brings its own clipping box, so the composer stays pinned', () => {
+    const page = readFileSync(TEMPLATE_CHAT_PAGE, 'utf-8')
+    expect(page).toMatch(/className="[^"]*overflow-hidden[^"]*"/)
+    expect(page, 'the chat box must fill the routed slot and be allowed to shrink').toMatch(
+      /className="[^"]*h-full[^"]*min-h-0[^"]*"/,
+    )
+  })
+})

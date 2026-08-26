@@ -193,14 +193,24 @@ export async function executeRoute(ctx: ExecuteRouteContext): Promise<void> {
       // policy is about to read. A plugin that authenticated the request was then not believed by
       // `evaluateRoutePolicy` three lines later, in every app with a `server/` directory (which is
       // every real app; the executor's own tests pass no `serverDir`, which is why it held).
-      // Middleware wins on a key collision because it runs later — last writer, as before.
       // That the replace was a slip rather than a decision is visible without archaeology:
       // `action-execute.ts` — the sibling executor, same lifecycle, same question — already wrote
       // `Object.assign(p.ctx, result.ctx ?? {})`. Actions merged; routes replaced; nothing recorded
       // a reason for the difference, and only one of the two can be right.
+      //
+      // Middleware wins THIS MERGE on a key collision, because it runs later. It does not win the
+      // request: `applyDecorations` re-runs below and assigns unconditionally, so the full order is
+      //
+      //     hook write  <  middleware write  <  plugin decoration
+      //
+      // The previous sentence here stopped at the merge and read as a claim about the outcome —
+      // the same half-truth the comment below it always carried (#496).
       ctx = { ...ctx, ...((result.ctx ?? {}) as Record<string, unknown>) }
-      // Re-apply decorations on top of middleware-produced ctx so plugin
-      // decorations win when middleware did not set the same key.
+      // Re-apply decorations on top of the merged ctx. They win OUTRIGHT — this loop assigns
+      // `ctx[key] = value` with no guard, so a decoration replaces a value middleware just wrote,
+      // not merely one it left absent. Measured, and pinned by
+      // `tests/unit/ctx-precedence-is-what-the-comments-say.test.ts` so the next reader gets the
+      // rule from something that fails when it changes.
       if (pluginRunner) pluginRunner.applyDecorations(ctx)
     }
 
