@@ -1,6 +1,6 @@
 {
   "name": "@theokit/agents-pty",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "The PTY interactive backend for @theokit/agents — a separate package so a web application does not compile a terminal it will never open.",
   "repository": {
     "type": "git",
