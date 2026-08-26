@@ -260,7 +260,16 @@ async function runAdapterBuild(
   // #409 / #410 — a config key that validates and is then never read makes the
   // deployed app behave as if the operator had not written it, with nothing
   // anywhere saying so. Name it before the build output scrolls past.
-  const { warnUnappliedConfig } = await import('../../adapters/config-support.js')
+  const { warnUnappliedConfig, assertRateLimitEnforceable } =
+    await import('../../adapters/config-support.js')
+
+  // #461 — one of those keys does not get a warning. A dropped `cors` degrades where someone can
+  // see it; a dropped RATE LIMIT looks exactly like success until the abuse it was meant to stop.
+  // #321 and #322 are that lesson twice. So this target/config combination is refused by name,
+  // BEFORE the build writes anything — the same answer `MissingRoutePolicyError` gives an
+  // undeclared route policy, and the public-bind refusal gives an unauthenticated write.
+  assertRateLimitEnforceable(config, adapter, target)
+
   warnUnappliedConfig(config, adapter, target, (message) => {
     console.log(message)
   })
