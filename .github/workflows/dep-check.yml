@@ -1,0 +1,58 @@
+# The blocking half of the ecosystem dependency gate, delegated to the organisation's
+# reusable workflow so the policy lives in one file rather than ten that drift.
+#
+# Source and rationale: https://github.com/usetheokit/.github/tree/main/scripts/dep-check
+#
+# A separate workflow rather than a job inside CI, deliberately. It is offline and
+# fast, so it reports in about a minute — well before the build finishes — and it does
+# not need to be ordered before anything to do that. What actually makes it a gate is
+# marking it required in branch protection; a job ordered first in a workflow that
+# nobody requires blocks nothing.
+#
+# NO `paths:` filter. A path-filtered workflow does not run when a pull request touches
+# nothing it matches, and a required check that never runs deadlocks every unrelated
+# pull request permanently.
+name: Dependency Gate
+
+on:
+  push:
+    branches: [main, develop, workspace]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dep-check-${{ github.ref }}
+  # A cancelled run on an integration branch leaves the commit with no verdict, which
+  # reads the same as a passing one.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/develop' }}
+
+jobs:
+  dep-check:
+    # Deliberately @main rather than a commit SHA, and this is the one place in the
+    # organisation where that is the right call. The blanket pinning policy defends
+    # against a THIRD PARTY moving a ref under us; usetheokit/.github is this same
+    # organisation, on a protected branch, with the same reviewers. What a SHA would buy
+    # here is a guarantee we already have, and what it would cost is the reason the
+    # workflow is reusable at all: pinning ten callers means ten pull requests to correct
+    # the gate once, which is how a central policy stops being central.
+    #
+    # The suppression is anchored ON the `uses:` line, not in the block above it: zizmor
+    # reads the comment attached to the offending line, and a reason parked three lines
+    # up documents a finding that still fails the lint.
+    #
+    # The gate only resolves once usetheokit/.github carries this workflow on main —
+    # merge that repository first.
+    uses: usetheokit/.github/.github/workflows/dep-check.yml@main # zizmor: ignore[unpinned-uses]
+    with:
+      # On an ordinary push only the offline check runs, so the feedback stays about a
+      # minute. The three expensive ones turn on for the release pull request — the last
+      # moment where "who does this strand" and "does the tarball actually install" can
+      # still change a decision. `github.base_ref` is empty outside a pull request, so
+      # these are false on push.
+      run-install-check: ${{ github.base_ref == 'main' }}
+      run-floor-check: ${{ github.base_ref == 'main' }}
+      run-impact-check: ${{ github.base_ref == 'main' }}
