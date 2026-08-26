@@ -41,24 +41,24 @@ concurrency:
 
 jobs:
   dep-check:
-    # Deliberately @main rather than a commit SHA, and this is the one place in the
-    # organisation where that is the right call. The blanket pinning policy defends
-    # against a THIRD PARTY moving a ref under us; usetheokit/.github is this same
-    # organisation, on a protected branch, with the same reviewers. What a SHA would buy
-    # here is a guarantee we already have, and what it would cost is the reason the
-    # workflow is reusable at all: pinning ten callers means ten pull requests to correct
-    # the gate once, which is how a central policy stops being central.
+    # Two things are versioned here and they move differently, which is the whole design.
     #
-    # The suppression is anchored ON the `uses:` line, not in the block above it: zizmor
-    # reads the comment attached to the offending line, and a reason parked three lines
-    # up documents a finding that still fails the lint.
+    # THE WORKFLOW MOVES. `@v1` is a moving major, deliberately unpinned, and the blanket
+    # SHA-pinning policy is suppressed for it below. That policy defends against a THIRD
+    # PARTY moving a ref under us; usetheokit/shared-workflows is this same organisation.
+    # What a SHA would buy is a guarantee we already have, and what it would cost is the
+    # reason a reusable workflow exists: pinning ten callers turns one correction into ten
+    # pull requests, and a central policy that costs ten pull requests is not central.
     #
-    # `@workspace` because that is the only branch usetheokit/.github has, and its default.
-    # This was written `@main` first, on the assumption that every repository in the
-    # organisation follows workspace → develop → main. That one does not, and a `uses:`
-    # naming a branch that does not exist fails at workflow RESOLUTION — before any step
-    # runs, with an error about the workflow rather than about dependencies.
-    uses: usetheokit/.github/.github/workflows/dep-check.yml@workspace # zizmor: ignore[unpinned-uses]
+    # THE TOOL DOES NOT MOVE. @theokit/dep-check is pinned to an exact version inside the
+    # reusable workflow, so a change in what the detector detects is a version bump
+    # somebody reviewed — never something that arrives overnight. A detector that silently
+    # changes what it detects is indistinguishable from the codebase changing, and the
+    # green that follows is believed either way.
+    #
+    # The suppression rides ON the `uses:` line because that is where zizmor reads it; a
+    # reason parked in the block above documents a finding that still fails the lint.
+    uses: usetheokit/shared-workflows/.github/workflows/dep-check.yml@v1 # zizmor: ignore[unpinned-uses]
     with:
       # On an ordinary push only the offline check runs, so the feedback stays about a
       # minute. The three expensive ones turn on for the release pull request — the last
