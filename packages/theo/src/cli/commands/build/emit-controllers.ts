@@ -6,6 +6,8 @@ import { pathToFileURL } from 'node:url'
 
 import {
   CONTROLLER_PREFIX,
+  ROUTE_METHODS,
+  USE_GUARDS,
   getMeta,
   isControllerClass,
   transformControllerSource,
@@ -127,24 +129,141 @@ function isReachable(prefix: string): boolean {
  * the runtime will actually match on, and a regex over source text would disagree with it the first
  * time someone writes the prefix as anything other than a literal.
  */
-async function assertControllerPathsReachable(
-  emitted: readonly { modulePath: string; sourceFile: string }[],
-): Promise<void> {
-  for (const { modulePath, sourceFile } of emitted) {
-    const mod: Record<string, unknown> = await import(pathToFileURL(modulePath).href)
-    for (const exported of Object.values(mod)) {
-      if (typeof exported !== 'function' || !isControllerClass(exported)) continue
-      // The metadata holds `{ prefix }`, not the bare string — measured off a compiled module
-      // rather than assumed, because the first two guesses (a string, and `getMeta(target, key)`)
-      // both type-checked and both threw.
-      const meta = getMeta<{ prefix?: string }>(CONTROLLER_PREFIX, exported)
-      const prefix = meta?.prefix ?? ''
-      if (isReachable(prefix)) continue
-      const name = exported.name || 'a controller'
-      throw new UnreachableControllerPathError(name, prefix, sourceFile)
+function assertControllerPathsReachable(
+  loaded: readonly { cls: ControllerClass; sourceFile: string }[],
+): void {
+  for (const { cls, sourceFile } of loaded) {
+    const meta = getMeta<{ prefix?: string }>(CONTROLLER_PREFIX, cls)
+    const prefix = meta?.prefix ?? ''
+    if (isReachable(prefix)) continue
+    throw new UnreachableControllerPathError(cls.name || 'a controller', prefix, sourceFile)
+  }
+}
+
+/**
+ * The metadata key an explicitly-open controller route sets.
+ *
+ * The counterpart of `'public'` on the file path, and it exists for the same routes: a health
+ * check a load balancer calls with no session, an OAuth callback the provider redirects to. Written
+ * as `@SetMetadata(PUBLIC_ROUTE_METADATA, true)` — `@theokit/http` already ships `SetMetadata`, so
+ * this needs no new decorator (parsimony-ladder.md rung 4).
+ *
+ * It is an opt-out, never a default. A route that is open says so in the file, where review sees
+ * it; a route nobody thought about is the one that ships open, which is the whole reason ADR 0001
+ * made absence stop meaning open on the file path.
+ */
+export const PUBLIC_ROUTE_METADATA = 'theokit:public'
+
+/**
+ * A controller route that declares no access decision at all.
+ *
+ * Distinct from a guard REFUSING a request — that is the system working. This is a route where
+ * nobody wrote down whether it should be reachable, which on the file path is a build failure and
+ * on the decorator path was, until now, silence.
+ *
+ * Measured against theokit@0.56.0: a `@Controller` with no guard answered 200 to a request with no
+ * session, while the file route it would replace answered 403, on the same server in the same
+ * second. The mechanism was never missing — `@UseGuards` works and returns `403 FORBIDDEN`. Only
+ * the refusal of absence was.
+ */
+export class UndeclaredControllerAccessError extends Error {
+  override readonly name = 'UndeclaredControllerAccessError'
+  constructor(
+    readonly controller: string,
+    readonly method: string,
+    readonly verb: string,
+    readonly file: string,
+  ) {
+    super(
+      [
+        `${controller}.${method}() serves ${verb} and declares no access decision.`,
+        ``,
+        `  ${file}`,
+        ``,
+        `  A file route with no \`.policy\` fails this build for the same reason (ADR 0001): a route`,
+        `  nobody thought about is the one that ships open. The decorator path now says the same.`,
+        ``,
+        `  Require a session:`,
+        ``,
+        `      @UseGuards(AuthGuard)   // on the method, or on the @Controller to cover all of them`,
+        ``,
+        `  Or state that it is open on purpose — a health check, an OAuth callback:`,
+        ``,
+        `      @SetMetadata('${PUBLIC_ROUTE_METADATA}', true)`,
+        ``,
+        `  Both are declarations. What is refused is neither.`,
+      ].join('\n'),
+    )
+  }
+}
+
+/**
+ * Refuse any controller route whose access decision nobody wrote down.
+ *
+ * A guard on the CLASS covers every method under it, which is the shape most controllers want and
+ * mirrors how `@UseGuards` already behaves at runtime — the gate must agree with the dispatcher or
+ * it would refuse code that works.
+ *
+ * Read off the compiled module for the reason the prefix check is: decorator metadata is what the
+ * runtime matches on. The per-method key lives on the CLASS with the property name, not on the
+ * prototype and not on the descriptor — measured, after both of those returned `undefined`.
+ */
+function assertControllerAccessDeclared(
+  loaded: readonly { cls: ControllerClass; sourceFile: string }[],
+): void {
+  for (const { cls, sourceFile } of loaded) {
+    // Class level covers every method under it — for BOTH forms. A guard on the class already
+    // behaves that way at runtime, and a controller whose routes are all open (a health group, an
+    // OAuth callback group) must be declarable once for the same reason. Checking one at class
+    // level and not the other would refuse code that is correct.
+    if (getMeta<unknown[]>(USE_GUARDS, cls) !== undefined) continue
+    if (Reflect.getMetadata(PUBLIC_ROUTE_METADATA, cls) === true) continue
+
+    const routes = getMeta<{ verb: string; propertyKey: string }[]>(ROUTE_METHODS, cls) ?? []
+    for (const { verb, propertyKey } of routes) {
+      if (getMeta<unknown[]>(USE_GUARDS, cls, propertyKey) !== undefined) continue
+      // `Reflect` directly, not `getMeta`: `@SetMetadata` writes through `Reflect.defineMetadata`
+      // with the key as given, and `getMeta` is typed for the symbol keys this package defines.
+      if (Reflect.getMetadata(PUBLIC_ROUTE_METADATA, cls, propertyKey) === true) continue
+      throw new UndeclaredControllerAccessError(
+        cls.name || 'a controller',
+        propertyKey,
+        verb,
+        sourceFile,
+      )
     }
   }
 }
+
+/**
+ * Load every emitted controller class once, for both checks below.
+ *
+ * One pass rather than one per check: the alternative loads each module twice and doubles the
+ * surface on which a stale import could fool a gate.
+ *
+ * The `?t=` is a cache-bust. `emitControllerArtifacts` runs once per build process today, so it
+ * changes nothing now — it is here because these are SECURITY gates, and the failure mode if a
+ * watch mode is ever added is one that reads metadata from a version of the file that no longer
+ * exists and passes it. `parsimony-ladder.md` is explicit that security is not what the ladder
+ * trims, and the cost is a query parameter.
+ */
+async function loadEmittedControllers(
+  emitted: readonly { modulePath: string; sourceFile: string }[],
+): Promise<{ cls: ControllerClass; sourceFile: string }[]> {
+  const out: { cls: ControllerClass; sourceFile: string }[] = []
+  for (const { modulePath, sourceFile } of emitted) {
+    const url = `${pathToFileURL(modulePath).href}?t=${Date.now()}`
+    const mod: Record<string, unknown> = await import(url)
+    for (const exported of Object.values(mod)) {
+      if (typeof exported !== 'function' || !isControllerClass(exported)) continue
+      out.push({ cls: exported as ControllerClass, sourceFile })
+    }
+  }
+  return out
+}
+
+/** A class carrying `@Controller` metadata — narrowed once so both checks read the same shape. */
+type ControllerClass = (new (...args: never[]) => unknown) & { name: string }
 
 export async function emitControllerArtifacts(opts: {
   serverDir: string
@@ -178,7 +297,9 @@ export async function emitControllerArtifacts(opts: {
   // AFTER writing, because reading the prefix means loading the compiled module — and a module that
   // failed to compile has already thrown above. Before the manifest, so a refused build leaves no
   // artifact claiming a route that does not answer.
-  await assertControllerPathsReachable(emitted)
+  const loaded = await loadEmittedControllers(emitted)
+  assertControllerPathsReachable(loaded)
+  assertControllerAccessDeclared(loaded)
 
   const manifest: ControllerBuildManifest = { version: 1, modules }
   writeFileSync(

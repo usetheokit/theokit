@@ -37,12 +37,16 @@ function writeController(name: string, prefix: string): void {
   mkdirSync(dir, { recursive: true })
   writeFileSync(
     join(dir, `${name}.controller.ts`),
+    // `@SetMetadata` declares this route open on purpose. Required since #514: a controller route
+    // with no access decision fails the build, and these fixtures are about the PATH check, not
+    // about access — leaving them undeclared would make them fail for the wrong reason.
     `import 'reflect-metadata'
-import { Controller, Get } from '@theokit/http'
+import { Controller, Get, SetMetadata } from '@theokit/http'
 
 @Controller('${prefix}')
 export class ${name[0]!.toUpperCase()}${name.slice(1)}Controller {
   @Get()
+  @SetMetadata('theokit:public', true)
   ping() { return { ok: true } }
 }
 `,
