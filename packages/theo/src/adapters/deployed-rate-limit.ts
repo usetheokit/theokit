@@ -89,7 +89,7 @@ interface BakeableRateLimit {
  * - `routes` needs the matched route, decided after this check. Refusing it is honest today and is
  *   the natural next slice.
  */
-export function bakeableRateLimit(
+function bakeableRateLimit(
   rateLimit: RateLimitConfig | undefined,
   target: string,
 ): BakeableRateLimit | undefined {
