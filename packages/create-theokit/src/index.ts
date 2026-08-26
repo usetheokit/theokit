@@ -18,6 +18,7 @@ import { resolve, join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { applyBareTransform } from './bare-transform.js'
+import { applyBotPreset } from './bot-preset.js'
 import { writeScaffoldFile } from './write-file.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -32,6 +33,8 @@ function isValidProjectName(name: string): boolean {
 
 interface ScaffoldOptions {
   bare?: boolean
+  /** `--preset=bot`: layer the unattended-agent shape over the default template (#467). */
+  botPreset?: boolean
   /** Test-only — force the bare transform to throw to validate EC-4 rollback. */
   _testForceTransformError?: string
 }
@@ -123,6 +126,19 @@ export function scaffold(
       throw new Error(
         `Scaffold rolled back: bare transform failed. Check filesystem perms.\nOriginal error: ${original}`,
       )
+    }
+  }
+
+  // #467 — `--preset=bot` layers over the default template rather than being a second one. Same
+  // rollback discipline as `--bare`: a partial layer leaves an app importing files it does not have,
+  // which fails at build time three steps from the cause.
+  if (options.botPreset) {
+    try {
+      applyBotPreset({ targetDir })
+    } catch (err) {
+      rmSync(targetDir, { recursive: true, force: true })
+      const original = err instanceof Error ? err.message : String(err)
+      throw new Error(`Scaffold rolled back: bot preset failed.\nOriginal error: ${original}`)
     }
   }
 }
