@@ -1,4 +1,4 @@
-import { DatabaseSync } from 'node:sqlite'
+import { createRequire } from 'node:module'
 
 import type { StorageAdapter } from '../storage/storage-types.js'
 
@@ -20,10 +20,21 @@ import type {
  *
  * ## Why `node:sqlite` and not a dependency
  *
- * The engine is already `>=22.12` and the module is built in, so this costs no install time and no
- * native build step — which matters here specifically, because the framework's install weight is
- * itself an open issue (#460). A deployment that wants Postgres implements the same two-method
- * interface; this is the durable DEFAULT, not the only shape.
+ * It costs no install time and no native build step, which matters here specifically because the
+ * framework's install weight is itself an open issue (#460). A deployment that wants Postgres
+ * implements the same two-method interface; this is the durable DEFAULT, not the only shape.
+ *
+ * ## It is NOT available at this package's engine floor
+ *
+ * `engines.node` says `>=22.12`, and `node:sqlite` is not a built-in module there — it became
+ * available unflagged later in the 22.x line. The first version of this file asserted the opposite
+ * ("the engine is already >=22.12 and the module is built in"), which was true on the machine that
+ * wrote it and false on the floor the package promises. CI caught it on the `22.12` leg with
+ * `No such built-in module: node:sqlite`.
+ *
+ * So the module is loaded LAZILY, and a runtime without it gets a refusal that names the reason
+ * rather than an import crash. That is the honest shape for an opt-in adapter behind its own
+ * subpath: a deployment on 22.12 simply does not use this one.
  *
  * Node reports SQLite as experimental. That is a stability warning about the module's API, not
  * about the database, and the surface used here is `exec` / `prepare` / `run` / `get` — the part
@@ -39,15 +50,47 @@ import type {
  * The period is inclusive at BOTH ends, matching `InMemoryUsageStorage` exactly (`t < from ||
  * t > to`). An adapter swap must not change an invoice.
  */
+/** The slice of `node:sqlite` this adapter uses. Named so the lazy load stays typed. */
+interface SqliteDatabase {
+  exec(sql: string): void
+  prepare(sql: string): {
+    run(...params: unknown[]): void
+    get(...params: unknown[]): unknown
+  }
+  close(): void
+}
+
+/**
+ * Load `node:sqlite`, or refuse with the reason.
+ *
+ * `createRequire` rather than a static import: a static one crashes the module at load on any
+ * runtime without it, which would take down anything that so much as imported this file.
+ */
+function loadSqlite(): new (filename: string) => SqliteDatabase {
+  try {
+    const require_ = createRequire(import.meta.url)
+    const mod = require_('node:sqlite') as { DatabaseSync: new (f: string) => SqliteDatabase }
+    return mod.DatabaseSync
+  } catch {
+    throw new Error(
+      'SqliteUsageStorage needs `node:sqlite`, which this Node does not provide ' +
+        `(running ${process.version}). It is not available at this package's engine floor of ` +
+        '22.12 — upgrade Node, or use a different UsageStorageAdapter: the interface is two ' +
+        'methods and `InMemoryUsageStorage` shows the shape.',
+    )
+  }
+}
+
 export class SqliteUsageStorage implements UsageStorageAdapter, StorageAdapter {
   readonly name = 'sqlite'
-  readonly #db: DatabaseSync
+  readonly #db: SqliteDatabase
 
   /**
    * @param filename path to the database file. `':memory:'` is accepted and is a legitimate choice
    *   for a test, but note that it defeats the entire purpose of this class in a deployment.
    */
   constructor(filename: string) {
+    const DatabaseSync = loadSqlite()
     this.#db = new DatabaseSync(filename)
     // WAL so a reader (a dashboard asking for a month's total) does not block the writer recording
     // the run that is happening while it asks.

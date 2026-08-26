@@ -10,10 +10,37 @@
  * Everything else here also passes against the in-memory adapter, so on its own it would prove
  * nothing about durability.
  *
- * `node:sqlite` rather than a dependency: the engine is already `>=22.12`, the module is built in,
- * and the alternative was adding a native driver to a framework whose install time is itself an
- * open issue (#460).
+ * `node:sqlite` rather than a dependency: no install time, no native build step, and the
+ * alternative was adding a native driver to a framework whose install weight is itself an open
+ * issue (#460).
+ *
+ * It is NOT available at this package's engine floor. `engines.node` says `>=22.12` and the module
+ * arrived unflagged later in 22.x, so these SKIP there rather than fail — the adapter is opt-in
+ * behind its own subpath, and a deployment on 22.12 uses a different one. The first version of this
+ * file assumed otherwise and CI's `22.12` leg said `No such built-in module: node:sqlite`.
+ *
+ * The skip is deliberately narrow: only the availability of the module is conditional. If it IS
+ * present, every assertion runs — a skip that swallowed a real failure would be worse than the
+ * gap it covers.
+ *
+ * NOT covered here, and stated rather than left to be discovered: the refusal message itself. It
+ * fires only where the module is absent, which is exactly where these skip. An attempt to simulate
+ * the floor by intercepting module resolution did not work — `createRequire` does not route
+ * builtins through the hook — and a test that appeared to prove it while proving nothing is worse
+ * than this paragraph. What CI's `22.12` leg does verify is the regression that mattered: importing
+ * this file no longer crashes on a runtime without `node:sqlite`.
  */
+
+/** Does this runtime have the module at all? The floor `22.12` does not. */
+const HAS_SQLITE = (() => {
+  try {
+    createRequire(import.meta.url)('node:sqlite')
+    return true
+  } catch {
+    return false
+  }
+})()
+import { createRequire } from 'node:module'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -49,7 +76,7 @@ function llm(userId: string, at: string, input: number, output: number, costUsd:
 
 const WHOLE_2026 = { from: AT('2026-01-01T00:00:00Z'), to: AT('2026-12-31T23:59:59Z') }
 
-describe('SqliteUsageStorage', () => {
+describe.skipIf(!HAS_SQLITE)('SqliteUsageStorage', () => {
   it('sums tokens, cost and runs for a user in a period', async () => {
     const store = new SqliteUsageStorage(file)
     await store.record(llm('u1', '2026-03-01T10:00:00Z', 100, 50, 0.001))
