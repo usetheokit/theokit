@@ -69,10 +69,13 @@ describe('a controller route that declares no access decision fails the build (#
       'sender',
       `@Controller('api/sender')\nexport class SenderController {\n  @Post('send') send() { return {} }\n}`,
     )
-    const err = await emit().catch((e: unknown) => e as Error)
-    expect(err.message).toContain('SenderController')
-    expect(err.message).toContain('send')
-    expect(err.message).toContain('POST')
+    // `await expect(...).rejects` rather than catching into a union: `emit()` resolves to a
+    // manifest, so `.catch(e => e as Error)` types as `Error | ControllerBuildManifest` and every
+    // `.message` read is unchecked. Caught by the workspace typecheck, which covers `tests/` —
+    // `tsc -p packages/theo` does not, which is why running that one alone reported clean.
+    await expect(emit()).rejects.toThrow(/SenderController/u)
+    await expect(emit()).rejects.toThrow(/send/u)
+    await expect(emit()).rejects.toThrow(/POST/u)
   })
 
   it('accepts a guard on the method', async () => {
@@ -105,8 +108,7 @@ describe('a controller route that declares no access decision fails the build (#
       'p',
       `@Controller('api/p')\nexport class PController {\n  @Get('a') @UseGuards(AuthGuard) a() { return {} }\n  @Post('b') b() { return {} }\n}`,
     )
-    const err = await emit().catch((e: unknown) => e as Error)
-    expect(err).toBeInstanceOf(UndeclaredControllerAccessError)
-    expect(err.message).toContain('b')
+    await expect(emit()).rejects.toThrow(UndeclaredControllerAccessError)
+    await expect(emit()).rejects.toThrow(/\bb\b/u)
   })
 })
