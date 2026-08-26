@@ -16,9 +16,25 @@ paths:
 
 `@theokit/ui` is an optional peer dependency. If installed, it provides ready-made AI components for chat + coding-agent surfaces (chat thread, agent events, tool calls, diff viewer, build logs), plus theming. **Never build custom equivalents** of components it provides. Generic primitives (Button, Input, Card, CodeBlock, PageShell, Sidebar, Avatar, Alert, etc.) live in `@usetheo/ui`, which `@theokit/ui` depends on — import those from `@usetheo/ui`.
 
+## Read the catalogue before writing markup
+
+`@theokit/ui` ships **`llms.txt`** — a file written for an agent to read, at
+`node_modules/@theokit/ui/llms.txt`. It lists every component with its purpose and, in a
+**"Which package has what"** table, routes each need to the right package. Read it before building a
+sidebar, a table, a select, a badge or an empty state by hand.
+
+That is not a style preference. A real app built on this scaffold hand-wrote ~600 lines of markup —
+navigation, queue rows, filters, status badges, empty states, a composer — and **every one of them
+already existed** in the two packages the scaffold had installed (usetheokit/theokit#471). The
+components were there; nothing pointed at them.
+
+`@usetheo/ui` has no `llms.txt`; its surface is in its own README and its type definitions.
+
 ## Package Identity
 
-`@theokit/ui` (AI-native, currently `1.0.0`) provides the AI-agent-surface components. Its generic foundation was split into `@usetheo/ui` in the 2026-07-03 AI-exclusive pivot; `@theokit/ui` depends on `@usetheo/ui`, so installing `@theokit/ui` pulls the foundation transitively.
+`@theokit/ui` provides the AI-agent-surface components. (The version this project uses is in
+`package.json`; a number written here goes stale the first time anyone upgrades, and this one
+said `1.0.0` while npm served `1.5.1`.) Its generic foundation was split into `@usetheo/ui` in the 2026-07-03 AI-exclusive pivot; `@theokit/ui` depends on `@usetheo/ui`, so installing `@theokit/ui` pulls the foundation transitively.
 
 ```bash
 # Install from npm (preferred)
