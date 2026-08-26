@@ -283,17 +283,34 @@ function takesCredential(desc: ProviderDescriptor): desc is CredentialedProvider
  *
  * @public
  */
+/**
+ * What a keyless provider reports as its key.
+ *
+ * This was `''` until #501, on the reasoning that an empty string is the honest value for a
+ * provider that needs no credential. The reasoning was sound and the value was wrong: the SDK's
+ * `createLocalAgent` calls `resolveApiKey`, which treats `''` as ABSENT, falls back to
+ * `THEOKIT_API_KEY` — which nobody sets for a local model — and throws `missing_api_key` before it
+ * ever looks at the provider. So #407 opened the registry door and every keyless provider,
+ * including the builtin `ollama`, still could not serve a turn.
+ *
+ * `'local'` is the SDK's own sentinel (`LOCAL_RUNTIME_MOCK_KEY`, `internal/auth/api-key-validator`).
+ * It is not a placeholder credential and does not become one: `validateApiKeyShape` short-circuits
+ * on it, and `mergeExplicitApiKey` excludes it from the credential pools, so it never reaches a
+ * provider as an `authorization` header. That was the objection the old comment raised against any
+ * non-empty value, and it is the reason this specific value is the one that answers it — measured
+ * against @theokit/sdk 4.52.1, where `apiKey: ''` throws `missing_api_key` and `apiKey: 'local'`
+ * builds the agent.
+ */
+const KEYLESS_API_KEY = 'local'
+
 export function resolveProvider(modelId?: string, options?: ResolveOptions): ResolvedProvider {
   const sorted = [...registryOf()].sort((a, b) => a.priority - b.priority)
 
   const declared = modelId === undefined ? undefined : providerOf(modelId, sorted)
   if (declared !== undefined && modelId !== undefined) {
     if (declared.envKey === undefined) {
-      // Keyless — a model on the developer's own machine. The empty string is the honest value and
-      // not a placeholder: the SDK's client sets an `authorization` header only when the key is
-      // non-empty, so anything else would put a meaningless credential on every local request.
       announce(declared, 'declared by the model', options)
-      return { name: declared.name, apiKey: '', baseUrl: baseUrlOf(declared) }
+      return { name: declared.name, apiKey: KEYLESS_API_KEY, baseUrl: baseUrlOf(declared) }
     }
     const apiKey = process.env[declared.envKey]
     if (apiKey && apiKey.length > 0) {
