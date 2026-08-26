@@ -77,6 +77,32 @@ export interface HitlWiring {
     opts: HumanInTheLoopOptions,
     toolName: string,
   ) => Promise<boolean | HitlDecision>
+  /**
+   * OPTIONAL — reach the owner off the stream (usetheokit/theokit#458).
+   *
+   * `emit` above puts the pause into the run's own event stream, and that was the only egress: a
+   * caller not currently consuming it never learned the run was waiting, so the framework's
+   * asynchronous promise held exactly as long as someone was watching.
+   *
+   * This receives the same facts the stream carries and does whatever the APPLICATION does — Slack,
+   * email, a row in a table. Deliberately not a `@theokit/gateway` dependency: this package must not
+   * import from it, and picking a channel is a policy decision the framework does not get to make.
+   *
+   * Fire-and-forget by contract. The run does not wait for it and does not fail on it: a dispatch
+   * outage must not decide whether a gated tool runs, and must not delay the pause it announces.
+   */
+  onApprovalRequired?: (request: ApprovalRequest) => void | Promise<void>
+}
+
+/** What an application is told when a gated tool pauses. The stream's facts, off the stream. */
+export interface ApprovalRequest {
+  approvalId: string
+  toolName: string
+  question: string
+  input: unknown
+  /** Relative, exactly as the stream carries it — the app knows its own base URL; this does not. */
+  callbackUrl: string
+  timeoutMs: number
 }
 
 /**
@@ -106,6 +132,26 @@ export function createHitlPlugin(wiring: HitlWiring): HitlPlugin {
           // M20 — carry the declared custom-payload schema so the UI knows what to collect.
           ...(opts.payloadSchema !== undefined ? { payloadSchema: opts.payloadSchema } : {}),
         })
+        // Announced AFTER the stream and BEFORE the await, without blocking either. A rejected
+        // promise here is swallowed on purpose: see `onApprovalRequired` for why a dispatch failure
+        // must not become the agent's decision.
+        if (wiring.onApprovalRequired !== undefined) {
+          void (async () => {
+            try {
+              await wiring.onApprovalRequired?.({
+                approvalId,
+                toolName: c.name,
+                question: opts.question,
+                input: c.args,
+                callbackUrl: `approve/${approvalId}`,
+                timeoutMs: opts.timeout ?? 300_000,
+              })
+            } catch {
+              // Intentionally ignored — the run's outcome belongs to the human, not to the channel.
+            }
+          })()
+        }
+
         const raw = await wiring.awaitApproval(approvalId, opts, c.name)
         // M20 — normalize the legacy boolean and the decision object to one shape.
         const decision: HitlDecision = typeof raw === 'boolean' ? { approved: raw } : raw
