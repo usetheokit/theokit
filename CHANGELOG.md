@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **The rest of `appliesConfig` is checked against what the adapter emits.** That declaration is
+  what silences `theokit build`'s warning about a dropped config key, and only `rateLimit` was ever
+  verified (#461). A marker regex does not generalise — an entry imports `withSecurityHeaders` and
+  `createCorsWebHandler` whether or not the operator's SETTINGS reach them — so each concern is now
+  rendered twice, once with nothing configured and once with an unmistakable value, and the value
+  must appear. An adapter that imports the mechanism and drops the config emits two identical
+  entries and fails. Five concerns across all six emitted targets. `plugins` is deliberately not
+  covered this way and the test records why: rendering proves a renderer would honour the option,
+  not that the build ever supplies it, and only three of the six do (#478)
+
 ### Fixed
 
 - **`pnpm check:all` runs locally again.** `pnpm lint` is `eslint .`, which needs more heap than
