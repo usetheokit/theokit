@@ -128,8 +128,33 @@ function dataPart(type: string, data: Record<string, unknown>): UIMessageChunk {
  */
 export type MaskError = (error: { message: string; code?: string }) => string
 
-/** The default. A fixed string, matching `ai@7`'s wording so an app moving between them is unsurprised. */
-const MASK_ERROR: MaskError = () => 'An error occurred.'
+/**
+ * Failure codes whose message is the OPERATOR'S OWN INPUT, and is therefore safe — and useful — to
+ * show verbatim (usetheokit/theokit#507).
+ *
+ * #390 masks to stop a driver's message, an HTTP client's or a filesystem call's reaching whoever
+ * loads the page: text that leaks paths, hostnames and internals. A missing or malformed API key is
+ * none of that. There is nobody to leak it to, because the person reading the blank message is the
+ * person who forgot to set the variable — and masking it costs them the first ten minutes of every
+ * misconfiguration, next to a `transient: true` that means "do not persist" here and "retry may
+ * help" everywhere else they have met the word.
+ *
+ * Keyed on CODES, deliberately, and not on the error class. `ConfigurationError` is a large surface
+ * and parts of it do describe internals, so an allowlist keyed on the parent would widen by accident
+ * the first time something new subclasses it. This list cannot drift without someone editing it.
+ *
+ * Adding a code here is a decision about what a browser may read. The bar: could this text name a
+ * host, a path, a query or a credential? If yes, it does not belong.
+ */
+const UNMASKED_CODES: ReadonlySet<string> = new Set(['missing_api_key', 'malformed_api_key'])
+
+/**
+ * The default. A fixed string matching `ai@7`'s wording so an app moving between them is
+ * unsurprised — except for the codes above, which are the operator's own configuration and reach
+ * them intact.
+ */
+const MASK_ERROR: MaskError = (error) =>
+  error.code !== undefined && UNMASKED_CODES.has(error.code) ? error.message : 'An error occurred.'
 
 function* errorChunks(errorText: string, code: string | undefined): Generator<UIMessageChunk> {
   if (code !== undefined) yield dataPart(ERROR_CODE_DATA_PART, { code })
