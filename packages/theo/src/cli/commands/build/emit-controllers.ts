@@ -1,6 +1,6 @@
 import 'reflect-metadata'
 
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join, relative, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
@@ -60,6 +60,61 @@ const CONTROLLER_OUT_DIR = 'controllers'
  * manifest as "this app has no controllers" and skips the whole branch, so a routes-only app pays
  * nothing and its `dist` is byte-identical to before — the ADR-5 posture, kept.
  */
+/**
+ * Point a compiled controller's RELATIVE imports back at the app's own source tree.
+ *
+ * theokit#516 — controllers are compiled into `<distDir>/controllers` because parameter decorators
+ * need metadata only swc emits. File routes are never compiled: in production `importUserModule`
+ * loads them straight from the source, which is why THEIR relative imports resolve. A controller's
+ * did not — `../auth/index.js` resolved from `dist`, where the app does not exist — so a controller
+ * that imported anything of the app's worked under `theokit dev` and failed the build.
+ *
+ * Rewriting to an ABSOLUTE path into the source tree is the smallest fix that keeps one definition
+ * of every module. The alternatives each cost more than they buy: copying the app's modules beside
+ * the controller duplicates them, and bundling inlines them, so in both a module with state exists
+ * twice and the two copies drift.
+ *
+ * The extension is mapped back to what is on disk. TypeScript source writes `./x.js` for `./x.ts`
+ * (NodeNext), and the emitted module has to name the file that exists, since it is loaded by the
+ * same `importUserModule` path a file route takes — `.ts` included.
+ *
+ * BARE specifiers are left exactly as written. `@theokit/http`, `zod` and every other package
+ * resolve through `node_modules` from any directory, so rewriting them would replace something that
+ * works with a path that pins a version.
+ */
+function rewriteLocalImports(code: string, sourceFile: string): string {
+  const fromDir = dirname(sourceFile)
+  return code.replace(
+    /(\bfrom\s*|\bimport\s*\(\s*)(['"])(\.[^'"]*)\2/g,
+    (whole, lead: string, quote: string, spec: string) => {
+      const resolved = resolve(fromDir, spec)
+      const onDisk = existingSourcePath(resolved)
+      if (onDisk === undefined) return whole
+      return `${lead}${quote}${pathToFileURL(onDisk).href}${quote}`
+    },
+  )
+}
+
+/**
+ * The file a compiled specifier names, as it exists on disk — or `undefined` when nothing does.
+ *
+ * `./x.js` may be `x.ts`, `x.tsx`, a literal `x.js`, or a directory holding `index.*`. Returning
+ * `undefined` for the rest is deliberate: a specifier this cannot resolve is left UNCHANGED, so the
+ * runtime reports the missing module by the name the author wrote. Substituting a guess would move
+ * the error somewhere the author never typed.
+ */
+function existingSourcePath(resolved: string): string | undefined {
+  const withoutExt = resolved.replace(/\.(js|mjs|cjs)$/, '')
+  const candidates = [
+    ...(resolved === withoutExt ? [] : [`${withoutExt}.ts`, `${withoutExt}.tsx`, resolved]),
+    ...(resolved === withoutExt ? [`${resolved}.ts`, `${resolved}.tsx`, `${resolved}.js`] : []),
+    join(withoutExt, 'index.ts'),
+    join(withoutExt, 'index.tsx'),
+    join(withoutExt, 'index.js'),
+  ]
+  return candidates.find((c) => existsSync(c))
+}
+
 /**
  * The URL prefix both runtimes gate the controller fall-through on.
  *
@@ -282,7 +337,8 @@ export async function emitControllerArtifacts(opts: {
     // Errors are NOT caught. A controller that fails to compile must fail the BUILD — swallowing it
     // here would ship an app whose routes 404 at runtime with nothing pointing back at the cause,
     // which is the exact failure mode this issue reports (error-handling.md § 2).
-    const code = await transformControllerSource(readFileSync(file, 'utf-8'), file)
+    const compiled = await transformControllerSource(readFileSync(file, 'utf-8'), file)
+    const code = rewriteLocalImports(compiled, file)
 
     // Mirror the source tree under `dist/controllers` so two files with the same basename in
     // different folders cannot overwrite each other.

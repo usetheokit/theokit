@@ -76,15 +76,17 @@ describe('a controller path the runtime cannot reach fails the build', () => {
     rmSync(join(SERVER_DIR, 'controllers'), { recursive: true, force: true })
     writeController('probe', 'probe')
 
-    const err = await emitControllerArtifacts({
-      serverDir: SERVER_DIR,
-      distDir: DIST_DIR,
-    }).catch((e: unknown) => e as Error)
+    // `rejects.toThrow`, not `.catch(e => e as Error)`: `emitControllerArtifacts` RESOLVES to a
+    // manifest, so catching into an alias types as `Error | ControllerBuildManifest` and every
+    // `.message` read after it is unchecked. Same union I removed from the sibling file in
+    // f4a2c43b0 and missed here — the fix went to the file I was looking at rather than to the
+    // pattern.
+    const emit = () => emitControllerArtifacts({ serverDir: SERVER_DIR, distDir: DIST_DIR })
 
     // The three things an operator needs: which controller, what it declared, what to write.
-    expect(err.message).toContain('ProbeController')
-    expect(err.message).toContain('probe')
-    expect(err.message).toContain('api/probe')
+    await expect(emit()).rejects.toThrow(/ProbeController/u)
+    await expect(emit()).rejects.toThrow(/probe/u)
+    await expect(emit()).rejects.toThrow(/api\/probe/u)
   })
 
   it('accepts a prefix under the served path', async () => {
