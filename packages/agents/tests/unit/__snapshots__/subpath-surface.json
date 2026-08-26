@@ -56,18 +56,6 @@
       "WalApplyResult"
     ]
   },
-  "pty": {
-    "values": [
-      "clampYield",
-      "MaxSessionsError",
-      "PtyInteractiveBackend",
-      "YIELD_MAX_MS",
-      "YIELD_MIN_MS"
-    ],
-    "types": [
-      "PtyInteractiveBackendOptions"
-    ]
-  },
   "sandbox": {
     "values": [
       "allowlistedEnv",

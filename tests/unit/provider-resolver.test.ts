@@ -246,11 +246,22 @@ describe('resolveProvider(modelId) routes by the provider the model declares', (
     expect(resolveProvider().name).toBe('openai')
   })
 
-  it('falls back to priority order when the prefix names no registered provider', () => {
+  it('REFUSES a prefix that names no registered provider, instead of falling back (#503)', () => {
     process.env.OPENAI_API_KEY = 'sk-openai'
 
-    // `qwen2.5:3b` has no slash; `acme/whatever` has a slash but no such provider.
-    expect(resolveProvider('acme/whatever').name).toBe('openai')
+    // This assertion was inverted. theokit#326 listed `acme/whatever → previous priority order`
+    // among its outcomes, so the old behaviour was recorded rather than accidental — but it was
+    // recorded without a reason, and the same commit argues the opposite principle two paragraphs
+    // on: "refusing to substitute is the load-bearing part ... falling through to another
+    // provider's key is precisely what made that 401 unattributable."
+    //
+    // #503 measured what that costs when the substitute's key is VALID: the turn succeeds against a
+    // provider nobody named — different endpoint, different account billed, prompt delivered to a
+    // vendor the operator had routed away from. An unregistered prefix is a choice, not a silence,
+    // and #326's own reasoning applies to it.
+    //
+    // `qwen2.5:3b` has no slash and still falls back; that case is asserted above and unchanged.
+    expect(() => resolveProvider('acme/whatever')).toThrow(/not registered/)
   })
 })
 

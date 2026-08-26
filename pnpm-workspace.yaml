@@ -1,6 +1,10 @@
 packages:
   - 'packages/*'
   - 'my-test'
+  # The scratch app the `--preset=bot` CI check scaffolds (#467). Declared for the same reason
+  # `my-test` is: the root install is what links a scaffold to this working tree, and it only links
+  # declared members. Neither directory is committed.
+  - 'my-test-bot'
   - 'examples/*'
   # The @theokit/sdk sibling packages are consumed from the npm registry, not linked: a workspace
   # link would have to sit inside the repo root. For local cross-repo work:

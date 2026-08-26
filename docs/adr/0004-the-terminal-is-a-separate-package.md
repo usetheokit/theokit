@@ -1,8 +1,8 @@
 # ADR 0004 — The terminal is a separate package
 
-- **Status:** Proposed (2026-08-25) — requires the project owner's acceptance
+- **Status:** Accepted (2026-08-26) — implemented as `@theokit/agents-pty` in this repository
 - **Date:** 2026-08-25
-- **Deciders:** requires the project owner's acceptance
+- **Deciders:** project owner (accepted 2026-08-26)
 - **Blocks:** usetheokit/theokit#460; the fourth benchmark metric (time to first green run)
 
 ## Context
@@ -66,7 +66,21 @@ A consumer's migration is one import line and one dependency.
 
 ## Consequences
 
-**Breaking**, and for a named set: anyone importing `@theokit/agents/pty`. The change is mechanical
+**Breaking**, and for a named set: anyone importing `@theokit/agents/pty`.
+
+The subpath itself is KEPT, as a stub that throws with the migration instruction. It imports
+nothing — no dependency, no native build — so it does not undo the change it accompanies. The
+reasoning: removing the specifier outright hands an upgrading consumer `ERR_MODULE_NOT_FOUND` on
+something that worked yesterday, with nothing to search for; the stub spends the same break on a
+sentence. Still a major, because a throw is a break — but one that explains itself.
+
+It throws from the members rather than at module load, so a consumer who merely re-exports the path
+without using it is not broken before their own code runs.
+
+A note on how the blast radius was measured, because the first measurement was wrong: a grep of this
+monorepo found one importer, and that population is not the one a break lands on. It cannot see
+anyone who ran `npm i @theokit/agents` and imported the subpath. The major and the stub are sized for
+the consumers a repository search is blind to. The change is mechanical
 (`@theokit/agents/pty` → the new package) and `tests/unit/subpath-surface.test.ts` already pins the
 six symbols, so the parity claim is checkable rather than asserted.
 
@@ -75,10 +89,23 @@ six symbols, so the parity claim is checkable rather than asserted.
 `@theokit/agents` returns to a dependency set with no native build step, which is the property the
 M79 inversion was fixed to restore.
 
-### What this does NOT decide
+### The two open sub-decisions, and how they were settled
 
-The new package's **name**, and whether it lives in this repository or beside `@theokit/sdk-pty`.
-Both are the owner's call and neither changes the argument above.
+This ADR deliberately left the package's **name** and its **home** to the owner. Both were decided
+on acceptance, and the reasoning is recorded here rather than left implicit in the code:
+
+**Name: `@theokit/agents-pty`.** It reads as what it is — the PTY half of `@theokit/agents` — and it
+keeps the migration mechanical: `@theokit/agents/pty` → `@theokit/agents-pty` is a slash becoming a
+hyphen. The alternative shapes both cost something: `@theokit/pty` loses the association with the
+package it completes, and `@theokit/terminal` names a concept broader than the one thing it carries.
+
+**Home: this repository.** The dependency-direction rule that governed it here has to keep applying,
+and it now asserts inside the new package (`tests/unit/dependency-direction.test.ts`) — the rule
+travelled with the dependency rather than being deleted from one side. Beside `@theokit/sdk-pty`
+would put a `@theokit/*` layer package in the SDK's repo, which inverts the layering this ADR exists
+to protect.
+
+Neither choice changes the argument above; both are named so a reader is not left inferring them.
 
 ## Alternatives considered
 

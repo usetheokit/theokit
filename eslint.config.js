@@ -70,6 +70,8 @@ export default tseslint.config(
       'packages/agents/vitest.config.ts',
       'packages/http/vitest.config.ts',
       'packages/agents/vitest.live.config.ts',
+      'packages/agents-pty/tsup.config.ts',
+      'packages/agents-pty/vitest.config.ts',
     ],
   },
 

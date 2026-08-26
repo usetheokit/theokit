@@ -49,10 +49,30 @@ describe('provider resolver — a local model needs no cloud credential (#407)',
 
     expect(resolved.name).toBe('ollama')
     expect(resolved.baseUrl).toBe('http://localhost:11434')
-    // Empty rather than a placeholder: the SDK's Ollama client sends an `authorization`
-    // header only when the key is non-empty, so a fake value would put a bogus header on
-    // every request to the developer's own machine.
-    expect(resolved.apiKey).toBe('')
+    // `'local'` is the SDK's own keyless sentinel, not a placeholder credential. It was `''` until
+    // #501 — see KEYLESS_API_KEY in provider-resolver.ts for why the honest-looking value was the
+    // one that made every keyless provider unreachable.
+    expect(resolved.apiKey).toBe('local')
+  })
+
+  // The regression test for #501, and it deliberately builds a REAL agent instead of asserting on
+  // the string. The bug survived a suite that already covered this branch because every test that
+  // "proved the mount path accepts a keyless key" handed it to a FAKE agent module, which accepts
+  // whatever it is given. `''` only fails where a real `createLocalAgent` reads it, so that is
+  // where this asserts. Measured against @theokit/sdk 4.52.1: `''` throws `missing_api_key`.
+  it('returns a key the SDK actually accepts — a keyless provider can build an agent', async () => {
+    const { Agent } = await import('@theokit/sdk')
+    const resolved = resolveProvider('ollama/llama3.2', { announce: () => undefined })
+
+    await expect(
+      Agent.builder()
+        .name('keyless-probe')
+        .systemPrompt('probe')
+        .model({ id: 'ollama/llama3.2' })
+        .apiKey(resolved.apiKey)
+        .local({})
+        .create(),
+    ).resolves.toBeDefined()
   })
 
   // Guards the REPORTED endpoint, not the routing: no caller in this framework reads

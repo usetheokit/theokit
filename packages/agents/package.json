@@ -41,10 +41,6 @@
       "types": "./dist/interactive.d.ts",
       "import": "./dist/interactive.js"
     },
-    "./pty": {
-      "types": "./dist/pty.d.ts",
-      "import": "./dist/pty.js"
-    },
     "./auth": {
       "types": "./dist/auth.d.ts",
       "import": "./dist/auth.js"
@@ -96,6 +92,10 @@
     "./usage": {
       "types": "./dist/usage.d.ts",
       "import": "./dist/usage.js"
+    },
+    "./pty": {
+      "types": "./dist/pty.d.ts",
+      "import": "./dist/pty.js"
     }
   },
   "files": [
@@ -135,7 +135,6 @@
   "dependencies": {
     "@theokit/presenter": "workspace:*",
     "@theokit/sdk": "^4.52.1",
-    "@theokit/sdk-pty": ">=0.2.0 <1.0.0",
     "@theokit/sdk-tools": "^0.26.1"
   },
   "publishConfig": {
