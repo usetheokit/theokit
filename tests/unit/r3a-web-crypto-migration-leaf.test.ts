@@ -293,6 +293,12 @@ describe('T5a.1a — leaf-file Web Crypto migration (node:crypto → globalThis.
       'packages/theo/src/server/http/error-pages.ts',
       // Node-adapter scope per ADR-0028 (static-file serving = Node only)
       'packages/theo/src/server/http/static.ts',
+      // Durable usage storage on `node:sqlite` (usetheokit/theokit#459). A leaf in the strict
+      // sense: NOT re-exported from `theokit/server/cost`, which stays Web-Standards, but reached
+      // only through its own `theokit/server/cost/sqlite` subpath. The first attempt did export it
+      // from the barrel, and this invariant is what caught that — an allowlist entry alone would
+      // have recorded the file as Node-only while the barrel went on dragging it onto Workers.
+      'packages/theo/src/server/cost/usage-storage-sqlite.ts',
       // Node-adapter scope: Busboy multipart parser (Node-only); the Web
       // Standards alternative ships at packages/theo/src/server/body-parser-web.ts
       // (zero node:* imports — uses request.formData()).

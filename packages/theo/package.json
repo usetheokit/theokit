@@ -47,6 +47,10 @@
       "types": "./dist/server/cost/index.d.ts",
       "import": "./dist/server/cost/index.js"
     },
+    "./server/cost/sqlite": {
+      "types": "./dist/server/cost/sqlite/index.d.ts",
+      "import": "./dist/server/cost/sqlite/index.js"
+    },
     "./server/cron": {
       "types": "./dist/server/cron/index.d.ts",
       "import": "./dist/server/cron/index.js"

@@ -37,6 +37,13 @@ export default function AboutPage() {
           screen. See <code>docs/ARCHITECTURE.md</code> § Adding a screen. Delete this page when you
           don't need it.
         </p>
+        <p className="text-muted-foreground text-sm leading-relaxed">
+          Before you write markup for that screen, look at what is already installed:{' '}
+          <code>@theokit/ui</code> for agent surfaces and <code>@usetheo/ui</code> for app chrome —
+          sidebars, tables, selects, badges, empty states. The catalogue is{' '}
+          <code>node_modules/@theokit/ui/llms.txt</code>, written to be read by an agent. The README
+          has the routing table.
+        </p>
         <Link to="/" prefetch="intent" className="text-primary text-sm hover:underline">
           ← Back to the chat
         </Link>

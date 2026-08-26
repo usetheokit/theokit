@@ -77,6 +77,30 @@ function registryState({ name, version }) {
   }
 }
 
+/**
+ * Does the tag for this release exist locally?
+ *
+ * `git tag -l <name>` prints the tag when it exists and nothing when it does not, exiting 0 either
+ * way — so the answer is on stdout, not in the status. Checked LOCALLY on purpose: changesets
+ * creates the tags before pushing them, so a local hit with a failed push is precisely the state
+ * this distinguishes, and asking the remote would report the same "absent" for both.
+ */
+function tagState({ name, version }) {
+  const tag = `${name}@${version}`
+  try {
+    // eslint-disable-next-line sonarjs/no-os-command-from-path -- toolchain binary, fixed argv
+    const out = execFileSync('git', ['tag', '-l', tag], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    return out.trim().length > 0 ? 'tagged' : 'absent'
+  } catch (err) {
+    // A git that cannot answer is NOT evidence of an absent tag. Saying so keeps this from
+    // reporting a failure it did not observe — the defect the whole script exists to prevent.
+    return `unknown: ${String(err?.stderr ?? err).split('\n')[0]}`
+  }
+}
+
 const packages = publishablePackages()
 
 // Non-vacuity floor, borrowed from the sibling: checking nothing and reporting green is the defect,
@@ -147,9 +171,48 @@ for (const pkg of pending) {
   console.error(`✗ ${pkg.name}@${pkg.version} was NOT published`)
 }
 
+// The second axis. `changesets publish` and the tag push live in one step, so a push that fails
+// after a successful publish leaves the run red and indistinguishable from one that published
+// nothing — which is the failure the paragraph below reports, and the wrong thing to conclude. An
+// operator who concludes it re-cuts a release against a registry that already has the version
+// (usetheokit/theokit#504).
+const untagged = []
+const untagStateUnknown = []
+for (const pkg of packages) {
+  const state = tagState(pkg)
+  if (state === 'tagged') continue
+  // `unknown` is NOT `absent`, and the first draft of this block treated them the same — failing a
+  // run because git could not answer, which is reporting a state nobody observed. It is the exact
+  // defect this script exists to prevent, written into the script itself.
+  if (state.startsWith('unknown')) untagStateUnknown.push({ ...pkg, state })
+  else untagged.push({ ...pkg, state })
+}
+
+for (const pkg of untagStateUnknown) {
+  console.warn(`⚠ ${pkg.name}@${pkg.version}: could not read the tag — ${pkg.state}`)
+}
+
+if (untagged.length > 0 && missing === 0 && unknown === 0) {
+  console.error('')
+  for (const pkg of untagged) {
+    console.error(`✗ ${pkg.name}@${pkg.version} WAS published, and its tag is ${pkg.state}`)
+  }
+  console.error(
+    `\nThe publish succeeded and the tagging did not — these versions are on the registry with no\n` +
+      'tag pointing at the commit they came from. This is NOT a failed release: do not re-cut it.\n' +
+      'Create the tags against the commit this run published from and push them:\n' +
+      untagged
+        .map((p) => `    git tag -a "${p.name}@${p.version}" <sha> -m "${p.name}@${p.version}"`)
+        .join('\n') +
+      '\n\nWithout them `git describe` cannot name the release and check-changelog-current.mjs\n' +
+      'compares against a tag that is not there.',
+  )
+  process.exit(1)
+}
+
 if (missing > 0 || unknown > 0) {
   console.error(
-    `\nThis release wrote a CHANGELOG entry and a tag for ${String(missing + unknown)} package(s) ` +
+    `\nThis release wrote a CHANGELOG entry for ${String(missing + unknown)} package(s) ` +
       'that are not on the registry. A green pipeline that published nothing is what\n' +
       'usetheokit/theokit#366 reports; the credential and the trusted-publisher configuration are\n' +
       'the two things worth checking first.',
