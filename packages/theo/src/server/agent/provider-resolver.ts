@@ -309,6 +309,27 @@ export function resolveProvider(modelId?: string, options?: ResolveOptions): Res
     )
   }
 
+  // A prefix the registry does not know is a CHOICE, not a silence — refuse before the walk.
+  //
+  // `providerOf` returns `undefined` for an unregistered prefix, which is indistinguishable from a
+  // bare model id, so the priority walk below used to claim the turn and the "not registered" error
+  // further down became unreachable for anyone holding a key. The visible cost was a confusing
+  // message; the real one was a turn that SUCCEEDED against a provider nobody named — different
+  // endpoint, different account billed, prompt delivered to a vendor the operator had routed away
+  // from, announced only by a `console.warn` that fires once per process (#503).
+  //
+  // #326 settled the principle for a registered provider: declared wins, priority is the fallback
+  // for a bare model id. This extends it to the case #326 did not reach — an unregistered prefix is
+  // not a bare model id either.
+  const unregisteredPrefix = declared === undefined ? declaredPrefixOf(modelId) : undefined
+  if (unregisteredPrefix !== undefined) {
+    throw new Error(
+      `Model "${String(modelId)}" declares provider "${unregisteredPrefix}", which is not registered. ` +
+        `Registered providers: ${sorted.map((p) => p.name).join(', ')}. ` +
+        `Register it with registerProvider({ name: '${unregisteredPrefix}', … }), or use a registered prefix.`,
+    )
+  }
+
   // Only providers that take a credential. A keyless entry is reachable exclusively through the
   // declared branch above; see `ProviderDescriptor.envKey` for why the walk cannot include it.
   const credentialed = sorted.filter(takesCredential)
@@ -325,18 +346,12 @@ export function resolveProvider(modelId?: string, options?: ResolveOptions): Res
     }
   }
 
-  // Nothing resolved. When the model id named a provider this registry does not know, say THAT —
-  // the generic message below sent a reader whose id read `groq/…` off to buy an OpenRouter key,
-  // which would not have helped and could not have been the fix (usetheokit/theokit#407).
-  const prefix = declaredPrefixOf(modelId)
-  if (prefix !== undefined) {
-    throw new Error(
-      `Model "${modelId}" declares provider "${prefix}", which is not registered. ` +
-        `Registered providers: ${sorted.map((p) => p.name).join(', ')}. ` +
-        `Register it with registerProvider({ name: '${prefix}', … }), or use a registered prefix.`,
-    )
-  }
-
+  // Nothing resolved, and the model id declared nothing — the unregistered-prefix case was refused
+  // above the walk, which is where it belongs (#503). This message is for the bare-id case only.
+  //
+  // It used to live here and it was the right message in the wrong place: reachable exactly when
+  // the operator had no keys at all, which is the case that needed it least (usetheokit/theokit#407
+  // is why the message exists; #503 is why it moved).
   const envKeys = credentialed.map((p) => p.envKey).join(' OR ')
   throw new Error(
     `No LLM provider API key found in environment. Set one of: ${envKeys}. ` +
