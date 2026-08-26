@@ -44,9 +44,12 @@ jobs:
     # reads the comment attached to the offending line, and a reason parked three lines
     # up documents a finding that still fails the lint.
     #
-    # The gate only resolves once usetheokit/.github carries this workflow on main —
-    # merge that repository first.
-    uses: usetheokit/.github/.github/workflows/dep-check.yml@main # zizmor: ignore[unpinned-uses]
+    # `@workspace` because that is the only branch usetheokit/.github has, and its default.
+    # This was written `@main` first, on the assumption that every repository in the
+    # organisation follows workspace → develop → main. That one does not, and a `uses:`
+    # naming a branch that does not exist fails at workflow RESOLUTION — before any step
+    # runs, with an error about the workflow rather than about dependencies.
+    uses: usetheokit/.github/.github/workflows/dep-check.yml@workspace # zizmor: ignore[unpinned-uses]
     with:
       # On an ordinary push only the offline check runs, so the feedback stays about a
       # minute. The three expensive ones turn on for the release pull request — the last
