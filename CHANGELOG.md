@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- **A release that publishes and then fails to tag now says so, instead of looking like one that
+  published nothing.** `changesets publish` and the tag push share a step, so a push failure lands
+  the run red after a successful publish — the same red as the failure `verify-release-published`
+  was written for, and the opposite advice. Run `32924724608` hit it: `theokit@0.55.0` and
+  `create-theokit@1.24.0` reached npm with provenance, both tags were absent, and an operator
+  reading that red could reasonably have re-cut a release against a registry that already had the
+  version. The guard now reports both axes and prints the `git tag` commands to repair the second.
+  A git that cannot answer is a warning rather than a verdict — its own message used to claim the
+  release "wrote a CHANGELOG entry and a tag" without ever having checked one (#504)
+
 ### Added
 
 - **The rest of `appliesConfig` is checked against what the adapter emits.** That declaration is
