@@ -1,5 +1,48 @@
 # theo
 
+## 0.56.0
+
+### Minor Changes
+
+- 695e042: `theokit build --target bun` now enforces a declared `rateLimit` instead of refusing the build. The limit is keyed on the caller's address as Bun reports it, so each visitor gets their own bucket. The other five Web-standards targets still refuse by name: they run per-invocation, where an in-process counter does not survive between requests, and a limiter that forgets is a limit that does not limit. A `keyBy` function, `keyBy: 'session' | 'user'`, and per-route limits are refused by name on `bun` too, rather than silently dropped.
+- d499d12: Usage survives a restart. `SqliteUsageStorage` is the first durable `UsageStorageAdapter` in the framework.
+
+  The interface existed so a deployment could answer "what did this tenant cost last month", and every implementation in the organisation was in-memory — so no question spanning a process lifetime could be answered at all. For anything that bills, meters or caps per tenant, that is the whole reason to record usage (#459).
+
+  ```ts
+  import { SqliteUsageStorage } from 'theokit/server/cost/sqlite'
+
+  const usage = new SqliteUsageStorage('./.data/usage.db')
+  ```
+
+  Its **own subpath**, not the `theokit/server/cost` barrel. That barrel is Web-Standards — it has to import cleanly on Cloudflare Workers and Deno Deploy, where `node:sqlite` does not exist — so putting this behind it would have made the whole cost subtree unimportable on five of the seven deploy targets. The import path also states the cost at the call site: a deployment writing `theokit/server/cost/sqlite` has said it runs on Node.
+
+  Same two-method contract, same inclusive period boundaries as `InMemoryUsageStorage` — an adapter swap must not change an invoice, so that rule is asserted rather than assumed. Both record kinds are stored; `getUsage` sums only LLM rows, because a tool call has no token or cost dimension and counting it as a run would inflate the total.
+
+  Built on `node:sqlite` rather than a dependency: no install time, no native build step, and adding a native driver to a framework whose install weight is itself an open issue (#460) would have traded one problem for another. A deployment that wants Postgres implements the same interface — this is the durable default, not the only shape.
+
+  `dispose()` closes the handle, unlike the in-memory adapter's noop, so a graceful shutdown does not leave the WAL unmerged.
+
+  **It needs a Node newer than this package's floor.** `engines.node` is `>=22.12` and `node:sqlite` is not a built-in module there — it arrived unflagged later in 22.x. The module is loaded lazily, so importing the subpath is safe everywhere and constructing the adapter on a runtime without it fails with a message that names the reason and points at the interface. A deployment on 22.12 uses a different adapter; that is what opt-in behind its own subpath is for.
+
+- e511d83: A model whose declared provider prefix is not registered is now refused, instead of being routed to whichever provider happens to hold a key.
+
+  `resolveProvider` already carried the right error — _"declares provider X, which is not registered"_ — and it was unreachable for anyone with a key. `providerOf` returns `undefined` for an unregistered prefix, which is indistinguishable from a bare model id, so the env-priority walk claimed the turn before the check below it ever ran.
+
+  The visible symptom was a confusing error. The real cost appears when the substitute's key is **valid**: the turn succeeds against a provider nobody named — a different endpoint, a different account billed, and the prompt delivered to a vendor the operator had explicitly routed away from. The only trace was a `console.warn` reading `(by env priority)`, which fires at most once per process, so on a long-running server it may already have been printed for an unrelated turn.
+
+  **This inverts a case theokit#326 listed as intended.** That commit recorded `acme/whatever → previous priority order` among its outcomes, but gave no reason for it, and argued the opposite principle two paragraphs on: _"refusing to substitute is the load-bearing part … falling through to another provider's key is precisely what made that 401 unattributable."_ An unregistered prefix is a choice, not a silence, so #326's own reasoning applies to it.
+
+  **To upgrade:** a model id like `acme/whatever` that previously resolved by env priority now throws, naming the prefix and the registered providers. Either register it — `registerProvider({ name: 'acme', … })` — or drop the prefix, since a bare id (`gpt-4o-mini`, `qwen2.5:3b`) still falls back to priority exactly as before. A registered prefix still wins over priority, also unchanged.
+
+### Patch Changes
+
+- d8d3f41: A keyless provider can now actually serve a turn. Registering one (or using the builtin `ollama`) resolved correctly but the agent still refused to build with `missing_api_key`: the resolver reported an empty key, and the SDK treats an empty key as an absent one. Local models are reachable without any cloud credential.
+- Updated dependencies [ed68f9f]
+- Updated dependencies [bf623e4]
+- Updated dependencies [8691f5c]
+  - @theokit/agents@12.0.0
+
 ## 0.55.0
 
 ### Minor Changes
