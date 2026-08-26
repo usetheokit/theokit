@@ -228,3 +228,36 @@ describe('create-theokit shell — an ordinary page scrolls without ceremony (#4
     )
   })
 })
+
+const TEMPLATE_UI_SKILL = resolve(
+  ROOT,
+  'packages/create-theokit/templates/default/dot-claude/skills/theokit-ui/SKILL.md',
+)
+const TEMPLATE_README = resolve(ROOT, 'packages/create-theokit/templates/default/README.md.tmpl')
+
+/**
+ * The scaffold installs two component libraries and used to point at neither. A real app built on it
+ * hand-wrote ~600 lines of navigation, rows, filters, badges and empty states that already existed
+ * in the packages already present (#471) — the components were there and nothing said so.
+ */
+describe('create-theokit — the installed components are findable (#471)', () => {
+  it('the UI skill points at the catalogue written for an agent to read', () => {
+    expect(readFileSync(TEMPLATE_UI_SKILL, 'utf-8')).toMatch(/llms\.txt/)
+  })
+
+  it('the UI skill does not pin a version number that goes stale', () => {
+    // It said "currently `1.0.0`" while npm served 1.5.1. A document cannot hold a moving number;
+    // `package.json` does. Matches an `X.Y.Z` in backticks, which is how the claim was written.
+    const skill = readFileSync(TEMPLATE_UI_SKILL, 'utf-8')
+    const claim = skill.match(/currently `\d+\.\d+\.\d+`/)
+    expect(claim, `the skill states a version: ${claim?.[0] ?? ''}`).toBeNull()
+  })
+
+  it('the README routes both packages, so neither is discovered by accident', () => {
+    const readme = readFileSync(TEMPLATE_README, 'utf-8')
+    expect(readme).toMatch(/@theokit\/ui/)
+    expect(readme).toMatch(/@usetheo\/ui/)
+    // Naming them is not enough — the reader needs to know which one to reach for.
+    expect(readme).toMatch(/llms\.txt/)
+  })
+})
