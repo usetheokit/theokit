@@ -1,7 +1,15 @@
+import 'reflect-metadata'
+
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join, relative, resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
 
-import { transformControllerSource } from '@theokit/http'
+import {
+  CONTROLLER_PREFIX,
+  getMeta,
+  isControllerClass,
+  transformControllerSource,
+} from '@theokit/http'
 
 import { findControllerFiles } from '../../../server/http/controller-dispatch.js'
 
@@ -50,6 +58,94 @@ const CONTROLLER_OUT_DIR = 'controllers'
  * manifest as "this app has no controllers" and skips the whole branch, so a routes-only app pays
  * nothing and its `dist` is byte-identical to before — the ADR-5 posture, kept.
  */
+/**
+ * The URL prefix both runtimes gate the controller fall-through on.
+ *
+ * `start/handlers.ts` and `vite-plugin/api-middleware.ts` each return early unless the request URL
+ * starts with `/api/`, so a controller declaring anything else describes a path that branch never
+ * visits. Written here as a constant rather than a literal in the check, because the day that gate
+ * moves this is the line that has to move with it.
+ */
+const SERVED_PREFIX = 'api'
+
+/**
+ * A controller compiled successfully and mounted at a path the runtime never routes to.
+ *
+ * Its own class so a caller can tell it from a compile failure: the source is fine, the decorators
+ * are fine, and the app would start — the route simply answers 404 forever. That is the failure
+ * this module's docblock already refuses for compile errors, reached by a different road.
+ *
+ * Measured against `theokit@0.56.0`: `@Controller('probe')` built clean, emitted a module, wrote
+ * the manifest, and `/api/probe` returned 404. `/probe` returned **200** — the SPA fallback serving
+ * `index.html`, so the status code agreed with success while the body was a web page. A defect that
+ * survives a status-code check is exactly the kind a build gate has to catch instead.
+ */
+export class UnreachableControllerPathError extends Error {
+  override readonly name = 'UnreachableControllerPathError'
+  constructor(
+    readonly controller: string,
+    readonly declaredPath: string,
+    readonly file: string,
+  ) {
+    super(
+      [
+        `${controller} declares \`@Controller('${declaredPath}')\`, which this runtime never routes to.`,
+        ``,
+        `  ${file}`,
+        ``,
+        `  Controller routes are served from a fall-through that runs only for URLs under`,
+        `  \`/${SERVED_PREFIX}/\` — a file-route miss is what reaches it. A path outside that`,
+        `  prefix compiles, emits, and then answers 404 for the life of the app.`,
+        ``,
+        `  Write it as:`,
+        ``,
+        `      @Controller('${SERVED_PREFIX}/${declaredPath.replace(/^\/+/, '')}')`,
+        ``,
+        `  Refused at build rather than left to 404, for the reason this module already refuses a`,
+        `  compile error: shipping a route nothing can reach, with nothing pointing back at why.`,
+      ].join('\n'),
+    )
+  }
+}
+
+/**
+ * Is `prefix` reachable from the served path?
+ *
+ * `'api'`, `'/api'`, `'api/x'` and `'/api/x'` are the same URL written four ways, so all four pass:
+ * the gate is about reachability, not spelling. A prefix that merely STARTS with the letters —
+ * `'apiary'` — is not, which is why the check is segment-wise rather than a `startsWith`.
+ */
+function isReachable(prefix: string): boolean {
+  const segments = prefix.split('/').filter((s) => s.length > 0)
+  return segments[0] === SERVED_PREFIX
+}
+
+/**
+ * Refuse any emitted controller whose declared path the runtime cannot route to.
+ *
+ * Reads the prefix off the COMPILED module rather than the source: the decorator metadata is what
+ * the runtime will actually match on, and a regex over source text would disagree with it the first
+ * time someone writes the prefix as anything other than a literal.
+ */
+async function assertControllerPathsReachable(
+  emitted: readonly { modulePath: string; sourceFile: string }[],
+): Promise<void> {
+  for (const { modulePath, sourceFile } of emitted) {
+    const mod: Record<string, unknown> = await import(pathToFileURL(modulePath).href)
+    for (const exported of Object.values(mod)) {
+      if (typeof exported !== 'function' || !isControllerClass(exported)) continue
+      // The metadata holds `{ prefix }`, not the bare string — measured off a compiled module
+      // rather than assumed, because the first two guesses (a string, and `getMeta(target, key)`)
+      // both type-checked and both threw.
+      const meta = getMeta<{ prefix?: string }>(CONTROLLER_PREFIX, exported)
+      const prefix = meta?.prefix ?? ''
+      if (isReachable(prefix)) continue
+      const name = exported.name || 'a controller'
+      throw new UnreachableControllerPathError(name, prefix, sourceFile)
+    }
+  }
+}
+
 export async function emitControllerArtifacts(opts: {
   serverDir: string
   distDir: string
@@ -62,6 +158,7 @@ export async function emitControllerArtifacts(opts: {
   mkdirSync(outDir, { recursive: true })
 
   const modules: string[] = []
+  const emitted: { modulePath: string; sourceFile: string }[] = []
   for (const file of files) {
     // Errors are NOT caught. A controller that fails to compile must fail the BUILD — swallowing it
     // here would ship an app whose routes 404 at runtime with nothing pointing back at the cause,
@@ -75,7 +172,13 @@ export async function emitControllerArtifacts(opts: {
     mkdirSync(dirname(outPath), { recursive: true })
     writeFileSync(outPath, code)
     modules.push(`${CONTROLLER_OUT_DIR}/${rel.split('\\').join('/')}`)
+    emitted.push({ modulePath: outPath, sourceFile: file })
   }
+
+  // AFTER writing, because reading the prefix means loading the compiled module — and a module that
+  // failed to compile has already thrown above. Before the manifest, so a refused build leaves no
+  // artifact claiming a route that does not answer.
+  await assertControllerPathsReachable(emitted)
 
   const manifest: ControllerBuildManifest = { version: 1, modules }
   writeFileSync(
