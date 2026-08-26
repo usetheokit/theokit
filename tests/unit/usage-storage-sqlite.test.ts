@@ -19,7 +19,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { SqliteUsageStorage } from '../../packages/theo/src/server/cost/usage-storage-sqlite.js'
+import { SqliteUsageStorage } from '../../packages/theo/src/server/cost/sqlite/index.js'
 
 let dir: string
 let file: string

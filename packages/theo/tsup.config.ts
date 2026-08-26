@@ -17,6 +17,9 @@ export default defineConfig([
       'server/agent/index': 'src/server/agent/index.ts',
       'server/auth/index': 'src/server/auth/index.ts',
       'server/cost/index': 'src/server/cost/index.ts',
+      // Its own door on purpose — `node:sqlite` must not ride the Web-Standards cost barrel
+      // onto an edge runtime (usetheokit/theokit#459).
+      'server/cost/sqlite/index': 'src/server/cost/sqlite/index.ts',
       'server/cron/index': 'src/server/cron/index.ts',
       'server/define/index': 'src/server/define/index.ts',
       'server/http/index': 'src/server/http/index.ts',
@@ -69,6 +72,15 @@ export default defineConfig([
       options.sourcesContent = false
     },
     clean: true,
+    // tsup strips the `node:` prefix by default (`removeNodeProtocol`, on for backwards compat with
+    // Node < 14.18). Harmless for legacy builtins — bare `fs` and `path` resolve — and FATAL for the
+    // ones Node exposes only under the protocol: `node:sqlite` was emitted as `from "sqlite"`, which
+    // resolves to a package nobody installed. The source was right and the ARTIFACT was broken, and
+    // only a smoke test importing from `dist/` caught it (usetheokit/theokit#459).
+    //
+    // esbuild is not the culprit and was measured before this line was written: it preserves
+    // `node:sqlite` at node20, node22 and esnext alike.
+    removeNodeProtocol: false,
     target: 'node20',
     external: [
       '@theokit/presenter',
