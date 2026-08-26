@@ -27,7 +27,10 @@
  * the implementation and silently change what the model receives. That is Risk R8, and it is the
  * reason this file asserts the block shape rather than merely the symbol's presence.
  */
+import { writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
@@ -58,11 +61,38 @@ function installedSdkToolsHasViewImage(): boolean {
 
 const UPSTREAM_HAS_IT = installedSdkToolsHasViewImage()
 
+/** The forwarded factory, reached through the layer — which is the seam under test. */
+function viewImageTool(): { handler: (input: { path: string }) => unknown } {
+  return (
+    toolsEntry as unknown as {
+      createViewImageTool: (o: { projectRoot: string }) => {
+        // `unknown` alone, not `Promise<unknown> | unknown`: the union is redundant — `unknown`
+        // already admits a promise — and `await` on a non-promise is a no-op, so both shapes are
+        // handled by awaiting the result at the call site.
+        handler: (input: { path: string }) => unknown
+      }
+    }
+  ).createViewImageTool({ projectRoot: tmpdir() })
+}
+
+/**
+ * A real 1x1 PNG on disk, because the tool reads bytes and sniffs the extension. A fixture
+ * committed to the repository would be a binary nobody can review in a diff; a file written here
+ * is three lines and the test says what it contains.
+ */
+async function writeScratchPng(): Promise<{ name: string; base64: string }> {
+  const base64 =
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+  const name = `dep-check-view-image-${process.pid}.png`
+  await writeFile(join(tmpdir(), name), Buffer.from(base64, 'base64'))
+  return { name, base64 }
+}
+
 if (!UPSTREAM_HAS_IT) {
   console.warn(
     '[tools-view-image-parity] SKIPPED — the installed @theokit/sdk-tools does not export ' +
-      'createViewImageTool. It was committed 2026-08-14 without a version bump; 0.27.0 is prepared ' +
-      'in theokit-sdk and awaits the release gate. crossval-4-6-absorption T1.2 is blocked on it.',
+      'createViewImageTool. It shipped in 0.27.0 and this package depends on ^0.27.1, so a skip ' +
+      'here now means the installed tree is older than the manifest claims, not that upstream is short.',
   )
 }
 
@@ -93,26 +123,26 @@ describe('T1.2 — the image tool crosses the layer seam', () => {
     ).toEqual([])
   })
 
-  it.skipIf(!UPSTREAM_HAS_IT)('test_sdk_view_image_emits_an_image_content_block', () => {
-    // Risk R8 — the adoption task must not assume a drop-in. The SDK's toModelOutput returns the
-    // IMAGE BLOCK ALONE on success; the consumer's returns a text line plus the image. Both are
-    // defensible; they are not identical, and the difference is what the model sees.
-    const tool = (
-      toolsEntry as unknown as {
-        createViewImageTool: (o: { projectRoot: string }) => {
-          toModelOutput?: (out: string) => unknown
-        }
-      }
-    ).createViewImageTool({ projectRoot: process.cwd() })
+  it.skipIf(!UPSTREAM_HAS_IT)('test_sdk_view_image_emits_an_image_content_block', async () => {
+    // Risk R8 — the adoption task must not assume a drop-in. The SDK emits the IMAGE BLOCK ALONE on
+    // success; the consumer's local tool emits a text line plus the image. Both are defensible; they
+    // are not identical, and the difference is what the model sees.
+    //
+    // Observed through `handler`, not `toModelOutput`. The shaping is applied INSIDE the factory —
+    // `Tool.create` consumes the `toModelOutput` it is given and the returned tool exposes only
+    // `name`, `description`, `inputSchema` and `handler`, which `view-image.ts` states in its own
+    // header: "the factory has already applied the shaping. There is no `tool.toModelOutput` left to
+    // call." Asserting on a property the surface does not carry tests the test, not the tool.
+    const tool = viewImageTool()
+    const png = await writeScratchPng()
 
-    expect(typeof tool.toModelOutput, 'the factory must expose toModelOutput').toBe('function')
+    const blocks = await tool.handler({ path: png.name })
 
-    const blocks = tool.toModelOutput?.(
-      JSON.stringify({ ok: true, path: 'a.png', media_type: 'image/png', bytes: 3, data: 'AAA' }),
+    expect(Array.isArray(blocks), 'a readable image must reach the model as content blocks').toBe(
+      true,
     )
-    expect(Array.isArray(blocks)).toBe(true)
     expect(blocks).toEqual([
-      { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'AAA' } },
+      { type: 'image', source: { type: 'base64', media_type: 'image/png', data: png.base64 } },
     ])
 
     // The recorded divergence: exactly one block, no leading text. The consumer's local tool emits
@@ -123,19 +153,14 @@ describe('T1.2 — the image tool crosses the layer seam', () => {
     ).toBe(1)
   })
 
-  it.skipIf(!UPSTREAM_HAS_IT)('test_a_failed_read_stays_text_so_the_model_can_retry', () => {
-    const tool = (
-      toolsEntry as unknown as {
-        createViewImageTool: (o: { projectRoot: string }) => {
-          toModelOutput?: (out: string) => unknown
-        }
-      }
-    ).createViewImageTool({ projectRoot: process.cwd() })
+  it.skipIf(!UPSTREAM_HAS_IT)('test_a_failed_read_stays_text_so_the_model_can_retry', async () => {
+    const tool = viewImageTool()
 
-    const failure = JSON.stringify({ ok: false, reason: 'not_found' })
-    expect(
-      tool.toModelOutput?.(failure),
-      'a failure must stay text — an error is not something to look at, and the model needs to read it',
-    ).toBe(failure)
+    const output = await tool.handler({ path: 'a-file-that-is-not-there.png' })
+
+    // A string, not blocks: an error is not something to look at, and the model needs to read it.
+    // The envelope shape is the source's, so this asserts the channel rather than the wording.
+    expect(typeof output, 'a failure must stay text').toBe('string')
+    expect(JSON.parse(output as string)).toMatchObject({ ok: false, error: 'not_found' })
   })
 })
