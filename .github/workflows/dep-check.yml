@@ -20,6 +20,15 @@ on:
   pull_request:
     branches: [main, develop]
   workflow_dispatch:
+    inputs:
+      full:
+        description: |
+          Run the expensive legs too — the suite at the floor of every declared range, a real
+          install of the packed tarball, and the list of consumers this release would strand.
+          They are on automatically for a pull request into main; this makes them reachable
+          without opening one, which is how the gate gets exercised before it has to matter.
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -56,6 +65,6 @@ jobs:
       # moment where "who does this strand" and "does the tarball actually install" can
       # still change a decision. `github.base_ref` is empty outside a pull request, so
       # these are false on push.
-      run-install-check: ${{ github.base_ref == 'main' }}
-      run-floor-check: ${{ github.base_ref == 'main' }}
-      run-impact-check: ${{ github.base_ref == 'main' }}
+      run-install-check: ${{ github.base_ref == 'main' || inputs.full == true }}
+      run-floor-check: ${{ github.base_ref == 'main' || inputs.full == true }}
+      run-impact-check: ${{ github.base_ref == 'main' || inputs.full == true }}
