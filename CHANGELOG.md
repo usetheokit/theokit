@@ -6,6 +6,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **Usage survives a restart.** `UsageStorageAdapter` was an interface whose every implementation in
+  the organisation was in-memory, so the question it exists to answer — what did this tenant cost
+  last month — died with the process. `SqliteUsageStorage` is the durable default, on its own
+  `theokit/server/cost/sqlite` subpath because the cost barrel is Web-Standards and `node:sqlite`
+  does not exist on an edge runtime. It also does not exist at this package's engine floor of 22.12,
+  so the module loads lazily and a runtime without it gets a refusal naming the reason (#459)
+
+- **A paused agent run can reach someone who is not watching.** The approval went into the run's own
+  event stream and nowhere else, so "the agent works and comes back when it needs your approval"
+  held only while a client was attached. `HitlWiring.onApprovalRequired` is opt-in and
+  transport-agnostic — not a `@theokit/gateway` dependency, because choosing a channel is the
+  application's policy. Fire-and-forget in both directions that matter: it does not delay the pause
+  it announces, and a dispatch failure cannot decide whether a gated tool runs (#458)
+
+### Fixed
+
+- **A release that publishes and then fails to tag now says which half broke.** `changesets publish`
+  and the tag push share a step, so a push failure lands the same red as a run that published
+  nothing — and the two need opposite reactions. The guard reports both axes and prints the `git tag`
+  commands to repair the second; its own message had been claiming the release "wrote a CHANGELOG
+  entry and a tag" without ever checking one (#504)
+
+- **The build stripped the `node:` prefix, so the dist imported packages nobody installed.** tsup's
+  `removeNodeProtocol` is on by default for Node < 14.18 compatibility. Harmless for legacy builtins
+  — bare `fs` resolves — and fatal for the ones Node exposes only under the protocol. Every builtin
+  now keeps its prefix in the published output, which is the modern form anyway (#459)
+
 
 ## [theokit 0.55.0, create-theokit 1.24.0] - 2026-08-26
 
