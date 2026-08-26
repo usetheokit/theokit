@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+
+## [theokit 0.55.0, create-theokit 1.24.0] - 2026-08-26
+
+Six issues, five of them the same shape: a declaration that outran the code — a comment, a
+skill, a layout premise, an adapter claim, a CI-only setting. The sixth turns a warning into a
+refusal for the one config key whose absence looks like success.
+
 ### Fixed
 
 - **A release that publishes and then fails to tag now says so, instead of looking like one that
@@ -18,8 +25,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   A git that cannot answer is a warning rather than a verdict — its own message used to claim the
   release "wrote a CHANGELOG entry and a tag" without ever having checked one (#504)
 
-### Added
-
 - **The rest of `appliesConfig` is checked against what the adapter emits.** That declaration is
   what silences `theokit build`'s warning about a dropped config key, and only `rateLimit` was ever
   verified (#461). A marker regex does not generalise — an entry imports `withSecurityHeaders` and
@@ -29,8 +34,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   entries and fails. Five concerns across all six emitted targets. `plugins` is deliberately not
   covered this way and the test records why: rendering proves a renderer would honour the option,
   not that the build ever supplies it, and only three of the six do (#478)
-
-### Fixed
 
 - **`pnpm check:all` runs locally again.** `pnpm lint` is `eslint .`, which needs more heap than
   Node's default on this repository — and the only place that said so was `ci.yml`, at workflow
@@ -47,6 +50,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   assigns unconditionally. The real order is hook write < middleware write < plugin decoration, and
   a test now pins it — a comment cannot hold a precedence rule, which is how both got it wrong at
   once (#496)
+
+- **A deploy target claiming to apply `rateLimit` is now checked against what it emits.** The
+  declaration in `appliesConfig` is what silences the build warning, so adding `'rateLimit'` to an
+  adapter's list without wiring anything would tell the operator they are protected and remove the
+  one line that said otherwise — #321 one level up, with the operator's attention removed too. The
+  contract test that introduced the declaration named this hole about itself ("a wrong claim here is
+  indistinguishable from a right one"); for the six Web-standards targets the handler is emitted as
+  source, so the claim is now compared against it. `node` is out of scope by construction and says
+  so: it applies the limit in `theokit start`, not in an emitted file (#461)
+
+## [theokit 0.54.0, 0.54.1] - 2026-08-25
+
+A route table nobody protected could still bind every interface, and the two things that had to
+be true first: `HOST` reaching the listener, and a plugin being believed when it authenticates.
 
 ### Security
 
@@ -79,16 +96,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   declare `'public'` and check by hand in each handler. Routes now merge, as the action executor
   beside them always did (#486)
 
-- **A deploy target claiming to apply `rateLimit` is now checked against what it emits.** The
-  declaration in `appliesConfig` is what silences the build warning, so adding `'rateLimit'` to an
-  adapter's list without wiring anything would tell the operator they are protected and remove the
-  one line that said otherwise — #321 one level up, with the operator's attention removed too. The
-  contract test that introduced the declaration named this hole about itself ("a wrong claim here is
-  indistinguishable from a right one"); for the six Web-standards targets the handler is emitted as
-  source, so the claim is now compared against it. `node` is out of scope by construction and says
-  so: it applies the limit in `theokit start`, not in an emitted file (#461)
+## [theokit 0.53.0] - 2026-08-25
 
-### Changed
+The generated client mirrors its URLs and carries its types; a tool handler may return an object.
+
+### Fixed
 
 - **A tool handler may return an object; it no longer throws on the model's first call.** The
   runtime demanded a string or a `toModelOutput`, and the type said nothing — so the failure arrived
@@ -98,8 +110,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   results are JSON-serialized now, `toModelOutput` still wins when the model should see a different
   shape, and the explicit error survives for the results no default can serialize — a cycle, a
   `BigInt`, a function — naming which one it hit (#464)
-
-### Fixed
 
 - **A route with a hyphen in its name was unreachable through the generated client.** The generator
   camelCased the segment (`agents-config` → `client.agentsConfig`) while the runtime Proxy builds the
