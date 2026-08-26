@@ -79,6 +79,24 @@ your environment.
 Deeper detail lives in [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md);
 customization and environment variables have their own pages beside it.
 
+## What is already installed
+
+Two component libraries come with this template, and the split is by **what a component is for**,
+not by how generic it looks:
+
+| You need | Import from | Examples |
+| --- | --- | --- |
+| Agent surfaces — chat, streaming, tool calls, approvals | **`@theokit/ui`** | `ChatThread`, `ChatMessage`, `ChatComposer`, `ToolCallCard`, `AgentStream` |
+| App chrome — shell, navigation, tables, forms, feedback | **`@usetheo/ui`** | `Sidebar`, `PageShell`, `DataTable`, `Select`, `FormField`, `Badge`, `EmptyState`, `Alert`, `Dialog`, `CommandPalette` |
+
+This template uses a handful of them. The rest are installed and waiting — **check before you write
+markup by hand.** A real app built on this scaffold hand-wrote around 600 lines of navigation, rows,
+filters, badges and empty states that already existed in these two packages
+(usetheokit/theokit#471).
+
+The catalogue is `node_modules/@theokit/ui/llms.txt` — written to be read by an agent, and it
+carries the routing table above in full.
+
 ## Adding a screen
 
 Routing is file-based: a screen is a folder under `app/` with a `page.tsx`.

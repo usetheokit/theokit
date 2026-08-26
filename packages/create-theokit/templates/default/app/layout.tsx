@@ -15,13 +15,23 @@ export default function RootLayout() {
     <div className="grid h-screen w-screen grid-rows-[auto_1fr] bg-background text-foreground">
       <Header />
       {/*
+        `<main>` SCROLLS. The shell pins itself to the viewport (`h-screen`), so the document never
+        scrolls and something inside has to — and the default is here, where an ordinary page gets
+        it for free. It used to be `overflow-hidden`, which is right for the chat and wrong for
+        every other page: content below the fold was simply unreachable, with nothing to explain it
+        (usetheokit/theokit#484). A page with the unusual requirement declares it; the common one
+        should not have to.
+
+        `min-h-0` is the non-obvious half. This is a grid child, and a grid/flex child defaults to
+        `min-height: auto` — it refuses to shrink below its content, so `overflow-y-auto` alone does
+        nothing at all. Whatever you scroll, it needs both.
+
         `data-theo-scroll` marks this as a scroll container, so its offset is restored on back
         navigation (usetheokit/theokit#421). Browsers and react-router only ever restore the
-        DOCUMENT; in a shell like this one the document never scrolls, so without the marker there
-        is nothing to restore. The value is the id — add the attribute to any other element you
-        scroll, with a different value.
+        DOCUMENT, which here never scrolls, so without the marker there is nothing to restore. The
+        value is the id — add the attribute to any other element you scroll, with a different value.
       */}
-      <main data-theo-scroll="main" className="flex h-full flex-col overflow-hidden">
+      <main data-theo-scroll="main" className="min-h-0 overflow-y-auto">
         <Outlet />
       </main>
     </div>

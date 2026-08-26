@@ -14,7 +14,7 @@
     "validate:publint": "npx publint packages/theo && npx publint packages/agents && npx publint packages/http && npx publint packages/presenter && npx publint packages/tauri && npx publint packages/create-theokit",
     "validate:attw": "npx @arethetypeswrong/cli --pack packages/theo --ignore-rules cjs-resolves-to-esm no-resolution",
     "typecheck": "pnpm build:packages && tsc --noEmit",
-    "lint": "eslint .",
+    "lint": "NODE_OPTIONS=\"$NODE_OPTIONS --max-old-space-size=8192\" eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
