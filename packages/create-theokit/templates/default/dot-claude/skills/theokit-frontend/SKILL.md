@@ -25,16 +25,20 @@ paths:
 ```typescript
 import { theoFetch } from 'theokit/client'
 
-// Typed fetch — params and response inferred from server routes
+// The URL is used literally — build it yourself for a dynamic route.
 const tasks = await theoFetch('/api/tasks')
-const task = await theoFetch('/api/tasks/:id', { params: { id: 1 } })
+const task = await theoFetch(`/api/tasks/${id}`)
 
-// POST with body
+// POST with body. `method` is REQUIRED when the route declares one.
 const created = await theoFetch('/api/tasks', {
   method: 'POST',
   body: { title: 'New task' },
 })
 ```
+
+`theoFetch` has **no `params` option.** Its options are `RequestInit` minus `body`/`method`, plus a
+conditional `query` and `body` — nothing interpolates a `:id` segment for you. Reach for the
+generated client below when you want that; it is the half that knows your route tree.
 
 ## App Client (proxy-based)
 
@@ -43,10 +47,21 @@ import { createAppClient } from 'theokit/client'
 
 const client = createAppClient()
 
-const tasks = await client.tasks.GET()
-const task = await client.tasks[':id'].GET({ params: { id: 1 } })
-const created = await client.tasks.POST({ body: { title: 'New' } })
+const tasks = await client.tasks.get()
+const task = await client.tasks.id.get({ params: { id: '42' } }) // → GET /api/tasks/42
+const created = await client.tasks.post({ body: { title: 'New' } })
 ```
+
+Three details the generator decides for you, and each is easy to guess wrong:
+
+- **methods are lowercase** — `get`, `post`; the export in your route file stays `GET`
+- **a dynamic segment loses its colon** — `app/tasks/[id]` is reached as `client.tasks.id`, not
+  `client.tasks[':id']`
+- **`params` values are strings** — `{ id: '42' }`; a URL segment has no other type
+
+Segments are otherwise kept **literal**, so a hyphenated route needs bracket access:
+`client['agents-config'].get()`. The client mirrors your URLs rather than prettifying them — a
+camelCased key once produced a request to a path no route served.
 
 ## Agent Streaming
 

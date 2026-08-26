@@ -39,21 +39,31 @@ export default function Page() {
   return (
     <>
       <Metadata title="TheoKit agent" description="Chat with your TheoKit agent." />
-      <ChatPanel
-        thread={thread}
-        isStreaming={isStreaming}
-        onlyGreeting={onlyGreeting}
-        onStarter={handleSubmit}
-      />
-      <Composer
-        value={composerValue}
-        onValueChange={setComposerValue}
-        onSubmit={handleSubmit}
-        running={isStreaming}
-        hasError={hasError}
-        error={error}
-        onNewChat={newChat}
-      />
+      {/*
+        The chat is the page that does NOT want the shell's scroll: the log scrolls inside itself
+        and the composer stays pinned to the bottom, which `overflow-hidden` is what produces. So it
+        declares that here rather than imposing it on every other page from the layout (#484).
+
+        `h-full` fills the routed slot; `min-h-0` lets this box shrink below its content so the
+        child's own scroll works — the same pair the layout comment describes.
+      */}
+      <div className="flex h-full min-h-0 flex-col overflow-hidden">
+        <ChatPanel
+          thread={thread}
+          isStreaming={isStreaming}
+          onlyGreeting={onlyGreeting}
+          onStarter={handleSubmit}
+        />
+        <Composer
+          value={composerValue}
+          onValueChange={setComposerValue}
+          onSubmit={handleSubmit}
+          running={isStreaming}
+          hasError={hasError}
+          error={error}
+          onNewChat={newChat}
+        />
+      </div>
     </>
   )
 }

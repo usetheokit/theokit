@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- **`pnpm check:all` runs locally again.** `pnpm lint` is `eslint .`, which needs more heap than
+  Node's default on this repository — and the only place that said so was `ci.yml`, at workflow
+  level. A developer running the documented pre-merge gate got a heap OOM naming nothing, and the
+  reasonable conclusion is "my change broke lint". The `lint` script now carries the requirement
+  itself, appended rather than assigned so an existing `NODE_OPTIONS` survives. Whether 8 GB is
+  comfortably enough on a loaded machine is a separate question and deliberately not claimed
+  here (#497)
+
+- **Two comments in the route executor described a `ctx` precedence the code does not implement.**
+  One of them shipped in 0.54.0 saying "middleware wins on a key collision"; the other, older, said
+  decorations win "when middleware did not set the same key". Measured: a plugin decoration
+  overwrites a value middleware just wrote, because `applyDecorations` re-runs after the merge and
+  assigns unconditionally. The real order is hook write < middleware write < plugin decoration, and
+  a test now pins it — a comment cannot hold a precedence rule, which is how both got it wrong at
+  once (#496)
+
 ### Security
 
 - **`HOST` now reaches the listener, so a container can actually be served.** The variable was added
