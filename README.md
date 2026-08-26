@@ -532,6 +532,7 @@ Defaults: `appDir: 'app'`, `serverDir: 'server'`, `agentsDir: 'agents'`.
 |---|---|---|
 | [`theokit`](https://www.npmjs.com/package/theokit) | ![npm](https://img.shields.io/npm/v/theokit?style=flat-square&label=) | Framework core — router, server, CLI, config, adapters, devtools, the agent mount + HITL/checkpoint harness |
 | [`@theokit/agents`](https://www.npmjs.com/package/@theokit/agents) | ![npm](https://img.shields.io/npm/v/@theokit/agents?style=flat-square&label=) | `AgentBuilder`, the SDK adapter, guardrails, skills, MCP, A2A/ACP, delegation |
+| [`@theokit/agents-pty`](https://www.npmjs.com/package/@theokit/agents-pty) | ![npm](https://img.shields.io/npm/v/@theokit/agents-pty?style=flat-square&label=) | The PTY/terminal backend, split out by ADR 0004 so a web app stops compiling one. **Install it only if you drive a terminal** — `@theokit/agents` no longer pulls it in |
 | [`@theokit/http`](https://www.npmjs.com/package/@theokit/http) | ![npm](https://img.shields.io/npm/v/@theokit/http?style=flat-square&label=) | NestJS-style HTTP decorators + pipeline + typed client |
 | [`@theokit/presenter`](https://www.npmjs.com/package/@theokit/presenter) | ![npm](https://img.shields.io/npm/v/@theokit/presenter?style=flat-square&label=) | The canonical `AgentOutputEvent` + presenters for web / terminal / JSON |
 | [`@theokit/tauri`](https://www.npmjs.com/package/@theokit/tauri) | ![npm](https://img.shields.io/npm/v/@theokit/tauri?style=flat-square&label=) | Desktop glue — the Channel/invoke transport + the JSONL sidecar |
@@ -571,7 +572,7 @@ Beta. The framework is used to build real apps, and the surface still moves betw
 minor versions — breaking changes are recorded in [`CHANGELOG.md`](CHANGELOG.md)
 against the version that carried them.
 
-- **6007 tests in 765 files** (5986 passing, 21 skipped, zero type errors) — unit, integration and type-level suites across `theokit`, `@theokit/http`, `@theokit/agents`, `@theokit/presenter` and `create-theokit`. One command: `pnpm test`.
+- **7232 tests in 930 files** (7211 passing, 21 skipped, zero type errors) — unit, integration and type-level suites across `theokit`, `@theokit/http`, `@theokit/agents`, `@theokit/agents-pty`, `@theokit/presenter` and `create-theokit`. One command: `pnpm test`. Measured 2026-08-26; a number nobody re-measures is a claim, not a fact.
 - **Nine CI jobs gate every PR**: lint + format, typecheck + build, unit + type tests, a coverage floor of 80%, dead code (`knip`), package validation (`publint` + `attw` + an install smoke test), a production dependency audit, and license compliance. Alongside them run the architecture guards — `dependency-cruiser` rules, `ls-lint` filename conventions, SDK surface parity — plus CodeQL and a two-layer secret scan (pre-commit hook and workflow).
 - **Nine deploy targets**, with TheoCloud as the principal one.
 - **There is no browser/E2E harness.** A change to rendering or hydration needs a reviewer to exercise it by hand.

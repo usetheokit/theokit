@@ -39,12 +39,38 @@ jobs:
       # Each pin carries the version it resolved to on 2026-08-21, read from the action's own
       # tags rather than assumed from the ref name. Majors are deliberately unchanged: pinning
       # freezes what already runs, upgrading is a separate decision with its own risk.
+      # Mint a short-lived token from the `theokit-release` GitHub App. GitHub does not start
+      # workflow runs from GITHUB_TOKEN-authored events, so a Version Packages pull request
+      # opened with that token arrives with none of its required checks running, and a
+      # required check that never reports cannot be satisfied. An App-authored event does
+      # start them. Proven on theokit-ui: 0/3 required checks became 3/3, the pull request
+      # reached CLEAN by itself, and 1.10.1 published with no manual gesture.
+      #
+      # The token is minted per run and expires with it. What is long-lived is the App's
+      # private key, an organization secret scoped to three repository permissions. NOT used
+      # for npm — publishing stays OIDC trusted publishing, with no token at all.
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        id: app-token
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          # Narrow the token to what this job does rather than inheriting whatever the
+          # installation holds. zizmor flags the unrestricted form as high severity.
+          permission-contents: write
+          permission-pull-requests: write
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1 # zizmor: ignore[artipacked]
         with:
           # The one checkout in this repository that keeps its credential, and not
           # by oversight: changesets/action pushes the version commit and the
           # release tags with the git CLI, which authenticates from exactly this
           # persisted token. `persist-credentials: false` breaks the release.
+          #
+          # It must be the APP's token. The push of `changeset-release/main` is what the
+          # pull request is opened against, so a push carrying the Actions bot's credential
+          # produces a bot-authored branch and the checks stay dormant even though the pull
+          # request was opened by the App. Both halves have to be the App or neither is.
+          token: ${{ steps.app-token.outputs.token }}
           fetch-depth: 0
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
         # No `version:` here on purpose. The action reads `packageManager` from
@@ -194,7 +220,11 @@ jobs:
           publish: pnpm release
           version: pnpm version-packages
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # The App's token, so the Version Packages pull request is authored by the App and
+          # its required checks actually run. With `secrets.GITHUB_TOKEN` here the pull
+          # request opens with nothing but the external Apps reporting and stays unmergeable
+          # until a person closes and reopens it.
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
           # NO npm credential of any kind, and this is the resolution of #169/#366
           # rather than a reversal of them.
           #

@@ -236,6 +236,23 @@ jobs:
       - run: pnpm install --no-frozen-lockfile
       - name: tsc --noEmit on the untouched scaffold
         run: cd my-test && ../node_modules/.bin/tsc --noEmit
+      # #467 — the same check against `--preset=bot`, and it is the load-bearing one for that
+      # preset. Two real defects survived every local gate and died here: `SandboxProvider` typed as
+      # `{ mode }` (it is a backend, or a function returning one) and `defineCron` imported from
+      # `theokit/server/define` (it lives in `theokit/server/cron`). Neither is visible from
+      # `create-theokit`, whose tests can only see that files were copied.
+      #
+      # `my-test-bot` is its own workspace member, declared alongside `my-test` in
+      # `pnpm-workspace.yaml`: the root install links only declared members, so a scaffold outside
+      # the list resolves the template's pins from npm and this check would measure the PUBLISHED
+      # package instead of this tree — the defect #420 reports.
+      - name: Scaffold with --preset=bot, over the same app
+        run: node_modules/.bin/tsx packages/create-theokit/src/cli.ts my-test-bot --preset=bot --yes --use-pnpm --disable-git --skip-install
+      - name: Point the bot scaffold at this working tree too
+        run: node_modules/.bin/tsx scripts/link-scaffold-to-workspace.ts my-test-bot
+      - run: pnpm install --no-frozen-lockfile
+      - name: tsc --noEmit on the bot preset
+        run: cd my-test-bot && ../node_modules/.bin/tsc --noEmit
 
   coverage:
     name: Coverage gate (>=80%)

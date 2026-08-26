@@ -91,7 +91,8 @@ const EXPECTED: Record<BuildTarget, readonly ConfigConcern[] | 'runtime-not-emit
   vercel: ['securityHeaders', 'csrf', 'disallowed', 'cors', 'serialization'],
   cloudflare: ['securityHeaders', 'csrf', 'disallowed', 'cors', 'serialization', 'plugins'],
   netlify: ['securityHeaders', 'csrf', 'disallowed', 'cors', 'serialization'],
-  bun: ['securityHeaders', 'csrf', 'disallowed', 'cors', 'serialization', 'plugins'],
+  // #508 — the first Web target to enforce a declared limit rather than refuse the build.
+  bun: ['securityHeaders', 'csrf', 'disallowed', 'cors', 'serialization', 'plugins', 'rateLimit'],
   'deno-deploy': ['securityHeaders', 'csrf', 'disallowed', 'cors', 'serialization', 'plugins'],
   'aws-lambda': ['securityHeaders', 'csrf', 'disallowed', 'cors', 'serialization'],
   static: [],

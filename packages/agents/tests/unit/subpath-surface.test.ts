@@ -39,9 +39,13 @@ const SNAPSHOT = JSON.parse(
  * comment swore "same scope".
  */
 describe('M90 — the infra subpath surface is locked', () => {
-  it('test_the_snapshot_covers_all_five_subpaths', () => {
+  it('test_the_snapshot_covers_all_four_subpaths', () => {
+    // `pty` left this package (#460): it carried `@theokit/sdk-pty`, whose native install step every
+    // web application was paying for, and it now lives in `@theokit/agents-pty`. Its six symbols did
+    // not disappear — `packages/agents-pty/tests/unit/surface.test.ts` holds the same list and
+    // asserts they are the upstream identities rather than a wrapper.
     const credKeys = Object.keys(SNAPSHOT).sort((a, b) => a.localeCompare(b))
-    expect(credKeys).toEqual(['interactive', 'persistence', 'pty', 'sandbox', 'tools'])
+    expect(credKeys).toEqual(['interactive', 'persistence', 'sandbox', 'tools'])
   })
 
   /**
@@ -60,9 +64,12 @@ describe('M90 — the infra subpath surface is locked', () => {
    * a regeneration that produced an empty file from a broken layer would pass on both sides. This one
    * fails a snapshot that shrank, whatever the cause.
    */
-  it('test_snapshot_holds_the_181_measured_symbols', () => {
+  it('test_snapshot_holds_the_175_measured_symbols', () => {
+    // 181 until `pty` moved out (#460). The drop is exactly its six — five values and one type —
+    // and it is the one kind of shrink this floor is not meant to catch: the symbols were relocated,
+    // not lost, and the package that received them asserts the same six.
     const total = Object.values(SNAPSHOT).reduce((n, s) => n + s.values.length + s.types.length, 0)
-    expect(total).toBe(181)
+    expect(total).toBe(175)
   })
 
   /**

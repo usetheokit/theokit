@@ -8,6 +8,9 @@ export default defineConfig({
     doctor: 'src/doctor/index.ts',
     usage: 'src/usage/index.ts',
     'mcp-health': 'src/mcp-health-entry.ts',
+    // A stub, not the backend: `./pty` resolves so an upgrading consumer gets a migration
+    // sentence instead of ERR_MODULE_NOT_FOUND. It imports nothing (#460).
+    pty: 'src/pty-entry.ts',
     'tool-scope': 'src/tools/index.ts',
     bridge: 'src/bridge-entry.ts',
     testing: 'src/testing/index.ts',
@@ -15,7 +18,6 @@ export default defineConfig({
     sandbox: 'src/sandbox-entry.ts',
     persistence: 'src/persistence-entry.ts',
     interactive: 'src/interactive-entry.ts',
-    pty: 'src/pty-entry.ts',
     // M60 — enriched auth domain.
     auth: 'src/auth-entry.ts',
     // Agent configuration, trust and the instruction tree — moved out of `theokit`
@@ -49,12 +51,5 @@ export default defineConfig({
     options.sourcesContent = false
   },
   clean: true,
-  external: [
-    '@theokit/http',
-    '@theokit/presenter',
-    '@theokit/sdk',
-    '@theokit/sdk-pty',
-    '@theokit/sdk-tools',
-    'zod',
-  ],
+  external: ['@theokit/http', '@theokit/presenter', '@theokit/sdk', '@theokit/sdk-tools', 'zod'],
 })

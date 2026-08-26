@@ -38,6 +38,7 @@ function showHelp(): void {
     --template=<name>             Template to use (default: "default")
     --surface=<web|tui|desktop>   App surface (default: "web") — tui (Ink) / desktop (Tauri)
     --bare                        Minimal app (no @theokit/* deps)
+    --preset=bot                  Layer the unattended-agent shape over the template
     --skip-install                Scaffold files only, skip package install
     --disable-git                 Skip git init
     --use-npm                     Use npm as package manager
@@ -54,6 +55,7 @@ function showHelp(): void {
     npx create-theokit my-app
     npx create-theokit my-app --bare --skip-install
     npx create-theokit my-app --surface=tui
+    npx create-theokit my-app --preset=bot
     npx create-theokit my-app --surface=desktop
     npx create-theokit my-app --use-bun --biome
     npx create-theokit my-app --example=https://github.com/user/repo
@@ -61,7 +63,26 @@ function showHelp(): void {
 `)
 }
 
-export async function main(): Promise<void> {
+export /**
+ * `--preset=<name>` — today only `bot` (#467).
+ *
+ * Extracted rather than inlined because an unknown value must be REFUSED by name: a typo that
+ * silently scaffolds the plain template is a person wondering for ten minutes where their bots
+ * went. Ignoring an unrecognised flag is the failure this whole session kept finding — a
+ * declaration that reports something the code did not do.
+ */
+function parsePresetFlag(args: string[]): boolean {
+  const preset = getFlag(args, 'preset')
+  if (preset === undefined) return false
+  if (preset !== 'bot') {
+    console.error('')
+    console.error(`Unknown preset "${preset}". The only preset today is \`bot\`.`)
+    process.exit(1)
+  }
+  return true
+}
+
+async function main(): Promise<void> {
   try {
     assertNodeVersion(process.version)
   } catch (err) {
@@ -95,6 +116,7 @@ export async function main(): Promise<void> {
   // Parse flags
   const templateName = getFlag(args, 'template') ?? 'default'
   const bare = hasFlag(args, 'bare')
+  const botPreset = parsePresetFlag(args)
   const skipInstall = hasFlag(args, 'skip-install')
   const useDefaults = hasFlag(args, 'yes')
   const disableGit = hasFlag(args, 'disable-git')
@@ -171,10 +193,10 @@ export async function main(): Promise<void> {
     const surfaceSuffix = surface !== 'web' ? ` [surface: ${surface}]` : ''
     const backendsSuffix = backends.length > 0 ? ` [+services: ${backends.join(', ')}]` : ''
     console.log(
-      `\nCreating TheoKit project "${projectName}" (template: ${templateName})${suffix}${surfaceSuffix}${backendsSuffix}...\n`,
+      `\nCreating TheoKit project "${projectName}" (template: ${templateName})${suffix}${surfaceSuffix}${backendsSuffix}${botPreset ? ' + bot preset' : ''}...\n`,
     )
 
-    scaffold(targetDir, projectName, templateName, { bare })
+    scaffold(targetDir, projectName, templateName, { bare, botPreset })
 
     // M45 — apply the surface onto the scaffolded default (tui/desktop; web is a no-op).
     applySurfaceStep(targetDir, projectName, surface, options)

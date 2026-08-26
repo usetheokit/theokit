@@ -33,10 +33,19 @@ const ROOT = join(HERE, '..')
  * lost the real change inside the noise — friction that pushes towards "I'll regenerate later", which
  * is exactly the omission failure mode that left this gate red on `develop`.
  */
+/**
+ * `pty` is deliberately absent. It carried `@theokit/sdk-pty`, whose `install` script downloads a
+ * prebuild or compiles C++, and as a hard dependency of this package every web application paid for
+ * a terminal it never opened (usetheokit/theokit#460). It lives in `@theokit/agents-pty` now, which
+ * owns both the subpath and the dependency, so an app that wants a terminal declares that name and
+ * one that does not never compiles it.
+ *
+ * It is NOT re-addable here. Putting it back reinstates the native install for everyone, and the
+ * barrel test asserts its absence from the manifest rather than merely not mentioning it.
+ */
 export const INFRA_SUBPATHS: Readonly<Record<string, string>> = {
   interactive: '@theokit/sdk/interactive',
   persistence: '@theokit/sdk/persistence',
-  pty: '@theokit/sdk-pty',
   sandbox: '@theokit/sdk/sandbox',
   tools: '@theokit/sdk-tools',
 }
