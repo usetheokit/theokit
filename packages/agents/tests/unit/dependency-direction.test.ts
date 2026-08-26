@@ -36,10 +36,18 @@ const peers = pkg.peerDependencies ?? {}
 const IMPLEMENTATION = [
   '@theokit/sdk',
   '@theokit/sdk-tools',
-  '@theokit/sdk-pty',
+  // `@theokit/sdk-pty` LEFT this list, and the reason is not that the rule changed — it is that this
+  // layer stopped carrying it. It made every web application compile a terminal, so it moved to
+  // `@theokit/agents-pty`, which owns both the subpath and the dependency (usetheokit/theokit#460).
+  //
+  // The rule travelled with it: that package asserts the same direction over the same specifier, so
+  // dropping the line here does not drop the guarantee. `m58-barrel-surface.test.ts` additionally
+  // asserts the dependency has not come BACK to this manifest, which is the failure this list would
+  // otherwise have been the only thing watching for.
+  //
   // The wire (`@theokit/presenter/wire`) has been this layer's implementation since the
-  // `remove-ai-dependency` plan: the consumer does not choose which frame parser we use, so it cannot
-  // provide it. Externalized in tsup so that ONE instance of the schema exists at runtime.
+  // `remove-ai-dependency` plan: the consumer does not choose which frame parser we use, so it
+  // cannot provide it. Externalized in tsup so that ONE instance of the schema exists at runtime.
   '@theokit/presenter',
 ] as const
 /**

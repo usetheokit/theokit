@@ -81,9 +81,29 @@ describe('M58 — @theokit/agents pass-through barrels for the 5 already-OO/pure
     }
   })
 
-  it('pty: PtyInteractiveBackend reaches @theokit/agents/pty', async () => {
-    const m = await import('../../src/pty-entry.js')
-    expect(m.PtyInteractiveBackend).toBeTypeOf('function')
+  it('pty: the backend moved to @theokit/agents-pty; the subpath stays as a signpost (#460)', async () => {
+    // Asserted as an absence rather than deleted, because the absence is the point: this entry made
+    // every web application compile a terminal, and a barrel test that simply stopped mentioning it
+    // would let it drift back in without anything objecting.
+    //
+    // Its surface did not shrink — `packages/agents-pty/tests/unit/surface.test.ts` carries the same
+    // six symbols and asserts they are the upstream identities, not a wrapper.
+    const manifest = (await import('../../package.json', { with: { type: 'json' } })).default as {
+      exports?: Record<string, unknown>
+      dependencies?: Record<string, string>
+    }
+    // The SUBPATH stays — it resolves to a stub that explains the move, so an upgrading consumer
+    // gets a sentence rather than ERR_MODULE_NOT_FOUND on a specifier that worked yesterday.
+    expect(
+      manifest.exports?.['./pty'],
+      '`./pty` must keep resolving, for the migration',
+    ).toBeDefined()
+    // The DEPENDENCY is what must never come back: it is the native install step every application
+    // was paying for, and a shim that re-imported it would undo the change it is shimming.
+    expect(
+      manifest.dependencies?.['@theokit/sdk-pty'],
+      'a native install step must not return to every consumer of this package',
+    ).toBeUndefined()
   })
 
   it('interactive: the module resolves (its surface is type-only; locked by the type imports above)', async () => {
