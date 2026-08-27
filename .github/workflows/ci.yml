@@ -573,7 +573,12 @@ jobs:
   # "You are running CI analysis while Automatic Analysis is enabled."
   sonar:
     needs: test
-    uses: usetheokit/shared-workflows/.github/workflows/sonar.yml@v1
-    secrets: inherit
+    # `@v1` is a moving ref by design — a policy fix in shared-workflows must reach every
+    # caller without eleven pull requests, which is the reason that repository exists.
+    uses: usetheokit/shared-workflows/.github/workflows/sonar.yml@v1 # zizmor: ignore[unpinned-uses]
+    # Named rather than inherited: `secrets: inherit` would hand the scanner every secret
+    # this repository holds.
+    secrets:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     with:
       coverage-command: pnpm test:coverage
