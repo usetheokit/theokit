@@ -610,7 +610,8 @@ export class TheoApp {
       let body: unknown
       if (entry.needsBody && ['POST', 'PUT', 'PATCH'].includes(method)) {
         try {
-          const text = await request.text()
+          // See create-server.ts: the clone keeps `@Req()` usable (theokit#534).
+          const text = await request.clone().text()
           body = text ? JSON.parse(text) : undefined
         } catch {
           body = undefined
