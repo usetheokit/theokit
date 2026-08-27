@@ -199,15 +199,20 @@ function assertControllerPathsReachable(
  * The metadata key an explicitly-open controller route sets.
  *
  * The counterpart of `'public'` on the file path, and it exists for the same routes: a health
- * check a load balancer calls with no session, an OAuth callback the provider redirects to. Written
- * as `@SetMetadata(PUBLIC_ROUTE_METADATA, true)` — `@theokit/http` already ships `SetMetadata`, so
- * this needs no new decorator (parsimony-ladder.md rung 4).
+ * check a load balancer calls with no session, an OAuth callback the provider redirects to.
+ *
+ * An app writes the STRING, not this constant: `@SetMetadata('theokit:public', true)`. The docblock
+ * used to show `@SetMetadata(PUBLIC_ROUTE_METADATA, true)`, which no consumer can write — this
+ * module lives under `cli/commands/build/` and no entry point reaches it. Exporting it so the
+ * example became true would publish a new surface for a string that appears once per open route and
+ * whose mistyping fails this very gate loudly, so the example is corrected instead. `@theokit/http`
+ * already ships `SetMetadata`, so no new decorator is needed either (parsimony-ladder.md rung 4).
  *
  * It is an opt-out, never a default. A route that is open says so in the file, where review sees
  * it; a route nobody thought about is the one that ships open, which is the whole reason ADR 0001
  * made absence stop meaning open on the file path.
  */
-export const PUBLIC_ROUTE_METADATA = 'theokit:public'
+const PUBLIC_ROUTE_METADATA = 'theokit:public'
 
 /**
  * A controller route that declares no access decision at all.
