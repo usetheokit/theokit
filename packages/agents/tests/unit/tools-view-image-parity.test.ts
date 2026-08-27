@@ -27,7 +27,7 @@
  * the implementation and silently change what the model receives. That is Risk R8, and it is the
  * reason this file asserts the block shape rather than merely the symbol's presence.
  */
-import { writeFile } from 'node:fs/promises'
+import { mkdtemp, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -61,6 +61,16 @@ function installedSdkToolsHasViewImage(): boolean {
 
 const UPSTREAM_HAS_IT = installedSdkToolsHasViewImage()
 
+/**
+ * A private scratch directory, created once per run with a name the OS chooses.
+ *
+ * `join(tmpdir(), 'fixed-name')` is a predictable path in a world-writable directory: any other
+ * user on the machine can pre-create a symlink there and the write follows it (CodeQL
+ * `js/insecure-temporary-file`, high). `mkdtemp` is the stdlib answer — the directory is created
+ * with 0700 and a random suffix, so there is nothing to guess and nothing to pre-empt.
+ */
+const scratchDir = await mkdtemp(join(tmpdir(), 'theokit-view-image-'))
+
 /** The forwarded factory, reached through the layer — which is the seam under test. */
 function viewImageTool(): { handler: (input: { path: string }) => unknown } {
   return (
@@ -72,7 +82,7 @@ function viewImageTool(): { handler: (input: { path: string }) => unknown } {
         handler: (input: { path: string }) => unknown
       }
     }
-  ).createViewImageTool({ projectRoot: tmpdir() })
+  ).createViewImageTool({ projectRoot: scratchDir })
 }
 
 /**
@@ -83,8 +93,8 @@ function viewImageTool(): { handler: (input: { path: string }) => unknown } {
 async function writeScratchPng(): Promise<{ name: string; base64: string }> {
   const base64 =
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
-  const name = `dep-check-view-image-${process.pid}.png`
-  await writeFile(join(tmpdir(), name), Buffer.from(base64, 'base64'))
+  const name = 'view-image.png'
+  await writeFile(join(scratchDir, name), Buffer.from(base64, 'base64'))
   return { name, base64 }
 }
 
