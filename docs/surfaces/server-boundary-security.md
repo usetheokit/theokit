@@ -109,7 +109,7 @@ its own error teaches nobody why it happened.
 | **A data-access-layer convention** | Field selection and record-level authorisation live wherever each caller put them | measured 2026-08-20 |
 | **Payload minimisation guidance or tooling** | Nothing inspects what the hydration payload carries | measured 2026-08-20 |
 | **CSP reporting and CSRF readiness in production** | Both are mounted by the Vite plugin only (`packages/theo/src/vite-plugin/api-middleware.ts:343`, `packages/theo/src/vite-plugin/api-middleware.ts:349`). A CSP that reports nothing in production is a CSP nobody can tighten | measured 2026-08-20 |
-| **Bundle secret scanning** | The repository scans source and history with TruffleHog (`.github/workflows/secret-scan.yml:42`); no job builds the client output and scans it for the *values* of configured secrets | measured 2026-08-20 |
+| **Bundle secret scanning** | The repository scans source and history with TruffleHog (`.github/workflows/secret-scan.yml:32`, which calls the shared implementation in `usetheokit/shared-workflows`); no job builds the client output and scans it for the *values* of configured secrets | measured 2026-08-20 |
 
 **Corrected from 2026-08-19.** That version listed *"Authorisation primitives beyond
 authentication"* as missing, saying `requireAuth` narrows a session and there is no equivalent for
