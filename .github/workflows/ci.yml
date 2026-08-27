@@ -581,4 +581,8 @@ jobs:
     secrets:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     with:
-      coverage-command: pnpm test:coverage
+      # Not re-run here: the `test` job above first checks out and builds the sibling
+      # theokit-sdk, rebuilds native bindings and installs bubblewrap — 89 suites fail to load
+      # without that, which is exactly what the first scan hit while still reporting green.
+      # Reading its artifact also means Sonar publishes the number this repo's own gate measured.
+      coverage-artifact: coverage-report
