@@ -136,6 +136,48 @@ describe('ActionClient — errors arrive typed', () => {
     expect((error as ActionInputError).fields).toEqual({ email: ['Email is already taken'] })
   })
 
+  it('keeps the field map when the action never set the wire marker either', async () => {
+    // The test above proves the rebuild works when `type: 'TheoActionInputError'` is present. But
+    // `type` is a WIRE marker, written by `serialize-action-result.ts` — a hand-written action has
+    // no reason to know it exists, and the case the rebuild was written for is exactly the
+    // hand-written one. So the guard that gates it also excludes it.
+    //
+    // Measured through @theokit/plugin-forms (usetheokit/theokit-plugins#175): an action returning
+    // `{ code: 'ACTION_INPUT_ERROR', message, fields }` reached `TheoForm` as an ActionError with
+    // no `fields`, the form's duck-type found nothing to place, and it re-threw — an uncaught
+    // rejection and a user who sees no message at all. The package's headline feature, unreachable
+    // from a browser.
+    const client = new ActionClient(
+      envelopeAction({
+        error: {
+          code: 'ACTION_INPUT_ERROR',
+          message: 'the server refused one field',
+          fields: { email: ['That address is already registered'] },
+        },
+      }),
+    )
+
+    await expect(client.mutateAsync({})).rejects.toBeInstanceOf(ActionInputError)
+
+    const error = client.getSnapshot().error
+    expect((error as ActionInputError).fields).toEqual({
+      email: ['That address is already registered'],
+    })
+  })
+
+  it('still answers INTERNAL_SERVER_ERROR for a shape that carries no field map', async () => {
+    // The counterpart that keeps the rule honest. `{code:'NETWORK_ERROR', message:'fetch failed'}`
+    // is the shape the generated facade produces when `fetch` itself rejects, and it must NOT be
+    // read as a validation error — otherwise loosening the guard above turns every unknown failure
+    // into a form error nobody can act on.
+    const client = new ActionClient(
+      envelopeAction({ error: { code: 'NETWORK_ERROR', message: 'fetch failed' } }),
+    )
+
+    await expect(client.mutateAsync({})).rejects.not.toBeInstanceOf(ActionInputError)
+    expect(client.getSnapshot().error).toMatchObject({ message: 'fetch failed' })
+  })
+
   it('rebuilds a nested field path from the map, dots and array indices intact', async () => {
     const client = new ActionClient(
       envelopeAction({
