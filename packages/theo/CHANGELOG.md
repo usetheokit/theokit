@@ -1,5 +1,30 @@
 # theo
 
+## 0.58.0
+
+### Minor Changes
+
+- 3e142ae: A controller can declare that it authenticates by other means, with `@SetMetadata('theokit:csrf-exempt', true)`.
+
+  The case this exists for is a webhook. Stripe, GitHub and every other sender authenticate with an HMAC over the request body and will never send `X-Theo-Action`, so a webhook endpoint answered 403 to every real delivery and the only escape was `csrf: 'warn'` for the whole application.
+
+  It is deliberately separate from `theokit:public`, which answers a different question — whether an unauthenticated caller may reach the route, not whether the route authenticates some other way. A route can want one without the other.
+
+  Declared on the controller, and absence still means the gate applies.
+
+### Patch Changes
+
+- 420ee70: A controller can read the raw request body again.
+
+  `resolveBody` consumed the request to populate `@Body`, unconditionally for POST, PUT and PATCH, and swallowed the failure when the payload was not JSON. The read still happened, so a handler taking `@Req()` received a request with `bodyUsed: true` and every later read threw `Body is unusable`.
+
+  That made `multipart/form-data` uploads and any signature-covered payload unreachable from a controller: the content-type and boundary arrived intact and the body was gone, while `@Body()` resolved to `undefined` because the JSON parse that drained it had failed.
+
+  It now reads a `clone()`. The JSON path is unchanged.
+
+- Updated dependencies [420ee70]
+  - @theokit/http@1.1.2
+
 ## 0.57.1
 
 ### Patch Changes
