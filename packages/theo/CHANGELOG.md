@@ -1,5 +1,42 @@
 # theo
 
+## 0.57.0
+
+### Minor Changes
+
+- fa13c8b: A `@Controller` route that declares no access decision now fails `theokit build`, matching what a file route with no `.policy` already did. Declare one with `@UseGuards(...)` — on the method or the controller — or state that a route is open on purpose with `@SetMetadata('theokit:public', true)`. Before this, converting a protected file route to a controller and forgetting the guard produced a route that served unauthenticated requests, silently.
+- 6dc3d2c: A `@Controller` can now import the app's own code. Before this it worked under `theokit dev` and failed `theokit build` with `Cannot find module '.theokit/…'` — the compiled controller resolved its relative imports from `dist`, where the app does not exist. Only package imports survived, which is why every existing test passed. Relative specifiers are now rewritten to the source files the app already runs from.
+- f215047: A `@Controller` whose path the runtime cannot route to now fails `theokit build` instead of answering 404 forever. Controller routes are served from a fall-through that only runs for URLs under `/api/`, so `@Controller('probe')` compiled, emitted, and never responded. The build now names the controller, the path it declared, and the path to write instead.
+
+### Patch Changes
+
+- 818f706: A server field error from a hand-written action reaches the form again.
+
+  An action returning `{ code, message, fields }` had its `fields` map discarded on the way to the client, so a form library received a generic error with nothing to place — and correctly refused to guess, re-throwing. The result was an uncaught rejection and a user shown nothing at all.
+
+  The map is now recognised whether or not the action set the internal wire marker, which only the framework's own serializer writes. A shape carrying no field map — a network failure, say — still answers `INTERNAL_SERVER_ERROR` as before.
+
+- 818f706: A controller answering with binary now delivers the bytes it produced.
+
+  Audio, images, PDFs, gzip — anything a controller returned was decoded as UTF-8 on its way out, so every byte `>= 0x80` became the replacement character. A 55 296-byte MP3 arrived as 76 790 bytes that no player would open, under a `200` and a correct `content-type`; the damage was invisible until someone opened the file. File routes were never affected, so this was a silent divergence between two paths meant to be at parity.
+
+  Controllers still BUFFER the body — a streamed response is collected before the first byte goes out, unchanged from before. Progressive delivery on that path is tracked separately.
+
+- 460ff4f: Widen the optional `@theokit/studio` peer from `^0.2.0` to `>=0.2.0 <1`.
+
+  `@theokit/studio@0.3.0` shipped, and a caret on a `0.x` version pins the minor — so `^0.2.0` excluded it. Installing `theokit` alongside the current studio produced an ERESOLVE:
+
+  ```
+  While resolving: theokit@0.56.0
+  Found: @theokit/studio@0.3.0
+  Conflicting peer dependency: @theokit/studio@0.2.0
+  ```
+
+  Nothing about `0.3.0` justified the ceiling: it exports the same single `./plugin` subpath as `0.2.0`, its release changed only its own `@theokit/agents` peer range, and `theokit` reaches it through a runtime `import()` rather than a compiled dependency. The range described a boundary that was never measured.
+
+- Updated dependencies [0f88b0e]
+  - @theokit/agents@12.1.0
+
 ## 0.56.0
 
 ### Minor Changes
