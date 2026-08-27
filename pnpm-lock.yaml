@@ -208,8 +208,8 @@ importers:
   packages/agents-pty:
     dependencies:
       '@theokit/sdk-pty':
-        specifier: '>=0.2.0 <1.0.0'
-        version: 0.3.0(@theokit/sdk@4.52.1(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.21.3)(zod@4.4.3))
+        specifier: '>=0.3.0 <1.0.0'
+        version: 0.3.4(@theokit/sdk@4.52.1(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.21.3)(zod@4.4.3))
     devDependencies:
       tsup:
         specifier: ^8.5.1
@@ -2155,8 +2155,9 @@ packages:
   '@tauri-apps/api@2.11.1':
     resolution: {integrity: sha512-M2FPuYND2m+wh5hfW9ZpSdxMPdEJovPBWwoHJmwUpysTYNHaOkVFN419m/K0LIgjb/7KU2vBgsUepJWugQCvAA==}
 
-  '@theokit/sdk-pty@0.3.0':
-    resolution: {integrity: sha512-WOQgYscNEzgtCZUMuUmK335PZv+sHK2Z+uaBGNMo1NEVohWCzyljwEFvirPW8a/RpAp7JWtWtuzLNvsXi4EBaQ==}
+  '@theokit/sdk-pty@0.3.4':
+    resolution: {integrity: sha512-P8gaWFIVNAuiREBTY7UEVaJCM+CKLRyR4HHSpqRjpErz497SlARFo3+G8SKKtoATv8y08Q7mwv7T7mmOCzMZkQ==}
+    engines: {node: '>=22.12.0'}
     peerDependencies:
       '@theokit/sdk': '>=4.4.1'
 
@@ -8108,7 +8109,7 @@ snapshots:
 
   '@tauri-apps/api@2.11.1': {}
 
-  '@theokit/sdk-pty@0.3.0(@theokit/sdk@4.52.1(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.21.3)(zod@4.4.3))':
+  '@theokit/sdk-pty@0.3.4(@theokit/sdk@4.52.1(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.21.3)(zod@4.4.3))':
     dependencies:
       '@theokit/sdk': 4.52.1(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.21.3)(zod@4.4.3)
     optionalDependencies:
