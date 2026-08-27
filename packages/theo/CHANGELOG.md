@@ -1,5 +1,11 @@
 # theo
 
+## 0.57.1
+
+### Patch Changes
+
+- 9dc2e63: Internal test fix, no runtime change: `test_ROOT_resolves_to_this_repository` asserted the name of the directory holding the checkout rather than the identity of the repository inside it.
+
 ## 0.57.0
 
 ### Minor Changes
