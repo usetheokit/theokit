@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **`@theokit/agents-pty` no longer claims to work with an `@theokit/sdk-pty` it cannot build against.** The floor was `>=0.2.0`, and two of the six symbols this package re-exports were first exported in `0.3.0`. Because the range sits in `dependencies` rather than `peerDependencies`, npm resolved it silently and a consumer found out at a call site. (#522)
+
 - **`theokit` installs alongside the current `@theokit/studio` again.** The optional peer was `^0.2.0`, and a caret on a `0.x` version pins the minor — so `0.3.0` was excluded and npm answered ERESOLVE. Nothing about `0.3.0` justified the ceiling: same single exported subpath, and `theokit` reaches it through a runtime `import()` rather than a compiled dependency. (#521)
 
 - **A server field error from a hand-written action reaches the form again.** An action returning `{ code, message, fields }` had its `fields` map discarded on the way to the client, so a form library got a generic error with nothing to place, re-threw, and the user saw no message at all — the failure looked like nothing happening. The map is now recognised whether or not the action set the internal wire marker, which only the framework's own serializer writes. (usetheokit/theokit-plugins#175)
