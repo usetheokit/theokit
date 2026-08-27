@@ -254,7 +254,12 @@ async function resolveBody(method: string, request: Request, walk: WalkResult): 
   if (!['POST', 'PUT', 'PATCH'].includes(method)) return undefined
   let body: unknown
   try {
-    const text = await request.text()
+    // `clone()` and not `request` itself: this read exists to populate `@Body`, and a handler taking
+    // `@Req()` still needs a body it can read. Reading the original leaves `bodyUsed: true`, so a
+    // multipart upload or a webhook needing the exact signed bytes reaches the handler with its
+    // content-type intact and its payload gone (theokit#534). The clone tees the stream; the
+    // original stays untouched.
+    const text = await request.clone().text()
     body = text ? JSON.parse(text) : undefined
   } catch {
     body = undefined
