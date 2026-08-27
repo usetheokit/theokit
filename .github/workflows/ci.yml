@@ -11,6 +11,12 @@ on:
     # emits blocks every PR forever, so the branch was left with an empty required list,
     # which reads as protection and demands nothing.
     branches: [main, develop]
+  # Manual dispatch against any ref. Added so this workflow can be exercised without opening a
+  # pull request — which is how the shape of a matrix job's NAME gets verified, and the name is
+  # what branch protection requires. `Unit + Type tests (22.12)` is a required context; if adding
+  # a key to that matrix leg renamed the job, the required check would stop existing and every
+  # pull request would wait for it forever, with no error anywhere.
+  workflow_dispatch:
 
 # Quality gates — every job runs on every PR. A failing job blocks merge.
 
