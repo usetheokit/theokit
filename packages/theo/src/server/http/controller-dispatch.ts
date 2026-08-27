@@ -11,6 +11,7 @@ import {
   createDecoratorHandler,
   getMeta,
   isControllerClass,
+  Reflector,
   type ServeAgent,
 } from '@theokit/http'
 
@@ -174,11 +175,15 @@ export async function createControllerDispatcher(opts: {
   const classes = await scanControllers(opts.controllersDir, opts.loadModule)
   if (classes.length === 0) return null
   const handle = createDecoratorHandler({ controllers: classes, serveAgent: opts.serveAgent })
+  const reflector = new Reflector()
 
   // Read once at construction: the metadata cannot change between requests, and re-walking every
   // class per request would put a reflection pass on the hot path for a value that never moves.
   const exemptPrefixes = classes
-    .filter((cls) => Reflect.getMetadata(CSRF_EXEMPT_METADATA, cls) === true)
+    // `Reflector`, not `Reflect.getMetadata`: the global is only typed where `reflect-metadata`
+    // has been imported, and this module does not import it — the dts build fails on it (TS2339).
+    // `@SetMetadata` writes through the same store, so the reader is the framework's own.
+    .filter((cls) => reflector.getByKey<boolean>(CSRF_EXEMPT_METADATA, cls) === true)
     .map((cls) => {
       const meta = getMeta<{ prefix?: string }>(CONTROLLER_PREFIX, cls)
       return meta?.prefix ?? ''
