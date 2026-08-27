@@ -80,19 +80,34 @@ function toActionError(raw: unknown): ActionError {
   }
 
   const obj = raw as Record<string, unknown>
-  if (obj.type === 'TheoActionInputError' && !Array.isArray(obj.issues)) {
-    // `ActionError.fromJson` reads `issues`, and the wire carries both it and the derived `fields`
-    // (`server/http/serialize-action-result.ts`). An error that arrives with only the map — a
-    // hand-written action, or a test fixture — has nothing for `fromJson` to read, and falling
-    // through would answer INTERNAL_SERVER_ERROR with the map gone. `fields` is the entire reason
-    // a form library subscribes to this error, so it is rebuilt into the issues it was derived
-    // from and `ActionInputError` re-derives an identical map.
-    const rebuilt = issuesFromFields(obj.fields)
-    if (rebuilt !== undefined) return new ActionInputError(rebuilt)
-  }
   if (obj.type === 'TheoActionInputError' || obj.type === 'TheoActionError') {
-    return ActionError.fromJson(raw)
+    if (obj.type === 'TheoActionInputError' && Array.isArray(obj.issues)) {
+      return ActionError.fromJson(raw)
+    }
+    if (obj.type === 'TheoActionError') {
+      return ActionError.fromJson(raw)
+    }
   }
+
+  // `ActionError.fromJson` reads `issues`, and the wire carries both it and the derived `fields`
+  // (`server/http/serialize-action-result.ts`). An error that arrives with only the map has nothing
+  // for `fromJson` to read, and falling through answers INTERNAL_SERVER_ERROR with the map gone —
+  // `fields` being the entire reason a form library subscribes to this error.
+  //
+  // This used to be gated on `obj.type === 'TheoActionInputError'`, and that guard excluded the very
+  // case it was written for. `type` is a WIRE marker set by the serializer; the shape that arrives
+  // with only a map is the HAND-WRITTEN action, which has no reason to know the marker exists.
+  // Measured through usetheokit/theokit-plugins#175: an action returning
+  // `{ code, message, fields }` reached the form as an ActionError with no `fields`, the form's
+  // duck-type found nothing to place, and it re-threw — an uncaught rejection and a user shown
+  // nothing at all.
+  //
+  // Recognising the map without the marker is safe because `issuesFromFields` returns `undefined`
+  // for anything that is not a field map. The shape that actually reaches the fallthrough —
+  // `{code:'NETWORK_ERROR', message:'fetch failed'}` from the generated facade — carries no
+  // `fields` and is unaffected, which its own test asserts.
+  const rebuilt = issuesFromFields(obj.fields)
+  if (rebuilt !== undefined) return new ActionInputError(rebuilt)
 
   // A shape the protocol does not define. The one that actually occurs is the generated facade's
   // `{code:'NETWORK_ERROR', message:'fetch failed'}` when `fetch` itself rejects: the code has no

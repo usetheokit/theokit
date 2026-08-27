@@ -135,7 +135,7 @@
   "dependencies": {
     "@theokit/presenter": "workspace:*",
     "@theokit/sdk": "^4.52.1",
-    "@theokit/sdk-tools": "^0.26.1"
+    "@theokit/sdk-tools": "^0.27.1"
   },
   "publishConfig": {
     "access": "public",

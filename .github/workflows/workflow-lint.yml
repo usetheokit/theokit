@@ -1,25 +1,14 @@
-# Lints the workflows themselves. Every other gate in this repository checks the
-# product; this one checks the thing that runs the gates.
+# Lints the workflows themselves — actionlint for validity, zizmor for safety. The
+# implementation is shared: ten repositories carried a byte-identical copy of it, which
+# could only ever be corrected ten times.
 #
-# It exists because the standard it enforces decays silently. An action pinned to a
-# commit SHA reads no differently from one pinned to `v4` until you look, a job
-# without `timeout-minutes` looks exactly like one with it, and a `${{ }}` spliced
-# into a `run:` block looks like every other line of shell. None of it fails a build
-# — it just sits there until the day it matters. Reviewers do not catch this class
-# of drift by reading diffs, so a machine does.
+#   https://github.com/usetheokit/shared-workflows/blob/main/.github/workflows/workflow-lint.yml
 #
-# Two tools, because they answer different questions:
-#   actionlint — is this a valid workflow? (schema, expressions, shellcheck on run blocks)
-#   zizmor     — is this workflow safe? (unpinned actions, template injection,
-#                over-broad permissions, credential persistence, cache poisoning)
-#
-# Both are pinned to a digest for the same reason the workflows they audit are.
-name: Workflow Lint
-
 # NO `paths:` filter, deliberately. A path-filtered workflow does not run when a pull
 # request touches nothing it matches — and a check that never runs never reports, so
-# making one REQUIRED deadlocks every unrelated pull request permanently. The job takes
-# about a minute; running it always is cheaper than the class of bug the filter invites.
+# making one REQUIRED deadlocks every unrelated pull request permanently.
+name: Workflow Lint
+
 on:
   push:
     branches: [main, develop, workspace]
@@ -30,37 +19,16 @@ on:
 permissions:
   contents: read
 
+# Declared here rather than in the reusable: a concurrency group inside a reusable is
+# shared by every repository calling it, so a run in one would cancel a run in another.
 concurrency:
   group: workflow-lint-${{ github.ref }}
-  # A cancelled run on an integration branch leaves the commit with no verdict,
-  # which reads the same as a passing one. Only supersede elsewhere.
+  # A cancelled run on an integration branch leaves the commit with no verdict, which
+  # reads the same as a passing one. Only supersede elsewhere.
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/develop' }}
 
 jobs:
   lint:
-    name: actionlint + zizmor
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: actionlint
-        # The pinned image carries its own shellcheck, so `run:` blocks are linted
-        # too — the same check that runs locally, with no toolchain to install.
-        run: |
-          docker run --rm \
-            -v "${GITHUB_WORKSPACE}:/repo" --workdir /repo \
-            rhysd/actionlint@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667 \
-            -color
-
-      - name: zizmor
-        # `--min-severity low` keeps the informational findings out while still
-        # failing on anything that is actually a weakness. A finding that is
-        # understood and accepted gets a `# zizmor: ignore[rule]` comment WITH the
-        # reason next to it — never a blanket exclusion in a config file, which
-        # hides the decision from whoever reads the workflow later.
-        run: |
-          pipx install zizmor==1.28.0
-          zizmor --no-progress --min-severity low .github/workflows/
+    # @v1 is a moving major on purpose: one correction reaches every caller on its next
+    # run. What it RUNS stays pinned — the actionlint image by digest, zizmor by version.
+    uses: usetheokit/shared-workflows/.github/workflows/workflow-lint.yml@v1 # zizmor: ignore[unpinned-uses]

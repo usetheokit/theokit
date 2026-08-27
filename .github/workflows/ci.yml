@@ -11,6 +11,12 @@ on:
     # emits blocks every PR forever, so the branch was left with an empty required list,
     # which reads as protection and demands nothing.
     branches: [main, develop]
+  # Manual dispatch against any ref. Added so this workflow can be exercised without opening a
+  # pull request — which is how the shape of a matrix job's NAME gets verified, and the name is
+  # what branch protection requires. `Unit + Type tests (22.12)` is a required context; if adding
+  # a key to that matrix leg renamed the job, the required check would stop existing and every
+  # pull request would wait for it forever, with no error anywhere.
+  workflow_dispatch:
 
 # Quality gates — every job runs on every PR. A failing job blocks merge.
 
@@ -132,6 +138,12 @@ jobs:
         # Restoring a second version means first deciding to support it: lower the floor in `engines`,
         # or the leg is theatre.
         node-version: ['22.12', '22']
+        # `include` adds a key to an EXISTING leg; a second matrix dimension would double the
+        # legs instead of annotating one. The floor version carries it, because that is the
+        # configuration `engines` promises — so the percentage describes what consumers run.
+        include:
+          - node-version: '22.12'
+            coverage: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -181,8 +193,27 @@ jobs:
           sudo apt-get update && sudo apt-get install -y bubblewrap
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
           bwrap --unshare-user --unshare-net --ro-bind / / /bin/true && echo "bwrap OK: userns liberado"
-      - run: pnpm test
+      # Coverage is a FLAG on this run, not a second run of it. It used to be a separate job
+      # that checked out, installed, cloned and built the sibling SDK, rebuilt the native
+      # binding, built the packages and then ran `vitest run --coverage` — the same suite this
+      # matrix had already run twice. Measured at 8.8 minutes per run, on ~100 runs a week.
+      #
+      # It also measured the wrong suite. That job never installed bubblewrap and never lifted
+      # the AppArmor userns restriction, so the ten kernel-confinement tests SKIPPED there while
+      # passing here: the percentage described an execution the product does not have.
+      #
+      # One leg carries the flag rather than both. The numbers would be identical, and two legs
+      # uploading under one artifact name is an upload conflict.
+      - name: Tests${{ matrix.coverage && ' + coverage thresholds' || '' }}
+        run: ${{ matrix.coverage && 'pnpm test:coverage' || 'pnpm test' }}
       - run: pnpm test:types
+      - name: Upload coverage report
+        if: ${{ matrix.coverage && always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 14
 
   scaffold-typecheck:
     # usetheokit/theokit#396 — a freshly scaffolded app must pass its own `typecheck` script.
@@ -253,49 +284,6 @@ jobs:
       - run: pnpm install --no-frozen-lockfile
       - name: tsc --noEmit on the bot preset
         run: cd my-test-bot && ../node_modules/.bin/tsc --noEmit
-
-  coverage:
-    name: Coverage gate (>=80%)
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version-file: '.nvmrc'
-          cache: 'pnpm'
-          # The cache key must change when the package manager does. setup-node keys the
-          # pnpm store on the lockfile alone, so a pnpm 9 -> 10 bump leaves the key
-          # identical and the job restores a store the new pnpm reads as inconsistent —
-          # `ERR_PNPM_MISSING_PACKAGE_INDEX_FILE`, on a package the lockfile does list.
-          # package.json carries `packageManager`, so including it ties the cache to the
-          # pnpm that wrote it.
-          cache-dependency-path: |
-            pnpm-lock.yaml
-            package.json
-      # Sibling theokit-sdk: workspace member declared in pnpm-workspace.yaml.
-      # `dist/` isn't committed → build after clone so type entries resolve.
-      - name: Checkout + build sibling theokit-sdk (workspace dep)
-        run: |
-          git clone --depth 1 https://github.com/usetheokit/theokit-sdk.git ../theokit-sdk
-          (cd ../theokit-sdk && pnpm install --no-frozen-lockfile && pnpm --filter "./packages/*" build)
-      - run: pnpm install --frozen-lockfile
-      - name: Rebuild native bindings (better-sqlite3 ABI guard)
-        run: pnpm rebuild better-sqlite3 || echo "::warning::native rebuild failed — preflight will surface details at test time"
-      # Build packages before tests — same rationale as `test` job above.
-      - run: pnpm build:packages
-      - name: Run tests with coverage thresholds
-        run: pnpm test:coverage
-      - name: Upload coverage report
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: coverage-report
-          path: coverage/
-          retention-days: 14
 
   dead-code:
     name: Dead code (Knip)
@@ -492,7 +480,6 @@ jobs:
       - typecheck-build
       - test
       - scaffold-typecheck
-      - coverage
       - dead-code
       - package-validation
       - dependency-audit
@@ -510,8 +497,9 @@ jobs:
         with:
           node-version-file: '.nvmrc'
 
-      # Real numbers or none. The `coverage` job uploads this; if it failed there is no artifact,
-      # and the report says it could not read one rather than printing a figure from somewhere else.
+      # Real numbers or none. The coverage-carrying leg of the `test` matrix uploads this; if it
+      # failed there is no artifact, and the report says it could not read one rather than
+      # printing a figure from somewhere else.
       - name: Download coverage report
         continue-on-error: true
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0

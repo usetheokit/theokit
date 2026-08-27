@@ -64,12 +64,17 @@ describe('M90 — the infra subpath surface is locked', () => {
    * a regeneration that produced an empty file from a broken layer would pass on both sides. This one
    * fails a snapshot that shrank, whatever the cause.
    */
-  it('test_snapshot_holds_the_175_measured_symbols', () => {
+  it('test_snapshot_holds_the_178_measured_symbols', () => {
     // 181 until `pty` moved out (#460). The drop is exactly its six — five values and one type —
     // and it is the one kind of shrink this floor is not meant to catch: the symbols were relocated,
     // not lost, and the package that received them asserts the same six.
+    //
+    // 178 since `@theokit/sdk-tools` moved to ^0.27.1. The growth is exactly the image tool's three
+    // — `createViewImageTool`, `DEFAULT_MAX_IMAGE_BYTES` and `CreateViewImageToolOptions` — which
+    // `tools-view-image-parity.test.ts` had been skipping loudly while the dependency was short.
+    // Raising the floor is what turned that skip back into an assertion.
     const total = Object.values(SNAPSHOT).reduce((n, s) => n + s.values.length + s.types.length, 0)
-    expect(total).toBe(175)
+    expect(total).toBe(178)
   })
 
   /**
