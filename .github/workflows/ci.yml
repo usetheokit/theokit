@@ -557,3 +557,23 @@ jobs:
           else
             gh pr comment "$PR" --body-file report.md
           fi
+
+  # SonarQube Cloud, from CI rather than Automatic Analysis.
+  #
+  # Automatic Analysis cannot import coverage — "code coverage information is not supported" in
+  # its documentation — so the gate saw bugs and smells and nothing about what the suite reaches.
+  # `vitest.config.ts` already emits lcov to `./coverage`; nothing was reading it.
+  #
+  # The workflow is shared rather than inlined. The ecosystem's only inline version carried
+  # `if: matrix.node-version == '22.x'` against a matrix of ['22.12', '22'] — a value that never
+  # occurs — so it reported `skipped` on every run for two months, which renders exactly like a
+  # passing step.
+  #
+  # Automatic Analysis is OFF for this project; the scanner refuses to run beside it with
+  # "You are running CI analysis while Automatic Analysis is enabled."
+  sonar:
+    needs: test
+    uses: usetheokit/shared-workflows/.github/workflows/sonar.yml@v1
+    secrets: inherit
+    with:
+      coverage-command: pnpm test:coverage
