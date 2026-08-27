@@ -10,11 +10,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - **`@theokit/agents-pty` no longer claims to work with an `@theokit/sdk-pty` it cannot build against.** The floor was `>=0.2.0`, and two of the six symbols this package re-exports were first exported in `0.3.0`. Because the range sits in `dependencies` rather than `peerDependencies`, npm resolved it silently and a consumer found out at a call site. (#522)
 
-- **`theokit` installs alongside the current `@theokit/studio` again.** The optional peer was `^0.2.0`, and a caret on a `0.x` version pins the minor — so `0.3.0` was excluded and npm answered ERESOLVE. Nothing about `0.3.0` justified the ceiling: same single exported subpath, and `theokit` reaches it through a runtime `import()` rather than a compiled dependency. (#521)
+## [theokit 0.57.0, @theokit/agents 12.1.0] - 2026-08-27
+
+### Fixed
+
+- **A controller returning binary no longer corrupts it.** Audio, images, PDFs, gzip — anything a controller answered with was decoded as UTF-8 on its way to the client, so every byte `>= 0x80` became the replacement character. A 55 296-byte MP3 arrived as 76 790 bytes that no player would open, under a `200` and a correct `content-type`; the damage was invisible until someone opened the file. File routes were never affected, so this was a silent divergence between two paths meant to be at parity. (#518)
 
 - **A server field error from a hand-written action reaches the form again.** An action returning `{ code, message, fields }` had its `fields` map discarded on the way to the client, so a form library got a generic error with nothing to place, re-threw, and the user saw no message at all — the failure looked like nothing happening. The map is now recognised whether or not the action set the internal wire marker, which only the framework's own serializer writes. (usetheokit/theokit-plugins#175)
 
-- **A controller returning binary no longer corrupts it.** Audio, images, PDFs, gzip — anything a controller answered with was decoded as UTF-8 on its way to the client, so every byte `>= 0x80` became the replacement character. A 55 296-byte MP3 arrived as 76 790 bytes that no player would open, under a `200` and a correct `content-type`; the damage was invisible until someone opened the file. File routes were never affected, so this was a silent divergence between two paths meant to be at parity. (#518)
+- **`theokit` installs alongside the current `@theokit/studio` again.** The optional peer was `^0.2.0`, and a caret on a `0.x` version pins the minor — so `0.3.0` was excluded and npm answered ERESOLVE. Nothing about `0.3.0` justified the ceiling: same single exported subpath, and `theokit` reaches it through a runtime `import()` rather than a compiled dependency. (#521)
+
+Also in this cut: three build gates for controllers — a route with no access decision fails
+`theokit build`, a path the runtime cannot reach fails it, and a controller may import the app it
+belongs to — plus the `@theokit/agents` image tool crossing the layer seam.
+
+## [theokit 0.56.0, @theokit/agents 12.0.0, @theokit/agents-pty 0.2.0, create-theokit 1.25.0] - 2026-08-26
 
 ### Added
 
@@ -45,6 +55,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   — bare `fs` resolves — and fatal for the ones Node exposes only under the protocol. Every builtin
   now keeps its prefix in the published output, which is the modern form anyway (#459)
 
+Also in this cut: the bot preset, a Bun adapter that enforces a declared rate limit rather than
+refusing the build, a keyless provider serving a turn, the terminal becoming its own package, and an
+unregistered prefix being refused.
 
 ## [theokit 0.55.0, create-theokit 1.24.0] - 2026-08-26
 
