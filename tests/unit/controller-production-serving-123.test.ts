@@ -37,11 +37,15 @@ const DIST_DIR = join(TEST_ROOT, '.theokit')
 const CONTROLLER_SRC = `
 import 'reflect-metadata'
 import { z } from 'zod'
-import { Controller, Get, Post, Body, Param } from '@theokit/http'
+import { Controller, Get, Post, Body, Param, SetMetadata } from '@theokit/http'
 
 export const zCreate = z.object({ title: z.string().min(3) })
 
+// Declared open on purpose. Required since #514: a controller route with no access decision now
+// fails the build, and this fixture is about COMPILATION and metadata survival — leaving it
+// undeclared would make these tests fail for a reason unrelated to what they assert.
 @Controller('api/v2/tasks')
+@SetMetadata('theokit:public', true)
 export class TasksController {
   @Get(':id')
   findById(@Param('id') id: string) {

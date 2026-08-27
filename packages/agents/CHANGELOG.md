@@ -1,5 +1,63 @@
 # @theokit/agents
 
+## 12.0.0
+
+### Major Changes
+
+- 8691f5c: `@theokit/agents/pty` is gone. The PTY backend now lives in `@theokit/agents-pty`, and installing `@theokit/agents` no longer compiles a terminal.
+
+  `@theokit/sdk-pty` declares `"install": "node scripts/prebuild.js || node-gyp rebuild"` — a native step that downloads a prebuild or falls back to a C++ compile. As a hard dependency of this package, **every consumer paid it**, including every web application that will never open a terminal. Measured: installing `@theokit/agents` alone took **6.7 s** with it and **1.4 s** without, and in a scaffolded app that was most of the gap in time to first green run (30.40 ± 7.50 s against Next.js's 14.93 ± 0.91 s) — with our build faster and our dependency tree smaller.
+
+  **To upgrade**, if you import the subpath:
+
+  ```diff
+  -import { PtyInteractiveBackend } from '@theokit/agents/pty'
+  +import { PtyInteractiveBackend } from '@theokit/agents-pty'
+  ```
+
+  plus `npm install @theokit/agents-pty`.
+
+  You do not have to find this note to know: `@theokit/agents/pty` still resolves, and using anything from it throws with the two lines above. It imports nothing, so keeping it costs no dependency and no native build — the failure is a sentence rather than an `ERR_MODULE_NOT_FOUND` you have to diagnose.
+
+  The surface is identical — the same six symbols, and the new package's test asserts they are the upstream identities rather than a wrapper. Nothing else changes.
+
+  If you do not import it, you install 5.3 s faster and there is nothing to do.
+
+  **Why a package and not an optional peer.** That was tried and reverted: a peer means _the host provides it_, and the M63 boundary forbids an application from importing `@theokit/sdk*` at all — so it would ask a consumer to declare exactly what it may not use. A sibling package is something the consumer genuinely does import, with no inversion. Recorded in `docs/adr/0004-the-terminal-is-a-separate-package.md`, along with the two alternatives rejected (a lazy `import()`, which defers nothing that is being measured, and documenting the cost, which is read after the decision it would inform).
+
+### Minor Changes
+
+- ed68f9f: A configuration error now reaches the browser with its own message, instead of the generic mask.
+
+  `missing_api_key` and `malformed_api_key` are the operator's own input — the person reading the blank error is the person who forgot to set the variable. Masking them cost that person the first ten minutes of every misconfiguration, and did it next to a `transient: true` that means _do not persist in history_ on this protocol and _retry may help_ everywhere else a developer has met the word. Together they read as a network hiccup.
+
+  Everything else is unchanged. #390's default stands: a driver's message, an HTTP client's, a filesystem call's — anything that could name a host, a path, a query or a credential — still reaches the browser as `An error occurred.`, with the failure code travelling separately so consumers never go back to matching on text.
+
+  The hole is keyed on **codes**, not on the error class. `ConfigurationError` is a large surface and parts of it do describe internals, so an allowlist keyed on the parent would widen by accident the first time something new subclassed it. Adding a code to the list is a decision about what a browser may read, and the bar is written beside it.
+
+  A host that passes its own `onError` is unaffected — the allowlist is the default's behaviour, not a rule imposed above the hook.
+
+- bf623e4: A paused run can reach its owner off the stream. `HitlWiring.onApprovalRequired` is the opt-in seam.
+
+  The framework's asynchronous promise — _the agent works and comes back when it needs your approval_ — held only while a client was attached. `ApprovalRequiredEvent` went into the run's own event stream and nowhere else, so a caller not consuming that stream never learned the run was waiting, and it stayed parked until someone opened the surface and looked (#458).
+
+  ```ts
+  createHitlPlugin({
+    gated,
+    emit,
+    awaitApproval,
+    onApprovalRequired: async ({ toolName, question, callbackUrl, timeoutMs }) => {
+      await myDelivery.send({ text: `${question} — ${toolName}`, url: `${BASE}/${callbackUrl}` })
+    },
+  })
+  ```
+
+  It receives the same facts the stream carries and does whatever the **application** does. Deliberately not a `@theokit/gateway` dependency: this package must not import from it, and choosing a channel is a policy decision the framework does not get to make. `@theokit/gateway`'s `DeliveryRouter` is the obvious thing to hand it, and that stays the app's decision.
+
+  **Fire-and-forget by contract, and both halves of that are tested.** The run does not wait for it, so a slow dispatch cannot hold a gated tool open; and it does not fail on it, so a Slack outage cannot decide whether a gated tool runs. A rejected promise is swallowed — the outcome belongs to the human, not to the channel.
+
+  Optional: a wiring without the hook behaves exactly as before.
+
 ## 11.1.0
 
 ### Minor Changes

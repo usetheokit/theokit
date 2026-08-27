@@ -1,0 +1,70 @@
+# The blocking half of the ecosystem dependency gate, delegated to the organisation's
+# reusable workflow so the policy lives in one file rather than ten that drift.
+#
+# Source and rationale: https://github.com/usetheokit/.github/tree/main/scripts/dep-check
+#
+# A separate workflow rather than a job inside CI, deliberately. It is offline and
+# fast, so it reports in about a minute — well before the build finishes — and it does
+# not need to be ordered before anything to do that. What actually makes it a gate is
+# marking it required in branch protection; a job ordered first in a workflow that
+# nobody requires blocks nothing.
+#
+# NO `paths:` filter. A path-filtered workflow does not run when a pull request touches
+# nothing it matches, and a required check that never runs deadlocks every unrelated
+# pull request permanently.
+name: Dependency Gate
+
+on:
+  push:
+    branches: [main, develop, workspace]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+    inputs:
+      full:
+        description: |
+          Run the expensive legs too — the suite at the floor of every declared range, a real
+          install of the packed tarball, and the list of consumers this release would strand.
+          They are on automatically for a pull request into main; this makes them reachable
+          without opening one, which is how the gate gets exercised before it has to matter.
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dep-check-${{ github.ref }}
+  # A cancelled run on an integration branch leaves the commit with no verdict, which
+  # reads the same as a passing one.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/develop' }}
+
+jobs:
+  dep-check:
+    # Two things are versioned here and they move differently, which is the whole design.
+    #
+    # THE WORKFLOW MOVES. `@v1` is a moving major, deliberately unpinned, and the blanket
+    # SHA-pinning policy is suppressed for it below. That policy defends against a THIRD
+    # PARTY moving a ref under us; usetheokit/shared-workflows is this same organisation.
+    # What a SHA would buy is a guarantee we already have, and what it would cost is the
+    # reason a reusable workflow exists: pinning ten callers turns one correction into ten
+    # pull requests, and a central policy that costs ten pull requests is not central.
+    #
+    # THE TOOL DOES NOT MOVE. @theokit/dep-check is pinned to an exact version inside the
+    # reusable workflow, so a change in what the detector detects is a version bump
+    # somebody reviewed — never something that arrives overnight. A detector that silently
+    # changes what it detects is indistinguishable from the codebase changing, and the
+    # green that follows is believed either way.
+    #
+    # The suppression rides ON the `uses:` line because that is where zizmor reads it; a
+    # reason parked in the block above documents a finding that still fails the lint.
+    uses: usetheokit/shared-workflows/.github/workflows/dep-check.yml@v1 # zizmor: ignore[unpinned-uses]
+    with:
+      # On an ordinary push only the offline check runs, so the feedback stays about a
+      # minute. The three expensive ones turn on for the release pull request — the last
+      # moment where "who does this strand" and "does the tarball actually install" can
+      # still change a decision. `github.base_ref` is empty outside a pull request, so
+      # these are false on push.
+      run-install-check: ${{ github.base_ref == 'main' || inputs.full == true }}
+      run-floor-check: ${{ github.base_ref == 'main' || inputs.full == true }}
+      run-impact-check: ${{ github.base_ref == 'main' || inputs.full == true }}
