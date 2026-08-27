@@ -6,7 +6,14 @@ import { readdirSync, type Dirent } from 'node:fs'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { join } from 'node:path'
 
-import { createDecoratorHandler, isControllerClass, type ServeAgent } from '@theokit/http'
+import {
+  CONTROLLER_PREFIX,
+  createDecoratorHandler,
+  getMeta,
+  isControllerClass,
+  Reflector,
+  type ServeAgent,
+} from '@theokit/http'
 
 import { dispatchCsrfWarn } from '../security/csrf-warn-dispatch.js'
 import { enforceCsrf, type DisallowedConfig } from '../security/csrf.js'
@@ -28,10 +35,49 @@ interface ControllerDispatcher {
   dispatch(request: Request): Promise<Response | null>
   /** Non-executing route probe — true when a controller route owns `method` + `pathname`. */
   matches(method: string, pathname: string): boolean
+  /** True when the controller owning `pathname` declared `theokit:csrf-exempt`. */
+  isCsrfExempt(pathname: string): boolean
 }
 
 // State-mutating methods get CSRF, mirroring the file-route pipeline (execute.ts).
 const CSRF_PROTECTED_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
+
+/**
+ * A controller declaring that it authenticates by other means, so the CSRF gate has nothing to add.
+ *
+ * The case this exists for is a webhook. Stripe, GitHub and every other sender authenticate with an
+ * HMAC over the request body — stronger than a header, and entirely unrelated to one. None of them
+ * will ever send `X-Theo-Action`, so without this a webhook endpoint answers 403 to every real
+ * delivery and the only escape is `csrf: 'warn'` for the whole application (theokit#535).
+ *
+ * DELIBERATELY separate from `theokit:public`. They answer different questions — "may an
+ * unauthenticated caller reach this?" and "does this route authenticate by other means?" — and a
+ * route can want the first without the second. Conflating them would lift the gate off every public
+ * route in the ecosystem as a side effect of a webhook fix.
+ *
+ * Declared on the CONTROLLER, not the method: the granularity a webhook needs, and it avoids a
+ * second path matcher alongside `handle.matches` that could drift from it.
+ */
+const CSRF_EXEMPT_METADATA = 'theokit:csrf-exempt'
+
+/**
+ * Segment-wise, so `api/hooks` never matches `api/hooks-admin`.
+ *
+ * Split-and-filter rather than a trimming regex: `/^\/+|\/+$/` is quadratic on a pathname of
+ * repeated slashes, and a pathname is attacker-supplied (sonarjs/slow-regex). Splitting is linear
+ * and `filter(Boolean)` drops the empty segments the leading and trailing slashes produce, which is
+ * all the trim was for.
+ */
+function segments(value: string): string[] {
+  return value.split('/').filter(Boolean)
+}
+
+function pathOwnedByPrefix(pathname: string, prefix: string): boolean {
+  const want = segments(prefix)
+  const got = segments(pathname)
+  if (want.length === 0 || got.length < want.length) return false
+  return want.every((segment, i) => got[i] === segment)
+}
 
 /** Recursively collect `*.controller.ts` files under `dir` (absolute paths). */
 /**
@@ -129,9 +175,25 @@ export async function createControllerDispatcher(opts: {
   const classes = await scanControllers(opts.controllersDir, opts.loadModule)
   if (classes.length === 0) return null
   const handle = createDecoratorHandler({ controllers: classes, serveAgent: opts.serveAgent })
+  const reflector = new Reflector()
+
+  // Read once at construction: the metadata cannot change between requests, and re-walking every
+  // class per request would put a reflection pass on the hot path for a value that never moves.
+  const exemptPrefixes = classes
+    // `Reflector`, not `Reflect.getMetadata`: the global is only typed where `reflect-metadata`
+    // has been imported, and this module does not import it — the dts build fails on it (TS2339).
+    // `@SetMetadata` writes through the same store, so the reader is the framework's own.
+    .filter((cls) => reflector.getByKey<boolean>(CSRF_EXEMPT_METADATA, cls) === true)
+    .map((cls) => {
+      const meta = getMeta<{ prefix?: string }>(CONTROLLER_PREFIX, cls)
+      return meta?.prefix ?? ''
+    })
+    .filter((prefix) => prefix !== '')
+
   return {
     dispatch: (request) => handle(request),
     matches: (method, pathname) => handle.matches(method, pathname),
+    isCsrfExempt: (pathname) => exemptPrefixes.some((p) => pathOwnedByPrefix(pathname, p)),
   }
 }
 
@@ -202,7 +264,11 @@ export async function dispatchControllerRequest(args: {
   // owns this path (probe with the non-executing matcher — never double-dispatch,
   // which would run the handler + its side effects). An unrouted path falls
   // through to the host's own 404, not a 403.
-  if (CSRF_PROTECTED_METHODS.has(method) && dispatcher.matches(method, pathname)) {
+  if (
+    CSRF_PROTECTED_METHODS.has(method) &&
+    dispatcher.matches(method, pathname) &&
+    !dispatcher.isCsrfExempt(pathname)
+  ) {
     const decision = enforceCsrf(
       req,
       csrfMode,

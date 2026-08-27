@@ -557,3 +557,32 @@ jobs:
           else
             gh pr comment "$PR" --body-file report.md
           fi
+
+  # SonarQube Cloud, from CI rather than Automatic Analysis.
+  #
+  # Automatic Analysis cannot import coverage — "code coverage information is not supported" in
+  # its documentation — so the gate saw bugs and smells and nothing about what the suite reaches.
+  # `vitest.config.ts` already emits lcov to `./coverage`; nothing was reading it.
+  #
+  # The workflow is shared rather than inlined. The ecosystem's only inline version carried
+  # `if: matrix.node-version == '22.x'` against a matrix of ['22.12', '22'] — a value that never
+  # occurs — so it reported `skipped` on every run for two months, which renders exactly like a
+  # passing step.
+  #
+  # Automatic Analysis is OFF for this project; the scanner refuses to run beside it with
+  # "You are running CI analysis while Automatic Analysis is enabled."
+  sonar:
+    needs: test
+    # `@v1` is a moving ref by design — a policy fix in shared-workflows must reach every
+    # caller without eleven pull requests, which is the reason that repository exists.
+    uses: usetheokit/shared-workflows/.github/workflows/sonar.yml@v1 # zizmor: ignore[unpinned-uses]
+    # Named rather than inherited: `secrets: inherit` would hand the scanner every secret
+    # this repository holds.
+    secrets:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+    with:
+      # Not re-run here: the `test` job above first checks out and builds the sibling
+      # theokit-sdk, rebuilds native bindings and installs bubblewrap — 89 suites fail to load
+      # without that, which is exactly what the first scan hit while still reporting green.
+      # Reading its artifact also means Sonar publishes the number this repo's own gate measured.
+      coverage-artifact: coverage-report

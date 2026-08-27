@@ -23,6 +23,7 @@ import {
   runMiddleware,
   type ResolvedMiddleware,
 } from './middleware-consumer.js'
+import { resolveBody } from './resolve-body.js'
 import { createNodeAdapter } from './runtime/node.js'
 import { walkControllerMetadata, type WalkResult } from './walk-metadata.js'
 
@@ -183,7 +184,7 @@ async function handleRequest(
     }
 
     // Body
-    const body = await resolveBody(method, request, walk)
+    const body = await resolveBody(method, request, walk, jsonResponse)
     if (body instanceof Response) return body // validation error response
 
     // Build args
@@ -242,27 +243,6 @@ async function runGuards(
 }
 
 // ─── Body resolution ─────────────────────────────────────────
-
-async function resolveBody(method: string, request: Request, walk: WalkResult): Promise<unknown> {
-  if (!['POST', 'PUT', 'PATCH'].includes(method)) return undefined
-
-  let body: unknown
-  try {
-    const text = await request.text()
-    body = text ? JSON.parse(text) : undefined
-  } catch {
-    body = undefined
-  }
-
-  if (walk.bodySchema && body !== undefined) {
-    const result = walk.bodySchema.safeParse(body)
-    if (!result.success) {
-      return jsonResponse(422, { error: { code: 'VALIDATION_ERROR', issues: result.error.issues } })
-    }
-    body = result.data
-  }
-  return body
-}
 
 // ─── Response builder ────────────────────────────────────────
 

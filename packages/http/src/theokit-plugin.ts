@@ -47,6 +47,7 @@ import {
   runMiddleware,
   type ResolvedMiddleware,
 } from './bridge/middleware-consumer.js'
+import { resolveBody } from './bridge/resolve-body.js'
 import { nodeIncomingToRequest, writeResponseToNode } from './bridge/runtime/node.js'
 import { loadControllersFromGlob } from './bridge/swc-loader.js'
 import { walkControllerMetadata, type WalkResult } from './bridge/walk-metadata.js'
@@ -204,7 +205,7 @@ async function handleDecoratorRoute(
     const guardResponse = await runGuards(walk.guards, ctx, container)
     if (guardResponse) return guardResponse
 
-    const body = await resolveBody(method, request, walk)
+    const body = await resolveBody(method, request, walk, jsonResponse)
     if (body instanceof Response) return body
 
     const args = buildArgs(walk.paramEntries, {
@@ -248,25 +249,6 @@ async function runGuards(
     }
   }
   return null
-}
-
-async function resolveBody(method: string, request: Request, walk: WalkResult): Promise<unknown> {
-  if (!['POST', 'PUT', 'PATCH'].includes(method)) return undefined
-  let body: unknown
-  try {
-    const text = await request.text()
-    body = text ? JSON.parse(text) : undefined
-  } catch {
-    body = undefined
-  }
-  if (walk.bodySchema && body !== undefined) {
-    const result = walk.bodySchema.safeParse(body)
-    if (!result.success) {
-      return jsonResponse(422, { error: { code: 'VALIDATION_ERROR', issues: result.error.issues } })
-    }
-    body = result.data
-  }
-  return body
 }
 
 function buildResponse(result: unknown, walk: WalkResult, method: string): Response {
