@@ -1,15 +1,13 @@
 import 'reflect-metadata'
 
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
-import { EventEmitter } from 'node:events'
-import { Readable } from 'node:stream'
-import type { IncomingMessage, ServerResponse } from 'node:http'
 import { join, resolve } from 'node:path'
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { loadControllerWithSwc } from '../../packages/http/dist/index.js'
 import { dispatchControllerRequest } from '../../packages/theo/src/server/http/controller-dispatch.js'
+import { nodeRequest, recordingResponse } from '../helpers/node-http-stubs.js'
 
 /*
  * A webhook endpoint authenticates by signature, and CSRF has nothing to protect there.
@@ -55,31 +53,6 @@ export class GuardedController {
 }
 `
 
-function recordingResponse(): { res: ServerResponse; status: () => number } {
-  let status = 0
-  const res = Object.assign(new EventEmitter(), {
-    writeHead(code: number) {
-      status = code
-      return res
-    },
-    setHeader: () => res,
-    write: () => true,
-    end: () => res,
-    destroy: () => res,
-  }) as unknown as ServerResponse
-  return { res, status: () => status }
-}
-
-function postWithoutTheoAction(url: string): IncomingMessage {
-  // A real Readable, not an EventEmitter: `incomingMessageToWebRequest` calls `Readable.toWeb`,
-  // which rejects anything else. A stub that cannot reach the code under test measures nothing.
-  return Object.assign(Readable.from([Buffer.from('{}')]), {
-    method: 'POST',
-    url,
-    headers: { host: 'localhost:3000', 'content-type': 'application/json' },
-  }) as unknown as IncomingMessage
-}
-
 describe('a controller that authenticates by signature', () => {
   beforeAll(() => {
     mkdirSync(CONTROLLERS_DIR, { recursive: true })
@@ -93,7 +66,7 @@ describe('a controller that authenticates by signature', () => {
     await dispatchControllerRequest({
       controllersDir: CONTROLLERS_DIR,
       loadModule: loadControllerWithSwc,
-      req: postWithoutTheoAction('/api/hook'),
+      req: nodeRequest({ url: '/api/hook' }),
       res,
       csrfMode: 'strict',
       requestId: 'exempt-test',
@@ -110,7 +83,7 @@ describe('a controller that authenticates by signature', () => {
     await dispatchControllerRequest({
       controllersDir: CONTROLLERS_DIR,
       loadModule: loadControllerWithSwc,
-      req: postWithoutTheoAction('/api/guarded'),
+      req: nodeRequest({ url: '/api/guarded' }),
       res,
       csrfMode: 'strict',
       requestId: 'exempt-test',

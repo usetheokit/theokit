@@ -1,14 +1,13 @@
 import 'reflect-metadata'
 
-import { EventEmitter } from 'node:events'
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
-import type { IncomingMessage, ServerResponse } from 'node:http'
 import { join, resolve } from 'node:path'
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { loadControllerWithSwc } from '../../packages/http/dist/index.js'
 import { dispatchControllerRequest } from '../../packages/theo/src/server/http/controller-dispatch.js'
+import { nodeRequest, recordingResponse } from '../helpers/node-http-stubs.js'
 
 /**
  * A controller that answers with binary — audio, an image, a PDF, a gzip blob — must deliver the
@@ -45,39 +44,6 @@ export class BinaryController {
 }
 `
 
-/** Minimal `ServerResponse` that records the bytes it was handed, without decoding them. */
-function recordingResponse(): { res: ServerResponse; chunks: Buffer[]; status: () => number } {
-  const chunks: Buffer[] = []
-  let status = 0
-  const res = Object.assign(new EventEmitter(), {
-    writeHead(code: number) {
-      status = code
-      return res
-    },
-    setHeader() {
-      return res
-    },
-    write(chunk: unknown) {
-      if (chunk !== undefined) chunks.push(Buffer.from(chunk as Uint8Array))
-      return true
-    },
-    end(chunk?: unknown) {
-      if (chunk !== undefined) chunks.push(Buffer.from(chunk as Uint8Array))
-      return res
-    },
-  }) as unknown as ServerResponse
-  return { res, chunks, status: () => status }
-}
-
-function getRequest(url: string): IncomingMessage {
-  const req = Object.assign(new EventEmitter(), {
-    method: 'GET',
-    url,
-    headers: { host: 'localhost:3000' },
-  }) as unknown as IncomingMessage
-  return req
-}
-
 describe('a controller answering with binary', () => {
   beforeAll(() => {
     mkdirSync(CONTROLLERS_DIR, { recursive: true })
@@ -94,7 +60,7 @@ describe('a controller answering with binary', () => {
     const handled = await dispatchControllerRequest({
       controllersDir: CONTROLLERS_DIR,
       loadModule: loadControllerWithSwc,
-      req: getRequest('/api/binary/bytes'),
+      req: nodeRequest({ method: 'GET', url: '/api/binary/bytes' }),
       res,
       csrfMode: 'off',
       requestId: 'binary-test',
