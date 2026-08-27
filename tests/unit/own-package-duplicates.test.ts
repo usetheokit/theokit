@@ -173,6 +173,17 @@ describe('own packages are not installed alongside themselves', () => {
   })
 
   it('test_ROOT_resolves_to_this_repository', () => {
-    expect(ROOT.endsWith('theokit')).toBe(true)
+    // The identity of the repository, not the name of the directory holding it. The two are
+    // different things, and the previous version asserted the second:
+    //
+    //     expect(ROOT.endsWith('theokit')).toBe(true)
+    //
+    // which is false for every checkout that is not literally named `theokit` — a `git worktree`,
+    // a `git clone <url> theokit-2`, and the CI dependency gate, which clones to `path: repo`
+    // (usetheokit/theokit#527). The anti-vacuity intent was right; the measurement was not.
+    const manifest = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')) as {
+      name?: string
+    }
+    expect(manifest.name).toBe('theokit-monorepo')
   })
 })
