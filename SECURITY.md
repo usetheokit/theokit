@@ -75,3 +75,12 @@ Out of scope:
 For vulnerabilities affecting multiple frameworks or with broad
 ecosystem impact, we coordinate with the affected vendors and (where
 applicable) the GitHub Security Lab before disclosure.
+
+## Static analysis coverage
+
+CodeQL is configured in `.github/workflows/codeql.yml`. GitHub does not accept
+CodeQL uploads from a private repository unless GitHub Advanced Security is
+enabled, so the analysis job is intentionally skipped while that capability is
+unavailable. Secret scanning, dependency review and the repository's local
+security gates remain active. Enabling GHAS (or making the repository public)
+activates CodeQL without a workflow change.
