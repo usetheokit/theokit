@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- **The default CSP allows media the app generated itself.** `media-src` was absent, so `<audio>`/`<video>` fell back to `default-src 'self'` and a `blob:` URL was blocked — an app could not play the audio `@theokit/plugin-voice` returns from `/api/voice/tts`. `img-src` already listed `blob:` for canvas exports; the same reasoning covers audio. (#553)
+
 ### Changed
 
 - **The build no longer runs twice per push and per typecheck job.** `typecheck` is `pnpm build:packages && tsc --noEmit`, and both the pre-push hook and the `Typecheck + Build` job called it right after building — so the build ran again. Callers that already built now use `typecheck:only`. Measured on an already-built tree: 87s → 19s.
