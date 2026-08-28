@@ -365,7 +365,6 @@ jobs:
     # was ordering, and it cost the wall clock: measured on a real run, `test` occupied +0.1 to
     # +12.5 and this job +12.6 to +14.3 — a twelve-minute wait in front of a 1.7-minute job for
     # nothing it needed.
-    needs: []
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
