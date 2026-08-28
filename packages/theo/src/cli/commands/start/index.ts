@@ -204,6 +204,10 @@ export async function startCommand(options: StartOptions): Promise<void> {
     routes: cachedRoutes,
     target: listenTarget,
     allowUnauthenticatedWrites: config.security?.allowUnauthenticatedWrites ?? false,
+    // `cachedRoutes` comes from the file-route scan and never describes controllers. Without this
+    // the gate reads an empty table as "nothing is exposed" and binds a public interface in silence,
+    // while a controller marked `theokit:public` on a POST sits on it (theokit#543).
+    hasControllers: controllersDistDir !== undefined,
   })
   if (exposure.kind === 'refused') {
     console.error(`\n  ${exposure.message}\n`)
