@@ -12,9 +12,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **`DefineAgentToolSpec` no longer documents its schema as Zod 3.** The `@public` doc shipped in the published `.d.ts` said "a Zod 3 schema" while the package declares `peerDependencies: { zod: ^4.0.0 }` and the code reads both majors' internals on purpose. A consumer opening the type was told the wrong major.
 
 
+## [theokit 0.58.1] - 2026-08-28
+
 ### Fixed
 
 - **The public-exposure gate no longer reads an empty route table as "nothing is exposed".** An app serving through controllers writes `routes: []` into its manifest — the scan behind that array reads `server/routes/` only — so the gate concluded there was nothing to judge and bound a public interface in silence, while a controller marked `theokit:public` on a POST sat on it. It now reports `unverified`, with a message that names the real cause instead of prescribing a rebuild that would not help. (#543)
+
+## [theokit 0.58.0, @theokit/agents-pty 0.2.1] - 2026-08-27
+
+### Added
+
+- **A controller can declare that it authenticates by other means.** `@SetMetadata('theokit:csrf-exempt', true)` exempts a route from the CSRF gate without making it public — a Stripe webhook carries no session and no token, and its signature IS the authentication, so a guard would reject every real delivery and accept nothing in exchange. Deliberately separate from `theokit:public`: the two answer different questions.
+
+### Fixed
+
+- **A handler taking `@Req()` receives a body it can still read.** `resolveBody` consumed the request stream to populate `@Body`, so a multipart upload or a webhook needing the exact signed bytes reached the handler with its content-type intact and its payload gone. It reads a `clone()` now; the original is untouched. (#534)
+
 - **`@theokit/agents-pty` no longer claims to work with an `@theokit/sdk-pty` it cannot build against.** The floor was `>=0.2.0`, and two of the six symbols this package re-exports were first exported in `0.3.0`. Because the range sits in `dependencies` rather than `peerDependencies`, npm resolved it silently and a consumer found out at a call site. (#522)
 
 ## [theokit 0.57.0, @theokit/agents 12.1.0] - 2026-08-27
