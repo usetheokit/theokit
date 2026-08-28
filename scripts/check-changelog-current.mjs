@@ -15,8 +15,8 @@
  *
  * ## What it checks
  *
- * The newest release tag must not be NEWER than the newest dated section of `CHANGELOG.md`. That
- * is the whole invariant: a release that shipped without reaching the record.
+ * The newest release tag must be NAMED by a dated section of `CHANGELOG.md`. That is the whole
+ * invariant: a release that shipped without reaching the record.
  *
  * ## What it deliberately does not check
  *
@@ -24,8 +24,17 @@
  *   can see that, and pretending otherwise would make a green run mean more than it does.
  * - Per-version completeness. A release may legitimately land inside a section that names several
  *   versions, which is how a same-day batch is recorded.
- * - Day granularity is the resolution. A release and its record on the same day always agree, so
- *   the gate cannot catch a same-day omission. Stated rather than hidden.
+ * - Whether every OLDER release is recorded. The check is about the newest one; a hole further
+ *   back stays a hole, and finding it is archaeology rather than a gate.
+ *
+ * Day granularity USED to be the resolution, and it was stated here as a known limit: a release and
+ * its record on the same day always agreed, so a same-day omission was invisible. That limit cost a
+ * real omission on 2026-08-28 — `theokit@0.58.1` and `theokit@0.59.0` both shipped that day, the
+ * record named only the first, and this gate was green. Three releases in two days is this
+ * repository's ordinary pace, so the case was not exotic.
+ *
+ * The comparison is now on IDENTITY, not date: the newest tag's `name@version` must appear in some
+ * dated heading. Strictly stronger, and it removes the limit rather than restating it.
  *
  * Exits 1 when the record is behind, 0 when it is current, and 0 with a stated reason when it could
  * not read the tags — a run that could not measure must not report a pass it did not earn.
@@ -68,12 +77,15 @@ function firstReleaseTag(raw) {
   return null
 }
 
-/** The newest `## [...] - YYYY-MM-DD` heading, or null when the file carries none. */
+/** A `## [...] - YYYY-MM-DD` heading. One definition, because two would drift. */
+const DATED_SECTION = /^## .*?-\s*(\d{4}-\d{2}-\d{2})\s*$/
+
+/** The newest dated heading, or null when the file carries none. Reported, not compared. */
 function newestRecordedSection() {
   const text = readFileSync(resolve(REPO_ROOT, 'CHANGELOG.md'), 'utf8')
   let newest = null
   for (const line of text.split('\n')) {
-    const match = /^## .*?-\s*(\d{4}-\d{2}-\d{2})\s*$/.exec(line)
+    const match = DATED_SECTION.exec(line)
     if (match && (newest === null || match[1] > newest.date)) {
       newest = { date: match[1], heading: line.trim() }
     }
@@ -99,10 +111,23 @@ if (section === null) {
   process.exit(1)
 }
 
-if (tag.date > section.date) {
-  console.error(
-    `✗ [changelog] ${tag.name} shipped on ${tag.date}; the newest record is ${section.date}.`,
-  )
+/**
+ * Is this tag named by any dated heading?
+ *
+ * A tag is `theokit@0.59.0`; a heading writes it `theokit 0.59.0`, and may name several in one —
+ * `## [theokit 0.58.0, @theokit/agents-pty 0.2.1] - 2026-08-27` — which is how a same-day batch is
+ * recorded. Normalising the `@` before the version and asking whether the heading CONTAINS it
+ * handles both shapes without parsing the list.
+ */
+function isRecorded(tagName) {
+  const spelled = tagName.replace(/@(?=\d)/, ' ')
+  return readFileSync(resolve(REPO_ROOT, 'CHANGELOG.md'), 'utf8')
+    .split('\n')
+    .some((line) => DATED_SECTION.test(line) && line.includes(spelled))
+}
+
+if (!isRecorded(tag.name)) {
+  console.error(`✗ [changelog] ${tag.name} shipped on ${tag.date} and no dated section names it.`)
   console.error(`    ${section.heading}`)
   console.error('')
   console.error('  A release reached the registry without reaching this file. Promote the entries')

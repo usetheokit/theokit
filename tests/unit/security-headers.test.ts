@@ -58,6 +58,24 @@ describe('buildSecurityHeaders — defaults', () => {
     expect(DEFAULT_CSP).toMatch(/img-src/)
     expect(DEFAULT_CSP).toMatch(/connect-src/)
   })
+
+  /**
+   * `media-src` was absent, so `<audio>`/`<video>` fell back to `default-src 'self'` and a
+   * `blob:` URL was blocked. That is not hypothetical: `@theokit/plugin-voice` returns `audio/mpeg`
+   * from `/api/voice/tts`, and the obvious way to play it — `URL.createObjectURL(new Blob([bytes]))`
+   * — was refused by the browser with
+   *
+   *   "Loading media from 'blob:…' violates 'default-src self'. Note that 'media-src' was not
+   *    explicitly set, so 'default-src' is used as a fallback."
+   *
+   * `img-src` already listed `blob:` for canvas exports; the same reasoning covers audio the app
+   * generated itself. Measured in Chrome against the running app (usetheokit/theokit#553).
+   */
+  it('allows media the app generated itself, as img-src already does', () => {
+    expect(DEFAULT_CSP).toMatch(/media-src[^;]*'self'/)
+    expect(DEFAULT_CSP).toMatch(/media-src[^;]*blob:/)
+    expect(DEFAULT_CSP).toMatch(/media-src[^;]*data:/)
+  })
 })
 
 describe('buildSecurityHeaders — cspMode', () => {

@@ -6,11 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- **The default CSP allows media the app generated itself.** `media-src` was absent, so `<audio>`/`<video>` fell back to `default-src 'self'` and a `blob:` URL was blocked — an app could not play the audio `@theokit/plugin-voice` returns from `/api/voice/tts`. `img-src` already listed `blob:` for canvas exports; the same reasoning covers audio. (#553)
+
+### Changed
+
+- **The build no longer runs twice per push and per typecheck job.** `typecheck` is `pnpm build:packages && tsc --noEmit`, and both the pre-push hook and the `Typecheck + Build` job called it right after building — so the build ran again. Callers that already built now use `typecheck:only`. Measured on an already-built tree: 87s → 19s.
+- **CI no longer clones and builds the sibling `theokit-sdk`.** Four job definitions did it on every run — 476s of compute, ~95s inside the critical path — for a dependency the lockfile never references. `@theokit/sdk` is consumed from the registry, which ships the `dist/index.d.ts` the step existed to produce.
+- **CI runs `test:types` once instead of once per node leg.** Its diagnostics come from the TypeScript version, the tsconfig and the sources — none of which vary with the node runtime executing tsc — so the second run recomputed a guaranteed-identical result at 283s and 316s. Moved to the leg WITHOUT coverage, which is what shortens the run: the coverage leg is already the critical path, so pairing them would have saved nothing.
+- **The release-record gate compares identity, not dates.** It asked whether the newest tag was newer than the newest dated section, so two releases on the same day masked each other — `theokit@0.59.0` shipped unrecorded with the gate green. It now requires a dated heading to NAME the tag. The day-granularity limit was documented rather than hidden, which is why it was findable; three releases in two days is this repo's ordinary pace, so it was worth removing rather than restating.
+
+## [theokit 0.59.0] - 2026-08-28
+
 ### Changed
 
 - **`react-router` peer widened to `^7.0.0 || ^8.0.0`.** The `^7.0.0` pin held every consumer back from a major that works: the ten symbols theokit imports all exist in 8.3.0, and the full suite passes on it with the same numbers as on 7 — 7242 passed, 18 skipped, zero failures. The floor check on the release PR exercises 7; everyday CI now exercises 8, so both majors in the range are actually run. (#547)
 - **`DefineAgentToolSpec` no longer documents its schema as Zod 3.** The `@public` doc shipped in the published `.d.ts` said "a Zod 3 schema" while the package declares `peerDependencies: { zod: ^4.0.0 }` and the code reads both majors' internals on purpose. A consumer opening the type was told the wrong major.
-
 
 ## [theokit 0.58.1] - 2026-08-28
 
