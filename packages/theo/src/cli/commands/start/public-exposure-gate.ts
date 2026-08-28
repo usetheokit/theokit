@@ -67,6 +67,18 @@ export interface ExposureAssessment {
   readonly target: ListenTarget
   /** `security.allowUnauthenticatedWrites` from theo.config.ts — an explicit, written decision. */
   readonly allowUnauthenticatedWrites: boolean
+  /**
+   * Whether this build emitted compiled controllers, which `routes` does not describe.
+   *
+   * The caller already knows: `start` resolves `dist/controllers.json` to decide whether to serve
+   * them at all. Passing the fact in is what lets an empty `routes` mean two different things —
+   * "this app serves nothing", which is safe to bind, and "this app serves through controllers the
+   * manifest does not list", which is not judged here at all.
+   *
+   * `undefined` is read as unknown, not as false. Distinguishing them is the point of the field, and
+   * a caller that has not been updated should not be answered with confidence it did not supply.
+   */
+  readonly hasControllers?: boolean
 }
 
 /** Does this address reach anything beyond this machine? */
@@ -85,16 +97,60 @@ function unauthenticatedWrites(routes: readonly ServerRouteNode[]): Exposure[] {
 }
 
 /**
- * True when at least one route file exports a mutating method and NO route carries the
- * `publicMethods` field — the signature of a manifest built before this check existed.
+ * Why the gate cannot judge this route table, or `null` when it can.
  *
- * A table where every route legitimately has zero public methods also has no `publicMethods` values,
- * so the distinguishing fact is the FIELD's presence, not its contents.
+ * Two different absences reach here, and telling them apart matters because the operator's next
+ * move differs. Returning a REASON rather than a boolean is what keeps the message honest: a
+ * warning that prescribes `theo build` to someone whose build is fine teaches them to ignore it.
+ *
+ * - `stale-manifest` — routes exist and declare mutating methods, but none carries `publicMethods`.
+ *   The signature of a manifest built before this check existed. Regenerating it answers the
+ *   question.
+ *
+ * - `empty-table` — the manifest describes no routes at all. Regenerating it changes nothing: the
+ *   scan behind that array reads `server/routes/`, and an app serving through controllers has none
+ *   (usetheokit/theokit#543). Measured on a nine-controller app: sixteen routes served, `routes: []`
+ *   written.
+ *
+ *   This one was silently `allowed` until 2026-08-28. `.some()` on an empty array is false for both
+ *   questions above, so the gate concluded there was nothing to expose and bound a public interface
+ *   without a word — while a controller declaring `@SetMetadata('theokit:public', true)` on a POST
+ *   sat on it. Absence of a description is not absence of exposure, which is the sentence this whole
+ *   file is written around.
  */
-function cannotAnswer(routes: readonly ServerRouteNode[]): boolean {
-  const anyDetected = routes.some((r) => r.publicMethods !== undefined)
-  if (anyDetected) return false
+function whyCannotAnswer(
+  routes: readonly ServerRouteNode[],
+  hasControllers: boolean | undefined,
+): 'stale-manifest' | 'empty-table' | null {
+  if (routes.length === 0) {
+    // An app that serves nothing is safe to bind anywhere, and warning about it is the kind of
+    // noise that gets a gate switched off. Only an empty table that is NOT the whole story warrants
+    // a word — controllers present, or a caller that did not say.
+    return hasControllers === false ? null : 'empty-table'
+  }
+  if (routes.some((r) => r.publicMethods !== undefined)) return null
   return routes.some((r) => (r.methods ?? []).some((m) => MUTATING_METHODS.has(m)))
+    ? 'stale-manifest'
+    : null
+}
+
+function unverifiedMessage(reason: 'stale-manifest' | 'empty-table', host: string): string {
+  const head = `Binding ${host} without checking whether its write routes are authenticated.`
+  return reason === 'stale-manifest'
+    ? [
+        head,
+        '  This manifest predates the check and records no policy kinds. Run `theo build` to',
+        '  regenerate it; until then the server starts, and this warning is the whole of what',
+        '  is known about the exposure.',
+      ].join('\n')
+    : [
+        head,
+        '  The manifest describes no routes, so there is nothing here to judge. If this app serves',
+        '  through controllers, that is expected and rebuilding will not change it — the route scan',
+        '  reads `server/routes/` only (usetheokit/theokit#543). Whatever your controllers mark',
+        '  `theokit:public` on a POST/PUT/PATCH/DELETE is reachable from this address, and this',
+        '  warning is the whole of what is known about it.',
+      ].join('\n')
 }
 
 function refusalMessage(exposures: readonly Exposure[], host: string): string {
@@ -127,16 +183,9 @@ function refusalMessage(exposures: readonly Exposure[], host: string): string {
 export function assessPublicExposure(input: ExposureAssessment): ExposureVerdict {
   if (!isPubliclyBound(input.target.host)) return { kind: 'not-exposed' }
 
-  if (cannotAnswer(input.routes)) {
-    return {
-      kind: 'unverified',
-      message: [
-        `Binding ${input.target.host} without checking whether its write routes are authenticated.`,
-        '  This manifest predates the check and records no policy kinds. Run `theo build` to',
-        '  regenerate it; until then the server starts, and this warning is the whole of what',
-        '  is known about the exposure.',
-      ].join('\n'),
-    }
+  const blind = whyCannotAnswer(input.routes, input.hasControllers)
+  if (blind !== null) {
+    return { kind: 'unverified', message: unverifiedMessage(blind, input.target.host) }
   }
 
   const exposures = unauthenticatedWrites(input.routes)

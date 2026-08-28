@@ -96,6 +96,71 @@ describe('assessPublicExposure', () => {
     expect(verdict.message).toContain('theo build')
   })
 
+  /**
+   * An app that serves entirely through controllers writes `routes: []` into its manifest — the
+   * scan behind that array reads `server/routes/`, and a controller-only app has none. Measured on
+   * `appplugins`: nine controllers, sixteen served routes, `"routes": 0` in the manifest
+   * (usetheokit/theokit#543).
+   *
+   * `cannotAnswer` was written for a DIFFERENT absence — a manifest built before `publicMethods`
+   * existed — and it detects that one by asking whether any route declares a mutating method. On an
+   * empty table `.some()` is false for both questions, so the gate concludes there is nothing to
+   * expose and binds a public interface in silence. A controller declaring
+   * `@SetMetadata('theokit:public', true)` on a POST is then reachable from the network by exactly
+   * the path this gate exists to refuse.
+   *
+   * The honest answer to an empty route table is not "nothing is exposed". It is "this does not
+   * describe what the app serves" — which is what `unverified` already means.
+   */
+  it('reports UNVERIFIED for an empty route table — silence is not the same as nothing', () => {
+    const verdict = assessPublicExposure({
+      routes: [],
+      target: everyInterface,
+      allowUnauthenticatedWrites: false,
+      hasControllers: true,
+    })
+    expect(verdict.kind).toBe('unverified')
+    if (verdict.kind !== 'unverified') throw new Error('unreachable')
+    // The message must fit THIS cause. Telling someone whose build is fine to run `theo build`
+    // teaches them the warning is noise, and the next real one gets the same treatment.
+    expect(verdict.message).not.toContain('theo build')
+    expect(verdict.message).toContain('controllers')
+  })
+
+  it('says nothing about an app that genuinely serves nothing', () => {
+    // The counterpart, and it is what keeps the warning above meaningful. An app with no routes and
+    // no controllers is safe to bind anywhere; warning about it is the kind of noise that gets a
+    // gate switched off, and then the real warning goes with it.
+    const verdict = assessPublicExposure({
+      routes: [],
+      target: everyInterface,
+      allowUnauthenticatedWrites: false,
+      hasControllers: false,
+    })
+    expect(verdict.kind).toBe('allowed')
+  })
+
+  it('treats an unstated hasControllers as unknown, not as false', () => {
+    // A caller that has not been updated gets the cautious answer. "Absence is not safety" is this
+    // file's own rule, and it applies to the field that reports the absence too.
+    const verdict = assessPublicExposure({
+      routes: [],
+      target: everyInterface,
+      allowUnauthenticatedWrites: false,
+    })
+    expect(verdict.kind).toBe('unverified')
+  })
+
+  it('still allows a public bind when the table is empty AND the override is written down', () => {
+    // The escape hatch has to keep working, or the gate becomes something people delete.
+    const verdict = assessPublicExposure({
+      routes: [],
+      target: everyInterface,
+      allowUnauthenticatedWrites: true,
+    })
+    expect(verdict.kind).not.toBe('refused')
+  })
+
   it('treats `::` as public, the same as 0.0.0.0', () => {
     const verdict = assessPublicExposure({
       routes: [node('/email/send', ['POST'], ['POST'])],
