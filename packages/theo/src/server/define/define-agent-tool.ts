@@ -73,9 +73,14 @@ export interface ToolTransform<R = unknown> {
 }
 
 /**
- * Spec accepted by {@link defineAgentTool}. `inputSchema` is a Zod 3 schema
- * rooted in `z.object(...)`. The `handler` argument type is inferred via
- * `z.infer<T>`.
+ * Spec accepted by the `tool()` builder. `inputSchema` is a Zod schema rooted in `z.object(...)`;
+ * the `handler` argument type is inferred via `z.infer<T>`.
+ *
+ * This said "a Zod 3 schema", which was wrong in a `@public` doc that ships in the published
+ * `.d.ts`: this package declares `peerDependencies: { zod: ^4.0.0 }`, and `isZodObject` below reads
+ * BOTH majors' internals on purpose (`def.type === 'object'` and `_def.typeName === 'ZodObject'`).
+ * Naming a major here dated the sentence and contradicted the manifest; the schema shape is what
+ * matters and it is the same in both.
  *
  * @public
  */
@@ -179,7 +184,7 @@ function isZodObject(schema: z.ZodType): boolean {
 }
 
 /**
- * Build a {@link CustomTool} from a Zod 3 schema + handler.
+ * Build a {@link CustomTool} from a Zod object schema + handler.
  *
  * Behavior:
  * - Validates `name` matches the LLM tool-name regex.

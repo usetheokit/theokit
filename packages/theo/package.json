@@ -1,6 +1,6 @@
 {
   "name": "theokit",
-  "version": "0.58.0",
+  "version": "0.58.1",
   "description": "The TheoKit web framework — file-based routing, typed server surfaces, the Vite plugin, the CLI and the deploy adapters, around agents served from agents/*.ts.",
   "repository": {
     "type": "git",
@@ -165,7 +165,7 @@
     "db0": "^0.3.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "react-router": "^7.0.0",
+    "react-router": "^7.0.0 || ^8.0.0",
     "unstorage": "^1.10.0",
     "ws": "^8.20.1",
     "zod": "^4.0.0"
