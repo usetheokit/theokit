@@ -96,16 +96,6 @@ jobs:
           cache-dependency-path: |
             pnpm-lock.yaml
             package.json
-      # Sibling theokit-sdk is declared as a workspace member in
-      # pnpm-workspace.yaml (`../theokit-sdk/packages/{sdk,gateway,gateway-telegram}`).
-      # pnpm-lock.yaml lists those packages with `link:` paths — pnpm install
-      # expects the files on disk. `dist/` isn't committed so we also build
-      # the SDK before consuming it (typecheck needs the type entries to
-      # resolve at `./dist/index.d.ts`). Public repo, anonymous clone OK.
-      - name: Checkout + build sibling theokit-sdk (workspace dep)
-        run: |
-          git clone --depth 1 https://github.com/usetheokit/theokit-sdk.git ../theokit-sdk
-          (cd ../theokit-sdk && pnpm install --no-frozen-lockfile && pnpm --filter "./packages/*" build)
       - run: pnpm install --frozen-lockfile
       # Build BEFORE typecheck: tests/smoke/import-validation.test.ts
       # imports from `packages/theo/dist/*` to validate the npm publish
@@ -162,12 +152,6 @@ jobs:
           cache-dependency-path: |
             pnpm-lock.yaml
             package.json
-      # Sibling theokit-sdk: workspace member declared in pnpm-workspace.yaml.
-      # `dist/` isn't committed → build after clone so type entries resolve.
-      - name: Checkout + build sibling theokit-sdk (workspace dep)
-        run: |
-          git clone --depth 1 https://github.com/usetheokit/theokit-sdk.git ../theokit-sdk
-          (cd ../theokit-sdk && pnpm install --no-frozen-lockfile && pnpm --filter "./packages/*" build)
       - run: pnpm install --frozen-lockfile
       # dogfood-regressions-fix-plan v1.1 T4.2 — defense in depth against
       # NODE_MODULE_VERSION mismatch. CRITICAL here because the matrix runs
@@ -262,10 +246,6 @@ jobs:
           cache-dependency-path: |
             pnpm-lock.yaml
             package.json
-      - name: Checkout + build sibling theokit-sdk (workspace dep)
-        run: |
-          git clone --depth 1 https://github.com/usetheokit/theokit-sdk.git ../theokit-sdk
-          (cd ../theokit-sdk && pnpm install --no-frozen-lockfile && pnpm --filter "./packages/*" build)
       - run: pnpm install --frozen-lockfile
       # The scaffold links against this working tree, so the packages must be built first —
       # otherwise `tsc` reads a stale `dist` and reports errors that belong to neither the template
@@ -328,12 +308,6 @@ jobs:
           cache-dependency-path: |
             pnpm-lock.yaml
             package.json
-      # Sibling theokit-sdk: workspace member declared in pnpm-workspace.yaml.
-      # `dist/` isn't committed → build after clone so type entries resolve.
-      - name: Checkout + build sibling theokit-sdk (workspace dep)
-        run: |
-          git clone --depth 1 https://github.com/usetheokit/theokit-sdk.git ../theokit-sdk
-          (cd ../theokit-sdk && pnpm install --no-frozen-lockfile && pnpm --filter "./packages/*" build)
       - run: pnpm install --frozen-lockfile
       # Build packages first so knip can resolve theokit's dist exports.
       - run: pnpm build:packages
@@ -602,8 +576,9 @@ jobs:
     secrets:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     with:
-      # Not re-run here: the `test` job above first checks out and builds the sibling
-      # theokit-sdk, rebuilds native bindings and installs bubblewrap — 89 suites fail to load
-      # without that, which is exactly what the first scan hit while still reporting green.
+      # Not re-run here: the `test` job above rebuilds native bindings and installs bubblewrap —
+      # 89 suites fail to load without that, which is exactly what the first scan hit while still
+      # reporting green. (The sibling theokit-sdk checkout used to be in this list and was removed:
+      # the lockfile never referenced it and the suite is identical with and without it — #551.)
       # Reading its artifact also means Sonar publishes the number this repo's own gate measured.
       coverage-artifact: coverage-report

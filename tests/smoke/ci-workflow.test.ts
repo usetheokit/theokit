@@ -93,11 +93,12 @@ describe('CI Workflow', () => {
   })
 
   it('should use --frozen-lockfile for the main pnpm install', () => {
-    // The `test` job has TWO `pnpm install` steps: one for the sibling
-    // theokit-sdk clone (uses --no-frozen-lockfile because lockfile may be
-    // out of sync with the SDK's own dev cadence) and the canonical theokit
-    // install (uses --frozen-lockfile). We assert the canonical one exists,
-    // not the first match — workflow ordering is irrelevant to the contract.
+    // The `test` job used to have TWO `pnpm install` steps: one inside the sibling theokit-sdk
+    // clone (`--no-frozen-lockfile`, because that lockfile follows the SDK's own cadence) and the
+    // canonical one. The sibling step is gone (#551), so only the canonical install remains — but
+    // the assertion stays written as "some step runs it" rather than "the first step does",
+    // because workflow ordering was never the contract and pinning it would break on the next
+    // reorder.
     const workflow = loadWorkflow('ci.yml')
     const steps = workflow.jobs.test.steps
     const hasFrozenInstall = steps.some((s: Record<string, string>) =>
