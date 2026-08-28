@@ -53,6 +53,17 @@ export interface ManifestAgent {
 export interface TheoManifest {
   version: 1
   generatedAt: string
+  /**
+   * FILE routes — what `scanServerRoutes` finds under `<serverDir>/routes`. Controllers are NOT
+   * here, and that is deliberate: they ship as a separate `controllers.json` so a deploy adapter
+   * that knows nothing about them keeps working unchanged (see `emit-controllers.ts`).
+   *
+   * Which makes `routes: []` ambiguous, and the ambiguity is worth stating rather than leaving for
+   * each reader to rediscover. It means "no file routes" — never "this app serves nothing". Measured
+   * on a nine-controller app: sixteen routes served, `routes: []` written (theokit#543). Anything
+   * answering "what does this app serve?" must read `controllers.json` too; `public-exposure-gate`
+   * is the one that had to learn this the expensive way.
+   */
   routes: ManifestRoute[]
   actions: ManifestAction[]
   websockets: ManifestWebSocket[]

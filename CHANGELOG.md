@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **The public-exposure gate no longer reads an empty route table as "nothing is exposed".** An app serving through controllers writes `routes: []` into its manifest — the scan behind that array reads `server/routes/` only — so the gate concluded there was nothing to judge and bound a public interface in silence, while a controller marked `theokit:public` on a POST sat on it. It now reports `unverified`, with a message that names the real cause instead of prescribing a rebuild that would not help. (#543)
 - **`@theokit/agents-pty` no longer claims to work with an `@theokit/sdk-pty` it cannot build against.** The floor was `>=0.2.0`, and two of the six symbols this package re-exports were first exported in `0.3.0`. Because the range sits in `dependencies` rather than `peerDependencies`, npm resolved it silently and a consumer found out at a call site. (#522)
 
 ## [theokit 0.57.0, @theokit/agents 12.1.0] - 2026-08-27
