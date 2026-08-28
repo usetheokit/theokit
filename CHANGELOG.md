@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- **`react-router` peer widened to `^7.0.0 || ^8.0.0`.** The `^7.0.0` pin held every consumer back from a major that works: the ten symbols theokit imports all exist in 8.3.0, and the full suite passes on it with the same numbers as on 7 — 7242 passed, 18 skipped, zero failures. The floor check on the release PR exercises 7; everyday CI now exercises 8, so both majors in the range are actually run. (#547)
+
+
 ### Fixed
 
 - **The public-exposure gate no longer reads an empty route table as "nothing is exposed".** An app serving through controllers writes `routes: []` into its manifest — the scan behind that array reads `server/routes/` only — so the gate concluded there was nothing to judge and bound a public interface in silence, while a controller marked `theokit:public` on a POST sat on it. It now reports `unverified`, with a message that names the real cause instead of prescribing a rebuild that would not help. (#543)
