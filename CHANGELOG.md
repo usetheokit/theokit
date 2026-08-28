@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- **CI runs `test:types` once instead of once per node leg.** Its diagnostics come from the TypeScript version, the tsconfig and the sources — none of which vary with the node runtime executing tsc — so the second run recomputed a guaranteed-identical result at 283s and 316s. Moved to the leg WITHOUT coverage, which is what shortens the run: the coverage leg is already the critical path, so pairing them would have saved nothing.
 - **`react-router` peer widened to `^7.0.0 || ^8.0.0`.** The `^7.0.0` pin held every consumer back from a major that works: the ten symbols theokit imports all exist in 8.3.0, and the full suite passes on it with the same numbers as on 7 — 7242 passed, 18 skipped, zero failures. The floor check on the release PR exercises 7; everyday CI now exercises 8, so both majors in the range are actually run. (#547)
 - **`DefineAgentToolSpec` no longer documents its schema as Zod 3.** The `@public` doc shipped in the published `.d.ts` said "a Zod 3 schema" while the package declares `peerDependencies: { zod: ^4.0.0 }` and the code reads both majors' internals on purpose. A consumer opening the type was told the wrong major.
 

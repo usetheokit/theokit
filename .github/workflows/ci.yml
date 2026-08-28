@@ -206,7 +206,28 @@ jobs:
       # uploading under one artifact name is an upload conflict.
       - name: Tests${{ matrix.coverage && ' + coverage thresholds' || '' }}
         run: ${{ matrix.coverage && 'pnpm test:coverage' || 'pnpm test' }}
+      # Once, not once per leg. `vitest --typecheck.only` runs TypeScript over the `.test-d.ts`
+      # files, and its diagnostics come from the TS version, the tsconfig and the sources — all
+      # pinned by the lockfile, none varying with the node runtime that executes tsc. The second
+      # run recomputed a result guaranteed to be identical. Measured at 283s and 316s on the two
+      # legs of one run.
+      #
+      # The same argument the coverage comment above makes, and the same waste it removed; it
+      # simply had not been applied here.
+      #
+      # WHICH leg matters, and the obvious answer is wrong. Putting it beside coverage on the
+      # floor leg saves nothing, because that leg is already the critical path. Measured on run
+      # 33179795266: today max(743s, 876s) = 14.6 min; beside coverage max(460s, 876s) = 14.6 min;
+      # here max(743s, 560s) = 12.4 min. The lighter leg is what balances them.
+      #
+      # `!matrix.coverage` rather than a new matrix key on purpose: coverage is already confined to
+      # exactly one leg, and that confinement is ENFORCED — two legs uploading under one artifact
+      # name is an upload conflict, which fails loudly. Borrowing an invariant something already
+      # checks means this condition cannot silently select no leg. A new key would be one nobody
+      # verifies, and a type gate that quietly stops running is the failure this repo keeps paying
+      # for. Both legs remain required contexts, so the check keeps blocking either way.
       - run: pnpm test:types
+        if: ${{ !matrix.coverage }}
       - name: Upload coverage report
         if: ${{ matrix.coverage && always() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
