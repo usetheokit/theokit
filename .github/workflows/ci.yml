@@ -105,7 +105,10 @@ jobs:
       # but the binstub points to dist/cli/index.js which doesn't exist
       # until the theo package finishes building → ordering blow-up).
       - run: pnpm build:packages
-      - run: pnpm typecheck
+      # `typecheck:only`, not `typecheck`: the latter is `pnpm build:packages && tsc --noEmit`,
+      # and the step above already built. Measured on run 33179795266 — build:packages 51s, then
+      # typecheck 67s, of which ~50s was that build running a second time.
+      - run: pnpm typecheck:only
 
   test:
     name: Unit + Type tests
