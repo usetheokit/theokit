@@ -6,25 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-### Changed
+### Fixed
 
-- **The dependency gate's floor legs stopped dragging an unpublished version into the install.**
-  Pinning a sibling at the bottom of its range replaces its workspace link with the published
-  tarball, and `@theokit/http@0.4.0` declares a `theokit` peer — which pnpm then satisfied from the
-  registry, asking for the version this tree declares rather than the one npm has. On a release PR
-  those differ by construction, so two legs went red on #550 and again on #561. The root manifest
-  now overrides `theokit` to `workspace:*`, which is the true statement: the copy that matters here
-  is the one being built. Pinning `theokit` itself still works — `dep-check pin-one` writes the same
-  map and overwrites the entry.
+- **The root CHANGELOG is now written by the release itself.** It is hand-maintained and nothing in
+  the release chain touched it, so the record fell behind the registry four times — the fourth being
+  `theokit@0.60.0`, which was recorded deliberately ahead of the tag and then lost when an unrelated
+  merge into `main` re-ran `release.yml` and regenerated `changeset-release/main` with a force-push.
+  Doing it right by hand did not survive the machine that owns the branch. `version-packages` now
+  runs `record-root-changelog.mjs` straight after `changeset version`, on the same commit the bot
+  makes, so regenerating the branch regenerates the record. It only MOVES prose a human wrote — an
+  empty `[Unreleased]` produces nothing rather than an invented line.
 
-- **The English-only gate no longer forbids a freshly-cut changelog.** It required `[Unreleased]` to
-  be non-empty, which is false at exactly one moment — the version cut, when migrating that section
-  under a dated heading is the point and leaving it empty is the prescribed state. That put it in
-  direct opposition to `check-changelog-current.mjs`, which refuses a release the root changelog does
-  not name: the only way to satisfy both was to record the release AFTER the tag, which is the drift
-  the second gate exists to punish. It fired three times in three days. The heading must still exist
-  — a renamed one makes the scan vacuous and still fails — but an empty section is now read as
-  "nothing written yet", which is what it means.
+## [theokit 0.60.0, create-theokit 1.25.1] - 2026-08-29
 
 ### Added
 
@@ -46,6 +39,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   is minted per run. (#555)
 
 ### Changed
+
+- **The dependency gate's floor legs stopped dragging an unpublished version into the install.**
+  Pinning a sibling at the bottom of its range replaces its workspace link with the published
+  tarball, and `@theokit/http@0.4.0` declares a `theokit` peer — which pnpm then satisfied from the
+  registry, asking for the version this tree declares rather than the one npm has. On a release PR
+  those differ by construction, so two legs went red on #550 and again on #561. The root manifest
+  now overrides `theokit` to `workspace:*`, which is the true statement: the copy that matters here
+  is the one being built. Pinning `theokit` itself still works — `dep-check pin-one` writes the same
+  map and overwrites the entry.
+
+- **The English-only gate no longer forbids a freshly-cut changelog.** It required `[Unreleased]` to
+  be non-empty, which is false at exactly one moment — the version cut, when migrating that section
+  under a dated heading is the point and leaving it empty is the prescribed state. That put it in
+  direct opposition to `check-changelog-current.mjs`, which refuses a release the root changelog does
+  not name: the only way to satisfy both was to record the release AFTER the tag, which is the drift
+  the second gate exists to punish. It fired three times in three days. The heading must still exist
+  — a renamed one makes the scan vacuous and still fails — but an empty section is now read as
+  "nothing written yet", which is what it means.
 
 - **No pull request could be merged into `develop` or `main`.** `SAST status` is a required status
   check on both, and the job that emits it was deleted from `codeql.yml` — a required context
@@ -71,6 +82,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   form, so it reads `plugins: []` while a code plugin is registered and working; an empty manager
   beside a populated `options.plugins` is the normal shape, not a symptom.
 
+- **The build no longer runs twice per push and per typecheck job.** `typecheck` is `pnpm build:packages && tsc --noEmit`, and both the pre-push hook and the `Typecheck + Build` job called it right after building — so the build ran again. Callers that already built now use `typecheck:only`. Measured on an already-built tree: 87s → 19s.
+- **CI no longer clones and builds the sibling `theokit-sdk`.** Four job definitions did it on every run — 476s of compute, ~95s inside the critical path — for a dependency the lockfile never references. `@theokit/sdk` is consumed from the registry, which ships the `dist/index.d.ts` the step existed to produce.
+- **CI runs `test:types` once instead of once per node leg.** Its diagnostics come from the TypeScript version, the tsconfig and the sources — none of which vary with the node runtime executing tsc — so the second run recomputed a guaranteed-identical result at 283s and 316s. Moved to the leg WITHOUT coverage, which is what shortens the run: the coverage leg is already the critical path, so pairing them would have saved nothing.
+- **The release-record gate compares identity, not dates.** It asked whether the newest tag was newer than the newest dated section, so two releases on the same day masked each other — `theokit@0.59.0` shipped unrecorded with the gate green. It now requires a dated heading to NAME the tag. The day-granularity limit was documented rather than hidden, which is why it was findable; three releases in two days is this repo's ordinary pace, so it was worth removing rather than restating.
+
 ### Fixed
 
 - **An OpenRouter-only setup runs the scaffold out of the box.** A fresh app given only the key
@@ -85,14 +101,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   another is what produced the unattributable 401 of #326. (#554)
 
 - **The default CSP allows media the app generated itself.** `media-src` was absent, so `<audio>`/`<video>` fell back to `default-src 'self'` and a `blob:` URL was blocked — an app could not play the audio `@theokit/plugin-voice` returns from `/api/voice/tts`. `img-src` already listed `blob:` for canvas exports; the same reasoning covers audio. (#553)
-
-### Changed
-
-- **The build no longer runs twice per push and per typecheck job.** `typecheck` is `pnpm build:packages && tsc --noEmit`, and both the pre-push hook and the `Typecheck + Build` job called it right after building — so the build ran again. Callers that already built now use `typecheck:only`. Measured on an already-built tree: 87s → 19s.
-- **CI no longer clones and builds the sibling `theokit-sdk`.** Four job definitions did it on every run — 476s of compute, ~95s inside the critical path — for a dependency the lockfile never references. `@theokit/sdk` is consumed from the registry, which ships the `dist/index.d.ts` the step existed to produce.
-- **CI runs `test:types` once instead of once per node leg.** Its diagnostics come from the TypeScript version, the tsconfig and the sources — none of which vary with the node runtime executing tsc — so the second run recomputed a guaranteed-identical result at 283s and 316s. Moved to the leg WITHOUT coverage, which is what shortens the run: the coverage leg is already the critical path, so pairing them would have saved nothing.
-- **The release-record gate compares identity, not dates.** It asked whether the newest tag was newer than the newest dated section, so two releases on the same day masked each other — `theokit@0.59.0` shipped unrecorded with the gate green. It now requires a dated heading to NAME the tag. The day-granularity limit was documented rather than hidden, which is why it was findable; three releases in two days is this repo's ordinary pace, so it was worth removing rather than restating.
-
 ## [theokit 0.59.0] - 2026-08-28
 
 ### Changed
