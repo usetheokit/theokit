@@ -19,7 +19,7 @@ export const policy = 'public'
 
 export default AgentBuilder.create()
   .input(z.object({ topic: z.string() }))
-  .model(process.env.LLM_MODEL ?? 'openai/gpt-4o-mini')
+  .model(process.env.LLM_MODEL ?? 'openrouter/openai/gpt-4o-mini')
   .system(
     'You research a topic and leave notes for the publisher bot. ' +
       'Write what you find with write_note; read what you already know with read_notes. ' +

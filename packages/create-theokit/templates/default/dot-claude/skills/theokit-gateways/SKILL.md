@@ -26,7 +26,7 @@ returns the `Response` your route must return.
 
 ```typescript
 import { handleChannelWebhook } from 'theokit/server/agent'
-import { telegram } from 'theokit/server/webhook' // also: discord, slack, github, stripe
+import { telegram } from 'theokit/server/webhook' // also: discord, slack, github, stripe, whatsapp
 import { parseInbound } from '@theokit/gateway-telegram'
 
 const response = await handleChannelWebhook(request, new URL(request.url).pathname, {
@@ -41,6 +41,34 @@ const response = await handleChannelWebhook(request, new URL(request.url).pathna
 
 The path it expects is `POST /api/agents/<name>/channels/<platform>/webhook`; `<name>` and
 `<platform>` arrive in `onMessage` as `agent` and `platform`.
+
+## Platforms that verify the endpoint first (WhatsApp, Instagram, Messenger)
+
+Meta will not deliver anything until it has verified the URL with a `GET` carrying
+`hub.mode=subscribe`, `hub.verify_token` and `hub.challenge`, and it requires the challenge echoed
+back as `text/plain`. Declare a responder per platform and mount the route for `GET` as well as
+`POST`:
+
+```typescript
+import { whatsapp, whatsappSubscribe } from 'theokit/server/webhook'
+
+const response = await handleChannelWebhook(request, new URL(request.url).pathname, {
+  validators: { whatsapp: whatsapp({ appSecret: process.env.META_APP_SECRET! }) },
+  subscribe: { whatsapp: whatsappSubscribe({ verifyToken: process.env.META_VERIFY_TOKEN! }) },
+  onMessage: async ({ payload }) => {
+    /* … */
+  },
+})
+```
+
+`appSecret` is the Meta **app secret**, not the access token — the signature is HMAC-SHA256 of it
+over the raw body. `verifyToken` is the string you typed into the Meta app when registering the URL;
+comparing it is the only thing standing between an arbitrary caller and a subscription. A `GET` for
+a platform with no `subscribe` entry answers `405`, not `404`: the platform is configured, it just
+does not do handshakes.
+
+Developing against any of this needs a public URL. `theo.config.ts` has `allowedHosts` for exactly
+that — see the framework README.
 
 **Give it a `Request` whose body has not been read.** It calls `request.json()` itself, so a wrapper
 that has already parsed the body — `defineRoute` offers a parsed `body` in its handler context —

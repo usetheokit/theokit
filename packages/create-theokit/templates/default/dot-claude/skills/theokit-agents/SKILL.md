@@ -25,7 +25,7 @@ import { z } from 'zod'
 
 export default defineAgent({
   input: z.object({ message: z.string() }),
-  model: 'openai/gpt-4o-mini',
+  model: 'openrouter/openai/gpt-4o-mini',
   system: 'You are a helpful assistant.',
 })
 ```
@@ -33,8 +33,11 @@ export default defineAgent({
 The endpoint streams the ai-sdk `UIMessageStream` that `useAgent` (client hook) consumes.
 `@theokit/sdk` runs the agent; conversation turns auto-persist per session — the SDK owns storage.
 
-**Provider resolution:** `OPENROUTER_API_KEY` (preferred — routes to many models) OR
-`ANTHROPIC_API_KEY` / `OPENAI_API_KEY`. Set one in `.env`.
+**Provider resolution:** the FIRST segment of the model id picks the provider, and that decides
+which key is needed — `openrouter/…` needs `OPENROUTER_API_KEY`, `anthropic/…` needs
+`ANTHROPIC_API_KEY`, `openai/…` needs `OPENAI_API_KEY`. A bare vendor prefix is a selection of that
+vendor, not a hint: reaching OpenAI's catalog through OpenRouter means naming the gateway first
+(`openrouter/openai/gpt-4o-mini`). Set the matching key in `.env`.
 
 ## Advanced Surface — @Agent Decorator (DI / class-based)
 
@@ -46,7 +49,7 @@ When you need dependency injection or composition, build the agent from **capabi
 import { applyCapabilities, AgentConfigCapability, ModelCapability } from '@theokit/agents'
 
 export const assistantAgent = applyCapabilities([
-  new ModelCapability('openai/gpt-4o-mini'),
+  new ModelCapability('openrouter/openai/gpt-4o-mini'),
   new AgentConfigCapability({
     systemPrompt: 'You are a helpful assistant.',
     maxIterations: 5,
@@ -75,7 +78,7 @@ const currentTimeTool = defineAgentTool({
 
 export default defineAgent({
   input: z.object({ message: z.string() }),
-  model: 'openai/gpt-4o-mini',
+  model: 'openrouter/openai/gpt-4o-mini',
   system: 'You are a helpful assistant.',
   tools: [currentTimeTool],
 })

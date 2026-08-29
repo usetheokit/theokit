@@ -6,7 +6,63 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **WhatsApp can be served through `handleChannelWebhook`.** The channel seam answered 404 for
+  `whatsapp` — no validator existed — and the subscribe handshake Meta performs before delivering
+  anything was not modelled at all, so the platform `@theokit/gateway-whatsapp` exists for was
+  unreachable by construction. `whatsapp({ appSecret })` verifies `X-Hub-Signature-256` over the raw
+  body, and `whatsappSubscribe({ verifyToken })` plugs into a new per-platform `subscribe` map so a
+  `GET` echoes `hub.challenge` as `text/plain`. Both are exported from `theokit/server/webhook`. The
+  signature scheme is the one GitHub already used, so the two now share a single implementation
+  rather than two copies of a crypto routine. (#556)
+
+- **The dev server can be reached through a tunnel.** `allowedHosts` exposes Vite's own
+  `server.allowedHosts` through `theo.config.ts`, so an app can be given a public URL — which is
+  the only practical way to develop against a webhook platform, and the reason this framework ships
+  five signature validators. A scaffolded app has no `vite.config.ts`, so the fix Vite's own error
+  message names was unreachable; `host()` is the bind address and never answered it. A leading dot
+  covers subdomains (`.trycloudflare.com`); `true` turns the check off for a tunnel whose hostname
+  is minted per run. (#555)
+
+### Changed
+
+- **No pull request could be merged into `develop` or `main`.** `SAST status` is a required status
+  check on both, and the job that emits it was deleted from `codeql.yml` — a required context
+  nothing reports can never be satisfied, so every promotion was blocked for everyone
+  (`enforce_admins: true`). Measured on PR #558: 27 checks green, `mergeStateStatus: BLOCKED`, one
+  required context reporting nothing. The job is restored, and two guards pin it: the check must be
+  emitted, and it must run unconditionally — `analyze` is gated on repository visibility, which is
+  precisely why a second always-running job is what makes a conditional scan requireable. (#559)
+
+- **Two CI guards went red on a change that broke nothing, and are now written against the
+  property instead of the mechanics.** Consolidating the per-job `pnpm/action-setup` + install into
+  a shared composite action left `should use pnpm/action-setup` and `should use --frozen-lockfile`
+  looking for steps that had moved. They assert what they always meant: every job that runs `pnpm`
+  has a step that installs it, in either form; and no CI install resolves outside the lockfile,
+  with the scaffold job named as the deliberate exception rather than filtered out silently.
+
+- Documented that three unrelated things in this ecosystem are called "plugin", and that two of
+  them share one option. A framework plugin (`@theokit/plugin-*`) extends an app; an SDK code
+  plugin (`PermissionPlugin`, `Handoff`) extends an agent; and the SDK's `plugins` option also
+  accepts `{ enabled: [...] }`, which selects plugins discovered under `.theokit/plugins/` and is
+  mutually exclusive with the array form. Reaching for the wrong one raises no error — it simply
+  has no effect. Also recorded that `agent.pluginsManager` only ever holds the file-discovered
+  form, so it reads `plugins: []` while a code plugin is registered and working; an empty manager
+  beside a populated `options.plugins` is the normal shape, not a symptom.
+
 ### Fixed
+
+- **An OpenRouter-only setup runs the scaffold out of the box.** A fresh app given only the key
+  `.env.example` asks for answered 500 on its first message: the generated agent declared
+  `openai/gpt-4o-mini`, which selects OpenAI and needs `OPENAI_API_KEY` — the one key the user was
+  never told to get. The scaffold now declares `openrouter/openai/gpt-4o-mini`, matching the key it
+  asks for, and its docs stop claiming that a bare vendor prefix is routed upstream by OpenRouter
+  (measured against the SDK's catalog: `openai/…` resolves to `api.openai.com`, only
+  `openrouter/…` to `openrouter.ai`). When a provider's key is missing, the refusal now names the
+  gateway-prefixed model id that would work, rather than only the variable that is absent. The
+  resolver still refuses instead of substituting a credential — sending one provider's key to
+  another is what produced the unattributable 401 of #326. (#554)
 
 - **The default CSP allows media the app generated itself.** `media-src` was absent, so `<audio>`/`<video>` fell back to `default-src 'self'` and a `blob:` URL was blocked — an app could not play the audio `@theokit/plugin-voice` returns from `/api/voice/tts`. `img-src` already listed `blob:` for canvas exports; the same reasoning covers audio. (#553)
 

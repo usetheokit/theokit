@@ -32,6 +32,12 @@ export interface ConfigBuilder {
   port(value: TheoConfig['port']): ConfigBuilder
   /** Bind host. Default `'localhost'`. */
   host(value: TheoConfig['host']): ConfigBuilder
+  /**
+   * Hostnames the dev server will answer for (Vite's `server.allowedHosts`) — what a tunnel or a
+   * reverse proxy needs. NOT the same as {@link ConfigBuilder.host}, which is the bind address;
+   * see `TheoConfig['allowedHosts']` for the matching rules and the cost of `true`.
+   */
+  allowedHosts(value: TheoConfig['allowedHosts']): ConfigBuilder
   /** Enable server-side rendering. Default `false`. */
   ssr(value: TheoConfig['ssr']): ConfigBuilder
   /** Escape hatch — merge any config fields not covered by a dedicated setter (rate-limit, security…). */
@@ -51,6 +57,7 @@ function makeConfigBuilder(spec: Partial<TheoConfig>): ConfigBuilder {
     distDir: (value) => merge({ distDir: value }),
     port: (value) => merge({ port: value }),
     host: (value) => merge({ host: value }),
+    allowedHosts: (value) => merge({ allowedHosts: value }),
     ssr: (value) => merge({ ssr: value }),
     set: (partial) => merge(partial),
     build: () => defineConfig(spec),

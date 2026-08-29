@@ -12,3 +12,11 @@ export type { TelegramWebhookOptions } from './telegram.js'
 
 export { discord } from './discord.js'
 export type { DiscordWebhookOptions } from './discord.js'
+
+export { whatsapp, whatsappSubscribe } from './whatsapp.js'
+export type {
+  WhatsAppWebhookOptions,
+  WhatsAppSubscribeOptions,
+  SubscribeFn,
+  SubscribeResult,
+} from './whatsapp.js'

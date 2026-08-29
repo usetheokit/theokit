@@ -56,7 +56,7 @@ your environment.
   ```ts
   export default AgentBuilder.create()
     .input(z.object({ message: z.string() }))
-    .model('openai/gpt-4o-mini')
+    .model('openrouter/openai/gpt-4o-mini')
     .system(BASE_INSTRUCTIONS)
     .tool(weatherTool)
     .approval('send_notification', { question: 'Send this notification?' })
