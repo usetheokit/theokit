@@ -505,13 +505,30 @@ import { config } from 'theokit'
 export default config()
   .port(3000)
   .ssr(false)
-  // Named setters: name, port, host, ssr, appDir, serverDir, agentsDir, distDir.
+  // Named setters: name, port, host, allowedHosts, ssr, appDir, serverDir, agentsDir, distDir.
   // `.set()` carries anything else.
   .set({ rateLimit: { windowMs: 60_000, max: 100 } })
   .build()
 ```
 
 Defaults: `appDir: 'app'`, `serverDir: 'server'`, `agentsDir: 'agents'`.
+
+### Reaching the dev server through a tunnel
+
+Developing against a webhook platform means the platform has to reach your machine, which means a
+tunnel or a reverse proxy — and a `Host` header the dev server refuses by default. `allowedHosts` is
+what allows it:
+
+```typescript
+export default config()
+  .allowedHosts(['.trycloudflare.com']) // a leading dot covers the subdomains too
+  .build()
+```
+
+`host()` is a different setting and does not help here: it is the bind address, and the request is
+refused by hostname rather than by interface. Pass `true` when the tunnel mints a fresh random
+hostname per run — it turns the check off, including the DNS-rebinding protection it provides, so
+prefer the list whenever the hostname is knowable. Dev only; `theokit start` has no such check.
 
 ## Deploy
 

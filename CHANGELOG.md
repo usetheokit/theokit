@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **The dev server can be reached through a tunnel.** `allowedHosts` exposes Vite's own
+  `server.allowedHosts` through `theo.config.ts`, so an app can be given a public URL — which is
+  the only practical way to develop against a webhook platform, and the reason this framework ships
+  five signature validators. A scaffolded app has no `vite.config.ts`, so the fix Vite's own error
+  message names was unreachable; `host()` is the bind address and never answered it. A leading dot
+  covers subdomains (`.trycloudflare.com`); `true` turns the check off for a tunnel whose hostname
+  is minted per run. (#555)
+
 ### Changed
 
 - Documented that three unrelated things in this ecosystem are called "plugin", and that two of
