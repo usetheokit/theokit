@@ -83,28 +83,58 @@ describe('CI Workflow', () => {
     }
   })
 
-  it('should use pnpm/action-setup', () => {
+  /**
+   * A step that installs the toolchain, in whichever form the workflow currently uses.
+   *
+   * Both shapes count, and the reason is that the assertions below survived a refactor that
+   * replaced one with the other. `pnpm/action-setup` + an inline install were inlined in every job
+   * until they were consolidated into a shared composite action; two guards written against the
+   * inline mechanics went red on a change that broke nothing, because they described HOW the
+   * toolchain arrives instead of THAT it does.
+   */
+  function isSetupStep(step: Record<string, string>): boolean {
+    const uses = step.uses ?? ''
+    return uses.includes('pnpm/action-setup') || uses.includes('shared-workflows/actions/setup')
+  }
+
+  it('every job that runs pnpm sets the toolchain up first', () => {
     const workflow = loadWorkflow('ci.yml')
-    const steps = workflow.jobs['lint-and-format'].steps
-    const hasPnpmSetup = steps.some((s: Record<string, string>) =>
-      s.uses?.includes('pnpm/action-setup'),
-    )
-    expect(hasPnpmSetup).toBe(true)
+
+    const missing = Object.entries(workflow.jobs as Record<string, { steps?: unknown[] }>)
+      .filter(([, job]) => Array.isArray(job.steps))
+      .filter(([, job]) =>
+        (job.steps as Record<string, string>[]).some((s) => s.run?.includes('pnpm ')),
+      )
+      .filter(([, job]) => !(job.steps as Record<string, string>[]).some((s) => isSetupStep(s)))
+      .map(([name]) => name)
+
+    expect(missing, 'these jobs run pnpm with no step that installs it').toEqual([])
   })
 
-  it('should use --frozen-lockfile for the main pnpm install', () => {
-    // The `test` job used to have TWO `pnpm install` steps: one inside the sibling theokit-sdk
-    // clone (`--no-frozen-lockfile`, because that lockfile follows the SDK's own cadence) and the
-    // canonical one. The sibling step is gone (#551), so only the canonical install remains — but
-    // the assertion stays written as "some step runs it" rather than "the first step does",
-    // because workflow ordering was never the contract and pinning it would break on the next
-    // reorder.
+  it('no CI install resolves outside the lockfile, except the scaffold ones that cannot', () => {
+    // The property the old `--frozen-lockfile` assertion protected: a CI install must resolve what
+    // the lockfile pins, or the run measures a dependency tree nobody committed. It was written
+    // against the `test` job's inline install, which the shared setup action now performs — so it
+    // is stated here over EVERY job instead, where no consolidation can hollow it out.
+    //
+    // The scaffold job is the deliberate exception and stays visible rather than filtered out
+    // silently: it scaffolds `my-test` / `my-test-bot` as new workspace members, so the lockfile
+    // legitimately changes and a frozen install cannot succeed.
     const workflow = loadWorkflow('ci.yml')
-    const steps = workflow.jobs.test.steps
-    const hasFrozenInstall = steps.some((s: Record<string, string>) =>
-      s.run?.includes('pnpm install --frozen-lockfile'),
+    const SCAFFOLD_JOBS = new Set(['scaffold-typecheck'])
+
+    const unfrozen = Object.entries(workflow.jobs as Record<string, { steps?: unknown[] }>)
+      .filter(([name]) => !SCAFFOLD_JOBS.has(name))
+      .flatMap(([name, job]) =>
+        (Array.isArray(job.steps) ? (job.steps as Record<string, string>[]) : [])
+          .filter((s) => s.run?.includes('pnpm install'))
+          .filter((s) => !s.run.includes('--frozen-lockfile'))
+          .map((s) => `${name}: ${s.run}`),
+      )
+
+    expect(unfrozen, 'a CI install that ignores the lockfile measures an uncommitted tree').toEqual(
+      [],
     )
-    expect(hasFrozenInstall).toBe(true)
   })
 
   it('should have a build step (filtered or unfiltered)', () => {

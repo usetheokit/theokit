@@ -27,6 +27,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- **Two CI guards went red on a change that broke nothing, and are now written against the
+  property instead of the mechanics.** Consolidating the per-job `pnpm/action-setup` + install into
+  a shared composite action left `should use pnpm/action-setup` and `should use --frozen-lockfile`
+  looking for steps that had moved. They assert what they always meant: every job that runs `pnpm`
+  has a step that installs it, in either form; and no CI install resolves outside the lockfile,
+  with the scaffold job named as the deliberate exception rather than filtered out silently.
+
 - Documented that three unrelated things in this ecosystem are called "plugin", and that two of
   them share one option. A framework plugin (`@theokit/plugin-*`) extends an app; an SDK code
   plugin (`PermissionPlugin`, `Handoff`) extends an agent; and the SDK's `plugins` option also
