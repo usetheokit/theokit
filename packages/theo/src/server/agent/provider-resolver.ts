@@ -63,6 +63,23 @@ export interface ProviderDescriptor {
    * contradicts the real one is a debugging trap rather than a harmless inaccuracy.
    */
   baseUrlEnv?: string
+  /**
+   * True when this provider is a GATEWAY — it serves other providers' catalogs under their own
+   * model ids, reachable by prefixing its name (`openrouter/openai/gpt-4o-mini`).
+   *
+   * It changes nothing about resolution. It exists so the refusal below can name a model id that
+   * would work instead of only the variable that is missing (#554): a scaffold shipping
+   * `openai/gpt-4o-mini` and an `.env.example` asking for `OPENROUTER_API_KEY` produced an error
+   * naming `OPENAI_API_KEY` — the one key the reader was never told to get — while the key they had
+   * serves that exact id through the gateway.
+   *
+   * Deliberately NOT a licence to substitute. Every caller here takes `.apiKey` and discards
+   * `.baseUrl`; the SDK picks the endpoint from the model id (measured: `openai/gpt-4o-mini` →
+   * `api.openai.com`, `openrouter/openai/gpt-4o-mini` → `openrouter.ai`). Handing an OpenRouter key
+   * to a request bound for OpenAI is #326 exactly, so the caller changes the id and the routing
+   * follows — the framework does not change it for them.
+   */
+  gateway?: boolean
   /** Resolution priority (lower = higher priority). FIRST match wins. */
   priority: number
 }
@@ -92,6 +109,7 @@ const DEFAULT_REGISTRY: ProviderDescriptor[] = [
     name: 'openrouter',
     envKey: 'OPENROUTER_API_KEY',
     baseUrl: 'https://openrouter.ai/api/v1',
+    gateway: true,
     priority: 1,
   },
   {
@@ -265,6 +283,36 @@ function declaredPrefixOf(modelId: string | undefined): string | undefined {
   return modelId.slice(0, slash)
 }
 
+/**
+ * The rest of the refusal: how to reach this model with a credential that IS present.
+ *
+ * A credentialed gateway serves the declared provider's catalog under the same id, so prefixing it
+ * turns an unreachable model into a reachable one — and that string is what the reader needs, not
+ * the abstract advice to "change the prefix". When no gateway is credentialed the sentence stays
+ * exactly as it was: naming a gateway with no key would trade one dead end for another.
+ *
+ * A gateway is never offered for a model already routed through one — `openrouter/openrouter/…` is
+ * not a thing — which is what excluding `declared` itself accomplishes.
+ */
+function gatewayHint(
+  declared: ProviderDescriptor,
+  modelId: string,
+  registered: readonly ProviderDescriptor[],
+): string {
+  const gateway = registered.find(
+    (p) =>
+      p.gateway === true &&
+      p.name !== declared.name &&
+      p.envKey !== undefined &&
+      (process.env[p.envKey] ?? '').length > 0,
+  )
+  if (gateway?.envKey === undefined) return `, or change the model's provider prefix`
+  return (
+    `, or use "${gateway.name}/${modelId}" to route it through ${gateway.name} ` +
+    `(${gateway.envKey} is set, and ${gateway.name} serves this model id)`
+  )
+}
+
 /** A provider that authenticates — the only kind the priority walk may select. */
 type CredentialedProvider = ProviderDescriptor & { envKey: string }
 
@@ -320,9 +368,12 @@ export function resolveProvider(modelId?: string, options?: ResolveOptions): Res
     // Deliberately NOT falling back to another provider's key. Silently substituting one is how
     // theokit#326 produced a 401 nobody could attribute: the request went somewhere the agent
     // never named. Say which variable is missing and stop.
+    //
+    // #554 — but say it usefully. "change the model's provider prefix" is true and unactionable:
+    // it does not say which prefix, and the reader may already hold a key that serves this model.
     throw new Error(
       `Model "${modelId}" declares provider "${declared.name}", but ${declared.envKey} is not set. ` +
-        `Set ${declared.envKey}, or change the model's provider prefix.`,
+        `Set ${declared.envKey}${gatewayHint(declared, modelId, sorted)}.`,
     )
   }
 

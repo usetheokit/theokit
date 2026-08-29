@@ -11,7 +11,7 @@ name: Workflow Lint
 
 on:
   push:
-    branches: [main, develop, workspace]
+    branches: [main, develop]
   pull_request:
     branches: [main, develop]
   workflow_dispatch:

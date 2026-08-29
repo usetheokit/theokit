@@ -117,7 +117,14 @@ describe('create-theokit default template — agent surface (T3.1)', () => {
     const agent = read('agents/chat.ts')
     // The literal is still there as the fallback — a scaffold must run with no
     // environment at all.
-    expect(agent).toMatch(/\.model\([^)]*['"][\w-]+\/[\w.-]+['"]/u)
+    //
+    // Read the literal out and inspect it, rather than matching its shape in one pattern: the id
+    // now has three segments (`openrouter/openai/gpt-4o-mini`, because a gateway has to be named
+    // to be used — #554), and a pattern that accepts a variable number of them needs a nested
+    // quantifier, which is a ReDoS the linter is right to refuse.
+    const declared = /\.model\(([^)]*)\)/u.exec(agent)?.[1] ?? ''
+    const literal = /['"]([^'"]+)['"]\s*$/u.exec(declared)?.[1] ?? ''
+    expect(literal, 'agents/chat.ts must declare a provider-prefixed model literal').toContain('/')
   })
 
   it('the documented LLM_MODEL override is actually read (#398, #408)', () => {

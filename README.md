@@ -27,12 +27,16 @@ start below it rather than failing later somewhere unrelated.
 The scaffold ships a working agent chat, so the five minutes are spent reading it,
 not assembling it.
 
-1. Point the agent at a provider. The SDK resolves the key from the environment —
-   OpenRouter (preferred), Anthropic, or OpenAI:
+1. Point the agent at a provider. The FIRST segment of the model id picks it, and
+   that decides which key is read — so the id and the key move together:
 
    ```bash
-   echo 'OPENROUTER_API_KEY=sk-or-v1-...' >> .env
+   echo 'OPENROUTER_API_KEY=sk-or-v1-...' >> .env   # matches `openrouter/…` below
    ```
+
+   `openrouter/openai/gpt-4o-mini` reaches OpenAI's catalog THROUGH the gateway. A
+   bare `openai/gpt-4o-mini` goes to OpenAI directly and needs `OPENAI_API_KEY`,
+   even with an OpenRouter key present — the prefix is a selection, not a hint.
 
 2. **An agent is a file.** `agents/chat.ts` is served at `POST /api/agents/chat` —
    there is nothing to register:
@@ -46,7 +50,7 @@ not assembling it.
 
    export default AgentBuilder.create()
      .input(z.object({ message: z.string() }))
-     .model('openai/gpt-4o-mini')
+     .model('openrouter/openai/gpt-4o-mini')
      .system('You are a helpful assistant.')
      .tool(weatherTool)
      // Human-in-the-loop: pause the run and ask before this tool executes.
@@ -193,7 +197,7 @@ Pluggable input/output guards that run at the framework boundary, before the SDK
 import { promptInjectionDetector, piiDetector, costGuard } from '@theokit/agents'
 
 AgentBuilder.create()
-  .model('openai/gpt-4o-mini')
+  .model('openrouter/openai/gpt-4o-mini')
   .guardrails([promptInjectionDetector(), piiDetector(), costGuard({ maxTokens: 100_000 })])
   .build()
 ```
@@ -342,6 +346,19 @@ because the dispatcher delegates straight to the agent runtime.
 
 `HttpStatus` carries the 30 status codes the framework actually uses —
 `HttpStatus.OK`, `HttpStatus.CREATED`, `HttpStatus.TOO_MANY_REQUESTS`, and so on.
+
+### `.plugins([...])` is not `@theokit/plugin-*`
+
+Two unrelated things wear the word, and both appear in this README:
+
+| | What it is | Where it goes |
+|---|---|---|
+| `@theokit/plugin-canvas`, `@theokit/auth-github`, … | **framework** plugins — routes, UI, devtools, CLI verbs | installed in the app, declared in its config |
+| `.plugins([...])` on the builder | **SDK** plugins — `PermissionPlugin`, `Handoff` — they extend the agent | passed through to `Agent.create` |
+
+Installing `@theokit/plugin-payments` does nothing for an agent; passing `PermissionPlugin` does
+nothing for a route. The SDK's own option additionally has two mutually exclusive forms — see
+[`@theokit/sdk`'s README](https://github.com/usetheokit/theokit-sdk#three-things-are-called-plugin).
 
 ## Server Routes
 
@@ -492,13 +509,30 @@ import { config } from 'theokit'
 export default config()
   .port(3000)
   .ssr(false)
-  // Named setters: name, port, host, ssr, appDir, serverDir, agentsDir, distDir.
+  // Named setters: name, port, host, allowedHosts, ssr, appDir, serverDir, agentsDir, distDir.
   // `.set()` carries anything else.
   .set({ rateLimit: { windowMs: 60_000, max: 100 } })
   .build()
 ```
 
 Defaults: `appDir: 'app'`, `serverDir: 'server'`, `agentsDir: 'agents'`.
+
+### Reaching the dev server through a tunnel
+
+Developing against a webhook platform means the platform has to reach your machine, which means a
+tunnel or a reverse proxy — and a `Host` header the dev server refuses by default. `allowedHosts` is
+what allows it:
+
+```typescript
+export default config()
+  .allowedHosts(['.trycloudflare.com']) // a leading dot covers the subdomains too
+  .build()
+```
+
+`host()` is a different setting and does not help here: it is the bind address, and the request is
+refused by hostname rather than by interface. Pass `true` when the tunnel mints a fresh random
+hostname per run — it turns the check off, including the DNS-rebinding protection it provides, so
+prefer the list whenever the hostname is knowable. Dev only; `theokit start` has no such check.
 
 ## Deploy
 

@@ -122,6 +122,29 @@ export const theoConfigSchema = z
      * is still distinguishable from "somebody said localhost".
      */
     host: z.union([z.string(), z.boolean()]).optional(),
+    /**
+     * Hostnames `theokit dev` will answer for, beyond the loopback names Vite permits out of the
+     * box — Vite's `server.allowedHosts` (#555).
+     *
+     * This is NOT {@link host}. That one is the bind ADDRESS; this one is the `Host` header check
+     * that runs after the connection is accepted, so binding `0.0.0.0` does not make a tunnelled
+     * request pass. Developing against any webhook platform needs a public URL, which means a
+     * tunnel or a reverse proxy, which means a `Host` the check refuses by default — and a
+     * scaffolded app has no `vite.config.ts` in which to allow it.
+     *
+     * Vite's own matching rules apply, not globs: a leading dot allows a domain and its
+     * subdomains (`.trycloudflare.com`), and anything else is compared literally.
+     *
+     * `true` disables the check. It is here because a tunnel that mints a fresh random hostname
+     * per run cannot be listed, and the alternative — editing config between runs — is what makes
+     * people reach for the production server instead. It also removes the protection against
+     * DNS-rebinding that the check exists to provide, so prefer the list whenever the hostname is
+     * knowable. `theokit start` is unaffected either way: this is dev-server-only.
+     *
+     * Deliberately NOT defaulted — an empty array is a decision that blocks every host including
+     * the loopback names, so "nobody said" has to stay distinguishable from "somebody said none".
+     */
+    allowedHosts: z.union([z.array(z.string()), z.literal(true)]).optional(),
     /** Automatically open browser on `theokit dev`. */
     open: z.union([z.boolean(), z.string()]).default(false),
     /** Exit if port is already in use instead of trying next available. */

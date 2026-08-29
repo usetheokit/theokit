@@ -42,7 +42,7 @@ jobs:
     # a failure that says nothing about the code.
     if: ${{ !github.event.repository.private }}
     runs-on: ubuntu-latest
-    timeout-minutes: 360
+    timeout-minutes: 45
     permissions:
       actions: read
       contents: read
@@ -71,6 +71,17 @@ jobs:
         with:
           category: '/language:${{ matrix.language }}'
 
+  # Restored after 0d93746c6 deleted it (usetheokit/theokit#559).
+  #
+  # It is a REQUIRED status check on `develop` and on `main`, and it is the only job in this file
+  # that always reports: `analyze` is gated on `!repository.private`, and a gated job that does not
+  # run never emits a status at all. So removing this one did not merely drop a message — it made
+  # both protected branches unmergeable, because a required context nothing emits can never be
+  # satisfied. Measured on #558: 27 checks green, `mergeStateStatus: BLOCKED`, one required context
+  # reporting nothing.
+  #
+  # That is also why the prose at the top of this file points at "the status job below". It was
+  # pointing at nothing for as long as this was missing.
   sast-status:
     name: SAST status
     runs-on: ubuntu-latest

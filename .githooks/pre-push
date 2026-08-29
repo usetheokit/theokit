@@ -54,7 +54,7 @@ if ! command -v pnpm >/dev/null 2>&1; then
   echo "  is how a gate stops meaning anything."
   echo ""
   echo "  Install pnpm for the active Node, or verify by hand and then push:"
-  echo "    pnpm build:packages && pnpm typecheck && git push --no-verify"
+  echo "    pnpm build:packages && pnpm typecheck:only && git push --no-verify"
   exit 1
 fi
 
@@ -82,7 +82,7 @@ report_stage_failure() {
     echo "  typecheck hold a large heap; a machine short on memory reaches this routinely."
     echo ""
     echo "  Free some memory and push again, or verify by hand and then push:"
-    echo "    pnpm build:packages && pnpm typecheck && git push --no-verify"
+    echo "    pnpm build:packages && pnpm typecheck:only && git push --no-verify"
   else
     echo "✗ pre-push: ${stage} failed (see error above)."
     echo "  A break must NOT reach develop. Fix it, or push anyway"
@@ -97,6 +97,12 @@ echo ""
 # Build first — this is the gate that catches a dropped export / fabricated
 # symbol (tsup DTS = tsc fails). Filter to packages/* so `pnpm -r build`
 # does not walk examples/.
+#
+# The typecheck below is `typecheck:only`, NOT `typecheck`. The latter is
+# `pnpm build:packages && tsc --noEmit`, so calling it here ran the whole
+# build a second time — measured at 28 `Build success` lines for 7 packages
+# in one push. The two stages stay separate because their failures mean
+# different things and the messages below say which.
 # The status is captured BEFORE any test, because `$?` inside `if ! cmd; then` is the status of
 # the NEGATION — always 0 — not of the command. Measured, after writing it the wrong way first.
 pnpm build:packages
@@ -105,7 +111,7 @@ if [ "$build_status" -ne 0 ]; then
   report_stage_failure "package build" "$build_status"
 fi
 
-pnpm typecheck
+pnpm typecheck:only
 typecheck_status=$?
 if [ "$typecheck_status" -ne 0 ]; then
   report_stage_failure "typecheck" "$typecheck_status"

@@ -115,7 +115,7 @@ jobs:
       # an ARRAY where earlier npm returned an object, so changesets reads no
       # published versions and tries to publish everything.
       - name: Install an npm that speaks OIDC (>= 11.5.1) but tolerates pnpm's forwarded flag
-        run: npm install -g npm@11.9.0 # zizmor: ignore[adhoc-packages] — bootstrapping npm itself; no lockfile can cover it
+        uses: usetheokit/shared-workflows/actions/npm-oidc@v1 # zizmor: ignore[unpinned-uses]
       # #169 — an `npm install -g npm@latest` step used to sit here, and it kept this workflow red
       # from 2026-07-24 to 2026-08-06 (7 consecutive runs):
       #

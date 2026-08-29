@@ -19,8 +19,16 @@ describe('server/webhook — the public surface', () => {
   it('exports every signature validator a channel webhook needs', async () => {
     const mod = await import('../../packages/theo/src/server/webhook/index.js')
 
-    for (const provider of ['telegram', 'discord', 'slack', 'github', 'stripe']) {
+    for (const provider of ['telegram', 'discord', 'slack', 'github', 'stripe', 'whatsapp']) {
       expect(typeof (mod as Record<string, unknown>)[provider]).toBe('function')
     }
+  })
+
+  it('exports the subscribe handshake a Meta platform needs before it delivers anything', async () => {
+    // A validator alone does not make WhatsApp servable: Meta verifies the endpoint with a GET
+    // first, and refusing that leaves the webhook unsubscribed (#556).
+    const mod = await import('../../packages/theo/src/server/webhook/index.js')
+
+    expect(typeof (mod as Record<string, unknown>).whatsappSubscribe).toBe('function')
   })
 })

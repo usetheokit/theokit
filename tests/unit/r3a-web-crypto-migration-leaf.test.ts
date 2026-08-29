@@ -123,9 +123,19 @@ describe('T5a.1a — leaf-file Web Crypto migration (node:crypto → globalThis.
     expect(source).not.toMatch(/from\s+['"]node:crypto['"]/)
   })
 
-  it('webhook/providers/github.ts uses Web Crypto subtle.sign for HMAC', () => {
-    const source = readSource('packages/theo/src/server/webhook/providers/github.ts')
+  it('the X-Hub-Signature-256 scheme uses Web Crypto subtle.sign for HMAC', () => {
+    // The assertion moved with the code, not away from it. `github.ts` delegated its verification
+    // to `hub-signature-256.ts` when WhatsApp arrived needing the identical scheme (#556); pointing
+    // this at `github.ts` would now pass on a file that computes nothing, which is the same as not
+    // checking. The property under test is unchanged: this scheme runs on Web Crypto, so it works
+    // on Workers/Bun/Deno per ADR-0028.
+    const source = readSource('packages/theo/src/server/webhook/providers/hub-signature-256.ts')
     expect(source).toMatch(/(globalThis\.)?crypto\.subtle\.(sign|importKey)/)
+  })
+
+  it('the X-Hub-Signature-256 scheme does not import from node:crypto', () => {
+    const source = readSource('packages/theo/src/server/webhook/providers/hub-signature-256.ts')
+    expect(source).not.toMatch(/from\s+['"]node:crypto['"]/)
   })
 
   it('webhook/providers/slack.ts no longer imports from node:crypto', () => {

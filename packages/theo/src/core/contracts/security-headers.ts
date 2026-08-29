@@ -46,6 +46,11 @@
  *                                         in animation directives
  *   - img-src 'self' data: blob:      — supports inline data URIs, blobs
  *                                         from canvas exports
+ *   - media-src 'self' data: blob:    — same reasoning for audio/video the app
+ *                                         generated itself. Absent until #553:
+ *                                         `<audio>` fell back to default-src
+ *                                         and a blob: from plugin-voice's TTS
+ *                                         was blocked in the browser
  *   - font-src 'self' data:           — Geist fonts inline-base64
  *   - connect-src 'self' ws: wss:     — WebSocket dev HMR + agent streams
  *   - frame-ancestors 'none'          — clickjacking defense
@@ -60,6 +65,7 @@ export const DEFAULT_CSP =
   "script-src 'self'; " +
   "style-src 'self' 'unsafe-inline'; " +
   "img-src 'self' data: blob:; " +
+  "media-src 'self' data: blob:; " +
   "font-src 'self' data:; " +
   "connect-src 'self' ws: wss:; " +
   "frame-ancestors 'none'; " +

@@ -8,9 +8,17 @@ Configuration lives in `.env` (copy `.env.example`). Nothing here is committed �
 | `ANTHROPIC_API_KEY`  | one of these | Use Anthropic directly instead of OpenRouter.                                 |
 | `OPENAI_API_KEY`     | one of these | Use OpenAI directly.                                                          |
 
-The agent resolves the key from the environment at runtime (OpenRouter preferred). The model id in
-`agents/chat.ts` is provider-prefixed (e.g. `openai/gpt-4o-mini`) so OpenRouter routes it upstream — see
-<https://openrouter.ai/models>.
+The FIRST segment of the model id in `agents/chat.ts` picks the provider, and that decides which key
+is needed. It is not a hint: `openai/gpt-4o-mini` goes to OpenAI and needs `OPENAI_API_KEY`, even
+with an OpenRouter key present. Reaching another vendor's catalog THROUGH OpenRouter means naming
+the gateway first — `openrouter/openai/gpt-4o-mini`, which is what the scaffold declares, matching
+the key above. See <https://openrouter.ai/models> for the ids OpenRouter serves.
+
+| Model id in `agents/chat.ts`    | Key it needs         |
+| ------------------------------- | -------------------- |
+| `openrouter/openai/gpt-4o-mini` | `OPENROUTER_API_KEY` |
+| `anthropic/claude-sonnet-4-6`   | `ANTHROPIC_API_KEY`  |
+| `openai/gpt-4o-mini`            | `OPENAI_API_KEY`     |
 
 ```bash
 cp .env.example .env

@@ -1,8 +1,9 @@
 import react from '@vitejs/plugin-react'
-import { createServer, type Plugin, type ViteDevServer } from 'vite'
+import { createServer, type Plugin, type ServerOptions, type ViteDevServer } from 'vite'
 
 import { loadConfig } from '../../config/load-config.js'
 import { loadEnv } from '../../config/load-env.js'
+import type { TheoConfig } from '../../config/schema.js'
 import { validateProjectStructure } from '../../config/validate-structure.js'
 import { initCacheEngineFromConfig } from '../../server/cache-bootstrap.js'
 import { orchestrateDev } from '../../services/index.js'
@@ -11,6 +12,30 @@ import { preflightNodeAndBindings } from '../preflight-node-version.js'
 
 interface DevOptions {
   port?: number
+}
+
+/**
+ * The Vite `server` block, as a pure function of the loaded config — the same reasoning
+ * `buildSecurityHeaders` is written down with: a setting that reaches Vite only from inside a
+ * booted dev server can be asserted only by booting one, and a setting nobody can assert is how a
+ * config field ends up existing and doing nothing (#555).
+ *
+ * Every key here is omitted rather than set to `undefined` when the app said nothing, so Vite's own
+ * defaults apply. That matters most for `allowedHosts`, where the falsy value is `[]` — an empty
+ * allowlist blocks every host, loopback included, so writing one on silence would turn "no opinion"
+ * into "refuse everything".
+ */
+export function buildDevServerOptions(config: TheoConfig, port: number): ServerOptions {
+  return {
+    port,
+    host: config.host,
+    open: config.open,
+    strictPort: config.strictPort,
+    ...(config.allowedHosts !== undefined ? { allowedHosts: config.allowedHosts } : {}),
+    warmup: config.warmup ?? {
+      clientFiles: ['./app/**/*.tsx', './app/**/*.ts'],
+    },
+  }
 }
 
 export async function startDevServer(cwd: string, options?: DevOptions): Promise<ViteDevServer> {
@@ -88,15 +113,7 @@ export async function startDevServer(cwd: string, options?: DevOptions): Promise
     server = await createServer({
       root: cwd,
       plugins: [react(), ...theoPlugins] as Plugin[],
-      server: {
-        port,
-        host: config.host,
-        open: config.open,
-        strictPort: config.strictPort,
-        warmup: config.warmup ?? {
-          clientFiles: ['./app/**/*.tsx', './app/**/*.ts'],
-        },
-      },
+      server: buildDevServerOptions(config, port),
       logLevel: options?.port === 0 ? 'silent' : undefined,
     })
 

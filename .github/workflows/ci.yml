@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
     # Both promotion legs are pull requests — workspace -> develop and develop -> main — so
     # both bases belong here. Until 2026-08-19 only `main` was listed, so the nine quality
@@ -37,27 +37,18 @@ concurrency:
 jobs:
   lint-and-format:
     name: Lint + Format
+    needs: typecheck-build
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: usetheokit/shared-workflows/actions/setup@v1 # zizmor: ignore[unpinned-uses]
+      - uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
         with:
-          node-version-file: '.nvmrc'
-          cache: 'pnpm'
-          # The cache key must change when the package manager does. setup-node keys the
-          # pnpm store on the lockfile alone, so a pnpm 9 -> 10 bump leaves the key
-          # identical and the job restores a store the new pnpm reads as inconsistent —
-          # `ERR_PNPM_MISSING_PACKAGE_INDEX_FILE`, on a package the lockfile does list.
-          # package.json carries `packageManager`, so including it ties the cache to the
-          # pnpm that wrote it.
-          cache-dependency-path: |
-            pnpm-lock.yaml
-            package.json
-      - run: pnpm install --frozen-lockfile
+          name: package-dist
+          path: packages
       # The type-aware ESLint rules resolve `@theokit/agents` through its package
       # `types` field, which points at `dist/`. On a fresh checkout that directory
       # does not exist, every type crossing the package boundary resolves to an
@@ -68,7 +59,6 @@ jobs:
       # the local lint gate had been giving false assurance for as long as this job
       # had been red. Proven by removing `packages/agents/dist` locally: the exact
       # CI errors appear, and restoring it returns exit 0.
-      - run: pnpm build:packages
       - name: ESLint (strict — zero warnings)
         run: pnpm lint
       - name: Prettier (format check)
@@ -82,31 +72,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version-file: '.nvmrc'
-          cache: 'pnpm'
-          # The cache key must change when the package manager does. setup-node keys the
-          # pnpm store on the lockfile alone, so a pnpm 9 -> 10 bump leaves the key
-          # identical and the job restores a store the new pnpm reads as inconsistent —
-          # `ERR_PNPM_MISSING_PACKAGE_INDEX_FILE`, on a package the lockfile does list.
-          # package.json carries `packageManager`, so including it ties the cache to the
-          # pnpm that wrote it.
-          cache-dependency-path: |
-            pnpm-lock.yaml
-            package.json
-      # Sibling theokit-sdk is declared as a workspace member in
-      # pnpm-workspace.yaml (`../theokit-sdk/packages/{sdk,gateway,gateway-telegram}`).
-      # pnpm-lock.yaml lists those packages with `link:` paths — pnpm install
-      # expects the files on disk. `dist/` isn't committed so we also build
-      # the SDK before consuming it (typecheck needs the type entries to
-      # resolve at `./dist/index.d.ts`). Public repo, anonymous clone OK.
-      - name: Checkout + build sibling theokit-sdk (workspace dep)
-        run: |
-          git clone --depth 1 https://github.com/usetheokit/theokit-sdk.git ../theokit-sdk
-          (cd ../theokit-sdk && pnpm install --no-frozen-lockfile && pnpm --filter "./packages/*" build)
-      - run: pnpm install --frozen-lockfile
+      - uses: usetheokit/shared-workflows/actions/setup@v1 # zizmor: ignore[unpinned-uses]
       # Build BEFORE typecheck: tests/smoke/import-validation.test.ts
       # imports from `packages/theo/dist/*` to validate the npm publish
       # surface — those files don't exist until build runs.
@@ -115,10 +81,19 @@ jobs:
       # but the binstub points to dist/cli/index.js which doesn't exist
       # until the theo package finishes building → ordering blow-up).
       - run: pnpm build:packages
-      - run: pnpm typecheck
+      # `typecheck:only`, not `typecheck`: the latter is `pnpm build:packages && tsc --noEmit`,
+      # and the step above already built. Measured on run 33179795266 — build:packages 51s, then
+      # typecheck 67s, of which ~50s was that build running a second time.
+      - run: pnpm typecheck:only
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: package-dist
+          path: packages/*/dist
+          retention-days: 1
 
   test:
     name: Unit + Type tests
+    needs: typecheck-build
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
@@ -148,27 +123,13 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: usetheokit/shared-workflows/actions/setup@v1 # zizmor: ignore[unpinned-uses]
         with:
           node-version: ${{ matrix.node-version }}
-          cache: 'pnpm'
-          # The cache key must change when the package manager does. setup-node keys the
-          # pnpm store on the lockfile alone, so a pnpm 9 -> 10 bump leaves the key
-          # identical and the job restores a store the new pnpm reads as inconsistent —
-          # `ERR_PNPM_MISSING_PACKAGE_INDEX_FILE`, on a package the lockfile does list.
-          # package.json carries `packageManager`, so including it ties the cache to the
-          # pnpm that wrote it.
-          cache-dependency-path: |
-            pnpm-lock.yaml
-            package.json
-      # Sibling theokit-sdk: workspace member declared in pnpm-workspace.yaml.
-      # `dist/` isn't committed → build after clone so type entries resolve.
-      - name: Checkout + build sibling theokit-sdk (workspace dep)
-        run: |
-          git clone --depth 1 https://github.com/usetheokit/theokit-sdk.git ../theokit-sdk
-          (cd ../theokit-sdk && pnpm install --no-frozen-lockfile && pnpm --filter "./packages/*" build)
-      - run: pnpm install --frozen-lockfile
+      - uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
+        with:
+          name: package-dist
+          path: packages
       # dogfood-regressions-fix-plan v1.1 T4.2 — defense in depth against
       # NODE_MODULE_VERSION mismatch. CRITICAL here because the matrix runs
       # both Node 20 and Node 22 against the same pnpm store (cache); the
@@ -179,7 +140,6 @@ jobs:
       # Build packages before running tests so the integration tests that
       # exercise `theokit build` (cron/job manifest tests, scaffold-build-start
       # E2E) find the bin at `packages/theo/dist/cli/index.js`.
-      - run: pnpm build:packages
       # M75 T1.2 — the kernel-confinement tests need bubblewrap. `apt install` alone is NOT enough
       # on ubuntu-latest: Ubuntu 24.04 blocks unprivileged user namespaces through AppArmor, and the
       # active probe (`bwrap --unshare-user ...`) fails with "user namespaces unavailable
@@ -206,7 +166,26 @@ jobs:
       # uploading under one artifact name is an upload conflict.
       - name: Tests${{ matrix.coverage && ' + coverage thresholds' || '' }}
         run: ${{ matrix.coverage && 'pnpm test:coverage' || 'pnpm test' }}
-      - run: pnpm test:types
+      # Once, not once per leg. `vitest --typecheck.only` runs TypeScript over the `.test-d.ts`
+      # files, and its diagnostics come from the TS version, the tsconfig and the sources — all
+      # pinned by the lockfile, none varying with the node runtime that executes tsc. The second
+      # run recomputed a result guaranteed to be identical. Measured at 283s and 316s on the two
+      # legs of one run.
+      #
+      # The same argument the coverage comment above makes, and the same waste it removed; it
+      # simply had not been applied here.
+      #
+      # WHICH leg matters, and the obvious answer is wrong. Putting it beside coverage on the
+      # floor leg saves nothing, because that leg is already the critical path. Measured on run
+      # 33179795266: today max(743s, 876s) = 14.6 min; beside coverage max(460s, 876s) = 14.6 min;
+      # here max(743s, 560s) = 12.4 min. The lighter leg is what balances them.
+      #
+      # `!matrix.coverage` rather than a new matrix key on purpose: coverage is already confined to
+      # exactly one leg, and that confinement is ENFORCED — two legs uploading under one artifact
+      # name is an upload conflict, which fails loudly. Borrowing an invariant something already
+      # checks means this condition cannot silently select no leg. A new key would be one nobody
+      # verifies, and a type gate that quietly stops running is the failure this repo keeps paying
+      # for. Both legs remain required contexts, so the check keeps blocking either way.
       - name: Upload coverage report
         if: ${{ matrix.coverage && always() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -214,6 +193,40 @@ jobs:
           name: coverage-report
           path: coverage/
           retention-days: 14
+
+  # Type-level tests, split out of `test`.
+  #
+  # They ran as a second step inside the node-22 leg, in series after the unit suite: that leg
+  # took 12.5 minutes against 7.5 for the leg that skipped them, and it was the critical path for
+  # the whole workflow. `vitest --typecheck.only` shares nothing with the unit run but the build,
+  # so running it beside them costs one more runner and removes five minutes from the chain.
+  type-tests:
+    name: Type tests
+    needs: typecheck-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: usetheokit/shared-workflows/actions/setup@v1 # zizmor: ignore[unpinned-uses]
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
+        with:
+          name: package-dist
+          path: packages
+      # dogfood-regressions-fix-plan v1.1 T4.2 — defense in depth against
+      # NODE_MODULE_VERSION mismatch. CRITICAL here because the matrix runs
+      # both Node 20 and Node 22 against the same pnpm store (cache); the
+      # binding installed under one Node version cannot dlopen under the
+      # other. Without this step the matrix would silently break.
+      - name: Rebuild native bindings (better-sqlite3 ABI guard)
+        run: pnpm rebuild better-sqlite3 || echo "::warning::native rebuild failed — preflight will surface details at test time"
+      # Build packages before running tests so the integration tests that
+      # exercise `theokit build` (cron/job manifest tests, scaffold-build-start
+      # E2E) find the bin at `packages/theo/dist/cli/index.js`.
+      - run: pnpm test:types
 
   scaffold-typecheck:
     # usetheokit/theokit#396 — a freshly scaffolded app must pass its own `typecheck` script.
@@ -227,29 +240,21 @@ jobs:
     # `tsc --noEmit` exit 0 on a clean tree. `pnpm try:scaffold` is deliberately NOT used — it omits
     # `--yes` and prompts, so it fails under CI with no TTY.
     name: Scaffolded app typechecks
+    needs: typecheck-build
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: usetheokit/shared-workflows/actions/setup@v1 # zizmor: ignore[unpinned-uses]
+      - uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
         with:
-          node-version-file: '.nvmrc'
-          cache: 'pnpm'
-          cache-dependency-path: |
-            pnpm-lock.yaml
-            package.json
-      - name: Checkout + build sibling theokit-sdk (workspace dep)
-        run: |
-          git clone --depth 1 https://github.com/usetheokit/theokit-sdk.git ../theokit-sdk
-          (cd ../theokit-sdk && pnpm install --no-frozen-lockfile && pnpm --filter "./packages/*" build)
-      - run: pnpm install --frozen-lockfile
+          name: package-dist
+          path: packages
       # The scaffold links against this working tree, so the packages must be built first —
       # otherwise `tsc` reads a stale `dist` and reports errors that belong to neither the template
       # nor the source. That exact confusion cost a debugging pass while this job was being written.
-      - run: pnpm build:packages
       # `--skip-install` because the CLI's own install runs BEFORE the link step below and resolves
       # the template's pins from npm. After `changeset version` bumps `theokit` to the version the
       # release is about to publish, that install cannot succeed — which deadlocked the release,
@@ -287,62 +292,40 @@ jobs:
 
   dead-code:
     name: Dead code (Knip)
+    needs: typecheck-build
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: usetheokit/shared-workflows/actions/setup@v1 # zizmor: ignore[unpinned-uses]
+      - uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
         with:
-          node-version-file: '.nvmrc'
-          cache: 'pnpm'
-          # The cache key must change when the package manager does. setup-node keys the
-          # pnpm store on the lockfile alone, so a pnpm 9 -> 10 bump leaves the key
-          # identical and the job restores a store the new pnpm reads as inconsistent —
-          # `ERR_PNPM_MISSING_PACKAGE_INDEX_FILE`, on a package the lockfile does list.
-          # package.json carries `packageManager`, so including it ties the cache to the
-          # pnpm that wrote it.
-          cache-dependency-path: |
-            pnpm-lock.yaml
-            package.json
-      # Sibling theokit-sdk: workspace member declared in pnpm-workspace.yaml.
-      # `dist/` isn't committed → build after clone so type entries resolve.
-      - name: Checkout + build sibling theokit-sdk (workspace dep)
-        run: |
-          git clone --depth 1 https://github.com/usetheokit/theokit-sdk.git ../theokit-sdk
-          (cd ../theokit-sdk && pnpm install --no-frozen-lockfile && pnpm --filter "./packages/*" build)
-      - run: pnpm install --frozen-lockfile
+          name: package-dist
+          path: packages
       # Build packages first so knip can resolve theokit's dist exports.
-      - run: pnpm build:packages
       - run: pnpm knip
 
   package-validation:
     name: Package validation (publint + ATTW + smoke)
+    needs: typecheck-build
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    needs: [lint-and-format, typecheck-build, test]
+    # NOT waiting on `test`, deliberately. This job installs, builds and runs its own smoke
+    # suite; it consumes no artifact and no output from lint, typecheck or test. The dependency
+    # was ordering, and it cost the wall clock: measured on a real run, `test` occupied +0.1 to
+    # +12.5 and this job +12.6 to +14.3 — a twelve-minute wait in front of a 1.7-minute job for
+    # nothing it needed.
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: usetheokit/shared-workflows/actions/setup@v1 # zizmor: ignore[unpinned-uses]
+      - uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
         with:
-          node-version-file: '.nvmrc'
-          cache: 'pnpm'
-          # The cache key must change when the package manager does. setup-node keys the
-          # pnpm store on the lockfile alone, so a pnpm 9 -> 10 bump leaves the key
-          # identical and the job restores a store the new pnpm reads as inconsistent —
-          # `ERR_PNPM_MISSING_PACKAGE_INDEX_FILE`, on a package the lockfile does list.
-          # package.json carries `packageManager`, so including it ties the cache to the
-          # pnpm that wrote it.
-          cache-dependency-path: |
-            pnpm-lock.yaml
-            package.json
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm build
+          name: package-dist
+          path: packages
       - run: pnpm validate:publint
       - run: pnpm validate:attw
       - run: npx vitest run tests/smoke/
@@ -361,25 +344,13 @@ jobs:
           persist-credentials: false
       # SHA-pinned, unlike the tag references elsewhere in this file. A supply-chain gate that
       # resolves its own tooling through a movable tag can be silenced by whoever moves the tag.
-      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: usetheokit/shared-workflows/actions/setup@v1 # zizmor: ignore[unpinned-uses]
         with:
-          node-version-file: '.nvmrc'
-          cache: 'pnpm'
-          # The cache key must change when the package manager does. setup-node keys the
-          # pnpm store on the lockfile alone, so a pnpm 9 -> 10 bump leaves the key
-          # identical and the job restores a store the new pnpm reads as inconsistent —
-          # `ERR_PNPM_MISSING_PACKAGE_INDEX_FILE`, on a package the lockfile does list.
-          # package.json carries `packageManager`, so including it ties the cache to the
-          # pnpm that wrote it.
-          cache-dependency-path: |
-            pnpm-lock.yaml
-            package.json
+          install-args: --ignore-scripts
       # `--ignore-scripts`: this job never builds or runs the tree, it only reads it. Executing
       # every dependency's install hooks to decide whether those dependencies are safe hands
       # arbitrary code to the thing under audit. `pnpm audit` works from the lockfile and
       # `check-licenses.mjs` uses only node builtins over the store, so neither loses anything.
-      - run: pnpm install --frozen-lockfile --ignore-scripts
       # `--prod` on purpose. A production advisory is inherited by every app built on the framework;
       # a dev-tree one never reaches a consumer and, measured today, would make this job permanently
       # red for findings nobody here can act on. A gate that is always red is a gate people learn to
@@ -431,8 +402,7 @@ jobs:
         with:
           persist-credentials: false
       # Pinned and script-free for the same reason as `dependency-audit` above.
-      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: usetheokit/shared-workflows/actions/setup@v1 # zizmor: ignore[unpinned-uses]
         with:
           # NOT .nvmrc, and this is the one job where that is right. `rollup` carries
           # `@napi-rs/lzma-linux-x64-gnu` as an optionalDependency, and that package
@@ -448,17 +418,7 @@ jobs:
           # `--no-optional` was measured and rejected as the fix: it takes the audit from
           # 551 packages to 163.
           node-version: '22'
-          cache: 'pnpm'
-          # The cache key must change when the package manager does. setup-node keys the
-          # pnpm store on the lockfile alone, so a pnpm 9 -> 10 bump leaves the key
-          # identical and the job restores a store the new pnpm reads as inconsistent —
-          # `ERR_PNPM_MISSING_PACKAGE_INDEX_FILE`, on a package the lockfile does list.
-          # package.json carries `packageManager`, so including it ties the cache to the
-          # pnpm that wrote it.
-          cache-dependency-path: |
-            pnpm-lock.yaml
-            package.json
-      - run: pnpm install --frozen-lockfile --ignore-scripts
+          install-args: --ignore-scripts
       - run: pnpm check:licenses
 
   pr-report:
@@ -479,6 +439,7 @@ jobs:
       - lint-and-format
       - typecheck-build
       - test
+      - type-tests
       - scaffold-typecheck
       - dead-code
       - package-validation
@@ -581,8 +542,61 @@ jobs:
     secrets:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     with:
-      # Not re-run here: the `test` job above first checks out and builds the sibling
-      # theokit-sdk, rebuilds native bindings and installs bubblewrap — 89 suites fail to load
-      # without that, which is exactly what the first scan hit while still reporting green.
+      # Not re-run here: the `test` job above rebuilds native bindings and installs bubblewrap —
+      # 89 suites fail to load without that, which is exactly what the first scan hit while still
+      # reporting green. (The sibling theokit-sdk checkout used to be in this list and was removed:
+      # the lockfile never referenced it and the suite is identical with and without it — #551.)
       # Reading its artifact also means Sonar publishes the number this repo's own gate measured.
       coverage-artifact: coverage-report
+
+  # The one check branch protection should require.
+  #
+  # `pr-report` already gathers every job, but only on pull requests from this repository — a
+  # push to a long-lived branch produces no such check, and neither does a PR from a fork. This
+  # one runs on every event.
+  #
+  # WHY IT MATTERS BEYOND TIDINESS. Requiring individual jobs works only while each runs on every
+  # event. The moment a job becomes conditional — a matrix leg skipped on pull requests, a path
+  # filter, a shard that only exists for some runs — a required check that never reports sits at
+  # "Expected — Waiting for status to be reported" and the pull request can never merge. Branch
+  # protection cannot tell "deliberately skipped" from "not reported yet". A sibling repository
+  # hit exactly that this morning and had to revert the change rather than fix it.
+  #
+  # A SKIPPED dependency counts as a pass; a failed or cancelled one does not. `cancelled` is
+  # checked too, or the concurrency group's own cancellations would report green.
+  ci-ok:
+    name: CI
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: always()
+    needs:
+      - lint-and-format
+      - typecheck-build
+      - test
+      - type-tests
+      - scaffold-typecheck
+      - dead-code
+      - package-validation
+      - dependency-audit
+      - doc-citations
+      - changelog-current
+      - license-compliance
+      - sonar
+    steps:
+      - name: Report
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          set -euo pipefail
+          echo "$RESULTS"
+          # Matched over the serialized results rather than a hand-kept list: a job added to
+          # `needs` and forgotten here would silently stop being gated.
+          if echo "$RESULTS" | grep -q '"result": *"failure"'; then
+            echo "::error::a required job failed"
+            exit 1
+          fi
+          if echo "$RESULTS" | grep -q '"result": *"cancelled"'; then
+            echo "::error::a required job was cancelled"
+            exit 1
+          fi
+          echo "no required job failed or was cancelled"
