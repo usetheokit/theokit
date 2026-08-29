@@ -20,14 +20,14 @@ Create an `agents/<name>.ts` file at the project root. It is automatically serve
 
 ```typescript
 // agents/chat.ts
-import { defineAgent } from '@theokit/agents'
+import { AgentBuilder } from '@theokit/agents'
 import { z } from 'zod'
 
-export default defineAgent({
-  input: z.object({ message: z.string() }),
-  model: 'openrouter/openai/gpt-4o-mini',
-  system: 'You are a helpful assistant.',
-})
+export default AgentBuilder.create()
+  .input(z.object({ message: z.string() }))
+  .model('openrouter/openai/gpt-4o-mini')
+  .system('You are a helpful assistant.')
+  .build()
 ```
 
 The endpoint streams the ai-sdk `UIMessageStream` that `useAgent` (client hook) consumes.
@@ -205,7 +205,7 @@ Before writing custom tools, check if they already exist:
 
 ## Anti-patterns
 
-- NEVER call OpenAI/Anthropic/OpenRouter APIs directly — use `defineAgent` or `@Agent`
+- NEVER call OpenAI/Anthropic/OpenRouter APIs directly — use `AgentBuilder.create()`
 - NEVER reimplement tool calling loop — the SDK handles it
 - NEVER reimplement file/search/shell tools — use `@theokit/sdk-tools` (readFile, writeFile, search, etc.)
 - NEVER store conversations manually — SDK persistence is automatic (the SDK owns storage)

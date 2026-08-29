@@ -2,7 +2,7 @@
 
 ## Imports
 
-- Use `theokit/server/define` for defineRoute, defineAction, defineWebSocket
+- Use `theokit/server/define` for `route()`, `action()`, `websocket()`, `tool()`
 - Use `theokit/client` for theoFetch, createAppClient
 - Use `theokit/server/auth` for session/auth APIs
 - NEVER import from `theokit/dist/...` or `theokit/src/...`
@@ -13,12 +13,12 @@
 - Zod is the single source of truth for types and validation
 - Define schema ONCE with `z.object(...)`, derive types with `z.infer<>`
 - NEVER duplicate a Zod schema as a manual TypeScript interface
-- NEVER parse request body manually — use `body:` in defineRoute
+- NEVER parse request body manually — use `.body(z.object({ … }))` on the `route()` chain
 
 ## Routes
 
 - File at `server/routes/tasks/[id].ts` maps to `/api/tasks/:id`
-- Export HTTP method handlers: `export const GET = defineRoute({...})`
+- Export HTTP method handlers: `export const GET = route().policy('public').handler(…).build()`
 - Every method declares `policy` — who may call it. `'public'` is a valid answer and an explicit one;
   omitting it fails the build with the file named
 - Use `params: z.object({...})` for URL params, `body:` for request body
