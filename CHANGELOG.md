@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [create-theokit 1.25.2] - 2026-08-29
+
 ### Fixed
 
 - **The scaffold no longer teaches four APIs that do not exist.** Its skills are installed into
@@ -30,8 +32,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `tool`, `route` and `websocket` live in `theokit/server/define`; `createSessionManager` and
   `requireAuth` in `theokit/server/auth`. Two of the six shipped into every generated app.
 
-### Fixed
-
 - **The root CHANGELOG is now written by the release itself.** It is hand-maintained and nothing in
   the release chain touched it, so the record fell behind the registry four times — the fourth being
   `theokit@0.60.0`, which was recorded deliberately ahead of the tag and then lost when an unrelated
@@ -40,7 +40,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   runs `record-root-changelog.mjs` straight after `changeset version`, on the same commit the bot
   makes, so regenerating the branch regenerates the record. It only MOVES prose a human wrote — an
   empty `[Unreleased]` produces nothing rather than an invented line.
-
 ## [theokit 0.60.0, create-theokit 1.25.1] - 2026-08-29
 
 ### Added
