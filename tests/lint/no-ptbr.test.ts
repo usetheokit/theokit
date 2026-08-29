@@ -488,21 +488,37 @@ describe('codebase is English-only (no PT-BR)', () => {
     const after = lines.slice(start + 1).findIndex((l) => l.startsWith('## ['))
     const end = after === -1 ? lines.length : start + 1 + after
 
-    // Non-vacuity floor, asserted BEFORE the result — the same failure this file records twice. If
-    // the heading is renamed or the section emptied, `slice` yields nothing and the scan reports
-    // clean over zero lines. A missing section is a defect in the changelog discipline, not a pass.
+    // Non-vacuity floor, asserted BEFORE the result — the same failure this file records twice. A
+    // renamed or removed heading makes `slice` yield nothing and the scan report clean over zero
+    // lines, which is a defect rather than a pass. The HEADING is what the floor rests on.
     expect(
       start,
       'no `## [Unreleased]` heading in CHANGELOG.md — the scan would be vacuous',
     ).toBeGreaterThanOrEqual(0)
     const section = lines.slice(start, end)
-    // Counted from `start + 1`, not `start`. The heading is always present by the assertion above,
-    // so counting it would make this floor satisfy itself — a vacuity check that cannot detect the
-    // vacuity it is for.
-    expect(
-      section.slice(1).filter((l) => l.trim() !== '').length,
-      '`[Unreleased]` is empty — every change lands there first (Unbreakable Rule 6)',
-    ).toBeGreaterThan(0)
+
+    // There was a second floor here requiring the section to be NON-EMPTY, on the reasoning that
+    // every change lands there first (Unbreakable Rule 6). The reasoning is right and the assertion
+    // was wrong at exactly one moment: the version cut, when moving `[Unreleased]` under a dated
+    // heading is the whole point and leaving it empty is the prescribed state.
+    //
+    // That is not hypothetical. It put two gates in direct opposition:
+    //
+    //   - this one refused a changelog whose `[Unreleased]` had just been migrated;
+    //   - `check-changelog-current.mjs` refuses a release the root changelog does not name.
+    //
+    // The only way to satisfy both was to record the release AFTER the tag — which is the drift the
+    // second gate exists to punish, and it fired three times in three days: `59720883b` ("three
+    // releases reached npm without reaching this file"), `c5b69972d`, `21b706800`. The single time
+    // `[Unreleased]` was legitimately emptied, the very next commit is titled "[Unreleased] cannot
+    // be empty — this PR's work belongs there" (`53b436550`): a gate satisfied by inventing content
+    // for it, which is the shape of a gate that has stopped measuring anything.
+    //
+    // Removed rather than conditioned on the date, because the vacuity it guarded is already
+    // guarded: if the heading exists and the section is empty, a scan over zero lines is CORRECT —
+    // there is nothing written to be written in the wrong language. And the discipline it invoked
+    // is not this file's to enforce; it belongs to `check-changelog-current.mjs`, which asks the
+    // question on the axis that can answer it — is the shipped release named in the record.
 
     // Line numbers are reported against the real file, so a failure points at the line to edit
     // rather than at an offset into a slice.

@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- **The English-only gate no longer forbids a freshly-cut changelog.** It required `[Unreleased]` to
+  be non-empty, which is false at exactly one moment — the version cut, when migrating that section
+  under a dated heading is the point and leaving it empty is the prescribed state. That put it in
+  direct opposition to `check-changelog-current.mjs`, which refuses a release the root changelog does
+  not name: the only way to satisfy both was to record the release AFTER the tag, which is the drift
+  the second gate exists to punish. It fired three times in three days. The heading must still exist
+  — a renamed one makes the scan vacuous and still fails — but an empty section is now read as
+  "nothing written yet", which is what it means.
+
 ### Added
 
 - **WhatsApp can be served through `handleChannelWebhook`.** The channel seam answered 404 for
