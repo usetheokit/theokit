@@ -8,6 +8,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **The scaffold no longer teaches four APIs that do not exist.** Its skills are installed into
+  every generated app and read by an AI agent working there, so a wrong name is not a snippet
+  somebody might copy — it is a recommendation to a reader that cannot check it. Measured against
+  the built package: `defineAgentTool` (#542 — declared in the shipped `.d.ts`, exported by no
+  subpath, so it typechecks and throws), `defineConfig`, `defineRoute` and `defineAction` (all
+  removed in favour of the `config()`, `route()` and `action()` builders the scaffold's own files
+  already use). `TheoError` was imported from the package root, where it does not live; it is in
+  `theokit/server/http`.
+
+  The guard that replaces them asks the PACKAGE rather than keeping a list of known-bad names,
+  resolving each documented import through the package's own `exports` map. A list only knows what
+  somebody already found — which was the exact vice of the test this removes, one that pinned the
+  *signature* of the fabricated `defineAgentTool` call and could never have noticed the function was
+  missing. Two of the four defects above were found by the listless version, after the list was
+  written.
+
+- **Documented imports point at their real subpaths.** Six examples across the README, the scaffold's
+  `CUSTOMIZATION.md` and its agents skill imported from `theokit/server`, the umbrella that resolves
+  with a deprecation warning naming a removal release. Measured against the published package:
+  `tool`, `route` and `websocket` live in `theokit/server/define`; `createSessionManager` and
+  `requireAuth` in `theokit/server/auth`. Two of the six shipped into every generated app.
+
+### Fixed
+
 - **The root CHANGELOG is now written by the release itself.** It is hand-maintained and nothing in
   the release chain touched it, so the record fell behind the registry four times — the fourth being
   `theokit@0.60.0`, which was recorded deliberately ahead of the tag and then lost when an unrelated

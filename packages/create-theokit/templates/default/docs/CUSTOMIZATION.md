@@ -17,7 +17,7 @@ Common changes, and where they go. See [ARCHITECTURE](./ARCHITECTURE.md) for the
 
 ```ts
 // agents/tools/echo.ts
-import { tool } from 'theokit/server'
+import { tool } from 'theokit/server/define'
 import { z } from 'zod'
 
 export const echoTool = tool('echo')

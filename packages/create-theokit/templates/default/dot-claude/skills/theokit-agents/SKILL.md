@@ -1,6 +1,6 @@
 ---
 name: theokit-agents
-description: TheoKit agent/LLM integration — agents/*.ts convention (defineAgent), @Agent decorator (advanced/DI), defineAgentTool, useAgent client hook
+description: TheoKit agent/LLM integration — agents/*.ts convention (AgentBuilder), the tool() builder, capabilities (advanced/DI), useAgent client hook
 user-invocable: false
 paths:
   - '**/*agent*'
@@ -58,31 +58,51 @@ export const assistantAgent = applyCapabilities([
 // The framework runs the LLM loop via @theokit/sdk.
 ```
 
-## Tools — defineAgentTool
+## Tools — `tool()`
 
-Declare typed tools with `defineAgentTool` (from `theokit/server`) and pass them to
-`defineAgent`'s `tools` array.
+Declare a tool with the `tool()` builder from `theokit/server/define`, then chain it onto the agent
+with `.tool(…)`. It is the same API `agents/tools/weather.ts` in this project uses — read that file
+for a working one.
+
+```typescript
+// agents/tools/current-time.ts
+import { tool } from 'theokit/server/define'
+import { z } from 'zod'
+
+export const currentTimeTool = tool('current_time')
+  .describe('Return the current ISO timestamp')
+  .input(z.object({}))
+  .execute(async () => new Date().toISOString())
+  .build()
+```
 
 ```typescript
 // agents/chat.ts
-import { defineAgent } from '@theokit/agents'
-import { defineAgentTool } from 'theokit/server'
+import { AgentBuilder } from '@theokit/agents'
 import { z } from 'zod'
 
-const currentTimeTool = defineAgentTool({
-  name: 'current_time',
-  description: 'Return the current ISO timestamp',
-  inputSchema: z.object({}),
-  handler: async () => new Date().toISOString(),
-})
+import { currentTimeTool } from './tools/current-time.js'
 
-export default defineAgent({
-  input: z.object({ message: z.string() }),
-  model: 'openrouter/openai/gpt-4o-mini',
-  system: 'You are a helpful assistant.',
-  tools: [currentTimeTool],
-})
+export default AgentBuilder.create()
+  .input(z.object({ message: z.string() }))
+  .model('openrouter/openai/gpt-4o-mini')
+  .system('You are a helpful assistant.')
+  .tool(currentTimeTool)
+  .build()
 ```
+
+A tool is pure metadata plus a handler: it describes a capability and does local or HTTP work, and
+it NEVER calls an LLM — the agent decides when to invoke it.
+
+**Import from `theokit/server/define`, not `theokit/server`.** The umbrella subpath still resolves
+and prints a deprecation warning naming a removal release; every symbol lives under a domain
+subpath (`define`, `auth`, `http`, `security`, …).
+
+> **`defineAgentTool` does not exist.** Earlier versions of this skill taught it. The name is still
+> declared in the published `.d.ts`, so an editor will autocomplete it and `tsc` will accept it —
+> and there is no runtime export behind it on any subpath, so the call throws on the first request
+> (usetheokit/theokit#542). If you find it in older code or in a generated snippet, replace it with
+> the `tool()` builder above.
 
 ### Toolbox class (advanced — state + injected dependencies)
 
@@ -177,7 +197,7 @@ Before writing custom tools, check if they already exist:
 ## Rules
 
 - Tool `name` and `description` are ALWAYS explicit — never inferred from method names (G4)
-- Tool `input` uses Zod schema — same pattern as defineRoute
+- Tool `.input()` takes a Zod schema — same pattern as `route().body(…)`
 - `@UseGuards()` works on agents (shared with HTTP pipeline)
 - `@UseInterceptors()` and `@UseFilters()` on agents are metadata-only (emit warnings)
 - Agent runtime is `@theokit/sdk` — NEVER call LLM APIs directly via fetch
