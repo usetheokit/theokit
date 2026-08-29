@@ -8,6 +8,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **The scaffold's rules file and agent skill taught three more names that do not exist.** Verifying
+  `create-theokit@1.25.2` against the published package rather than the working tree turned up
+  `.claude/rules/theokit-conventions.md` — a RULES file, which an agent reads as normative — still
+  prescribing `defineRoute`, `defineAction` and `defineWebSocket`, and the agents skill still
+  building every example on `defineAgent`. None is exported by anything; the real surface is
+  `route()`, `action()`, `websocket()` and `AgentBuilder.create()`.
+
+  The guard missed them because it read only `import` lines from `theokit/…`. It now covers the
+  workspace's scoped siblings too, derives verifiability from `packages/` instead of a hardcoded
+  allowlist (the first version reported `@theokit/tui` and `@theokit/gateway-telegram` — packages of
+  other repositories — as defects), and reads the built `export {}` block statically rather than
+  importing it. Statically because vitest routes dynamic imports through Vite's SSR loader, which
+  rewrote the entry's chunk references and could not resolve them; and the `.js` rather than the
+  `.d.ts`, which is the whole point of #542 — the fabricated name IS in the published types.
+
+### Fixed
+
+## [create-theokit 1.25.2] - 2026-08-29
+
+### Fixed
+
 - **The scaffold no longer teaches four APIs that do not exist.** Its skills are installed into
   every generated app and read by an AI agent working there, so a wrong name is not a snippet
   somebody might copy — it is a recommendation to a reader that cannot check it. Measured against
@@ -30,8 +51,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `tool`, `route` and `websocket` live in `theokit/server/define`; `createSessionManager` and
   `requireAuth` in `theokit/server/auth`. Two of the six shipped into every generated app.
 
-### Fixed
-
 - **The root CHANGELOG is now written by the release itself.** It is hand-maintained and nothing in
   the release chain touched it, so the record fell behind the registry four times — the fourth being
   `theokit@0.60.0`, which was recorded deliberately ahead of the tag and then lost when an unrelated
@@ -40,7 +59,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   runs `record-root-changelog.mjs` straight after `changeset version`, on the same commit the bot
   makes, so regenerating the branch regenerates the record. It only MOVES prose a human wrote — an
   empty `[Unreleased]` produces nothing rather than an invented line.
-
 ## [theokit 0.60.0, create-theokit 1.25.1] - 2026-08-29
 
 ### Added
