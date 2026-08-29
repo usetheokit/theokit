@@ -8,6 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **WhatsApp can be served through `handleChannelWebhook`.** The channel seam answered 404 for
+  `whatsapp` — no validator existed — and the subscribe handshake Meta performs before delivering
+  anything was not modelled at all, so the platform `@theokit/gateway-whatsapp` exists for was
+  unreachable by construction. `whatsapp({ appSecret })` verifies `X-Hub-Signature-256` over the raw
+  body, and `whatsappSubscribe({ verifyToken })` plugs into a new per-platform `subscribe` map so a
+  `GET` echoes `hub.challenge` as `text/plain`. Both are exported from `theokit/server/webhook`. The
+  signature scheme is the one GitHub already used, so the two now share a single implementation
+  rather than two copies of a crypto routine. (#556)
+
 - **The dev server can be reached through a tunnel.** `allowedHosts` exposes Vite's own
   `server.allowedHosts` through `theo.config.ts`, so an app can be given a public URL — which is
   the only practical way to develop against a webhook platform, and the reason this framework ships
