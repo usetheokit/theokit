@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- Documented that three unrelated things in this ecosystem are called "plugin", and that two of
+  them share one option. A framework plugin (`@theokit/plugin-*`) extends an app; an SDK code
+  plugin (`PermissionPlugin`, `Handoff`) extends an agent; and the SDK's `plugins` option also
+  accepts `{ enabled: [...] }`, which selects plugins discovered under `.theokit/plugins/` and is
+  mutually exclusive with the array form. Reaching for the wrong one raises no error — it simply
+  has no effect. Also recorded that `agent.pluginsManager` only ever holds the file-discovered
+  form, so it reads `plugins: []` while a code plugin is registered and working; an empty manager
+  beside a populated `options.plugins` is the normal shape, not a symptom.
+
 ### Fixed
 
 - **The default CSP allows media the app generated itself.** `media-src` was absent, so `<audio>`/`<video>` fell back to `default-src 'self'` and a `blob:` URL was blocked — an app could not play the audio `@theokit/plugin-voice` returns from `/api/voice/tts`. `img-src` already listed `blob:` for canvas exports; the same reasoning covers audio. (#553)

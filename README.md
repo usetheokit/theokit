@@ -343,6 +343,19 @@ because the dispatcher delegates straight to the agent runtime.
 `HttpStatus` carries the 30 status codes the framework actually uses —
 `HttpStatus.OK`, `HttpStatus.CREATED`, `HttpStatus.TOO_MANY_REQUESTS`, and so on.
 
+### `.plugins([...])` is not `@theokit/plugin-*`
+
+Two unrelated things wear the word, and both appear in this README:
+
+| | What it is | Where it goes |
+|---|---|---|
+| `@theokit/plugin-canvas`, `@theokit/auth-github`, … | **framework** plugins — routes, UI, devtools, CLI verbs | installed in the app, declared in its config |
+| `.plugins([...])` on the builder | **SDK** plugins — `PermissionPlugin`, `Handoff` — they extend the agent | passed through to `Agent.create` |
+
+Installing `@theokit/plugin-payments` does nothing for an agent; passing `PermissionPlugin` does
+nothing for a route. The SDK's own option additionally has two mutually exclusive forms — see
+[`@theokit/sdk`'s README](https://github.com/usetheokit/theokit-sdk#three-things-are-called-plugin).
+
 ## Server Routes
 
 ```typescript
