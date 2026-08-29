@@ -63,7 +63,7 @@ not assembling it.
 
    ```ts
    // agents/tools/weather.ts
-   import { tool } from 'theokit/server'
+   import { tool } from 'theokit/server/define'
    import { z } from 'zod'
 
    export const weatherTool = tool('weather')
@@ -364,7 +364,7 @@ nothing for a route. The SDK's own option additionally has two mutually exclusiv
 
 ```typescript
 // server/routes/users.ts
-import { route } from 'theokit/server'
+import { route } from 'theokit/server/define'
 import { z } from 'zod'
 
 export const GET = route()
@@ -437,7 +437,8 @@ offset of an inner container was not restored across a back navigation.
 ## Auth
 
 ```typescript
-import { createSessionManager, requireAuth, route } from 'theokit/server'
+import { createSessionManager, requireAuth } from 'theokit/server/auth'
+import { route } from 'theokit/server/define'
 
 const auth = createSessionManager<{ userId: string }>({
   secret: process.env.SESSION_SECRET!, // min 32 chars; pass an array to rotate keys
@@ -462,7 +463,7 @@ transparently re-encrypts on a hit against an older key.
 
 ```typescript
 // server/ws/chat.ts → ws://localhost:3000/ws/chat
-import { websocket } from 'theokit/server'
+import { websocket } from 'theokit/server/define'
 
 export default websocket()
   .onOpen((ws) => ws.send('connected'))

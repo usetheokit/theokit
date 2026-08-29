@@ -71,7 +71,7 @@ Developing against any of this needs a public URL. `theo.config.ts` has `allowed
 that — see the framework README.
 
 **Give it a `Request` whose body has not been read.** It calls `request.json()` itself, so a wrapper
-that has already parsed the body — `defineRoute` offers a parsed `body` in its handler context —
+that has already parsed the body — `route().body(…)` offers a parsed `body` in its handler context —
 leaves nothing for it to read. Mount it where you still hold the original request, or pass a clone.
 
 `ChannelMessage` is `{ agent, platform, payload }`. There is no `request` inside `onMessage`, because
