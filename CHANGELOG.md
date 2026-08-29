@@ -8,6 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- **The dependency gate's floor legs stopped dragging an unpublished version into the install.**
+  Pinning a sibling at the bottom of its range replaces its workspace link with the published
+  tarball, and `@theokit/http@0.4.0` declares a `theokit` peer — which pnpm then satisfied from the
+  registry, asking for the version this tree declares rather than the one npm has. On a release PR
+  those differ by construction, so two legs went red on #550 and again on #561. The root manifest
+  now overrides `theokit` to `workspace:*`, which is the true statement: the copy that matters here
+  is the one being built. Pinning `theokit` itself still works — `dep-check pin-one` writes the same
+  map and overwrites the entry.
+
 - **The English-only gate no longer forbids a freshly-cut changelog.** It required `[Unreleased]` to
   be non-empty, which is false at exactly one moment — the version cut, when migrating that section
   under a dated heading is the point and leaving it empty is the prescribed state. That put it in
