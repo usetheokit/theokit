@@ -27,12 +27,16 @@ start below it rather than failing later somewhere unrelated.
 The scaffold ships a working agent chat, so the five minutes are spent reading it,
 not assembling it.
 
-1. Point the agent at a provider. The SDK resolves the key from the environment —
-   OpenRouter (preferred), Anthropic, or OpenAI:
+1. Point the agent at a provider. The FIRST segment of the model id picks it, and
+   that decides which key is read — so the id and the key move together:
 
    ```bash
-   echo 'OPENROUTER_API_KEY=sk-or-v1-...' >> .env
+   echo 'OPENROUTER_API_KEY=sk-or-v1-...' >> .env   # matches `openrouter/…` below
    ```
+
+   `openrouter/openai/gpt-4o-mini` reaches OpenAI's catalog THROUGH the gateway. A
+   bare `openai/gpt-4o-mini` goes to OpenAI directly and needs `OPENAI_API_KEY`,
+   even with an OpenRouter key present — the prefix is a selection, not a hint.
 
 2. **An agent is a file.** `agents/chat.ts` is served at `POST /api/agents/chat` —
    there is nothing to register:
@@ -46,7 +50,7 @@ not assembling it.
 
    export default AgentBuilder.create()
      .input(z.object({ message: z.string() }))
-     .model('openai/gpt-4o-mini')
+     .model('openrouter/openai/gpt-4o-mini')
      .system('You are a helpful assistant.')
      .tool(weatherTool)
      // Human-in-the-loop: pause the run and ask before this tool executes.
@@ -193,7 +197,7 @@ Pluggable input/output guards that run at the framework boundary, before the SDK
 import { promptInjectionDetector, piiDetector, costGuard } from '@theokit/agents'
 
 AgentBuilder.create()
-  .model('openai/gpt-4o-mini')
+  .model('openrouter/openai/gpt-4o-mini')
   .guardrails([promptInjectionDetector(), piiDetector(), costGuard({ maxTokens: 100_000 })])
   .build()
 ```

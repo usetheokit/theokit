@@ -29,6 +29,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **An OpenRouter-only setup runs the scaffold out of the box.** A fresh app given only the key
+  `.env.example` asks for answered 500 on its first message: the generated agent declared
+  `openai/gpt-4o-mini`, which selects OpenAI and needs `OPENAI_API_KEY` — the one key the user was
+  never told to get. The scaffold now declares `openrouter/openai/gpt-4o-mini`, matching the key it
+  asks for, and its docs stop claiming that a bare vendor prefix is routed upstream by OpenRouter
+  (measured against the SDK's catalog: `openai/…` resolves to `api.openai.com`, only
+  `openrouter/…` to `openrouter.ai`). When a provider's key is missing, the refusal now names the
+  gateway-prefixed model id that would work, rather than only the variable that is absent. The
+  resolver still refuses instead of substituting a credential — sending one provider's key to
+  another is what produced the unattributable 401 of #326. (#554)
+
 - **The default CSP allows media the app generated itself.** `media-src` was absent, so `<audio>`/`<video>` fell back to `default-src 'self'` and a `blob:` URL was blocked — an app could not play the audio `@theokit/plugin-voice` returns from `/api/voice/tts`. `img-src` already listed `blob:` for canvas exports; the same reasoning covers audio. (#553)
 
 ### Changed

@@ -59,7 +59,7 @@ An agent that outgrows one file becomes a folder that co-locates its own composi
 ```ts
 export default AgentBuilder.create()
   .input(z.object({ message: z.string() }))
-  .model('openai/gpt-4o-mini')
+  .model('openrouter/openai/gpt-4o-mini')
   .system(BASE_INSTRUCTIONS) // agents/prompts/instructions.ts
   .tool(weatherTool) // agents/tools/weather.ts
   .tool(currentTimeTool) // agents/tools/current-time.ts

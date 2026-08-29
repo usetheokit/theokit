@@ -20,7 +20,7 @@ export const policy = 'public'
 
 export default AgentBuilder.create()
   .input(z.object({ instruction: z.string() }))
-  .model(process.env.LLM_MODEL ?? 'openai/gpt-4o-mini')
+  .model(process.env.LLM_MODEL ?? 'openrouter/openai/gpt-4o-mini')
   .system(
     'You turn research notes into published output. Read notes with read_notes, then publish. ' +
       'Publishing is gated: a human approves it before it happens.',
