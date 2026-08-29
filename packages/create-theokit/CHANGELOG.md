@@ -1,5 +1,56 @@
 # create-theo
 
+## 1.25.1
+
+### Patch Changes
+
+- db29ca0: An OpenRouter-only setup runs the scaffold out of the box.
+
+  A fresh app given only the key `.env.example` asks for answered 500 on its first message. The
+  generated agent declared `openai/gpt-4o-mini`; the first segment of a model id selects the provider,
+  so that id needs `OPENAI_API_KEY` — the one key the user was never told to get. The scaffold's own
+  docblock promised the opposite, that the prefix let OpenRouter route the model upstream.
+
+  Measured against `@theokit/sdk`'s provider catalog, it does not: `openai/gpt-4o-mini` resolves to
+  `api.openai.com`, and only `openrouter/openai/gpt-4o-mini` resolves to `openrouter.ai`. The gateway
+  has to be named in the id.
+
+  So the scaffold declares `openrouter/openai/gpt-4o-mini`, matching the key it asks for, and its docs
+  say what the prefix actually does. A test in `create-theokit` now pins the invariant: the key
+  `.env.example` leaves uncommented must be the key the declared models need.
+
+  The resolver still refuses rather than substituting a credential it happens to find — every caller
+  takes its `apiKey` and discards its `baseUrl`, so a substituted key reaches whatever endpoint the
+  model id names, which is the unattributable `401` of #326. What changed is that the refusal is now
+  actionable: when a credentialed gateway could serve the model, the message names the exact
+  gateway-prefixed id instead of only the variable that is missing.
+
+- 97166a4: WhatsApp can be served through `handleChannelWebhook`.
+
+  The channel seam could not serve the one platform `@theokit/gateway-whatsapp` exists for, for two
+  independent reasons. `theokit/server/webhook` exported `stripe`, `github`, `slack`, `telegram` and
+  `discord`, so a `validators` map with no `whatsapp` entry made the path answer 404 by construction.
+  And Meta verifies an endpoint before it delivers anything — a `GET` carrying `hub.mode=subscribe`,
+  `hub.verify_token` and `hub.challenge`, with the challenge echoed back as `text/plain` — which was
+  not modelled, so an app had to add a route of its own regardless.
+
+  Both halves close:
+
+  - `whatsapp({ appSecret })` verifies `X-Hub-Signature-256` — HMAC-SHA256 over the RAW body, which is
+    the sharp edge a hand-rolled version gets wrong: hashing a parsed-and-restringified body compares
+    different bytes and rejects correct requests.
+  - `whatsappSubscribe({ verifyToken })` answers the handshake, through a new per-platform `subscribe`
+    map on `ChannelWebhookConfig`. Per-platform rather than a bare `verifyToken`, because the query
+    shape is Meta's — shared with Instagram and Messenger, not universal. A `GET` on a platform that
+    declared no responder answers 405, not 404: the platform is configured, it just does not do
+    handshakes.
+
+  The signature scheme is the one GitHub already used — same header, same construction — so `github`
+  and `whatsapp` now share one implementation instead of two copies of a constant-time comparison,
+  a hex decoder and a rotation loop.
+
+  Nothing about the POST path changed, and its tests assert so.
+
 ## 1.25.0
 
 ### Minor Changes
