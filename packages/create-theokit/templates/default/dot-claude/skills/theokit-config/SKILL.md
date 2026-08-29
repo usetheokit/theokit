@@ -1,6 +1,6 @@
 ---
 name: theokit-config
-description: TheoKit configuration — defineConfig, plugins, security, storage, agents, build targets
+description: TheoKit configuration — the config() builder, plugins, security, storage, agents, build targets
 user-invocable: false
 paths:
   - 'theo.config*'
@@ -12,37 +12,39 @@ paths:
 ## theo.config.ts
 
 ```typescript
-import { defineConfig } from 'theokit'
+import { config } from 'theokit'
 
-export default defineConfig({
-  // Basic
-  name: 'my-app', // DNS-1123 format (lowercase + hyphens)
-  port: 3000, // Dev + production port
+export default config()
+  .set({
+    // Basic
+    name: 'my-app', // DNS-1123 format (lowercase + hyphens)
+    port: 3000, // Dev + production port
 
-  // SSR (default: false)
-  ssr: false,
+    // SSR (default: false)
+    ssr: false,
 
-  // Security (defaults are secure)
-  security: {
-    csrf: true, // CSRF protection (default: true)
-    csp: 'report-only', // Content Security Policy
-  },
-
-  // Agent runtime
-  agents: {
-    maxRegistries: 100,
-    registry: {
-      maxAgents: 100,
-      idleTimeoutMs: 30 * 60_000,
+    // Security (defaults are secure)
+    security: {
+      csrf: true, // CSRF protection (default: true)
+      csp: 'report-only', // Content Security Policy
     },
-  },
 
-  // DevTools overlay (dev only)
-  devtools: true,
+    // Agent runtime
+    agents: {
+      maxRegistries: 100,
+      registry: {
+        maxAgents: 100,
+        idleTimeoutMs: 30 * 60_000,
+      },
+    },
 
-  // Plugins
-  plugins: [],
-})
+    // DevTools overlay (dev only)
+    devtools: true,
+
+    // Plugins
+    plugins: [],
+  })
+  .build()
 ```
 
 ## Common Configuration Patterns
@@ -50,50 +52,58 @@ export default defineConfig({
 ### Adding CORS
 
 ```typescript
-import { defineConfig } from 'theokit'
+import { config } from 'theokit'
 
-export default defineConfig({
-  // CORS is handled by the framework — configure in route-level or globally
-  security: {
-    cors: {
-      origin: ['http://localhost:3000', 'https://myapp.com'],
-      credentials: true,
+export default config()
+  .set({
+    // CORS is handled by the framework — configure in route-level or globally
+    security: {
+      cors: {
+        origin: ['http://localhost:3000', 'https://myapp.com'],
+        credentials: true,
+      },
     },
-  },
-})
+  })
+  .build()
 ```
 
 ### Storage (Postgres + Redis)
 
 ```typescript
-export default defineConfig({
-  storage: {
-    postgres: [{ url: process.env.DATABASE_URL }],
-    redis: [{ url: process.env.REDIS_URL }],
-  },
-})
+export default config()
+  .set({
+    storage: {
+      postgres: [{ url: process.env.DATABASE_URL }],
+      redis: [{ url: process.env.REDIS_URL }],
+    },
+  })
+  .build()
 ```
 
 ### Rate Limiting
 
 ```typescript
-export default defineConfig({
-  rateLimit: {
-    global: { max: 100, windowMs: 60_000 },
-  },
-})
+export default config()
+  .set({
+    rateLimit: {
+      global: { max: 100, windowMs: 60_000 },
+    },
+  })
+  .build()
 ```
 
 ### OpenAPI Generation
 
 ```typescript
-export default defineConfig({
-  openapi: {
-    title: 'My App API',
-    version: '1.0.0',
-    outDir: '.theokit',
-  },
-})
+export default config()
+  .set({
+    openapi: {
+      title: 'My App API',
+      version: '1.0.0',
+      outDir: '.theokit',
+    },
+  })
+  .build()
 ```
 
 ## CLI Commands

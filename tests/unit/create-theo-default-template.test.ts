@@ -109,38 +109,20 @@ describe('create-theokit default template — package.json.tmpl SDK dep (EC-7)',
   })
 })
 
-const TEMPLATE_AGENTS_SKILL = resolve(
-  ROOT,
-  'packages/create-theokit/templates/default/dot-claude/skills/theokit-agents/SKILL.md',
-)
-
-describe('create-theokit theokit-agents SKILL — defineAgentTool signature (issue #79)', () => {
-  // Extract ONLY the `defineAgentTool({ ... })` call — the surrounding `defineAgent({ input })`
-  // and the `### @Tool({ input })` decorator example legitimately use `input:` (their real field);
-  // the guard must target the defineAgentTool spec, whose real fields are inputSchema + handler.
-  function defineAgentToolCall(): string {
-    const md = readFileSync(TEMPLATE_AGENTS_SKILL, 'utf-8')
-    const open = md.indexOf('defineAgentTool({')
-    expect(open, 'SKILL.md must contain a defineAgentTool({ ... }) example').toBeGreaterThan(-1)
-    // The call closes with `\n})` at line start; nested `})` (e.g. `z.object({})`) are inline.
-    const close = md.indexOf('\n})', open)
-    expect(close).toBeGreaterThan(open)
-    return md.slice(open, close + 3)
-  }
-
-  it('teaches the real DefineAgentToolSpec fields (inputSchema + handler)', () => {
-    const call = defineAgentToolCall()
-    // Real API: define-agent-tool.ts DefineAgentToolSpec = { inputSchema, handler: () => string }.
-    expect(call).toMatch(/inputSchema:/)
-    expect(call).toMatch(/handler:/)
-  })
-
-  it('does NOT use the wrong input:/execute: shape (the pre-fix drift users copy)', () => {
-    const call = defineAgentToolCall()
-    expect(call).not.toMatch(/\binput:/)
-    expect(call).not.toMatch(/\bexecute:/)
-  })
-})
+/**
+ * This block used to pin the SIGNATURE of a `defineAgentTool({ … })` example — the #79 fix, which
+ * corrected `input`/`execute` to `inputSchema`/`handler` and left the symbol itself in place.
+ *
+ * Measured against the published `theokit@0.60.0`: the name is declared in the shipped `.d.ts` and
+ * exported by NO subpath at runtime (#542, reopened). So the guard was asserting the shape of a call
+ * to a function that does not exist — it passed, and what it protected was a fiction. Correcting the
+ * fields of a fabricated API is a fix to the wrong layer.
+ *
+ * The skill now teaches `tool()` from `theokit/server/define`, which is what the scaffold's own
+ * `agents/tools/weather.ts` uses. What replaces this lives in
+ * `packages/create-theokit/tests/unit/template-docs-import-what-exists.test.ts`, and asks the
+ * question one level up: does the thing an example imports exist at all.
+ */
 
 const TEMPLATE_FRONTEND_SKILL = resolve(
   ROOT,
