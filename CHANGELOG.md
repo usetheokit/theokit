@@ -27,6 +27,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- **No pull request could be merged into `develop` or `main`.** `SAST status` is a required status
+  check on both, and the job that emits it was deleted from `codeql.yml` — a required context
+  nothing reports can never be satisfied, so every promotion was blocked for everyone
+  (`enforce_admins: true`). Measured on PR #558: 27 checks green, `mergeStateStatus: BLOCKED`, one
+  required context reporting nothing. The job is restored, and two guards pin it: the check must be
+  emitted, and it must run unconditionally — `analyze` is gated on repository visibility, which is
+  precisely why a second always-running job is what makes a conditional scan requireable. (#559)
+
 - **Two CI guards went red on a change that broke nothing, and are now written against the
   property instead of the mechanics.** Consolidating the per-job `pnpm/action-setup` + install into
   a shared composite action left `should use pnpm/action-setup` and `should use --frozen-lockfile`

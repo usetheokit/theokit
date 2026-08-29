@@ -174,6 +174,45 @@ describe('CI Workflow', () => {
   })
 })
 
+describe('CodeQL Workflow', () => {
+  /**
+   * `SAST status` is a REQUIRED status check on `develop` and on `main`, and it is the only job in
+   * `codeql.yml` that always reports — `analyze` is gated on `!repository.private`, and a gated job
+   * that does not run emits no status at all.
+   *
+   * Deleting it therefore does not merely drop a message: a required context nothing emits can
+   * never be satisfied, so BOTH protected branches become unmergeable by everyone
+   * (`enforce_admins: true`). Measured on #558 — 27 checks green, `mergeStateStatus: BLOCKED`, one
+   * required context reporting nothing (#559).
+   *
+   * Pinned by the job's `name`, not its key, because the branch protection matches on the name.
+   * Renaming it is exactly as breaking as removing it and this guard says so either way.
+   */
+  it('emits the `SAST status` check that both protected branches require', () => {
+    const workflow = loadWorkflow('codeql.yml')
+
+    const names = Object.values(workflow.jobs as Record<string, { name?: string }>).map(
+      (job) => job.name,
+    )
+
+    expect(names, 'a required context that no job emits makes the branch unmergeable').toContain(
+      'SAST status',
+    )
+  })
+
+  it('runs that job unconditionally, which is the whole reason it can be required', () => {
+    // An `if:` here would reintroduce the defect in a subtler form: the job would exist, the guard
+    // above would pass, and the check would still fail to report whenever the condition is false.
+    const workflow = loadWorkflow('codeql.yml')
+
+    const sast = Object.values(
+      workflow.jobs as Record<string, { name?: string; if?: unknown }>,
+    ).find((job) => job.name === 'SAST status')
+
+    expect(sast?.if, 'the status job must report even when the scan cannot run').toBeUndefined()
+  })
+})
+
 describe('Release Workflow', () => {
   const releasePath = resolve(rootDir, '.github/workflows/release.yml')
 

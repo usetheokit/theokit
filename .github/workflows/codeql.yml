@@ -70,3 +70,34 @@ jobs:
         uses: github/codeql-action/analyze@c16c0f3f2812ec4bb3750a5ed64873fe2ce0fbef # codeql-bundle-v2.26.3
         with:
           category: '/language:${{ matrix.language }}'
+
+  # Restored after 0d93746c6 deleted it (usetheokit/theokit#559).
+  #
+  # It is a REQUIRED status check on `develop` and on `main`, and it is the only job in this file
+  # that always reports: `analyze` is gated on `!repository.private`, and a gated job that does not
+  # run never emits a status at all. So removing this one did not merely drop a message — it made
+  # both protected branches unmergeable, because a required context nothing emits can never be
+  # satisfied. Measured on #558: 27 checks green, `mergeStateStatus: BLOCKED`, one required context
+  # reporting nothing.
+  #
+  # That is also why the prose at the top of this file points at "the status job below". It was
+  # pointing at nothing for as long as this was missing.
+  sast-status:
+    name: SAST status
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # ALWAYS runs. Its whole job is to make the absence visible: a checks list with no SAST entry
+    # reads as "SAST is not configured", which is a different and worse claim than "SAST is
+    # configured and cannot report here".
+    steps:
+      - name: Report whether CodeQL could run
+        run: |
+          if [ "${{ github.event.repository.private }}" = "true" ]; then
+            echo "::warning::CodeQL analysis SKIPPED — this repository is private and CodeQL's"\
+              "upload needs GitHub Advanced Security. The scan is configured and will run as soon"\
+              "as GHAS is enabled or the repository becomes public. Until then it is skipped"\
+              "rather than left permanently red, because a check that always fails teaches people"\
+              "to ignore checks."
+          else
+            echo "CodeQL analysis ran — see the Analyze job."
+          fi
