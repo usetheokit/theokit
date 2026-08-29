@@ -135,4 +135,4 @@ Env vars are loaded from `.env` (dev) and `.env.production` (build). NEVER commi
 - NEVER hardcode secrets in theo.config.ts — use environment variables
 - NEVER set `security.csrf: false` in production
 - NEVER use `ssr: true` without understanding hydration (start with `false`)
-- NEVER add plugins that don't match `defineTheoPlugin` interface
+- NEVER add plugins that don't match `TheoPlugin` interface

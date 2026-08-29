@@ -8,6 +8,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **The scaffold's rules file and agent skill taught three more names that do not exist.** Verifying
+  `create-theokit@1.25.2` against the published package rather than the working tree turned up
+  `.claude/rules/theokit-conventions.md` — a RULES file, which an agent reads as normative — still
+  prescribing `defineRoute`, `defineAction` and `defineWebSocket`, and the agents skill still
+  building every example on `defineAgent`. None is exported by anything; the real surface is
+  `route()`, `action()`, `websocket()` and `AgentBuilder.create()`.
+
+  The guard missed them because it read only `import` lines from `theokit/…`. It now covers the
+  workspace's scoped siblings too, derives verifiability from `packages/` instead of a hardcoded
+  allowlist (the first version reported `@theokit/tui` and `@theokit/gateway-telegram` — packages of
+  other repositories — as defects), and reads the built `export {}` block statically rather than
+  importing it. Statically because vitest routes dynamic imports through Vite's SSR loader, which
+  rewrote the entry's chunk references and could not resolve them; and the `.js` rather than the
+  `.d.ts`, which is the whole point of #542 — the fabricated name IS in the published types.
+
+### Fixed
+
 - **The scaffold no longer teaches four APIs that do not exist.** Its skills are installed into
   every generated app and read by an AI agent working there, so a wrong name is not a snippet
   somebody might copy — it is a recommendation to a reader that cannot check it. Measured against
