@@ -161,7 +161,8 @@ async function serveAux(
     csrfMode: deps.csrfMode,
     // M39 — the thread follow-up route drives the agent; resolve the key on demand.
     // theokit#328 — the thread route drives an agent, so its key follows the model too.
-    resolveApiKey: (model: string | undefined) => resolveProvider(model).apiKey,
+    resolveApiKey: (model: string | undefined, plugins?: readonly unknown[]) =>
+      resolveProvider(model, { plugins }).apiKey,
     // usetheokit/theokit#365 — parity with `theokit start`; lazy for the same reason.
     resolveSubject: createAgentSubjectResolver({
       req,
@@ -364,7 +365,8 @@ async function serveAgentTurn(t: {
     async (request) => {
       const mod = await loadModule(agent.filePath)
       // theokit#326 — resolve against the model the agent declares, not by env priority.
-      const apiKey = (model: string | undefined): string => resolveProvider(model).apiKey
+      const apiKey = (model: string | undefined, plugins?: readonly unknown[]): string =>
+        resolveProvider(model, { plugins }).apiKey
       const response = await mountAgent(mod, request, apiKey, {
         source: agent.filePath,
         csrfMode,

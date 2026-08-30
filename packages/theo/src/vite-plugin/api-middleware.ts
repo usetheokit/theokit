@@ -287,7 +287,7 @@ async function tryControllerFallthrough(ctx: {
     // the conversation store with the convention endpoints, so a guard that admits a caller admits
     // them to whatever `sessionId` the body names — see the advisory.
     serveAgent: (agent: unknown, request: Request) =>
-      mountAgent(agent, request, (model) => resolveProvider(model).apiKey, {
+      mountAgent(agent, request, (model, plugins) => resolveProvider(model, { plugins }).apiKey, {
         source: 'expose',
         csrfMode: 'off',
       }),

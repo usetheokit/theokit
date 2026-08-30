@@ -19,4 +19,14 @@
  *
  * @public
  */
-export type ApiKeyResolver = (modelId: string | undefined) => string
+export type ApiKeyResolver = (
+  modelId: string | undefined,
+  /**
+   * The plugins the compiled agent declared, so a resolver can honour a `model-provider` one
+   * (#579). Optional and additive: an existing one-argument resolver stays valid, and a caller that
+   * ignores this keeps the registry-only behaviour byte-for-byte.
+   *
+   * `unknown[]` because `@theokit/sdk` is an optional peer — the consumer narrows the shape.
+   */
+  plugins?: readonly unknown[],
+) => string
