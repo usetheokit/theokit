@@ -35,9 +35,42 @@ export type RoutePolicy<TQuery = unknown, TBody = unknown, TParams = unknown> =
       input: RoutePolicyInput<TQuery, TBody, TParams>,
     ) => boolean | AccessDecision | Promise<boolean | AccessDecision>)
 
-/** Narrow a run-context to the subject it carries, if it carries one. */
+/**
+ * Narrow a RUN-CONTEXT to the subject it carries, if it carries one.
+ *
+ * The argument is the object `server/context.ts` builds — the one with `subject` on it. It is NOT a
+ * controller guard's `ExecutionContext`, and telling a caller so is the whole reason for the throw
+ * below (usetheokit/theokit#574).
+ *
+ * An `ExecutionContext` carries `getRequest`, `getUrl`, `getClass` and `getMethodName` and nothing
+ * else, so this function used to answer `null` for it — indistinguishable from "an anonymous
+ * caller". A guard written as `subjectFromContext(context) !== null` therefore denied EVERYONE, and
+ * passed the only test aimed at it, because that test asserted an unauthenticated request is
+ * refused. A guard that always denies is indistinguishable from a working one until somebody tries
+ * to get in.
+ *
+ * That is a silent, fail-CLOSED defect, which is the worst combination: nothing errors, nothing
+ * logs, and the failure looks like the feature. `error-handling.md` § 2 is unambiguous here — fail
+ * fast, fail loud, and never return a magic value for a caller mistake.
+ *
+ * @throws TypeError when handed an `ExecutionContext` instead of a run-context.
+ */
 export function subjectFromContext(context: unknown): RouteSubject | null {
   if (context === null || typeof context !== 'object') return null
+  // The one shape worth refusing rather than answering. Detected by the method every
+  // `ExecutionContext` has and no run-context does — narrow on purpose: anything else that merely
+  // lacks `subject` is a legitimate anonymous caller and must still answer `null`.
+  if (
+    typeof (context as { getRequest?: unknown }).getRequest === 'function' &&
+    !('subject' in context)
+  ) {
+    throw new TypeError(
+      'subjectFromContext was given a controller ExecutionContext, which carries no subject — it ' +
+        'would answer null for every caller and a guard built on that denies everyone. Read the ' +
+        'subject from the request instead (e.g. your session manager over `context.getRequest()`), ' +
+        'or use `@Public()` when the route is genuinely open.',
+    )
+  }
   const candidate = (context as { subject?: unknown }).subject
   if (candidate === null || candidate === undefined || typeof candidate !== 'object') return null
   const id = (candidate as { id?: unknown }).id

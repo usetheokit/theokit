@@ -6,6 +6,50 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **`@Public()` says a controller's access decision as intent.** Since #514 every controller route
+  must declare one, so this is on the critical path of every route an adopter writes — and the two
+  surfaces said the same thing very differently: `.policy('public')` on the route builder versus
+  `@SetMetadata('theokit:public', true)` on a controller, with the framework's own metadata key
+  copied into consumer source as a string literal. Measured in the first real adopter: 8
+  controllers, 6 copies of that string. `PUBLIC_ROUTE_METADATA` is exported alongside it, so there
+  is one importable definition instead of a key that could not change. `SetMetadata` stays for
+  anything custom. (#574)
+
+- **A route that declared no access decision can now be told apart from one declared open — and
+  refused.** `guards: []` meant both "open on purpose" and "nobody said", and the dispatcher took
+  the permissive reading. For controllers that was safe only while the build gate (#514) ran, which
+  makes least privilege a property of the pipeline rather than of the system; agent routes had no
+  gate at all — auto-wired, dispatched first, and a capability-authored agent has no class to hang a
+  guard on. An agent entry can now say `access: 'public' | 'guarded'`, every undeclared route warns
+  once at mount naming its own remedy, and `undeclaredRoutes: 'deny'` answers 403. The default stays
+  `'warn'`: flipping it here would break exactly the apps this is about, so it becomes `'deny'` in
+  the next major. (#576)
+
+- **A plugin author can import the types of what they are writing.** `TheoPlugin`, `PluginContext`,
+  `PluginErrorContext` and the four hook signatures existed and were unexported from
+  `theokit/server/define` — `TS2459: declares 'TheoPlugin' locally, but it is not exported` — so
+  apps declared structural copies. A copy compiles, and keeps compiling after the framework's shape
+  changes, until something fails at runtime. (#575)
+
+### Fixed
+
+- **A controller that cannot be constructed no longer takes the process down.** One optional
+  plugin's env var was unset; the app booted, reported the plugin as skipped, and then exited on the
+  first request to *any* route — an unhandled rejection from a controller field initializer, inside
+  request dispatch. The routes of a controller that failed to build now answer 500
+  `CONTROLLER_CONSTRUCTION_FAILED` with the cause and the controller's name (stack redacted in
+  production), the failure is logged once at construction, and every other controller serves
+  normally. An operator told a plugin degraded gracefully should not then lose the process. (#577)
+
+- **`subjectFromContext` no longer denies everyone in silence.** Handed a controller guard's
+  `ExecutionContext` — which carries `getRequest`/`getUrl`/`getClass`/`getMethodName` and no
+  subject — it answered `null`, indistinguishable from an anonymous caller, so a guard built on it
+  refused every request and passed the only test aimed at it. Silent AND fail-closed is the worst
+  pair: nothing errors and the failure looks exactly like the feature working. It now throws,
+  naming what to use instead. An anonymous run-context still answers `null`. (#574)
+
 ## [create-theokit 1.25.3] - 2026-08-29
 
 ### Fixed

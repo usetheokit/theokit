@@ -7,8 +7,15 @@ import { createNodeAdapter } from './bridge/runtime/node.js'
 import type { ServerHandle } from './bridge/runtime/types.js'
 import { walkControllerMetadata, type WalkResult } from './bridge/walk-metadata.js'
 import type { ParamEntry } from './decorators/params.js'
+import { PUBLIC_ROUTE_METADATA } from './decorators/public.js'
 import { ForbiddenException, HttpException } from './exceptions/http-exception.js'
 import { runWithRequestContext, type TheoRequestContext } from './request-context.js'
+import {
+  classifyAccess,
+  undeclaredRouteWarning,
+  type AccessDecision,
+  type UndeclaredRoutePolicy,
+} from './route-access.js'
 import { createStaticHandler } from './static.js'
 import { renderToStream, streamToResponse } from './stream-renderer.js'
 
@@ -40,6 +47,15 @@ export interface AgentAppEntry {
   readonly compiled: unknown
   /** Guards to run before the agent routes (same shape the controller pipeline uses). */
   readonly guards?: Function[]
+  /**
+   * The access decision for this agent's routes, said explicitly (#576).
+   *
+   * Omit it and a non-empty `guards` still counts as a declaration. Omit BOTH and the route is
+   * `'undeclared'` — which used to be indistinguishable from open, because both arrived as
+   * `guards: []`. Agent routes need this most: they are auto-wired, so the app never wrote a file a
+   * reviewer could read, and a capability-authored agent has no class to hang `@UseGuards` on.
+   */
+  readonly access?: Exclude<AccessDecision, 'undeclared'>
   /** Method name reported for this agent's route (default `'run'`). */
   readonly methodName?: string
   /** Optional owning class, kept only for guard resolution parity with controllers. */
@@ -100,6 +116,17 @@ export interface AgentRuntime {
 export interface TheoAppOptions {
   /** Controller classes decorated with @Controller. */
   controllers: Function[]
+  /**
+   * What to do with a route that declared no access decision (#576).
+   *
+   * `'warn'` (default) serves it after saying so once at mount. `'deny'` refuses with 403.
+   *
+   * The default is not `'deny'` because flipping it here would break every app whose agent
+   * endpoints are open today — the population #576 is about — inside a non-major release. It
+   * becomes `'deny'` in the next major; `'deny'` is available now for anyone who wants the property
+   * before then.
+   */
+  undeclaredRoutes?: UndeclaredRoutePolicy
   /**
    * Agents to auto-wire (routes + SSE + tools). M53 — these are prepared ENTRIES, not decorated
    * classes: the app no longer reads agent metadata, so authoring is free to be capability-based
@@ -180,7 +207,14 @@ export class TheoApp {
   private readonly readyPath: string
   private readonly readinessChecks: ReadinessCheck[]
 
-  private constructor(opts?: Pick<TheoAppOptions, 'readinessChecks' | 'healthPath' | 'readyPath'>) {
+  private constructor(
+    opts?: Pick<
+      TheoAppOptions,
+      'readinessChecks' | 'healthPath' | 'readyPath' | 'undeclaredRoutes'
+    >,
+  ) {
+    // #576 — decided once, at construction, like every other app-level setting here.
+    this.undeclaredRoutes = opts?.undeclaredRoutes ?? 'warn'
     const hp = opts?.healthPath ?? '/__theo/health'
     const rp = opts?.readyPath ?? '/__theo/ready'
     // Security: prevent health paths from colliding with user API routes
@@ -348,7 +382,22 @@ export class TheoApp {
     guards: Function[]
     agentClass: Function
     methodName: string | symbol
+    /** What the entry declared about who may call this route (#576). */
+    access: AccessDecision
   }[] = []
+
+  /**
+   * Paths already warned about (#576).
+   *
+   * Controller routes are classified at dispatch rather than at mount — the app builds its route
+   * table from walked metadata and the public marker lives on the class, so the cheapest place to
+   * ask is where both are already in hand. The set is what keeps it to one line per route instead
+   * of one per request.
+   */
+  private readonly warnedUndeclared = new Set<string>()
+
+  /** #576 — how this app answers a route nobody declared. Set once, at create. */
+  private readonly undeclaredRoutes: UndeclaredRoutePolicy
 
   /**
    * Synchronous since B-M67-21: the only `await` here was the dynamic `import('@theokit/agents')`
@@ -408,6 +457,10 @@ export class TheoApp {
       // eslint-disable-next-line @typescript-eslint/no-empty-function -- identity token, never called
       const agentIdentity = entry.agentClass ?? function agent() {}
 
+      // What the app said about this agent, decided ONCE for all of its routes: they share an
+      // entry, so they share a decision (#576).
+      const access = classifyAccess(entry)
+
       const routes = runtime.generateAgentRoutes({
         walkResult: { route: entry.route },
         compiledOptions: entry.compiled,
@@ -431,7 +484,19 @@ export class TheoApp {
           guards: entry.guards ?? [],
           agentClass: agentIdentity,
           methodName: entry.methodName ?? 'run',
+          access,
         })
+      }
+
+      // Once per mounted route, at boot — not per request. An operator reads the boot log, and a
+      // warning that only appears under traffic appears when it is too late to act on it (#576).
+      if (access === 'undeclared') {
+        for (const route of routes) {
+          // `route.path` is already the full mounted path — the pattern a few lines above is built
+          // from it alone. Prefixing `entry.route` again produced `/api/agents/x/api/agents/x/chat`
+          // in a warning whose entire job is to name the route someone has to go and fix.
+          console.warn(undeclaredRouteWarning('agent', route.path))
+        }
       }
 
       console.log(
@@ -564,6 +629,16 @@ export class TheoApp {
     // Agent routes (auto-wired — checked first, with guard enforcement per Bug #4)
     for (const route of this.agentRoutes) {
       if (request.method.toUpperCase() === route.method && route.pattern.test(pathname)) {
+        // #576 — a route nobody declared is refused when the app asked for that. The warning
+        // already went out at mount; this is the half that makes least privilege a property of the
+        // system rather than of whichever command happened to run the build gate.
+        if (route.access === 'undeclared' && this.undeclaredRoutes === 'deny') {
+          const ex = new ForbiddenException(
+            `Agent route ${pathname} declares no access decision (undeclaredRoutes: 'deny')`,
+          )
+          return jsonResponse(ex.statusCode, ex.toJSON())
+        }
+
         // Bug #4 fix: enforce @UseGuards on agent routes (same pipeline as controllers)
         if (route.guards.length > 0) {
           const ctx = createExecutionContext(request, route.agentClass, route.methodName)
@@ -590,6 +665,35 @@ export class TheoApp {
     }
 
     const { entry, params } = match
+
+    // #576 — the same question asked of controller routes. `entry.walk.guards` being empty ran the
+    // loop below zero times and served, which was safe only while a separate build gate (#514)
+    // refused undeclared controller routes. That makes least privilege a property of the pipeline;
+    // `@theokit/http` is published on its own, so a dispatcher reached without that build is an
+    // ordinary way to use it, not an exotic one.
+    const controllerClass = entry.instance.constructor
+    const access = classifyAccess({
+      access:
+        Reflect.getMetadata(PUBLIC_ROUTE_METADATA, controllerClass) === true ||
+        Reflect.getMetadata(PUBLIC_ROUTE_METADATA, controllerClass, entry.walk.propertyKey) === true
+          ? 'public'
+          : undefined,
+      guards: entry.walk.guards,
+    })
+    if (access === 'undeclared') {
+      if (this.undeclaredRoutes === 'deny') {
+        const ex = new ForbiddenException(
+          `Controller route ${url.pathname} declares no access decision (undeclaredRoutes: 'deny')`,
+        )
+        return jsonResponse(ex.statusCode, ex.toJSON())
+      }
+      // Once per route, not per request — a warning repeated on every call is one that gets
+      // filtered out, and the set of routes is fixed at mount.
+      if (!this.warnedUndeclared.has(url.pathname)) {
+        this.warnedUndeclared.add(url.pathname)
+        console.warn(undeclaredRouteWarning('controller', url.pathname))
+      }
+    }
 
     try {
       // Guards

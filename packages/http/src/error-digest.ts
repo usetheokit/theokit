@@ -16,7 +16,12 @@ import { HttpException } from './exceptions/http-exception.js'
 
 export interface ErrorContext {
   route?: string
-  phase?: 'guard' | 'interceptor' | 'handler' | 'filter' | 'agent'
+  /**
+   * `'construction'` is the controller never coming into existence — distinct from `'handler'`,
+   * which is its method throwing. #577: the first has no instance to blame and takes out every
+   * route on the class, so an operator reading a digest needs to tell the two apart.
+   */
+  phase?: 'construction' | 'guard' | 'interceptor' | 'handler' | 'filter' | 'agent'
   source?: string
 }
 

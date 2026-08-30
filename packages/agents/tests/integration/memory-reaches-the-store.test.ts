@@ -21,7 +21,7 @@
  * test needs no credential and no network.
  */
 import { createServer, type Server } from 'node:http'
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -77,7 +77,11 @@ describe('durable memory declared on the builder reaches the store (#557)', () =
   })
 
   /** Runs one turn through the same seam `mountAgent` uses, rooted at a throwaway workspace. */
-  async function turn(memory: { enabled: boolean } | undefined, message: string): Promise<string> {
+  async function turn(
+    memory: { enabled: boolean } | undefined,
+    message: string,
+    extra: { baseDir?: string } = {},
+  ): Promise<string> {
     const cwd = mkdtempSync(join(tmpdir(), 'theokit-memory-'))
     workspaces.push(cwd)
     let builder = AgentBuilder.create().model('ollama/llama3.2').system('You answer briefly.')
@@ -85,7 +89,7 @@ describe('durable memory declared on the builder reaches the store (#557)', () =
     const compiled = compileAgentDefinition(builder.build())
     // `'local'` is the sentinel a keyless provider resolves to — see `KEYLESS_API_KEY` in
     // `provider-resolver.ts`. `cwd` is what `mountAgent` threads from the app root.
-    const events = createSdkAgentStream(compiled, compiled.tools, 'local', { cwd })
+    const events = createSdkAgentStream(compiled, compiled.tools, 'local', { cwd, ...extra })
     for await (const _event of events(message, `session-${workspaces.length}`)) {
       // drain — the turn is what triggers the capture
     }
@@ -98,6 +102,53 @@ describe('durable memory declared on the builder reaches the store (#557)', () =
     const memoryMd = join(cwd, '.theokit', 'memory', 'MEMORY.md')
     expect(existsSync(memoryMd)).toBe(true)
     expect(readFileSync(memoryMd, 'utf8')).toContain('deploys go through the release branch')
+  }, 60_000)
+
+  /**
+   * WHERE it lands, not just that it lands — the assertion this file was missing (#557).
+   *
+   * `mountAgent` sets `baseDir` unconditionally, to root the session transcript under the app's
+   * `.data/`. From `@theokit/sdk` 4.61 the SDK derives its MEMORY root from that same field
+   * (`memoryHome = explicitSessionDir(local)`), so `MEMORY.md` moves to
+   * `<baseDir>/projects/<encoded-cwd>/memory/` while `.index/` and `sessions/` stay under
+   * `<cwd>/.theokit/memory/` — the store looks alive and the capture looks broken. That is the
+   * whole of #557, and it cannot be fixed from this side: one SDK field governs both roots, and its
+   * docstring says "Only transcripts are written here" (usetheokit/theokit-sdk#463).
+   *
+   * The assertion is deliberately "written SOMEWHERE findable", not "written HERE". The location
+   * genuinely differs across the SDK range this package supports — at the `^4.52.1` floor there is
+   * no relocation, from 4.61 there is — so pinning either path makes the suite report the resolved
+   * lockfile rather than the framework. What must never happen, in any version, is the phrase being
+   * captured and stored nowhere, which is what a consumer experiences.
+   *
+   * It prints where it found it, because that is the fact a reader of a failure needs.
+   */
+  it('memory is written somewhere findable when the mount roots the transcript (#557)', async () => {
+    const baseDir = mkdtempSync(join(tmpdir(), 'theokit-transcript-'))
+    workspaces.push(baseDir)
+
+    const cwd = await turn({ enabled: true }, CAPTURE, { baseDir })
+
+    const documented = join(cwd, '.theokit', 'memory', 'MEMORY.md')
+    const projects = join(baseDir, 'projects')
+    const relocated = existsSync(projects)
+      ? readdirSync(projects, { withFileTypes: true })
+          .filter((e) => e.isDirectory())
+          .map((e) => join(projects, e.name, 'memory', 'MEMORY.md'))
+          .filter((f) => existsSync(f))
+      : []
+
+    const found = existsSync(documented) ? [documented] : relocated
+    expect(
+      found.length,
+      'the capture phrase was accepted and MEMORY.md exists nowhere — neither under the documented ' +
+        '`<cwd>/.theokit/memory/` nor under the transcript root. That is #557 as a consumer meets it.',
+    ).toBeGreaterThan(0)
+
+    // Not an assertion: a reader of a future failure needs to know which root answered.
+    console.info(
+      `[#557] MEMORY.md found under ${existsSync(documented) ? '<cwd>/.theokit/memory' : '<baseDir>/projects/<encoded-cwd>/memory'}`,
+    )
   }, 60_000)
 
   /**

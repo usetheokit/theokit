@@ -104,10 +104,27 @@ export interface RuntimeOverrides {
   budgetTracker?: BudgetTracker
   /**
    * SDK 4.0 (SE40) — root of the native Claude-shaped `.jsonl` session transcript the SDK writes
-   * automatically (`<baseDir>/projects/<encoded-cwd>/<agentId>.jsonl`). The framework threads the
+   * automatically (`<root>/projects/<encoded-cwd>/<agentId>.jsonl`). The framework threads the
    * app's project root here (see `mount-agent`) so sessions persist per-app; unset ⇒ SDK default
    * (`~/.theokit`). Replaces the removed pluggable `conversationStorage` — persistence is now the
    * SDK's native transcript, not a swappable adapter.
+   *
+   * Forwarded to the SDK as `local.baseDir`, which that package deprecated in its own #301 in favour
+   * of `sessionDir`. It stays `baseDir` on purpose: `sessionDir` does not exist at `^4.52.1`, the
+   * floor this package declares, so switching would type-error on the floor and — worse — silently
+   * send the transcript to the SDK default `~/.theokit` for any consumer resolving there, losing
+   * per-app persistence. Migrating the name is a floor bump, not a rename, and the deprecated field
+   * is still honoured. Attempted and reverted rather than assumed: the typecheck gate caught it.
+   *
+   * **Setting this also relocates the agent's durable MEMORY**, which the SDK's own docstring for
+   * the field denies ("Only transcripts are written here"). `MEMORY.md` moves from
+   * `<cwd>/.theokit/memory/` to `<root>/projects/<encoded-cwd>/memory/`, while `.index/` and
+   * `sessions/` stay behind — so the store looks alive and the capture looks broken. Since the
+   * mount sets this unconditionally, it applies to every agent the framework serves.
+   *
+   * Measured against `@theokit/sdk` 4.62.0 and filed as usetheokit/theokit-sdk#463; the downstream
+   * report is usetheokit/theokit#557. Documented here rather than worked around because one SDK
+   * field governs both roots — there is no way to place them separately from this side.
    */
   baseDir?: string
   /**
