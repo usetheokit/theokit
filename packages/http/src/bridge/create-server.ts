@@ -7,6 +7,7 @@ import 'reflect-metadata'
 
 import type { ExposeOptions } from '../decorators/expose.js'
 import type { ParamEntry } from '../decorators/params.js'
+import { digestError } from '../error-digest.js'
 import { ForbiddenException } from '../exceptions/http-exception.js'
 
 import { resolveOrNew, type DiContainer } from './di-resolve.js'
@@ -56,6 +57,24 @@ export interface DecoratorHandler {
   matches(method: string, pathname: string): boolean
 }
 
+/** Why a controller never came into existence, and which one (#577). */
+interface ControllerConstructionFailure {
+  controllerName: string
+  error: unknown
+}
+
+/**
+ * One matchable route: its metadata, and EITHER the controller instance that serves it OR the
+ * failure that stopped that controller being built (#577).
+ *
+ * A union rather than two optional fields, so the exclusivity is a property of the type instead of
+ * a sentence in a comment: `'failure' in entry` narrows the other arm to a non-optional `instance`,
+ * and no reachable state has both or neither.
+ */
+type RouteEntry =
+  | { walk: WalkResult; instance: object }
+  | { walk: WalkResult; failure: ControllerConstructionFailure }
+
 /**
  * Build a pure Web-Standard request handler from decorated controller classes,
  * WITHOUT binding a network listener. Returns a {@link DecoratorHandler} whose
@@ -90,13 +109,33 @@ export function createDecoratorHandler(
     unique.push(Ctor)
   }
 
-  // Walk metadata
-  const routes: { walk: WalkResult; instance: object }[] = []
+  // Walk metadata.
+  //
+  // A constructor that throws is CONTAINED to its own controller (#577). This loop used to
+  // propagate, so one class failing to build discarded the handler for all of them — and since the
+  // framework builds this lazily inside request dispatch, the throw escaped as an unhandled
+  // rejection and exited the process. Reported from a real app: one optional plugin's env var was
+  // unset, the app booted, logged the plugin as skipped, and died on the first request to ANY
+  // route. The operator had been told it degraded gracefully.
+  //
+  // The routes are still registered, with the error in place of the instance, so the failure is
+  // visible where it belongs — a 500 on that controller's paths — instead of everywhere.
+  const routes: RouteEntry[] = []
   for (const Ctor of unique) {
-    const instance = resolveOrNew(Ctor, container)
-    const walks = walkControllerMetadata(Ctor)
-    for (const w of walks) {
-      routes.push({ walk: w, instance })
+    let built: { instance: object } | { failure: ControllerConstructionFailure }
+    try {
+      built = { instance: resolveOrNew(Ctor, container) }
+    } catch (error) {
+      built = { failure: { controllerName: Ctor.name, error } }
+      // Once, here, and not per request: containment is not swallowing. A 500 nobody reads is the
+      // silent failure this codebase refuses elsewhere, and the operator is already watching stdout.
+      console.error(
+        `[theokit] controller ${Ctor.name} failed to construct — its routes will answer 500:`,
+        error instanceof Error ? error.message : String(error),
+      )
+    }
+    for (const walk of walkControllerMetadata(Ctor)) {
+      routes.push({ walk, ...built })
     }
   }
 
@@ -141,7 +180,7 @@ export function createDecoratorServer(
 // ─── Web Standard request handler ────────────────────────────
 
 async function handleRequest(
-  routes: { walk: WalkResult; instance: object }[],
+  routes: RouteEntry[],
   request: Request,
   container?: DiContainer,
   middlewareEntries: ResolvedMiddleware[] = [],
@@ -155,7 +194,31 @@ async function handleRequest(
   // null = no controller route matched; the caller owns the miss (404 or fall-through).
   if (!match) return null
 
-  const { walk, instance, params } = match
+  const { walk, params } = match
+
+  // Before anything reads `instance`. The route exists and is matched — what does not exist is the
+  // controller behind it, and that is a 500 for these paths and nothing else (#577).
+  if ('failure' in match) {
+    const { controllerName, error } = match.failure
+    const digested = digestError(error, {
+      route: `${method} ${pathname}`,
+      phase: 'construction',
+      source: controllerName,
+    })
+    return jsonResponse(500, {
+      error: {
+        code: 'CONTROLLER_CONSTRUCTION_FAILED',
+        // The cause, named, with the controller that failed: an operator has to be able to act on
+        // this without attaching a debugger. `digestError` is what keeps the stack out of a
+        // production response — the same redaction every other error path here gets.
+        message: `Controller ${controllerName} failed to construct: ${digested.message}`,
+        digest: digested.digest,
+        ...(digested.stack === undefined ? {} : { stack: digested.stack }),
+      },
+    })
+  }
+
+  const { instance } = match
 
   try {
     // Middleware
@@ -274,21 +337,16 @@ function jsonResponse(status: number, body: unknown): Response {
 
 // ─── Route matching ──────────────────────────────────────────
 
-interface RouteMatch {
-  walk: WalkResult
-  instance: object
-  params: Record<string, string>
-}
+/** A {@link RouteEntry} plus the path parameters that matched it. */
+type RouteMatch = RouteEntry & { params: Record<string, string> }
 
-function findRoute(
-  routes: { walk: WalkResult; instance: object }[],
-  method: string,
-  pathname: string,
-): RouteMatch | null {
-  for (const { walk, instance } of routes) {
-    if (walk.verb !== 'ALL' && walk.verb !== method) continue
-    const params = matchPath(walk.fullPath, pathname)
-    if (params !== null) return { walk, instance, params }
+function findRoute(routes: RouteEntry[], method: string, pathname: string): RouteMatch | null {
+  for (const entry of routes) {
+    if (entry.walk.verb !== 'ALL' && entry.walk.verb !== method) continue
+    const params = matchPath(entry.walk.fullPath, pathname)
+    // Spread the whole entry: picking fields off it is how `constructionError` would silently stop
+    // reaching the dispatcher the next time one is added.
+    if (params !== null) return { ...entry, params }
   }
   return null
 }
