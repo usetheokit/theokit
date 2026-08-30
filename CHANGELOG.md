@@ -14,6 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   rot underneath a release. It began as an arrangement between two sessions, which holds
   exactly as long as both are around; written into `CONTRIBUTING.md` it survives them.
 
+## [theokit 0.62.1] - 2026-08-30
 
 ### Fixed
 
@@ -25,8 +26,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   the gate. Three builtins were affected — `ollama`, `lmstudio`, `llamacpp` — of which only `ollama`
   escaped, because this project's own registry entry wins first. A profile that really does
   authenticate by a key still requires it. (#585)
-
-
 ## [theokit 0.62.0] - 2026-08-30
 
 ### Fixed
