@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- **A model id naming an SDK builtin provider resolves instead of being refused.** An app that
+  called `.plugins(Provider.builtins())` and then `.model('openai-chatgpt/gpt-5.4')` got a 500
+  saying the provider "is not registered" — the resolver consulted only this project's four-entry
+  registry, while the SDK ships 44 builtins and a `Provider.forModel` documented for exactly this
+  runtime. It now asks the SDK after its own registry misses; a declared entry keeps its own env
+  key, priority and base URL, a profile with no env var resolves keyless, and a prefix neither
+  source knows is still refused. (#579)
+
+- **Durable memory stops depending on the directory the process was started in.** With memory
+  enabled the framework now names the resolved app root as the SDK's cwd; before, an agent that had
+  not opted into file-based config left the memory root to `process.cwd()`, which the framework's
+  own code records is not guaranteed to be the app root. Partial: on SDK >= 4.61 the root comes off
+  `local.baseDir` instead, which is `usetheokit/theokit-sdk#463`. (#557)
+
 ## [@theokit/http 1.2.0, theokit 0.61.0] - 2026-08-30
 
 ### Added
