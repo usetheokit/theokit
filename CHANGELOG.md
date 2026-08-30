@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- **The release checklist names the examples check.** After publishing, running
+  `framework/agent-endpoint`'s test suite in `theokit-examples` asserts what the examples
+  *teach* rather than what the framework compiles — the only signal that documentation did not
+  rot underneath a release. It began as an arrangement between two sessions, which holds
+  exactly as long as both are around; written into `CONTRIBUTING.md` it survives them.
+
+
 ### Fixed
 
 - **A provider whose catalog declares `authType: "none"` no longer demands an API key.** #579 opened
