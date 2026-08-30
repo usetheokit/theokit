@@ -53,12 +53,23 @@ describe('pre-push reports a killed stage as killed', () => {
 
   function runHook(): { code: number; out: string } {
     try {
+      // The rule below is right about the general case and inapplicable here: prepending a
+      // writable directory to PATH is not an accident, it IS the fixture. The hook calls `pnpm` by
+      // name, so a stub can only reach it that way, and the directory is one mkdtemp created and
+      // afterEach removes. Naming the real reason rather than borrowing the sibling scripts'
+      // "toolchain binary, fixed argv", which would be false of this call.
+      // eslint-disable-next-line sonarjs/no-os-command-from-path -- the writable PATH entry is the fixture
       const out = execFileSync('bash', [HOOK], {
         cwd: dir,
         encoding: 'utf8',
         stdio: ['ignore', 'pipe', 'pipe'],
         // `node` must stay reachable: the hook gates on its major version before anything else.
-        env: { ...process.env, PATH: `${bin}:${process.env.PATH ?? ''}`, CI: '', GITHUB_ACTIONS: '' },
+        env: {
+          ...process.env,
+          PATH: `${bin}:${process.env.PATH ?? ''}`,
+          CI: '',
+          GITHUB_ACTIONS: '',
+        },
       })
       return { code: 0, out }
     } catch (err) {

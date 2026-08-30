@@ -25,6 +25,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **A controller that cannot be constructed no longer takes the process down.** One optional
+  plugin's env var was unset; the app booted, reported the plugin as skipped, and then exited on the
+  first request to *any* route — an unhandled rejection from a controller field initializer, inside
+  request dispatch. The routes of a controller that failed to build now answer 500
+  `CONTROLLER_CONSTRUCTION_FAILED` with the cause and the controller's name (stack redacted in
+  production), the failure is logged once at construction, and every other controller serves
+  normally. An operator told a plugin degraded gracefully should not then lose the process. (#577)
+
 - **`subjectFromContext` no longer denies everyone in silence.** Handed a controller guard's
   `ExecutionContext` — which carries `getRequest`/`getUrl`/`getClass`/`getMethodName` and no
   subject — it answered `null`, indistinguishable from an anonymous caller, so a guard built on it
