@@ -52,6 +52,32 @@ export { websocket, type WebSocketBuilder } from './websocket-builder.js'
 export { middleware, type MiddlewareBuilder } from './middleware-builder.js'
 export { tool, type ToolBuilder } from './tool-builder.js'
 export { plugin, type PluginBuilder } from './plugin-builder.js'
+/**
+ * The types of the thing a plugin author is WRITING (usetheokit/theokit#575).
+ *
+ * They existed and were unexported from this barrel, so an app that wrote a plugin could not import
+ * the shape of its own subject and declared structural copies instead:
+ *
+ *     Module 'theokit/server/define' declares 'TheoPlugin' locally, but it is not exported.  TS2459
+ *
+ * A hand-written copy compiles — structural typing does not care — and goes on compiling after the
+ * framework's shape changes, until something fails at runtime. That is the failure mode this closes:
+ * not an inconvenience, a type that stops tracking what it describes.
+ *
+ * `plugin()` above is the preferred surface and covers the hook seam. These are for the raw
+ * `{ name, register }` form, for a `preHandler` written as a standalone function, and for anything
+ * `register(app)` reaches that the builder does not yet wrap.
+ */
+export type {
+  TheoPlugin,
+  PluginContext,
+  PluginErrorContext,
+  OnRequestHook,
+  PreHandlerHook,
+  OnResponseHook,
+  OnErrorHook,
+  HookName,
+} from '../plugin-types.js'
 
 // --- Non-define runtime utilities (kept public) ---
 export { applyTransform } from './define-agent-tool.js'

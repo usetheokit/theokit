@@ -6,6 +6,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **`@Public()` says a controller's access decision as intent.** Since #514 every controller route
+  must declare one, so this is on the critical path of every route an adopter writes — and the two
+  surfaces said the same thing very differently: `.policy('public')` on the route builder versus
+  `@SetMetadata('theokit:public', true)` on a controller, with the framework's own metadata key
+  copied into consumer source as a string literal. Measured in the first real adopter: 8
+  controllers, 6 copies of that string. `PUBLIC_ROUTE_METADATA` is exported alongside it, so there
+  is one importable definition instead of a key that could not change. `SetMetadata` stays for
+  anything custom. (#574)
+
+- **A plugin author can import the types of what they are writing.** `TheoPlugin`, `PluginContext`,
+  `PluginErrorContext` and the four hook signatures existed and were unexported from
+  `theokit/server/define` — `TS2459: declares 'TheoPlugin' locally, but it is not exported` — so
+  apps declared structural copies. A copy compiles, and keeps compiling after the framework's shape
+  changes, until something fails at runtime. (#575)
+
+### Fixed
+
+- **`subjectFromContext` no longer denies everyone in silence.** Handed a controller guard's
+  `ExecutionContext` — which carries `getRequest`/`getUrl`/`getClass`/`getMethodName` and no
+  subject — it answered `null`, indistinguishable from an anonymous caller, so a guard built on it
+  refused every request and passed the only test aimed at it. Silent AND fail-closed is the worst
+  pair: nothing errors and the failure looks exactly like the feature working. It now throws,
+  naming what to use instead. An anonymous run-context still answers `null`. (#574)
+
 ### Fixed
 
 - **The scaffold's rules file and agent skill taught three more names that do not exist.** Verifying

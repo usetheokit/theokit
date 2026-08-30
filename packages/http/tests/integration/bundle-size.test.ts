@@ -21,7 +21,15 @@ describe('Bundle size regression', () => {
     // decorator + `ExposeOptions`/`ExposeEntry` + the `WalkResult.agent`
     // field + `ServeAgent` + `@UseGuards` widened to a PropertyDecorator, so
     // an agent binds to a controller visibly (ADR-0059). Deliberate addition.
-    expect(size).toBeLessThan(56_000)
+    // Budget bumped 56KB → 58KB (#574): the surface gained `@Public()` +
+    // `PUBLIC_ROUTE_METADATA`, so a controller says its access decision as
+    // intent instead of copying the framework's metadata key into app source
+    // as a string literal. Measured cost 673 bytes, of which the docblock's
+    // usage example is most — trimmed to what a hover needs and kept, because
+    // an access decision nobody can read from the editor is the thing this
+    // export exists to fix. The baseline was already 55 482, so the headroom
+    // was 518 before this: the bump is the honest number, not a round one.
+    expect(size).toBeLessThan(58_000)
     console.log(`  http-decorators/dist/index.d.ts: ${(size / 1024).toFixed(1)} KB`)
   })
 })

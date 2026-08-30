@@ -15,6 +15,7 @@ export type { RedirectMeta } from './response.js'
 
 export { UseGuards, UseInterceptors, UseFilters, Catch } from './middleware.js'
 export { createDecorator, SetMetadata, Reflector, type MetadataKey } from './set-metadata.js'
+export { Public, PUBLIC_ROUTE_METADATA } from './public.js'
 export {
   Throttle,
   SkipThrottle,
