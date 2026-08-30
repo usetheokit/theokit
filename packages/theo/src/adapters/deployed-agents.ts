@@ -149,7 +149,7 @@ export function deployedAgentsFragment(
       `      // A name nobody scanned is a 404, exactly like any other unknown path. Handing`,
       `      // \`undefined\` to mountAgent would surface as a 500 for what is a routing miss.`,
       `      if (mod === undefined) return ${notFound}`,
-      `      const agentResponse = await mountAgent(mod, request, (model) => resolveProvider(model).apiKey, {`,
+      `      const agentResponse = await mountAgent(mod, request, (model, plugins) => resolveProvider(model, { plugins }).apiKey, {`,
       `        agentName,`,
       `        ...CSRF_CONFIG,`,
       `      })`,

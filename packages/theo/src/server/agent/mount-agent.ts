@@ -246,7 +246,11 @@ export async function mountAgent(
   const compiled = compileAgentModule(mod, source)
 
   // Now that the model is known, let the caller pick the credential for THAT provider.
-  const resolvedApiKey = typeof apiKey === 'function' ? apiKey(compiled.model) : apiKey
+  // `compiled.plugins` reaches the resolver so a provider the agent DECLARED can serve the model
+  // (#579). Without it, `.plugins(Provider.builtins())` was invisible at resolution time and the
+  // prefix came back "not registered".
+  const resolvedApiKey =
+    typeof apiKey === 'function' ? apiKey(compiled.model, compiled.plugins) : apiKey
 
   // M13 — resolve a per-request skills selector (from `defineAgent({ skills: (ctx) => [...] })`)
   // against the M7 run-context, setting `skills.enabled` before the SDK runs. `undefined` ⇒ the
@@ -271,7 +275,10 @@ export async function mountAgent(
     ...input,
     hitl,
     signal: request.signal,
-    cwd: resolveDiscoveryCwd(compiled, projectRoot),
+    // Two reasons to name a cwd, and memory is the one that must win when both apply: file-based
+    // discovery works from `process.cwd()` (it just discovers less), while durable memory written
+    // to `process.cwd()` lands in a directory nobody named and nobody reads (#557).
+    cwd: resolveMemoryCwd(compiled, projectRoot) ?? resolveDiscoveryCwd(compiled, projectRoot),
     baseDir: resolveSessionBaseDir(projectRoot),
   })
   // M8 — spans for the run, each tool call, each HITL pause and the token usage,
@@ -290,6 +297,48 @@ export async function mountAgent(
     observeServedRun(stream, { agentName: identity, request }),
     { runId, cache: getRunEventCache() },
   )
+}
+
+/**
+ * The cwd the SDK resolves the DURABLE MEMORY root from, when the agent asked for memory (#557).
+ *
+ * Separate from {@link resolveDiscoveryCwd} on purpose, even though both answer "which cwd". That
+ * one exists for `.settingSources([...])` discovery and stays `undefined` otherwise, because
+ * `undefined` is what the SDK reads as "enable everything discovered" — widening it would change
+ * skill selection for every agent that never asked for memory.
+ *
+ * This one exists because at the declared floor (`@theokit/sdk@^4.52.1`) the memory root is
+ * `resolve(memoryDir(opts.cwd))`, so an absent cwd sends `MEMORY.md` to `process.cwd()` — and
+ * `resolveDiscoveryCwd`'s own docblock already records that `process.cwd()` "is not guaranteed to
+ * be the app root". An operator who starts the server from a different directory gets their memory
+ * written somewhere else, with nothing said.
+ *
+ * Naming the resolved root makes that deterministic. It does NOT relocate memory on SDK >= 4.61,
+ * where the root is derived from `local.baseDir` instead — one field governing both the transcript
+ * and the memory, which is `usetheokit/theokit-sdk#463` and not fixable from here. What is fixable
+ * from here is not adding a second source of nondeterminism underneath it.
+ */
+export function resolveMemoryCwd(
+  compiled: { memory?: object },
+  projectRoot: string | undefined,
+): string | undefined {
+  if (!memoryIsOn(compiled.memory)) return undefined
+  return projectRoot
+}
+
+/**
+ * Whether a compiled `memory` field means memory is ON.
+ *
+ * The same rule `assembleM8CreateOptions` applies when it projects the field, and deliberately not
+ * a second one: the builder path carries the SDK's `MemorySettings` (which has `enabled`), while
+ * the legacy decorator shape has no such field and declaring `@Memory()` at all means the author
+ * wants it on. Two functions disagreeing about what "on" means is how the cwd would be named for a
+ * run whose memory the adapter then did not enable, or the reverse.
+ */
+function memoryIsOn(memory: object | undefined): boolean {
+  if (memory === undefined) return false
+  if ('enabled' in memory) return (memory as { enabled?: unknown }).enabled === true
+  return true
 }
 
 /**

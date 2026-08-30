@@ -170,6 +170,14 @@ export function resetProviderAnnouncements(): void {
 export interface ResolveOptions {
   /** Receives one line per provider, at most once. NEVER receives the key. */
   announce?: (line: string) => void
+  /**
+   * The plugins the agent declared (`compiled.plugins`), consulted for a `model-provider` one when
+   * this project's registry does not know the model's prefix (#579).
+   *
+   * Absent ⇒ registry-only, byte-unchanged. This is what keeps `.plugins(Provider.builtins())`
+   * meaning something at resolution time without making every SDK builtin nameable by every app.
+   */
+  plugins?: readonly unknown[]
 }
 
 /**
@@ -351,10 +359,93 @@ function takesCredential(desc: ProviderDescriptor): desc is CredentialedProvider
  */
 const KEYLESS_API_KEY = 'local'
 
+/**
+ * The provider a MODEL-PROVIDER PLUGIN THE AGENT DECLARED serves `modelId` with (#579).
+ *
+ * ## Why the agent's plugins and not the SDK's catalogue
+ *
+ * The first version of this asked `Provider.forModel` — the SDK's global builtin lookup — and that
+ * is wrong in a way the suite caught immediately: `tests/unit/unregistered-prefix-is-refused-not-
+ * rerouted.test.ts` uses `openai-chatgpt/gpt-5.4` as its example of a prefix that MUST be refused
+ * (#503), because a turn must never succeed against a provider nobody named. Consulting the
+ * catalogue makes every one of the SDK's 44 builtins nameable by any app, whether or not it asked
+ * for them — the exact permissiveness #503 exists to forbid, reintroduced one level down.
+ *
+ * `.plugins(Provider.builtins())` IS the app naming them. So the question is not "does the SDK know
+ * this prefix" but "did this agent declare a provider that serves it", and the answer is already in
+ * `compiled.plugins`, which the caller passes in. An app that declared nothing keeps getting the
+ * refusal, unchanged.
+ *
+ * ## The shape it reads
+ *
+ * A `model-provider` plugin carries `profile: { name, envVars, baseUrl }`. `envVars[0]` is the
+ * credential when the profile names one; naming none means the provider does not authenticate by
+ * environment — Codex refreshes OAuth per request inside the profile's own `transform.fetch` — and
+ * that is the keyless class `ProviderDescriptor.envKey` already describes for `ollama` (#407).
+ *
+ * Structural, never imported: `@theokit/sdk` is an optional peer, and this module must keep
+ * resolving its own four entries without it. The plugins arrive as `unknown` and are narrowed here.
+ */
+function declaredPluginProviderFor(
+  modelId: string,
+  plugins: readonly unknown[] | undefined,
+): ProviderDescriptor | undefined {
+  if (plugins === undefined) return undefined
+  const prefix = declaredPrefixOf(modelId)
+  if (prefix === undefined) return undefined
+
+  for (const plugin of plugins) {
+    const profile = modelProviderProfileOf(plugin)
+    if (profile === undefined) continue
+    // The profile's own name, plus the aliases it declares — the SDK routes on both, and reading
+    // only `name` would refuse `codex/...` for a profile that lists it as an alias of itself.
+    if (profile.name !== prefix && !(profile.aliases ?? []).includes(prefix)) continue
+    return {
+      name: profile.name,
+      ...(profile.envVars.length > 0 ? { envKey: profile.envVars[0] } : {}),
+      baseUrl: profile.baseUrl,
+      // Last in the priority walk, and reachable only through the declared branch anyway: a plugin
+      // provider must never win a BARE model id away from an entry this project declares.
+      priority: Number.MAX_SAFE_INTEGER,
+    }
+  }
+  return undefined
+}
+
+/** The `profile` of a value that is a model-provider plugin, or `undefined` for anything else. */
+function modelProviderProfileOf(plugin: unknown): ProviderProfileLike | undefined {
+  if (typeof plugin !== 'object' || plugin === null) return undefined
+  const candidate = plugin as { kind?: unknown; profile?: unknown }
+  if (candidate.kind !== 'model-provider') return undefined
+  const profile = candidate.profile
+  if (typeof profile !== 'object' || profile === null) return undefined
+  const shape = profile as Partial<ProviderProfileLike>
+  if (typeof shape.name !== 'string' || typeof shape.baseUrl !== 'string') return undefined
+  if (!Array.isArray(shape.envVars)) return undefined
+  return shape as ProviderProfileLike
+}
+
+/**
+ * The fields of the SDK's `ProviderProfile` this module reads.
+ *
+ * Structural rather than imported: importing the SDK's type would make an optional peer a
+ * build-time dependency of a module that must work without it.
+ */
+interface ProviderProfileLike {
+  name: string
+  envVars: readonly string[]
+  baseUrl: string
+  aliases?: readonly string[]
+}
+
 export function resolveProvider(modelId?: string, options?: ResolveOptions): ResolvedProvider {
   const sorted = [...registryOf()].sort((a, b) => a.priority - b.priority)
 
-  const declared = modelId === undefined ? undefined : providerOf(modelId, sorted)
+  // The local registry first, the SDK's builtins as the fallback for a prefix it does not know.
+  const declared =
+    modelId === undefined
+      ? undefined
+      : (providerOf(modelId, sorted) ?? declaredPluginProviderFor(modelId, options?.plugins))
   if (declared !== undefined && modelId !== undefined) {
     if (declared.envKey === undefined) {
       announce(declared, 'declared by the model', options)

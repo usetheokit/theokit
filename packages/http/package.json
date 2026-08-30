@@ -1,6 +1,6 @@
 {
   "name": "@theokit/http",
-  "version": "1.1.2",
+  "version": "1.2.0",
   "description": "NestJS-style decorators (@Controller, @Get, @Post, @Body, @UseGuards) over Web Standards, compiling to TheoKit route registrations.",
   "repository": {
     "type": "git",
