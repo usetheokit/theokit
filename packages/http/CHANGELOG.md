@@ -1,5 +1,76 @@
 # Changelog
 
+## 1.2.0
+
+### Minor Changes
+
+- 6cee319: Two authoring surfaces stop making consumers write framework internals by hand.
+
+  **`@Public()`** (`@theokit/http`) — since #514 every controller route must declare an access
+  decision, so this sits on the critical path of every route an adopter writes. The route builder says
+  `.policy('public')`; a controller had to say `@SetMetadata('theokit:public', true)`, copying the
+  framework's metadata key into app source from a build-time module no entry point reaches. Measured in
+  the first real adopter: 8 controllers, 6 copies of that string. `PUBLIC_ROUTE_METADATA` is exported
+  with it, so one importable definition replaces a key that could not be changed without a coordinated
+  edit in every app. `SetMetadata` stays for anything custom, and this does not make controllers a
+  second policy engine — `.policy()` remains the richer surface.
+
+  **Plugin authoring types** (`theokit/server/define`) — `TheoPlugin`, `PluginContext`,
+  `PluginErrorContext` and the four hook signatures existed and were unexported, so an app writing a
+  plugin could not name the shape of its own subject and declared structural copies instead. Those
+  compile, and go on compiling after the framework's shape changes, until something fails at runtime.
+
+  **`subjectFromContext` fails loudly** — given a controller guard's `ExecutionContext` it used to
+  answer `null`, which is indistinguishable from "anonymous caller", so a guard written on it denied
+  everyone and passed the only test aimed at it. It now throws and names the alternative. An anonymous
+  run-context still answers `null`, and a context carrying both a subject and `getRequest` still
+  resolves — the absence is the trigger, not the shape.
+
+- f55cd1b: A route that declared no access decision is now distinguishable from one declared open, and can be
+  refused.
+
+  `guards: []` meant two things at once (#576) — _"open on purpose"_ and _"nobody said"_ — and the
+  dispatcher, unable to tell them apart, took the permissive reading. For controllers that was safe
+  only while a separate build gate (#514) refused undeclared controller routes, which makes least
+  privilege a property of the **pipeline** rather than of the system; `@theokit/http` is published on
+  its own, so reaching the dispatcher without that build is an ordinary way to use it. Agent routes
+  had neither gate: they are auto-wired, dispatched before everything else, and a capability-authored
+  agent has no class to hang `@UseGuards` on, so `guards` was `undefined` → `?? []` → served.
+
+  - `AgentAppEntry.access?: 'public' | 'guarded'` makes the decision explicit. A non-empty `guards`
+    still counts as a declaration, so nothing that already guards its routes has to re-declare it.
+  - Every undeclared route warns **once at mount**, naming the route and the remedy for its own
+    surface (`access: 'public'` for an agent entry, `@Public()` for a controller).
+  - `TheoAppOptions.undeclaredRoutes: 'warn' | 'deny'` — `'deny'` answers 403 instead.
+
+  **The default is `'warn'`, and that is deliberate.** Flipping it here would break every app whose
+  agent endpoints are open today — precisely the population this issue is about — inside a non-major
+  release. It becomes `'deny'` in the next major; `'deny'` is available now for anyone who wants the
+  property before then.
+
+  `emit-controllers` now imports `PUBLIC_ROUTE_METADATA` from `@theokit/http` instead of redeclaring
+  it, and its refusal message teaches `@Public()` rather than the raw `@SetMetadata` string.
+
+### Patch Changes
+
+- 98b4f83: A controller whose constructor throws answers 500 for its own routes instead of exiting the process.
+
+  Reported from a real app (#577): one optional plugin's env var was unset, the app booted, logged the
+  plugin as skipped, printed its URL — and then died on the first request to **any** route, from an
+  unhandled rejection inside the dispatcher. `createDecoratorHandler` built every controller in one
+  loop before serving anything, so one class failing to construct discarded the handler for all of
+  them; because the framework builds that handler lazily inside request dispatch, the throw escaped
+  into the request.
+
+  The routes of a controller that failed to build are still registered and now answer 500
+  `CONTROLLER_CONSTRUCTION_FAILED`, carrying the cause and the controller's name — with the stack
+  redacted in production by the same `digestError` every other error path here uses. The failure is
+  also logged once, at construction: containment is not swallowing, and a 500 nobody reads is the
+  silent failure this codebase refuses elsewhere.
+
+  Every other controller serves normally, which is the whole point — the operator had been told the
+  plugin degraded gracefully, and it had widened one route's failure to the process.
+
 ## 1.1.2
 
 ### Patch Changes

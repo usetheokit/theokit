@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [@theokit/http 1.2.0, theokit 0.61.0] - 2026-08-30
+
 ### Added
 
 - **`@Public()` says a controller's access decision as intent.** Since #514 every controller route
@@ -49,7 +51,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   refused every request and passed the only test aimed at it. Silent AND fail-closed is the worst
   pair: nothing errors and the failure looks exactly like the feature working. It now throws,
   naming what to use instead. An anonymous run-context still answers `null`. (#574)
-
 ## [create-theokit 1.25.3] - 2026-08-29
 
 ### Fixed
