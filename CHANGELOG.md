@@ -32,6 +32,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   pair: nothing errors and the failure looks exactly like the feature working. It now throws,
   naming what to use instead. An anonymous run-context still answers `null`. (#574)
 
+## [create-theokit 1.25.3] - 2026-08-29
+
 ### Fixed
 
 - **The scaffold's rules file and agent skill taught three more names that do not exist.** Verifying
@@ -48,9 +50,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   importing it. Statically because vitest routes dynamic imports through Vite's SSR loader, which
   rewrote the entry's chunk references and could not resolve them; and the `.js` rather than the
   `.d.ts`, which is the whole point of #542 — the fabricated name IS in the published types.
-
-### Fixed
-
 ## [create-theokit 1.25.2] - 2026-08-29
 
 ### Fixed
