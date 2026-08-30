@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- **A provider whose catalog declares `authType: "none"` no longer demands an API key.** #579 opened
+  the SDK's 45 builtin providers to a model id and derived the credential variable from the
+  profile's `envVars`, treating "an env var is named" as "a key is required" — but the SDK declares
+  both on the same profile (`lmstudio` names `LMSTUDIO_API_KEY` *and* `authType: "none"`). A local
+  model server was refused for want of a variable with nothing behind it, and any value satisfied
+  the gate. Three builtins were affected — `ollama`, `lmstudio`, `llamacpp` — of which only `ollama`
+  escaped, because this project's own registry entry wins first. A profile that really does
+  authenticate by a key still requires it. (#585)
+
+
 ## [theokit 0.62.0] - 2026-08-30
 
 ### Fixed
