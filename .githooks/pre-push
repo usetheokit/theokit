@@ -105,14 +105,21 @@ echo ""
 # different things and the messages below say which.
 # The status is captured BEFORE any test, because `$?` inside `if ! cmd; then` is the status of
 # the NEGATION — always 0 — not of the command. Measured, after writing it the wrong way first.
-pnpm build:packages
-build_status=$?
+# `|| stage_status=$?` and not a bare call, because `set -e` is in force above.
+# A bare `pnpm build:packages` that exits non-zero ends the script ON THAT LINE, so the
+# capture below it — and every branch of report_stage_failure — never runs. The helper was
+# written to tell a killed stage from a failed one and could not be reached to say either.
+# Measured 2026-08-30: earlyoom sent SIGTERM to the DTS build (VmRSS 1794 MiB, swap full) and
+# the push printed the raw pnpm error, which reads exactly like a broken build.
+# `|| ...` is a tested command, so `set -e` stands down for it and stays armed everywhere else.
+build_status=0
+pnpm build:packages || build_status=$?
 if [ "$build_status" -ne 0 ]; then
   report_stage_failure "package build" "$build_status"
 fi
 
-pnpm typecheck:only
-typecheck_status=$?
+typecheck_status=0
+pnpm typecheck:only || typecheck_status=$?
 if [ "$typecheck_status" -ne 0 ]; then
   report_stage_failure "typecheck" "$typecheck_status"
 fi
