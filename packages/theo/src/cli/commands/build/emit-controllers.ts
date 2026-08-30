@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join, relative, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
+import { PUBLIC_ROUTE_METADATA } from '@theokit/http'
 import {
   CONTROLLER_PREFIX,
   ROUTE_METHODS,
@@ -196,23 +197,21 @@ function assertControllerPathsReachable(
 }
 
 /**
- * The metadata key an explicitly-open controller route sets.
+ * The metadata key an explicitly-open controller route sets — IMPORTED, no longer redeclared.
  *
- * The counterpart of `'public'` on the file path, and it exists for the same routes: a health
- * check a load balancer calls with no session, an OAuth callback the provider redirects to.
+ * The counterpart of `'public'` on the file path, and it exists for the same routes: a health check
+ * a load balancer calls with no session, an OAuth callback the provider redirects to.
  *
- * An app writes the STRING, not this constant: `@SetMetadata('theokit:public', true)`. The docblock
- * used to show `@SetMetadata(PUBLIC_ROUTE_METADATA, true)`, which no consumer can write — this
- * module lives under `cli/commands/build/` and no entry point reaches it. Exporting it so the
- * example became true would publish a new surface for a string that appears once per open route and
- * whose mistyping fails this very gate loudly, so the example is corrected instead. `@theokit/http`
- * already ships `SetMetadata`, so no new decorator is needed either (parsimony-ladder.md rung 4).
+ * This was a local `const` under a docblock arguing that exporting it "would publish a new surface
+ * for a string that appears once per open route". #574 measured the cost of that reasoning in the
+ * first real adopter — 8 controllers, 6 hand-written copies of `'theokit:public'` — and
+ * `@theokit/http` now exports both the key and `@Public()`. Keeping a second copy here would leave
+ * the gate and the decorator agreeing by coincidence rather than by construction.
  *
  * It is an opt-out, never a default. A route that is open says so in the file, where review sees
  * it; a route nobody thought about is the one that ships open, which is the whole reason ADR 0001
  * made absence stop meaning open on the file path.
  */
-const PUBLIC_ROUTE_METADATA = 'theokit:public'
 
 /**
  * A controller route that declares no access decision at all.
@@ -249,7 +248,7 @@ export class UndeclaredControllerAccessError extends Error {
         ``,
         `  Or state that it is open on purpose — a health check, an OAuth callback:`,
         ``,
-        `      @SetMetadata('${PUBLIC_ROUTE_METADATA}', true)`,
+        `      @Public()               // from '@theokit/http'`,
         ``,
         `  Both are declarations. What is refused is neither.`,
       ].join('\n'),
