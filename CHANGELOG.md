@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- **The release checklist names the examples check.** After publishing, running
+  `framework/agent-endpoint`'s test suite in `theokit-examples` asserts what the examples
+  *teach* rather than what the framework compiles — the only signal that documentation did not
+  rot underneath a release. It began as an arrangement between two sessions, which holds
+  exactly as long as both are around; written into `CONTRIBUTING.md` it survives them.
+
+## [theokit 0.62.1] - 2026-08-30
+
 ### Fixed
 
 - **A provider whose catalog declares `authType: "none"` no longer demands an API key.** #579 opened
@@ -16,8 +26,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   the gate. Three builtins were affected — `ollama`, `lmstudio`, `llamacpp` — of which only `ollama`
   escaped, because this project's own registry entry wins first. A profile that really does
   authenticate by a key still requires it. (#585)
-
-
 ## [theokit 0.62.0] - 2026-08-30
 
 ### Fixed
