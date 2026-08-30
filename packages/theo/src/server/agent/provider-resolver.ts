@@ -400,9 +400,11 @@ function declaredPluginProviderFor(
     // The profile's own name, plus the aliases it declares — the SDK routes on both, and reading
     // only `name` would refuse `codex/...` for a profile that lists it as an alias of itself.
     if (profile.name !== prefix && !(profile.aliases ?? []).includes(prefix)) continue
+    // `authType`, not the length of `envVars` — see the docblock above (#585).
+    const needsCredential = profile.authType !== 'none' && profile.envVars.length > 0
     return {
       name: profile.name,
-      ...(profile.envVars.length > 0 ? { envKey: profile.envVars[0] } : {}),
+      ...(needsCredential ? { envKey: profile.envVars[0] } : {}),
       baseUrl: profile.baseUrl,
       // Last in the priority walk, and reachable only through the declared branch anyway: a plugin
       // provider must never win a BARE model id away from an entry this project declares.
@@ -436,6 +438,13 @@ interface ProviderProfileLike {
   envVars: readonly string[]
   baseUrl: string
   aliases?: readonly string[]
+  /**
+   * How the provider authenticates. `'none'` means it does not, whatever `envVars` names (#585).
+   *
+   * Optional here although the SDK's own type requires it: this module narrows a plugin from
+   * `unknown`, so a value arriving without the field is representable and must not be assumed.
+   */
+  authType?: string
 }
 
 export function resolveProvider(modelId?: string, options?: ResolveOptions): ResolvedProvider {

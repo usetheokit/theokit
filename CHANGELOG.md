@@ -8,6 +8,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **A provider whose catalog declares `authType: "none"` no longer demands an API key.** #579 opened
+  the SDK's 45 builtin providers to a model id and derived the credential variable from the
+  profile's `envVars`, treating "an env var is named" as "a key is required" — but the SDK declares
+  both on the same profile (`lmstudio` names `LMSTUDIO_API_KEY` *and* `authType: "none"`). A local
+  model server was refused for want of a variable with nothing behind it, and any value satisfied
+  the gate. Three builtins were affected — `ollama`, `lmstudio`, `llamacpp` — of which only `ollama`
+  escaped, because this project's own registry entry wins first. A profile that really does
+  authenticate by a key still requires it. (#585)
+
+
+## [theokit 0.62.0] - 2026-08-30
+
+### Fixed
+
 - **A model id naming an SDK builtin provider resolves instead of being refused.** An app that
   called `.plugins(Provider.builtins())` and then `.model('openai-chatgpt/gpt-5.4')` got a 500
   saying the provider "is not registered" — the resolver consulted only this project's four-entry
@@ -21,7 +35,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   not opted into file-based config left the memory root to `process.cwd()`, which the framework's
   own code records is not guaranteed to be the app root. Partial: on SDK >= 4.61 the root comes off
   `local.baseDir` instead, which is `usetheokit/theokit-sdk#463`. (#557)
-
 ## [@theokit/http 1.2.0, theokit 0.61.0] - 2026-08-30
 
 ### Added
