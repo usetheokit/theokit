@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [theokit 0.62.0] - 2026-08-30
+
 ### Fixed
 
 - **A model id naming an SDK builtin provider resolves instead of being refused.** An app that
@@ -21,7 +23,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   not opted into file-based config left the memory root to `process.cwd()`, which the framework's
   own code records is not guaranteed to be the app root. Partial: on SDK >= 4.61 the root comes off
   `local.baseDir` instead, which is `usetheokit/theokit-sdk#463`. (#557)
-
 ## [@theokit/http 1.2.0, theokit 0.61.0] - 2026-08-30
 
 ### Added
