@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [@theokit/http 2.0.0, theokit 0.64.0] - 2026-08-31
 
 ### Added
+- **ci:** `Promotion gate` refuses a pull request into `develop` that does not come from this repository's own `workspace`. `git-safety.md` has always said so and `validate-command.sh:245` has always blocked it — for a `git merge` typed locally, which is not how any of this repository's 157 promotions landed (usetheokit/theokit#606)
 
 - **`Authenticated(sessions)` in `theokit/server/auth`** — the controller equivalent of
   `.policy(({ subject }) => subject !== null)`, so "any signed-in caller" is not a guard each app

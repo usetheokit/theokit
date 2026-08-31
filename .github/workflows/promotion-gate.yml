@@ -1,0 +1,76 @@
+# `develop` accepts one thing: the promotion from `workspace`.
+#
+# WHY A WORKFLOW AND NOT THE HOOK. `rules/git-safety.md` says `develop` "advances only by promoting
+# `workspace`" and to "never merge anything other than `workspace` into it", and
+# `hooks/validate-command.sh:245` blocks it — for a `git merge` typed in a local checkout. Nothing
+# merges that way. All 157 of this repository's promotions landed through `gh pr merge`, which runs
+# server-side where no local hook exists. The rule was enforced on the path nobody uses and
+# unenforced on the path everybody uses.
+#
+# That is not hypothetical. Measured across the eleven repositories in this organisation that have a
+# `develop` (2026-08-31): exactly ONE had a check that looks at where a pull request comes from.
+# `theokit-sdk` had accumulated 48 merged `main → develop` pull requests through this gap, because
+# its back-merge workflow targeted `develop` and no hook ever saw them.
+#
+# This repository carries 2 pull request(s) into `develop` from something other than `workspace`,
+# and BOTH PREDATE THE CONVENTION — feature branches from May/June 2026, not a back-merge. That
+# distinction is why the finding here is the ABSENCE OF THE GATE and not a violation count: the two
+# ask for different actions, and a bare number would send someone to fix history.
+#
+# NO `paths:` FILTER, deliberately. This is marked required in branch protection, and a required
+# check that does not run on some pull requests deadlocks them permanently. The same reasoning is
+# written at the top of `dep-check.yml`; the opposite reasoning is written at the top of
+# `peer-majors.yml`, which is not required and therefore may filter.
+#
+# WHAT IT DOES NOT COVER. A push directly to `develop`, which branch protection already refuses, and
+# a merge performed by someone with permission to bypass protection. It answers one question — did
+# this work originate on `workspace` — which is the question the rule asks.
+name: Promotion gate
+
+on:
+  pull_request:
+    branches: [develop]
+
+permissions:
+  contents: read
+
+jobs:
+  head-is-workspace:
+    name: develop accepts only workspace
+    runs-on: ubuntu-latest
+    steps:
+      - name: check the head branch
+        env:
+          # Never interpolated into the script: a branch name is attacker-chosen text on a fork
+          # pull request, and `${{ }}` inside `run:` expands it as source code.
+          HEAD_REF: ${{ github.head_ref }}
+          # The branch NAME is not enough. `github.head_ref` on a fork pull request is the branch
+          # name inside THE FORK, so anyone may fork this public repository, name a branch
+          # `workspace`, and satisfy a name-only check. The promotion comes from this repository's
+          # own `workspace` or it is not the promotion.
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          echo "head: ${HEAD_REPO}:${HEAD_REF}  ->  base: ${BASE_REPO}:develop"
+
+          if [ "$HEAD_REPO" != "$BASE_REPO" ]; then
+            echo "::error::a fork cannot promote into develop. The head is '${HEAD_REPO}', not '${BASE_REPO}'."
+            echo
+            echo "Work originates on this repository's own workspace branch. A branch named"
+            echo "'workspace' in a fork is a different branch that happens to share a name."
+            exit 1
+          fi
+
+          if [ "$HEAD_REF" = "workspace" ]; then
+            echo "head is this repository's workspace — the promotion the rule allows"
+            exit 0
+          fi
+          echo "::error::'${HEAD_REF}' cannot be merged into develop."
+          echo
+          echo "rules/git-safety.md § 1: develop advances ONLY by promoting workspace, and nothing"
+          echo "other than workspace may be merged into it. Work originates on workspace; develop"
+          echo "integrates it."
+          echo
+          echo "Land this on workspace first, then open workspace -> develop."
+          exit 1
