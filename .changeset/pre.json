@@ -1,0 +1,14 @@
+{
+  "mode": "pre",
+  "tag": "next",
+  "initialVersions": {
+    "@theokit/agents": "12.1.0",
+    "@theokit/agents-pty": "0.2.1",
+    "create-theokit": "1.25.3",
+    "@theokit/http": "2.0.0",
+    "@theokit/presenter": "0.8.0",
+    "@theokit/tauri": "0.1.2",
+    "theokit": "0.64.0"
+  },
+  "changesets": []
+}

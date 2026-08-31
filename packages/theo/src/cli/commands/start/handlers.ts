@@ -452,6 +452,10 @@ export async function tryServeApiRoute(c: RequestHandlerCtx): Promise<boolean> {
         csrfMode: c.csrfMode,
         disallowed: c.disallowed,
         requestId: c.requestId,
+        // #607 — the runner this branch never received. Without it a `@Controller` route ran no
+        // plugin hook at all in production: not `onRequest`, not `preHandler`, not `onResponse`,
+        // not `onError`. The file-route branch below has always passed it.
+        pluginRunner: c.pluginRunner,
       })
       if (handled) return true
     }
