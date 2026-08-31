@@ -29,6 +29,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { Controller, Get } from '../../src/index.js'
 import { createDecoratorHandler } from '../../src/bridge/create-server.js'
+import { Public } from '../../src/decorators/public.js'
 
 class ConfigMissing extends Error {
   constructor() {
@@ -37,6 +38,7 @@ class ConfigMissing extends Error {
   }
 }
 
+@Public()
 @Controller('voice')
 class BrokenController {
   // A field initializer, which is where the reported crash lived: it runs at construction, and the
@@ -51,6 +53,7 @@ class BrokenController {
   }
 }
 
+@Public()
 @Controller('health')
 class HealthyController {
   @Get()

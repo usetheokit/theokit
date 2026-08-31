@@ -29,6 +29,7 @@ import {
   createDecoratorServer,
   type DiContainer,
 } from '../../src/index.js'
+import { Public } from '../../src/decorators/public.js'
 
 // Bun lacks emitDecoratorMetadata support (same as esbuild). Tests using
 // decorator syntax require SWC compilation provided by vitest. Skip on Bun.
@@ -109,22 +110,26 @@ class UsersController {
     this.svc = svc
   }
 
+  @Public()
   @Get()
   @Header('X-Powered-By', '@theokit/http')
   findAll() {
     return this.svc.findAll()
   }
 
+  @Public()
   @Get(':id')
   findById(@Param('id') id: string) {
     return this.svc.findById(id) ?? { error: 'not found' }
   }
 
+  @Public()
   @Post()
   create(@Body() body: CreateUserDto) {
     return this.svc.create(body as z.infer<typeof zCreateUser>)
   }
 
+  @Public()
   @Delete(':id')
   @HttpCode(204)
   remove(@Param('id') id: string) {
@@ -138,6 +143,7 @@ class UsersController {
   }
 }
 
+@Public()
 @Controller('products')
 class ProductsController {
   private svc: ProductService
@@ -156,6 +162,7 @@ class ProductsController {
   }
 }
 
+@Public()
 @Controller('health')
 class HealthController {
   @Get()

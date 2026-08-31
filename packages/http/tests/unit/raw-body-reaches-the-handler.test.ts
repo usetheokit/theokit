@@ -5,6 +5,7 @@ import { Controller } from '../../src/decorators/controller.js'
 import { Post } from '../../src/decorators/methods.js'
 import { Req } from '../../src/decorators/params.js'
 import { createDecoratorHandler } from '../../src/bridge/create-server.js'
+import { Public } from '../../src/decorators/public.js'
 
 /*
  * A controller that needs the RAW body must be able to read it.
@@ -39,6 +40,7 @@ describe('a controller reading the raw body', () => {
   it('receives a request whose body has not already been consumed', async () => {
     let seen: { bodyUsed: boolean; formLanguage: string | null; error: string | null } | undefined
 
+    @Public()
     @Controller('api/probe')
     class ProbeController {
       @Post()
@@ -72,6 +74,7 @@ describe('a controller reading the raw body', () => {
     const { Body } = await import('../../src/decorators/params.js')
     let received: unknown
 
+    @Public()
     @Controller('api/json')
     class JsonController {
       @Post()

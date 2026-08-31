@@ -29,7 +29,16 @@ describe('Bundle size regression', () => {
     // an access decision nobody can read from the editor is the thing this
     // export exists to fix. The baseline was already 55 482, so the headroom
     // was 518 before this: the bump is the honest number, not a round one.
-    expect(size).toBeLessThan(58_000)
+    // Budget bumped 58KB → 60KB (#576): the barrel now re-exports the access
+    // vocabulary — `classifyAccess`, `undeclaredRouteWarning`,
+    // `undeclaredRouteRefusal`, `AccessDecision`, `UndeclaredRoutePolicy` —
+    // which shipped reachable only through `TheoAppOptions`. Measured 56 475 →
+    // 58 162, so 1 687 bytes, nearly all of it the docblock explaining why
+    // `guards: []` stopped meaning "open". It is kept rather than trimmed for
+    // the same reason as the bump above: an app now has to SET
+    // `undeclaredRoutes`, and a policy nobody can read from the editor is how
+    // the option gets set wrong.
+    expect(size).toBeLessThan(60_000)
     console.log(`  http-decorators/dist/index.d.ts: ${(size / 1024).toFixed(1)} KB`)
   })
 })

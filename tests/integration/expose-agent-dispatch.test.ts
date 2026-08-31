@@ -21,16 +21,18 @@ const CONTROLLERS_DIR = join(TEST_ROOT, 'controllers')
 
 const CONTROLLER_SRC = `
 import 'reflect-metadata'
-import { Controller, Get, Expose } from '@theokit/http'
+import { Controller, Get, Expose, Public } from '@theokit/http'
 
 const chatAgent = { __agent: 'chat' }
 
+@Public()
 @Controller('api/agents')
 export class AgentsController {
   @Expose(chatAgent)
   chat
 }
 
+@Public()
 @Controller('api/health')
 export class HealthController {
   @Get()

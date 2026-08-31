@@ -5,6 +5,7 @@ import { resolve } from 'node:path'
 import { existsSync, readFileSync } from 'node:fs'
 import { z } from 'zod'
 import http from 'node:http'
+import { Public } from '../../src/decorators/public.js'
 
 // Bun lacks emitDecoratorMetadata support (same as esbuild). Tests using
 // decorator syntax require SWC compilation provided by vitest. Skip on Bun.
@@ -94,6 +95,7 @@ describe.skipIf(!isVitest)('dist build validation', () => {
 
       const schema = z.object({ title: z.string().min(1) })
 
+      @Public()
       @Controller('items')
       class ItemCtrl {
         @Get()

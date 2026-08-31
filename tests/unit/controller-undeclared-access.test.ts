@@ -102,6 +102,26 @@ describe('a controller route that declares no access decision fails the build (#
     await expect(emit()).resolves.toBeTruthy()
   })
 
+  it('refuses @UseGuards() with no arguments — it names nobody who decides', async () => {
+    // It reads as a guarded route to anyone skimming the file and runs a zero-length loop at
+    // dispatch. This gate accepted it on PRESENCE alone while `classifyAccess` — the runtime
+    // classifier the three dispatchers share — calls it `'undeclared'`, so the build passed and the
+    // request was served unguarded, each side believing the other was checking (#576).
+    write(
+      'e',
+      `@Controller('api/e')\nexport class EController {\n  @Get() @UseGuards() one() { return {} }\n}`,
+    )
+    await expect(emit()).rejects.toThrow(UndeclaredControllerAccessError)
+  })
+
+  it('refuses an empty @UseGuards() on the CLASS for the same reason', async () => {
+    write(
+      'ec',
+      `@Controller('api/ec')\n@UseGuards()\nexport class EcController {\n  @Get() one() { return {} }\n}`,
+    )
+    await expect(emit()).rejects.toThrow(UndeclaredControllerAccessError)
+  })
+
   it('refuses when only SOME methods are covered — the uncovered one is the defect', async () => {
     // The realistic shape of the mistake: a controller converted method by method, one forgotten.
     write(

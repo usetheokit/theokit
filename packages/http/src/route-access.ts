@@ -10,7 +10,7 @@
  *
  * Faced with both readings it took the permissive one and served. For controllers that was safe
  * only because a separate build gate (#514) refuses an undeclared controller route — which makes
- * least privilege a property of the PIPELINE rather than of the system. Anything reaching the
+ * least privilege a property of the PIPELINE rather than of the system. Anything reaching a
  * dispatcher without having run that build is served, and `@theokit/http` is published on its own,
  * so "without having run that build" is an ordinary way to use it.
  *
@@ -20,7 +20,8 @@
  * `guards` was `undefined`, so `?? []`, so served.
  *
  * The fix is not a new guard. It is making absence REPRESENTABLE, so a decision can be told from
- * its residue.
+ * its residue — and then REFUSING it, so the property belongs to the system rather than to
+ * whichever command happened to run the build gate.
  */
 
 /** What a route says about who may call it. */
@@ -35,21 +36,25 @@ export type AccessDecision =
 /**
  * How an app answers a route that declared nothing.
  *
- * `'warn'` is the default and serves the request after saying so once, loudly, at mount. `'deny'`
- * refuses with 403.
+ * `'deny'` is the default and refuses with 403. `'warn'` serves the request after saying so once,
+ * loudly, at the first dispatch — the migration escape, and nothing else.
  *
- * The default is `'warn'` and not `'deny'` because flipping it silently would break every app whose
- * agent endpoints are open today — which is precisely the population #576 is about, and breaking
- * them inside a patch is how a security improvement becomes an outage. It becomes `'deny'` in the
- * next major; `'deny'` is available now for anyone who wants the property before then.
+ * The default was `'warn'` for one release, so that flipping it did not break every app whose
+ * agent endpoints were open, inside a patch. It is `'deny'` from `@theokit/http@2.0.0`, which is
+ * the major that release bought: a safe default an app has to switch on is not a safe default, and
+ * the population that never reads the warning is exactly the population #576 is about.
  */
 export type UndeclaredRoutePolicy = 'warn' | 'deny'
 
 /**
  * Classify one route from what its author declared.
  *
- * `access` is the explicit answer and wins. Otherwise a non-empty `guards` IS a declaration — the
+ * `access` is the explicit answer and wins. Otherwise a NON-EMPTY `guards` IS a declaration — the
  * author named who decides — and an empty or absent one is nobody having said.
+ *
+ * "Non-empty" and not "present" is deliberate, and it is the one place this can drift from the
+ * build gate: `@UseGuards()` with no arguments writes `[]`, which reads as a declaration to anyone
+ * skimming the file and decides nothing at dispatch. Both gates refuse it (#576).
  */
 export function classifyAccess(declared: {
   access?: Exclude<AccessDecision, 'undeclared'>
@@ -59,18 +64,36 @@ export function classifyAccess(declared: {
   return declared.guards !== undefined && declared.guards.length > 0 ? 'guarded' : 'undeclared'
 }
 
+/** How a route says it is open, in the surface the author is holding. */
+const declareOpen = (kind: 'agent' | 'controller'): string =>
+  kind === 'agent' ? "`access: 'public'`" : '`@Public()`'
+
 /**
- * The line printed once per undeclared route, at mount.
+ * The line printed once per undeclared route that is nonetheless served.
  *
- * At mount and not per request: an operator reads the boot log, and a warning that only appears
- * under traffic is one that appears when it is too late to act on it. It names the route, because a
- * warning that does not say WHICH route sends the reader grepping.
+ * Only reachable under an explicit `undeclaredRoutes: 'warn'`, which is the whole point: the
+ * default refuses, and an app that opted back into being served is told what it opted into. It
+ * names the route, because a warning that does not say WHICH route sends the reader grepping.
  */
 export function undeclaredRouteWarning(kind: 'agent' | 'controller', route: string): string {
   return (
-    `[theokit] ${kind} route ${route} declares no access decision and is served to anyone. ` +
-    `Declare one: attach a guard, or say it is open on purpose ` +
-    `(${kind === 'agent' ? "`access: 'public'`" : '`@Public()`'}). ` +
-    `This becomes a 403 in the next major; set \`undeclaredRoutes: 'deny'\` to refuse it now.`
+    `[theokit] ${kind} route ${route} declares no access decision and is served to anyone ` +
+    `because \`undeclaredRoutes: 'warn'\` is set. Declare one: attach a guard, or say it is open ` +
+    `on purpose (${declareOpen(kind)}). Dropping the option refuses it with 403.`
+  )
+}
+
+/**
+ * The 403 body for a route nobody declared.
+ *
+ * Separate from a guard REFUSING a caller, which is the system working, and it must read that way:
+ * an operator meeting this has a route to fix, not a caller to authenticate. It names both
+ * declarations and the escape, so the fix does not require finding this file.
+ */
+export function undeclaredRouteRefusal(kind: 'agent' | 'controller', route: string): string {
+  return (
+    `${kind === 'agent' ? 'Agent' : 'Controller'} route ${route} declares no access decision, ` +
+    `so it is refused. Attach a guard, or say it is open on purpose (${declareOpen(kind)}). ` +
+    `\`undeclaredRoutes: 'warn'\` serves it with a warning while you migrate.`
   )
 }

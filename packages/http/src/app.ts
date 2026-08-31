@@ -7,11 +7,11 @@ import { createNodeAdapter } from './bridge/runtime/node.js'
 import type { ServerHandle } from './bridge/runtime/types.js'
 import { walkControllerMetadata, type WalkResult } from './bridge/walk-metadata.js'
 import type { ParamEntry } from './decorators/params.js'
-import { PUBLIC_ROUTE_METADATA } from './decorators/public.js'
 import { ForbiddenException, HttpException } from './exceptions/http-exception.js'
 import { runWithRequestContext, type TheoRequestContext } from './request-context.js'
 import {
   classifyAccess,
+  undeclaredRouteRefusal,
   undeclaredRouteWarning,
   type AccessDecision,
   type UndeclaredRoutePolicy,
@@ -119,12 +119,11 @@ export interface TheoAppOptions {
   /**
    * What to do with a route that declared no access decision (#576).
    *
-   * `'warn'` (default) serves it after saying so once at mount. `'deny'` refuses with 403.
+   * `'deny'` (default) refuses with 403. `'warn'` serves it after saying so once — the migration
+   * escape for an app whose agent endpoints are open today, and nothing else.
    *
-   * The default is not `'deny'` because flipping it here would break every app whose agent
-   * endpoints are open today — the population #576 is about — inside a non-major release. It
-   * becomes `'deny'` in the next major; `'deny'` is available now for anyone who wants the property
-   * before then.
+   * The default was `'warn'` in 1.2.0 so the flip did not land inside a patch. This is the major
+   * that release bought.
    */
   undeclaredRoutes?: UndeclaredRoutePolicy
   /**
@@ -214,7 +213,7 @@ export class TheoApp {
     >,
   ) {
     // #576 — decided once, at construction, like every other app-level setting here.
-    this.undeclaredRoutes = opts?.undeclaredRoutes ?? 'warn'
+    this.undeclaredRoutes = opts?.undeclaredRoutes ?? 'deny'
     const hp = opts?.healthPath ?? '/__theo/health'
     const rp = opts?.readyPath ?? '/__theo/ready'
     // Security: prevent health paths from colliding with user API routes
@@ -489,13 +488,22 @@ export class TheoApp {
       }
 
       // Once per mounted route, at boot — not per request. An operator reads the boot log, and a
-      // warning that only appears under traffic appears when it is too late to act on it (#576).
+      // notice that only appears under traffic appears when it is too late to act on it (#576).
+      //
+      // Said at boot for AGENT routes specifically, under both policies: controllers have the build
+      // gate to meet them earlier (`theokit build` refuses an undeclared controller), and agent
+      // routes have nothing — the app never wrote them, so there is no file for a reviewer to read.
+      // Without this line the operator's first signal is a 403 on a route they did not author.
       if (access === 'undeclared') {
         for (const route of routes) {
           // `route.path` is already the full mounted path — the pattern a few lines above is built
           // from it alone. Prefixing `entry.route` again produced `/api/agents/x/api/agents/x/chat`
-          // in a warning whose entire job is to name the route someone has to go and fix.
-          console.warn(undeclaredRouteWarning('agent', route.path))
+          // in a notice whose entire job is to name the route someone has to go and fix.
+          if (this.undeclaredRoutes === 'deny') {
+            console.error(`[theokit] ${undeclaredRouteRefusal('agent', route.path)}`)
+          } else {
+            console.warn(undeclaredRouteWarning('agent', route.path))
+          }
         }
       }
 
@@ -633,9 +641,7 @@ export class TheoApp {
         // already went out at mount; this is the half that makes least privilege a property of the
         // system rather than of whichever command happened to run the build gate.
         if (route.access === 'undeclared' && this.undeclaredRoutes === 'deny') {
-          const ex = new ForbiddenException(
-            `Agent route ${pathname} declares no access decision (undeclaredRoutes: 'deny')`,
-          )
+          const ex = new ForbiddenException(undeclaredRouteRefusal('agent', pathname))
           return jsonResponse(ex.statusCode, ex.toJSON())
         }
 
@@ -671,20 +677,11 @@ export class TheoApp {
     // refused undeclared controller routes. That makes least privilege a property of the pipeline;
     // `@theokit/http` is published on its own, so a dispatcher reached without that build is an
     // ordinary way to use it, not an exotic one.
-    const controllerClass = entry.instance.constructor
-    const access = classifyAccess({
-      access:
-        Reflect.getMetadata(PUBLIC_ROUTE_METADATA, controllerClass) === true ||
-        Reflect.getMetadata(PUBLIC_ROUTE_METADATA, controllerClass, entry.walk.propertyKey) === true
-          ? 'public'
-          : undefined,
-      guards: entry.walk.guards,
-    })
-    if (access === 'undeclared') {
+    // Classified on the walk, so this dispatcher and the other two answer the same question the
+    // same way — see `WalkResult.access`.
+    if (entry.walk.access === 'undeclared') {
       if (this.undeclaredRoutes === 'deny') {
-        const ex = new ForbiddenException(
-          `Controller route ${url.pathname} declares no access decision (undeclaredRoutes: 'deny')`,
-        )
+        const ex = new ForbiddenException(undeclaredRouteRefusal('controller', url.pathname))
         return jsonResponse(ex.statusCode, ex.toJSON())
       }
       // Once per route, not per request — a warning repeated on every call is one that gets

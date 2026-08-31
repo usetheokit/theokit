@@ -6,6 +6,7 @@ import { createDecoratorServer } from '../../src/bridge/create-server.js'
 import type { Interceptor } from '../../src/bridge/interceptor-chain.js'
 import type { ExecutionContext } from '../../src/bridge/execution-context.js'
 import { z } from 'zod'
+import { Public } from '../../src/decorators/public.js'
 
 // Bun lacks emitDecoratorMetadata support (same as esbuild). Tests using
 // decorator syntax require SWC compilation provided by vitest. Skip on Bun.
@@ -48,11 +49,13 @@ const schema = z.object({ name: z.string() })
 @UseInterceptors(TimingInterceptor)
 @Controller('items')
 class ItemsController {
+  @Public()
   @Get()
   list() {
     return [{ id: 1 }]
   }
 
+  @Public()
   @Post()
   @UseInterceptors(WrapInterceptor)
   create(@Body(schema) body: z.infer<typeof schema>) {

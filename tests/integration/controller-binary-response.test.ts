@@ -28,8 +28,9 @@ const EVERY_BYTE = new Uint8Array(256).map((_, i) => i)
 
 const CONTROLLER_SRC = `
 import 'reflect-metadata'
-import { Controller, Get } from '@theokit/http'
+import { Controller, Get, Public } from '@theokit/http'
 
+@Public()
 @Controller('api/binary')
 export class BinaryController {
   @Get('bytes')

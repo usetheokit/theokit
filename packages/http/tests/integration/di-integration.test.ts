@@ -3,6 +3,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { Controller } from '../../src/decorators/controller.js'
 import { Get } from '../../src/decorators/methods.js'
 import { createDecoratorServer, type DiContainer } from '../../src/bridge/create-server.js'
+import { Public } from '../../src/decorators/public.js'
 
 // Bun lacks emitDecoratorMetadata support (same as esbuild). Tests using
 // decorator syntax require SWC compilation provided by vitest. Skip on Bun.
@@ -20,6 +21,7 @@ class CatsService {
 }
 
 // Controller with constructor injection
+@Public()
 @Controller('cats')
 class CatsController {
   private catsService: CatsService
@@ -106,6 +108,7 @@ describe.skipIf(!isVitest)('DI Integration — constructor injection via contain
 
 describe.skipIf(!isVitest)('DI fallback — works without container (backward compat)', () => {
   it('createDecoratorServer([...]) still works with array syntax', async () => {
+    @Public()
     @Controller('health')
     class HealthCtrl {
       @Get()

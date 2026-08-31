@@ -23,6 +23,7 @@ import {
   createDecoratorServer,
   type DiContainer,
 } from '../../src/index.js'
+import { Public } from '../../src/decorators/public.js'
 
 // Bun lacks emitDecoratorMetadata support (same as esbuild). Tests using
 // decorator syntax require SWC compilation provided by vitest. Skip on Bun.
@@ -101,23 +102,27 @@ class UsersController {
     this.userService = userService
   }
 
+  @Public()
   @Get()
   @Header('X-Service', 'users')
   findAll() {
     return this.userService.findAll()
   }
 
+  @Public()
   @Get(':id')
   findById(@Param('id') id: string) {
     const user = this.userService.findById(id)
     return user ?? { error: 'User not found' }
   }
 
+  @Public()
   @Post()
   create(@Body() body: CreateUserDto) {
     return this.userService.create(body as z.infer<typeof zCreateUser>)
   }
 
+  @Public()
   @Delete(':id')
   @HttpCode(204)
   remove(@Param('id') id: string) {
@@ -131,6 +136,7 @@ class UsersController {
   }
 }
 
+@Public()
 @Controller('health')
 class HealthController {
   @Get()

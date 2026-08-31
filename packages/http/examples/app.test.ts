@@ -30,6 +30,7 @@ import {
   createDecoratorServer,
   type DiContainer,
 } from '../src/index.js'
+import { Public } from '../src/decorators/public.js'
 
 // ╔═══════════════════════════════════════════════════════════╗
 // ║  1. SERVICES — business logic, injectable through DI      ║
@@ -116,34 +117,40 @@ class TasksController {
     this.taskService = taskService
   }
 
+  @Public()
   @Get()
   @Header('X-App', 'theokit-example')
   findAll() {
     return this.taskService.findAll()
   }
 
+  @Public()
   @Get('search')
   search(@Query('q') q: string) {
     return this.taskService.search(q)
   }
 
+  @Public()
   @Get(':id')
   findById(@Param('id') id: string) {
     const task = this.taskService.findById(id)
     return task ?? { error: 'Task not found' }
   }
 
+  @Public()
   @Post()
   create(@Body() body: CreateTaskDto) {
     return this.taskService.create(body as z.infer<typeof zCreateTask>)
   }
 
+  @Public()
   @Post(':id/complete')
   complete(@Param('id') id: string) {
     const task = this.taskService.complete(id)
     return task ?? { error: 'Task not found' }
   }
 
+  @Public()
   @Delete(':id')
   @HttpCode(204)
   remove(@Param('id') id: string) {
@@ -157,6 +164,7 @@ class TasksController {
   }
 }
 
+@Public()
 @Controller('health')
 class HealthController {
   @Get()

@@ -5,6 +5,7 @@ import type { ControllerMeta } from '../decorators/controller.js'
 import type { ExposeEntry, ExposeOptions } from '../decorators/expose.js'
 import type { RouteMethodEntry, HttpVerb } from '../decorators/methods.js'
 import type { ParamEntry } from '../decorators/params.js'
+import { PUBLIC_ROUTE_METADATA } from '../decorators/public.js'
 import type { RedirectMeta } from '../decorators/response.js'
 import {
   getMeta,
@@ -19,6 +20,7 @@ import {
   USE_INTERCEPTORS,
   USE_FILTERS,
 } from '../metadata/index.js'
+import { classifyAccess, type AccessDecision } from '../route-access.js'
 
 import { resolveDtoSchema } from './dto-zod.js'
 import { HttpDecoratorsConfigError } from './errors.js'
@@ -37,6 +39,19 @@ export interface WalkResult {
   guards: Function[]
   interceptors: Function[]
   filters: Function[]
+  /**
+   * What this route said about who may call it — decided HERE, once (usetheokit/theokit#576).
+   *
+   * Every controller dispatcher in this package consumes a `WalkResult`: `TheoApp`,
+   * `createDecoratorHandler` (which the framework's own controller dispatch reuses) and
+   * `httpDecoratorsPlugin`. Only the first of them classified access, and it did so by re-reading
+   * the metadata itself — so the other two served an undeclared route no matter what the app had
+   * configured, and a fourth dispatcher would have shipped with the same hole.
+   *
+   * Computing it on the walk is what makes "a route nobody declared is refused" a property of the
+   * package rather than of whichever dispatcher someone remembered to patch.
+   */
+  access: AccessDecision
   /**
    * M47 — set when the member is bound via `@Expose(agent, opts)`. The dispatcher delegates such routes to
    * the agent runtime (`mountAgent`) instead of invoking a JSON handler. `undefined` for normal verb routes.
@@ -84,6 +99,29 @@ function resolveBodySchema(
       `Fix: use @Body(zodSchema) for validation without metadata emission.`,
   )
   return undefined
+}
+
+/**
+ * Read one route's access declaration off the class.
+ *
+ * `@Public()` is a `MethodDecorator & ClassDecorator` and the build gate honours both placements, so
+ * this must too — a dispatcher that read only the method would refuse a controller declared open at
+ * class level, which is the shape a health-check or OAuth-callback group wants.
+ *
+ * `Reflect.getMetadata` directly, and not `getMeta`: `@SetMetadata` writes through
+ * `Reflect.defineMetadata` with the key exactly as given, and `getMeta` is typed for the SYMBOL keys
+ * this package defines. `PUBLIC_ROUTE_METADATA` is a string, on purpose — it is the key an app used
+ * to have to type by hand (#574).
+ */
+function declaredAccess(
+  ControllerClass: Function,
+  propertyKey: string | symbol,
+  guards: readonly Function[],
+): AccessDecision {
+  const isPublic =
+    Reflect.getMetadata(PUBLIC_ROUTE_METADATA, ControllerClass) === true ||
+    Reflect.getMetadata(PUBLIC_ROUTE_METADATA, ControllerClass, propertyKey) === true
+  return classifyAccess({ access: isPublic ? 'public' : undefined, guards })
 }
 
 /** WeakMap cache — metadata is immutable; walk once, reuse forever. */
@@ -143,6 +181,7 @@ export function walkControllerMetadata(ControllerClass: Function): WalkResult[] 
       guards: [...classGuards, ...methodGuards],
       interceptors: [...classInterceptors, ...methodInterceptors],
       filters: getMeta<Function[]>(USE_FILTERS, ControllerClass, m.propertyKey) ?? classFilters,
+      access: declaredAccess(ControllerClass, m.propertyKey, [...classGuards, ...methodGuards]),
     }
   })
 
@@ -165,6 +204,7 @@ export function walkControllerMetadata(ControllerClass: Function): WalkResult[] 
       guards: [...classGuards, ...memberGuards],
       interceptors: [],
       filters: classFilters,
+      access: declaredAccess(ControllerClass, e.propertyKey, [...classGuards, ...memberGuards]),
       agent: { module: e.agent, opts: e.opts },
     }
   })

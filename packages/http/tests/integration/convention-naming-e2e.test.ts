@@ -7,6 +7,7 @@ import 'reflect-metadata'
 import { z } from 'zod'
 import { Controller, Get, Post, Put, Delete, Body, Param, HttpCode } from '../../src/index.js'
 import { TheoApp } from '../../src/app.js'
+import { Public } from '../../src/decorators/public.js'
 
 // Bun lacks emitDecoratorMetadata support (same as esbuild). Tests using
 // decorator syntax require SWC compilation provided by vitest. Skip on Bun.
@@ -14,6 +15,7 @@ const isVitest = typeof process !== 'undefined' && !!process.env.VITEST
 
 // ── Convention controllers (NO explicit path) ──
 
+@Public()
 @Controller()
 class UsersController {
   @Get() list() {
@@ -36,6 +38,7 @@ class UsersController {
   }
 }
 
+@Public()
 @Controller()
 class ProductsController {
   @Get() list() {
@@ -51,6 +54,7 @@ class ProductsController {
   }
 }
 
+@Public()
 @Controller()
 class OrderItemsController {
   @Get() list() {
@@ -58,6 +62,7 @@ class OrderItemsController {
   }
 }
 
+@Public()
 @Controller()
 class HealthCheckController {
   @Get() check() {
@@ -66,6 +71,7 @@ class HealthCheckController {
 }
 
 // ── Explicit override controller ──
+@Public()
 @Controller('api/v2/legacy')
 class LegacyController {
   @Get() list() {
