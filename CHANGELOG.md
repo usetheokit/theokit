@@ -6,6 +6,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING (`@theokit/http` 2.0.0): a route that declares no access decision is refused, not
+  served.** A `@Controller` route without `@Public()` or `@UseGuards(...)`, and an agent entry
+  passed to `TheoApp.create` without `access: 'public'` or `guards`, now answer 403. The option
+  `undeclaredRoutes` defaulted to `'warn'` in 1.2.0 and logged a line promising this change; a safe
+  default an app has to switch on protects only the apps already reading their logs.
+  `undeclaredRoutes: 'warn'` restores the previous behaviour per app while migrating, and
+  `MIGRATION.md` carries the guide. An agent declared in a file under `agents/` with
+  `export const policy` is served by `mountAgent` and is NOT affected. (#576)
+
+- **The undeclared-route check reaches every dispatcher, not one of three.** `@theokit/http` ships
+  `TheoApp`, `createDecoratorHandler` and `httpDecoratorsPlugin` over the same route metadata, and
+  the framework's own controller dispatch — `theokit dev`, `theokit start` — reuses the one that had
+  no check at all. The decision is computed once on the metadata walk (`WalkResult.access`) and read
+  by all three. (#576)
+
+- **`@UseGuards()` with no arguments stops counting as an access declaration**, at dispatch and at
+  build. It named nobody who decides while reading as guarded, and the two gates disagreed about it:
+  the build passed and the request was served unguarded. (#576)
+
+### Added
+
+- **`Authenticated(sessions)` in `theokit/server/auth`** — the controller equivalent of
+  `.policy(({ subject }) => subject !== null)`, so "any signed-in caller" is not a guard each app
+  writes by hand. The hand-written version's documented failure mode read the subject off the
+  guard's `ExecutionContext`, which carries none, and therefore denied everyone while passing the
+  only test aimed at it. (#574)
+
 ## [theokit 0.63.1] - 2026-08-31
 
 ### Fixed
