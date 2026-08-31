@@ -40,6 +40,7 @@ class UpdateCatDto {
 // ── Guard ──────────────────────────────────────────────
 
 import type { ExecutionContext } from '../src/bridge/execution-context.js'
+import { Public } from '../src/decorators/public.js'
 
 class ApiKeyGuard {
   canActivate(context: ExecutionContext) {
@@ -60,18 +61,21 @@ let nextId = 4
 
 @Controller('cats')
 class CatsController {
+  @Public()
   @Get()
   @Header('X-Total-Count', String(cats.length))
   findAll() {
     return cats
   }
 
+  @Public()
   @Get('search')
   search(@Query('breed') breed: string) {
     const found = cats.filter((c) => c.breed?.toLowerCase() === breed?.toLowerCase())
     return { breed, count: found.length, results: found }
   }
 
+  @Public()
   @Get(':id')
   findOne(@Param('id') id: string) {
     const cat = cats.find((c) => c.id === Number(id))
@@ -79,6 +83,7 @@ class CatsController {
     return cat
   }
 
+  @Public()
   @Post()
   create(@Body() body: CreateCatDto) {
     const data = body as z.infer<typeof zCreateCat>
@@ -87,6 +92,7 @@ class CatsController {
     return cat
   }
 
+  @Public()
   @Put(':id')
   update(@Param('id') id: string, @Body() body: UpdateCatDto) {
     const cat = cats.find((c) => c.id === Number(id))
@@ -95,6 +101,7 @@ class CatsController {
     return cat
   }
 
+  @Public()
   @Delete(':id')
   @HttpCode(204)
   remove(@Param('id') id: string) {
@@ -111,6 +118,7 @@ class CatsController {
 
 // ── Health ─────────────────────────────────────────────
 
+@Public()
 @Controller('health')
 class HealthController {
   @Get()

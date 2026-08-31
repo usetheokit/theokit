@@ -16,6 +16,7 @@ import {
   HttpCode,
   Header,
   UseGuards,
+  Public,
   setMeta,
   ROUTE_PARAMS,
   createDecoratorServer,
@@ -124,6 +125,12 @@ Get('admin/stats')(
   Object.getOwnPropertyDescriptor(CatsController.prototype, 'adminStats'),
 )
 UseGuards(ApiKeyGuard)(CatsController.prototype, 'adminStats')
+
+// Every other route is open on purpose, and says so: since usetheokit/theokit#576 a route that
+// declares neither is refused with 403 rather than served.
+for (const m of ['findAll', 'search', 'findOne', 'create', 'remove']) {
+  Public()(CatsController.prototype, m)
+}
 Header('X-Powered-By', '@theokit/http-decorators')(
   CatsController.prototype,
   'findAll',
@@ -156,6 +163,7 @@ class HealthController {
   }
 }
 Controller('health')(HealthController)
+Public()(HealthController)
 Get()(
   HealthController.prototype,
   'check',

@@ -21,6 +21,7 @@ import {
   setMeta,
   ROUTE_PARAMS,
 } from '../../src/index.js'
+import { Public } from '../../src/decorators/public.js'
 
 // Bun lacks emitDecoratorMetadata support (same as esbuild). Tests using
 // decorator syntax require SWC compilation provided by vitest. Skip on Bun.
@@ -75,21 +76,25 @@ class ApiKeyGuard {
 class CatsController {
   constructor(private catService: CatService) {}
 
+  @Public()
   @Get()
   findAll() {
     return this.catService.findAll()
   }
 
+  @Public()
   @Get(':id')
   findById(@Param('id') id: string) {
     return this.catService.findById(id) ?? { error: 'not found' }
   }
 
+  @Public()
   @Post()
   create(@Body() body: CreateCatDto) {
     return this.catService.create(body as z.infer<typeof zCreateCat>)
   }
 
+  @Public()
   @Delete(':id')
   @HttpCode(204)
   remove(@Param('id') id: string) {
@@ -103,6 +108,7 @@ class CatsController {
   }
 }
 
+@Public()
 @Controller('health')
 class HealthCtrl {
   @Get()

@@ -19,6 +19,7 @@ import {
 } from '../../src/index.js'
 import { TheoApp } from '../../src/app.js'
 import { createTypedClient, TypedClientError, contract } from '../../src/index.js'
+import { Public } from '../../src/decorators/public.js'
 
 // Bun lacks emitDecoratorMetadata support (same as esbuild). Tests using
 // decorator syntax require SWC compilation provided by vitest. Skip on Bun.
@@ -36,6 +37,7 @@ const zCreate = z.object({
 })
 
 // ── Controller ──
+@Public()
 @Controller('api/tasks')
 class TasksCtrl {
   @Get()

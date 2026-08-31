@@ -36,6 +36,7 @@ import {
   walkControllerMetadata,
 } from '../src/index.js'
 import type { ExecutionContext } from '../src/bridge/execution-context.js'
+import { Public } from '../src/decorators/public.js'
 
 // ────────────────────────────────────────────
 // 1. Define DTOs with Zod static schema (Pattern D2)
@@ -68,21 +69,25 @@ class AuthGuard {
 
 @Controller('cats')
 class CatsController {
+  @Public()
   @Get()
   findAll() {
     return 'This action returns all cats'
   }
 
+  @Public()
   @Get('breed')
   findBreeds(@Query('type') type: string) {
     return `Breeds of type: ${type}`
   }
 
+  @Public()
   @Post()
   create(@Body() body: CreateCatDto) {
     return `Created cat: ${JSON.stringify(body)}`
   }
 
+  @Public()
   @Get(':id')
   findOne(@Param('id') id: string, @Headers('accept') accept: string) {
     return `Cat #${id} (accept: ${accept})`
@@ -95,6 +100,7 @@ class CatsController {
     return `Deleted cat #${id}`
   }
 
+  @Public()
   @Get('docs')
   @Redirect('https://docs.theokit.dev/cats', 301)
   @Header('Cache-Control', 'no-store')
@@ -103,6 +109,7 @@ class CatsController {
   }
 }
 
+@Public()
 @Controller('dogs')
 class DogsController {
   @Get()

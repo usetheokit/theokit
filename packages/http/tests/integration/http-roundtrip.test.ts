@@ -8,6 +8,7 @@ import { Body, Param, Query } from '../../src/decorators/params.js'
 import { HttpCode, Header } from '../../src/decorators/response.js'
 import { UseGuards } from '../../src/decorators/middleware.js'
 import { createDecoratorServer } from '../../src/bridge/create-server.js'
+import { Public } from '../../src/decorators/public.js'
 
 // Bun lacks emitDecoratorMetadata support (same as esbuild). Tests using
 // decorator syntax require SWC compilation provided by vitest. Skip on Bun.
@@ -36,27 +37,32 @@ class ThrowingGuard {
 
 @Controller('cats')
 class CatsController {
+  @Public()
   @Get()
   findAll() {
     return 'This action returns all cats'
   }
 
+  @Public()
   @Get('search')
   @Header('X-Custom', 'test-value')
   search(@Query('breed') breed: string) {
     return { breed, found: true }
   }
 
+  @Public()
   @Post()
   create(@Body() body: CreateCatDto) {
     return { created: true, name: (body as z.infer<typeof zCreateCat>).name }
   }
 
+  @Public()
   @Get(':id')
   findOne(@Param('id') id: string) {
     return { id, name: `Cat #${id}` }
   }
 
+  @Public()
   @Delete(':id')
   @HttpCode(204)
   remove(@Param('id') _id: string) {
@@ -75,6 +81,7 @@ class CatsController {
     return 'should never reach here'
   }
 
+  @Public()
   @Get('raw-response')
   @HttpCode(201)
   @Header('X-Custom', 'should-be-ignored')

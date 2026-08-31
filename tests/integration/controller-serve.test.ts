@@ -19,12 +19,13 @@ const CONTROLLERS_DIR = join(TEST_ROOT, 'controllers')
 const CONTROLLER_SRC = `
 import 'reflect-metadata'
 import { z } from 'zod'
-import { Controller, Get, Post, Body, Param } from '@theokit/http'
+import { Controller, Get, Post, Body, Param, Public } from '@theokit/http'
 
 const zCreate = z.object({ title: z.string().min(3) })
 const store = [{ id: 1, title: 'seed' }]
 let nextId = 2
 
+@Public()
 @Controller('api/v2/things')
 export class ThingsController {
   @Get(':id')

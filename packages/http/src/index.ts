@@ -12,6 +12,19 @@ export {
   type RouteDefinition,
 } from './typed-client.js'
 export { contract } from './contract.js'
+// #576 — the access vocabulary, exported so a consumer can name it.
+//
+// It shipped reachable only through `TheoAppOptions`, which meant an app could SET
+// `undeclaredRoutes` and not annotate the value, and could not reuse the classifier its own
+// dispatcher would need. `classifyAccess` is the single answer to "did this route declare
+// anything?", and a single answer nobody can import becomes two answers.
+export {
+  classifyAccess,
+  undeclaredRouteWarning,
+  undeclaredRouteRefusal,
+  type AccessDecision,
+  type UndeclaredRoutePolicy,
+} from './route-access.js'
 export { createStaticHandler, getMimeType, isSafePath, type StaticOptions } from './static.js'
 export {
   getRequestContext,

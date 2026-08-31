@@ -5,12 +5,14 @@ import { z } from 'zod'
 
 import { Controller, Get, Post, Body, Param } from '../../src/index.js'
 import { createDecoratorHandler } from '../../src/bridge/create-server.js'
+import { Public } from '../../src/decorators/public.js'
 
 // Bun lacks emitDecoratorMetadata (same as esbuild); decorator tests need SWC via vitest.
 const isVitest = typeof process !== 'undefined' && !!process.env.VITEST
 
 const zCreate = z.object({ title: z.string().min(3) })
 
+@Public()
 @Controller('api/v2/things')
 class ThingsCtrl {
   @Get(':id')

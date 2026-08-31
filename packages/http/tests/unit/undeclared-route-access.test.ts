@@ -12,8 +12,10 @@
  * 3. Nothing gates agent routes for absence at all. They are auto-wired, so no file exists for a
  *    reviewer to read, and a capability-authored agent has no class, so it takes no `@UseGuards`.
  *
- * These tests cover the removal of the ambiguity and the warn/deny policy built on it. They do NOT
- * claim least privilege is now the default — it is not, deliberately: see `UndeclaredRoutePolicy`.
+ * These tests cover the removal of the ambiguity and the deny/warn policy built on it. Least
+ * privilege IS the default now: `'deny'` refuses an undeclared route and `'warn'` is the migration
+ * escape an app opts into. The sibling file `undeclared-route-dispatchers.test.ts` asserts the same
+ * property through the other two dispatchers, which is where the gate had no reach at all.
  */
 import { describe, expect, it, vi } from 'vitest'
 
@@ -66,13 +68,18 @@ describe('absence is representable (#576)', () => {
 })
 
 describe('the warning is actionable (#576)', () => {
-  it('names the route, both remedies, and when it stops being a warning', () => {
+  it('names the route, the remedy, and why the request was served at all', () => {
     const said = undeclaredRouteWarning('agent', '/api/agents/assistant/chat')
 
     expect(said).toContain('/api/agents/assistant/chat')
     expect(said).toMatch(/access: 'public'/u)
-    expect(said).toMatch(/undeclaredRoutes: 'deny'/u)
-    expect(said, 'a warning with no deadline is one nobody acts on').toMatch(/next major/u)
+    // Only reachable under an explicit opt-in now, and it must say so: a warning that reads like
+    // the default leaves the operator unable to tell which setting produced it.
+    expect(said).toMatch(/undeclaredRoutes: 'warn'/u)
+    expect(
+      said,
+      'a warning that does not say what happens without it is advice, not a warning',
+    ).toMatch(/403/u)
   })
 
   it('names the remedy that exists on the surface being warned about', () => {
@@ -118,8 +125,26 @@ describe('the app applies the decision it classified (#576)', () => {
     ...extra,
   })
 
-  it('warns once at boot, naming the mounted path', async () => {
+  it("warns once at boot under 'warn', naming the mounted path", async () => {
     const spy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    await TheoApp.create({
+      controllers: [],
+      agents: [entry()],
+      agentRuntime: runtime as never,
+      undeclaredRoutes: 'warn',
+    })
+    const said = spy.mock.calls.map((c) => c.join(' ')).join('\n')
+    spy.mockRestore()
+
+    expect(said).toContain('/api/agents/assistant/chat')
+    expect(said).toMatch(/declares no access decision/u)
+  })
+
+  it('names the route at boot under the DEFAULT policy too, as an error', async () => {
+    // An agent route is auto-wired: the app never wrote a file for a reviewer to read, and there is
+    // no build gate over it the way #514 covers controllers. Without a line at boot the operator's
+    // first signal is a 403 on a route they did not author.
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
     await TheoApp.create({
       controllers: [],
       agents: [entry()],
@@ -130,20 +155,27 @@ describe('the app applies the decision it classified (#576)', () => {
 
     expect(said).toContain('/api/agents/assistant/chat')
     expect(said).toMatch(/declares no access decision/u)
+    // It must say what HAPPENS, not merely that something is wrong: under 'deny' the route is
+    // already refused, and a line worded as a warning would describe the other policy.
+    expect(said).toMatch(/refused/u)
   })
 
   it('says nothing when the entry declared one', async () => {
     // Both shapes of declaration, because warning on a guarded route is how a real warning gets
     // muted by the people it is meant for.
     for (const declared of [{ access: 'public' as const }, { guards: [AlwaysAllows] }]) {
-      const spy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      // Both channels, because the boot notice moved to `console.error` under the default policy
+      // and a test watching one of them would call the other silent.
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {})
       await TheoApp.create({
         controllers: [],
         agents: [entry(declared)],
         agentRuntime: runtime as never,
       })
-      const said = spy.mock.calls.map((c) => c.join(' ')).join('\n')
-      spy.mockRestore()
+      const said = [...warn.mock.calls, ...error.mock.calls].map((c) => c.join(' ')).join('\n')
+      warn.mockRestore()
+      error.mockRestore()
 
       expect(said).not.toMatch(/declares no access decision/u)
     }
@@ -184,14 +216,32 @@ describe('the app applies the decision it classified (#576)', () => {
     expect(await res.text()).toBe('served')
   })
 
-  it('serves an undeclared route under the default policy — this release only warns', async () => {
-    // The compatibility promise, asserted rather than described. Flipping the default silently is
-    // how a security improvement becomes an outage for the population the issue is about.
+  it('refuses an undeclared agent route under the DEFAULT policy', async () => {
+    // The whole point of the major. Agent routes are auto-wired, matched before everything else,
+    // and the app never wrote a file for a reviewer to read — so an opt-in safe default protected
+    // exactly nobody among the population this issue is about.
+    const app = await TheoApp.create({
+      controllers: [],
+      agents: [entry()],
+      agentRuntime: runtime as never,
+    })
+
+    const res = await drive(
+      app,
+      new Request('http://x/api/agents/assistant/chat', { method: 'POST' }),
+    )
+    expect(res.status).toBe(403)
+  })
+
+  it("serves an undeclared agent route under undeclaredRoutes: 'warn'", async () => {
+    // The migration escape, asserted rather than described: an app whose agent endpoints are open
+    // today has one line to write while it declares them, and it is not a downgrade.
     const spy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const app = await TheoApp.create({
       controllers: [],
       agents: [entry()],
       agentRuntime: runtime as never,
+      undeclaredRoutes: 'warn',
     })
     spy.mockRestore()
 
@@ -239,8 +289,8 @@ describe('the app applies the decision to controller routes too (#576)', () => {
 
   const controllers = [DeclaredOpen, DeclaredGuarded, DeclaredNothing]
 
-  it('warns once per undeclared controller route, and only for that one', async () => {
-    const app = await TheoApp.create({ controllers })
+  it("warns once per undeclared controller route under 'warn', and only for that one", async () => {
+    const app = await TheoApp.create({ controllers, undeclaredRoutes: 'warn' })
     const spy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
     await drive(app, new Request('http://x/silent'))
@@ -267,13 +317,14 @@ describe('the app applies the decision to controller routes too (#576)', () => {
     expect((await drive(app, new Request('http://x/guarded'))).status).toBe(200)
   })
 
-  it('serves the undeclared route under the default policy', async () => {
+  it('refuses the undeclared controller route under the DEFAULT policy', async () => {
     const app = await TheoApp.create({ controllers })
-    const spy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const res = await drive(app, new Request('http://x/silent'))
-    spy.mockRestore()
 
-    expect(res.status).toBe(200)
+    expect((await drive(app, new Request('http://x/silent'))).status).toBe(403)
+    // And the declared ones are untouched by the flip — the assertion that keeps "deny everything"
+    // from passing as a fix.
+    expect((await drive(app, new Request('http://x/open'))).status).toBe(200)
+    expect((await drive(app, new Request('http://x/guarded'))).status).toBe(200)
   })
 
   it('reads @Public() from the CLASS, not only the method', async () => {

@@ -31,11 +31,16 @@ form — `@Body(schema)` — works without it.
 ## Quick start
 
 ```typescript
-import { Controller, Get, Post, Body, Param } from '@theokit/http'
+import { Controller, Get, Post, Body, Param, Public } from '@theokit/http'
 import { z } from 'zod'
 
 // Convention: @Controller() on CatsController infers the prefix "api/cats".
 // Pass a string to override: @Controller('api/v2/cats').
+//
+// `@Public()` is the access decision "anyone may call this". Every route needs one — a guard or
+// this — because a route that declares neither is refused with 403 rather than served. See
+// "Every route declares who may call it" below.
+@Public()
 @Controller()
 export class CatsController {
   @Get()
@@ -53,6 +58,40 @@ export class CatsController {
     return { created: body }
   }
 }
+```
+
+## Every route declares who may call it
+
+A route says one of two things, and saying neither is not a third option:
+
+| | how it is said |
+|---|---|
+| anyone may call it | `@Public()` — on the method, or on the class to cover every route under it |
+| someone decides | `@UseGuards(SomeGuard)` — likewise on either |
+
+A route that declares neither is **refused with 403** at dispatch, in every dispatcher this package
+ships, and `theokit build` fails on it before that. The reason is that `guards: []` used to mean
+both *"open on purpose"* and *"nobody said"*, so the dispatcher took the permissive reading — and a
+route nobody thought about is the one that ships open.
+
+`undeclaredRoutes: 'warn'` restores the old behaviour while you migrate, with one warning per route:
+
+```typescript
+TheoApp.create({ controllers, undeclaredRoutes: 'warn' }) // also on createDecoratorHandler(...)
+```
+
+Guards still run on a `@Public()` route — the decorator answers *who may call it*, not *what else
+happens on the way in*. For "any signed-in caller", `theokit/server/auth` exports the guard rather
+than leaving every app to write it:
+
+```typescript
+import { createSessionManagerWeb, Authenticated } from 'theokit/server/auth'
+
+const sessions = createSessionManagerWeb<{ userId: string }>({ secret: process.env.SESSION_SECRET! })
+
+@Controller('api/tasks')
+@UseGuards(Authenticated(sessions))
+export class TasksController { … }
 ```
 
 ## Validation — Zod is the single source of truth

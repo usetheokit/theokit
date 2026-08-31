@@ -26,6 +26,7 @@ import {
   HttpCode,
   Header,
   UseGuards,
+  Public,
   setMeta,
   ROUTE_PARAMS,
   createDecoratorServer,
@@ -197,6 +198,11 @@ Post()(UsersController.prototype, 'create')
 Delete(':id')(UsersController.prototype, 'remove')
 HttpCode(204)(UsersController.prototype, 'remove')
 Get('stats')(UsersController.prototype, 'stats')
+// The routes nobody guards are open on purpose, and say so: since usetheokit/theokit#576 a route
+// that declares neither a guard nor `@Public()` is refused with 403 rather than served.
+for (const m of ['findAll', 'findById', 'create', 'remove']) {
+  Public()(UsersController.prototype, m)
+}
 UseGuards(ApiKeyGuard)(UsersController.prototype, 'stats')
 UseGuards(AdminGuard)(UsersController.prototype, 'stats')
 Header('X-Service', 'users')(UsersController.prototype, 'findAll')
@@ -246,6 +252,9 @@ Get(':id')(ProductsController.prototype, 'findById')
 Post()(ProductsController.prototype, 'create')
 Delete(':id')(ProductsController.prototype, 'remove')
 HttpCode(204)(ProductsController.prototype, 'remove')
+for (const m of ['findAll', 'search', 'findById', 'remove']) {
+  Public()(ProductsController.prototype, m)
+}
 UseGuards(ApiKeyGuard)(ProductsController.prototype, 'create')
 
 wp(ProductsController, 'search', 0, 'query', 'q')
@@ -275,6 +284,7 @@ class HealthController {
   }
 }
 Controller('api/health')(HealthController)
+Public()(HealthController)
 Get()(HealthController.prototype, 'check')
 
 // ═══════════════════════════════════════════════════════

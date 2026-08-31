@@ -5,6 +5,7 @@ import { Controller } from '../../src/decorators/controller.js'
 import { Expose } from '../../src/decorators/expose.js'
 import { UseGuards } from '../../src/decorators/middleware.js'
 import { createDecoratorHandler } from '../../src/bridge/create-server.js'
+import { Public } from '../../src/decorators/public.js'
 
 /**
  * M47 (ADR-M47-1) — an `@Expose`-bound route is delegated to the injected `serveAgent` callback (theo
@@ -15,6 +16,7 @@ describe('M47 — createDecoratorHandler delegates @Expose routes to serveAgent'
   const fakeAgent = { __agent: 'chat' } as const
 
   it('test_agent_route_delegates_to_serveAgent', async () => {
+    @Public()
     @Controller('api/agents')
     class AgentsController {
       @Expose(fakeAgent)
@@ -58,6 +60,7 @@ describe('M47 — createDecoratorHandler delegates @Expose routes to serveAgent'
   })
 
   it('test_agent_route_without_serveAgent_is_a_typed_config_error', async () => {
+    @Public()
     @Controller('api/agents')
     class AgentsController {
       @Expose(fakeAgent)
@@ -73,6 +76,7 @@ describe('M47 — createDecoratorHandler delegates @Expose routes to serveAgent'
   })
 
   it('test_normal_route_unaffected_by_serveAgent', async () => {
+    @Public()
     @Controller('api/things')
     class ThingsController {
       list() {

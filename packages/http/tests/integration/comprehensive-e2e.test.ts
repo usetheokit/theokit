@@ -41,6 +41,7 @@ import type {
 } from '../../src/index.js'
 import { TheoApp } from '../../src/app.js'
 import { createTypedClient, TypedClientError } from '../../src/index.js'
+import { Public } from '../../src/decorators/public.js'
 
 // Bun lacks emitDecoratorMetadata support (same as esbuild). Tests using
 // decorator syntax require SWC compilation provided by vitest. Skip on Bun.
@@ -103,6 +104,7 @@ class CustomErrorFilter implements ExceptionFilter {
 
 // ── Controllers ──
 
+@Public()
 @Controller('api/items')
 class ItemsController {
   @Get()
@@ -161,6 +163,7 @@ class ItemsController {
   }
 }
 
+@Public()
 @Controller('api/headers')
 class HeadersController {
   @Get('echo')
@@ -198,6 +201,7 @@ class GuardedController {
   }
 }
 
+@Public()
 @Controller('api/intercepted')
 @UseInterceptors(TimingInterceptor)
 class InterceptedController {
@@ -207,6 +211,7 @@ class InterceptedController {
   }
 }
 
+@Public()
 @Controller('api/filtered')
 @UseFilters(CustomErrorFilter)
 class FilteredController {
@@ -221,6 +226,7 @@ class FilteredController {
   }
 }
 
+@Public()
 @Controller('api/exceptions')
 class ExceptionsController {
   @Get('400') bad() {
@@ -254,6 +260,7 @@ class ExceptionsController {
   }
 }
 
+@Public()
 @Controller('api/status')
 class StatusController {
   @Post('created')
@@ -290,6 +297,7 @@ class StatusController {
   }
 }
 
+@Public()
 @Controller('api/validation')
 class ValidationController {
   @Post('strict')
