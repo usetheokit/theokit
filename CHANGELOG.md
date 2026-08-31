@@ -26,12 +26,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **Webhook validators refuse an unusable secret instead of throwing.** `line({ channelSecret: '' })`
+  raised `DataError: Zero-length key is not supported` from WebCrypto, which is what one unset
+  environment variable produces, and the throw escaped `handleChannelWebhook` as a 500 rather than
+  the 401 that says why a delivery was refused. An empty rotation list was worse than an error: it
+  answered `signature mismatch` after comparing against nothing. All eight validators now refuse
+  through one shared decision, naming the option to set. (#594)
+
 - **Deploy adapters honour `serverDir` instead of hardcoding `server`.** The `bun`, `cloudflare`,
   `vercel` and `aws-lambda` entrypoints each emitted `resolve(cwd, 'server')` while receiving the
   config that carries the real value, so any project configuring the option shipped a bundle that
   resolved a directory that did not exist — discovered only after deploy, as a 404 with nothing in
   the log naming the cause. The path is now emitted through one shared helper that quotes it, so a
   directory containing a space or a quote cannot break the generated source.
+
+### Security
+
+- **A webhook validator built with an empty credential refuses; `whatsappSubscribe` no longer
+  accepts one.** `whatsappSubscribe({ verifyToken: '' })` returned `{ ok: true }` for a caller
+  presenting an empty `hub.verify_token`, so an app whose Meta verify token was unset completed the
+  subscribe handshake for anybody who asked — the token is the only credential on that request.
+  `timingSafeEqual` is right to call two zero-length inputs equal; the caller has to refuse the
+  empty configuration before asking. (#595)
 
 ## [theokit 0.62.1] - 2026-08-30
 

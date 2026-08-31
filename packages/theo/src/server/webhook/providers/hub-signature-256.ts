@@ -43,9 +43,16 @@ function fromPrefixedHex(value: string): DecodeResult {
 /**
  * Build a {@link VerifyFn} that checks `X-Hub-Signature-256` against `secrets`.
  *
- * `secrets` is a list so a rotation is not an outage: during the overlap both the old and the new
- * secret verify, and deliveries signed with either are accepted.
+ * `secrets` accepts one secret or a list, so a rotation is not an outage: during the overlap both
+ * the old and the new secret verify, and deliveries signed with either are accepted.
+ *
+ * `option` is the caller's name for the credential — GitHub calls it `secret` and Meta calls it
+ * `appSecret` — and it travels through so a refusal names the option the reader actually wrote
+ * (#594).
  */
-export function verifyHubSignature256(secrets: readonly string[]): VerifyFn {
-  return verifyHmacSha256({ header: HEADER, secrets, decode: fromPrefixedHex })
+export function verifyHubSignature256(
+  secrets: string | readonly string[],
+  option: string,
+): VerifyFn {
+  return verifyHmacSha256({ header: HEADER, secrets, option, decode: fromPrefixedHex })
 }

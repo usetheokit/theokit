@@ -21,6 +21,7 @@
 import { timingSafeEqual } from '../timing-safe-equal.js'
 import type { VerifyFn } from '../webhook-types.js'
 
+import { configuredSecrets } from './configured-secret.js'
 import { verifyHubSignature256 } from './hub-signature-256.js'
 
 export interface WhatsAppWebhookOptions {
@@ -41,9 +42,7 @@ export interface WhatsAppWebhookOptions {
  * failure mode #534 documents for controllers.
  */
 export function whatsapp(opts: WhatsAppWebhookOptions): VerifyFn {
-  return verifyHubSignature256(
-    Array.isArray(opts.appSecret) ? opts.appSecret : [opts.appSecret as string],
-  )
+  return verifyHubSignature256(opts.appSecret, 'appSecret')
 }
 
 /** The outcome of a subscribe handshake: the challenge to echo, or why it was refused. */
@@ -67,8 +66,19 @@ export interface WhatsAppSubscribeOptions {
 }
 
 export function whatsappSubscribe(opts: WhatsAppSubscribeOptions): SubscribeFn {
+  // The one place in this directory where the empty case ACCEPTED (#594). `timingSafeEqual` returns
+  // true for two zero-length inputs — correctly, that is byte equality — so an unset verify token
+  // matched a caller presenting `hub.verify_token=` and completed the handshake for anybody who
+  // asked. The token is the ONLY credential on this request; refusing it is not a diagnostic
+  // improvement here, it closes an authentication bypass.
+  const configured = configuredSecrets(opts.verifyToken, 'verifyToken')
+  if (!configured.ok) {
+    const { reason } = configured
+    return () => ({ ok: false, reason })
+  }
+
   const encoder = new TextEncoder()
-  const expected = encoder.encode(opts.verifyToken)
+  const expected = encoder.encode(configured.secrets[0])
 
   return (req: Request): SubscribeResult => {
     const params = new URL(req.url).searchParams

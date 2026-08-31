@@ -4,6 +4,8 @@
 import { timingSafeEqual } from '../timing-safe-equal.js'
 import type { VerifyFn, VerifyResult } from '../webhook-types.js'
 
+import { configuredSecrets, refusingVerifier } from './configured-secret.js'
+
 /**
  * Slack webhook signature verification per official spec.
  *
@@ -42,7 +44,12 @@ function fromHex(hex: string): Uint8Array | null {
 
 export function slack(opts: SlackWebhookOptions): VerifyFn {
   const tolerance = opts.toleranceSeconds ?? 300
-  const signingSecret = opts.signingSecret
+
+  // Refused before any request reaches `importKey`, which rejects a zero-length key (#594). Slack
+  // has no rotation, so there is exactly one secret and no list to check.
+  const configured = configuredSecrets(opts.signingSecret, 'signingSecret')
+  if (!configured.ok) return refusingVerifier(configured.reason)
+  const signingSecret = configured.secrets[0]
 
   return async (req: Request): Promise<VerifyResult> => {
     const tsHeader = req.headers.get('x-slack-request-timestamp')

@@ -10,14 +10,21 @@
 import { timingSafeEqual } from '../timing-safe-equal.js'
 import type { VerifyFn, VerifyResult } from '../webhook-types.js'
 
+import { configuredSecrets, refusingVerifier } from './configured-secret.js'
+
 export interface TelegramWebhookOptions {
   /** The `secret_token` configured on `setWebhook` (1–256 chars). */
   secretToken: string
 }
 
 export function telegram(opts: TelegramWebhookOptions): VerifyFn {
+  // No crypto here to throw — this one answered `secret token mismatch`, which is a claim about
+  // what the caller sent when the truth is that nothing was configured to compare against (#594).
+  const configured = configuredSecrets(opts.secretToken, 'secretToken')
+  if (!configured.ok) return refusingVerifier(configured.reason)
+
   const enc = new TextEncoder()
-  const expected = enc.encode(opts.secretToken)
+  const expected = enc.encode(configured.secrets[0])
 
   return (req: Request): VerifyResult => {
     const header = req.headers.get('x-telegram-bot-api-secret-token')
