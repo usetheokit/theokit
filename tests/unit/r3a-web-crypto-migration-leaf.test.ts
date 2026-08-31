@@ -123,19 +123,37 @@ describe('T5a.1a — leaf-file Web Crypto migration (node:crypto → globalThis.
     expect(source).not.toMatch(/from\s+['"]node:crypto['"]/)
   })
 
-  it('the X-Hub-Signature-256 scheme uses Web Crypto subtle.sign for HMAC', () => {
-    // The assertion moved with the code, not away from it. `github.ts` delegated its verification
-    // to `hub-signature-256.ts` when WhatsApp arrived needing the identical scheme (#556); pointing
-    // this at `github.ts` would now pass on a file that computes nothing, which is the same as not
-    // checking. The property under test is unchanged: this scheme runs on Web Crypto, so it works
-    // on Workers/Bun/Deno per ADR-0028.
-    const source = readSource('packages/theo/src/server/webhook/providers/hub-signature-256.ts')
+  it('the shared HMAC-SHA256 core uses Web Crypto subtle.sign', () => {
+    // The assertion moves with the code, not away from it — for the second time. `github.ts`
+    // delegated to `hub-signature-256.ts` when WhatsApp arrived needing the identical scheme
+    // (#556); that file delegated to `hmac-sha256.ts` when LINE became a third caller of the same
+    // construction under a different header and encoding (#590). Pointing this at either ancestor
+    // would now pass on a file that computes nothing, which is the same as not checking.
+    //
+    // The property under test never changed: the HMAC runs on Web Crypto, so it works on
+    // Workers/Bun/Deno per ADR-0028.
+    const source = readSource('packages/theo/src/server/webhook/providers/hmac-sha256.ts')
     expect(source).toMatch(/(globalThis\.)?crypto\.subtle\.(sign|importKey)/)
   })
 
-  it('the X-Hub-Signature-256 scheme does not import from node:crypto', () => {
-    const source = readSource('packages/theo/src/server/webhook/providers/hub-signature-256.ts')
-    expect(source).not.toMatch(/from\s+['"]node:crypto['"]/)
+  it('NO webhook provider imports node:crypto — derived, not listed', () => {
+    // The half that survives the next move. Every assertion above names one file, so each one
+    // silently stops checking anything the moment its subject is refactored — twice now, and both
+    // times it took a failing test to notice rather than a passing one to prevent.
+    //
+    // Sweeping the directory asks the question the migration actually cares about: does anything
+    // under `providers/` reach for the Node-only API? A file added tomorrow is covered without
+    // anyone remembering to add a case.
+    const dir = 'packages/theo/src/server/webhook/providers'
+    const offenders = readdirSync(join(REPO_ROOT, dir))
+      .filter((f) => f.endsWith('.ts'))
+      .filter((f) => /from\s+['"]node:crypto['"]/.test(readSource(`${dir}/${f}`)))
+
+    // The positive half: an empty directory would satisfy the filter and assert nothing.
+    expect(
+      readdirSync(join(REPO_ROOT, dir)).filter((f) => f.endsWith('.ts')).length,
+    ).toBeGreaterThanOrEqual(8)
+    expect(offenders, 'node:crypto does not run on Workers/Bun/Deno (ADR-0028)').toEqual([])
   })
 
   it('webhook/providers/slack.ts no longer imports from node:crypto', () => {
