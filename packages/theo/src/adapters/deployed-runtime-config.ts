@@ -48,6 +48,31 @@
  * Composed into each adapter's option type the way `DeployedCsrfOptions` already is, so the six
  * targets cannot drift into six spellings of the same field.
  */
+/**
+ * The project's `serverDir`, carried into every generated entrypoint (#RFC server-layout).
+ *
+ * Separate from the other option groups because it is not a runtime feature toggle: it is the
+ * project's own layout, and an adapter that hardcodes `'server'` agrees with the default by
+ * COINCIDENCE. The moment a project sets the option — the entire point of it existing — the
+ * generated entrypoint resolves a directory that is not there, and only after deploy: the build
+ * succeeds, the bundle is written, and routes 404 in production with nothing naming the cause.
+ */
+export interface DeployedServerDirOptions {
+  /** Project-relative server directory. Absent ⇒ the schema default, `server`. */
+  serverDir?: string
+}
+
+/**
+ * The server directory as a quoted TypeScript literal, ready to interpolate into generated source.
+ *
+ * `JSON.stringify` rather than wrapping in quotes by hand: the value reaches this from user config,
+ * so a directory containing a quote or a backslash would otherwise emit a syntax error into
+ * somebody else's build — a worse failure than the one this fixes.
+ */
+export function serverDirLiteral(opts: DeployedServerDirOptions): string {
+  return JSON.stringify(opts.serverDir ?? 'server')
+}
+
 export interface DeployedRuntimeConfigOptions {
   /**
    * Specifier of the plugins module the build wrote beside the entry, or `undefined` when the app

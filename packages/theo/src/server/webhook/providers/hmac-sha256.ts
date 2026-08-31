@@ -24,6 +24,8 @@
 import { timingSafeEqual } from '../timing-safe-equal.js'
 import type { VerifyFn, VerifyResult } from '../webhook-types.js'
 
+import { configuredSecrets, refusingVerifier } from './configured-secret.js'
+
 /**
  * The outcome of reading signature bytes out of a header value.
  *
@@ -41,16 +43,25 @@ export type DecodeSignature = (headerValue: string) => DecodeResult
 /**
  * Build a {@link VerifyFn} that checks `header` against an HMAC-SHA256 of the raw body.
  *
- * `secrets` is a list so a rotation is not an outage: during the overlap both the old and the new
- * secret verify. Every candidate is tried — the loop does not stop at the first match, so the
- * number of secrets, and which one matched, do not leak through timing.
+ * `secrets` accepts one secret or a list, so a rotation is not an outage: during the overlap both
+ * the old and the new secret verify. Every candidate is tried — the loop does not stop at the first
+ * match, so the number of secrets, and which one matched, do not leak through timing.
+ *
+ * A configuration with no usable secret is refused HERE rather than in each caller, because this is
+ * the function that reaches `importKey`, and a zero-length key is where it threw (#594). `option`
+ * is the caller's name for the credential, so the refusal names what the operator has to set.
  */
 export function verifyHmacSha256(opts: {
   header: string
-  secrets: readonly string[]
+  secrets: string | readonly string[]
+  option: string
   decode: DecodeSignature
 }): VerifyFn {
-  const { header, secrets, decode } = opts
+  const { header, decode } = opts
+
+  const configured = configuredSecrets(opts.secrets, opts.option)
+  if (!configured.ok) return refusingVerifier(configured.reason)
+  const { secrets } = configured
 
   return async (req: Request): Promise<VerifyResult> => {
     const value = req.headers.get(header)
