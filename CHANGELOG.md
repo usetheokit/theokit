@@ -26,6 +26,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **`stripe.ts` no longer ends in a dead constant.** `const __stripeInternalEnc = enc` was
+  justified as a re-export that kept `enc` from being an orphan and pre-warmed a decoder; it was
+  not exported, `enc` already had a consumer, and the assignment ran no code. Nothing read it in
+  source or in `dist/`. (#596)
+
 - **Webhook validators refuse an unusable secret instead of throwing.** `line({ channelSecret: '' })`
   raised `DataError: Zero-length key is not supported` from WebCrypto, which is what one unset
   environment variable produces, and the throw escaped `handleChannelWebhook` as a 500 rather than
