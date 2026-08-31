@@ -1,5 +1,53 @@
 # theo
 
+## 0.63.1
+
+### Patch Changes
+
+- bcfbf8e: Deploy adapters emit the project's configured `serverDir` instead of the literal `server`.
+
+  `bun`, `cloudflare`, `vercel` and `aws-lambda` each generated an entrypoint containing
+  `resolve(cwd, 'server')` while receiving the full config as an argument — the value was in hand and
+  unused. Any project that set `serverDir` (the entire point of the option) got a bundle resolving a
+  directory that is not there, and only found out after deploy: the build succeeds, the artifact is
+  written, and routes 404 in production with nothing in the log naming the cause.
+
+  The directory is now emitted through one shared helper that quotes it with `JSON.stringify`, so a
+  path containing a space, a quote or a backslash cannot turn a generated file into a syntax error in
+  someone else's build. Projects that never set the option are unaffected — the fallback is still
+  `server`.
+
+- 22045b0: `stripe.ts` no longer ends in a dead constant justified by a comment that was not true of it.
+
+  `const __stripeInternalEnc = enc` was described as a re-export that kept `enc` from being an orphan
+  and pre-warmed a decoder. It was not exported, `enc` already had a consumer one function above, and
+  assigning a binding to another name runs no code. Nothing read it, in source or in the built
+  output. The cost was never the byte: a false rationale is more expensive to remove than none, which
+  is how it survived several passes over the file.
+
+- 5c2781b: Webhook validators refuse an unusable credential instead of throwing, misreporting, or — in one
+  case — accepting.
+
+  `line({ channelSecret: '' })` raised `DataError: Zero-length key is not supported` from inside
+  WebCrypto's `importKey`, which is what one unset environment variable produces at the natural call
+  site `process.env.LINE_CHANNEL_SECRET ?? ''`. The throw escapes `handleChannelWebhook` as a 500,
+  past the 401 branch written to say why a delivery was refused, and the operator gets a crypto error
+  naming neither the variable nor the platform.
+
+  Applying the same lens to every validator in the directory found two further shapes. An empty
+  rotation list (`{ channelSecret: [] }`) answered `signature mismatch` after comparing against
+  nothing, which sends the reader to look at the sender's signature rather than at their own
+  configuration. And `whatsappSubscribe({ verifyToken: '' })` **accepted** a caller presenting an
+  empty `hub.verify_token`, completing the subscribe handshake for anybody who asked — the verify
+  token is the only credential on that request, so that one was an authentication bypass rather than
+  a diagnostic problem.
+
+  All eight validators now refuse a configuration that cannot verify anything, through one shared
+  decision, with a reason that names the option the operator has to set. A half-configured rotation
+  (`['current', '']`) refuses rather than quietly verifying with the secret that is set — otherwise
+  the mistake surfaces on the day the remaining secret is retired, in production, against all
+  traffic.
+
 ## 0.63.0
 
 ### Minor Changes
