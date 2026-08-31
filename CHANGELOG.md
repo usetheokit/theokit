@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [theokit 0.63.0] - 2026-08-31
+
 ### Added
 
 - **`line({ channelSecret })` makes LINE webhooks servable through `handleChannelWebhook`.** The
@@ -16,7 +18,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   use, so a copied validator fails as a 401 indistinguishable from a wrong secret. `channelSecret`
   takes an array, so rotating is an overlap rather than an outage. (#590)
 
-
 ### Changed
 
 - **The release checklist names the examples check.** After publishing, running
@@ -24,7 +25,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   *teach* rather than what the framework compiles — the only signal that documentation did not
   rot underneath a release. It began as an arrangement between two sessions, which holds
   exactly as long as both are around; written into `CONTRIBUTING.md` it survives them.
-
 ## [theokit 0.62.1] - 2026-08-30
 
 ### Fixed
