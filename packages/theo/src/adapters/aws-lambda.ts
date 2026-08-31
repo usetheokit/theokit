@@ -12,7 +12,9 @@ import { deployedCorsFragment, type DeployedCorsOptions } from './deployed-cors.
 import { deployedCsrfFragment, type DeployedCsrfOptions } from './deployed-csrf.js'
 import {
   deployedRuntimeConfigFragment,
+  serverDirLiteral,
   type DeployedRuntimeConfigOptions,
+  type DeployedServerDirOptions,
 } from './deployed-runtime-config.js'
 import { deployedTraceFragment } from './deployed-trace.js'
 import { nodeAdapter } from './node.js'
@@ -191,6 +193,7 @@ function awsLambdaHandlerFragment(runtimeSpread: string): string[] {
 export function renderAwsLambdaEntry(
   opts: { securityHeaders?: SecurityHeadersConfig } & DeployedCsrfOptions &
     DeployedRuntimeConfigOptions &
+    DeployedServerDirOptions &
     DeployedCorsOptions = {},
 ): string {
   const runtimeConfig = deployedRuntimeConfigFragment(opts)
@@ -204,7 +207,7 @@ export function renderAwsLambdaEntry(
     `import { buildSecurityHeaders, withSecurityHeaders } from 'theokit/adapters/security-headers'`,
     ``,
     `const cwd = process.cwd()`,
-    `const serverDir = resolve(cwd, 'server')`,
+    `const serverDir = resolve(cwd, ${serverDirLiteral(opts)})`,
     `let routesCache = null`,
     `let loaderCache = null`,
     ``,

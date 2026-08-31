@@ -19,7 +19,9 @@ import {
 } from './deployed-rate-limit.js'
 import {
   deployedRuntimeConfigFragment,
+  serverDirLiteral,
   type DeployedRuntimeConfigOptions,
+  type DeployedServerDirOptions,
 } from './deployed-runtime-config.js'
 import { deployedTraceFragment } from './deployed-trace.js'
 import { nodeAdapter } from './node.js'
@@ -42,6 +44,7 @@ export function renderBunEntry(
     securityHeaders?: SecurityHeadersConfig
   } & DeployedCsrfOptions &
     DeployedRuntimeConfigOptions &
+    DeployedServerDirOptions &
     DeployedCorsOptions &
     DeployedRateLimitOptions = {},
 ): string {
@@ -89,7 +92,7 @@ export function renderBunEntry(
     ``,
     `const cwd = process.cwd()`,
     `const clientDir = resolve(cwd, '.theokit/client')`,
-    `const serverDir = resolve(cwd, 'server')`,
+    `const serverDir = resolve(cwd, ${serverDirLiteral(opts)})`,
     `const port = process.env.PORT ? Number(process.env.PORT) : ${port}`,
     ``,
     `// #410 — the security baseline \`theokit start\` puts on every response,`,

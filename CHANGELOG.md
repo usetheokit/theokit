@@ -16,7 +16,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   use, so a copied validator fails as a 401 indistinguishable from a wrong secret. `channelSecret`
   takes an array, so rotating is an overlap rather than an outage. (#590)
 
-
 ### Changed
 
 - **The release checklist names the examples check.** After publishing, running
@@ -24,6 +23,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   *teach* rather than what the framework compiles — the only signal that documentation did not
   rot underneath a release. It began as an arrangement between two sessions, which holds
   exactly as long as both are around; written into `CONTRIBUTING.md` it survives them.
+
+### Fixed
+
+- **Deploy adapters honour `serverDir` instead of hardcoding `server`.** The `bun`, `cloudflare`,
+  `vercel` and `aws-lambda` entrypoints each emitted `resolve(cwd, 'server')` while receiving the
+  config that carries the real value, so any project configuring the option shipped a bundle that
+  resolved a directory that did not exist — discovered only after deploy, as a 404 with nothing in
+  the log naming the cause. The path is now emitted through one shared helper that quotes it, so a
+  directory containing a space or a quote cannot break the generated source.
 
 ## [theokit 0.62.1] - 2026-08-30
 
