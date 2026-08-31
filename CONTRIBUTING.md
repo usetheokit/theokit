@@ -89,6 +89,31 @@ The release engineer is the only person who runs `npm publish`. If your
 PR needs a new release to be visible to users, mention that in the PR
 description; the maintainer will queue the publish.
 
+### After publishing: check the examples still teach the truth
+
+```sh
+# in the theokit-examples checkout
+cd framework/agent-endpoint && npm test   # ~40s, no credential, no network
+```
+
+This boots a real `theokit dev` against local stubs and asserts what the example
+*teaches* — not what the framework compiles. The suite here proves the code
+works; only this proves the documentation did not rot underneath a release.
+
+Two limits a green does not carry:
+
+- **The example pins an exact version**, so it does not see a release until
+  someone bumps it. Bump, then run — in the other order the green is about the
+  previous version.
+- **A failure here is usually a rotted lesson, not a broken release.** The remedy
+  is normally in `theokit-examples`, not in this repository. Read the failure
+  before assuming which side is wrong.
+
+Written down rather than agreed between people: this step began as an
+arrangement between two sessions, which works exactly as long as both are
+around. A release cut on a quiet week would have skipped it with nothing to
+say so — the failure mode is the absence of the step, not the step.
+
 ## Code of Conduct
 
 This project follows the [Contributor Covenant](CODE_OF_CONDUCT.md). By

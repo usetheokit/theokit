@@ -24,6 +24,7 @@ export type {
 export {
   discord,
   github,
+  line,
   slack,
   stripe,
   telegram,
@@ -33,6 +34,7 @@ export {
 export type {
   DiscordWebhookOptions,
   GitHubWebhookOptions,
+  LineWebhookOptions,
   SlackWebhookOptions,
   StripeWebhookOptions,
   TelegramWebhookOptions,

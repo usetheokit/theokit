@@ -20,3 +20,6 @@ export type {
   SubscribeFn,
   SubscribeResult,
 } from './whatsapp.js'
+
+export { line } from './line.js'
+export type { LineWebhookOptions } from './line.js'

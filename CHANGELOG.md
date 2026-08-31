@@ -6,6 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **`line({ channelSecret })` makes LINE webhooks servable through `handleChannelWebhook`.** The
+  seam shipped validators for six platforms and LINE was not one of them, while
+  `@theokit/gateway-line` already published the primitive — so every app that wanted LINE wrote the
+  same bridge, reimplementing two sharp edges: the body must be hashed RAW (a restringified body
+  rejects every correct delivery) and the signature is base64, not the hex that GitHub and WhatsApp
+  use, so a copied validator fails as a 401 indistinguishable from a wrong secret. `channelSecret`
+  takes an array, so rotating is an overlap rather than an outage. (#590)
+
+
+### Changed
+
+- **The release checklist names the examples check.** After publishing, running
+  `framework/agent-endpoint`'s test suite in `theokit-examples` asserts what the examples
+  *teach* rather than what the framework compiles — the only signal that documentation did not
+  rot underneath a release. It began as an arrangement between two sessions, which holds
+  exactly as long as both are around; written into `CONTRIBUTING.md` it survives them.
+
 ## [theokit 0.62.1] - 2026-08-30
 
 ### Fixed
