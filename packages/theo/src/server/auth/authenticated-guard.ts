@@ -76,6 +76,12 @@ export interface SessionReader<TSession> {
  * session manager travels in the closure rather than through a container, so this works with or
  * without DI.
  *
+ * A `getSession` that THROWS propagates, and is not caught into `false`. A thrown error is a fault
+ * in the session layer, not an access decision, and turning it into a denial would report a broken
+ * secret or an unreachable store as "this caller is not signed in" — the swallowed-exception
+ * pattern `error-handling.md` § 2 forbids. Denying happens to be the safe direction, which is
+ * exactly why it would go unnoticed.
+ *
  * @param sessions the session manager the app already built; its `getSession` reads the request
  * @returns a guard class ready to pass to `@UseGuards`
  */

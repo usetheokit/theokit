@@ -93,3 +93,17 @@ describe('Authenticated(sessions) (#574)', () => {
     await expect(guard.canActivate(contextFor(new Request('http://x/')))).resolves.toBe(true)
   })
 })
+
+describe('a broken session layer is a fault, not a denial (#574)', () => {
+  it('propagates an error from getSession instead of answering false', async () => {
+    // Denying is the safe direction, which is exactly why swallowing here would go unnoticed: an
+    // unreachable session store or a broken secret would be reported as "not signed in" forever.
+    const guard = new (Authenticated({
+      getSession: () => Promise.reject(new Error('session store unreachable')),
+    }))()
+
+    await expect(guard.canActivate(contextFor(new Request('http://x/')))).rejects.toThrow(
+      'session store unreachable',
+    )
+  })
+})
