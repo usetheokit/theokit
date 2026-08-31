@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [@theokit/http 2.0.0, theokit 0.64.0] - 2026-08-31
+
+### Added
+
+- **`Authenticated(sessions)` in `theokit/server/auth`** — the controller equivalent of
+  `.policy(({ subject }) => subject !== null)`, so "any signed-in caller" is not a guard each app
+  writes by hand. The hand-written version's documented failure mode read the subject off the
+  guard's `ExecutionContext`, which carries none, and therefore denied everyone while passing the
+  only test aimed at it. (#574)
+
 ### Changed
 
 - **BREAKING (`@theokit/http` 2.0.0): a route that declares no access decision is refused, not
@@ -26,15 +36,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **`@UseGuards()` with no arguments stops counting as an access declaration**, at dispatch and at
   build. It named nobody who decides while reading as guarded, and the two gates disagreed about it:
   the build passed and the request was served unguarded. (#576)
-
-### Added
-
-- **`Authenticated(sessions)` in `theokit/server/auth`** — the controller equivalent of
-  `.policy(({ subject }) => subject !== null)`, so "any signed-in caller" is not a guard each app
-  writes by hand. The hand-written version's documented failure mode read the subject off the
-  guard's `ExecutionContext`, which carries none, and therefore denied everyone while passing the
-  only test aimed at it. (#574)
-
 ## [theokit 0.63.1] - 2026-08-31
 
 ### Fixed
