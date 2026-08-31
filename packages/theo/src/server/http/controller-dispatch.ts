@@ -15,6 +15,8 @@ import {
   type ServeAgent,
 } from '@theokit/http'
 
+import type { PluginContext } from '../plugin-types.js'
+import type { PluginRunner } from '../plugins/plugin-runner.js'
 import { dispatchCsrfWarn } from '../security/csrf-warn-dispatch.js'
 import { enforceCsrf, type DisallowedConfig } from '../security/csrf.js'
 
@@ -41,6 +43,62 @@ interface ControllerDispatcher {
 
 // State-mutating methods get CSRF, mirroring the file-route pipeline (execute.ts).
 const CSRF_PROTECTED_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
+
+/**
+ * The plugin lifecycle a controller route runs, or a do-nothing stand-in when there is none.
+ *
+ * A null object rather than an optional runner threaded through four call sites: with `undefined`
+ * every stage reads `if (runner && ctx)` and the dispatcher's branch count carries a question that
+ * was already answered once. Here the question is answered when the object is built, and the
+ * stages below say what they do instead of re-deciding whether to do it.
+ *
+ * `shortCircuited` from the inert one is always `false`, which is the truth: no hook answered
+ * because there were no hooks.
+ */
+interface ControllerLifecycle {
+  onRequest(): Promise<boolean>
+  preHandler(): Promise<boolean>
+  onError(error: unknown): Promise<void>
+  onResponse(): Promise<void>
+}
+
+const INERT_LIFECYCLE: ControllerLifecycle = {
+  onRequest: () => Promise.resolve(false),
+  preHandler: () => Promise.resolve(false),
+  onError: () => Promise.resolve(),
+  onResponse: () => Promise.resolve(),
+}
+
+/**
+ * Build the lifecycle for a request a controller OWNS (usetheokit/theokit#607).
+ *
+ * @param runner - absent for an app that declares no plugins.
+ * @param owned - `dispatcher.matches(...)`, the non-executing probe. False means this dispatcher
+ *   is about to decline the path, and a hook fired here would run on a request the host is going
+ *   to serve some other way — which is how a hook ends up firing twice for one request.
+ */
+function controllerLifecycle(
+  runner: PluginRunner | undefined,
+  owned: boolean,
+  ctx: PluginContext,
+): ControllerLifecycle {
+  if (runner === undefined || !owned) return INERT_LIFECYCLE
+  return {
+    async onRequest() {
+      runner.applyDecorations(ctx.ctx)
+      return (await runner.runOnRequest(ctx)).shortCircuited
+    },
+    async preHandler() {
+      return (await runner.runPreHandler(ctx)).shortCircuited
+    },
+    async onError(error: unknown) {
+      await runner.runOnError(ctx, error)
+    },
+    async onResponse() {
+      await runner.runOnResponse(ctx)
+    },
+  }
+}
 
 /**
  * A controller declaring that it authenticates by other means, so the CSRF gate has nothing to add.
@@ -252,8 +310,20 @@ export async function dispatchControllerRequest(args: {
   requestId: string
   /** M47 — serves `@Expose`-bound agent routes (mountAgent-backed); omit for routes-only apps. */
   serveAgent?: ServeAgent
+  /**
+   * usetheokit/theokit#607 — the plugin lifecycle a controller route runs.
+   *
+   * This parameter did not exist, so neither caller could pass one, so a `@Controller` route ran
+   * NO hook in either surface: `theokit start` gave it nothing at all, and `theokit dev` gave it
+   * only the `onRequest` its middleware happened to fire before matching. An adopter's identity
+   * plugin was therefore dead while the boot log reported it registered, and a rate limiter written
+   * as a `preHandler` enforced nothing while reading exactly like protection.
+   *
+   * Omit it for an app with no plugins — the path then costs one `undefined` check.
+   */
+  pluginRunner?: PluginRunner
 }): Promise<boolean> {
-  const { req, res, csrfMode, disallowed, requestId } = args
+  const { req, res, csrfMode, disallowed, requestId, pluginRunner } = args
   const dispatcher = await createControllerDispatcher({
     controllersDir: args.controllersDir,
     loadModule: args.loadModule,
@@ -265,15 +335,32 @@ export async function dispatchControllerRequest(args: {
   const webRequest = incomingMessageToWebRequest(req)
   const pathname = new URL(webRequest.url).pathname
 
+  /**
+   * Whether a controller route owns this path, decided WITHOUT executing anything.
+   *
+   * The same non-executing probe the CSRF gate below already used, hoisted because the plugin
+   * lifecycle needs the identical answer. Every hook is gated on it: this function runs for every
+   * unmatched `/api/*` url, so firing a hook before knowing the path is ours would run the
+   * lifecycle on requests this dispatcher is about to decline — and the host runs its own for
+   * those (`api-middleware.ts`, the "nobody owns it" arm).
+   */
+  const owned = dispatcher.matches(method, pathname)
+  const lifecycle = controllerLifecycle(pluginRunner, owned, {
+    request: webRequest,
+    response: res,
+    ctx: {},
+    requestId,
+  })
+
+  // #607 — onRequest BEFORE the CSRF gate, mirroring `executeRoute`: a hook that establishes
+  // identity must have run before anything decides whether to refuse the caller.
+  if (await lifecycle.onRequest()) return true
+
   // CSRF parity: enforce ONLY when a protected-method controller route actually
   // owns this path (probe with the non-executing matcher — never double-dispatch,
   // which would run the handler + its side effects). An unrouted path falls
   // through to the host's own 404, not a 403.
-  if (
-    CSRF_PROTECTED_METHODS.has(method) &&
-    dispatcher.matches(method, pathname) &&
-    !dispatcher.isCsrfExempt(pathname)
-  ) {
+  if (CSRF_PROTECTED_METHODS.has(method) && owned && !dispatcher.isCsrfExempt(pathname)) {
     const decision = enforceCsrf(
       req,
       csrfMode,
@@ -293,8 +380,23 @@ export async function dispatchControllerRequest(args: {
     }
   }
 
-  const response = await dispatcher.dispatch(webRequest)
+  // #607 — preHandler after the CSRF gate and immediately before the handler, the position it
+  // holds in `execute.ts` for a file route. A hook that answers here stops the pipeline.
+  if (await lifecycle.preHandler()) return true
+
+  let response: Response | null
+  try {
+    response = await dispatcher.dispatch(webRequest)
+  } catch (err) {
+    // Fail loud: the hook observes the failure and the error keeps rising to the host, which owns
+    // the 500 envelope. Swallowing it here would give plugins a view the caller does not have.
+    await lifecycle.onError(err)
+    throw err
+  }
   if (response === null) return false
   await writeControllerResponse(res, response)
+
+  // After the response is written, as `executeRoute` and `serveThroughPluginLifecycle` both do.
+  await lifecycle.onResponse()
   return true
 }

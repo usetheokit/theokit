@@ -253,9 +253,15 @@ async function runPluginsBeforeRouteMatch(
 /**
  * #122 (T1.2) — controller fall-through for the `!match` arm. Serves a decorator
  * controller under `<serverDir>/controllers/` (dev parity); inherits the security-
- * headers/CORS/rate-limit/plugin gates already run upstream, and CSRF is enforced
- * inside `dispatchControllerRequest`. Zero cost for routes-only apps. Returns `true`
- * when a controller handled the request (response already written + logged).
+ * headers/CORS/rate-limit gates already run upstream, and CSRF is enforced inside
+ * `dispatchControllerRequest`. Zero cost for routes-only apps. Returns `true` when a
+ * controller handled the request (response already written + logged).
+ *
+ * #607 — this used to say "plugin gates" among the ones inherited from upstream, and that was
+ * false in both surfaces: `theokit start` ran no hook here at all, and dev ran only `onRequest`,
+ * from a pre-match call unrelated to controllers. The lifecycle is now passed IN, through
+ * `pluginRunner`, and run by the dispatcher around the handler — so the sentence describes the
+ * code rather than the intention.
  */
 async function tryControllerFallthrough(ctx: {
   req: IncomingMessage
@@ -267,6 +273,8 @@ async function tryControllerFallthrough(ctx: {
   requestId: string
   url: string
   start: number
+  /** #607 — the lifecycle a controller route runs; `undefined` for an app with no plugins. */
+  pluginRunner: PluginRunner | undefined
 }): Promise<boolean> {
   const handled = await dispatchControllerRequest({
     controllersDir: resolve(ctx.serverDir, 'controllers'),
@@ -276,6 +284,7 @@ async function tryControllerFallthrough(ctx: {
     csrfMode: ctx.csrfMode,
     disallowed: ctx.disallowed,
     requestId: ctx.requestId,
+    pluginRunner: ctx.pluginRunner,
     // M47 — serve @Expose-bound agent routes via the ONE runtime (mountAgent). CSRF is already enforced
     // once at the controller-dispatch boundary (G5), so mountAgent runs with csrfMode 'off' (no double gate).
     //
@@ -387,25 +396,25 @@ export function createApiMiddleware(
         return
       }
 
-      // P#3 T4.1 — fire pluginRunner.onRequest BEFORE matchRoute so plugins
-      // can intercept unmatched paths (e.g., @theokit/plugin-openapi /api/docs).
-      if (
-        pluginRunner &&
-        (await runPluginsBeforeRouteMatch(pluginRunner, { req, res, requestId, start, url }))
-      ) {
-        return
-      }
-
-      // T1.4 — Batch endpoint (only when batching is enabled in config)
-      if (await handleBatchIfMatch(req, res, { url, batching, requestId, start })) {
-        return
-      }
-
+      // usetheokit/theokit#609 — the route table is consulted BEFORE any hook runs.
+      //
+      // `runPluginsBeforeRouteMatch` used to sit here, above the match, and `executeRoute` runs
+      // its own `onRequest` further down. Nothing deduped the two, so a matched file route fired
+      // `onRequest` TWICE in dev and once under `theokit start` — measured, and every side effect
+      // an `onRequest` carries (a counter, a rate-limit tick, a billed call, an opened span) was
+      // doubled on the surface nobody instruments.
+      //
+      // The call still exists, at the bottom of the `!match` arm, because the reason it was added
+      // is real: a plugin that serves a path no route owns (`@theokit/plugin-openapi` on
+      // `/api/docs`) must still get its chance before the 404. What changed is that it is now the
+      // LAST resort rather than the first, so it can no longer fire for a request that another
+      // arm is about to give a lifecycle of its own.
       const routes = scanServerRoutes(serverDir)
       const match = matchRoute(url, routes)
 
       if (!match) {
         // #122 (T1.2) — no file route matched; try a decorator controller (dev parity).
+        // #607 — and the controller now carries the plugin lifecycle with it.
         if (
           await tryControllerFallthrough({
             req,
@@ -417,8 +426,25 @@ export function createApiMiddleware(
             requestId,
             url,
             start,
+            pluginRunner,
           })
         ) {
+          return
+        }
+
+        // Nothing owns this path. This is the interception the call above was written for, and
+        // the only arm that still reaches it — so it fires exactly once, for a request no other
+        // arm will serve.
+        if (
+          pluginRunner &&
+          (await runPluginsBeforeRouteMatch(pluginRunner, { req, res, requestId, start, url }))
+        ) {
+          return
+        }
+
+        // T1.4 — Batch endpoint (only when batching is enabled in config). Below the plugin arm,
+        // as it was before, so a plugin still sees the request first.
+        if (await handleBatchIfMatch(req, res, { url, batching, requestId, start })) {
           return
         }
 
