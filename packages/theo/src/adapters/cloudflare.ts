@@ -16,7 +16,9 @@ import { deployedCsrfFragment, type DeployedCsrfOptions } from './deployed-csrf.
 import { planDeployedPlugins } from './deployed-plugins-module.js'
 import {
   deployedRuntimeConfigFragment,
+  serverDirLiteral,
   type DeployedRuntimeConfigOptions,
+  type DeployedServerDirOptions,
 } from './deployed-runtime-config.js'
 import { deployedTraceFragment } from './deployed-trace.js'
 import { nodeAdapter } from './node.js'
@@ -179,7 +181,8 @@ export function renderCloudflareWorkerEntry(
     agents?: readonly DeployedAgent[]
     /** WebSocket route files, scanned on the build machine. Only their presence is used (#369). */
     wsRoutes?: readonly string[]
-  } & DeployedCsrfOptions &
+  } & DeployedServerDirOptions &
+    DeployedCsrfOptions &
     DeployedCorsOptions = {},
 ): string {
   const streamingImport = opts.ssrStreaming
@@ -268,7 +271,7 @@ export function renderCloudflareWorkerEntry(
     ``,
     `// CR-006: server directory is a build-time literal — Workers cannot`,
     `// call process.cwd() and resolving paths at runtime returned '/server'.`,
-    `const serverDir = 'server'`,
+    `const serverDir = ${serverDirLiteral(opts)}`,
     ``,
     ...routeRuntimeLines(routeModuleEntries, routeTableEntries),
     `// #410 — the security baseline \`theokit start\` puts on every response, carried`,

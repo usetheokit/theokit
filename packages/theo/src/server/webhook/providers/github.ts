@@ -23,5 +23,5 @@ export interface GitHubWebhookOptions {
 }
 
 export function github(opts: GitHubWebhookOptions): VerifyFn {
-  return verifyHubSignature256(Array.isArray(opts.secret) ? opts.secret : [opts.secret as string])
+  return verifyHubSignature256(opts.secret, 'secret')
 }

@@ -69,8 +69,10 @@ export interface LineWebhookOptions {
  * @public
  */
 export function line(options: LineWebhookOptions): VerifyFn {
-  const secrets =
-    typeof options.channelSecret === 'string' ? [options.channelSecret] : options.channelSecret
-
-  return verifyHmacSha256({ header: HEADER, secrets, decode: fromBase64 })
+  return verifyHmacSha256({
+    header: HEADER,
+    secrets: options.channelSecret,
+    option: 'channelSecret',
+    decode: fromBase64,
+  })
 }

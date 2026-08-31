@@ -10,6 +10,8 @@
  */
 import type { VerifyFn, VerifyResult } from '../webhook-types.js'
 
+import { configuredSecrets, refusingVerifier } from './configured-secret.js'
+
 export interface DiscordWebhookOptions {
   /** The Discord application's public key (hex). */
   publicKey: string
@@ -27,7 +29,12 @@ function fromHex(hex: string): Uint8Array<ArrayBuffer> | null {
 }
 
 export function discord(opts: DiscordWebhookOptions): VerifyFn {
-  const keyBytes = fromHex(opts.publicKey)
+  // `fromHex('')` already refused, as `malformed public key hex` — true of a typo and misleading
+  // for the case that actually produces it, an unset environment variable (#594).
+  const configured = configuredSecrets(opts.publicKey, 'publicKey')
+  if (!configured.ok) return refusingVerifier(configured.reason)
+
+  const keyBytes = fromHex(configured.secrets[0])
 
   return async (req: Request): Promise<VerifyResult> => {
     if (!keyBytes) return { ok: false, reason: 'malformed public key hex' }

@@ -5,6 +5,8 @@
 import { timingSafeEqual } from '../timing-safe-equal.js'
 import type { VerifyFn, VerifyResult } from '../webhook-types.js'
 
+import { configuredSecrets, refusingVerifier } from './configured-secret.js'
+
 /**
  * Stripe webhook signature verification per official spec.
  *
@@ -97,9 +99,12 @@ const fromHex = (hex: string): Uint8Array | null => {
 
 export function stripe(opts: StripeWebhookOptions): VerifyFn {
   const tolerance = opts.toleranceSeconds ?? 300
-  const secrets: readonly string[] = Array.isArray(opts.secret)
-    ? opts.secret
-    : [opts.secret as string]
+
+  // Refused before any request reaches `importKey`, which rejects a zero-length key (#594). An
+  // empty list would otherwise answer `signature mismatch` after comparing against nothing.
+  const configured = configuredSecrets(opts.secret, 'secret')
+  if (!configured.ok) return refusingVerifier(configured.reason)
+  const { secrets } = configured
 
   return async (req: Request): Promise<VerifyResult> => {
     const header = req.headers.get('stripe-signature')
@@ -137,8 +142,3 @@ export function stripe(opts: StripeWebhookOptions): VerifyFn {
     return { ok: false, reason: 'signature mismatch' }
   }
 }
-
-// Re-export to make the enc constant non-orphan for tree-shaking purposes;
-// importing TextEncoder via `enc` makes the bundle pre-warm a single decoder.
-// (Kept for symmetry with Slack/GitHub helpers which use it directly.)
-const __stripeInternalEnc = enc

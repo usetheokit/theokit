@@ -13,7 +13,9 @@ import { deployedCorsFragment, type DeployedCorsOptions } from './deployed-cors.
 import { deployedCsrfFragment, type DeployedCsrfOptions } from './deployed-csrf.js'
 import {
   deployedRuntimeConfigFragment,
+  serverDirLiteral,
   type DeployedRuntimeConfigOptions,
+  type DeployedServerDirOptions,
 } from './deployed-runtime-config.js'
 import { deployedTraceFragment } from './deployed-trace.js'
 import { nodeAdapter } from './node.js'
@@ -165,6 +167,7 @@ function vercelRouteRequestFragment(runtimeSpread: string): string[] {
 export function renderVercelFunctionEntry(
   opts: { securityHeaders?: SecurityHeadersConfig } & DeployedCsrfOptions &
     DeployedRuntimeConfigOptions &
+    DeployedServerDirOptions &
     DeployedCorsOptions = {},
 ): string {
   const runtimeConfig = deployedRuntimeConfigFragment(opts)
@@ -180,7 +183,7 @@ export function renderVercelFunctionEntry(
     `// Cold-start cache`,
     `let routesCache = null`,
     `let loaderCache = null`,
-    `const serverDir = resolve(process.cwd(), 'server')`,
+    `const serverDir = resolve(process.cwd(), ${serverDirLiteral(opts)})`,
     ``,
     `// #410 — the security baseline \`theokit start\` puts on every response,`,
     `// carried here as a literal because the deployed function has no`,
