@@ -174,6 +174,11 @@ export async function createControllerDispatcher(opts: {
 }): Promise<ControllerDispatcher | null> {
   const classes = await scanControllers(opts.controllersDir, opts.loadModule)
   if (classes.length === 0) return null
+  // No `undeclaredRoutes` pass-through, deliberately (usetheokit/theokit#576). The handler defaults
+  // to `'deny'`, and a theokit app cannot ship an undeclared controller anyway — `theokit build`
+  // refuses one (#514). What this closes is `theokit dev`, which never runs that gate: an undeclared
+  // route now answers 403 there, at the first request, instead of being served until the build
+  // catches it. An escape here would only let an app defer a failure it cannot ship past.
   const handle = createDecoratorHandler({ controllers: classes, serveAgent: opts.serveAgent })
   const reflector = new Reflector()
 

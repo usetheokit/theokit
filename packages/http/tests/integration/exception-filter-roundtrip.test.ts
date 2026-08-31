@@ -11,6 +11,7 @@ import { createDecoratorServer } from '../../src/bridge/create-server.js'
 import type { ExceptionFilter, ArgumentsHost } from '../../src/bridge/exception-filter-chain.js'
 import { z } from 'zod'
 import { Body, Post } from '../../src/decorators/index.js'
+import { Public } from '../../src/decorators/public.js'
 
 // Bun lacks emitDecoratorMetadata support (same as esbuild). Tests using
 // decorator syntax require SWC compilation provided by vitest. Skip on Bun.
@@ -33,6 +34,7 @@ class CustomErrorFilter implements ExceptionFilter {
 
 const schema = z.object({ name: z.string().min(1) })
 
+@Public()
 @Controller('items')
 class ItemsCtrl {
   @Get(':id')

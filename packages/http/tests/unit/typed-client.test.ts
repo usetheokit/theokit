@@ -5,6 +5,7 @@ import { Controller, Get, Post, Delete, Body, Param, HttpCode } from '../../src/
 import { TheoApp } from '../../src/app.js'
 import { contract, createTypedClient, TypedClientError } from '../../src/index.js'
 import type { TypedClient } from '../../src/typed-client.js'
+import { Public } from '../../src/decorators/public.js'
 
 // Bun lacks emitDecoratorMetadata support (same as esbuild). Tests using
 // decorator syntax require SWC compilation provided by vitest. Skip on Bun.
@@ -37,6 +38,7 @@ const store: Task[] = [
   { id: 2, title: 'Second task', done: true },
 ]
 
+@Public()
 @Controller('api/tasks')
 class TasksController {
   @Get()

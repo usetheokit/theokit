@@ -9,6 +9,11 @@ import type { ExposeOptions } from '../decorators/expose.js'
 import type { ParamEntry } from '../decorators/params.js'
 import { digestError } from '../error-digest.js'
 import { ForbiddenException } from '../exceptions/http-exception.js'
+import {
+  undeclaredRouteRefusal,
+  undeclaredRouteWarning,
+  type UndeclaredRoutePolicy,
+} from '../route-access.js'
 
 import { resolveOrNew, type DiContainer } from './di-resolve.js'
 export type { DiContainer } from './di-resolve.js'
@@ -44,6 +49,17 @@ export interface CreateDecoratorServerOptions {
   configure?: (consumer: MiddlewareConsumerImpl) => void
   /** M47 — required when any controller `@Expose`-binds an agent; serves the agent route. */
   serveAgent?: ServeAgent
+  /**
+   * What to do with a controller route that declared no access decision (#576).
+   *
+   * `'deny'` (default) refuses with 403. `'warn'` serves it after saying so once per route.
+   *
+   * This seam is where least privilege has to hold, not only `TheoApp`: the framework's own
+   * controller dispatch reuses this handler, `theokit dev` never runs the build gate that refuses
+   * an undeclared controller, and `@theokit/http` is published on its own. A gate that lives in one
+   * of three dispatchers is a lint, which is exactly what #576 reported.
+   */
+  undeclaredRoutes?: UndeclaredRoutePolicy
 }
 
 /**
@@ -86,14 +102,21 @@ type RouteEntry =
 export function createDecoratorHandler(
   controllersOrOpts: Function[] | CreateDecoratorServerOptions,
 ): DecoratorHandler {
-  const { controllers, container, configure, serveAgent } = Array.isArray(controllersOrOpts)
+  const { controllers, container, configure, serveAgent, undeclaredRoutes } = Array.isArray(
+    controllersOrOpts,
+  )
     ? {
         controllers: controllersOrOpts,
         container: undefined,
         configure: undefined,
         serveAgent: undefined,
+        undeclaredRoutes: undefined,
       }
     : controllersOrOpts
+  const undeclaredPolicy: UndeclaredRoutePolicy = undeclaredRoutes ?? 'deny'
+  // Warned once per route, never per request: a line repeated on every call is one that gets
+  // filtered out, and the route table is fixed once the handler is built.
+  const warnedUndeclared = new Set<string>()
 
   // Collect middleware
   const middlewareConsumer = new MiddlewareConsumerImpl(container)
@@ -147,8 +170,14 @@ export function createDecoratorHandler(
     return 0
   })
 
+  const dispatchDeps: DispatchDeps = {
+    container,
+    middlewareEntries,
+    serveAgent,
+    undeclared: { policy: undeclaredPolicy, warned: warnedUndeclared },
+  }
   const handler = ((request: Request) =>
-    handleRequest(routes, request, container, middlewareEntries, serveAgent)) as DecoratorHandler
+    handleRequest(routes, request, dispatchDeps)) as DecoratorHandler
   handler.matches = (method: string, pathname: string): boolean =>
     findRoute(routes, method.toUpperCase(), pathname) !== null
   return handler
@@ -179,13 +208,30 @@ export function createDecoratorServer(
 
 // ─── Web Standard request handler ────────────────────────────
 
+/**
+ * The undeclared-route decision, carried as one value so the policy and its warn-once set cannot be
+ * separated — a `Set` that outlives the handler it belongs to would silence the warning for a
+ * second handler over the same paths.
+ */
+interface UndeclaredGate {
+  policy: UndeclaredRoutePolicy
+  warned: Set<string>
+}
+
+/** Everything dispatch needs that is not the request — decided once, when the handler is built. */
+interface DispatchDeps {
+  container: DiContainer | undefined
+  middlewareEntries: ResolvedMiddleware[]
+  serveAgent: ServeAgent | undefined
+  undeclared: UndeclaredGate
+}
+
 async function handleRequest(
   routes: RouteEntry[],
   request: Request,
-  container?: DiContainer,
-  middlewareEntries: ResolvedMiddleware[] = [],
-  serveAgent?: ServeAgent,
+  deps: DispatchDeps,
 ): Promise<Response | null> {
+  const { container, middlewareEntries, serveAgent, undeclared } = deps
   const url = new URL(request.url)
   const method = request.method.toUpperCase()
   const pathname = url.pathname
@@ -224,6 +270,20 @@ async function handleRequest(
     // Middleware
     const mwResponse = await runMiddleware(middlewareEntries, request, pathname)
     if (mwResponse) return mwResponse
+
+    // #576 — a route nobody declared is refused, in the same place a guard would have decided it.
+    // After middleware on purpose: a CORS layer must still reach a denied request, or the browser
+    // cannot read the 403 that explains it.
+    if (walk.access === 'undeclared') {
+      if (undeclared.policy === 'deny') {
+        const ex = new ForbiddenException(undeclaredRouteRefusal('controller', pathname))
+        return jsonResponse(ex.statusCode, ex.toJSON())
+      }
+      if (!undeclared.warned.has(pathname)) {
+        undeclared.warned.add(pathname)
+        console.warn(undeclaredRouteWarning('controller', pathname))
+      }
+    }
 
     // Guards
     const ctx = createExecutionContext(request, instance.constructor, walk.propertyKey)

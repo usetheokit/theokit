@@ -75,6 +75,126 @@ time in production. The scanner already refuses a dotted route basename and a co
 reserved batch path by name, before anything serves traffic. This is the same gate, for a bigger
 class of mistake.
 
+## `@theokit/http` v2 — an undeclared route is refused, not served
+
+**Breaking**, for every application serving `@Controller` classes or auto-wired agent routes.
+A route that declares no access decision now answers **403** instead of being served. Nothing
+changes for a route that already declares one, which is every route in an application that passes
+`theokit build` today.
+
+### What changed
+
+`@theokit/http@1.2.0` made absence representable: `guards: []` had meant both *"open on purpose"*
+and *"nobody said"*, and the dispatcher, unable to tell them apart, took the permissive reading. It
+shipped `undeclaredRoutes`, defaulting to `'warn'` — the request was still served, with a line in
+the log promising a 403 "in the next major".
+
+This is that major, and it does two things the warn release did not:
+
+1. **The default is `'deny'`.** A safe default an app has to switch on is not a safe default: the
+   population that never reads the warning is the population the gate exists for.
+2. **Every dispatcher enforces it.** The check lived in `TheoApp` alone, while `@theokit/http` ships
+   three dispatchers over the same route metadata — and the framework's own controller dispatch
+   (`theokit dev`, `theokit start`) reuses `createDecoratorHandler`, which had no check at all. The
+   decision is now computed once, on the metadata walk, so all three answer identically.
+
+A build gate has refused undeclared **controller** routes since theokit 0.60.0. That gate is a
+property of the pipeline, not of the system: `theokit dev` never runs it, and `@theokit/http` is
+published on its own. Least privilege now holds at dispatch, with the build gate as the earlier,
+friendlier failure rather than the only one.
+
+Agent routes were the surface with neither. They are auto-wired — the app never wrote them, so there
+is no file for a reviewer to read — and they are matched *before* static files, controllers and file
+routes.
+
+### What this does NOT touch: a file agent with `export const policy`
+
+**If your agents live in `agents/*.ts` and declare `export const policy`, you have nothing to do.**
+Those routes are served by `mountAgent`, which evaluates that policy — a different surface from the
+one this change gates, and `'public'` there is already the decision it always was.
+
+The two paths are disjoint, and it is worth saying which is which because both are called "agent
+routes":
+
+| what you wrote | who serves it | gated by |
+|---|---|---|
+| `agents/chat.ts` with `export const policy` | `mountAgent`, from `theokit dev` / `theokit start` | the agent scanner (see the section below) |
+| `agents: [...]` passed to `TheoApp.create` | `@theokit/http`'s own dispatcher | this change |
+| `@Expose(agent)` on a controller property | controller dispatch | this change, via the controller's declaration |
+
+The framework never constructs `TheoApp` — it is the standalone `@theokit/http` entry point — so an
+application that reaches its agents through the file scanner does not meet this gate at all. The
+boot-time notice is likewise only emitted for `TheoApp`-mounted entries.
+
+The middle row is the population #576 was reporting: an app wiring `@theokit/http` directly, where
+`entry.guards` was `undefined`, so `?? []`, so served.
+
+### What you need to do
+
+| Your situation | Action |
+|---|---|
+| Your agents are files under `agents/` declaring `export const policy` | Nothing — see above |
+| A controller route anyone may call (health, version, OAuth callback) | `@Public()` on the method, or on the class to cover every route under it |
+| A controller route behind authentication | `@UseGuards(AuthGuard)`, likewise on either |
+| Every route in the controller needs any signed-in caller | `@UseGuards(Authenticated(sessions))` — from `theokit/server/auth`, so you no longer write that guard |
+| An agent entry that anyone may call | `access: 'public'` on the entry |
+| An agent entry behind authentication | `guards: [YourGuard]` on the entry |
+| You wrote `@UseGuards()` with no arguments | It declares nobody. Give it a guard, or use `@Public()` — both gates refuse the empty form now |
+| You need time to migrate | `undeclaredRoutes: 'warn'` on `TheoApp.create` / `createDecoratorHandler` / `httpDecoratorsPlugin` restores the old behaviour, with one warning per route |
+
+```diff
+- import { Controller, Get } from '@theokit/http'
++ import { Controller, Get, Public } from '@theokit/http'
+
++ @Public()
+  @Controller('api/health')
+  export class HealthController {
+    @Get()
+    check() {
+      return { status: 'ok' }
+    }
+  }
+```
+
+`@Public()` does not disable guards. It answers *who may call this route*; a guard attached to a
+public route still runs, which is what lets a route be open and still rate-limited or traced.
+
+### The guard you no longer write
+
+`theokit/server/auth` exports `Authenticated(sessions)` — "any signed-in caller", the controller
+equivalent of `.policy(({ subject }) => subject !== null)`:
+
+```typescript
+import { createSessionManagerWeb, Authenticated } from 'theokit/server/auth'
+
+const sessions = createSessionManagerWeb<{ userId: string }>({ secret: process.env.SESSION_SECRET! })
+
+@Controller('api/tasks')
+@UseGuards(Authenticated(sessions))
+export class TasksController { … }
+```
+
+It exists because the hand-written version has a failure mode worth naming: reading the subject off
+the guard's `ExecutionContext` (`subjectFromContext(context)`) returns nothing, because that context
+carries `getRequest`, `getUrl`, `getClass` and `getMethodName` and no subject. A guard built that way
+**denies everyone**, and passes the test written for it — that test asserts an unauthenticated
+request is refused. `subjectFromContext` now throws on that shape instead of answering `null`.
+
+`Authenticated` answers "is anyone there", never "may THIS subject touch THIS record". The second
+question is `requireOwner` from `theokit/server/define`.
+
+### How the failure reads
+
+```
+403 Forbidden
+Controller route /api/tasks declares no access decision, so it is refused. Attach a guard, or say
+it is open on purpose (`@Public()`). `undeclaredRoutes: 'warn'` serves it with a warning while you
+migrate.
+```
+
+The route, both remedies, and the escape — so the fix does not require finding the source of the
+framework.
+
 ## `theokit` — every agent file declares who may run it
 
 **Breaking**, for every application with a file under `agents/`. The agent scanner refuses a file

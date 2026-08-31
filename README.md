@@ -271,6 +271,11 @@ class UsersController {
 }
 ```
 
+Every route declares who may call it — `@UseGuards(...)` names who decides, `@Public()` says it is
+open on purpose. A route that declares neither is refused with 403 rather than served, and
+`theokit build` fails on it first. `theokit/server/auth` ships `Authenticated(sessions)` for the
+commonest answer, so "any signed-in caller" is not a guard each app writes by hand.
+
 ### Pipeline
 
 `middleware → guards → interceptors → handler`, with filters catching what escapes.

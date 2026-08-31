@@ -53,6 +53,11 @@ import { loadControllersFromGlob } from './bridge/swc-loader.js'
 import { walkControllerMetadata, type WalkResult } from './bridge/walk-metadata.js'
 import type { ParamEntry } from './decorators/params.js'
 import { ForbiddenException } from './exceptions/http-exception.js'
+import {
+  undeclaredRouteRefusal,
+  undeclaredRouteWarning,
+  type UndeclaredRoutePolicy,
+} from './route-access.js'
 
 export interface HttpDecoratorsPluginOptions {
   /** Direct controller class references (Mode 2 — tests, pre-compiled). */
@@ -65,6 +70,15 @@ export interface HttpDecoratorsPluginOptions {
   container?: DiContainer
   /** NestJS-style middleware configuration callback. */
   configure?: (consumer: MiddlewareConsumerImpl) => void
+  /**
+   * What to do with a controller route that declared no access decision (#576).
+   *
+   * `'deny'` (default) refuses with 403. `'warn'` serves it after saying so once per route.
+   *
+   * Present here for the same reason it is on `TheoApp` and `createDecoratorHandler`: this is a
+   * third dispatcher over the same `WalkResult`, and a gate that holds in two of three is a lint.
+   */
+  undeclaredRoutes?: UndeclaredRoutePolicy
 }
 
 interface RouteEntry {
@@ -92,6 +106,12 @@ export function httpDecoratorsPlugin(opts: HttpDecoratorsPluginOptions) {
   const middlewareConsumer = new MiddlewareConsumerImpl(opts.container)
   if (opts.configure) opts.configure(middlewareConsumer)
   const middlewareEntries = middlewareConsumer.getEntries()
+
+  const undeclared: UndeclaredGate = {
+    policy: opts.undeclaredRoutes ?? 'deny',
+    // Warned once per route, never per request — see `create-server.ts`.
+    warned: new Set<string>(),
+  }
 
   // Mode 2: Direct class references — initialize eagerly
   if (opts.controllers && opts.controllers.length > 0) {
@@ -131,6 +151,7 @@ export function httpDecoratorsPlugin(opts: HttpDecoratorsPluginOptions) {
         const response = await handleDecoratorRoute(
           routes,
           request,
+          undeclared,
           opts.container,
           middlewareEntries,
         )
@@ -182,10 +203,17 @@ function buildRouteTable(
 
 // ─── Request handler (extracted for complexity budget) ──
 
+/** The undeclared-route decision and its warn-once set — see `bridge/create-server.ts`. */
+interface UndeclaredGate {
+  policy: UndeclaredRoutePolicy
+  warned: Set<string>
+}
+
 /** Returns Response if handled, null if not our route. */
 async function handleDecoratorRoute(
   routes: RouteEntry[],
   request: Request,
+  undeclared: UndeclaredGate,
   container?: DiContainer,
   mwEntries: ResolvedMiddleware[] = [],
 ): Promise<Response | null> {
@@ -200,6 +228,19 @@ async function handleDecoratorRoute(
   try {
     const mwResponse = await runMiddleware(mwEntries, request, url.pathname)
     if (mwResponse) return mwResponse
+
+    // #576 — after middleware, before guards: the same placement as the other two dispatchers, so
+    // a denied request still passes through a CORS layer that would let the browser read the 403.
+    if (walk.access === 'undeclared') {
+      if (undeclared.policy === 'deny') {
+        const ex = new ForbiddenException(undeclaredRouteRefusal('controller', url.pathname))
+        return jsonResponse(ex.statusCode, ex.toJSON())
+      }
+      if (!undeclared.warned.has(url.pathname)) {
+        undeclared.warned.add(url.pathname)
+        console.warn(undeclaredRouteWarning('controller', url.pathname))
+      }
+    }
 
     const ctx = createExecutionContext(request, instance.constructor, walk.propertyKey)
     const guardResponse = await runGuards(walk.guards, ctx, container)

@@ -267,6 +267,20 @@ export class UndeclaredControllerAccessError extends Error {
  * runtime matches on. The per-method key lives on the CLASS with the property name, not on the
  * prototype and not on the descriptor — measured, after both of those returned `undefined`.
  */
+/**
+ * Whether `@UseGuards` on this target names anyone who decides.
+ *
+ * Presence is not a declaration: `@UseGuards()` with no arguments writes `[]`, which reads as a
+ * guarded route to anyone skimming the file and runs a zero-length loop at dispatch. This gate used
+ * to accept it while `classifyAccess` — the runtime classifier the three dispatchers share — calls
+ * it `'undeclared'`, so the build passed and the request was served unguarded. The two must answer
+ * the same question the same way or the gate approves what the dispatcher refuses, and vice versa
+ * (usetheokit/theokit#576).
+ */
+function declaresGuard(cls: ControllerClass, propertyKey?: string): boolean {
+  return (getMeta<unknown[]>(USE_GUARDS, cls, propertyKey) ?? []).length > 0
+}
+
 function assertControllerAccessDeclared(
   loaded: readonly { cls: ControllerClass; sourceFile: string }[],
 ): void {
@@ -275,12 +289,12 @@ function assertControllerAccessDeclared(
     // behaves that way at runtime, and a controller whose routes are all open (a health group, an
     // OAuth callback group) must be declarable once for the same reason. Checking one at class
     // level and not the other would refuse code that is correct.
-    if (getMeta<unknown[]>(USE_GUARDS, cls) !== undefined) continue
+    if (declaresGuard(cls)) continue
     if (Reflect.getMetadata(PUBLIC_ROUTE_METADATA, cls) === true) continue
 
     const routes = getMeta<{ verb: string; propertyKey: string }[]>(ROUTE_METHODS, cls) ?? []
     for (const { verb, propertyKey } of routes) {
-      if (getMeta<unknown[]>(USE_GUARDS, cls, propertyKey) !== undefined) continue
+      if (declaresGuard(cls, propertyKey)) continue
       // `Reflect` directly, not `getMeta`: `@SetMetadata` writes through `Reflect.defineMetadata`
       // with the key as given, and `getMeta` is typed for the symbol keys this package defines.
       if (Reflect.getMetadata(PUBLIC_ROUTE_METADATA, cls, propertyKey) === true) continue

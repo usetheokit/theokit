@@ -8,6 +8,7 @@ import { HttpCode } from '../../src/decorators/response.js'
 import { UseGuards } from '../../src/decorators/middleware.js'
 import { setMeta, ROUTE_PARAMS } from '../../src/metadata/index.js'
 import { httpDecoratorsPlugin } from '../../src/theokit-plugin.js'
+import { Public } from '../../src/decorators/public.js'
 
 // Bun lacks emitDecoratorMetadata support (same as esbuild). Tests using
 // decorator syntax require SWC compilation provided by vitest. Skip on Bun.
@@ -28,19 +29,30 @@ class RejectGuard {
 
 @Controller('cats')
 class CatsCtrl {
-  @Get() findAll() {
+  @Public()
+  @Get()
+  findAll() {
     return [{ id: 1, name: 'Whiskers' }]
   }
-  @Get('search') search(breed: string) {
+  @Public()
+  @Get('search')
+  search(breed: string) {
     return { breed }
   }
-  @Get(':id') findOne(id: string) {
+  @Public()
+  @Get(':id')
+  findOne(id: string) {
     return { id }
   }
-  @Post() create(body: CreateCatDto) {
+  @Public()
+  @Post()
+  create(body: CreateCatDto) {
     return { created: true, ...(body as z.infer<typeof zCreateCat>) }
   }
-  @Delete(':id') @HttpCode(204) remove(_id: string) {}
+  @Public()
+  @Delete(':id')
+  @HttpCode(204)
+  remove(_id: string) {}
   @Get('admin') @UseGuards(RejectGuard) admin() {
     return 'secret'
   }
