@@ -107,10 +107,33 @@ Agent routes were the surface with neither. They are auto-wired — the app neve
 is no file for a reviewer to read — and they are matched *before* static files, controllers and file
 routes.
 
+### What this does NOT touch: a file agent with `export const policy`
+
+**If your agents live in `agents/*.ts` and declare `export const policy`, you have nothing to do.**
+Those routes are served by `mountAgent`, which evaluates that policy — a different surface from the
+one this change gates, and `'public'` there is already the decision it always was.
+
+The two paths are disjoint, and it is worth saying which is which because both are called "agent
+routes":
+
+| what you wrote | who serves it | gated by |
+|---|---|---|
+| `agents/chat.ts` with `export const policy` | `mountAgent`, from `theokit dev` / `theokit start` | the agent scanner (see the section below) |
+| `agents: [...]` passed to `TheoApp.create` | `@theokit/http`'s own dispatcher | this change |
+| `@Expose(agent)` on a controller property | controller dispatch | this change, via the controller's declaration |
+
+The framework never constructs `TheoApp` — it is the standalone `@theokit/http` entry point — so an
+application that reaches its agents through the file scanner does not meet this gate at all. The
+boot-time notice is likewise only emitted for `TheoApp`-mounted entries.
+
+The middle row is the population #576 was reporting: an app wiring `@theokit/http` directly, where
+`entry.guards` was `undefined`, so `?? []`, so served.
+
 ### What you need to do
 
 | Your situation | Action |
 |---|---|
+| Your agents are files under `agents/` declaring `export const policy` | Nothing — see above |
 | A controller route anyone may call (health, version, OAuth callback) | `@Public()` on the method, or on the class to cover every route under it |
 | A controller route behind authentication | `@UseGuards(AuthGuard)`, likewise on either |
 | Every route in the controller needs any signed-in caller | `@UseGuards(Authenticated(sessions))` — from `theokit/server/auth`, so you no longer write that guard |
