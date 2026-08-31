@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [theokit 0.63.1] - 2026-08-31
+
 ### Fixed
 
 - **`stripe.ts` no longer ends in a dead constant.** `const __stripeInternalEnc = enc` was
@@ -35,7 +37,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   subscribe handshake for anybody who asked — the token is the only credential on that request.
   `timingSafeEqual` is right to call two zero-length inputs equal; the caller has to refuse the
   empty configuration before asking. (#595)
-
 ## [theokit 0.63.0] - 2026-08-31
 
 ### Added
