@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [@theokit/tauri 1.0.0-next.0, theokit 0.65.0-next.0] - 2026-09-01
+
 ### Added
 
 - **ci:** per-commit package previews via pkg.pr.new. A fix here is unverifiable from a sibling
@@ -21,7 +23,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   way removes `pre.json`; nothing errors; the next release publishes a stable version and moves the
   `latest` dist-tag for every consumer, reporting success. Cutting a stable release stays available
   and becomes deliberate — it takes both edits, in the same pull request.
-
 ## [@theokit/http 2.0.0, theokit 0.64.0] - 2026-08-31
 
 ### Added
