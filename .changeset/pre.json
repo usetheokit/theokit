@@ -10,5 +10,7 @@
     "@theokit/tauri": "0.1.2",
     "theokit": "0.64.0"
   },
-  "changesets": []
+  "changesets": [
+    "plugin-hooks-reach-every-route-kind"
+  ]
 }
