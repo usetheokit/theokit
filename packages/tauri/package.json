@@ -22,7 +22,8 @@
     "./sidecar": {
       "types": "./dist/sidecar.d.ts",
       "import": "./dist/sidecar.js"
-    }
+    },
+    "./package.json": "./package.json"
   },
   "files": [
     "dist",
@@ -53,5 +54,15 @@
   },
   "engines": {
     "node": ">=22.12.0"
-  }
+  },
+  "keywords": [
+    "theokit",
+    "tauri",
+    "desktop",
+    "glue",
+    "agents",
+    "channel",
+    "invoke",
+    "transport"
+  ]
 }

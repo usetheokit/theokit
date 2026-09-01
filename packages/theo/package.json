@@ -134,7 +134,8 @@
     "./adapters/ws-shim": {
       "types": "./dist/adapters/ws-shim.d.ts",
       "import": "./dist/adapters/ws-shim.js"
-    }
+    },
+    "./package.json": "./package.json"
   },
   "files": [
     "dist"
@@ -204,5 +205,15 @@
   },
   "engines": {
     "node": ">=22.12.0"
-  }
+  },
+  "keywords": [
+    "theokit",
+    "web",
+    "framework",
+    "file-based",
+    "routing",
+    "typed",
+    "server",
+    "surfaces"
+  ]
 }

@@ -63,6 +63,15 @@ jobs:
         run: pnpm lint
       - name: Prettier (format check)
         run: pnpm format:check
+      # The published-manifest contract, checked instead of remembered. Audited across 50
+      # packages on 2026-09-01: 38 did not export "./package.json" — reproduced as
+      # `ERR_PACKAGE_PATH_NOT_EXPORTED` against a real tarball — 30 had no keywords and 18
+      # declared no sideEffects at all.
+      #
+      # `@v1` is a moving ref by design — a policy fix in shared-workflows must reach every
+      # caller without nine pull requests, which is the reason that repo exists.
+      - name: Published manifests satisfy the contract
+        uses: usetheokit/shared-workflows/actions/manifest-check@v1 # zizmor: ignore[unpinned-uses]
 
   typecheck-build:
     name: Typecheck + Build

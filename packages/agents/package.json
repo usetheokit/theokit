@@ -96,7 +96,8 @@
     "./pty": {
       "types": "./dist/pty.d.ts",
       "import": "./dist/pty.js"
-    }
+    },
+    "./package.json": "./package.json"
   },
   "files": [
     "dist",
@@ -140,5 +141,15 @@
   "publishConfig": {
     "access": "public",
     "provenance": true
-  }
+  },
+  "keywords": [
+    "theokit",
+    "agents",
+    "first-class",
+    "citizens",
+    "pipeline",
+    "agentbuilder.create",
+    "authoring",
+    "chain"
+  ]
 }
