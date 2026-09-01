@@ -15,7 +15,20 @@ name: Preview releases
 # usetheokit/shared-workflows/.github/workflows/preview.yml.
 
 on:
+  # Filtered by BASE branch, and that is the only lever there is: `pull_request` has no head-branch
+  # filter, and a job-level `if:` cannot help — GitHub decides whether a run needs approval BEFORE
+  # any job is evaluated, so the run is created, held, and expires regardless.
+  #
+  # A back-merge is `main -> workspace`, so excluding `workspace` as a base removes exactly the
+  # pull requests that expire. It is opened by `github-actions[bot]`, whose runs GitHub holds for
+  # manual approval; nobody approves them, and each lands in the checks list as a failure meaning
+  # "a preview nobody needed was not produced".
+  #
+  # THE COST, stated rather than discovered: a Dependabot pull request also targets `workspace`, so
+  # it no longer previews before merge. The `push` trigger below still previews the moment it lands,
+  # which is a few minutes later and the same packages.
   pull_request:
+    branches: [develop, main]
   # Work is born on `workspace` and only meets a pull request at promotion time, so a fix would
   # otherwise sit here with no preview during the window it is most worth iterating on. A push with
   # no pull request gets a `@workspace` tag rather than a comment.
