@@ -35,5 +35,12 @@
   },
   "engines": {
     "node": ">=22.12.0"
-  }
+  },
+  "keywords": [
+    "theokit",
+    "create",
+    "scaffold",
+    "new",
+    "project"
+  ]
 }

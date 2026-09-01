@@ -23,7 +23,8 @@
     "./wire": {
       "types": "./dist/wire/index.d.ts",
       "import": "./dist/wire/index.js"
-    }
+    },
+    "./package.json": "./package.json"
   },
   "files": [
     "dist",
@@ -56,5 +57,15 @@
   "publishConfig": {
     "access": "public",
     "provenance": true
-  }
+  },
+  "keywords": [
+    "theokit",
+    "presenter",
+    "presentation",
+    "layer",
+    "canonical",
+    "agentoutputevent",
+    "strategy",
+    "turns"
+  ]
 }

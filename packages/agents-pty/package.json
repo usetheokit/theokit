@@ -20,7 +20,8 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    }
+    },
+    "./package.json": "./package.json"
   },
   "files": [
     "dist",
@@ -46,5 +47,15 @@
     "tsup": "^8.5.1",
     "typescript": "^5.9.3",
     "vitest": "^4.1.9"
-  }
+  },
+  "keywords": [
+    "theokit",
+    "agents",
+    "pty",
+    "interactive",
+    "backend",
+    "separate",
+    "package",
+    "web"
+  ]
 }
