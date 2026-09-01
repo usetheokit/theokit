@@ -1,0 +1,33 @@
+name: Preview releases
+
+# Per-commit package previews on pkg.pr.new — never npm, so nothing here burns a version.
+#
+# A fix in this repository is unverifiable from a sibling repository until it is on a registry: an
+# example or a package that resolves through a workspace tests the repository it lives in, not the
+# experience of the person who typed `npm install`. This ecosystem has nine interdependent
+# publishable repositories, which is why that gap is where its expensive defects live.
+#
+# Reach for this first. `release.yml`'s snapshot path publishes to the real registry under a
+# non-`latest` dist-tag and burns an immutable npm version — that is for when the answer has to
+# come from registry.npmjs.org specifically.
+#
+# The implementation is shared rather than copied nine times; see
+# usetheokit/shared-workflows/.github/workflows/preview.yml.
+
+on:
+  pull_request:
+  # Work is born on `workspace` and only meets a pull request at promotion time, so a fix would
+  # otherwise sit here with no preview during the window it is most worth iterating on. A push with
+  # no pull request gets a `@workspace` tag rather than a comment.
+  push:
+    branches: [workspace]
+
+permissions: {}
+
+concurrency:
+  group: preview-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  preview:
+    uses: usetheokit/shared-workflows/.github/workflows/preview.yml@v1 # zizmor: ignore[unpinned-uses]

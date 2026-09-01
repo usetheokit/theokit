@@ -22,7 +22,24 @@ permissions:
   contents: read
 
 jobs:
+  # The last line, for the path that reached a release without passing through a pull request.
+  # If the declared channel and `.changeset/pre.json` disagree, this release would publish under
+  # the wrong dist-tag — most expensively, a stable version onto `latest` after an accidental
+  # `changeset pre exit`, with the publish reporting success.
+  release-channel:
+    name: release channel
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: usetheokit/shared-workflows/actions/release-channel@v1 # zizmor: ignore[unpinned-uses]
+
   release:
+    needs: release-channel
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:

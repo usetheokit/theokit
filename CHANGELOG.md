@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **ci:** per-commit package previews via pkg.pr.new. A fix here is unverifiable from a sibling
+  repository until it is on a registry, and this ecosystem has nine interdependent publishable
+  repositories — measured 2026-08-31, `@theokit/http` reached 2.0.0 in one while three packages in
+  another declared a range excluding it, and nothing found out until a release gate ran. Previews
+  cost nothing and burn no npm version, so they are the first thing to reach for; the snapshot path
+  is for when the answer has to come from registry.npmjs.org specifically.
+
+- **release:** the release channel this repository declares is now guarded. `"releaseChannel"` in
+  the root manifest and `.changeset/pre.json` must agree, checked on every pull request and again
+  immediately before a release. `changeset pre exit`, a bad merge, or a conflict resolved the wrong
+  way removes `pre.json`; nothing errors; the next release publishes a stable version and moves the
+  `latest` dist-tag for every consumer, reporting success. Cutting a stable release stays available
+  and becomes deliberate — it takes both edits, in the same pull request.
+
 ## [@theokit/http 2.0.0, theokit 0.64.0] - 2026-08-31
 
 ### Added
