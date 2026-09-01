@@ -1,6 +1,6 @@
 {
   "name": "@theokit/tauri",
-  "version": "0.1.2",
+  "version": "1.0.0-next.0",
   "description": "Tauri desktop glue for TheoKit agents — the Channel/invoke transport source (webview) + the JSONL sidecar (node), over the unified client. UI is @theokit/ui; the runtime is @theokit/sdk.",
   "repository": {
     "type": "git",
@@ -35,7 +35,7 @@
     "prepublishOnly": "node ../../scripts/check-pack-no-workspace.mjs ."
   },
   "peerDependencies": {
-    "theokit": ">=0.36.1",
+    "theokit": ">=0.65.0-next.0",
     "@tauri-apps/api": ">=2.0.0"
   },
   "peerDependenciesMeta": {
