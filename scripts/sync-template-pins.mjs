@@ -29,7 +29,7 @@
  * Usage: `node scripts/sync-template-pins.mjs [--check]`
  *   --check  report drift and exit non-zero, changing nothing (for CI)
  */
-import { readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 const TEMPLATE = 'packages/create-theokit/templates/default/package.json.tmpl'
@@ -60,6 +60,43 @@ function workspaceVersions() {
  */
 function rangeFor(version) {
   return `^${version}`
+}
+
+/**
+ * Prerelease mode changes what "the version this release publishes" may mean here, and the docblock
+ * above predates it.
+ *
+ * A scaffolded app is a NEW CONSUMER, and a new consumer belongs on the stable channel. Syncing the
+ * template during a prerelease cut pins `create-theokit` at `^0.65.0-next.0`, so every app anyone
+ * scaffolds arrives silently on the `next` channel — the opposite of what a default is for, and
+ * invisible until something on that channel breaks.
+ *
+ * It also deadlocks the release outright, which is how this was found (usetheokit/theokit#618).
+ * `tests/integration/pnpm-11-compat.test.ts` scaffolds from this template and runs `pnpm install`;
+ * the pinned prerelease is not on the registry yet, so the install 404s and the test fails — while
+ * the publish that would create that version is blocked by that same failing test.
+ *
+ * Under prerelease mode the template therefore keeps the pin it has, which points at the last
+ * stable line. The original invariant is untouched for stable cuts, which is what it was reasoned
+ * about.
+ */
+function inPrereleaseMode() {
+  const pre = '.changeset/pre.json'
+  if (!existsSync(pre)) return false
+  try {
+    return JSON.parse(readFileSync(pre, 'utf8')).mode === 'pre'
+  } catch {
+    // A pre.json that exists and does not parse is not "we are on stable" — resolving it that way
+    // would resolve an unknown in the direction that rewrites the template.
+    throw new Error('.changeset/pre.json exists but is not valid JSON')
+  }
+}
+
+if (inPrereleaseMode()) {
+  console.log(
+    'Prerelease mode — template pins left alone. A scaffolded app is a new consumer and belongs on the stable channel.',
+  )
+  process.exit(0)
 }
 
 const template = readFileSync(TEMPLATE, 'utf8')
