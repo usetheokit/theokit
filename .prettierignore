@@ -19,3 +19,11 @@ CHANGELOG.md
 # settles at zero, and regenerating becomes something to postpone — which is the omission failure mode
 # that left the gate red on develop.
 packages/agents/tests/unit/__snapshots__/subpath-surface.json
+
+# Written by changesets, not by anyone here. `changeset version` rewrites `pre.json` on every run
+# and does not format its output — prettier wants the `changesets` array on one line and changesets
+# writes it expanded, so formatting it once fixes nothing and the check fails again at the next
+# release. Measured on usetheokit/theokit#618, where it failed `Lint + Format`, `Type tests`,
+# `Unit + Type tests` and `CI` at once. theokit-plugins already ignores this directory; matching it
+# rather than inventing a second convention.
+.changeset
