@@ -600,3 +600,22 @@ jobs:
             exit 1
           fi
           echo "no required job failed or was cancelled"
+
+  # The channel this repository declares and the state changesets is actually in must agree.
+  # `changeset pre exit`, a bad merge, or a conflict resolved the wrong way removes
+  # `.changeset/pre.json`; nothing errors; the next release publishes a stable version and moves
+  # the `latest` dist-tag for every consumer, reporting success. This is the pull-request half of
+  # the gate — `release.yml` carries the other half, for the path that never passed through here.
+  release-channel:
+    name: release channel
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # `@v1` is a moving ref by design — a policy fix in shared-workflows must reach every caller
+      # without seven pull requests, which is the reason that repository exists.
+      - uses: usetheokit/shared-workflows/actions/release-channel@v1 # zizmor: ignore[unpinned-uses]
