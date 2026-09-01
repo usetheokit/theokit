@@ -582,30 +582,19 @@ jobs:
       - changelog-current
       - license-compliance
       - sonar
+      - release-channel
     steps:
-      - name: Report
-        env:
-          RESULTS: ${{ toJSON(needs) }}
-        run: |
-          set -euo pipefail
-          echo "$RESULTS"
-          # Matched over the serialized results rather than a hand-kept list: a job added to
-          # `needs` and forgotten here would silently stop being gated.
-          if echo "$RESULTS" | grep -q '"result": *"failure"'; then
-            echo "::error::a required job failed"
-            exit 1
-          fi
-          if echo "$RESULTS" | grep -q '"result": *"cancelled"'; then
-            echo "::error::a required job was cancelled"
-            exit 1
-          fi
-          echo "no required job failed or was cancelled"
+      # Was an inline grep over the serialized results, duplicated in four repositories.
+      # It read only `failure` and `cancelled`, so a job that SKIPPED counted as a pass —
+      # and a job that did not run reads exactly like one that did. The shared action
+      # fails on an undeclared skip, and one implementation replaces four.
+      #
+      # `@v1` is a moving ref by design — a policy fix in shared-workflows must reach
+      # every caller without nine pull requests, which is the reason that repo exists.
+      - uses: usetheokit/shared-workflows/actions/checks-pass@v1 # zizmor: ignore[unpinned-uses]
+        with:
+          needs: ${{ toJSON(needs) }}
 
-  # The channel this repository declares and the state changesets is actually in must agree.
-  # `changeset pre exit`, a bad merge, or a conflict resolved the wrong way removes
-  # `.changeset/pre.json`; nothing errors; the next release publishes a stable version and moves
-  # the `latest` dist-tag for every consumer, reporting success. This is the pull-request half of
-  # the gate — `release.yml` carries the other half, for the path that never passed through here.
   release-channel:
     name: release channel
     runs-on: ubuntu-latest
