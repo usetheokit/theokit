@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-// @ts-expect-error — a plain `.mjs` script with JSDoc types, imported for its one pure function.
+// Typed by `scripts/preview-packages.d.mts` — no suppression needed, so a future change to the
+// signature is a compile error here rather than a silent one.
 import { selectPreviewPackages } from '../../scripts/preview-packages.mjs'
 
 /**
