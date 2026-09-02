@@ -173,8 +173,16 @@ jobs:
       #
       # One leg carries the flag rather than both. The numbers would be identical, and two legs
       # uploading under one artifact name is an upload conflict.
+      # `hanging-process` on the coverage leg (#635). It prints NOTHING on a healthy run and lists the
+      # handles keeping the process alive when the run will not terminate — which is the one thing
+      # four dead 30-minute jobs could not tell anyone. Those jobs died at the workflow's own ceiling
+      # having printed only successes: the summary comes last, so a run that never finishes has no
+      # failure in its log at all, and the author bisects a commit instead of reading a name.
+      #
+      # On the coverage leg alone, because that is the leg it happens on, and because a second
+      # reporter on the leg that already passes buys nothing.
       - name: Tests${{ matrix.coverage && ' + coverage thresholds' || '' }}
-        run: ${{ matrix.coverage && 'pnpm test:coverage' || 'pnpm test' }}
+        run: ${{ matrix.coverage && 'pnpm test:coverage --reporter=default --reporter=hanging-process' || 'pnpm test' }}
       # Once, not once per leg. `vitest --typecheck.only` runs TypeScript over the `.test-d.ts`
       # files, and its diagnostics come from the TS version, the tsconfig and the sources — all
       # pinned by the lockfile, none varying with the node runtime that executes tsc. The second
