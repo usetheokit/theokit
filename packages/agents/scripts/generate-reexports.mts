@@ -81,8 +81,70 @@ export interface Surface {
  *
  * Resolves from `src/index.ts` — the build's own point of view, so it does not diverge from the bundler.
  */
+/**
+ * One `Surface` per specifier, computed once (usetheokit/theokit#631's neighbour — see below).
+ *
+ * `enumerateSurface` builds a whole TypeScript program: a compiler host, a module resolution, a
+ * `createProgram`, a type checker. `subpath-surface.test.ts` asks the same four specifiers twice —
+ * once for "the layer re-exports everything the source has", once for "the layer invents nothing" —
+ * so eight programs were built where four answer both questions.
+ *
+ * Under `vitest --coverage` that arithmetic stopped being academic: measured 2026-09-02, the first
+ * of those two tests took **105 s against its own 60 s timeout** and failed, on a suite that passes
+ * in 10 minutes without coverage. It fails by the clock rather than by the assertion, so it fails
+ * only when the machine is busy — which is the definition of a flaky test, and `rules/testing.md`
+ * § 3 calls that a bug rather than an inconvenience.
+ *
+ * The cache is safe because the answer is a pure function of the specifier: the same input resolves
+ * the same file and enumerates the same exports, for the lifetime of a process in which the files
+ * on disk do not change. The generator script calls each specifier once, so it is unaffected.
+ */
+const SURFACE_CACHE = new Map<string, Promise<Surface>>()
+
 export async function enumerateSurface(specifier: string): Promise<Surface> {
+  // The PROMISE is cached, not the resolved value: two concurrent callers for the same specifier
+  // then share one program instead of racing to build two.
+  const cached = SURFACE_CACHE.get(specifier)
+  if (cached !== undefined) return cached
+  const computing = computeSurface(specifier)
+  SURFACE_CACHE.set(specifier, computing)
+  return computing
+}
+
+/**
+ * One compiler host for every specifier, with its parsed files kept.
+ *
+ * The cache above removed the DUPLICATE programs; this removes the duplicated WORK inside the four
+ * that remain. Each `createProgram` re-reads and re-parses the TypeScript `lib.*.d.ts` files and
+ * everything the specifier pulls in — identical bytes, four times, because a fresh host starts with
+ * an empty source-file cache.
+ *
+ * Measured 2026-09-02 on a machine constrained to 4 CPUs, which is the shape of a CI runner: the
+ * cached-but-unshared version still took **63 s against the test's 60 s timeout**. The wall clock is
+ * what fails here, so the arithmetic that looks academic on a workstation is the whole defect on the
+ * machine that actually gates the merge.
+ *
+ * `getSourceFile` is the only method overridden: everything else keeps the default host's behaviour,
+ * so resolution, lib lookup and file existence are unchanged. Keyed by file name alone because these
+ * files do not change within one process — the same assumption the surface cache already documents.
+ */
+const SOURCE_FILE_CACHE = new Map<string, ts.SourceFile | undefined>()
+
+function sharedCompilerHost(): ts.CompilerHost {
   const host = ts.createCompilerHost({})
+  const readFile = host.getSourceFile.bind(host)
+  host.getSourceFile = (fileName, languageVersion, onError, shouldCreate) => {
+    const hit = SOURCE_FILE_CACHE.get(fileName)
+    if (hit !== undefined) return hit
+    const parsed = readFile(fileName, languageVersion, onError, shouldCreate)
+    SOURCE_FILE_CACHE.set(fileName, parsed)
+    return parsed
+  }
+  return host
+}
+
+async function computeSurface(specifier: string): Promise<Surface> {
+  const host = sharedCompilerHost()
   const res = ts.resolveModuleName(
     specifier,
     join(ROOT, 'src', 'index.ts'),
@@ -92,11 +154,17 @@ export async function enumerateSurface(specifier: string): Promise<Surface> {
   const file = res.resolvedModule?.resolvedFileName
   if (file === undefined) throw new Error(`did not resolve: ${specifier}`)
 
-  const prog = ts.createProgram([file], {
-    noEmit: true,
-    moduleResolution: ts.ModuleResolutionKind.Bundler,
-    skipLibCheck: true,
-  })
+  const prog = ts.createProgram(
+    [file],
+    {
+      noEmit: true,
+      moduleResolution: ts.ModuleResolutionKind.Bundler,
+      skipLibCheck: true,
+    },
+    // The same host the resolution used: without passing it, `createProgram` builds its own and the
+    // parse cache above would cover module resolution only, which is the cheap half.
+    host,
+  )
   const sf = prog.getSourceFile(file)
   if (sf === undefined) throw new Error(`no source file: ${file}`)
   const ck = prog.getTypeChecker()

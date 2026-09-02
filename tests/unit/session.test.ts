@@ -2,7 +2,9 @@ import { describe, it, expect } from 'vitest'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { createSessionManager } from '../../packages/theo/src/server/auth/session.js'
 
-const SECRET = 'a-very-secure-secret-key-for-testing-purposes-1234'
+// `openssl rand -hex 32`-shaped. A fixture that trips the production guard (#610) is one the
+// suite reports as a warning on every run, which is how a warning stops being read.
+const SECRET = '1d94199747cbc0ec38c7ecbe6ee3238a3ede3130c0dcf5f218b4d4f8308e9d00'
 
 interface TestSession {
   userId: string
@@ -146,8 +148,8 @@ describe('Session Manager', () => {
  * No silent truncation (which would give false sense of rotation).
  */
 describe('T3.1 — Session secret as string | string[]', () => {
-  const NEW_SECRET = 'a-new-secret-' + 'x'.repeat(32)
-  const OLD_SECRET = 'an-old-secret-' + 'y'.repeat(32)
+  const NEW_SECRET = '790d2288294f631ad2bad5179aabff1e9dc72fb7544f0164b93b1b934ea71f59'
+  const OLD_SECRET = 'c95bb04e8e31f62897b16dbc8ea8d4a5de2d9f06872b3b8fc93916a604558a1a'
 
   it('Backwards compat: string secret works as before', async () => {
     const auth = createSessionManager<TestSession>({ secret: NEW_SECRET })
@@ -186,7 +188,7 @@ describe('T3.1 — Session secret as string | string[]', () => {
 
   it('Decrypt returns null when no secret in array matches', async () => {
     const thirdParty = createSessionManager<TestSession>({
-      secret: 'unknown-secret-' + 'z'.repeat(32),
+      secret: '1bbf660a56a6aa385ad45b74696595ff2f449f9e7445c5d0254765d70e8fdf41',
     })
     const r = createMockRes()
     await thirdParty.createSession(r, { userId: '99', role: 'x' })

@@ -20,7 +20,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 import ts from 'typescript'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { generateClientDts } from '../../packages/theo/src/vite-plugin/app-typed-client.js'
 import type { TheoManifest } from '../../packages/theo/src/server/scan/manifest.js'
@@ -28,15 +28,33 @@ import type { TheoManifest } from '../../packages/theo/src/server/scan/manifest.
 const REPO_ROOT = resolve(__dirname, '../..')
 const created: string[] = []
 
-afterEach(() => {
+afterAll(() => {
   while (created.length > 0) rmSync(created.pop()!, { recursive: true, force: true })
 })
 
 /**
- * Stage a project holding one route, the generated `client.d.ts` for it, and a probe that assigns
- * the response to `number`. Returns the diagnostics the compiler produced for the probe.
+ * Both probes, compiled in ONE program (usetheokit/theokit#635).
+ *
+ * Each probe used to build its own `ts.Program`, and a program re-reads and re-parses the
+ * TypeScript `lib.*.d.ts` files plus the whole `theokit/client` source tree behind the `paths`
+ * mapping. Two probes, two copies of identical work; only the probe itself differs.
+ *
+ * On a workstation that duplication is invisible. Measured 2026-09-02 with the process constrained
+ * to 4 CPUs — the shape of a CI runner — this file took 65s inside a full run and blew its per-test
+ * timeout. Caching the parsed files across the two calls brought it to 50s, which still failed:
+ * the second program is cheap once the files are cached, and the FIRST one is the cost. One program
+ * is what removes it.
+ *
+ * The oracle is unchanged. Diagnostics were already filtered by probe file name — two probes in one
+ * program are two independent modules, and each test still reads only its own.
  */
-function compileProbe(probeBody: string): readonly ts.Diagnostic[] {
+interface Probe {
+  readonly name: string
+  readonly body: string
+}
+
+/** Diagnostics per probe name, from a single compilation of all of them. */
+function compileProbes(probes: readonly Probe[]): Map<string, readonly ts.Diagnostic[]> {
   const root = mkdtempSync(join(tmpdir(), 'client-dts-'))
   created.push(root)
   mkdirSync(join(root, 'server', 'routes'), { recursive: true })
@@ -66,11 +84,15 @@ function compileProbe(probeBody: string): readonly ts.Diagnostic[] {
     }),
   )
 
-  const probe = join(root, 'probe.ts')
-  writeFileSync(probe, probeBody)
+  const paths = new Map<string, string>()
+  for (const probe of probes) {
+    const file = join(root, `${probe.name}.ts`)
+    writeFileSync(file, probe.body)
+    paths.set(probe.name, file)
+  }
 
   const program = ts.createProgram({
-    rootNames: [probe, join(root, '.theokit', 'client.d.ts')],
+    rootNames: [...paths.values(), join(root, '.theokit', 'client.d.ts')],
     options: {
       target: ts.ScriptTarget.ES2022,
       module: ts.ModuleKind.ESNext,
@@ -85,47 +107,66 @@ function compileProbe(probeBody: string): readonly ts.Diagnostic[] {
     },
   })
 
-  return ts.getPreEmitDiagnostics(program).filter((d) => d.file?.fileName === probe)
+  const all = ts.getPreEmitDiagnostics(program)
+  const byProbe = new Map<string, readonly ts.Diagnostic[]>()
+  for (const [name, file] of paths) {
+    byProbe.set(
+      name,
+      all.filter((d) => d.file?.fileName === file),
+    )
+  }
+  return byProbe
 }
+
+const PROBES: readonly Probe[] = [
+  {
+    name: 'assigns-to-number',
+    body: [
+      "import { client } from '@theo/client'",
+      'export async function run() {',
+      '  const res = await client.health.get()',
+      '  const wrong: number = res',
+      '  return wrong',
+      '}',
+      '',
+    ].join('\n'),
+  },
+  {
+    name: 'assigns-to-the-route-shape',
+    body: [
+      "import { client } from '@theo/client'",
+      'export async function run() {',
+      '  const res: { status: string; uptime: number } = await client.health.get()',
+      '  return res',
+      '}',
+      '',
+    ].join('\n'),
+  },
+]
+
+let diagnostics: Map<string, readonly ts.Diagnostic[]>
+
+beforeAll(() => {
+  diagnostics = compileProbes(PROBES)
+}, 120_000)
+
+const messagesFor = (name: string): string =>
+  (diagnostics.get(name) ?? [])
+    .map((d) => ts.flattenDiagnosticMessageText(d.messageText, ' '))
+    .join('\n')
 
 describe('the generated @theo/client keeps its types', () => {
   it('reports the real response shape when it is assigned to the wrong type', () => {
-    const diagnostics = compileProbe(
-      [
-        "import { client } from '@theo/client'",
-        'export async function run() {',
-        '  const res = await client.health.get()',
-        '  const wrong: number = res',
-        '  return wrong',
-        '}',
-        '',
-      ].join('\n'),
-    )
-
     // Silence here is the defect: `any` assigns to `number` without complaint.
-    expect(diagnostics.length).toBeGreaterThan(0)
-    const message = diagnostics
-      .map((d) => ts.flattenDiagnosticMessageText(d.messageText, ' '))
-      .join('\n')
+    expect(diagnostics.get('assigns-to-number')?.length ?? 0).toBeGreaterThan(0)
+
+    const message = messagesFor('assigns-to-number')
     expect(message).toContain('not assignable to type')
     // The shape has to be the ROUTE's, not some other error that happens to fire.
     expect(message).toContain('uptime')
   })
 
   it('accepts the response when it is assigned to the shape the route returns', () => {
-    const diagnostics = compileProbe(
-      [
-        "import { client } from '@theo/client'",
-        'export async function run() {',
-        '  const res: { status: string; uptime: number } = await client.health.get()',
-        '  return res',
-        '}',
-        '',
-      ].join('\n'),
-    )
-
-    expect(
-      diagnostics.map((d) => ts.flattenDiagnosticMessageText(d.messageText, ' ')).join('\n'),
-    ).toBe('')
+    expect(messagesFor('assigns-to-the-route-shape')).toBe('')
   })
 })

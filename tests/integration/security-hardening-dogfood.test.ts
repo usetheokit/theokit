@@ -206,8 +206,8 @@ describe('Security-hardening dogfood — composed end-to-end', () => {
   // Step 6 — Rotate session secret, existing cookie still decrypts
   // ─────────────────────────────────────────────────────────────
   it('session secret rotation: legacy-encrypted cookie still decrypts AND gets re-encrypted with newest', async () => {
-    const NEW = 'new-secret-' + 'x'.repeat(32)
-    const OLD = 'old-secret-' + 'y'.repeat(32)
+    const NEW = 'b6404972fe57b34a3d087895649f308428060c7493b3b410ed49f47868154c33'
+    const OLD = '0059c645dc6b76a55ba577087a63850160537db176904bebf97f8745a698d695'
 
     interface S {
       userId: string

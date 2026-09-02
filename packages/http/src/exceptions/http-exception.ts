@@ -32,12 +32,32 @@ const STATUS_CODES: Record<number, string> = {
 export interface HttpExceptionOptions {
   cause?: Error
   description?: string
+  /**
+   * Response headers that belong to THIS refusal (usetheokit/theokit#612).
+   *
+   * Some statuses are not complete without them. `429` without `Retry-After` tells a client it went
+   * too fast and not when it may return, so a well-behaved client can only guess and a badly
+   * behaved one retries immediately. The same holds for `401` + `WWW-Authenticate`, `405` + `Allow`
+   * and `503` + `Retry-After`: the header is not decoration, it is the half of the answer that says
+   * what to do next.
+   *
+   * Before this existed, a guard computing `X-RateLimit-*` had nowhere to put them — `canActivate`
+   * returns a boolean and owns no response — so the numbers were discarded at the boundary and the
+   * caller received a bare `403`.
+   *
+   * `content-type` is set by the dispatcher and is not overridable here: the body is always the
+   * `toJSON()` shape, and letting a header claim otherwise would describe a body that does not
+   * exist.
+   */
+  headers?: Readonly<Record<string, string>>
 }
 
 export class HttpException extends Error {
   public readonly statusCode: number
   public readonly code: string
   public readonly description?: string
+  /** Headers this refusal carries. Empty unless the thrower supplied some. See {@link HttpExceptionOptions.headers}. */
+  public readonly headers: Readonly<Record<string, string>>
 
   constructor(message: string, statusCode: number, options?: HttpExceptionOptions) {
     super(message, options?.cause ? { cause: options.cause } : undefined)
@@ -45,6 +65,9 @@ export class HttpException extends Error {
     this.statusCode = statusCode
     this.code = STATUS_CODES[statusCode] ?? 'INTERNAL_SERVER_ERROR'
     this.description = options?.description
+    // Frozen: an exception in flight is a value, and a dispatcher that mutated it would change what
+    // an exception filter downstream sees.
+    this.headers = Object.freeze({ ...options?.headers })
   }
 
   toJSON() {
@@ -59,7 +82,23 @@ export class HttpException extends Error {
   }
 }
 
-function factory(status: number, defaultMsg: string) {
+/**
+ * The constructor shape every status-named exception shares.
+ *
+ * Declared explicitly (usetheokit/theokit#612) because inference erased it where it mattered most.
+ * Without a return type, `tsup` emitted each subclass's base as an ANONYMOUS structural object —
+ * `{ new (…): { statusCode: number; name: string; message: string; stack?: string } }` — so
+ * `TooManyRequestsException` was, to a consumer's type checker, no longer an `Error`. Every app
+ * writing `throw new UnauthorizedException()` therefore tripped `@typescript-eslint/only-throw-error`
+ * against the framework's own exceptions, and the honest reading of that lint was correct: the
+ * published types no longer said these were errors.
+ */
+type HttpExceptionConstructor = new (
+  message?: string,
+  options?: HttpExceptionOptions,
+) => HttpException
+
+function factory(status: number, defaultMsg: string): HttpExceptionConstructor {
   return class extends HttpException {
     constructor(message = defaultMsg, options?: HttpExceptionOptions) {
       super(message, status, options)

@@ -2,12 +2,14 @@
 import 'reflect-metadata'
 
 import { HttpDecoratorsConfigError } from './bridge/errors.js'
-import { createExecutionContext, type CanActivate } from './bridge/execution-context.js'
+import { createExecutionContext } from './bridge/execution-context.js'
+import { runGuards } from './bridge/guard-chain.js'
 import { createNodeAdapter } from './bridge/runtime/node.js'
 import type { ServerHandle } from './bridge/runtime/types.js'
 import { walkControllerMetadata, type WalkResult } from './bridge/walk-metadata.js'
 import type { ParamEntry } from './decorators/params.js'
 import { ForbiddenException, HttpException } from './exceptions/http-exception.js'
+import { httpExceptionToResponse } from './exceptions/to-response.js'
 import { runWithRequestContext, type TheoRequestContext } from './request-context.js'
 import {
   classifyAccess,
@@ -642,18 +644,24 @@ export class TheoApp {
         // system rather than of whichever command happened to run the build gate.
         if (route.access === 'undeclared' && this.undeclaredRoutes === 'deny') {
           const ex = new ForbiddenException(undeclaredRouteRefusal('agent', pathname))
-          return jsonResponse(ex.statusCode, ex.toJSON())
+          return httpExceptionToResponse(ex)
         }
 
         // Bug #4 fix: enforce @UseGuards on agent routes (same pipeline as controllers)
         if (route.guards.length > 0) {
           const ctx = createExecutionContext(request, route.agentClass, route.methodName)
-          for (const GuardCtor of route.guards) {
-            const guard = new (GuardCtor as new () => CanActivate)()
-            if (!(await guard.canActivate(ctx))) {
-              const ex = new ForbiddenException('Forbidden resource')
-              return jsonResponse(ex.statusCode, ex.toJSON())
-            }
+          // #612 — the `try` is what an agent route lacked. This loop sits OUTSIDE the controller
+          // path's try/catch below, so a guard raising `TooManyRequestsException` escaped into the
+          // runtime and became whatever the host does with an unhandled rejection. Agent routes
+          // carry no `@UseFilters`, so rendering the exception here is the whole answer; anything
+          // that is not an `HttpException` still propagates, because a broken guard is a fault and
+          // not a decision.
+          try {
+            const refusal = await runGuards(route.guards, ctx)
+            if (refusal) return refusal
+          } catch (err) {
+            if (err instanceof HttpException) return httpExceptionToResponse(err)
+            throw err
           }
         }
         return route.handler(request)
@@ -682,7 +690,7 @@ export class TheoApp {
     if (entry.walk.access === 'undeclared') {
       if (this.undeclaredRoutes === 'deny') {
         const ex = new ForbiddenException(undeclaredRouteRefusal('controller', url.pathname))
-        return jsonResponse(ex.statusCode, ex.toJSON())
+        return httpExceptionToResponse(ex)
       }
       // Once per route, not per request — a warning repeated on every call is one that gets
       // filtered out, and the set of routes is fixed at mount.
@@ -699,13 +707,11 @@ export class TheoApp {
         entry.instance.constructor,
         entry.walk.propertyKey,
       )
-      for (const GuardCtor of entry.walk.guards) {
-        const guard = new (GuardCtor as new () => CanActivate)()
-        if (!(await guard.canActivate(ctx))) {
-          const ex = new ForbiddenException('Forbidden resource')
-          return jsonResponse(ex.statusCode, ex.toJSON())
-        }
-      }
+      // #612 — one guard pipeline for all three dispatchers; see `bridge/guard-chain.ts`. An
+      // `HttpException` thrown by a guard falls through to the catch below, where `@UseFilters` and
+      // then `httpExceptionToResponse` render it WITH its headers.
+      const refusal = await runGuards(entry.walk.guards, ctx)
+      if (refusal) return refusal
 
       // Body — skip parsing entirely if handler has no @Body decorator (Elysia-inspired lazy parsing)
       let body: unknown
@@ -773,7 +779,9 @@ export class TheoApp {
       }
       // Fallback: HttpException subclasses (Bug #3 fix)
       if (err instanceof HttpException) {
-        return jsonResponse(err.statusCode, err.toJSON())
+        // #612 — `httpExceptionToResponse`, not `jsonResponse`, so a refusal that carries
+        // `Retry-After` / `X-RateLimit-*` reaches the client with them.
+        return httpExceptionToResponse(err)
       }
       // Security: never leak raw error messages to clients
       console.error('[theokit] Internal error:', err instanceof Error ? err.message : err)

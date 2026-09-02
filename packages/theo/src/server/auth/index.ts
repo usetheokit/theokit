@@ -1,5 +1,6 @@
 export * from './auth.js'
 export * from './session.js'
+export * from './secret-strength.js'
 export * from './authenticated-guard.js'
 export * from './crypto.js'
 export * from './nonce.js'

@@ -9,6 +9,7 @@ import type { ExposeOptions } from '../decorators/expose.js'
 import type { ParamEntry } from '../decorators/params.js'
 import { digestError } from '../error-digest.js'
 import { ForbiddenException } from '../exceptions/http-exception.js'
+import { httpExceptionToResponse } from '../exceptions/to-response.js'
 import {
   undeclaredRouteRefusal,
   undeclaredRouteWarning,
@@ -18,11 +19,8 @@ import {
 import { resolveOrNew, type DiContainer } from './di-resolve.js'
 export type { DiContainer } from './di-resolve.js'
 import { runExceptionFilters } from './exception-filter-chain.js'
-import {
-  createExecutionContext,
-  type CanActivate,
-  type ExecutionContext,
-} from './execution-context.js'
+import { createExecutionContext, type CanActivate } from './execution-context.js'
+import { runGuards } from './guard-chain.js'
 import { runInterceptors } from './interceptor-chain.js'
 import {
   MiddlewareConsumerImpl,
@@ -277,7 +275,7 @@ async function handleRequest(
     if (walk.access === 'undeclared') {
       if (undeclared.policy === 'deny') {
         const ex = new ForbiddenException(undeclaredRouteRefusal('controller', pathname))
-        return jsonResponse(ex.statusCode, ex.toJSON())
+        return httpExceptionToResponse(ex)
       }
       if (!undeclared.warned.has(pathname)) {
         undeclared.warned.add(pathname)
@@ -287,7 +285,12 @@ async function handleRequest(
 
     // Guards
     const ctx = createExecutionContext(request, instance.constructor, walk.propertyKey)
-    const guardResponse = await runGuards(walk.guards, ctx, container)
+    // #612 — one guard pipeline for all three dispatchers; see `bridge/guard-chain.ts`.
+    const guardResponse = await runGuards(
+      walk.guards,
+      ctx,
+      (Ctor) => resolveOrNew(Ctor, container) as CanActivate,
+    )
     if (guardResponse) return guardResponse
 
     // M47 — an @Expose-bound route is served by the injected agent runtime (mountAgent, via theo), AFTER
@@ -345,24 +348,6 @@ async function handleRequest(
   } catch (err) {
     return runExceptionFilters(err, walk.filters, request, container)
   }
-}
-
-// ─── Guards (return Response on rejection, null on pass) ─────
-
-async function runGuards(
-  guards: Function[],
-  context: ExecutionContext,
-  container?: DiContainer,
-): Promise<Response | null> {
-  for (const GuardCtor of guards) {
-    const guard = resolveOrNew(GuardCtor, container) as CanActivate
-    const allowed = await guard.canActivate(context)
-    if (!allowed) {
-      const ex = new ForbiddenException('Forbidden resource')
-      return jsonResponse(ex.statusCode, ex.toJSON())
-    }
-  }
-  return null
 }
 
 // ─── Body resolution ─────────────────────────────────────────

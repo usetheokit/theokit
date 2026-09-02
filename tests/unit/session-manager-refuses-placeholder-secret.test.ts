@@ -21,7 +21,11 @@ import {
 
 // 41 chars, so the length floor cannot be what refuses it. It is the placeholder that must.
 const LONG_PLACEHOLDER = 'CHANGE_ME_TO_RANDOM_32_PLUS_CHARS_FOR_REAL'
-const REAL_SECRET = 'a-real-32-char-or-more-secret-value-for-tests'
+// `openssl rand -hex 32`. The previous fixture read `a-real-32-char-or-more-secret-value-for-tests`,
+// which the widened rules (#610) now refuse — correctly: it contains the word "secret", and a
+// generated secret contains no words. A fixture that could not survive the guard it exercises is
+// the same defect as a guard too narrow to fire, seen from the other side.
+const REAL_SECRET = '9f2c1b7ae4d05836af41c9b2e7d3105fa8b6c4e29d17035bce8a4f6027d1b93c'
 
 const constructors = [
   ['createSessionManager', createSessionManager],
@@ -80,4 +84,57 @@ describe('session managers refuse a placeholder secret in production (#429)', ()
       )
     })
   }
+})
+
+/**
+ * #610 — the six strings measured against 0.64.0, each of which BOOTED in production. They are
+ * exercised through the constructors rather than through `inspectSecret`, because "the rule refuses
+ * it" and "the app cannot start with it" are different claims and only the second one protects
+ * anybody. `secret-strength.test.ts` covers the first.
+ *
+ * The forged-cookie transcript on the issue needs only one of these to be accepted: the signing key
+ * is then readable in the app's own source, and an attacker mints a session for any identity.
+ */
+describe('session managers refuse the placeholders 0.64.0 accepted (#610)', () => {
+  let warnSpy: ReturnType<typeof vi.spyOn>
+
+  beforeEach(() => {
+    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+  })
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    warnSpy.mockRestore()
+  })
+
+  const measured = [
+    'dev-only-session-secret-32-chars-min-xxxx',
+    'changemexxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+    'devxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+    'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    'test-secret00000000000000000000000000000',
+    // The OAuth-transaction cookie from the same adopter — a second call site repeating the idiom
+    // of the first, which is why the check belongs where every secret passes rather than in a
+    // function an app must know to call.
+    'dev-only-oauth-tx-secret-32-chars-min-yy',
+  ]
+
+  for (const [name, construct] of constructors) {
+    for (const secret of measured) {
+      it(`Given production, When ${name} gets a ${secret.length}-char placeholder, Then it refuses`, () => {
+        vi.stubEnv('NODE_ENV', 'production')
+        expect(secret.length).toBeGreaterThanOrEqual(32)
+        expect(() => construct({ secret, cookieName: 'sid' })).toThrow()
+      })
+    }
+  }
+
+  // The refusal must not publish the key it refuses: an error message reaches stdout, the crash
+  // reporter, and everything that aggregates them.
+  it('Given production, When the secret is refused, Then the message does not echo it', () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    const secret = 'dev-only-session-secret-32-chars-min-xxxx'
+    expect(() => createSessionManagerWeb({ secret, cookieName: 'sid' })).toThrow(
+      expect.objectContaining({ message: expect.not.stringContaining(secret.slice(0, 16)) }),
+    )
+  })
 })

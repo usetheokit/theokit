@@ -274,7 +274,18 @@ class UsersController {
 Every route declares who may call it — `@UseGuards(...)` names who decides, `@Public()` says it is
 open on purpose. A route that declares neither is refused with 403 rather than served, and
 `theokit build` fails on it first. `theokit/server/auth` ships `Authenticated(sessions)` for the
-commonest answer, so "any signed-in caller" is not a guard each app writes by hand.
+commonest answer, so "any signed-in caller" is not a guard each app writes by hand, and
+`theokit/server/rate-limit` ships `RateLimited({ max, windowMs })` for the second commonest —
+a caller over budget gets `429` with `Retry-After` and the remaining budget, which is the answer a
+boolean guard cannot give:
+
+```typescript
+import { RateLimited } from 'theokit/server/rate-limit'
+
+@Post('transcribe')
+@UseGuards(Authenticated(sessions), RateLimited({ max: 20, windowMs: 60_000 }))
+transcribe(@Body(schema) body) { ... }
+```
 
 ### Pipeline
 
@@ -284,7 +295,8 @@ commonest answer, so "any signed-in caller" is not a guard each app writes by ha
 import { HttpException } from '@theokit/http'
 import type { ArgumentsHost, CanActivate, ExecutionContext, Interceptor } from '@theokit/http'
 
-// Guards — decide whether the request enters. `false` answers 403.
+// Guards — decide whether the request enters. `false` answers 403; throw an HttpException when
+// the refusal needs its own status or headers (429 + Retry-After, 401 + WWW-Authenticate).
 class AuthGuard implements CanActivate {
   canActivate(ctx: ExecutionContext): boolean {
     return ctx.getRequest().headers.get('authorization') !== null

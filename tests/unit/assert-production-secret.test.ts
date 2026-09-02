@@ -1,7 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { assertProductionSecret } from '../../packages/theo/src/server/auth/session.js'
 
-const REAL_SECRET = 'a-real-32-char-or-more-secret-value-for-tests'
+// `openssl rand -hex 32`. The previous fixture read `a-real-32-char-or-more-secret-value-for-tests`,
+// which the widened rules (#610) now refuse — correctly: it contains the word "secret", and a
+// generated secret contains no words. A fixture that could not survive the guard it exercises is
+// the same defect as a guard too narrow to fire, seen from the other side.
+const REAL_SECRET = '9f2c1b7ae4d05836af41c9b2e7d3105fa8b6c4e29d17035bce8a4f6027d1b93c'
 
 describe('assertProductionSecret (EC-2)', () => {
   let envBefore: string | undefined

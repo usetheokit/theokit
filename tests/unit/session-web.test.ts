@@ -19,8 +19,10 @@ import {
 } from '../../packages/theo/src/server/auth/session.js'
 
 // Test secret meeting the 32-char minimum.
-const SECRET_A = 'a'.repeat(32)
-const SECRET_B = 'b'.repeat(32)
+// `openssl rand -hex 32`-shaped. A fixture that trips the production guard (#610) is one the
+// suite reports as a warning on every run, which is how a warning stops being read.
+const SECRET_A = 'c7dff4606018b4aac3e6e054015b1853308bfbf1936c6c2f2577409a5e8c796f'
+const SECRET_B = 'cf3d17af21ccbaf537332e8fa92388ad2b0d8cd6d50ec0d532735239c80ed17c'
 
 interface UserSession {
   userId: string
