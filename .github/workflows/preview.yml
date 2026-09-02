@@ -13,6 +13,31 @@ name: Preview releases
 #
 # The implementation is shared rather than copied nine times; see
 # usetheokit/shared-workflows/.github/workflows/preview.yml.
+#
+# ## Installing a preview on pnpm 11: ERR_PNPM_EXOTIC_SUBDEP (#632)
+#
+# A consumer pinning ONE preview of a package from this monorepo can be refused before anything is
+# downloaded:
+#
+#   [ERR_PNPM_EXOTIC_SUBDEP] Exotic dependency "@theokit/presenter" (resolved via url) is not
+#   allowed in subdependencies when blockExoticSubdeps is enabled
+#
+# The preview is not broken, and neither is the consumer's manifest. pkg.pr.new rewrites the
+# internal dependencies of everything published in the SAME invocation to preview URLs, so the
+# preview of `@theokit/agents` declares `@theokit/presenter` as a URL. One level down from the
+# consumer that is a SUBdependency, and pnpm 11 ships `blockExoticSubdeps: true` by default.
+#
+# The workaround is `blockExoticSubdeps: false` in the consuming workspace. It works — measured on a
+# real consumer, 94 files / 753 tests green on a preview build — and it is a poor trade: the guard
+# goes off for the whole tree, not for the pinned preview, and stays off afterwards. Prefer it for
+# the length of the verification and put it back.
+#
+# Measured 2026-09-02, both halves: `pkg-pr-new@0.0.88 --help` offers no flag to keep an internal
+# dependency on its registry range, and `pnpm pack` on `packages/agents` ALREADY writes
+# `"@theokit/presenter": "0.8.0"` (from `workspace:*`) — so the URL comes from the cross-package
+# rewrite, not from the manifest. Publishing fewer packages per invocation would avoid it, at the
+# cost of a preview that cannot carry an unpublished change in a sibling. That decision belongs with
+# the shared workflow, not here.
 
 on:
   # Filtered by BASE branch, and that is the only lever there is: `pull_request` has no head-branch
