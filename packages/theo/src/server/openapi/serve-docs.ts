@@ -13,6 +13,8 @@
 import { closeSync, fstatSync, openSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
+import { escapeHtml, escapeHtmlAttribute } from '../security/escape-html.js'
+
 export interface OpenApiDocsOptions {
   /** Path to serve Scalar UI (default: '/api/docs'). */
   docsPath?: string
@@ -81,13 +83,9 @@ function hasDotDotSegment(p: string): boolean {
 
 // ── HTML renderer ──
 
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-}
+// #611 — this file used to carry its own four-character `escapeHtml`, private and unreachable, and
+// an adopter re-derived the same four characters (and the same omission of `'`) for an e-mail body.
+// The escaping now comes from `server/security`, where it is exported with the caveat attached.
 
 function renderScalarHtml(title: string, specUrl: string, cdnUrl: string): string {
   return `<!DOCTYPE html>
@@ -98,8 +96,8 @@ function renderScalarHtml(title: string, specUrl: string, cdnUrl: string): strin
   <meta name="viewport" content="width=device-width,initial-scale=1">
 </head>
 <body>
-  <script id="api-reference" data-url="${escapeHtml(specUrl)}"></script>
-  <script src="${escapeHtml(cdnUrl)}"></script>
+  <script id="api-reference" data-url="${escapeHtmlAttribute(specUrl)}"></script>
+  <script src="${escapeHtmlAttribute(cdnUrl)}"></script>
 </body>
 </html>`
 }
