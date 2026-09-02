@@ -8,7 +8,6 @@
 import type { InteractionUpdate } from '@theokit/sdk'
 
 import type { StreamEvent } from './agent-sse-handler.js'
-import { noteReplayMarker } from './replay-marker-detector.js'
 
 /** Minimal SDK message shape — duck-typed to avoid hard import of @theokit/sdk types. */
 export interface SdkMessage {
@@ -87,10 +86,6 @@ function translateAssistantEvent(msg: SdkMessage): StreamEvent[] {
   for (const block of content) {
     const b = block as { type: string; text?: string; name?: string; input?: unknown; id?: string }
     if (b.type === 'text' && b.text) {
-      // #631 — observed on its own line, never in the expression that builds the event: this
-      // notices, it does not filter. See the module for why stripping the marker would turn a
-      // visible defect into an invisible one.
-      noteReplayMarker(b.text)
       events.push({ type: 'text_delta', content: b.text })
     }
     if (b.type === 'tool_use') {
@@ -277,10 +272,7 @@ export function translateSdkEvent(msg: SdkMessage, runId: string): StreamEvent[]
 export function translateInteractionUpdate(update: InteractionUpdate): StreamEvent[] {
   switch (update.type) {
     case 'text-delta':
-      // #631 — the token path carries the same marker when the model imitates it mid-stream.
-      if (!update.text) return []
-      noteReplayMarker(update.text)
-      return [{ type: 'text_delta', content: update.text }]
+      return update.text ? [{ type: 'text_delta', content: update.text }] : []
     case 'thinking-delta':
       return update.text ? [{ type: 'thinking', content: update.text }] : []
     case 'tool-call-started':
