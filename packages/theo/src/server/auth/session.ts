@@ -10,6 +10,7 @@ import {
 } from '../http/cookies.js'
 
 import { encrypt, decrypt } from './crypto.js'
+import { inspectSecret } from './secret-strength.js'
 
 export interface SessionConfig {
   /**
@@ -346,44 +347,42 @@ export async function rotateIfNeeded<TSession>(
 }
 
 /**
- * EC-2 — Production secret guard. Refuses to boot when `NODE_ENV === 'production'`
- * AND the secret is too short (< 32 chars) OR matches a known placeholder.
+ * EC-2 — Production secret guard. Refuses to boot when `NODE_ENV === 'production'` and the secret
+ * is one a human wrote rather than one a generator produced. Outside production it warns, because
+ * that warning is the sentence telling a developer what production will do.
  *
- * Accepts a single secret OR an array. In array form, each entry is validated
- * independently — a single bad entry refuses boot with an index-qualified message.
+ * Accepts a single secret OR an array. In array form, each entry is validated independently — a
+ * single bad entry refuses boot with an index-qualified message.
+ *
+ * #610 — the rules themselves live in `secret-strength.ts`. They used to be one regex here,
+ * `/CHANGE_ME|demo[-_]|placeholder/i`, which accepted `changeme…`, `dev-only-…-secret`, `test-…`
+ * and forty identical characters; the 32-character floor was the only condition that ever fired,
+ * and it is the floor whose own error message asks the developer to pad a placeholder to 32
+ * characters. Moving the vocabulary out is what let it grow past a line nobody could read.
+ *
+ * The message no longer echoes a fragment of the secret. It used to carry `secret.slice(0, 16)`,
+ * which publishes half the signing key into stdout, the crash reporter, and everything that
+ * aggregates them. The index and the reason identify which secret is wrong without reproducing it.
  */
-const PLACEHOLDER_PATTERN = /CHANGE_ME|demo[-_]|placeholder/i
-
 export function assertProductionSecret(secret: string | string[]): void {
   const arr = Array.isArray(secret) ? secret : [secret]
   const isProd = process.env.NODE_ENV === 'production'
 
   for (let i = 0; i < arr.length; i++) {
-    const s = arr[i]
-    const isPlaceholder = PLACEHOLDER_PATTERN.test(s)
-    const isTooShort = s.length < 32
+    const weakness = inspectSecret(arr[i])
+    if (!weakness) continue
+
     const prefix = arr.length > 1 ? `Session secret at index ${i}` : 'Session secret'
 
     if (isProd) {
-      if (isTooShort) {
-        throw new Error(
-          `${prefix} too short for production (${s.length} chars; minimum 32). ` +
-            `Set a 32+ random char secret in your env (e.g., \`openssl rand -hex 32\`).`,
-        )
-      }
-      if (isPlaceholder) {
-        throw new Error(
-          `${prefix} looks like a placeholder ("${s.slice(0, 16)}…") and NODE_ENV is "production". ` +
-            `Replace it with a 32+ random char secret (e.g., \`openssl rand -hex 32\`) before deploying.`,
-        )
-      }
-      continue
-    }
-    if (isPlaceholder || isTooShort) {
-      console.warn(
-        `[theokit] WARNING: ${prefix.toLowerCase()} is a placeholder or too short. ` +
-          `This is OK for dev, but the production server will REFUSE to boot until you replace it.`,
+      throw new Error(
+        `${prefix} ${weakness.reason}, and NODE_ENV is "production". ` +
+          `Generate one with \`openssl rand -hex 32\` and read it from the environment.`,
       )
     }
+    console.warn(
+      `[theokit] WARNING: ${prefix.toLowerCase()} ${weakness.reason}. ` +
+        `This is OK for dev, but the production server will REFUSE to boot until you replace it.`,
+    )
   }
 }

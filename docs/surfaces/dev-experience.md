@@ -78,6 +78,24 @@ production refusal (`packages/theo/src/server/auth/session.ts:349`), is referenc
 `tests/unit/assert-production-secret.test.ts:2`. Neither `theo dev`, nor `theo build`, nor `theo start`
 calls it. A deploy carrying `CHANGE_ME_…` boots.
 
+**Update 2026-09-02 — both halves are now closed, and the second half was not in the original
+finding.** The paragraph above is left as written, because what it measured was true and the reason
+it went unnoticed is the lesson. Two things changed since:
+
+- `assertProductionSecret` is called by `resolveSecrets`
+  (`packages/theo/src/server/auth/session.ts:106`), which both session constructors run, so the
+  check is on the path an application actually takes rather than on one a developer must know to
+  call (#429).
+- Being called was not enough. The `CHANGE_ME|demo[-_]|placeholder` pattern accepted
+  `changemexxxx…`, `dev-only-…-secret`, `test-secret000…` and forty identical characters — measured
+  against `theokit@0.64.0`, all five booted in production — so the length floor was still the only
+  condition that ever fired. The vocabulary now lives in `inspectSecret`
+  (`packages/theo/src/server/auth/secret-strength.ts:71`) with a distinct-character floor and a
+  repeated-block check beside it (#610).
+
+A guard that is called and admits `aaaa…` is worse than the uncalled one this correction found: it
+retires the question.
+
 ---
 
 ## What is strong
@@ -132,7 +150,7 @@ entry (`packages/theo/src/vite-plugin/config-hook.ts:109`), which mounts into a 
 | Missing | Consequence |
 |---|---|
 | **The digest reaching anything** | See correction 1. Before the linkage can be asserted, `digestError` (`packages/http/src/error-digest.ts:57`) has to be called on the server error path — today it is called nowhere. |
-| **A boot-time secret check** | See correction 3. `assertProductionSecret` (`packages/theo/src/server/auth/session.ts:337`) exists, is tested, and is invoked by no command. |
+| **A boot-time secret check** | See correction 3. `assertProductionSecret` (`packages/theo/src/server/auth/session.ts:367`) exists, is tested, and is invoked by no command. **Closed 2026-09-02:** it runs from `resolveSecrets` (`packages/theo/src/server/auth/session.ts:106`) on both session constructors, and the vocabulary it checks was widened (#429, #610). It is still per-application construction rather than a `theo start` boot step — an app that builds no session manager is still unchecked. |
 | **A warning-code catalogue — and codes to put in it** | See correction 2. The catalogue is missing, but the more urgent half is that only one code exists (`packages/theo/src/server/security/csrf.ts:78`); the rest are ad-hoc strings. Cataloguing them first would document a convention nobody follows. |
 | **A production-like local mode, in one command** | Narrower than the previous edition implied, and still real. `theo start` does serve the built output with the real security headers (`packages/theo/src/cli/commands/start/request-handler.ts:241`) and refuses without a build (`packages/theo/src/cli/commands/start/index.ts:84`) — but reaching it is two commands, and there is no `preview`: the CLI registers dev, build, start, generate, agent, mcp, routes, check, add, info, doctor, upgrade-readiness, openapi, docker and db, and nothing else (`packages/theo/src/cli/index.ts:18`). |
 | **Parity between the dev and built security paths** | The dev SSR middleware applies the same headers but branches on `NODE_ENV` for the production variants (`packages/theo/src/vite-plugin/ssr-dev-middleware.ts:122`), and applies the nonce on a separate line (`packages/theo/src/vite-plugin/ssr-dev-middleware.ts:118`). Close is not the same, and this is the divergence behind the recent nonce and hydration defects. |
