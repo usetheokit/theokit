@@ -20,10 +20,22 @@ on:
 
 # Quality gates — every job runs on every PR. A failing job blocks merge.
 
-# tsup DTS build for theokit's ~24 entrypoints OOMs the runner's default worker
-# heap (ERR_WORKER_OUT_OF_MEMORY). Raise it workflow-wide.
+# EXPERIMENT for usetheokit/theokit#635 — this branch is disposable and is not to be merged.
+#
+# The hypothesis with numbers: `--max-old-space-size` is PER PROCESS, and the value below was
+# chosen in 6d9d0f2f7 for ONE process — the tsup DTS build — then applied "workflow-wide", which
+# is what its own comment said. In the test job that becomes 2 workers plus the parent, so the
+# heap those three may claim is 24 GB against a runner with 15.6 GB. A process that stalls without
+# dying and without an OOM line is what that produces.
+#
+# Measured before changing it: the build peaks at 3.0 GB RSS and completes with exit 0 under
+# `--max-old-space-size=4096`, same peak, 21.8s against 19.2s. So the ceiling is slack, not need.
+#
+# The trigger from 249ce9784 is cherry-picked onto this branch — four hangs out of four with that
+# content. If this run passes at 4096, the memory hypothesis is proved and the fix is the sizing.
+# If it hangs, the hypothesis falls and something else is going on. Either answer settles it.
 env:
-  NODE_OPTIONS: --max-old-space-size=8192
+  NODE_OPTIONS: --max-old-space-size=4096
 
 permissions:
   contents: read
