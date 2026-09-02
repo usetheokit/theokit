@@ -1,7 +1,46 @@
-import { cpus } from 'node:os'
+import { cpus, freemem, totalmem } from 'node:os'
 import path from 'node:path'
 
 import { defineConfig } from 'vitest/config'
+
+const MAX_WORKERS = Math.max(2, cpus().length - 4)
+
+/**
+ * What the run actually got, printed once, in CI only (usetheokit/theokit#635).
+ *
+ * The coverage leg dies at its own 30-minute limit with no failing test in the log, always at the
+ * same point, and it does not reproduce on a developer machine. The two hypotheses on that issue —
+ * memory pressure, and contention in the final phase — are separated by numbers nobody was
+ * printing, so every author who met the red mark bisected their own commit instead.
+ *
+ * `maxWorkers` is the one worth seeing. `Math.max(2, cpus().length - 4)` was tuned where it leaves
+ * eight workers; on the `ubuntu-24.04` runner, which has FOUR vCPUs, `4 - 4 = 0` and the floor
+ * takes over — so CI runs with 2 workers and each one carries four times the files. `NODE_OPTIONS:
+ * --max-old-space-size=8192` in `ci.yml` is per PROCESS, so the ceiling those two workers may claim
+ * is 16 GB, on a runner that has 16 GB in total.
+ *
+ * A measurement, not a fix. Nothing here changes behaviour: it makes the next hung run say what it
+ * was given, so the difference between "the environment changed" and "the environment was always
+ * this tight and the volume grew into it" is read off the log rather than argued.
+ *
+ * CI only, because on a developer machine it is a line of noise on every run — and the defect it
+ * serves has never been seen off CI.
+ */
+// Guarded by an env var rather than a module-level boolean: this config is EVALUATED ONCE PER
+// PROJECT, in the same process, so a plain flag printed the line three times. The variable is
+// inherited by the workers too, so it does not come back there either.
+if (
+  (process.env.CI === 'true' || process.env.GITHUB_ACTIONS !== undefined) &&
+  process.env.THEOKIT_635_ENV_REPORTED === undefined
+) {
+  process.env.THEOKIT_635_ENV_REPORTED = '1'
+  const gb = (bytes: number) => (bytes / 1024 ** 3).toFixed(1)
+  console.error(
+    `[vitest] cpus=${cpus().length} maxWorkers=${MAX_WORKERS} ` +
+      `mem=${gb(totalmem())}GB total / ${gb(freemem())}GB free ` +
+      `NODE_OPTIONS=${process.env.NODE_OPTIONS ?? '(unset)'} (theokit#635)`,
+  )
+}
 
 export default defineConfig({
   test: {
@@ -144,7 +183,7 @@ export default defineConfig({
     // it starves. Leaving 4 cores free scales with the runner rather than hard-coding one host's
     // core count; measured in `theokit-ui`, the suite ran 73.96 s at 4 workers against 74.36 s at
     // 12, so the parallelism above the cap was already noise.
-    maxWorkers: Math.max(2, cpus().length - 4),
+    maxWorkers: MAX_WORKERS,
     // `testTimeout` covers the wall-clock for individual assertions.
     // Integration tests spawning `theokit dev` need >5s under load.
     // 30s is generous but bounded — a real hang surfaces well within this window.
