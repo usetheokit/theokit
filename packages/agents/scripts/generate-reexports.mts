@@ -81,7 +81,37 @@ export interface Surface {
  *
  * Resolves from `src/index.ts` — the build's own point of view, so it does not diverge from the bundler.
  */
+/**
+ * One `Surface` per specifier, computed once (usetheokit/theokit#631's neighbour — see below).
+ *
+ * `enumerateSurface` builds a whole TypeScript program: a compiler host, a module resolution, a
+ * `createProgram`, a type checker. `subpath-surface.test.ts` asks the same four specifiers twice —
+ * once for "the layer re-exports everything the source has", once for "the layer invents nothing" —
+ * so eight programs were built where four answer both questions.
+ *
+ * Under `vitest --coverage` that arithmetic stopped being academic: measured 2026-09-02, the first
+ * of those two tests took **105 s against its own 60 s timeout** and failed, on a suite that passes
+ * in 10 minutes without coverage. It fails by the clock rather than by the assertion, so it fails
+ * only when the machine is busy — which is the definition of a flaky test, and `rules/testing.md`
+ * § 3 calls that a bug rather than an inconvenience.
+ *
+ * The cache is safe because the answer is a pure function of the specifier: the same input resolves
+ * the same file and enumerates the same exports, for the lifetime of a process in which the files
+ * on disk do not change. The generator script calls each specifier once, so it is unaffected.
+ */
+const SURFACE_CACHE = new Map<string, Promise<Surface>>()
+
 export async function enumerateSurface(specifier: string): Promise<Surface> {
+  // The PROMISE is cached, not the resolved value: two concurrent callers for the same specifier
+  // then share one program instead of racing to build two.
+  const cached = SURFACE_CACHE.get(specifier)
+  if (cached !== undefined) return cached
+  const computing = computeSurface(specifier)
+  SURFACE_CACHE.set(specifier, computing)
+  return computing
+}
+
+async function computeSurface(specifier: string): Promise<Surface> {
   const host = ts.createCompilerHost({})
   const res = ts.resolveModuleName(
     specifier,
