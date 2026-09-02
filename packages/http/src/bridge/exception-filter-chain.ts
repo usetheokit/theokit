@@ -5,6 +5,7 @@
  * EC-1: recursion guard — filter that throws → global fallback.
  */
 import { HttpException } from '../exceptions/http-exception.js'
+import { httpExceptionToResponse } from '../exceptions/to-response.js'
 import { getMeta, CATCH_EXCEPTIONS } from '../metadata/index.js'
 
 import { resolveOrNew, type DiContainer } from './di-resolve.js'
@@ -57,10 +58,10 @@ function matchesException(exception: unknown, catchTypes: Function[]): boolean {
 
 function builtInResponse(exception: unknown): Response {
   if (exception instanceof HttpException) {
-    return new Response(JSON.stringify(exception.toJSON()), {
-      status: exception.statusCode,
-      headers: { 'content-type': 'application/json' },
-    })
+    // #612 — through `httpExceptionToResponse` so the exception's own headers survive. This is the
+    // path a guard's `TooManyRequestsException` takes in both `createDecoratorHandler` and the
+    // TheoKit plugin, and it used to drop `Retry-After` on the floor.
+    return httpExceptionToResponse(exception)
   }
   return globalFallback(exception)
 }

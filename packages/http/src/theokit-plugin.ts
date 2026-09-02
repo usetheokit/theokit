@@ -36,11 +36,8 @@ import 'reflect-metadata'
 
 import { resolveOrNew, type DiContainer } from './bridge/di-resolve.js'
 import { runExceptionFilters } from './bridge/exception-filter-chain.js'
-import {
-  createExecutionContext,
-  type CanActivate,
-  type ExecutionContext,
-} from './bridge/execution-context.js'
+import { createExecutionContext, type CanActivate } from './bridge/execution-context.js'
+import { runGuards } from './bridge/guard-chain.js'
 import { runInterceptors } from './bridge/interceptor-chain.js'
 import {
   MiddlewareConsumerImpl,
@@ -53,6 +50,7 @@ import { loadControllersFromGlob } from './bridge/swc-loader.js'
 import { walkControllerMetadata, type WalkResult } from './bridge/walk-metadata.js'
 import type { ParamEntry } from './decorators/params.js'
 import { ForbiddenException } from './exceptions/http-exception.js'
+import { httpExceptionToResponse } from './exceptions/to-response.js'
 import {
   undeclaredRouteRefusal,
   undeclaredRouteWarning,
@@ -234,7 +232,7 @@ async function handleDecoratorRoute(
     if (walk.access === 'undeclared') {
       if (undeclared.policy === 'deny') {
         const ex = new ForbiddenException(undeclaredRouteRefusal('controller', url.pathname))
-        return jsonResponse(ex.statusCode, ex.toJSON())
+        return httpExceptionToResponse(ex)
       }
       if (!undeclared.warned.has(url.pathname)) {
         undeclared.warned.add(url.pathname)
@@ -243,7 +241,12 @@ async function handleDecoratorRoute(
     }
 
     const ctx = createExecutionContext(request, instance.constructor, walk.propertyKey)
-    const guardResponse = await runGuards(walk.guards, ctx, container)
+    // #612 — one guard pipeline for all three dispatchers; see `bridge/guard-chain.ts`.
+    const guardResponse = await runGuards(
+      walk.guards,
+      ctx,
+      (Ctor) => resolveOrNew(Ctor, container) as CanActivate,
+    )
     if (guardResponse) return guardResponse
 
     const body = await resolveBody(method, request, walk, jsonResponse)
@@ -275,21 +278,6 @@ async function handleDecoratorRoute(
   } catch (err) {
     return runExceptionFilters(err, walk.filters, request, container)
   }
-}
-
-async function runGuards(
-  guards: Function[],
-  context: ExecutionContext,
-  container?: DiContainer,
-): Promise<Response | null> {
-  for (const GuardCtor of guards) {
-    const guard = resolveOrNew(GuardCtor, container) as CanActivate
-    if (!(await guard.canActivate(context))) {
-      const ex = new ForbiddenException('Forbidden resource')
-      return jsonResponse(ex.statusCode, ex.toJSON())
-    }
-  }
-  return null
 }
 
 function buildResponse(result: unknown, walk: WalkResult, method: string): Response {
