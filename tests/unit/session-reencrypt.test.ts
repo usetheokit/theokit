@@ -10,8 +10,10 @@ import { createSessionManager } from '../../packages/theo/src/server/auth/sessio
  * handler runs — EC-4) is covered in tests/integration/session-rotation*.test.ts.
  */
 
-const NEW_SECRET = 'new-secret-' + 'x'.repeat(32)
-const OLD_SECRET = 'old-secret-' + 'y'.repeat(32)
+// `openssl rand -hex 32`-shaped. A fixture that trips the production guard (#610) is one the
+// suite reports as a warning on every run, which is how a warning stops being read.
+const NEW_SECRET = '1720285f0edf9323313351f15289a6c1520a932d509e0862e52e82019ea6a8e4'
+const OLD_SECRET = '6713e4c94568ac68a546b7f0700f1444ad7ae0fd90752231613a9fff429987b7'
 
 interface TS {
   userId: string
@@ -95,7 +97,9 @@ describe('T3.2 — getSessionWithMeta', () => {
   })
 
   it('all decrypts fail → data=null, needsReencrypt=false (no exception)', async () => {
-    const thirdParty = createSessionManager<TS>({ secret: 'unknown-' + 'z'.repeat(32) })
+    const thirdParty = createSessionManager<TS>({
+      secret: 'b72363f8913fd0c21d5f7028810235c710f1615fe3bee59bc792122f28c5303a',
+    })
     const r1 = createMockRes()
     await thirdParty.createSession(r1, { userId: 'X' })
     const cookieValue = extractCookieValue(r1, 'theo_session')!

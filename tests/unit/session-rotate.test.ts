@@ -10,7 +10,9 @@ import { createSessionManager } from '../../packages/theo/src/server/auth/sessio
  * expiry; emits new cookie.
  */
 
-const SECRET = 'rotate-secret-' + 'a'.repeat(32)
+// `openssl rand -hex 32`-shaped. A fixture that trips the production guard (#610) is one the
+// suite reports as a warning on every run, which is how a warning stops being read.
+const SECRET = '0954e6e81dd237aa45ddca96684de168643025951d9eb92cff8d729d246eeb1e'
 
 interface TS {
   userId: string

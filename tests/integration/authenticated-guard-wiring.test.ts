@@ -28,7 +28,9 @@ import { createSessionManagerWeb } from '../../packages/theo/src/server/auth/ses
  */
 
 /** 32+ chars, which `createSessionManagerWeb` enforces. A fixture, not a credential. */
-const SECRET = 'integration-secret-value-0123456789abcdef'
+// `openssl rand -hex 32`-shaped. A fixture that trips the production guard (#610) is one the
+// suite reports as a warning on every run, which is how a warning stops being read.
+const SECRET = '1026839239e3f9df6f8869c958e062787ab8a7307c8ede7d9e6310d98ac067ba'
 
 const sessions = createSessionManagerWeb<{ userId: string }>({ secret: SECRET })
 

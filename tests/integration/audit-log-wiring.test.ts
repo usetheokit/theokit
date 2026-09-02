@@ -101,7 +101,9 @@ describe('T4.2 — rate-limit.exceeded emits audit event', () => {
 describe('T4.2 — session.rotated emits audit event', () => {
   it('rotateSession produces a session.rotated payload', async () => {
     const { logger, events } = recordingLogger()
-    const sm = createSessionManager<{ userId: string }>({ secret: 'rotate-' + 'a'.repeat(32) })
+    const sm = createSessionManager<{ userId: string }>({
+      secret: '4eb24437eae10f74d1bbb676bbb954ef19803c725ad92cf2111a90c0fc1f4037',
+    })
 
     function mockRes(): ServerResponse {
       const headers: Record<string, string | string[]> = {}

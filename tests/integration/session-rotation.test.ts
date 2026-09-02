@@ -20,8 +20,10 @@ import {
  *     dropped from the array.
  */
 
-const NEW_SECRET = 'new-secret-' + 'x'.repeat(32)
-const OLD_SECRET = 'old-secret-' + 'y'.repeat(32)
+// `openssl rand -hex 32`-shaped. A fixture that trips the production guard (#610) is one the
+// suite reports as a warning on every run, which is how a warning stops being read.
+const NEW_SECRET = '82f5ae7b48514c96cd2d94ea5ffe02c9a85906dbca5042a3c71db45c4cdc5624'
+const OLD_SECRET = '589288b51c19bff3a69bfadcb89736e57280bd7dba1a1ed078e34762c6de18db'
 
 interface TS {
   userId: string
