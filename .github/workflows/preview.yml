@@ -88,6 +88,16 @@ jobs:
       # if it fails, the script finds no diff and prints every package, which is exactly what this
       # workflow did before. Failing WIDE keeps a preview being produced; failing narrow would
       # silently stop previewing the package somebody was about to verify.
+      # The refspec is explicit and that is the whole trick: `actions/checkout` configures the
+      # remote to track ONLY the ref it checked out, so a bare `git fetch origin develop` downloads
+      # the objects and creates no `refs/remotes/origin/develop` for `git diff` to name. Measured on
+      # run 33684696268 — the script reported "could not read a diff" and previewed all seven.
+      #
+      # stderr is NOT silenced: when the fetch fails, the reason belongs in the log. `|| true` keeps
+      # the failure non-fatal, because the script then prints every package, which is what this
+      # workflow did before scoping existed.
       packages-command: >-
-        git fetch --quiet --depth=50 origin ${{ github.base_ref || 'develop' }} 2>/dev/null || true;
+        git fetch --quiet --depth=50 origin
+        +refs/heads/${{ github.base_ref || 'develop' }}:refs/remotes/origin/${{ github.base_ref || 'develop' }}
+        || true;
         PREVIEW_DIFF_BASE=origin/${{ github.base_ref || 'develop' }} node scripts/preview-packages.mjs
