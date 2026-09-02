@@ -70,16 +70,27 @@ function publishablePackages() {
  */
 function changedFiles() {
   const base = process.env.PREVIEW_DIFF_BASE ?? 'origin/develop'
-  for (const range of [`${base}...HEAD`, 'HEAD~1...HEAD']) {
+  // Ordered by how well each answers "what did this branch change", with the later ones robust
+  // where the earlier ones cannot run:
+  //
+  //   base...HEAD   what the branch added, ignoring what the base moved on. Needs a MERGE BASE, and
+  //                 a shallow clone often has none — measured in CI, this is what failed there.
+  //   base HEAD     two-dot: compares the two tips directly, no common ancestor required. Can name
+  //                 a package the base moved and this branch did not, which publishes MORE than
+  //                 needed. That is the safe direction.
+  //   HEAD~1...HEAD the last commit alone, for a checkout with no base ref at all.
+  const attempts = [[`${base}...HEAD`], [base, 'HEAD'], ['HEAD~1...HEAD']]
+  for (const range of attempts) {
     try {
       // eslint-disable-next-line sonarjs/no-os-command-from-path -- toolchain binary, fixed argv
-      const out = execFileSync('git', ['diff', '--name-only', range], {
+      const out = execFileSync('git', ['diff', '--name-only', ...range], {
         encoding: 'utf8',
         stdio: ['ignore', 'pipe', 'ignore'],
       })
       return out.split('\n').filter(Boolean)
     } catch {
-      // Try the next range: a shallow clone has no merge base, a first commit has no HEAD~1.
+      // Next attempt. Every one failing means no diff is readable at all, which the caller treats
+      // as "publish everything" rather than as "nothing changed".
     }
   }
   return null
