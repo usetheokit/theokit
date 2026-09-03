@@ -21,7 +21,11 @@ import type { ReasoningEffort } from '../types.js'
 
 import type { CompiledAgentOptions, CompiledTool } from './agent-compiler.js'
 import type { HookHandlers } from './hook-handlers.js'
-import { resolveSettingSources, type SettingSourcesSelection } from './setting-sources-gate.js'
+import {
+  resolveCompatSources,
+  resolveSettingSources,
+  type SettingSourcesSelection,
+} from './setting-sources-gate.js'
 
 /**
  * Brand tag for a `defineAgent` value. `Symbol.for` (global registry, not `Symbol()`) so
@@ -264,6 +268,17 @@ export function compileAgentDefinition(def: AgentDefinition): CompiledAgentOptio
     // `error-handling.md` § 3: validate at the entry, fail before the value travels.
     ...(def.settingSources !== undefined
       ? { settingSources: resolveSettingSources(def.settingSources) }
+      : {}),
+    // #634 — the same selection carries `claudeCode`, resolved through the same gate at the same
+    // point. Separate field because the SDK takes it on a separate option; the same
+    // `ProjectSettingsGrant` NOT because the two questions are the same (they are not — see the
+    // field's docblock), but because a separate capability could not carry the distinction:
+    // `TrustPosture.allows` moves every value with the trust level.
+    //
+    // `SettingSourcesCapability` resolves this too. Both compile paths, or the capability path
+    // silently produces an agent with no foreign dialect at all.
+    ...(def.settingSources?.claudeCode !== undefined
+      ? { compatSources: resolveCompatSources(def.settingSources) }
       : {}),
     // M49 — memory flows to the projection layer; `assembleM8CreateOptions` forwards it to Agent.create.
     ...(def.memory !== undefined ? { memory: def.memory } : {}),

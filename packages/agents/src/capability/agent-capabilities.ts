@@ -5,6 +5,7 @@ import {
 } from '../bridge/compile-context-window.js'
 import { compileSkills, type SkillsOptions } from '../bridge/compile-skills.js'
 import {
+  resolveCompatSources,
   resolveSettingSources,
   type SettingSourcesSelection,
 } from '../bridge/setting-sources-gate.js'
@@ -152,6 +153,14 @@ export class SettingSourcesCapability implements Capability {
   constructor(private readonly selection: SettingSourcesSelection) {}
   apply(draft: CompiledAgentOptionsDraft): void {
     setOnce(draft, 'settingSources', resolveSettingSources(this.selection), this.name)
+    // #634 — one selection, two fields, and BOTH have to be resolved here. `defineAgent` derives
+    // `compatSources` from this same object, so resolving only `settingSources` would make the two
+    // compile paths disagree on a field nobody reads directly: the foreign dialect would simply
+    // never load for anyone building through capabilities, with no error to explain it.
+    // Set only when declared, because the waist distinguishes "not declared" from "declared empty".
+    if (this.selection.claudeCode !== undefined) {
+      setOnce(draft, 'compatSources', resolveCompatSources(this.selection), this.name)
+    }
   }
 }
 export class PluginsCapability extends FieldCapability<'plugins'> {
