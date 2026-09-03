@@ -87,7 +87,7 @@ The same agent is reached from three interchangeable frontends — only the tran
 
 | Surface | Frontend dir | Transport                             |
 | ------- | ------------ | ------------------------------------- |
-| web     | `src/app/`       | `HttpTransport` (`/api/agents/chat`)  |
+| web     | `src/app/`   | `HttpTransport` (`/api/agents/chat`)  |
 | tui     | `tui/`       | `InProcessTransport`                  |
 | desktop | `frontend/`  | `ChannelTransport` (`@theokit/tauri`) |
 
@@ -97,12 +97,12 @@ All three render the same `@theokit/ui` chat and read `src/shared/agent.ts` for 
 
 The web `src/app/` is organized **type-based**, the layout most React apps grow into:
 
-| Folder        | Holds                                                     | Example                                                 |
-| ------------- | --------------------------------------------------------- | ------------------------------------------------------- |
-| `src/app/` root   | the **route surface** — the only files the router serves  | `page.tsx`, `layout.tsx`, `error/loading/not-found.tsx` |
-| `components/` | presentational UI (flat `.tsx`; Tailwind, no CSS modules) | `Header`, `ChatPanel`, `Composer`                       |
-| `hooks/`      | custom hooks — where **state** lives                      | `use-transcript.ts`                                     |
-| `lib/`        | app modules / config                                      | `constants.ts`                                          |
+| Folder          | Holds                                                     | Example                                                 |
+| --------------- | --------------------------------------------------------- | ------------------------------------------------------- |
+| `src/app/` root | the **route surface** — the only files the router serves  | `page.tsx`, `layout.tsx`, `error/loading/not-found.tsx` |
+| `components/`   | presentational UI (flat `.tsx`; Tailwind, no CSS modules) | `Header`, `ChatPanel`, `Composer`                       |
+| `hooks/`        | custom hooks — where **state** lives                      | `use-transcript.ts`                                     |
+| `lib/`          | app modules / config                                      | `constants.ts`                                          |
 
 ### Route files are not components
 
@@ -137,8 +137,8 @@ a `pages/` folder you wire by hand: that's the Next.js-style convention TheoKit 
 Routing is **file-based**: a screen is a folder under `src/app/` with a `page.tsx`. The folder name is the URL
 segment; the home screen is the flat `src/app/page.tsx`.
 
-| You want             | Create                          | Serves                                                        |
-| -------------------- | ------------------------------- | ------------------------------------------------------------- |
+| You want             | Create                              | Serves                                                        |
+| -------------------- | ----------------------------------- | ------------------------------------------------------------- |
 | a `/settings` screen | `src/app/settings/page.tsx`         | `/settings`                                                   |
 | a nested screen      | `src/app/settings/billing/page.tsx` | `/settings/billing`                                           |
 | a dynamic screen     | `src/app/users/[id]/page.tsx`       | `/users/:id` (read the param with react-router's `useParams`) |

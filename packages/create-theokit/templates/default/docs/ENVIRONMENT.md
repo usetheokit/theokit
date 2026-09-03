@@ -14,11 +14,11 @@ with an OpenRouter key present. Reaching another vendor's catalog THROUGH OpenRo
 the gateway first — `openrouter/openai/gpt-4o-mini`, which is what the scaffold declares, matching
 the key above. See <https://openrouter.ai/models> for the ids OpenRouter serves.
 
-| Model id in `src/server/agents/chat.ts`    | Key it needs         |
-| ------------------------------- | -------------------- |
-| `openrouter/openai/gpt-4o-mini` | `OPENROUTER_API_KEY` |
-| `anthropic/claude-sonnet-4-6`   | `ANTHROPIC_API_KEY`  |
-| `openai/gpt-4o-mini`            | `OPENAI_API_KEY`     |
+| Model id in `src/server/agents/chat.ts` | Key it needs         |
+| --------------------------------------- | -------------------- |
+| `openrouter/openai/gpt-4o-mini`         | `OPENROUTER_API_KEY` |
+| `anthropic/claude-sonnet-4-6`           | `ANTHROPIC_API_KEY`  |
+| `openai/gpt-4o-mini`                    | `OPENAI_API_KEY`     |
 
 ```bash
 cp .env.example .env

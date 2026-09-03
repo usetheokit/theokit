@@ -19,9 +19,9 @@ describe('scaffold', () => {
     const targetDir = join(tempBase, 'my-app')
     scaffold(targetDir, 'my-app')
 
-    expect(existsSync(join(targetDir, 'app/page.tsx'))).toBe(true)
-    expect(existsSync(join(targetDir, 'app/layout.tsx'))).toBe(true)
-    expect(existsSync(join(targetDir, 'server/routes/health.ts'))).toBe(true)
+    expect(existsSync(join(targetDir, 'src/app/page.tsx'))).toBe(true)
+    expect(existsSync(join(targetDir, 'src/app/layout.tsx'))).toBe(true)
+    expect(existsSync(join(targetDir, 'src/server/routes/health.ts'))).toBe(true)
     expect(existsSync(join(targetDir, 'index.html'))).toBe(true)
     expect(existsSync(join(targetDir, 'theo.config.ts'))).toBe(true)
     expect(existsSync(join(targetDir, 'tsconfig.json'))).toBe(true)
