@@ -23,8 +23,10 @@ agent file and what composes it (prompts, tools, skills) sit together with clean
 │   │   │   ├── tools/      #     tools the agent can call
 │   │   │   │   ├── weather.ts       # remote — current weather via open-meteo (HTTP)
 │   │   │   │   └── current-time.ts  # local — date/time in an IANA timezone (no network)
-│   │   │   └── skills/     #     procedures the model loads on demand (Skill.create)
-│   │   │       └── daily-briefing.ts  # a real skill: time → weather → a one-line nudge
+│   │   │   ├── skills/     #     procedures the model loads on demand (Skill.create)
+│   │   │   │   └── daily-briefing.ts  # a real skill: time → weather → a one-line nudge
+│   │   │   └── hooks/      #     lifecycle interception
+│   │   │       └── tool-audit.ts      # one structured line per tool call, with timing
 │   │   └── routes/         #   Backend routes / actions (POST/GET handlers, jobs)
 │   ├── app/                # Frontend (web surface). tui → tui/, desktop → frontend/
 │   │   ├── page.tsx        #   the `/` route — composition root (components + the hook)
@@ -42,10 +44,45 @@ agent file and what composes it (prompts, tools, skills) sit together with clean
 │   │       └── constants.ts       # greeting + starter prompts
 │   └── shared/             # Code imported by BOTH sides — and only that
 │       └── agent.ts        #   branding (name, model, greeting) — one source of truth
+├── .theokit/               # Agent context, read at runtime — no rebuild to change it
+│   ├── THEO.md             #   prepended every turn (priority 60)
+│   ├── rules/              #   path-scoped instructions, by glob (priority 45)
+│   └── personalities/      #   swappable system prompts (agent.usePersonality)
 ├── types/                  # Framework ambient declarations (e.g. the job registry)
 ├── docs/                   # This folder
 └── theo.config.ts          # App config (name, dirs, plugins)
 ```
+
+## Two halves: what you compile, and what the agent reads
+
+`src/server/agents/` is **code** — it changes when you deploy. `.theokit/` is **data** — the agent
+reads it at runtime, so a wording change is an edit, not a release.
+
+The SDK loads context from seven sources in priority order, and yours sit inside it:
+
+| Priority | Source                    | Scope                    |
+| -------- | ------------------------- | ------------------------ |
+| 10       | `AGENTS.md`               | walks up to the git root |
+| 20       | `GEMINI.md`               | walks up to the git root |
+| 30       | `CLAUDE.md`               | walks up to the git root |
+| 40       | `.cursor/rules/*.mdc`     | glob-activated           |
+| **45**   | **`.theokit/rules/*.md`** | **glob-activated**       |
+| 50       | `.theokit/context/*.md`   | glob-activated           |
+| **60**   | **`.theokit/THEO.md`**    | this directory only      |
+
+Later wins where they conflict, so `THEO.md` is the strongest thing in the file layer — which is
+why it should hold facts rather than preferences. A preference that always wins is a preference you
+cannot override with a personality.
+
+**Personalities are not in that table**, and the reason is worth keeping straight: the seven sources
+above are _context files_, merged into every relevant turn. A personality REPLACES the system
+prompt, only while it is active, and only when someone asks for it:
+
+```ts
+await agent.usePersonality('teacher', { save: true })
+```
+
+Reserved names — `none`, `default`, `neutral` — clear it.
 
 ## Clean names, no phantom routes
 
