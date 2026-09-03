@@ -3,7 +3,7 @@ name: theokit-gateways
 description: Receiving messages from Telegram, WhatsApp, Slack and other platforms — handleChannelWebhook, the @theokit/gateway-* adapters, signature validation, the onMessage seam
 user-invocable: false
 paths:
-  - 'server/routes/**'
+  - 'src/server/routes/**'
   - 'server/channels/**'
   - '**/*gateway*'
   - '**/*webhook*'

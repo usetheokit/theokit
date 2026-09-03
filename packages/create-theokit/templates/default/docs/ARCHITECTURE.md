@@ -1,39 +1,47 @@
 # Architecture
 
-How this TheoKit app is organized. The layout puts the **agent at the center**: the agent file and the
-folders it composes (prompts, tools, skills) live together under `agents/`, with clean names — the
+How this TheoKit app is organized. Two domains, named by what they are rather than by what they
+contain: `src/app/` is the interface — the only code that reaches a browser — and `src/server/` is
+the backend, everything that never leaves the machine.
+
+The **agent lives inside the backend**, at `src/server/agents/`, because that is what it is: it
+reads your API keys, calls tools that touch the network, and runs where the server runs. Every rule
+that applies to `server/` applies to it. Within that folder the agent is still at the center — the
+agent file and what composes it (prompts, tools, skills) sit together with clean names, the
 "file = identity" convention agent frameworks like [Eve](https://eve.dev) use.
 
 ## Project structure
 
 ```
 .
-├── agents/                 # The agent, and what composes it
-│   ├── chat.ts             #   the agent → POST /api/agents/chat, useAgent('chat')
-│   ├── prompts/            #   system prompts / personas
-│   │   └── instructions.ts
-│   ├── tools/              #   tools the agent can call
-│   │   ├── weather.ts      #     remote — current weather via open-meteo (HTTP)
-│   │   └── current-time.ts #     local — date/time in an IANA timezone (no network)
-│   └── skills/             #   procedures the model loads on demand (Skill.create)
-│       └── daily-briefing.ts    #   a real skill: time → weather → a one-line nudge
-├── app/                    # Frontend (web surface). tui → tui/, desktop → frontend/
-│   ├── page.tsx            #   the `/` route — composition root (lays out the components + the hook)
-│   ├── layout.tsx          #   root layout — composes <Header/> over the routed page
-│   ├── error/loading/not-found.tsx  #   route surface (special files)
-│   ├── about/page.tsx      #   an EXAMPLE `/about` route — shows how screens grow (delete when done)
-│   ├── components/         #   presentational UI (Tailwind, flat .tsx — no CSS modules)
-│   │   ├── Header.tsx      #     the top bar (composes Nav + theme toggle)
-│   │   ├── Nav.tsx         #     the navigation menu (a link per screen)
-│   │   ├── ChatPanel.tsx   #     the transcript + streaming indicator + starter prompts
-│   │   └── Composer.tsx    #     the input + error card + new-chat
-│   ├── hooks/              #   custom hooks
-│   │   └── use-transcript.ts  #     transcript STATE (history + streaming)
-│   └── lib/                #   app modules / config
-│       └── constants.ts    #     greeting + starter prompts
-├── server/                 # Backend routes / actions (POST/GET handlers, jobs)
-├── shared/                 # Code imported by more than one layer
-│   └── agent.ts            #   branding (name, model, greeting) — one source of truth
+├── src/
+│   ├── server/             # Backend — everything that never leaves the machine
+│   │   ├── agents/         #   The agent, and what composes it
+│   │   │   ├── chat.ts     #     the agent → POST /api/agents/chat, useAgent('chat')
+│   │   │   ├── prompts/    #     system prompts / personas
+│   │   │   │   └── instructions.ts
+│   │   │   ├── tools/      #     tools the agent can call
+│   │   │   │   ├── weather.ts       # remote — current weather via open-meteo (HTTP)
+│   │   │   │   └── current-time.ts  # local — date/time in an IANA timezone (no network)
+│   │   │   └── skills/     #     procedures the model loads on demand (Skill.create)
+│   │   │       └── daily-briefing.ts  # a real skill: time → weather → a one-line nudge
+│   │   └── routes/         #   Backend routes / actions (POST/GET handlers, jobs)
+│   ├── app/                # Frontend (web surface). tui → tui/, desktop → frontend/
+│   │   ├── page.tsx        #   the `/` route — composition root (components + the hook)
+│   │   ├── layout.tsx      #   root layout — composes <Header/> over the routed page
+│   │   ├── error/loading/not-found.tsx  #   route surface (special files)
+│   │   ├── about/page.tsx  #   an EXAMPLE `/about` route (delete when done)
+│   │   ├── components/     #   presentational UI (Tailwind, flat .tsx — no CSS modules)
+│   │   │   ├── Header.tsx  #     the top bar (composes Nav + theme toggle)
+│   │   │   ├── Nav.tsx     #     the navigation menu (a link per screen)
+│   │   │   ├── ChatPanel.tsx   #   the transcript + streaming indicator + starters
+│   │   │   └── Composer.tsx    #   the input + error card + new-chat
+│   │   ├── hooks/          #   custom hooks
+│   │   │   └── use-transcript.ts  # transcript STATE (history + streaming)
+│   │   └── lib/            #   app modules / config
+│   │       └── constants.ts       # greeting + starter prompts
+│   └── shared/             # Code imported by BOTH sides — and only that
+│       └── agent.ts        #   branding (name, model, greeting) — one source of truth
 ├── types/                  # Framework ambient declarations (e.g. the job registry)
 ├── docs/                   # This folder
 └── theo.config.ts          # App config (name, dirs, plugins)
@@ -41,20 +49,20 @@ folders it composes (prompts, tools, skills) live together under `agents/`, with
 
 ## Clean names, no phantom routes
 
-An agent is a file: `agents/<name>.ts` → `POST /api/agents/<name>`. But the framework's scanner is
-**folder-semantic** — thirteen sub-folder names under `agents/` (`tools/`, `skills/`, `prompts/`,
+An agent is a file: `src/server/agents/<name>.ts` → `POST /api/agents/<name>`. But the framework's scanner is
+**folder-semantic** — thirteen sub-folder names under `src/server/agents/` (`tools/`, `skills/`, `prompts/`,
 `lib/`, `hooks/`, `channels/`, `connections/`, `subagents/`, `schedules/`, `sandbox/`, `workflows/`,
 `evals/`, `memory/`) are **that concern, not routes**.
-So the names stay clean (`tools/`, not `_tools/`) and `agents/tools/weather.ts` never becomes a phantom
+So the names stay clean (`tools/`, not `_tools/`) and `src/server/agents/tools/weather.ts` never becomes a phantom
 `/api/agents/tools/weather` endpoint. Markdown (`skills/*.md`) is never scanned either way. The
-prompts/tools/skills are **shared** across every agent in `agents/`.
+prompts/tools/skills are **shared** across every agent in `src/server/agents/`.
 
 An agent that outgrows one file becomes a folder that co-locates its own composition —
-`agents/<name>/index.ts` with `tools/` and `prompts/` beside it. Same route, same identity.
+`src/server/agents/<name>/index.ts` with `tools/` and `prompts/` beside it. Same route, same identity.
 
 ## Composition
 
-`agents/chat.ts` is thin on purpose — it wires the pieces together:
+`src/server/agents/chat.ts` is thin on purpose — it wires the pieces together:
 
 ```ts
 export default AgentBuilder.create()
@@ -71,7 +79,7 @@ Grow the agent by editing its neighbours, not by inflating `chat.ts`: persona �
 a new capability → `tools/<name>.ts` (then `.tool(<name>Tool)`), a documented procedure → a
 `Skill.create(...)` in `skills/<name>.ts` (add it to the `.skills([...])` list). A **skill** is
 loaded by the model on demand via the `skill_read` tool, so long procedures don't bloat every prompt. Add a
-**second agent** as another `agents/<name>.ts`.
+**second agent** as another `src/server/agents/<name>.ts`.
 
 ## Surfaces
 
@@ -79,19 +87,19 @@ The same agent is reached from three interchangeable frontends — only the tran
 
 | Surface | Frontend dir | Transport                             |
 | ------- | ------------ | ------------------------------------- |
-| web     | `app/`       | `HttpTransport` (`/api/agents/chat`)  |
+| web     | `src/app/`       | `HttpTransport` (`/api/agents/chat`)  |
 | tui     | `tui/`       | `InProcessTransport`                  |
 | desktop | `frontend/`  | `ChannelTransport` (`@theokit/tauri`) |
 
-All three render the same `@theokit/ui` chat and read `shared/agent.ts` for the greeting + model label.
+All three render the same `@theokit/ui` chat and read `src/shared/agent.ts` for the greeting + model label.
 
 ## Frontend organization
 
-The web `app/` is organized **type-based**, the layout most React apps grow into:
+The web `src/app/` is organized **type-based**, the layout most React apps grow into:
 
 | Folder        | Holds                                                     | Example                                                 |
 | ------------- | --------------------------------------------------------- | ------------------------------------------------------- |
-| `app/` root   | the **route surface** — the only files the router serves  | `page.tsx`, `layout.tsx`, `error/loading/not-found.tsx` |
+| `src/app/` root   | the **route surface** — the only files the router serves  | `page.tsx`, `layout.tsx`, `error/loading/not-found.tsx` |
 | `components/` | presentational UI (flat `.tsx`; Tailwind, no CSS modules) | `Header`, `ChatPanel`, `Composer`                       |
 | `hooks/`      | custom hooks — where **state** lives                      | `use-transcript.ts`                                     |
 | `lib/`        | app modules / config                                      | `constants.ts`                                          |
@@ -100,13 +108,13 @@ The web `app/` is organized **type-based**, the layout most React apps grow into
 
 `page` · `layout` · `loading` · `error` · `not-found` are **route conventions**, not components. The
 router binds them by **name + location**: matched by `^(page|layout|error|loading|not-found)\.(tsx|ts|jsx|js)$`
-at a route segment (the `app/` root is the `/` route). `loading.tsx` becomes that route's Suspense
+at a route segment (the `src/app/` root is the `/` route). `loading.tsx` becomes that route's Suspense
 fallback, `error.tsx` its error boundary — _because they sit there, with that name_.
 
 So `loading.tsx` looks like a component (it renders a spinner) but it is **not** one — move it into
 `components/` and the router no longer finds it, and the route loses its loading UI. This is exactly the
 Next.js App Router model TheoKit implements: the special files live at the route segment, and `components/`
-/ `hooks/` / `lib/` sit alongside them. Having both at the `app/` root is the convention, not a mismatch.
+/ `hooks/` / `lib/` sit alongside them. Having both at the `src/app/` root is the convention, not a mismatch.
 (If a special file grows big, keep the thin route file and have it render a real component from
 `components/` — e.g. `loading.tsx` → `<LoadingScreen/>`.)
 
@@ -126,17 +134,17 @@ a `pages/` folder you wire by hand: that's the Next.js-style convention TheoKit 
 
 ### Adding a screen
 
-Routing is **file-based**: a screen is a folder under `app/` with a `page.tsx`. The folder name is the URL
-segment; the home screen is the flat `app/page.tsx`.
+Routing is **file-based**: a screen is a folder under `src/app/` with a `page.tsx`. The folder name is the URL
+segment; the home screen is the flat `src/app/page.tsx`.
 
 | You want             | Create                          | Serves                                                        |
 | -------------------- | ------------------------------- | ------------------------------------------------------------- |
-| a `/settings` screen | `app/settings/page.tsx`         | `/settings`                                                   |
-| a nested screen      | `app/settings/billing/page.tsx` | `/settings/billing`                                           |
-| a dynamic screen     | `app/users/[id]/page.tsx`       | `/users/:id` (read the param with react-router's `useParams`) |
-| a catch-all          | `app/docs/[...slug]/page.tsx`   | `/docs/*`                                                     |
+| a `/settings` screen | `src/app/settings/page.tsx`         | `/settings`                                                   |
+| a nested screen      | `src/app/settings/billing/page.tsx` | `/settings/billing`                                           |
+| a dynamic screen     | `src/app/users/[id]/page.tsx`       | `/users/:id` (read the param with react-router's `useParams`) |
+| a catch-all          | `src/app/docs/[...slug]/page.tsx`   | `/docs/*`                                                     |
 
-The one-command way: **`theokit generate page settings`** creates `app/settings/page.tsx` for you. Each
+The one-command way: **`theokit generate page settings`** creates `src/app/settings/page.tsx` for you. Each
 screen can have its own `layout.tsx` / `loading.tsx` / `error.tsx` / `not-found.tsx` (the route special
 files, scoped to that segment).
 
@@ -158,11 +166,11 @@ export function SettingsLink() {
 
 TheoKit's `theokit/client` gives you the Next-parity building blocks: **`Link`** (prefetch), **`Metadata`**
 (set `<title>`/meta per route — used in `page.tsx` + `about/page.tsx`), **`Image`** (optimized `<img>`),
-**`theoFetch`** + the **`theokit/react-query`** adapter (typed data fetching against your `server/`
+**`theoFetch`** + the **`theokit/react-query`** adapter (typed data fetching against your `src/server/`
 routes), and **`useAgent`** (the chat stream). Reach for these instead of generic libraries.
 
-The primary menu is `app/components/Nav.tsx` (TheoKit `Link` + `useLocation` for the active route). A worked
-example ships as `app/about/page.tsx` (the `/about` route, linked from the `Nav`, with its own `Metadata`
+The primary menu is `src/app/components/Nav.tsx` (TheoKit `Link` + `useLocation` for the active route). A worked
+example ships as `src/app/about/page.tsx` (the `/about` route, linked from the `Nav`, with its own `Metadata`
 title); it explains this and tells you to delete it once you've got the idea.
 
 See also: [CUSTOMIZATION](./CUSTOMIZATION.md).
