@@ -161,7 +161,7 @@ from and the code that produces it.
 
 **Criteria 4 and 5 cost nothing to write because nothing can be written.** This is not a small
 number, and it must not be reported as one. The fluent builder that the scaffold uses
-(`packages/create-theokit/templates/default/agents/chat.ts:21`) has no step-ceiling method anywhere
+(`packages/create-theokit/templates/default/src/server/agents/chat.ts:21`) has no step-ceiling method anywhere
 in its surface (`packages/agents/src/bridge/agent-builder.ts:125` opens the interface,
 `packages/agents/src/bridge/agent-builder.ts:291` closes it with `build`), so there is no declaration
 for an application to make. The ceiling that does exist on the compiled agent
@@ -361,7 +361,7 @@ absolute cost is one line.
 **On the TheoKit side there is no declaration to make on the path the scaffold generates.** The
 fluent `AgentBuilder` interface (`packages/agents/src/bridge/agent-builder.ts:125` through its
 closing `build` at `:291`) carries no ceiling method, and the scaffold writes that builder
-(`packages/create-theokit/templates/default/agents/chat.ts:21`). The TheoKit section above already
+(`packages/create-theokit/templates/default/src/server/agents/chat.ts:21`). The TheoKit section above already
 recorded this. What this measurement adds is the answer to the question
 [#363](https://github.com/usetheokit/theokit/issues/363) left open, because the benchmark needed it:
 
@@ -483,7 +483,7 @@ fit a new comparison is precisely what publishing the diffs was meant to make im
 
 | | Before `3762c7d0f` | After |
 | --- | --- | --- |
-| The fluent builder the scaffold writes (`packages/create-theokit/templates/default/agents/chat.ts:21`) | no ceiling method anywhere in its surface | `.maxIterations(n)` (`packages/agents/src/bridge/agent-builder.ts:158`) |
+| The fluent builder the scaffold writes (`packages/create-theokit/templates/default/src/server/agents/chat.ts:21`) | no ceiling method anywhere in its surface | `.maxIterations(n)` (`packages/agents/src/bridge/agent-builder.ts:158`) |
 | The functional surface | no field | `defineAgent({ maxIterations })` (`packages/agents/src/bridge/define-agent.ts:56`) |
 | The decorator path (`@Agent`, `@MainLoop`) | declared a ceiling nothing read | the same declaration, now read |
 | `CompiledAgentOptions.maxIterations` (`packages/agents/src/bridge/agent-compiler.ts:287`) | written by every path, read by none on the served path | lowered onto the SDK send (`packages/agents/src/bridge/sdk-adapter.ts:207`, applied at `:563`) |
