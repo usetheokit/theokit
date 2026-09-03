@@ -49,5 +49,10 @@ describe('the generated project passes its own format:check', () => {
     )
 
     expect(result).not.toMatch(/Code style issues/)
-  })
+    // 30s, not the 5s default. This spawns Prettier over a whole project tree — 1.7s on an idle
+    // machine, and it timed out in a full-suite run where 16 workers were competing for the same
+    // CPUs. A test whose verdict depends on what else is running is a flaky test, and a flaky test
+    // is a bug (`rules/testing.md` § 3); the fix is a budget that reflects what the test does
+    // rather than one that happens to fit when nothing else does.
+  }, 30_000)
 })
