@@ -50,3 +50,28 @@ can see where their file sits among `AGENTS.md`, `CLAUDE.md` and `.cursor/rules`
 
 Verified on a generated app: `typecheck`, `lint`, `format:check` and `test` all exit 0, and
 `theokit build` completes with the hook attached.
+
+## The root context file, and the option that never worked
+
+`THEO.md` **cannot** live at the project root: the SDK registers it as `.theokit/THEO.md` with
+`cwd-only` scope, so a copy at the root is read by nothing. The file that IS read from there is
+`AGENTS.md` — `git-root-walk`, the same scope as `CLAUDE.md`, discovered from any subdirectory.
+
+The scaffold now ships one, and the two files say what separates them:
+
+| | `AGENTS.md` (root) | `.theokit/THEO.md` |
+| --- | --- | --- |
+| Audience | agents that **write** this code | the agent your **users** talk to |
+| Content | commands, layout, conventions | product facts, domain vocabulary |
+| Priority | 10 — anything overrides it | 60 — strongest file-layer source |
+
+That ordering is why `THEO.md` warns against putting preferences in it: a tone instruction there
+wins against every personality, which silently makes `usePersonality` do nothing.
+
+**The `agentsMd` option was inert in three separate ways**, and shipping the file is what exposed
+all three: `--agents-md` was documented in `--help` and never parsed; the prompt asked a question
+whose answer changed nothing; and the code only ever *deleted* an `AGENTS.md` the template did not
+have. The flag is now `--no-agents-md` (the direction that can change anything, since the default
+is true), it is parsed, and it is applied after the prompts so a typed flag beats an earlier answer.
+Verified through the real CLI: present by default, absent with the flag, `THEO.md` untouched either
+way.
