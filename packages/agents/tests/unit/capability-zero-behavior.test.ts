@@ -51,6 +51,7 @@ const WAIST_FIELDS = [
   'recoverLeakedToolCalls',
   'systemPrompt',
   'settingSources',
+  'compatSources',
   'plugins',
   'tools',
   'agents',
@@ -91,6 +92,13 @@ const WAIST_FIELDS_ARE_EXHAUSTIVE: _Exhaustive = true
  */
 const NOT_EXPRESSIBLE_YET = [] as const satisfies readonly WaistField[]
 
+/** A posture that grants — built here rather than mocked, so the gate runs its real refusal path. */
+const TRUSTING_POSTURE = {
+  level: 'trusted',
+  source: 'env',
+  allows: { projectSettings: true },
+} as const
+
 /** The draft carries `provenance` (new diagnostics) — not part of the waist, so it is stripped. */
 function waistOf(draft: Record<string, unknown>): Record<string, unknown> {
   const { provenance: _p, ...waist } = draft
@@ -106,6 +114,31 @@ describe('capability path ≡ defineAgent path (zero-behavior)', () => {
       new ModelCapability('openai/gpt-5.4'),
       new SkillsCapability(['code-review', 'testing']),
     ])
+    expect(waistOf(viaCapabilities as unknown as Record<string, unknown>)).toEqual(reference)
+  })
+
+  it('carries compatSources down BOTH paths, not just defineAgent (#634)', () => {
+    // The zero-behavior contract is what makes this worth its own case: `compatSources` is derived
+    // from the same `settingSources` selection, so a capability that resolves one and forgets the
+    // other produces a waist that differs from `defineAgent` in a field nobody reads until the
+    // foreign dialect silently fails to load.
+    const selection = {
+      project: { trustedBy: TRUSTING_POSTURE },
+      claudeCode: { trustedBy: TRUSTING_POSTURE },
+    }
+
+    const reference = compileAgentDefinition(
+      defineAgent({ model: 'openai/gpt-5.4', settingSources: selection }),
+    )
+    const viaCapabilities = applyCapabilities([
+      new ModelCapability('openai/gpt-5.4'),
+      new SettingSourcesCapability(selection),
+    ])
+
+    // `CompatSource` is `"claude-code"` in the SDK — kebab, verified against the published package
+    // (see the note at the literal in `setting-sources-gate.ts` for how, and for why the type is
+    // not imported while the floor is `^4.52.1`).
+    expect(reference.compatSources).toEqual(['claude-code'])
     expect(waistOf(viaCapabilities as unknown as Record<string, unknown>)).toEqual(reference)
   })
 
@@ -176,7 +209,10 @@ describe('capability path — waist coverage is complete', () => {
       new CheckpointCapability({ storage: 'memory' } as never),
       new HumanInTheLoopCapability(new Map() as never),
       new SubAgentsCapability({ c: {} } as never),
-      new SettingSourcesCapability([] as never),
+      // Declares the foreign dialect, because this fixture's job is "every capability, fully
+      // switched on" — and `compatSources` only exists when it is asked for. An empty selection
+      // here would report the field as inexpressible when it simply was not requested.
+      new SettingSourcesCapability({ claudeCode: { trustedBy: TRUSTING_POSTURE } } as never),
       new PluginsCapability([] as never),
       new RunContextCapability({} as never),
       new SkillsResolverCapability((() => []) as never),

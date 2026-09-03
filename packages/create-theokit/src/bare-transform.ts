@@ -95,17 +95,17 @@ export function applyBareTransform(targetDir: string, options: BareTransformOpti
 
   // 2. Replace app/page.tsx (Hello Theo) + app/layout.tsx (unstyled shell) — the defaults compose the chat
   //    surface + import @theokit/ui, which --bare drops.
-  const pagePath = join(targetDir, 'app/page.tsx')
+  const pagePath = join(targetDir, 'src/app/page.tsx')
   if (existsSync(pagePath)) {
     writeScaffoldFile(pagePath, HELLO_PAGE)
   }
-  const layoutPath = join(targetDir, 'app/layout.tsx')
+  const layoutPath = join(targetDir, 'src/app/layout.tsx')
   if (existsSync(layoutPath)) {
     writeScaffoldFile(layoutPath, BARE_LAYOUT)
   }
 
   // 3. Remove the demo chat agent (the `agents/chat.ts` file + its TheoUI page)
-  const chatPath = join(targetDir, 'agents/chat.ts')
+  const chatPath = join(targetDir, 'src/server/agents/chat.ts')
   if (existsSync(chatPath)) {
     unlinkSync(chatPath)
   }
@@ -113,7 +113,7 @@ export function applyBareTransform(targetDir: string, options: BareTransformOpti
   // 3b. Remove the chat frontend surface — `app/{components,hooks,lib}/` (import @theokit/ui) + the
   //     `app/about/` example route (part of the chat demo). The Hello-Theo page references none of them.
   //     (The route surface — layout/page/error/… — is kept; page + layout are rewritten above.)
-  for (const dir of ['app/components', 'app/hooks', 'app/lib', 'app/about']) {
+  for (const dir of ['src/app/components', 'src/app/hooks', 'src/app/lib', 'src/app/about']) {
     const p = join(targetDir, dir)
     if (existsSync(p)) rmSync(p, { recursive: true, force: true })
   }

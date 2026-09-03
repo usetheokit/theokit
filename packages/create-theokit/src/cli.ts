@@ -1,7 +1,8 @@
 import { execSync } from 'node:child_process'
-import { readFileSync, unlinkSync, mkdirSync, renameSync, existsSync, rmSync } from 'node:fs'
+import { readFileSync, unlinkSync, existsSync, rmSync } from 'node:fs'
 import { resolve } from 'node:path'
 
+import { aliasPaths } from './alias-paths.js'
 import { cloneExample } from './clone-example.js'
 import { runInstall } from './install.js'
 import { detectPkgManager, type PkgManager } from './pkg-manager.js'
@@ -9,6 +10,7 @@ import { assertNodeVersion } from './preflight-node.js'
 import { runPrompts, getDefaults, type ProjectOptions } from './prompts.js'
 import { parseBackendFlags, scaffoldServices, type BackendKind } from './scaffold-services.js'
 import { applySurface, parseSurfaceFlags, type SurfaceKind } from './scaffold-surface.js'
+import { TAILWIND_CSS_IMPORT } from './tailwind-css-import.js'
 import { CLI_VERSION } from './version.js'
 import { writeScaffoldFile } from './write-file.js'
 
@@ -253,7 +255,6 @@ function applySurfaceStep(
     throw new Error(`Scaffold rolled back: surface transform failed.\nOriginal error: ${original}`)
   }
   options.tailwind = false
-  options.srcDir = false
 }
 
 interface ApplyOpts {
@@ -317,29 +318,15 @@ function applyOptions(targetDir: string, options: ProjectOptions, opts: ApplyOpt
     const cssDir = existsSync(resolve(targetDir, 'src/app')) ? 'src/app' : 'app'
     const cssPath = resolve(targetDir, `${cssDir}/globals.css`)
     const existing = existsSync(cssPath) ? readFileSync(cssPath, 'utf-8') : ''
-    writeScaffoldFile(cssPath, '@import "tailwindcss";\n\n' + existing)
+    writeScaffoldFile(cssPath, TAILWIND_CSS_IMPORT + existing)
   }
 
-  // src/ directory
-  if (options.srcDir) {
-    const srcDir = resolve(targetDir, 'src')
-    mkdirSync(srcDir, { recursive: true })
-    for (const dir of ['app', 'server']) {
-      const from = resolve(targetDir, dir)
-      const to = resolve(srcDir, dir)
-      if (existsSync(from)) renameSync(from, to)
-    }
-    // Move theo.config.ts into src/ for --src-dir mode
-    const configFrom = resolve(targetDir, 'theo.config.ts')
-    if (existsSync(configFrom)) renameSync(configFrom, resolve(srcDir, 'theo.config.ts'))
-    // index.html stays at root — Vite expects it there
-
-    const tscPath = resolve(targetDir, 'tsconfig.json')
-    const tsc = JSON.parse(readFileSync(tscPath, 'utf-8'))
-    tsc.compilerOptions.baseUrl = 'src'
-    tsc.include = ['src/**/*.ts', 'src/**/*.tsx']
-    writeScaffoldFile(tscPath, JSON.stringify(tsc, null, 2) + '\n')
-  }
+  // `src/` is the layout, not an option. The block that used to move `app/` and `server/` into it
+  // is gone because there is nothing left to move — and leaving it would have been worse than dead
+  // code: it also relocated `theo.config.ts` into `src/`, where the CLI does not look for it, and
+  // overwrote `include` with `src/**` alone, dropping the two ambient `.d.ts` globs the template
+  // needs. A flag whose "on" state breaks the project it configures is a flag nobody can use
+  // correctly.
 
   // Import alias (custom or disabled)
   const tscPath = resolve(targetDir, 'tsconfig.json')
@@ -348,13 +335,9 @@ function applyOptions(targetDir: string, options: ProjectOptions, opts: ApplyOpt
     delete tsc.compilerOptions.baseUrl
     delete tsc.compilerOptions.paths
   } else if (opts.importAlias !== '@/*') {
-    // Custom alias: replace @/* with user choice
-    const prefix = opts.importAlias.replace('/*', '')
-    tsc.compilerOptions.paths = {
-      [`${prefix}/*`]: ['./*'],
-      [`${prefix}/server/*`]: ['./server/*'],
-      [`${prefix}/app/*`]: ['./app/*'],
-    }
+    // Custom alias: replace @/* with user choice. The mapping lives in `alias-paths.ts` so it can
+    // be tested against the directories the template actually ships (see that file's docblock).
+    tsc.compilerOptions.paths = aliasPaths(opts.importAlias)
   }
   writeScaffoldFile(tscPath, JSON.stringify(tsc, null, 2) + '\n')
 

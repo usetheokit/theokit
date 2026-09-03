@@ -41,7 +41,10 @@ const VALID_SURFACES = ['web', 'tui', 'desktop'] as const
 const WEB_ONLY_DEPS = ['@theokit/ui', '@usetheo/ui', 'lucide-react'] as const
 const WEB_ONLY_DEV_DEPS = ['tailwindcss', '@tailwindcss/vite', 'tailwindcss-animate'] as const
 /** Web UI files removed for the tui/desktop surfaces. */
-const WEB_ONLY_FILES = ['app', 'index.html', 'tailwind.config.ts', 'postcss.config.js'] as const
+// `src/app`, not `app`: the web UI moved under `src/` with the rest of the project. A surface that
+// drops the web UI must still find it, and a stale name here removes NOTHING while every assertion
+// about "the web UI is gone" keeps passing on a directory nobody looked for.
+const WEB_ONLY_FILES = ['src/app', 'index.html', 'tailwind.config.ts', 'postcss.config.js'] as const
 
 interface SurfaceConfig {
   /** The template fragment dir under `templates/surfaces/`. */
@@ -91,9 +94,10 @@ const SURFACE_CONFIG: Record<Exclude<SurfaceKind, 'web'>, SurfaceConfig> = {
     tsconfigInclude: [
       'tui/**/*.ts',
       'tui/**/*.tsx',
-      'server/**/*.ts',
-      'agents/**/*.ts',
-      'shared/**/*.ts',
+      // `src/server/**` covers the agents too: they live at `src/server/agents` now, because an
+      // agent is an entry point of this backend rather than a second one beside it.
+      'src/server/**/*.ts',
+      'src/shared/**/*.ts',
     ],
   },
   desktop: {
@@ -134,9 +138,10 @@ const SURFACE_CONFIG: Record<Exclude<SurfaceKind, 'web'>, SurfaceConfig> = {
       'sidecar/**/*.ts',
       'frontend/src/**/*.ts',
       'frontend/src/**/*.tsx',
-      'server/**/*.ts',
-      'agents/**/*.ts',
-      'shared/**/*.ts',
+      // `src/server/**` covers the agents too: they live at `src/server/agents` now, because an
+      // agent is an entry point of this backend rather than a second one beside it.
+      'src/server/**/*.ts',
+      'src/shared/**/*.ts',
     ],
   },
 }

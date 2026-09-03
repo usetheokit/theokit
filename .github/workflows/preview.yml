@@ -96,6 +96,22 @@ jobs:
       # stderr is NOT silenced: when the fetch fails, the reason belongs in the log. `|| true` keeps
       # the failure non-fatal, because the script then prints every package, which is what this
       # workflow did before scoping existed.
+      # `--pnpm`, and without it the scoping above publishes something WORSE than the URL it removes.
+      #
+      # pkg-pr-new runs `npm pack` by default, and npm does not understand `workspace:*` — so the
+      # published manifest carries the protocol verbatim and no external consumer can resolve it.
+      # Publishing every package in one invocation hid this: the cross-package rewrite replaced each
+      # `workspace:*` with a preview URL on its way out. Take the rewrite away, and the raw protocol
+      # is what ships.
+      #
+      # Measured on the preview this workflow produced for d2903f1cc — `@theokit/presenter` came out
+      # as `workspace:*`. `pnpm pack` resolves it to the real version (`0.8.0`), which is what makes
+      # the preview installable, and `--pnpm` is what selects it.
+      #
+      # The version is repeated here because `pkg-pr-new-version` is documented as ignored when
+      # `publish-command` is given; keeping it pinned is the point of that input.
+      publish-command: >-
+        pnpm dlx pkg-pr-new@0.0.88 publish --pnpm $DIRS
       packages-command: >-
         git fetch --quiet --depth=50 origin
         +refs/heads/${{ github.base_ref || 'develop' }}:refs/remotes/origin/${{ github.base_ref || 'develop' }}

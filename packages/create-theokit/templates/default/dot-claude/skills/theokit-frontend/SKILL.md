@@ -3,7 +3,7 @@ name: theokit-frontend
 description: TheoKit frontend — file-based routing, layouts, theoFetch typed client, useAgent, React patterns
 user-invocable: false
 paths:
-  - 'app/**'
+  - 'src/app/**'
 ---
 
 # TheoKit Frontend (React + File-Based Routing)

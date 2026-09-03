@@ -14,11 +14,10 @@
     "emitDecoratorMetadata": true
   },
   "include": [
-    "app/**/*.ts",
-    "app/**/*.tsx",
-    "server/**/*.ts",
-    "agents/**/*.ts",
-    "shared/**/*.ts",
+    "src/app/**/*.ts",
+    "src/app/**/*.tsx",
+    "src/server/**/*.ts",
+    "src/shared/**/*.ts",
     ".theokit/**/*.d.ts",
     "types/**/*.d.ts"
   ]
