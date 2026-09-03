@@ -3,7 +3,7 @@ name: theokit-routes
 description: TheoKit server routes — the route() builder, Zod validation, HTTP methods, dynamic params, error handling
 user-invocable: false
 paths:
-  - 'server/routes/**'
+  - 'src/server/routes/**'
   - 'server/actions/**'
 ---
 

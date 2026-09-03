@@ -112,22 +112,22 @@ describe('applyBareTransform', () => {
   })
 
   it('should replace app/page.tsx with Hello Theo', () => {
-    mkdirSync(join(targetDir, 'app'), { recursive: true })
-    writeFileSync(join(targetDir, 'app/page.tsx'), '<div>Agent Surface</div>')
+    mkdirSync(join(targetDir, 'src/app'), { recursive: true })
+    writeFileSync(join(targetDir, 'src/app/page.tsx'), '<div>Agent Surface</div>')
 
     applyBareTransform(targetDir)
 
-    const content = readFileSync(join(targetDir, 'app/page.tsx'), 'utf-8')
+    const content = readFileSync(join(targetDir, 'src/app/page.tsx'), 'utf-8')
     expect(content).toContain('Hello Theo')
   })
 
   it('should remove agents/chat.ts', () => {
-    mkdirSync(join(targetDir, 'agents'), { recursive: true })
-    writeFileSync(join(targetDir, 'agents/chat.ts'), 'export default {}')
+    mkdirSync(join(targetDir, 'src/server/agents'), { recursive: true })
+    writeFileSync(join(targetDir, 'src/server/agents/chat.ts'), 'export default {}')
 
     applyBareTransform(targetDir)
 
-    expect(existsSync(join(targetDir, 'agents/chat.ts'))).toBe(false)
+    expect(existsSync(join(targetDir, 'src/server/agents/chat.ts'))).toBe(false)
   })
 
   it('should remove tailwind.config.ts', () => {

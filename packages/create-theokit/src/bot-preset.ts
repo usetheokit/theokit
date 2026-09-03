@@ -15,12 +15,12 @@ import { fileURLToPath } from 'node:url'
  *
  * | file | the question it answers |
  * |---|---|
- * | `agents/researcher.ts`, `agents/publisher.ts` | two bots, so "whose conversation is this" is a real question rather than an exercise |
- * | `agents/lib/bot-scope.ts` | the piece people rediscover: conversation id + tool confinement + workspace, composed once |
- * | `agents/lib/sandbox.ts` | the confinement default, stated rather than omitted |
- * | `agents/tools/*` | a write confined by a resolved path, and a read the other bot cannot write |
- * | `server/delivery.ts` | how an approval reaches you when nobody is attached |
- * | `server/crons/daily-research.ts` | the schedule that makes it a bot |
+ * | `src/server/agents/researcher.ts`, `…/publisher.ts` | two bots, so "whose conversation is this" is a real question rather than an exercise |
+ * | `src/server/agents/lib/bot-scope.ts` | the piece people rediscover: conversation id + tool confinement + workspace, composed once |
+ * | `src/server/agents/lib/sandbox.ts` | the confinement default, stated rather than omitted |
+ * | `src/server/agents/tools/*` | a write confined by a resolved path, and a read the other bot cannot write |
+ * | `src/server/delivery.ts` | how an approval reaches you when nobody is attached |
+ * | `src/server/crons/daily-research.ts` | the schedule that makes it a bot |
  *
  * ## Two bots, not three
  *
@@ -29,7 +29,7 @@ import { fileURLToPath } from 'node:url'
  *
  * ## No delivery channel is wired
  *
- * `server/delivery.ts` prints. A default channel is a policy decision — an email address you did not
+ * `src/server/delivery.ts` prints. A default channel is a policy decision — an email address you did not
  * write, a workspace you may not have — and a scaffold that made it would be choosing for you. The
  * seam is present, called from the places that need it, with one commented example.
  */
@@ -40,15 +40,15 @@ export interface BotPresetOptions {
 
 /** Files the preset owns, relative to its template root. Listed so a partial copy is detectable. */
 const PRESET_FILES = [
-  'agents/researcher.ts',
-  'agents/publisher.ts',
-  'agents/lib/bot-scope.ts',
-  'agents/lib/sandbox.ts',
-  'agents/tools/read-notes.ts',
-  'agents/tools/write-note.ts',
-  'agents/tools/publish.ts',
-  'server/delivery.ts',
-  'server/crons/daily-research.ts',
+  'src/server/agents/researcher.ts',
+  'src/server/agents/publisher.ts',
+  'src/server/agents/lib/bot-scope.ts',
+  'src/server/agents/lib/sandbox.ts',
+  'src/server/agents/tools/read-notes.ts',
+  'src/server/agents/tools/write-note.ts',
+  'src/server/agents/tools/publish.ts',
+  'src/server/delivery.ts',
+  'src/server/crons/daily-research.ts',
 ] as const
 
 function presetRoot(): string {
@@ -119,7 +119,7 @@ curl -X POST localhost:3000/api/agents/researcher \\
 
 ### What to change first
 
-**\`server/delivery.ts\`** prints to the console. That is the honest local behaviour and the reason
+**\`src/server/delivery.ts\`** prints to the console. That is the honest local behaviour and the reason
 the scaffold runs before you configure anything — but a bot whose approvals only print is a bot
 nobody can approve. Point it at a channel you actually read; one commented example is in the file.
 

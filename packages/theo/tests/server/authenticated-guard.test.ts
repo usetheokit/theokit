@@ -30,7 +30,9 @@ const contextFor = (request: Request) => ({
 })
 
 /** 32+ chars, which `createSessionManagerWeb` enforces. Not a credential — a test fixture. */
-const SECRET = 'unit-test-secret-value-0123456789abcdef'
+// `openssl rand -hex 32`-shaped. A fixture that trips the production guard (#610) is one the
+// suite reports as a warning on every run, which is how a warning stops being read.
+const SECRET = 'f1490bcc329b9950ad9270ad27d696ac687504b0013e49ebeabefd883292dbc4'
 
 const withCookie = async (
   sessions: ReturnType<typeof createSessionManagerWeb<{ userId: string }>>,
@@ -67,7 +69,7 @@ describe('Authenticated(sessions) (#574)', () => {
   it('refuses a session cookie it cannot decrypt', async () => {
     // A cookie signed with another secret is not a session, and must not be read as one.
     const other = createSessionManagerWeb<{ userId: string }>({
-      secret: 'a-different-secret-value-0123456789abcd',
+      secret: 'ca9d2e3cdc2db2e3f59cbaa6f4157e8bdf99b028b4da3550c4b92fed1bc34552',
     })
     const guard = new (Authenticated(sessions))()
     const request = await withCookie(other, { userId: 'u-1' })

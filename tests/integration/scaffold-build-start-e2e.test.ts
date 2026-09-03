@@ -46,10 +46,10 @@ afterAll(() => {
 
 describe('T7.4 Sub-phase D — scaffold → build → start E2E', () => {
   it('scaffold creates the canonical project structure', () => {
-    expect(existsSync(join(projectDir, 'app/page.tsx'))).toBe(true)
+    expect(existsSync(join(projectDir, 'src/app/page.tsx'))).toBe(true)
     expect(existsSync(join(projectDir, 'theo.config.ts'))).toBe(true)
     expect(existsSync(join(projectDir, 'package.json'))).toBe(true)
-    expect(existsSync(join(projectDir, 'server/routes/health.ts'))).toBe(true)
+    expect(existsSync(join(projectDir, 'src/server/routes/health.ts'))).toBe(true)
   })
 
   it('scaffold writes valid package.json with theokit deps', () => {
@@ -69,7 +69,7 @@ describe('T7.4 Sub-phase D — scaffold → build → start E2E', () => {
   })
 
   it('scaffolded app uses `theokit` imports (not `theo`) — locked stack', () => {
-    const health = readFileSync(join(projectDir, 'server/routes/health.ts'), 'utf8')
+    const health = readFileSync(join(projectDir, 'src/server/routes/health.ts'), 'utf8')
     // Accept the canonical barrel OR a documented subpath (`theokit/server`,
     // `theokit/server/define`, …) — the locked-stack invariant is the
     // `theokit` scope, not a specific subpath. (server/index.ts documents

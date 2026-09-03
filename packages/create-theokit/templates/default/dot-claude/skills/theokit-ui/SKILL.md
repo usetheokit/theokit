@@ -3,7 +3,7 @@ name: theokit-ui
 description: '@theokit/ui AI-native component library — AI-agent surfaces (ChatThread, ChatMessage, ChatComposer, ToolCallCard, AgentStream), theming, providers; generic primitives (CodeBlock, Sidebar, Button) come from @usetheo/ui'
 user-invocable: false
 paths:
-  - 'app/**'
+  - 'src/app/**'
   - '**/*Chat*'
   - '**/*chat*'
   - '**/*Sidebar*'

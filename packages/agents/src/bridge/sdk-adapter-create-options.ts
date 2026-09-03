@@ -6,6 +6,8 @@
  *    arguments (the single compile site is `agent-compiler.ts`, per sdk-runtime.md);
  *  - `realUsageDone` builds the terminal `done` StreamEvent from the SDK `RunResult`.
  */
+import { createRequire } from 'node:module'
+
 import type { ContextSettings, SkillsSettings, SystemPromptResolver } from '@theokit/sdk'
 import type { MemorySettings } from '@theokit/sdk'
 
@@ -22,7 +24,7 @@ interface M8CreateOptions {
   context?: ContextSettings
   systemPrompt?: string | SystemPromptResolver
   /** SDK local options: settings source for SKILL.md discovery (EC-1) + per-run cwd (V4-L.2). */
-  local?: { settingSources?: string[]; cwd?: string; baseDir?: string }
+  local?: { settingSources?: string[]; compatSources?: string[]; cwd?: string; baseDir?: string }
   plugins?: readonly unknown[]
   /** #89 — `@MCP` servers forwarded to `Agent.create({ mcpServers })` (the SDK owns execution). */
   mcpServers?: McpServersMap
@@ -35,6 +37,49 @@ interface M8CreateOptions {
  * `@ProjectContext` resolver is built here (it does I/O, so the compiler keeps it raw). `applied`
  * lists which decorators contributed, for the observability log (wiring triad — runtime metric).
  */
+/** Reported once per process — a warning repeated per agent stops being read. */
+let sdkCompatWarningEmitted = false
+
+/**
+ * Warns when the installed SDK is too old to know `compatSources`, instead of letting it vanish.
+ *
+ * ## Why this lives here and not upstream
+ *
+ * `theokit-sdk#526` makes the SDK name an unrecognised key under `local` — and it only exists in
+ * the SDK that already supports `compatSources`. So it covers exactly the half where no warning is
+ * needed, and is absent from the half where one is. This layer is the only place that sees both.
+ *
+ * ## Why this does not require raising the floor
+ *
+ * `@theokit/sdk` declares `"./package.json"` in `exports`, so its version is readable at runtime.
+ * That is what made `usetheokit/theokit#634` buildable before a stable cut: the blocker was never
+ * the missing type — a string union is declarable here — it was that a forward against an older SDK
+ * would be inert IN SILENCE. Reading the version removes the silence, and the floor stays
+ * `^4.52.1`, so no consumer is pinned to a prerelease.
+ *
+ * Failure to read it is not an error: a bundled or vendored SDK may not resolve that subpath, and
+ * refusing to create an agent over a diagnostic would be the cure being worse than the disease.
+ */
+function warnIfSdkCannotReadCompatSources(): void {
+  if (sdkCompatWarningEmitted) return
+  let version: string | undefined
+  try {
+    version = (createRequire(import.meta.url)('@theokit/sdk/package.json') as { version?: string })
+      .version
+  } catch {
+    return // cannot tell — say nothing rather than guess
+  }
+  const major = Number.parseInt(version?.split('.')[0] ?? '', 10)
+  if (!Number.isFinite(major) || major >= 5) return
+  sdkCompatWarningEmitted = true
+  console.warn(
+    `[theokit/agents] \`compatSources\` was declared, but @theokit/sdk@${version} does not know ` +
+      `that option and will ignore it — the foreign configuration root will NOT be read. It landed ` +
+      `in 5.0.0. Until this package's floor can name a stable 5.x, override the SDK in your ` +
+      `workspace (usetheokit/theokit#634).`,
+  )
+}
+
 export function assembleM8CreateOptions(compiled: CompiledAgentOptions): {
   options: M8CreateOptions
   applied: string[]
@@ -68,6 +113,14 @@ export function assembleM8CreateOptions(compiled: CompiledAgentOptions): {
   if (compiled.settingSources !== undefined && compiled.settingSources.length > 0) {
     options.local = { ...options.local, settingSources: [...compiled.settingSources] }
     applied.push('settingSources')
+  }
+  // #634 — spread over `options.local` rather than replacing it, because `settingSources` above
+  // projects onto the same object and the second write eating the first is the ordinary way this
+  // breaks: invisibly, with each option passing its own test.
+  if (compiled.compatSources !== undefined && compiled.compatSources.length > 0) {
+    options.local = { ...options.local, compatSources: [...compiled.compatSources] }
+    applied.push('compatSources')
+    warnIfSdkCannotReadCompatSources()
   }
   if (compiled.context) {
     options.context = compiled.context

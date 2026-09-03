@@ -11,7 +11,6 @@ export interface ProjectOptions {
   typescript: boolean
   eslint: boolean
   tailwind: boolean
-  srcDir: boolean
   aliases: boolean
   agentsMd: boolean
 }
@@ -20,7 +19,6 @@ const DEFAULTS: Omit<ProjectOptions, 'projectName'> = {
   typescript: true,
   eslint: true,
   tailwind: true,
-  srcDir: false,
   aliases: true,
   agentsMd: true,
 }
@@ -81,11 +79,12 @@ export async function runPrompts(projectName: string): Promise<ProjectOptions> {
     const typescript = await ask(rl, 'Would you like to use TypeScript?', true)
     const eslint = await ask(rl, 'Would you like to use ESLint?', true)
     const tailwind = await ask(rl, 'Would you like to use Tailwind CSS?', true)
-    const srcDir = await ask(rl, 'Would you like your code inside a `src/` directory?', false)
+    // No `src/` question: the generated project always uses `src/`, so asking would offer a
+    // choice that changes nothing whichever way it is answered.
     const aliases = await ask(rl, 'Would you like to use import alias (@/*)?', true)
     const agentsMd = await ask(rl, 'Would you like to include AGENTS.md for coding agents?', true)
 
-    return { projectName, typescript, eslint, tailwind, srcDir, aliases, agentsMd }
+    return { projectName, typescript, eslint, tailwind, aliases, agentsMd }
   } finally {
     rl.close()
   }

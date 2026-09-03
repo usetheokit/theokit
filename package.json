@@ -24,7 +24,7 @@
     "knip:strict": "knip --strict",
     "check:deps": "dependency-cruiser packages/theo/src --config .dependency-cruiser.cjs",
     "check:naming": "ls-lint",
-    "check:all": "pnpm build && pnpm lint && pnpm format:check && pnpm typecheck && pnpm test:coverage && pnpm knip && pnpm check:docs && pnpm check:changelog",
+    "check:all": "pnpm build && run-p -c --aggregate-output lint format:check typecheck test:coverage knip check:docs check:changelog",
     "try:scaffold": "tsx packages/create-theokit/src/cli.ts my-test && tsx scripts/link-scaffold-to-workspace.ts my-test",
     "try:dev": "cd my-test && npx tsx ../packages/theo/src/cli/index.ts dev",
     "try:clean": "node -e \"const fs=require('fs');fs.rmSync('my-test',{recursive:true,force:true})\"",
@@ -75,6 +75,7 @@
     "globals": "^15.15.0",
     "knip": "^5.88.1",
     "lint-staged": "^15.5.2",
+    "npm-run-all2": "9.0.3",
     "pg": "^8.23.0",
     "pg-mem": "^3.0.14",
     "prettier": "^3.8.4",
@@ -107,7 +108,8 @@
       "eslint-plugin-sonarjs>minimatch": "^10.2.3",
       "react-router@>=7.12.0 <7.18.2": ">=7.18.2",
       "postcss@<8.5.18": ">=8.5.18",
-      "nanoid@<3.3.17": ">=3.3.17"
+      "nanoid@<3.3.17": ">=3.3.17",
+      "browserslist@<=4.28.6": ">=4.28.7"
     },
     "patchedDependencies": {
       "@vitest/utils@4.1.9": "patches/@vitest__utils@4.1.9.patch"

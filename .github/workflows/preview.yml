@@ -13,6 +13,31 @@ name: Preview releases
 #
 # The implementation is shared rather than copied nine times; see
 # usetheokit/shared-workflows/.github/workflows/preview.yml.
+#
+# ## Installing a preview on pnpm 11: ERR_PNPM_EXOTIC_SUBDEP (#632)
+#
+# A consumer pinning ONE preview of a package from this monorepo can be refused before anything is
+# downloaded:
+#
+#   [ERR_PNPM_EXOTIC_SUBDEP] Exotic dependency "@theokit/presenter" (resolved via url) is not
+#   allowed in subdependencies when blockExoticSubdeps is enabled
+#
+# The preview is not broken, and neither is the consumer's manifest. pkg.pr.new rewrites the
+# internal dependencies of everything published in the SAME invocation to preview URLs, so the
+# preview of `@theokit/agents` declares `@theokit/presenter` as a URL. One level down from the
+# consumer that is a SUBdependency, and pnpm 11 ships `blockExoticSubdeps: true` by default.
+#
+# The workaround is `blockExoticSubdeps: false` in the consuming workspace. It works — measured on a
+# real consumer, 94 files / 753 tests green on a preview build — and it is a poor trade: the guard
+# goes off for the whole tree, not for the pinned preview, and stays off afterwards. Prefer it for
+# the length of the verification and put it back.
+#
+# Measured 2026-09-02, both halves: `pkg-pr-new@0.0.88 --help` offers no flag to keep an internal
+# dependency on its registry range, and `pnpm pack` on `packages/agents` ALREADY writes
+# `"@theokit/presenter": "0.8.0"` (from `workspace:*`) — so the URL comes from the cross-package
+# rewrite, not from the manifest. Publishing fewer packages per invocation would avoid it, at the
+# cost of a preview that cannot carry an unpublished change in a sibling. That decision belongs with
+# the shared workflow, not here.
 
 on:
   # Filtered by BASE branch, and that is the only lever there is: `pull_request` has no head-branch
@@ -44,3 +69,51 @@ concurrency:
 jobs:
   preview:
     uses: usetheokit/shared-workflows/.github/workflows/preview.yml@v1 # zizmor: ignore[unpinned-uses]
+    with:
+      # #632 — publish the packages THIS commit touched, not all seven.
+      #
+      # pkg.pr.new rewrites internal dependencies to preview URLs across everything in ONE
+      # invocation, so publishing all seven made each preview declare its siblings as URLs. From the
+      # consumer's side that is an exotic SUBdependency, which a default pnpm 11 refuses outright —
+      # the preview exists for exactly that consumer.
+      #
+      # Scoping keeps the property the cross-rewrite is FOR. A change inside one package publishes
+      # one package, so its siblings stay on registry ranges and the preview installs; a change
+      # spanning two publishes both, so the URL between THEM survives, which is the case that needs
+      # it. Publishing one package per invocation would have removed the cross-URL everywhere,
+      # including where it is required.
+      #
+      # The `git fetch` is what makes the diff readable at all: the shared workflow checks out
+      # shallow, so `origin/develop` is not there until asked for. It is `|| true` on purpose —
+      # if it fails, the script finds no diff and prints every package, which is exactly what this
+      # workflow did before. Failing WIDE keeps a preview being produced; failing narrow would
+      # silently stop previewing the package somebody was about to verify.
+      # The refspec is explicit and that is the whole trick: `actions/checkout` configures the
+      # remote to track ONLY the ref it checked out, so a bare `git fetch origin develop` downloads
+      # the objects and creates no `refs/remotes/origin/develop` for `git diff` to name. Measured on
+      # run 33684696268 — the script reported "could not read a diff" and previewed all seven.
+      #
+      # stderr is NOT silenced: when the fetch fails, the reason belongs in the log. `|| true` keeps
+      # the failure non-fatal, because the script then prints every package, which is what this
+      # workflow did before scoping existed.
+      # `--pnpm`, and without it the scoping above publishes something WORSE than the URL it removes.
+      #
+      # pkg-pr-new runs `npm pack` by default, and npm does not understand `workspace:*` — so the
+      # published manifest carries the protocol verbatim and no external consumer can resolve it.
+      # Publishing every package in one invocation hid this: the cross-package rewrite replaced each
+      # `workspace:*` with a preview URL on its way out. Take the rewrite away, and the raw protocol
+      # is what ships.
+      #
+      # Measured on the preview this workflow produced for d2903f1cc — `@theokit/presenter` came out
+      # as `workspace:*`. `pnpm pack` resolves it to the real version (`0.8.0`), which is what makes
+      # the preview installable, and `--pnpm` is what selects it.
+      #
+      # The version is repeated here because `pkg-pr-new-version` is documented as ignored when
+      # `publish-command` is given; keeping it pinned is the point of that input.
+      publish-command: >-
+        pnpm dlx pkg-pr-new@0.0.88 publish --pnpm $DIRS
+      packages-command: >-
+        git fetch --quiet --depth=50 origin
+        +refs/heads/${{ github.base_ref || 'develop' }}:refs/remotes/origin/${{ github.base_ref || 'develop' }}
+        || true;
+        PREVIEW_DIFF_BASE=origin/${{ github.base_ref || 'develop' }} node scripts/preview-packages.mjs

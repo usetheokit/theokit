@@ -11,7 +11,7 @@
  * 1. **A fabricated symbol.** The agents skill taught `defineAgentTool`. The name is declared in the
  *    published `.d.ts`, so an editor autocompletes it and `tsc` accepts it — and no subpath exports
  *    it at runtime, so the call throws on the first request (#542). The scaffold used the real API,
- *    `tool()`, one directory away in `agents/tools/weather.ts`. A fresh app carried both.
+ *    `tool()`, one directory away in `src/server/agents/tools/weather.ts`. A fresh app carried both.
  *
  *    Worse, `create-theo-default-template.test.ts` pinned the *signature* of that call
  *    (`inputSchema` + `handler`, the #79 fix) — a guard asserting the shape of a function that does
@@ -224,7 +224,10 @@ describe('the scaffold teaches imports that exist (#542, #79)', () => {
       join(TEMPLATES, 'default/dot-claude/skills/theokit-agents/SKILL.md'),
       'utf8',
     )
-    const realTool = readFileSync(join(TEMPLATES, 'default/agents/tools/weather.ts'), 'utf8')
+    const realTool = readFileSync(
+      join(TEMPLATES, 'default/src/server/agents/tools/weather.ts'),
+      'utf8',
+    )
 
     expect(skill).toContain("from 'theokit/server/define'")
     expect(skill, 'the skill must show the same builder the generated app uses').toMatch(

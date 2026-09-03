@@ -120,7 +120,7 @@ side: the agent mount answers with fixed `text/event-stream` headers
 (`packages/theo/src/server/agent/durable-ui-message-stream-response.ts:23`), nothing in
 `packages/theo/src/server/agent/mount-agent.ts:98` branches to a buffered response, and the
 scaffolded client already reads the result as a stream
-(`packages/create-theokit/templates/default/app/hooks/use-transcript.ts:29`). A non-streaming
+(`packages/create-theokit/templates/default/src/app/hooks/use-transcript.ts:29`). A non-streaming
 baseline would have to be hand-built - a plain server route that awaits the run and returns JSON -
 and the delta from that would price a detour no developer takes. So the delta is taken from the
 scaffold as it ships, the rule is reported as not applying rather than reinterpreted, and the

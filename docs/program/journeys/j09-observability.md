@@ -697,7 +697,7 @@ manufacture noise. Its counts, its version facts and its criteria grades are reu
 
 **The breaking change costs zero lines, and that was measured rather than assumed.** The scaffold
 template now ships the declaration itself
-(`packages/create-theokit/templates/default/agents/chat.ts:42`), so the untouched baseline
+(`packages/create-theokit/templates/default/src/server/agents/chat.ts:42`), so the untouched baseline
 already satisfies the new gate: the app was built and served from the verbatim template and the agent
 endpoint answered `200`. J9 adds no agent, so it writes no policy. The honest caveat is that a journey
 which *adds* an agent would now pay a line for it, and J9 is not that journey.

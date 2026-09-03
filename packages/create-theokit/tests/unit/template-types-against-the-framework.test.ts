@@ -22,7 +22,9 @@ import { fileURLToPath } from 'node:url'
 
 import { describe, expect, it } from 'vitest'
 
-const TEMPLATE_APP = join(fileURLToPath(new URL('../../templates/default/app', import.meta.url)))
+const TEMPLATE_APP = join(
+  fileURLToPath(new URL('../../templates/default/src/app', import.meta.url)),
+)
 
 function sourceFiles(dir: string): string[] {
   return readdirSync(dir).flatMap((entry) => {

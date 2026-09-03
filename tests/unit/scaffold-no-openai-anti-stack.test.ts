@@ -35,7 +35,9 @@ import { resolve } from 'node:path'
 const ROOT = resolve(__dirname, '../..')
 
 // The file that is actually shipped to the user — the `create-theokit` template.
-const FILES_TO_SCAN = ['packages/create-theokit/templates/default/agents/chat.ts'] as const
+const FILES_TO_SCAN = [
+  'packages/create-theokit/templates/default/src/server/agents/chat.ts',
+] as const
 
 describe('scaffold anti-stack lint — no raw OpenAI in default agents/chat.ts (M3)', () => {
   it('declares exactly 1 file to scan (defends against missing file in array)', () => {

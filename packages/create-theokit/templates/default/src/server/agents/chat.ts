@@ -2,6 +2,7 @@ import { AgentBuilder } from '@theokit/agents'
 import { z } from 'zod'
 
 import { BASE_INSTRUCTIONS } from './prompts/instructions.js'
+import { toolAuditHooks } from './hooks/tool-audit.js'
 import { dailyBriefingSkill } from './skills/daily-briefing.js'
 import { currentTimeTool } from './tools/current-time.js'
 import { sendNotificationTool } from './tools/send-notification.js'
@@ -67,4 +68,9 @@ export default AgentBuilder.create()
   .approval('send_notification', { question: 'Send this notification?' })
   // Skills the agent can consult on demand (hover `.skills` for how it works).
   .skills([dailyBriefingSkill])
+  // Lifecycle hooks — one structured log line per tool call, with its duration. This is the
+  // observability half of the wiring: without it, a slow or looping agent is something you infer
+  // from a complaint instead of something you read in a log. `hooks/tool-audit.ts` explains the
+  // other seven events, and why this one deliberately does not veto anything.
+  .hooks(toolAuditHooks)
   .build()

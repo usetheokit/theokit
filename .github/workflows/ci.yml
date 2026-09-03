@@ -63,6 +63,15 @@ jobs:
         run: pnpm lint
       - name: Prettier (format check)
         run: pnpm format:check
+      # The published-manifest contract, checked instead of remembered. Audited across 50
+      # packages on 2026-09-01: 38 did not export "./package.json" — reproduced as
+      # `ERR_PACKAGE_PATH_NOT_EXPORTED` against a real tarball — 30 had no keywords and 18
+      # declared no sideEffects at all.
+      #
+      # `@v1` is a moving ref by design — a policy fix in shared-workflows must reach every
+      # caller without nine pull requests, which is the reason that repo exists.
+      - name: Published manifests satisfy the contract
+        uses: usetheokit/shared-workflows/actions/manifest-check@v1 # zizmor: ignore[unpinned-uses]
 
   typecheck-build:
     name: Typecheck + Build
@@ -164,8 +173,16 @@ jobs:
       #
       # One leg carries the flag rather than both. The numbers would be identical, and two legs
       # uploading under one artifact name is an upload conflict.
+      # `hanging-process` on the coverage leg (#635). It prints NOTHING on a healthy run and lists the
+      # handles keeping the process alive when the run will not terminate — which is the one thing
+      # four dead 30-minute jobs could not tell anyone. Those jobs died at the workflow's own ceiling
+      # having printed only successes: the summary comes last, so a run that never finishes has no
+      # failure in its log at all, and the author bisects a commit instead of reading a name.
+      #
+      # On the coverage leg alone, because that is the leg it happens on, and because a second
+      # reporter on the leg that already passes buys nothing.
       - name: Tests${{ matrix.coverage && ' + coverage thresholds' || '' }}
-        run: ${{ matrix.coverage && 'pnpm test:coverage' || 'pnpm test' }}
+        run: ${{ matrix.coverage && 'pnpm test:coverage --reporter=default --reporter=hanging-process' || 'pnpm test' }}
       # Once, not once per leg. `vitest --typecheck.only` runs TypeScript over the `.test-d.ts`
       # files, and its diagnostics come from the TS version, the tsconfig and the sources — all
       # pinned by the lockfile, none varying with the node runtime that executes tsc. The second
@@ -582,30 +599,19 @@ jobs:
       - changelog-current
       - license-compliance
       - sonar
+      - release-channel
     steps:
-      - name: Report
-        env:
-          RESULTS: ${{ toJSON(needs) }}
-        run: |
-          set -euo pipefail
-          echo "$RESULTS"
-          # Matched over the serialized results rather than a hand-kept list: a job added to
-          # `needs` and forgotten here would silently stop being gated.
-          if echo "$RESULTS" | grep -q '"result": *"failure"'; then
-            echo "::error::a required job failed"
-            exit 1
-          fi
-          if echo "$RESULTS" | grep -q '"result": *"cancelled"'; then
-            echo "::error::a required job was cancelled"
-            exit 1
-          fi
-          echo "no required job failed or was cancelled"
+      # Was an inline grep over the serialized results, duplicated in four repositories.
+      # It read only `failure` and `cancelled`, so a job that SKIPPED counted as a pass —
+      # and a job that did not run reads exactly like one that did. The shared action
+      # fails on an undeclared skip, and one implementation replaces four.
+      #
+      # `@v1` is a moving ref by design — a policy fix in shared-workflows must reach
+      # every caller without nine pull requests, which is the reason that repo exists.
+      - uses: usetheokit/shared-workflows/actions/checks-pass@v1 # zizmor: ignore[unpinned-uses]
+        with:
+          needs: ${{ toJSON(needs) }}
 
-  # The channel this repository declares and the state changesets is actually in must agree.
-  # `changeset pre exit`, a bad merge, or a conflict resolved the wrong way removes
-  # `.changeset/pre.json`; nothing errors; the next release publishes a stable version and moves
-  # the `latest` dist-tag for every consumer, reporting success. This is the pull-request half of
-  # the gate — `release.yml` carries the other half, for the path that never passed through here.
   release-channel:
     name: release channel
     runs-on: ubuntu-latest

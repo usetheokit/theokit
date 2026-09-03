@@ -267,6 +267,13 @@ export interface CompiledAgentOptions {
    * (merged with `cwd`, decoupled from inline skills). Absent ⇒ inline (code) config only.
    */
   settingSources?: readonly SettingSource[]
+  /**
+   * Foreign configuration dialects, already authorised (usetheokit/theokit#634).
+   *
+   * Resolved at compile time by `resolveCompatSources`, exactly like `settingSources`: a value here
+   * can only hold a source some posture granted, so the adapter projects rather than decides.
+   */
+  compatSources?: readonly string[]
   /** Code `Plugin` objects forwarded to `Agent.create({ plugins })` (lifecycle-hook seam). */
   plugins?: readonly unknown[]
   tools: CompiledTool[]

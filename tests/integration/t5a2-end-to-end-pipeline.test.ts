@@ -41,7 +41,9 @@ interface UserSession {
   role: 'admin' | 'user'
 }
 
-const SECRET = 'a'.repeat(32)
+// `openssl rand -hex 32`-shaped. A fixture that trips the production guard (#610) is one the
+// suite reports as a warning on every run, which is how a warning stops being read.
+const SECRET = '25c476327bcdae53bfa3596976ff198b0090533c7c24e9dc2f3814f4fa8b999f'
 const sm = createSessionManagerWeb<UserSession>({ secret: SECRET })
 const cors = createCorsWebHandler({
   origins: 'http://example.com',

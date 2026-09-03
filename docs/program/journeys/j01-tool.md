@@ -80,8 +80,8 @@ landed on this journey.
 
 **Files touched.** Scaffolder output nobody edited does not count on either side, and that
 exclusion is load-bearing here: `create-theokit` already emits a working tool
-(`packages/create-theokit/templates/default/agents/tools/weather.ts:35`) wired into a scaffolded
-agent (`packages/create-theokit/templates/default/agents/chat.ts:25`). Counting those as work would
+(`packages/create-theokit/templates/default/src/server/agents/tools/weather.ts:35`) wired into a scaffolded
+agent (`packages/create-theokit/templates/default/src/server/agents/chat.ts:25`). Counting those as work would
 hand this journey a win the developer did not do. So J1 is measured by **replacing** the scaffolded
 tool with a new one whose behaviour the criteria above can randomize, and the count is the files
 the developer edits to do that.
@@ -397,7 +397,7 @@ Measured against the working tree on 2026-08-20; every claim is read from source
   (`packages/agents/src/bridge/agent-builder.ts:157`, `:177`), and the tool names accumulate into a
   phantom union so the surrounding types know them (`:74`).
 - The scaffold ships a working example of exactly this journey
-  (`packages/create-theokit/templates/default/agents/tools/weather.ts:35`), which is why the metric
+  (`packages/create-theokit/templates/default/src/server/agents/tools/weather.ts:35`), which is why the metric
   note above excludes it from the count.
 
 **Two adjacent surfaces are implemented and unwired, and neither blocks this journey** — recorded

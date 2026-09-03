@@ -43,7 +43,8 @@
     "./css-resource": {
       "types": "./dist/css-resource.d.ts",
       "import": "./dist/css-resource.js"
-    }
+    },
+    "./package.json": "./package.json"
   },
   "files": [
     "dist",
@@ -90,5 +91,15 @@
   "publishConfig": {
     "access": "public",
     "provenance": true
-  }
+  },
+  "keywords": [
+    "theokit",
+    "http",
+    "nestjs-style",
+    "decorators",
+    "controller",
+    "get",
+    "post",
+    "body"
+  ]
 }

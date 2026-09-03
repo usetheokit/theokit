@@ -19,7 +19,7 @@ cp .env.example .env && $EDITOR .env
 pnpm dev
 ```
 
-Open the app and chat. Edit `agents/chat.ts` to change the model, add tools, or
+Open the app and chat. Edit `src/server/agents/chat.ts` to change the model, add tools, or
 swap the persona — `@theokit/sdk` is the runtime and resolves the provider from
 your environment.
 
@@ -27,29 +27,55 @@ your environment.
 
 ```
 {{name}}/
-├── agents/                 # The agent, and what composes it
-│   ├── chat.ts             #   the agent → POST /api/agents/chat
-│   ├── prompts/            #   system prompts / personas
-│   ├── tools/              #   tools the agent can call (weather, current-time, …)
-│   └── skills/             #   procedures the model loads on demand
-├── app/                    # Frontend — file-based routing
-│   ├── page.tsx            #   the `/` route — composition root
-│   ├── layout.tsx          #   root layout
-│   ├── components/         #   presentational UI
-│   ├── hooks/              #   custom hooks — where state lives
-│   └── lib/                #   app modules / config
-├── server/
-│   └── routes/health.ts    # GET /api/health
-├── shared/agent.ts         # Branding (name, model, greeting) — one source of truth
+├── src/
+│   ├── app/                # Frontend — the only half that ships to a browser
+│   │   ├── page.tsx        #   the `/` route — composition root
+│   │   ├── layout.tsx      #   root layout
+│   │   ├── components/     #   presentational UI
+│   │   ├── hooks/          #   custom hooks — where state lives
+│   │   └── lib/            #   app modules / config
+│   ├── server/             # Backend — everything that never leaves the machine
+│   │   ├── agents/         #   the agent, and what composes it
+│   │   │   ├── chat.ts     #     the agent → POST /api/agents/chat
+│   │   │   ├── prompts/    #     system prompts / personas
+│   │   │   ├── tools/      #     tools the agent can call (weather, current-time, …)
+│   │   │   ├── skills/     #     procedures the model loads on demand
+│   │   │   └── hooks/      #     lifecycle interception (audit every tool call)
+│   │   └── routes/health.ts  # GET /api/health
+│   └── shared/agent.ts     # Branding (name, model, greeting) — one source of truth
+├── .theokit/               # Agent context — DATA, edited without a rebuild
+│   ├── THEO.md             #   facts true on every turn
+│   ├── rules/              #   instructions scoped to file globs
+│   └── personalities/      #   swappable system prompts (usePersonality)
 ├── docs/                   # ARCHITECTURE · CUSTOMIZATION · ENVIRONMENT
-├── theo.config.ts          # TheoKit configuration
+├── theo.config.ts          # TheoKit configuration — declares the three paths above
 └── .env.example            # Environment variables
 ```
 
+**Code and data are the two halves.** `src/server/agents/` is what you compile — agents, tools,
+skills, hooks. `.theokit/` is what the agent reads at runtime — context, rules, personalities. You
+change the second without a rebuild, and that is the point of the split: tone and domain facts move
+at a different speed than code, and shipping a deploy to reword a system prompt is a bad trade.
+
+| You want to change                  | Edit                       | Rebuild? |
+| ----------------------------------- | -------------------------- | -------- |
+| what the agent can DO               | `src/server/agents/tools/` | yes      |
+| what it always knows                | `.theokit/THEO.md`         | no       |
+| how it behaves near certain files   | `.theokit/rules/`          | no       |
+| how it talks, switchable at runtime | `.theokit/personalities/`  | no       |
+
+**Why agents live under `server/`.** An agent reads your API keys, calls tools that touch the
+network, and runs where the server runs. Every rule that applies to `server/` applies to it, so it
+is a part of the backend rather than a third thing beside it — and `src/app/` stays exactly what it
+claims to be: the only code that reaches a browser.
+
+The three paths are declared in `theo.config.ts`, not assumed by the framework. Move them wherever
+your project wants and update that file; nothing else needs to know.
+
 ## Key Concepts
 
-- **An agent is a file.** `agents/chat.ts` is served at `POST /api/agents/chat` —
-  nothing to register. Add a second agent as another `agents/<name>.ts`.
+- **An agent is a file.** `src/server/agents/chat.ts` is served at `POST /api/agents/chat` —
+  nothing to register. Add a second agent as another `src/server/agents/<name>.ts`.
 - **`AgentBuilder`** is the authoring surface. The chain accumulates type-state, so
   `.build()` without `.model()` is a compile error, not a runtime surprise:
 
@@ -66,8 +92,8 @@ your environment.
 
 - **A tool is a file too** — `tool('name').describe(…).input(z.object({…})).execute(…).build()`.
   Pure metadata plus a handler; it never calls an LLM.
-- **The sub-folders under `agents/` are semantic, not routes.** `prompts/`, `tools/`,
-  `skills/` and friends are skipped by the scanner, so `agents/tools/weather.ts`
+- **The sub-folders under `src/server/agents/` are semantic, not routes.** `prompts/`, `tools/`,
+  `skills/` and friends are skipped by the scanner, so `src/server/agents/tools/weather.ts`
   never becomes a phantom `/api/agents/tools/weather` endpoint.
 - **`useAgent`** binds the client to the agent and hands you the transcript:
   `const { thread, send, status, reset, error } = useAgent('/api/agents/chat')`.
@@ -84,9 +110,9 @@ customization and environment variables have their own pages beside it.
 Two component libraries come with this template, and the split is by **what a component is for**,
 not by how generic it looks:
 
-| You need | Import from | Examples |
-| --- | --- | --- |
-| Agent surfaces — chat, streaming, tool calls, approvals | **`@theokit/ui`** | `ChatThread`, `ChatMessage`, `ChatComposer`, `ToolCallCard`, `AgentStream` |
+| You need                                                | Import from       | Examples                                                                                                               |
+| ------------------------------------------------------- | ----------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Agent surfaces — chat, streaming, tool calls, approvals | **`@theokit/ui`** | `ChatThread`, `ChatMessage`, `ChatComposer`, `ToolCallCard`, `AgentStream`                                             |
 | App chrome — shell, navigation, tables, forms, feedback | **`@usetheo/ui`** | `Sidebar`, `PageShell`, `DataTable`, `Select`, `FormField`, `Badge`, `EmptyState`, `Alert`, `Dialog`, `CommandPalette` |
 
 This template uses a handful of them. The rest are installed and waiting — **check before you write
@@ -99,15 +125,15 @@ carries the routing table above in full.
 
 ## Adding a screen
 
-Routing is file-based: a screen is a folder under `app/` with a `page.tsx`.
+Routing is file-based: a screen is a folder under `src/app/` with a `page.tsx`.
 
-| You want | Create | Serves |
-|---|---|---|
-| a `/settings` screen | `app/settings/page.tsx` | `/settings` |
-| a nested screen | `app/settings/billing/page.tsx` | `/settings/billing` |
-| a dynamic screen | `app/users/[id]/page.tsx` | `/users/:id` |
+| You want             | Create                              | Serves              |
+| -------------------- | ----------------------------------- | ------------------- |
+| a `/settings` screen | `src/app/settings/page.tsx`         | `/settings`         |
+| a nested screen      | `src/app/settings/billing/page.tsx` | `/settings/billing` |
+| a dynamic screen     | `src/app/users/[id]/page.tsx`       | `/users/:id`        |
 
-Or run `theokit generate page settings`, then link it from `app/components/Nav.tsx`.
+Or run `theokit generate page settings`, then link it from `src/app/components/Nav.tsx`.
 
 ## Other scaffolds
 

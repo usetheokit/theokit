@@ -41,9 +41,22 @@ interface ExportsMap {
 }
 
 /** Every subpath key of the published `exports` map, e.g. `.`, `./server`, `./client/core`. */
+/**
+ * `./package.json` is excluded here and in `exportTargets` below. It is the one subpath that
+ * maps to a plain string rather than a conditions object, because it is METADATA and not an
+ * entry point: nothing imports it, so it has no source file behind it and no boundary to
+ * cross. Every helper in this file assumes `{ import: './dist/....js' }` and would read
+ * `undefined` from it.
+ *
+ * It exists so that `require('theokit/package.json')` resolves at all — without it Node answers
+ * ERR_PACKAGE_PATH_NOT_EXPORTED, which bundlers, test-runner resolvers and version telemetry
+ * all hit.
+ */
+const IS_ENTRY_POINT = (subpath: string): boolean => subpath !== './package.json'
+
 function publishedSubpaths(): string[] {
   const pkg = JSON.parse(readFileSync(THEO_PKG, 'utf8')) as ExportsMap
-  return Object.keys(pkg.exports)
+  return Object.keys(pkg.exports).filter(IS_ENTRY_POINT)
 }
 
 /**
@@ -59,7 +72,11 @@ function sourceFileFor(pkgExportTarget: string): string {
 
 function exportTargets(): Record<string, string> {
   const pkg = JSON.parse(readFileSync(THEO_PKG, 'utf8')) as ExportsMap
-  return Object.fromEntries(Object.entries(pkg.exports).map(([k, v]) => [k, v.import]))
+  return Object.fromEntries(
+    Object.entries(pkg.exports)
+      .filter(([k]) => IS_ENTRY_POINT(k))
+      .map(([k, v]) => [k, v.import]),
+  )
 }
 
 const isServerSubpath = (subpath: string): boolean =>

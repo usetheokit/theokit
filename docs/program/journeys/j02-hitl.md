@@ -207,7 +207,7 @@ with the same ruler.
 **One asymmetry inside the baseline that must be declared before the numbers, because it is the
 largest single favour this measurement does TheoKit.** The scaffold **already ships a gated tool** —
 `.approval('send_notification', { question: 'Send this notification?' })` at
-`packages/create-theokit/templates/default/agents/chat.ts:29`. § The four metrics excludes scaffolder
+`packages/create-theokit/templates/default/src/server/agents/chat.ts:29`. § The four metrics excludes scaffolder
 output not edited by hand, so had this journey gated *that* tool, the gate line would have been free.
 It does not, because `send_notification` has no side effect outside the process and J2's criteria
 grade the side effect rather than the response body — and this page's own counting rule says that if

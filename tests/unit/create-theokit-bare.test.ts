@@ -38,7 +38,7 @@ describe('create-theokit --bare flag (T4.1)', () => {
     rmSync(target, { recursive: true, force: true })
     try {
       scaffold(target, 'demo-app', 'default', { bare: true })
-      const page = readFileSync(join(target, 'app/page.tsx'), 'utf-8')
+      const page = readFileSync(join(target, 'src/app/page.tsx'), 'utf-8')
       expect(page).toContain('Hello Theo')
       expect(page).not.toContain('AgentComposer')
       expect(page).not.toContain('@theokit/ui')
@@ -47,12 +47,25 @@ describe('create-theokit --bare flag (T4.1)', () => {
     }
   })
 
-  it('with --bare: removes the demo agent (agents/chat.ts)', () => {
+  it('with --bare: removes the demo agent (src/server/agents/chat.ts)', () => {
     const target = makeTargetDir()
     rmSync(target, { recursive: true, force: true })
     try {
+      // Both halves, because the absence alone stopped meaning anything when agents moved under
+      // `src/server/`: the old path `agents/chat.ts` is absent from EVERY scaffold now, bare or
+      // not, so asserting it would pass while `--bare` removed nothing at all. The non-bare
+      // control is what makes the absence evidence of removal rather than of the move.
       scaffold(target, 'demo-app', 'default', { bare: true })
-      expect(existsSync(join(target, 'agents/chat.ts'))).toBe(false)
+      expect(existsSync(join(target, 'src/server/agents/chat.ts'))).toBe(false)
+
+      const withAgent = `${target}-with-agent`
+      rmSync(withAgent, { recursive: true, force: true })
+      try {
+        scaffold(withAgent, 'demo-app', 'default')
+        expect(existsSync(join(withAgent, 'src/server/agents/chat.ts'))).toBe(true)
+      } finally {
+        rmSync(withAgent, { recursive: true, force: true })
+      }
     } finally {
       rmSync(target, { recursive: true, force: true })
     }
@@ -71,7 +84,7 @@ describe('create-theokit --bare flag (T4.1)', () => {
     rmSync(target, { recursive: true, force: true })
     try {
       scaffold(target, 'demo-app', 'default', { bare: true })
-      expect(existsSync(join(target, 'server/routes/health.ts'))).toBe(true)
+      expect(existsSync(join(target, 'src/server/routes/health.ts'))).toBe(true)
       expect(existsSync(join(target, 'theo.config.ts'))).toBe(true)
       expect(existsSync(join(target, 'tsconfig.json'))).toBe(true)
     } finally {

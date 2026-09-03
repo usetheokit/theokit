@@ -21,8 +21,8 @@ describe('scaffold', () => {
     scaffold(targetDir, 'test-app')
 
     expect(existsSync(targetDir)).toBe(true)
-    expect(existsSync(join(targetDir, 'app'))).toBe(true)
-    expect(existsSync(join(targetDir, 'server'))).toBe(true)
+    expect(existsSync(join(targetDir, 'src/app'))).toBe(true)
+    expect(existsSync(join(targetDir, 'src/server'))).toBe(true)
   })
 
   it('should rename _gitignore to .gitignore', () => {
@@ -124,7 +124,7 @@ describe('scaffold', () => {
     // @theokit/ui should be removed by bare transform
     expect(pkg.dependencies?.['@theokit/ui']).toBeUndefined()
     // Page should be Hello Theo
-    const page = readFileSync(join(targetDir, 'app/page.tsx'), 'utf-8')
+    const page = readFileSync(join(targetDir, 'src/app/page.tsx'), 'utf-8')
     expect(page).toContain('Hello Theo')
   })
 
