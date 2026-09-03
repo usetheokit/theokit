@@ -161,7 +161,6 @@
   },
   "peerDependencies": {
     "@theokit/sdk": "^4.52.1",
-    "@theokit/studio": ">=0.2.0 <1",
     "@theokit/ui": "^1.1.0",
     "db0": "^0.3.0",
     "react": "^19.0.0",
@@ -185,9 +184,6 @@
       "optional": true
     },
     "ws": {
-      "optional": true
-    },
-    "@theokit/studio": {
       "optional": true
     }
   },
