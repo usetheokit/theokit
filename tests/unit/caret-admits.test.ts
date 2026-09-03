@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-// @ts-expect-error — a plain .mjs release script with no type declarations; the function under test
-// is four lines of arithmetic and typing the whole script to reach it would be the larger change.
+// Typed by `scripts/sync-template-pins.d.mts` — no suppression, so a future change to the
+// signature is a compile error here rather than a silent one.
 import { caretAdmits } from '../../scripts/sync-template-pins.mjs'
 
 /**
