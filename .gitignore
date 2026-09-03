@@ -19,7 +19,7 @@ dist/
 .wrangler/
 *.tsbuildinfo
 cross-validation-output/
-
+performance-audit-output/
 # Environment
 .env
 .env.*

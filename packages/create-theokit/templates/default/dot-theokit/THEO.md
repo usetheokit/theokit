@@ -1,0 +1,36 @@
+# Product context
+
+Prepended to your agent's context on **every turn**, and it is the strongest source in the file
+layer (priority 60) — nothing else overrides it. That is what decides what belongs here.
+
+> **Not the same file as `AGENTS.md` at the root.** That one tells agents how to work on this
+> codebase: commands, layout, conventions. This one tells your agent what your product IS, for the
+> conversations it has with your users. If a sentence would help someone edit the code, it goes
+> there instead.
+
+**Put facts here, not preferences.** A preference written here wins against every personality, so a
+tone instruction in this file quietly makes `usePersonality` do nothing. Tone belongs in
+`.theokit/personalities/`; instructions about specific files belong in `.theokit/rules/`.
+
+Keep it short — every line costs tokens on every turn.
+
+## What this app is
+
+Replace this with two or three sentences: what your product does, who uses it, and the one thing an
+agent must never get wrong about it.
+
+## Vocabulary
+
+The highest-value section, and the one most projects skip. Define the words your domain uses
+differently from everyone else — a model that guesses what "account" means in your system will
+guess wrong in a way that reads as fluent, which is the hardest kind of wrong to notice.
+
+| Term   | In this app it means                     |
+| ------ | ---------------------------------------- |
+| _term_ | _the definition your team actually uses_ |
+
+## Boundaries
+
+What the agent should refuse or hand off, stated as fact rather than as tone. "Refunds are issued
+by support, never by the assistant" is a fact. "Be careful with refunds" is a preference, and it
+belongs in a personality where a user could switch it.

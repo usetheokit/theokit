@@ -50,7 +50,7 @@ function showHelp(): void {
     --import-alias=<alias>        Import alias (default: "@/*")
     --example=<github-url>        Bootstrap from a GitHub repository
     --biome                       Use Biome instead of ESLint
-    --agents-md                   Include AGENTS.md (default: true)
+    --no-agents-md                Skip AGENTS.md (included by default)
 
   Examples:
     npx create-theokit my-app --yes
@@ -123,6 +123,10 @@ async function main(): Promise<void> {
   const useDefaults = hasFlag(args, 'yes')
   const disableGit = hasFlag(args, 'disable-git')
   const useBiome = hasFlag(args, 'biome')
+  // `--no-agents-md` rather than `--agents-md`: the default is already true, so the flag that can
+  // change anything is the one that turns it off. The help documented the useless direction and
+  // nothing parsed either — see the note at the `agentsMd` application below.
+  const noAgentsMd = hasFlag(args, 'no-agents-md')
   const exampleFlag = getFlag(args, 'example')
   const importAlias = getFlag(args, 'import-alias') ?? '@/*'
 
@@ -189,6 +193,9 @@ async function main(): Promise<void> {
   } else {
     options = await runPrompts(projectName)
   }
+  // After both branches, so the flag wins over the prompt as well as over the default. A flag the
+  // user typed losing to an answer they gave earlier in the same run would be the surprise.
+  if (noAgentsMd) options.agentsMd = false
 
   try {
     const suffix = bare ? ' [--bare]' : ''
@@ -341,7 +348,13 @@ function applyOptions(targetDir: string, options: ProjectOptions, opts: ApplyOpt
   }
   writeScaffoldFile(tscPath, JSON.stringify(tsc, null, 2) + '\n')
 
-  // AGENTS.md
+  // AGENTS.md — the root context file, read by many tools (`git-root-walk`, priority 10). Distinct
+  // from `.theokit/THEO.md`, which is product context at `cwd-only` priority 60; each file says so
+  // and points at the other.
+  //
+  // This block only ever DELETED, and the template shipped no `AGENTS.md`, so the prompt and the
+  // documented flag both changed nothing whichever way they were answered. The template ships one
+  // now, which is what makes the choice real.
   if (!options.agentsMd) {
     const agentsPath = resolve(targetDir, 'AGENTS.md')
     if (existsSync(agentsPath)) unlinkSync(agentsPath)

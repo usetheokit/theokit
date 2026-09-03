@@ -39,13 +39,30 @@ your environment.
 │   │   │   ├── chat.ts     #     the agent → POST /api/agents/chat
 │   │   │   ├── prompts/    #     system prompts / personas
 │   │   │   ├── tools/      #     tools the agent can call (weather, current-time, …)
-│   │   │   └── skills/     #     procedures the model loads on demand
+│   │   │   ├── skills/     #     procedures the model loads on demand
+│   │   │   └── hooks/      #     lifecycle interception (audit every tool call)
 │   │   └── routes/health.ts  # GET /api/health
 │   └── shared/agent.ts     # Branding (name, model, greeting) — one source of truth
+├── .theokit/               # Agent context — DATA, edited without a rebuild
+│   ├── THEO.md             #   facts true on every turn
+│   ├── rules/              #   instructions scoped to file globs
+│   └── personalities/      #   swappable system prompts (usePersonality)
 ├── docs/                   # ARCHITECTURE · CUSTOMIZATION · ENVIRONMENT
 ├── theo.config.ts          # TheoKit configuration — declares the three paths above
 └── .env.example            # Environment variables
 ```
+
+**Code and data are the two halves.** `src/server/agents/` is what you compile — agents, tools,
+skills, hooks. `.theokit/` is what the agent reads at runtime — context, rules, personalities. You
+change the second without a rebuild, and that is the point of the split: tone and domain facts move
+at a different speed than code, and shipping a deploy to reword a system prompt is a bad trade.
+
+| You want to change                  | Edit                       | Rebuild? |
+| ----------------------------------- | -------------------------- | -------- |
+| what the agent can DO               | `src/server/agents/tools/` | yes      |
+| what it always knows                | `.theokit/THEO.md`         | no       |
+| how it behaves near certain files   | `.theokit/rules/`          | no       |
+| how it talks, switchable at runtime | `.theokit/personalities/`  | no       |
 
 **Why agents live under `server/`.** An agent reads your API keys, calls tools that touch the
 network, and runs where the server runs. Every rule that applies to `server/` applies to it, so it

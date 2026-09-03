@@ -91,11 +91,14 @@ export function scaffold(
     }
   }
 
-  // dot-claude/ → .claude/ (npm ignores dotfolders in published packages)
-  const dotClaudeSrc = join(targetDir, 'dot-claude')
-  const dotClaudeDest = join(targetDir, '.claude')
-  if (existsSync(dotClaudeSrc)) {
-    renameSync(dotClaudeSrc, dotClaudeDest)
+  // dot-*/ → .*/ (npm ignores dotfolders in published packages, so the template ships them
+  // prefixed). A list rather than a block per directory: the second one arrived with `.theokit/`
+  // and would have been a copy of the first, differing only in a string.
+  for (const name of ['claude', 'theokit']) {
+    const src = join(targetDir, `dot-${name}`)
+    if (existsSync(src)) {
+      renameSync(src, join(targetDir, `.${name}`))
+    }
   }
 
   // Apply {{name}} substitution to every `*.tmpl` file in the target dir.
