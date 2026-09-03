@@ -40,7 +40,7 @@ of something that already ships to every scaffolded project.
 | Route scanner and codegen | Enumerating documents into routes, and generating types for collections | `packages/theo/src/router/scan.ts:128-171`, `packages/theo/src/router/generate.ts:136-150`, `packages/theo/src/cli/commands/generate-types.ts:1-45` |
 | The bundler plugin layer | Where compilation and caching hook in | `packages/theo/src/vite-plugin/index.ts:1-68` |
 | The `Image` component | Where content images should route — though nothing in this repository renders it yet | `packages/theo/src/client/image.tsx:42`, exported at `packages/theo/src/client/index.ts:77` |
-| The `Link` component | Where content links should route; the scaffold does use this one | `packages/theo/src/client/link.tsx:54`, used at `packages/create-theokit/templates/default/app/about/page.tsx:40` |
+| The `Link` component | Where content links should route; the scaffold does use this one | `packages/theo/src/client/link.tsx:54`, used at `packages/create-theokit/templates/default/src/app/about/page.tsx:40` |
 | A scalar frontmatter splitter | Prior art for the fence handling, not for the schema | `packages/agents/src/config/frontmatter.ts:34-61` |
 | A markdown-to-JSX pipeline that sanitizes | Ships in `@theokit/ui`; see below | outside this repository — `./pnpm-lock.yaml:288-290` |
 

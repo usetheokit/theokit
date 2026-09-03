@@ -32,7 +32,7 @@ side as if they cooperated.
 | Lazy toggle per build | Lazy in the browser build, static in the SSR build | `packages/theo/src/vite-plugin/virtual-modules-hook.ts:75` |
 | Preload map | Emitted per absolute route path — **consumed at hydration only** | `packages/theo/src/router/generate.ts:144`, consumed at `packages/theo/src/router/entry.ts:83` |
 | `Link` reachable by an application | Exported from `theokit/client`, not from the root entry | `packages/theo/src/client/index.ts:69` |
-| Used by the scaffold | The generated nav renders `Link` with `prefetch="intent"` | `packages/create-theokit/templates/default/app/components/Nav.tsx:21` |
+| Used by the scaffold | The generated nav renders `Link` with `prefetch="intent"` | `packages/create-theokit/templates/default/src/app/components/Nav.tsx:21` |
 
 **Correction to the 2026-08-19 edition.** It listed *Prefetch mechanism* as "a `rel="prefetch"` link element
 for the route path" and *Preload map* as "emitted per route path, keyed to match the router's own

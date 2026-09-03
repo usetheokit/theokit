@@ -1,7 +1,7 @@
 import { tool } from 'theokit/server/define'
 import { z } from 'zod'
 
-import { deliver } from '../../server/delivery.js'
+import { deliver } from '../../delivery.js'
 
 /**
  * The action that leaves the building — and therefore the one behind an approval.

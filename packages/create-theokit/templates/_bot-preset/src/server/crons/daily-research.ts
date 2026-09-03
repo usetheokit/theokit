@@ -1,7 +1,7 @@
 import { defineCron } from 'theokit/server/cron'
 
-import { botScope } from '../../agents/lib/bot-scope.js'
-import { workspaceSandbox } from '../../agents/lib/sandbox.js'
+import { botScope } from '../agents/lib/bot-scope.js'
+import { workspaceSandbox } from '../agents/lib/sandbox.js'
 import { deliver } from '../delivery.js'
 
 /**

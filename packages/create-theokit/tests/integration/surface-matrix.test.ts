@@ -63,7 +63,7 @@ describe('M45 surface matrix — full scaffold per surface', () => {
   it('web — no-op: keeps the web app, adds no surface files', () => {
     scaffold(dir, 'web-app')
     applySurface({ targetDir: dir, projectName: 'web-app', surface: 'web' })
-    expect(has('app')).toBe(true)
+    expect(has('src/app')).toBe(true)
     expect(has('tui')).toBe(false)
     expect(has('sidecar')).toBe(false)
     expect(pkg().dependencies.theokit).toBeDefined()
@@ -77,8 +77,8 @@ describe('M45 surface matrix — full scaffold per surface', () => {
     expect(has('tui/main.tsx')).toBe(true)
     expect(has('tui/App.tsx')).toBe(true)
     expect(has('README-surface.md')).toBe(true)
-    expect(has('agents/chat.ts')).toBe(true) // agent kept
-    expect(has('app')).toBe(false) // web UI removed
+    expect(has('src/server/agents/chat.ts')).toBe(true) // agent kept
+    expect(has('src/app')).toBe(false) // web UI removed
     expect(has('index.html')).toBe(false)
     expect(noTmplLeftover()).toBe(true)
 
@@ -125,7 +125,7 @@ describe('M45 surface matrix — full scaffold per surface', () => {
     // tsconfig points at the surface source
     const tsc = JSON.parse(read('tsconfig.json')) as { include: string[] }
     expect(tsc.include).toContain('tui/**/*.tsx')
-    expect(tsc.include.every((g) => !g.startsWith('app/'))).toBe(true)
+    expect(tsc.include.every((g) => !g.startsWith('src/app/'))).toBe(true)
   })
 
   it('desktop — three tiers on the unified client, Rust + Tauri config coherent', () => {
@@ -150,7 +150,7 @@ describe('M45 surface matrix — full scaffold per surface', () => {
     }
     expect(has('sidecar/sidecar-core.ts')).toBe(false) // M47 — replaced by @theokit/tauri/sidecar
     expect(has('frontend/src/main.ts')).toBe(false) // M47 — React main.tsx now
-    expect(has('app')).toBe(false)
+    expect(has('src/app')).toBe(false)
     expect(noTmplLeftover()).toBe(true)
 
     // Webview = React + @theokit/ui, driven by useAgent over @theokit/tauri's ChannelTransport (M47)

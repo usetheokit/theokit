@@ -41,7 +41,7 @@ describe('applySurface (M45)', () => {
   it('web is a no-op — keeps the web app', () => {
     scaffold(targetDir, 'app')
     applySurface({ targetDir, projectName: 'app', surface: 'web' })
-    expect(existsSync(join(targetDir, 'app'))).toBe(true)
+    expect(existsSync(join(targetDir, 'src/app'))).toBe(true)
   })
 
   it('tui scaffolds an Ink app on useAgent(InProcessTransport) and drops the web UI', () => {
@@ -203,13 +203,13 @@ describe('applySurface (M45)', () => {
     expect(pkg.scripts.dev).toContain('tui/main.tsx')
     expect(pkg.scripts['demo:tools']).toBe('tsx tui/tool-variations.tsx')
 
-    expect(existsSync(join(targetDir, 'app'))).toBe(false) // web UI removed
+    expect(existsSync(join(targetDir, 'src/app'))).toBe(false) // web UI removed
     expect(existsSync(join(targetDir, 'tui/App.tsx.tmpl'))).toBe(false) // no leftover .tmpl
 
     // tsconfig include points at the surface source (so `tsc` type-checks the entry files).
     const tsconfig = JSON.parse(read('tsconfig.json')) as { include: string[] }
     expect(tsconfig.include).toContain('tui/**/*.tsx')
-    expect(tsconfig.include.some((g) => g.startsWith('app/'))).toBe(false)
+    expect(tsconfig.include.some((g) => g.startsWith('src/app/'))).toBe(false)
   })
 
   it('desktop scaffolds a Tauri app: sidecar + src-tauri + React webview on @theokit/ui + @theokit/tauri', () => {
@@ -252,7 +252,7 @@ describe('applySurface (M45)', () => {
     expect(read('src-tauri/Cargo.toml')).toContain('my-desk-desktop')
     expect(read('src-tauri/tauri.conf.json')).toContain('my-desk')
 
-    expect(existsSync(join(targetDir, 'app'))).toBe(false) // web UI removed
+    expect(existsSync(join(targetDir, 'src/app'))).toBe(false) // web UI removed
     expect(existsSync(join(targetDir, 'src-tauri/Cargo.toml.tmpl'))).toBe(false) // no leftover .tmpl
 
     // Cross-platform release CI (macOS + Linux + Windows native runners — Tauri can't cross-compile).
@@ -277,7 +277,7 @@ describe('applySurface (M45)', () => {
     const tsconfig = JSON.parse(read('tsconfig.json')) as { include: string[] }
     expect(tsconfig.include).toContain('sidecar/**/*.ts')
     expect(tsconfig.include).toContain('frontend/src/**/*.tsx')
-    expect(tsconfig.include.some((g) => g.startsWith('app/'))).toBe(false)
+    expect(tsconfig.include.some((g) => g.startsWith('src/app/'))).toBe(false)
 
     // Window/bundle icons ship — `tauri::generate_context!()` fails to compile without icons/icon.png.
     expect(existsSync(join(targetDir, 'src-tauri/icons/icon.png'))).toBe(true)
@@ -353,7 +353,7 @@ describe('a scaffolded surface declares no script it cannot run (#374)', () => {
   it('test_no_surface_script_invokes_theokit_build_after_app_was_removed', () => {
     for (const surface of ['tui', 'desktop'] as const) {
       const scripts = scriptsOf(surface)
-      expect(existsSync(join(targetDir, 'app'))).toBe(false)
+      expect(existsSync(join(targetDir, 'src/app'))).toBe(false)
       // `theokit build` requires `app/`. Any script still naming it is a script
       // that cannot run in the project it was written into.
       const broken = Object.entries(scripts).filter(([, cmd]) => /\btheokit build\b/.test(cmd))

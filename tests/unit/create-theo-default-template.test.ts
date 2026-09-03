@@ -15,7 +15,10 @@ import { resolve } from 'node:path'
  */
 
 const ROOT = resolve(__dirname, '../..')
-const TEMPLATE_CHAT = resolve(ROOT, 'packages/create-theokit/templates/default/agents/chat.ts')
+const TEMPLATE_CHAT = resolve(
+  ROOT,
+  'packages/create-theokit/templates/default/src/server/agents/chat.ts',
+)
 const TEMPLATE_PKG = resolve(ROOT, 'packages/create-theokit/templates/default/package.json.tmpl')
 
 describe('create-theokit default template — agents/chat.ts shape (M3)', () => {
@@ -181,8 +184,14 @@ describe('create-theokit theokit-frontend SKILL — the two clients are not the 
   })
 })
 
-const TEMPLATE_LAYOUT = resolve(ROOT, 'packages/create-theokit/templates/default/app/layout.tsx')
-const TEMPLATE_CHAT_PAGE = resolve(ROOT, 'packages/create-theokit/templates/default/app/page.tsx')
+const TEMPLATE_LAYOUT = resolve(
+  ROOT,
+  'packages/create-theokit/templates/default/src/app/layout.tsx',
+)
+const TEMPLATE_CHAT_PAGE = resolve(
+  ROOT,
+  'packages/create-theokit/templates/default/src/app/page.tsx',
+)
 
 /**
  * The shell pins itself to the viewport, so the document never scrolls and SOMETHING inside must.

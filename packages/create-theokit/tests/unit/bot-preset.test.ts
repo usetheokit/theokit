@@ -23,8 +23,8 @@ import { applyBotPreset } from '../../src/bot-preset.js'
 /** A target dir standing in for an already-scaffolded default app. */
 function scaffoldedApp(): string {
   const dir = mkdtempSync(join(tmpdir(), 'bot-preset-'))
-  mkdirSync(join(dir, 'agents'), { recursive: true })
-  mkdirSync(join(dir, 'server'), { recursive: true })
+  mkdirSync(join(dir, 'src/server/agents'), { recursive: true })
+  mkdirSync(join(dir, 'src/server'), { recursive: true })
   writeFileSync(join(dir, 'README.md'), '# my-app\n\nA TheoKit app.\n', 'utf-8')
   return dir
 }
@@ -37,15 +37,15 @@ describe('applyBotPreset', () => {
     // Each of these is imported by something else in the layer. A missing one is an app that fails
     // at build time, three steps from the cause.
     for (const f of [
-      'agents/researcher.ts',
-      'agents/publisher.ts',
-      'agents/lib/bot-scope.ts',
-      'agents/lib/sandbox.ts',
-      'agents/tools/read-notes.ts',
-      'agents/tools/write-note.ts',
-      'agents/tools/publish.ts',
-      'server/delivery.ts',
-      'server/crons/daily-research.ts',
+      'src/server/agents/researcher.ts',
+      'src/server/agents/publisher.ts',
+      'src/server/agents/lib/bot-scope.ts',
+      'src/server/agents/lib/sandbox.ts',
+      'src/server/agents/tools/read-notes.ts',
+      'src/server/agents/tools/write-note.ts',
+      'src/server/agents/tools/publish.ts',
+      'src/server/delivery.ts',
+      'src/server/crons/daily-research.ts',
     ]) {
       expect(existsSync(join(dir, f)), `${f} must reach the scaffolded app`).toBe(true)
     }
@@ -56,9 +56,9 @@ describe('applyBotPreset', () => {
     // ninety percent that is the same is how two templates drift. `--surface` already layers for the
     // same reason.
     const dir = scaffoldedApp()
-    writeFileSync(join(dir, 'agents', 'chat.ts'), 'export default {}', 'utf-8')
+    writeFileSync(join(dir, 'src/server/agents', 'chat.ts'), 'export default {}', 'utf-8')
     applyBotPreset({ targetDir: dir })
-    expect(existsSync(join(dir, 'agents', 'chat.ts'))).toBe(true)
+    expect(existsSync(join(dir, 'src/server/agents', 'chat.ts'))).toBe(true)
   })
 
   it('appends to the README instead of replacing it', () => {
@@ -68,7 +68,7 @@ describe('applyBotPreset', () => {
     expect(readme, "the app's own README must survive").toContain('# my-app')
     expect(readme).toContain('## Bots')
     // The two things a reader must change first, named where they will look.
-    expect(readme).toContain('server/delivery.ts')
+    expect(readme).toContain('src/server/delivery.ts')
     expect(readme).toContain('UTC')
   })
 
@@ -88,14 +88,17 @@ describe('applyBotPreset', () => {
     applyBotPreset({ targetDir: dir })
     // Asserted because the count is a decision, not an accident: one bot is a chat app with a cron,
     // and three starts being a product rather than a starting point.
-    const publisher = readFileSync(join(dir, 'agents', 'publisher.ts'), 'utf-8')
+    const publisher = readFileSync(join(dir, 'src/server/agents', 'publisher.ts'), 'utf-8')
     expect(publisher, 'the side-effecting bot must be gated').toContain(".approval('publish'")
   })
 
   it('wires no delivery channel, and says why in the file', () => {
     // A default channel is a policy decision — an address the developer did not write, a workspace
     // they may not have. The seam is present and unpointed.
-    const delivery = readFileSync(join(scaffoldedAppWithPreset(), 'server', 'delivery.ts'), 'utf-8')
+    const delivery = readFileSync(
+      join(scaffoldedAppWithPreset(), 'src/server', 'delivery.ts'),
+      'utf-8',
+    )
     expect(delivery).toContain('console.log')
     expect(delivery, 'the example must be commented, not installed').toContain('RESEND_API_KEY')
   })

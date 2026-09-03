@@ -25,7 +25,7 @@ function readAppTree(): string {
       }
     }
   }
-  walk(resolve(TEMPLATE_ROOT, 'app'))
+  walk(resolve(TEMPLATE_ROOT, 'src/app'))
   return chunks.join('\n')
 }
 
@@ -85,8 +85,8 @@ describe('create-theokit default template — agent surface (T3.1)', () => {
     expect(app).toMatch(/from ['"]@theokit\/ui['"]/)
   })
 
-  it('app/page.tsx is a Client Component ("use client" directive)', () => {
-    const page = read('app/page.tsx')
+  it('src/app/page.tsx is a Client Component ("use client" directive)', () => {
+    const page = read('src/app/page.tsx')
     expect(page.trim().startsWith("'use client'") || page.trim().startsWith('"use client"')).toBe(
       true,
     )
@@ -98,23 +98,23 @@ describe('create-theokit default template — agent surface (T3.1)', () => {
   // new shape and the absence of the old surface.
 
   it('M3: server/routes/chat.ts is absent (removed in clean break)', () => {
-    expect(existsSync(resolve(TEMPLATE_ROOT, 'server/routes/chat.ts'))).toBe(false)
+    expect(existsSync(resolve(TEMPLATE_ROOT, 'src/server/routes/chat.ts'))).toBe(false)
   })
 
   it('M31: agents/chat.ts default-exports the agent() builder from @theokit/agents', () => {
-    const agent = read('agents/chat.ts')
+    const agent = read('src/server/agents/chat.ts')
     expect(agent).toMatch(/export\s+default\s+AgentBuilder\.create\(\)/)
     expect(agent).toMatch(/\.build\(\)/)
     expect(agent).toMatch(/from\s+['"]@theokit\/agents['"]/)
   })
 
   it('M31: agents/chat.ts declares a Zod input schema (typed end-to-end client)', () => {
-    const agent = read('agents/chat.ts')
+    const agent = read('src/server/agents/chat.ts')
     expect(agent).toMatch(/\.input\(\s*z\.object\(/)
   })
 
   it('M31: agents/chat.ts declares a model', () => {
-    const agent = read('agents/chat.ts')
+    const agent = read('src/server/agents/chat.ts')
     // The literal is still there as the fallback — a scaffold must run with no
     // environment at all.
     //
@@ -124,7 +124,10 @@ describe('create-theokit default template — agent surface (T3.1)', () => {
     // quantifier, which is a ReDoS the linter is right to refuse.
     const declared = /\.model\(([^)]*)\)/u.exec(agent)?.[1] ?? ''
     const literal = /['"]([^'"]+)['"]\s*$/u.exec(declared)?.[1] ?? ''
-    expect(literal, 'agents/chat.ts must declare a provider-prefixed model literal').toContain('/')
+    expect(
+      literal,
+      'src/server/agents/chat.ts must declare a provider-prefixed model literal',
+    ).toContain('/')
   })
 
   it('the documented LLM_MODEL override is actually read (#398, #408)', () => {
@@ -136,7 +139,7 @@ describe('create-theokit default template — agent surface (T3.1)', () => {
     // where the value already lives. Adding an override path to the framework
     // for a knob a template can honour in one expression is the abstraction
     // nobody asked for.
-    const agent = read('agents/chat.ts')
+    const agent = read('src/server/agents/chat.ts')
     expect(agent).toContain('process.env.LLM_MODEL')
     expect(agent).toMatch(/process\.env\.LLM_MODEL\s*\?\?/u)
   })
@@ -150,14 +153,14 @@ describe('create-theokit default template — agent surface (T3.1)', () => {
   })
 
   it('M3: agents/chat.ts does NOT reference the removed proprietary surface', () => {
-    const agent = read('agents/chat.ts')
+    const agent = read('src/server/agents/chat.ts')
     expect(agent).not.toMatch(
       /defineAgentEndpoint|streamAgentRun|createConversationHistory|AgentEvent/,
     )
   })
 
   it('M3: agents/chat.ts does NOT import a raw LLM SDK (anti-stack guard — the SDK owns the provider)', () => {
-    const agent = read('agents/chat.ts')
+    const agent = read('src/server/agents/chat.ts')
     const rawSdkImport =
       /(?:from|require\(|import\()\s*['"]openai['"]/i.test(agent) ||
       /from\s+['"]@anthropic-ai\/sdk['"]/i.test(agent)
@@ -183,7 +186,7 @@ describe('create-theokit default template — agent surface (T3.1)', () => {
   })
 
   it('layout.tsx does not manually wrap ThemeProvider (auto-injected via entry-client)', () => {
-    const layout = read('app/layout.tsx')
+    const layout = read('src/app/layout.tsx')
     expect(layout).not.toContain('TheoUIProvider')
     // ThemeProvider is fine to mention only if not as a JSX wrapper — exclude
     // the JSX-call form `<ThemeProvider`.
@@ -196,7 +199,7 @@ describe('create-theokit default template — agent surface (T3.1)', () => {
     // <Outlet />. The generator now wraps with `children: <Outlet />`, but
     // the canonical layout in the template should still import Outlet
     // directly so it works regardless of router-side wiring.
-    const layout = read('app/layout.tsx')
+    const layout = read('src/app/layout.tsx')
     expect(layout).toMatch(/import\s*\{[^}]*\bOutlet\b/)
     expect(layout).toMatch(/<Outlet/)
   })
@@ -207,7 +210,7 @@ describe('create-theokit default template — agent surface (T3.1)', () => {
   })
 
   it('layout imports @theokit/ui/styles.css (Tailwind v4 entry — pre-bundled by @theokit/ui)', () => {
-    const layout = read('app/layout.tsx')
+    const layout = read('src/app/layout.tsx')
     expect(layout).toMatch(/import\s+['"]@theokit\/ui\/styles\.css['"]/)
   })
 

@@ -30,8 +30,8 @@ re-checked here and hold, and the corrections below are additions it missed rath
 and documented, and nothing in this repository renders it: `command grep -rn "<Image" packages` matches
 only its own definition and its own doc comment (`packages/theo/src/client/image.tsx:17-19,42`). The
 scaffold every new project starts from uses `<Link>` and `<Metadata>` and never `<Image>`
-(`packages/create-theokit/templates/default/app/about/page.tsx:40`,
-`packages/create-theokit/templates/default/app/page.tsx:41`). It is a public surface, not dead code —
+(`packages/create-theokit/templates/default/src/app/about/page.tsx:40`,
+`packages/create-theokit/templates/default/src/app/page.tsx:41`). It is a public surface, not dead code —
 but the distinction matters here, because it means no path in this repository exercises it, and any
 future transform contract would be landing on a component nobody in-tree consumes yet.
 
