@@ -10,6 +10,7 @@ import { assertNodeVersion } from './preflight-node.js'
 import { runPrompts, getDefaults, type ProjectOptions } from './prompts.js'
 import { parseBackendFlags, scaffoldServices, type BackendKind } from './scaffold-services.js'
 import { applySurface, parseSurfaceFlags, type SurfaceKind } from './scaffold-surface.js'
+import { TAILWIND_CSS_IMPORT } from './tailwind-css-import.js'
 import { CLI_VERSION } from './version.js'
 import { writeScaffoldFile } from './write-file.js'
 
@@ -317,7 +318,7 @@ function applyOptions(targetDir: string, options: ProjectOptions, opts: ApplyOpt
     const cssDir = existsSync(resolve(targetDir, 'src/app')) ? 'src/app' : 'app'
     const cssPath = resolve(targetDir, `${cssDir}/globals.css`)
     const existing = existsSync(cssPath) ? readFileSync(cssPath, 'utf-8') : ''
-    writeScaffoldFile(cssPath, '@import "tailwindcss";\n\n' + existing)
+    writeScaffoldFile(cssPath, TAILWIND_CSS_IMPORT + existing)
   }
 
   // `src/` is the layout, not an option. The block that used to move `app/` and `server/` into it

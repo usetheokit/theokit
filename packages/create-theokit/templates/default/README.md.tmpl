@@ -93,9 +93,9 @@ customization and environment variables have their own pages beside it.
 Two component libraries come with this template, and the split is by **what a component is for**,
 not by how generic it looks:
 
-| You need | Import from | Examples |
-| --- | --- | --- |
-| Agent surfaces — chat, streaming, tool calls, approvals | **`@theokit/ui`** | `ChatThread`, `ChatMessage`, `ChatComposer`, `ToolCallCard`, `AgentStream` |
+| You need                                                | Import from       | Examples                                                                                                               |
+| ------------------------------------------------------- | ----------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Agent surfaces — chat, streaming, tool calls, approvals | **`@theokit/ui`** | `ChatThread`, `ChatMessage`, `ChatComposer`, `ToolCallCard`, `AgentStream`                                             |
 | App chrome — shell, navigation, tables, forms, feedback | **`@usetheo/ui`** | `Sidebar`, `PageShell`, `DataTable`, `Select`, `FormField`, `Badge`, `EmptyState`, `Alert`, `Dialog`, `CommandPalette` |
 
 This template uses a handful of them. The rest are installed and waiting — **check before you write
@@ -110,11 +110,11 @@ carries the routing table above in full.
 
 Routing is file-based: a screen is a folder under `src/app/` with a `page.tsx`.
 
-| You want | Create | Serves |
-|---|---|---|
-| a `/settings` screen | `src/app/settings/page.tsx` | `/settings` |
-| a nested screen | `src/app/settings/billing/page.tsx` | `/settings/billing` |
-| a dynamic screen | `src/app/users/[id]/page.tsx` | `/users/:id` |
+| You want             | Create                              | Serves              |
+| -------------------- | ----------------------------------- | ------------------- |
+| a `/settings` screen | `src/app/settings/page.tsx`         | `/settings`         |
+| a nested screen      | `src/app/settings/billing/page.tsx` | `/settings/billing` |
+| a dynamic screen     | `src/app/users/[id]/page.tsx`       | `/users/:id`        |
 
 Or run `theokit generate page settings`, then link it from `src/app/components/Nav.tsx`.
 

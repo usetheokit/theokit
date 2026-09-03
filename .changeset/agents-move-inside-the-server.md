@@ -46,3 +46,16 @@ Two options the move exposed as broken, both now fixed:
   the question changed nothing whichever way it was answered — and answering *yes* actively broke
   the project: it moved `theo.config.ts` into `src/`, where the CLI does not look for it, and
   overwrote `include` with `src/**` alone, dropping the two ambient `.d.ts` globs the template needs.
+
+And two the generated app itself exposed, both of which made a fresh project fail its own
+`format:check` on files the user never typed:
+
+- **`README.md.tmpl` was never formatted.** The check that exists reads the template's `**/*.md`,
+  and `.tmpl` does not match — but it becomes `README.md` in the user's project, where it *is*
+  checked. Its tables had been unaligned since before this refactor.
+- **The `--tailwind` stylesheet import used double quotes** against a template whose `.prettierrc`
+  sets `singleQuote: true`, plus a stray blank line.
+
+Both are now covered by tests over the OUTPUT rather than the template: one scaffolds a project and
+runs Prettier against it with the config that project ships, the other hands the injected CSS line
+straight to Prettier — it is written after `scaffold()` returns, so the first test cannot see it.
