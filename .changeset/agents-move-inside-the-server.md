@@ -34,3 +34,15 @@ without a framework release.
 Two things the move made visible, both of which argue it was overdue: the three cross-imports in the
 bot preset got *shorter* (`../../server/delivery.js` → `../../delivery.js`), and the `tsconfig`
 include lost an entry, because `src/server/**` now covers the agents that needed their own line.
+
+Two options the move exposed as broken, both now fixed:
+
+- **`--import-alias` pointed at directories that no longer exist.** A custom alias expanded to
+  `./server/*` and `./app/*`, so a project generated with `--import-alias '~/*'` carried a tsconfig
+  whose aliases resolve to nothing. The mapping moved to `alias-paths.ts` where it is tested against
+  the directories the template actually ships, rather than living as three untested literals inside
+  a function that writes to disk.
+- **`--src-dir` is gone, and its prompt with it.** The generated project is always under `src/`, so
+  the question changed nothing whichever way it was answered — and answering *yes* actively broke
+  the project: it moved `theo.config.ts` into `src/`, where the CLI does not look for it, and
+  overwrote `include` with `src/**` alone, dropping the two ambient `.d.ts` globs the template needs.
