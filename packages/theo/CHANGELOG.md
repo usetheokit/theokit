@@ -1,5 +1,156 @@
 # theo
 
+## 0.65.0-next.1
+
+### Minor Changes
+
+- 4709eec: **`escapeHtml` is exported, and says which context it is safe in** (#611).
+
+  The framework had the function, kept it private inside the OpenAPI docs renderer, and an adopter
+  building an HTML e-mail body wrote it again — same four characters, same order, same omission of
+  `'`. Neither escaped the apostrophe, and neither had to: both call sites interpolate into text
+  content, where four characters are enough. They were right by luck rather than by having been told,
+  and the caveat is the part that does not survive being re-derived.
+
+  `theokit/server/security` now exports two functions with two names, so the decision is visible where
+  the interpolation happens:
+
+  ```ts
+  import { escapeHtml, escapeHtmlAttribute } from 'theokit/server/security'
+
+  ;`<title>${escapeHtml(title)}</title>` // text content
+  `<a href='${escapeHtmlAttribute(url)}'>` // quoted attribute — escapes ' and ` too
+  ```
+
+  Both run as a single character-class pass, which also removes the ordering hazard the chained
+  `.replace()` idiom carries: run the ampersand last and `<` has already become `&lt;`, which the
+  ampersand pass then turns into `&amp;lt;`. The docs renderer consumes them instead of carrying its
+  own copy.
+
+  Same shape as #574 (`@Public()`, `Authenticated()`): the framework owns the primitive, so it owns
+  the caveat with it.
+
+- 9b5da86: **A controller route can name a rate limit, and a guard can refuse with 429** (#612).
+
+  `theokit/server/rate-limit` exported a complete limiter and nothing a `@Controller` route could use,
+  so every app wrote the adapter — the third instance of a pattern whose first two shipped as
+  `@Public()` and `Authenticated()` (#574). The hand-written adapter could not be correct, for two
+  reasons that were not the author's fault:
+
+  - **A guard could not answer 429.** `canActivate` returns a boolean, so a refused caller received
+    `403 Forbidden resource` and the `X-RateLimit-*` the limiter had just computed were discarded —
+    a guard owns no response to attach them to. "You are not allowed" and "you are allowed, later"
+    read identically, and a well-behaved client had nothing to back off on.
+  - **The intuitive alternative was silently inert.** A `preHandler` plugin enforced nothing on
+    controller routes (#607, fixed in the same line of work) while reading exactly like protection.
+
+  **`theokit/server/rate-limit` now exports `RateLimited`:**
+
+  ```ts
+  @Post('stt')
+  @UseGuards(Authenticated(sessions), RateLimited({ max: 20, windowMs: 60_000 }))
+  transcribe() { ... }
+  ```
+
+  A refused caller gets `429` with `Retry-After`, `X-RateLimit-Limit` and `X-RateLimit-Remaining`.
+  `scope: 'shared'` pools several routes into one budget, which is what an app capping endpoints that
+  bill a third party per call actually wants. The constructor **throws** on a configuration that
+  cannot tell callers apart — `keyBy: 'ip'` with no `trustProxy` and no `identify` — because a Web
+  `Request` has no socket address, and accepting it would put every visitor in one bucket: a limiter
+  that refuses the whole internet after N requests while reading as protection until it does. It does
+  not attach `X-RateLimit-*` to allowed responses, and says so in its docblock rather than shipping a
+  header that appears under one dispatcher and vanishes under another.
+
+  **`@theokit/http`:**
+
+  - `HttpException` accepts and carries `headers`, and every dispatcher renders them through one
+    `httpExceptionToResponse` instead of four hand-built `new Response(...)` calls. `429` without
+    `Retry-After`, `401` without `WWW-Authenticate` and `405` without `Allow` are all half an answer.
+  - The guard pipeline is one `runGuards` shared by `TheoApp`, `createDecoratorHandler` and the
+    TheoKit plugin, instead of four copies — the arrangement #576 already paid for once. A guard
+    throwing an `HttpException` now reaches the client with its status and headers on all three, agent
+    routes included, where the exception previously escaped the dispatcher entirely.
+  - The published types say these exceptions are `Error`s again. `tsup` had been erasing the
+    inheritance into an anonymous structural type, so an app writing `throw new UnauthorizedException()`
+    tripped `@typescript-eslint/only-throw-error` against the framework's own exceptions — and the
+    lint was right about what the `.d.ts` claimed.
+
+- d2b5413: **A session secret that looks like a placeholder no longer boots in production** (#610).
+
+  `assertProductionSecret` reached both session constructors already (#429's half of the fix) and
+  still admitted every placeholder an adopter actually writes. Its whole vocabulary was
+  `/CHANGE_ME|demo[-_]|placeholder/i`, so the 32-character floor was the only condition that ever
+  fired — and a placeholder long enough to clear that floor is exactly what a developer produces when
+  the error message asks for 32 characters. Measured against `theokit@0.64.0` with
+  `NODE_ENV=production`, all five of these started a server:
+
+  ```
+  ACCEPTED  "dev-only-session-secret-32-chars-min-xxxx"   ← a real app's fallback
+  ACCEPTED  "changemexxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"    ← the pattern wants CHANGE_ME, not changeme
+  ACCEPTED  "devxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  ACCEPTED  "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"    ← forty identical characters
+  ACCEPTED  "test-secret00000000000000000000000000000"
+  ```
+
+  An app that falls back to a literal when its env var is unset then signs production cookies with a
+  value published in its own source. Reading the repository is the whole attack: forge the cookie,
+  and the server accepts any identity. The adopter that surfaced this had two such fallbacks, the
+  second written because the first one was a pattern.
+
+  The rules now live in `theokit/server/auth`'s new `inspectSecret`, exported so the same question can
+  be asked of a webhook secret or a signing key: a vocabulary of words that appear in strings people
+  type and not in generated output, a floor on distinct characters that refuses `aaaa…`, and a
+  repeated-block check. The distinct-character floor is 8 rather than 12 on purpose — a real
+  `openssl rand -hex 32` carries about 14 with a tail below 12, and a guard that refuses correct input
+  is a guard somebody disables.
+
+  **Two behaviour changes to know about:**
+
+  - A production boot with a weak secret now throws where it previously proceeded. That is the point
+    of the change, and the message names which rule fired.
+  - The error no longer echoes the first 16 characters of the secret. An error message reaches stdout,
+    the crash reporter, and everything that aggregates them; the index and the reason identify which
+    secret is wrong without publishing half of it.
+
+### Patch Changes
+
+- 777258c: **`@theokit/studio` is no longer declared as an optional peer dependency.**
+
+  Nothing changes at runtime. `/_studio` still mounts when Studio is installed, still no-ops when it
+  is not, and still warns when an installed copy does not export `theokitStudio()`.
+
+  What changes is that this package no longer pins a compatible range for a package it does not
+  install. The declaration bought one thing — `npm install` refusing an incompatible pair up front —
+  and charged the release train for it:
+
+  > `@theokit/agents@13.0.0-next.0` could not publish. npm resolved this optional peer to the
+  > published `@theokit/studio@0.3.0`, whose own peer read `@theokit/agents ">=11.0.0 <13"`, and the
+  > install failed `ERESOLVE`.
+
+  The 13 was not even a break. Changesets promotes a peer-dependent to major when a peer takes a minor
+  bump, and that changelog carries Minor and Patch sections only. So a dev-only route, in a package
+  this repository never installs, held four packages' release hostage to a second repository's release
+  cycle.
+
+  The runtime already covers what the declaration promised (`integrate-studio.ts`):
+
+  - **absent** → no `/_studio`, silently, which is the normal case for an app that never asked for it
+  - **installed but skewed** → `console.warn` naming the package and telling the reader to check the
+    installed version
+
+  That is the same information the peer range carried, delivered at the moment it matters, to the
+  person who actually installed Studio.
+
+  **Genuinely lost:** `npm install` no longer refuses an incompatible pair before anything runs.
+  Anyone pinning both should read that warning as the contract. The docblock in
+  `integrate-studio.ts` records this so the declaration is not re-added without the trade being
+  re-made.
+
+- Updated dependencies [fe8a0c6]
+- Updated dependencies [9b5da86]
+  - @theokit/agents@13.0.0-next.0
+  - @theokit/http@2.1.0-next.0
+
 ## 0.65.0-next.0
 
 ### Minor Changes

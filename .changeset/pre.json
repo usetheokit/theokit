@@ -11,6 +11,14 @@
     "theokit": "0.64.0"
   },
   "changesets": [
-    "plugin-hooks-reach-every-route-kind"
+    "agents-move-inside-the-server",
+    "compat-sources-reach-the-sdk",
+    "escape-html-is-exported-with-its-caveat",
+    "plugin-hooks-reach-every-route-kind",
+    "rate-limited-guard-and-refusals-that-carry-headers",
+    "session-secret-guard-refuses-what-people-type",
+    "studio-is-no-longer-a-declared-peer",
+    "template-pin-admits-the-published-stable",
+    "the-five-concepts-in-every-generated-app"
   ]
 }
