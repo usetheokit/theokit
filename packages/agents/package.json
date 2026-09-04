@@ -1,6 +1,6 @@
 {
   "name": "@theokit/agents",
-  "version": "12.1.0",
+  "version": "13.0.0-next.0",
   "description": "AI agents as first-class citizens of the TheoKit pipeline. The AgentBuilder.create() authoring chain compiles to the @theokit/sdk runtime.",
   "repository": {
     "type": "git",
@@ -113,7 +113,7 @@
     "prepublishOnly": "node ../../scripts/check-pack-no-workspace.mjs ."
   },
   "peerDependencies": {
-    "@theokit/http": ">=0.1.0-alpha.0",
+    "@theokit/http": ">=2.1.0-next.0",
     "react": ">=18",
     "zod": "^4.0.0"
   },
