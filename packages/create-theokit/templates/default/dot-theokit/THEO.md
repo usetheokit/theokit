@@ -12,6 +12,24 @@ layer (priority 60) — nothing else overrides it. That is what decides what bel
 tone instruction in this file quietly makes `usePersonality` do nothing. Tone belongs in
 `.theokit/personalities/`; instructions about specific files belong in `.theokit/rules/`.
 
+## Why this file is here and not at the root
+
+On the SDK this project installs (`^4.52.1`, which resolves to a 4.x), `.theokit/THEO.md` is the
+**only** path a `THEO.md` is read from — a copy at the project root is read by nothing, silently.
+
+`@theokit/sdk@5` adds a root `THEO.md` (`usetheokit/theokit-sdk#531`) at priority 55, so on that
+version both locations work and `.theokit/THEO.md` still wins a conflict. 5.x is currently published
+on the `next` channel only, so moving this file to the root would break it for anyone on the default
+install — which is why the scaffold keeps it here.
+
+Two more things worth knowing if you do move it once 5.x is stable:
+
+- The root spec sets `followImports: true`, this one does not. `@file` references resolve there and
+  not here.
+- Keep the pair. `AGENTS.md` is read by Cursor, Copilot and Claude Code as well as by TheoKit, and
+  it addresses a different audience — agents that write your code, rather than the agent that talks
+  to your users. That distinction survives whichever location this file ends up in.
+
 Keep it short — every line costs tokens on every turn.
 
 ## What this app is

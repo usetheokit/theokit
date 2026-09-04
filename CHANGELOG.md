@@ -6,6 +6,61 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [create-theokit 2.0.0-next.0, @theokit/agents 13.0.0-next.0, @theokit/http 2.1.0-next.0, theokit 0.65.0-next.1] - 2026-09-04
+
+### Added
+
+- **scaffold:** a generated project now demonstrates all five TheoKit concepts — agents, tools,
+  skills, hooks, rules and personalities — each verified by its wiring rather than its presence.
+  Agents moved inside the backend (`src/server/agents/`), because an agent reads your keys, calls
+  tools and runs where the server runs; every rule that applied to `server/` already applied to it.
+  The layout is declared in `theo.config.ts`, so framework defaults are unchanged and no existing
+  project moves. `AGENTS.md` ships at the root for agents that write the code; `.theokit/THEO.md`
+  carries product facts for the agent that talks to users (#642).
+
+- **agents:** `compatSources` is forwarded to the SDK, so a consumer can opt into reading
+  `<cwd>/.claude/`. Declaring it answers "do I want another product's configuration imported?";
+  the `TrustPosture` inside answers "do I trust this directory's code?" — two questions, two
+  answers. On an SDK too old to know the option, a warning fires once per process rather than the
+  option vanishing silently (#634).
+
+- **security:** `escapeHtml` is exported with the caveat that decides where it is safe — text
+  content, not attributes (#611). `RateLimited` ships as a guard whose refusals carry the limiter's
+  headers, which is what `HttpException`'s new `headers` option is for (#612).
+
+### Fixed
+
+- **security:** `createSessionManagerWeb` refuses a weak session secret instead of accepting it —
+  too short, an obvious placeholder, or too few distinct characters. The refusal no longer echoes
+  the secret (#610).
+
+- **scaffold:** the template pinned `@theokit/agents: ^10.1.0` while npm's `latest` was `12.1.0`,
+  so every generated app ran two majors behind — missing the 11.0.0 fix that stopped the server's
+  raw error text reaching the browser. `sync-template-pins.mjs` abstains in prerelease mode, and
+  that abstention rested on an unchecked premise; it now verifies each pin against the published
+  stable and fails when one excludes it.
+
+- **scaffold:** `--import-alias` generated a tsconfig whose aliases pointed at directories that no
+  longer exist, and `--src-dir` damaged the project it configured — moving `theo.config.ts` where
+  the CLI does not look and dropping two ambient `.d.ts` globs. `--src-dir` is removed: the
+  generated project is always under `src/`, so the question changed nothing whichever way it was
+  answered. `--no-agents-md` is parsed for the first time; it had been documented in `--help` and
+  implemented nowhere.
+
+- **scaffold:** a generated app passes its own `format:check`. `README.md.tmpl` was never formatted
+  (the existing check reads `**/*.md`, and `.tmpl` does not match) and the Tailwind import used
+  double quotes against a template whose `.prettierrc` sets `singleQuote`.
+
+### Changed
+
+- **theokit:** `@theokit/studio` is no longer declared as an optional peer dependency. Nothing
+  changes at runtime — `/_studio` still mounts when Studio is installed, no-ops when it is not, and
+  warns on a version skew. The declaration bought one thing, `npm install` refusing an incompatible
+  pair up front, and charged the release train for it: a dev-only route in a package this repository
+  never installs blocked `@theokit/agents@13` from publishing at all. What is lost is recorded in
+  `integrate-studio.ts` so the declaration is not re-added without re-making the trade.
+
+
 ## [@theokit/tauri 1.0.0-next.0, theokit 0.65.0-next.0] - 2026-09-01
 
 ### Added
