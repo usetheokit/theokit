@@ -19,6 +19,26 @@ import type { Plugin } from 'vite'
  * installed. That is deliberate and symmetric with `@theokit/ui`: an app that did not ask for Studio
  * should not be told about it on every boot.
  *
+ * ## Not declared as a peer at all, since 2026-09-03
+ *
+ * It used to be `peerDependencies: { "@theokit/studio": ">=0.2.0 <1" }`, optional. The declaration
+ * bought one thing — npm warning at INSTALL time about a version skew — and cost the release train
+ * every time the two repositories moved apart:
+ *
+ *   `@theokit/agents@13.0.0-next.0` could not publish, because npm resolved this optional peer to
+ *   the published `@theokit/studio@0.3.0`, whose own peer said `@theokit/agents ">=11.0.0 <13"`.
+ *   ERESOLVE. The 13 was not even a break — changesets promotes a peer-dependent to major when a
+ *   peer takes a minor bump, and that changelog carries Minor and Patch sections only.
+ *
+ * So a package this repo never installs, for a dev-only route, held four packages' release hostage
+ * to a second repository's release cycle. The runtime already covers what the declaration promised:
+ * absence is a no-op, and a version skew is the `console.warn` below, which names the package and
+ * says to check the installed version. That is the same information, at the moment it matters, to
+ * the person who actually installed Studio.
+ *
+ * What is genuinely lost: `npm install` no longer refuses an incompatible pair up front. Anyone
+ * pinning both should read that warning as the contract.
+ *
  * ## Dev only
  *
  * `apply: 'serve'` is enforced HERE rather than trusted from the plugin: mounting a development UI

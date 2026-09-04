@@ -83,6 +83,12 @@ export default defineConfig([
     removeNodeProtocol: false,
     target: 'node20',
     external: [
+      // Optional and never installed here, so esbuild cannot resolve it — and must not try.
+      // `integrate-studio.ts` imports it dynamically and treats absence as a supported state;
+      // marking it external is what lets the build succeed while keeping that behaviour. It became
+      // necessary when the package stopped being declared as an optional peer: until then it sat in
+      // the lockfile and resolved by accident. The pre-push build gate caught it.
+      '@theokit/studio/plugin',
       '@theokit/presenter',
       'vite',
       'react',
@@ -112,6 +118,12 @@ export default defineConfig([
       js: '#!/usr/bin/env node\nimport "tsx/esm";',
     },
     external: [
+      // Optional and never installed here, so esbuild cannot resolve it — and must not try.
+      // `integrate-studio.ts` imports it dynamically and treats absence as a supported state;
+      // marking it external is what lets the build succeed while keeping that behaviour. It became
+      // necessary when the package stopped being declared as an optional peer: until then it sat in
+      // the lockfile and resolved by accident. The pre-push build gate caught it.
+      '@theokit/studio/plugin',
       '@theokit/presenter',
       'vite',
       'react',
