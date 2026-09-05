@@ -89,24 +89,26 @@ jobs:
           # request was opened by the App. Both halves have to be the App or neither is.
           token: ${{ steps.app-token.outputs.token }}
           fetch-depth: 0
-      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
-        # No `version:` here on purpose. The action reads `packageManager` from
-        # package.json, which is already the single authority on the pnpm version.
-        # Pinning it a second time in this file creates two places to update, and
-        # once they disagree action-setup aborts with ERR_PNPM_BAD_PM_VERSION.
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      # `@v1` is a moving ref by design — a policy fix in shared-workflows must reach every
+      # caller without nine pull requests, which is the reason that repository exists. What the
+      # action RUNS stays pinned: every action inside it by digest, Node from `.nvmrc`, and pnpm
+      # from `packageManager`, so neither version is named twice.
+      #
+      # It carries the cache key this block spelled out — `package.json` beside `pnpm-lock.yaml`,
+      # because setup-node keys the pnpm store on the lockfile alone, so a pnpm 9 → 10 bump would
+      # leave the key identical and restore a store the new pnpm reads as inconsistent
+      # (`ERR_PNPM_MISSING_PACKAGE_INDEX_FILE`).
+      #
+      # It also deliberately does NOT pass `registry-url`, which is the property this file needs
+      # most: setup-node would write `_authToken=${NODE_AUTH_TOKEN}` into an npmrc unconditionally
+      # and nothing exports that token under OIDC, so the publish would run against a config
+      # naming a credential that does not exist.
+      #
+      # `install: false` — the frozen install stays where it is below, AFTER the npm upgrade,
+      # because the order is load-bearing and this change is about the toolchain block only.
+      - uses: usetheokit/shared-workflows/actions/setup@v1 # zizmor: ignore[unpinned-uses]
         with:
-          node-version-file: '.nvmrc'
-          cache: 'pnpm'
-          # The cache key must change when the package manager does. setup-node keys the
-          # pnpm store on the lockfile alone, so a pnpm 9 -> 10 bump leaves the key
-          # identical and the job restores a store the new pnpm reads as inconsistent —
-          # `ERR_PNPM_MISSING_PACKAGE_INDEX_FILE`, on a package the lockfile does list.
-          # package.json carries `packageManager`, so including it ties the cache to the
-          # pnpm that wrote it.
-          cache-dependency-path: |
-            pnpm-lock.yaml
-            package.json
+          install: 'false'
           # NO `registry-url`. It looks harmless and is not: setup-node writes
           # `//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}` into an npmrc
           # UNCONDITIONALLY and points NPM_CONFIG_USERCONFIG at it, then exports
