@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [create-theokit 2.0.0-next.1] - 2026-09-04
+
+### Changed
+
+- **scaffold:** `THEO.md` ships at `.theokit/THEO.md` rather than the project root, and the file
+  now carries a section explaining that choice. A root `THEO.md` is only discovered by SDK 5.x,
+  and the template pins `@theokit/sdk` at `^4.52.1` — so a root file would be read by nothing in
+  a freshly generated project. Placing it where the pinned SDK looks means the scaffold works as
+  generated; the explanation is in the file so the next person moving it knows what has to change
+  first (#642).
+
 ## [create-theokit 2.0.0-next.0, @theokit/agents 13.0.0-next.0, @theokit/http 2.1.0-next.0, theokit 0.65.0-next.1] - 2026-09-04
 
 ### Added
