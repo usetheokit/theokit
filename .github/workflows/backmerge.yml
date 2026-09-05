@@ -1,0 +1,29 @@
+# `main` must not leave the long-lived branch behind after a release.
+#
+# The job itself lives in `usetheokit/shared-workflows` and is called by ref, so a change to the
+# POLICY reaches every repository that calls it. It was copied into three repositories under two
+# file names until 2026-09-05 — which is also why a grep for one name reported two instances
+# instead of three.
+#
+# WHY A PULL REQUEST AND NOT A DIRECT PUSH, decided by measurement rather than preference. The
+# objection to the push is that it bypasses review; measured across all ten consumers, `workspace`
+# carries NO branch protection anywhere, so neither mechanism bypasses anything. What decided it
+# was the opposite worry: a pull request only helps if somebody merges it. Twelve back-merge pull
+# requests, twelve merged, ten of them the same day — so the reviewable record costs nothing.
+name: Back-merge
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  backmerge:
+    uses: usetheokit/shared-workflows/.github/workflows/backmerge.yml@v1 # zizmor: ignore[unpinned-uses]
+    permissions:
+      contents: read
+      pull-requests: write
