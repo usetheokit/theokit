@@ -154,6 +154,33 @@ file that arrives with the repository.
 This is distinct from the session auto-memory at `~/.claude/projects/`: each subagent reads and
 writes its own `MEMORY.md`, not the operator's.
 
+## Environment variables
+
+**This list is CLOSED.** A variable that is not in this table is not read by this package — not
+"undocumented", not "read somewhere else": not read. That is the whole point of writing it down.
+`rules/foreign-config-surfaces.md` settles the same question for `.claude/` file surfaces in one
+sentence — *a surface is read, or it is refused with a reason about this product; it is never
+accepted and ignored* — and this is that sentence applied to the environment.
+
+The reason the guarantee is worth more than a list of three: it answers for every variable anyone
+could export, including the ones nobody enumerated, so an operator who sets something and sees no
+change knows which of the two worlds they are in.
+
+| Variable | Security | What it changes | Read at |
+|---|---|---|---|
+| `PROGRAMDATA` | no | Where the machine-wide operator policy is looked for on Windows. Changing it moves which policy file governs the run. | `src/config/operator-policy.ts:119` |
+| `THEOKIT_CODEX_CLIENT_ID` | **yes** | Overrides the OAuth client id used for the Codex device flow. It selects which OAuth client the device authorisation is issued against, so it is a credential-path decision rather than a convenience one. | `src/auth/device-provider.ts:97`, via the constant at `:93` |
+| `THEOKIT_DEBUG` | no | Turns on debug logging. Log output can contain request shapes, so treat the logs as sensitive even though the switch is not. | `src/debug-log.ts:10` |
+
+The `Security` column is a decision per row, not a keyword match on the name. A name containing
+`AWS` can be a plain address, and a name matching nothing can disable a control — so each row was
+judged rather than classified.
+
+`node scripts/check-env-verdicts.mjs` fails the build in **both** directions: a variable this package
+reads and this table omits, and a variable this table lists that nothing reads any more. Without the
+second direction the table would keep advertising a variable after a refactor deleted its only read,
+which is a worse failure than never having documented it.
+
 ## Boundaries this package keeps
 
 - It does **not** call an LLM provider, run a tool-dispatch loop, or own the conversation store.
