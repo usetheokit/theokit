@@ -251,3 +251,34 @@ describe('the seam is reachable the way a consumer reaches it', () => {
     )
   })
 })
+
+describe('the handler is told when the wait is over', () => {
+  it('test_a_timed_out_handler_receives_an_aborted_signal', async () => {
+    // Cross-validation finding from /review: plan ADR-3 says the signal "is included", and the
+    // first implementation passed none — the plan claimed a capability the code did not have.
+    // Without it a timed-out handler runs on, detached, holding whatever it holds.
+    let observed: AbortSignal | undefined
+    const wrapped = withPreCompaction(
+      recordingStrategy([]),
+      (_messages, signal) => {
+        observed = signal
+        return new Promise<void>(() => undefined)
+      },
+      { timeoutMs: 10, onError: () => undefined },
+    )
+
+    await wrapped.compact(MESSAGES)
+
+    expect(observed, 'the handler received no signal at all').toBeDefined()
+    expect(observed?.aborted, 'the signal never fired when the bound was reached').toBe(true)
+  })
+
+  it('test_a_handler_that_finishes_in_time_is_not_aborted', async () => {
+    let observed: AbortSignal | undefined
+    await withPreCompaction(recordingStrategy([]), (_messages, signal) => {
+      observed = signal
+    }).compact(MESSAGES)
+
+    expect(observed?.aborted, 'a handler that won the race was signalled anyway').toBe(false)
+  })
+})

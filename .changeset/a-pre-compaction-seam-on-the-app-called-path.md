@@ -34,5 +34,9 @@ bound (30s by default, configurable) is passed to your `onError` as a typed
 `PreCompactionHandlerError` carrying `reason: 'timeout' | 'threw'` — and compaction proceeds anyway.
 A run that cannot compact meets the context wall, which is worse than a run whose handler failed.
 
+The handler also receives an `AbortSignal` that fires when the bound is reached, so a cooperative
+handler can drop work that is now pointless instead of running on, detached, after compaction stopped
+waiting for it. Signalling is not stopping — the timeout is what releases compaction either way.
+
 The handler receives a readonly copy: `compact` documents that it never mutates its input, and a
 seam that handed out the live array would open a mutation path through that guarantee.

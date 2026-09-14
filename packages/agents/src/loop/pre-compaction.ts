@@ -25,13 +25,20 @@ import type { CompactionCallOptions, TranscriptCompactionStrategy } from './comp
 /**
  * Work to run before the transcript is rewritten.
  *
- * Receives a READONLY view of the pre-compaction transcript — the reason the handler exists is to
+ * Receives a READONLY view of the pre-compaction transcript, and an `AbortSignal` that fires when the
+ * bound below is reached. The signal is additive, never the bound itself: signalling is not stopping,
+ * and a handler that ignores it still holds nothing up — the timeout is what releases compaction.
+ * What the signal buys is a COOPERATIVE handler being able to drop work that is now pointless
+ * instead of running on, detached, after the decorator stopped waiting for it.
+ *
+ * Receives a readonly view of the pre-compaction transcript — the reason the handler exists is to
  * read what compaction is about to destroy. The array is a copy: `compact` documents that it never
  * mutates its input, and handing a caller the live array would open a mutation path through that
  * contract whose damage surfaces later, in the compacted output, pointing at nothing.
  */
 export type PreCompactionHandler = (
   messages: readonly CompressibleMessage[],
+  signal: AbortSignal,
 ) => void | Promise<void>
 
 /** How a failed handler is reported, and how long one may take. */
@@ -106,11 +113,15 @@ async function runHandlerBounded(
   onError?: (error: PreCompactionHandlerError) => void,
 ): Promise<void> {
   let timer: ReturnType<typeof setTimeout> | undefined
+  const controller = new AbortController()
   try {
     await Promise.race([
-      Promise.resolve(handler(messages)),
+      Promise.resolve(handler(messages, controller.signal)),
       new Promise<never>((_resolve, reject) => {
         timer = setTimeout(() => {
+          // Told before abandoned: the signal fires first so a cooperative handler learns the wait
+          // is over, then the race rejects and compaction proceeds regardless of what it does.
+          controller.abort()
           reject(
             new PreCompactionHandlerError(
               `pre-compaction handler exceeded its ${String(timeoutMs)}ms bound; compaction proceeded without it`,
