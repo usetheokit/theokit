@@ -217,6 +217,21 @@ export {
   type Veto,
 } from './auth/permission-gate.js'
 
+// B-080 — a `pre_tool_call` gate, which is what `./auth` already carries. It refuses state-changing
+// calls while the run is in the SDK's declared `plan` permission mode, and returns `undefined`
+// otherwise so it COMPOSES with an existing handler instead of replacing it:
+//
+//   pre_tool_call: async (ctx) => (await planOnly(ctx)) ?? (await mine(ctx))
+//
+// Here rather than the root barrel because the barrel is not the API and this is opt-in: a consumer
+// who never runs in plan mode pays nothing for it.
+export {
+  createPlanOnlyGate,
+  PlanOnlyRefusalError,
+  type PlanOnlyContext,
+  type PlanOnlyGateOptions,
+} from './loop/plan-only.js'
+
 /**
  * B-061 — the type this barrel's own signatures NAME.
  *
