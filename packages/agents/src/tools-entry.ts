@@ -135,3 +135,17 @@ export {
   type CreateDelegateToolOptions,
   type DelegateRosterEntry,
 } from './tools/delegate-tool.js'
+
+// B-079 + B-080 — the tools through which the agent declares the work it is JUDGED on. They live
+// here for the same reason `createDelegateTool` does: an agent-facing tool belongs on the
+// agent-facing surface, and a consumer should not have to know which package implements what.
+//
+// They cannot live SDK-side either, and for a sharper reason than delegate's: the judge that reads
+// the decomposition is bound here, so an SDK-side declaration tool would produce a decomposition
+// nothing in the SDK consumes.
+export {
+  createTaskCompleteTool,
+  createTaskDeclareTool,
+  type TaskRegistry,
+  type TaskToolOptions,
+} from './tools/task-tools.js'

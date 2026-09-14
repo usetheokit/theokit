@@ -58,3 +58,8 @@ export {
   type ReflectionStrategyConfig,
   reflectionStrategyConfigSchema,
 } from './reflection-strategy.js'
+
+// B-079 — which decomposition the judge reads. A pure function on the goal-loop surface, because
+// the precedence it encodes (the AGENT's decomposition wins over a caller-supplied `subgoals`) is a
+// goal-loop rule and not a tool.
+export { resolveDecomposition } from './decomposition.js'
