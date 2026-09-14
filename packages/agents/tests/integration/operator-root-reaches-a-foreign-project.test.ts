@@ -4,7 +4,7 @@ import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
-import { resolveOperatorRoots } from '../../src/index.js'
+import { resolveOperatorRoots } from '../../src/config-entry.js'
 
 /**
  * B-024 AC-002 — an operator skill reaches a run whose cwd contains none.
@@ -14,9 +14,15 @@ import { resolveOperatorRoots } from '../../src/index.js'
  * consumer who has to put the skill in every project they clone has no operator root, whatever the
  * flag says.
  *
- * Imported from the package entry rather than a relative path, deliberately — FR-003 measures
+ * Imported from the `./config` entry rather than a relative path, deliberately — FR-003 measures
  * reachability through the public export map, and a relative import would prove the module works
  * while saying nothing about what a consumer can reach.
+ *
+ * `./config` and not the root barrel, because this package's README says so in its own words:
+ * *"Twenty entry points. Import the one you need — the barrel is not the API."* The first version
+ * of this work put the export in the root barrel and the bundle gate caught it — 41 416 bytes
+ * against a 39 500 ceiling, measured by control at 2 888 bytes for this one module. Every consumer
+ * would have paid those bytes to import an agent builder. The subpath costs the root bundle zero.
  */
 function operatorHome(): string {
   const home = mkdtempSync(join(tmpdir(), 'b024-operator-'))

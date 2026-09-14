@@ -9,13 +9,17 @@ difference, and have no way to tell "this runtime does not read it" from "it rea
 wrong" — the accepted-and-ignored failure this package removes everywhere else.
 
 ```ts
-import { resolveOperatorRoots } from '@theokit/agents'
+import { resolveOperatorRoots } from '@theokit/agents/config'
 
 const { definitions, withheld } = resolveOperatorRoots({
   user: true,
   grants: ['claude-code'],   // only this admits the foreign root
 })
 ```
+
+It lives at `./config`, beside the operator POLICY reader, rather than in the root barrel — this
+package's README is explicit that *"the barrel is not the API"*, and the bundle gate measured the
+difference: 2 888 bytes every consumer would have paid to import an agent builder.
 
 **Two roots, one grant.** `~/.theokit/skills/` and `~/.theokit/agents/` are ours — `user: true` is
 the whole permission. `~/.claude/skills/` and `~/.claude/agents/` belong to another product under a

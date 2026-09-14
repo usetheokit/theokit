@@ -67,8 +67,29 @@ describe('Bundle size regression', () => {
    * Headroom is about a kilobyte again. Anyone who finds themselves raising it a fourth time inside
    * one release cycle should read that as the barrel growing faster than the budget was written for,
    * not as the number being wrong.
+   *
+   * ## NOT raised a fourth time for B-024 — the warning above was the right one
+   *
+   * `resolveOperatorRoots` went into the root barrel first and this gate caught it: 41 416 against
+   * the 39 500 ceiling, attributed by control at **2 888 bytes** for that one module (38 528
+   * without, 41 416 with). The paragraph above had already named the reading — the barrel growing
+   * faster than the budget was written for — and the fix was the SHAPE, not the number.
+   *
+   * It moved to the `./config` subpath, where this package's README says it belongs: *"Twenty entry
+   * points. Import the one you need — the barrel is not the API."* `./config` already carries agent
+   * configuration and the operator policy, so the reader of the operator's ROOTS now sits beside
+   * the reader of the operator's POLICY rather than in a barrel every consumer pays for.
+   *
+   * The root bundle is 38 528 again — the same number as before B-024 — so the capability costs a
+   * consumer who does not import it exactly nothing. The ceiling comes DOWN to 38 600, restoring
+   * the tightness the 39 500 raise had spent: a gate carrying a kilobyte of slack is a gate that
+   * approves the next kilobyte without being asked.
+   *
+   * There is deliberately no size gate on `./config` itself. The root barrel is what every consumer
+   * pays for unconditionally; a subpath is opt-in, and a gate on every entry point would be a
+   * budget nobody set against a cost nobody bears.
    */
-  it('agents main bundle under 39.5KB', (ctx) => {
+  it('agents main bundle under 38.6KB', (ctx) => {
     const path = resolve(distDir, 'index.js')
     if (!existsSync(path)) {
       // `ctx.skip()`, not `return`. A bare return reports the test as PASSED, so a suite run with no
@@ -78,7 +99,7 @@ describe('Bundle size regression', () => {
       return
     }
     const size = statSync(path).size
-    expect(size).toBeLessThan(39_500)
+    expect(size).toBeLessThan(38_600)
     console.log(`  agents/dist/index.js: ${(size / 1024).toFixed(1)} KB`)
   })
 

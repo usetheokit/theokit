@@ -142,7 +142,7 @@ describe('the user root is honoured or refused', () => {
  * The public entry, loaded ONCE at module scope — loading it inside a test body charges ~1s of
  * barrel evaluation to that test, measured on B-002.
  */
-const publicEntry = (await import('../../src/index.js')) as Record<string, unknown>
+const publicEntry = (await import('../../src/config-entry.js')) as Record<string, unknown>
 
 describe('the capability is reachable, and the docblock no longer describes a gap', () => {
   it('test_reachable_from_the_public_entry_point', () => {
