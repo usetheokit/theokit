@@ -9,10 +9,10 @@
  *
  * The deliverable is a CLOSED list — absent from it means not read — which answers for EVERY
  * variable, including the ones nobody enumerated, while naming nothing foreign. That framing is the
- * reviewer's decision on 2026-09-14 (*"não quero referências no nosso sistema"*), and it is the
- * correct call twice over: `rules/reference-provenance.md` keeps third-party material out of this
- * repository, and `cycle-backlog.md` gate G5 refuses a foreign product's behaviour as our
- * justification.
+ * reviewer's decision on 2026-09-14: no third-party reference material enters this repository. It is
+ * the correct call twice over — `rules/reference-provenance.md` keeps third-party material out, and
+ * `cycle-backlog.md` gate G5 refuses a foreign product's behaviour as our justification. The
+ * decision's exact wording is recorded in the alignment brief.
  *
  * ## Why the scanner resolves a same-file constant
  *
