@@ -34,6 +34,13 @@ export {
   type TranscriptCompactionStrategy,
 } from './compaction-strategy.js'
 export {
+  DEFAULT_HANDLER_TIMEOUT_MS,
+  type PreCompactionHandler,
+  PreCompactionHandlerError,
+  type PreCompactionOptions,
+  withPreCompaction,
+} from './pre-compaction.js'
+export {
   DEFAULT_MAX_ITERATIONS,
   type LoopFinishReason,
   type LoopOutcome,
