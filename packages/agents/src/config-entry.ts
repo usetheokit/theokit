@@ -179,6 +179,16 @@ export {
   mcpServerAdmitted,
   type OperatorPolicy,
 } from './config/operator-policy.js'
+export {
+  type OperatorDefinition,
+  type OperatorOrigin,
+  type OperatorRootsOptions,
+  type OperatorRootsResult,
+  OperatorRootUnreadableError,
+  resolveOperatorRoots,
+  type SkippedDefinition,
+  type WithheldRoot,
+} from './config/operator-roots.js'
 
 /**
  * Per-subagent memory — the directory a `memory:` frontmatter key promises.
