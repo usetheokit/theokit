@@ -67,10 +67,16 @@ export interface SettingSourcesSelection {
    *
    * ## What this does NOT do today, stated here because the field is where it is read
    *
-   * **Nothing reads the operator's root because of this flag.** `resolveSettingSources` forwards it
-   * and `includesSetting` is called with exactly `"project"` and `"plugins"` — measured against
-   * `@theokit/sdk@5.5.0`, not inferred: a grep of the published `dist` returns those two literals
-   * and no `"user"`. So skills, subagents and rules under `~/.theokit/` do not reach a run.
+   * **This layer reads the operator's root because of this flag** (B-024). `resolveOperatorRoots`
+   * walks `~/.theokit/skills/` and `~/.theokit/agents/`, and the `~/.claude/` equivalents when the
+   * `claude-code` dialect is granted — the SAME grant that gates the project's `.claude/` surfaces,
+   * never a looser one. Every definition carries the root it came from, so an operator can tell one
+   * they wrote for this product from one they wrote for another.
+   *
+   * The SDK still does not consult `user`: `includesSetting` is called with exactly `"project"` and
+   * `"plugins"` — measured against the published `dist`, not inferred. That is why the read happens
+   * here. Until B-024 this field described a capability nothing delivered, which is the
+   * accepted-and-ignored failure `rules/foreign-config-surfaces.md` exists to remove.
    *
    * The admission already lived in `resolveSettingSources`' docblock, several hundred lines away,
    * while this line described the root as though the flag delivered it. Two docblocks disagreeing
@@ -299,10 +305,19 @@ declare const GATED: unique symbol
  *
  * `includesSetting` is called with exactly `"project"` and `"plugins"`
  * (`theokit-sdk/packages/sdk/src/internal/local-agent/local-agent.ts:174-175`). `user`, `team` and
- * `mdm` are accepted by the option and never consulted, so forwarding them would be a name the
- * runtime discards. `user` is still resolved here because it costs nothing and the SDK may start
- * reading it; `team` and `mdm` are deliberately absent from {@link SettingSourcesSelection} rather
- * than plumbed through to be ignored.
+ * `mdm` are accepted by the option and not consulted BY THE SDK, so forwarding them would be a name
+ * its runtime discards. `team` and `mdm` are deliberately absent from {@link SettingSourcesSelection}
+ * rather than plumbed through to be ignored.
+ *
+ * **`user` is different now, and the difference is the whole of B-024.** This layer reads the
+ * operator's roots itself — `resolveOperatorRoots` in `config/operator-roots.ts` — so `user: true`
+ * reaches `~/.theokit/skills/` and `~/.theokit/agents/`, and reaches `~/.claude/` equivalents when
+ * the `claude-code` dialect is granted. It is no longer a flag that changes nothing: the SDK still
+ * does not consult it, and this layer does.
+ *
+ * The distinction matters for whoever reads this next. The sentence above was true and complete
+ * about the SDK while the FIELD's own docblock described a capability nobody delivered — two
+ * docblocks disagreeing about one option, with a consumer reading the reassuring one.
  */
 export type GatedSettingSource = SettingSource & { readonly [GATED]: true }
 
