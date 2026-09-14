@@ -112,7 +112,7 @@ describe('a pre-compaction handler runs before the rewrite', () => {
     const inner = recordingStrategy(timeline)
     const options: CompactionCallOptions = {
       keepTokens: 99,
-      summarize: async () => 'summary',
+      summarize: async () => ({ role: 'assistant', content: 'summary' }) as CompressibleMessage,
       marker: 'MARK',
       summaryTemplate: 'TPL',
       failSafe: false,
