@@ -18,6 +18,16 @@ export type { ApprovalRequest, HitlDecision } from './bridge/hitl-plugin.js'
 export { ConfigurationError } from './errors.js'
 export * from './capability/index.js'
 export * from './bridge/index.js'
+export {
+  type OperatorDefinition,
+  type OperatorOrigin,
+  type OperatorRootsOptions,
+  type OperatorRootsResult,
+  OperatorRootUnreadableError,
+  resolveOperatorRoots,
+  type SkippedDefinition,
+  type WithheldRoot,
+} from './config/operator-roots.js'
 export * from './loop/index.js'
 export * from './guardrails/index.js'
 export * from './a2a/agent-card.js'
