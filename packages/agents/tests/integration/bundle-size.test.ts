@@ -52,8 +52,23 @@ describe('Bundle size regression', () => {
    *
    * Headroom is again about a kilobyte, and again stated so the next barrel addition meets a guard
    * rather than a formality.
+   *
+   * ## Raised again to 39 500 for B-002 — measured the same way
+   *
+   * Carrying `withPreCompaction` and its types across the barrel cost **160 bytes**, attributed by
+   * building with and without only that export line: 38 368 → 38 528.
+   *
+   * Two things worth the next reader's time. The 160 bytes buy the pre-compaction seam a consumer
+   * can reach from the package entry — FR-003 measures reachability through the public export map,
+   * so a module that exists and is not exported satisfies nothing. And the gate was already at 38 368
+   * BEFORE this change: the 14.0.0 work had left 132 bytes of the last kilobyte, so this addition met
+   * a ceiling that was nearly spent rather than one it alone exhausted.
+   *
+   * Headroom is about a kilobyte again. Anyone who finds themselves raising it a fourth time inside
+   * one release cycle should read that as the barrel growing faster than the budget was written for,
+   * not as the number being wrong.
    */
-  it('agents main bundle under 38.5KB', (ctx) => {
+  it('agents main bundle under 39.5KB', (ctx) => {
     const path = resolve(distDir, 'index.js')
     if (!existsSync(path)) {
       // `ctx.skip()`, not `return`. A bare return reports the test as PASSED, so a suite run with no
@@ -63,7 +78,7 @@ describe('Bundle size regression', () => {
       return
     }
     const size = statSync(path).size
-    expect(size).toBeLessThan(38_500)
+    expect(size).toBeLessThan(39_500)
     console.log(`  agents/dist/index.js: ${(size / 1024).toFixed(1)} KB`)
   })
 
