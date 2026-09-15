@@ -138,6 +138,17 @@ and saying so is the distinction this section exists to make.
 The registry entry that prompted this counts four decisions across three files, because
 `~/.claude.json` is split. That is the count, stated so nobody goes looking for a fourth file.
 
+### `themes/*.json`
+
+Read by none of the three packages, measured 2026-09-15. After `keybindings.json` turned out to be
+read by the consumer rather than by the package it was attributed to, the obvious next move was to
+treat this as the same finding. It is not.
+
+This package has no colour at all — a grep for `color`, `chalk` or `theme` across its source returns
+nothing, the one apparent hit being `ansi` inside `stateTransitionHistory`. It produces text and tool
+calls; a palette here would be configuration nothing could act on. The toolkit reads no theme file
+either, so naming an owner would repeat the mistake the `keybindings.json` row already made.
+
 ### `CLAUDE.md`
 
 The instruction tree accepts any file list: `input.fileNames`, falling back to a default of
