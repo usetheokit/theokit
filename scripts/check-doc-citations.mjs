@@ -75,6 +75,22 @@ export function isHistoricalRecord(relPath) {
 }
 
 /**
+ * The maintenance registry, out of scope for a different reason than the changelog.
+ *
+ * `BACKLOG.md` is not versioned by this repository — it is a maintainer's working file — and it
+ * spans the ECOSYSTEM rather than this repo: an item about `theokit-sdk` cites
+ * `packages/sdk/src/...`, an item about the agents bridge cites `bridge/...`. Those paths are
+ * correct where the item points and unresolvable here, by construction.
+ *
+ * Measured 2026-09-15: 43 of this checker's 43 rotten citations came from this one file, and every
+ * one of them named a sibling repository. Reporting them says nothing about this repository's docs
+ * and hides the number that does — 1297 citations resolve.
+ */
+export function isUnversionedRegistry(relPath) {
+  return /(^|\/)BACKLOG\.md$/i.test(relPath)
+}
+
+/**
  * Every citation in `text`, with the 1-based line it was written on.
  *
  * @returns {{ raw: string, path: string, line: number, docLine: number }[]}
@@ -125,7 +141,11 @@ export function collectDocs(root, dir = root, acc = []) {
     if (entry.isDirectory()) {
       if (SKIP_DIRS.has(entry.name)) continue
       collectDocs(root, full, acc)
-    } else if (entry.name.endsWith('.md') && !isHistoricalRecord(relative(root, full))) {
+    } else if (
+      entry.name.endsWith('.md') &&
+      !isHistoricalRecord(relative(root, full)) &&
+      !isUnversionedRegistry(relative(root, full))
+    ) {
       acc.push(full)
     }
   }
