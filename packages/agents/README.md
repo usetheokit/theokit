@@ -164,6 +164,24 @@ Grouping it with `outputStyle` under one `read` claimed for both what is true of
 table serves is that a surface is read, or refused with a reason, and never accepted and ignored;
 a key that is parsed and dropped is the third state, and it was in this file's own table.
 
+## Why `env` is not applied, rather than not yet applied
+
+This is a refusal with a reason, not a gap waiting for someone.
+
+`env` under `.claude/` sets environment variables, and a variable is not inert. `NODE_OPTIONS`
+alone is code execution — `--require ./anything.js` runs a file before the program does — and
+`LD_PRELOAD`, `PATH` and `NODE_PATH` each reach the same place by another route. Anything this
+package spawns inherits the process environment: hook commands, and the stdio MCP servers whose
+`${VAR}` references `expandEnvReferences` already resolves against `process.env`.
+
+`.claude/settings.json` usually arrives with the clone. Applying its `env` would let a repository
+choose what runs inside every subprocess of anyone who opens it — the same threat the `hooks` row
+above is gated for, arriving by a quieter door. A consumer that wants those values can read
+`settings.values.env` and decide for itself, which is where a trust decision of that size belongs.
+
+The honest form of this is what the table now says: parsed, so an author is told the key was seen,
+and not applied, so nobody believes it took effect.
+
 ### `agent-memory/`
 
 `resolveAgentMemory()` resolves the directory a subagent reads and writes, and returns the first
