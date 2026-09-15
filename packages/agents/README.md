@@ -123,7 +123,7 @@ toggles are a CLI's own state — that file is written by a specific program abo
 a library reading another program's login state would be reaching into something it neither owns nor
 can refresh. Its **personal-scope MCP servers** are a different matter: an MCP server the operator
 registered for themselves is a framework concern, this package already reads project-scope servers
-from `.mcp.json`, and the personal scope measures 0. That half is **not refused — it is not done**,
+from `.mcp.json`, and the personal scope measured 0 when this was written. **It does not any more:** on the machine this was re-measured on, 2026-09-15, `~/.claude.json` carried 2 personal-scope servers. The gap now costs an operator the servers they registered for themselves, which is the difference between a gap worth declaring and one worth closing. That half is **not refused — it is not done**,
 and saying so is the distinction this section exists to make.
 
 The registry entry that prompted this counts four decisions across three files, because
