@@ -27,6 +27,14 @@ export default tseslint.config(
   {
     ignores: [
       '**/node_modules/**',
+      // The installed kit. It is NOT versioned by this repository — a consumer's `.claude/` is a
+      // dependency, not source — so linting it reports problems in files nobody who clones this
+      // repo even has. The two that surfaced are eval FIXTURES under
+      // `skills/discover-execute/evals/`, deliberately written to look like another project's
+      // code and belonging to no tsconfig, so they fail parsing rather than any rule. Same
+      // reasoning as the study zone below, with one addition: these files are invisible to CI,
+      // so the failure only ever appears on a maintainer's machine.
+      '.claude/**',
       '**/dist/**',
       '**/.theokit/**',
       '**/coverage/**',
