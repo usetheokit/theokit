@@ -208,6 +208,13 @@ jobs:
       # Tracked in #413.
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
+      # Packs every publishable package, so it must NOT go in `check:all`: that aggregate runs
+      # through `run-p`, and `@theokit/agents`' `test_the_list_reaches_the_packed_tarball` packs a
+      # tarball too. Measured 2026-09-15 — with both packing at once that test went from passing
+      # alone to timing out at its 30s budget, having taken 42s. Raising somebody else's timeout to
+      # fit a new gate is the wrong repair; the gate belongs where packing is already serial.
+      - name: Every declared export path exists inside the tarball
+        run: node scripts/check-pack-exports-resolve.mjs
 
       # `pnpm install` runs the root `prepare` script, which points core.hooksPath at `.githooks`,
       # arming the pre-commit secret scan on this runner. changesets then runs

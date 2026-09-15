@@ -237,6 +237,12 @@ export default defineConfig({
   },
   resolve: {
     alias: {
+      // The prefix trap this file warns about twice, caught once: without this line
+      // `theokit/client/core` matches the `theokit/client` alias and resolves to
+      // `…/src/client/index.ts/core`, which does not exist. The symptom is not a failing
+      // test — it is 19 unhandled TypeCheckErrors from `packages/tauri`, so `vitest run`
+      // exits 1 with every one of its 7974 tests green. Measured 2026-09-15.
+      'theokit/client/core': path.resolve(__dirname, 'packages/theo/src/client/core.ts'),
       'theokit/client': path.resolve(__dirname, 'packages/theo/src/client/index.ts'),
       'theokit/server': path.resolve(__dirname, 'packages/theo/src/server/index.ts'),
       theokit: path.resolve(__dirname, 'packages/theo/src/index.ts'),
