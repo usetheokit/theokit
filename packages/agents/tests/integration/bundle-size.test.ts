@@ -88,8 +88,29 @@ describe('Bundle size regression', () => {
    * There is deliberately no size gate on `./config` itself. The root barrel is what every consumer
    * pays for unconditionally; a subpath is opt-in, and a gate on every entry point would be a
    * budget nobody set against a cost nobody bears.
+   *
+   * ## Raised to 38 700 for B-103 — 52 bytes, and moving it was considered first
+   *
+   * Reading the operator's personal-scope MCP servers cost **52 bytes**, attributed by building the
+   * barrel at this change's parent and at the change: 38 576 -> 38 628.
+   *
+   * The section above is the reason this needed a paragraph rather than a number. B-024's answer to
+   * a barrel over budget was the SHAPE — move the module to the subpath where it belongs — and that
+   * was checked here first. It does not apply: `loadPersonalMcpServers` sits beside `loadMcpJson`,
+   * which was already in the root barrel, and moving one of a pair out would leave a consumer
+   * importing the project-scope reader from the barrel and the personal-scope reader from `./bridge`.
+   * That is a worse surface than 52 bytes.
+   *
+   * The two cases differ by more than an argument: B-024's module was a LONE 2 888 bytes, this is 52
+   * beside an export already paid for. What the numbers have in common is that both were measured by
+   * control rather than estimated.
+   *
+   * Headroom is 72 bytes, which is what B-024 deliberately left when it brought the ceiling DOWN to
+   * 38 600 from 39 500. Restoring a kilobyte here would undo that decision by the back door — the
+   * paragraph above names a kilobyte of slack as a gate that approves the next kilobyte without
+   * being asked, and it is right.
    */
-  it('agents main bundle under 38.6KB', (ctx) => {
+  it('agents main bundle under 38.7KB', (ctx) => {
     const path = resolve(distDir, 'index.js')
     if (!existsSync(path)) {
       // `ctx.skip()`, not `return`. A bare return reports the test as PASSED, so a suite run with no
@@ -99,7 +120,7 @@ describe('Bundle size regression', () => {
       return
     }
     const size = statSync(path).size
-    expect(size).toBeLessThan(38_600)
+    expect(size).toBeLessThan(38_700)
     console.log(`  agents/dist/index.js: ${(size / 1024).toFixed(1)} KB`)
   })
 
