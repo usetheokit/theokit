@@ -90,7 +90,7 @@ configuration that had no effect.
 
 | Surface | State |
 |---|---|
-| `CLAUDE.md` | read |
+| `CLAUDE.md` | **read when the host names it** — see below |
 | `settings.json` — `permissions` | translated into the SDK's `PermissionRule[]`; an entry that cannot be rendered faithfully is reported and excluded |
 | `settings.json` — `outputStyle` | read | 
 | `settings.json` — `env` | **parsed, not applied** — see below |
@@ -128,6 +128,18 @@ and saying so is the distinction this section exists to make.
 
 The registry entry that prompted this counts four decisions across three files, because
 `~/.claude.json` is split. That is the count, stated so nobody goes looking for a fourth file.
+
+### `CLAUDE.md`
+
+The instruction tree accepts any file list: `input.fileNames`, falling back to a default of
+`['THEO.md', 'AGENTS.md', 'THEO.local.md', 'AGENTS.local.md']`. `CLAUDE.md` is not in it, and
+`instruction-tree.ts` says so while explaining why `CLAUDE.local.md` is absent too: "a private
+companion to a file this does not read would pair with nothing".
+
+A consumer that wants it passes it. Measured 2026-09-15 while auditing this table row by row:
+`CLAUDE.md`, `settings.json` → `env` and `agent-memory/` are each resolvable by the host, and each
+was listed as `read`. The word describes the mechanism existing; a reader takes it as the behaviour
+happening.
 
 ### `settings.json` — `env`
 
