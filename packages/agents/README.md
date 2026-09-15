@@ -97,7 +97,7 @@ configuration that had no effect.
 | `skills/`, `agents/`, `commands/`, `plugins/` | read when the dialect is declared |
 | `.mcp.json` | read; a field this runtime does not carry is reported |
 | `output-styles/*.md` | read, selected by `settings.json` |
-| `agent-memory/` | read — see below |
+| `agent-memory/` | **resolvable by the host** — see below |
 | `workflows/*.js` | **refused**, and reported. Every other surface is data; a workflow is code, and executing JavaScript found under a caller-supplied directory is a decision that belongs to you |
 | `keybindings.json` | **out of scope** — `@theokit/tui` |
 | `themes/*.json` | **out of scope** — `@theokit/tui` |
@@ -130,9 +130,19 @@ The registry entry that prompted this counts four decisions across three files, 
 
 ### `agent-memory/`
 
-A subagent whose frontmatter declares `memory:` gets a directory it reads and writes. The first
-**200 lines, capped at 25KB**, of its `MEMORY.md` are loaded when it runs — both caps apply, and
-truncation is reported rather than silent.
+`resolveAgentMemory()` resolves the directory a subagent reads and writes, and returns the first
+**200 lines, capped at 25KB**, of its `MEMORY.md` — both caps apply, and truncation is reported
+rather than silent.
+
+**The host calls it. Nothing here calls it for you, and `memory:` in subagent frontmatter does not
+reach it.** Measured 2026-09-15: `resolveAgentMemory` has no caller in this repository outside its
+own tests, and `@theokit/sdk` — which is the package that loads `.claude/agents/*.md`, and does not
+depend on this one — lists `memory` among the fields it refuses, so a file declaring it is skipped
+with a diagnostic rather than granted a directory.
+
+Saying "read" in the table above, as this document did until that measurement, put this surface in
+the same column as `CLAUDE.md` and implied a wiring that does not exist. The reader is real and the
+three roots below are real; what an author supplies is the call.
 
 | `memory:` | Root | Who can see it |
 |---|---|---|
