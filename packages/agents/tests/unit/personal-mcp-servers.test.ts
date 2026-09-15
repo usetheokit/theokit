@@ -74,4 +74,32 @@ describe('loadPersonalMcpServers', () => {
       /claude\.json/,
     )
   })
+  it('names the file it actually read, not the project one it reuses the parser from', () => {
+    // MEASURED 2026-09-15 against the real `~/.claude.json` on the machine this shipped from:
+    //
+    //   [@theokit/agents] .mcp.json: server "context7" declares "type", ... it is NOT being applied.
+    //
+    // That text came from the PERSONAL file. `reportUncarriedKeys` hardcoded the project filename,
+    // and reusing `parseMcpJson` for the personal scope — which is the right call, one parser for
+    // one format — inherited a message that had silently become false.
+    //
+    // The cost is specific, not cosmetic: an operator reads it and opens `.mcp.json` looking for a
+    // `type` key that is not there. A diagnostic that sends someone to the wrong file is worse than
+    // silence, because silence does not consume the search.
+    const warnings: string[] = []
+    // The real entry from the machine this shipped from: `type` on a STDIO server, which the
+    // stdio key set does not carry. On a `url` server `type` IS carried, so a remote fixture would
+    // emit nothing and the test would pass over an empty list — the vacuous shape this file's
+    // sibling checks already guard against.
+    const home = homeWith({
+      mcpServers: {
+        context7: { type: 'stdio', command: 'npx', args: ['-y', '@upstash/context7-mcp'] },
+      },
+    })
+    loadPersonalMcpServers(home, { onWarn: (m) => warnings.push(m) })
+    const uncarried = warnings.filter((w) => w.includes('does not carry'))
+    expect(uncarried).toHaveLength(1)
+    expect(uncarried[0]).toContain('.claude.json')
+    expect(uncarried[0]).not.toContain('.mcp.json')
+  })
 })

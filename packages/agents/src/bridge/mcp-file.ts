@@ -279,7 +279,7 @@ function parseMcpJson(
       onWarn(`${source}: server "${name}" ignored — ${reason}`)
       continue
     }
-    out[name] = buildEntry(entryRaw as Record<string, unknown>, name, env, onWarn)
+    out[name] = buildEntry(entryRaw as Record<string, unknown>, name, env, onWarn, source)
   }
   return out
 }
@@ -436,12 +436,18 @@ function reportUncarriedKeys(
   carried: ReadonlySet<string>,
   name: string,
   warn: (warning: string) => void,
+  /**
+   * The file this entry came from. Threaded rather than assumed: `parseMcpJson` is reused for the
+   * PERSONAL scope (`~/.claude.json`) and the message hardcoded the project filename, so every
+   * personal-scope diagnostic named a file the operator would open and not find the key in.
+   */
+  source: string,
 ): void {
   for (const key of Object.keys(entry)) {
     if (carried.has(key)) continue
     const because = EXPLAINED_KEYS[key]
     warn(
-      `${MCP_FILENAME}: server "${name}" declares "${key}", which this runtime does not carry — ` +
+      `${source}: server "${name}" declares "${key}", which this runtime does not carry — ` +
         (because === undefined
           ? 'it is NOT being applied'
           : `${because}. It is NOT being applied`) +
@@ -455,8 +461,10 @@ function buildEntry(
   name: string,
   env: Record<string, string | undefined>,
   warn: (warning: string) => void,
+  /** The file this entry came from — see {@link reportUncarriedKeys}. */
+  source: string,
 ): McpServerConfig {
-  reportUncarriedKeys(entry, entry.url !== undefined ? REMOTE_KEYS : STDIO_KEYS, name, warn)
+  reportUncarriedKeys(entry, entry.url !== undefined ? REMOTE_KEYS : STDIO_KEYS, name, warn, source)
   if (entry.url !== undefined) {
     const remote: Record<string, unknown> = { url: entry.url }
     // NORMALISED, not forwarded. `streamable-http` is the MCP spec's current name for the transport
