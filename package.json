@@ -33,6 +33,7 @@
     "release": "pnpm build && node scripts/check-pack-no-workspace.mjs && node scripts/publish-and-record.mjs && node scripts/verify-release-published.mjs",
     "prepare": "git config core.hooksPath .githooks || true",
     "check:pack-no-workspace": "node scripts/check-pack-no-workspace.mjs",
+    "check:pack-exports": "node scripts/check-pack-exports-resolve.mjs",
     "verify:version-collision": "node scripts/verify-version-not-published.mjs",
     "check:licenses": "node scripts/check-licenses.mjs",
     "check:licenses:published": "node scripts/verify-published-license-matches.mjs",
