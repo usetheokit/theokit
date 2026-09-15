@@ -98,7 +98,7 @@ configuration that had no effect.
 | `skills/`, `agents/`, `commands/`, `plugins/` | read when the dialect is declared |
 | `.mcp.json` | read; a field this runtime does not carry is reported |
 | `output-styles/*.md` | read, selected by `settings.json` |
-| `agent-memory/` | **resolvable by the host** — see below |
+| `agent-memory/` | **read** — declaration carried by the SDK, applied by `applySubagentMemory` |
 | `workflows/*.js` | **refused**, and reported. Every other surface is data; a workflow is code, and executing JavaScript found under a caller-supplied directory is a decision that belongs to you |
 | `keybindings.json` | **out of scope** — `@theokit/tui` |
 | `themes/*.json` | **out of scope** — `@theokit/tui` |

@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Added
+- **`applySubagentMemory` closes the route a subagent's `memory:` declaration had no way to travel.** `@theokit/sdk` now carries the declaration on `AgentDefinition.memory` and deliberately stops there; this applies it, appending the agent's `MEMORY.md` to the prompt it receives, marked as notes rather than instructions. An unrecognised scope throws rather than defaulting — the three roots differ in who can see the notes — and an agent that declared `memory:` before writing its first note is left unchanged. (#B-091)
 - **`loadPersonalMcpServers` reads the MCP servers an operator registered for themselves**, from `~/.claude.json`. Only `mcpServers` — the OAuth state and UI toggles in that same file are a specific CLI writing about its own session, and a test pins that nothing else travels. It reports and returns empty on a malformed file rather than throwing, because one stray comma in a shared home file must not break every project on the machine. Validated against the real file on this machine: 2 servers found, both named. (#B-103)
 
 ### Fixed
