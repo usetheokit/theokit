@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+- **A release can no longer publish an export map pointing at a file the tarball does not carry.** `scripts/check-pack-exports-resolve.mjs` packs every publishable package, lists the archive, and asserts that each non-wildcard target the `exports` map declares is inside it — 66 subpaths across 7 packages today, all present. `exports` promises a file and `files` decides what ships; nothing made the two agree, and a subpath whose build output falls outside `files` passes every check in this repository, because the file exists on the machine that built it. It fails on the consumer's disk, at import, which is the one machine this repository never uses. Measured before writing it: `theokit@0.66.0` declares 28 importable entry points and nothing here exercised any of them — they were correct, verified by installing the published package standalone, which is luck confirmed after the fact rather than a guarantee kept. The sibling repository had the same shape and shipped 17 `@public` symbols reachable from no entry point across four releases (`theokit-sdk#684`). The guard runs its own negative control FIRST and aborts if the detector cannot spot a missing target: proved by disabling the comparison, which exits 2 instead of reporting a clean surface. 2 seconds for all seven packages. (B-084)
+
 ## [@theokit/agents 14.4.0] - 2026-09-14
 
 Released with no entry under `[Unreleased]`. Per-package detail is in each package's
