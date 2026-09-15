@@ -92,7 +92,8 @@ configuration that had no effect.
 |---|---|
 | `CLAUDE.md` | read |
 | `settings.json` — `permissions` | translated into the SDK's `PermissionRule[]`; an entry that cannot be rendered faithfully is reported and excluded |
-| `settings.json` — `env`, `outputStyle` | read |
+| `settings.json` — `outputStyle` | read | 
+| `settings.json` — `env` | **parsed, not applied** — see below |
 | `settings.local.json` | read, layered above `settings.json` |
 | `skills/`, `agents/`, `commands/`, `plugins/` | read when the dialect is declared |
 | `.mcp.json` | read; a field this runtime does not carry is reported |
@@ -127,6 +128,20 @@ and saying so is the distinction this section exists to make.
 
 The registry entry that prompted this counts four decisions across three files, because
 `~/.claude.json` is split. That is the count, stated so nobody goes looking for a fourth file.
+
+### `settings.json` — `env`
+
+`outputStyle` is read AND applied: `loadSettings` returns it and `resolveOutputStyle` hands it to
+`loadOutputStyle`, which is the mechanism this package documents.
+
+`env` is parsed and goes no further here. Measured 2026-09-15: the schema accepts it, the only
+consumer of a `loadSettings` result in this package reads `outputStyle`, and nothing applies the
+parsed values to `process.env`. A host that wants them can read `settings.values.env` and apply
+them itself — the same shape as `agent-memory/` above, and stated for the same reason.
+
+Grouping it with `outputStyle` under one `read` claimed for both what is true of one. The rule this
+table serves is that a surface is read, or refused with a reason, and never accepted and ignored;
+a key that is parsed and dropped is the third state, and it was in this file's own table.
 
 ### `agent-memory/`
 

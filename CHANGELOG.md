@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Fixed
+- **`settings.json` → `env` is documented as parsed-not-applied, which is what it is.** It shared a table row and the word `read` with `outputStyle`. Measured 2026-09-15: `outputStyle` is read and handed to `loadOutputStyle`; `env` is accepted by the schema, no consumer of a `loadSettings` result reads it, and nothing applies it to `process.env`. A host can read `settings.values.env` itself — the same state as `agent-memory/`. The defect sat one row from the entry recording the identical overclaim for that surface. (#B-101)
 - **`agent-memory/` is documented as what it is — a reader the host calls, not a surface the runtime wires.** The README and the surfaces rule both said `memory:` frontmatter "gets a directory it reads and writes". Measured 2026-09-15: `resolveAgentMemory` has no caller outside its tests, and `@theokit/sdk` — the package that loads `.claude/agents/*.md`, which does not depend on this one — refuses `memory`. An author who read the claim and wrote the key got an agent that failed to load. (#B-091)
 
 ### Added
