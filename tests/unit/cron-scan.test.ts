@@ -42,8 +42,17 @@ export default defineCron('${name}', { schedule: '${schedule}', handler: () => {
 // pre-built artifact (e.g., `dist/server/cron/define-cron.js`) so
 // the import chain becomes plain `.js → .js`; OR switch to spawning
 // `theokit build` against a fixture directory (real CLI path).
-// See the `theokit-test-suite-cleanup` followup plan that owns this
-// debt category.
+//
+// There is deliberately no pointer to a plan here. This comment used to name a
+// `theokit-test-suite-cleanup` followup as the OWNER of the debt. That name exists
+// in exactly one place: the subject of `test(infra): vitest exit 0 — close 89
+// pre-existing failures (test-suite-cleanup followup)`, as a parenthetical. It is a
+// label on a change that happened, not a plan that owns anything, and no plan by
+// that name exists in the records or the registry. Five disabled tests citing an
+// owner read as TRACKED debt, which is worse than reading as debt: nobody goes
+// looking for what is already owned. What the five
+// cover is named above and the two ways out are named above; that is what a reader
+// needs, and it travels with the file instead of pointing outside it.
 describe('scanCrons (T1.3)', () => {
   it('returns empty array for empty directory', async () => {
     const result = await scanCrons(crons())
