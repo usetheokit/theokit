@@ -7,9 +7,9 @@
  * `check-pack-exports-resolve.mjs` asserts that each `exports` target is INSIDE the archive. Its own
  * docblock admits the limit — "whether a present module also LOADS is a different question" — as a
  * justification for being cheap. TheoCode, reviewing that file through a frontier model on
- * 2026-09-15, returned it as the gap it is, with the consumer path spelled out: "o resolvedor
- * encontraria `package/dist/index.js` com sucesso, e só ao executar `import` o Node lançaria o erro;
- * o script verifica presença, não importação". That became B-089, and this is B-089.
+ * 2026-09-15, returned it as the gap it is, with the consumer path spelled out: the resolver finds
+ * `package/dist/index.js`, the error surfaces only when `import` actually runs, and a script that
+ * checks presence never reaches that point. That became B-089, and this is B-089.
  *
  * It packs each publishable package, installs the tarball into an empty directory, and imports every
  * non-wildcard subpath its map declares. That catches what presence cannot: an undeclared runtime

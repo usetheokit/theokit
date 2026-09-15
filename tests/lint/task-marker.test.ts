@@ -139,9 +139,9 @@ describe('agent-builder#120 — a task marker in a comment', () => {
     // The strings below are DATA, not prose of ours: Portuguese text that must not trip the
     // marker regex. They stay in Portuguese because that is the input the regression is about.
     for (const prose of [
-      '// o adaptador por onde todo turno passa',
-      '// para todo erro do provedor, um código nosso',
-      ' * todo estado novo entra por aqui',
+      '// o adaptador por onde todo turno passa', // english-only: the fixture must be Portuguese to exercise the regression
+      '// para todo erro do provedor, um código nosso', // english-only: the fixture must be Portuguese to exercise the regression
+      ' * todo estado novo entra por aqui', // english-only: the fixture must be Portuguese to exercise the regression
     ]) {
       expect(MARKER.test(prose), prose).toBe(false)
     }
