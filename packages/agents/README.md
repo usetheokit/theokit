@@ -113,10 +113,19 @@ were measured on 2026-09-12 — `keybindings`, `themes/` and `.claude.json` each
 across every package source tree, against a control of 31 for `skills` — and each one is a decision
 rather than a gap.
 
-**`keybindings.json` and `themes/*.json` belong to `@theokit/tui`.** A framework has no keyboard and
+**`keybindings.json` and `themes/*.json` are not this package's.** A framework has no keyboard and
 no colour: it produces text and tool calls, and the process that renders them owns which key does
 what and which escape codes it emits. Reading them here would let this package hold configuration it
 cannot act on, which is the accepted-and-ignored failure the table above exists to prevent.
+
+**Where they actually go is the consumer, not `@theokit/tui`.** Re-measured 2026-09-15: the toolkit
+carries internal keybindings and reads no file; `theocode` reads `~/.claude/keybindings.json` itself,
+in `terminal-io/keybindings.ts`, against a format it measured against the published documentation.
+Naming the toolkit as the owner sent a reader to the package that does the least with it — and the
+row said `out of scope` without saying out of scope FOR WHOM, which is the half that misleads.
+
+`themes/*.json` is read by nobody, in any of the three packages. That is a genuine gap rather than a
+delegation, and it is stated here rather than implied by an ownership that does not exist.
 
 **`~/.claude.json` is two things under one name, and the split is the point.** Its OAuth state and UI
 toggles are a CLI's own state — that file is written by a specific program about its own session, and
