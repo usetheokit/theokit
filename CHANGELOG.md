@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+- **`loadPersonalMcpServers` reads the MCP servers an operator registered for themselves**, from `~/.claude.json`. Only `mcpServers` — the OAuth state and UI toggles in that same file are a specific CLI writing about its own session, and a test pins that nothing else travels. It reports and returns empty on a malformed file rather than throwing, because one stray comma in a shared home file must not break every project on the machine. Validated against the real file on this machine: 2 servers found, both named. (#B-103)
+
 ### Fixed
 - **`keybindings.json` is read, by the consumer — the table sent readers to the wrong package.** It was listed `out of scope — @theokit/tui`. Re-measured 2026-09-15: the toolkit carries internal keybindings and reads no file, while `theocode` reads `~/.claude/keybindings.json` itself. `out of scope` without saying out of scope FOR WHOM is the half that misleads. `themes/*.json` is read by nobody in any of the three packages, which is a gap rather than a delegation and now says so. (#B-104)
 - **The measurement that excused the personal-scope MCP gap is re-measured, and it expired.** `~/.claude.json` personal-scope servers are listed as "not read yet, and in scope", justified with "the personal scope measures 0". Re-measured 2026-09-15 on the same machine: 2 servers, `context7` and `deepwiki`, none of which reach an agent. A declared gap stays honest only while the number behind it is current. (#B-103)

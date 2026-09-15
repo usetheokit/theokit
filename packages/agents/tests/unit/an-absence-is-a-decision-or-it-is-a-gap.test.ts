@@ -44,10 +44,25 @@ describe('an absence is a decision, or it is a gap', () => {
   })
 
   it('never says "out of scope" without naming who owns it instead', () => {
-    // The DoD's third bullet. "Not supported" with no successor sends the reader looking for a bug.
-    for (const line of README.split('\n').filter((l) => l.includes('out of scope'))) {
+    // The DoD's third bullet. "Not supported" with no successor sends the reader looking.
+    //
+    // `the consumer` joined the list on 2026-09-15, and the reason is the finding that put it
+    // there: `keybindings.json` was attributed to `@theokit/tui`, and re-measuring showed the
+    // toolkit carries internal keybindings and reads no file while `theocode` reads
+    // `~/.claude/keybindings.json` itself. Naming a package that does the least with a surface
+    // satisfies the letter of this test and defeats it — the reader still ends up in the wrong
+    // repository. What the rule asks for is a successor the reader can go to, and the consumer is
+    // one. for a bug.
+    // Rows, not every line. The sibling case above already learned this — "an assertion that
+    // passes from the explanation of a decision, rather than from the decision, verifies" the
+    // wrong thing — and this one was still scanning prose, so a sentence ABOUT the defect tripped
+    // it while every verdict row passed. Measured 2026-09-15 on a paragraph explaining why an
+    // earlier attribution was wrong.
+    for (const line of OUT_OF_SCOPE.map(verdictRowFor).filter(
+      (r): r is string => r !== undefined,
+    )) {
       expect(
-        /@theokit\/tui|a CLI's own state/.test(line),
+        /@theokit\/tui|a CLI's own state|the consumer/.test(line),
         `"${line.trim()}" refuses a surface without naming who owns it`,
       ).toBe(true)
     }
