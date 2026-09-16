@@ -391,6 +391,19 @@ jobs:
       - run: pnpm validate:publint
       - run: pnpm validate:attw
       - run: npx vitest run tests/smoke/
+      # The two tarball gates, moved here from release-only on 2026-09-16.
+      #
+      # They ran ONLY in `release.yml`, which is why a release died at them instead of a PR: the
+      # entry-point gate runs BEFORE the publish step, and `theokit`'s `@theokit/agents:
+      # workspace:^` packs to the version being released — which the registry does not have, by
+      # construction. Every release bumping a package the meta-package depends on failed there, and
+      # the first signal was a dead release rather than a red check.
+      #
+      # This job is where they belong and nothing had to be added for them: it already downloads
+      # `package-dist` into `packages/`, which is the one precondition packing has. Measured on the
+      # release run that failed: 44s over 60 entry points.
+      - run: node scripts/check-pack-exports-resolve.mjs
+      - run: node scripts/check-pack-entry-points-load.mjs
 
   # Supply chain. Both jobs were deleted in a cleanup pass and left no replacement — an advisory in
   # a transitive dependency, or a copyleft package entering a tree that publishes to npm, was caught

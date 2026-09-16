@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- **The two tarball gates now run on every PR, not only at release.** `check-pack-exports-resolve` and `check-pack-entry-points-load` lived in `release.yml` alone, so the first signal that a tarball was broken was a dead release — which is exactly how `@theokit/agents@14.5.0` stalled: the entry-point gate runs before the publish step, and `theokit`'s `workspace:^` dependency packs to the version being released, which the registry cannot have yet. They ride in `package-validation`, the job that already downloads `package-dist` and therefore already satisfies the one precondition packing has. Measured cost: 44s over 60 entry points. (#B-110)
+
 ## [@theokit/agents 14.5.1] - 2026-09-16
 
 ### Fixed
