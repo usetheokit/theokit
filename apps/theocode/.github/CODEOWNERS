@@ -1,0 +1,40 @@
+# Who has to look at a change that weakens a gate.
+#
+# #4 — this file did not exist at any of the three locations GitHub reads (repository root,
+# `.github/`, `docs/`), so every checker in `npm run lint` could be relaxed, narrowed or deleted
+# with no named reviewer. This repository has already paid for that class once: `.dependency-
+# cruiser.cjs` exists because B-010 found a boundary the code claimed and nothing enforced.
+#
+# Deliberately short. A CODEOWNERS that names every path is one nobody reads and one that makes
+# every pull request wait on the same person for reasons that are mostly cosmetic. What is listed
+# below is the machinery that decides whether a build is allowed to be green — nothing else. The
+# product source is not here on purpose: a change to `packages/` is judged by the gates, and a
+# change to the gates is what has nobody left to judge it.
+#
+# One honest limit: GitHub only enforces this when branch protection has "Require review from Code
+# Owners" enabled. Without that it is a routing declaration — reviewers get requested automatically,
+# and nothing blocks. It is worth having either way, because the request is what makes the change
+# visible; it is not worth mistaking for the enforcement.
+
+# The gate definitions themselves.
+/eslint.config.mjs        @paulohenriquevn
+/knip.jsonc               @paulohenriquevn
+/.dependency-cruiser.cjs  @paulohenriquevn
+/tools/                   @paulohenriquevn
+
+# The chain, which is a string in a manifest. Owning the checkers and not this would guard the
+# hard way of weakening a gate (edit its logic) and leave the cheap one open: drop a `&& node
+# tools/check-*.mjs` from `scripts.lint` and the checker still passes its own tests, unrun.
+/package.json             @paulohenriquevn
+
+# What the gates run on, and the workflows that run them.
+/.github/workflows/       @paulohenriquevn
+
+# Prettier is not a gate here and must not become one (#38). This file is still gate configuration:
+# it is what keeps `npm run format` away from records that are PARSED rather than read, and its own
+# comments record the measurement — a formatter reflowed `BACKLOG.md` and took three `fixed_in:`
+# lines off column 0, turning `check-backlog-crossval.py` from 0 problems into 3.
+/.prettierignore          @paulohenriquevn
+
+# This file. A CODEOWNERS that does not own itself is removable by the change it exists to catch.
+/.github/CODEOWNERS       @paulohenriquevn

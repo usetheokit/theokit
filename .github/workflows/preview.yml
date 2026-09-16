@@ -119,6 +119,17 @@ jobs:
       #
       # The version is repeated here because `pkg-pr-new-version` is documented as ignored when
       # `publish-command` is given; keeping it pinned is the point of that input.
+      # Scoped to the publishable packages, which is what this workflow publishes previews OF.
+      #
+      # The shared workflow's default build is recursive, and on 2026-09-16 `apps/theocode` joined
+      # the workspace — a PRIVATE application that esbuilds against `@theokit/agents/*` subpaths.
+      # The recursive build reached it before the framework's dist existed and failed with 77
+      # `Could not resolve` errors, in a job whose purpose has nothing to do with that package.
+      #
+      # `build:packages` is the filter this repository already uses for the same reason in
+      # `ci.yml` — "Filter to packages/* only: `pnpm -r build` would walk examples" — so this
+      # reuses the declaration rather than spelling a second one that can drift from it.
+      build-command: pnpm build:packages
       publish-command: >-
         pnpm dlx pkg-pr-new@0.0.88 publish --pnpm $DIRS
       packages-command: >-

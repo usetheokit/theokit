@@ -39,8 +39,8 @@ interface Inside {
   readonly verdict: 'in'
   /** Where it crosses, for a reader tracing the decision back to a block in `src/index.ts`. */
   readonly via: string
-  /** Set when only one supported major has this. See `installedSdkMajor`. */
-  readonly sinceMajor?: number
+  /** The SDK version this first appears in. See `installedSdkVersion`. */
+  readonly since?: string
 }
 
 /** A root-bar value the layer deliberately does NOT re-export. */
@@ -48,8 +48,8 @@ interface Outside {
   readonly verdict: 'out'
   /** Why. Enforced non-trivial: an exception without a reason is never revisited. */
   readonly reason: string
-  /** Set when only one supported major exports this. See SINCE_5 below. */
-  readonly sinceMajor?: number
+  /** The SDK version this first appears in. See `installedSdkVersion`. */
+  readonly since?: string
 }
 
 type Verdict = Inside | Outside
@@ -93,21 +93,55 @@ const R = {
  * (`^4.52.1 || ^5.0.0`), so "this export is absent" only means the table has rotted when the
  * installed major is one that should have it.
  */
-function installedSdkMajor(): number {
+function installedSdkVersion(): string {
   const require_ = createRequire(import.meta.url)
   const { version } = require_('@theokit/sdk/package.json') as { version: string }
-  return Number(version.split('.')[0])
+  return version
+}
+
+/** `a >= b` over `major.minor.patch`; a prerelease suffix is dropped, never compared. */
+function atLeast(a: string, b: string): boolean {
+  const parse = (v: string): number[] => (v.split('-')[0] ?? '').split('.').map(Number)
+  const [A, B] = [parse(a), parse(b)]
+  for (let i = 0; i < 3; i++) {
+    const [x, y] = [A[i] ?? 0, B[i] ?? 0]
+    if (x !== y) return x > y
+  }
+  return true
 }
 
 const ROOT_BAR_VERDICTS: Record<string, Verdict> = {
-  // ── Arrived with `@theokit/sdk@5.x`; `sinceMajor` keeps them out of the orphan guard on 4.x.
-  Workflow: { sinceMajor: 5, verdict: 'out', reason: R.PUBLIC_NO_CONSUMER },
-  agentStep: { sinceMajor: 5, verdict: 'out', reason: R.PUBLIC_NO_CONSUMER },
-  fn: { sinceMajor: 5, verdict: 'out', reason: R.PUBLIC_NO_CONSUMER },
-  isValidTaskId: { sinceMajor: 5, verdict: 'out', reason: R.SCHEDULING },
-  TASK_RESERVED_PREFIXES: { sinceMajor: 5, verdict: 'out', reason: R.SCHEDULING },
+  // ── Arrived with `@theokit/sdk@5.x`; `since` keeps them out of the orphan guard on earlier ones.
+  //
+  // The seven below arrived with the 5.5.0 → 5.9.0 bump that merging `apps/theocode` forced: that
+  // product needs a `@theokit/sdk` carrying the `memory:` frontmatter field, and one workspace has
+  // one copy. Each is `out`, and each was checked rather than inferred from its name — signature
+  // read in the SDK's `.d.ts`, and `0` occurrences in this package's `src`.
+  //
+  // Their `since` values are the reason this field stopped being a MAJOR. All seven were written as
+  // `sinceMajor: 5`, which reads "present anywhere in the 5 line" and is false for every one of
+  // them: `@theokit/agents` declares `^5.3.0`, the floor run installs exactly that, and the orphan
+  // guard then reported all seven as decisions about symbols the SDK does not export. It was right.
+  //
+  // Probed at runtime with `Object.keys(await import('@theokit/sdk'))` across 5.3.0, 5.5.0, 5.6.0,
+  // 5.7.0, 5.8.0 and 5.9.0 — the same thing `rootBarValues()` reads. The `.d.ts` disagrees and
+  // would have given two wrong answers: it carries `createTokenLimiter` from 5.3.0 while the module
+  // does not export it until 5.8.0. Nothing here is 5.9.0, which is what guessing would have
+  // produced from the bump that prompted the work.
+  createTokenLimiter: { since: '5.8.0', verdict: 'out', reason: R.GUARDRAILS },
+  createUnicodeNormalizer: { since: '5.8.0', verdict: 'out', reason: R.GUARDRAILS },
+  isInside: { since: '5.6.0', verdict: 'out', reason: R.INTERNAL },
+  parsePermissionRules: { since: '5.6.0', verdict: 'out', reason: R.OWN_SURFACE },
+  permissionFloorReason: { since: '5.6.0', verdict: 'out', reason: R.PURE_CONVERTER },
+  managedSettingsPathFor: { since: '5.6.0', verdict: 'out', reason: R.PUBLIC_NO_CONSUMER },
+  readManagedSettings: { since: '5.6.0', verdict: 'out', reason: R.PUBLIC_NO_CONSUMER },
+  Workflow: { since: '5.0.0', verdict: 'out', reason: R.PUBLIC_NO_CONSUMER },
+  agentStep: { since: '5.0.0', verdict: 'out', reason: R.PUBLIC_NO_CONSUMER },
+  fn: { since: '5.0.0', verdict: 'out', reason: R.PUBLIC_NO_CONSUMER },
+  isValidTaskId: { since: '5.0.0', verdict: 'out', reason: R.SCHEDULING },
+  TASK_RESERVED_PREFIXES: { since: '5.0.0', verdict: 'out', reason: R.SCHEDULING },
   readSessionMessages: {
-    sinceMajor: 5,
+    since: '5.0.0',
     verdict: 'out',
     reason:
       'reads a stored session back as structured messages, so a host that repointed a session can ' +
@@ -250,12 +284,12 @@ describe('M67 T5 — root-bar coverage policy', () => {
   it('test_the_verdict_list_does_not_reference_a_NONEXISTENT_export', () => {
     // The inverse. Without it the table rots, holding decisions about symbols the SDK dropped.
     const present = new Set(rootBarValues())
-    const installedMajor = installedSdkMajor()
+    const installed = installedSdkVersion()
     const orphans = Object.keys(ROOT_BAR_VERDICTS).filter((name) => {
       if (present.has(name)) return false
-      const since = ROOT_BAR_VERDICTS[name].sinceMajor
-      // Absent AND expected on this major — see the note on `sinceMajor`.
-      return since === undefined || installedMajor >= since
+      const since = ROOT_BAR_VERDICTS[name].since
+      // Absent AND expected on the version actually installed — see the note on `since`.
+      return since === undefined || atLeast(installed, since)
     })
     expect(orphans, 'these have a verdict but the SDK no longer exports them').toEqual([])
   })

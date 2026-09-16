@@ -1,0 +1,50 @@
+# Prettier 3 honours the `.gitignore` AT THE ROOT — every runtime artifact listed there (`.theokit/`,
+# `dist/`) is excluded without being repeated here. It does not read a NESTED one: measured
+# 2026-09-10, `dist/theocode.mjs` is skipped (root `.gitignore:4`) while `.complexipy_cache/README.md`
+# is offered for reformatting despite `.complexipy_cache/.gitignore` excluding it. A directory kept
+# out of git by its own nested file needs a line here as well, or `npm run format` will rewrite it.
+#
+# Otherwise this file declares ONLY what is versioned source and still must not be rewritten by a
+# machine. Most of what follows is here for one reason: the file's contract is that something PARSES
+# it, and "make this pretty" and "these bytes are read by a program" are answers to different
+# questions. The formatter only knows the first one.
+
+# #321 — the CHANGELOG is immutable history: the project's changelog rule forbids editing an entry
+# of an already-released version, and `prettier --write .` changed 224 lines of it (inserting a blank
+# line between items), almost all in published versions. Cosmetic, silent, and straight into the
+# audit record. The [Unreleased] section is edited by hand like the others — no formatter belongs here.
+CHANGELOG.md
+
+# `.claude/` is the CYCLE ecosystem installed from the kit's own repository — vendored code, not
+# this repository's source. It has its own repo, its own formatter and its own tests
+# (`check_xrefs.py`, `test_e2e_smoke.py`). Reformatting it here would produce 153 files of cosmetic
+# diff that the next reinstall undoes, and that diff would mask a real contract change. The only
+# content of ours inside it is `knowledge-base/`, which is an audit record — same reason as the
+# CHANGELOG: history is not rewritten by a machine.
+.claude/
+
+# B-073 — the BACKLOG is a PARSED record, not prose, and this file already knew the lesson for the
+# CHANGELOG two entries up without anyone extending it here.
+#
+# `tools/check-backlog-crossval.py` reads `^fixed_in: (.+)$` — anchored at column 0, at `FIXED_IN`
+# — and skips an item whose value names no local commit. (Cited by line number until 2026-09-10;
+# the refactor that gave that file its first tests moved both, and a `path:line` pointer survives a
+# relocation by pointing at the wrong thing. The symbol does not move.) Running `prettier --write .`
+# reflowed 6,982
+# lines of this file and left THREE `fixed_in:` lines no longer starting a line: 128 became 125, and
+# crossval went from `0 problems / 42 skipped` to `3 problems / 39 skipped`.
+#
+# Nothing about the content changed. The gate broke because a formatter rewrapped a file whose
+# contract is that certain strings begin a line — the tool answered "make this pretty" while the
+# file's contract was "these lines are parsed". Measured, restored from the pre-format commit, and
+# verified back to 128 and 0 problems.
+BACKLOG.md
+
+# #38 — the lockfile, which is generated, parsed, and the largest thing `npm run format` would
+# silently rewrite. Measured 2026-09-10: `prettier pnpm-lock.yaml` differs on 3,292 of its 3,763
+# lines, exploding every `resolution: {integrity: sha512-…}` onto four lines of its own. Nothing
+# about the resolution changes and nothing good comes of it — pnpm rewrites the file on the next
+# install, so the diff is churn that survives exactly until someone runs the package manager, while
+# sitting in review as three thousand lines that hide whatever real dependency change shipped
+# beside it. Same class as the CHANGELOG and the BACKLOG above: a record with a machine reader.
+pnpm-lock.yaml

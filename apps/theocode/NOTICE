@@ -1,0 +1,55 @@
+TheoCode
+Copyright (c) 2026 usetheo
+
+================================================================================
+OpenAI Codex
+================================================================================
+
+This product includes work adapted from OpenAI Codex.
+
+- Source project: OpenAI Codex — https://github.com/openai/codex
+- License: Apache License, Version 2.0 (http://www.apache.org/licenses/LICENSE-2.0)
+- A verbatim copy of the License is distributed with this repository at
+  `licenses/Apache-2.0.txt`, per Apache-2.0 § 4(a).
+
+Components adapted, as they exist in THIS repository:
+
+1. The agent persona — `packages/agent/src/context/instructions.ts`. Derived from the Codex
+   terminal-agent persona (`codex-rs/core/gpt_5_codex_prompt.md`). It is a derivative work,
+   not a verbatim copy: the behavioural discipline (when to plan and when to just act, editing
+   constraints, review mindset, concise `file:line`-referenced answers) is re-expressed against
+   this product's own tool surface. The file declares the derivation on its second line.
+
+2. The `usage` shape of the headless JSON protocol — `packages/cli/src/runtime/events.ts`
+   (`toCodexUsage`). The event names and the token-accounting fields follow Codex's wire format
+   so that a consumer written against Codex reads this output without translation.
+
+3. The tool contract — the names the model is trained on are Codex's. Measured in this tree:
+   `run_shell` and `apply_patch` (`packages/agent/src/tools/registry.ts`), `edit_file` and
+   `read_file` (`packages/agent/src/chat.ts`), and `update_plan`, `write_stdin`, `web_search`,
+   `interactive_shell` as rendered contracts in `packages/tui/src/formatting/tool-header.ts`.
+   They are a contract with the model: diverging from them would cost behaviour, not gain
+   independence.
+
+4. The command and posture vocabulary — `/compact`, `/review`, `/goal`, `/fork`, `/archive`,
+   the three approval modes and the three sandbox modes follow Codex's semantics.
+
+Attribution is retained per Apache-2.0 § 4(d).
+
+NOTE ON SCOPE (2026-08-07): the NOTICE of the repository this code was extracted from also lists
+a patch-application sequence search and a cBPF seccomp filter as adapted components. Both were
+measured as absent from this tree — they now live in the `@theokit/agents` SDK, which is consumed
+here as a dependency and carries its own attribution. Listing them here would claim a derivation
+this repository does not distribute.
+
+================================================================================
+opencode
+================================================================================
+
+This project includes code derived from opencode (https://github.com/sst/opencode),
+licensed under the MIT license.
+Copyright (c) 2025 opencode
+
+Derived material: the OAuth device-authorization flow and the provider OAuth endpoint/client
+values (`packages/agent/src/auth/`), adapted from the project's GitHub Copilot and OpenAI Codex
+plugins. The MIT license permits this reuse with attribution.
