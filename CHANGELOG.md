@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [@theokit/agents 14.5.1] - 2026-09-16
+
 ### Fixed
 
 - **`applySubagentMemory` could never resolve the `user` scope — one of its three roots, and the one that scope exists for.** It passed `{ home }` where `resolveAgentMemory` reads `input.homeDir`, so every `user` call threw `needs a home directory and none was given` while holding one. The field travels through a SPREAD, where TypeScript's excess-property check does not apply, and `homeDir` is optional, so the compiler had nothing to report. Six tests covered the function and all six declared `project` — the branch reading `cwd`, never the one reading home. Found the first time a consumer actually called it. (#B-091)
