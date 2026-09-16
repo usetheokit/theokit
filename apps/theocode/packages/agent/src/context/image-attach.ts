@@ -1,5 +1,5 @@
 import { TheokitAgentError } from '@theokit/agents'
-import { readFileSync, statSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { extname } from 'node:path'
 
 export interface AttachedImage {
@@ -36,12 +36,16 @@ export function readImageAttachment(path: string): AttachedImage {
       'unsupported_type',
     )
   }
-  let size: number
+  // Read FIRST, then measure the bytes that arrived. Stat-then-read let the file grow in the gap,
+  // so the limit governed a size nobody ended up loading — `js/file-system-race`, and the measure
+  // was wrong in the direction that matters. `size` is now what this process is holding.
+  let bytes: Buffer
   try {
-    size = statSync(path).size
+    bytes = readFileSync(path)
   } catch {
     throw new ImageAttachError(`image not found: ${path}`, 'not_found')
   }
+  const size = bytes.length
   if (size > MAX_IMAGE_BYTES) {
     throw new ImageAttachError(
       `image too large: ${path} is ${(size / 1024 / 1024).toFixed(1)} MiB (max ${MAX_IMAGE_BYTES / 1024 / 1024} MiB)`,
@@ -53,7 +57,7 @@ export function readImageAttachment(path: string): AttachedImage {
   // was the one path that left the declared ImageAttachError contract, so a caller catching the
   // typed error let it through untyped.
   try {
-    return { data: readFileSync(path).toString('base64'), mimeType }
+    return { data: bytes.toString('base64'), mimeType }
   } catch (err) {
     throw new ImageAttachError(
       `image unreadable: ${path} — ${(err as Error).message}`,

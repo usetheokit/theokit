@@ -60,6 +60,11 @@ export function migrateConfigFile(from: string): string {
     throw toConfigError(err, from)
   }
 
-  writeFileSync(to, `${JSON.stringify(values, null, 2)}\n`)
+  // `wx` — fails if the path exists, decided by the OS in the same call that writes. The
+  // `existsSync` above stays: it produces the message an operator can act on, and doing the check
+  // early means the TOML is not parsed just to be thrown away. What it cannot do is survive the gap
+  // between checking and writing, which is the window `js/file-system-race` names. Belt and
+  // atomicity: the check explains, the flag guarantees.
+  writeFileSync(to, `${JSON.stringify(values, null, 2)}\n`, { flag: 'wx' })
   return to
 }

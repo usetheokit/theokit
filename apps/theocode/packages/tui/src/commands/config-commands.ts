@@ -3,7 +3,7 @@ import { subagentPath } from './subagent-inventory.js'
 import type { CustomCommand } from './custom-commands.js'
 import { nextApprovalMode, parseApprovalMode, type ApprovalMode } from '../consent/index.js'
 import { execFile } from 'node:child_process'
-import { readFileSync, statSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 
@@ -140,7 +140,10 @@ export function expansionDeps(
         ? join(homedir(), fileName.slice(2))
         : resolve(workingDirectory(), fileName)
       try {
-        return statSync(path).isFile() ? readFileSync(path, 'utf8') : undefined
+        // No `statSync` first: a directory makes `readFileSync` throw EISDIR and the catch below
+        // already returns undefined for it. The check bought a branch for a case the error path
+        // handled, and paid a race — the path could be replaced between the two calls.
+        return readFileSync(path, 'utf8')
       } catch {
         return undefined
       }
@@ -161,8 +164,7 @@ function withDelegationInstruction(
   // into a listing that promises an agent this router then fails to find. One definition, one
   // possible answer.
   const agentExists =
-    command.agent !== undefined &&
-    subagentPath(workingDirectory(), command.agent) !== undefined
+    command.agent !== undefined && subagentPath(workingDirectory(), command.agent) !== undefined
   if (command.agent !== undefined && !agentExists) {
     setToast({
       message: `/${name}: subagent "${command.agent}" not found in .theokit/agents/ or .claude/agents/ — running in main context`,
