@@ -25,6 +25,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { cliOverridesLayer } from '../../src/config/cli-overrides.js'
+import { ConfigError } from '../../src/config/config-contract.js'
 
 /** Every key any of these tests could leak, cleaned whether the test passed or failed. */
 const CANARIES = ['polluted', 'alsoPolluted', 'viaConstructor'] as const
@@ -40,11 +41,19 @@ const reachedPrototype = (key: string): boolean =>
 
 describe('a config override cannot reach Object.prototype', () => {
   it.each([
-    ['__proto__.polluted=1', 'polluted'],
-    ['constructor.prototype.viaConstructor=1', 'viaConstructor'],
-    ['prototype.alsoPolluted=1', 'alsoPolluted'],
-  ])('refuses %s, and leaves the prototype untouched', (pair, canary) => {
-    expect(() => cliOverridesLayer([pair])).toThrow()
+    ['__proto__.polluted=1', 'polluted', '__proto__'],
+    ['constructor.prototype.viaConstructor=1', 'viaConstructor', 'constructor'],
+    ['prototype.alsoPolluted=1', 'alsoPolluted', 'prototype'],
+  ])('refuses %s, and leaves the prototype untouched', (pair, canary, segment) => {
+    // The class AND the segment, because a bare `toThrow()` is satisfied by any throw — including
+    // a crash for an unrelated reason, and including whatever remains after the typed refusal has
+    // decayed into a generic one. `check-typed-error-assertions` caught exactly that here on
+    // 2026-09-16; what follows was MEASURED by running the three cases and reading what arrived,
+    // not inferred from what the code looks like it should raise.
+    expect(() => cliOverridesLayer([pair])).toThrow(ConfigError)
+    expect(() => cliOverridesLayer([pair])).toThrow(
+      new RegExp(`\`${segment}\` is a reserved object-prototype segment`),
+    )
 
     // The half that actually matters. A throw raised AFTER the assignment would satisfy the line
     // above and leave every object in the process carrying the key.
