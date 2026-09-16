@@ -58,6 +58,33 @@ const pkgs = readdirSync('packages', { withFileTypes: true })
     }
   })
 
+/**
+ * Every publishable package, packed once, keyed by the name its manifest declares.
+ *
+ * MEASURED 2026-09-16 cutting `@theokit/agents@14.5.0`: this gate runs BEFORE the publish step, and
+ * `theokit`'s `@theokit/agents: workspace:^` packs to `^14.5.0` — a version the registry does not
+ * have yet, by construction. `npm install` of that tarball then fails on a dependency the same run
+ * is about to publish, and the release dies before publishing anything. 31 of 32 entry points
+ * loaded; the one that did not was the meta-package waiting on its own sibling.
+ *
+ * Installing the sibling's TARBALL answers the question this gate actually asks — does every
+ * declared entry point load from what we are about to ship — without making the answer depend on
+ * an ordering the workflow cannot satisfy.
+ */
+const siblingTarballs = new Map()
+const packDir = mkdtempSync(join(tmpdir(), 'load-siblings-'))
+for (const dir of pkgs) {
+  const name = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')).name
+  const before = new Set(readdirSync(packDir))
+  // eslint-disable-next-line sonarjs/no-os-command-from-path -- toolchain binary, fixed argv
+  execFileSync('pnpm', ['pack', '--pack-destination', packDir], {
+    cwd: dir,
+    stdio: ['ignore', 'ignore', 'pipe'],
+  })
+  const made = readdirSync(packDir).find((f) => f.endsWith('.tgz') && !before.has(f))
+  if (made !== undefined) siblingTarballs.set(name, join(packDir, made))
+}
+
 let bad = 0,
   checked = 0
 for (const dir of pkgs) {
@@ -84,9 +111,16 @@ for (const dir of pkgs) {
     // LINE, and prettier — which lint-staged runs before eslint, for exactly this reason — breaks a
     // long call across lines, leaving the directive on `execFileSync(` and the rule firing on
     // `'npm',` below it. Measured here: an orphaned directive at 83 and an unguarded call at 85.
+    // A `@theokit/*` dependency this run also packs is installed FROM THAT TARBALL. Left to npm it
+    // resolves from the registry, where the version does not exist until the publish step 50 lines
+    // further down the workflow — see `siblingTarballs` above for the release this deadlocked.
+    const siblings = Object.keys(manifest.dependencies ?? {})
+      .filter((n) => siblingTarballs.has(n))
+      .map((n) => siblingTarballs.get(n))
     const args = [
       'install',
       join(out, tgz),
+      ...siblings,
       ...peers,
       '--no-audit',
       '--no-fund',
