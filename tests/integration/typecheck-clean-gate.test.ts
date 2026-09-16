@@ -20,6 +20,23 @@ const REPO = resolve(__dirname, '../..')
  * budget instead of two, sized on the measurement: 300s is ~3x the measured worst case, headroom for
  * the monorepo to grow into rather than a number someone guessed. The duplicate subprocess going
  * away is tidiness, not the fix.
+ *
+ * ## Raised again to 900s on 2026-09-16, and the margin is the finding
+ *
+ * The 300s budget timed out inside `check:all`. Re-measured isolated the same day: **161s**, against
+ * the 97s this note recorded — the cost grew 66% while nobody was looking, exactly the drift the
+ * paragraph above predicted ("the cost grows with the package count, so the margin was shrinking on
+ * its own").
+ *
+ * 161s isolated is not what the budget has to cover. `check:all` is `run-p lint format:check
+ * typecheck:only test:coverage`, so this test spawns a full `pnpm typecheck` — a seven-package build
+ * — while a SECOND full typecheck and two linters run beside it. Four processes competing is where
+ * the 300s went, and the ratio between isolated and loaded is what a budget here has to absorb.
+ *
+ * 900s is ~5.5x the isolated measurement. Deliberately generous, because the failure mode is
+ * asymmetric: a budget too small reports a passing typecheck as a failing gate — which is precisely
+ * what happened, and the report said `1 failed` beside `Type Errors: no errors` in the same run. A
+ * budget too large only delays a real failure that the same run's `typecheck:only` catches anyway.
  */
 let typecheckOutput = ''
 
@@ -30,7 +47,7 @@ describe('pnpm typecheck clean gate (T0.3)', () => {
       cwd: REPO,
       encoding: 'utf8',
     })
-  }, 300_000)
+  }, 900_000)
 
   it('pnpm typecheck exits 0 (zero TS errors across workspace)', () => {
     const errorCount = (typecheckOutput.match(/error TS/g) ?? []).length
