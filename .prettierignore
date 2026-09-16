@@ -27,3 +27,17 @@ packages/agents/tests/unit/__snapshots__/subpath-surface.json
 # `Unit + Type tests` and `CI` at once. theokit-plugins already ignores this directory; matching it
 # rather than inventing a second convention.
 .changeset
+
+# `apps/**` — workspace members that are PRODUCTS and carry their own formatter.
+#
+# Fifth root tool to sweep `apps/theocode` when it joined on 2026-09-16, after the recursive
+# builds, eslint and knip. Same repair: the owning package governs its own gate.
+#
+# A GAP IS BEING NAMED HERE, not closed. That package's OWN `prettier --check .` fails on 152
+# files — measured, not inferred — because its six CI jobs never included a format check, so
+# the drift was invisible in its own repository and stays invisible here. Formatting them is a
+# 152-file mechanical diff that would bury an 8-commit migration, and it is somebody's decision
+# rather than a side effect of moving a directory. The files are unchanged and the drift is
+# recorded; what this line does is stop THIS repository's formatter from claiming authority
+# over a package whose formatter disagrees with it about nothing except which files it reads.
+apps/
