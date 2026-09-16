@@ -200,6 +200,45 @@ export function loadMcpJson(cwd: string, opts: LoadMcpJsonOptions = {}): McpServ
   return parseMcpJson(parsed, path, warningChannel(opts), opts.env ?? process.env)
 }
 
+/**
+ * The MCP servers an operator registered for themselves, from `~/.claude.json`.
+ *
+ * `.mcp.json` is a PROJECT's declaration and {@link loadMcpJson} has read it since B-043. This is
+ * the other half: the servers someone registered for their own account, under the same
+ * `mcpServers` key, which nothing here was reading. The surfaces table listed them "not read yet,
+ * and in scope", justified with "the personal scope measures 0" — re-measured 2026-09-15 on the
+ * machine that wrote that note: 2 servers, neither reaching an agent.
+ *
+ * ## Only `mcpServers`, and the rest is deliberately left alone
+ *
+ * That file is two things under one name. Its OAuth state and UI toggles are a specific CLI writing
+ * about its own session; a library reaching into another program's login state would be taking
+ * something it neither owns nor can refresh. The parser already ignores every other key, and a test
+ * pins it by putting a token beside the servers and asserting the result carries nothing but them.
+ *
+ * ## Why this never throws
+ *
+ * {@link loadMcpJson} throws on a malformed project file, because that file is the project's own
+ * declaration and an author who wrote it wants to know. This one is in the operator's home and is
+ * shared with another product: one stray comma there would otherwise break every project on the
+ * machine, for a file this project did not write. It reports and returns nothing instead — the same
+ * trade `readLayer` makes in `config/settings-file.ts`, for the same reason.
+ */
+export function loadPersonalMcpServers(home: string, opts: LoadMcpJsonOptions = {}): McpServersMap {
+  const path = join(home, '.claude.json')
+  // eslint-disable-next-line security/detect-non-literal-fs-filename -- `home` is the caller's
+  if (!existsSync(path)) return {}
+  const warn = warningChannel(opts)
+  try {
+    // eslint-disable-next-line security/detect-non-literal-fs-filename -- same path, already checked
+    const parsed: unknown = JSON.parse(readFileSync(path, 'utf8'))
+    return parseMcpJson(parsed, path, warn, opts.env ?? process.env)
+  } catch (err) {
+    warn(`${path} could not be read for MCP servers, so none were loaded: ${describeIt(err)}`)
+    return {}
+  }
+}
+
 /** Validate a parsed `.mcp.json` document into an {@link McpServersMap}. Internal to the loader. */
 function parseMcpJson(
   raw: unknown,
@@ -240,7 +279,7 @@ function parseMcpJson(
       onWarn(`${source}: server "${name}" ignored — ${reason}`)
       continue
     }
-    out[name] = buildEntry(entryRaw as Record<string, unknown>, name, env, onWarn)
+    out[name] = buildEntry(entryRaw as Record<string, unknown>, name, env, onWarn, source)
   }
   return out
 }
@@ -397,12 +436,18 @@ function reportUncarriedKeys(
   carried: ReadonlySet<string>,
   name: string,
   warn: (warning: string) => void,
+  /**
+   * The file this entry came from. Threaded rather than assumed: `parseMcpJson` is reused for the
+   * PERSONAL scope (`~/.claude.json`) and the message hardcoded the project filename, so every
+   * personal-scope diagnostic named a file the operator would open and not find the key in.
+   */
+  source: string,
 ): void {
   for (const key of Object.keys(entry)) {
     if (carried.has(key)) continue
     const because = EXPLAINED_KEYS[key]
     warn(
-      `${MCP_FILENAME}: server "${name}" declares "${key}", which this runtime does not carry — ` +
+      `${source}: server "${name}" declares "${key}", which this runtime does not carry — ` +
         (because === undefined
           ? 'it is NOT being applied'
           : `${because}. It is NOT being applied`) +
@@ -416,8 +461,10 @@ function buildEntry(
   name: string,
   env: Record<string, string | undefined>,
   warn: (warning: string) => void,
+  /** The file this entry came from — see {@link reportUncarriedKeys}. */
+  source: string,
 ): McpServerConfig {
-  reportUncarriedKeys(entry, entry.url !== undefined ? REMOTE_KEYS : STDIO_KEYS, name, warn)
+  reportUncarriedKeys(entry, entry.url !== undefined ? REMOTE_KEYS : STDIO_KEYS, name, warn, source)
   if (entry.url !== undefined) {
     const remote: Record<string, unknown> = { url: entry.url }
     // NORMALISED, not forwarded. `streamable-http` is the MCP spec's current name for the transport

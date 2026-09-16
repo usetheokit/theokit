@@ -199,6 +199,7 @@ export {
  * every run with nothing while its own definition said otherwise.
  */
 export {
+  applySubagentMemory,
   resolveAgentMemory,
   AgentMemoryError,
   MEMORY_LINE_CAP,

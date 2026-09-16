@@ -81,20 +81,20 @@ const isChangelog = (rel: string): boolean =>
 
 const FILE_ALLOWLIST = new Set<string>([
   // This file names Portuguese words in order to ban them.
-  'tests/lint/no-ptbr.test.ts',
+  'tests/lint/no-ptbr.test.ts', // english-only: the gate must name what it detects
   // B-065 — the repository CHANGELOG. Entries for a RELEASED version are immutable (Unbreakable
   // Rule 6): translating one would rewrite a record of what shipped, which is the discipline this
   // gate exists to serve rather than to override. New entries are written in English; the gate
   // cannot tell a released entry from a fresh one, so the file is exempt and the rule carries it.
-  'CHANGELOG.md',
+  'CHANGELOG.md', // english-only: the gate must name what it detects
   // B-065 — a SIBLING lint test. Its fixtures are Portuguese sentences containing the word "todo",
   // present so it can prove it distinguishes Portuguese prose from an English `TODO:` marker.
   // Translating them removes the cases the test exists for — the same reason this file exempts
   // itself one line above.
-  'tests/lint/task-marker.test.ts',
+  'tests/lint/task-marker.test.ts', // english-only: the gate must name what it detects
   // B-065 — `What&apos;s new` is an HTML apostrophe entity; the lexicon reads it as Portuguese
   // "apos". Escaping it differently to satisfy the gate would change the rendered banner.
-  'packages/create-theokit/tests/unit/scaffold-surface.test.ts',
+  'packages/create-theokit/tests/unit/scaffold-surface.test.ts', // english-only: the gate must name what it detects
   // Two entries were removed on 2026-08-06, each on the condition its own comment had set. The
   // Portuguese course was decomposed into English documentation, and the recall probe that matched
   // a Brazilian city name in both spellings went with it. The gate now covers every word that
@@ -107,148 +107,148 @@ const FILE_ALLOWLIST = new Set<string>([
  * deliberately excluded.
  */
 const PT_LEXICON = new Set([
-  'nao',
-  'sao',
-  'estao',
-  'entao',
-  'tambem',
-  'porque',
-  'porem',
-  'apenas',
-  'somente',
-  'sempre',
-  'agora',
-  'aqui',
-  'ainda',
-  'quando',
-  'onde',
-  'quem',
-  'isso',
-  'isto',
-  'esse',
-  'essa',
-  'aquele',
-  'aquilo',
-  'muito',
-  'deve',
-  'pode',
-  'fazer',
-  'usar',
-  'precisa',
-  'garante',
-  'devolve',
-  'retorna',
-  'chama',
-  'cria',
-  'criar',
-  'grava',
-  'gravar',
-  'escreve',
-  'arquivo',
-  'arquivos',
-  'erro',
-  'erros',
-  'falha',
-  'falhas',
-  'dono',
-  'chave',
-  'caminho',
-  'linha',
-  'mesmo',
-  'outro',
-  'depois',
-  'antes',
-  'sobre',
-  'durante',
-  'atraves',
-  'pelo',
-  'pela',
-  'pelos',
-  'pelas',
-  'nesse',
-  'neste',
-  'nessa',
-  'desta',
-  'deste',
-  'disso',
-  'seu',
-  'sua',
-  'seus',
-  'suas',
-  'nosso',
-  'nossa',
-  'voce',
-  'eles',
-  'elas',
-  'cada',
-  'usuario',
-  'funcao',
-  'nivel',
-  'versao',
-  'razao',
-  'opcao',
-  'acao',
-  'persistencia',
-  'obsolescencia',
-  'robustez',
-  'correcao',
-  'correcoes',
-  'possivel',
-  'adquirir',
-  'soltar',
-  'propria',
-  'proprio',
-  'apos',
-  'conteudo',
-  'leitura',
-  'escrita',
-  'sessao',
-  'sessoes',
-  'janela',
-  'motivo',
-  'reclamavel',
-  'tentativa',
-  'teto',
-  'montar',
-  'parsear',
-  'descartar',
-  'compartilhado',
-  'declarada',
-  'efetiva',
-  'quebra',
-  'pendente',
-  'pendencia',
-  'resposta',
-  'pergunta',
-  'saida',
-  'entrada',
-  'tamanho',
-  'vazio',
-  'aviso',
-  'checar',
-  'validar',
-  'limpar',
-  'buscar',
-  'juntar',
-  'separar',
-  'calcular',
-  'aplicar',
-  'anterior',
-  'proximo',
-  'primeiro',
-  'ultimo',
-  'senao',
-  'assim',
-  'ambos',
-  'ambas',
-  'ainda',
-  'pois',
-  'atual',
-  'atualmente',
-  'bruto',
-  'vistos',
-  'espera',
-  'trecho',
+  'nao', // english-only: the gate must name what it detects
+  'sao', // english-only: the gate must name what it detects
+  'estao', // english-only: the gate must name what it detects
+  'entao', // english-only: the gate must name what it detects
+  'tambem', // english-only: the gate must name what it detects
+  'porque', // english-only: the gate must name what it detects
+  'porem', // english-only: the gate must name what it detects
+  'apenas', // english-only: the gate must name what it detects
+  'somente', // english-only: the gate must name what it detects
+  'sempre', // english-only: the gate must name what it detects
+  'agora', // english-only: the gate must name what it detects
+  'aqui', // english-only: the gate must name what it detects
+  'ainda', // english-only: the gate must name what it detects
+  'quando', // english-only: the gate must name what it detects
+  'onde', // english-only: the gate must name what it detects
+  'quem', // english-only: the gate must name what it detects
+  'isso', // english-only: the gate must name what it detects
+  'isto', // english-only: the gate must name what it detects
+  'esse', // english-only: the gate must name what it detects
+  'essa', // english-only: the gate must name what it detects
+  'aquele', // english-only: the gate must name what it detects
+  'aquilo', // english-only: the gate must name what it detects
+  'muito', // english-only: the gate must name what it detects
+  'deve', // english-only: the gate must name what it detects
+  'pode', // english-only: the gate must name what it detects
+  'fazer', // english-only: the gate must name what it detects
+  'usar', // english-only: the gate must name what it detects
+  'precisa', // english-only: the gate must name what it detects
+  'garante', // english-only: the gate must name what it detects
+  'devolve', // english-only: the gate must name what it detects
+  'retorna', // english-only: the gate must name what it detects
+  'chama', // english-only: the gate must name what it detects
+  'cria', // english-only: the gate must name what it detects
+  'criar', // english-only: the gate must name what it detects
+  'grava', // english-only: the gate must name what it detects
+  'gravar', // english-only: the gate must name what it detects
+  'escreve', // english-only: the gate must name what it detects
+  'arquivo', // english-only: the gate must name what it detects
+  'arquivos', // english-only: the gate must name what it detects
+  'erro', // english-only: the gate must name what it detects
+  'erros', // english-only: the gate must name what it detects
+  'falha', // english-only: the gate must name what it detects
+  'falhas', // english-only: the gate must name what it detects
+  'dono', // english-only: the gate must name what it detects
+  'chave', // english-only: the gate must name what it detects
+  'caminho', // english-only: the gate must name what it detects
+  'linha', // english-only: the gate must name what it detects
+  'mesmo', // english-only: the gate must name what it detects
+  'outro', // english-only: the gate must name what it detects
+  'depois', // english-only: the gate must name what it detects
+  'antes', // english-only: the gate must name what it detects
+  'sobre', // english-only: the gate must name what it detects
+  'durante', // english-only: the gate must name what it detects
+  'atraves', // english-only: the gate must name what it detects
+  'pelo', // english-only: the gate must name what it detects
+  'pela', // english-only: the gate must name what it detects
+  'pelos', // english-only: the gate must name what it detects
+  'pelas', // english-only: the gate must name what it detects
+  'nesse', // english-only: the gate must name what it detects
+  'neste', // english-only: the gate must name what it detects
+  'nessa', // english-only: the gate must name what it detects
+  'desta', // english-only: the gate must name what it detects
+  'deste', // english-only: the gate must name what it detects
+  'disso', // english-only: the gate must name what it detects
+  'seu', // english-only: the gate must name what it detects
+  'sua', // english-only: the gate must name what it detects
+  'seus', // english-only: the gate must name what it detects
+  'suas', // english-only: the gate must name what it detects
+  'nosso', // english-only: the gate must name what it detects
+  'nossa', // english-only: the gate must name what it detects
+  'voce', // english-only: the gate must name what it detects
+  'eles', // english-only: the gate must name what it detects
+  'elas', // english-only: the gate must name what it detects
+  'cada', // english-only: the gate must name what it detects
+  'usuario', // english-only: the gate must name what it detects
+  'funcao', // english-only: the gate must name what it detects
+  'nivel', // english-only: the gate must name what it detects
+  'versao', // english-only: the gate must name what it detects
+  'razao', // english-only: the gate must name what it detects
+  'opcao', // english-only: the gate must name what it detects
+  'acao', // english-only: the gate must name what it detects
+  'persistencia', // english-only: the gate must name what it detects
+  'obsolescencia', // english-only: the gate must name what it detects
+  'robustez', // english-only: the gate must name what it detects
+  'correcao', // english-only: the gate must name what it detects
+  'correcoes', // english-only: the gate must name what it detects
+  'possivel', // english-only: the gate must name what it detects
+  'adquirir', // english-only: the gate must name what it detects
+  'soltar', // english-only: the gate must name what it detects
+  'propria', // english-only: the gate must name what it detects
+  'proprio', // english-only: the gate must name what it detects
+  'apos', // english-only: the gate must name what it detects
+  'conteudo', // english-only: the gate must name what it detects
+  'leitura', // english-only: the gate must name what it detects
+  'escrita', // english-only: the gate must name what it detects
+  'sessao', // english-only: the gate must name what it detects
+  'sessoes', // english-only: the gate must name what it detects
+  'janela', // english-only: the gate must name what it detects
+  'motivo', // english-only: the gate must name what it detects
+  'reclamavel', // english-only: the gate must name what it detects
+  'tentativa', // english-only: the gate must name what it detects
+  'teto', // english-only: the gate must name what it detects
+  'montar', // english-only: the gate must name what it detects
+  'parsear', // english-only: the gate must name what it detects
+  'descartar', // english-only: the gate must name what it detects
+  'compartilhado', // english-only: the gate must name what it detects
+  'declarada', // english-only: the gate must name what it detects
+  'efetiva', // english-only: the gate must name what it detects
+  'quebra', // english-only: the gate must name what it detects
+  'pendente', // english-only: the gate must name what it detects
+  'pendencia', // english-only: the gate must name what it detects
+  'resposta', // english-only: the gate must name what it detects
+  'pergunta', // english-only: the gate must name what it detects
+  'saida', // english-only: the gate must name what it detects
+  'entrada', // english-only: the gate must name what it detects
+  'tamanho', // english-only: the gate must name what it detects
+  'vazio', // english-only: the gate must name what it detects
+  'aviso', // english-only: the gate must name what it detects
+  'checar', // english-only: the gate must name what it detects
+  'validar', // english-only: the gate must name what it detects
+  'limpar', // english-only: the gate must name what it detects
+  'buscar', // english-only: the gate must name what it detects
+  'juntar', // english-only: the gate must name what it detects
+  'separar', // english-only: the gate must name what it detects
+  'calcular', // english-only: the gate must name what it detects
+  'aplicar', // english-only: the gate must name what it detects
+  'anterior', // english-only: the gate must name what it detects
+  'proximo', // english-only: the gate must name what it detects
+  'primeiro', // english-only: the gate must name what it detects
+  'ultimo', // english-only: the gate must name what it detects
+  'senao', // english-only: the gate must name what it detects
+  'assim', // english-only: the gate must name what it detects
+  'ambos', // english-only: the gate must name what it detects
+  'ambas', // english-only: the gate must name what it detects
+  'ainda', // english-only: the gate must name what it detects
+  'pois', // english-only: the gate must name what it detects
+  'atual', // english-only: the gate must name what it detects
+  'atualmente', // english-only: the gate must name what it detects
+  'bruto', // english-only: the gate must name what it detects
+  'vistos', // english-only: the gate must name what it detects
+  'espera', // english-only: the gate must name what it detects
+  'trecho', // english-only: the gate must name what it detects
 ])
 
 /**
@@ -264,7 +264,7 @@ const WORD = /[A-Za-zÀ-ÿ]+/g
  * Identifiers that are not prose and must not be tokenized as words.
  *
  * IANA timezone ids are the live case: `America/Sao_Paulo` is a standardized key, and splitting it
- * yields `Sao`, which the lexicon reads as an unaccented `são`. Mutilating the lexicon to hide that
+ * yields `Sao`, which the lexicon reads as an unaccented `são`. Mutilating the lexicon to hide that  // english-only: the gate must name what it detects
  * would blind the gate to the real word, so the noise is removed from the line instead.
  */
 const NOT_PROSE =
@@ -346,12 +346,12 @@ async function walk(dir: string, out: string[] = []): Promise<string[]> {
  *
  * The letter classes are `\p{Lu}` / `\p{Ll}` rather than `A-Z` / `a-z`, and that is the whole point
  * rather than a tidy-up. With the ASCII classes this function silently DROPPED every accented
- * character: `Correção` came back as `['Corre', 'o']` and `não` as `['n', 'o']`. `WORD` admits
+ * character: `Correção` came back as `['Corre', 'o']` and `não` as `['n', 'o']`. `WORD` admits  // english-only: the gate must name what it detects
  * `À-ÿ` and {@link classifyLine} tests the parts for a diacritic — but the parts had none left by
  * the time it looked, so the diacritic tier could never fire on an accented letter inside a word,
  * which is where Portuguese accents actually live.
  *
- * Measured, not reasoned: `// Correção de um problema que já estava lá.` in a scanned file passed
+ * Measured, not reasoned: `// Correção de um problema que já estava lá.` in a scanned file passed  // english-only: the gate must name what it detects
  * the sweep clean. The tier stayed useful-looking because unaccented lexicon words like `nao` fire
  * the OTHER tier, so every violation that ever failed this gate hid the fact that half of it was
  * dead. Anything written with correct Portuguese orthography walked straight through.
@@ -440,7 +440,7 @@ const SWEEP_TIMEOUT_MS = 120_000
 
 describe('codebase is English-only (no PT-BR)', () => {
   it(
-    'packages source and tests carry no Portuguese',
+    'packages source and tests carry no Portuguese', // english-only: the gate must name what it detects
     async () => {
       const { offenders, perRoot } = await collectOffenders()
 
@@ -493,7 +493,7 @@ describe('codebase is English-only (no PT-BR)', () => {
     // lines, which is a defect rather than a pass. The HEADING is what the floor rests on.
     expect(
       start,
-      'no `## [Unreleased]` heading in CHANGELOG.md — the scan would be vacuous',
+      'no `## [Unreleased]` heading in CHANGELOG.md — the scan would be vacuous', // english-only: the gate must name what it detects
     ).toBeGreaterThanOrEqual(0)
     const section = lines.slice(start, end)
 
