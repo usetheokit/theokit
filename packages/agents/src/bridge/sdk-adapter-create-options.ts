@@ -248,6 +248,93 @@ export function compatSourcesForSdk(
   return out
 }
 
+/**
+ * Where a subagent's `memory:` frontmatter key landed.
+ *
+ * `applySubagentMemory` shipped in 14.5.0 reading `AgentDefinition.memory`, and the field arrives
+ * only if the SDK accepts the key while parsing frontmatter. Measured 2026-09-16 by loading a real
+ * subagent out of `.theokit/agents/` against the published tarballs, with a control (a second
+ * subagent declaring no `memory:`, which must load on every version):
+ *
+ *   5.3.0  ConfigurationError: Subagent note-taker.md: unknown frontmatter field "memory"
+ *          (accepted: name, description, model, tools, reasoning_effort, mcp, sandbox)
+ *   5.9.0  loads both; `memory: "project"` survives the parse
+ *
+ * The failure is LOUD, and that is exactly why it needs a guard rather than a floor. The SDK's error
+ * names the FIELD and the accepted list — so a reader concludes their frontmatter is wrong, not that
+ * their SDK is too old, and goes to delete the line they meant to write. An error that sends people
+ * to the wrong repair is not the "typed error naming what it needs" the range invariant asks for.
+ *
+ * Raising the floor instead was tried and reverted: it strands every consumer — including the ones
+ * who never write `memory:` — to duplicate a refusal that, once this guard exists, announces itself.
+ * That is the argument `the-declared-sdk-range-delivers-what-the-code-assumes.test.ts` already
+ * makes about `local.hooks` and the narrowed `import`, and it applies here unchanged.
+ */
+const SUBAGENT_MEMORY_SINCE = { major: 5, minor: 9 } as const
+
+/**
+ * A subagent declared `memory:` on an SDK that will refuse to parse it.
+ *
+ * Refuses rather than warns, for the reason {@link HookGateUnsupportedError} refuses: the operation
+ * this guards does not degrade. The SDK throws either way — what changes is WHICH repair the message
+ * sends the reader to. Left alone, the operator edits their frontmatter; guarded, they upgrade.
+ */
+export class SubagentMemoryUnsupportedError extends TheokitAgentError {
+  override readonly name = 'SubagentMemoryUnsupportedError'
+  constructor(version: string | undefined) {
+    super(
+      `a subagent declared \`memory:\`, but the installed @theokit/sdk ` +
+        `(${version ?? 'version unreadable'}) refuses that frontmatter key: it landed in ` +
+        `${String(SUBAGENT_MEMORY_SINCE.major)}.${String(SUBAGENT_MEMORY_SINCE.minor)}.0. An older ` +
+        `SDK reports it as an unknown field and names the keys it accepts, which reads as a typo in ` +
+        `your frontmatter rather than a version too old — so the line usually gets deleted instead ` +
+        `of the SDK upgraded. Upgrade @theokit/sdk, or remove the \`memory:\` key ` +
+        `(usetheokit/theokit#812).`,
+      { code: 'subagent_memory_unsupported', isRetryable: false },
+    )
+  }
+}
+
+/**
+ * Replaces the SDK's refusal with one that names the version, and leaves every other error alone.
+ *
+ * ## Why this ENRICHES rather than guards
+ *
+ * Its two siblings assert BEFORE calling, because they guard an option this layer is about to pass.
+ * There is nothing to pass here: the SDK reads the file and decides. Asserting up front would refuse
+ * discovery on an older SDK even when no subagent declares `memory:` at all — strictly worse than
+ * today, where those projects work.
+ *
+ * So the check runs where the failure already is. A predicate nobody could call would be the exact
+ * defect this pull request's other half is about.
+ *
+ * ## Why both conditions, and why neither alone
+ *
+ * The version alone would re-label every parse error on an older SDK, including the typos this
+ * message would then send people to upgrade over. The message alone would re-label a genuine
+ * unknown-field error on a NEW SDK, where `memory:` parses and the operator really did mistype
+ * something else.
+ */
+export function explainSubagentMemoryRefusal(error: unknown, version: string | undefined): unknown {
+  const [major, minor] = (version ?? '').split('.').map((n) => Number.parseInt(n, 10))
+  const known = Number.isFinite(major) && Number.isFinite(minor)
+  const supported =
+    known &&
+    (major > SUBAGENT_MEMORY_SINCE.major ||
+      (major === SUBAGENT_MEMORY_SINCE.major && minor >= SUBAGENT_MEMORY_SINCE.minor))
+  if (supported) return error
+
+  // An unreadable version is NOT treated as old here, and that is the opposite of the asymmetry the
+  // two guards above take — deliberately. They refuse on "cannot tell" because passing an option
+  // blind is unsafe. This one only rewrites a message: claiming a version caused a failure we could
+  // not read the version for would be a fabricated diagnosis, and the SDK's own error survives.
+  if (!known) return error
+
+  const message = error instanceof Error ? error.message : String(error)
+  if (!/unknown frontmatter field ["`']?memory/i.test(message)) return error
+  return new SubagentMemoryUnsupportedError(version)
+}
+
 /** Pure so both directions are testable without installing two SDKs. */
 export function assertSdkCanReadNarrowedImport(version: string | undefined): void {
   const [major, minor] = (version ?? '').split('.').map((n) => Number.parseInt(n, 10))
@@ -273,7 +360,7 @@ export function assertSdkCanGateHooks(version: string | undefined): void {
 }
 
 /** The installed SDK's version, or `undefined` when the subpath does not resolve. */
-function installedSdkVersion(): string | undefined {
+export function installedSdkVersion(): string | undefined {
   try {
     return (createRequire(import.meta.url)('@theokit/sdk/package.json') as { version?: string })
       .version
