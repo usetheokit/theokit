@@ -91,7 +91,7 @@ TheoCode already has memory, and its location is the difference that matters:
 | scope | the working directory | the git repository, shared across worktrees |
 
 Ours defaults to off for a measured reason, recorded in
-`packages/agent/src/config/memory-default.test.ts:12-13`:
+`apps/theocode/packages/agent/tests/config/memory-default.test.ts:12-13`:
 
 > a summary of every session lands in `<cwd>/.theokit/memory/sessions/`. Running the agent in
 > someone's repository left files there nobody asked for; 332 KB had accumulated in this checkout
