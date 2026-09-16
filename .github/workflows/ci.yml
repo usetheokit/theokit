@@ -495,6 +495,10 @@ jobs:
           # So: install both. The download saved was real and small; the property it traded away
           # was the gate's correctness, which is not a trade. The `have_*` probe stays because
           # printing what the image carries is worth having on its own.
+          # Named literally at the apt call below, not expanded from here: an unquoted `$pkgs`
+          # is how this list word-splits into two arguments, and shellcheck reads that as the
+          # SC2086 bug it usually is. The variable survives for the operator-facing messages,
+          # which is the only job left now that the list is fixed at two.
           pkgs="wamerican wbrazilian"
           echo "missing (en=$have_en pt=$have_pt) — installing:$pkgs"
 
@@ -502,7 +506,7 @@ jobs:
             # `timeout` per ATTEMPT, not per step: the failure is a silent stall with zero output,
             # so a whole-step ceiling can only report the death, never recover from it.
             if timeout 90 sudo apt-get update -qq \
-               && timeout 90 sudo apt-get install -y -qq $pkgs; then
+               && timeout 90 sudo apt-get install -y -qq wamerican wbrazilian; then
               echo "word lists installed on attempt ${attempt}"
               exit 0
             fi
@@ -524,6 +528,8 @@ jobs:
       # dictionary getting bigger would be worse than no gate.
       - name: Verify the lexicons actually load
         run: |
+          # shellcheck disable=SC2016  # the `${...}` below are JS template literals inside a
+          # node program; shell expansion is the thing the single quotes exist to prevent.
           node -e '
             const { readFileSync, existsSync } = require("node:fs")
             const load = (paths) => {

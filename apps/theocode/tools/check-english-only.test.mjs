@@ -19,6 +19,38 @@ import {
   portugueseWordsInFilename,
   wordParts,
 } from './check-english-only.mjs'
+// Imported from the detectors module rather than through the facade above: `lexiconReport` is not
+// among the seven names `check-english-only.mjs` re-exports, and widening its public surface for
+// one test is how an export with no production caller gets created. ESM caches by resolved
+// specifier, so this is the same module instance the facade loaded — the same lexicon state.
+import { lexiconReport } from './english-only-detectors.mjs'
+
+describe('the lexicon these tests measure against is actually loaded', () => {
+  it('test_the_dictionaries_are_installed', () => {
+    // Read this first when four tests below are red. Every detector here is a set difference
+    // against dictionaries installed on the SYSTEM, so with none installed they find nothing and
+    // fail as `expected [] to include 'desligado'` — a message about an empty array, which is the
+    // one fact that says nothing about why it is empty.
+    //
+    // That cost a full diagnosis on 2026-09-16, when this package moved into the monorepo and the
+    // CI job was rebuilt from package scripts. Scripts do not carry apt, so the runner had the
+    // English half (`en_US.dic` ships with the image) and not the Portuguese one.
+    //
+    // FAILING and not skipping is the point. A skip here would turn a missing dependency into a
+    // green run with the language gate silently unexercised — the failure mode the guard itself
+    // refuses, by exiting 1 rather than reporting `clean` when it cannot load a lexicon.
+    const { enLoaded, ptLoaded, enForms, ptForms } = lexiconReport()
+    const remedy = 'install them: sudo apt-get install -y wamerican wbrazilian'
+    expect(enLoaded, `no ENGLISH dictionary loaded (${remedy})`).toBeGreaterThan(0)
+    expect(ptLoaded, `no PORTUGUESE dictionary loaded (${remedy})`).toBeGreaterThan(0)
+
+    // A lexicon that loaded a file and almost no words is the same outage wearing a passing check.
+    // The floors are deliberately far below what any real install carries — CI asserts the real
+    // numbers; this only separates "loaded" from "loaded something useless".
+    expect(enForms, 'English lexicon loaded but nearly empty').toBeGreaterThan(1000)
+    expect(ptForms, 'Portuguese lexicon loaded but nearly empty').toBeGreaterThan(1000)
+  })
+})
 
 describe('T0.1 — a Portuguese filename is a violation', () => {
   it('test_a_portuguese_filename_is_flagged', () => {
