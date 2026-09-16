@@ -25,6 +25,37 @@ import { describe, expect, it } from 'vitest'
  */
 const README = readFileSync(join(import.meta.dirname, '..', '..', 'README.md'), 'utf8')
 
+/**
+ * Every verdict a row is allowed to carry. Closed on purpose: a new word is how `refused` (a
+ * decision) and `not read yet` (a gap) collapse into one thing a reader cannot act on.
+ */
+const VERDICTS = [
+  'read',
+  'translated',
+  'parsed, not applied',
+  'resolvable',
+  'refused',
+  'out of scope',
+  'not read yet',
+] as const
+
+/**
+ * The verdict a row declares: its second cell, with the bold markers stripped. Every verdict in the
+ * table OPENS its cell, which is what makes this checkable — `startsWith` refuses `planned to be
+ * read later`, where a substring match would find `read` in it and pass.
+ */
+const verdictOf = (row: string): string =>
+  (row.split('|')[2] ?? '').trim().replace(/^\*\*/, '').toLowerCase()
+
+/**
+ * Just the `## Foreign configuration surfaces` section. The README holds more than one table and
+ * the other one's first column is an import path, so a file-wide row filter reads rows that were
+ * never surface verdicts.
+ */
+const SURFACES_TABLE = README.slice(README.indexOf('## Foreign configuration surfaces')).split(
+  '\n## ',
+)[0]
+
 const OUT_OF_SCOPE = ['keybindings.json', 'themes/*.json'] as const
 
 describe('an absence is a decision, or it is a gap', () => {
@@ -61,8 +92,15 @@ describe('an absence is a decision, or it is a gap', () => {
     for (const line of OUT_OF_SCOPE.map(verdictRowFor).filter(
       (r): r is string => r !== undefined,
     )) {
+      // `nobody` joined on 2026-09-16, and it is a successor rather than a hole in the rule.
+      // `themes/*.json` was attributed to `@theokit/tui` while this file's own prose said the row
+      // "names no owner, because inventing one is exactly the mistake the `keybindings.json` row
+      // already made". The document contradicted itself and the row is the half a reader checks.
+      // Re-measured: no package in the ecosystem reads a theme file. An ownership that does not
+      // exist is still an answer, and it is the one that stops a reader hunting for a fourth
+      // package. What this rule forbids is SILENCE about the successor, not a measured absence.
       expect(
-        /@theokit\/tui|a CLI's own state|the consumer/.test(line),
+        /@theokit\/tui|a CLI's own state|the consumer|nobody/.test(line),
         `"${line.trim()}" refuses a surface without naming who owns it`,
       ).toBe(true)
     }
@@ -72,23 +110,57 @@ describe('an absence is a decision, or it is a gap', () => {
     // The DoD's second bullet, and the one a summary would flatten. The file holds a CLI's session
     // state AND the operator's personal-scope MCP servers; those belong to different owners, so one
     // verdict over the whole file would be wrong about one half whichever way it went.
-    const rows = README.split('\n').filter((l) => l.includes('~/.claude.json'))
+    //
+    // This asserted the literal words `out of scope` and `not read yet` until 2026-09-16, which
+    // pinned the WORLD rather than the document: the MCP half was undone when the test was written
+    // and `loadPersonalMcpServers` closed it, so a test guarding the split failed because the gap it
+    // described got fixed. What the split means is that the two halves are judged SEPARATELY — so
+    // that is what is asserted, and it survives either half changing verdict again.
+    const rows = README.split('\n').filter(
+      (l) => l.startsWith('| ') && l.includes('~/.claude.json'),
+    )
 
     expect(
       rows.length,
       '`~/.claude.json` got a single verdict, so one of its halves is misfiled',
     ).toBeGreaterThanOrEqual(2)
-    expect(rows.some((r) => r.includes('out of scope'))).toBe(true)
+
+    const verdicts = new Set(rows.map((r) => VERDICTS.find((v) => verdictOf(r).startsWith(v))))
+    expect(verdicts.has(undefined), 'a `~/.claude.json` row carries no verdict at all').toBe(false)
     expect(
-      rows.some((r) => r.includes('not read yet')),
-      'the MCP-server half is filed as refused rather than as undone',
-    ).toBe(true)
+      verdicts.size,
+      'both halves of `~/.claude.json` got the same verdict, which is deciding it whole',
+    ).toBeGreaterThanOrEqual(2)
   })
 
-  it('keeps "not read yet" distinguishable from "refused"', () => {
+  it('keeps an undone surface distinguishable from a refused one', () => {
     // The whole point of the item: the two must not collapse into one word. A reader deciding
     // whether to file a bug needs to know which one they are looking at.
-    expect(README).toContain('not read yet')
-    expect(README).toContain('refused')
+    //
+    // It used to assert that the string `not read yet` appears somewhere in the README. That held
+    // only while some surface was undone. Closing the last one — `loadPersonalMcpServers`, the same
+    // day — emptied the phrase of any referent and the assertion started demanding that the document
+    // describe a gap the package no longer has. A test that fails when a gap is CLOSED is pointed
+    // the wrong way round.
+    //
+    // The property that actually protects the reader is that the vocabulary stays CLOSED: a row may
+    // not invent a word. `partial`, `planned`, `supported` are exactly how "refused" and "not done"
+    // collapse, because each reads as either one depending on who is looking.
+    // Scoped to the section, not to the file. The first version filtered every line in the README
+    // starting with "| `" and picked up the subpath-export table, whose first column is an import
+    // path — so the test failed on a row that was never a surface verdict and never could be.
+    const rows = SURFACES_TABLE.split('\n').filter(
+      (l) => l.startsWith('| `') && !l.startsWith('| ---'),
+    )
+    expect(rows.length, 'the surfaces table is gone, so this test guards nothing').toBeGreaterThan(
+      8,
+    )
+
+    for (const row of rows) {
+      expect(
+        VERDICTS.some((v) => verdictOf(row).startsWith(v)),
+        `"${row.trim()}" opens with a verdict outside ${VERDICTS.join(' / ')}`,
+      ).toBe(true)
+    }
   })
 })
