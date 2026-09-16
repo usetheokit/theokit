@@ -199,7 +199,12 @@ export function applySubagentMemory<T extends { prompt: string; memory?: string 
     agent,
     scope: definition.memory,
     cwd,
-    ...(home === undefined ? {} : { home }),
+    // `homeDir`, not `home`: that is the field `ResolveAgentMemoryInput` declares, and the two
+    // names disagreed for as long as both existed. A SPREAD carries it, so excess-property
+    // checking never applied, and `homeDir` is optional, so its absence was legal too — the
+    // compiler had nothing to report. Every `user`-scope call threw `needs a home directory`
+    // with a home directory in hand, until a caller in a consumer finally ran one.
+    ...(home === undefined ? {} : { homeDir: home }),
   })
   if (resolved.memory === undefined || resolved.memory.trim() === '') return definition
   const suffix = resolved.truncated ? ' (truncated)' : ''
