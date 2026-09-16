@@ -48,6 +48,16 @@ export default tseslint.config(
       'pnpm-lock.yaml',
       'examples/**/dist/**',
       'my-test/**',
+      // `apps/**` — workspace members that are PRODUCTS, not framework code, and each governs its
+      // own lint. `apps/theocode` joined on 2026-09-16 and this config swept it immediately: 997
+      // problems across 202 files, every one of them there, and `pnpm --filter theocode lint`
+      // exits 0 on the same tree. Two configs disagreeing about one directory is not a finding —
+      // it is two opinions, and the owning package's is the one that governs it.
+      //
+      // Same reason `my-test/**` and `examples/**` are here, and a glob rather than one entry per
+      // app: enumerating fails by omission, which is how `packages/http/examples/**` was left out
+      // a few lines below and produced 3 parser errors.
+      'apps/**',
       // create-theo `templates/` are pristine scaffold blueprints that get
       // copied into the user's project. They are NOT framework code; they
       // exist as didactic starting points. Lint-checking them creates

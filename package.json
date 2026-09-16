@@ -7,6 +7,7 @@
   "packageManager": "pnpm@10.34.1+sha512.b58fbde6dca66a929538021581f648b4570b6ca19b18e7cbd7f2c07a7b24454155388dacdf08f2af3678e88a6d1fe04f9d609df24bf51735a060ea041b374ab7",
   "scripts": {
     "test": "pnpm test:dist-gate && vitest run",
+    "test:theocode": "pnpm --filter theocode test",
     "test:watch": "pnpm test:dist-gate && vitest",
     "test:types": "pnpm test:dist-gate && vitest --typecheck.only --run",
     "test:coverage": "pnpm test:dist-gate && vitest run --coverage",
@@ -24,7 +25,7 @@
     "knip:strict": "knip --strict",
     "check:deps": "dependency-cruiser packages/theo/src --config .dependency-cruiser.cjs",
     "check:naming": "ls-lint",
-    "check:all": "pnpm build && run-p -c --aggregate-output lint format:check typecheck:only test:coverage knip check:docs check:changelog",
+    "check:all": "pnpm build:packages && run-p -c --aggregate-output lint format:check typecheck:only test:coverage knip check:docs check:changelog",
     "try:scaffold": "tsx packages/create-theokit/src/cli.ts my-test && tsx scripts/link-scaffold-to-workspace.ts my-test",
     "try:dev": "cd my-test && npx tsx ../packages/theo/src/cli/index.ts dev",
     "try:clean": "node -e \"const fs=require('fs');fs.rmSync('my-test',{recursive:true,force:true})\"",
@@ -119,7 +120,8 @@
       "fast-uri@>=3.0.0 <=3.1.3": "^3.1.4",
       "smol-toml@<=1.7.0": "^1.7.1",
       "brace-expansion@>=3.0.0 <5.0.7": ">=5.0.7",
-      "js-yaml@>=3.0.0 <3.15.0": "^3.15.0"
+      "js-yaml@>=3.0.0 <3.15.0": "^3.15.0",
+      "@theokit/sdk": "5.9.0"
     },
     "patchedDependencies": {
       "@vitest/utils@4.1.9": "patches/@vitest__utils@4.1.9.patch"

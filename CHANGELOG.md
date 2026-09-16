@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- **Five root-level gates now stop at `apps/**`, and one gap is named rather than closed.** Bringing in a workspace member that is not framework code swept it into every tool whose scope was written when everything here WAS the framework: two recursive builds, eslint, knip and prettier. Each is scoped to what it governs, and the owning package runs its own. The gap: `apps/theocode`'s own `prettier --check .` fails on 152 files — its six CI jobs never included a format check, so the drift was invisible in its repository and stays invisible here. The files are untouched; formatting them is a decision, not a side effect of moving a directory. (#B-111)
+
+- **`theocode` now lives at `apps/theocode/`, with its history.** The application that consumes this framework was its own repository; a change here reached it only after a publish, a pin move and a registry wait — measured on 2026-09-16 as two publish cycles and a stalled release for one bug. It resolves `@theokit/agents` through the workspace now, so the loop is a build and a test run. `apps/` and not `packages/`: five globs in this repository spell `packages/*` and every one means "the publishable framework", so a private application there would be swept into all five silently. Brought in with `git subtree` (1009 commits, both parents on the merge). (#B-111)
+- **`@theokit/sdk` moves 5.5.0 → 5.9.0 for this workspace.** One workspace has one copy, and `theocode` needs an SDK that carries the `memory:` frontmatter field — 5.5.0 REFUSES it, which dropped the declaration before `applySubagentMemory` could see it. The declared range was checked rather than assumed: `^5.3.0` already resolves to 5.9.0 on a fresh install, so this moves the lockfile to what a consumer installing today already gets. Seven new root-bar exports came with it and each carries a verdict, decided from its signature and from `0` occurrences in `src` rather than from its name. (#B-111)
+
+- **The two tarball gates now run on every PR, not only at release.** `check-pack-exports-resolve` and `check-pack-entry-points-load` lived in `release.yml` alone, so the first signal that a tarball was broken was a dead release — which is exactly how `@theokit/agents@14.5.0` stalled: the entry-point gate runs before the publish step, and `theokit`'s `workspace:^` dependency packs to the version being released, which the registry cannot have yet. They ride in `package-validation`, the job that already downloads `package-dist` and therefore already satisfies the one precondition packing has. Measured cost: 44s over 60 entry points. (#B-110)
+
+## [@theokit/agents 14.5.1] - 2026-09-16
+
 ### Fixed
 
 - **`applySubagentMemory` could never resolve the `user` scope — one of its three roots, and the one that scope exists for.** It passed `{ home }` where `resolveAgentMemory` reads `input.homeDir`, so every `user` call threw `needs a home directory and none was given` while holding one. The field travels through a SPREAD, where TypeScript's excess-property check does not apply, and `homeDir` is optional, so the compiler had nothing to report. Six tests covered the function and all six declared `project` — the branch reading `cwd`, never the one reading home. Found the first time a consumer actually called it. (#B-091)

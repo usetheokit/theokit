@@ -391,11 +391,187 @@ jobs:
       - run: pnpm validate:publint
       - run: pnpm validate:attw
       - run: npx vitest run tests/smoke/
+      # The two tarball gates, moved here from release-only on 2026-09-16.
+      #
+      # They ran ONLY in `release.yml`, which is why a release died at them instead of a PR: the
+      # entry-point gate runs BEFORE the publish step, and `theokit`'s `@theokit/agents:
+      # workspace:^` packs to the version being released — which the registry does not have, by
+      # construction. Every release bumping a package the meta-package depends on failed there, and
+      # the first signal was a dead release rather than a red check.
+      #
+      # This job is where they belong and nothing had to be added for them: it already downloads
+      # `package-dist` into `packages/`, which is the one precondition packing has. Measured on the
+      # release run that failed: 44s over 60 entry points.
+      - run: node scripts/check-pack-exports-resolve.mjs
+      - run: node scripts/check-pack-entry-points-load.mjs
 
   # Supply chain. Both jobs were deleted in a cleanup pass and left no replacement — an advisory in
   # a transitive dependency, or a copyleft package entering a tree that publishes to npm, was caught
   # by nothing. Neither reimplements a tool: audit is pnpm's own, and the licence gate reads pnpm's
   # report and applies a policy that lives in the repository.
+  # `apps/theocode` — the first-party application that consumes this framework, brought in on
+  # 2026-09-16. Its six CI jobs came with the subtree as inert files under `apps/theocode/.github/`,
+  # which GitHub never reads: workflows are only honoured at the repository root. They are folded
+  # into this one job, whose steps carry the same names so a failure stays attributable.
+  #
+  # ONE job and not six, because every one of them was `pnpm run <script>` in the same directory:
+  # the definitions stay in `apps/theocode/package.json`, which is where that product owns them.
+  #
+  # `needs: typecheck-build` and the artifact download are not ceremony. `@theokit/agents` resolves
+  # through its own `exports` map to `dist/`, so these tests import the BUILT framework — the same
+  # precondition `package-validation` has, and the reason this job sits beside it rather than in the
+  # `test` job, which has no dist.
+  #
+  # Its suite is NOT merged into the root vitest `projects` list, deliberately. Vitest reads
+  # `coverage` from the root config only, so aggregating would silently discard the 62.03% floor
+  # `apps/theocode/vitest.config.ts` documents across 170 lines — a measured number becoming inert
+  # is the accepted-and-ignored failure this repository keeps finding.
+  theocode:
+    name: TheoCode (the consumer that validates this framework)
+    needs: typecheck-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: usetheokit/shared-workflows/actions/setup@v1 # zizmor: ignore[unpinned-uses]
+      - uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
+        with:
+          name: package-dist
+          path: packages
+      # The language gate needs a dictionary, and the runner does not ship the Portuguese half.
+      #
+      # Brought over verbatim from `apps/theocode`'s own workflow, whose six jobs became inert
+      # files under `apps/theocode/.github/` when the subtree moved in on 2026-09-16. I rebuilt
+      # the job from its package scripts and did not rebuild this, so `pnpm --filter theocode
+      # test` went red on four `check-english-only` assertions that read `expected [] to include
+      # 'desligado'` — the detector finding NOTHING, which is what a missing lexicon looks like
+      # from inside a unit test.
+      #
+      # Restored rather than rewritten. Both steps carry measurements this session did not make:
+      # the retry exists because a mirror stalled silently three runs in a row, and the floor
+      # check exists because "the package installed" and "the lexicon loaded" once disagreed by a
+      # quarter of the English vocabulary while the install step reported success.
+      - name: Provide word lists (skip apt when the image already has them)
+        run: |
+          set -u
+          # B-073 — ASK BEFORE INSTALLING. `check-english-only.mjs` accepts any of these paths, and
+          # the runner image may already carry one; three consecutive runs on 2026-08-19 exhausted
+          # every apt retry against a mirror that stalls with zero output, so an install we do not
+          # need is an outage we do not need to survive. This also prints what IS present, which is
+          # the measurement the workflow never made.
+          echo "--- dictionaries present before any install:"
+          ls -1 /usr/share/dict/ 2>/dev/null || echo "  (no /usr/share/dict)"
+          ls -1 /usr/share/hunspell/ 2>/dev/null || echo "  (no /usr/share/hunspell)"
+
+          have_en=0; have_pt=0
+          for f in /usr/share/dict/american-english /usr/share/dict/words /usr/share/hunspell/en_US.dic; do
+            [ -s "$f" ] && have_en=1
+          done
+          for f in /usr/share/dict/brazilian /usr/share/dict/portuguese /usr/share/hunspell/pt_BR.dic; do
+            [ -s "$f" ] && have_pt=1
+          done
+          if [ "$have_en" = 1 ] && [ "$have_pt" = 1 ]; then
+            echo "both dictionaries already present — apt not needed"
+            exit 0
+          fi
+          # B-073 bullet 3 — BOTH packages, always, and the reason is a mistake worth keeping.
+          #
+          # This step briefly installed only what `have_en`/`have_pt` reported missing. On
+          # `ubuntu-24.04` that meant `wbrazilian` alone, because `/usr/share/hunspell/en_US.dic`
+          # ships with the image and `LEXICONS.en` lists that path. The install SUCCEEDED —
+          # "missing (en=1 pt=0) — installing: wbrazilian", "word lists installed on attempt 1" —
+          # and five `check-english-only` tests went RED that had been green on the parent commit.
+          #
+          # THE MEASUREMENT WAS TRUE AND ABOUT THE WRONG PROPERTY. `check-english-only.mjs`
+          # ACCEPTS `en_US.dic`, which is what was measured. It does not produce the same LEXICON
+          # from it: `loadLexicon` unions every path that exists, so dropping `wamerican` also
+          # dropped `/usr/share/dict/american-english` AND `/usr/share/dict/words` (a
+          # dictionaries-common symlink that `wamerican` owns) — 102,485 forms down to 75,798.
+          # Path acceptance is not lexicon equivalence, and a gate whose verdict is a set
+          # difference is decided by exactly that.
+          #
+          # So: install both. The download saved was real and small; the property it traded away
+          # was the gate's correctness, which is not a trade. The `have_*` probe stays because
+          # printing what the image carries is worth having on its own.
+          # Named literally at the apt call below, not expanded from here: an unquoted `$pkgs`
+          # is how this list word-splits into two arguments, and shellcheck reads that as the
+          # SC2086 bug it usually is. The variable survives for the operator-facing messages,
+          # which is the only job left now that the list is fixed at two.
+          pkgs="wamerican wbrazilian"
+          echo "missing (en=$have_en pt=$have_pt) — installing:$pkgs"
+
+          for attempt in 1 2 3; do
+            # `timeout` per ATTEMPT, not per step: the failure is a silent stall with zero output,
+            # so a whole-step ceiling can only report the death, never recover from it.
+            if timeout 90 sudo apt-get update -qq \
+               && timeout 90 sudo apt-get install -y -qq wamerican wbrazilian; then
+              echo "word lists installed on attempt ${attempt}"
+              exit 0
+            fi
+            echo "attempt ${attempt} failed or stalled; backing off" >&2
+            sleep $((attempt * 15))
+          done
+          echo "::error::apt could not provide$pkgs after 3 attempts." >&2
+          echo "check-english-only.mjs needs a dictionary and fails closed without one, so this" >&2
+          echo "job is RED rather than silently skipping the language gate." >&2
+          exit 1
+
+      # B-073 — VERIFY THE LEXICON, not the package. Added because the step above once reported
+      # "word lists installed on attempt 1" while the gate it feeds had lost a quarter of its
+      # English vocabulary, and five tests went red before anyone connected the two.
+      #
+      # "The package installed" and "the tool can build the lexicon it needs" are different
+      # claims, and only the second one is the reason this step exists. Asserting a FLOOR rather
+      # than an exact count: the numbers move with distro versions, and a gate that fails on a
+      # dictionary getting bigger would be worse than no gate.
+      - name: Verify the lexicons actually load
+        run: |
+          # shellcheck disable=SC2016  # the `${...}` below are JS template literals inside a
+          # node program; shell expansion is the thing the single quotes exist to prevent.
+          node -e '
+            const { readFileSync, existsSync } = require("node:fs")
+            const load = (paths) => {
+              const words = new Set()
+              let files = 0
+              for (const p of paths) {
+                if (!existsSync(p)) continue
+                files++
+                for (const line of readFileSync(p, "latin1").split("\n")) {
+                  const w = (line.split("/")[0] ?? "").trim().toLowerCase()
+                  if (w.length >= 3 && /^[a-z\u00e0-\u00ff]+$/.test(w)) words.add(w)
+                }
+              }
+              return { files, size: words.size }
+            }
+            const en = load(["/usr/share/dict/american-english", "/usr/share/dict/words", "/usr/share/hunspell/en_US.dic"])
+            const pt = load(["/usr/share/dict/brazilian", "/usr/share/dict/portuguese", "/usr/share/hunspell/pt_BR.dic"])
+            console.log(`en: ${en.files} file(s), ${en.size} forms`)
+            console.log(`pt: ${pt.files} file(s), ${pt.size} forms`)
+            const FLOOR_EN = 90000, FLOOR_PT = 150000
+            if (en.size < FLOOR_EN || pt.size < FLOOR_PT) {
+              console.error(`::error::lexicon too small — en ${en.size} (floor ${FLOOR_EN}), pt ${pt.size} (floor ${FLOOR_PT}).`)
+              console.error("The packages may have installed while the vocabulary the gate needs did not.")
+              console.error("Measured 2026-08-20 on ubuntu-24.04: en 102485 with wamerican, 75798 without.")
+              process.exit(1)
+            }
+          '
+        timeout-minutes: 2
+
+      - name: typecheck
+        run: pnpm --filter theocode run typecheck
+      - name: test
+        run: pnpm --filter theocode test
+      - name: lint
+        run: pnpm --filter theocode run lint
+      - name: depcruise
+        run: pnpm --filter theocode run depcruise
+      - name: crossval
+        run: pnpm --filter theocode run crossval
+      - name: build
+        run: pnpm --filter theocode run build
+
   dependency-audit:
     name: Dependency audit (production, high+)
     runs-on: ubuntu-latest

@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "jsx": "react-jsx",
+    "isolatedModules": true,
+    "resolveJsonModule": true,
+    "paths": {
+      "@theocode/agent": ["./packages/agent/src/index.ts"],
+      "@theocode/agent/*": ["./packages/agent/src/*"],
+      "@theocode/shared/*": ["./packages/shared/src/*"]
+    }
+  },
+  "include": ["packages/*/src/**/*", "packages/*/tests/**/*", "packages/*/tools/**/*", "tools/**/*", "*.config.ts"],
+  "exclude": ["node_modules", "dist"]
+}
