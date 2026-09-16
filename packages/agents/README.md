@@ -100,10 +100,10 @@ configuration that had no effect.
 | `output-styles/*.md` | read, selected by `settings.json` |
 | `agent-memory/` | **resolvable** — the SDK carries the declaration, `applySubagentMemory` applies it, and the host decides whether to call it. Measured 2026-09-15: no consumer does yet |
 | `workflows/*.js` | **refused**, and reported. Every other surface is data; a workflow is code, and executing JavaScript found under a caller-supplied directory is a decision that belongs to you |
-| `keybindings.json` | **out of scope** — `@theokit/tui` |
-| `themes/*.json` | **out of scope** — `@theokit/tui` |
+| `keybindings.json` | **out of scope HERE** — read by the consumer, see below |
+| `themes/*.json` | **out of scope** — nobody reads it, in any of the three packages |
 | `~/.claude.json` — OAuth state, UI toggles | **out of scope** — a CLI's own state |
-| `~/.claude.json` — personal-scope MCP servers | **not read yet**, and in scope |
+| `~/.claude.json` — personal-scope MCP servers | **read** — `loadPersonalMcpServers` |
 
 
 ### Out of scope, and who owns it instead
@@ -132,8 +132,16 @@ toggles are a CLI's own state — that file is written by a specific program abo
 a library reading another program's login state would be reaching into something it neither owns nor
 can refresh. Its **personal-scope MCP servers** are a different matter: an MCP server the operator
 registered for themselves is a framework concern, this package already reads project-scope servers
-from `.mcp.json`, and the personal scope measured 0 when this was written. **It does not any more:** on the machine this was re-measured on, 2026-09-15, `~/.claude.json` carried 2 personal-scope servers. The gap now costs an operator the servers they registered for themselves, which is the difference between a gap worth declaring and one worth closing. That half is **not refused — it is not done**,
-and saying so is the distinction this section exists to make.
+from `.mcp.json`, and the personal scope measured 0 when this was written. **It does not any more:** on the machine this was re-measured on, 2026-09-15, `~/.claude.json` carried 2 personal-scope servers. The gap cost an operator the servers they registered for themselves, which is the difference between a
+gap worth declaring and one worth closing — so it was closed. `loadPersonalMcpServers` reads that key
+and only that key, and returns empty on a malformed file rather than throwing, because one stray comma
+in a shared home file must not break every project on the machine.
+
+Both MCP readers are called by the host, not from inside this package — `loadMcpJson` has no internal
+caller either, and a library with no `main()` cannot have one. That is why both rows say **read** while
+`agent-memory/` says **resolvable**: the difference is not who calls, it is whether the chain is intact.
+A `memory:` declaration was DROPPED by `@theokit/sdk` before any reader could see it; nothing drops an
+MCP server.
 
 The registry entry that prompted this counts four decisions across three files, because
 `~/.claude.json` is split. That is the count, stated so nobody goes looking for a fourth file.

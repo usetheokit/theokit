@@ -1,5 +1,32 @@
 # @theokit/agents
 
+## 14.5.0
+
+### Minor Changes
+
+- 604ecab: `loadPersonalMcpServers` — MCP servers an operator registered for themselves, in `~/.claude.json`,
+  are now read alongside the project-scope servers from `.mcp.json`.
+
+  The surface table recorded this as measuring zero and therefore not worth closing. Re-measured
+  2026-09-15 on the machine the original number came from: the file carried 2 personal-scope servers.
+  A measurement that justifies inaction has to stay current, and that one had expired — the gap costs
+  an operator the servers they registered for themselves.
+
+  Never throws: `~/.claude.json` is shared with another tool that writes it, so an unreadable or
+  surprising file yields no servers rather than failing the run that merely wanted to read them.
+
+- 604ecab: `applySubagentMemory` — a subagent's `memory:` declaration now reaches the prompt it governs.
+
+  `@theokit/sdk` carries the declaration and deliberately stops there: which of three roots a note
+  lives under is a decision about who can see it, and a second copy of that rule in that package is
+  how two packages drift into disagreeing about privacy. `resolveAgentMemory` owned that decision
+  here — and owned it with no caller. The reader and the declaration were one call apart for as long
+  as both existed.
+
+  The three roots are decided together, because they differ in exactly one way — who can see the
+  notes — so defaulting an unrecognised scope would publish, on the next commit, something somebody
+  wrote expecting privacy. An unrecognised scope therefore throws rather than guessing.
+
 ## 14.4.0
 
 ### Minor Changes
