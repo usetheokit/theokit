@@ -48,6 +48,30 @@ describe('applySubagentMemory', () => {
     expect(out.prompt).toContain('remember the postgres timeout')
   })
 
+  /**
+   * The `user` scope, which six sibling tests never exercised — every one of them declares
+   * `project`, and `project` is the branch that reads `cwd`. So the ONE root that needs `home`
+   * went through this function zero times, and the mismatch below survived a full test file.
+   *
+   * MEASURED 2026-09-16, wiring this into a consumer: `applySubagentMemory` built its input as
+   * `{ ...(home === undefined ? {} : { home }) }` while `resolveAgentMemory` reads
+   * `input.homeDir`. Every `user`-scope call threw `needs a home directory and none was given`
+   * — with a home directory that had been given.
+   *
+   * TypeScript could not see it. The field arrives through a SPREAD, and excess-property checking
+   * does not apply to spreads; `homeDir` is optional, so its absence is legal too. An optional
+   * field plus a spread is a silent rename, and only a test that reads the note back catches it.
+   */
+  it('resolves the user scope against home, which is the root that scope exists for', () => {
+    const home = projectWith('crosser', 'the note that crosses projects')
+    const cwd = projectWith('crosser', 'THE PROJECT NOTE - must not be read')
+
+    const out = applySubagentMemory({ ...DEF, memory: 'user' }, 'crosser', cwd, home)
+
+    expect(out.prompt).toContain('the note that crosses projects')
+    expect(out.prompt).not.toContain('must not be read')
+  })
+
   it('leaves a definition without a declaration exactly as it was', () => {
     const cwd = projectWith('auditor', 'notes nobody asked for')
     expect(applySubagentMemory(DEF, 'auditor', cwd)).toEqual(DEF)
