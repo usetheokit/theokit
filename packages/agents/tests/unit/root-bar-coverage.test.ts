@@ -101,6 +101,18 @@ function installedSdkMajor(): number {
 
 const ROOT_BAR_VERDICTS: Record<string, Verdict> = {
   // ── Arrived with `@theokit/sdk@5.x`; `sinceMajor` keeps them out of the orphan guard on 4.x.
+  //
+  // The seven below arrived with the 5.5.0 → 5.9.0 bump that merging `apps/theocode` forced: that
+  // product needs a `@theokit/sdk` carrying the `memory:` frontmatter field, and one workspace has
+  // one copy. Each is `out`, and each was checked rather than inferred from its name — signature
+  // read in the SDK's `.d.ts`, and `0` occurrences in this package's `src`.
+  createTokenLimiter: { sinceMajor: 5, verdict: 'out', reason: R.GUARDRAILS },
+  createUnicodeNormalizer: { sinceMajor: 5, verdict: 'out', reason: R.GUARDRAILS },
+  isInside: { sinceMajor: 5, verdict: 'out', reason: R.INTERNAL },
+  parsePermissionRules: { sinceMajor: 5, verdict: 'out', reason: R.OWN_SURFACE },
+  permissionFloorReason: { sinceMajor: 5, verdict: 'out', reason: R.PURE_CONVERTER },
+  managedSettingsPathFor: { sinceMajor: 5, verdict: 'out', reason: R.PUBLIC_NO_CONSUMER },
+  readManagedSettings: { sinceMajor: 5, verdict: 'out', reason: R.PUBLIC_NO_CONSUMER },
   Workflow: { sinceMajor: 5, verdict: 'out', reason: R.PUBLIC_NO_CONSUMER },
   agentStep: { sinceMajor: 5, verdict: 'out', reason: R.PUBLIC_NO_CONSUMER },
   fn: { sinceMajor: 5, verdict: 'out', reason: R.PUBLIC_NO_CONSUMER },

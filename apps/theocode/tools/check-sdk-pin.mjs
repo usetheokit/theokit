@@ -23,7 +23,7 @@
  * number someone fixes by hand drifts back the next time either file is edited.
  */
 import { existsSync, readFileSync, readdirSync, realpathSync } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 
 const PKG = 'package.json'
 const WS = 'pnpm-workspace.yaml'
@@ -35,7 +35,7 @@ const NAME = '@theokit/sdk'
  * Takes the file CONTENTS so the rule is testable without a filesystem — the guard that has no test
  * is the one that reports clean over anything.
  */
-export function disagreement(pkgJson, workspaceYaml, workspaceManifests = []) {
+export function disagreement(pkgJson, workspaceYaml, workspaceManifests = [], wsLabel = WS) {
   const pkg = JSON.parse(pkgJson)
   const declared = pkg.devDependencies?.[NAME] ?? pkg.dependencies?.[NAME]
   const npmOverride = pkg.overrides?.[NAME]
@@ -66,15 +66,15 @@ export function disagreement(pkgJson, workspaceYaml, workspaceManifests = []) {
     const shown = npmOverride === undefined ? names.join(', ') : `${NAME} (${npmOverride})`
     return (
       `${PKG} has an npm \`overrides\` block — ${shown}. pnpm does not read it, so it is inert; ` +
-      `${WS} is the one that decides. Delete the block and pin there if the pin is wanted.`
+      `${wsLabel} is the one that decides. Delete the block and pin there if the pin is wanted.`
     )
   }
   if (declared === undefined) return undefined
   if (wsOverride === undefined) {
-    return `${PKG} declares ${NAME}@${declared} and ${WS} has no \`${NAME}\` override to hold the whole tree to it`
+    return `${PKG} declares ${NAME}@${declared} and ${wsLabel} has no \`${NAME}\` override to hold the whole tree to it`
   }
   if (declared !== wsOverride) {
-    return `${PKG} declares ${NAME}@${declared} while ${WS} overrides the tree to ${wsOverride} — the build would read a different copy than everything else`
+    return `${PKG} declares ${NAME}@${declared} while ${wsLabel} overrides the tree to ${wsOverride} — the build would read a different copy than everything else`
   }
 
   // A workspace that does NOT name the SDK is silent, not wrong: three of the four packages reach it
@@ -85,7 +85,7 @@ export function disagreement(pkgJson, workspaceYaml, workspaceManifests = []) {
     const pin = manifest.dependencies?.[NAME] ?? manifest.devDependencies?.[NAME]
     if (pin === undefined) continue
     if (pin !== wsOverride) {
-      return `${path} declares ${NAME}@${pin} while ${WS} overrides the tree to ${wsOverride} — that package would typecheck against one copy and run against another`
+      return `${path} declares ${NAME}@${pin} while ${wsLabel} overrides the tree to ${wsOverride} — that package would typecheck against one copy and run against another`
     }
   }
   return undefined
@@ -152,6 +152,47 @@ export function resolvedDisagreement(declarations, resolved) {
   return undefined
 }
 
+/**
+ * Where the tree's `@theokit/sdk` override actually lives, and what it says.
+ *
+ * It was `pnpm-workspace.yaml` beside this file while this package was its own repository. Moved
+ * under `apps/theocode/` on 2026-09-16, the workspace root is the monorepo's and the override sits
+ * in ITS `package.json` under `pnpm.overrides` — a block pnpm honours, unlike the npm-style
+ * top-level `overrides` this guard refuses a few lines up. The two are different keys and only one
+ * of them is inert; conflating them is how #69 shipped.
+ *
+ * Both sources are read and concatenated because the root may legitimately use either, and the
+ * caller only scans for the package name. Reading just one would make a real pin invisible and
+ * report a clean tree over an override this guard exists to hold.
+ */
+export function workspaceOverrideSource(from = process.cwd()) {
+  let dir = from
+  for (;;) {
+    const ws = join(dir, WS)
+    const pkg = join(dir, PKG)
+    const hasWs = existsSync(ws)
+    // The workspace ROOT is the directory declaring members, not merely any ancestor with a manifest.
+    if (hasWs) {
+      const pnpmOverrides = existsSync(pkg)
+        ? (JSON.parse(readFileSync(pkg, 'utf8')).pnpm?.overrides ?? {})
+        : {}
+      const synthesized = Object.entries(pnpmOverrides)
+        .map(([name, range]) => `'${name}': '${range}'`)
+        .join('\n')
+      const label = NAME in pnpmOverrides ? `${join(dir, PKG)} \`pnpm.overrides\`` : join(dir, WS)
+      return { label, content: `${readFileSync(ws, 'utf8')}\n${synthesized}` }
+    }
+    const up = dirname(dir)
+    if (up === dir) {
+      // No workspace anywhere: hand back an empty document so the caller reports "no override to
+      // hold the whole tree" rather than crashing on a missing file, which is what it did here the
+      // first time this package was moved.
+      return { label: WS, content: '' }
+    }
+    dir = up
+  }
+}
+
 if (import.meta.url === `file://${process.argv[1]}`) {
   // Read from disk here rather than inside `disagreement`, which stays filesystem-free so the rule
   // is testable — the guard with no test is the one that reports clean over anything.
@@ -160,7 +201,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     .map((e) => join('packages', e.name, 'package.json'))
     .filter((p) => existsSync(p))
     .map((p) => ({ path: p, json: readFileSync(p, 'utf8') }))
-  const problem = disagreement(readFileSync(PKG, 'utf8'), readFileSync(WS, 'utf8'), manifests)
+  const { label, content } = workspaceOverrideSource()
+  const problem = disagreement(readFileSync(PKG, 'utf8'), content, manifests, label)
   if (problem !== undefined) {
     process.stderr.write(`${problem}\n`)
     process.exit(1)

@@ -18,9 +18,9 @@
     "./session": "./src/session/index.ts"
   },
   "dependencies": {
-    "@theocode/shared": "*",
-    "@theokit/agents": "14.5.1",
-    "@theokit/agents-pty": "^0.2.1",
+    "@theocode/shared": "workspace:*",
+    "@theokit/agents": "workspace:*",
+    "@theokit/agents-pty": "workspace:*",
     "smol-toml": "^1.7.0",
     "zod": "^4.0.0",
     "@theokit/sdk": "5.9.0"

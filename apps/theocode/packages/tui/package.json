@@ -5,9 +5,9 @@
   "type": "module",
   "description": "Surface 1 \u2014 the terminal UI.",
   "dependencies": {
-    "@theocode/agent": "*",
-    "@theocode/shared": "*",
-    "@theokit/agents": "14.5.1",
+    "@theocode/agent": "workspace:*",
+    "@theocode/shared": "workspace:*",
+    "@theokit/agents": "workspace:*",
     "@theokit/tui": "^0.80.0",
     "ink": "^7.1.0",
     "lowlight": "^3.0.0",

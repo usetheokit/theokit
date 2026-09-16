@@ -6,6 +6,28 @@ packages:
   # declared members. Neither directory is committed.
   - 'my-test-bot'
   - 'examples/*'
+  # `theocode` — a first-party APPLICATION that consumes the framework, brought in from
+  # `usetheoai-lab/TheoCode` on 2026-09-16 with its history (`git subtree`, 1009 commits).
+  #
+  # `apps/` and not `packages/`, and the reason is mechanical rather than stylistic: five globs in
+  # this repository spell `packages/*` and every one of them means "the publishable framework" —
+  # `build:packages`, the root `tsconfig` include, vitest's `coverage.include`, the `packages/*/dist`
+  # CI artifact, and the architecture guards. A private application dropped in there would be swept
+  # into all five silently, and each would need an exclusion. A sibling directory needs none.
+  - 'apps/*'
+  - 'apps/*/packages/*'
   # The @theokit/sdk sibling packages are consumed from the npm registry, not linked: a workspace
   # link would have to sit inside the repo root. For local cross-repo work:
   # `pnpm link ../theokit-sdk/packages/sdk`
+
+# From `apps/theocode/pnpm-workspace.yaml`, which the outer workspace ignores. `node-pty` is a NATIVE
+# addon: without its postinstall there is no compiled binding and the two tools backed by
+# `PtyInteractiveBackend` stop existing rather than degrade.
+#
+# `minimumReleaseAgeExclude` did NOT come with it. Its `@theokit/*` rows described packages that are
+# now `workspace:*` and never fetched, and `pnpm config get minimumReleaseAge` returns undefined in
+# both repositories — so the rest was an exception list for a policy nobody enabled.
+allowBuilds:
+  esbuild: true
+  node-pty: true
+

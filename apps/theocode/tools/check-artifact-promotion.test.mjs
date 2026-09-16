@@ -17,14 +17,13 @@
  * that follow are the same discipline the doc-reference and English-only guards already apply.
  */
 import { existsSync } from 'node:fs'
-import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { join } from 'node:path'
+
+import { kitRoot } from './kit-root.mjs'
 
 import { describe, expect, it } from 'vitest'
 
 import { PAIRS, auditPairs, divergentDuplicates } from './check-artifact-promotion.mjs'
-
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 
 /**
  * A fake tree: { dir: { file: contents } }.
@@ -74,10 +73,7 @@ describe('divergentDuplicates', () => {
 
   it('test_it_passes_when_the_two_copies_agree', async () => {
     // Anti-vacuity floor: a guard that flags everything would pass the test above.
-    const io = fakeFs({
-      work: { 'plan.md': 'same\n' },
-      published: { 'plan.md': 'same\n' },
-    })
+    const io = fakeFs({ work: { 'plan.md': 'same\n' }, published: { 'plan.md': 'same\n' } })
     expect(await divergentDuplicates(FIXTURE_PAIRS, io)).toEqual([])
   })
 
@@ -115,10 +111,7 @@ describe('divergentDuplicates', () => {
   })
 
   it('test_non_markdown_files_are_ignored', async () => {
-    const io = fakeFs({
-      work: { 'notes.txt': 'A\n' },
-      published: { 'notes.txt': 'B\n' },
-    })
+    const io = fakeFs({ work: { 'notes.txt': 'A\n' }, published: { 'notes.txt': 'B\n' } })
     expect(await divergentDuplicates(FIXTURE_PAIRS, io)).toEqual([])
   })
 
@@ -141,7 +134,13 @@ describe('divergentDuplicates', () => {
       w2: { 'y.md': 'A\n' },
       p2: { 'y.md': 'B\n' },
     })
-    const problems = await divergentDuplicates([['w1', 'p1'], ['w2', 'p2']], io)
+    const problems = await divergentDuplicates(
+      [
+        ['w1', 'p1'],
+        ['w2', 'p2'],
+      ],
+      io,
+    )
     expect(problems).toHaveLength(2)
   })
 })
@@ -163,12 +162,24 @@ describe('PAIRS', () => {
     // against disk there would be asserting about a tree nobody shipped. SKIP is the honest
     // outcome and it is announced, following `check-codex-parity.mjs`, which skips loudly on its
     // own gitignored input rather than reporting a clean surface it never read.
-    if (!existsSync(join(ROOT, '.claude'))) {
-      ctx.skip('.claude/ is not versioned and is absent here — nothing to check the constant against')
+    if (kitRoot() === undefined) {
+      ctx.skip(
+        '.claude/ is not versioned and is absent here — nothing to check the constant against',
+      )
       return
     }
+    // Resolved against the KIT's root, not this package's. They were the same directory while this
+    // was its own repository; in the monorepo the kit is installed once at the top and the working
+    // area went with it.
+    //
+    // OPEN, and worth a decision rather than a silent mapping: that area is now shared with the
+    // framework, so the promoted half of each pair (`docs/plans`, `docs/reviews` — neither of which
+    // exists here) would be audited against records this product did not write. The directories are
+    // asserted because that is what this test claims; whether the PAIRING still means anything in a
+    // shared working area is a question for whoever next runs the audit.
+    const kit = kitRoot()
     for (const [working] of PAIRS) {
-      expect(existsSync(join(ROOT, working)), `declared working directory: ${working}`).toBe(true)
+      expect(existsSync(join(kit, working)), `declared working directory: ${working}`).toBe(true)
     }
   })
 

@@ -409,6 +409,50 @@ jobs:
   # a transitive dependency, or a copyleft package entering a tree that publishes to npm, was caught
   # by nothing. Neither reimplements a tool: audit is pnpm's own, and the licence gate reads pnpm's
   # report and applies a policy that lives in the repository.
+  # `apps/theocode` — the first-party application that consumes this framework, brought in on
+  # 2026-09-16. Its six CI jobs came with the subtree as inert files under `apps/theocode/.github/`,
+  # which GitHub never reads: workflows are only honoured at the repository root. They are folded
+  # into this one job, whose steps carry the same names so a failure stays attributable.
+  #
+  # ONE job and not six, because every one of them was `pnpm run <script>` in the same directory:
+  # the definitions stay in `apps/theocode/package.json`, which is where that product owns them.
+  #
+  # `needs: typecheck-build` and the artifact download are not ceremony. `@theokit/agents` resolves
+  # through its own `exports` map to `dist/`, so these tests import the BUILT framework — the same
+  # precondition `package-validation` has, and the reason this job sits beside it rather than in the
+  # `test` job, which has no dist.
+  #
+  # Its suite is NOT merged into the root vitest `projects` list, deliberately. Vitest reads
+  # `coverage` from the root config only, so aggregating would silently discard the 62.03% floor
+  # `apps/theocode/vitest.config.ts` documents across 170 lines — a measured number becoming inert
+  # is the accepted-and-ignored failure this repository keeps finding.
+  theocode:
+    name: TheoCode (the consumer that validates this framework)
+    needs: typecheck-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: usetheokit/shared-workflows/actions/setup@v1 # zizmor: ignore[unpinned-uses]
+      - uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
+        with:
+          name: package-dist
+          path: packages
+      - name: typecheck
+        run: pnpm --filter theocode run typecheck
+      - name: test
+        run: pnpm --filter theocode test
+      - name: lint
+        run: pnpm --filter theocode run lint
+      - name: depcruise
+        run: pnpm --filter theocode run depcruise
+      - name: crossval
+        run: pnpm --filter theocode run crossval
+      - name: build
+        run: pnpm --filter theocode run build
+
   dependency-audit:
     name: Dependency audit (production, high+)
     runs-on: ubuntu-latest
