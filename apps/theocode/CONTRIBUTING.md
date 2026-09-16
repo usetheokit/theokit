@@ -345,7 +345,7 @@ version string cannot be mistaken for anything else.
 refuses:
 
 ```
-node_modules/@changesets/cli/dist/changesets-cli.cjs.js:1352
+# @changesets/cli@2.31.0 — changesets-cli.cjs.js:1352
   logger.error("Snapshot release is not allowed in pre mode")
   logger.log("To resolve this exit the pre mode by running `changeset pre exit`")
   throw new errors.ExitError(1)
