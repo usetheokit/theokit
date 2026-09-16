@@ -1,7 +1,6 @@
 {
   "name": "theocode",
   "version": "0.27.0",
-  "packageManager": "pnpm@11.22.0",
   "private": true,
   "type": "module",
   "description": "A terminal coding agent: one agent core, two surfaces.",
