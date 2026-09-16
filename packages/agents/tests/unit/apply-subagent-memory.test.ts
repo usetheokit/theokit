@@ -72,6 +72,30 @@ describe('applySubagentMemory', () => {
     expect(out.prompt).not.toContain('must not be read')
   })
 
+  /**
+   * The third root, and the last one this wrapper had never run. `local` shares `cwd` with
+   * `project` and differs only in the directory — `agent-memory-local`, kept OUT of version
+   * control, which is the whole point of having it.
+   *
+   * Added the same day the `user` bug was found, and for the reason that bug teaches: the lower
+   * layer's tests covered all three roots while THIS layer covered one, and "it takes the same
+   * branch as `project`" is the reasoning that let a silent rename live. A wrong directory name
+   * here fails exactly like a wrong field name did — quietly, and only for the root nobody ran.
+   */
+  it('resolves the local scope against its own directory, not the project one', () => {
+    const cwd = projectWith('drafter', 'the note kept out of git', '.claude/agent-memory-local')
+    mkdirSync(join(cwd, '.claude', 'agent-memory', 'drafter'), { recursive: true })
+    writeFileSync(
+      join(cwd, '.claude', 'agent-memory', 'drafter', 'MEMORY.md'),
+      'THE COMMITTED NOTE - must not be read',
+    )
+
+    const out = applySubagentMemory({ ...DEF, memory: 'local' }, 'drafter', cwd)
+
+    expect(out.prompt).toContain('the note kept out of git')
+    expect(out.prompt).not.toContain('must not be read')
+  })
+
   it('leaves a definition without a declaration exactly as it was', () => {
     const cwd = projectWith('auditor', 'notes nobody asked for')
     expect(applySubagentMemory(DEF, 'auditor', cwd)).toEqual(DEF)
