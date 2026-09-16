@@ -99,7 +99,23 @@
       // tool relying on that hoisting is what left `npm run build` unable to resolve it at all.
       // Recorded here rather than left as a standing warning, because a gate that always prints
       // something is a gate people stop reading.
-      "ignoreDependencies": ["@theokit/sdk"],
+      //
+      // `@theokit/agents` and `@theokit/agents-pty` are declared for a different reason, and knip is
+      // right that this workspace imports neither: `packages/agent` and `packages/cli` do. They are
+      // here so that `pnpm -r run build` ORDERS this application after the framework packages it
+      // bundles.
+      //
+      // pnpm orders by dependencies between workspace PROJECTS. The real declarations live at
+      // `packages/agent`, which has no `build` script; the script is here, and while this manifest
+      // named no framework package pnpm started the esbuild bundle alongside `packages/http` — 77
+      // `Could not resolve "@theokit/agents/..."` errors against a `dist/` that did not exist yet.
+      // Measured on 2026-09-16: without them this project builds 1st and `packages/agents` 6th; with
+      // them, 5th and 6th.
+      //
+      // A build-ordering edge is not an import, so it can never satisfy knip. Listing it here is the
+      // honest resolution — the alternative is a gate that prints two lines on every run, which is a
+      // gate people stop reading.
+      "ignoreDependencies": ["@theokit/sdk", "@theokit/agents", "@theokit/agents-pty"],
     },
     "packages/agent": {
       "entry": ["tests/**/*.test.ts"],
