@@ -90,14 +90,15 @@ configuration that had no effect.
 
 | Surface | State |
 |---|---|
-| `CLAUDE.md` | read |
+| `CLAUDE.md` | **read when the host names it** — see below |
 | `settings.json` — `permissions` | translated into the SDK's `PermissionRule[]`; an entry that cannot be rendered faithfully is reported and excluded |
-| `settings.json` — `env`, `outputStyle` | read |
+| `settings.json` — `outputStyle` | read | 
+| `settings.json` — `env` | **parsed, not applied** — see below |
 | `settings.local.json` | read, layered above `settings.json` |
 | `skills/`, `agents/`, `commands/`, `plugins/` | read when the dialect is declared |
 | `.mcp.json` | read; a field this runtime does not carry is reported |
 | `output-styles/*.md` | read, selected by `settings.json` |
-| `agent-memory/` | read — see below |
+| `agent-memory/` | **resolvable** — the SDK carries the declaration, `applySubagentMemory` applies it, and the host decides whether to call it. Measured 2026-09-15: no consumer does yet |
 | `workflows/*.js` | **refused**, and reported. Every other surface is data; a workflow is code, and executing JavaScript found under a caller-supplied directory is a decision that belongs to you |
 | `keybindings.json` | **out of scope** — `@theokit/tui` |
 | `themes/*.json` | **out of scope** — `@theokit/tui` |
@@ -112,27 +113,101 @@ were measured on 2026-09-12 — `keybindings`, `themes/` and `.claude.json` each
 across every package source tree, against a control of 31 for `skills` — and each one is a decision
 rather than a gap.
 
-**`keybindings.json` and `themes/*.json` belong to `@theokit/tui`.** A framework has no keyboard and
+**`keybindings.json` and `themes/*.json` are not this package's.** A framework has no keyboard and
 no colour: it produces text and tool calls, and the process that renders them owns which key does
 what and which escape codes it emits. Reading them here would let this package hold configuration it
 cannot act on, which is the accepted-and-ignored failure the table above exists to prevent.
+
+**Where they actually go is the consumer, not `@theokit/tui`.** Re-measured 2026-09-15: the toolkit
+carries internal keybindings and reads no file; `theocode` reads `~/.claude/keybindings.json` itself,
+in `terminal-io/keybindings.ts`, against a format it measured against the published documentation.
+Naming the toolkit as the owner sent a reader to the package that does the least with it — and the
+row said `out of scope` without saying out of scope FOR WHOM, which is the half that misleads.
+
+`themes/*.json` is read by nobody, in any of the three packages. That is a genuine gap rather than a
+delegation, and it is stated here rather than implied by an ownership that does not exist.
 
 **`~/.claude.json` is two things under one name, and the split is the point.** Its OAuth state and UI
 toggles are a CLI's own state — that file is written by a specific program about its own session, and
 a library reading another program's login state would be reaching into something it neither owns nor
 can refresh. Its **personal-scope MCP servers** are a different matter: an MCP server the operator
 registered for themselves is a framework concern, this package already reads project-scope servers
-from `.mcp.json`, and the personal scope measures 0. That half is **not refused — it is not done**,
+from `.mcp.json`, and the personal scope measured 0 when this was written. **It does not any more:** on the machine this was re-measured on, 2026-09-15, `~/.claude.json` carried 2 personal-scope servers. The gap now costs an operator the servers they registered for themselves, which is the difference between a gap worth declaring and one worth closing. That half is **not refused — it is not done**,
 and saying so is the distinction this section exists to make.
 
 The registry entry that prompted this counts four decisions across three files, because
 `~/.claude.json` is split. That is the count, stated so nobody goes looking for a fourth file.
 
+### `themes/*.json`
+
+Read by none of the three packages, measured 2026-09-15. After `keybindings.json` turned out to be
+read by the consumer rather than by the package it was attributed to, the obvious next move was to
+treat this as the same finding. It is not.
+
+This package has no colour at all — a grep for `color`, `chalk` or `theme` across its source returns
+nothing, the one apparent hit being `ansi` inside `stateTransitionHistory`. It produces text and tool
+calls; a palette here would be configuration nothing could act on. The toolkit reads no theme file
+either, so naming an owner would repeat the mistake the `keybindings.json` row already made.
+
+### `CLAUDE.md`
+
+The instruction tree accepts any file list: `input.fileNames`, falling back to a default of
+`['THEO.md', 'AGENTS.md', 'THEO.local.md', 'AGENTS.local.md']`. `CLAUDE.md` is not in it, and
+`instruction-tree.ts` says so while explaining why `CLAUDE.local.md` is absent too: "a private
+companion to a file this does not read would pair with nothing".
+
+A consumer that wants it passes it. Measured 2026-09-15 while auditing this table row by row:
+`CLAUDE.md`, `settings.json` → `env` and `agent-memory/` are each resolvable by the host, and each
+was listed as `read`. The word describes the mechanism existing; a reader takes it as the behaviour
+happening.
+
+### `settings.json` — `env`
+
+`outputStyle` is read AND applied: `loadSettings` returns it and `resolveOutputStyle` hands it to
+`loadOutputStyle`, which is the mechanism this package documents.
+
+`env` is parsed and goes no further here. Measured 2026-09-15: the schema accepts it, the only
+consumer of a `loadSettings` result in this package reads `outputStyle`, and nothing applies the
+parsed values to `process.env`. A host that wants them can read `settings.values.env` and apply
+them itself — the same shape as `agent-memory/` above, and stated for the same reason.
+
+Grouping it with `outputStyle` under one `read` claimed for both what is true of one. The rule this
+table serves is that a surface is read, or refused with a reason, and never accepted and ignored;
+a key that is parsed and dropped is the third state, and it was in this file's own table.
+
+## Why `env` is not applied, rather than not yet applied
+
+This is a refusal with a reason, not a gap waiting for someone.
+
+`env` under `.claude/` sets environment variables, and a variable is not inert. `NODE_OPTIONS`
+alone is code execution — `--require ./anything.js` runs a file before the program does — and
+`LD_PRELOAD`, `PATH` and `NODE_PATH` each reach the same place by another route. Anything this
+package spawns inherits the process environment: hook commands, and the stdio MCP servers whose
+`${VAR}` references `expandEnvReferences` already resolves against `process.env`.
+
+`.claude/settings.json` usually arrives with the clone. Applying its `env` would let a repository
+choose what runs inside every subprocess of anyone who opens it — the same threat the `hooks` row
+above is gated for, arriving by a quieter door. A consumer that wants those values can read
+`settings.values.env` and decide for itself, which is where a trust decision of that size belongs.
+
+The honest form of this is what the table now says: parsed, so an author is told the key was seen,
+and not applied, so nobody believes it took effect.
+
 ### `agent-memory/`
 
-A subagent whose frontmatter declares `memory:` gets a directory it reads and writes. The first
-**200 lines, capped at 25KB**, of its `MEMORY.md` are loaded when it runs — both caps apply, and
-truncation is reported rather than silent.
+`resolveAgentMemory()` resolves the directory a subagent reads and writes, and returns the first
+**200 lines, capped at 25KB**, of its `MEMORY.md` — both caps apply, and truncation is reported
+rather than silent.
+
+**The host calls it. Nothing here calls it for you, and `memory:` in subagent frontmatter does not
+reach it.** Measured 2026-09-15: `resolveAgentMemory` has no caller in this repository outside its
+own tests, and `@theokit/sdk` — which is the package that loads `.claude/agents/*.md`, and does not
+depend on this one — lists `memory` among the fields it refuses, so a file declaring it is skipped
+with a diagnostic rather than granted a directory.
+
+Saying "read" in the table above, as this document did until that measurement, put this surface in
+the same column as `CLAUDE.md` and implied a wiring that does not exist. The reader is real and the
+three roots below are real; what an author supplies is the call.
 
 | `memory:` | Root | Who can see it |
 |---|---|---|

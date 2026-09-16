@@ -214,7 +214,7 @@ export {
 // M107 — the neighbour that TOUCHES disk. `mcp-resolver` decides which servers a request receives;
 // this one reads `<cwd>/.mcp.json`. The layer exposed the rare cases and not the common one, so every
 // consumer wrote the loader by hand.
-export { loadMcpJson, McpFileError } from './mcp-file.js'
+export { loadMcpJson, loadPersonalMcpServers, McpFileError } from './mcp-file.js'
 
 // M68 — the `settingSources` trust gate (ADR 0063/0064/0065).
 export * from './setting-sources-gate.js'

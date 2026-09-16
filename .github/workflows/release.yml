@@ -215,6 +215,11 @@ jobs:
       # fit a new gate is the wrong repair; the gate belongs where packing is already serial.
       - name: Every declared export path exists inside the tarball
         run: node scripts/check-pack-exports-resolve.mjs
+      # The other half, and the one a consumer meets: presence is not loading. Installs each
+      # tarball into an empty directory and imports every subpath it declares (B-089, found by
+      # TheoCode reviewing the gate above).
+      - name: Every declared entry point loads from the tarball
+        run: node scripts/check-pack-entry-points-load.mjs
 
       # `pnpm install` runs the root `prepare` script, which points core.hooksPath at `.githooks`,
       # arming the pre-commit secret scan on this runner. changesets then runs
