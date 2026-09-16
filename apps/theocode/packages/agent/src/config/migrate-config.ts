@@ -42,9 +42,6 @@ export function findStrandedConfigs(dir: string): string[] {
 /** Convert one `config.toml` and return the path of the `settings.json` written beside it. */
 export function migrateConfigFile(from: string): string {
   const to = join(dirname(from), 'settings.json')
-  if (existsSync(to)) {
-    throw new ConfigError(`${to} already exists — delete it first, or convert ${from} by hand.`)
-  }
 
   let parsed: unknown
   try {
@@ -60,11 +57,20 @@ export function migrateConfigFile(from: string): string {
     throw toConfigError(err, from)
   }
 
-  // `wx` — fails if the path exists, decided by the OS in the same call that writes. The
-  // `existsSync` above stays: it produces the message an operator can act on, and doing the check
-  // early means the TOML is not parsed just to be thrown away. What it cannot do is survive the gap
-  // between checking and writing, which is the window `js/file-system-race` names. Belt and
-  // atomicity: the check explains, the flag guarantees.
-  writeFileSync(to, `${JSON.stringify(values, null, 2)}\n`, { flag: 'wx' })
+  // `wx` fails if the path exists, decided by the OS in the same call that writes — so existence
+  // is not checked separately at all. An `existsSync` above it read better and could not survive
+  // the gap between the check and the write, which is the window `js/file-system-race` names; and
+  // keeping both left the scanner seeing check-then-use however atomic the write had become.
+  //
+  // The message an operator needs is reproduced from the failure rather than predicted before it,
+  // which is also the only version that can be true: the file may appear while the TOML is parsed.
+  try {
+    writeFileSync(to, `${JSON.stringify(values, null, 2)}\n`, { flag: 'wx' })
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'EEXIST') {
+      throw new ConfigError(`${to} already exists — delete it first, or convert ${from} by hand.`)
+    }
+    throw err
+  }
   return to
 }
