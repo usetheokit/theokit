@@ -1,0 +1,121 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+
+  // The dead-export gate `npm run lint` enforces.
+  //
+  // `includeEntryExports` is kept, and it is NOT doing what this comment used to claim. Measured
+  // against knip 6.32.2 on 2026-09-03 by appending a plainly dead `export const X = 1` to one file
+  // at a time and re-running:
+  //
+  //   packages/tui/src/theme.ts            not an entry   -> REPORTED
+  //   packages/agent/src/config/config.ts  not an entry   -> REPORTED
+  //   packages/agent/src/index.ts          not an entry   -> REPORTED
+  //   packages/tui/src/main.tsx            entry          -> not reported
+  //   packages/cli/src/main.ts             entry          -> not reported
+  //   packages/agent/src/chat-acp.ts       entry          -> not reported
+  //   packages/tui/tools/render-banner.tsx entry          -> not reported
+  //
+  // The paths above are the ones that existed ON 2026-09-03 and are left as written. `theme.ts`
+  // moved to `packages/tui/src/theme/theme.ts` on 2026-09-10, in the clipboard/theme fold.
+  // Re-anchoring them would falsify the observation — rules/testing.md § 5: a live pointer is
+  // re-anchored, a quotation of a measurement stays. Re-verified after the move by the same
+  // method, and the answer is unchanged: a dead export in the new location is still REPORTED.
+  //
+  // Four for four: an export declared in an entry file is exempt anyway. Setting it here, setting it
+  // inside a workspace block, and passing `--include-entry-exports` on the command line all produce
+  // the same result. So the gate covers non-entry files — which is most of the tree, and includes
+  // every barrel — and does not cover the four entry files.
+  //
+  // WHY, narrowed 2026-09-04 and filed as webpro-nl/knip#2011. It is not a knip 6.x regression and not
+  // auto-discovery: `includeEntryExports` reports a dead entry export in a single package, with an
+  // auto-discovered entry, and in a workspace — all three verified on 6.32.2. The trigger is a ROOT
+  // `package.json` script naming a file inside a workspace. Two arms differing by one line:
+  //
+  //   "scripts": { "dev": "node packages/app/src/main.ts" }   present -> dead export NOT reported
+  //                                                            absent -> dead export reported
+  //
+  // Which is exactly this tree: `"dev": "tsx packages/tui/src/main.tsx"`, `"exec": "tsx
+  // packages/cli/src/main.ts"`, and `tools/build-cli.mjs`'s `entryPoints`. The workspace blocks below
+  // declare `entry` as the TEST globs, so nothing else makes those files entries. knip also emits
+  // `Remove redundant entry pattern` for the declaration that would have covered them, which is how
+  // this stays invisible.
+  //
+  // WHAT HAPPENS WHEN THE FIX LANDS. webpro-nl/knip#2012 makes an EXPLICIT workspace `entry` win over
+  // the script-derived exemption. Measured against that branch on this tree: the run goes from clean
+  // to one finding —
+  //
+  //   packages/agent/src/hooks/fail-safe-defaults.test.ts:43  omittingAGateMustNotCompile
+  //
+  // — because the test globs below ARE declared entries, so their exports become checked. It is a true
+  // positive and a deliberate survivor: a compile-time assertion helper, exported only because eslint
+  // flags an unused local function, whose own docblock already says the scan would list it. The remedy
+  // is local and verified on that branch: `"tags": ["-knipignore"]` here plus `/** @knipignore */` on
+  // the symbol, which keeps the reason beside the code instead of in this file.
+  //
+  // The four `main`/entry FILES stay exempt even with that PR, because none of them is declared in any
+  // `entry` below — only the root scripts make them entries. Adding them here would cover them once
+  // the PR ships; it is deliberately NOT done yet, because the PR is unmerged and a config written for
+  // an unreleased behaviour is a gate nobody can verify today.
+  //
+  // The claim this replaces was wrong twice over, and the second half is why it went unnoticed: it
+  // said "every `index.ts` here is an entry", and no `index.ts` is in any entry list. The barrels are
+  // covered precisely BECAUSE they are not entries. The "1 issue vs 28" measurement it cited was real
+  // when written; what changed is knip, not this tree. The setting stays because it costs nothing and
+  // becomes correct again the day the interaction is fixed upstream.
+  //
+  // Every package here is `private: true` and never published, so an export nobody imports has no
+  // downstream consumer to protect: it is dead surface, not API. If a survivor must be kept, add it
+  // to the workspace's `ignore` or `ignoreDependencies` WITH a comment saying why. An unexplained
+  // exemption is how the previous cleanup (B-049) ended with 120 survivors and not one recorded
+  // reason, which is what let the surface regrow unnoticed.
+  //
+  // WHAT THIS GATE CANNOT SEE — do not read a green run as more than it is. A dependency loaded
+  // through a runtime-computed specifier is invisible to every static tool: `@theokit/tui` loads its
+  // optional peers exactly that way (`const spec = "figlet"; await import(spec)`), and `lowlight`
+  // is reached through `AgentTimeline` -> `ChatMessage` -> `MarkdownText` -> `CodeBlock`. Before
+  // deleting any dependency, read the framework's own loaders and grep the shipped bundle by hand.
+
+  "includeEntryExports": true,
+
+  "workspaces": {
+    // Only the test globs are listed. The other ten patterns this block used to carry were reported
+    // by knip itself as `Remove redundant entry pattern` — it already reaches each of them without
+    // being told: the four `tools/*.mjs` scripts and `.dependency-cruiser.cjs` through the
+    // `package.json` scripts that run them, `vitest.config.ts` and `eslint.config.mjs` as tool
+    // configs, and `src/main.ts` / `src/main.tsx` / `src/chat-acp.ts` through its default entry
+    // patterns and the `build:acp` script. Verified by deleting them and re-running: still 0 issues,
+    // and the same four files still resolve as entries.
+    ".": {
+      "entry": ["tools/**/*.test.mjs"],
+      "project": ["tools/**/*.mjs", "*.ts", "*.mjs"],
+      // B-136 — `@theokit/sdk` IS used, by `tools/build-cli.mjs`, and knip cannot see it: the
+      // reference is `createRequire(import.meta.url).resolve('@theokit/sdk/package.json')`, which is
+      // the runtime-computed specifier the note at the top of this file warns about. The build copies
+      // `provider-catalog.json` out of that package, and without the copy auto-compaction is silently
+      // disabled in every model mode.
+      //
+      // It is declared at the root because the root is what uses it. Nothing in `packages/*/src`
+      // imports the SDK — it arrives under `@theokit/agents` as the pinned override — and the build
+      // tool relying on that hoisting is what left `npm run build` unable to resolve it at all.
+      // Recorded here rather than left as a standing warning, because a gate that always prints
+      // something is a gate people stop reading.
+      "ignoreDependencies": ["@theokit/sdk"],
+    },
+    "packages/agent": {
+      "entry": ["tests/**/*.test.ts"],
+      "project": ["src/**/*.ts", "tests/**/*.ts"],
+    },
+    "packages/cli": {
+      "entry": ["tests/**/*.test.ts"],
+      "project": ["src/**/*.ts", "tests/**/*.ts"],
+    },
+    "packages/tui": {
+      "entry": ["tests/**/*.test.ts", "tests/**/*.test.tsx"],
+      "project": ["src/**/*.ts", "src/**/*.tsx", "tests/**/*.ts", "tests/**/*.tsx"],
+    },
+    "packages/shared": {
+      "entry": ["tests/**/*.test.ts"],
+      "project": ["src/**/*.ts", "tests/**/*.ts"],
+    },
+  },
+}

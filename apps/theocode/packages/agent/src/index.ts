@@ -1,0 +1,15 @@
+export { buildChatAgent } from './chat/chat.js'
+export { wiredCapabilities } from './wired-capabilities.js'
+export { memoryEnabledForSession, setMemoryEnabledForSession } from './memory/memory-switch.js'
+export { setSandboxModeForSession } from './sandbox-switch.js'
+export { memoryFacts, withFactRemoved } from './memory/memory-facts.js'
+export { collectChecks, diagnose, renderDiagnosis } from './doctor/doctor.js'
+export type { CredentialState } from './doctor/doctor.js'
+export type { WiredCapabilities, WiredEntity } from './wired-capabilities.js'
+
+export { skillsOnDisk } from './skills-on-disk.js'
+export { foreignSurfacesOnDisk } from './foreign-surfaces-on-disk.js'
+export { foreignHookRefusals } from './hooks/foreign-hook-gate.js'
+
+export { loadOutputStyle } from './context/output-styles.js'
+export { FOREIGN_SURFACES } from './setting-sources.js'

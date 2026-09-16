@@ -1,0 +1,57 @@
+{
+  "name": "theocode",
+  "version": "0.27.0",
+  "packageManager": "pnpm@11.22.0",
+  "private": true,
+  "type": "module",
+  "description": "A terminal coding agent: one agent core, two surfaces.",
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "tsx packages/tui/src/main.tsx",
+    "exec": "tsx packages/cli/src/main.ts",
+    "dev:banner": "tsx packages/tui/scripts/render-banner.tsx",
+    "build": "node tools/build-cli.mjs && npm run build:acp",
+    "build:acp": "esbuild packages/agent/src/chat/chat-acp.ts --bundle --platform=node --format=esm --packages=external --outfile=dist/acp-entry.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . && knip --no-progress && node tools/check-english-only.mjs --quiet && node tools/check-artifact-promotion.mjs --quiet && node tools/check-doc-references.mjs --quiet && node tools/check-config-documented.mjs --quiet && node tools/check-env-knobs-documented.mjs --quiet && node tools/check-sdk-pin.mjs --quiet && node tools/check-typed-error-assertions.mjs --quiet && node tools/check-codex-parity.mjs --quiet && node tools/check-coverage-floor.mjs && npm run depcruise",
+    "lint:deadcode": "knip --no-progress",
+    "deps:theokit": "node tools/check-theokit-updates.mjs",
+    "deps:theokit:json": "node tools/check-theokit-updates.mjs --json",
+    "deps:theokit:report": "node tools/report-theokit-staleness.mjs --dry-run",
+    "depcruise": "depcruise packages --config .dependency-cruiser.cjs",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint:english": "node tools/check-english-only.mjs",
+    "crossval": "python3 -B -m unittest discover -s tools && python3 tools/check-backlog-crossval.py",
+    "test:coverage": "vitest run --coverage",
+    "blockers": "node tools/check-upstream-blockers.mjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@theokit/sdk": "5.9.0",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@vitest/coverage-v8": "^4.1.11",
+    "dependency-cruiser": "18.2.0",
+    "esbuild": "0.28.2",
+    "eslint": "^10.9.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "ink-testing-library": "^4.0.0",
+    "knip": "^6.34.0",
+    "prettier": "^3.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.68.0",
+    "vitest": "^4.1.11"
+  },
+  "bin": {
+    "theocode": "./dist/theocode.mjs"
+  }
+}

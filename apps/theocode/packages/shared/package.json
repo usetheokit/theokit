@@ -1,0 +1,18 @@
+{
+  "name": "@theocode/shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Code both surfaces need. Neither owns it.",
+  "exports": {
+    "./agent": "./src/agent.ts",
+    "./diagnostic-sink": "./src/diagnostic-sink.ts",
+    "./git-runner": "./src/git-runner.ts",
+    "./retry-record": "./src/retry-record.ts",
+    "./turn-error": "./src/turn-error.ts",
+    "./turn-failure-reporting": "./src/turn-failure-reporting.ts"
+  },
+  "dependencies": {
+    "@theokit/agents": "14.5.1"
+  }
+}

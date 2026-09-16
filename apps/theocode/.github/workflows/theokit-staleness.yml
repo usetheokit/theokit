@@ -1,0 +1,54 @@
+# #148 — the scheduled half of the staleness mechanism.
+#
+# Deliberately NOT a job in `ci.yml`. Upstream publishing something is not a failure of this
+# repository's build, and a gate that fails for a reason its author cannot fix is a gate people
+# learn to bypass — which costs more than the signal was worth.
+#
+# It writes to the tracker instead, which is where work is decided.
+name: theokit staleness
+
+on:
+  schedule:
+    # Mondays, 06:00 UTC. Weekly rather than daily on purpose: an exact pin going one release behind
+    # is not urgent, and a bot that comments every morning is one whose notifications get muted —
+    # after which the mechanism exists and reaches nobody.
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+# The only two things it does: read the repository, and write one issue.
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  # Two runs racing would each find no open issue and each open one. The marker makes the script
+  # idempotent against ITS OWN past runs; this makes it idempotent against its concurrent ones.
+  group: theokit-staleness
+  cancel-in-progress: false
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      # The checker compares what is INSTALLED against what is published, so the lockfile has to be
+      # materialised. `--frozen-lockfile` keeps this run from resolving anything the repository did
+      # not already agree to — the answer must be about the committed pins, not about a fresh solve.
+      - run: pnpm install --frozen-lockfile
+
+      - name: Report staleness to the tracker
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node tools/report-theokit-staleness.mjs
+
+# The job goes red only when the check itself could not answer (exit 1 from the script, distinct
+# from the checker's own exit 1 for "behind"). A red run here means "nobody measured", which is a
+# fact worth a human's attention; being behind is not, and lands in the issue instead.
