@@ -17,6 +17,7 @@ import {
   ENV_SANDBOX_MODE,
   ENV_MEMORY,
   ENV_SESSION_GC,
+  ENV_SESSION_GC_MAX_AGE_DAYS,
   ENV_SHELL_TIMEOUT_MS,
 } from './env-knobs.js'
 import { LAYERS, foldLayers, type Layer } from './layers.js'
@@ -129,6 +130,14 @@ export interface AgentConfig {
    * KEEP-what-cannot-be-classified fail-safe are the same ones `sessions gc` has always used.
    */
   session_gc: boolean
+  /**
+   * #736 — how many days of session transcripts the collector keeps.
+   *
+   * Optional with NO default here on purpose: absent means the collector keeps its own
+   * `DEFAULT_WINDOW_DAYS`, and a second copy of that number in this file would disagree with the
+   * first the day one of them moved. `.claude/settings.json` spells it `cleanupPeriodDays`.
+   */
+  session_gc_max_age_days?: number
   context_window?: number
   /**
    * The output style to apply, by name — Claude Code's feature, read from its directories.
@@ -179,6 +188,7 @@ export const ENV_BY_KEY: Readonly<Partial<Record<SchemaKey, EnvPath>>> = {
   shell_timeout_ms: { knob: ENV_SHELL_TIMEOUT_MS, coerce: numberFromEnv },
   memory: { knob: ENV_MEMORY, coerce: booleanFromEnv },
   session_gc: { knob: ENV_SESSION_GC, coerce: booleanFromEnv },
+  session_gc_max_age_days: { knob: ENV_SESSION_GC_MAX_AGE_DAYS, coerce: numberFromEnv },
   output_style: { knob: ENV_OUTPUT_STYLE, coerce: (s) => s },
 }
 
@@ -307,6 +317,7 @@ const scalarSchema = z
       .positive('shell_timeout_ms: must be positive — execFile reads 0 as "no timeout"')
       .optional(),
     session_gc: z.boolean().optional(),
+    session_gc_max_age_days: z.number().int().positive().optional(),
     context_window: z.number().int().positive().optional(),
     output_style: z.string().min(1, 'output_style: empty style name').optional(),
   })

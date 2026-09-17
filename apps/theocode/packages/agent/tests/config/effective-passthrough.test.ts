@@ -33,6 +33,8 @@ const NON_DEFAULT: Record<SchemaKey, unknown> = {
   home_dir: '.theocode',
   shell_timeout_ms: 45_000,
   session_gc: false,
+  // #736 — a window the collector would not otherwise use, so a passthrough that dropped it shows.
+  session_gc_max_age_days: 7,
   context_window: 123_456,
   output_style: 'terse',
 }

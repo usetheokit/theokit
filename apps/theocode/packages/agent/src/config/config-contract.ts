@@ -30,6 +30,7 @@ export const CONFIG_SCHEMA_KEYS = [
   'home_dir',
   'shell_timeout_ms',
   'session_gc',
+  'session_gc_max_age_days',
   'context_window',
   'output_style',
 ] as const

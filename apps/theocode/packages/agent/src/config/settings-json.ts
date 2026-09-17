@@ -212,6 +212,10 @@ const MATCH_ALL = '*'
  */
 const SAME_SETTING_DIFFERENT_SPELLING: Readonly<Record<string, string>> = {
   outputStyle: 'output_style',
+  // #736 — the same setting under the foreign name. Mapping it rather than adding a second reader is
+  // what makes the key HONOURED instead of merely parsed: it lands in `values` like any of ours, and
+  // the effective config carries it to the collector.
+  cleanupPeriodDays: 'session_gc_max_age_days',
 }
 
 function isNonSettingConvention(key: string): boolean {
@@ -405,22 +409,21 @@ export function translateSettings(raw: unknown, opts: TranslateOptions): Setting
   for (const [rawKey, value] of Object.entries(raw)) {
     const key = SAME_SETTING_DIFFERENT_SPELLING[rawKey] ?? rawKey
     if (key === 'permissions') {
-      // TRANSLATED AND STILL REPORTED AS NOT IMPLEMENTED, which looks contradictory and is the only
-      // honest state available today.
+      // #736 — TRANSLATED AND ENFORCED, since the plugin seam landed.
       //
-      // `@theokit/agents@14.0.0` renders the block into `PermissionRule[]` — that half works, and
-      // the translation is what produces `unsupportedPermissions` below, which is real information
-      // an operator cannot get any other way. What does NOT exist is a path from those rules to the
-      // engine: `AgentBuilder` exposes `approval`, `approvals`, `guardrails`, `hooks`,
-      // `settingSources` and no `permissions`, and `approval` is a HITL prompt rather than a policy
-      // evaluator. Measured 2026-09-13 against the published `.d.ts`.
+      // This block used to end with `ignored.push(key)`, and a comment explaining that the honest
+      // state was to go on reporting the key as not implemented: `@theokit/agents` rendered the
+      // rules and nothing built an engine from them, so an operator was told twice that their
+      // `deny` did not take effect.
       //
-      // So the key stays in `ignored`. An earlier version of this block removed it, and the effect
-      // was that `doctor` stopped printing "not implemented here: permissions" while a `deny` an
-      // operator wrote still gated nothing — a diagnostic that had become false, which is strictly
-      // worse than the gap it was describing. Closing this needs a seam in `@theokit/agents`; until
-      // that ships, the operator is told the truth twice: the block does not take effect, AND which
-      // of its entries could not even be rendered.
+      // That path now exists — `createPermissionsPlugin` builds the engine and the run carries it
+      // as a `pre_tool_call` plugin — so the same line became false in the other direction, which
+      // is the worse one: the diagnostic told an operator a control was inert while it was
+      // refusing their reads. Verified on the built binary before this line moved.
+      //
+      // `unsupportedPermissions` stays exactly as it was. It is the real information an operator
+      // cannot get any other way: WHICH entries could not be rendered, and are therefore not being
+      // applied even though the block as a whole is.
       const translated = permissionRulesFromSettings(asPermissionsBlock(value), {
           specifierArg: SPECIFIER_ARG,
           ...(opts.baseDir === undefined ? {} : { baseDir: opts.baseDir }),
@@ -430,7 +433,6 @@ export function translateSettings(raw: unknown, opts: TranslateOptions): Setting
         entry: u.entry,
         reason: u.reason,
       }))
-      ignored.push(key)
       continue
     }
     if (ours.has(key)) {
