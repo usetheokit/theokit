@@ -129,7 +129,7 @@ type-state is the point: the mistakes surface in your editor, not in production.
 **Key design decisions:**
 
 - HTTP and AI run through **distinct execution pipelines** — not the same middleware chain. A file-based agent is gated in its own chain, with `.approval()`, `.guardrail()` and `.hooks()`. Guards become shared only where the two surfaces meet: an agent bound to a controller property with `@Expose` is served through the controller's dispatch, so the controller's `@UseGuards` protects it (interceptors do not run on that path).
-- **Agent authoring is builder-only.** The `@Agent` / `@Tool` / `@Toolbox` / `@MainLoop` decorators were removed from the public API (ADR-0043); their implementations remain internal, read by the compiler. `AgentBuilder.create()` and `tool()` are the single authoring surface.
+- **Agent authoring is builder-only.** The `@Agent` / `@Tool` / `@Toolbox` / `@MainLoop` decorators were removed from the public API — one authoring surface rather than two grammars that must be kept in step, and a decorator path that could drift from the builder without a compile error saying so (`CHANGELOG.md`, the `builder-only-authoring-api` entries); their implementations remain internal, read by the compiler. `AgentBuilder.create()` and `tool()` are the single authoring surface.
 - `@theokit/sdk` is the **only** agent runtime. TheoKit compiles definitions and owns the surface; the SDK owns the loop, the providers, and conversation persistence.
 - A tool always requires an explicit name, description, and input schema — no implicit capability exposure.
 

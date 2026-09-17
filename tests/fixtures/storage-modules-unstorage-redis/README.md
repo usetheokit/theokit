@@ -1,6 +1,9 @@
 # Fixture — storage-modules-unstorage-redis
 
-End-to-end proof of `useUnstorage(name, driver)` with a Redis-style mock driver (T3.2, ADR-0009).
+End-to-end proof of `useUnstorage(name, driver)` with a Redis-style mock driver (T3.2).
+
+<!-- #832 — the ADR reference here resolved to nothing; see the note in
+     `storage-manager-recipe/README.md`. -->
 
 ## What this shows
 

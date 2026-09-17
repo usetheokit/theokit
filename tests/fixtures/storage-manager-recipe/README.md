@@ -1,6 +1,10 @@
 # Fixture — storage-manager-recipe
 
-End-to-end proof of the `StorageManager` wire (ADR-0007 / T2.2).
+End-to-end proof of the `StorageManager` wire (T2.2).
+
+<!-- #832 — this line cited a four-digit ADR that `docs/adr/` has never held: the internal decision
+     trail was removed from the published tree and the reference into it stayed. The fixture's own
+     name and the line above say what it proves, which is what a reader of a fixture needs. -->
 
 ## What this shows
 
