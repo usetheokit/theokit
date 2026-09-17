@@ -35,6 +35,7 @@
 import { approvalModeFor } from '../config/sandbox-policy.js'
 import type { ApprovalPolicy } from '../config/config.js'
 import { createPermissionsPlugin } from '@theokit/agents'
+import type { PermissionRule } from '@theokit/sdk'
 import type { PermissionsPluginOptions } from '@theokit/agents'
 import { settingsReport } from '../config/settings-load.js'
 import type { Plugin } from '@theokit/agents'
@@ -171,14 +172,45 @@ function askGateFor(policy: ApprovalPolicy): PermissionsPluginOptions['onAsk'] {
   })
 }
 
+/**
+ * Every layer's permission rules, ordered so an explicit `deny` is reached first.
+ *
+ * #736 — `PermissionEngine` is FIRST-MATCH-WINS. Measured directly against the SDK: an engine built
+ * from `[allow Read, deny Read]` evaluates `allow`, and the same pair reversed evaluates `deny`. So
+ * the order the layers happen to be concatenated in decided whether a refusal held, and nothing was
+ * ordering them.
+ *
+ * Measured on the built binary 2026-09-17: `~/.claude/settings.json` carried `allow: [… "Read" …]`
+ * among forty entries an operator had accumulated, a project `settings.json` carried
+ * `deny: ["Read(./off-limits.txt)"]`, and the file's contents came back. `update_plan` — denied by the
+ * same project file and named in no allow list anywhere — was blocked correctly, which is what made
+ * this look like a per-tool defect for most of the investigation.
+ *
+ * Deny-first rather than a layer precedence, and it is right in BOTH directions: a repository must
+ * not grant itself what the operator refused, and an operator's broad convenience allow must not
+ * silently disarm a refusal a repository wrote about its own files. It is the asymmetry
+ * `security-floor.ts` already encodes for `sandbox_mode` and `approval_policy` — a layer may harden,
+ * never loosen — applied to the rule language.
+ *
+ * Exported because this is the assertion that matters and it has no other seam: the plugin closes
+ * over the engine, and an engine does not say what order it was built in.
+ */
+export function orderedPermissionRules(cwd: string, operatorHome: string): readonly PermissionRule[] {
+  const rules = settingsReport({ projectDir: cwd, userDir: operatorHome }).flatMap(
+    (r) => r.permissionRules,
+  )
+  // A stable partition, not a sort: within each action the layer order is the one the settings files
+  // declared, and reordering rules that agree on the verdict would change which SPECIFIER matched
+  // without changing the decision — a difference nobody wrote down and nobody could predict.
+  return [...rules.filter((r) => r.action === 'deny'), ...rules.filter((r) => r.action !== 'deny')]
+}
+
+
 export function permissionsPluginsFor(
   cwd: string,
   operatorHome: string,
   approvalPolicy: ApprovalPolicy,
 ): readonly Plugin[] {
-  const rules = settingsReport({ projectDir: cwd, userDir: operatorHome }).flatMap(
-    (r) => r.permissionRules,
-  )
-  const plugin = createPermissionsPlugin(rules, { onAsk: askGateFor(approvalPolicy) })
+  const plugin = createPermissionsPlugin(orderedPermissionRules(cwd, operatorHome), { onAsk: askGateFor(approvalPolicy) })
   return plugin === undefined ? [] : [plugin]
 }
