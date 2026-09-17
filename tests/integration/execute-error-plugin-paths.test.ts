@@ -122,7 +122,7 @@ describe('executeRoute — error-path plugin hooks', () => {
     stream.url = '/api/test'
     stream.headers = {
       host: 'localhost:3000',
-      origin: 'http://localhost:3000',
+      origin: 'http://127.0.0.1:3000',
       'content-type': 'application/x-unsupported',
       // Required to satisfy strict CSRF — the test is about content-type, not CSRF.
       'x-theo-action': '1',

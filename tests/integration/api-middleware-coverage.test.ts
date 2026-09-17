@@ -160,7 +160,7 @@ describe('createApiMiddleware — batch endpoint match', () => {
           contentType: 'application/json',
           body,
           xTheoAction: '1',
-          origin: 'http://localhost:3000',
+          origin: 'http://127.0.0.1:3000',
         }),
         r.res,
       )

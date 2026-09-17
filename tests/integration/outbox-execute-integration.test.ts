@@ -5,6 +5,7 @@ import type { AddressInfo } from 'node:net'
 import { executeRoute } from '../../packages/theo/src/server/http/execute.js'
 import { InMemoryJobBackend } from '../../packages/theo/src/server/jobs/job-backend-memory.js'
 import type { ServerRouteNode } from '../../packages/theo/src/server/scan/match.js'
+import { localUrl } from './helpers/local-url.js'
 
 interface MockBackend extends InMemoryJobBackend {
   // Test-only spy hook
@@ -42,7 +43,7 @@ let backend: MockBackend
 let port: number
 
 const fetchTest = async (path: string, init?: RequestInit): Promise<Response> => {
-  return fetch(`http://localhost:${port}${path}`, init)
+  return fetch(localUrl(port, '${path}'), init)
 }
 
 beforeEach(() => {

@@ -23,13 +23,13 @@ describe('createPermissionsPlugin', () => {
     const { rules } = permissionRulesFromSettings({ deny: ['Bash(rm:*)'], allow: ['Read'] })
 
     expect(rules.length, 'the fixture must translate, or this proves nothing').toBeGreaterThan(0)
-    expect(createPermissionsPlugin(rules)).toBeDefined()
+    expect(createPermissionsPlugin(rules, { onAsk: () => ({ behavior: 'allow' }) })).toBeDefined()
   })
 
   it('test_no_rules_means_no_plugin', () => {
     // A plugin built over an empty rule set is a gate that can only say yes. Returning `undefined`
     // lets the caller omit it entirely, which is the difference between "no policy" and "a policy
     // that permits everything" — and the second is what an operator would read a green row as.
-    expect(createPermissionsPlugin([])).toBeUndefined()
+    expect(createPermissionsPlugin([], { onAsk: () => ({ behavior: 'allow' }) })).toBeUndefined()
   })
 })

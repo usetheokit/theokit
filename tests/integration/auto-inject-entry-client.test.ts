@@ -6,6 +6,7 @@ import { startDevServer } from '../../packages/theo/src/cli/commands/dev.js'
 import { safeClose } from './helpers/safe-close.js'
 import { waitForServer } from './helpers/wait-for-server.js'
 import type { Server } from 'node:http'
+import { localUrl } from './helpers/local-url.js'
 
 /**
  * T2.1 integration — auto-inject the entry-client script.
@@ -59,14 +60,14 @@ afterAll(async () => {
 
 describe('T2.1 — auto-inject integration (Vite dev server)', () => {
   it('served HTML contains the entry-client script even though index.html omits it', async () => {
-    const res = await fetch(`http://localhost:${port}/`)
+    const res = await fetch(localUrl(port, '/'))
     expect(res.status).toBe(200)
     const html = await res.text()
     expect(html).toContain('/@theo/entry-client')
   })
 
   it('script is injected BEFORE </body> tag', async () => {
-    const html = await (await fetch(`http://localhost:${port}/`)).text()
+    const html = await (await fetch(localUrl(port, '/'))).text()
     const scriptIdx = html.indexOf('/@theo/entry-client')
     const bodyCloseIdx = html.toLowerCase().indexOf('</body>')
     expect(scriptIdx).toBeGreaterThan(0)
@@ -74,7 +75,7 @@ describe('T2.1 — auto-inject integration (Vite dev server)', () => {
   })
 
   it('user-authored content (h1 from page.tsx) still renders in shell', async () => {
-    const html = await (await fetch(`http://localhost:${port}/`)).text()
+    const html = await (await fetch(localUrl(port, '/'))).text()
     // page.tsx doesn't actually run in SSR shell (Vite serves the shell with
     // <div id="root"></div>) — but the shell itself should be intact.
     expect(html).toContain('<div id="root">')

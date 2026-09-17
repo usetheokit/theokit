@@ -1,3 +1,5 @@
+import { localUrl } from './local-url.js'
+
 /**
  * Helper: wait until a dev server actually ACCEPTS connections.
  *
@@ -22,7 +24,7 @@ export async function waitForServer(port: number, timeoutMs = 10_000): Promise<v
   let lastError: unknown
   while (Date.now() - started < timeoutMs) {
     try {
-      await fetch(`http://localhost:${String(port)}/`)
+      await fetch(localUrl(port))
       return
     } catch (error) {
       lastError = error

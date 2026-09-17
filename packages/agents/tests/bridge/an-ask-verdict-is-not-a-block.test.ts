@@ -53,11 +53,16 @@ describe('an ask verdict', () => {
 
 /** Drive the plugin's `pre_tool_call` the way the SDK does, and return whatever it vetoes with. */
 async function vetoFor(
-  plugin: { register: (ctx: unknown) => void },
+  plugin: unknown,
   toolName: string,
 ): Promise<{ block?: boolean; message?: string } | undefined> {
   let handler: ((c: { name: string; args: unknown }) => unknown) | undefined
-  plugin.register({
+  // `Plugin` is a union, and one of its variants has no `register` at all — a model provider. Narrowing
+  // with an assertion rather than a cast keeps the failure legible: a plugin of the wrong kind says so
+  // here instead of throwing `undefined is not a function` three frames down.
+  const register = (plugin as { register?: (ctx: unknown) => unknown }).register
+  expect(register, 'the permissions plugin must be a registering plugin').toBeTypeOf('function')
+  register!({
     on: (event: string, fn: (c: { name: string; args: unknown }) => unknown) => {
       if (event === 'pre_tool_call') handler = fn
     },

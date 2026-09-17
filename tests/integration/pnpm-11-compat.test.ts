@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { tmpdir as osTmpdir } from 'node:os'
 
 import { unpublishedPins } from '../../scripts/unpublished-pins.js'
+import { localUrl } from './helpers/local-url.js'
 
 /**
  * theokit-evolution-ci-and-dx Phase 1C — pnpm 11+ compat gate.
@@ -91,7 +92,7 @@ async function waitForPort(port: number, timeoutMs: number): Promise<boolean> {
       const ctrl = new AbortController()
       const tid = setTimeout(() => ctrl.abort(), 1000)
       try {
-        const res = await fetch(`http://localhost:${port}/`, { signal: ctrl.signal })
+        const res = await fetch(localUrl(port, '/'), { signal: ctrl.signal })
         clearTimeout(tid)
         if (res.ok || res.status === 404 || res.status === 304) return true
       } catch {
@@ -109,7 +110,7 @@ async function isPortBusy(port: number): Promise<boolean> {
   try {
     const ctrl = new AbortController()
     const tid = setTimeout(() => ctrl.abort(), 500)
-    await fetch(`http://localhost:${port}/`, { signal: ctrl.signal })
+    await fetch(localUrl(port, '/'), { signal: ctrl.signal })
     clearTimeout(tid)
     return true
   } catch {
