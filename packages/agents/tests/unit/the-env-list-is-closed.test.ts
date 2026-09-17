@@ -29,9 +29,16 @@
  * prevent it.
  */
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, writeFileSync, chmodSync, readFileSync } from 'node:fs'
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join, relative, resolve, sep } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
@@ -176,5 +183,52 @@ describe('the list reaches the consumer, not just the repository', () => {
     // and no keyword rule produces that split from the names alone.
     expect(readme).toMatch(/\|\s*`THEOKIT_CODEX_CLIENT_ID`\s*\|\s*\*\*yes\*\*\s*\|/)
     expect(readme).toMatch(/\|\s*`THEOKIT_DEBUG`\s*\|\s*no\s*\|/)
+  })
+})
+
+describe('the Web-Standards boundary names every exception it keeps', () => {
+  /**
+   * The README claims Web Standards over Node APIs and cites `crypto.randomUUID` by name. It was
+   * true of everything except that one API: `hooks/secure-store.ts` imported `randomUUID` from
+   * `node:crypto` while three other files used the global, so the line's own example was its only
+   * counter-example. Measured and removed 2026-09-17.
+   *
+   * Two imports remain and the README names both with the reason. This asserts the SET, so a third
+   * one makes the claim false and fails here rather than being discovered by a reader.
+   */
+  const ALLOWED = [
+    'src/hooks/hook-fingerprint.ts', // createHash — the Web equivalent is async, this is not
+    'src/hooks/hook-spec.ts', // randomBytes — getRandomValues needs a hand-written hex conversion
+  ] as const
+
+  it('test_no_node_crypto_import_outside_the_two_the_readme_names', () => {
+    const root = join(import.meta.dirname, '..', '..')
+    const offenders: string[] = []
+    const walk = (dir: string): void => {
+      for (const e of readdirSync(dir, { withFileTypes: true })) {
+        const full = join(dir, e.name)
+        if (e.isDirectory()) walk(full)
+        else if (
+          e.name.endsWith('.ts') &&
+          readFileSync(full, 'utf8').includes("from 'node:crypto'")
+        )
+          offenders.push(relative(root, full).split(sep).join('/'))
+      }
+    }
+    walk(join(root, 'src'))
+
+    expect(
+      offenders
+        .filter((f) => !ALLOWED.includes(f as (typeof ALLOWED)[number]))
+        .sort((a, b) => a.localeCompare(b)),
+      'a `node:crypto` import the README does not name — either use the Web global or add it to ' +
+        'the boundary section WITH the reason it cannot be replaced',
+    ).toEqual([])
+
+    // The anti-vacuity floor: a walk that found nothing would satisfy the line above while
+    // measuring an empty tree.
+    expect(offenders.length, 'the walk found no node:crypto at all — check the path').toBe(
+      ALLOWED.length,
+    )
   })
 })
