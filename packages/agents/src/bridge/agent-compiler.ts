@@ -32,6 +32,7 @@ import type {
 } from '../types.js'
 
 import type { CodePlugin } from './code-plugins.js'
+import type { SubagentAgentDefinition } from './define-agent.js'
 import type { HookApprovalGate } from './sdk-adapter-create-options.js'
 import type { GatedCompatSource, GatedSettingSource } from './setting-sources-gate.js'
 
@@ -278,6 +279,15 @@ export interface CompiledAgentOptions {
    * (merged with `cwd`, decoupled from inline skills). Absent ⇒ inline (code) config only.
    */
   settingSources?: readonly GatedSettingSource[]
+  /**
+   * #825 — subagents the AUTHOR declared, carried through to `AgentOptions.agents`.
+   *
+   * Beside `settingSources` on purpose: that field says which roots the SDK may DISCOVER subagents
+   * in, and this one says which subagents exist with which instructions. A caller that applied a
+   * `MEMORY.md` to a definition has only this field to put the result in — through the other, the
+   * SDK re-reads the file and the enriched copy is lost.
+   */
+  subagents?: Readonly<Record<string, SubagentAgentDefinition>>
   /**
    * Foreign configuration dialects, already authorised (usetheokit/theokit#634).
    *

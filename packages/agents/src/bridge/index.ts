@@ -168,6 +168,7 @@ export {
   type ToolCallVeto,
 } from './tool-hooks-plugin.js'
 export { createPermissionsPlugin } from './permissions-plugin.js'
+export type { PermissionsPluginOptions } from './permissions-plugin.js'
 
 export {
   runWithApiErrorHandling,

@@ -416,6 +416,14 @@ function applyLocalSources(
     options.local = { ...options.local, settingSources: [...compiled.settingSources] }
     applied.push('settingSources')
   }
+  // #825 — the author's own subagents, which the SDK takes at the TOP level rather than under
+  // `local`. They are not an alternative to `settingSources`: that grants a root to discover in,
+  // and this supplies the definition that runs. Where both name the same subagent, the declared one
+  // wins — it is the one somebody decided, and it is the only one that can carry an applied memory.
+  if (compiled.subagents !== undefined && Object.keys(compiled.subagents).length > 0) {
+    options.agents = { ...compiled.subagents }
+    applied.push('subagents')
+  }
   // B-060 — the external session store. Only when declared: an empty `local` block would hand
   // `Agent.create` a claim about setting sources and a cwd that no author made.
   if (compiled.sessionStore !== undefined) {

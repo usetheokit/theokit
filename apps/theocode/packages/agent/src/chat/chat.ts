@@ -26,7 +26,6 @@ import { z } from 'zod'
 
 import { MAX_AGGREGATE, agentsMdChain, composeInstructions, loadAgentsMd, loadUserAgentsMd } from '../context/index.js'
 import type { RulesLoad } from '../context/rules.js'
-import { userSkills } from '../context/user-skills.js'
 import type { InlineSkill } from '@theokit/sdk'
 import {
   resolveEffectiveConfig,
@@ -45,7 +44,9 @@ import { createInteractiveShellTool } from '../ask/index.js'
 import { MAX_PTY_SESSIONS } from '../pty/index.js'
 import type { SessionPtyOwner } from '../pty/index.js'
 import { ToolRegistry, resolveToolScope } from '../tools/index.js'
-import { declareAgent, permissionsPluginsFor, toolsNamed } from '../composition/agent-spec.js'
+import type { AgentDefinitionLike } from '../delegation/named-subagents.js'
+import { diskEntities } from './disk-entities.js'
+import { permissionsPluginsFor } from '../composition/agent-spec.js'
 import { refuseForeignHook } from '../hooks/foreign-hook-gate.js'
 import { skillReadTool } from '../context/readable-skills.js'
 import { settingSourcesFor } from '../setting-sources.js'
@@ -168,17 +169,7 @@ export async function buildChatAgent(overrides: {
   // which is why every listing that wanted it had to re-read the file and could disagree with what
   // actually ran.
   const mcp = mcpScopes(posture, cwd, overrides?.onMcpWarn)
-
-  // #65 — the operator's own skills, loaded HERE for the same reason `mcp` is: once, at the
-  // composition root, so the builder and any record of what was wired cannot disagree.
-  //
-  // This is what made `buildChatAgent` async. Reading a skill body is disk I/O and the SDK's door
-  // (`loadSkillInstructions`) is async by design; the synchronous alternative was a second reader of
-  // the SKILL.md convention, which fails SILENTLY when the format moves — frontmatter lands inside
-  // the instructions and nothing reports it. Four of the five call sites were already in async
-  // functions, so the ripple is an `await`, not a restructure.
-  const operatorSkills = await userSkills(operatorHome)
-
+    const disk = await diskEntities(cwd, operatorHome, posture)
   const chain = withShellAndProjectEntities(withWrites, {
     registry,
     interactiveBackend,
@@ -189,11 +180,11 @@ export async function buildChatAgent(overrides: {
     writePolicy,
     cwd,
     mcpServers: mcp.servers,
-    operatorSkills,
+      ...disk,
     searchConfigured,
   })
 
-  publishWiring(overrides?.onWired, { posture, cwd, cfg, mcp, operatorSkills, rules, aggregateCuts })
+  publishWiring(overrides?.onWired, { posture, cwd, cfg, mcp, operatorSkills: disk.operatorSkills, rules, aggregateCuts })
 
   // M70 — the two registrations that depend on the surface PROFILE, applied here because the builder
   // is a fluent chain with no `.tools([...])`: there is no way to skip a link in the middle of it.
@@ -413,6 +404,7 @@ type ShellAndProjectCtx = {
     mcpServers: ReturnType<typeof loadMcpJson>
     /** #65 — the operator's `~/.theokit/skills/`, already read. Loaded by the caller, like `mcpServers`. */
     operatorSkills: InlineSkill[]
+    namedSubagents: Record<string, AgentDefinitionLike>
     /**
      * Decided by the caller, for the same reason: this function writes the `web_search` APPROVAL
      * entry while `baseAgent` registers the tool, and the framework refuses a map naming a tool the
@@ -420,6 +412,7 @@ type ShellAndProjectCtx = {
      */
     searchConfigured: boolean
   }
+
 function withShellAndProjectEntities(
   withWrites: ReturnType<typeof withWriteTools<ReturnType<typeof baseAgent>['agent']>>,
   ctx: ShellAndProjectCtx,
@@ -546,6 +539,7 @@ function withProjectEntities(
       // would refuse someone their own configuration because of where they happened to `cd` — the
       // same reasoning `context/rules.ts` and `user-agents-md.ts` already apply to instructions.
       .skills([...(posture.allows.skills ? cfg.skills : []), ...ctx.operatorSkills])
+        .subagents(ctx.namedSubagents)
       // M20 — opt into theokit's `.theokit/` file-based config (project + user): skills, subagents, hooks,
       // context, mcp are discovered from disk. The enabler for M24 (disk skills), M25 (subagent roles), M26
       // (lifecycle hooks) — those milestones populate `.theokit/`; here we just turn discovery on. The
@@ -584,43 +578,7 @@ function withProjectEntities(
   )
 }
 
-/**
- * B-059 — the coding agent's registry-backed tool set, declared through the shared entry.
- *
- * Memoised per registry because the chain asks for one tool at a time and the shape is one
- * decision; rebuilding it per `.tool()` call would make the provenance record say the set was
- * declared six times.
- */
-const READ_TOOLS = [
-  'CurrentTime',
-  'Read',
-  'ViewImage',
-  'Glob',
-  'Grep',
-  'RepoStatus',
-  'GitDiff',
-] as const
-const shapeCache = new WeakMap<ToolRegistry, Map<string, CustomTool>>()
-
-function readTool(registry: ToolRegistry, name: (typeof READ_TOOLS)[number]): CustomTool {
-  let byName = shapeCache.get(registry)
-  if (byName === undefined) {
-    const shape = declareAgent(
-      'coding-agent-reads',
-      { registry, model: 'unused', reasoning_effort: 'medium' },
-      [toolsNamed(registry, READ_TOOLS)],
-    )
-    byName = new Map(shape.tools.map((tool) => [tool.name, tool]))
-    shapeCache.set(registry, byName)
-  }
-  const tool = byName.get(name)
-  if (tool === undefined) {
-    throw new ConfigurationError(`"${name}" is not in the declared coding-agent read set`, {
-      code: 'tool_not_declared',
-    })
-  }
-  return tool
-}
+import { readTool } from './read-tools.js'
 
 /**
  * MEASURED AND DELIBERATELY NOT SPLIT (2026-09-10).
@@ -708,7 +666,7 @@ function baseAgent(ctx: {
       // The DECISION remains the product's: each headless surface declares its posture at the composition
       // point (`exec/main.ts`), derived from `headlessApprovalPosture` — including the F-arch-3 refusal
       // ("no bwrap means no confinement") that M70 added.
-      .plugins([...providerPlugins, ...permissionsPluginsFor(ctx.cwd, ctx.operatorHome)])
+      .plugins([...providerPlugins, ...permissionsPluginsFor(ctx.cwd, ctx.operatorHome, ctx.cfg.approval_policy)])
       // M20 — reasoning budget from config (default "medium" matches Codex's own default, so the harness
       // comparison still isolates harness behavior when no config overrides it).
       .reasoningEffort(overrides?.reasoning_effort ?? cfg.reasoning_effort)

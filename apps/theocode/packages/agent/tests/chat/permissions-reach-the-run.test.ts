@@ -44,7 +44,7 @@ describe('a permissions block reaches the run', () => {
     // The rule survives the report — this is the half that was being dropped.
     expect(rules.map((r) => r.tool), 'the deny rule did not survive the report').toContain('Read')
     // And becomes something the run can carry.
-    expect(createPermissionsPlugin(rules)).toBeDefined()
+    expect(createPermissionsPlugin(rules, { onAsk: () => ({ behavior: 'allow' }) })).toBeDefined()
   })
 
   it('test_the_tool_name_is_the_one_this_product_registers', () => {
@@ -65,6 +65,6 @@ describe('a permissions block reaches the run', () => {
     const rules = settingsReport({ projectDir: cwd, userDir: cwd }).flatMap((r) => r.permissionRules)
 
     expect(rules).toEqual([])
-    expect(createPermissionsPlugin(rules)).toBeUndefined()
+    expect(createPermissionsPlugin(rules, { onAsk: () => ({ behavior: 'allow' }) })).toBeUndefined()
   })
 })

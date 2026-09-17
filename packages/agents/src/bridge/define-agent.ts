@@ -30,6 +30,22 @@ import {
 } from './setting-sources-gate.js'
 
 /**
+ * One subagent, as `AgentOptions.agents` in the SDK takes it.
+ *
+ * Declared here rather than imported so the framework states its own contract: the SDK's
+ * `AgentDefinition` carries fields this bridge does not thread, and re-exporting it would promise
+ * every one of them.
+ */
+export interface SubagentAgentDefinition {
+  /** What the model reads when choosing this subagent. */
+  readonly description: string
+  /** The instructions it runs with — the field that carries an applied memory. */
+  readonly prompt: string
+  /** Tool names it may call. Absent means the framework decides, as it does for a discovered one. */
+  readonly tools?: readonly string[]
+}
+
+/**
  * Brand tag for a `defineAgent` value. `Symbol.for` (global registry, not `Symbol()`) so
  * the brand survives duplicate module instances (dual-package / bundling) — the scanner's
  * brand-check then works regardless of which copy created the definition.
@@ -94,6 +110,19 @@ export interface DefineAgentConfig<TInput extends z.ZodType = z.ZodType> {
    * request path against the run-context). Absent ⇒ the SDK enables every discovered skill.
    */
   skills?: SkillsSelection
+  /**
+   * Subagents this agent carries, registered by name — `AgentOptions.agents` in the SDK.
+   *
+   * #825 — distinct from what `settingSources` discovers, and that distinction is the whole reason it
+   * exists. The framework reads `.claude/agents/<name>.md` itself and takes the prompt from the FILE,
+   * so a caller that enriches a definition — `applySubagentMemory` folding in a `MEMORY.md` is the
+   * measured case — had nowhere to put the result. It computed the enriched copy and the framework
+   * used the file's, with nothing reporting a difference.
+   *
+   * A name declared here and also found on disk is the same subagent; the definition given here is
+   * the one that runs, because it is the one an author decided rather than the one a loader guessed.
+   */
+  subagents?: Record<string, SubagentAgentDefinition>
   /**
    * theokit-file-based-config — opt into `.theokit/` file-based config (skills, subagents, hooks,
    * MCP, context, cron). The SDK discovers config from these roots under the app's `cwd`:
@@ -295,6 +324,10 @@ export function compileAgentDefinition(def: AgentDefinition): CompiledAgentOptio
     ...(def.approvals !== undefined ? { hitl: compileApprovals(def) } : {}),
     // M13 — skills: a static list → SDK skills.enabled; a resolver → carried for the request path.
     ...compileSkillsSelection(def.skills),
+    // #825 — the author's own subagents, carried verbatim. Absent ⇒ no key, so an agent that
+    // declares none is indistinguishable from one written before the field existed, and the SDK
+    // goes on discovering from `settingSources` exactly as it did.
+    ...(def.subagents !== undefined ? { subagents: def.subagents } : {}),
     // theokit-file-based-config + M68 — the selection is resolved here, and refusing at compile time
     // rather than at run assembly is `error-handling.md` § 3: validate at the entry, fail before the
     // value travels.

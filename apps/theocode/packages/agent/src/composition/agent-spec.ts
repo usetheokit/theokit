@@ -32,7 +32,10 @@
  * contributed which field, inspectable as data) and `CapabilityConflictError` instead of last-wins
  * when two members declare the same scalar differently.
  */
+import { approvalModeFor } from '../config/sandbox-policy.js'
+import type { ApprovalPolicy } from '../config/config.js'
 import { createPermissionsPlugin } from '@theokit/agents'
+import type { PermissionsPluginOptions } from '@theokit/agents'
 import { settingsReport } from '../config/settings-load.js'
 import type { Plugin } from '@theokit/agents'
 import {
@@ -139,10 +142,43 @@ export function reviewerShape(ctx: SpecContext): AgentShape {
  * in `@theokit/sdk`, which is published from another repository, and is tracked on #736 with the
  * measurement. Nothing here pretends otherwise.
  */
-export function permissionsPluginsFor(cwd: string, operatorHome: string): readonly Plugin[] {
+/**
+ * What an `ask` verdict resolves to for THIS run, derived from the approval policy the operator set.
+ *
+ * #826 — `ask` is the verdict `PermissionEngine` returns for a tool no rule matches, and it is the
+ * one verdict the rules do not answer. Leaving it to the SDK's default made it a hard block, so the
+ * first `permissions` block an operator wrote killed every tool they had not enumerated.
+ *
+ * Derived rather than chosen, and the derivation is the existing one: `approvalModeFor` already maps
+ * the policy to a mode, and `full-auto` is precisely "the operator said do not ask me". A second
+ * mapping here would be a second source of truth for one decision.
+ *
+ * `suggest` refuses, and says what would change it. Routing an unmatched tool to the interactive
+ * approval card instead is the better answer and is NOT what this does: that card is keyed by the
+ * build-time `.approvals({...})` map, and reaching it needs a general asker this composition does not
+ * have. Refusing with a reason an operator can act on is honest; refusing with "requires approval"
+ * was not.
+ */
+function askGateFor(policy: ApprovalPolicy): PermissionsPluginOptions['onAsk'] {
+  if (approvalModeFor(policy) === 'full-auto') return () => ({ behavior: 'allow' })
+  return (toolName) => ({
+    behavior: 'deny',
+    message:
+      `\`${toolName}\` matched no rule in your \`permissions\` block, so it needs a decision, and ` +
+      `approval_policy="${policy}" means that decision is yours. Nothing here can ask you for it. ` +
+      `Add \`${toolName}\` to \`permissions.allow\`, or set approval_policy="never" to let ` +
+      `unmatched tools run.`,
+  })
+}
+
+export function permissionsPluginsFor(
+  cwd: string,
+  operatorHome: string,
+  approvalPolicy: ApprovalPolicy,
+): readonly Plugin[] {
   const rules = settingsReport({ projectDir: cwd, userDir: operatorHome }).flatMap(
     (r) => r.permissionRules,
   )
-  const plugin = createPermissionsPlugin(rules)
+  const plugin = createPermissionsPlugin(rules, { onAsk: askGateFor(approvalPolicy) })
   return plugin === undefined ? [] : [plugin]
 }

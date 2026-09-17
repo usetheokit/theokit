@@ -119,6 +119,7 @@ type SkillsOnDiskFindings = {
   readonly presentButUndeclared: readonly string[]
   readonly declaredUserOnlySoNotLoaded?: readonly string[]
   readonly foreignRootSkills?: readonly string[]
+  bundledSkills?: readonly string[]
 }
 
 /**
@@ -152,6 +153,15 @@ function skillsOnDiskParts(found: SkillsOnDiskFindings): string[] {
     parts.push(
       `${String(foreign.length)} under .claude/skills/, loaded by the compatibility dialect ` +
         `without a config line (this row cannot say which reached the model)`,
+    )
+  // #826 — bundled skills get their own clause. The count and the ROOT travel together, because an
+  // operator checking whether a bundle took effect is asking about that root specifically, and a
+  // number that rose without naming where would answer a different question than the one they asked.
+  const bundled = found.bundledSkills ?? []
+  if (bundled.length > 0)
+    parts.push(
+      `${String(bundled.length)} under .claude/plugins/<bundle>/skills/, shipped by a bundle and ` +
+        `readable by name`,
     )
   return parts
 }

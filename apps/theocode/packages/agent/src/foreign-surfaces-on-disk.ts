@@ -34,15 +34,21 @@ import type { ForeignSurface } from './doctor/doctor.js'
  * accounted for and none by accident:
  *
  *     skills    -> `skills-on-disk`, which asks the better question
- *     plugins   -> `skills-on-disk` too: `bundledSkillNames` walks
- *                  `<plugins>/<bundle>/skills/<name>/SKILL.md`
+ *     plugins   -> HERE, since #826. The line above said `skills-on-disk` covered it, and that was
+ *                  true of one question and not of the other: `bundledSkillNames` stopped such a skill
+ *                  being called "declared with no SKILL.md", and nothing counted the bundles or said
+ *                  whether this product acts on them. Measured 2026-09-17 on a workspace holding one
+ *                  bundled skill and one ordinary one: `skills-on-disk` reported `1`, and the
+ *                  `foreign-surfaces` row named `agents`, `commands`, `agent-memory` and `workflows`
+ *                  and not `plugins` — so the one surface whose coverage this comment ASSERTED was the
+ *                  only one a reader could not see at all
  *     subagents -> here, as `agents`
  *     commands  -> here
  *     context   -> the `[rules]` diagnostic the instruction tree already emits
  *
- * So `plugins` is absent from this list for the same reason `skills` is, not as an oversight. The
- * check was worth running: a fix covering four of five surfaces would have left the fifth in the
- * silence this whole file exists to end, and looked complete while doing it.
+ * The check was worth running and its conclusion was wrong, which is worth more than recording that it
+ * passed: a fix covering four of five surfaces left the fifth in the silence this whole file exists to
+ * end, and the comment asserting coverage is what stopped anyone looking.
  */
 const SURFACES: readonly {
   readonly dir: ForeignSurface['dir']
@@ -76,6 +82,12 @@ const SURFACES: readonly {
   { dir: 'agent-memory', state: 'read', count: (d) => memories(d) },
   // REFUSED, and counted so the refusal is visible rather than implied by an absent row.
   { dir: 'workflows', state: 'refused', count: (d) => topLevel(d, '.js') },
+  // #826 — one per bundle that ships at least one skill, which is what this product acts on there.
+  // Counting bundles rather than skills, because the question the row answers is "did my bundle take
+  // effect"; how many skills each contributes is `skills-on-disk`'s answer, and two readings of one
+  // number eventually disagree. A bundle with no `skills/` is not counted — nothing here loads it, and
+  // a row claiming otherwise would be the accepted-and-ignored failure in the diagnostic.
+  { dir: 'plugins', state: 'read', count: (d) => bundlesWithSkills(d) },
 ]
 
 /** Entries directly in `dir` with the given extension — no recursion, like the loaders. */
@@ -106,6 +118,13 @@ function definitions(dir: string): number {
     if (readFileSync(join(dir, entry.name), 'utf8').startsWith('---')) n += 1
   }
   return n
+}
+
+/** One per `<bundle>/skills/` that exists — the bundles this product reads something from. */
+function bundlesWithSkills(dir: string): number {
+  return readdirSync(dir, { withFileTypes: true }).filter(
+    (e) => e.isDirectory() && existsSync(join(dir, e.name, 'skills')),
+  ).length
 }
 
 /** One per `<agent>/MEMORY.md`. */
