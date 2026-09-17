@@ -8,6 +8,8 @@ import {
   SUGAR,
   type ExecArgs,
   type ExecRun,
+  type ExecUi,
+  type ExecUsageError,
   type OptionValues,
   type StdinBehavior,
 } from './exec-args.js'
@@ -60,6 +62,38 @@ function resolveInput(
 }
 
 
+/**
+ * An interactive session, or a refusal naming the flags it would have dropped.
+ *
+ * `security-floor.ts` (B-006) makes `cli` the operator's override — the one layer that wins in BOTH
+ * directions, because the threat model is a repository or an inherited environment, never the person
+ * at the keyboard. `ExecUi` carries nothing, so on this path that override reaches nobody.
+ *
+ * Measured 2026-09-17 against a trusted workspace whose file said `danger-full-access`: the operator
+ * typed `--sandbox read-only`, asking for MORE confinement, and the session came up
+ * `workspace-write` with no message. A control believed to be in force and absent is worse than one
+ * refused out loud — which is what this product's `doctor` says about permission rules one surface
+ * over.
+ *
+ * Derived from what was PASSED, so a flag added later is covered without anyone coming back here.
+ * The filter is not decoration: `values` carries EVERY boolean in the schema at its default, and
+ * without it the bare `theocode` was refused. A boolean nobody passed reads `false`; a string nobody
+ * passed reads `undefined`.
+ */
+function resolveUiOrRefuse(values: OptionValues): ExecUi | ExecUsageError {
+  const typed = Object.entries(values)
+    .filter(([, v]) => v !== false && v !== undefined)
+    .map(([k]) => (k.length === 1 ? `-${k}` : `--${k}`))
+  if (typed.length === 0) return { mode: 'ui' }
+  return {
+    mode: 'error',
+    message:
+      `${typed.join(', ')} cannot be applied to an interactive session — the UI resolves its ` +
+      `configuration from the working directory. Pass a prompt to use them for one answer, or ` +
+      `set them in .theokit/settings.json.`,
+  }
+}
+
 function parseResumeOrPrompt(
   values: OptionValues,
   positionals: string[],
@@ -72,9 +106,7 @@ function parseResumeOrPrompt(
 
   const e = resolveInput(promptParts.join(' '), stdinIsTTY)
   if ('error' in e) return { mode: 'error', message: e.error }
-  // Before the flags are folded in: the UI resolves its own configuration from the working
-  // directory, so carrying them here would be two sources for one answer.
-  if ('ui' in e) return { mode: 'ui' }
+  if ('ui' in e) return resolveUiOrRefuse(values)
   const { prompt, stdinBehavior } = e
 
   return {
