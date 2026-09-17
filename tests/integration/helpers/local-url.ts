@@ -25,6 +25,17 @@ export function rememberHost(port: number, host: string): void {
 /** The loopback hosts to try, in the order Node's own resolver would reach them for `localhost`. */
 export const LOOPBACK_HOSTS = ['127.0.0.1', '[::1]'] as const
 
+/**
+ * Record the host from a server this test STARTED, where the family is known rather than probed.
+ *
+ * `server.address()` reports what the listener actually bound. A wildcard (`::` or `0.0.0.0`) accepts
+ * on the loopback of its own family, so that is what gets recorded — no probe, no guess, and no
+ * dependence on what a resolver would have chosen.
+ */
+export function rememberFromAddress(port: number, family: string): void {
+  rememberHost(port, family === 'IPv6' ? '[::1]' : '127.0.0.1')
+}
+
 export function localUrl(port: number, path = '/'): string {
   return `http://${hostForPort.get(port) ?? LOOPBACK_HOSTS[0]}:${String(port)}${path}`
 }

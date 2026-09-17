@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { tmpdir as osTmpdir } from 'node:os'
 
 import { unpublishedPins } from '../../scripts/unpublished-pins.js'
-import { localUrl } from './helpers/local-url.js'
+import { localUrl, LOOPBACK_HOSTS, rememberHost } from './helpers/local-url.js'
 
 /**
  * theokit-evolution-ci-and-dx Phase 1C — pnpm 11+ compat gate.
@@ -92,9 +92,18 @@ async function waitForPort(port: number, timeoutMs: number): Promise<boolean> {
       const ctrl = new AbortController()
       const tid = setTimeout(() => ctrl.abort(), 1000)
       try {
-        const res = await fetch(localUrl(port, '/'), { signal: ctrl.signal })
+        // #830 — both families, and the one that ACCEPTS is recorded so every later request in this
+        // file reaches the same server. This probe used `localhost` and left the choice to the
+        // resolver, which is the nondeterminism the shared `waitForServer` already stopped making.
+        for (const host of LOOPBACK_HOSTS) {
+          const res = await fetch(`http://${host}:${String(port)}/`, { signal: ctrl.signal })
+          if (res.ok || res.status === 404 || res.status === 304) {
+            rememberHost(port, host)
+            clearTimeout(tid)
+            return true
+          }
+        }
         clearTimeout(tid)
-        if (res.ok || res.status === 404 || res.status === 304) return true
       } catch {
         clearTimeout(tid)
       }
