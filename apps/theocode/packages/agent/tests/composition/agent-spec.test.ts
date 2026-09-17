@@ -32,17 +32,17 @@ describe('B-059 — an agent shape is declared, not written', () => {
   it('test_the_reviewer_shape_holds_exactly_the_tools_its_job_needs', async () => {
     // Same expectation `composition.test.ts` makes of the built reviewer. Stated here against the
     // DECLARATION, so the two would disagree if the declaration and the construction drifted apart.
-    expect(names(reviewerShape(ctx()))).toEqual(['git_diff', 'grep', 'read_file', 'run_shell'])
+    expect(names(reviewerShape(ctx()))).toEqual(['Bash', 'GitDiff', 'Grep', 'Read'])
   })
 
   it('test_a_fourth_agent_is_a_list_and_not_a_new_construction_routine', async () => {
     // The bullet, executed. A read-only auditor: strictly smaller than the coding agent, declared
     // in three lines, with no file beside chat.ts and no second Agent.create call site.
     const auditor = declareAgent('auditor', ctx(), [
-      toolsNamed(ctx().registry, ['read_file', 'grep', 'list_dir']),
+      toolsNamed(ctx().registry, ['Read', 'Grep', 'Glob']),
     ])
 
-    expect(names(auditor)).toEqual(['grep', 'list_dir', 'read_file'])
+    expect(names(auditor)).toEqual(['Glob', 'Grep', 'Read'])
   })
 
   it('test_the_fourth_agent_is_strictly_smaller_than_the_reviewer', async () => {
@@ -50,14 +50,14 @@ describe('B-059 — an agent shape is declared, not written', () => {
     // overrides can add a tool and cannot remove one (`chat.ts:320`), which is why an agent needing
     // LESS became a new routine both times it was needed.
     const auditor = declareAgent('auditor', ctx(), [
-      toolsNamed(ctx().registry, ['read_file', 'grep', 'list_dir']),
+      toolsNamed(ctx().registry, ['Read', 'Grep', 'Glob']),
     ])
     const reviewer = reviewerShape(ctx())
 
     const auditorTools = new Set(names(auditor))
-    expect(auditorTools.has('run_shell'), 'a read-only auditor was handed a shell').toBe(false)
-    expect(auditorTools.has('git_diff')).toBe(false)
-    expect(names(reviewer)).toContain('run_shell')
+    expect(auditorTools.has('Bash'), 'a read-only auditor was handed a shell').toBe(false)
+    expect(auditorTools.has('GitDiff')).toBe(false)
+    expect(names(reviewer)).toContain('Bash')
   })
 
   it('test_a_shape_records_which_capability_contributed_what', async () => {
@@ -78,7 +78,7 @@ describe('B-059 — an agent shape is declared, not written', () => {
     // so it would go on passing after the fail-loud policy had decayed into a stack trace. Measured
     // — the message is `unknown tool "gerp"` — not guessed from the source.
     expect(() =>
-      declareAgent('typo', ctx(), [toolsNamed(ctx().registry, ['read_file', 'gerp'])]),
+      declareAgent('typo', ctx(), [toolsNamed(ctx().registry, ['Read', 'gerp'])]),
     ).toThrow(/unknown tool "gerp"/)
   })
 

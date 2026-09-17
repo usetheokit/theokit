@@ -171,6 +171,22 @@ describe('what the file carried and this product did not act on', () => {
     expect(report?.ignored).not.toContain('model')
   })
 
+  it('test_a_permission_block_travels_as_rules_not_only_as_a_complaint', () => {
+    // #736 — `translateSettings` has rendered `permissions` into `PermissionRule[]` since it was
+    // written, and `reportOne` kept only what could NOT be translated. The report carried the
+    // complaint and dropped the policy, so nothing downstream could enforce what the operator wrote.
+    //
+    // Measured 2026-09-17 beside Claude Code on byte-identical configuration: it refused a
+    // `Read(./off-limits.txt)` deny rule; this product answered with the file's contents.
+    write(project, '.claude', 'settings.json', {
+      permissions: { deny: ['Bash(rm:*)'], allow: ['Read'] },
+    })
+    const [report] = settingsReport({ projectDir: project, userDir: home, env: { HOME: home } })
+
+    expect(report?.permissionRules.length ?? 0).toBeGreaterThan(0)
+    expect(report?.permissionRules.map((r) => r.tool)).toContain('Bash')
+  })
+
   it('test_an_untranslatable_hook_is_reported_with_its_reason', () => {
     write(project, LEGACY_HOME_DIR, 'settings.json', {
       hooks: { UserPromptSubmit: [{ hooks: [{ type: 'command', command: 'inject.sh' }] }] },

@@ -38,7 +38,7 @@ describe('the preamble is not part of the final message', () => {
     const p = createHumanProcessor(io, 'sess-1')
 
     p.process(text("I'll read duration.mjs and report briefly."))
-    p.process(toolCall('read_file'))
+    p.process(toolCall('Read'))
     p.process({ type: 'tool-output-available' })
     p.process(text('parseDuration converts seconds to milliseconds.'))
     const result = p.finish('finished')
@@ -59,11 +59,11 @@ describe('the preamble is not part of the final message', () => {
     const p = createHumanProcessor(io, 'sess-1')
 
     p.process(text('Patching the parser now.'))
-    p.process(toolCall('apply_patch'))
+    p.process(toolCall('ApplyPatch'))
     p.finish('finished')
 
     const preamble = err.indexOf('Patching the parser now.')
-    const call = err.findIndex((l) => l.startsWith('exec apply_patch'))
+    const call = err.findIndex((l) => l.startsWith('exec ApplyPatch'))
 
     expect(preamble, 'the preamble was dropped instead of reported').toBeGreaterThanOrEqual(0)
     expect(call, 'the tool call was not reported').toBeGreaterThanOrEqual(0)
@@ -78,7 +78,7 @@ describe('the preamble is not part of the final message', () => {
 
     for (const step of ['First I look.', 'Now I patch.', 'Now I test.']) {
       p.process(text(step))
-      p.process(toolCall('run_shell'))
+      p.process(toolCall('Bash'))
     }
     p.process(text('All ten tests pass.'))
     p.finish('finished')
@@ -119,7 +119,7 @@ describe('the preamble is not part of the final message', () => {
     const p = createHumanProcessor(io, 'sess-1')
 
     p.process(text('Running the suite now.'))
-    p.process(toolCall('run_shell'))
+    p.process(toolCall('Bash'))
 
     expect(p.finish('finished').finalText).toBe('')
     expect(out, 'a preamble was passed off as the final answer').toEqual([])
@@ -134,7 +134,7 @@ describe('the JSONL processor derives the same final message', () => {
     const p = createJsonlProcessor(io, 'sess-1')
 
     p.process(text('Looking at the file.'))
-    p.process(toolCall('read_file'))
+    p.process(toolCall('Read'))
     p.process(text('It defines parseDuration.'))
 
     expect(p.finish('finished').finalText).toBe('It defines parseDuration.')

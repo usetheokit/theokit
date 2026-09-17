@@ -68,7 +68,7 @@ describe('BASE_INSTRUCTIONS', () => {
 
   describe('round-economy rules', () => {
     it('forbids exploring for files the prompt already named', () => {
-      expect(BASE_INSTRUCTIONS).toContain('The prompt named the files? `read_file` them directly')
+      expect(BASE_INSTRUCTIONS).toContain('The prompt named the files? `Read` them directly')
       expect(BASE_INSTRUCTIONS).toContain('to rediscover a path you were handed')
     })
 
@@ -81,8 +81,8 @@ describe('BASE_INSTRUCTIONS', () => {
       expect(BASE_INSTRUCTIONS).toContain("don't re-read to check")
     })
 
-    it('keeps repo_status off the pre-edit warm-up path', () => {
-      expect(BASE_INSTRUCTIONS).toContain('`repo_status` ONLY when the task is about git state')
+    it('keeps RepoStatus off the pre-edit warm-up path', () => {
+      expect(BASE_INSTRUCTIONS).toContain('`RepoStatus` ONLY when the task is about git state')
       expect(BASE_INSTRUCTIONS).toContain('it is not a warm-up before editing')
     })
 

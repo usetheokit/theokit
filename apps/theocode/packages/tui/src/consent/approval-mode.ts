@@ -10,18 +10,18 @@ export type { ApprovalMode }
  * Which tools THIS product lets run without asking, in `auto-edit`.
  *
  * Passed explicitly on every call, and that is the point rather than ceremony. `@theokit/agents`
- * also exports `WRITE_SCOPED_TOOLS` — `apply_patch`, `edit_file`, `write_file` — but that is a
+ * also exports `WRITE_SCOPED_TOOLS` — `ApplyPatch`, `Edit`, `write_file` — but that is a
  * CATALOG of which SDK tools bound their own writes, not a policy about who may skip the human.
  * Adopting it as a default here would silently widen an approval gate: this surface registers
- * `edit_file` (`agent/chat.ts:272-273`) and deliberately does not auto-approve it, so inheriting the
+ * `Edit` (`agent/chat.ts:272-273`) and deliberately does not auto-approve it, so inheriting the
  * framework's list would un-gate a live, model-callable write tool as a side effect of deleting
  * duplicated code. The framework's `auto-edit` approves nothing when no set is given, precisely so
  * that widening cannot happen by omission.
  *
- * `apply_patch` is here because it is bounded by the tool's own write scope rather than by the
+ * `ApplyPatch` is here because it is bounded by the tool's own write scope rather than by the
  * kernel, and the user opted into edits specifically.
  */
-const EDIT_TOOLS: ReadonlySet<string> = new Set(['apply_patch'])
+const EDIT_TOOLS: ReadonlySet<string> = new Set(['ApplyPatch'])
 
 /**
  * Whether a gated tool may run without asking.

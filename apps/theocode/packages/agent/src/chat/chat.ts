@@ -45,7 +45,7 @@ import { createInteractiveShellTool } from '../ask/index.js'
 import { MAX_PTY_SESSIONS } from '../pty/index.js'
 import type { SessionPtyOwner } from '../pty/index.js'
 import { ToolRegistry, resolveToolScope } from '../tools/index.js'
-import { declareAgent, toolsNamed } from '../composition/agent-spec.js'
+import { declareAgent, permissionsPluginsFor, toolsNamed } from '../composition/agent-spec.js'
 import { refuseForeignHook } from '../hooks/foreign-hook-gate.js'
 import { skillReadTool } from '../context/readable-skills.js'
 import { settingSourcesFor } from '../setting-sources.js'
@@ -357,8 +357,8 @@ function withWriteTools<T extends { tool: (t: CustomTool) => T }>(
   const overrides = { reasoning_effort: ctx.reasoning_effort }
   return writePolicy.writes
     ? base
-        .tool(registry.get('apply_patch'))
-        .tool(registry.get('edit_file'))
+        .tool(registry.get('ApplyPatch'))
+        .tool(registry.get('Edit'))
         // M36 — a SEQUENTIAL team (explorer → worker) built from the SDK's `Squad.create` (no bespoke
         // orchestration — Rule 9). Write-gated with the other write tools: the worker member needs write
         // authority, so gating here keeps a team from widening a member's authority beyond the parent's
@@ -449,22 +449,25 @@ function withShellTools(
       // also upstreamed (edit_file Strategy 3). Full circle: theocode reuses the ecosystem it enriched.
       // M3 — shell execution, gated behind approval below. M16: now the surface-agnostic `createShellTool`
       // built-in (catastrophic-command guard + optional SandboxProvider injection), aliased back to the
-      // Codex-ish `run_shell` name so the approval gate + TUI header/render + tool contract are unchanged.
+      // Named `Bash` — Claude Code's name for it — so a `permissions` block pasted from a
+      // `.claude/settings.json` addresses this tool instead of nothing. The name used to be the
+      // Codex-ish `run_shell`, and the approval gate, the TUI header and the tool contract are all
+      // unchanged by the rename: they key off the registry, not off the spelling.
       // The description is overridden to this agent's actual tool set (the built-in's default names
       // write_file/glob_files/search_text — which we don't register — and drops the interactive_shell steer).
-      // M68 — `run_shell`'s AUTHORITY (projectRoot + kernel sandbox) comes from the single registry;
+      // M68 — `Bash`'s AUTHORITY (projectRoot + kernel sandbox) comes from the single registry;
       // what stays here is the parent's own STEER. The distinction is deliberate: the description
       // cites `interactive_shell`/`write_stdin`, which a squad member does NOT receive, so inheriting
       // it would point them at tools they do not have. The registry rules what a tool CAN do; the
       // consumer may refine what it SAYS to the model.
       .tool(
         withDescription(
-          registry.get('run_shell'),
+          registry.get('Bash'),
           'Run a shell command in the project (tests, build, git). Returns { ok, stdout, stderr, exit_code } ' +
             '— READ exit_code, non-zero means it failed; report what failed, never claim success unless 0. ' +
             'One-shot and non-interactive (no stdin): for a REPL or a command that PROMPTS for input ' +
             '(python3, git rebase -i, a read prompt) use interactive_shell + write_stdin instead. Do NOT use ' +
-            'it for file ops — prefer read_file/list_dir/grep/apply_patch. timeout_ms defaults to 30000 ' +
+            'it for file ops — prefer Read/Glob/Grep/apply_patch. timeout_ms defaults to 30000 ' +
             '(max 300000). Requires human approval before running.',
         ),
       )
@@ -491,14 +494,14 @@ function withShellTools(
       .approvals({
         ...(writePolicy.writes
           ? {
-              apply_patch: { question: 'Apply this file patch?' },
-              edit_file: { question: 'Apply this edit?' },
+              ApplyPatch: { question: 'Apply this file patch?' },
+              Edit: { question: 'Apply this edit?' },
               delegate_to_team: {
                 question: 'Delegate this task to the team (the worker may edit/run files)?',
               },
             }
           : {}),
-        run_shell: { question: 'Run this shell command?' },
+        Bash: { question: 'Run this shell command?' },
         interactive_shell: { question: 'Start this interactive session?' },
         write_stdin: { question: 'Send this input to the interactive session?' },
         web_fetch: { question: 'Fetch this URL?' },
@@ -589,13 +592,13 @@ function withProjectEntities(
  * declared six times.
  */
 const READ_TOOLS = [
-  'current_time',
-  'read_file',
-  'view_image',
-  'list_dir',
-  'grep',
-  'repo_status',
-  'git_diff',
+  'CurrentTime',
+  'Read',
+  'ViewImage',
+  'Glob',
+  'Grep',
+  'RepoStatus',
+  'GitDiff',
 ] as const
 const shapeCache = new WeakMap<ToolRegistry, Map<string, CustomTool>>()
 
@@ -705,7 +708,7 @@ function baseAgent(ctx: {
       // The DECISION remains the product's: each headless surface declares its posture at the composition
       // point (`exec/main.ts`), derived from `headlessApprovalPosture` — including the F-arch-3 refusal
       // ("no bwrap means no confinement") that M70 added.
-      .plugins([...providerPlugins])
+      .plugins([...providerPlugins, ...permissionsPluginsFor(ctx.cwd, ctx.operatorHome)])
       // M20 — reasoning budget from config (default "medium" matches Codex's own default, so the harness
       // comparison still isolates harness behavior when no config overrides it).
       .reasoningEffort(overrides?.reasoning_effort ?? cfg.reasoning_effort)
@@ -744,45 +747,45 @@ function baseAgent(ctx: {
       // here, so this is a declaration change and not a behaviour change. The per-tool comments
       // below record why each is in the set and stay with the declaration.
       //
-      // M16 — current_time is now a surface-agnostic built-in consumed from `@theokit/agents/tools`
+      // M16 — CurrentTime is now a surface-agnostic built-in consumed from `@theokit/agents/tools`
       // (Codex-faithful UTC + optional IANA timezone); the bespoke local tool was retired.
-      .tool(readTool(registry, 'current_time'))
+      .tool(readTool(registry, 'CurrentTime'))
       // M1 — read-only filesystem access (path-safe; see tools/*.ts + lib/*-core.ts).
       // M17: read_file is now the Codex-grade `createReadFileTool` built-in — lineNumbers (cat -n view the
       // model cites/edits by), offset/limit paging, and allowAbsolute (Codex reads-anywhere; the secret guard
       // blocks .env/.git/… at any depth). Retired the bespoke read-file.ts + read-file-core.ts.
-      .tool(readTool(registry, 'read_file'))
-      // B-082 registered `view_image` and never handed it to an agent. Measured 2026-08-25: the
+      .tool(readTool(registry, 'Read'))
+      // B-082 registered `ViewImage` and never handed it to an agent. Measured 2026-08-25: the
       // registry built it, `image-root.test.ts` asserted it was resolvable BY THE REGISTRY under a
-      // describe block named "view_image is wired", and no agent held it — the compiled chat agent
+      // describe block named "ViewImage is wired", and no agent held it — the compiled chat agent
       // declared 16 tools and this was not among them. So the model could not look at a screenshot
       // it had just produced, which is the entire capability the item exists for, and the test
       // that would have caught it was checking the wrong end of the wire.
       //
       // Ungated, like every other read. It reads a file under the SAME root through the SAME
-      // containment rule as `read_file`, which is ungated; `read_file` can already hand the model
+      // containment rule as `Read`, which is ungated; `Read` can already hand the model
       // the bytes of any file in the workspace. Gating this one would gate the RENDERING, not the
       // ACCESS, and would train the user to click through cards that protect nothing — which is
-      // what makes the cards on `run_shell` and `apply_patch` worth reading.
-      .tool(readTool(registry, 'view_image'))
-      .tool(readTool(registry, 'list_dir'))
+      // what makes the cards on `Bash` and `ApplyPatch` worth reading.
+      .tool(readTool(registry, 'ViewImage'))
+      .tool(readTool(registry, 'Glob'))
       // M17: grep is now the `createSearchTextTool` built-in in regex mode (grep semantics) + allowAbsolute
-      // (Codex reads-anywhere), aliased to the `grep` name. Retired the bespoke grep.ts + grep-core.ts.
-      .tool(readTool(registry, 'grep'))
+      // (Codex reads-anywhere), aliased to the `Grep` name. Retired the bespoke grep.ts + grep-core.ts.
+      .tool(readTool(registry, 'Grep'))
       // M6 — repo-aware context (read-only, ungated).
       // M76 — the framework's tool. The local one parsed `git status --porcelain=v1 -b` in 62 LoC;
       // `createGitStatusTool` produces the SAME output, branch line included (parity verified BEFORE
       // deleting — without that check, migrating would have silently cost the "am I on the right branch?").
       // M99 — it comes from the registry. Built inline here until then, carrying `projectRoot` outside the
       // single source: one of the two sites the manual survey at `ROADMAP.md:2412` did not enumerate, in
-      // the very file M68 refactored. The name (`repo_status`) is preserved — it is a contract with the
+      // the very file M68 refactored. The name (`RepoStatus`) is preserved — it is a contract with the
       // model, with the approval map, and with the TUI's rendering.
-      .tool(readTool(registry, 'repo_status'))
+      .tool(readTool(registry, 'RepoStatus'))
       // M38 — the working-tree diff, so the model can review pending changes. `createGitDiffTool` is a
       // `@theokit/agents/tools` built-in (`git diff --no-color`, detached, 30s/5MB caps) — read-only, so ungated
-      // (same posture as `repo_status`, which also shells out to git). LLM name: `git_diff`.
-      // M99 — same as above: from the registry, keeping the name `git_diff`.
-      .tool(readTool(registry, 'git_diff'))
+      // (same posture as `RepoStatus`, which also shells out to git). LLM name: `GitDiff`.
+      // M99 — same as above: from the registry, keeping the name `GitDiff`.
+      .tool(readTool(registry, 'GitDiff'))
       // M38 — `request_user_input`: the agent pauses mid-turn to ask the user a question, resolved through the
       // TUI's EXISTING inline input slot via the ask-bridge (no second prompt channel). `createQuestionTool`
       // returns a literal object named `question` with an `unknown` inputSchema, so we spread-adapt it to the

@@ -32,7 +32,7 @@ function oneLine(value: string, max = 120): string {
  * It has now been measured, by rejecting a real approval in the TUI and dumping the event:
  *
  *     {"kind":"tool","name":"Ran echo probe2","status":"failed",
- *      "output":"{\"stdout\":\"\",\"stderr\":\"Tool 'run_shell' denied by human approver\",
+ *      "output":"{\"stdout\":\"\",\"stderr\":\"Tool 'Bash' denied by human approver\",
  *                \"exitCode\":126}"}
  *
  * `@theokit/agents@11.0.0` turns a `{block: true, message}` decision into exactly that — camelCase
@@ -56,8 +56,8 @@ export const REJECTED_BODY = 'rejected — nothing ran'
  * fix landed, which is exactly how it was caught: the body read `rejected — nothing ran` under a
  * header that still said `Ran echo parity-final`.
  *
- * The raw form is kept because `shellBody` only handles `run_shell`; a rejected `apply_patch` or
- * `edit_file` still arrives with the runtime's own payload.
+ * The raw form is kept because `shellBody` only handles `Bash`; a rejected `ApplyPatch` or
+ * `Edit` still arrives with the runtime's own payload.
  */
 function wasDenied(event: AgentToolEvent): boolean {
   if (event.status !== 'failed') return false
@@ -70,13 +70,13 @@ function wasDenied(event: AgentToolEvent): boolean {
  * Ours only. `defaultToolHeader` was composed in as a fallback and then REMOVED, measured.
  *
  * The reasoning that added it was sound and the measurement killed it. This product exposes
- * `git_diff`, `grep`, `list_dir` and `read_file` with no entry below, so they rendered as raw
+ * `GitDiff`, `Grep`, `Glob` and `Read` with no entry below, so they rendered as raw
  * snake_case names, and the toolkit's default answers all four. What that missed is the sentence in
  * `ToolHeaderFormatter`'s own docblock: *explored grouping matches on the (possibly overridden)
  * `name`, so returning a name for a tool listed in `exploreTools` opts that call OUT of the
  * collapse*. All four are in `DEFAULT_EXPLORE_TOOLS`.
  *
- * Measured on three consecutive `read_file` calls:
+ * Measured on three consecutive `Read` calls:
  *
  *     without a header   ->  explored                              (one block)
  *     with the default   ->  tool/Read | tool/Read | tool/Read     (three cards)
@@ -111,15 +111,15 @@ export function formatToolHeader(
 function deniedName(tool: string, input: Record<string, unknown>): string {
   const cmd = typeof input.command === 'string' ? oneLine(input.command) : ''
   switch (tool) {
-    case 'run_shell':
+    case 'Bash':
       return `Rejected ${cmd}`.trim()
     case 'interactive_shell':
       return 'Rejected the interactive session'
     case 'write_stdin':
       return 'Rejected the input to the session'
-    case 'apply_patch':
+    case 'ApplyPatch':
       return 'Rejected the patch'
-    case 'edit_file':
+    case 'Edit':
       return 'Rejected the edit'
     default:
       return `Rejected ${tool}`
@@ -133,7 +133,7 @@ const HEADERS_BY_TOOL: ReadonlyMap<
   (input: Record<string, unknown>, active: boolean) => Header
 > = new Map([
   [
-    'run_shell',
+    'Bash',
     (input, active) => {
       const cmd = typeof input.command === 'string' ? oneLine(input.command) : ''
       return { name: `${active ? 'Running' : 'Ran'} ${cmd}`.trim() }
@@ -151,26 +151,26 @@ const HEADERS_BY_TOOL: ReadonlyMap<
     (_input, active) => ({ name: active ? 'Writing to session' : 'Wrote to session' }),
   ],
   [
-    'current_time',
+    'CurrentTime',
     (_input, active) => ({ name: active ? 'Checking the time' : 'Checked the time' }),
   ],
   ['update_plan', (_input, active) => ({ name: active ? 'Updating plan' : 'Updated plan' })],
   [
-    'edit_file',
+    'Edit',
     (input, active) => {
       const path = typeof input.path === 'string' ? input.path : 'file'
       return { name: `${active ? 'Editing' : 'Edited'} ${path}`.trim() }
     },
   ],
   [
-    'view_image',
+    'ViewImage',
     (input, active) => {
       const path = typeof input.path === 'string' ? input.path : 'image'
       return { name: `${active ? 'Viewing' : 'Viewed'} ${path}`.trim() }
     },
   ],
   [
-    'apply_patch',
+    'ApplyPatch',
     (input, active) => {
       const patch = typeof input.patch === 'string' ? input.patch : ''
       return {
@@ -196,9 +196,9 @@ const BODY_BY_TOOL: ReadonlyMap<string, (p: ParsedResult) => { output: string } 
     ['interactive_shell', terminalBody],
     ['write_stdin', terminalBody],
     [
-      'edit_file',
+      'Edit',
       (p) => {
-        if (p.ok === false) return { output: `edit_file: ${errorText(p)}` }
+        if (p.ok === false) return { output: `Edit: ${errorText(p)}` }
         if (typeof p.replacements !== 'number') return undefined
         return {
           output: `Applied ${String(p.replacements)} edit${p.replacements === 1 ? '' : 's'}.`,
@@ -206,23 +206,23 @@ const BODY_BY_TOOL: ReadonlyMap<string, (p: ParsedResult) => { output: string } 
       },
     ],
     [
-      'current_time',
+      'CurrentTime',
       (p) => {
-        if (p.ok === false) return { output: `current_time: ${errorText(p)}` }
-        return typeof p.current_time === 'string' ? { output: p.current_time } : undefined
+        if (p.ok === false) return { output: `CurrentTime: ${errorText(p)}` }
+        return typeof p.CurrentTime === 'string' ? { output: p.CurrentTime } : undefined
       },
     ],
     [
-      'read_file',
+      'Read',
       (p) => {
-        if (p.ok === false) return { output: `read_file: ${errorText(p)}` }
+        if (p.ok === false) return { output: `Read: ${errorText(p)}` }
         return typeof p.content === 'string' ? { output: p.content } : undefined
       },
     ],
     [
-      'apply_patch',
+      'ApplyPatch',
       (p) => {
-        if (p.ok === false) return { output: `apply_patch: ${errorText(p)}` }
+        if (p.ok === false) return { output: `ApplyPatch: ${errorText(p)}` }
         const files = Array.isArray(p.files_patched)
           ? (p.files_patched as unknown[]).map(String)
           : []
@@ -233,9 +233,9 @@ const BODY_BY_TOOL: ReadonlyMap<string, (p: ParsedResult) => { output: string } 
       },
     ],
     [
-      'grep',
+      'Grep',
       (p) => {
-        if (p.ok === false) return { output: `grep: ${errorText(p)}` }
+        if (p.ok === false) return { output: `Grep: ${errorText(p)}` }
         if (!Array.isArray(p.matches)) return undefined
         const lines = (
           p.matches as Array<{ file?: unknown; line?: unknown; preview?: unknown }>
@@ -244,7 +244,7 @@ const BODY_BY_TOOL: ReadonlyMap<string, (p: ParsedResult) => { output: string } 
       },
     ],
     ['update_plan', planBody],
-    ['run_shell', shellBody],
+    ['Bash', shellBody],
   ])
 
 function terminalBody(p: ParsedResult): { output: string } | undefined {
@@ -267,7 +267,7 @@ function planBody(p: ParsedResult): { output: string } | undefined {
 }
 
 function shellBody(p: ParsedResult): { output: string } | undefined {
-  if (p.ok === false) return { output: `run_shell: ${errorText(p)}` }
+  if (p.ok === false) return { output: `Bash: ${errorText(p)}` }
   // A rejected call, now that the formatter is reached on the failure path at all
   // (usetheokit/theokit-tui#156 — the override used to be gated on a field an errored part never
   // populates, so the raw payload was printed verbatim). The runtime renders the veto as a shell
@@ -345,7 +345,7 @@ type ApprovalLabel = { toolType: string; command: string; description?: string }
 const APPROVAL_LABELS: ReadonlyMap<string, (input: Record<string, unknown>) => ApprovalLabel> =
   new Map([
     [
-      'run_shell',
+      'Bash',
       (input) => ({
         toolType: 'Run command',
         command: typeof input.command === 'string' ? input.command : '',
@@ -366,14 +366,14 @@ const APPROVAL_LABELS: ReadonlyMap<string, (input: Record<string, unknown>) => A
       },
     ],
     [
-      'edit_file',
+      'Edit',
       (input) => ({
         toolType: 'Apply edit',
         command: typeof input.path === 'string' ? input.path : 'file',
       }),
     ],
     [
-      'apply_patch',
+      'ApplyPatch',
       (input) => {
         const patch = typeof input.patch === 'string' ? input.patch : ''
         return {

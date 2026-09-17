@@ -99,6 +99,14 @@ export interface TranslateOptions {
    */
   readonly ownKeys: readonly string[]
   /**
+   * The directory this settings file lives in, so a path specifier can be anchored to it.
+   *
+   * `Read(./off-limits.txt)` means that file next to THIS settings file. Without the anchor the
+   * rule matches only its relative spellings, and a tool called with an absolute path walks past a
+   * deny the operator believes covers it — measured 2026-09-17, end to end.
+   */
+  readonly baseDir?: string
+  /**
    * True for a file under the FOREIGN root (`.claude/`), whose vocabulary belongs to another product
    * and grows on its release cadence, not ours. There, an unknown key is ignored and reported.
    * False for a file under this product's own root, where an unknown key is a typo and the strict
@@ -354,6 +362,29 @@ function normaliseHooks(
   return read.dropped
 }
 
+/**
+ * Which argument each tool's specifier addresses, for this product's tools.
+ *
+ * `Bash(rm:*)` addresses the shell's `command`; `Read(./secret)` addresses the reader's `path`. The
+ * translator refuses a specifier for a tool absent from this map rather than rendering it against the
+ * wrong field, because a matcher on a field the tool does not have never fires — and a rule that
+ * looks translated is worse than one reported as untranslatable.
+ *
+ * Measured 2026-09-17: `Read(./off-limits.txt)` was rendered against `command`, carried by the
+ * plugin, and the file was read. The names are this product's registry names, which since the same
+ * day are Claude Code's, so a rule pasted from a `.claude/settings.json` addresses the right tool.
+ */
+const SPECIFIER_ARG: Readonly<Record<string, string>> = {
+  Bash: 'command',
+  Read: 'path',
+  Edit: 'path',
+  Glob: 'path',
+  ViewImage: 'path',
+  ApplyPatch: 'patch',
+  Grep: 'pattern',
+}
+
+
 export function translateSettings(raw: unknown, opts: TranslateOptions): SettingsRead {
   if (!isRecord(raw))
     return {
@@ -390,7 +421,10 @@ export function translateSettings(raw: unknown, opts: TranslateOptions): Setting
       // worse than the gap it was describing. Closing this needs a seam in `@theokit/agents`; until
       // that ships, the operator is told the truth twice: the block does not take effect, AND which
       // of its entries could not even be rendered.
-      const translated = permissionRulesFromSettings(asPermissionsBlock(value))
+      const translated = permissionRulesFromSettings(asPermissionsBlock(value), {
+          specifierArg: SPECIFIER_ARG,
+          ...(opts.baseDir === undefined ? {} : { baseDir: opts.baseDir }),
+        })
       permissionRules = translated.rules
       unsupportedPermissions = translated.unsupported.map((u) => ({
         entry: u.entry,

@@ -32,6 +32,9 @@
  * contributed which field, inspectable as data) and `CapabilityConflictError` instead of last-wins
  * when two members declare the same scalar differently.
  */
+import { createPermissionsPlugin } from '@theokit/agents'
+import { settingsReport } from '../config/settings-load.js'
+import type { Plugin } from '@theokit/agents'
 import {
   CapabilityPreset,
   ModelCapability,
@@ -98,7 +101,7 @@ export function declareAgent(
 }
 
 /** The tool names the reviewer holds. Its job is to read a diff and report on it. */
-export const REVIEWER_TOOLS = ['git_diff', 'read_file', 'grep', 'run_shell'] as const
+export const REVIEWER_TOOLS = ['GitDiff', 'Read', 'Grep', 'Bash'] as const
 
 /**
  * The reviewer, as a list.
@@ -109,4 +112,37 @@ export const REVIEWER_TOOLS = ['git_diff', 'read_file', 'grep', 'run_shell'] as 
  */
 export function reviewerShape(ctx: SpecContext): AgentShape {
   return declareAgent('reviewer', ctx, [toolsNamed(ctx.registry, REVIEWER_TOOLS)])
+}
+
+/**
+ * The `permissions` policy of every settings layer, as plugins the run carries.
+ *
+ * ## Why an array
+ *
+ * `createPermissionsPlugin` returns `undefined` when nothing was configured, and the caller spreads
+ * whatever comes back. An array of zero or one keeps "no policy was written" different from "a policy
+ * that permits everything" without a conditional at the composition point — which is also what keeps
+ * `baseAgent` under its complexity ceiling.
+ *
+ * ## What this joins
+ *
+ * `translateSettings` has rendered the block into `PermissionRule[]` since `@theokit/agents@14.0.0`,
+ * `reportOne` used to discard the result, and nothing built an engine. Measured 2026-09-17 beside
+ * Claude Code on byte-identical configuration: it refused a `Read(./off-limits.txt)` deny rule and
+ * this product answered with the file's contents.
+ *
+ * ## The link that is NOT yet proven
+ *
+ * The rules reach the plugin with the right tool name and the right argument — verified end to end on
+ * the real binary. What has not been observed is the SDK's `pre_tool_call` seam vetoing a CUSTOM tool:
+ * a `deny` on `Read` was carried and the call still returned `{"ok":true,...}`. That last joint lives
+ * in `@theokit/sdk`, which is published from another repository, and is tracked on #736 with the
+ * measurement. Nothing here pretends otherwise.
+ */
+export function permissionsPluginsFor(cwd: string, operatorHome: string): readonly Plugin[] {
+  const rules = settingsReport({ projectDir: cwd, userDir: operatorHome }).flatMap(
+    (r) => r.permissionRules,
+  )
+  const plugin = createPermissionsPlugin(rules)
+  return plugin === undefined ? [] : [plugin]
 }

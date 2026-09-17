@@ -30,6 +30,24 @@ import type { CredentialState } from '@theocode/agent'
  * have. Only a number in the past counts. `now` is injected so the boundary is testable without
  * waiting for a real token to age.
  */
+/**
+ * The shape every stored credential has, whichever kind it is.
+ *
+ * `StoredOAuthCredential` declares `provider`, and the message this product prints when no
+ * credential is found tells the operator to write `{"provider": "openrouter", "api_key": "..."}`.
+ * The two forms share exactly one field, so that field is the floor — nothing here invents a
+ * contract, it reads the one the product already states in two places.
+ *
+ * Deliberately NOT stricter. Demanding `access`/`api_key` would make this file the second authority
+ * on what a credential is, and the first one lives in the framework; a `doctor` that refuses what
+ * the loader accepts is the same defect pointed the other way.
+ */
+function looksLikeACredential(parsed: unknown): boolean {
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return false
+  const provider: unknown = (parsed as { provider?: unknown }).provider
+  return typeof provider === 'string' && provider !== ''
+}
+
 export function credentialState(path: string, now: number = Date.now()): CredentialState {
   if (!existsSync(path)) return 'absent'
   let parsed: unknown
@@ -38,6 +56,11 @@ export function credentialState(path: string, now: number = Date.now()): Credent
   } catch {
     return 'unreadable'
   }
+  // #823 — parsing is not the same question as being a credential. `{"nao":"e-credencial"}` is valid
+  // JSON, so this returned `present` while the TUI, which tries to USE the file, showed `none`.
+  // Measured 2026-09-17 against a decoy: the diagnostic an operator opens BECAUSE a session will not
+  // authenticate was the one saying everything was fine.
+  if (!looksLikeACredential(parsed)) return 'unreadable'
   const expires = (parsed as { expires?: unknown }).expires
   return typeof expires === 'number' && expires <= now ? 'expired' : 'present'
 }

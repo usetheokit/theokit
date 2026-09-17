@@ -266,6 +266,37 @@ function foreignHookCheck(
   ]
 }
 
+/**
+ * What this file's permission rules actually do, which depends on whether the key is implemented.
+ *
+ * #824 — the previous line listed ONLY the entries whose syntax would not translate. A reader
+ * concluded, reasonably, that the rules absent from that list DID apply. None applied: `permissions`
+ * sits in `ignored`, so no rule in the file reaches an engine, translatable or not.
+ *
+ * Measured 2026-09-17 beside Claude Code, which refused the same `deny` rule this product honoured
+ * with the file's canary. The comment on the old line argued that `ignored` and this line together
+ * gave the operator both halves. They do not compose: one names KEYS and the other names ENTRIES, so
+ * the second reads as the specific list and the first as background.
+ *
+ * Both branches are kept, and the second is not hypothetical — it is what this row must say the day
+ * enforcement lands, which makes that transition visible instead of silent.
+ */
+function permissionNotice(r: SettingsFileReport): string {
+  const untranslatable =
+    r.unsupportedPermissions.length > 0
+      ? ` These would not have translated either: ${r.unsupportedPermissions.join('; ')}`
+      : ''
+  if (r.ignored.includes('permissions')) {
+    return (
+      'no permission rule from this file is in force — `permissions` is not implemented here, so ' +
+      `every allow and deny in it is inert, not only the ones below.${untranslatable}`
+    )
+  }
+  return r.unsupportedPermissions.length > 0
+    ? `permission entries not honoured: ${r.unsupportedPermissions.join('; ')}`
+    : ''
+}
+
 function settingsCheck(reports: readonly SettingsFileReport[] = []): Check[] {
   const said = reports
     .map((r) => {
@@ -279,9 +310,7 @@ function settingsCheck(reports: readonly SettingsFileReport[] = []): Check[] {
         // second line is about TRANSLATION: an entry listed here did not even render, so its
         // problem is that LINE rather than the absent seam. An operator needs both, and neither
         // alone would let them believe a `deny` they wrote is in force.
-        r.unsupportedPermissions.length > 0
-          ? `permission entries not honoured: ${r.unsupportedPermissions.join('; ')}`
-          : '',
+          permissionNotice(r),
       ].filter((p) => p !== '')
       return parts.length > 0 ? `${r.path} — ${parts.join('; ')}` : ''
     })

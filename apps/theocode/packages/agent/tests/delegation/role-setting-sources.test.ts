@@ -120,13 +120,13 @@ describe('#74 — what a delegated role is allowed to read', () => {
     // #80 — a local agent is given a `shell` tool by the framework whether or not the caller asks,
     // "including when you pass `tools: []`" (`LocalOptions` docblock, `@theokit/sdk@5.0.1`). Measured
     // on the built binary: the `analyst`, declared with three read tools and instructions saying it
-    // cannot run commands, enumerates its catalog as `shell, read_file, list_dir, grep, parallel`.
+    // cannot run commands, enumerates its catalog as `shell, read_file, Glob, grep, parallel`.
     //
     // A role therefore carried authority its definition never granted, and the test asserting its
     // declared tool list passed throughout — the list was right and the catalog was not.
     //
     // Withholding the BUILTIN is safe for the roles that legitimately execute: this product's own
-    // shell is the custom `run_shell`, a different name, resolved from the registry per role. What
+    // shell is the custom `Bash`, a different name, resolved from the registry per role. What
     // goes is only the one nobody declared.
     const opts = await optsOf({ subagents: true, hooks: true })
 

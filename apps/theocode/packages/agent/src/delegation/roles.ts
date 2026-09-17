@@ -175,7 +175,7 @@ async function roleAgentOptions(
     // a child declared with three read tools enumerated `shell` first in its catalog, while the test
     // asserting its declared list went on passing. The list was right; the catalog was not.
     //
-    // Safe for the roles that legitimately execute: this product's shell is the CUSTOM `run_shell`,
+    // Safe for the roles that legitimately execute: this product's shell is the CUSTOM `Bash`,
     // resolved per role from the registry under a different name. What goes is only the builtin
     // nobody declared, and a role that lost a tool it needed would fail loudly rather than quietly —
     // the right direction for this to be wrong in.

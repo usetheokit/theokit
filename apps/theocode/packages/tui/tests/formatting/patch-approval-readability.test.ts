@@ -20,7 +20,7 @@ const PATCH = `*** Begin Patch
 *** End Patch`
 
 function describePatch(patch: string): string {
-  return formatApproval({ toolName: 'apply_patch', input: { patch } }).description ?? ''
+  return formatApproval({ toolName: 'ApplyPatch', input: { patch } }).description ?? ''
 }
 
 describe('formatApproval — apply_patch', () => {

@@ -11,7 +11,7 @@ const MAX_PATCH_LINES = 40
  * One line per tool call on the headless surface — except a patch, which gets its body.
  *
  * The generic form is `exec <name> <json>`, and for most tools it is the right one:
- * `exec read_file {"path":"tax.mjs"}` says everything in a line. `apply_patch` is where it collapses.
+ * `exec Read {"path":"tax.mjs"}` says everything in a line. `ApplyPatch` is where it collapses.
  * Its input is a whole diff, so `JSON.stringify` turns the one tool call a reader most wants to read
  * into a single line of escaped text with literal `\n` where the newlines were.
  *
@@ -39,7 +39,7 @@ export function toolLine(chunk: ToolChunk): string {
 }
 
 function patchBody(chunk: ToolChunk): string | undefined {
-  if (chunk.toolName !== 'apply_patch') return undefined
+  if (chunk.toolName !== 'ApplyPatch') return undefined
   const input = chunk.input
   if (typeof input !== 'object' || input === null) return undefined
   const patch = (input as { patch?: unknown }).patch

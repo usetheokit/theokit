@@ -48,7 +48,7 @@ describe('B-075 — conversationToMarkdown', () => {
     // The timeline is heterogeneous: tool events carry no role or parts. Including them would emit
     // `undefined` into the document.
     const md = conversationToMarkdown([
-      { id: 't1', kind: 'tool', name: 'run_shell', status: 'success' },
+      { id: 't1', kind: 'tool', name: 'Bash', status: 'success' },
       { id: 'k1', kind: 'thinking', text: 'pondering' },
       msg('assistant', 'done'),
     ])
