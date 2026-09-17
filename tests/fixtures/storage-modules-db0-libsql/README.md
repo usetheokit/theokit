@@ -1,6 +1,9 @@
 # Fixture — storage-modules-db0-libsql
 
-End-to-end proof of `useDatabase(name, connector)` with `better-sqlite3` connector (T4.2, ADR-0010).
+End-to-end proof of `useDatabase(name, connector)` with `better-sqlite3` connector (T4.2).
+
+<!-- #832 — the ADR reference here resolved to nothing; see the note in
+     `storage-manager-recipe/README.md`. -->
 
 ## What this shows
 
