@@ -98,10 +98,10 @@ configuration that had no effect.
 | `skills/`, `agents/`, `commands/`, `plugins/` | read when the dialect is declared |
 | `.mcp.json` | read; a field this runtime does not carry is reported |
 | `output-styles/*.md` | read, selected by `settings.json` |
-| `agent-memory/` | **resolvable** — the SDK carries the declaration, `applySubagentMemory` applies it, and the host decides whether to call it. Measured 2026-09-15: no consumer does yet |
+| `agent-memory/` | **read** — `applySubagentMemory` applies a subagent's `memory:` declaration, and `apps/theocode` calls it (`delegation/role-discovery.ts`). The host still decides: nothing here calls it for you |
 | `workflows/*.js` | **refused**, and reported. Every other surface is data; a workflow is code, and executing JavaScript found under a caller-supplied directory is a decision that belongs to you |
 | `keybindings.json` | **out of scope HERE** — read by the consumer, see below |
-| `themes/*.json` | **out of scope** — nobody reads it, in any of the three packages |
+| `themes/*.json` | **out of scope HERE** — read by the consumer, like `keybindings.json`. `apps/theocode` resolves `~/.claude/themes/` in `tui/src/theme/custom-theme.ts`; this package and `@theokit/tui` read neither |
 | `~/.claude.json` — OAuth state, UI toggles | **out of scope** — a CLI's own state |
 | `~/.claude.json` — personal-scope MCP servers | **read** — `loadPersonalMcpServers` |
 
@@ -124,8 +124,10 @@ in `terminal-io/keybindings.ts`, against a format it measured against the publis
 Naming the toolkit as the owner sent a reader to the package that does the least with it — and the
 row said `out of scope` without saying out of scope FOR WHOM, which is the half that misleads.
 
-`themes/*.json` is read by nobody, in any of the three packages. That is a genuine gap rather than a
-delegation, and it is stated here rather than implied by an ownership that does not exist.
+`themes/*.json` is read by the CONSUMER, exactly as `keybindings.json` is: `apps/theocode` resolves
+`~/.claude/themes/` in `tui/src/theme/custom-theme.ts` and selects one through `/theme custom:<slug>`.
+This package reads it in 0 files and so does `@theokit/tui` — measured 2026-09-17 against the
+installed 0.80.0.
 
 **`~/.claude.json` is two things under one name, and the split is the point.** Its OAuth state and UI
 toggles are a CLI's own state — that file is written by a specific program about its own session, and
@@ -148,9 +150,16 @@ The registry entry that prompted this counts four decisions across three files, 
 
 ### `themes/*.json`
 
-Read by none of the three packages, measured 2026-09-15. After `keybindings.json` turned out to be
-read by the consumer rather than by the package it was attributed to, the obvious next move was to
-treat this as the same finding. It is not.
+Read by the consumer, measured 2026-09-17. After `keybindings.json` turned out to be read by
+`apps/theocode` rather than by the package it was attributed to, the obvious next move was to treat
+this as the same finding — and it **is** the same finding, which this document denied until the
+three packages were named.
+
+The denial is worth keeping, because it shows what an unfalsifiable sentence costs. This section
+read *"nobody reads it, in any of the three packages"* and never said which three. A reader could
+not check a set they could not enumerate, so nobody did; naming them took one edit, and the sentence
+was false the moment it became checkable — `apps/theocode` resolves `~/.claude/themes/` in
+`tui/src/theme/custom-theme.ts`, with three reads in that one file.
 
 This package has no colour at all — a grep for `color`, `chalk` or `theme` across its source returns
 nothing, the one apparent hit being `ansi` inside `stateTransitionHistory`. It produces text and tool
@@ -207,15 +216,28 @@ and not applied, so nobody believes it took effect.
 **200 lines, capped at 25KB**, of its `MEMORY.md` — both caps apply, and truncation is reported
 rather than silent.
 
-**The host calls it. Nothing here calls it for you, and `memory:` in subagent frontmatter does not
-reach it.** Measured 2026-09-15: `resolveAgentMemory` has no caller in this repository outside its
-own tests, and `@theokit/sdk` — which is the package that loads `.claude/agents/*.md`, and does not
-depend on this one — lists `memory` among the fields it refuses, so a file declaring it is skipped
-with a diagnostic rather than granted a directory.
+**The host calls it. Nothing here calls it for you** — and that sentence is the whole contract: this
+package exposes the reader, an application wires it.
 
-Saying "read" in the table above, as this document did until that measurement, put this surface in
-the same column as `CLAUDE.md` and implied a wiring that does not exist. The reader is real and the
-three roots below are real; what an author supplies is the call.
+One does. `apps/theocode` imports `applySubagentMemory` from `@theokit/agents/config` and applies it
+to both role sets in `delegation/role-discovery.ts:84-85`; that reaches `resolveAgentMemory`
+through `agent-memory.ts:231`. So the chain runs end to end, and this document says **read** rather
+than **resolvable**.
+
+It said the opposite until 2026-09-16, and the reason is worth keeping because it is the failure
+mode this table exists to prevent. The measurement behind *"no consumer does yet"* was true when
+taken: the consumer could not call it. Its own source says why — *"`applySubagentMemory` … is NOT in
+the published 14.4.0 this project pins, so the one line that wires it does not compile here yet"*.
+The integration was written, tested, and left disconnected, waiting on a publish.
+
+What changed is not the code on either side. `apps/theocode` joined this repository, `@theokit/agents`
+resolves through the workspace, and the line compiled. **A capability can be published, correct, and
+unreachable** — and a document that reports the reachable state as the real one is reporting a
+delivery problem as a design decision.
+
+`@theokit/sdk` before 5.9.0 refuses `memory:` in frontmatter entirely, naming the field rather than
+the version — `agent-memory.ts` carries that measurement, and
+`the-sdk-version-that-parses-memory.test.ts` pins it.
 
 | `memory:` | Root | Who can see it |
 |---|---|---|
