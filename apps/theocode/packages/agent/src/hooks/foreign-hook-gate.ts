@@ -9,15 +9,29 @@ import type { HookApprovalRequest } from '@theokit/agents'
  * `buildHookHandlers`, and are handed to the framework with a `fingerprint` callback that resolves
  * each one against the on-disk approval store. That gate already exists and already works.
  *
- * What reaches HERE is the other path: the framework's compatibility loader reads
- * `<cwd>/.claude/settings.json` and `<cwd>/.theokit/hooks.json` itself, and spawns what it finds
+ * What WOULD reach here is the other path: the framework's compatibility loader reading
+ * `<cwd>/.claude/settings.json` and `<cwd>/.theokit/hooks.json` itself and spawning what it finds,
  * without ever passing through `buildHookHandlers`. Measured before the gate existed: a hook
  * declared in a project `.claude/settings.json` fired once, with no approval prompt and no approval
  * file written, against a control arm at zero where the same tool still ran.
  *
- * So every request arriving here is by construction a hook this product did not translate, did not
- * fingerprint, and was never asked to approve. Refusing is not a policy choice made here — it is
- * the policy the README and `doctor` have stated all along, finally reaching the point of action.
+ * **Nothing reaches here today, and the paragraph above used to say otherwise.** The framework
+ * spawns a foreign root's hooks only when `hooks` is among the surfaces this product grants, and
+ * `FOREIGN_SURFACES` is `skills, subagents, plugins, commands, context` — measured 2026-09-16, and
+ * pinned by `the-foreign-hook-gate-is-unreachable.test.ts` so the claim cannot rot again. The
+ * present tense here described the world before the import list narrowed, which is worse than dead
+ * code: a reader tracing a security question found a paragraph asserting a live path.
+ *
+ * So the refusal below is an answer prepared in advance rather than one being given. Every request
+ * that COULD arrive is by construction a hook this product did not translate, did not fingerprint,
+ * and was never asked to approve — refusing is the policy the README and `doctor` state, ready at
+ * the point of action for the day the grant changes.
+ *
+ * That day is a product decision, not a wiring one. Granting `hooks` makes this predicate reachable
+ * and, in the same move, starts asking a user to trust shell they were never shown; the consent
+ * screen reads THIS product's `settings.json` hooks, so a `.claude/` hook is never displayed and
+ * can never be approved. A fingerprint check against the store would then be a gate that can only
+ * answer no. The test names all of it, on the assertion that fires.
  *
  * ## Why not approve them against the store instead
  *

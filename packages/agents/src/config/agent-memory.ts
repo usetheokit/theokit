@@ -34,6 +34,39 @@ export const MEMORY_LINE_CAP = 200
 /** Bytes loaded, matching the reference. Applied with the line cap, not instead of it. */
 export const MEMORY_BYTE_CAP = 25_000
 
+/**
+ * `memory:` is parsed by `@theokit/sdk` from 5.9.0, and REFUSED before it.
+ *
+ * Measured 2026-09-16 by loading a real subagent out of `.theokit/agents/` against the published
+ * tarballs, with a control (a second subagent declaring no `memory:`, which loads on both):
+ *
+ *   5.3.0  ConfigurationError: Subagent note-taker.md: unknown frontmatter field "memory"
+ *          (accepted: name, description, model, tools, reasoning_effort, mcp, sandbox)
+ *   5.9.0  loads both; `memory: "project"` survives the parse
+ *
+ * The failure is loud. What misleads is where it POINTS: naming the field and the accepted keys
+ * reads as a typo, so the line an author meant to write gets deleted instead of the SDK upgraded.
+ *
+ * ## Why there is no runtime guard for this, and the number that decided it
+ *
+ * One was written and removed. `listSubagentNames` is the only place this package touches that
+ * parse, it lives in the ROOT BARREL, and wiring it to a version check cost **161 bytes** — the
+ * budget's headroom is 72. Attributed by removing the wiring and rebuilding: 38 789 back to
+ * 38 628. The cost is the coupling rather than the code: four different bodies for the same
+ * function produced byte-identical bundles, because importing `sdk-adapter-create-options` at all
+ * pulls it into the barrel's chunk. A dedicated module was worse (40 403) — it duplicated
+ * `createRequire` instead of sharing it.
+ *
+ * So the choice was a message every consumer pays 161 bytes for against one that no consumer pays
+ * for. `bundle-size.test.ts` argues the rest: the root barrel is what every consumer carries
+ * unconditionally, and raising a ceiling to fit one change approves the next kilobyte without
+ * being asked. The fact lives here and in `the-sdk-version-that-parses-memory.test.ts`, which
+ * fails if it stops being true.
+ *
+ * `applySubagentMemory` itself needs NO particular SDK: it reads `node:fs`, takes an object, and
+ * works on any version. The requirement belongs to the parser, which is why it is documented at
+ * the parse rather than guarded at the function.
+ */
 /** Where a subagent's memory lives. The values a `memory:` frontmatter key may take. */
 export type AgentMemoryScope = 'project' | 'local' | 'user'
 
