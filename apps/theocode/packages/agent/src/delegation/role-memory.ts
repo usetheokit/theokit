@@ -1,28 +1,26 @@
 /**
  * Apply each subagent's declared `memory:` to the prompt it governs.
  *
- * ## THIS HAS NO CALLER YET, declared rather than left to be discovered
+ * ## It is wired, and the delay is the part worth keeping
  *
- * The join is written and tested; what is missing is the reader it calls. `applySubagentMemory`
- * lives in `@theokit/agents/config` and is NOT in the published 14.4.0 this project pins — so the
- * one line that wires it does not compile here yet, and committing it would leave the tree red for
- * a reason that has nothing to do with the code.
+ * `delegation/role-discovery.ts:84-85` applies this to both role sets. That took one line, and the
+ * line could not be written for weeks: `applySubagentMemory` lives in `@theokit/agents/config` and
+ * was not in the published `14.4.0` this project pinned, so committing it would have left the tree
+ * red for a reason that had nothing to do with the code. The join was written, tested, and held
+ * back — waiting on a publish, a pin move and a registry wait.
+ *
+ * What released it was not a fix on either side. `theocode` moved into the framework's monorepo on
+ * 2026-09-16, `@theokit/agents` resolves through the workspace, and the line compiled. Keeping the
+ * note because the shape recurs: **a capability can be published, correct, and unreachable**, and
+ * the only visible symptom is an integration that exists and is not switched on.
  *
  * It was proved end to end before being held back, with both packages linked to their local builds:
  * an agent declaring `memory: project` came out of `discoverRoles` with its `MEMORY.md` note in the
  * prompt, and a sibling declaring nothing came out untouched. TWO dependency edges had to be
  * repointed for that — this project's pin AND the nested `@theokit/sdk` inside the linked package,
  * which resolved to 5.5.0 and rejects `memory:`. The second was invisible until the stack trace
- * named it, and both were restored afterwards.
- *
- * The wiring, verbatim, so publication is a paste rather than a rediscovery. In
- * `delegation/role-discovery.ts`, import `applySubagentMemory` from `@theokit/agents/config` and
- * replace `return { ...mine, ...theirs }` with:
- *
- *     return {
- *       ...applyMemoryToRoles(mine, home, home, applySubagentMemory),
- *       ...applyMemoryToRoles(theirs, opts.cwd, home, applySubagentMemory),
- *     }
+ * named it. The workspace removed both edges; `the-sdk-version-that-parses-memory.test.ts` in
+ * `@theokit/agents` now pins the SDK half, which was the one that stayed dangerous.
  *
  * The ROOT travels with each half on purpose: `project` and `local` resolve against the root the
  * agent came FROM, `user` against home. Applying after the merge loses that — by then both halves
