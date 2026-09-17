@@ -29,6 +29,25 @@ async function pointerSettles(file: string): Promise<void> {
   }
 }
 
+/**
+ * Waits for the pointer to hold a SPECIFIC id, which `pointerSettles` cannot do.
+ *
+ * That one waits for the file to exist, and on a second launch it already does — written by the
+ * first. So the second case waited a flat 60ms instead, which is a guess about how long a write
+ * takes on the machine running it. It held here and failed on CI: the assertion read the FIRST
+ * session's id out of the file, which is what "not yet overwritten" looks like from the outside.
+ *
+ * Same shape as its sibling, same 500ms ceiling, and it returns the moment the write lands. The
+ * assertion after it still fails if the id never arrives — waiting for the right thing removes the
+ * flake without removing the check.
+ */
+async function pointerHolds(file: string, id: string): Promise<void> {
+  for (let i = 0; i < 50; i += 1) {
+    if (existsSync(file) && readFileSync(file, 'utf8').trim() === id) return
+    await new Promise((r) => setTimeout(r, 10))
+  }
+}
+
 import { createTuiSession } from '../../src/agent-session/tui-session.js'
 
 const made: string[] = []
@@ -56,7 +75,7 @@ describe('the session pointer', () => {
     const first = createTuiSession({ cwd: '/tmp', sessionPointer: pointer, resume: false }).session()
     await pointerSettles(pointer)
     const second = createTuiSession({ cwd: '/tmp', sessionPointer: pointer, resume: false }).session()
-    await new Promise((r) => setTimeout(r, 60))
+    await pointerHolds(pointer, second)
     expect(second).not.toBe(first)
     expect(readFileSync(pointer, 'utf8').trim()).toBe(second)
   })
