@@ -103,9 +103,53 @@ function escapeRegExp(literal: string): string {
  * argument is named something else would therefore not match — which is exactly why anything beyond
  * the two plain forms is reported rather than translated.
  */
+/**
+ * Whether a specifier names a PATH rather than, say, a command prefix.
+ *
+ * `./x`, `x/y` and `/x` are paths; `rm` and `npm run` are not. The test is deliberately narrow — a
+ * specifier with no separator and no leading dot stays a plain literal, which is what keeps
+ * `Bash(rm:*)` from gaining path spellings it has no use for.
+ */
+function looksLikeAPath(literal: string): boolean {
+  return literal.startsWith('./') || literal.startsWith('../') || literal.includes('/')
+}
+
+/**
+ * The pattern one specifier becomes.
+ *
+ * A path specifier matches the EQUIVALENT SPELLINGS of one file — `./x`, `x`, and `<baseDir>/x` —
+ * because a tool receives whichever the caller happened to build, and the operator wrote only one.
+ * Measured 2026-09-17: `Read(./off-limits.txt)` produced `/^\.\/off-limits\.txt$/`, the tool was
+ * called with `off-limits.txt`, and the deny never fired.
+ *
+ * What it deliberately does NOT do is match the same NAME elsewhere. `(^|/)x$` would deny
+ * `/somewhere/else/x`, and a rule that fires on calls the operator did not describe is the other half
+ * of the failure this module refuses: they would not know what their rule covers.
+ */
+function specifierPattern(literal: string, isPrefix: boolean, baseDir: string | undefined): RegExp {
+  const end = isPrefix ? '' : '$'
+  // literal and `splitEntry` bounds its length, so the pattern is linear in a value this
+  // module controls.
+  // eslint-disable-next-line security/detect-non-literal-regexp -- see above
+  if (!looksLikeAPath(literal)) return new RegExp(`^${escapeRegExp(literal)}${end}`)
+
+  const bare = literal.replace(/^\.\//, '')
+  const forms = [`\\./${escapeRegExp(bare)}`, escapeRegExp(bare)]
+  if (baseDir !== undefined) {
+    const absolute = `${baseDir.replace(/\/$/, '')}/${bare}`
+    forms.push(escapeRegExp(absolute))
+  }
+  // literal and `splitEntry` bounds its length, so the pattern is linear in a value this
+  // module controls.
+  // eslint-disable-next-line security/detect-non-literal-regexp -- see above
+  return new RegExp(`^(?:${forms.join('|')})${end}`)
+}
+
 function translate(
   entry: string,
   action: PermissionAction,
+  specifierArg: Readonly<Record<string, string>>,
+  baseDir: string | undefined,
 ): PermissionRule | UnsupportedPermissionEntry {
   const parsed = splitEntry(entry.trim())
   if (parsed === undefined) {
@@ -114,6 +158,24 @@ function translate(
 
   const { tool, spec } = parsed
   if (spec === undefined) return { tool, action }
+  // Which argument the specifier addresses. `Bash(rm:*)` means the shell's `command`;
+  // `Read(./secret)` means the reader's `path`. Rendering both against `command` produced a matcher
+  // on a field the tool does not have — it can never fire, and an operator reading a translated rule
+  // believes a control is in force. Measured 2026-09-17: a `deny` on `Read` was carried by the plugin
+  // and the file was read anyway.
+  // `Object.hasOwn`, never `in`: `in` walks the prototype, so a tool named `constructor` would
+  // resolve an argument nobody declared.
+  const argName = Object.hasOwn(specifierArg, tool) ? specifierArg[tool] : undefined
+  if (argName === undefined) {
+    return {
+      entry,
+      reason:
+        `names no argument this runtime can address for tool \`${tool}\`. A specifier matches one ` +
+        'named argument, and rendering it against the wrong one produces a rule that never fires — ' +
+        `worse than none, because you would believe a control is in force. Write \`${tool}\` to ` +
+        'address the whole tool, or declare its specifier argument.',
+    }
+  }
   if (spec.length === 0) {
     return { entry, reason: 'has an empty specifier — write `Tool` if you meant the whole tool.' }
   }
@@ -140,8 +202,7 @@ function translate(
       // Built from the operator's own specifier, and escaped before it gets here so no metacharacter
       // of theirs survives into the pattern. `splitEntry` has already bounded its length, so the compiled
       // pattern is linear in a value this module controls the size of.
-      // eslint-disable-next-line security/detect-non-literal-regexp -- the literal is escaped by `escapeRegExp` and length-bounded by `splitEntry`; the whole point of the module is to turn operator text into a matcher
-      command: new RegExp(`^${escapeRegExp(literal)}${prefix === undefined ? '$' : ''}`),
+      [argName]: specifierPattern(literal, prefix !== undefined, baseDir),
     },
     action,
   }
@@ -157,10 +218,46 @@ function isRule(value: PermissionRule | UnsupportedPermissionEntry): value is Pe
  * An absent or empty block yields nothing and reports nothing: most projects declare no permissions,
  * and a translator that warned there would be noise in every one of them.
  */
+/**
+ * The shell-shaped default this function shipped with.
+ *
+ * `command` is the field the SDK's own worked example uses, and a caller that passes no map keeps
+ * exactly the behaviour it had. Everything else must be declared, because a wrong field is a rule
+ * that never fires.
+ */
+const DEFAULT_SPECIFIER_ARG: Readonly<Record<string, string>> = {
+  Bash: 'command',
+  shell: 'command',
+}
+
 export function permissionRulesFromSettings(
   block: PermissionsBlock | undefined,
+  opts: {
+    /**
+     * Which argument each tool's specifier addresses — `{ Bash: 'command', Read: 'path' }`.
+     *
+     * Required per tool rather than guessed. A specifier rendered against the wrong field produces a
+     * matcher that can never fire, and a rule that looks translated is worse than one reported as
+     * untranslatable: the operator believes a control is in force. A tool absent from this map has
+     * its specifier entries REPORTED, never rendered.
+     *
+     * The default keeps the shell-shaped behaviour this function shipped with, so a caller that
+     * passes nothing is unchanged.
+     */
+    readonly specifierArg?: Readonly<Record<string, string>>
+    /**
+     * The directory a path specifier is relative TO — normally the one holding the settings file.
+     *
+     * Without it, `./x` matches only its relative spellings; a tool called with an absolute path
+     * would slip past a rule the operator believes covers that file. With it, the absolute form is
+     * anchored to this directory and nowhere else.
+     */
+    readonly baseDir?: string
+  } = {},
 ): PermissionTranslation {
   if (block === undefined) return { rules: [], unsupported: [] }
+
+  const specifierArg = opts.specifierArg ?? DEFAULT_SPECIFIER_ARG
 
   const rules: PermissionRule[] = []
   const unsupported: UnsupportedPermissionEntry[] = []
@@ -178,7 +275,7 @@ export function permissionRulesFromSettings(
 
   for (const action of ACTIONS) {
     for (const entry of block[action] ?? []) {
-      const translated = translate(entry, action)
+      const translated = translate(entry, action, specifierArg, opts.baseDir)
       if (isRule(translated)) rules.push(translated)
       else unsupported.push(translated)
     }

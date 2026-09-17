@@ -167,6 +167,7 @@ export {
   type ProcessInputContext,
   type ToolCallVeto,
 } from './tool-hooks-plugin.js'
+export { createPermissionsPlugin } from './permissions-plugin.js'
 
 export {
   runWithApiErrorHandling,
