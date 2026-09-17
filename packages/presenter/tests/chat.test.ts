@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { AgentOutputEvent } from '../src/agent-output-event.js'
+import type { Presenter } from '../src/presenter.js'
 import { ChatPresenter, type ChatMessage } from '../src/presenters/chat.js'
 
 /**
@@ -11,7 +12,20 @@ import { ChatPresenter, type ChatMessage } from '../src/presenters/chat.js'
  * took every frame carrying a delta. `AgentOutputEvent` is a discriminated union of eight
  * variants, so here that cannot happen by construction.
  */
-const run = (p: ChatPresenter, events: AgentOutputEvent[]): unknown[] => [
+/**
+ * Drive a presenter the way a host does — through the INTERFACE, never the class.
+ *
+ * `start?()` and `finish?()` are optional members of `Presenter<TOut>`; `implements` does not add
+ * them to the implementing class's own type, so typing this parameter as `ChatPresenter` made
+ * `p.start?.()` a TS2339 even though the call is correct at runtime. That broke `pnpm typecheck` on
+ * `workspace` and blocked another session's PR — caught by them, not by this package's own suite,
+ * because `vitest run` here does not typecheck.
+ *
+ * Typing it as the interface is also the shape a consumer actually has: `PresenterRegistry.resolve`
+ * hands back `Presenter<TOut>`, so a test bound to the concrete class exercises something nobody
+ * does.
+ */
+const run = (p: Presenter<ChatMessage>, events: AgentOutputEvent[]): unknown[] => [
   ...(p.start?.() ?? []),
   ...events.flatMap((e) => p.present(e)),
   ...(p.finish?.() ?? []),
