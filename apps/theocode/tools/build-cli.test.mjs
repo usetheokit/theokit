@@ -45,7 +45,37 @@ describe('bundleOptions', () => {
 
   it('test_the_artifact_is_directly_executable', () => {
     // Without the shebang `./dist/theocode.mjs` is not runnable, and `bin` points straight at it.
-    expect(options.banner.js).toBe('#!/usr/bin/env node')
+    // Asserted as the FIRST LINE rather than as the whole banner: the banner carries a second
+    // thing now (below), and an equality here would fail for a change that breaks nothing while
+    // still passing for a shebang that moved off line 1, which is the only way it can break.
+    expect(options.banner.js.split('\n')[0]).toBe('#!/usr/bin/env node')
+  })
+
+  it('test_bundled_cjs_can_require_at_load_time', () => {
+    // esbuild rewrites a bundled CJS `require(...)` to its `__require` shim, which throws
+    // `Dynamic require of "x" is not supported` unless a `require` exists in scope. An ESM module
+    // has none, so the banner must build one.
+    //
+    // Measured 2026-09-17: bundling the TUI pulled in `signal-exit@3.0.7` (an Ink dependency) whose
+    // module body runs `assert = require("assert")`. The build was clean and the binary died on
+    // startup. Nothing in the build can catch that — which is why it is asserted here.
+    expect(options.banner.js).toContain(
+      "import { createRequire as __nodeCreateRequire } from 'node:module'",
+    )
+    expect(options.banner.js).toContain('const require = __nodeCreateRequire(import.meta.url)')
+  })
+
+  it('test_ink_devtools_resolves_to_an_empty_module', () => {
+    // `react-devtools-core` is a peer Ink declares optional and this app does not install. Ink
+    // guards it at runtime, but bundling defeats the guard: esbuild follows the dynamic import into
+    // `devtools.js`, whose STATIC import of the package is then hoisted to the top of the bundle.
+    //
+    // Marking it external was tried first and is the wrong tool — esbuild leaves the unresolved
+    // path in the bundle, and the binary died with ERR_MODULE_NOT_FOUND. A plugin that resolves it
+    // to an empty module is what makes the bundle self-contained.
+    const names = (options.plugins ?? []).map((plugin) => plugin.name)
+    expect(names).toContain('ink-devtools-stub')
+    expect(options.external).not.toContain('react-devtools-core')
   })
 
   it('test_it_bundles_the_cli_entry_point', () => {

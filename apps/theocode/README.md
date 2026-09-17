@@ -19,12 +19,33 @@ mapping without ever consulting `exports`.
 
 ## Running it
 
+From a clone:
+
 ```bash
 npm install
 npm run dev          # the terminal UI
 npm run exec "..."   # the headless CLI
 npm run build        # dist/theocode.mjs (bundle) + dist/acp-entry.mjs
 ```
+
+As an installed command:
+
+```bash
+npm run install:local     # build, then link `theocode` onto your PATH
+theocode                  # no arguments, on a terminal: the interactive UI
+theocode "explain this"   # a prompt: one answer, then exit
+npm run uninstall:local   # remove the link
+```
+
+**`theocode` with no arguments opens the UI.** That is the `ui` mode — a name the parser
+produces, never a subcommand you type; `theocode ui` would be read as the prompt "ui".
+
+It is worth stating because it was not true until 2026-09-17: with no prompt the CLI answered
+`No prompt provided` and exited 1, so the UI was reachable only through `npm run dev` in a
+clone. An installed copy therefore had no way to reach the 46 slash commands — `/login` among
+them, which is how a credential gets configured at all.
+
+Reading a prompt from a pipe is unchanged: `echo "..." | theocode` still answers and exits.
 
 Smoke test that touches neither the network nor a credential:
 

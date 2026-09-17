@@ -90,7 +90,17 @@ export interface ExecVersion {
   mode: 'version'
 }
 
-interface ExecMigrateConfig {
+/**
+ * No prompt, on a terminal: open the interactive UI.
+ *
+ * Carries nothing. Every option the UI needs it resolves itself from the working directory, the
+ * same way `npm run dev` did — this mode says WHICH program runs, not how it is configured.
+ */
+export interface ExecUi {
+  mode: 'ui'
+}
+
+export interface ExecMigrateConfig {
   mode: 'migrate-config'
   cd?: string
 }
@@ -107,6 +117,7 @@ export type ExecArgs =
   | ExecSessions
   | ExecDoctor
   | ExecMigrateConfig
+  | ExecUi
   | ExecVersion
   | ExecHelp
   | ExecUsageError

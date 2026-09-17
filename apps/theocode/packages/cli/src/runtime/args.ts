@@ -39,11 +39,21 @@ function resolveResume(
 function resolveInput(
   rawPrompt: string,
   stdinIsTTY: boolean,
-): { prompt: string | undefined; stdinBehavior: StdinBehavior } | { error: string } {
+):
+  | { prompt: string | undefined; stdinBehavior: StdinBehavior }
+  | { ui: true }
+  | { error: string } {
   const raw = rawPrompt.length > 0 ? rawPrompt : undefined
   if (raw === '-') return { prompt: undefined, stdinBehavior: 'forced' }
   if (raw === undefined) {
-    if (stdinIsTTY) return { error: 'No prompt provided' }
+    // No prompt AND a terminal: the user wants a session, not an answer. This used to be
+    // `{ error: 'No prompt provided' }`, which made the UI reachable only through `npm run dev`
+    // — so an INSTALL had no way to reach the 46 slash commands, `/login` among them, and the
+    // documented OAuth device flow could not be run at all.
+    //
+    // A pipe with no prompt keeps reading stdin: that is a real use, and it has no terminal for
+    // the UI to draw on.
+    if (stdinIsTTY) return { ui: true }
     return { prompt: undefined, stdinBehavior: 'required' }
   }
   return { prompt: raw, stdinBehavior: stdinIsTTY ? 'none' : 'append' }
@@ -62,6 +72,9 @@ function parseResumeOrPrompt(
 
   const e = resolveInput(promptParts.join(' '), stdinIsTTY)
   if ('error' in e) return { mode: 'error', message: e.error }
+  // Before the flags are folded in: the UI resolves its own configuration from the working
+  // directory, so carrying them here would be two sources for one answer.
+  if ('ui' in e) return { mode: 'ui' }
   const { prompt, stdinBehavior } = e
 
   return {

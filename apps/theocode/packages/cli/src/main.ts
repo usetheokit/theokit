@@ -6,7 +6,14 @@ import { installConfiguredHome, resolveEffectiveConfig } from '@theocode/agent/c
 import { installClaudeProjectDir } from '@theocode/agent/hooks'
 import { createShutdown } from '@theokit/agents/commands'
 import { loadProjectEnv, gitGate, parseExecArgs, USAGE } from './runtime/index.js'
-import type { ExecArgs, ExecHelp, ExecUsageError, ExecVersion } from './runtime/index.js'
+import type {
+  ExecArgs,
+  ExecHelp,
+  ExecMigrateConfig,
+  ExecUi,
+  ExecUsageError,
+  ExecVersion,
+} from './runtime/index.js'
 import { AGENT } from '@theocode/shared/agent'
 import { goalCommand } from './commands/goal.js'
 import { reviewCommand } from './commands/review.js'
@@ -76,6 +83,36 @@ function handledBeforeBootstrap(args: ExecArgs): args is ExecUsageError | ExecHe
   return false
 }
 
+/**
+ * Routes a fully bootstrapped invocation to the command that answers it.
+ *
+ * Split out of `main` when the `ui` mode was added: `main` was doing two things — deciding what is
+ * set up and deciding who runs — and one more branch pushed it past the complexity ceiling. The
+ * ceiling was the signal, not the obstacle; the two halves genuinely answer different questions.
+ */
+async function dispatchCommand(
+  // Subtractive on purpose. A `mode` list here would silently skip a NEW mode — the switch below
+  // is exhaustive over this type, so naming what `main` already answered makes the compiler
+  // point at the gap instead of letting it route nowhere.
+  args: Exclude<ExecArgs, ExecUsageError | ExecHelp | ExecVersion | ExecUi | ExecMigrateConfig>,
+  shutdown: ReturnType<typeof createShutdown>,
+): Promise<void> {
+  if (args.mode === 'sessions') return sessionsCommand(args)
+  if (args.mode === 'doctor') return doctorCommand(args)
+
+  gitGate(args.skipGitCheck)
+
+  switch (args.mode) {
+    case 'review':
+      return reviewCommand(args, shutdown)
+    case 'goal':
+      return goalCommand(args, shutdown)
+    case 'run':
+    case 'resume':
+      return runCommand(args, shutdown)
+  }
+}
+
 async function main(): Promise<void> {
   // The local `shared/shutdown.ts` was deleted in favour of the framework's, which is the same
   // mechanism with more information: cleanups are NAMED (a watchdog timeout can say WHICH one hung,
@@ -98,6 +135,18 @@ async function main(): Promise<void> {
 
   const args = parseExecArgs(process.argv.slice(2), process.stdin.isTTY === true)
   if (handledBeforeBootstrap(args)) return
+
+  // The UI owns its own startup — working directory, configuration, session sweep — exactly as it
+  // did when `npm run dev` was the only way in. Handing it a half-bootstrapped process would give
+  // one program two initialisations, and the second would silently win.
+  //
+  // Imported here rather than at the top so the one-shot path does not pay for Ink and React on
+  // every `theocode doctor`.
+  if (args.mode === 'ui') {
+    await import('@theocode/tui/main')
+    return
+  }
+
   if (args.cd !== undefined) process.chdir(args.cd)
 
   // BEFORE `bootstrap()`: the whole point of this command is to be reachable when configuration
@@ -111,20 +160,7 @@ async function main(): Promise<void> {
   // AFTER chdir: `.env` belongs to the directory the user selected, not the one they started in.
   bootstrap()
 
-  if (args.mode === 'sessions') return sessionsCommand(args)
-  if (args.mode === 'doctor') return doctorCommand(args)
-
-  gitGate(args.skipGitCheck)
-
-  switch (args.mode) {
-    case 'review':
-      return reviewCommand(args, shutdown)
-    case 'goal':
-      return goalCommand(args, shutdown)
-    case 'run':
-    case 'resume':
-      return runCommand(args, shutdown)
-  }
+  return dispatchCommand(args, shutdown)
 }
 
 void main().catch((err: unknown) => {
