@@ -70,6 +70,18 @@ export class McpServersCapability extends FieldCapability<'mcpServers'> {
   readonly name = 'mcp'
   protected readonly field = 'mcpServers' as const
 }
+/**
+ * #825 — `.subagents({...})` → `subagents`, reaching `AgentOptions.agents`.
+ *
+ * A capability rather than builder-only wiring, because `capability-zero-behavior.test.ts` derives
+ * both sides of the waist and demands they agree: a field the builder can set and no capability can
+ * express puts the decorator path one field behind, which is the gap that test exists to pin. It has
+ * made the same demand three times before and been right every time.
+ */
+export class SubagentsCapability extends FieldCapability<'subagents'> {
+  readonly name = 'subagents'
+  protected readonly field = 'subagents' as const
+}
 /** `@Guardrails` → `guardrails`. */
 export class GuardrailsCapability extends FieldCapability<'guardrails'> {
   readonly name = 'guardrails'

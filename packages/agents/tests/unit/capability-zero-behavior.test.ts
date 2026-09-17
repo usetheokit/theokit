@@ -12,6 +12,7 @@ import {
   HumanInTheLoopCapability,
   MainLoopCapability,
   McpServersCapability,
+  SubagentsCapability,
   MemoryCapability,
   PluginsCapability,
   ProjectContextCapability,
@@ -83,6 +84,11 @@ const WAIST_FIELDS = [
   // tests would compile, and the third time the demand was right: the field existed one layer
   // down and only `defineAgent` could have reached it.
   'telemetry',
+  // #825 — `subagents`, from `AgentBuilder.subagents()`. Fourth time this gate has demanded a
+  // classification before the tests would compile, and the fourth time it was right: the field is
+  // reachable from the builder, so it belongs in the list a capability CAN express rather than in
+  // the empty set below.
+  'subagents',
 ] as const satisfies readonly WaistField[]
 
 /**
@@ -220,6 +226,7 @@ describe('capability path — waist coverage is complete', () => {
       new ContextWindowCapability({ maxTokens: 1 } as never),
       new ProjectContextCapability({ enabled: true } as never),
       new McpServersCapability({} as never),
+      new SubagentsCapability({} as never),
       new GuardrailsCapability([] as never),
       new CheckpointCapability({ storage: 'memory' } as never),
       new HumanInTheLoopCapability(new Map() as never),
