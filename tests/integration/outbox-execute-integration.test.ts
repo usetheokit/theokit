@@ -43,7 +43,7 @@ let backend: MockBackend
 let port: number
 
 const fetchTest = async (path: string, init?: RequestInit): Promise<Response> => {
-  return fetch(localUrl(port, '${path}'), init)
+  return fetch(localUrl(port, path), init)
 }
 
 beforeEach(() => {
