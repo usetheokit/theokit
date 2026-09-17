@@ -26,7 +26,7 @@ function createMockReq(body: unknown, opts: { method?: string } = {}): IncomingM
   stream.headers = {
     'content-type': 'application/json',
     'x-theo-action': '1',
-    origin: 'http://127.0.0.1:3000',
+    origin: 'http://localhost:3000',
     host: 'localhost:3000',
   }
   return stream

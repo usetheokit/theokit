@@ -1,4 +1,4 @@
-import { localUrl } from './local-url.js'
+import { LOOPBACK_HOSTS, rememberHost } from './local-url.js'
 
 /**
  * Helper: wait until a dev server actually ACCEPTS connections.
@@ -24,8 +24,19 @@ export async function waitForServer(port: number, timeoutMs = 10_000): Promise<v
   let lastError: unknown
   while (Date.now() - started < timeoutMs) {
     try {
-      await fetch(localUrl(port))
-      return
+      // Both families, because which one the server bound is not knowable from here and guessing has
+      // now been measured wrong in both directions (#830). The first that accepts is recorded, and
+      // every later request in the run uses it.
+      for (const host of LOOPBACK_HOSTS) {
+        try {
+          await fetch(`http://${host}:${String(port)}/`)
+          rememberHost(port, host)
+          return
+        } catch (perHost) {
+          lastError = perHost
+        }
+      }
+      throw lastError
     } catch (error) {
       lastError = error
       // Short and fixed rather than exponential: the window being closed is milliseconds wide, and a

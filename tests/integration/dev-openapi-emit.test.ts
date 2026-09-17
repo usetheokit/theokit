@@ -83,7 +83,7 @@ describe('T1.1 — reEmitOpenApi helper (live)', () => {
     mkdirSync(serverDir, { recursive: true })
 
     await reEmitOpenApi(serverDir, distDir, {
-      servers: [{ url: 'http://127.0.0.1:3000' }],
+      servers: [{ url: 'http://localhost:3000' }],
       specVersion: '3.1.0',
       title: 'T',
       version: '0.0.0',
@@ -103,7 +103,7 @@ describe('T1.1 — reEmitOpenApi helper (live)', () => {
     mkdirSync(serverDir, { recursive: true })
 
     await reEmitOpenApi(serverDir, distDir, {
-      servers: [{ url: 'http://127.0.0.1:3000' }],
+      servers: [{ url: 'http://localhost:3000' }],
       specVersion: '3.1.0',
       title: 'T',
       version: '0.0.0',
@@ -123,7 +123,7 @@ describe('T1.1 — reEmitOpenApi helper (live)', () => {
     // Pass a serverDir that doesn't exist → generateManifest throws → swallowed
     await expect(
       reEmitOpenApi(join(tmpDir, 'non-existent-dir'), join(tmpDir, '.theokit'), {
-        servers: [{ url: 'http://127.0.0.1:3000' }],
+        servers: [{ url: 'http://localhost:3000' }],
         specVersion: '3.1.0',
         title: 'T',
         version: '0.0.0',
@@ -147,13 +147,13 @@ describe('T1.1 — reEmitOpenApi helper (live)', () => {
     // We can't easily make one hang, so we use a synchronous side-channel via
     // the exported flag-reset to simulate concurrent state.
     const p1 = reEmitOpenApi(serverDir, distDir, {
-      servers: [{ url: 'http://127.0.0.1:3000' }],
+      servers: [{ url: 'http://localhost:3000' }],
       specVersion: '3.1.0',
       title: 'T',
       version: '0.0.0',
     })
     const p2 = reEmitOpenApi(serverDir, distDir, {
-      servers: [{ url: 'http://127.0.0.1:3000' }],
+      servers: [{ url: 'http://localhost:3000' }],
       specVersion: '3.1.0',
       title: 'T',
       version: '0.0.0',

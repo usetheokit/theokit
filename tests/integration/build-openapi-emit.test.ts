@@ -195,7 +195,7 @@ describe('T2.2 — path templating wired correctly (smoke through emit)', () => 
     const { document } = emitOpenApi({
       manifest: [{ routePath: '/users/:id', methods: ['GET'] }],
       config: {
-        servers: [{ url: 'http://127.0.0.1:3000' }],
+        servers: [{ url: 'http://localhost:3000' }],
         specVersion: '3.1.0',
         title: 'T',
         version: '0.0.0',
