@@ -21,7 +21,6 @@
  *    throw that takes down the turn, and never a silent empty that is indistinguishable from "no
  *    approvals yet". The caller gets the error to surface (`error-handling.md § 2`).
  */
-import { randomUUID } from 'node:crypto'
 import { chmodSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
@@ -142,14 +141,15 @@ export function readSecureJson<T>(
  * `ENOENT`. Serialised sync calls on a single thread never collide, which is why the suite was
  * green; `worker_threads` share a pid and do not.
  *
- * `randomUUID` and not a clock, per `system-design-guardrails.md` G8: a timestamp is a poor source
+ * `crypto.randomUUID()` — the Web global, not the `node:crypto` import — and not a clock, per
+ * `system-design-guardrails.md` G8: a timestamp is a poor source
  * of identity precisely because two events can share one.
  *
  * Beside the store, never in the system temp dir: `rename` is atomic only within a filesystem, and a
  * cross-device temp degrades to a copy a reader can catch halfway.
  */
 export function tempPathFor(filePath: string): string {
-  return join(dirname(filePath), `.${randomUUID()}.tmp`)
+  return join(dirname(filePath), `.${crypto.randomUUID()}.tmp`)
 }
 
 /** Replace the file atomically, owner-only. */

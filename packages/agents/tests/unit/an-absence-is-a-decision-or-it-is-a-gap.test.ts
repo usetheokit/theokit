@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
@@ -57,6 +57,109 @@ const SURFACES_TABLE = README.slice(README.indexOf('## Foreign configuration sur
 )[0]
 
 const OUT_OF_SCOPE = ['keybindings.json', 'themes/*.json'] as const
+
+/**
+ * The consumer this repository ships, reachable from `packages/agents/tests/unit`.
+ *
+ * Its absence is not a failure: a checkout without it simply cannot make the claim below false, and
+ * a test that DEMANDED the application be there would fail every consumer who installs this package
+ * on its own.
+ */
+const CONSUMER_SRC = join(
+  import.meta.dirname,
+  '..',
+  '..',
+  '..',
+  '..',
+  'apps',
+  'theocode',
+  'packages',
+)
+
+/** Every `.ts` under the consumer, or `[]` when it is not in this checkout. */
+function consumerSources(dir = CONSUMER_SRC): string[] {
+  if (!existsSync(dir)) return []
+  return readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+    const full = join(dir, e.name)
+    if (e.isDirectory())
+      return e.name === 'node_modules' || e.name === 'dist' ? [] : consumerSources(full)
+    return e.name.endsWith('.ts') || e.name.endsWith('.tsx') ? [readFileSync(full, 'utf8')] : []
+  })
+}
+
+describe('a claim about who consumes a surface is checked against the consumer', () => {
+  /**
+   * The gap this closes, and it is the one that actually bit.
+   *
+   * The `agent-memory/` row read *"Measured 2026-09-15: no consumer does yet"* while
+   * `apps/theocode` was importing `applySubagentMemory` and applying it in
+   * `delegation/role-discovery.ts`. The measurement had been true — the consumer could not call it,
+   * because the function was not in the version it pinned — and it stopped being true when that
+   * repository moved into this one and the import resolved through the workspace.
+   *
+   * Nothing caught it. The structural guards above check that a row EXISTS and carries a verdict
+   * from a closed list; none of them reads what the row says about the world. So the document kept
+   * reporting a delivery problem as a design decision, which is the exact confusion this file's
+   * title is about.
+   *
+   * The assertion is deliberately narrow: it does not try to verify every claim in prose. It takes
+   * the ones that assert an ABSENCE OF CONSUMPTION — the class that rots the moment a consumer
+   * appears — and confronts each with the consumer's own source.
+   */
+  const ABSENCE_CLAIMS: readonly (readonly [claim: string, consumerPattern: string])[] = [
+    // `agent-memory/` — the row said "no consumer does yet" while the consumer called it.
+    ['no consumer does yet', String.raw`\bapplySubagentMemory\s*\(`],
+    ['no consumer calls it', String.raw`\bapplySubagentMemory\s*\(`],
+    // `themes/*.json` — the row said nobody reads it, naming no one, while the consumer resolved
+    // `~/.claude/themes/`. Naming the three packages is what made the sentence checkable, and it
+    // failed the moment it was. A claim nobody can check is not a weaker claim; it is a claim that
+    // has never been tested.
+    ['read by none of', String.raw`['"\.]claude['"/\s,\)]+.{0,12}themes`],
+    ['nobody reads', String.raw`['"\.]claude['"/\s,\)]+.{0,12}themes`],
+  ]
+
+  /**
+   * TABLE ROWS ONLY, and the first version of this check did not do that — it matched the whole
+   * README and failed on the sentence above explaining that the old claim WAS true when measured.
+   * A quotation of a decision is not the decision, which is the lesson the block below this one
+   * already records for `toContain` and which I had to be taught twice in one file.
+   */
+  const tableRows = (): string[] =>
+    SURFACES_TABLE.split('\n').filter((l) => l.startsWith('| ') && l.includes('|', 2))
+
+  it.each(ABSENCE_CLAIMS)(
+    'does not say "%s" in a row the consumer contradicts',
+    (claim, consumerPattern) => {
+      if (!tableRows().some((r) => r.toLowerCase().includes(claim))) return
+
+      const sources = consumerSources()
+      if (sources.length === 0) return // no consumer in this checkout — the claim cannot be falsified here
+
+      const readers = sources.filter((s) => new RegExp(consumerPattern).test(s))
+      expect(
+        readers,
+        `the README row claims "${claim}", and apps/theocode matches /${consumerPattern}/ in ` +
+          `${String(readers.length)} file(s) — the claim was true when measured and stopped being ` +
+          `true; re-measure it rather than re-dating it`,
+      ).toHaveLength(0)
+    },
+  )
+
+  it('finds the consumer at all, or says the check was vacuous', () => {
+    // The anti-vacuity floor. Every assertion above returns early when the consumer is absent, so
+    // without this one a wrong path would make the whole block silently prove nothing — which is
+    // the failure this file already records for `toContain` matching prose instead of a table row.
+    const sources = consumerSources()
+    if (sources.length === 0) {
+      expect(
+        existsSync(CONSUMER_SRC),
+        'apps/theocode is absent — the claims above were NOT checked',
+      ).toBe(false)
+      return
+    }
+    expect(sources.length, 'the consumer path resolves but yielded no sources').toBeGreaterThan(50)
+  })
+})
 
 describe('an absence is a decision, or it is a gap', () => {
   /** The surface's row in the table, or `undefined` — prose elsewhere in the file does not count. */
