@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { AgentOutputEvent } from '../src/agent-output-event.js'
-import { ChatPresenter } from '../src/presenters/chat.js'
+import { ChatPresenter, type ChatMessage } from '../src/presenters/chat.js'
 
 /**
  * B-019 — agent output reaches a chat channel through a presenter, not a hand-written loop.
@@ -17,7 +17,44 @@ const run = (p: ChatPresenter, events: AgentOutputEvent[]): unknown[] => [
   ...(p.finish?.() ?? []),
 ]
 
+/**
+ * The contract `@theokit/gateway` declares for `sendMessage`, copied here rather than imported.
+ *
+ * Importing it would make `@theokit/presenter` depend on a gateway package from another
+ * repository, and `dependencies: {}` is the property `ChatPresenter` was built to preserve —
+ * a gateway must stay usable without an agent, so the dependency may only point one way.
+ *
+ * TypeScript is structural, so a copy is enough to PROVE compatibility. What a copy cannot do is
+ * notice that the original moved: if `OutboundMessage` gains a required field, this file keeps
+ * passing and the real integration breaks. That risk is the price of `dependencies: {}` and it is
+ * stated here rather than left for someone to discover — mirrored verbatim from
+ * `@theokit/gateway`'s `adapter/base.ts` on 2026-09-17.
+ */
+interface OutboundMessageContract {
+  readonly channel: {
+    readonly id: string
+    readonly type: 'dm' | 'group' | 'thread'
+    readonly topicId?: string
+  }
+  readonly text: string
+  readonly format?: 'plain' | 'markdown' | 'html'
+  readonly replyTo?: string
+}
+
 describe('ChatPresenter', () => {
+  it('emits something the gateway can send, without importing the gateway', () => {
+    const out = run(
+      new ChatPresenter({ channel: { id: 'c1', type: 'dm' }, replyTo: 'm7', format: 'plain' }),
+      [{ type: 'text', text: 'ok' }, { type: 'finish' }],
+    )
+
+    // The assertion that matters is the assignment: it is checked by `tsc --noEmit`, which CI runs.
+    // A `ChatMessage` that stops satisfying the gateway's shape fails the typecheck rather than
+    // failing in production on the first real send.
+    const sendable: OutboundMessageContract = out[0] as ChatMessage
+    expect(sendable).toMatchObject({ text: 'ok', format: 'plain', replyTo: 'm7' })
+  })
+
   it('emits exactly ONE message for a whole turn', () => {
     const out = run(new ChatPresenter({ channel: { id: 'c1', type: 'dm' } }), [
       { type: 'text', text: 'Hello ' },
