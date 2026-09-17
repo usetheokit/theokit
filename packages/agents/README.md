@@ -98,10 +98,10 @@ configuration that had no effect.
 | `skills/`, `agents/`, `commands/`, `plugins/` | read when the dialect is declared |
 | `.mcp.json` | read; a field this runtime does not carry is reported |
 | `output-styles/*.md` | read, selected by `settings.json` |
-| `agent-memory/` | **read** — `applySubagentMemory` applies a subagent's `memory:` declaration, and `apps/theocode` calls it (`delegation/role-discovery.ts`). The host still decides: nothing here calls it for you |
+| `agent-memory/` | **read** — `applySubagentMemory` applies a subagent's `memory:` declaration, and `apps/theocode` calls it (`apps/theocode/packages/agent/src/delegation/role-discovery.ts`). The host still decides: nothing here calls it for you |
 | `workflows/*.js` | **refused**, and reported. Every other surface is data; a workflow is code, and executing JavaScript found under a caller-supplied directory is a decision that belongs to you |
 | `keybindings.json` | **out of scope HERE** — read by the consumer, see below |
-| `themes/*.json` | **out of scope HERE** — read by the consumer, like `keybindings.json`. `apps/theocode` resolves `~/.claude/themes/` in `tui/src/theme/custom-theme.ts`; this package and `@theokit/tui` read neither |
+| `themes/*.json` | **out of scope HERE** — read by the consumer, like `keybindings.json`. `apps/theocode` resolves `~/.claude/themes/` in `apps/theocode/packages/tui/src/theme/custom-theme.ts`; this package and `@theokit/tui` read neither |
 | `~/.claude.json` — OAuth state, UI toggles | **out of scope** — a CLI's own state |
 | `~/.claude.json` — personal-scope MCP servers | **read** — `loadPersonalMcpServers` |
 
@@ -125,7 +125,7 @@ Naming the toolkit as the owner sent a reader to the package that does the least
 row said `out of scope` without saying out of scope FOR WHOM, which is the half that misleads.
 
 `themes/*.json` is read by the CONSUMER, exactly as `keybindings.json` is: `apps/theocode` resolves
-`~/.claude/themes/` in `tui/src/theme/custom-theme.ts` and selects one through `/theme custom:<slug>`.
+`~/.claude/themes/` in `apps/theocode/packages/tui/src/theme/custom-theme.ts` and selects one through `/theme custom:<slug>`.
 This package reads it in 0 files and so does `@theokit/tui` — measured 2026-09-17 against the
 installed 0.80.0.
 
@@ -159,7 +159,7 @@ The denial is worth keeping, because it shows what an unfalsifiable sentence cos
 read *"nobody reads it, in any of the three packages"* and never said which three. A reader could
 not check a set they could not enumerate, so nobody did; naming them took one edit, and the sentence
 was false the moment it became checkable — `apps/theocode` resolves `~/.claude/themes/` in
-`tui/src/theme/custom-theme.ts`, with three reads in that one file.
+`apps/theocode/packages/tui/src/theme/custom-theme.ts`, with three reads in that one file.
 
 This package has no colour at all — a grep for `color`, `chalk` or `theme` across its source returns
 nothing, the one apparent hit being `ansi` inside `stateTransitionHistory`. It produces text and tool
@@ -220,7 +220,7 @@ rather than silent.
 package exposes the reader, an application wires it.
 
 One does. `apps/theocode` imports `applySubagentMemory` from `@theokit/agents/config` and applies it
-to both role sets in `delegation/role-discovery.ts:84-85`; that reaches `resolveAgentMemory`
+to both role sets in `apps/theocode/packages/agent/src/delegation/role-discovery.ts:84`; that reaches `resolveAgentMemory`
 through `agent-memory.ts:231`. So the chain runs end to end, and this document says **read** rather
 than **resolvable**.
 
