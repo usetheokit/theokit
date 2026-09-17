@@ -92,8 +92,8 @@ describe('ChatPresenter', () => {
 
   it('drops partial tool calls, tool calls, results and status by default', () => {
     const out = run(new ChatPresenter({ channel: { id: 'c1', type: 'dm' } }), [
-      { type: 'partial-tool-call', callId: '1', name: 'weather', input: { c: 'Sã' } },
-      { type: 'tool-call', callId: '1', name: 'weather', input: { city: 'São Paulo' } },
+      { type: 'partial-tool-call', callId: '1', name: 'weather', input: { c: 'Berl' } },
+      { type: 'tool-call', callId: '1', name: 'weather', input: { city: 'Berlin' } },
       { type: 'tool-result', callId: '1', name: 'weather', result: 'sunny' },
       { type: 'status', status: 'active' },
       { type: 'text', text: 'It is sunny.' },
