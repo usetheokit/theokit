@@ -73,6 +73,29 @@ function resolveRoleTools(
   return [...declareAgent(name, ctx, [toolsNamed(registry, names)]).tools]
 }
 
+/**
+ * The instructions a delegated member runs with, memory included.
+ *
+ * #825 — `applySubagentMemory` enriches the definition in `role-discovery.ts`, and the enriched copy
+ * was then dropped: `roleConfigFrom` keeps `model`, `tools` and `sandbox`, and the member was built
+ * with no prompt at all. The subagent still answered, which is what hid it — the SDK reads
+ * `.claude/agents/<name>.md` itself through `compatSources` and uses the prompt from the FILE. So the
+ * member ran with the file's text and without the memory, and nothing reported a difference.
+ *
+ * Measured 2026-09-17 beside Claude Code on byte-identical configuration: asked what it knew without
+ * reading any file, Claude Code returned the memory canary and called it pre-loaded into its
+ * instructions; this product returned only the definition's own.
+ *
+ * NOT exported: the assertion that matters is about the object the member is BUILT from, which
+ * `role-setting-sources.test.ts`'s `createAgent` seam already reaches. A test against this
+ * function would restate that `applySubagentMemory` enriched the definition — true before the
+ * defect and true during it — and pass over the one field that was missing.
+ */
+function promptForRole(def: SubagentDefinition): string {
+  return def.prompt
+}
+
+
 function roleConfigFrom(def: SubagentDefinition, name = ''): RoleConfig {
   const model = def.model
   const selection = typeof model === 'string' ? undefined : model
@@ -180,6 +203,10 @@ async function roleAgentOptions(
     // nobody declared, and a role that lost a tool it needed would fail loudly rather than quietly —
     // the right direction for this to be wrong in.
     withheldBuiltinTools: ['shell' as const],
+      // #825 — the prompt the member runs with, carrying the memory `applySubagentMemory` folded
+      // in. Without it the SDK falls back to the file on disk and the memory is lost, with nothing
+      // reporting that anything went missing.
+      systemPrompt: promptForRole(def),
     local: {
       cwd,
       settingSources: sources,
