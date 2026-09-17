@@ -1,3 +1,6 @@
+import { tmpdir } from 'node:os'
+
+import { fallbackConfigPosture } from '../config-health.js'
 import { randomUUID } from 'node:crypto'
 
 import { resolveEffectiveConfig, type ReasoningEffort } from '@theocode/agent/config'
@@ -43,7 +46,29 @@ export function createTuiSession(opts: SessionOptions): TuiSession {
   const loadSession = opts.loadSession ?? loadOrCreateSessionId
   const cwd = opts.cwd ?? workingDirectory()
 
-  let cfg = loadConfig({ cwd })
+  // #827 — a typo in `settings.json` must not take the terminal down.
+  //
+  // `resolveEffectiveConfig` throws `ConfigError` on a malformed file, and this call had no guard:
+  // once a directory is trusted its project config IS read, so a broken file killed the process
+  // with a stack trace before the first frame. Measured 2026-09-17 and confirmed pre-existing by
+  // rebuilding HEAD. `session-start.ts` already makes this argument for its own path — "a hook
+  // failing must not refuse a session the operator just asked for" — and this is the path it does
+  // not cover.
+  //
+  // The fallback is the CONFINED posture, not the defaults: the operator expressed a preference
+  // that could not be read, and granting write authority on the strength of a file we just failed
+  // to parse is the opposite of what the failure warrants. `configHealthNotice` puts the reason on
+  // screen so the narrow posture is explained rather than mysterious.
+  let cfg = ((): ReturnType<typeof loadConfig> => {
+    try {
+      return loadConfig({ cwd })
+    } catch {
+      // Through the `cli` layer, in its `key=value` form: that is the layer `security-floor.ts`
+      // designates as the operator's override, and this only ever HARDENS.
+      const posture = Object.entries(fallbackConfigPosture()).map(([k, v]) => `${k}=${v}`)
+      return loadConfig({ cwd: tmpdir(), cli: posture })
+    }
+  })()
   let effort: ReasoningEffort = cfg.reasoning_effort
   // READING the pointer is what makes this launch inherit a conversation; WRITING it is what makes
   // the NEXT launch able to. Only the first is gated by `resume`.

@@ -98,11 +98,11 @@ export function TrustGate({
                 setEffort(SESSION.effort())
               } catch (err: unknown) {
                 setToast({
-                  message: `trust granted, but the project config.toml could not be read: ${(err as Error).message} — fix it and restart; this session keeps the previous config`,
+                  message: `trust granted, but the project settings.json could not be read: ${(err as Error).message} — fix it and restart; this session keeps the previous config`,
                   variant: 'error',
                 })
                 process.stderr.write(
-                  `trust granted, but the project config.toml could not be read: ${(err as Error).message}\n`,
+                  `trust granted, but the project settings.json could not be read: ${(err as Error).message}\n`,
                 )
               }
             },
