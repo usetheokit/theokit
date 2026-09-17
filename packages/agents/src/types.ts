@@ -184,22 +184,45 @@ export interface ProjectContextOptions {
   includeExtensions?: string[]
 }
 
-export type CheckpointStrategy =
-  | 'after-tool-call' // checkpoint after every successful tool execution
-  | 'after-iteration' // checkpoint after every loop iteration
-  | 'manual' // only checkpoint when explicitly called via ctx.checkpoint()
-
-export type CheckpointStorage = 'memory' | 'filesystem' | 'drizzle' | 'redis'
-
+/**
+ * #724 — whether the run tells the client its transcript can be resumed.
+ *
+ * ## What this replaced, and why the shape had to go
+ *
+ * `CheckpointOptions` declared four fields — `storage`, `strategy`, `maxCheckpoints`, `ttl` — and
+ * read exactly one, as an `=== 'filesystem'` equality deciding whether a `checkpoint_saved` event is
+ * emitted. `strategy`, `maxCheckpoints` and `ttl` were read NOWHERE in the monorepo, and `'drizzle'`
+ * and `'redis'` were indistinguishable from `'memory'` in every code path: nothing rejected them,
+ * nothing warned about them, nothing behaved differently.
+ *
+ * The warning was the sharpest part. It told an author `'filesystem'` "selects the SDK's durable
+ * conversation store", while the comment above the one read states the SDK persists EVERY session to
+ * its transcript regardless. So it pushed authors toward a value that changes only whether an event
+ * is emitted — and on a pod with no volume, `filesystem` is the one storage actually unreachable.
+ * Four knobs made that read as an informed choice.
+ *
+ * ## Why removal rather than deprecation
+ *
+ * This ecosystem's rule for a configuration surface is that it is read, or refused with a reason,
+ * and never accepted and ignored. For a typed API the refusal is removing the field: an author
+ * cannot write what does not compile, and a `@deprecated` tag on an inert field is the accepted-and-
+ * ignored state with a label on it.
+ *
+ * Nothing in this monorepo wrote the removed fields. An external caller that did was configuring
+ * nothing, so what breaks is a compile, never a behaviour.
+ *
+ * ## What durable state actually is here
+ *
+ * Resume is a property of the SDK's session transcript, not of this option — see the comment at the
+ * emit site. Durable application state belongs to the developer through the data plane.
+ */
 export interface CheckpointOptions {
-  /** Where to persist checkpoints. */
-  storage?: CheckpointStorage
-  /** When to auto-checkpoint (default: 'after-tool-call'). */
-  strategy?: CheckpointStrategy
-  /** Maximum checkpoints to retain per run (rolling window). */
-  maxCheckpoints?: number
-  /** Time-to-live in ms before checkpoints expire (default: 3_600_000 = 1h). */
-  ttl?: number
+  /**
+   * Emit `checkpoint_saved` so a client knows the run can be resumed. Default off.
+   *
+   * A SIGNAL, not a backend selector — that is the whole of what the field it replaced ever did.
+   */
+  resumeSignal?: boolean
 }
 
 export type MemoryProvider = 'built-in' | 'honcho' | 'supermemory' | 'mem0'

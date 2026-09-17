@@ -127,6 +127,16 @@ describe('Bundle size regression', () => {
    *
    * Headroom is 33 bytes, deliberately tighter than the 72 B-024 left. A gate carrying slack approves
    * the next addition without being asked, and this raise is the second in a row.
+   *
+   * ## Lowered to 38 600 for #724 — the budget came back
+   *
+   * `CheckpointOptions` declared four fields and read one. Narrowing it to what the code does —
+   * `resumeSignal?: boolean`, with `CheckpointStorage` and `CheckpointStrategy` gone — gave **385
+   * bytes** back: 38 867 -> 38 482.
+   *
+   * So the ceiling comes down with it. The raise above was paid for by a capability; this is dead
+   * surface leaving, and a budget that kept the slack would be holding room for the next addition
+   * nobody asked about. Headroom is 118 bytes.
    */
   it('agents main bundle under 38.7KB', (ctx) => {
     const path = resolve(distDir, 'index.js')
@@ -138,7 +148,7 @@ describe('Bundle size regression', () => {
       return
     }
     const size = statSync(path).size
-    expect(size).toBeLessThan(38_900)
+    expect(size).toBeLessThan(38_600)
     console.log(`  agents/dist/index.js: ${(size / 1024).toFixed(1)} KB`)
   })
 

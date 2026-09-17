@@ -115,13 +115,15 @@ export class CheckpointCapability implements Capability {
   readonly name = 'checkpoint'
   constructor(private readonly options: CompiledAgentOptions['checkpoint']) {}
   apply(draft: CompiledAgentOptionsDraft): void {
-    if (this.options !== undefined && this.options.storage !== 'filesystem') {
-      console.warn(
-        `[THEO_AGENT_CHECKPOINT_STORAGE_METADATA_ONLY] checkpoint({ storage: '${this.options.storage ?? 'memory'}' }) ` +
-          `does NOT resume across requests — only 'filesystem' selects the SDK's durable conversation ` +
-          `store. Use checkpoint({ storage: 'filesystem' }) for cross-request resume.`,
-      )
-    }
+    // #724 — no warning. The one this replaced told an author that `storage: 'filesystem'` "selects
+    // the SDK's durable conversation store", and it selected nothing: the SDK persists every session
+    // regardless, so the value changed only whether an event was emitted. On a pod with no volume it
+    // also named the one storage that is unreachable, so the advice was worse than absent.
+    //
+    // The capability's docstring said such a warning exists because "a declared checkpoint that
+    // silently cannot resume is exactly the kind of no-op this project refuses to ship" — the right
+    // instinct pointed at the wrong half. What could not resume was the OPTION, and the type now says
+    // so instead of a console line at runtime.
     setOnce(draft, 'checkpoint', this.options, this.name)
   }
 }

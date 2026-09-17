@@ -140,6 +140,33 @@ describe('an agent served through the endpoint applies its guardrails', () => {
     )
   })
 
+  it('test_the_task_milestone_channel_is_moderated', async () => {
+    // The fourth channel #732 named, decided in the same change. It is not a mirror of anything, so it
+    // cannot be rebuilt the way `done` is — it carries text the model writes through `task-tools`, and
+    // a milestone naming the key is the same disclosure as a delta naming it.
+    h.events = [
+      { type: 'task_progress', status: 'working', text: 'found the key sk-abc123' },
+      { type: 'text_delta', content: 'Done.' },
+      DONE,
+    ]
+    h.sent = []
+    const redactOutput: Guardrail = {
+      name: 'redact-output',
+      checkOutput: (text) => ({
+        action: 'redact' as const,
+        text: text.replace('sk-abc123', '[R]'),
+      }),
+    }
+
+    const seen = await drain(
+      streamAgentUIMessages(agentWith([redactOutput]), 'key', { message: 'x', sessionId: 's' }),
+    )
+
+    expect(seen, 'the milestone delivered what every other channel removed').not.toContain(
+      'sk-abc123',
+    )
+  })
+
   it('moderates reasoning WITHOUT promoting it into visible text', async () => {
     // The channel a single wider extractor would destroy: two kinds under one `extractText` collapse
     // into one event, so the model's private reasoning would arrive as the assistant's answer.

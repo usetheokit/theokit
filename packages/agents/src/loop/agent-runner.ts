@@ -25,6 +25,7 @@ import type { StreamEvent } from '../bridge/agent-sse-handler.js'
 import type { DelegationResult } from '../bridge/delegation-types.js'
 import { createSdkAgentStream } from '../bridge/sdk-adapter.js'
 import { moderateOutputStream, runInputGuards, textPayloadExtractor } from '../guardrails/index.js'
+import { mirrorModeratedText } from '../guardrails/terminal-frame.js'
 import type { MainLoopMeta, ReasoningEffort } from '../types.js'
 
 import {
@@ -262,9 +263,9 @@ export class AgentRunner {
         // `present-ui-message-stream.ts:192`.
         //
         // A third pass would NOT extend to `done`: there is one per round, so a pass keyed on it
-        // would collapse every round's into one. Those two channels need a different mechanism and
-        // are tracked separately — naming them here is what keeps this comment from claiming a
-        // coverage it does not have.
+        // would collapse every round's into one. That is why `done` is MIRRORED below instead —
+        // rebuilt from the round's own moderated deltas — while `task_progress` takes the ordinary
+        // third pass, being text in its own right rather than a mirror of anything. #732.
         //
         // `thinking` is a public `AgentStreamEvent` and reaches the client like any other, and this
         // moderated only `text_delta`: measured, a guard declared over the agent's output delivered
@@ -286,23 +287,45 @@ export class AgentRunner {
         // `expected 'the key is [R], I must not say it' to be 'Here is your answer.'`, substitution
         // rather than double application. The commit body had it right and the source comment kept
         // the wrong half.
-        return yield* moderateOutputStream(
+        // #732 — the terminal frame, rebuilt from the moderated deltas this stream just produced.
+        //
+        // OUTERMOST on purpose: it mirrors what the client received, so it must see the text after
+        // both moderation passes. It re-runs no guard and invents no text — `done.result` carries
+        // the visible text of its own round, so the round's moderated deltas ARE the answer.
+        return yield* mirrorModeratedText(
+          // #732 — the fourth channel, and the one the `done` fix cannot reach. A milestone is not
+          // a mirror of anything: it carries text the model writes through `task-tools`, so it gets
+          // its own pass like the two below. One pass per kind, because two kinds under one
+          // extractor collapse into a single event.
+          //
+          // `task-tools.ts` claimed B-018 had already shipped this. It had not — `agent-endpoint.ts`
+          // said in the same tree that the channel was NOT covered, and the claim is corrected there
+          // rather than deleted.
           moderateOutputStream(
-            runUnguarded(safe),
+            moderateOutputStream(
+              moderateOutputStream(
+                runUnguarded(safe),
+                guardrails,
+                // B-021 — the shared extractor, so "this kind, content unreadable" throws instead of
+                // sharing a return value with "not this kind". The hand-written form here returned
+                // `undefined` for a non-string, which reads as "carries no text": the payload was
+                // never shown to a guard and was yielded verbatim.
+                textPayloadExtractor<StreamEvent>('text_delta', (e) => e.content),
+                (content) => ({ type: 'text_delta', content }),
+                (content, result) => ({ ...result, response: content }),
+              ),
+              guardrails,
+              textPayloadExtractor<StreamEvent>('thinking', (e) => e.content),
+              (content) => ({ type: 'thinking', content }),
+              // The reasoning pass does NOT touch the aggregate — the visible pass already did.
+              (_content, result) => result,
+            ),
             guardrails,
-            // B-021 — the shared extractor, so "this kind, content unreadable" throws instead of
-            // sharing a return value with "not this kind". The hand-written form here returned
-            // `undefined` for a non-string, which reads as "carries no text": the payload was never
-            // shown to a guard and was yielded verbatim.
-            textPayloadExtractor<StreamEvent>('text_delta', (e) => e.content),
-            (content) => ({ type: 'text_delta', content }),
-            (content, result) => ({ ...result, response: content }),
+            textPayloadExtractor<StreamEvent>('task_progress', (e) => e.text),
+            (text) => ({ type: 'task_progress', text }),
+            // A milestone is not the answer — the visible pass owns the aggregate.
+            (_text, result) => result,
           ),
-          guardrails,
-          textPayloadExtractor<StreamEvent>('thinking', (e) => e.content),
-          (content) => ({ type: 'thinking', content }),
-          // The reasoning pass does NOT touch the aggregate — the visible pass already did.
-          (_content, result) => result,
         )
       })()
     }
