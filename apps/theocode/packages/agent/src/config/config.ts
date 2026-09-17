@@ -28,6 +28,7 @@ import {
 } from './settings-load.js'
 import type { TrustPosture } from './trust-posture.js'
 import { applySecurityFloor } from './security-floor.js'
+import { readManagedSettings } from './managed-settings.js'
 
 /**
  * How long an operator-supplied shell command may run before it is killed.
@@ -379,6 +380,11 @@ export interface ConfigLayers {
   projectLocal?: unknown
   env?: Record<string, string | undefined>
   cli?: unknown
+  /**
+   * #737 — the enterprise `managed-settings.json`, deployed by an administrator to a platform
+   * path an ordinary user cannot write. Highest precedence, `cli` included.
+   */
+  managed?: unknown
 }
 
 const ACCUMULATING_KEYS = ['hooks'] as const
@@ -440,6 +446,9 @@ export function resolveConfig(layers: ConfigLayers = {}): AgentConfig {
   const project = fromFile(layers.project, 'settings.json')
   const projectLocal = fromFile(layers.projectLocal, 'settings.local.json')
   const cli = fromFile(layers.cli, 'cli (-c)')
+  // #737 — the enterprise policy. Parsed through the SAME schema as every other layer: a
+  // managed file with a typo must fail by name, not be tolerated because of where it came from.
+  const managed = fromFile(layers.managed, 'managed-settings.json')
 
   const { name: selectedProfile, values: profile } = chosenProfile([
     user,
@@ -458,6 +467,7 @@ export function resolveConfig(layers: ConfigLayers = {}): AgentConfig {
     profile: pickScalars(profile),
     env: pickScalars(envParsed),
     cli: pickScalars(cli),
+    managed: pickScalars(managed),
   }
   const folded = foldLayers(
     LAYERS.map((c) => ({
@@ -525,6 +535,10 @@ export function loadConfig(opts: {
   // imagined — a valid hook block under the unused root produced `hooks: []` from a trusted
   // directory and read exactly like a product defect. Changing any path here means changing
   // README § "Where configuration lives" in the same commit.
+  // #737 — read here rather than in `discoverSettings`, which is about the files a PROJECT and a
+  // USER own. This one is neither: an administrator deployed it to a path they cannot write, and no
+  // trust posture gates it — the policy binds the untrusted repository too.
+  const managedSettings = readManagedSettings()
   const { user, project, projectLocal, projectAllowed, ourHome } = discoverSettings({
     projectDir,
     userDir,
@@ -556,5 +570,6 @@ export function loadConfig(opts: {
     ...(projectLocal !== null ? { projectLocal: projectLocal } : {}),
     env,
     ...(opts.cli !== undefined ? { cli: opts.cli } : {}),
+    ...(managedSettings !== null ? { managed: managedSettings } : {}),
   })
 }

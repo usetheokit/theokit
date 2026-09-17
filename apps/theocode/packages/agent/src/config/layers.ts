@@ -21,6 +21,7 @@ export type Layer =
   | 'profile'
   | 'env'
   | 'cli'
+  | 'managed'
 
 export interface DeclaredLayer {
   readonly layer: Layer
@@ -39,6 +40,16 @@ export const LAYERS: readonly DeclaredLayer[] = Object.freeze([
   Object.freeze({ layer: 'profile' as const, precedence: 40 }),
   Object.freeze({ layer: 'env' as const, precedence: 50 }),
   Object.freeze({ layer: 'cli' as const, precedence: 60 }),
+  // #737 — the enterprise policy, ABOVE the operator's own `-c` flag.
+  //
+  // Every other layer in this chain answers "who is closer to the keyboard", and the closest wins.
+  // This one inverts that, and the inversion is the whole point: a managed policy binds the person
+  // AT the keyboard. Ranking it below `cli` would leave an organisation believing a control applies
+  // while a single flag lifts it, which is the failure direction the reference calls out — permit.
+  //
+  // Deployed by an administrator to a platform path no ordinary user can write, so it is not another
+  // file a project ships: `.claude/settings.json` arrives with the clone and this does not.
+  Object.freeze({ layer: 'managed' as const, precedence: 70 }),
 ])
 
 // At module load, so a chain edited into an inconsistent state fails on import rather than on the

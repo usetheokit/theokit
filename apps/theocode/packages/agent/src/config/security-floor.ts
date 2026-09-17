@@ -45,6 +45,8 @@ export interface LayeredValues {
   profile?: string | undefined
   env?: string | undefined
   cli?: string | undefined
+  /** #737 — the enterprise policy. Outranks every other layer, `cli` included. */
+  managed?: string | undefined
 }
 
 /**
@@ -52,6 +54,17 @@ export interface LayeredValues {
  * choose something more permissive than what a lower layer already established.
  */
 export function applySecurityFloor(key: SecurityKey, layers: LayeredValues): string | undefined {
+  // #737 — a managed value IS the answer, and the floor never runs.
+  //
+  // Not an extra `restricted` entry and not a second `override`: the floor decides who may LOOSEN,
+  // and an organisation policy is not competing on that axis — it is the ceiling the rest negotiate
+  // under. Expressed here rather than in `applySecurityFloor`, which is the SDK's and takes exactly
+  // one override.
+  //
+  // It may therefore loosen as well as harden, which is deliberate: an administrator who deploys
+  // `sandbox_mode = workspace-write` to a fleet has decided that, and a floor that overrode them
+  // would make the policy unpredictable in the one direction they control.
+  if (layers.managed !== undefined) return layers.managed
   return applyFloor({
     permissiveness: MORE_PERMISSIVE[key],
     restricted: CANNOT_LOOSEN,
