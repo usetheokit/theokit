@@ -4,9 +4,15 @@
  * ## The half-present feature these close
  *
  * The runtime already models tasks and already emits their lifecycle: `Task.submit` is published and
- * `task_started` / `task_updated` / `task_completed` reach a consumer through `RunEvent`. B-018 even
- * shipped moderation for `task_progress.text`, so the channel is real enough to have needed a
- * security gate.
+ * `task_started` / `task_updated` / `task_completed` reach a consumer through `RunEvent`, so the
+ * channel is real enough to have needed a security gate.
+ *
+ * This said "B-018 even shipped moderation for `task_progress.text`", and it had not. Measured
+ * 2026-09-17 while closing #732: `agent-endpoint.ts` stated in the same tree that `done.result` and
+ * `task_progress.text` were NOT covered, and neither composition had a pass over the channel. The
+ * moderation exists NOW — a third `moderateOutputStream` pass on both surfaces — and the false claim
+ * is corrected rather than deleted, because a wrong statement about a security control is what stops
+ * the next reader from checking.
  *
  * What was missing is the way in. Measured 2026-09-14: `packages/agents/src` emitted `task_started`
  * in **0** files and produced `subgoals` in **0**, against a control of 2 for `GoalOptions`. So

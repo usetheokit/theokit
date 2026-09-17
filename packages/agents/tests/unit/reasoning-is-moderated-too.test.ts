@@ -93,6 +93,51 @@ describe('an output guard reaches the reasoning too', () => {
     )
   })
 
+  it('test_the_terminal_frame_does_not_contradict_the_deltas', async () => {
+    // #732 — with an output guard declared, one turn delivered two different answers: the `text_delta`
+    // stream was redacted and `DoneEvent.result` was not, so a client rendering the terminal frame
+    // received the secret the guard was declared to remove.
+    //
+    // Asserted HERE and not on the served path: measured 2026-09-17, `streamAgentUIMessages` does not
+    // carry `done.result` into the UI stream at all, so the same assertion there passes with or
+    // without the fix. A test that cannot fail is worse than no test.
+    script([
+      [
+        { type: 'text_delta', content: 'the key is sk-abc123' },
+        { type: 'done', result: 'the key is sk-abc123' },
+      ],
+    ])
+
+    const { events } = await drain(runnerWith([redactor]).stream('hi', { apiKey: 'k' }) as never)
+    const done = events.find((e) => e.type === 'done')
+
+    expect(done, 'the round must still deliver its terminal frame').toBeDefined()
+    expect(
+      (done as { result?: string }).result,
+      'the frame carried what the deltas had removed',
+    ).toBe('the key is [R]')
+  })
+
+  it('test_the_task_milestone_channel_is_moderated', async () => {
+    // The fourth channel #732 named, decided in the same change. It is not a mirror of anything, so it
+    // cannot be rebuilt the way `done` is — it carries text the model writes through `task-tools`, and
+    // a milestone naming the key is the same disclosure as a delta naming it.
+    script([
+      [
+        { type: 'task_progress', status: 'working', text: 'found the key sk-abc123' },
+        { type: 'text_delta', content: 'Done.' },
+        { type: 'done' },
+      ],
+    ])
+
+    const { events } = await drain(runnerWith([redactor]).stream('hi', { apiKey: 'k' }) as never)
+
+    expect(
+      JSON.stringify(events),
+      'the milestone kept what every other channel removed',
+    ).not.toContain('sk-abc123')
+  })
+
   it('test_reasoning_stays_a_thinking_event_and_does_not_become_visible_text', async () => {
     // FR-002. Widening one `extractText` over both kinds would also remove the secret — by
     // COLLAPSING the two events into one, which promotes the reasoning into visible output. The
