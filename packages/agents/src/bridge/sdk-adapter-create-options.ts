@@ -167,20 +167,22 @@ export class HookGateUnsupportedError extends TheokitAgentError {
 /**
  * #739 — the installed SDK cannot read a foreign configuration root at all.
  *
- * NOT re-exported from the root barrel, and the bundle-size gate is what made that a question rather
- * than a default. Measured by control: the export costs 60 bytes of a barrel every consumer pays for
- * unconditionally. Its sibling IS exported and nothing in this ecosystem catches either — so the
- * export would be speculative, which is rung 1 of the parsimony ladder before it is a byte count.
+ * NOT exported, and two gates asked the question in turn. The bundle-size budget went 42 bytes over,
+ * and its own doctrine is to check the SHAPE before the number: measured by control, barrelling it
+ * costs 60 bytes every consumer pays for unconditionally. Knip then found the file-level export had no
+ * importer either.
  *
- * A consumer that needs to discriminate can read `err.name`, which is what the override below is for.
- * Export it the day somebody catches it; the bytes are the smaller half of that argument.
+ * Both point the same way. Its sibling IS exported and nothing in this ecosystem catches either, so
+ * exporting this one was speculative — rung 1 of the parsimony ladder before it is a byte count. A
+ * consumer that needs to discriminate reads `err.name`, which is what the override below is for.
+ * Export it the day somebody catches it.
  *
  * Distinct from `CompatImportUnsupportedError` below, and the distinction is the message: that one
  * is about NARROWING a root the SDK can read (5.4.0), this one about a runtime that does not know
  * `compatSources` exists (5.0.0). Reusing it would name the wrong version and send whoever reads it
  * to the wrong upgrade.
  */
-export class CompatRootUnsupportedError extends TheokitAgentError {
+class CompatRootUnsupportedError extends TheokitAgentError {
   override readonly name = 'CompatRootUnsupportedError'
   constructor(version: string | undefined) {
     super(

@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
@@ -30,7 +30,21 @@ describe('the TUI harness', () => {
   const sentinel = join(OPERATOR_HOME, '.theocode', 'auth.json')
   const preexisting = existsSync(sentinel)
 
+  // What THIS test wrote, so the guard below can tell it from what the harness wrote. Set by the
+  // logout case, which needs a credential at the operator's path to prove `/logout` leaves it alone.
+  let wroteSentinel = false
+
   afterAll(() => {
+    // Remove our own sentinel FIRST. On a machine where the operator has no credential the logout
+    // case creates one, and a guard that cannot tell that from a leak fails on the test's own setup.
+    //
+    // Measured in CI on 2026-09-17: green on every developer machine, red on a clean runner — which
+    // is the only place the guard can fire at all, so the one run that mattered was the one nobody
+    // had. A control that cannot fire where it is exercised is not a control.
+    if (wroteSentinel) {
+      rmSync(sentinel, { force: true })
+      wroteSentinel = false
+    }
     // Never leave a file behind in someone's home that this test invented.
     if (!preexisting && existsSync(sentinel)) {
       throw new Error(`the harness created ${sentinel}; it must not write to the operator's home`)
@@ -49,7 +63,10 @@ describe('the TUI harness', () => {
 
   it('test_logout_cannot_remove_the_operators_credential', async () => {
     mkdirSync(join(OPERATOR_HOME, '.theocode'), { recursive: true })
-    if (!preexisting) writeFileSync(sentinel, '{"sentinel":true}\n', { mode: 0o600 })
+    if (!preexisting) {
+      writeFileSync(sentinel, '{"sentinel":true}\n', { mode: 0o600 })
+      wroteSentinel = true
+    }
 
     const tui = await openTui()
     try {
