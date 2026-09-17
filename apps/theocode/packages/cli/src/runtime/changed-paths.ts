@@ -28,7 +28,7 @@ import type { ToolChunk } from './tool-line.js'
  */
 
 /** Tools that name their target in a `path` field. */
-const PATH_FIELD_TOOLS: ReadonlySet<string> = new Set(['write_file', 'edit_file'])
+const PATH_FIELD_TOOLS: ReadonlySet<string> = new Set(['write_file', 'Edit'])
 
 /** `*** Add File: x`, `*** Update File: x`, `*** Delete File: x` — the three headers a patch uses. */
 const PATCH_HEADER = /^\*\*\* (?:Add|Update|Delete) File: (.+)$/
@@ -45,7 +45,7 @@ function pathsIn(chunk: ToolChunk): string[] {
   const input = chunk.input
   if (typeof input !== 'object' || input === null) return []
 
-  if (chunk.toolName === 'apply_patch') {
+  if (chunk.toolName === 'ApplyPatch') {
     const patch = (input as { patch?: unknown }).patch
     if (typeof patch !== 'string') return []
     return patch

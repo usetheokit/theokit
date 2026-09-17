@@ -38,6 +38,16 @@ export interface SkillsOnDisk {
    * number.
    */
   readonly foreignRootSkills: readonly string[]
+  /**
+   * Skill names a plugin bundle ships, at `<root>/plugins/<bundle>/skills/<name>/SKILL.md`.
+   *
+   * #826 — its own field rather than part of `foreignRootSkills`, and the separation is the point. A
+   * bundled skill loads the same way and lives somewhere else, so an operator checking whether their
+   * bundle took effect needs the answer to name the bundle root. Folding it into the other number
+   * would make the count rise with nothing saying why, which is the shape `foreignSurfacesCheck`
+   * already refuses one file over.
+   */
+  readonly bundledSkills: readonly string[]
   /** Declared in configuration, with no `SKILL.md` under any root — the operator's included. */
   readonly declaredButAbsent: readonly string[]
   /**
@@ -113,6 +123,7 @@ export function skillsOnDisk(
   const inForeignRoot = skillNamesIn(join(cwd, FOREIGN_ROOT, 'skills'))
   return {
     foreignRootSkills: [...new Set(inForeignRoot)].sort(),
+      bundledSkills: [...inBundles].sort(),
     declaredButAbsent: [...named]
       .filter((name) => !inProject.has(name) && !inUserRoot.has(name) && !inBundles.has(name))
       .sort(),

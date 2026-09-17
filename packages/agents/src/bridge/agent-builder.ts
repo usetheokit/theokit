@@ -25,6 +25,7 @@ import type { McpServersMap } from '../types.js'
 import type { ReasoningEffort } from '../types.js'
 
 import type { CodePlugin } from './code-plugins.js'
+import type { SubagentAgentDefinition } from './define-agent.js'
 import { defineAgent, type AgentDefinition, type DefineAgentConfig } from './define-agent.js'
 import type { HookHandlers } from './hook-handlers.js'
 import type { HookApprovalGate } from './sdk-adapter-create-options.js'
@@ -234,6 +235,16 @@ export interface AgentBuilder<
    */
   skills(selection: SkillsSelection): AgentBuilder<TInput, TModel, TContext, TTools>
   /**
+   * #825 — subagents this agent carries, by name, WITH whatever the caller applied to them.
+   *
+   * Distinct from `settingSources`, which DISCOVERS them: the framework reads the file and takes the
+   * prompt straight from it, so an enriched definition — a `MEMORY.md` folded in by
+   * `applySubagentMemory` is the measured case — had nowhere to go and was silently discarded.
+   */
+  subagents(
+    map: Record<string, SubagentAgentDefinition>,
+  ): AgentBuilder<TInput, TModel, TContext, TTools>
+  /**
    * theokit-file-based-config — opt into `.theokit/` file-based config (skills, subagents, hooks,
    * MCP, context, cron), discovered by the SDK from the app root (`project` = `<cwd>/.theokit/`,
    * `user` = `~/.theokit/`). Unset ⇒ inline (code) config only.
@@ -372,6 +383,8 @@ function makeBuilder(config: DefineAgentConfig): AgentBuilder {
     approvals: (map: Record<string, HumanInTheLoopOptions>) =>
       makeBuilder({ ...config, approvals: map }),
     skills: (selection: SkillsSelection) => makeBuilder({ ...config, skills: selection }),
+    subagents: (map: Record<string, SubagentAgentDefinition>) =>
+      makeBuilder({ ...config, subagents: map }),
     settingSources: (selection: SettingSourcesSelection) =>
       makeBuilder({ ...config, settingSources: selection }),
     hookApproval: (gate: HookApprovalGate) => makeBuilder({ ...config, hookApproval: gate }),

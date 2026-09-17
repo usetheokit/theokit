@@ -128,6 +128,7 @@ describe('every schema key survives pickScalars', () => {
     home_dir: '.theocode',
     shell_timeout_ms: 33_000,
     session_gc: false,
+    session_gc_max_age_days: 7,
     context_window: 12_345,
     output_style: 'terse',
   }

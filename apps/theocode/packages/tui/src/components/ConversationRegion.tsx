@@ -22,6 +22,32 @@ import { Banner } from './Banner.js'
 import type { ContentPanel } from '../rendering/index.js'
 import type { ToastPayload } from '../screen-types.js'
 
+/**
+ * What the operator must know BEFORE their first turn, and could not learn any other way.
+ *
+ * Both notices exist for one reason: the condition they describe is otherwise silent. A missing
+ * credential surfaces only when a turn fails; an unreadable `settings.json` used to surface only in
+ * the turn trust was granted (#827), leaving later sessions on defaults that look like a choice.
+ *
+ * Extracted together rather than inlined because they are one idea, and because two more ternaries
+ * took `ConversationRegion` past its complexity ceiling — the gate pointing at a seam that was
+ * already there.
+ */
+function StartupNotices({
+  config,
+  credential,
+}: {
+  readonly config: string | undefined
+  readonly credential: string | undefined
+}): ReactElement {
+  return (
+    <>
+      {config !== undefined ? <Notice variant="error">{config}</Notice> : null}
+      {credential !== undefined ? <Notice variant="error">{credential}</Notice> : null}
+    </>
+  )
+}
+
 export interface ConversationRegionProps {
   readonly clearEpoch: number
   readonly events: Parameters<typeof AgentTimeline>[0]['events']
@@ -30,6 +56,8 @@ export interface ConversationRegionProps {
   readonly lastUsage: Parameters<typeof UsagePanel>[0]['usage'] | undefined
   readonly agentError: Error | undefined
   readonly credentialError: () => string | undefined
+  /** #827 — why the project configuration is not in force, when it is not. */
+  readonly configNotice: string | undefined
   readonly panel: ContentPanel | undefined
   readonly showUsage: boolean
   readonly reviewResult: string | null
@@ -153,13 +181,7 @@ export function ConversationRegion(props: ConversationRegionProps): ReactElement
           showCancelHint
         />
       ) : null}
-      {/* M30 — a credential problem is surfaced AT STARTUP with its actionable message, not
-          swallowed until a turn fails. The DoD is explicit that validation happens at startup:
-          a key declared for one provider that carries another's prefix, a world-readable file,
-          or nothing configured at all must all say so here, with the fix. */}
-      {props.credentialError() !== undefined ? (
-        <Notice variant="error">{props.credentialError()}</Notice>
-      ) : null}
+        <StartupNotices config={props.configNotice} credential={props.credentialError()} />
       {/* M85 — branches: a transient error points at /retry, a fatal one does not (retrying would not help). */}
       {props.agentError ? (
         <Notice variant="error">{formatTurnError(props.agentError)}</Notice>

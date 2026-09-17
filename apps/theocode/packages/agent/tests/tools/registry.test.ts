@@ -76,7 +76,7 @@ describe('bindToolScope — the scope is bound once, and write tools stay at the
    * bind. Two properties have to survive that, and neither is obvious from the diff.
    */
   it('test_the_permissive_mode_widens_the_WRITE_root_without_widening_the_read_root', () => {
-    // The detail a naive bind would have erased. `apply_patch` and `edit_file` receive
+    // The detail a naive bind would have erased. `ApplyPatch` and `Edit` receive
     // `projectRoot: scope.writeRoot` — for them the project root IS the write root. Letting the bind
     // apply `cwd` would narrow the write scope silently whenever the two diverge, which is exactly
     // the `danger-full-access` case.
@@ -93,7 +93,7 @@ describe('bindToolScope — the scope is bound once, and write tools stay at the
     // The thesis: an unconfined shell must be UNREPRESENTABLE, and the guarantee is in the TYPE, not
     // in a runtime check. So the honest assertion is about compilation.
     //
-    // The first version of this test checked `names()).toContain('run_shell')` under a name that
+    // The first version of this test checked `names()).toContain('Bash')` under a name that
     // promised to speak about the sandbox. That would pass with the sandbox removed, and would have
     // said nothing.
     const withoutSandbox = { cwd: '/tmp/proj', writeRoot: '/tmp/proj' }

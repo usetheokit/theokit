@@ -127,6 +127,8 @@ const HOOK_GATE_SINCE = { major: 5, minor: 4 } as const
  * prevent it.
  */
 const COMPAT_IMPORT_SINCE = { major: 5, minor: 4 } as const
+/** The major in which `compatSources` itself landed — reading the foreign root at all. */
+const COMPAT_ROOT_SINCE_MAJOR = 5
 
 /**
  * Refuses when the installed SDK cannot honour a declared hook gate.
@@ -158,6 +160,39 @@ export class HookGateUnsupportedError extends TheokitAgentError {
         `@theokit/sdk, or remove \`hookApproval\` and keep whatever refusal you have today ` +
         `(usetheokit/theokit#686).`,
       { code: 'hook_gate_unsupported', isRetryable: false },
+    )
+  }
+}
+
+/**
+ * #739 — the installed SDK cannot read a foreign configuration root at all.
+ *
+ * NOT exported, and two gates asked the question in turn. The bundle-size budget went 42 bytes over,
+ * and its own doctrine is to check the SHAPE before the number: measured by control, barrelling it
+ * costs 60 bytes every consumer pays for unconditionally. Knip then found the file-level export had no
+ * importer either.
+ *
+ * Both point the same way. Its sibling IS exported and nothing in this ecosystem catches either, so
+ * exporting this one was speculative — rung 1 of the parsimony ladder before it is a byte count. A
+ * consumer that needs to discriminate reads `err.name`, which is what the override below is for.
+ * Export it the day somebody catches it.
+ *
+ * Distinct from `CompatImportUnsupportedError` below, and the distinction is the message: that one
+ * is about NARROWING a root the SDK can read (5.4.0), this one about a runtime that does not know
+ * `compatSources` exists (5.0.0). Reusing it would name the wrong version and send whoever reads it
+ * to the wrong upgrade.
+ */
+class CompatRootUnsupportedError extends TheokitAgentError {
+  override readonly name = 'CompatRootUnsupportedError'
+  constructor(version: string | undefined) {
+    super(
+      `\`compatSources\` asks for a foreign configuration root to be read, but the installed ` +
+        `@theokit/sdk (${version ?? 'version unreadable'}) does not know that option and drops it ` +
+        `in silence — so EVERY foreign surface would be unavailable while the package resolves, ` +
+        `compiles and runs. It landed in ${String(COMPAT_ROOT_SINCE_MAJOR)}.0.0, and this package ` +
+        `declares a floor above it, so reaching this error means an override pinned the SDK lower. ` +
+        `Remove the override, or drop \`compatSources\` if the foreign root is not wanted ` +
+        `(usetheokit/theokit#739).`,
     )
   }
 }
@@ -282,31 +317,26 @@ function installedSdkVersion(): string | undefined {
   }
 }
 
-/** Reported once per process — a warning repeated per agent stops being read. */
-let sdkCompatWarningEmitted = false
-
 /**
- * Warns when the installed SDK is too old to know `compatSources`, instead of letting it vanish.
+ * Refuses when the installed SDK is too old to know `compatSources`, instead of letting it vanish.
  *
  * ## Why this lives here and not upstream
  *
  * `theokit-sdk#526` makes the SDK name an unrecognised key under `local` — and it only exists in
- * the SDK that already supports `compatSources`. So it covers exactly the half where no warning is
- * needed, and is absent from the half where one is. This layer is the only place that sees both.
+ * the SDK that already supports `compatSources`. So it covers exactly the half where no diagnostic
+ * is needed, and is absent from the half where one is. This layer is the only place that sees both.
  *
- * ## Why this does not require raising the floor
+ * ## Why it reads the version rather than trusting the manifest
  *
  * `@theokit/sdk` declares `"./package.json"` in `exports`, so its version is readable at runtime.
- * That is what made `usetheokit/theokit#634` buildable before a stable cut: the blocker was never
- * the missing type — a string union is declarable here — it was that a forward against an older SDK
- * would be inert IN SILENCE. Reading the version removes the silence, and the floor stays
- * `^4.52.1`, so no consumer is pinned to a prerelease.
+ * The declared floor says what SHOULD be installed; an override says what is. Only the second can
+ * be wrong in the direction that matters here.
  *
  * Failure to read it is not an error: a bundled or vendored SDK may not resolve that subpath, and
- * refusing to create an agent over a diagnostic would be the cure being worse than the disease.
+ * refusing to create an agent over a string we could not parse would be the cure being worse than
+ * the disease.
  */
-function warnIfSdkCannotReadCompatSources(): void {
-  if (sdkCompatWarningEmitted) return
+function refuseIfSdkCannotReadCompatSources(): void {
   let version: string | undefined
   try {
     version = (createRequire(import.meta.url)('@theokit/sdk/package.json') as { version?: string })
@@ -314,15 +344,34 @@ function warnIfSdkCannotReadCompatSources(): void {
   } catch {
     return // cannot tell — say nothing rather than guess
   }
+  assertSdkCanReadCompatSources(version)
+}
+
+/**
+ * #739 — refuse an SDK that cannot read the foreign root, naming the version that introduced it.
+ *
+ * `compatSources` landed in `@theokit/sdk@5.0.0`. Below it the option is accepted and IGNORED, so
+ * every `.claude/` surface is unavailable while the package resolves, compiles and runs.
+ *
+ * A `console.warn` stood here, and its own text named the condition that kept it one: "Until this
+ * package's floor can name a stable 5.x, override the SDK in your workspace". The floor is `^5.3.0`.
+ * The condition is met.
+ *
+ * The warning was RIGHT while the manifest genuinely permitted such a version — refusing then would
+ * have broken installs the package said it supported. It is wrong now: the only way to reach this
+ * branch is an override, and an override that silently disables every foreign surface is exactly what
+ * a refusal is for.
+ *
+ * Pure, and separate from `assertSdkCanReadNarrowedImport` beside it, because the two answer
+ * different questions: that one asks whether a SUBSET of surfaces can be named (5.4.0), this one
+ * whether the root can be read at all (5.0.0). Collapsing them would refuse a narrowed import on a
+ * version that reads the root perfectly well.
+ */
+export function assertSdkCanReadCompatSources(version: string | undefined): void {
   const major = Number.parseInt(version?.split('.')[0] ?? '', 10)
-  if (!Number.isFinite(major) || major >= 5) return
-  sdkCompatWarningEmitted = true
-  console.warn(
-    `[theokit/agents] \`compatSources\` was declared, but @theokit/sdk@${version} does not know ` +
-      `that option and will ignore it — the foreign configuration root will NOT be read. It landed ` +
-      `in 5.0.0. Until this package's floor can name a stable 5.x, override the SDK in your ` +
-      `workspace (usetheokit/theokit#634).`,
-  )
+  if (!Number.isFinite(major)) return // cannot tell — say nothing rather than guess
+  if (major >= COMPAT_ROOT_SINCE_MAJOR) return
+  throw new CompatRootUnsupportedError(version)
 }
 
 /**
@@ -416,6 +465,14 @@ function applyLocalSources(
     options.local = { ...options.local, settingSources: [...compiled.settingSources] }
     applied.push('settingSources')
   }
+  // #825 — the author's own subagents, which the SDK takes at the TOP level rather than under
+  // `local`. They are not an alternative to `settingSources`: that grants a root to discover in,
+  // and this supplies the definition that runs. Where both name the same subagent, the declared one
+  // wins — it is the one somebody decided, and it is the only one that can carry an applied memory.
+  if (compiled.subagents !== undefined && Object.keys(compiled.subagents).length > 0) {
+    options.agents = { ...compiled.subagents }
+    applied.push('subagents')
+  }
   // B-060 — the external session store. Only when declared: an empty `local` block would hand
   // `Agent.create` a claim about setting sources and a cwd that no author made.
   if (compiled.sessionStore !== undefined) {
@@ -440,7 +497,7 @@ function applyLocalSources(
     if (forSdk.length > 0) {
       options.local = { ...options.local, compatSources: forSdk }
       applied.push('compatSources')
-      warnIfSdkCannotReadCompatSources()
+      refuseIfSdkCannotReadCompatSources()
     }
   }
 }

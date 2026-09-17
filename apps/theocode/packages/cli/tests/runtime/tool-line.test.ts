@@ -2,7 +2,7 @@
  * The headless surface renders a patch as a patch — and says so when it truncates.
  *
  * `toolLine` was one generic line for every tool: `exec <name> <JSON.stringify(input).slice(0,200)>`.
- * For a read that is fine (`exec read_file {"path":"tax.mjs"}`). For `apply_patch` it collapses the
+ * For a read that is fine (`exec Read {"path":"tax.mjs"}`). For `ApplyPatch` it collapses the
  * edit into escaped JSON on a single line, with literal `\n` where the diff's newlines were — the
  * one tool call a reader most wants to actually read.
  *
@@ -29,7 +29,7 @@ const PATCH = `*** Begin Patch
 
 describe('toolLine', () => {
   it('test_a_patch_renders_as_a_patch_not_as_escaped_json', () => {
-    const out = toolLine({ toolName: 'apply_patch', input: { patch: PATCH } })
+    const out = toolLine({ toolName: 'ApplyPatch', input: { patch: PATCH } })
 
     expect(out, 'the diff body must survive as lines').toContain('-  return (amount + amount) * rate')
     expect(out).toContain('+  return amount + amount * rate')
@@ -39,7 +39,7 @@ describe('toolLine', () => {
   it('test_a_truncated_patch_says_it_was_truncated', () => {
     // The silent half of the old behaviour. A reader seeing half an edit must be told it is half.
     const long = `*** Begin Patch\n${'+ a line that goes on\n'.repeat(400)}*** End Patch`
-    const out = toolLine({ toolName: 'apply_patch', input: { patch: long } })
+    const out = toolLine({ toolName: 'ApplyPatch', input: { patch: long } })
 
     expect(out).toMatch(/truncated/i)
     expect(out).toMatch(/\d+ more lines?/i)
@@ -47,13 +47,13 @@ describe('toolLine', () => {
 
   it('test_a_short_patch_is_not_marked_truncated', () => {
     // Anti-vacuity: a formatter that always appended the notice would satisfy the case above.
-    expect(toolLine({ toolName: 'apply_patch', input: { patch: PATCH } })).not.toMatch(/truncated/i)
+    expect(toolLine({ toolName: 'ApplyPatch', input: { patch: PATCH } })).not.toMatch(/truncated/i)
   })
 
   it('test_every_other_tool_keeps_the_line_it_had', () => {
     // The generic line is right for the rest, and changing it would be scope this did not ask for.
-    expect(toolLine({ toolName: 'read_file', input: { path: 'tax.mjs' } })).toBe(
-      'exec read_file {"path":"tax.mjs"}',
+    expect(toolLine({ toolName: 'Read', input: { path: 'tax.mjs' } })).toBe(
+      'exec Read {"path":"tax.mjs"}',
     )
     expect(toolLine({ toolName: undefined, input: undefined })).toBe('exec tool {}')
   })
@@ -61,6 +61,6 @@ describe('toolLine', () => {
   it('test_a_patch_without_a_string_body_falls_back_to_the_generic_line', () => {
     // The input crosses from a model. A renderer that assumed the shape would throw on a turn that
     // is already going wrong.
-    expect(toolLine({ toolName: 'apply_patch', input: { patch: 42 } })).toContain('exec apply_patch')
+    expect(toolLine({ toolName: 'ApplyPatch', input: { patch: 42 } })).toContain('exec ApplyPatch')
   })
 })

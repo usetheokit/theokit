@@ -31,6 +31,8 @@ export class EffectiveConfig {
   readonly shell_timeout_ms: number
   /** Whether the session collector runs on its own. See `AgentConfig.session_gc`. */
   readonly session_gc: boolean
+  /** #736 — the retention window, when the operator wrote one. Absent keeps the collector's own. */
+  readonly session_gc_max_age_days?: number
   /** The output style to apply, by name; `undefined` means the built-in instructions, unchanged. */
   readonly output_style: string | undefined
   readonly profile: string | undefined
@@ -47,6 +49,8 @@ export class EffectiveConfig {
     this.home_dir = cfg.home_dir
     this.shell_timeout_ms = cfg.shell_timeout_ms
     this.session_gc = cfg.session_gc
+    if (cfg.session_gc_max_age_days !== undefined)
+      this.session_gc_max_age_days = cfg.session_gc_max_age_days
     this.output_style = cfg.output_style
     this.profile = cfg.profile
     this.#contextWindow = cfg.context_window

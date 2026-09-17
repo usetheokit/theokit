@@ -76,6 +76,14 @@ export function startSessionSweepInBackground(opts: {
   readonly now?: Date
   readonly projectsRootOverride?: string
   readonly intervalHours?: number
+  /**
+   * #736 — the retention window from `cleanupPeriodDays`, when the operator wrote one.
+   *
+   * Threaded rather than read here: this function already takes its interval from the caller for the
+   * same reason, and a second reader of the settings file would disagree with the first the day one
+   * of them moved. Absent leaves `DEFAULT_WINDOW_DAYS` where it is.
+   */
+  readonly maxAgeDays?: number
   readonly spawnSweep?: (cmd: SweepCommand) => {
     on: (event: 'close', cb: (code: number | null) => void) => void
     stdout?: { on: (event: 'data', cb: (chunk: unknown) => void) => void } | null
@@ -92,7 +100,7 @@ export function startSessionSweepInBackground(opts: {
   })
   if (!decision.run) return { started: false, reason: decision.reason }
 
-  const command = commandOrUndefined(!decision.firstRun, opts.onReport)
+  const command = commandOrUndefined(!decision.firstRun, opts.onReport, opts.maxAgeDays)
   if (command === undefined) return { started: false, reason: 'unspawnable' }
 
   // Stamped BEFORE the spawn, which is also what narrows the concurrency window to the microseconds
@@ -190,9 +198,15 @@ function sweepFinishedLine(firstRun: boolean, code: number | null, said: string)
 function commandOrUndefined(
   apply: boolean,
   onReport: (line: string) => void,
+  maxAgeDays: number | undefined,
 ): SweepCommand | undefined {
   try {
-    return buildSweepCommand({ apply, execPath: process.execPath, script: process.argv[1] })
+      return buildSweepCommand({
+        apply,
+        execPath: process.execPath,
+        script: process.argv[1],
+        ...(maxAgeDays === undefined ? {} : { maxAgeDays }),
+      })
   } catch (err) {
     onReport(`[sessions gc] ${reasonOf(err)}`)
     return undefined

@@ -127,8 +127,8 @@ const loadMcpJson = vi.fn((dir: string) =>
 
 /** What the project's `.theokit/agents/` declares in these tests. */
 const PROJECT_ROLES = {
-  explorer: { tools: ['read_file', 'grep', 'list_dir'] },
-  worker: { tools: ['read_file', 'apply_patch', 'run_shell'] },
+  explorer: { tools: ['Read', 'Grep', 'Glob'] },
+  worker: { tools: ['Read', 'ApplyPatch', 'Bash'] },
 }
 
 /** What the operator's own `~/.theokit/agents/` declares. Empty unless a test fills it. */
@@ -210,7 +210,7 @@ describe('path 1 — buildChatAgent composes the coding agent', () => {
     const agent = await compile({ surface: 'headless', cwd: '/p' })
     const names = namesOf(agent)
 
-    for (const write of ['apply_patch', 'edit_file', 'delegate_to_team']) {
+    for (const write of ['ApplyPatch', 'Edit', 'delegate_to_team']) {
       expect(names, `read-only still granted "${write}"`).not.toContain(write)
       expect(
         Object.keys(agent.approvals),
@@ -224,7 +224,7 @@ describe('path 1 — buildChatAgent composes the coding agent', () => {
     const agent = await compile({ surface: 'headless', cwd: '/p' })
     const names = namesOf(agent)
 
-    for (const write of ['apply_patch', 'edit_file', 'delegate_to_team']) {
+    for (const write of ['ApplyPatch', 'Edit', 'delegate_to_team']) {
       expect(names, `workspace-write did not grant "${write}"`).toContain(write)
       expect(
         Object.keys(agent.approvals),
@@ -240,7 +240,7 @@ describe('path 1 — buildChatAgent composes the coding agent', () => {
     const agent = await compile({ surface: 'headless', cwd: '/p' })
     const gated = new Set(Object.keys(agent.approvals))
 
-    for (const executes of ['run_shell', 'interactive_shell', 'write_stdin']) {
+    for (const executes of ['Bash', 'interactive_shell', 'write_stdin']) {
       expect(
         gated.has(executes),
         `"${executes}" executes commands on the user's machine and is not approval-gated`,
@@ -312,8 +312,8 @@ describe('path 1 — buildChatAgent declares only what it can actually use', () 
   })
 
   it('test_the_model_can_look_at_an_image_in_the_working_tree', async () => {
-    // B-082 built `view_image` and registered it, and no agent ever held it: the registry resolved
-    // it, so the test named "view_image is wired" passed, while the compiled agent declared 16
+    // B-082 built `ViewImage` and registered it, and no agent ever held it: the registry resolved
+    // it, so the test named "ViewImage is wired" passed, while the compiled agent declared 16
     // tools without it. The capability the item exists for — the model deciding to look at a
     // screenshot it just produced — did not exist. Asserting on the AGENT is what the registry
     // assertion could not do.
@@ -322,21 +322,21 @@ describe('path 1 — buildChatAgent declares only what it can actually use', () 
 
     expect(
       namesOf(headless),
-      'view_image is built by the registry and handed to no one — dead weight in the registry and ' +
+      'ViewImage is built by the registry and handed to no one — dead weight in the registry and ' +
         'a capability the model does not have',
-    ).toContain('view_image')
-    expect(namesOf(interactive)).toContain('view_image')
+    ).toContain('ViewImage')
+    expect(namesOf(interactive)).toContain('ViewImage')
   })
 
   it('test_reading_tools_including_view_image_are_not_approval_gated', async () => {
-    // The decision recorded at the registration site: `view_image` reads a file under the SAME root
-    // through the SAME containment rule as `read_file`, which is ungated. Gating it would gate the
+    // The decision recorded at the registration site: `ViewImage` reads a file under the SAME root
+    // through the SAME containment rule as `Read`, which is ungated. Gating it would gate the
     // rendering rather than the access, and a card that protects nothing is what teaches users to
     // click through the cards that do.
     const agent = await compile({ surface: 'headless', cwd: '/p' })
     const gated = new Set(Object.keys(agent.approvals))
 
-    for (const reads of ['read_file', 'view_image', 'list_dir', 'grep']) {
+    for (const reads of ['Read', 'ViewImage', 'Glob', 'Grep']) {
       expect(
         gated.has(reads),
         `"${reads}" only reads inside the workspace and was given an approval card, which is ` +
@@ -346,7 +346,7 @@ describe('path 1 — buildChatAgent declares only what it can actually use', () 
     // Anti-vacuity: an agent with an EMPTY approvals map passes the loop above trivially, and would
     // mean every gate in the product had been dropped.
     expect(
-      gated.has('run_shell'),
+      gated.has('Bash'),
       'the approvals map is empty or missing run_shell, so the loop above proved nothing',
     ).toBe(true)
   })
@@ -525,14 +525,14 @@ describe('path 2 — createReviewAgent composes the reviewer', () => {
 
     // The expected set is written OUT here rather than compared against `REVIEWER_TOOLS`.
     // Measured: comparing to the constant made this test tautological — a mutation adding
-    // `apply_patch` to the constant changed both sides at once and survived. A characterization
+    // `ApplyPatch` to the constant changed both sides at once and survived. A characterization
     // test has to state the expectation independently of the thing it characterises.
-    expect(names).toEqual(['git_diff', 'grep', 'read_file', 'run_shell'])
+    expect(names).toEqual(['Bash', 'GitDiff', 'Grep', 'Read'])
 
     // And the property behind the list, so a future addition is judged rather than merely noticed:
     // the reviewer reads a diff and reports on it. Anything that mutates the tree or delegates
     // authority onward is not part of that job.
-    for (const forbidden of ['apply_patch', 'edit_file', 'delegate_to_team', 'interactive_shell']) {
+    for (const forbidden of ['ApplyPatch', 'Edit', 'delegate_to_team', 'interactive_shell']) {
       expect(
         names,
         `the reviewer was handed "${forbidden}" — it reads a diff and reports; a tool that mutates ` +
@@ -591,12 +591,12 @@ describe('path 3 — buildRoleAgent composes a delegated team member', () => {
   }
 
   it('test_a_role_receives_only_the_tools_its_definition_declares', async () => {
-    // A role's tool list is its authority. `explorer` reads; if it silently gained `run_shell` or
-    // `apply_patch`, the read-only half of the sequential team would stop being read-only and the
+    // A role's tool list is its authority. `explorer` reads; if it silently gained `Bash` or
+    // `ApplyPatch`, the read-only half of the sequential team would stop being read-only and the
     // approval the parent showed for `delegate_to_team` would have covered more than it said.
     const explorer = await buildRole('explorer', { subagents: true })
 
-    expect(explorer?.tools.map((t) => t.name).sort()).toEqual(['grep', 'list_dir', 'read_file'])
+    expect(explorer?.tools.map((t) => t.name).sort()).toEqual(['Glob', 'Grep', 'Read'])
   })
 
   it('test_a_role_is_confined_to_the_directory_the_parent_resolved', async () => {
@@ -617,7 +617,7 @@ describe('path 3 — buildRoleAgent composes a delegated team member', () => {
     // the untrusted repository, so nothing in that repository chooses the member's model, effort or
     // sandbox flag.
     const { buildRoleAgent } = await import('../src/delegation/roles.js')
-    operatorRoles = { explorer: { tools: ['read_file'] } }
+    operatorRoles = { explorer: { tools: ['Read'] } }
 
     try {
       await expect(

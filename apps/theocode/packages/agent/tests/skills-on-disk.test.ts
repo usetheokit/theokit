@@ -82,6 +82,7 @@ describe('#67 — declared against what is on disk', () => {
       declaredUserOnlySoNotLoaded: [],
       // The foreign root is reported now; these fixtures put nothing under `.claude/skills/`.
       foreignRootSkills: [],
+      bundledSkills: [],
     })
   })
 
@@ -145,6 +146,7 @@ describe('#67 — declared against what is on disk', () => {
       declaredUserOnlySoNotLoaded: [],
       // The foreign root is reported now; these fixtures put nothing under `.claude/skills/`.
       foreignRootSkills: [],
+      bundledSkills: [],
     })
   })
 
@@ -212,6 +214,7 @@ describe('#67 — declared against what is on disk', () => {
       declaredUserOnlySoNotLoaded: [],
       // The foreign root is reported now; these fixtures put nothing under `.claude/skills/`.
       foreignRootSkills: [],
+      bundledSkills: [],
     })
   })
 })

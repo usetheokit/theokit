@@ -146,14 +146,14 @@ describe('B-044 — a PostToolUse hook receives what the tool was actually calle
 
     await handlers.transform_tool_result?.(
       [{ toolUseId: 'call-1', content: 'the result' }],
-      ctxTurn({ toolCalls: [{ id: 'call-1', name: 'run_shell', args: { command: 'rm -rf /' } }] }),
+      ctxTurn({ toolCalls: [{ id: 'call-1', name: 'Bash', args: { command: 'rm -rf /' } }] }),
     )
 
     const payload = JSON.parse(readFileSync(out, 'utf8')) as {
       name: string
       args: Record<string, unknown>
     }
-    expect(payload.name).toBe('run_shell')
+    expect(payload.name).toBe('Bash')
     expect(payload.args, 'the hook was told nothing about what the tool was called with').toEqual({
       command: 'rm -rf /',
     })
@@ -174,11 +174,11 @@ describe('B-055 — a hook veto reaches the surface', () => {
       onVeto: (v) => seen.push(v),
     })
 
-    const decision = await handlers.pre_tool_call?.({ name: 'run_shell', args: {} } as never)
+    const decision = await handlers.pre_tool_call?.({ name: 'Bash', args: {} } as never)
 
     expect(decision, 'the hook did not block').toMatchObject({ block: true })
     expect(seen, 'the veto blocked the call and told nobody').toHaveLength(1)
-    expect(seen[0]?.tool).toBe('run_shell')
+    expect(seen[0]?.tool).toBe('Bash')
     expect(seen[0]?.reason.length).toBeGreaterThan(0)
   })
 
@@ -192,7 +192,7 @@ describe('B-055 — a hook veto reaches the surface', () => {
       onVeto: (v) => seen.push(v),
     })
 
-    await handlers.pre_tool_call?.({ name: 'run_shell', args: {} } as never)
+    await handlers.pre_tool_call?.({ name: 'Bash', args: {} } as never)
 
     expect(seen).toEqual([])
   })

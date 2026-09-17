@@ -2,7 +2,7 @@ import { SubAgent } from '@theokit/agents'
 
 import type { ToolRegistry } from '../tools/index.js'
 
-const ANALYST_TOOLS = ['read_file', 'list_dir', 'grep'] as const
+const ANALYST_TOOLS = ['Read', 'Glob', 'Grep'] as const
 
 /**
  * The analyst's SPEC, separated from its construction so it can be asserted.
@@ -26,7 +26,7 @@ export function analystSpec(parentModel: string, registry: ToolRegistry) {
       'style sub-questions so the main thread stays focused.',
     instructions:
       'You are a focused code analyst. Answer the delegated question by READING the relevant files with ' +
-      'your tools (read_file / list_dir / grep) — never guess. Return a concise, grounded summary with ' +
+      'your tools (Read / Glob / Grep) — never guess. Return a concise, grounded summary with ' +
       'concrete evidence (file paths, names, counts). You cannot edit files or run commands.',
     model: parentModel,
     tools: registry.resolve([...ANALYST_TOOLS]),
@@ -39,7 +39,7 @@ export function analystSpec(parentModel: string, registry: ToolRegistry) {
     //
     // Safe here in a way it would not be for a role that executes: `ANALYST_TOOLS` holds three read
     // tools and no shell of any kind, so nothing this agent was granted travels under this name. The
-    // sibling `roles.ts` withholds the same builtin and keeps `run_shell`, which is this product's
+    // sibling `roles.ts` withholds the same builtin and keeps `Bash`, which is this product's
     // own tool under a different name.
     withheldBuiltinTools: ['shell' as const],
     maxDelegationDepth: 2,

@@ -46,6 +46,17 @@ const SETTINGS_SCHEMA = z.looseObject({
   /** Environment variables for the session. */
   env: z.record(z.string(), z.string()).optional(),
   /**
+   * #736 — the model an operator chose. HONOURED: this package's consumers carry a `model` of their
+   * own, so a key written here names something they can act on, and dropping it published a control
+   * that did nothing.
+   */
+  model: z.string().optional(),
+  /**
+   * #736 — how long a session transcript is kept. HONOURED for the same reason: there is a session
+   * GC here with a collection window, so the number has somewhere to land.
+   */
+  cleanupPeriodDays: z.number().optional(),
+  /**
    * Tool permissions, as `settings-permissions.ts` translates them into `PermissionRule[]`.
    *
    * Typed here rather than left to the passthrough because the passthrough yields `unknown`, and a
@@ -61,6 +72,67 @@ const SETTINGS_SCHEMA = z.looseObject({
     .loose()
     .optional(),
 })
+
+/**
+ * What this package does with each `.claude/settings.json` key its diagnostics name, and why.
+ *
+ * #736 — the issue's ask in its own words: "Decide each documented key: honoured, or explicitly
+ * unsupported with the reason." Reporting a key as "not implemented here" says the code does not act
+ * on it. It does not say whether that is a REFUSAL or an OMISSION, and an author reading it cannot
+ * tell whether to stop writing the key or to wait for it — the accepted-and-ignored failure one step
+ * removed, arriving through the diagnostic instead of through the loader.
+ *
+ * Each verdict is decided on what exists HERE, never on what the reference documents. Exported
+ * because a decision nobody can read is not a decision.
+ */
+export const FOREIGN_KEY_DECISIONS: Readonly<
+  Record<string, { readonly verdict: 'honoured' | 'refused'; readonly because: string }>
+> = {
+  permissions: {
+    verdict: 'honoured',
+    because:
+      'translated into PermissionRule[] and enforced by a pre_tool_call plugin, with denies ordered ahead of allows',
+  },
+  hooks: {
+    verdict: 'honoured',
+    because:
+      'granted per surface, and withheld entirely by a consumer that gates them, because a hook executes shell from a file the repository ships',
+  },
+  outputStyle: {
+    verdict: 'honoured',
+    because: 'read by loadSettings and resolved against .claude/output-styles/ by loadOutputStyle',
+  },
+  model: {
+    verdict: 'honoured',
+    because:
+      'this package has a model of its own for the run to select, so a key written here names something the code can act on',
+  },
+  cleanupPeriodDays: {
+    verdict: 'honoured',
+    because:
+      'a consumer here keeps session transcripts and collects them on a window, so the number has somewhere to land',
+  },
+  env: {
+    verdict: 'refused',
+    because:
+      'an environment variable is not inert: NODE_OPTIONS --require runs a file before the program does, and the directory usually arrives with the clone, so applying it would let a repository choose what runs inside every subprocess',
+  },
+  statusLine: {
+    verdict: 'refused',
+    because:
+      'it is a command spec rather than a value, so honouring it would execute a shell command written in a file the repository ships — the same trust decision env is refused for, with a nicer name',
+  },
+  autoMemoryEnabled: {
+    verdict: 'refused',
+    because:
+      'it toggles a per-project transcript memory this package does not have, and a flag that switches off something absent reads as a control in force while governing nothing',
+  },
+  workflows: {
+    verdict: 'refused',
+    because:
+      'a workflow file is code, and executing JavaScript found under a caller-supplied directory is a trust decision that belongs to the host rather than to this library',
+  },
+}
 
 export type Settings = z.infer<typeof SETTINGS_SCHEMA>
 

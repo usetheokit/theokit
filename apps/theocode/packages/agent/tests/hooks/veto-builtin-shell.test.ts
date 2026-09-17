@@ -48,7 +48,7 @@ describe('withBuiltinShellVeto', () => {
 
     const result = await call(
       withBuiltinShellVeto({ pre_tool_call: previous } as Handlers),
-      'run_shell',
+      'Bash',
     )
 
     expect(previous).toHaveBeenCalled()
@@ -56,7 +56,7 @@ describe('withBuiltinShellVeto', () => {
   })
 
   it('allows_another_tool_when_there_is_no_previous_handler', async () => {
-    const result = await call(withBuiltinShellVeto({} as Handlers), 'run_shell')
+    const result = await call(withBuiltinShellVeto({} as Handlers), 'Bash')
 
     expect(result).toBeUndefined()
   })

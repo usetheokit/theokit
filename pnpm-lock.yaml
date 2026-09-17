@@ -270,6 +270,9 @@ importers:
       '@theocode/shared':
         specifier: workspace:*
         version: link:../shared
+      '@theocode/tui':
+        specifier: workspace:*
+        version: link:../tui
       '@theokit/agents':
         specifier: workspace:*
         version: link:../../../../packages/agents

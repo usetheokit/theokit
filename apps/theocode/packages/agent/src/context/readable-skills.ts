@@ -6,6 +6,7 @@ import { SkillReadTool } from '@theokit/sdk'
 import type { CustomTool, InlineSkill } from '@theokit/sdk'
 
 import { DEFAULT_HOME_DIR } from '../config/home-dir.js'
+import { bundleSkillRoots } from './bundle-skill-roots.js'
 
 /**
  * Every skill whose BODY this run can hand to the model, for `skill_read`.
@@ -48,6 +49,16 @@ export async function readableSkills(
     join(cwd, DEFAULT_HOME_DIR, 'skills'),
     join(cwd, '.claude', 'skills'),
     join(home, DEFAULT_HOME_DIR, 'skills'),
+    // #826 — the skills a plugin bundle ships. Two files in this product already walk
+    // `<root>/plugins/<bundle>/skills/<name>/SKILL.md` and call it deliberate: `skills-on-disk.ts`
+    // counts such a skill as present, and `foreign-surfaces-on-disk.ts` cites that walk as the reason
+    // `plugins` needs no row of its own. Neither made one READABLE — this list is what `skill_read`
+    // can load, and no bundle was in it.
+    //
+    // Measured on the built binary 2026-09-17, after the permission regression stopped masking it:
+    // `skill_read("bundled")` answered `Skill "bundled" not found. Available skills: greet.` for a
+    // file sitting beside the one it did find.
+    ...bundleSkillRoots(cwd),
   ]
   const byName = new Map<string, InlineSkill>()
   for (const root of roots) {

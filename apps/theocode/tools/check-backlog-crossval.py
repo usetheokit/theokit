@@ -240,7 +240,26 @@ def exit_code(report):
 
 
 def main():
-    text = pathlib.Path("BACKLOG.md").read_text(encoding="utf-8")
+    # The registry is a personal maintenance record and is NEVER versioned, so a CI runner and a
+    # fresh clone both legitimately lack it. Reading it unguarded turned that normal state into an
+    # unhandled FileNotFoundError, which is a crash reporting a policy rather than a defect.
+    #
+    # Absent is reported and PASSES: there is nothing to cross-validate, and failing would make every
+    # runner red over a file it is not supposed to have. The check still does its work wherever the
+    # registry exists, which is the machine that maintains it.
+    #
+    # Searched from this tool's directory UPWARDS, because `pnpm --filter` runs it with cwd set to the
+    # package while the registry lives at the root of the governed scope.
+    registry = None
+    for parent in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]:
+        candidate = parent / "BACKLOG.md"
+        if candidate.is_file():
+            registry = candidate
+            break
+    if registry is None:
+        print("BACKLOG.md: not present — nothing to cross-validate (it is never versioned)")
+        return 0
+    text = registry.read_text(encoding="utf-8")
 
     def git(*args):
         return subprocess.run(args, capture_output=True, text=True).stdout

@@ -19,7 +19,7 @@ import {
  */
 describe('every approval card carries the key hint', () => {
   it('test_a_known_tool_gets_the_hint', () => {
-    expect(formatApproval({ toolName: 'run_shell', input: { command: 'ls' } }).hint).toBe(
+    expect(formatApproval({ toolName: 'Bash', input: { command: 'ls' } }).hint).toBe(
       APPROVAL_KEY_HINT,
     )
   })
@@ -42,7 +42,7 @@ describe('every approval card carries the key hint', () => {
 
   it('test_the_known_label_is_not_lost_when_the_hint_is_added', () => {
     // Anti-vacuity: spreading the hint over the label object could have replaced it.
-    const card = formatApproval({ toolName: 'run_shell', input: { command: 'echo hi' } })
+    const card = formatApproval({ toolName: 'Bash', input: { command: 'echo hi' } })
 
     expect(card.toolType).toBe('Run command')
     expect(card.command).toBe('echo hi')
@@ -71,7 +71,7 @@ describe('approvalChoices', () => {
   })
 
   it('test_the_approval_card_carries_them', () => {
-    const card = formatApproval({ toolName: 'run_shell', input: { command: 'ls' } })
+    const card = formatApproval({ toolName: 'Bash', input: { command: 'ls' } })
 
     expect(card.choices.map((c) => c.label)).not.toEqual(['Yes', 'No'])
     expect(card.choices.at(-1)?.value).toBe('no')
@@ -84,7 +84,7 @@ describe('approvalChoices', () => {
  * Measured in the TUI by rejecting a real approval and dumping the event the renderer receives:
  *
  *     {"kind":"tool","name":"Ran echo probe2","status":"failed",
- *      "output":"{\"stdout\":\"\",\"stderr\":\"Tool 'run_shell' denied by human approver\",
+ *      "output":"{\"stdout\":\"\",\"stderr\":\"Tool 'Bash' denied by human approver\",
  *                \"exitCode\":126}"}
  *
  * Every header here reads `failed` as "not active" and prints the past tense, so the transcript
@@ -107,7 +107,7 @@ const denied = (name: string, input: Record<string, unknown>) =>
 
 describe('a rejected tool call is not reported as one that ran', () => {
   it('test_the_header_does_not_claim_the_command_ran', () => {
-    const header = formatToolHeader(denied('run_shell', { command: 'echo probe2' }))
+    const header = formatToolHeader(denied('Bash', { command: 'echo probe2' }))
 
     expect(header?.name, 'the transcript claims a rejected command ran').not.toMatch(/^Ran /)
     expect(header?.name).toBe('Rejected echo probe2')
@@ -116,14 +116,14 @@ describe('a rejected tool call is not reported as one that ran', () => {
   it('test_it_says_nothing_changed', () => {
     // The question a user asks after rejecting is "did anything happen?". A header alone leaves it
     // open; the summary answers it.
-    expect(formatToolHeader(denied('run_shell', { command: 'rm -rf /' }))?.summary).toContain(
+    expect(formatToolHeader(denied('Bash', { command: 'rm -rf /' }))?.summary).toContain(
       'nothing ran',
     )
   })
 
   it('test_a_write_tool_is_named_by_what_it_would_have_done', () => {
-    expect(formatToolHeader(denied('apply_patch', {}))?.name).toBe('Rejected the patch')
-    expect(formatToolHeader(denied('edit_file', { path: 'a.ts' }))?.name).toBe('Rejected the edit')
+    expect(formatToolHeader(denied('ApplyPatch', {}))?.name).toBe('Rejected the patch')
+    expect(formatToolHeader(denied('Edit', { path: 'a.ts' }))?.name).toBe('Rejected the edit')
   })
 
   it('test_it_recognises_the_body_the_RESULT_formatter_already_produced', () => {
@@ -133,7 +133,7 @@ describe('a rejected tool call is not reported as one that ran', () => {
     // the symptom was a body reading `rejected — nothing ran` under a header saying `Ran echo …`.
     const afterResultFormatter = {
       kind: 'tool',
-      name: 'run_shell',
+      name: 'Bash',
       status: 'failed',
       input: { command: 'echo parity-final' },
       output: REJECTED_BODY,
@@ -147,7 +147,7 @@ describe('a rejected tool call is not reported as one that ran', () => {
     // which is the opposite mistake and just as misleading.
     const ran = {
       kind: 'tool',
-      name: 'run_shell',
+      name: 'Bash',
       status: 'failed',
       input: { command: 'false' },
       output: JSON.stringify({ stdout: '', stderr: '', exit_code: 1 }),
@@ -160,7 +160,7 @@ describe('a rejected tool call is not reported as one that ran', () => {
   it('test_a_running_call_still_reads_as_running', () => {
     const running = {
       kind: 'tool',
-      name: 'run_shell',
+      name: 'Bash',
       status: 'running',
       input: { command: 'sleep 1' },
     } as never
@@ -172,7 +172,7 @@ describe('a rejected tool call is not reported as one that ran', () => {
 /**
  * The BODY of a rejected call, which used to reach the user as raw JSON:
  *
- *     ⎿ {"stdout":"","stderr":"Tool 'run_shell' denied by human approver","exitCode":126}
+ *     ⎿ {"stdout":"","stderr":"Tool 'Bash' denied by human approver","exitCode":126}
  *
  * Not a formatting oversight here — `formatToolResult` was never CALLED on the failure path.
  * `toToolEvent` gated the override on a field an errored part does not populate
@@ -180,11 +180,11 @@ describe('a rejected tool call is not reported as one that ran', () => {
  */
 describe('the body of a rejected call', () => {
   const result = (raw: unknown) =>
-    formatToolResult({ name: 'run_shell', status: 'failed' } as never, raw)?.output
+    formatToolResult({ name: 'Bash', status: 'failed' } as never, raw)?.output
 
   it('test_a_rejection_reads_as_a_rejection_not_as_a_shell_result', () => {
     expect(
-      result(JSON.stringify({ stdout: '', stderr: "Tool 'run_shell' denied by human approver", exitCode: 126 })),
+      result(JSON.stringify({ stdout: '', stderr: "Tool 'Bash' denied by human approver", exitCode: 126 })),
     ).toBe('rejected — nothing ran')
   })
 
@@ -204,10 +204,10 @@ describe('the body of a rejected call', () => {
 /**
  * The toolkit's default table is NOT composed in — measured, then reverted.
  *
- * It was added as a fallback so `git_diff`, `grep`, `list_dir` and `read_file` would stop rendering
+ * It was added as a fallback so `GitDiff`, `Grep`, `Glob` and `Read` would stop rendering
  * as raw snake_case names. All four are in `DEFAULT_EXPLORE_TOOLS`, and `ToolHeaderFormatter`'s
  * docblock says returning a name for such a tool opts it OUT of the explored collapse. Measured on
- * three consecutive `read_file` calls: `explored` (one block) became three separate cards.
+ * three consecutive `Read` calls: `explored` (one block) became three separate cards.
  *
  * The grouping is the Claude Code shape this product is chasing, so the fallback was a pure loss.
  * These tests pin the trade in both directions, because the argument for adding it back is
@@ -215,7 +215,7 @@ describe('the body of a rejected call', () => {
  */
 describe('the explored grouping is worth more than a verb on a card', () => {
   it('test_an_explored_tool_is_left_unnamed_so_its_run_can_collapse', () => {
-    for (const tool of ['read_file', 'list_dir', 'grep', 'git_diff']) {
+    for (const tool of ['Read', 'Glob', 'Grep', 'GitDiff']) {
       expect(
         formatToolHeader({ name: tool, status: 'completed', input: {} } as never),
         `${tool} is in DEFAULT_EXPLORE_TOOLS — naming it breaks the collapse`,
@@ -228,13 +228,13 @@ describe('the explored grouping is worth more than a verb on a card', () => {
     // above and delete every header in the product.
     expect(
       formatToolHeader({
-        name: 'run_shell',
+        name: 'Bash',
         status: 'running',
         input: { command: 'echo hi' },
       } as never)?.name,
     ).toBe('Running echo hi')
     expect(
-      formatToolHeader({ name: 'view_image', status: 'completed', input: { path: 'a.png' } } as never)
+      formatToolHeader({ name: 'ViewImage', status: 'completed', input: { path: 'a.png' } } as never)
         ?.name,
     ).toBe('Viewed a.png')
   })

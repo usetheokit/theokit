@@ -32,6 +32,13 @@
  * contributed which field, inspectable as data) and `CapabilityConflictError` instead of last-wins
  * when two members declare the same scalar differently.
  */
+import { approvalModeFor } from '../config/sandbox-policy.js'
+import type { ApprovalPolicy } from '../config/config.js'
+import { createPermissionsPlugin } from '@theokit/agents'
+import type { PermissionRule } from '@theokit/sdk'
+import type { PermissionsPluginOptions } from '@theokit/agents'
+import { settingsReport } from '../config/settings-load.js'
+import type { Plugin } from '@theokit/agents'
 import {
   CapabilityPreset,
   ModelCapability,
@@ -98,7 +105,7 @@ export function declareAgent(
 }
 
 /** The tool names the reviewer holds. Its job is to read a diff and report on it. */
-export const REVIEWER_TOOLS = ['git_diff', 'read_file', 'grep', 'run_shell'] as const
+export const REVIEWER_TOOLS = ['GitDiff', 'Read', 'Grep', 'Bash'] as const
 
 /**
  * The reviewer, as a list.
@@ -109,4 +116,101 @@ export const REVIEWER_TOOLS = ['git_diff', 'read_file', 'grep', 'run_shell'] as 
  */
 export function reviewerShape(ctx: SpecContext): AgentShape {
   return declareAgent('reviewer', ctx, [toolsNamed(ctx.registry, REVIEWER_TOOLS)])
+}
+
+/**
+ * The `permissions` policy of every settings layer, as plugins the run carries.
+ *
+ * ## Why an array
+ *
+ * `createPermissionsPlugin` returns `undefined` when nothing was configured, and the caller spreads
+ * whatever comes back. An array of zero or one keeps "no policy was written" different from "a policy
+ * that permits everything" without a conditional at the composition point — which is also what keeps
+ * `baseAgent` under its complexity ceiling.
+ *
+ * ## What this joins
+ *
+ * `translateSettings` has rendered the block into `PermissionRule[]` since `@theokit/agents@14.0.0`,
+ * `reportOne` used to discard the result, and nothing built an engine. Measured 2026-09-17 beside
+ * Claude Code on byte-identical configuration: it refused a `Read(./off-limits.txt)` deny rule and
+ * this product answered with the file's contents.
+ *
+ * ## The link that is NOT yet proven
+ *
+ * The rules reach the plugin with the right tool name and the right argument — verified end to end on
+ * the real binary. What has not been observed is the SDK's `pre_tool_call` seam vetoing a CUSTOM tool:
+ * a `deny` on `Read` was carried and the call still returned `{"ok":true,...}`. That last joint lives
+ * in `@theokit/sdk`, which is published from another repository, and is tracked on #736 with the
+ * measurement. Nothing here pretends otherwise.
+ */
+/**
+ * What an `ask` verdict resolves to for THIS run, derived from the approval policy the operator set.
+ *
+ * #826 — `ask` is the verdict `PermissionEngine` returns for a tool no rule matches, and it is the
+ * one verdict the rules do not answer. Leaving it to the SDK's default made it a hard block, so the
+ * first `permissions` block an operator wrote killed every tool they had not enumerated.
+ *
+ * Derived rather than chosen, and the derivation is the existing one: `approvalModeFor` already maps
+ * the policy to a mode, and `full-auto` is precisely "the operator said do not ask me". A second
+ * mapping here would be a second source of truth for one decision.
+ *
+ * `suggest` refuses, and says what would change it. Routing an unmatched tool to the interactive
+ * approval card instead is the better answer and is NOT what this does: that card is keyed by the
+ * build-time `.approvals({...})` map, and reaching it needs a general asker this composition does not
+ * have. Refusing with a reason an operator can act on is honest; refusing with "requires approval"
+ * was not.
+ */
+function askGateFor(policy: ApprovalPolicy): PermissionsPluginOptions['onAsk'] {
+  if (approvalModeFor(policy) === 'full-auto') return () => ({ behavior: 'allow' })
+  return (toolName) => ({
+    behavior: 'deny',
+    message:
+      `\`${toolName}\` matched no rule in your \`permissions\` block, so it needs a decision, and ` +
+      `approval_policy="${policy}" means that decision is yours. Nothing here can ask you for it. ` +
+      `Add \`${toolName}\` to \`permissions.allow\`, or set approval_policy="never" to let ` +
+      `unmatched tools run.`,
+  })
+}
+
+/**
+ * Every layer's permission rules, ordered so an explicit `deny` is reached first.
+ *
+ * #736 — `PermissionEngine` is FIRST-MATCH-WINS. Measured directly against the SDK: an engine built
+ * from `[allow Read, deny Read]` evaluates `allow`, and the same pair reversed evaluates `deny`. So
+ * the order the layers happen to be concatenated in decided whether a refusal held, and nothing was
+ * ordering them.
+ *
+ * Measured on the built binary 2026-09-17: `~/.claude/settings.json` carried `allow: [… "Read" …]`
+ * among forty entries an operator had accumulated, a project `settings.json` carried
+ * `deny: ["Read(./off-limits.txt)"]`, and the file's contents came back. `update_plan` — denied by the
+ * same project file and named in no allow list anywhere — was blocked correctly, which is what made
+ * this look like a per-tool defect for most of the investigation.
+ *
+ * Deny-first rather than a layer precedence, and it is right in BOTH directions: a repository must
+ * not grant itself what the operator refused, and an operator's broad convenience allow must not
+ * silently disarm a refusal a repository wrote about its own files. It is the asymmetry
+ * `security-floor.ts` already encodes for `sandbox_mode` and `approval_policy` — a layer may harden,
+ * never loosen — applied to the rule language.
+ *
+ * Exported because this is the assertion that matters and it has no other seam: the plugin closes
+ * over the engine, and an engine does not say what order it was built in.
+ */
+export function orderedPermissionRules(cwd: string, operatorHome: string): readonly PermissionRule[] {
+  const rules = settingsReport({ projectDir: cwd, userDir: operatorHome }).flatMap(
+    (r) => r.permissionRules,
+  )
+  // A stable partition, not a sort: within each action the layer order is the one the settings files
+  // declared, and reordering rules that agree on the verdict would change which SPECIFIER matched
+  // without changing the decision — a difference nobody wrote down and nobody could predict.
+  return [...rules.filter((r) => r.action === 'deny'), ...rules.filter((r) => r.action !== 'deny')]
+}
+
+
+export function permissionsPluginsFor(
+  cwd: string,
+  operatorHome: string,
+  approvalPolicy: ApprovalPolicy,
+): readonly Plugin[] {
+  const plugin = createPermissionsPlugin(orderedPermissionRules(cwd, operatorHome), { onAsk: askGateFor(approvalPolicy) })
+  return plugin === undefined ? [] : [plugin]
 }

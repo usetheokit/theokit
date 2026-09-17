@@ -41,11 +41,11 @@ describe('B-006 — full-auto requires an enforced sandbox', () => {
 
 describe('B-006 — the other modes are unchanged', () => {
   it('test_suggest_never_auto_approves', () => {
-    expect(shouldAutoApprove('suggest', 'apply_patch', ENFORCED)).toBe(false)
+    expect(shouldAutoApprove('suggest', 'ApplyPatch', ENFORCED)).toBe(false)
   })
 
   it('test_auto_edit_still_covers_edits_under_an_enforced_sandbox', () => {
-    expect(shouldAutoApprove('auto-edit', 'apply_patch', ENFORCED)).toBe(true)
+    expect(shouldAutoApprove('auto-edit', 'ApplyPatch', ENFORCED)).toBe(true)
   })
 
   it('test_auto_edit_does_not_auto_approve_a_shell_command', () => {
@@ -53,10 +53,10 @@ describe('B-006 — the other modes are unchanged', () => {
   })
 
   it('test_auto_edit_of_a_file_is_allowed_without_a_kernel_sandbox', () => {
-    // Deliberate: `apply_patch` is confined by the tool's own write scope, not by the kernel, and
+    // Deliberate: `ApplyPatch` is confined by the tool's own write scope, not by the kernel, and
     // the user opted into edits specifically. Widening the refusal here would be a different
     // decision than the one the headless surface made, which is only about running commands blind.
-    expect(shouldAutoApprove('auto-edit', 'apply_patch', NOT_ENFORCED)).toBe(true)
+    expect(shouldAutoApprove('auto-edit', 'ApplyPatch', NOT_ENFORCED)).toBe(true)
   })
 })
 
@@ -64,9 +64,9 @@ describe('B-006 — the other modes are unchanged', () => {
  * The gate this product chose, pinned against the framework's wider catalog.
  *
  * `shouldAutoApprove` is now `@theokit/agents`' rule with our set passed in. The framework also
- * exports `WRITE_SCOPED_TOOLS` — `apply_patch`, `edit_file`, `write_file` — as a catalog of which
+ * exports `WRITE_SCOPED_TOOLS` — `ApplyPatch`, `Edit`, `write_file` — as a catalog of which
  * SDK tools bound their own writes. Adopting it here would widen an approval gate: this surface
- * REGISTERS `edit_file` (`agent/chat.ts:272-273`) and deliberately does not auto-approve it.
+ * REGISTERS `Edit` (`agent/chat.ts:272-273`) and deliberately does not auto-approve it.
  *
  * Written because the migration was mutation-tested and the suite did not catch it: swapping our
  * one-tool set for the framework's three left all seven existing tests green. A gate that can be
@@ -77,8 +77,8 @@ describe('the auto-edit set is this product', () => {
 
   it('test_edit_file_still_requires_a_human_in_auto_edit', () => {
     // The tool the framework's catalog would have un-gated. It is registered and model-callable.
-    expect(shouldAutoApprove('auto-edit', 'edit_file')).toBe(false)
-    expect(shouldAutoApprove('auto-edit', 'edit_file', ENFORCED)).toBe(false)
+    expect(shouldAutoApprove('auto-edit', 'Edit')).toBe(false)
+    expect(shouldAutoApprove('auto-edit', 'Edit', ENFORCED)).toBe(false)
   })
 
   it('test_write_file_still_requires_a_human_in_auto_edit', () => {
@@ -87,6 +87,6 @@ describe('the auto-edit set is this product', () => {
 
   it('test_apply_patch_is_the_one_that_auto_approves', () => {
     // Anti-vacuity floor: without this, a policy of the empty set would satisfy both cases above.
-    expect(shouldAutoApprove('auto-edit', 'apply_patch')).toBe(true)
+    expect(shouldAutoApprove('auto-edit', 'ApplyPatch')).toBe(true)
   })
 })

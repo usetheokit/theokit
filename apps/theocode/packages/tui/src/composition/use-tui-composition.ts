@@ -329,6 +329,7 @@ function conversationProps(c: {
     lastUsage: c.lastUsage,
     agentError: c.agent.error,
     credentialError: c.credentialError,
+    configNotice: c.screen.configNotice,
     panel: c.screen.panel,
     showUsage: c.screen.showUsage,
     reviewResult: c.screen.reviewResult,

@@ -118,16 +118,16 @@ describe('B-008 — which surface the conversation slot draws', () => {
     const state = settled({
       pendingApproval: {
         approvalId: 'a1',
-        toolName: 'run_shell',
+        toolName: 'Bash',
         input: { command: 'ls' },
       } as never,
     })
     const selected = selectSurface(INPUT_LAYERS, state)
     expect(selected.layer).toBe('approval')
     const { lastFrame } = render(<>{selected.render()}</>)
-    // Measured, not guessed: the frame says `Run command` and `ls`, never the raw `run_shell` —
+    // Measured, not guessed: the frame says `Run command` and `ls`, never the raw `Bash` —
     // `formatApproval` turns the tool name into the sentence a human reads. The first draft of
-    // this assertion looked for `run_shell` and failed, which is the whole reason one test mounts.
+    // this assertion looked for `Bash` and failed, which is the whole reason one test mounts.
     const frame = lastFrame() ?? ''
     expect(frame).toContain('Run command')
     expect(frame).toContain('ls')

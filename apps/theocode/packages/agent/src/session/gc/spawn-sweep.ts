@@ -38,6 +38,13 @@ export interface SweepCommandInput {
   readonly execPath: string
   /** `process.argv[1]` — whatever entry point started this process, bundle or `tsx` source. */
   readonly script: string | undefined
+  /**
+   * #736 — the window the operator asked for, from `cleanupPeriodDays`.
+   *
+   * Optional, and absent means the child keeps `DEFAULT_WINDOW_DAYS`. A default supplied HERE would
+   * be a second place deciding the same number, and the two would disagree the first time one moved.
+   */
+  readonly maxAgeDays?: number
 }
 
 export interface SweepCommand {
@@ -107,6 +114,9 @@ export function buildSweepCommand(input: SweepCommandInput): SweepCommand {
       'gc',
       '--all-projects',
       ...(input.apply ? ['--apply'] : []),
+        ...(input.maxAgeDays === undefined
+          ? []
+          : ['--max-age-days', String(input.maxAgeDays)]),
     ],
   }
 }

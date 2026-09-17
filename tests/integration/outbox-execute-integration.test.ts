@@ -5,6 +5,7 @@ import type { AddressInfo } from 'node:net'
 import { executeRoute } from '../../packages/theo/src/server/http/execute.js'
 import { InMemoryJobBackend } from '../../packages/theo/src/server/jobs/job-backend-memory.js'
 import type { ServerRouteNode } from '../../packages/theo/src/server/scan/match.js'
+import { localUrl, rememberFromAddress } from './helpers/local-url.js'
 
 interface MockBackend extends InMemoryJobBackend {
   // Test-only spy hook
@@ -42,7 +43,7 @@ let backend: MockBackend
 let port: number
 
 const fetchTest = async (path: string, init?: RequestInit): Promise<Response> => {
-  return fetch(`http://localhost:${port}${path}`, init)
+  return fetch(localUrl(port, path), init)
 }
 
 beforeEach(() => {
@@ -80,6 +81,8 @@ const startServer = (handler: (ctx: Record<string, unknown>) => unknown): Promis
     })
     server.listen(0, () => {
       port = (server.address() as AddressInfo).port
+      // #830 — the family the listener actually bound, so every fetch below reaches it.
+      rememberFromAddress(port, (server.address() as AddressInfo).family)
       resolveStart()
     })
   })
@@ -177,6 +180,8 @@ describe('outbox + ctx.queue integration via executeRoute (T2.1)', () => {
     await new Promise<void>((r) => {
       server.listen(0, () => {
         port = (server.address() as AddressInfo).port
+        // #830 — the family the listener actually bound, so every fetch below reaches it.
+        rememberFromAddress(port, (server.address() as AddressInfo).family)
         r()
       })
     })
