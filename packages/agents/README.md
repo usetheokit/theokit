@@ -292,6 +292,13 @@ which is a worse failure than never having documented it.
   Those are the SDK's, and a PR that adds one here is rejected on sight.
 - It does **not** depend on the `theokit` web framework. The dependency runs the other way.
 - Web Standards over Node APIs inside `src/` — `Request`/`Response`, `fetch`, `crypto.randomUUID`.
+  Two `node:crypto` imports remain and both are measured rather than overlooked: `createHash` in
+  `packages/agents/src/hooks/hook-fingerprint.ts`, because the Web equivalent is async and this
+  function is not, and `randomBytes` in `packages/agents/src/hooks/hook-spec.ts`, where
+  `getRandomValues` would buy conformance at the cost of a hand-written hex conversion. A third
+  was removed on 2026-09-17: `randomUUID` had no such defence — the global is the API this line
+  names, and three other files in the package were already using it.
+  File reads keep `node:fs`: there is no Web Standard to prefer.
   Node APIs live in adapters.
 
 ## Who decides policy
