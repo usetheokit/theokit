@@ -481,12 +481,14 @@ function unguardedStream(
     source = queue.drain()
   }
 
-  // M4 @Checkpoint: emit `checkpoint_saved` (→ `data-checkpoint`) ONLY when the agent opted into a
-  // durable checkpoint (`@Checkpoint({ storage: 'filesystem' })`) — the theokit-side signal that the
-  // client may resume. SDK 4.0 (SE40) persists EVERY session to the native `.jsonl` transcript, so
-  // resume is available under the hood; this gate keeps the pre-4.0 emit contract unchanged (G10:
-  // don't retroactively promise a resume handle the agent never asked to advertise).
-  const durableCheckpoint = compiled.checkpoint?.storage === 'filesystem'
-  const events = durableCheckpoint ? appendCheckpointSaved(source, input.sessionId) : source
+  // #724 — emit `checkpoint_saved` (→ `data-checkpoint`) only when the agent asked for the signal.
+  //
+  // This gated on `storage === 'filesystem'`, and the comment beside it already said why that was
+  // the wrong question: the SDK persists EVERY session to its `.jsonl` transcript, so resume is
+  // available under the hood and the storage value selected nothing. The gate is kept — it is the
+  // pre-4.0 emit contract, and promising a resume handle an agent never asked to advertise would be
+  // a retroactive claim — but it now reads the field that says what it means.
+  const resumeSignal = compiled.checkpoint?.resumeSignal === true
+  const events = resumeSignal ? appendCheckpointSaved(source, input.sessionId) : source
   return presentUIMessageStream(events, { textId, onError: input.onError })
 }
