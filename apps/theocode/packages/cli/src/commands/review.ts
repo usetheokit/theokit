@@ -8,7 +8,7 @@ export async function reviewCommand(args: ExecReview, shutdown: Shutdown): Promi
   if (approvalRequested) {
     process.stderr.write(
       'ERROR: `-a/--approval` does not apply to `review` mode: the reviewer receives no write tool ' +
-        '(`apply_patch`/`edit_file`), so there is no action to approve. Remove the flag.\n',
+        '(`ApplyPatch`/`Edit`), so there is no action to approve. Remove the flag.\n',
     )
     process.exit(2)
   }

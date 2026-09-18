@@ -33,29 +33,37 @@ const foreign = (raw: unknown) =>
   })
 
 describe('a permissions block is acted on, not ignored', () => {
-  it('keeps reporting that the block does not take effect', () => {
-    // The assertion that was INVERTED for one commit, and the inversion is the lesson.
+  it('test_it_stops_reporting_the_block_as_inert_now_that_the_seam_exists', () => {
+    // This assertion has been INVERTED TWICE, and both inversions are the lesson.
     //
-    // Removing `permissions` from `ignored` made `doctor` stop printing "not implemented here:
-    // permissions" — while a `deny` an operator wrote still gated nothing, because `AgentBuilder`
-    // exposes no seam that carries rules to the engine (measured against the published `.d.ts`:
-    // `approval`, `approvals`, `guardrails`, `hooks`, `settingSources`, and `approval` is a HITL
-    // prompt, not a policy evaluator).
+    // It first asserted that `permissions` was absent from `ignored`. That was wrong: `doctor` stopped
+    // printing "not implemented here: permissions" while a `deny` an operator wrote still gated
+    // nothing, because `AgentBuilder` exposed no seam carrying rules to an engine. A diagnostic that
+    // had become false was strictly worse than the gap it described — the operator went from "I know
+    // this does nothing" to believing a protection was in force. So the key stayed reported, and the
+    // comment said: UNTIL THE SEAM EXISTS.
     //
-    // A diagnostic that had become false is strictly worse than the gap it described: the operator
-    // goes from "I know this does nothing" to believing a protection is in force. So the key stays
-    // reported until the seam exists.
+    // It exists (#736). `createPermissionsPlugin` builds the engine and the run carries it as a
+    // `pre_tool_call` plugin, verified on the built binary: a project deny on a path refuses the read,
+    // and an allowed path under `src/` still reads. So the line became false in the other direction,
+    // and the same argument that kept it now removes it.
+    //
+    // What has NOT changed is `unsupportedPermissions` below — an entry this grammar cannot render is
+    // still named, because the block taking effect says nothing about an entry that never became a
+    // rule.
     const read = foreign({ permissions: { deny: ['Read(./.env)'] } })
 
     expect(
       read.ignored,
-      'doctor would stop warning while the block still gates nothing',
-    ).toContain('permissions')
+      'doctor would tell an operator their deny is inert while it is refusing reads',
+    ).not.toContain('permissions')
   })
 
-  it('renders a deny entry into rules, ready for the seam that does not exist yet', () => {
-    // The half that DOES work. Translating is not enforcing, and this assertion is deliberately
-    // about the rendering alone — claiming more would be the false diagnostic above, in a test.
+  it('renders a deny entry into rules, which is what the engine is built from', () => {
+    // Translating is still not enforcing, and this assertion is still about the rendering alone.
+    // What changed is what happens downstream: `permissionsPluginsFor` orders these rules
+    // deny-first and hands them to an engine. Asserting enforcement HERE would test the
+    // composition from the wrong end — `a-deny-wins-over-any-allow.test.ts` is where that lives.
     const read = foreign({ permissions: { deny: ['Read(./.env)'] } })
 
     expect(read.permissionRules.length).toBeGreaterThan(0)

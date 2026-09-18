@@ -70,6 +70,18 @@ export class McpServersCapability extends FieldCapability<'mcpServers'> {
   readonly name = 'mcp'
   protected readonly field = 'mcpServers' as const
 }
+/**
+ * #825 — `.subagents({...})` → `subagents`, reaching `AgentOptions.agents`.
+ *
+ * A capability rather than builder-only wiring, because `capability-zero-behavior.test.ts` derives
+ * both sides of the waist and demands they agree: a field the builder can set and no capability can
+ * express puts the decorator path one field behind, which is the gap that test exists to pin. It has
+ * made the same demand three times before and been right every time.
+ */
+export class SubagentsCapability extends FieldCapability<'subagents'> {
+  readonly name = 'subagents'
+  protected readonly field = 'subagents' as const
+}
 /** `@Guardrails` → `guardrails`. */
 export class GuardrailsCapability extends FieldCapability<'guardrails'> {
   readonly name = 'guardrails'
@@ -103,13 +115,15 @@ export class CheckpointCapability implements Capability {
   readonly name = 'checkpoint'
   constructor(private readonly options: CompiledAgentOptions['checkpoint']) {}
   apply(draft: CompiledAgentOptionsDraft): void {
-    if (this.options !== undefined && this.options.storage !== 'filesystem') {
-      console.warn(
-        `[THEO_AGENT_CHECKPOINT_STORAGE_METADATA_ONLY] checkpoint({ storage: '${this.options.storage ?? 'memory'}' }) ` +
-          `does NOT resume across requests — only 'filesystem' selects the SDK's durable conversation ` +
-          `store. Use checkpoint({ storage: 'filesystem' }) for cross-request resume.`,
-      )
-    }
+    // #724 — no warning. The one this replaced told an author that `storage: 'filesystem'` "selects
+    // the SDK's durable conversation store", and it selected nothing: the SDK persists every session
+    // regardless, so the value changed only whether an event was emitted. On a pod with no volume it
+    // also named the one storage that is unreachable, so the advice was worse than absent.
+    //
+    // The capability's docstring said such a warning exists because "a declared checkpoint that
+    // silently cannot resume is exactly the kind of no-op this project refuses to ship" — the right
+    // instinct pointed at the wrong half. What could not resume was the OPTION, and the type now says
+    // so instead of a console line at runtime.
     setOnce(draft, 'checkpoint', this.options, this.name)
   }
 }

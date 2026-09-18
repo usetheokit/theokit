@@ -24,6 +24,7 @@ import type { StreamEvent } from './agent-sse-handler.js'
 import type { AgentStreamEvent } from './agent-stream-events.js'
 import { type AgentDefinition, compileAgentDefinition, isAgentDefinition } from './define-agent.js'
 import { createHitlPlugin, type HitlWiring } from './hitl-plugin.js'
+import { TASK_PROGRESS_DATA_PART } from './present-ui-message-stream.js'
 import { presentUIMessageStream, type MaskError } from './present-ui-message-stream.js'
 import { createSdkAgentStream, type RuntimeOverrides } from './sdk-adapter.js'
 
@@ -339,10 +340,13 @@ export function streamAgentUIMessages(
  * visible one and the moderation would create the disclosure it exists to close. The VISIBLE pass is
  * inner; the reasoning pass must not touch a channel the visible one owns.
  *
- * `done.result` and `task_progress.text` are NOT covered here, exactly as they are not in
- * `AgentRunner` — they need a different mechanism (there is one `done` per round, so a pass keyed on
- * it would collapse every round's into one) and are tracked separately. Naming them is what keeps
- * this from claiming a coverage it does not have.
+ * `task_progress.text` IS covered, by a third pass below — #732. It is not a mirror of anything, so
+ * the `done` mechanism does not apply to it and an ordinary pass does.
+ *
+ * `done.result` is not rebuilt here, and that is a measurement rather than an omission: this path does
+ * not carry it onto the wire at all. `AgentRunner` does, and that is where it is rebuilt — from the
+ * round's own moderated deltas, because one `done` per round makes a pass keyed on it collapse every
+ * round's frame into one.
  */
 async function* guardedStream(
   compiled: CompiledAgentOptions,
@@ -358,7 +362,7 @@ async function* guardedStream(
     (delta, replaced) => ({ ...replaced, delta }) as UIMessageChunk,
     (_text, result) => result,
   )
-  yield* moderateOutputStream(
+  const reasoned = moderateOutputStream(
     inner,
     guardrails,
     textPayloadExtractor<UIMessageChunk>(
@@ -366,6 +370,26 @@ async function* guardedStream(
       (e) => (e as { delta?: unknown }).delta,
     ),
     (delta, replaced) => ({ ...replaced, delta }) as UIMessageChunk,
+    (_text, result) => result,
+  )
+  // #732 — the fourth channel, on this surface too. `task_progress.text` reaches the wire as the
+  // `data-task-progress` part, carrying text the model writes through `task-tools`; a milestone
+  // naming a secret is the same disclosure as a delta naming it.
+  //
+  // `done.result` is NOT rebuilt here, and that is a measurement rather than an omission: this path
+  // does not carry it onto the wire at all. Asserting it here would have passed with or without a
+  // fix, which is why the runner is where that half is tested.
+  yield* moderateOutputStream(
+    reasoned,
+    guardrails,
+    textPayloadExtractor<UIMessageChunk>(
+      TASK_PROGRESS_DATA_PART,
+      (e) => (e as { data?: { text?: unknown } }).data?.text,
+    ),
+    (text, replaced) => {
+      const part = replaced as unknown as { data: Record<string, unknown> }
+      return { ...replaced, data: { ...part.data, text } } as UIMessageChunk
+    },
     (_text, result) => result,
   )
 }
@@ -457,12 +481,14 @@ function unguardedStream(
     source = queue.drain()
   }
 
-  // M4 @Checkpoint: emit `checkpoint_saved` (→ `data-checkpoint`) ONLY when the agent opted into a
-  // durable checkpoint (`@Checkpoint({ storage: 'filesystem' })`) — the theokit-side signal that the
-  // client may resume. SDK 4.0 (SE40) persists EVERY session to the native `.jsonl` transcript, so
-  // resume is available under the hood; this gate keeps the pre-4.0 emit contract unchanged (G10:
-  // don't retroactively promise a resume handle the agent never asked to advertise).
-  const durableCheckpoint = compiled.checkpoint?.storage === 'filesystem'
-  const events = durableCheckpoint ? appendCheckpointSaved(source, input.sessionId) : source
+  // #724 — emit `checkpoint_saved` (→ `data-checkpoint`) only when the agent asked for the signal.
+  //
+  // This gated on `storage === 'filesystem'`, and the comment beside it already said why that was
+  // the wrong question: the SDK persists EVERY session to its `.jsonl` transcript, so resume is
+  // available under the hood and the storage value selected nothing. The gate is kept — it is the
+  // pre-4.0 emit contract, and promising a resume handle an agent never asked to advertise would be
+  // a retroactive claim — but it now reads the field that says what it means.
+  const resumeSignal = compiled.checkpoint?.resumeSignal === true
+  const events = resumeSignal ? appendCheckpointSaved(source, input.sessionId) : source
   return presentUIMessageStream(events, { textId, onError: input.onError })
 }

@@ -39,7 +39,7 @@ describe('#80 — the analyst does not carry a builtin it was never granted', ()
 
     expect(catalog.unresolved, 'names is only the whole catalog when nothing is unresolved').toEqual([])
     expect(catalog.names, 'the analyst says it cannot run commands; the runtime disagreed').not.toContain('shell')
-    expect([...catalog.names].sort()).toEqual(['grep', 'list_dir', 'read_file'])
+    expect([...catalog.names].sort()).toEqual(['Glob', 'Grep', 'Read'])
   })
 
   it('test_the_spec_withholds_the_builtin_shell', () => {
@@ -53,10 +53,10 @@ describe('#80 — the analyst does not carry a builtin it was never granted', ()
   it('test_no_shell_of_any_kind_is_in_its_declared_list', () => {
     // The other half of the claim, and the reason withholding is SAFE here rather than merely
     // desirable: nothing this agent was granted travels under the withheld name. The sibling
-    // `roles.ts` withholds the same builtin and keeps `run_shell`, which is this product's own tool.
+    // `roles.ts` withholds the same builtin and keeps `Bash`, which is this product's own tool.
     // If someone ever adds an execution tool to `ANALYST_TOOLS`, this arm is what says so.
     const names = (analystSpec('gpt-5.4', registry()).tools ?? []).map((t) => t.name)
-    expect(names.sort()).toEqual(['grep', 'list_dir', 'read_file'])
+    expect(names.sort()).toEqual(['Glob', 'Grep', 'Read'])
   })
 
   it('test_the_seam_is_required_because_a_created_subagent_is_refused', () => {

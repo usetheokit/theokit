@@ -5,7 +5,7 @@
  * scope: in a repository that was already dirty it prints everything, including what the operator
  * changed by hand before the turn started, and the reader cannot tell the two apart.
  *
- * The agent's own write-scoped calls carry the answer, so this collects it from them. `apply_patch`
+ * The agent's own write-scoped calls carry the answer, so this collects it from them. `ApplyPatch`
  * hides the paths inside the patch text; the others name them in a field.
  *
  * Every branch narrows before it reads. The input crosses from a model, and a collector that threw
@@ -18,7 +18,7 @@ import { changedPaths } from '../../src/runtime/changed-paths.js'
 
 describe('#105 — the paths a turn wrote', () => {
   it('test_apply_patch_paths_come_from_the_patch_body', () => {
-    // The shape that matters most: `apply_patch` has no `path` field at all.
+    // The shape that matters most: `ApplyPatch` has no `path` field at all.
     const patch = [
       '*** Begin Patch',
       '*** Add File: src/a.ts',
@@ -31,7 +31,7 @@ describe('#105 — the paths a turn wrote', () => {
       '*** End Patch',
     ].join('\n')
 
-    expect(changedPaths([{ toolName: 'apply_patch', input: { patch } }])).toEqual([
+    expect(changedPaths([{ toolName: 'ApplyPatch', input: { patch } }])).toEqual([
       'src/a.ts',
       'src/b.ts',
       'src/c.ts',
@@ -42,7 +42,7 @@ describe('#105 — the paths a turn wrote', () => {
     expect(
       changedPaths([
         { toolName: 'write_file', input: { path: 'x.txt' } },
-        { toolName: 'edit_file', input: { path: 'y.txt' } },
+        { toolName: 'Edit', input: { path: 'y.txt' } },
       ]),
     ).toEqual(['x.txt', 'y.txt'])
   })
@@ -52,9 +52,9 @@ describe('#105 — the paths a turn wrote', () => {
     // print a diff for a turn that changed nothing, which is worse than printing none.
     expect(
       changedPaths([
-        { toolName: 'read_file', input: { path: 'x.txt' } },
-        { toolName: 'grep', input: { pattern: 'x', path: 'y.txt' } },
-        { toolName: 'run_shell', input: { command: 'ls' } },
+        { toolName: 'Read', input: { path: 'x.txt' } },
+        { toolName: 'Grep', input: { pattern: 'x', path: 'y.txt' } },
+        { toolName: 'Bash', input: { command: 'ls' } },
       ]),
     ).toEqual([])
   })
@@ -72,8 +72,8 @@ describe('#105 — the paths a turn wrote', () => {
     // The input crosses from a model. Every one of these has been seen from some model somewhere.
     expect(
       changedPaths([
-        { toolName: 'apply_patch', input: null },
-        { toolName: 'apply_patch', input: { patch: 42 } },
+        { toolName: 'ApplyPatch', input: null },
+        { toolName: 'ApplyPatch', input: { patch: 42 } },
         { toolName: 'write_file', input: { path: '' } },
         { toolName: 'write_file' },
         {},

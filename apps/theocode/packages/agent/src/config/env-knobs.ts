@@ -17,6 +17,7 @@ export const ENV_CONTEXT_WINDOW = `${AB}CONTEXT_WINDOW`
 export const ENV_SHELL_TIMEOUT_MS = `${AB}SHELL_TIMEOUT_MS`
 export const ENV_MEMORY = `${AB}MEMORY`
 export const ENV_SESSION_GC = `${AB}SESSION_GC`
+export const ENV_SESSION_GC_MAX_AGE_DAYS = `${AB}SESSION_GC_MAX_AGE_DAYS`
 const ENV_PROVIDER = `${AB}PROVIDER`
 export const ENV_HOME = `${AB}HOME`
 const ENV_THEOKIT_HOME = 'THEOKIT_HOME'
@@ -106,6 +107,13 @@ export const ENV_KNOBS: readonly EnvKnob[] = [
     effect:
       'Whether the session collector runs on its own, at most once a day, applying the SAME 30-day window, 1-day floor and operation budget `sessions gc` uses. `0`/`false` keeps collection manual.',
   },
+    {
+      name: ENV_SESSION_GC_MAX_AGE_DAYS,
+      reader: CONFIG,
+      default: 'the collector\'s own 30-day window',
+      effect:
+        'How many days of session transcripts the collector keeps. `.claude/settings.json` spells it `cleanupPeriodDays`. Unset leaves the collector\'s own window, so this knob and that file cannot disagree about a default neither of them owns.',
+    },
   {
     name: ENV_PROVIDER,
     reader: CREDENTIALS,

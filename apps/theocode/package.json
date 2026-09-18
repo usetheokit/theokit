@@ -30,7 +30,9 @@
     "lint:english": "node tools/check-english-only.mjs",
     "crossval": "python3 -B -m unittest discover -s tools && python3 tools/check-backlog-crossval.py",
     "test:coverage": "vitest run --coverage",
-    "blockers": "node tools/check-upstream-blockers.mjs"
+    "blockers": "node tools/check-upstream-blockers.mjs",
+    "install:local": "npm run build && npm link",
+    "uninstall:local": "npm unlink -g theocode"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

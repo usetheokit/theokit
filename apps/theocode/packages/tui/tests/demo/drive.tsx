@@ -14,6 +14,10 @@
  * and the alternate screen are the terminal's job, and that is a separate — much smaller — question
  * than whether the command did what it says.
  */
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
 import { render } from 'ink-testing-library'
 
 import { App } from '../../src/App.js'
@@ -35,7 +39,38 @@ export interface Driver {
 
 const wait = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
 
+/**
+ * Point `$HOME` at a throwaway directory for the life of one driven session.
+ *
+ * The harness mounts the real `<App />` IN THIS PROCESS, so `homedir()` is the operator's own home
+ * and a command that writes there writes there for real.
+ *
+ * Measured 2026-09-17: `every-command.test.tsx` runs `/logout`, `handleLogout` calls
+ * `logout(homedir())`, and a credential obtained minutes earlier was gone after `npm test` — with
+ * the suite reporting 5 passed. A decoy confirmed the aim: a generic file in the same directory
+ * survived and `auth.json` did not.
+ *
+ * Isolated HERE rather than in `/logout`, because the defect is a suite driving every command
+ * against the real environment: the next destructive command would land the same way.
+ */
+function isolateHome(): { restore: () => void } {
+  const isolated = mkdtempSync(join(tmpdir(), 'theocode-tui-home-'))
+  const operator = process.env.HOME
+  process.env.HOME = isolated
+  return {
+    restore: () => {
+      // The environment is process-wide: a worker shared between test files would otherwise inherit
+      // a home that has just been deleted.
+      if (operator === undefined) delete process.env.HOME
+      else process.env.HOME = operator
+      rmSync(isolated, { recursive: true, force: true })
+    },
+  }
+}
+
 export async function openTui(): Promise<Driver> {
+  const home = isolateHome()
+
   const ui = render(<App />)
 
   /**
@@ -128,6 +163,9 @@ export async function openTui(): Promise<Driver> {
     frame: () => plain(ui.lastFrame()),
     stop: () => {
       ui.unmount()
+      // Restore before the next file runs: `process.env` is process-wide, and a worker shared
+      // between test files would otherwise inherit a home that has been deleted.
+      home.restore()
     },
   }
 }

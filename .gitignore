@@ -20,6 +20,8 @@ dist/
 *.tsbuildinfo
 cross-validation-output/
 performance-audit-output/
+reference-compare-output/
+.squad/records/cycle-events.jsonl
 # Environment
 .env
 .env.*

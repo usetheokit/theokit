@@ -128,13 +128,22 @@ describe('TheoCode TUI — all 46 commands, each on a clean screen', () => {
     // answer arrives or the budget runs out, rather than a count of how many made it in time.
     const tui = await openTui()
     const before = tui.frame()
-    let after = before
-    for (let i = 0; i < 40 && after.split('\n').length <= before.split('\n').length; i += 1) {
-      after = i === 0 ? await tui.run('/help') : tui.frame()
-      if (after === before) await new Promise((r) => setTimeout(r, 500))
+    // MOVED, not GREW.
+    //
+    // The original compared line counts, which made the verdict depend on how tall the BOOT frame
+    // happened to be — a property of the machine, not of the product. Measured 2026-09-17, after the
+    // harness stopped borrowing the operator's home: boot went from 32 lines to 42 and `/help` then
+    // rendered 32, failing a check nothing in the product had changed. The note beside `silent`
+    // above already states the principle this now follows — whether the screen MOVED is the
+    // observable claim.
+    let moved = false
+    for (let i = 0; i < 40 && !moved; i += 1) {
+      const after = i === 0 ? await tui.run('/help') : tui.frame()
+      moved = after !== before
+      if (!moved) await new Promise((r) => setTimeout(r, 500))
     }
     tui.stop()
-    expect(after.split('\n').length).toBeGreaterThan(before.split('\n').length)
+    expect(moved, '/help left the screen exactly as it found it').toBe(true)
   }, 200_000)
 
   it('/clear is a TERMINAL clear this harness cannot observe — stated, not asserted away', async () => {

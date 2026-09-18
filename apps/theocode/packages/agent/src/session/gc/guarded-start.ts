@@ -28,11 +28,22 @@ export function guardedSweepStart(opts: {
   readonly start?: (o: {
     enabled: boolean
     onReport: (line: string) => void
+    maxAgeDays?: number
   }) => { started: boolean; reason: string }
+  /**
+   * #736 — the retention window, read INSIDE the guard for the same reason `enabled` is: the config
+   * read throws on a malformed file, and a throw here kills the terminal at startup.
+   */
+  readonly maxAgeDays?: () => number | undefined
 }): void {
   try {
     const start = opts.start ?? startSessionSweepInBackground
-    const outcome = start({ enabled: opts.enabled(), onReport: opts.onReport })
+      const days = opts.maxAgeDays?.()
+      const outcome = start({
+        enabled: opts.enabled(),
+        onReport: opts.onReport,
+        ...(days === undefined ? {} : { maxAgeDays: days }),
+      })
     const notice = startupNoticeFor(outcome)
     if (notice !== undefined) opts.onReport(notice)
   } catch (err) {

@@ -109,6 +109,34 @@ describe('Bundle size regression', () => {
    * 38 600 from 39 500. Restoring a kilobyte here would undo that decision by the back door — the
    * paragraph above names a kilobyte of slack as a gate that approves the next kilobyte without
    * being asked, and it is right.
+   *
+   * ## Raised to 38 900 for #825 — 185 bytes, and moving it was considered first
+   *
+   * `SubagentsCapability` costs **185 bytes**, attributed by control: building the barrel with the
+   * class removed gives 38 682, with it 38 867.
+   *
+   * The shape was checked first, as B-024 requires. It does not apply for the same reason B-103's
+   * did not: `src/index.ts` carries `export * from './capability/index.js'`, so the whole capability
+   * family is in the root barrel BY DESIGN, and moving one member to a subpath would leave a consumer
+   * importing eleven capabilities from the barrel and the twelfth from somewhere else.
+   *
+   * Nor is the class optional. `capability-zero-behavior.test.ts` derives both sides of the waist and
+   * demands they agree: a field the builder can set and no capability can express puts the decorator
+   * path one field behind, which is the gap that test exists to pin. It made the same demand three
+   * times before this one and was right every time.
+   *
+   * Headroom is 33 bytes, deliberately tighter than the 72 B-024 left. A gate carrying slack approves
+   * the next addition without being asked, and this raise is the second in a row.
+   *
+   * ## Lowered to 38 600 for #724 — the budget came back
+   *
+   * `CheckpointOptions` declared four fields and read one. Narrowing it to what the code does —
+   * `resumeSignal?: boolean`, with `CheckpointStorage` and `CheckpointStrategy` gone — gave **385
+   * bytes** back: 38 867 -> 38 482.
+   *
+   * So the ceiling comes down with it. The raise above was paid for by a capability; this is dead
+   * surface leaving, and a budget that kept the slack would be holding room for the next addition
+   * nobody asked about. Headroom is 118 bytes.
    */
   it('agents main bundle under 38.7KB', (ctx) => {
     const path = resolve(distDir, 'index.js')
@@ -120,7 +148,7 @@ describe('Bundle size regression', () => {
       return
     }
     const size = statSync(path).size
-    expect(size).toBeLessThan(38_700)
+    expect(size).toBeLessThan(38_600)
     console.log(`  agents/dist/index.js: ${(size / 1024).toFixed(1)} KB`)
   })
 

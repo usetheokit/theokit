@@ -17,6 +17,7 @@ import {
   ENV_SANDBOX_MODE,
   ENV_MEMORY,
   ENV_SESSION_GC,
+  ENV_SESSION_GC_MAX_AGE_DAYS,
   ENV_SHELL_TIMEOUT_MS,
 } from './env-knobs.js'
 import { LAYERS, foldLayers, type Layer } from './layers.js'
@@ -27,6 +28,7 @@ import {
 } from './settings-load.js'
 import type { TrustPosture } from './trust-posture.js'
 import { applySecurityFloor } from './security-floor.js'
+import { readManagedSettings } from './managed-settings.js'
 
 /**
  * How long an operator-supplied shell command may run before it is killed.
@@ -129,6 +131,14 @@ export interface AgentConfig {
    * KEEP-what-cannot-be-classified fail-safe are the same ones `sessions gc` has always used.
    */
   session_gc: boolean
+  /**
+   * #736 — how many days of session transcripts the collector keeps.
+   *
+   * Optional with NO default here on purpose: absent means the collector keeps its own
+   * `DEFAULT_WINDOW_DAYS`, and a second copy of that number in this file would disagree with the
+   * first the day one of them moved. `.claude/settings.json` spells it `cleanupPeriodDays`.
+   */
+  session_gc_max_age_days?: number
   context_window?: number
   /**
    * The output style to apply, by name — Claude Code's feature, read from its directories.
@@ -179,6 +189,7 @@ export const ENV_BY_KEY: Readonly<Partial<Record<SchemaKey, EnvPath>>> = {
   shell_timeout_ms: { knob: ENV_SHELL_TIMEOUT_MS, coerce: numberFromEnv },
   memory: { knob: ENV_MEMORY, coerce: booleanFromEnv },
   session_gc: { knob: ENV_SESSION_GC, coerce: booleanFromEnv },
+  session_gc_max_age_days: { knob: ENV_SESSION_GC_MAX_AGE_DAYS, coerce: numberFromEnv },
   output_style: { knob: ENV_OUTPUT_STYLE, coerce: (s) => s },
 }
 
@@ -307,6 +318,7 @@ const scalarSchema = z
       .positive('shell_timeout_ms: must be positive — execFile reads 0 as "no timeout"')
       .optional(),
     session_gc: z.boolean().optional(),
+    session_gc_max_age_days: z.number().int().positive().optional(),
     context_window: z.number().int().positive().optional(),
     output_style: z.string().min(1, 'output_style: empty style name').optional(),
   })
@@ -368,6 +380,11 @@ export interface ConfigLayers {
   projectLocal?: unknown
   env?: Record<string, string | undefined>
   cli?: unknown
+  /**
+   * #737 — the enterprise `managed-settings.json`, deployed by an administrator to a platform
+   * path an ordinary user cannot write. Highest precedence, `cli` included.
+   */
+  managed?: unknown
 }
 
 const ACCUMULATING_KEYS = ['hooks'] as const
@@ -429,6 +446,9 @@ export function resolveConfig(layers: ConfigLayers = {}): AgentConfig {
   const project = fromFile(layers.project, 'settings.json')
   const projectLocal = fromFile(layers.projectLocal, 'settings.local.json')
   const cli = fromFile(layers.cli, 'cli (-c)')
+  // #737 — the enterprise policy. Parsed through the SAME schema as every other layer: a
+  // managed file with a typo must fail by name, not be tolerated because of where it came from.
+  const managed = fromFile(layers.managed, 'managed-settings.json')
 
   const { name: selectedProfile, values: profile } = chosenProfile([
     user,
@@ -447,6 +467,7 @@ export function resolveConfig(layers: ConfigLayers = {}): AgentConfig {
     profile: pickScalars(profile),
     env: pickScalars(envParsed),
     cli: pickScalars(cli),
+    managed: pickScalars(managed),
   }
   const folded = foldLayers(
     LAYERS.map((c) => ({
@@ -514,6 +535,10 @@ export function loadConfig(opts: {
   // imagined — a valid hook block under the unused root produced `hooks: []` from a trusted
   // directory and read exactly like a product defect. Changing any path here means changing
   // README § "Where configuration lives" in the same commit.
+  // #737 — read here rather than in `discoverSettings`, which is about the files a PROJECT and a
+  // USER own. This one is neither: an administrator deployed it to a path they cannot write, and no
+  // trust posture gates it — the policy binds the untrusted repository too.
+  const managedSettings = readManagedSettings()
   const { user, project, projectLocal, projectAllowed, ourHome } = discoverSettings({
     projectDir,
     userDir,
@@ -545,5 +570,6 @@ export function loadConfig(opts: {
     ...(projectLocal !== null ? { projectLocal: projectLocal } : {}),
     env,
     ...(opts.cli !== undefined ? { cli: opts.cli } : {}),
+    ...(managedSettings !== null ? { managed: managedSettings } : {}),
   })
 }

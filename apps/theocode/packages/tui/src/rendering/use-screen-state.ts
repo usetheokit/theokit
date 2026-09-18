@@ -1,9 +1,21 @@
 import { useState, type Dispatch, type SetStateAction } from 'react'
 
 import type { Mode, ContentPanel, ToastPayload } from '../screen-types.js'
+
+import { resolveEffectiveConfig } from '@theocode/agent/config'
+
+import { configHealthNotice } from '../config-health.js'
+import { workingDirectory } from '../working-directory.js'
 export type { ContentPanel }
 
 export interface ScreenState {
+  /**
+   * Why the project configuration is not in force, when it is not. #827.
+   *
+   * `undefined` on a healthy boot — a notice on every good start is noise, and noise is what makes
+   * a diagnostic stop being read.
+   */
+  readonly configNotice: string | undefined
   readonly clearEpoch: number
   readonly setClearEpoch: Dispatch<SetStateAction<number>>
   readonly composerText: string
@@ -58,10 +70,25 @@ export function useScreenState(resumedAtStartup = false): ScreenState {
   const [exitArmed, setExitArmed] = useState(false)
   const [mode, setMode] = useState<Mode>('chat')
   const [toast, setToast] = useState<ToastPayload | null>(null)
+
+  // #827 — the project configuration, checked on EVERY boot rather than once.
+  //
+  // The warning used to live inside the branch that runs when trust is GRANTED, so a file broken
+  // after that point was dropped in silence: nothing on screen, nothing in the stderr log, and a
+  // status bar showing defaults that look like a choice. `theocode doctor` exits 1 on the same file.
+  //
+  // Here because this is where the toast state is, and a notice that cannot reach the screen is the
+  // log line this replaces. `useState` with an initialiser, not `useEffect`: the read happens once
+  // per mount, before the first frame, so the operator sees it with the banner rather than after it.
+  const [configNotice] = useState(() =>
+    configHealthNotice(() => resolveEffectiveConfig({ cwd: workingDirectory() })),
+  )
+
   const [reviewResult, setReviewResult] = useState<string | null>(null)
   const [goalFeed, setGoalFeed] = useState<string | null>(null)
   const [loginProvider, setLoginProvider] = useState<string | undefined>(undefined)
   return {
+    configNotice,
     resumed,
     setResumed,
     clearEpoch,

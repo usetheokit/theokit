@@ -8,6 +8,8 @@ import {
   SUGAR,
   type ExecArgs,
   type ExecRun,
+  type ExecUi,
+  type ExecUsageError,
   type OptionValues,
   type StdinBehavior,
 } from './exec-args.js'
@@ -39,16 +41,58 @@ function resolveResume(
 function resolveInput(
   rawPrompt: string,
   stdinIsTTY: boolean,
-): { prompt: string | undefined; stdinBehavior: StdinBehavior } | { error: string } {
+):
+  | { prompt: string | undefined; stdinBehavior: StdinBehavior }
+  | { ui: true }
+  | { error: string } {
   const raw = rawPrompt.length > 0 ? rawPrompt : undefined
   if (raw === '-') return { prompt: undefined, stdinBehavior: 'forced' }
   if (raw === undefined) {
-    if (stdinIsTTY) return { error: 'No prompt provided' }
+    // No prompt AND a terminal: the user wants a session, not an answer. This used to be
+    // `{ error: 'No prompt provided' }`, which made the UI reachable only through `npm run dev`
+    // — so an INSTALL had no way to reach the 46 slash commands, `/login` among them, and the
+    // documented OAuth device flow could not be run at all.
+    //
+    // A pipe with no prompt keeps reading stdin: that is a real use, and it has no terminal for
+    // the UI to draw on.
+    if (stdinIsTTY) return { ui: true }
     return { prompt: undefined, stdinBehavior: 'required' }
   }
   return { prompt: raw, stdinBehavior: stdinIsTTY ? 'none' : 'append' }
 }
 
+
+/**
+ * An interactive session, or a refusal naming the flags it would have dropped.
+ *
+ * `security-floor.ts` (B-006) makes `cli` the operator's override — the one layer that wins in BOTH
+ * directions, because the threat model is a repository or an inherited environment, never the person
+ * at the keyboard. `ExecUi` carries nothing, so on this path that override reaches nobody.
+ *
+ * Measured 2026-09-17 against a trusted workspace whose file said `danger-full-access`: the operator
+ * typed `--sandbox read-only`, asking for MORE confinement, and the session came up
+ * `workspace-write` with no message. A control believed to be in force and absent is worse than one
+ * refused out loud — which is what this product's `doctor` says about permission rules one surface
+ * over.
+ *
+ * Derived from what was PASSED, so a flag added later is covered without anyone coming back here.
+ * The filter is not decoration: `values` carries EVERY boolean in the schema at its default, and
+ * without it the bare `theocode` was refused. A boolean nobody passed reads `false`; a string nobody
+ * passed reads `undefined`.
+ */
+function resolveUiOrRefuse(values: OptionValues): ExecUi | ExecUsageError {
+  const typed = Object.entries(values)
+    .filter(([, v]) => v !== false && v !== undefined)
+    .map(([k]) => (k.length === 1 ? `-${k}` : `--${k}`))
+  if (typed.length === 0) return { mode: 'ui' }
+  return {
+    mode: 'error',
+    message:
+      `${typed.join(', ')} cannot be applied to an interactive session — the UI resolves its ` +
+      `configuration from the working directory. Pass a prompt to use them for one answer, or ` +
+      `set them in .theokit/settings.json.`,
+  }
+}
 
 function parseResumeOrPrompt(
   values: OptionValues,
@@ -62,6 +106,7 @@ function parseResumeOrPrompt(
 
   const e = resolveInput(promptParts.join(' '), stdinIsTTY)
   if ('error' in e) return { mode: 'error', message: e.error }
+  if ('ui' in e) return resolveUiOrRefuse(values)
   const { prompt, stdinBehavior } = e
 
   return {

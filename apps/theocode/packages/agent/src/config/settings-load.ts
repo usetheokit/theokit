@@ -5,6 +5,7 @@
  * `config.ts` owns the SCHEMA and the pure fold across layers; this file owns WHERE the files are
  * and what each one carried that the schema never saw.
  */
+import { dirname } from 'node:path'
 import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, sep } from 'node:path'
@@ -13,6 +14,7 @@ import process from 'node:process'
 import { CONFIG_SCHEMA_KEYS, ConfigError } from './config-contract.js'
 import { DEFAULT_HOME_DIR, LEGACY_HOME_DIR, homeStateDir } from './home-dir.js'
 import { translateSettings } from './settings-json.js'
+import type { PermissionRule } from '@theokit/agents/config'
 
 /**
  * The foreign root, read by name and not by guess. Both roots are consulted for every file layer and
@@ -50,6 +52,7 @@ function readSettingsIfPresent(candidate: SettingsCandidate): unknown | null {
     ownKeys: CONFIG_SCHEMA_KEYS,
     foreignRoot: candidate.foreignRoot,
     hooksDelivery: candidate.hooksDelivery,
+    baseDir: dirname(candidate.path),
   }).values
 }
 
@@ -154,6 +157,17 @@ export interface SettingsFileReport {
    * reading the first goes looking for a feature; one reading the second goes looking at their line.
    */
   readonly unsupportedPermissions: readonly string[]
+  /**
+   * The rules this file's `permissions` block became, for the engine that enforces them.
+   *
+   * #736 — the block was translated and then dropped here: `reportOne` kept `unsupportedPermissions`,
+   * which is the COMPLAINT, and discarded `permissionRules`, which is the POLICY. An operator's `deny`
+   * was parsed, reported as translated, and enforced by nobody.
+   *
+   * Measured 2026-09-17 beside Claude Code on byte-identical configuration: it refused a
+   * `Read(./off-limits.txt)` deny rule; this product answered with the file's contents.
+   */
+  readonly permissionRules: readonly PermissionRule[]
 }
 
 /**
@@ -189,6 +203,7 @@ function reportOne(candidate: SettingsCandidate): SettingsFileReport | 'skip' | 
       ownKeys: CONFIG_SCHEMA_KEYS,
       foreignRoot: candidate.foreignRoot,
       hooksDelivery: candidate.hooksDelivery,
+      baseDir: dirname(candidate.path),
     })
     return {
       path,
@@ -196,6 +211,7 @@ function reportOne(candidate: SettingsCandidate): SettingsFileReport | 'skip' | 
       unrecognised: read.unrecognised,
       droppedHooks: read.droppedHooks,
       unsupportedPermissions: read.unsupportedPermissions.map((u) => `${u.entry} — ${u.reason}`),
+      permissionRules: read.permissionRules,
     }
   } catch (err) {
     // #151 — a refused `hooks` key throws. A DIAGNOSTIC must survive the state it exists to
@@ -206,6 +222,7 @@ function reportOne(candidate: SettingsCandidate): SettingsFileReport | 'skip' | 
       unrecognised: [],
       droppedHooks: [(err as Error).message],
       unsupportedPermissions: [],
+        permissionRules: [],
     }
   }
 }

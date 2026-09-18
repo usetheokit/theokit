@@ -30,17 +30,34 @@ export interface ToolScope {
   defaultTimeoutMs?: number
 }
 
+/**
+ * The tools this product registers, by the name the model and the configuration both use.
+ *
+ * Four of them carry CLAUDE CODE's name, and that is the whole point: `permissions` in a
+ * `.claude/settings.json` addresses tools by name — `Bash(ls:*)`, `Read(./src/**)` — and
+ * `permissionRulesFromSettings` passes that name straight into the rule it builds, with no mapping
+ * (`translate` returns `{ tool, action }`). A rule naming `Bash` can only match a tool named `Bash`.
+ *
+ * Measured 2026-09-17 against Claude Code on byte-identical configuration: it refused a `deny` rule
+ * that this product honoured with the file's canary. The divergent names were not cosmetic — they
+ * were the reason a pasted settings file addressed nothing at all.
+ *
+ * The rest keep their own names because they have no one-to-one counterpart. Renaming `ApplyPatch`
+ * to `Write`, or `ViewImage` to `Read`, would make a pasted rule address the WRONG capability, which
+ * is worse than addressing none: the operator would believe a control is in force over something it
+ * does not cover.
+ */
 export const REGISTRY_TOOL_NAMES = [
-  'read_file',
-  'list_dir',
-  'grep',
-  'repo_status',
-  'git_diff',
-  'current_time',
-  'view_image',
-  'apply_patch',
-  'edit_file',
-  'run_shell',
+  'Read',
+  'Glob',
+  'Grep',
+  'RepoStatus',
+  'GitDiff',
+  'CurrentTime',
+  'ViewImage',
+  'ApplyPatch',
+  'Edit',
+  'Bash',
 ] as const
 
 export type RegistryToolName = (typeof REGISTRY_TOOL_NAMES)[number]
@@ -67,15 +84,24 @@ export class ToolRegistry {
     })
 
     const entries = new Map<string, CustomTool>([
-      ['read_file', bound.bind(createReadFileTool)({ lineNumbers: true, allowAbsolute: true })],
-      ['list_dir', bound.bind(createListDirTool)({ allowAbsolute: true })],
       [
-        'grep',
-        withName(bound.bind(createSearchTextTool)({ regex: true, allowAbsolute: true }), 'grep'),
+        'Read',
+        withName(
+          bound.bind(createReadFileTool)({ lineNumbers: true, allowAbsolute: true }),
+          'Read',
+        ),
       ],
-      ['repo_status', bound.bind(createGitStatusTool)({ name: 'repo_status' })],
-      ['git_diff', bound.bind(createGitDiffTool)()],
-      ['current_time', createCurrentTimeTool()],
+      [
+        'Glob',
+        withName(bound.bind(createListDirTool)({ allowAbsolute: true }), 'Glob'),
+      ],
+      [
+        'Grep',
+        withName(bound.bind(createSearchTextTool)({ regex: true, allowAbsolute: true }), 'Grep'),
+      ],
+      ['RepoStatus', bound.bind(createGitStatusTool)({ name: 'RepoStatus' })],
+      ['GitDiff', withName(bound.bind(createGitDiffTool)(), 'GitDiff')],
+      ['CurrentTime', withName(createCurrentTimeTool(), 'CurrentTime')],
       // B-082 — the model can look at a diagram or screenshot itself, under the same read root.
       // The 53-line local version was DELETED when `@theokit/agents@12.1.0` started forwarding this
       // built-in: the local one threw for the SDK to convert, where the built-in returns typed
@@ -85,15 +111,18 @@ export class ToolRegistry {
       // which the factory now does. The upstream note is the argument for deleting rather than
       // keeping: "an image reader that honours any path is a file exfiltration primitive with a
       // friendly name" — not code to maintain one copy of per product.
-      ['view_image', bound.bind(createViewImageTool)()],
+      ['ViewImage', withName(bound.bind(createViewImageTool)(), 'ViewImage')],
       // Explicit override: for a write tool, the project root IS the write root.
-      ['apply_patch', bound.bind(createApplyPatchTool)({ projectRoot: scope.writeRoot })],
       [
-        'edit_file',
-        withName(bound.bind(createEditFileTool)({ projectRoot: scope.writeRoot }), 'edit_file'),
+        'ApplyPatch',
+        withName(bound.bind(createApplyPatchTool)({ projectRoot: scope.writeRoot }), 'ApplyPatch'),
       ],
       [
-        'run_shell',
+        'Edit',
+        withName(bound.bind(createEditFileTool)({ projectRoot: scope.writeRoot }), 'Edit'),
+      ],
+      [
+        'Bash',
         withName(
           // `sandbox` comes from the bound scope — no path here can forget it.
           bound.bind(createShellTool)(
@@ -101,7 +130,7 @@ export class ToolRegistry {
               ? { defaultTimeoutMs: scope.defaultTimeoutMs }
               : {},
           ),
-          'run_shell',
+          'Bash',
         ),
       ],
     ])

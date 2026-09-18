@@ -34,7 +34,7 @@ describe('#70 — a stored session becomes a drawable thread', () => {
         role: 'assistant',
         text: '',
         parts: [
-          { type: 'tool_use', id: 'c1', name: 'run_shell', input: { command: 'echo x' } },
+          { type: 'tool_use', id: 'c1', name: 'Bash', input: { command: 'echo x' } },
           { type: 'tool_result', toolUseId: 'c1', content: 'x' },
         ],
       },
@@ -54,7 +54,7 @@ describe('#70 — a stored session becomes a drawable thread', () => {
       {
         role: 'assistant',
         text: '',
-        parts: [{ type: 'tool_use', id: 'c9', name: 'run_shell', input: { command: 'echo hi' } }],
+        parts: [{ type: 'tool_use', id: 'c9', name: 'Bash', input: { command: 'echo hi' } }],
       },
       { role: 'user', text: '', parts: [{ type: 'tool_result', toolUseId: 'c9', content: 'hi' }] },
     ])
@@ -69,7 +69,7 @@ describe('#70 — a stored session becomes a drawable thread', () => {
       {
         role: 'assistant',
         text: '',
-        parts: [{ type: 'tool_use', id: 'c9', name: 'run_shell', input: { command: 'echo hi' } }],
+        parts: [{ type: 'tool_use', id: 'c9', name: 'Bash', input: { command: 'echo hi' } }],
       },
       { role: 'user', text: '', parts: [{ type: 'tool_result', toolUseId: 'c9', content: 'hi' }] },
     ])
@@ -83,7 +83,7 @@ describe('#70 — a stored session becomes a drawable thread', () => {
         role: 'assistant',
         text: '',
         parts: [
-          { type: 'tool_use', id: 'c2', name: 'run_shell', input: { command: 'false' } },
+          { type: 'tool_use', id: 'c2', name: 'Bash', input: { command: 'false' } },
           { type: 'tool_result', toolUseId: 'c2', content: 'boom', isError: true },
         ],
       },
@@ -98,7 +98,7 @@ describe('#70 — a stored session becomes a drawable thread', () => {
       {
         role: 'assistant',
         text: '',
-        parts: [{ type: 'tool_use', id: 'c3', name: 'run_shell', input: { command: 'sleep 9' } }],
+        parts: [{ type: 'tool_use', id: 'c3', name: 'Bash', input: { command: 'sleep 9' } }],
       },
     ])
 

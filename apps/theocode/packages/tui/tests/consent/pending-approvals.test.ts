@@ -23,7 +23,7 @@ import { createApprovalLedger, findNextApproval, ingest, settle } from '../../sr
 
 /** One assistant message carrying a part in the `approval-requested` state. */
 const pendingThread = (id: string): Parameters<typeof ingest>[1] => [
-  { parts: [{ state: 'approval-requested', toolCallId: id, toolName: 'run_shell', input: {} }] },
+  { parts: [{ state: 'approval-requested', toolCallId: id, toolName: 'Bash', input: {} }] },
 ]
 
 describe('B-011 — the ledger is load-bearing while the thread lags', () => {

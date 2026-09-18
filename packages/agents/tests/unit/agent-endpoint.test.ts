@@ -181,10 +181,10 @@ describe('streamAgentUIMessages — @Checkpoint emit + resume (M4)', () => {
     const compiled = compileAgentModule({
       default: applyCapabilities([
         new ModelCapability('m'),
-        new CheckpointCapability({ storage: 'filesystem' }),
+        new CheckpointCapability({ resumeSignal: true }),
       ]),
     })
-    expect(compiled.checkpoint?.storage).toBe('filesystem')
+    expect(compiled.checkpoint?.resumeSignal).toBe(true)
 
     const chunks = await collectStream(
       streamAgentUIMessages(compiled, 'k', { message: 'hi', sessionId: 's1' }),
@@ -207,31 +207,31 @@ describe('streamAgentUIMessages — @Checkpoint emit + resume (M4)', () => {
     expect(chunks.some((c) => c.type === 'data-checkpoint')).toBe(false)
   })
 
-  it('test_non_filesystem_checkpoint_emits_no_handle_and_warns', async () => {
-    // G10 honesty (review HIGH-2): a 'memory' @Checkpoint cannot resume across requests, so it must
-    // NOT emit a resume handle — and it warns at walk time so the no-op is never silent.
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    try {
-      h.events = [{ type: 'text_delta', content: 'hi' }, DONE]
-      h.calls = []
-      h.overrides = []
+  it('test_no_handle_when_the_agent_did_not_ask_for_the_signal', async () => {
+    // G10 honesty, with its premise corrected. This asserted that a `memory` @Checkpoint "cannot
+    // resume across requests" while `filesystem` could, and warned so the no-op would not be silent.
+    // #724 measured that premise false: the SDK persists EVERY session to its transcript, so neither
+    // value selected a store, and the warning sent authors to the one storage a pod without a volume
+    // cannot provide.
+    //
+    // What survives is the invariant that was always real, and the reason the gate exists: an agent
+    // that did not ask to advertise a resume handle must not have one advertised for it. The option
+    // says that in its name now, so there is nothing left to warn about at walk time.
+    h.events = [{ type: 'text_delta', content: 'hi' }, DONE]
+    h.calls = []
+    h.overrides = []
 
-      const compiled = compileAgentModule({
-        default: applyCapabilities([
-          new ModelCapability('m'),
-          new CheckpointCapability({ storage: 'memory' }),
-        ]),
-      })
-      const chunks = await collectStream(
-        streamAgentUIMessages(compiled, 'k', { message: 'hi', sessionId: 's1' }),
-      )
-      expect(chunks.some((c) => c.type === 'data-checkpoint')).toBe(false)
-      expect(warn).toHaveBeenCalledWith(
-        expect.stringContaining('THEO_AGENT_CHECKPOINT_STORAGE_METADATA_ONLY'),
-      )
-    } finally {
-      warn.mockRestore()
-    }
+    const compiled = compileAgentModule({
+      default: applyCapabilities([
+        new ModelCapability('m'),
+        new CheckpointCapability({ resumeSignal: false }),
+      ]),
+    })
+    const chunks = await collectStream(
+      streamAgentUIMessages(compiled, 'k', { message: 'hi', sessionId: 's1' }),
+    )
+
+    expect(chunks.some((c) => c.type === 'data-checkpoint')).toBe(false)
   })
 
   it('test_resume_by_sessionId_threads_the_session_into_the_sdk', async () => {

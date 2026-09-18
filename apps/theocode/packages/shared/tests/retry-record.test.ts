@@ -59,7 +59,7 @@ describe('createRetryRecord', () => {
     // different member; anything else must leave the count alone.
     const record = createRetryRecord()
 
-    record.sink({ type: 'tool_progress', toolName: 'read_file', toolCallId: 'x' } as never)
+    record.sink({ type: 'tool_progress', toolName: 'Read', toolCallId: 'x' } as never)
     record.sink({ type: 'mcp_server_failed', serverName: 'db', message: 'boom' } as never)
 
     expect(record.attempts()).toBe(0)

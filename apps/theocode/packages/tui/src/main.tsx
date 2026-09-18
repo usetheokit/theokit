@@ -67,6 +67,9 @@ guardedSweepStart({
   // A function, not a value: `resolveEffectiveConfig` throws on a malformed config.toml and must be
   // read INSIDE the guard. See `guardedSweepStart`.
   enabled: () => resolveEffectiveConfig({ cwd: workingDirectory() }).session_gc,
+  // #736 — `cleanupPeriodDays` from `.claude/settings.json`, which the config layer carries under its
+  // own spelling. A function for the same reason `enabled` is one.
+  maxAgeDays: () => resolveEffectiveConfig({ cwd: workingDirectory() }).session_gc_max_age_days,
   // stderr is redirected to `.theokit/tui-stderr.log` by `installStderrGuard` above (B-104), so this
   // is the diagnostics channel rather than a write over the Ink frame.
   onReport: (line) => {

@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { tmpdir as osTmpdir } from 'node:os'
 
 import { unpublishedPins } from '../../scripts/unpublished-pins.js'
+import { localUrl, LOOPBACK_HOSTS, rememberHost } from './helpers/local-url.js'
 
 /**
  * theokit-evolution-ci-and-dx Phase 1C — pnpm 11+ compat gate.
@@ -87,18 +88,29 @@ const PNPM_ENV = {
 async function waitForPort(port: number, timeoutMs: number): Promise<boolean> {
   const start = Date.now()
   while (Date.now() - start < timeoutMs) {
-    try {
+    // #830 — both families, each with its OWN controller and its OWN catch.
+    //
+    // The first version of this shared one of each, and both were defects: a single 1s controller
+    // left the second fetch starting on an already-aborted signal, and a single catch meant a
+    // REFUSAL on the first host exited the loop before the second was tried — so on a runner whose
+    // server binds IPv6, `127.0.0.1` refused and `[::1]` was never reached. That is the exact
+    // failure this loop exists to prevent, rebuilt inside the fix for it.
+    for (const host of LOOPBACK_HOSTS) {
       const ctrl = new AbortController()
-      const tid = setTimeout(() => ctrl.abort(), 1000)
+      const tid = setTimeout(() => {
+        ctrl.abort()
+      }, 1000)
       try {
-        const res = await fetch(`http://localhost:${port}/`, { signal: ctrl.signal })
-        clearTimeout(tid)
-        if (res.ok || res.status === 404 || res.status === 304) return true
+        const res = await fetch(`http://${host}:${String(port)}/`, { signal: ctrl.signal })
+        if (res.ok || res.status === 404 || res.status === 304) {
+          rememberHost(port, host)
+          return true
+        }
       } catch {
+        // this family did not answer; the next one still gets its turn
+      } finally {
         clearTimeout(tid)
       }
-    } catch {
-      // outer try guards fetch-not-available (older runtimes); best-effort retry
     }
     await new Promise((r) => setTimeout(r, 500))
   }
@@ -109,7 +121,7 @@ async function isPortBusy(port: number): Promise<boolean> {
   try {
     const ctrl = new AbortController()
     const tid = setTimeout(() => ctrl.abort(), 500)
-    await fetch(`http://localhost:${port}/`, { signal: ctrl.signal })
+    await fetch(localUrl(port, '/'), { signal: ctrl.signal })
     clearTimeout(tid)
     return true
   } catch {

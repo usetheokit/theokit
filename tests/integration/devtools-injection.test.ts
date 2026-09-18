@@ -16,6 +16,7 @@ import type { Server } from 'node:http'
 import { startDevServer } from '../../packages/theo/src/cli/commands/dev.js'
 import { safeClose } from './helpers/safe-close.js'
 import { waitForServer } from './helpers/wait-for-server.js'
+import { localUrl } from './helpers/local-url.js'
 
 function makeProject(opts: { devtoolsConfig?: string }): string {
   const root = mkdtempSync(join(tmpdir(), 'theo-devtools-inject-'))
@@ -62,14 +63,14 @@ describe('T1.2 — devtools injection (default — devtools enabled)', () => {
   }, 15000)
 
   it('served HTML contains the devtools entry script tag in dev mode', async () => {
-    const res = await fetch(`http://localhost:${port}/`)
+    const res = await fetch(localUrl(port, '/'))
     expect(res.status).toBe(200)
     const html = await res.text()
     expect(html).toContain('/@theo/devtools/entry.js')
   })
 
   it('devtools script is injected BEFORE </head>', async () => {
-    const html = await (await fetch(`http://localhost:${port}/`)).text()
+    const html = await (await fetch(localUrl(port, '/'))).text()
     const scriptIdx = html.indexOf('/@theo/devtools/entry.js')
     const headCloseIdx = html.toLowerCase().indexOf('</head>')
     expect(scriptIdx).toBeGreaterThan(0)
@@ -77,7 +78,7 @@ describe('T1.2 — devtools injection (default — devtools enabled)', () => {
   })
 
   it('virtual module /@theo/devtools/entry.js returns 200 JS', async () => {
-    const res = await fetch(`http://localhost:${port}/@theo/devtools/entry.js`)
+    const res = await fetch(localUrl(port, '/@theo/devtools/entry.js'))
     expect(res.status).toBe(200)
     const ct = res.headers.get('content-type') ?? ''
     // Vite serves JS modules with javascript content type
@@ -94,7 +95,7 @@ describe('T1.2 — devtools injection (default — devtools enabled)', () => {
   })
 
   it('entry-client script and devtools script BOTH present (independent injections)', async () => {
-    const html = await (await fetch(`http://localhost:${port}/`)).text()
+    const html = await (await fetch(localUrl(port, '/'))).text()
     expect(html).toContain('/@theo/entry-client')
     expect(html).toContain('/@theo/devtools/entry.js')
   })
@@ -118,12 +119,12 @@ describe('T1.2 — devtools opt-out (devtools: false)', () => {
   }, 15000)
 
   it('served HTML does NOT contain devtools script tag when devtools: false', async () => {
-    const html = await (await fetch(`http://localhost:${port}/`)).text()
+    const html = await (await fetch(localUrl(port, '/'))).text()
     expect(html).not.toContain('/@theo/devtools/entry.js')
   })
 
   it('entry-client script is still present (only devtools is disabled)', async () => {
-    const html = await (await fetch(`http://localhost:${port}/`)).text()
+    const html = await (await fetch(localUrl(port, '/'))).text()
     expect(html).toContain('/@theo/entry-client')
   })
 })

@@ -19,12 +19,33 @@ mapping without ever consulting `exports`.
 
 ## Running it
 
+From a clone:
+
 ```bash
 npm install
 npm run dev          # the terminal UI
 npm run exec "..."   # the headless CLI
 npm run build        # dist/theocode.mjs (bundle) + dist/acp-entry.mjs
 ```
+
+As an installed command:
+
+```bash
+npm run install:local     # build, then link `theocode` onto your PATH
+theocode                  # no arguments, on a terminal: the interactive UI
+theocode "explain this"   # a prompt: one answer, then exit
+npm run uninstall:local   # remove the link
+```
+
+**`theocode` with no arguments opens the UI.** That is the `ui` mode — a name the parser
+produces, never a subcommand you type; `theocode ui` would be read as the prompt "ui".
+
+It is worth stating because it was not true until 2026-09-17: with no prompt the CLI answered
+`No prompt provided` and exited 1, so the UI was reachable only through `npm run dev` in a
+clone. An installed copy therefore had no way to reach the 46 slash commands — `/login` among
+them, which is how a credential gets configured at all.
+
+Reading a prompt from a pipe is unchanged: `echo "..." | theocode` still answers and exits.
 
 Smoke test that touches neither the network nor a credential:
 
@@ -73,7 +94,7 @@ alternative is that moving your file has no visible effect.
 
 | Path                              | Read by            | Holds                                                                                           |
 | --------------------------------- | ------------------ | ----------------------------------------------------------------------------------------------- |
-| `<project>/.theokit/settings.json` | this product **and the SDK** | `model`, `reasoning_effort`, `sandbox_mode`, `approval_policy`, `memory`, `shell_timeout_ms`, `session_gc`, `context_window`, `goal_oracle`, `home_dir`, `skills`, `output_style`, profiles — but **not `hooks`**, which this file refuses (#151). **Two readers, one file** — see the row below: adding a key here means checking what the SDK does with it |
+| `<project>/.theokit/settings.json` | this product **and the SDK** | `model`, `reasoning_effort`, `sandbox_mode`, `approval_policy`, `memory`, `shell_timeout_ms`, `session_gc`, `session_gc_max_age_days` (days of session transcripts the collector keeps; `.claude/settings.json` spells it `cleanupPeriodDays`, and absent leaves the collector's own 30-day window), `context_window`, `goal_oracle`, `home_dir`, `skills`, `output_style`, profiles — but **not `hooks`**, which this file refuses (#151). **Two readers, one file** — see the row below: adding a key here means checking what the SDK does with it |
 | `~/<home_dir>/settings.json`      | this product       | the same keys, as your defaults; the project layer wins                                         |
 | `~/<home_dir>/`                   | both               | transcripts, trust, hook approvals — `.theokit` by default; `home_dir` renames it, `.claude` included. A NAME, not a path, and an explicit `THEOKIT_HOME` still wins |
 | `~/<home_dir>/AGENTS.md`          | this product       | instructions that belong to YOU, in every project; the project's own file is read after it. `~/.theocode/AGENTS.md` still works |
