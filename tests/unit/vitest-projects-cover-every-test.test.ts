@@ -1,8 +1,9 @@
 import { execFileSync } from 'node:child_process'
-import { readdirSync, statSync } from 'node:fs'
+import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
+import { parse as parseYaml } from 'yaml'
 
 /**
  * The anti-vacuity floor for the vitest project split.
@@ -109,18 +110,73 @@ function filesVitestWillRun(): Map<string, Set<string>> {
  * rather than listed, for the same reason the rest of this file exists — a list
  * fails by omission, and a new package would inherit exactly the gap #357 recorded.
  */
+/**
+ * The workspace members, as the repository itself declares them.
+ *
+ * Read from `pnpm-workspace.yaml` rather than walked. A walk of the top level sweeps
+ * `node_modules/`, `docs/`, `patches/` and `scripts/` and then needs the exclusion list it was
+ * avoiding; a hardcoded container name is the omission the docblock above warns about, and it is
+ * what this function did until 2026-09-18 — it knew about `packages/` and nothing else, so
+ * `apps/theoclaw/tests` was invisible to the guard written to make exactly that visible.
+ */
+function workspaceGlobs(): string[] {
+  const parsed = parseYaml(readFileSync(join(ROOT, 'pnpm-workspace.yaml'), 'utf8')) as {
+    packages?: unknown
+  }
+  const globs = parsed?.packages
+  if (!Array.isArray(globs) || globs.length === 0) {
+    throw new Error(
+      'pnpm-workspace.yaml has no non-empty `packages:` list. Failing loudly rather than falling ' +
+        'back to packages/: a silent fallback restores the omission this guard exists to close.',
+    )
+  }
+  return globs.filter((g): g is string => typeof g === 'string')
+}
+
+/** Expand one workspace glob into the directories on disk that match it. */
+function expandGlob(glob: string): string[] {
+  let current = ['']
+  for (const segment of glob.split('/')) {
+    const next: string[] = []
+    for (const base of current) {
+      const candidates =
+        segment === '*'
+          ? readdirSafe(join(ROOT, base)).map((e) => (base ? `${base}/${e}` : e))
+          : [base ? `${base}/${segment}` : segment]
+      for (const candidate of candidates) {
+        if (isDirectory(join(ROOT, candidate))) next.push(candidate)
+      }
+    }
+    current = next
+  }
+  return current
+}
+
+function readdirSafe(dir: string): string[] {
+  try {
+    return readdirSync(dir)
+  } catch {
+    return [] // a declared member that is not checked out here
+  }
+}
+
+function isDirectory(path: string): boolean {
+  try {
+    return statSync(path).isDirectory()
+  } catch {
+    return false
+  }
+}
+
 function testRoots(): string[] {
   const roots = [join(ROOT, 'tests')]
-  const packagesDir = join(ROOT, 'packages')
-  for (const entry of readdirSync(packagesDir)) {
-    const candidate = join(packagesDir, entry, 'tests')
-    try {
-      if (statSync(candidate).isDirectory()) roots.push(candidate)
-    } catch {
-      // The package owns no tests. Nothing to claim, nothing to check.
+  for (const glob of workspaceGlobs()) {
+    for (const member of expandGlob(glob)) {
+      const candidate = join(ROOT, member, 'tests')
+      if (isDirectory(candidate)) roots.push(candidate)
     }
   }
-  return roots
+  return [...new Set(roots)]
 }
 
 /**
@@ -135,6 +191,13 @@ const DECLARED_EXCLUSIONS: { pattern: RegExp; why: string }[] = [
   {
     pattern: /^packages\/agents\/tests\/live\//,
     why: 'hits a real provider; excluded by packages/agents/vitest.config.ts and run on demand via `npm run test:live`',
+  },
+  {
+    // A path prefix and not an extension pattern, deliberately: `.test.ts` alone would orphan the
+    // 12 `.test.tsx` files under here and fail this guard on its first widened run. 242 files
+    // total, measured 2026-09-18.
+    pattern: /^apps\/theocode\/packages\//,
+    why: 'ci.yml:425-428 — its suite is NOT merged into the root projects list deliberately, because vitest reads coverage from the root config only and aggregating would discard the 62.03% floor apps/theocode/vitest.config.ts documents. It runs under its own CI job at ci.yml:429.',
   },
 ]
 

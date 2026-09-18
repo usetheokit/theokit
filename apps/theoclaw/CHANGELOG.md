@@ -11,6 +11,17 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- This app's vitest config was the only one of ten in the monorepo that did not cap `maxWorkers`.
+  The default is one fork per core, each booting a full test environment, so a project ceding no
+  headroom slows every project sharing the run. Measured rather than reasoned: registering this
+  app in the root `projects` list took `vitest run tests/unit/` from 266s/307s to 418s/469s — +55%
+  on a suite whose test COUNT did not change — and tipped a 16-second test past its 30-second
+  timeout, intermittently. With the cap the same runs are 338s/241s: a mean of 290s against 286s
+  before. The expression is the one nine sibling configs already carry, and this is the third
+  config value this session written without checking what the workspace uses.
+
 ### Security
 
 - A CRITICAL and a HIGH CVE shipped in this package's own declared toolchain. `vitest` was
