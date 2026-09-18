@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- **A corrected scaffold pin now reaches a user, not only the repository (B-186).** Minutes after
+  `theokit@0.67.0` published the HITL approvals scoping fix, `npm create theokit` still produced an
+  app on `theokit@0.66.1` — inside the affected range of the advisory that release closed. The
+  release had corrected the pin in the template and could not publish the CLI that carries it,
+  because the pin lives in a template file and changesets reads dependencies. The step that knows
+  the pin changed now writes the version bump the tool could not derive.
+- **Two CI jobs ran without being able to block a merge (B-183).** `theocode` and `env-verdicts`
+  were absent from `ci-ok.needs`, and `ci-ok` is the required check — so a break in either reached
+  the trunk with the gate green. `pr-report` stays out deliberately: it runs on `always()`, so
+  gating on it would weaken `ci-ok` rather than strengthen it.
+
 ## [theokit 0.67.0] - 2026-09-18
 
 ### Added
