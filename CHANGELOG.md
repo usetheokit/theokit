@@ -8,6 +8,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **The domain routing table now travels with the checkout (B-008).** It lived at
+  `.claude/rules/domain-routing.txt`, and `.claude/` is gitignored — so a fresh clone had no table
+  and routed every item by whatever a re-derivation happened to produce, or by nothing. The kit's own
+  reader has resolved `.squad/domain-routing.txt` first since 2026-09-10 and says the migration is a
+  person's to make, because a tool writing into a repository it does not own is the thing that rule
+  exists to prevent.
+
+  Moved, and the legacy copy REMOVED rather than left beside it. Two copies is the state the data-root
+  gate calls its loudest: a reader resolves the first and never sees the second, so the stale one is
+  unreachable while looking current. `.squad/records/cycle-events.jsonl` stays ignored — that stream
+  is one machine's run history and says nothing to whoever clones.
+
 - **A subprocess smoke test waited on a clock and flaked in the full run.**
   `acp-tool.test.ts` slept 300ms and hoped a spawned node process had booted, read stdin and written
   back. It passed 4/4 alone and failed inside the 1072-file run — the machine was busy, not the code.
