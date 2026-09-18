@@ -26,8 +26,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   now records which of the two routes it took, and the test checks that claim against `src/index.ts`
   rather than trusting it.
 
-### Added
-
 - **`@theokit/agents` now publishes a capability map: every public symbol and the exact specifier to
   import it from.** Twenty subpaths were published and nothing inventoried which symbol crossed which
   one, so a consumer guessed — and the guess fails in the worst order. `apps/theocode` carries the
@@ -44,8 +42,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   applySubagentMemory` — a re-exported name is an ALIAS and carries the alias flag, not the flags of
   what it points at. Resolving the alias first gives 542 values and 534 types, cross-checked against
   the declarations themselves.
-
-### Added
 
 - **Two gates over the published type surface, both proven armed before being trusted.**
   `dts-export-parity` asks the TypeScript compiler — not a regex — whether every symbol a source
@@ -66,8 +62,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   canary nominal class in two published declarations. A gate whose failure nobody has seen is a gate
   nobody knows the shape of.
 
-### Added
-
 - **The coverage policy reaches the package axis.** `subpath-coverage.test.ts` demanded a verdict for
   each of the SDK's 34 subpaths and `root-bar-coverage.test.ts` for the root bar, and both stopped at
   `@theokit/sdk`. The workspace publishes a family of twelve, and a sibling could appear, grow a public
@@ -79,20 +73,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   layer and nine are referenced zero times. All twelve now carry a verdict, and the nine `out` reasons
   differ from each other — which is the point of recording decisions rather than keeping an allowlist.
 
-### Fixed
-
-- **`ADR 0061` was cited five times and existed nowhere.** `packages/agents/src/index.ts` (twice),
-  `tests/unit/root-bar-coverage.test.ts` (twice) and `tests/type/trust-posture-passthrough.test-d.ts`
-  all cited it; `docs/adr/` held `0001`–`0004` and no file matching `*0061*` existed in this repository
-  or in any sibling. A citation that resolves to nothing reads as evidence and is not — the failure
-  this project's own plan gate hard-caps a plan for. The decision those five lines describe is now
-  recorded in `docs/adr/0005-the-root-bar-gate-sees-values-not-types.md`, with its two rejected
-  alternatives reconstructed from the test's own header and the unrecoverable one named as such.
-
-  The ADR also carries the size of the gap it declares — **324 of 422 root-bar exports** are type-only
-  and outside what `Object.keys` over an ESM namespace can see — attributed to the cross-validation
-  audit that measured it, because a gap declared without its size reads as small.
-
 ### Changed
 
 - **The README explained why a row said `resolvable` while the row said `read`.** The table was
@@ -100,8 +80,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   value was left behind, so the document contradicted itself on the one surface the section is about.
   Re-measured: `delegation/role-discovery.ts:84-85` is the join and the integration test that pins the
   SDK half passes. The prose now records the transition instead of denying it.
-
-### Changed
 
 - **Source comments no longer attribute design decisions to third-party projects.** Nineteen
   comments across `packages/agents` and `packages/theo` named other products and quoted their
@@ -116,6 +94,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   be preserved. Removing them would turn a compliant distribution into an infringing one — the
   opposite of the exposure this change reduces. The derivation declarations the `NOTICE` names,
   including the one on the second line of `instructions.ts`, stay exactly where they are.
+
+### Fixed
+
+- **`ADR 0061` was cited five times and existed nowhere.** `packages/agents/src/index.ts` (twice),
+  `tests/unit/root-bar-coverage.test.ts` (twice) and `tests/type/trust-posture-passthrough.test-d.ts`
+  all cited it; `docs/adr/` held `0001`–`0004` and no file matching `*0061*` existed in this repository
+  or in any sibling. A citation that resolves to nothing reads as evidence and is not — the failure
+  this project's own plan gate hard-caps a plan for. The decision those five lines describe is now
+  recorded in `docs/adr/0005-the-root-bar-gate-sees-values-not-types.md`, with its two rejected
+  alternatives reconstructed from the test's own header and the unrecoverable one named as such.
+
+  The ADR also carries the size of the gap it declares — **324 of 422 root-bar exports** are type-only
+  and outside what `Object.keys` over an ESM namespace can see — attributed to the cross-validation
+  audit that measured it, because a gap declared without its size reads as small.
 
 ## [@theokit/agents 15.0.0, @theokit/presenter 0.10.0, theokit 0.66.1] - 2026-09-18
 
