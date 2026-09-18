@@ -23,14 +23,21 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
-- This app's vitest config was the only one of ten in the monorepo that did not cap `maxWorkers`.
-  The default is one fork per core, each booting a full test environment, so a project ceding no
-  headroom slows every project sharing the run. Measured rather than reasoned: registering this
-  app in the root `projects` list took `vitest run tests/unit/` from 266s/307s to 418s/469s — +55%
-  on a suite whose test COUNT did not change — and tipped a 16-second test past its 30-second
-  timeout, intermittently. With the cap the same runs are 338s/241s: a mean of 290s against 286s
-  before. The expression is the one nine sibling configs already carry, and this is the third
-  config value this session written without checking what the workspace uses.
+- This app's vitest config was the only one of ten in the monorepo without a `maxWorkers` cap —
+  verified independently by a reviewer, who counted the ten files and confirmed the nine. It now
+  carries the same expression the other nine compute, which makes a config mismatch unreachable by
+  construction.
+
+  **What this entry claimed and could not support.** It first said the missing cap CAUSED a +55%
+  regression in `vitest run tests/unit/`, citing 265.61/307.19s before registering this app in the
+  root `projects` list and 417.68/469.02s after. A reviewer refuted the mechanism twice, and
+  structurally rather than by re-measuring: `vitest list tests/unit/` selects zero specs from this
+  project, because the filter is a path substring this app's test path does not contain — so a
+  project with no specs never reaches the code a worker cap governs; and vitest 4's
+  `resolveMaxWorkers` falls back to the ROOT config's value before the per-core default, and the
+  root has carried 8 throughout. The interval was observed. The cause was not established, the
+  post-cap runs (337.79/241.31s) spread 97s against a declared noise floor of 41.6s, and two
+  samples per condition cannot tell them apart.
 
 ### Security
 
