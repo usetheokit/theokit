@@ -118,8 +118,21 @@ describe('NodeAcpTransport (real subprocess smoke)', () => {
         params: { message: 'hey' },
       }),
     )
-    await new Promise((r) => setTimeout(r, 300))
+    // Wait for the ANSWER, not for a clock. A fixed `setTimeout(300)` here was a real flake: it
+    // passes 4/4 alone and failed inside the full run — 1072 files competing, and 300ms is not
+    // enough for a spawned node process to boot, read stdin and write back. `rules/testing.md` § 6
+    // names exactly this ("time in unit tests"), and the fix is not a longer sleep: a bigger number
+    // is the same race with a lower failure rate. Polling for the condition makes the test fast on
+    // an idle machine, reliable on a busy one, and failing only when the round-trip truly does not
+    // happen.
+    const deadline = Date.now() + 10_000
+    while (!received.join('').includes('ok:hey') && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 10))
+    }
     transport.close()
-    expect(received.join('')).toContain('ok:hey')
+    expect(
+      received.join(''),
+      'the echo agent never answered within 10s — this is the round-trip failing, not the machine',
+    ).toContain('ok:hey')
   })
 })

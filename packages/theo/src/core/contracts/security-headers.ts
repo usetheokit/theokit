@@ -140,6 +140,20 @@ export interface SecurityEnv {
 export interface SecurityHeadersOptions {
   nonce?: string
   prerender?: boolean
+  /**
+   * B-034 — this response is being served against a valid preview credential.
+   *
+   * Two headers follow, and both are the Definition-of-done rather than decoration. `X-Robots-Tag`
+   * keeps an unpublished document out of an index. `Cache-Control: private, no-store` keeps it out
+   * of a CDN, without which *"served only against a valid credential"* is false however good the
+   * credential is: the first hit fills a shared cache and every later reader gets the draft for
+   * free.
+   *
+   * The nonce path below emits the same `Cache-Control` for a different reason (EC-3) and exempts
+   * prerendered routes, whose HTML is meant to be cached. **This condition takes no such exemption:
+   * a prerendered draft is still a draft.** That is why the two are separate `if`s rather than one.
+   */
+  preview?: boolean
 }
 
 const DEFAULT_HSTS = 'max-age=31536000; includeSubDomains'
@@ -238,6 +252,14 @@ export function buildSecurityHeaders(
   // silent prod-only failure. Prerendered routes (which carry no nonce
   // by design — EC-4) are exempt; their HTML is meant to be cacheable.
   if (effectiveNonce) {
+    out['Cache-Control'] = 'private, no-store'
+  }
+
+  // B-034 — deliberately AFTER the nonce block and deliberately not folded into it. The nonce's
+  // `no-store` is exempt for prerendered routes; a draft is not, and merging the conditions would
+  // silently take that exemption for content that must never be cached publicly.
+  if (options.preview) {
+    out['X-Robots-Tag'] = 'noindex, nofollow'
     out['Cache-Control'] = 'private, no-store'
   }
 

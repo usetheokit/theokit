@@ -140,10 +140,16 @@ and only that key, and returns empty on a malformed file rather than throwing, b
 in a shared home file must not break every project on the machine.
 
 Both MCP readers are called by the host, not from inside this package — `loadMcpJson` has no internal
-caller either, and a library with no `main()` cannot have one. That is why both rows say **read** while
-`agent-memory/` says **resolvable**: the difference is not who calls, it is whether the chain is intact.
-A `memory:` declaration was DROPPED by `@theokit/sdk` before any reader could see it; nothing drops an
-MCP server.
+caller either, and a library with no `main()` cannot have one. That is why both rows say **read**: the
+criterion is not who calls, it is whether the chain is intact. Nothing drops an MCP server.
+
+`agent-memory/` said **resolvable** under the same criterion, and for a real reason — a `memory:`
+declaration was DROPPED by `@theokit/sdk` before any reader could see it, so the applier could be called
+and still govern nothing. **That is no longer true**, which is why its row says `read` now. The SDK
+carries the declaration, `packages/agents/tests/integration/the-sdk-version-that-parses-memory.test.ts`
+pins the half that was dangerous, and `apps/theocode/packages/agent/src/delegation/role-discovery.ts:84-85`
+is the join. The sentence above outlived the fix for two days, which is the shape this whole section
+exists to catch: the table was corrected and the paragraph explaining it was not.
 
 The registry entry that prompted this counts four decisions across three files, because
 `~/.claude.json` is split. That is the count, stated so nobody goes looking for a fourth file.
