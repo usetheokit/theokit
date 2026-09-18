@@ -30,6 +30,7 @@
  * gap with whatever the request lifecycle owes — and a seventh route added to the match table
  * inherits that bracket instead of having to remember it.
  */
+import type { RouteSubject } from '../../core/contracts/route-policy.js'
 import type { AgentNode } from '../scan/agent-scan.js'
 import { validateCsrfRequest, type CsrfMode } from '../security/csrf.js'
 
@@ -221,6 +222,13 @@ export async function matchAgentAuxRoute(
   return matchGetAuxRoute(verb, urlPath, deps) ?? (await matchPostAuxRoute(verb, urlPath, deps))
 }
 
+/** What {@link admitAux} decided, and — when a policy declared one — who was admitted. */
+interface Admission {
+  readonly refusal: Response | null
+  /** The admitted caller's id, or `undefined` when no policy asked for one. */
+  readonly subject: string | undefined
+}
+
 /**
  * Evaluate the agent's declared policy for one aux endpoint.
  *
@@ -233,15 +241,32 @@ async function admitAux(
   agent: AgentNode,
   params: AgentAccessParams,
   body?: unknown,
-): Promise<Response | null> {
+): Promise<Admission> {
   const mod = await deps.loadModule(agent.filePath)
+  // The subject is RECORDED rather than resolved twice. `admitAgentRequest` returns before touching
+  // the resolver when the policy is absent or `'public'`, which is the guarantee `resolveSubject`'s
+  // own docblock makes: the application's `createContext` must not run for a url this dispatcher
+  // merely declines. Wrapping preserves that exactly — `seen` stays `undefined` in those cases —
+  // while the approvals branch gets the id it needs to scope its answer.
+  const resolve = deps.resolveSubject
+  // A box rather than a `let`: the assignment happens inside a closure the compiler cannot see as
+  // reachable before the read, so a plain binding narrows to `never` and `seen?.id` stops compiling.
+  const admitted: { subject: RouteSubject | null } = { subject: null }
+  const recording: AgentSubjectResolver | undefined =
+    resolve === undefined
+      ? undefined
+      : async () => {
+          admitted.subject = await resolve()
+          return admitted.subject
+        }
   const decision = await admitAgentRequest(
     readAgentPolicy(mod, agent.filePath),
-    deps.resolveSubject,
+    recording,
     params,
     body,
   )
-  return decision.allowed ? null : agentAccessDenied(decision, params)
+  const refusal = decision.allowed ? null : agentAccessDenied(decision, params)
+  return { refusal, subject: admitted.subject?.id }
 }
 
 /**
@@ -262,11 +287,14 @@ export async function serveMatchedAuxRoute(
   // usetheokit/theokit#365 — the approvals listing used to answer 200 with every pending approval
   // id to anyone who asked, and the id is all the approve route needs to settle a paused tool.
   if (route.kind === 'approvals') {
-    const refusal = await admitAux(deps, route.agent, {
+    const admission = await admitAux(deps, route.agent, {
       agent: route.agent.name,
       endpoint: 'approvals',
     })
-    return refusal ?? handleListApprovals(getApprovalRegistry())
+    if (admission.refusal !== null) return admission.refusal
+    // SCOPED to this caller. `admitAux` answered "may you touch this agent's approvals"; it cannot
+    // answer "which of them are yours", and the registry is process-wide by contract (ADR 0038).
+    return handleListApprovals(getApprovalRegistry(), admission.subject)
   }
 
   // M37 — INTENTIONALLY open (no CSRF, no auth gate): a GET is not CSRF-vulnerable, the run-start
@@ -314,7 +342,7 @@ async function serveThreadRoute(
   const { agent, sessionId } = route
 
   if (route.kind === 'thread-stream') {
-    const refusal = await admitAux(deps, agent, {
+    const { refusal } = await admitAux(deps, agent, {
       agent: agent.name,
       endpoint: 'thread-stream',
       sessionId,
@@ -322,7 +350,7 @@ async function serveThreadRoute(
     return refusal ?? handleThreadStream(sessionId, request)
   }
 
-  const refusal = await admitAux(deps, agent, {
+  const { refusal } = await admitAux(deps, agent, {
     agent: agent.name,
     endpoint: 'thread-message',
     sessionId,

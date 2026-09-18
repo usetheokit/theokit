@@ -7,6 +7,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Added
+- **The HITL approvals listing is scoped to the caller it admitted.** `GET /api/agents/<name>/approvals`
+  answered with `registry.list()`, and that registry is process-wide by contract: one admitted tenant
+  of one agent received every pending approval in the process — other tenants', other agents' — each
+  carrying the `approvalId` the settle route needs to act on it.
+
+  The two halves around this were already closed and neither was in it. The route refuses a caller
+  the agent's policy does not admit, and the settle route refuses a caller who is not the approval's
+  owner. The door was gated and the window left open: being admitted to one agent showed you
+  everyone's ids.
+
+  An approval with no owner stays visible, because the registry records an owner only for agents that
+  DECLARE a policy and the settle route already refuses nobody on an absent one. Hiding those would
+  blank a public agent's own UI while protecting nothing.
+
+  The scoping asks `ownerOf` per approval instead of reading an owner off the listing: `owner` is held
+  beside the listing payload precisely so it cannot leak, and scoping a response must not put identity
+  back into it.
+
 
 - **The coverage policy reaches the half of the root bar a runtime enumeration cannot see.**
   `root-bar-coverage.test.ts` demanded a verdict for every root-bar VALUE and said in its own header
