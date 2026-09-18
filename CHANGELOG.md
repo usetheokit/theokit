@@ -8,6 +8,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **`@theokit/agents` now publishes a capability map: every public symbol and the exact specifier to
+  import it from.** Twenty subpaths were published and nothing inventoried which symbol crossed which
+  one, so a consumer guessed — and the guess fails in the worst order. `apps/theocode` carries the
+  cost in its own words: `applySubagentMemory` lives on `./config`, importing it from the root
+  type-checks against the bundled declaration, and it throws at run time with `does not provide an
+  export named`. The types never said a word.
+
+  Generated, never hand-written: a hand-kept copy of an export list is the copy that goes stale.
+  `docs/capability-map.md` ships in the package (`docs` added to `files`, verified against the real
+  `npm pack` rather than the manifest), and a test fails when the committed copy has drifted.
+
+  The oracle is the compiler over each declared `types` entry. Its first version read symbol flags
+  directly and classified **1071 of 1076** symbols as type-only, including `declare function
+  applySubagentMemory` — a re-exported name is an ALIAS and carries the alias flag, not the flags of
+  what it points at. Resolving the alias first gives 542 values and 534 types, cross-checked against
+  the declarations themselves.
+
+### Added
+
 - **Two gates over the published type surface, both proven armed before being trusted.**
   `dts-export-parity` asks the TypeScript compiler — not a regex — whether every symbol a source
   barrel exports reached the declaration the package publishes. `subpath-surface.test.ts` already did

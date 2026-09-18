@@ -1,9 +1,9 @@
 import { existsSync } from 'node:fs'
-import { createRequire } from 'node:module'
 import { join } from 'node:path'
 
 import { beforeAll, describe, expect, it } from 'vitest'
 
+import { exportedSymbols } from '../../scripts/capability-map.mjs'
 import tsupConfig from '../../tsup.config.js'
 
 /**
@@ -43,27 +43,6 @@ import tsupConfig from '../../tsup.config.js'
  * always in the source.
  */
 
-/**
- * Exactly the slice of the compiler API this file touches. Narrower than `any` and narrower than the
- * real types, which are not worth importing for six members.
- */
-interface TsCompilerApi {
-  readonly ScriptTarget: { readonly ES2022: number }
-  readonly ModuleKind: { readonly ESNext: number }
-  readonly ModuleResolutionKind: { readonly Bundler: number }
-  createProgram(
-    files: string[],
-    options: Record<string, unknown>,
-  ): {
-    getSourceFile(file: string): unknown
-    getTypeChecker(): {
-      getSymbolAtLocation(node: unknown): unknown
-      getExportsOfModule(symbol: unknown): { name: string }[]
-    }
-  }
-}
-
-const require_ = createRequire(import.meta.url)
 const ROOT = join(import.meta.dirname, '..', '..')
 
 interface Entry {
@@ -85,24 +64,15 @@ function declaredEntries(): Entry[] {
 const ENTRIES = declaredEntries()
 const BUILT = ENTRIES.filter((e) => existsSync(e.emitted))
 
-/** Exported names per file, asked of the compiler. `undefined` when the file is not in the program. */
+/**
+ * Exported names per file. Delegates to the capability map's enumerator — one place answers "what
+ * does this module export", because two copies of that question drift on the day the compiler API
+ * changes under one of them.
+ */
 function exportedNamesByFile(files: string[]): Map<string, Set<string>> {
-  const ts = require_('typescript') as TsCompilerApi
-  const program = ts.createProgram(files, {
-    noEmit: true,
-    skipLibCheck: true,
-    target: ts.ScriptTarget.ES2022,
-    module: ts.ModuleKind.ESNext,
-    moduleResolution: ts.ModuleResolutionKind.Bundler,
-  })
-  const checker = program.getTypeChecker()
   const out = new Map<string, Set<string>>()
-  for (const file of files) {
-    const source = program.getSourceFile(file)
-    if (source === undefined) continue
-    const moduleSymbol = checker.getSymbolAtLocation(source)
-    if (moduleSymbol === undefined) continue
-    out.set(file, new Set(checker.getExportsOfModule(moduleSymbol).map((s) => s.name)))
+  for (const [file, s] of exportedSymbols(files)) {
+    out.set(file, new Set([...s.values, ...s.types]))
   }
   return out
 }
