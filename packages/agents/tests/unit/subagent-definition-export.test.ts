@@ -10,9 +10,8 @@
  * silently receive the wrong type — and the only remaining way out was to redeclare the shape by
  * hand, which is exactly the duplication M81 existed to delete.
  *
- * The alias resolves the collision without touching the occupied name, which is literally the pair
- * the peer publishes (`gemini-cli/packages/core/src/index.ts:191-192`: the loader and the type, side
- * by side).
+ * The alias resolves the collision without touching the occupied name: the loader and the type are
+ * published side by side.
  *
  * ## Why the FLOOR test compares a string, and not `satisfies` (ADR D11)
  *

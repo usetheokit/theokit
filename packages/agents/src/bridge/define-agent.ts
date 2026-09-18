@@ -86,8 +86,7 @@ export interface DefineAgentConfig<TInput extends z.ZodType = z.ZodType> {
    * M7 — run-context: an opaque, per-agent object forwarded to every tool handler's
    * `ctx.context` at run time (injected by the theokit adapter's tool wrapper). Set shared config
    * (e.g. `{ projectRoot }`) ONCE at the agent level instead of baking it into each tool
-   * factory. Mirrors ai-sdk `experimental_context`, mastra `RuntimeContext`, and
-   * openai-agents-js `RunContext`. Distinct from `@Agent`'s context-window `context`.
+   * factory. Distinct from `@Agent`'s context-window `context`.
    */
   context?: Record<string, unknown>
   /**

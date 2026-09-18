@@ -6,6 +6,185 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- **An acceptance record now has a place a clone can read (B-020).** The trail lived under
+  `.claude/records/`, which is gitignored, so the evidence that a milestone was exercised against a
+  released artifact was readable on exactly one machine. It is worse than that in fact: the run the
+  item cites wrote sixteen evidence files, and by the time this was closed **none of them existed
+  anywhere** — the unreadable evidence had become no evidence.
+
+  114 files moved to `.squad/records/`, closing the `SPLIT` the data-root gate reported: two copies
+  where a reader resolves the first and never sees the second, so the stale one is unreachable while
+  looking current. The gate now reads `CENTRALISED`.
+
+  The versioning question is answered per half, copying the arrangement the kit uses on itself: the
+  dated trail stays OUT (one machine's run history says nothing to whoever clones), `records/acceptance/`
+  and `domain-routing.txt` come IN, each with the reason written where the rule is.
+
+- **The domain routing table now travels with the checkout (B-008).** It lived at
+  `.claude/rules/domain-routing.txt`, and `.claude/` is gitignored — so a fresh clone had no table
+  and routed every item by whatever a re-derivation happened to produce, or by nothing. The kit's own
+  reader has resolved `.squad/domain-routing.txt` first since 2026-09-10 and says the migration is a
+  person's to make, because a tool writing into a repository it does not own is the thing that rule
+  exists to prevent.
+
+  Moved, and the legacy copy REMOVED rather than left beside it. Two copies is the state the data-root
+  gate calls its loudest: a reader resolves the first and never sees the second, so the stale one is
+  unreachable while looking current. `.squad/records/cycle-events.jsonl` stays ignored — that stream
+  is one machine's run history and says nothing to whoever clones.
+
+- **A subprocess smoke test waited on a clock and flaked in the full run.**
+  `acp-tool.test.ts` slept 300ms and hoped a spawned node process had booted, read stdin and written
+  back. It passed 4/4 alone and failed inside the 1072-file run — the machine was busy, not the code.
+  A longer sleep is the same race with a lower failure rate, so it now waits for the ANSWER with a 10s
+  ceiling: 82ms on an idle machine, and a failure that says the round-trip did not happen rather than
+  that the clock ran out.
+
+
+### Added
+
+- **Draft preview: the credential and the response policy now ship (B-034).** A named surface was
+  neither built nor declared absent — `noindex`, `robots`, `isPreview`, `draftMode` and `previewMode`
+  returned zero hits across both source trees, while the ROADMAP listed preview in the minimum
+  contract.
+
+  `createPreviewMarker` (published on `@theokit/theo/server/auth`) mints a signed, expiring
+  credential. It is a CONFIGURED INSTANCE of `createSessionManagerWeb` under its own cookie, so the
+  encryption and key rotation are the ones already in use rather than a second implementation of
+  either. The expiry lives in the signed payload and not only on the cookie: `Max-Age` is a
+  client-side hint a copy-paste into curl drops, so the reader refuses an expired marker even when
+  the cookie arrives intact.
+
+  `buildSecurityHeaders(..., { preview: true })` puts `X-Robots-Tag: noindex, nofollow` and
+  `Cache-Control: private, no-store` on that response. The cache header is the Definition-of-done and
+  not an extra: a draft cached by a CDN is served to everyone who asks, credential or not. It is a
+  separate condition from the nonce's `no-store`, which is deliberately exempt for prerendered
+  routes — a prerendered draft is still a draft.
+
+  **What does not ship is stated rather than left open.** The framework has no content model, so
+  deciding WHICH response is a draft stays the application's; `docs/surfaces/draft-preview.md` now
+  says that instead of describing a gap.
+- **The HITL approvals listing is scoped to the caller it admitted.** `GET /api/agents/<name>/approvals`
+  answered with `registry.list()`, and that registry is process-wide by contract: one admitted tenant
+  of one agent received every pending approval in the process — other tenants', other agents' — each
+  carrying the `approvalId` the settle route needs to act on it.
+
+  The two halves around this were already closed and neither was in it. The route refuses a caller
+  the agent's policy does not admit, and the settle route refuses a caller who is not the approval's
+  owner. The door was gated and the window left open: being admitted to one agent showed you
+  everyone's ids.
+
+  An approval with no owner stays visible, because the registry records an owner only for agents that
+  DECLARE a policy and the settle route already refuses nobody on an absent one. Hiding those would
+  blank a public agent's own UI while protecting nothing.
+
+  The scoping asks `ownerOf` per approval instead of reading an owner off the listing: `owner` is held
+  beside the listing payload precisely so it cannot leak, and scoping a response must not put identity
+  back into it.
+
+
+- **The coverage policy reaches the half of the root bar a runtime enumeration cannot see.**
+  `root-bar-coverage.test.ts` demanded a verdict for every root-bar VALUE and said in its own header
+  that `Object.keys` over an imported namespace cannot see an `export type` by construction. It
+  declared that a known gap and carried no number.
+
+  Measured with the compiler instead: the SDK root bar is **99 values and 323 types**, 422 in total —
+  three quarters of it outside what any gate could see. The cross-validation audit had said 324; the
+  one-symbol difference is the version skew it declared for itself, so the figure is now this
+  repository's own rather than quoted from a report that is not in the tree.
+
+  The verdict is demanded of the **38 types that CROSS**, not of all 323. For a type that does not
+  cross, the consumer reaches it from `@theokit/sdk` directly, and *is there a type I need and cannot
+  name?* is already derived rather than listed by `every-public-type-crosses-the-barrel.test.ts`. What
+  had no decision anywhere was the other direction — and **14 of the 38 arrive through an `export *`
+  in the root barrel without being named there at all.** Nobody wrote those; a star did. Each verdict
+  now records which of the two routes it took, and the test checks that claim against `src/index.ts`
+  rather than trusting it.
+
+- **`@theokit/agents` now publishes a capability map: every public symbol and the exact specifier to
+  import it from.** Twenty subpaths were published and nothing inventoried which symbol crossed which
+  one, so a consumer guessed — and the guess fails in the worst order. `apps/theocode` carries the
+  cost in its own words: `applySubagentMemory` lives on `./config`, importing it from the root
+  type-checks against the bundled declaration, and it throws at run time with `does not provide an
+  export named`. The types never said a word.
+
+  Generated, never hand-written: a hand-kept copy of an export list is the copy that goes stale.
+  `docs/capability-map.md` ships in the package (`docs` added to `files`, verified against the real
+  `npm pack` rather than the manifest), and a test fails when the committed copy has drifted.
+
+  The oracle is the compiler over each declared `types` entry. Its first version read symbol flags
+  directly and classified **1071 of 1076** symbols as type-only, including `declare function
+  applySubagentMemory` — a re-exported name is an ALIAS and carries the alias flag, not the flags of
+  what it points at. Resolving the alias first gives 542 values and 534 types, cross-checked against
+  the declarations themselves.
+
+- **Two gates over the published type surface, both proven armed before being trusted.**
+  `dts-export-parity` asks the TypeScript compiler — not a regex — whether every symbol a source
+  barrel exports reached the declaration the package publishes. `subpath-surface.test.ts` already did
+  this for the four entries that are a pure re-export of an SDK specifier, which is the set its oracle
+  can cover; the package publishes twenty, and the other sixteen declare symbols inline, where a
+  text match reads them as empty and passes over nothing. `check:pack-exports` and `validate:attw` do
+  not close it either: both start from the emit and ask whether what is there resolves, so a symbol
+  that never reached the emit is invisible to both.
+
+  `dts-nominal-identity` asks whether one class carrying a `private`/`protected`/`#` member is
+  declared by two entries a consumer can import at once. TypeScript compares such a class nominally,
+  so two copies are incompatible types and the error a consumer sees names a field and not an import
+  site. Scope is the exports map rather than `dist/`, because a duplicate no subpath reaches cannot be
+  triggered and a gate that reports it trains people to ignore the gate.
+
+  Both find nothing today, and both were verified to bite: a canary export absent from the emit, and a
+  canary nominal class in two published declarations. A gate whose failure nobody has seen is a gate
+  nobody knows the shape of.
+
+- **The coverage policy reaches the package axis.** `subpath-coverage.test.ts` demanded a verdict for
+  each of the SDK's 34 subpaths and `root-bar-coverage.test.ts` for the root bar, and both stopped at
+  `@theokit/sdk`. The workspace publishes a family of twelve, and a sibling could appear, grow a public
+  surface and never be considered — the same defect one axis out. `package-axis-coverage.test.ts` now
+  demands an `in`/`out` verdict with a written reason for every package the SDK's shipped capability
+  map names, enumerated from that map so the list cannot fall behind a publish.
+
+  Measured 2026-09-18: 1228 public symbols across twelve packages; three are imported by name in this
+  layer and nine are referenced zero times. All twelve now carry a verdict, and the nine `out` reasons
+  differ from each other — which is the point of recording decisions rather than keeping an allowlist.
+
+### Changed
+
+- **The README explained why a row said `resolvable` while the row said `read`.** The table was
+  corrected when `apps/theocode` began calling `applySubagentMemory`; the paragraph explaining the old
+  value was left behind, so the document contradicted itself on the one surface the section is about.
+  Re-measured: `delegation/role-discovery.ts:84-85` is the join and the integration test that pins the
+  SDK half passes. The prose now records the transition instead of denying it.
+
+- **Source comments no longer attribute design decisions to third-party projects.** Nineteen
+  comments across `packages/agents` and `packages/theo` named other products and quoted their
+  internal identifiers and file paths. A comment saying a construct mirrors somebody else's is an
+  attribution of derivation, and it carried that claim into a repository that does not distribute
+  their code. The engineering reasoning is unchanged — what is gone is the attribution and the
+  borrowed identifiers. Nine of the nineteen also cited a study directory this repository does not
+  have, so they read as evidence and resolved to nothing (#838).
+
+  **`NOTICE`, `licenses/` and the credit section of `apps/theocode/README.md` are deliberately
+  untouched.** This product adapts work under Apache-2.0 and MIT, both of which REQUIRE the notice to
+  be preserved. Removing them would turn a compliant distribution into an infringing one — the
+  opposite of the exposure this change reduces. The derivation declarations the `NOTICE` names,
+  including the one on the second line of `instructions.ts`, stay exactly where they are.
+
+### Fixed
+
+- **`ADR 0061` was cited five times and existed nowhere.** `packages/agents/src/index.ts` (twice),
+  `tests/unit/root-bar-coverage.test.ts` (twice) and `tests/type/trust-posture-passthrough.test-d.ts`
+  all cited it; `docs/adr/` held `0001`–`0004` and no file matching `*0061*` existed in this repository
+  or in any sibling. A citation that resolves to nothing reads as evidence and is not — the failure
+  this project's own plan gate hard-caps a plan for. The decision those five lines describe is now
+  recorded in `docs/adr/0005-the-root-bar-gate-sees-values-not-types.md`, with its two rejected
+  alternatives reconstructed from the test's own header and the unrecoverable one named as such.
+
+  The ADR also carries the size of the gap it declares — **324 of 422 root-bar exports** are type-only
+  and outside what `Object.keys` over an ESM namespace can see — attributed to the cross-validation
+  audit that measured it, because a gap declared without its size reads as small.
+
 ## [@theokit/agents 15.0.0, @theokit/presenter 0.10.0, theokit 0.66.1] - 2026-09-18
 
 ### Changed

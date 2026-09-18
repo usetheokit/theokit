@@ -10,21 +10,24 @@ import * as sdk from '@theokit/sdk'
  *
  * ## The hole this file closes
  *
- * `subpath-coverage.test.ts` (M78) demands a verdict for each of the SDK's 31 SUBPATHS, and its own
+ * `subpath-coverage.test.ts` (M78) demands a verdict for each of the SDK's 34 SUBPATHS, and its own
  * header explains why a verdict beats an allowlist: without one, "nobody has decided yet" is
  * indistinguishable from "we decided it stays out". That policy worked — for the axis it covers.
  *
  * The config/trust/wiring family lives on the ROOT BAR (`@theokit/sdk` entry `.`), which no gate
  * enumerated. Measured consequence: NINE consecutive minors (4.41 → 4.49) added symbols there and not
  * one produced a signal here. The omission did not survive because reviewers were careless; it
- * survived because the instrument's scope was narrower than the property it claimed. ADR 0061.
+ * survived because the instrument's scope was narrower than the property it claimed.
+ * See `docs/adr/0005-the-root-bar-gate-sees-values-not-types.md`.
  *
  * ## Scope: VALUES, and the name says so
  *
  * Enumeration is `Object.keys` over the imported namespace — the runtime object. Every `export type`
  * in the SDK is erased at compile time and cannot appear. Claiming "every root-bar export has a
  * verdict" while covering only values would repeat, one level down, exactly the defect above. So the
- * test is named for what it checks, and type coverage is declared a known gap (ADR 0061, alternative 4).
+ * test is named for what it checks, and type coverage is declared a known gap
+ * (ADR 0005 § The size of the declared gap). It is no longer open: `root-bar-types-coverage.test.ts`
+ * enumerates the type half with the compiler and demands a verdict for every type that CROSSES.
  *
  * ## ESM on both sides, deliberately
  *

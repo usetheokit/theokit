@@ -14,8 +14,22 @@ import type { Presenter } from '../presenter.js'
  *
  * ## It emits ONE message, and never splits
  *
- * A chat message is not a stream: the surface has no line to rewrite. So the presenter assembles
- * across `present()` calls and emits once on `finish()`.
+ * The presenter assembles across `present()` calls and emits once on `finish()`.
+ *
+ * The reason is NOT that the surface cannot be edited — it can, and a competitor in production does
+ * it. `NousResearch/hermes-agent` (MIT) classifies every platform by exactly that in
+ * `gateway/display_config.py`: HIGH edits for personal use, MEDIUM edits but is customer-facing,
+ * LOW has no edit support so progress messages are permanent, MINIMAL batches. Telegram, Discord,
+ * Mattermost and Matrix all edit.
+ *
+ * What it edits is TOOL PROGRESS, not the answer: `tool_progress_grouping: "accumulate"` edits one
+ * progress bubble, and `cleanup_progress` deletes that bubble after a successful final response
+ * while keeping it on failed runs as a breadcrumb. The final answer is still one message.
+ *
+ * So one message per turn stands, and editing is a capability this presenter does not use rather
+ * than one the surface lacks. Showing tool progress at all is the product decision left open below;
+ * if it is ever taken, the edit path is where it would live, and it is a different mechanism from
+ * this one.
  *
  * It also never splits, and that is a decision with evidence behind it (`B-019` ADR D1): all eight
  * gateway splitters already split inside `sendMessage`, so a presenter that pre-split would produce

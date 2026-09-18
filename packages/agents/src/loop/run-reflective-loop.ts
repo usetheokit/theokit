@@ -11,8 +11,6 @@
  *
  * `runReflectiveLoop` is INTERNAL (not re-exported from the package barrel,
  * Drawback #4) — consumed by `delegate()` (T2.2) and `AgentRunner` (T3.1).
- *
- * reference: knowledge-base/references/mastra agent.ts (re-enter the loop with feedback).
  */
 // V4-P: type-only import (erased at runtime) so the loop stays SDK-optional; the `withRetry`
 // VALUE is dynamic-imported inside consumeOneRound only when `retry` is configured.
@@ -89,7 +87,7 @@ const MAINLOOP_METRIC = '[THEO_AGENT_MAINLOOP_RUNTIME_APPLIED]'
 /** The "still working" continuation signal — a tool-using turn re-enters the loop. */
 const TOOL_CALLS: LoopFinishReason = 'tool-calls'
 
-/** Final-round graceful-degradation hint (V4-D step_limit — modeled on opencode MAX_STEPS_PROMPT). */
+/** Final-round graceful-degradation hint (V4-D step_limit). */
 const STEP_LIMIT_HINT =
   'This is your final round — do not call any more tools; summarize the work done so far and list any remaining tasks.'
 
@@ -115,8 +113,8 @@ function stableStringify(value: unknown): string {
  * Two consecutive rounds with an equal signature made no new progress. The assistant
  * narration text is DELIBERATELY excluded (theokit#53): a model that re-runs identical
  * tool calls while rephrasing its prose ("…and run it." → "Now I will run…") would
- * otherwise evade the detector and spin. Mirrors opencode's `doom_loop`, which compares
- * tool name + JSON.stringify(input) and nothing else. Tool `output` is also excluded:
+ * otherwise evade the detector and spin. The signature is tool name + canonicalized input and
+ * nothing else. Tool `output` is also excluded:
  * repeating the same call is no-progress even if the result text wobbles. (V4-D, ADR D2)
  */
 function roundSignature(toolCalls: readonly { name: string; input: unknown }[]): string {

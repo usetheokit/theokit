@@ -11,7 +11,7 @@
  * the consumer cannot name is unusable: they would have to redeclare the shape by hand, and a second
  * declaration of a security contract drifts from the first in silence.
  *
- * ADR 0061 (M67) honestly declared that the ROOT-BAR gate covers values and not types, because
+ * ADR 0005 (M67) honestly declared that the ROOT-BAR gate covers values and not types, because
  * `Object.keys` over the namespace does not see `export type`. These four close that gap where it
  * matters — not for completeness, but because M68 depends on them.
  */

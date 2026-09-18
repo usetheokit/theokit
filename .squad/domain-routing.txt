@@ -1,0 +1,29 @@
+# Domain routing — WHICH REPOSITORIES EXIST HERE, and who owns each.
+#
+# This file is the PROJECT'S, not the kit's. It lives in `rules/*.txt` for that
+# reason: the boundary guard allows the project to edit it, and a reinstall
+# preserves it. It used to be a section inside `rules/cycle-backlog.md`, which is
+# the kit's contract — so the kit prescribed writing to a file its own guard
+# blocked, and the section had to be replaced by regex, which took the invariants
+# next to it along.
+#
+# Format:  domain | repo[, repo...] | agents/<specialist>.md
+#
+# Derive it:
+#   python3 .claude/skills/backlog-init/scripts/detect_domains.py --root . \
+#     --write .claude/rules/domain-routing.txt
+#
+# Edit by hand when ownership does not follow the directory layout — that case is
+# why this is a file you own rather than one the kit overwrites.
+#
+# The invariants this table must satisfy are NOT repeated here. They are the
+# kit's contract and live in `rules/cycle-backlog.md` under `## Routing
+# invariants` — `scripts/route_domain.py` enforces them and its own header calls
+# that rule the source of truth it refuses to copy. This file is yours and could
+# be edited to say anything; the rule that governs it is not.
+#
+# In short: one repo belongs to exactly one domain, and a repo the inventory
+# names but disk does not have stays listed rather than deleted. Read the rule
+# for why each is so.
+
+theokit | theokit, packages/agents, packages/agents-pty, packages/create-theokit, packages/http, packages/presenter, packages/tauri, packages/theo | agents/theokit.md

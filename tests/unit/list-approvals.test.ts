@@ -1,9 +1,12 @@
 /**
  * M14 (theokit-ai-first) — GET /api/agents/:name/approvals lists pending HITL approvals.
  *
- * The in-process ApprovalRegistry now tracks pending-approval metadata and exposes `list()`; the
- * handler serves it as JSON. Single-process contract (ADR 0038) — the list is process-wide; a
- * durable/multi-tenant store is the documented follow-up.
+ * The in-process ApprovalRegistry tracks pending-approval metadata and exposes `list()`; the
+ * handler serves the subset THIS CALLER may see as JSON. Single-process contract (ADR 0038) — the
+ * registry is process-wide, and that is exactly why the handler scopes: one admitted tenant of one
+ * agent used to receive every pending approval in the process, each with the id the settle route
+ * acts on. Scoping is in `packages/theo/tests/server/approvals-listing-is-scoped.test.ts`; this
+ * file keeps the shape of the response.
  *
  * TDD RED-first.
  */
@@ -59,7 +62,9 @@ describe('handleListApprovals', () => {
     const reg = createInProcessApprovalRegistry()
     void reg.register('x', { timeoutMs: 60_000, onTimeout: 'abort', toolName: 't', question: 'q?' })
 
-    const res = handleListApprovals(reg)
+    // The registration declares no owner, so the approval is ownerless and every caller sees it —
+    // the rule the settle route already follows for an absent owner.
+    const res = handleListApprovals(reg, undefined)
     expect(res.status).toBe(200)
     const body = (await res.json()) as { approvals: { approvalId: string }[] }
     expect(body.approvals.map((a) => a.approvalId)).toEqual(['x'])

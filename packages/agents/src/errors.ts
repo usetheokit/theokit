@@ -12,7 +12,6 @@
  * from `@theokit/agents` and runtime throws from `@theokit/sdk` are the SAME class — `instanceof`
  * holds across the boundary in both directions. It gains the SDK's `{ code, cause, metadata }`
  * options (existing single-arg `new ConfigurationError('msg')` calls are unchanged — options are
- * optional) and stays `instanceof Error` (via `TheokitAgentError extends Error`). Decision in
- * `knowledge-base/adrs/0006-configuration-error-unification.md`.
+ * optional) and stays `instanceof Error` (via `TheokitAgentError extends Error`).
  */
 export { ConfigurationError } from '@theokit/sdk/errors'

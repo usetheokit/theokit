@@ -13,7 +13,6 @@ dist/
 .theokit/
 .next/
 .output/
-.nitro/
 .cache/
 .vercel/
 .wrangler/
@@ -21,7 +20,32 @@ dist/
 cross-validation-output/
 performance-audit-output/
 reference-compare-output/
-.squad/records/cycle-events.jsonl
+# `.squad/` is what this system produces. Two halves with opposite answers, and the
+# arrangement is copied from the kit's own `.gitignore` rather than invented here.
+#
+#   wiki/     durable knowledge — decisions, references. It travels.
+#   records/  the dated trail — one run's plans, briefs, audits, reviews. It does not:
+#             what this machine's cycles did says nothing to whoever clones, and
+#             committing it puts one operator's run history in everybody's diff.
+#
+# TWO exceptions, each argued rather than convenient:
+#
+#   domain-routing.txt   the map deciding which specialist owns which repository. It is
+#                        CONFIGURATION, not a run record, and a clone without it routes
+#                        by nothing (B-008).
+#   records/acceptance/  the evidence that a milestone was exercised against a released
+#                        artifact. It is what an auditor reads to answer "was this ever
+#                        actually used before we called it done", and an answer only one
+#                        machine can read is not an answer (B-020).
+#
+# `.squad/*` and not `.squad/`: git does not descend into an excluded DIRECTORY, so the
+# star is what lets the re-inclusions below be reachable at all.
+.squad/*
+!.squad/domain-routing.txt
+!.squad/wiki/
+!.squad/records/
+.squad/records/*
+!.squad/records/acceptance/
 # Environment
 .env
 .env.*
