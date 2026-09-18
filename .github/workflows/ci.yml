@@ -572,6 +572,31 @@ jobs:
       - name: build
         run: pnpm --filter theocode run build
 
+  theoclaw:
+    name: TheoClaw (the assistant assembled on this framework)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # No `needs:`, deliberately. The `theocode` job above waits on `typecheck-build` because it
+    # consumes the workspace packages from the `package-dist` artifact. This app does not: its
+    # `@theokit/*` dependencies resolve to REGISTRY versions in the lockfile, not to `link:`
+    # entries, so there is nothing built here for it to wait for. Adding the dependency anyway
+    # would serialise a 10-minute job behind a 30-minute one for no verdict.
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: usetheokit/shared-workflows/actions/setup@v1 # zizmor: ignore[unpinned-uses]
+
+      # The three gates this package declares, each as its own step so a red run names which one
+      # failed rather than reporting "the job failed". They were verified by hand in the session
+      # that wrote them (B-004) and by nothing since — which is the item this job closes.
+      - name: test
+        run: pnpm --filter theoclaw test
+      - name: typecheck
+        run: pnpm --filter theoclaw run typecheck
+      - name: boundaries
+        run: pnpm --filter theoclaw run boundaries
+
   dependency-audit:
     name: Dependency audit (production, high+)
     runs-on: ubuntu-latest

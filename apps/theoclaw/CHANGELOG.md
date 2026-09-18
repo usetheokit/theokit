@@ -11,6 +11,16 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- A CI job that runs this package's three gates — `test`, `typecheck`, `boundaries` — on every
+  push to the trunk. `grep -rn theoclaw .github/workflows/` returned zero lines across 12 workflow
+  files until now, so from B-004 onward the gates held exactly as long as somebody remembered to
+  run them. Each gate is its own step, so a red run names which one failed instead of reporting
+  that the job failed. The job carries no `needs:`, deliberately: this app's `@theokit/*`
+  dependencies resolve to registry versions rather than workspace links, so there is nothing built
+  in this repository for it to wait on.
+
 ### Fixed
 
 - This app's vitest config was the only one of ten in the monorepo that did not cap `maxWorkers`.
