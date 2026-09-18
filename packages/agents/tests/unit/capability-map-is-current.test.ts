@@ -2,7 +2,12 @@ import { existsSync, readFileSync } from 'node:fs'
 
 import { beforeAll, describe, expect, it } from 'vitest'
 
-import { OUT, currentCapabilityMap, declaredEntries } from '../../scripts/capability-map.mjs'
+import {
+  OUT,
+  currentCapabilityMap,
+  declaredEntries,
+  sdkVersion,
+} from '../../scripts/capability-map.mjs'
 
 /**
  * The committed capability map agrees with the package it describes.
@@ -52,8 +57,28 @@ describe('the committed capability map is what the package implies', () => {
     )
   })
 
+  /**
+   * The map re-exports the SDK, so its content is a function of which SDK is installed — and the
+   * `dep-check / suite at the bottom of every declared range` leg installs this package's declared
+   * floor (`@theokit/sdk: ^5.3.0`) rather than the resolved one. Measured 2026-09-18: a straight
+   * comparison reported drift there on a tree nobody had touched, while the typecheck was clean and
+   * 1070 test files passed beside it.
+   *
+   * So the gate states its precondition instead of asserting through it. Drift means the committed
+   * map stopped matching the package AT THE SAME SDK; a different SDK is a different question, and
+   * answering it with this assertion turns a repo-hygiene gate into a version-brittle one that the
+   * next person disables.
+   */
   it('test_the_committed_map_has_NOT_drifted', () => {
     const committed = existsSync(OUT) ? readFileSync(OUT, 'utf8') : ''
+    const stamp = /Measured against `@theokit\/sdk@([^`]+)`\./.exec(committed)?.[1]
+    if (stamp !== undefined && stamp !== sdkVersion()) {
+      expect(
+        stamp,
+        'the committed map carries no readable SDK stamp, so this skip cannot be justified',
+      ).toMatch(/^\d+\.\d+\.\d+/)
+      return
+    }
     expect(
       committed === rendered,
       'docs/capability-map.md has drifted from the package. Re-run ' +
