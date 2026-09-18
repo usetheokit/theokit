@@ -129,6 +129,17 @@ export function exportedSymbols(files: string[]): Map<string, Symbols> {
 }
 
 /** The document. Deterministic: same package, same bytes. */
+/**
+ * The version of `@theokit/sdk` this run measured against, read from its manifest.
+ *
+ * Exported because the drift gate needs the same number: comparing a committed map against a
+ * different SDK's surface is comparing two different questions.
+ */
+export function sdkVersion(): string {
+  const manifest = require_.resolve('@theokit/sdk/package.json')
+  return (JSON.parse(readFileSync(manifest, 'utf8')) as { version?: string }).version ?? 'unknown'
+}
+
 export function renderCapabilityMap(entries: Entry[], symbols: Map<string, Symbols>): string {
   const rows = entries
     .map((e) => ({ e, s: symbols.get(e.emitted) }))
@@ -149,6 +160,12 @@ export function renderCapabilityMap(entries: Entry[], symbols: Map<string, Symbo
     'with `does not provide an export named`. That is the mistake this file exists to prevent.',
     '',
     `${total} export(s) across ${rows.length} entry point(s).`,
+    '',
+    // The map re-exports the SDK, so its content is a function of which SDK is installed. Stamping
+    // the version lets `capability-map-is-current.test.ts` tell a map that ROTTED from one measured
+    // against an older SDK — the `dep-check` leg installs this package's declared floor, where a
+    // straight comparison reported drift on a tree nobody had touched.
+    `Measured against \`@theokit/sdk@${sdkVersion()}\`.`,
     '',
   ]
   for (const { e, s } of rows) {

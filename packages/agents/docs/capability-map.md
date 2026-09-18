@@ -12,6 +12,8 @@ with `does not provide an export named`. That is the mistake this file exists to
 
 1076 export(s) across 20 entry point(s).
 
+Measured against `@theokit/sdk@5.9.0`.
+
 ## `@theokit/agents`
 
 | Symbol | Kind |

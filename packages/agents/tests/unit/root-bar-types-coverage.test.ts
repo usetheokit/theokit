@@ -163,10 +163,39 @@ describe('the root bar has a type half, and it is now visible', () => {
     ).toEqual([])
   })
 
+  /**
+   * Two different facts hid under one assertion until 2026-09-18, and the dep-check found it.
+   *
+   * A verdict naming a type that does not cross can mean the table rotted — somebody stopped
+   * re-exporting the type and left the decision behind. It can also mean the INSTALLED SDK simply
+   * predates the type: this package declares `@theokit/sdk: ^5.3.0`, `HookApprovalGate` landed in
+   * `5.4.0`, and the `dep-check / suite at the bottom of every declared range` leg installs the
+   * floor. There the table is not stale; the environment is older than the table.
+   *
+   * Collapsing the two made this gate fail on a floor where the package is correct — measured: the
+   * typecheck was clean and 1070 test files passed beside it. `sdk-adapter-create-options.ts`
+   * declares its own `HookApprovalGate` for exactly that reason, so the floor is honest and this
+   * gate was the thing that was wrong.
+   *
+   * So the failure is scoped to the case that is actually rot: the SDK DEFINES the type and it no
+   * longer crosses. A verdict for a type this SDK has never heard of is reported in the message and
+   * does not fail — and the opposite direction, a crossing type with no verdict, stays unconditional
+   * above, because a newer SDK adding a crossing type must still force a decision.
+   */
   it('test_the_list_does_not_reference_a_type_that_no_longer_crosses', () => {
     const crossing = new Set(SURFACE.crossingTypes)
-    const stale = Object.keys(TYPE_VERDICTS).filter((n) => !crossing.has(n))
-    expect(stale, `verdict(s) for type(s) that no longer cross: ${stale.join(', ')}`).toEqual([])
+    const defined = new Set(SURFACE.sdkTypes)
+    const absent = Object.keys(TYPE_VERDICTS).filter((n) => !crossing.has(n))
+    const stale = absent.filter((n) => defined.has(n))
+    const olderSdk = absent.filter((n) => !defined.has(n))
+    expect(
+      stale,
+      `verdict(s) for type(s) the installed SDK defines and that no longer cross: ${stale.join(', ')}.` +
+        (olderSdk.length > 0
+          ? `\nNot counted, because the installed SDK does not define them at all — an older SDK, ` +
+            `not a stale table: ${olderSdk.join(', ')}.`
+          : ''),
+    ).toEqual([])
   })
 
   it('test_a_via_of_NAMED_is_true_of_the_barrel', () => {
