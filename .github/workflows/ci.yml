@@ -575,7 +575,14 @@ jobs:
   theoclaw:
     name: TheoClaw (the assistant assembled on this framework)
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # 3 and not 10: NFR-001 of this item's brief bounds this job at 180 seconds, and until now
+    # nothing in the file enforced it — `timeout-minutes: 10` is 600s, 3.3x the stated
+    # requirement, so the bound lived only in a document while the file allowed anything under
+    # ten minutes. The number comes from the REQUIREMENT and not from a measurement: this job
+    # has never run (the branch has no upstream), so its first run is what tests both the job
+    # and the bound. A failure here means one of the two is wrong, which is the fact a 600s
+    # ceiling was hiding.
+    timeout-minutes: 3
     # No `needs:`, deliberately. The `theocode` job above waits on `typecheck-build` because it
     # consumes the workspace packages from the `package-dist` artifact. This app does not: its
     # `@theokit/*` dependencies resolve to REGISTRY versions in the lockfile, not to `link:`

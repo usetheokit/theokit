@@ -178,6 +178,19 @@ describe('CI Workflow', () => {
   // advisory while looking mandatory. Measured 2026-09-18 by the independent audit of B-011
   // (LCR2014): the `theoclaw` job had just been added and was not listed, which left its three
   // gates unable to block the merge they were written to block.
+  // NFR-001 of B-011's alignment brief bounds this job at 180 seconds. Until 2026-09-18 the file
+  // declared `timeout-minutes: 10` — 600s, 3.3x the requirement — so the bound existed only in a
+  // document and the workflow would have accepted anything under ten minutes.
+  //
+  // WHAT THIS TEST CANNOT DO, stated rather than implied: the brief lives at
+  // `apps/theoclaw/.squad/records/alignment/ci-coverage-alignment.md` and is NOT tracked by git,
+  // so this cannot read the requirement and compare. The 3 below is transcribed by hand. If the
+  // requirement moves, this number does not follow it on its own.
+  it('the theoclaw job cannot outlive the bound its requirement states', () => {
+    const workflow = loadWorkflow('ci.yml')
+    expect(workflow.jobs.theoclaw['timeout-minutes']).toBeLessThanOrEqual(3)
+  })
+
   it('every job reaches the one check branch protection requires', () => {
     const workflow = loadWorkflow('ci.yml')
     const needs: string[] = workflow.jobs['ci-ok'].needs
