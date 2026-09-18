@@ -1,5 +1,20 @@
 # theo
 
+## 0.66.1
+
+### Patch Changes
+
+- Updated dependencies [c3d677d]
+- Updated dependencies [4aa6602]
+- Updated dependencies [fb80f7d]
+- Updated dependencies [54d87cf]
+- Updated dependencies [b81957c]
+- Updated dependencies [d4c00bb]
+- Updated dependencies [f6a5526]
+- Updated dependencies [3d73fd2]
+  - @theokit/agents@15.0.0
+  - @theokit/presenter@0.10.0
+
 ## 0.66.0
 
 ### Minor Changes
