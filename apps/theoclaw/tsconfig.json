@@ -6,8 +6,18 @@
     "declaration": true,
     "declarationDir": "./dist",
     "strict": true,
-    "types": ["node", "reflect-metadata"]
+    "types": [
+      "node",
+      "reflect-metadata"
+    ],
+    "noEmit": false
   },
-  "include": ["src/**/*.ts"],
-  "exclude": ["dist", "tests", "node_modules"]
+  "include": [
+    "src/**/*.ts"
+  ],
+  "exclude": [
+    "dist",
+    "tests",
+    "node_modules"
+  ]
 }

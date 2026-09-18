@@ -8,14 +8,13 @@
   "dependencies": {
     "@theokit/di": "^0.2.1",
     "@theokit/di-agent": "^0.5.0",
-    "@theokit/sdk": "^5.9.1",
+    "@theokit/sdk": "^5.9.0",
     "reflect-metadata": "^0.2.0"
   },
   "devDependencies": {
-    "typescript": "^5.6.0",
-    "vitest": "^2.1.0",
     "@types/node": "^22.0.0",
-    "dependency-cruiser": "^16.0.0"
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",

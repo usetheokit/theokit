@@ -48,6 +48,6 @@ export function createContainer<TAgent>(
 
   return {
     withAgent: (work) =>
-      container.runInRequest(async () => work(await container.resolve<TAgent>(provider.provide))),
+      container.runInRequest(async () => work(await container.resolveAsync<TAgent>(provider.provide))),
   }
 }
