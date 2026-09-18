@@ -184,6 +184,31 @@ importers:
         specifier: ^4.0.0
         version: 4.4.3
 
+  apps/theoclaw:
+    dependencies:
+      '@theokit/di':
+        specifier: ^0.2.1
+        version: 0.2.1(reflect-metadata@0.2.2)
+      '@theokit/di-agent':
+        specifier: ^0.5.0
+        version: 0.5.0(@theokit/di@0.2.1(reflect-metadata@0.2.2))(@theokit/sdk@5.9.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.21.3))(reflect-metadata@0.2.2)
+      '@theokit/sdk':
+        specifier: 5.9.0
+        version: 5.9.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.21.3)
+      reflect-metadata:
+        specifier: ^0.2.0
+        version: 0.2.2
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.20.3
+      typescript:
+        specifier: ^5.6.0
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.9
+        version: 4.1.11(@types/node@22.20.3)(@vitest/coverage-v8@4.1.11)(happy-dom@20.9.0)(msw@2.14.6(@types/node@22.20.3)(typescript@5.9.3))(vite@7.3.5(@types/node@22.20.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0))
+
   apps/theocode:
     devDependencies:
       '@eslint/js':
@@ -2742,6 +2767,20 @@ packages:
 
   '@tauri-apps/api@2.11.1':
     resolution: {integrity: sha512-M2FPuYND2m+wh5hfW9ZpSdxMPdEJovPBWwoHJmwUpysTYNHaOkVFN419m/K0LIgjb/7KU2vBgsUepJWugQCvAA==}
+
+  '@theokit/di-agent@0.5.0':
+    resolution: {integrity: sha512-DqsggX3nO5KUatys1hlmy7baZPa/huLbegnaB7adQJxaUID3GpbEOrK6z6Ft8nm1SUK9tKUuskzxT5oMHpNahg==}
+    engines: {node: '>=22.12.0'}
+    peerDependencies:
+      '@theokit/di': '>=0.1.1 <0.3'
+      '@theokit/sdk': 5.9.0
+      reflect-metadata: ^0.2.0
+
+  '@theokit/di@0.2.1':
+    resolution: {integrity: sha512-QD2bKytgwMI019uRm9CkM97u9Nml9X7QZ7imwVX4FpIp/iZZN6sqETz31IOheTJAkI6qrwXBBsQnn7SWqK4DTA==}
+    engines: {node: '>=22.12.0'}
+    peerDependencies:
+      reflect-metadata: ^0.2.0
 
   '@theokit/sdk-pty@0.3.4':
     resolution: {integrity: sha512-P8gaWFIVNAuiREBTY7UEVaJCM+CKLRyR4HHSpqRjpErz497SlARFo3+G8SKKtoATv8y08Q7mwv7T7mmOCzMZkQ==}
@@ -9484,6 +9523,16 @@ snapshots:
 
   '@tauri-apps/api@2.11.1': {}
 
+  '@theokit/di-agent@0.5.0(@theokit/di@0.2.1(reflect-metadata@0.2.2))(@theokit/sdk@5.9.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.21.3))(reflect-metadata@0.2.2)':
+    dependencies:
+      '@theokit/di': 0.2.1(reflect-metadata@0.2.2)
+      '@theokit/sdk': 5.9.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.21.3)
+      reflect-metadata: 0.2.2
+
+  '@theokit/di@0.2.1(reflect-metadata@0.2.2)':
+    dependencies:
+      reflect-metadata: 0.2.2
+
   '@theokit/sdk-pty@0.3.4(@theokit/sdk@5.9.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.21.3))':
     dependencies:
       '@theokit/sdk': 5.9.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.21.3)
@@ -9607,7 +9656,7 @@ snapshots:
 
   '@types/better-sqlite3@7.6.13':
     dependencies:
-      '@types/node': 22.20.3
+      '@types/node': 25.9.5
     optional: true
 
   '@types/busboy@1.5.4':
@@ -9850,7 +9899,7 @@ snapshots:
 
   '@types/set-cookie-parser@2.4.10':
     dependencies:
-      '@types/node': 22.20.3
+      '@types/node': 25.9.5
     optional: true
 
   '@types/statuses@2.0.6':
@@ -10261,7 +10310,7 @@ snapshots:
       obug: 2.1.3
       std-env: 4.1.0
       tinyrainbow: 3.1.0
-      vitest: 4.1.11(@types/node@22.20.3)(@vitest/coverage-v8@4.1.11)(happy-dom@20.9.0)(msw@2.14.6(@types/node@22.20.3)(typescript@6.0.3))(vite@7.3.5(@types/node@22.20.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0))
+      vitest: 4.1.11(@types/node@22.20.3)(@vitest/coverage-v8@4.1.11)(happy-dom@20.9.0)(msw@2.14.6(@types/node@22.20.3)(typescript@5.9.3))(vite@7.3.5(@types/node@22.20.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0))
 
   '@vitest/coverage-v8@4.1.9(vitest@4.1.9)':
     dependencies:
@@ -10294,6 +10343,15 @@ snapshots:
       '@vitest/utils': 4.1.9(patch_hash=6936c325f606bc6110eea7301acef094a9704b0074b4b853f00d643725535ed7)
       chai: 6.2.2
       tinyrainbow: 3.1.0
+
+  '@vitest/mocker@4.1.11(msw@2.14.6(@types/node@22.20.3)(typescript@5.9.3))(vite@7.3.5(@types/node@22.20.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0))':
+    dependencies:
+      '@vitest/spy': 4.1.11
+      estree-walker: 3.0.3
+      magic-string: 0.30.21
+    optionalDependencies:
+      msw: 2.14.6(@types/node@22.20.3)(typescript@5.9.3)
+      vite: 7.3.5(@types/node@22.20.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0)
 
   '@vitest/mocker@4.1.11(msw@2.14.6(@types/node@22.20.3)(typescript@6.0.3))(vite@7.3.5(@types/node@22.20.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0))':
     dependencies:
@@ -12131,7 +12189,7 @@ snapshots:
 
   happy-dom@20.9.0:
     dependencies:
-      '@types/node': 22.20.3
+      '@types/node': 25.9.5
       '@types/whatwg-mimetype': 3.0.2
       '@types/ws': 8.18.1
       entities: 7.0.1
@@ -13368,6 +13426,32 @@ snapshots:
   mri@1.2.0: {}
 
   ms@2.1.3: {}
+
+  msw@2.14.6(@types/node@22.20.3)(typescript@5.9.3):
+    dependencies:
+      '@inquirer/confirm': 6.1.1(@types/node@22.20.3)
+      '@mswjs/interceptors': 0.41.9
+      '@open-draft/deferred-promise': 3.0.0
+      '@types/statuses': 2.0.6
+      cookie: 1.1.1
+      graphql: 16.14.2
+      headers-polyfill: 5.0.1
+      is-node-process: 1.2.0
+      outvariant: 1.4.3
+      path-to-regexp: 6.3.0
+      picocolors: 1.1.1
+      rettime: 0.11.11
+      statuses: 2.0.2
+      strict-event-emitter: 0.5.1
+      tough-cookie: 6.0.2
+      type-fest: 5.8.0
+      until-async: 3.0.2
+      yargs: 17.7.3
+    optionalDependencies:
+      typescript: 5.9.3
+    transitivePeerDependencies:
+      - '@types/node'
+    optional: true
 
   msw@2.14.6(@types/node@22.20.3)(typescript@6.0.3):
     dependencies:
@@ -15011,6 +15095,35 @@ snapshots:
       tsx: 4.22.4
       yaml: 2.9.0
 
+  vitest@4.1.11(@types/node@22.20.3)(@vitest/coverage-v8@4.1.11)(happy-dom@20.9.0)(msw@2.14.6(@types/node@22.20.3)(typescript@5.9.3))(vite@7.3.5(@types/node@22.20.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0)):
+    dependencies:
+      '@vitest/expect': 4.1.11
+      '@vitest/mocker': 4.1.11(msw@2.14.6(@types/node@22.20.3)(typescript@5.9.3))(vite@7.3.5(@types/node@22.20.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0))
+      '@vitest/pretty-format': 4.1.11
+      '@vitest/runner': 4.1.11
+      '@vitest/snapshot': 4.1.11
+      '@vitest/spy': 4.1.11
+      '@vitest/utils': 4.1.11
+      es-module-lexer: 2.1.0
+      expect-type: 1.3.0
+      magic-string: 0.30.21
+      obug: 2.1.3
+      pathe: 2.0.3
+      picomatch: 4.0.7
+      std-env: 4.1.0
+      tinybench: 2.9.0
+      tinyexec: 1.3.0
+      tinyglobby: 0.2.17
+      tinyrainbow: 3.1.0
+      vite: 7.3.5(@types/node@22.20.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0)
+      why-is-node-running: 2.3.0
+    optionalDependencies:
+      '@types/node': 22.20.3
+      '@vitest/coverage-v8': 4.1.11(vitest@4.1.11)
+      happy-dom: 20.9.0
+    transitivePeerDependencies:
+      - msw
+
   vitest@4.1.11(@types/node@22.20.3)(@vitest/coverage-v8@4.1.11)(happy-dom@20.9.0)(msw@2.14.6(@types/node@22.20.3)(typescript@6.0.3))(vite@7.3.5(@types/node@22.20.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)(yaml@2.9.0)):
     dependencies:
       '@vitest/expect': 4.1.11
@@ -15025,7 +15138,7 @@ snapshots:
       magic-string: 0.30.21
       obug: 2.1.3
       pathe: 2.0.3
-      picomatch: 4.0.5
+      picomatch: 4.0.7
       std-env: 4.1.0
       tinybench: 2.9.0
       tinyexec: 1.3.0
