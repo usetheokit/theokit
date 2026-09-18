@@ -8,6 +8,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **Two gates over the published type surface, both proven armed before being trusted.**
+  `dts-export-parity` asks the TypeScript compiler — not a regex — whether every symbol a source
+  barrel exports reached the declaration the package publishes. `subpath-surface.test.ts` already did
+  this for the four entries that are a pure re-export of an SDK specifier, which is the set its oracle
+  can cover; the package publishes twenty, and the other sixteen declare symbols inline, where a
+  text match reads them as empty and passes over nothing. `check:pack-exports` and `validate:attw` do
+  not close it either: both start from the emit and ask whether what is there resolves, so a symbol
+  that never reached the emit is invisible to both.
+
+  `dts-nominal-identity` asks whether one class carrying a `private`/`protected`/`#` member is
+  declared by two entries a consumer can import at once. TypeScript compares such a class nominally,
+  so two copies are incompatible types and the error a consumer sees names a field and not an import
+  site. Scope is the exports map rather than `dist/`, because a duplicate no subpath reaches cannot be
+  triggered and a gate that reports it trains people to ignore the gate.
+
+  Both find nothing today, and both were verified to bite: a canary export absent from the emit, and a
+  canary nominal class in two published declarations. A gate whose failure nobody has seen is a gate
+  nobody knows the shape of.
+
+### Added
+
 - **The coverage policy reaches the package axis.** `subpath-coverage.test.ts` demanded a verdict for
   each of the SDK's 34 subpaths and `root-bar-coverage.test.ts` for the root bar, and both stopped at
   `@theokit/sdk`. The workspace publishes a family of twelve, and a sibling could appear, grow a public
