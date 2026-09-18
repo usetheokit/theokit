@@ -6,6 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- **`ADR 0061` was cited five times and existed nowhere.** `packages/agents/src/index.ts` (twice),
+  `tests/unit/root-bar-coverage.test.ts` (twice) and `tests/type/trust-posture-passthrough.test-d.ts`
+  all cited it; `docs/adr/` held `0001`–`0004` and no file matching `*0061*` existed in this repository
+  or in any sibling. A citation that resolves to nothing reads as evidence and is not — the failure
+  this project's own plan gate hard-caps a plan for. The decision those five lines describe is now
+  recorded in `docs/adr/0005-the-root-bar-gate-sees-values-not-types.md`, with its two rejected
+  alternatives reconstructed from the test's own header and the unrecoverable one named as such.
+
+  The ADR also carries the size of the gap it declares — **324 of 422 root-bar exports** are type-only
+  and outside what `Object.keys` over an ESM namespace can see — attributed to the cross-validation
+  audit that measured it, because a gap declared without its size reads as small.
+
+### Changed
+
+- **The README explained why a row said `resolvable` while the row said `read`.** The table was
+  corrected when `apps/theocode` began calling `applySubagentMemory`; the paragraph explaining the old
+  value was left behind, so the document contradicted itself on the one surface the section is about.
+  Re-measured: `delegation/role-discovery.ts:84-85` is the join and the integration test that pins the
+  SDK half passes. The prose now records the transition instead of denying it.
+
 ### Changed
 
 - **Source comments no longer attribute design decisions to third-party projects.** Nineteen

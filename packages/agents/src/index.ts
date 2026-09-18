@@ -322,7 +322,7 @@ export type {
 // the domain" is not a meaningful unit. This is NOT a subpath: it is a slice of the SDK's root bar,
 // and starring it would drag the SDK's entire surface into this barrel and erase the boundary M63
 // drew. `tests/unit/subpath-coverage.test.ts` now demands a verdict for every root-bar VALUE, so the
-// next addition upstream breaks the build ONCE instead of disappearing for nine minors (ADR 0061).
+// next addition upstream breaks the build ONCE instead of disappearing for nine minors (ADR 0005).
 export {
   applySecurityFloor,
   auditEnvReachability,
@@ -364,7 +364,7 @@ export {
 // Pure pass-through, like the rest of the M67 family — `resolveTrustPosture` (the value) already
 // crosses in the block above. These are the types it produces and consumes.
 //
-// Closes, for these four, the type-coverage gap ADR 0061 recorded honestly: the ROOT-BAR gate
+// Closes, for these four, the type-coverage gap ADR 0005 recorded honestly: the ROOT-BAR gate
 // enumerates the namespace's `Object.keys` and by construction cannot see an `export type`.
 export type { TrustLevel, TrustPosture, TrustPostureInput, TrustSource } from '@theokit/sdk'
 
