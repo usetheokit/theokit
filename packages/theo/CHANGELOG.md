@@ -1,5 +1,39 @@
 # theo
 
+## 0.67.0
+
+### Minor Changes
+
+- 1e9e336: Add the preview marker — a signed, expiring credential that marks a request as a preview,
+  and the response headers that keep a preview out of indexes and caches.
+
+  The expiry travels **inside the signed payload**, not beside it. A cookie's own `Max-Age`
+  is advisory: a client that keeps sending an expired cookie is not misbehaving, it is
+  merely a client, so the server has to be the one that refuses. `isPreview` reads the `exp`
+  the signature covers and compares it against now.
+
+  A preview response carries `X-Robots-Tag: noindex, nofollow` and `Cache-Control: private,
+no-store`. The prerender exemption that applies to the nonce deliberately does **not**
+  apply here: a prerendered preview is still a preview, and a shared cache holding one is
+  the failure this closes.
+
+### Patch Changes
+
+- 1e9e336: Scope the HITL approvals listing to the caller. `GET /api/agents/{name}/approvals`
+  returned every pending approval in the process to any admitted caller, so one tenant
+  could read another tenant's approval ids, tool names and arguments — and, holding an
+  id, act on a decision that was never theirs to make.
+
+  The listing now filters by the subject the request resolved to. An approval whose owner
+  the registry does not know stays visible, because withholding it would break a
+  single-tenant application that never declared a policy; an approval with a known owner
+  is visible only to that owner.
+
+  The subject is resolved **once**, during admission, and reused. Resolving it again in the
+  listing branch would have run an application's `createContext` for urls the dispatcher
+  declines, which is the contract `resolveSubject` already had and the reason the admission
+  path returns the subject instead of recomputing it.
+
 ## 0.66.1
 
 ### Patch Changes
