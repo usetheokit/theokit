@@ -284,8 +284,17 @@ realises: REQ-1
 
 **Repository:** `apps/theoclaw`.
 
-**None of the other eight pieces mentions authorization, and the gap survives the self-hosted
-decision rather than being removed by it.** Hermes keeps it in `gateway/authz_mixin.py`, whose
+**None of the other nine pieces mentions authorization, and the gap survives the self-hosted
+decision rather than being removed by it.**
+<!-- Corrected 2026-09-18: this sentence read "other eight pieces". `grep -c '^## PIECE-'`
+     returns 10, and 10 minus PIECE-9 is 9. Falsification run before changing it: if the
+     document had held nine pieces when the sentence was written, "eight" would have been
+     right and merely old. `git log` shows exactly one commit has ever touched this file
+     (f07069084), and that revision already carries ten pieces AND this sentence — so the two
+     numbers describe the same document and the sentence was never true. The Sign-off above
+     says "The ten pieces are the right decomposition", which is the count the signer read.
+     The number is corrected in place rather than by a rewrite, so what was written stays
+     visible: found by the `theoclaw` lane, verified here. --> Hermes keeps it in `gateway/authz_mixin.py`, whose
 docblock names four concerns: *"may this user/chat talk to the agent, the per-adapter DM policy,
 the unauthorized-DM behavior, and the bot loop guard."*
 
