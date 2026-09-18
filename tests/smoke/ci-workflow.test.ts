@@ -172,6 +172,31 @@ describe('CI Workflow', () => {
     const workflow = loadWorkflow('ci.yml')
     expect(workflow.jobs.e2e).toBeUndefined()
   })
+
+  // The single check branch protection requires is `ci-ok` (`name: CI`, ci.yml:846). A job absent
+  // from its `needs:` still runs and still reports, and nothing reads that report — so the gate is
+  // advisory while looking mandatory. Measured 2026-09-18 by the independent audit of B-011
+  // (LCR2014): the `theoclaw` job had just been added and was not listed, which left its three
+  // gates unable to block the merge they were written to block.
+  it('every job reaches the one check branch protection requires', () => {
+    const workflow = loadWorkflow('ci.yml')
+    const needs: string[] = workflow.jobs['ci-ok'].needs
+
+    // Absent DELIBERATELY, each with what makes it deliberate. Anything not named here and not in
+    // `needs` is a gate that cannot block, which is the condition this test exists to refuse.
+    const declaredOmissions: Record<string, string> = {
+      'pr-report':
+        'ci.yml:831 — it runs only on pull requests from this repository, which is the reason ci-ok exists at all',
+      theocode:
+        'BACKLOG.md B-016 — predates this guard; declared so the guard ships without failing on debt it did not create',
+      'env-verdicts': 'BACKLOG.md B-016 — same omission, same item',
+    }
+
+    const unreachable = Object.keys(workflow.jobs).filter(
+      (job) => job !== 'ci-ok' && !needs.includes(job) && !(job in declaredOmissions),
+    )
+    expect(unreachable).toEqual([])
+  })
 })
 
 describe('CodeQL Workflow', () => {

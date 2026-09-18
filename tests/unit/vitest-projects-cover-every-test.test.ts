@@ -134,9 +134,20 @@ function workspaceGlobs(): string[] {
 }
 
 /** Expand one workspace glob into the directories on disk that match it. */
-function expandGlob(glob: string): string[] {
+export function expandGlob(glob: string): string[] {
   let current = ['']
   for (const segment of glob.split('/')) {
+    // Only a bare `*` is expanded. Every other segment is taken literally, so a real pnpm form
+    // this cannot read — `**`, a partial `theokit-*`, a `!negation` — would name a directory that
+    // does not exist and expand to [], which is indistinguishable from a member that is genuinely
+    // absent. Refusing is the difference between a guard that is incomplete and one that lies.
+    if (segment !== '*' && (segment.includes('*') || segment.startsWith('!'))) {
+      throw new Error(
+        `unsupported workspace glob segment \`${segment}\` in \`${glob}\` (pnpm-workspace.yaml). ` +
+          'expandGlob expands a bare `*` and literal names only. Teach it this form before ' +
+          'declaring the member, or the guard silently sweeps a smaller tree than it reports.',
+      )
+    }
     const next: string[] = []
     for (const base of current) {
       const candidates =
@@ -152,23 +163,30 @@ function expandGlob(glob: string): string[] {
   return current
 }
 
-function readdirSafe(dir: string): string[] {
+export function readdirSafe(dir: string): string[] {
   try {
     return readdirSync(dir)
-  } catch {
-    return [] // a declared member that is not checked out here
+  } catch (error) {
+    // ENOENT is the one condition this was written for: a declared member that is not checked
+    // out here. Everything else — EACCES, ENOTDIR, EMFILE under a parallel run, EIO — means the
+    // directory exists and could not be read, and answering [] would shrink the swept tree while
+    // the sweep goes on reporting agreement with the claim.
+    if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') return []
+    throw error
   }
 }
 
-function isDirectory(path: string): boolean {
+export function isDirectory(path: string): boolean {
   try {
     return statSync(path).isDirectory()
-  } catch {
-    return false
+  } catch (error) {
+    // Same split as readdirSafe: absent is an answer, unreadable is a fault.
+    if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') return false
+    throw error
   }
 }
 
-function testRoots(): string[] {
+export function testRoots(): string[] {
   const roots = [join(ROOT, 'tests')]
   for (const glob of workspaceGlobs()) {
     for (const member of expandGlob(glob)) {
@@ -204,6 +222,40 @@ const DECLARED_EXCLUSIONS: { pattern: RegExp; why: string }[] = [
 function isDeclaredExclusion(file: string): boolean {
   return DECLARED_EXCLUSIONS.some((rule) => rule.pattern.test(file))
 }
+
+describe("the guard's own reach", () => {
+  // LCR0602 — the widening of testRoots() from a hardcoded `packages/` walk to the workspace
+  // member list is the central fix of B-011, and until this assertion existed nothing failed when
+  // it was reverted: the sweep lost exactly ONE file (1039 -> 1038) against a >400 floor with 638
+  // files of slack, so every other `it` in this file stayed green on the reverted code.
+  it('test_test_roots_reach_a_workspace_member_outside_packages', () => {
+    const outside = testRoots().filter(
+      (root) => !root.startsWith(join(ROOT, 'packages')) && root !== join(ROOT, 'tests'),
+    )
+    expect(outside).not.toEqual([])
+  })
+
+  // LCR0104 — a segment is treated as a wildcard only when it is exactly `*`. Any other real
+  // pnpm glob form (`**`, a partial `theokit-*`, a `!negation`) was read as a literal directory
+  // name, matched nothing, and expanded to [] — a silent empty answer indistinguishable from a
+  // member that is genuinely absent. Today's six globs are all supported forms, so this defect is
+  // latent: it costs nothing until someone adds one, and then it costs the whole sweep silently.
+  it('test_expand_glob_refuses_a_form_it_cannot_expand', () => {
+    for (const unsupported of ['apps/**', 'packages/theokit-*', '!examples/broken']) {
+      expect(() => expandGlob(unsupported)).toThrow(/unsupported workspace glob/i)
+    }
+  })
+
+  // LCR0102 — the catch was unqualified where its own comment named exactly one condition
+  // ("a declared member that is not checked out here", i.e. ENOENT). EACCES, ENOTDIR, EMFILE
+  // under a parallel run and EIO all produced the same answer: this member contributes no test
+  // roots. The sweep then compares a smaller set against the claim and reports agreement.
+  it('test_readdir_safe_rethrows_anything_that_is_not_an_absent_directory', () => {
+    const notADirectory = join(ROOT, 'package.json')
+    expect(() => readdirSafe(notADirectory)).toThrow()
+    expect(readdirSafe(join(ROOT, 'no-such-directory-here'))).toEqual([])
+  })
+})
 
 describe('the vitest project split reaches every test file', () => {
   const onDisk = testRoots()

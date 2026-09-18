@@ -856,6 +856,7 @@ jobs:
       - scaffold-typecheck
       - dead-code
       - package-validation
+      - theoclaw
       - dependency-audit
       - doc-citations
       - changelog-current
