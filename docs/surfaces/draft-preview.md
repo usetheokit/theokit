@@ -1,8 +1,33 @@
-# Preview in this framework: nothing yet, and the shape it should take
+# Preview in this framework: the credential and the response policy ship; the content model does not
+
+**Amended 2026-09-18 — the first two pieces of the order below are built (B-034).**
+
+| | |
+|---|---|
+| **`createPreviewMarker`** (`packages/theo/src/server/auth/preview-marker.ts`, published on `@theokit/theo/server/auth`) | a signed, expiring credential. A configured instance of `createSessionManagerWeb` under its own cookie — the same encryption and key rotation, not a second implementation of either |
+| **`buildSecurityHeaders(..., { preview: true })`** | `X-Robots-Tag: noindex, nofollow` and `Cache-Control: private, no-store` on that response |
+
+**The expiry is inside the signed payload, not only on the cookie.** `Max-Age` is a client-side
+hint — it is dropped by a copy-paste into curl and nothing signs it — so the reader refuses a marker
+whose `exp` has passed even when the cookie arrives intact.
+
+**`Cache-Control` is the Definition-of-done, not an extra.** A draft cached by a CDN is served to
+everyone who asks, credential or not, and *"served only against a valid credential"* would be false
+however good the credential is. It is a separate condition from the nonce's `no-store` (EC-3), which
+is deliberately exempt for prerendered routes: a prerendered draft is still a draft.
+
+**What does NOT ship, and will not from here.** The framework has no content model, so it cannot know
+which document is unpublished. `isPreview(request)` answers *may this caller see a draft*; deciding
+*which response is a draft* stays the application's. Item 4 of the order below — non-leakage as a
+shipped test helper — is not built.
+
+---
+
+## The original measurement, kept
 
 **Measured 2026-08-20** against `packages/theo/src` and `packages/agents/src`.
 
-**Confirmed: nothing exists.** A case-insensitive search for `noindex`, `robots`, `isPreview`,
+**Confirmed at the time: nothing existed.** A case-insensitive search for `noindex`, `robots`, `isPreview`,
 `draftMode` and `previewMode` across both source trees returns zero hits. The ROADMAP's M15 status
 line — *"There is no `robots` or `noindex` field anywhere in `packages/theo/src`"* — is accurate as
 written, and the metadata component's prop list confirms it from the other direction: eleven props,

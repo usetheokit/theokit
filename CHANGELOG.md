@@ -17,6 +17,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 
 ### Added
+
+- **Draft preview: the credential and the response policy now ship (B-034).** A named surface was
+  neither built nor declared absent — `noindex`, `robots`, `isPreview`, `draftMode` and `previewMode`
+  returned zero hits across both source trees, while the ROADMAP listed preview in the minimum
+  contract.
+
+  `createPreviewMarker` (published on `@theokit/theo/server/auth`) mints a signed, expiring
+  credential. It is a CONFIGURED INSTANCE of `createSessionManagerWeb` under its own cookie, so the
+  encryption and key rotation are the ones already in use rather than a second implementation of
+  either. The expiry lives in the signed payload and not only on the cookie: `Max-Age` is a
+  client-side hint a copy-paste into curl drops, so the reader refuses an expired marker even when
+  the cookie arrives intact.
+
+  `buildSecurityHeaders(..., { preview: true })` puts `X-Robots-Tag: noindex, nofollow` and
+  `Cache-Control: private, no-store` on that response. The cache header is the Definition-of-done and
+  not an extra: a draft cached by a CDN is served to everyone who asks, credential or not. It is a
+  separate condition from the nonce's `no-store`, which is deliberately exempt for prerendered
+  routes — a prerendered draft is still a draft.
+
+  **What does not ship is stated rather than left open.** The framework has no content model, so
+  deciding WHICH response is a draft stays the application's; `docs/surfaces/draft-preview.md` now
+  says that instead of describing a gap.
 - **The HITL approvals listing is scoped to the caller it admitted.** `GET /api/agents/<name>/approvals`
   answered with `registry.list()`, and that registry is process-wide by contract: one admitted tenant
   of one agent received every pending approval in the process — other tenants', other agents' — each
