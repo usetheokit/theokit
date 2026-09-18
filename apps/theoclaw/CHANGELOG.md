@@ -11,6 +11,27 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Security
+
+- A CRITICAL and a HIGH CVE shipped in this package's own declared toolchain. `vitest` was
+  declared `^2.1.0` and installed 2.1.9, inside the range of `vitest <3.2.6` — "Vitest UI server
+  listening, arbitrary file read and execute" — and dragged `vite <=6.4.2`'s `server.fs.deny`
+  bypass with it. Measured by `pnpm audit --json`, which reported them attributable to
+  `apps__theoclaw>vitest`.
+
+  The fix is one line, and the reason it was needed is worth more than the fix: every other
+  package in this monorepo declares `vitest: ^4.1.9` or `^4.1.11`. This app was the only one on
+  the 2.x line, because the declaration was written without checking what the workspace uses.
+  Bumped to `^4.1.9`, resolving 4.1.11; the suite passes 6/6 with no migration, since six sibling
+  packages had already been running that major. Workspace criticals went 1 → 0, highs 1 → 0,
+  moderates 12 → 7.
+
+  It was found one item late. The dependency audit written for the change that introduced the
+  declaration returned PASS_WITH_CAVEATS and does not contain the word `vitest`: it read
+  `dependencies` and skipped `devDependencies`. That earlier verdict is left standing in its own
+  file with a note pointing here, because a verdict silently corrected is a verdict nobody can
+  audit.
+
 ### Fixed
 
 - The declared build produced nothing. `package.json` declares `build: tsc -p tsconfig.json` and
