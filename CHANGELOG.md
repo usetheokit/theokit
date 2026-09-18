@@ -6,41 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-### Fixed
-
-- **An acceptance record now has a place a clone can read (B-020).** The trail lived under
-  `.claude/records/`, which is gitignored, so the evidence that a milestone was exercised against a
-  released artifact was readable on exactly one machine. It is worse than that in fact: the run the
-  item cites wrote sixteen evidence files, and by the time this was closed **none of them existed
-  anywhere** — the unreadable evidence had become no evidence.
-
-  114 files moved to `.squad/records/`, closing the `SPLIT` the data-root gate reported: two copies
-  where a reader resolves the first and never sees the second, so the stale one is unreachable while
-  looking current. The gate now reads `CENTRALISED`.
-
-  The versioning question is answered per half, copying the arrangement the kit uses on itself: the
-  dated trail stays OUT (one machine's run history says nothing to whoever clones), `records/acceptance/`
-  and `domain-routing.txt` come IN, each with the reason written where the rule is.
-
-- **The domain routing table now travels with the checkout (B-008).** It lived at
-  `.claude/rules/domain-routing.txt`, and `.claude/` is gitignored — so a fresh clone had no table
-  and routed every item by whatever a re-derivation happened to produce, or by nothing. The kit's own
-  reader has resolved `.squad/domain-routing.txt` first since 2026-09-10 and says the migration is a
-  person's to make, because a tool writing into a repository it does not own is the thing that rule
-  exists to prevent.
-
-  Moved, and the legacy copy REMOVED rather than left beside it. Two copies is the state the data-root
-  gate calls its loudest: a reader resolves the first and never sees the second, so the stale one is
-  unreachable while looking current. `.squad/records/cycle-events.jsonl` stays ignored — that stream
-  is one machine's run history and says nothing to whoever clones.
-
-- **A subprocess smoke test waited on a clock and flaked in the full run.**
-  `acp-tool.test.ts` slept 300ms and hoped a spawned node process had booted, read stdin and written
-  back. It passed 4/4 alone and failed inside the 1072-file run — the machine was busy, not the code.
-  A longer sleep is the same race with a lower failure rate, so it now waits for the ANSWER with a 10s
-  ceiling: 82ms on an idle machine, and a failure that says the round-trip did not happen rather than
-  that the clock ran out.
-
+## [theokit 0.67.0] - 2026-09-18
 
 ### Added
 
@@ -172,6 +138,39 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   including the one on the second line of `instructions.ts`, stay exactly where they are.
 
 ### Fixed
+
+- **An acceptance record now has a place a clone can read (B-020).** The trail lived under
+  `.claude/records/`, which is gitignored, so the evidence that a milestone was exercised against a
+  released artifact was readable on exactly one machine. It is worse than that in fact: the run the
+  item cites wrote sixteen evidence files, and by the time this was closed **none of them existed
+  anywhere** — the unreadable evidence had become no evidence.
+
+  114 files moved to `.squad/records/`, closing the `SPLIT` the data-root gate reported: two copies
+  where a reader resolves the first and never sees the second, so the stale one is unreachable while
+  looking current. The gate now reads `CENTRALISED`.
+
+  The versioning question is answered per half, copying the arrangement the kit uses on itself: the
+  dated trail stays OUT (one machine's run history says nothing to whoever clones), `records/acceptance/`
+  and `domain-routing.txt` come IN, each with the reason written where the rule is.
+
+- **The domain routing table now travels with the checkout (B-008).** It lived at
+  `.claude/rules/domain-routing.txt`, and `.claude/` is gitignored — so a fresh clone had no table
+  and routed every item by whatever a re-derivation happened to produce, or by nothing. The kit's own
+  reader has resolved `.squad/domain-routing.txt` first since 2026-09-10 and says the migration is a
+  person's to make, because a tool writing into a repository it does not own is the thing that rule
+  exists to prevent.
+
+  Moved, and the legacy copy REMOVED rather than left beside it. Two copies is the state the data-root
+  gate calls its loudest: a reader resolves the first and never sees the second, so the stale one is
+  unreachable while looking current. `.squad/records/cycle-events.jsonl` stays ignored — that stream
+  is one machine's run history and says nothing to whoever clones.
+
+- **A subprocess smoke test waited on a clock and flaked in the full run.**
+  `acp-tool.test.ts` slept 300ms and hoped a spawned node process had booted, read stdin and written
+  back. It passed 4/4 alone and failed inside the 1072-file run — the machine was busy, not the code.
+  A longer sleep is the same race with a lower failure rate, so it now waits for the ANSWER with a 10s
+  ceiling: 82ms on an idle machine, and a failure that says the round-trip did not happen rather than
+  that the clock ran out.
 
 - **`ADR 0061` was cited five times and existed nowhere.** `packages/agents/src/index.ts` (twice),
   `tests/unit/root-bar-coverage.test.ts` (twice) and `tests/type/trust-posture-passthrough.test-d.ts`
