@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- **A subprocess smoke test waited on a clock and flaked in the full run.**
+  `acp-tool.test.ts` slept 300ms and hoped a spawned node process had booted, read stdin and written
+  back. It passed 4/4 alone and failed inside the 1072-file run — the machine was busy, not the code.
+  A longer sleep is the same race with a lower failure rate, so it now waits for the ANSWER with a 10s
+  ceiling: 82ms on an idle machine, and a failure that says the round-trip did not happen rather than
+  that the clock ran out.
+
+
 ### Added
 - **The HITL approvals listing is scoped to the caller it admitted.** `GET /api/agents/<name>/approvals`
   answered with `registry.list()`, and that registry is process-wide by contract: one admitted tenant
