@@ -1,0 +1,24 @@
+{
+  "name": "theoclaw",
+  "version": "0.0.0",
+  "private": true,
+  "description": "A personal AI assistant that lives where its user already writes.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@theokit/di": "^0.2.1",
+    "@theokit/di-agent": "^0.5.0",
+    "@theokit/sdk": "^5.9.1",
+    "reflect-metadata": "^0.2.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0",
+    "@types/node": "^22.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  }
+}
