@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **The coverage policy reaches the package axis.** `subpath-coverage.test.ts` demanded a verdict for
+  each of the SDK's 34 subpaths and `root-bar-coverage.test.ts` for the root bar, and both stopped at
+  `@theokit/sdk`. The workspace publishes a family of twelve, and a sibling could appear, grow a public
+  surface and never be considered — the same defect one axis out. `package-axis-coverage.test.ts` now
+  demands an `in`/`out` verdict with a written reason for every package the SDK's shipped capability
+  map names, enumerated from that map so the list cannot fall behind a publish.
+
+  Measured 2026-09-18: 1228 public symbols across twelve packages; three are imported by name in this
+  layer and nine are referenced zero times. All twelve now carry a verdict, and the nine `out` reasons
+  differ from each other — which is the point of recording decisions rather than keeping an allowlist.
+
 ### Fixed
 
 - **`ADR 0061` was cited five times and existed nowhere.** `packages/agents/src/index.ts` (twice),
