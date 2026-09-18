@@ -6,8 +6,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-## [@theokit/agents 15.0.0, @theokit/presenter 0.10.0, theokit 0.66.1] - 2026-09-18
-
 ### Changed
 
 - **Source comments no longer attribute design decisions to third-party projects.** Nineteen
@@ -23,6 +21,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   be preserved. Removing them would turn a compliant distribution into an infringing one — the
   opposite of the exposure this change reduces. The derivation declarations the `NOTICE` names,
   including the one on the second line of `instructions.ts`, stay exactly where they are.
+
+## [@theokit/agents 15.0.0, @theokit/presenter 0.10.0, theokit 0.66.1] - 2026-09-18
 
 ### Changed
 
