@@ -864,6 +864,13 @@ jobs:
       - dead-code
       - package-validation
       - theoclaw
+      # `theocode` and `env-verdicts` were outside this list until 2026-09-18 (B-183). A job
+      # absent from it still runs and still shows a red X on the pull request, and the required
+      # check on the branch is `ci-ok` — so it could not hold a merge. `pr-report` stays out
+      # deliberately and is explained at its own definition: it runs on `always()`, so it
+      # reports success when everything under it failed.
+      - theocode
+      - env-verdicts
       - dependency-audit
       - doc-citations
       - changelog-current

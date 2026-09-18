@@ -197,12 +197,15 @@ describe('CI Workflow', () => {
 
     // Absent DELIBERATELY, each with what makes it deliberate. Anything not named here and not in
     // `needs` is a gate that cannot block, which is the condition this test exists to refuse.
+    // `pr-report` is the only job outside `ci-ok.needs`, and it is the only one that should be.
+    // `theocode` and `env-verdicts` were here too until 2026-09-18 (B-183); both are in the gate now,
+    // so what is left is a decision rather than debt. Removing this entry without moving the job into
+    // `ci-ok.needs` makes this test fail, which is the point of declaring it rather than filtering it.
     const declaredOmissions: Record<string, string> = {
       'pr-report':
-        'ci.yml:831 — it runs only on pull requests from this repository, which is the reason ci-ok exists at all',
-      theocode:
-        'omitted from ci-ok before this guard existed; declared so the guard ships without failing on debt it did not create. No registry id: this repository root carries no BACKLOG.md, so a cited B-NNN would resolve to nothing',
-      'env-verdicts': 'same omission, same reason — see theocode above',
+        'ci.yml:710-723 — it runs on `always()`, so it reports success when every job under it failed. ' +
+        'Gating on it would weaken `ci-ok`, not strengthen it. It is also fork-guarded, because a fork ' +
+        'pull_request token is read-only and the comment step would fail on every external contribution.',
     }
 
     const unreachable = Object.keys(workflow.jobs).filter(
