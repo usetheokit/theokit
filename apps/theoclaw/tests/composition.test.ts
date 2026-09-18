@@ -31,4 +31,24 @@ describe("the composition root", () => {
 
     expect(secondRequestSaw).toEqual([]);
   });
+  /**
+   * B-004 T1.1 — FR-004 says a caller asking for an agent outside a request is refused. Writing
+   * that test revealed something better than a passing assertion: **through this module's public
+   * surface the situation cannot arise.**
+   *
+   * `createContainer` returns one key, and that key always wraps its work in `runInRequest`. The
+   * container never escapes, so there is no caller-reachable path to an unbounded resolve. The
+   * first draft of this test invented a `resolveOutsideBoundaryForTest()` to reach one — a
+   * production method existing only for a test, which the parsimony ladder refuses before its
+   * sixth rung.
+   *
+   * So the requirement is met by CONSTRUCTION rather than by a guard, and this is what pins the
+   * construction: the day a second key appears on that object, this fails and someone has to
+   * argue for it.
+   */
+  it("exposes no way to resolve outside a request boundary", () => {
+    const container = createContainer({ factory: () => ({ id: Symbol("agent") }) });
+
+    expect(Object.keys(container)).toEqual(["withAgent"]);
+  });
 });

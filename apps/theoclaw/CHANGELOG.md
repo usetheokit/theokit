@@ -13,6 +13,15 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- A typecheck that actually reads the tests (`tsconfig.test.json`). The existing `tsconfig.json`
+  excludes `tests/`, so `tsc --noEmit` resolved zero test files and a fabricated method call passed
+  it silently — a reviewer found it. The new config was proven to arm before being committed.
+- Architecture boundaries for this application (`.dependency-cruiser.cjs`): production must not
+  import tests, and nothing may import the composition root but an entry point. Both rules name
+  directories that exist and both were proven to fire.
+- A third test pinning the composition root's surface to exactly one key, which is what makes
+  "no caller can resolve outside a request" true by construction rather than by a guard.
+
 - The composition root (`src/composition.ts`) — the first code in this application. It exposes a
   request BOUNDARY rather than a resolve, because the container refuses a REQUEST-scoped resolve
   outside one with a typed error, and a boundary opened per resolve would make "one agent per
