@@ -22,27 +22,22 @@ import { AuthProvider } from './auth-provider.js'
  * round-trip that stores nothing. The `AuthProvider` docblock instructed exactly that:
  * *"the caller persists them via `AuthProvider.persist`"*.
  *
- * ## The design came from measuring three peers, and it refuted the original proposal
+ * ## The shape, and the discriminant that was rejected
  *
- * - **`codex`** — `codex-rs/login/src/device_code_auth.rs:234` has `run_device_code_login`, which
- *   returns `()`: **nothing** comes out for the caller to persist, and the two granular halves stay
- *   public. `loginWithDevice` copies that shape.
- * - **`opencode`** — every provider is an object with `methods: [{ label, type, authorize }]`, and
- *   three providers written by different authors converge on **3 labelled methods** each. The label
- *   is what the UI shows: it turns a protocol choice into a choice between readable phrases.
- * - **REJECTED — a `kind` discriminant.** None of the three discriminates protocol by field. The
- *   measurement that closes the case: in `opencode`, Codex's browser and headless methods carry the
- *   **same** `type: 'oauth'` — so `type` classifies the **kind of credential**, not the protocol. A
- *   `kind` with internal dispatch would be a `switch`, exactly the defect this milestone removes
- *   from the consumer. Here, each method points at **its own** function.
+ * `loginWithDevice` returns `()` — nothing comes out for the caller to persist, and the two granular
+ * halves stay public. A provider is an object with `methods: [{ label, type, authorize }]`, and the
+ * label is what the UI shows: it turns a protocol choice into a choice between readable phrases.
+ *
+ * **REJECTED — a `kind` discriminant.** `type` classifies the **kind of credential**, not the
+ * protocol: a browser method and a headless one can both be `type: 'oauth'`. A `kind` with internal
+ * dispatch would be a `switch`, exactly the defect this milestone removes from the consumer. Here,
+ * each method points at **its own** function.
  *
  * ## Why the public identity lives HERE
  *
- * `codex` exports `CLIENT_ID` from the crate that implements the flow (`login/src/lib.rs:32`) and
- * the CLI **imports** it; `opencode` declares it inside the plugin. The two arrived at the same
- * place independently — and with the same value the consumer had copied. As long as it lived in the
- * consumer, every project wanting Codex would copy four public constants: a DRY violation across the
- * boundary, with two owners of the same fact.
+ * The client identity belongs beside the flow that uses it rather than in the consumer, so a surface
+ * cannot hold a stale copy of it.
+ *
  */
 
 /**
@@ -85,10 +80,9 @@ const CODEX_CLIENT_ID = 'app_EMoamEEZ73f0CkXaXp7hrann'
 const CODEX_ISSUER = 'https://auth.openai.com'
 
 /**
- * Environment override for `clientId` — adopted from `codex`, which exports `CLIENT_ID` **and**
- * `CLIENT_ID_OVERRIDE_ENV_VAR` (`login/src/lib.rs:32-33`). It dissolves the false dilemma between a
- * fixed constant (inflexible) and a mandatory parameter (which hands the copy back to the consumer):
- * a default in the package, an escape for whoever needs one.
+ * Environment override for `clientId`. It dissolves the false dilemma between a fixed constant
+ * (inflexible) and a mandatory parameter (which hands the copy back to the consumer): a default in
+ * the package, an escape for whoever needs one.
  */
 export const CODEX_CLIENT_ID_ENV_VAR = 'THEOKIT_CODEX_CLIENT_ID'
 
@@ -163,10 +157,9 @@ function comDefaults(deps?: Partial<DeviceDeps>): DeviceDeps {
  * Authorizes **and** persists, in one call. Returns where the credential landed and the account it
  * was attributed to — **never** token material.
  *
- * The shape comes from `run_device_code_login` (`codex`), which returns `()`: if nothing comes out
- * for the caller, there is no step it can forget. The two halves stay public on `AuthProvider`
- * (`deviceLogin` / `persist`) for whoever needs the granularity — the same choice `codex` makes by
- * keeping `request_device_code` and `complete_device_code_login` public alongside the facade.
+ * Nothing comes out for the caller, so there is no step it can forget. The two halves stay public on
+ * `AuthProvider` (`deviceLogin` / `persist`) for whoever needs the granularity, alongside this
+ * facade.
  *
  * It delegates verbatim: `method.authorize` runs the flow and `AuthProvider.persist` writes. Copying
  * the sequence instead of calling it would create a second oracle over the same fact, and two oracles

@@ -32,14 +32,11 @@
  * is still visible through the `onWarn` channel. An **unparseable** file (broken JSON, an
  * `mcpServers` that is not an object) still throws, because there are no entries to separate there.
  *
- * Both TS peers decide it this way, through different idioms: `gemini-cli` runs `Promise.all` over
- * promises that **never reject** (the `catch` closes the client, emits a diagnostic naming the server
- * and marks `DISCONNECTED` without rethrowing); `opencode` returns `Effect.succeed({ status:
- * 'failed' })`. Neither lets one server take down the others.
+ * A failing entry resolves rather than rejects: the failure closes that client, emits a diagnostic
+ * naming the server and marks it `DISCONNECTED`, so one server cannot take down the others.
  *
- * **Secrets:** the value of `headers` never enters a warning. The peers **diverge** here —
- * `gemini-cli` redacts in 18 places, `opencode` in zero — and a peer is not precedent for security.
- * The internal precedent decides: `AuthProvider` states that it never exposes token material, and
+ * **Secrets:** the value of `headers` never enters a warning, and the internal precedent is what
+ * decides it: `AuthProvider` states that it never exposes token material, and
  * `.mcp.json` is a **project** file, which can be committed by accident.
  */
 import { existsSync, readFileSync } from 'node:fs'

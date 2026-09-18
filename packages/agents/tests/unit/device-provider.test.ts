@@ -27,21 +27,16 @@ import {
  *
  * ## The decisions these assertions pin
  *
- * M111's discovery measured three peers (`codex`, `opencode`, `gemini-cli`) and **rejected** part of
- * the original proposal:
+ * M111's discovery **rejected** part of the original proposal:
  *
- * - **Rejected — a `kind` discriminant.** None of the three discriminates protocol by field. The
- *   measurement that closes the case: in `opencode`, Codex's browser and headless methods carry the
- *   **same** `type: "oauth"` (3 `oauth` + 1 `api` in the file), so `type` classifies the **kind of
- *   credential**, not the protocol. A `kind` with internal dispatch would be the `switch` this
- *   milestone exists to remove. Each method points at **its own** function;
- *   `test_the_two_shapes_are_NOT_the_same_function` fails on a merge.
- * - **Confirmed — the facade.** `codex/codex-rs/login/src/device_code_auth.rs:234` has
- *   `run_device_code_login`, which returns `()` — nothing comes out for the caller to persist — and
- *   keeps both halves public. `loginWithDevice` copies that shape.
- * - **Confirmed — the identity lives with the flow.** `codex` exports `CLIENT_ID` from the crate that
- *   implements it (`login/src/lib.rs:32`) and the CLI **imports** it; `opencode` declares it inside
- *   the plugin. Both, independently, and with the same value the consumer had copied.
+ * - **Rejected — a `kind` discriminant.** `type` classifies the **kind of credential**, not the
+ *   protocol: a browser method and a headless one can both be `type: "oauth"`. A `kind` with internal
+ *   dispatch would be the `switch` this milestone exists to remove. Each method points at **its own**
+ *   function; `test_the_two_shapes_are_NOT_the_same_function` fails on a merge.
+ * - **Confirmed — the facade.** `loginWithDevice` returns nothing for the caller to persist, and
+ *   keeps both halves public.
+ * - **Confirmed — the identity lives with the flow.** The client identity belongs beside the code
+ *   that uses it, so a surface cannot hold a stale copy.
  *
  * ## Why `AuthMethod` is a discriminated union and not an optional field
  *

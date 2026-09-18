@@ -36,16 +36,14 @@ import { McpFileError, loadMcpJson } from '../../src/bridge/mcp-file.js'
  * }
  * ```
  *
- * It is **field for field** what the blueprint derived independently from `gemini-cli`, `opencode`
- * and `codex`. M112 therefore **builds no transport** — it stops narrowing: this module declared its
+ * It is **field for field** what the blueprint derived independently. M112 therefore **builds no
+ * transport** — it stops narrowing: this module declared its
  * own `McpServerConfig`, narrower than the SDK's, and refused what the SDK accepts.
  *
- * ## Why the peers decide it this way
+ * ## Why the failure is contained per server
  *
- * Both TS peers contain the failure **per server**, through different idioms: `gemini-cli` uses
- * `Promise.all` over promises that **never reject** (`connectAndDiscover` closes the client, emits a
- * diagnostic naming the server, marks `DISCONNECTED` and does not rethrow); `opencode` returns
- * `Effect.succeed({ status: 'failed' })`. **Neither** lets one server take down the others.
+ * A failing entry resolves rather than rejects — the failure closes that client, emits a diagnostic
+ * naming the server and marks it `DISCONNECTED`. One server cannot take down the others.
  *
  * ## The tension with `error-handling.md § 2`, spelled out
  *
@@ -129,7 +127,7 @@ describe('M112 — .mcp.json degrades per entry', () => {
   })
 
   it('test_a_url_without_type_crosses_and_the_SDK_decides_the_default', () => {
-    // `gemini-cli` makes a `url` without a `type` fall back to HTTP. The layer does NOT decide that —
+    // A `url` without a `type` falls back to HTTP, and the layer does NOT decide that —
     // it forwards, and the default is the SDK's. Inventing the default here would be a second oracle
     // over the same fact.
     writeIt({ mcpServers: { r: { url: 'https://example.invalid/mcp' } } })
@@ -194,8 +192,8 @@ describe('M112 — .mcp.json degrades per entry', () => {
   })
 
   it('test_NEGATIVE_the_header_value_NEVER_appears_in_the_warning', () => {
-    // The plan's D5. The peers DIVERGE here — `gemini-cli` redacts in 18 places, `opencode` in ZERO —
-    // and a peer is not precedent for security. The INTERNAL precedent decides: `AuthProvider` states
+    // The plan's D5. The INTERNAL precedent decides:
+    // `AuthProvider` states
     // it never exposes token material. `.mcp.json` is a PROJECT file, which can be committed.
     writeIt({
       mcpServers: {

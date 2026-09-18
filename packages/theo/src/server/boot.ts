@@ -1,10 +1,9 @@
 /**
  * M7-3 — `theokit/boot`: programmatic boot surface for the convention server.
  *
- * The programmatic surface is a Web `fetch` handler (the universal "fetch
- * handler is the entry point" contract — see the hono reference in
- * knowledge-base/discoveries/blueprints/m7-http-dual-surface-blueprint.md
- * "Coverage Corner 4"). It composes M7-1 (typed 404 envelope) + M7-2 (reserved
+ * The programmatic surface is a Web `fetch` handler — the universal "a fetch
+ * handler is the entry point" contract. It composes M7-1 (typed 404 envelope)
+ * + M7-2 (reserved
  * health/ready routes) and binds NO socket, so embedders + integration tests
  * can fire requests in-process via `app.fetch(new Request(...))`.
  *

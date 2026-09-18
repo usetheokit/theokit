@@ -7,8 +7,6 @@
  * Spring's `ChatClient.builder(...).build()`); `stream()`/`run()` do the I/O via
  * `runReflectiveLoopStream` (the SAME loop `delegate()` drains — DRY, ADR 0031).
  * V4-D-stream: `stream()` yields events live (SSE-first); `run()` drains it to a result.
- *
- * reference: knowledge-base/references/spring-ai DefaultChatClientBuilder.java (build() returns standalone).
  */
 import type {
   AgentDefinition,
