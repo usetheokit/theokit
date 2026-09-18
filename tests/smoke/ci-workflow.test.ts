@@ -201,8 +201,8 @@ describe('CI Workflow', () => {
       'pr-report':
         'ci.yml:831 — it runs only on pull requests from this repository, which is the reason ci-ok exists at all',
       theocode:
-        'BACKLOG.md B-016 — predates this guard; declared so the guard ships without failing on debt it did not create',
-      'env-verdicts': 'BACKLOG.md B-016 — same omission, same item',
+        'omitted from ci-ok before this guard existed; declared so the guard ships without failing on debt it did not create. No registry id: this repository root carries no BACKLOG.md, so a cited B-NNN would resolve to nothing',
+      'env-verdicts': 'same omission, same reason — see theocode above',
     }
 
     const unreachable = Object.keys(workflow.jobs).filter(
