@@ -3,8 +3,8 @@
  * regardless of the assistant's narration. Before the fix, `roundSignature` folded the assistant
  * text into the fingerprint, so a model that re-ran the same tool while rephrasing its prose
  * ("I will create… and run it." → "… Now I will run…") produced a different signature each round
- * and evaded `NO_PROGRESS_THRESHOLD`. Prior art: opencode's `doom_loop` keys purely on
- * tool name + JSON.stringify(input) (knowledge-base/discoveries/blueprints/no-progress-signature-stuck-loop-blueprint.md).
+ * and evaded `NO_PROGRESS_THRESHOLD`. The signature keys purely on tool name +
+ * `JSON.stringify(input)`, so narration cannot move it.
  */
 import 'reflect-metadata'
 import { describe, expect, it } from 'vitest'

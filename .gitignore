@@ -13,7 +13,6 @@ dist/
 .theokit/
 .next/
 .output/
-.nitro/
 .cache/
 .vercel/
 .wrangler/

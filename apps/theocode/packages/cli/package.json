@@ -1,9 +1,9 @@
 {
   "name": "@theocode/cli",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
-  "description": "Surface 2 \u2014 the headless CLI.",
+  "description": "Surface 2 — the headless CLI.",
   "dependencies": {
     "@theocode/agent": "workspace:*",
     "@theocode/shared": "workspace:*",

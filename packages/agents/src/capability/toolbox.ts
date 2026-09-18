@@ -113,9 +113,8 @@ export class ToolboxCapability implements Capability {
    * a convention repeated in two loops. That repetition is precisely how the two drifted apart in
    * #145: the tool became `ns_tool` while its gate stayed `ns.tool`, silently ungating it.
    *
-   * Same technique the `opencode` harness uses for the analogous tool↔permission coupling, where
-   * `Permission.visibleTools` filters the tool record itself rather than keeping a parallel map
-   * ("so the two cannot drift" — `permission/index.ts`).
+   * Filtering the tool record itself, rather than keeping a parallel map, is what makes the two
+   * unable to drift.
    */
   #walk(): ToolboxWalkResult {
     return {

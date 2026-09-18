@@ -2,9 +2,8 @@
  * M7-2 — health/ready reserved routes for the convention/filesystem-route
  * server. Liveness (`/__theo/health`, always 200) and readiness
  * (`/__theo/ready`, 200/503 from a probe) are registered on a reserved
- * namespace BEFORE the user-route catch-all + 404 branch — mirroring nitro's
- * `/_nitro/*` reserved-namespace pattern (knowledge-base/references/nitro/src/
- * runtime/internal/routes/dev-tasks.ts). Liveness and readiness are kept
+ * namespace BEFORE the user-route catch-all + 404 branch, which is why a user
+ * route can never shadow them. Liveness and readiness are kept
  * separate by design: liveness says "the process is up", readiness says
  * "dependencies are up".
  *

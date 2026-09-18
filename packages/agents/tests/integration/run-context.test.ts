@@ -3,8 +3,7 @@
  *
  * BDD: Given `defineAgent({ context })`, When the agent runs a tool, Then the tool's handler
  * receives that object as `ctx.context` — so shared config (e.g. `projectRoot`) is set ONCE at
- * the agent level instead of baked into each tool factory (mirrors ai-sdk `experimental_context`,
- * mastra `RuntimeContext`, openai-agents-js `RunContext`).
+ * the agent level instead of baked into each tool factory.
  *
  * This exercises the REAL `createSdkAgentStream` wiring end-to-end; only `@theokit/sdk` is mocked.
  * theokit OWNS the run-context concern: it injects it into every tool handler at the adapter layer

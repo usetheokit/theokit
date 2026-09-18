@@ -8,8 +8,6 @@
  * (inverted) + `maxSteps` ceiling — NOT Spring's per-call Advisor (plan ADR D1).
  * Config is Zod-validated so an invalid `maxIterations` fails fast at resolve
  * time, never as a silent infinite loop at runtime (plan ADR D3).
- *
- * reference: knowledge-base/references/mastra agentic-loop/index.ts (stopWhen + maxSteps).
  */
 import { z } from 'zod'
 

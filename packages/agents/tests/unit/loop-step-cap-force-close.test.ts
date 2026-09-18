@@ -2,8 +2,8 @@
  * Step-cap force-close: on the ceiling round (`round === maxIterations`) the loop calls the factory
  * with `disableTools: true`, which the SDK adapter maps to `tool_choice:"none"` at send-time —
  * forcing the model to emit the closing summary the STEP_LIMIT_HINT requests instead of spinning on
- * more tool calls. Below the ceiling, tools stay enabled. Mirrors opencode's MAX_STEPS_PROMPT +
- * toolChoice:"none". A cached agent's tools can't be un-registered, so the gate is per-send.
+ * more tool calls. Below the ceiling, tools stay enabled. A cached agent's tools can't be
+ * un-registered, so the gate is per-send.
  */
 import 'reflect-metadata'
 import { describe, expect, it } from 'vitest'

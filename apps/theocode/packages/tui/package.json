@@ -3,10 +3,10 @@
   "exports": {
     "./main": "./src/main.tsx"
   },
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
-  "description": "Surface 1 \u2014 the terminal UI.",
+  "description": "Surface 1 — the terminal UI.",
   "dependencies": {
     "@theocode/agent": "workspace:*",
     "@theocode/shared": "workspace:*",

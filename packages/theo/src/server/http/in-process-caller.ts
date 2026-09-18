@@ -7,11 +7,9 @@
  * (`validateRouteInput`) so there is no drift, and reuses the SAME `config.response` server-fault
  * check. Failures throw typed errors (there is no HTTP status off-web).
  *
- * Prior art: tRPC `callProcedure` / `createCallerFactory`
- *
  * Design (ADR-0044 / blueprint §5.4): the AUTHOR passes structured input `{query?, body?, params?}`
  * — never synthesizes a Request. A minimal in-process `Request` is provided to the handler ONLY so
- * handlers that read `request.headers`/`request.url` still work (opencode's proven pattern); the
+ * handlers that read `request.headers`/`request.url` still work; the
  * input itself is NOT parsed from it.
  */
 import type { z } from 'zod'

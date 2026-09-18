@@ -27,8 +27,7 @@
  * `false`. Making it required would be the stricter type and the worse outcome — a caller who cannot
  * yet supply it writes its own predicate instead, which is how the duplication started.
  *
- * The peers resolve omission the same way: `codex`'s `GranularApprovalConfig` auto-REJECTS an absent
- * field, and `opencode` resolves an absent rule to `ask`.
+ * An omitted posture resolves to the conservative answer rather than to a permissive one.
  */
 import type { SandboxPosture } from '@theokit/sdk/sandbox'
 

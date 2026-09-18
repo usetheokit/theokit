@@ -16,11 +16,10 @@
  *
  * `codex` models the posture as a four-variant `enum AskForApproval` in the protocol crate, and
  * makes forgetting it a compile error through the `ToolRuntime: Approvable + Sandboxable` supertrait;
- * a mandatory field is the closest this type system gets to that. `codex` also resolves the
- * ambiguity of omission in the safe direction (`GranularApprovalConfig`: an absent field is
- * auto-REJECTED, never auto-approved), and names the human's stand-in rather than inferring it from
- * the absence of one (`ApprovalReviewer::{Guardian, User}`). `opencode` does the same inside out:
- * an absent rule resolves to `ask`.
+ * a mandatory field is the closest this type system gets to that.
+ *
+ * Omission resolves in the safe direction — never auto-approved — and the human's stand-in is named
+ * rather than inferred from the absence of one.
  */
 import type { SandboxPosture } from '@theokit/sdk/sandbox'
 

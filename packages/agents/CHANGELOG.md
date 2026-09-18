@@ -1,5 +1,130 @@
 # @theokit/agents
 
+## 15.0.0
+
+### Major Changes
+
+- d4c00bb: **Breaking:** `CheckpointOptions` is narrowed to `{ resumeSignal?: boolean }`. `storage`, `strategy`,
+  `maxCheckpoints` and `ttl` are removed, along with the `CheckpointStorage` and `CheckpointStrategy`
+  types.
+
+  The option read as a durable-checkpoint configuration and was a signalling flag: four fields
+  declared, exactly one ever read, as an `=== 'filesystem'` equality deciding whether a
+  `checkpoint_saved` event is emitted. `'drizzle'` and `'redis'` were indistinguishable from
+  `'memory'` in every code path.
+
+  The warning that pushed authors toward `'filesystem'` is gone. It said that value "selects the SDK's
+  durable conversation store"; the SDK persists every session to its transcript regardless, so it
+  selected nothing — and on a pod with no volume it named the one storage that is unreachable.
+
+  **Migration:** delete the removed fields; they configured nothing. `storage: 'filesystem'` becomes
+  `resumeSignal: true` if you want the `checkpoint_saved` event. Resume itself is a property of the
+  SDK's session transcript and needs no option.
+
+### Minor Changes
+
+- c3d677d: An SDK that cannot read a foreign configuration root is now refused with a typed
+  `CompatRootUnsupportedError`, instead of warned about.
+
+  `compatSources` landed in `@theokit/sdk@5.0.0`. Below it the option is accepted and ignored, so every
+  `.claude/` surface is unavailable while the package resolves, compiles and runs. A `console.warn`
+  stood there, and its own text named the condition that kept it a warning: "Until this package's floor
+  can name a stable 5.x". The floor is `^5.3.0`, so the only way to reach that branch is an override —
+  and an override that silently disables every foreign surface is what a refusal is for.
+
+  Separate from `CompatImportUnsupportedError`, which is about narrowing a root the SDK can already
+  read (5.4.0). Reusing it would name the wrong version and send the reader to the wrong upgrade.
+
+- fb80f7d: `createPermissionsPlugin` now requires a gate for the `ask` verdict, and `AgentBuilder` gained
+  `.subagents()`.
+
+  The gate is mandatory rather than optional because its absence had a silent, catastrophic default:
+  `PermissionEngine` answers `ask` for a tool no rule matches, and the SDK turns that into a hard block
+  when nothing answers it. Wiring the engine without a gate made every tool an operator had not
+  enumerated stop working, the moment they wrote any `permissions` block at all.
+
+  `.subagents()` supplies subagent definitions by name, reaching `AgentOptions.agents`. It is distinct
+  from `settingSources`, which discovers them: the framework reads `.claude/agents/<name>.md` and takes
+  the prompt from the file, so a caller that enriched a definition — `applySubagentMemory` folding in a
+  `MEMORY.md` is the measured case — had nowhere to put the result and it was silently discarded.
+
+- b81957c: `FOREIGN_KEY_DECISIONS` records what this package does with each `.claude/settings.json` key its
+  diagnostics name, and why — `honoured` or `refused`, each with a reason about this product rather
+  than about the reference.
+
+  `model` and `cleanupPeriodDays` join the settings schema as honoured keys. Reporting a key as "not
+  implemented here" says the code does not act on it; it never says whether that is a refusal or an
+  omission, and an author reading it cannot tell whether to stop writing the key or to wait for it.
+
+### Patch Changes
+
+- 4aa6602: Documents that a subagent's `memory:` declaration needs `@theokit/sdk@5.9.0`, and pins it
+  with a test.
+
+  `applySubagentMemory` shipped in 14.5.0 reading a declaration the SDK parses off subagent
+  frontmatter. Before 5.9.0 that parse REFUSES the key — measured against the published
+  tarballs, with a control that declares no `memory:` and loads on both:
+
+      5.3.0   ConfigurationError: Subagent note-taker.md: unknown frontmatter field "memory"
+              (accepted: name, description, model, tools, reasoning_effort, mcp, sandbox)
+      5.9.0   loads both; `memory: "project"` survives
+
+  The failure was never silent. What misleads is where it points: naming the field reads as a
+  typo, so the line an author meant to write gets deleted instead of the SDK upgraded.
+
+  **The range is unchanged at `^5.3.0`, and there is no runtime guard.** Both were tried and
+  both were refused by gates that were right. Raising the floor is refused by
+  `the-declared-sdk-range-delivers-what-the-code-assumes.test.ts`, which holds that a gap
+  announcing itself is guarded rather than closed by the range — closing it strands every
+  consumer, including those who never write `memory:`. A guard is refused by the bundle
+  budget: wiring one into `listSubagentNames` cost **161 bytes** of a root barrel with 72 of
+  headroom, and the cost is the COUPLING rather than the code — four different bodies produced
+  byte-identical bundles, and a dedicated module was worse at 40 403 because it duplicated
+  `createRequire`.
+
+  So the requirement is documented where someone hits it, and a test fails if it stops being
+  true. `applySubagentMemory` itself needs no particular SDK: it reads `node:fs`, takes an
+  object, and works on any version — the requirement belongs to the parser.
+
+- f6a5526: Two rows of the foreign-surfaces table were false, and a test now checks the class they
+  belong to.
+
+  `agent-memory/` read _"Measured 2026-09-15: no consumer does yet"_ while `apps/theocode`
+  imported `applySubagentMemory` and applied it in `delegation/role-discovery.ts:84-85`. The
+  measurement was true when taken — the consumer could not call it, because the function was
+  not in the version it pinned, and its own source says so: _"the one line that wires it does
+  not compile here yet"_. The integration was written, tested, and left disconnected, waiting
+  on a publish. Nothing about either side changed; the consumer moved into this repository and
+  the import resolved.
+
+  `themes/*.json` read _"nobody reads it, in any of the three packages"_ and never said which
+  three. Naming them took one edit and the sentence failed immediately: `apps/theocode`
+  resolves `~/.claude/themes/` in `tui/src/theme/custom-theme.ts`, with three reads in that one
+  file. It is the same shape as `keybindings.json` — out of scope HERE, read by the consumer —
+  which this section had explicitly denied.
+
+  **A claim nobody can check is not a weaker claim; it is a claim that has never been tested.**
+
+  `an-absence-is-a-decision-or-it-is-a-gap.test.ts` now confronts any row asserting an absence
+  of consumption with the consumer's own source, and fails naming both. It reads TABLE ROWS
+  rather than the file — the first version matched the prose explaining the old claim, which is
+  the mistake that file already records one block below. Positive controls on both rows: each
+  restored claim fails the test with the reason.
+
+- 3d73fd2: Every text-bearing channel a client receives now reflects the declared output guards.
+
+  `DoneEvent.result` was not moderated: with a redactor declared, one turn delivered `text_delta ->
+"here: [R]"` and `done.result -> "here: sk-abc123"`, so a client rendering the terminal frame got the
+  secret the guard existed to remove. It is now rebuilt from the round's own moderated deltas — which is
+  exact rather than approximate, because the frame carries the visible text of its own round.
+
+  `task_progress.text` — the fourth channel — takes an ordinary third `moderateOutputStream` pass on
+  both the runner and the served path. It is not a mirror of anything: it carries text the model writes
+  through `task-tools`, and a milestone naming a secret is the same disclosure as a delta naming it.
+
+- Updated dependencies [54d87cf]
+  - @theokit/presenter@0.10.0
+
 ## 14.5.1
 
 ### Patch Changes

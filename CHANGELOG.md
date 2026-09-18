@@ -8,6 +8,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- **Source comments no longer attribute design decisions to third-party projects.** Nineteen
+  comments across `packages/agents` and `packages/theo` named other products and quoted their
+  internal identifiers and file paths. A comment saying a construct mirrors somebody else's is an
+  attribution of derivation, and it carried that claim into a repository that does not distribute
+  their code. The engineering reasoning is unchanged — what is gone is the attribution and the
+  borrowed identifiers. Nine of the nineteen also cited a study directory this repository does not
+  have, so they read as evidence and resolved to nothing (#838).
+
+  **`NOTICE`, `licenses/` and the credit section of `apps/theocode/README.md` are deliberately
+  untouched.** This product adapts work under Apache-2.0 and MIT, both of which REQUIRE the notice to
+  be preserved. Removing them would turn a compliant distribution into an infringing one — the
+  opposite of the exposure this change reduces. The derivation declarations the `NOTICE` names,
+  including the one on the second line of `instructions.ts`, stay exactly where they are.
+
+## [@theokit/agents 15.0.0, @theokit/presenter 0.10.0, theokit 0.66.1] - 2026-09-18
+
+### Changed
+
 - **The foreign-hook gate in `apps/theocode` said it was live, and it is unreachable.** `refuseForeignHook`'s tests prove what it ANSWERS — `false`, from any file — and none asks whether a request can arrive; the framework spawns a foreign root's hooks only when `hooks` is among the granted surfaces, and `FOREIGN_SURFACES` is `skills, subagents, plugins, commands, context`. The worse half was the comment: it described the compatibility loader spawning `.claude/settings.json` hooks in the PRESENT tense, beside a real measurement taken before the import list narrowed, so a reader tracing a security question found a paragraph asserting a door that had been closed. Dead code is silent; this was confident. The approval path is deliberately NOT built — the issue's own entry condition is a probe showing the gate consulted before any approval logic, and the probe says it is not. Granting `hooks` would make the predicate reachable and, in the same move, start asking a user to trust shell they were never shown, since the consent screen reads this product's own hooks and a `.claude/` hook is never displayed. That is a product decision, so the test fails ON THE GRANT with the consequence in its assertion message. (#815)
 
 - **The consumer found three defects on its way in, and each was a check that could not fail for the reason it was written.** `apps/theocode`'s own gates rejected, in order: a bare `toThrow()` in a test written to prove a prototype-pollution guard — any throw satisfies it, including whatever remains after the typed refusal has decayed into a generic one, so the class and the message segment are now measured and asserted; a check-then-write in `migrate-config`, where `{ flag: 'wx' }` had removed the race and not the PATTERN, and scanners read patterns; and a CI job rebuilt from package scripts without the apt step its language gate needs, since scripts do not carry apt. Without a lexicon those detectors find nothing and fail as `expected [] to include 'desligado'` — an empty array, which is the one fact that says nothing about why it is empty — so a precondition test now FAILS (never skips) naming the packages to install. (#B-111)
