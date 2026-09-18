@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [@theokit/agents 15.0.0, @theokit/presenter 0.10.0, theokit 0.66.1] - 2026-09-18
+
 ### Changed
 
 - **The foreign-hook gate in `apps/theocode` said it was live, and it is unreachable.** `refuseForeignHook`'s tests prove what it ANSWERS — `false`, from any file — and none asks whether a request can arrive; the framework spawns a foreign root's hooks only when `hooks` is among the granted surfaces, and `FOREIGN_SURFACES` is `skills, subagents, plugins, commands, context`. The worse half was the comment: it described the compatibility loader spawning `.claude/settings.json` hooks in the PRESENT tense, beside a real measurement taken before the import list narrowed, so a reader tracing a security question found a paragraph asserting a door that had been closed. Dead code is silent; this was confident. The approval path is deliberately NOT built — the issue's own entry condition is a probe showing the gate consulted before any approval logic, and the probe says it is not. Granting `hooks` would make the predicate reachable and, in the same move, start asking a user to trust shell they were never shown, since the consent screen reads this product's own hooks and a `.claude/` hook is never displayed. That is a product decision, so the test fails ON THE GRANT with the consequence in its assertion message. (#815)
