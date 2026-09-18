@@ -8,6 +8,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **The coverage policy reaches the half of the root bar a runtime enumeration cannot see.**
+  `root-bar-coverage.test.ts` demanded a verdict for every root-bar VALUE and said in its own header
+  that `Object.keys` over an imported namespace cannot see an `export type` by construction. It
+  declared that a known gap and carried no number.
+
+  Measured with the compiler instead: the SDK root bar is **99 values and 323 types**, 422 in total —
+  three quarters of it outside what any gate could see. The cross-validation audit had said 324; the
+  one-symbol difference is the version skew it declared for itself, so the figure is now this
+  repository's own rather than quoted from a report that is not in the tree.
+
+  The verdict is demanded of the **38 types that CROSS**, not of all 323. For a type that does not
+  cross, the consumer reaches it from `@theokit/sdk` directly, and *is there a type I need and cannot
+  name?* is already derived rather than listed by `every-public-type-crosses-the-barrel.test.ts`. What
+  had no decision anywhere was the other direction — and **14 of the 38 arrive through an `export *`
+  in the root barrel without being named there at all.** Nobody wrote those; a star did. Each verdict
+  now records which of the two routes it took, and the test checks that claim against `src/index.ts`
+  rather than trusting it.
+
+### Added
+
 - **`@theokit/agents` now publishes a capability map: every public symbol and the exact specifier to
   import it from.** Twenty subpaths were published and nothing inventoried which symbol crossed which
   one, so a consumer guessed — and the guess fails in the worst order. `apps/theocode` carries the

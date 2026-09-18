@@ -26,7 +26,8 @@ import * as sdk from '@theokit/sdk'
  * in the SDK is erased at compile time and cannot appear. Claiming "every root-bar export has a
  * verdict" while covering only values would repeat, one level down, exactly the defect above. So the
  * test is named for what it checks, and type coverage is declared a known gap
- * (ADR 0005 § The size of the declared gap; tracked as `B-178`).
+ * (ADR 0005 § The size of the declared gap). It is no longer open: `root-bar-types-coverage.test.ts`
+ * enumerates the type half with the compiler and demands a verdict for every type that CROSSES.
  *
  * ## ESM on both sides, deliberately
  *

@@ -40,12 +40,27 @@ can see, and that gap is declared rather than papered over.
 
 ## The size of the declared gap
 
-The cross-validation audit of 2026-09-17 puts the unseen share at **324 of 422 root-bar exports** —
-roughly three quarters. **That number is the audit's**, is written nowhere else in this repository, and
-was not re-measured when this ADR was written. It is recorded because a gap declared without its size
-reads as small, and this one is not.
+The cross-validation audit of 2026-09-17 put the unseen share at **324 of 422 root-bar exports**.
+**Re-measured 2026-09-18** with the compiler over the declared `types` entry — the oracle the audit's
+own remediation asked for — the split is **99 values and 323 types, 422 in total**. The one-symbol
+difference is the version skew the audit declared for itself: its baseline was `@theokit/sdk@5.8.0`
+and the installed artifact is 5.9.0.
 
-Closing it is tracked as `B-178`.
+So the number stands, and it is now this repository's own rather than a figure quoted from a report
+that is not in the tree.
+
+**The gap is closed as of 2026-09-18**, by `tests/unit/root-bar-types-coverage.test.ts` — and closed
+narrower than "a verdict for all 323", deliberately. A verdict exists to stop "nobody decided" from
+reading like "we decided it stays out". For a type that does NOT cross, the consumer reaches it from
+`@theokit/sdk` directly, and the question they actually hit — *is there a type I need and cannot
+name?* — is already DERIVED rather than listed, by `every-public-type-crosses-the-barrel.test.ts`.
+
+What had no decision anywhere was the other direction: **38 root-bar types cross into this package**,
+and **14 of them arrive through an `export *` in the root barrel without being named there at all**.
+Nobody wrote those; a star did. Each now carries a verdict, and the verdict records which of the two
+routes it took — a claim the test checks against `src/index.ts` rather than trusting.
+
+`B-178` tracked this.
 
 ## Provenance — why this ADR is numbered 0005 and not 0061
 
