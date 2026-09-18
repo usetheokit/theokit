@@ -102,6 +102,7 @@ export default defineConfig({
       './packages/theo/vitest.config.ts',
       './packages/create-theokit/vitest.config.ts',
       './packages/tauri/vitest.config.ts',
+      './apps/theoclaw/vitest.config.ts',
     ],
     // A better-sqlite3 NODE_MODULE_VERSION mismatch surfaces as a raw test failure. Run
     // `pnpm rebuild better-sqlite3` when it does.
