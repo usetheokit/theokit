@@ -15,7 +15,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   it with a real `Request`, and asserts on the served body; the stub echoes the `htmlHead` it was
   handed rather than a canned document, and the test asserts the renderer was invoked BEFORE it
   asserts anything about the body, because a body assertion is vacuous if the branch was never
-  taken. Both assertions were proved able to fail by canary before the work was accepted. The
+  taken. Both halves of the shell are observed — head and tail, byte-exact. The hydration script is
+  deliberately NOT claimed: the real renderer appends it, and a stub standing in for that renderer
+  cannot produce evidence about it. Both assertions were proved able to fail by canary before the work was accepted. The
   string-containment test is kept: an entry that stops emitting the call never parses into a `fetch`
   to execute, so the two fail on different defects.
 

@@ -103,6 +103,7 @@ describe('the served document carries the shell, proved by running the worker', 
   interface Seen {
     readonly calls: number
     readonly head: string | undefined
+    readonly tail: string | undefined
   }
 
   async function loadWorker(
@@ -120,6 +121,7 @@ describe('the served document carries the shell, proved by running the worker', 
       stub,
       `export let calls = 0
 export let head
+export let tail
 export const matchRoute = () => null
 export const compilePattern = () => ({})
 export const executeRoute = () => {}
@@ -140,10 +142,17 @@ export const scanAgents = () => []
 export const renderStreamingWeb = async (request, options = {}) => {
   calls += 1
   head = options.htmlHead
-  return new Response(
-    (options.htmlHead ?? '') + '<script id="theokit-data">{}</script>' + (options.htmlTail ?? ''),
-    { headers: { 'content-type': 'text/html' } },
-  )
+  tail = options.htmlTail
+  // Echoes the shell and fabricates NOTHING. An earlier version inserted a
+  // '<script id="theokit-data">' marker here and the test asserted the body contained it — an
+  // assertion no defect in the generator could fail, because the literal never travelled through
+  // the entry. Both reviewers proved it with the same canary: against a stub that ignored its
+  // options, the '<head>' assertion failed and the marker assertion PASSED. The real
+  // renderStreamingWeb is what appends the hydration script; this stub stands in for it and cannot
+  // observe it, so it no longer pretends to.
+  return new Response((options.htmlHead ?? '') + (options.htmlTail ?? ''), {
+    headers: { 'content-type': 'text/html' },
+  })
 }
 `,
       'utf8',
@@ -175,14 +184,15 @@ export const renderStreamingWeb = async (request, options = {}) => {
     const probe = (await import(/* @vite-ignore */ pathToFileURL(stub).href)) as {
       calls: number
       head?: string
+      tail?: string
     }
     return {
       fetch: (r: Request) => mod.default.fetch(r, {}, {}),
-      seen: () => ({ calls: probe.calls, head: probe.head }),
+      seen: () => ({ calls: probe.calls, head: probe.head, tail: probe.tail }),
     }
   }
 
-  it('test_the_served_document_carries_the_head_and_the_hydration_script', async () => {
+  it('test_the_served_document_carries_both_halves_of_the_shell', async () => {
     const worker = await loadWorker(HEAD, TAIL)
     const response = await worker.fetch(new Request('https://app.test/'))
 
@@ -194,7 +204,13 @@ export const renderStreamingWeb = async (request, options = {}) => {
 
     const body = await response.text()
     expect(body).toContain('<head>')
-    expect(body).toContain('id="theokit-data"')
+
+    // The TAIL half, which this case did not assert until the review measured its absence. A canary
+    // forcing `htmlTail: ''` passed every case in this file while the served document lost
+    // `entry-client.js` — half of #343's original symptom ("no stylesheet and no client entry")
+    // surviving the proof written to prevent it.
+    expect(body).toContain('entry-client.js')
+    expect(worker.seen().tail).toBe(TAIL)
   })
 
   it('test_a_shell_carrying_a_closing_script_tag_is_still_forwarded_intact', async () => {
