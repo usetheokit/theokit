@@ -88,9 +88,16 @@ The signature becomes `(request, context, next) => Response | undefined | void`:
    both documents, with two clauses resting on the unstated answer. Last round the question was
    *required or optional*; this one is *is `next` idempotent*.
 
-   Implemented by retaining what `next()` returned, in a per-frame slot written synchronously by the
-   call. The slot being non-empty IS "has invoked", so clause 7 holds by construction rather than by a
+   Implemented by retaining what `next()` returned, in a per-frame LIST appended synchronously by the
+   call. The list being non-empty IS "has invoked", so clause 7 holds by construction rather than by a
    second variable kept in step with the first.
+
+   **This said "slot", singular, and the implementation deleted it.** A single slot is overwritten by
+   a second `next()`, which orphans the first invocation's promise — and a rejected promise nobody
+   observes terminates the Node process. Every invocation is now retained AND owned at creation, so a
+   discarded one is reported through `console.warn` rather than killing the server. Corrected
+   2026-09-19 after review, which found the code and this clause describing different mechanisms
+   while the code cited this clause by number.
 
    **Retaining is not memoising, and clause 6 requires the first while this clause rejects the
    second.** Retention lets the frame yield what the one invocation produced. Memoising would make a
@@ -108,7 +115,7 @@ Found by `grep -rl` over `packages`, `tests` and `apps`, excluding `node_modules
 |---|---|---|
 | `WebMiddleware` | `web-middleware-runner.ts`, `web-handler.ts`, `tests/integration/web-handler-params.test.ts` | the type gains an optional third parameter |
 | `runWebMiddleware` | the same three | the runner gains a downstream parameter |
-| `MiddlewareHandler` | 8 files, including 3 test files carrying 13 cases | **untouched by this decision** |
+| `MiddlewareHandler` | 8 files, including 3 test files carrying 13 cases | **CHANGED — this row was wrong.** It gained the same optional `next`, because `WebMiddleware` and it were never assignable to each other (`Promise<void>` is in one union and was not in the other), so FR-001 was unreachable by any edit confined to the runner. Corrected 2026-09-19 after review: the stale row is why nobody asked what the NODE runner does with the new parameter — `middleware-runner.ts:84` passes two arguments, so `next` is `undefined` on the path `README.md` documents. That gap is **B-196** |
 | the Node `middleware-runner.ts` (218 rows, 3 integration suites) | — | **untouched by this decision** |
 
 ## What would break, and what would not

@@ -14,8 +14,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `middleware()` builder can wrap the response instead of only replacing it **on the Web
   request path**. The Node file-scan runner — the one `packages/theo/README.md` documents for
   `server/middleware/*.ts` — still invokes middleware with two arguments, so `next` is
-  `undefined` there and a middleware that relies on it does nothing. This sentence was
-  unqualified until review measured the second invoker; B-196 tracks closing the gap. Omit the argument and
+  `undefined` there and a middleware that relies on it does nothing.
+
+  **And the qualification is narrower than it reads.** Traced 2026-09-19 on re-review:
+  `runWebMiddleware` is reached only from `executeWebRequest`, which is reached only from
+  `executeWebRequestFromNode`, which **nothing calls**. Every deploy entry this framework
+  GENERATES emits `executeRoute` instead — `adapters/bun.ts:86` and its five siblings — and
+  that routes to the two-argument path. So `next` is live for an application that imports
+  `executeWebRequest` from `theokit/server` and calls it directly, and on no surface the
+  framework itself generates. This sentence was unqualified until review measured the second
+  invoker, then still overstated until review traced the first. **B-196** carries both halves. Omit the argument and
   the runner behaves exactly as before. What a frame returns is one ordered rule — the middleware's
   own `Response` when it returned one, otherwise what its single `next()` call produced — recorded
   with its rejected alternatives in `docs/adr/0006`.
@@ -25,7 +33,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **The builder's output was never assignable to the runner's parameter, and nothing measured it
   (B-003).** `MiddlewareHandler` admitted `Promise<void>` and `WebMiddleware` did not, so a
   middleware written with `middleware()` and passed to `runWebMiddleware` failed to type-check —
-  two structurally similar types for one contract, which `tsc` reported in 15 errors the moment
+  two structurally similar types for one contract, which `tsc` reported the moment
   either moved. `next` is now declared once, beside the definition of a middleware, and the Web
   type aliases it.
 

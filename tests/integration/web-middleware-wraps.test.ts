@@ -48,17 +48,30 @@ function callable(next: MiddlewareNext | undefined): MiddlewareNext {
   return next
 }
 
-/** A downstream that counts its invocations and hands back one stable `Response`. */
+/**
+ * A downstream that counts its invocations and hands back a DISTINCT `Response` per call.
+ *
+ * `response` is the first one, so single-invocation cases read as before. What changed on
+ * re-review: it used to return ONE stable object, and an identity assertion over it could not
+ * see WHICH invocation the frame yielded. A reviewer armed `settled[0]` — yield the first
+ * rather than the last — and all sixteen tests passed. The fixture was erasing the difference
+ * the assertion claimed to measure, which is this item's own subject inside its own test.
+ */
 function countingDownstream(trace: string[] = []) {
-  const response = new Response('from the route')
+  const responses: Response[] = []
   let calls = 0
   return {
-    response,
+    get response() {
+      return responses[0]
+    },
+    nth: (index: number) => responses[index],
     calls: () => calls,
     run: async () => {
       calls += 1
       trace.push('route')
-      return response
+      const made = new Response(`from the route, invocation ${calls}`)
+      responses.push(made)
+      return made
     },
   }
 }
@@ -177,40 +190,62 @@ describe('the public builder runs in the Web runner (B-003)', () => {
     // protection that did not exist, which is the defect class this entire item is about.
     expect(downstream.calls(), 'a second next() is a second invocation, never a cached one').toBe(2)
 
-    // And the frame still yields a Response — the last invocation's, per clause 6.
-    expect(result, 'the frame yields what the last invocation produced').toBe(downstream.response)
+    // Clause 6 yields what the LAST invocation produced, and the fixture now hands back a
+    // distinct object per call so the assertion can tell them apart. Against the previous
+    // fixture — one stable `Response` — yielding the FIRST invocation passed just as well.
+    expect(downstream.nth(1), 'the fixture must distinguish the two invocations').not.toBe(
+      downstream.nth(0),
+    )
+    expect(result, 'the frame yields what the LAST invocation produced').toBe(downstream.nth(1))
   })
 
-  it('test_a_discarded_invocation_does_not_orphan_its_rejection', async () => {
-    const failures: unknown[] = []
-    const onUnhandled = (reason: unknown) => failures.push(reason)
+  it('test_a_discarded_invocation_is_reported_and_never_orphaned', async () => {
+    const orphaned: unknown[] = []
+    const onUnhandled = (reason: unknown) => orphaned.push(reason)
     process.on('unhandledRejection', onUnhandled)
+    const warned: string[] = []
+    const realWarn = console.warn
+    console.warn = (...args: unknown[]) => {
+      warned.push(args.join(' '))
+    }
 
     const exploding = async () => {
       throw new Error('the route handler blew up')
     }
+    const own = new Response('served from cache', { status: 200 })
     const handler = middleware()
-      .handle((_request, _context, next) => {
+      .handle(async (_request, _context, next) => {
         void callable(next)()
-        return new Response('served from cache', { status: 200 })
+        // A MACROTASK between the call and the return. This is the shape the first fix missed:
+        // owning the invocations after the body returns leaves the promise unowned for as long
+        // as the body runs, and a cache lookup is exactly this. Node declares the rejection
+        // unhandled at end of tick and the process dies mid-request — worse than the original
+        // defect, where the client at least received its response first.
+        await new Promise((resolve) => setTimeout(resolve, 10))
+        return own
       })
       .build()
 
-    // Clause 6 would prefer the middleware's own `Response`. An exception is not a value, and
-    // `rules/error-handling.md § 2` forbids swallowing one — so the failure propagates rather
-    // than being discarded with the value.
-    //
-    // Measured 2026-09-19 before the fix, through `executeWebRequest` with this exact shape:
-    // the client received 200 and the SERVER PROCESS DIED on the unhandled rejection, with
-    // nothing connecting the crash to the request. Impossible before this contract, because
-    // every result passed through one `await` into the caller's try/catch.
-    await expect(
-      runWebMiddleware(new Request('http://x/'), [handler], {}, exploding),
-    ).rejects.toThrow('the route handler blew up')
+    const result = await runWebMiddleware(new Request('http://x/'), [handler], {}, exploding)
 
     await new Promise((resolve) => setTimeout(resolve, 20))
+    console.warn = realWarn
     process.off('unhandledRejection', onUnhandled)
 
-    expect(failures, 'an invocation the frame discarded left its rejection unowned').toEqual([])
+    // Clause 6 is unchanged: the middleware's own `Response` wins. A middleware that discarded
+    // this invocation's value has already declared it does not want that outcome, and
+    // overturning it would be a second decision rather than a consequence of owning the
+    // rejection. `rules/error-handling.md § 2` forbids SWALLOWING an error; it does not require
+    // that every error become the request's answer.
+    expect(result, "clause 6 still yields the middleware's own Response").toBe(own)
+
+    expect(orphaned, 'a discarded invocation left its rejection unowned').toEqual([])
+
+    // Not swallowed — reported, through the convention this package already uses for a failure
+    // it cannot return (`server/index.ts:50`, `jobs/job-backend-memory.ts:77`).
+    expect(
+      warned.filter((w) => w.includes('the route handler blew up')),
+      'the discarded failure reached no client AND was not reported anywhere',
+    ).toHaveLength(1)
   })
 })
