@@ -30,6 +30,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **A middleware that starts the route and answers from elsewhere no longer kills the server
+  (B-003).** `next()` hands back a promise, and the runner's contract lets a frame yield a
+  different value than that promise produces — a middleware answering from cache, or calling
+  `next()` twice. A rejected promise nobody observes terminates the Node process, so a route
+  handler that threw took the server down AFTER the client had already been answered, with
+  nothing connecting the crash to the request.
+
+  Every invocation is now owned the moment it is created, synchronously inside `next` — not
+  after the middleware body returns, which is too late for a body that awaits anything or
+  throws.
+
+  **A downstream failure does not become the request's answer.** `error-handling.md` forbids
+  swallowing an error; it does not require that every error overturn a `Response` the contract
+  says wins. A middleware that discarded an invocation's value has already said it does not want
+  that outcome. The failure is reported through `console.warn` instead — and only when nobody
+  downstream is holding it, so the ordinary `const r = await next()` wrap, whose rejection
+  reaches the caller as a 500, logs nothing.
 - **The builder's output was never assignable to the runner's parameter, and nothing measured it
   (B-003).** `MiddlewareHandler` admitted `Promise<void>` and `WebMiddleware` did not, so a
   middleware written with `middleware()` and passed to `runWebMiddleware` failed to type-check —
