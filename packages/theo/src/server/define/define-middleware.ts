@@ -40,6 +40,13 @@ export type MiddlewareHandler = (
   context: Record<string, unknown>,
   // OPTIONAL, so every middleware written against the two-parameter shape keeps
   // compiling and keeps behaving identically — `docs/adr/0006` clause 5.
+  //
+  // SUPPLIED BY THE WEB RUNNER ONLY. `http/web-middleware-runner.ts` passes it;
+  // `http/middleware-runner.ts:84` — the Node file-scan path that `README.md` documents for
+  // `server/middleware/*.ts` — invokes this same type with TWO arguments, so `next` is
+  // `undefined` there and a middleware that depends on it silently does nothing. Measured
+  // 2026-09-19 during review. Until the two runners agree, a middleware that calls `next`
+  // is portable to the Web path and not to the Node one, and B-196 tracks closing that.
   next?: MiddlewareNext,
   // `void` is deliberate: returning nothing is how a middleware says "continue". The runner only
   // inspects `instanceof Response`, so there is nothing to distinguish from `undefined`.

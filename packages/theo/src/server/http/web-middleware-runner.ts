@@ -96,15 +96,33 @@ export async function runWebMiddleware(
       return downstream === undefined ? undefined : await downstream(request, context)
     }
 
-    let pending: Promise<Response | undefined> | undefined
+    // Every invocation this frame creates, in order. A frame yields ONE of them (clause 6)
+    // and must still OWN the rest: an invocation whose value is discarded can still reject,
+    // and a rejected promise nobody awaits terminates the Node process
+    // (`in-process-transport-abort.test.ts:172` records the same fact one package over).
+    //
+    // Measured 2026-09-19 through `executeWebRequest` with a builder-authored middleware that
+    // fires `next()` without awaiting and returns its own `Response`, against a route that
+    // throws: the client received 200 and the server died. Impossible before this contract,
+    // because every result went through one `await` into the caller's try/catch.
+    const invocations: Promise<Response | undefined>[] = []
     const next: WebNext = () => {
-      pending = runFrom(index + 1)
-      return pending
+      const started = runFrom(index + 1)
+      invocations.push(started)
+      return started
     }
 
     const own = await middleware[index](request, context, next)
+
+    // Clause 6 chooses between VALUES. An exception is not a value, and
+    // `rules/error-handling.md § 2` forbids swallowing one — so every invocation is awaited
+    // before the frame returns, and a downstream failure propagates even when clause 6 would
+    // have preferred another frame's value. Failing the request is the recoverable error;
+    // killing the process is not.
+    const settled = await Promise.all(invocations)
+
     if (own instanceof Response) return own
-    if (pending !== undefined) return await pending
+    if (settled.length > 0) return settled[settled.length - 1]
     return await runFrom(index + 1)
   }
 

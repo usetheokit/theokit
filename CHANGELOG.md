@@ -11,7 +11,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **A middleware can now run code after the route, because the runner passes it a `next`
   (B-003).** `runWebMiddleware` takes the route execution as an optional fourth argument and gives
   each middleware a `next` that runs the rest of the chain, so a handler authored with the public
-  `middleware()` builder can wrap the response instead of only replacing it. Omit the argument and
+  `middleware()` builder can wrap the response instead of only replacing it **on the Web
+  request path**. The Node file-scan runner — the one `packages/theo/README.md` documents for
+  `server/middleware/*.ts` — still invokes middleware with two arguments, so `next` is
+  `undefined` there and a middleware that relies on it does nothing. This sentence was
+  unqualified until review measured the second invoker; B-196 tracks closing the gap. Omit the argument and
   the runner behaves exactly as before. What a frame returns is one ordered rule — the middleware's
   own `Response` when it returned one, otherwise what its single `next()` call produced — recorded
   with its rejected alternatives in `docs/adr/0006`.

@@ -153,4 +153,64 @@ describe('the public builder runs in the Web runner (B-003)', () => {
     expect(result, "the middleware's own Response wins").toBe(own)
     expect(result, "and it is not the downstream's").not.toBe(downstream.response)
   })
+
+  it('test_calling_next_twice_really_invokes_the_downstream_twice', async () => {
+    const downstream = countingDownstream()
+
+    const handler = middleware()
+      .handle(async (_request, _context, next) => {
+        const first = callable(next)()
+        const second = callable(next)()
+        await Promise.allSettled([first, second])
+      })
+      .build()
+
+    const result = await runWebMiddleware(new Request('http://x/'), [handler], {}, downstream.run)
+
+    // ADR 0006 clause 7 rejects memoising `next`'s result BY NAME, on the ground that
+    // memoising "would also silence a genuinely careless double call, which is the one thing
+    // the counter in AC-003 exists to detect".
+    //
+    // Nothing tested it. A reviewer armed the rejected reading — `pending ??= runFrom(index+1)`
+    // — and ran the WHOLE repository suite: 8075 passed, byte-identical to baseline, because
+    // no test called `next()` twice. The ADR and the runner's own docblock both named a
+    // protection that did not exist, which is the defect class this entire item is about.
+    expect(downstream.calls(), 'a second next() is a second invocation, never a cached one').toBe(2)
+
+    // And the frame still yields a Response — the last invocation's, per clause 6.
+    expect(result, 'the frame yields what the last invocation produced').toBe(downstream.response)
+  })
+
+  it('test_a_discarded_invocation_does_not_orphan_its_rejection', async () => {
+    const failures: unknown[] = []
+    const onUnhandled = (reason: unknown) => failures.push(reason)
+    process.on('unhandledRejection', onUnhandled)
+
+    const exploding = async () => {
+      throw new Error('the route handler blew up')
+    }
+    const handler = middleware()
+      .handle((_request, _context, next) => {
+        void callable(next)()
+        return new Response('served from cache', { status: 200 })
+      })
+      .build()
+
+    // Clause 6 would prefer the middleware's own `Response`. An exception is not a value, and
+    // `rules/error-handling.md § 2` forbids swallowing one — so the failure propagates rather
+    // than being discarded with the value.
+    //
+    // Measured 2026-09-19 before the fix, through `executeWebRequest` with this exact shape:
+    // the client received 200 and the SERVER PROCESS DIED on the unhandled rejection, with
+    // nothing connecting the crash to the request. Impossible before this contract, because
+    // every result passed through one `await` into the caller's try/catch.
+    await expect(
+      runWebMiddleware(new Request('http://x/'), [handler], {}, exploding),
+    ).rejects.toThrow('the route handler blew up')
+
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    process.off('unhandledRejection', onUnhandled)
+
+    expect(failures, 'an invocation the frame discarded left its rejection unowned').toEqual([])
+  })
 })
