@@ -568,19 +568,24 @@ export async function executeWebRequest(
     try {
       // T3.2 — middleware runs AFTER the CSRF gate (EC-3), BEFORE the handler.
       const context: Record<string, unknown> = {}
-      if (opts.middleware?.length) {
-        const shortCircuit = await runWebMiddleware(request, opts.middleware, context)
-        if (shortCircuit) return shortCircuit
+      // B-003 — the route IS the downstream, so a middleware that awaits `next`
+      // observes the real response. Running it after the runner returned is what
+      // made `next` unsupplyable (`docs/adr/0006`).
+      const runRoute = async (): Promise<Response> => {
+        const outcome = await runHandler(
+          config,
+          request,
+          opts.bodyParser ?? 'inline',
+          opts.params ?? {},
+          context,
+        )
+        return outcome.ok ? toResponse(outcome.result, config.status) : outcome.response
       }
-      const outcome = await runHandler(
-        config,
-        request,
-        opts.bodyParser ?? 'inline',
-        opts.params ?? {},
-        context,
-      )
-      if (!outcome.ok) return outcome.response
-      return toResponse(outcome.result, config.status)
+      if (opts.middleware?.length) {
+        const response = await runWebMiddleware(request, opts.middleware, context, runRoute)
+        if (response !== undefined) return response
+      }
+      return await runRoute()
     } catch (err) {
       return handlerErrorResponse(err)
     }
@@ -653,21 +658,24 @@ async function runHandlerStage(
     return
   }
   // hookCtx.ctx is the shared per-request context the middleware mutates.
+  const runRoute = async (): Promise<Response> => {
+    const outcome = await runHandler(
+      config,
+      request,
+      opts.bodyParser ?? 'inline',
+      opts.params ?? {},
+      hookCtx.ctx,
+    )
+    return outcome.ok ? toResponse(outcome.result, config.status) : outcome.response
+  }
   if (opts.middleware?.length) {
-    const shortCircuit = await runWebMiddleware(request, opts.middleware, hookCtx.ctx)
-    if (shortCircuit) {
-      hookCtx.response = shortCircuit
+    const response = await runWebMiddleware(request, opts.middleware, hookCtx.ctx, runRoute)
+    if (response !== undefined) {
+      hookCtx.response = response
       return
     }
   }
-  const outcome = await runHandler(
-    config,
-    request,
-    opts.bodyParser ?? 'inline',
-    opts.params ?? {},
-    hookCtx.ctx,
-  )
-  hookCtx.response = outcome.ok ? toResponse(outcome.result, config.status) : outcome.response
+  hookCtx.response = await runRoute()
 }
 
 async function runWithHooks(

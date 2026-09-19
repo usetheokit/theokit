@@ -22,9 +22,25 @@
  * Node-bound — which is why it cannot be the framework's contract — but evicting it would break
  * every app that has one.
  */
+/**
+ * Run the rest of the chain and resolve to what it produced.
+ *
+ * Declared HERE rather than beside the runner because the dependency runs
+ * `http/ -> define/` and never the other way (`http/middleware-runner.ts:10`
+ * already imports from this module). A middleware's contract belongs with the
+ * definition of a middleware; the runner consumes it.
+ *
+ * `docs/adr/0006` clause 3 is what this parameter buys: code AFTER the
+ * downstream, which the short-circuit shape cannot express.
+ */
+export type MiddlewareNext = () => Promise<Response | undefined>
+
 export type MiddlewareHandler = (
   request: Request,
   context: Record<string, unknown>,
+  // OPTIONAL, so every middleware written against the two-parameter shape keeps
+  // compiling and keeps behaving identically — `docs/adr/0006` clause 5.
+  next?: MiddlewareNext,
   // `void` is deliberate: returning nothing is how a middleware says "continue". The runner only
   // inspects `instanceof Response`, so there is nothing to distinguish from `undefined`.
   // eslint-disable-next-line @typescript-eslint/no-invalid-void-type

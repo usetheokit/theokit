@@ -6,7 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **A middleware can now run code after the route, because the runner passes it a `next`
+  (B-003).** `runWebMiddleware` takes the route execution as an optional fourth argument and gives
+  each middleware a `next` that runs the rest of the chain, so a handler authored with the public
+  `middleware()` builder can wrap the response instead of only replacing it. Omit the argument and
+  the runner behaves exactly as before. What a frame returns is one ordered rule — the middleware's
+  own `Response` when it returned one, otherwise what its single `next()` call produced — recorded
+  with its rejected alternatives in `docs/adr/0006`.
+
 ### Fixed
+
+- **The builder's output was never assignable to the runner's parameter, and nothing measured it
+  (B-003).** `MiddlewareHandler` admitted `Promise<void>` and `WebMiddleware` did not, so a
+  middleware written with `middleware()` and passed to `runWebMiddleware` failed to type-check —
+  two structurally similar types for one contract, which `tsc` reported in 15 errors the moment
+  either moved. `next` is now declared once, beside the definition of a middleware, and the Web
+  type aliases it.
 
 - **The artifact-promotion guard no longer names a records root two renames out of date
   (B-191).** `apps/theocode/tools/check-artifact-promotion.mjs` declared `.claude/records/plans` and
