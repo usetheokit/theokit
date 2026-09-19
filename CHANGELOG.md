@@ -19,6 +19,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   they are what will police a pairing when one exists again — and the run that compares nothing keeps
   saying so rather than printing a clean result.
 
+  Review found two more of the same defect and both are fixed here. Emptying the table had turned
+  `test_no_pair_names_the_retired_working_area` into a vacuous pass — 4 assertions before the change,
+  0 after, still green — the identical `for`-over-empty shape forty lines from the one that prompted
+  this item; it now also checks the retirement reason, which is the one string that still names a
+  root. And the split census message shipped with nothing executing it: a case now runs the CLI and
+  asserts that an empty table reports its retirement rather than borrowing the explanation written
+  for a declared directory that was absent.
+
 - **The Cloudflare streaming shell is now proved by execution, not by reading the generator
   (B-001).** `tests/unit/cloudflare-streaming-shell.test.ts` asserted `expect(entry).toContain('<head>')`
   over the generated worker SOURCE — a literal present in the emitted text whether or not the worker

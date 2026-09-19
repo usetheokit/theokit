@@ -16,7 +16,9 @@
  * has been quietly turned into a no-op still passes its own suite. The two anti-vacuity floors
  * that follow are the same discipline the doc-reference and English-only guards already apply.
  */
+import { execFileSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
 
 import { kitRoot } from './kit-root.mjs'
@@ -234,9 +236,37 @@ describe('PAIRS', () => {
     // Runs everywhere, including CI, because it reads the constant rather than the disk. The rot
     // that produced the finding was a rename: the working area moved to `.claude/records/` and
     // this constant kept naming `.claude/knowledge-base/`, which had stopped existing.
+    //
+    // The loop below is NOT the assertion. Measured 2026-09-19: emptying `PAIRS` took this case from
+    // 4 assertions to 0 while leaving the tick green — the identical `for`-over-empty shape ADR-3
+    // fixed forty lines above and this one kept. No detection is lost today, because with no rows
+    // there is no stale root to find; what is lost is the RE-ARMING, and a named test that reads as
+    // coverage while asserting nothing.
+    //
+    // So the retirement reason is checked too. It is the one string that still names a root today,
+    // and it must name the LIVE one.
+    expect(RETIRED ?? '', 'the retirement reason').not.toContain('knowledge-base')
     for (const [working, published] of PAIRS) {
       expect(working, 'working side').not.toContain('knowledge-base')
       expect(published, 'published side').not.toContain('knowledge-base')
+    }
+  })
+
+  it('test_the_cli_reports_which_nothing_it_compared', () => {
+    // EDH-002: the RETIRED/SKIPPED split shipped with no assertion — nothing executed the main
+    // block. Three sibling checkers in this directory test their CLI through `execFileSync`,
+    // including `check-codex-parity.mjs`, which this module's own docblock names as its model.
+    //
+    // The distinction under test is the whole of ADR-4: a run that declared nothing must not print
+    // the message written for a run whose declared directory was absent.
+    const out = execFileSync('node', [fileURLToPath(new URL('check-artifact-promotion.mjs', import.meta.url))], {
+      encoding: 'utf8',
+    })
+    if (PAIRS.length === 0) {
+      expect(out, 'an empty table reports its retirement').toContain('RETIRED')
+      expect(out, 'and does NOT borrow the absent-directory explanation').not.toContain('SKIPPED')
+    } else {
+      expect(out, 'a declared table does not report a retirement').not.toContain('RETIRED')
     }
   })
 })
