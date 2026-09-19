@@ -23,7 +23,7 @@ import { kitRoot } from './kit-root.mjs'
 
 import { describe, expect, it } from 'vitest'
 
-import { PAIRS, auditPairs, divergentDuplicates } from './check-artifact-promotion.mjs'
+import { PAIRS, RETIRED, auditPairs, divergentDuplicates } from './check-artifact-promotion.mjs'
 
 /**
  * A fake tree: { dir: { file: contents } }.
@@ -177,9 +177,56 @@ describe('PAIRS', () => {
     // exists here) would be audited against records this product did not write. The directories are
     // asserted because that is what this test claims; whether the PAIRING still means anything in a
     // shared working area is a question for whoever next runs the audit.
+    //
+    // ANSWERED 2026-09-19 (B-191). The pairing means nothing here and the constant now says so: the
+    // working side moved to `.squad/records/` with the write root, and the published side was deleted
+    // outright by `41732e6a8`. `PAIRS` is empty and carries `RETIRED`.
+    //
+    // The assertion is a DISJUNCTION rather than a bare loop, because a `for` over an empty list
+    // asserts nothing — it would report this file clean while checking no path at all, which is the
+    // failure the docblock above says this file exists to prevent.
     const kit = kitRoot()
+    if (PAIRS.length === 0) {
+      expect(
+        RETIRED,
+        'the table is empty, so it must say WHY — otherwise rot that removed the rows is ' +
+          'indistinguishable from a decision to retire them',
+      ).toBeTypeOf('string')
+      expect(RETIRED.length, 'the retirement reason must not be blank').toBeGreaterThan(0)
+      return
+    }
     for (const [working] of PAIRS) {
       expect(existsSync(join(kit, working)), `declared working directory: ${working}`).toBe(true)
+    }
+  })
+
+  it('test_an_empty_table_declares_why_it_is_empty', () => {
+    // The same claim the disjunction above makes, and NOT a duplicate of it. That one sits below a
+    // `ctx.skip` for a missing `.claude/`, which is every CI runner — so on CI the half that matters
+    // most is never asserted. This case reads the constant only, touches no disk, and therefore runs
+    // everywhere, exactly like `test_no_pair_names_the_retired_working_area` below it.
+    //
+    // Measured 2026-09-19: without it the suite totalled 1941 where the plan's DoD demanded 1942, and
+    // the gap was this assertion being skipped rather than a case being deleted.
+    if (PAIRS.length === 0) {
+      expect(
+        RETIRED,
+        'the table is empty, so it must say WHY — in CI too, not only where `.claude/` exists',
+      ).toBeTypeOf('string')
+      expect(RETIRED.length, 'the retirement reason must not be blank').toBeGreaterThan(0)
+    }
+  })
+
+  it('test_a_table_with_rows_declares_no_retirement', () => {
+    // The other half of the mutual exclusion, and the half that survives re-adding a row. Flow 4 of
+    // the alignment brief draws that re-addition; nothing else makes the reason go with it, so a live
+    // table carrying a stale `RETIRED` would tell the next reader the guard is off when it is on.
+    // Reads the constant only, so it runs in CI where the working tree is absent.
+    if (PAIRS.length > 0) {
+      expect(
+        RETIRED,
+        'the table has rows, so it is live — a retirement reason here contradicts it',
+      ).toBeUndefined()
     }
   })
 

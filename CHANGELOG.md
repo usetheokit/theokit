@@ -8,6 +8,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **The artifact-promotion guard no longer names a records root two renames out of date
+  (B-191).** `apps/theocode/tools/check-artifact-promotion.mjs` declared `.claude/records/plans` and
+  `.claude/records/reviews`; both stopped existing when the write root moved to `.squad/` on
+  2026-09-09, which was the theocode suite's single failing test out of 1940. The published half of
+  each pair was deleted separately, so the pairing has nothing left to compare on either side: the
+  constant is now empty and carries an exported `RETIRED` reason naming what happened and when. The
+  reason is a VALUE the tests import rather than a comment, because an assertion satisfied by a word
+  appearing somewhere in a file is not an assertion. The guard's decision functions are unchanged —
+  they are what will police a pairing when one exists again — and the run that compares nothing keeps
+  saying so rather than printing a clean result.
+
 - **The Cloudflare streaming shell is now proved by execution, not by reading the generator
   (B-001).** `tests/unit/cloudflare-streaming-shell.test.ts` asserted `expect(entry).toContain('<head>')`
   over the generated worker SOURCE — a literal present in the emitted text whether or not the worker
