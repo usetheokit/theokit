@@ -83,8 +83,9 @@ export type WebDownstream = (
  * A SECOND `next()` really does invoke the downstream again — retaining is not memoising.
  * Silencing a careless double call would blind the invocation counter that exists to catch it,
  * and `test_calling_next_twice_really_invokes_the_downstream_twice` is what proves that: a
- * reviewer armed the memoising reading and the whole 8075-test suite passed unchanged, because
- * nothing called `next()` twice.
+ * reviewer armed the memoising reading and nothing failed, because nothing called `next()`
+ * twice. (This said "the whole 8075-test suite". His record is one test file, and he said in
+ * writing that he did not run the suite — an attribution the author invented and he caught.)
  *
  * EVERY invocation is owned at creation, and only ONE is yielded. A discarded invocation can
  * still reject, and a rejection nobody observes kills the process; it is reported through
@@ -109,6 +110,11 @@ export async function runWebMiddleware(
     // and a rejected promise nobody awaits terminates the Node process
     // (`in-process-transport-abort.test.ts:172` records the same fact one package over).
     const invocations: Promise<Response | undefined>[] = []
+    //: Rejections observed but not yet accounted for. OWNING and REPORTING are separate acts,
+    //: and conflating them was this frame's third defect: ownership must be synchronous at
+    //: creation, or the process dies while the middleware body runs; reporting can only be
+    //: honest once the frame knows which invocation it used and whether it is throwing.
+    const rejections = new Map<Promise<Response | undefined>, unknown>()
 
     const next: WebNext = () => {
       const started = runFrom(index + 1)
@@ -116,41 +122,76 @@ export async function runWebMiddleware(
 
       // Owned AT CREATION, synchronously, and not after the middleware body returns.
       //
-      // The first attempt at this awaited the invocations after `await middleware[index](...)`,
-      // which leaves the promise unowned for as long as the middleware body runs. A body that
-      // awaits a MACROTASK — a cache lookup is one — lets Node declare the rejection unhandled
-      // at end of tick, and the process dies mid-request, so the client gets nothing where
-      // before it at least got its response. Found on re-review; the fix had closed the shape
-      // its own new test exercised rather than the shape the finding described.
+      // The first attempt awaited the invocations after `await middleware[index](...)`, which
+      // leaves the promise unowned for as long as the body runs. A body that awaits a MACROTASK
+      // — a cache lookup is one — lets Node declare the rejection unhandled at end of tick, and
+      // the process dies mid-request, so the client gets nothing where before it at least got
+      // its response. A body that THROWS after calling `next()` never reaches the frame's tail
+      // at all, which is why no ownership placed after the body can cover it.
+      //
+      // Recording rather than reporting: see `report` below.
       started.catch((reason: unknown) => {
-        // NOT swallowed — reported. `rules/error-handling.md § 2` forbids a silent catch, and
-        // § 3 is satisfied by a failure that is loud and carries its context. What it does NOT
-        // require is that every error become the request's answer: a middleware that discarded
-        // this invocation's value has already declared it does not want that outcome, and
-        // overturning a `Response` clause 6 says wins would be a second decision rather than a
-        // consequence of the first.
-        //
-        // `console.warn` with this prefix is the convention this package already uses for a
-        // failure it cannot return — `server/index.ts:50`, `jobs/job-backend-memory.ts:77`,
-        // `agent/configure-agent-registry.ts:62`.
-        const detail = reason instanceof Error ? (reason.stack ?? reason.message) : String(reason)
-        console.warn(
-          '[theokit] a middleware invoked next() and the downstream rejected, but the frame ' +
-            `yielded a different value, so this failure reached no client: ${detail}`,
-        )
+        rejections.set(started, reason)
       })
 
       return started
     }
 
+    /**
+     * Report the rejections nobody downstream is holding.
+     *
+     * `rules/error-handling.md § 2` forbids SWALLOWING an error; it does not require that every
+     * error become the request's answer. A middleware that discarded an invocation's value has
+     * already declared it does not want that outcome, so clause 6 keeps its value — and the
+     * failure still has to be visible somewhere, which is here.
+     *
+     * `yielded` is the invocation whose rejection reaches the caller, so it is skipped: the
+     * first version of this reported EVERY rejecting invocation and asserted, on
+     * `const r = await next()` — the canonical wrap and the capability this item exists to add —
+     * that "the frame yielded a different value, so this failure reached no client", while the
+     * client was holding exactly that error as a 500. A wrong sentence, per request, with a full
+     * stack, from a library, with no level and no off switch.
+     *
+     * `console.warn` with this prefix is what this package already uses for a failure it cannot
+     * return — `packages/theo/src/server/index.ts:50`,
+     * `packages/theo/src/server/jobs/job-backend-memory.ts:77`,
+     * `packages/theo/src/server/agent/configure-agent-registry.ts:62`. Full paths because the
+     * short forms resolved from no root that also resolved the first.
+     */
+    const report = (yielded?: Promise<Response | undefined>): void => {
+      for (const [invocation, reason] of rejections) {
+        if (invocation === yielded) continue
+        const detail = reason instanceof Error ? (reason.stack ?? reason.message) : String(reason)
+        console.warn(
+          '[theokit] a middleware invoked next() and the downstream rejected, but the frame ' +
+            `did not yield that result, so this failure reached no client: ${detail}`,
+        )
+      }
+    }
+
+    // No try/catch here, deliberately: if the middleware throws, the caller is about to hold an
+    // error for this request, so `report` never runs and nothing is double-reported. A wrapper
+    // that only rethrows is what the linter calls useless, and it would have been — the
+    // behaviour comes from `report` not being reached, not from catching.
     const own = await middleware[index](request, context, next)
 
     // Clause 6, unchanged: the middleware's own `Response`, otherwise what the invocation
     // produced, otherwise the rest of the chain. The early return stays FIRST — awaiting the
     // discarded invocation before it made a short-circuit block on work it had chosen not to
-    // use, measured on re-review at 12ms -> 311ms against a 300ms route.
-    if (own instanceof Response) return own
-    if (invocations.length > 0) return await invocations[invocations.length - 1]
+    // use, measured on re-review at 1ms against 301ms on a 300ms route.
+    if (own instanceof Response) {
+      report()
+      return own
+    }
+    if (invocations.length > 0) {
+      const yielded = invocations[invocations.length - 1]
+      try {
+        return await yielded
+      } finally {
+        report(yielded)
+      }
+    }
+    report()
     return await runFrom(index + 1)
   }
 

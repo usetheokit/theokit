@@ -102,9 +102,11 @@ The signature becomes `(request, context, next) => Response | undefined | void`:
    **Retaining is not memoising, and clause 6 requires the first while this clause rejects the
    second.** Retention lets the frame yield what the one invocation produced. Memoising would make a
    SECOND explicit `next()` return the first one's result — silencing a genuinely careless double
-   call, which is the one thing the counter in AC-003 exists to detect. A second call overwrites the
-   slot and really does invoke the downstream again, so the counter reads 2 and the test fails, which
-   is correct. Raised by `vera-technical-arbiter` in round 5: as first written, this note forbade the
+   call, which is the one thing the counter in AC-003 exists to detect. A second call appends to the
+   LIST and really does invoke the downstream again, so the counter reads 2 and the test fails, which
+   is correct. (This said "overwrites the slot" for two commits after the slot was replaced, eleven
+   lines below the paragraph announcing its deletion — the phrase straddles a line break, which is
+   why a grep for it missed it twice.) Raised by `vera-technical-arbiter` in round 5: as first written, this note forbade the
    retention clause 6 depends on, leaving the two mutually unsatisfiable.
 
 ## Who is affected

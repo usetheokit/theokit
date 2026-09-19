@@ -185,8 +185,9 @@ describe('the public builder runs in the Web runner (B-003)', () => {
     // the counter in AC-003 exists to detect".
     //
     // Nothing tested it. A reviewer armed the rejected reading — `pending ??= runFrom(index+1)`
-    // — and ran the WHOLE repository suite: 8075 passed, byte-identical to baseline, because
-    // no test called `next()` twice. The ADR and the runner's own docblock both named a
+    // — and nothing failed, because no test called `next()` twice. (This said "ran the WHOLE
+    // repository suite: 8075 passed". His record is one test file and he said so in writing;
+    // the denominator was the author's invention and he caught it on the third review.) The ADR and the runner's own docblock both named a
     // protection that did not exist, which is the defect class this entire item is about.
     expect(downstream.calls(), 'a second next() is a second invocation, never a cached one').toBe(2)
 
