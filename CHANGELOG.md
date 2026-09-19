@@ -8,6 +8,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **The Cloudflare streaming shell is now proved by execution, not by reading the generator
+  (B-001).** `tests/unit/cloudflare-streaming-shell.test.ts` asserted `expect(entry).toContain('<head>')`
+  over the generated worker SOURCE — a literal present in the emitted text whether or not the worker
+  forwards the shell to the renderer at run time. The file now also loads the emitted worker, calls
+  it with a real `Request`, and asserts on the served body; the stub echoes the `htmlHead` it was
+  handed rather than a canned document, and the test asserts the renderer was invoked BEFORE it
+  asserts anything about the body, because a body assertion is vacuous if the branch was never
+  taken. Both assertions were proved able to fail by canary before the work was accepted. The
+  string-containment test is kept: an entry that stops emitting the call never parses into a `fetch`
+  to execute, so the two fail on different defects.
+
 - **A corrected scaffold pin now reaches a user, not only the repository (B-186).** Minutes after
   `theokit@0.67.0` published the HITL approvals scoping fix, `npm create theokit` still produced an
   app on `theokit@0.66.1` — inside the affected range of the advisory that release closed. The
