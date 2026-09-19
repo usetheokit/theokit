@@ -249,4 +249,82 @@ describe('the public builder runs in the Web runner (B-003)', () => {
       'the discarded failure reached no client AND was not reported anywhere',
     ).toHaveLength(1)
   })
+
+  it('test_a_late_rejection_is_still_reported', async () => {
+    const warned: string[] = []
+    const realWarn = console.warn
+    console.warn = (...args: unknown[]) => {
+      warned.push(args.join(' '))
+    }
+    const orphaned: unknown[] = []
+    const onUnhandled = (reason: unknown) => orphaned.push(reason)
+    process.on('unhandledRejection', onUnhandled)
+
+    // The route fails AFTER the frame has already chosen. This is the archetype every artifact
+    // uses for this feature — a middleware answering from cache — and the first fix swallowed
+    // it: the rejection was recorded into a per-frame map the frame never reads again, so the
+    // failure reached nobody at all. Zero warnings, which is what `error-handling.md § 2`
+    // forbids and what the reporting exists to prevent.
+    const lateBoom = async () => {
+      await new Promise((resolve) => setTimeout(resolve, 30))
+      throw new Error('the route failed after the frame had answered')
+    }
+    const handler = middleware()
+      .handle((_request, _context, next) => {
+        void callable(next)()
+        return new Response('served from cache', { status: 200 })
+      })
+      .build()
+
+    const result = await runWebMiddleware(new Request('http://x/'), [handler], {}, lateBoom)
+    await new Promise((resolve) => setTimeout(resolve, 60))
+    console.warn = realWarn
+    process.off('unhandledRejection', onUnhandled)
+
+    expect(await result?.text(), 'clause 6 still yields the cached response').toBe(
+      'served from cache',
+    )
+    expect(orphaned, 'a late rejection was left unowned').toEqual([])
+    expect(
+      warned.filter((w) => w.includes('failed after the frame had answered')),
+      'a rejection landing after the frame returned reached nobody',
+    ).toHaveLength(1)
+  })
+
+  it('test_the_yielded_rejection_is_not_reported_twice', async () => {
+    const warned: string[] = []
+    const realWarn = console.warn
+    console.warn = (...args: unknown[]) => {
+      warned.push(args.join(' '))
+    }
+
+    // The shape where the guard is REACHABLE, which is not the one this case first used.
+    //
+    // It used the canonical wrap — `await next()` — and a canary showed deleting the guard left
+    // the suite green there. Structural, not luck: a middleware that awaits a rejecting `next()`
+    // THROWS, so the frame never reaches `report` and no guard is consulted. The guard exists
+    // for clause 6 branch 2: `next()` fired without awaiting, the middleware returns void, and
+    // the FRAME awaits the invocation — so the rejection travels to the caller through the
+    // frame's own return, and reporting it would be a second copy of an error being held.
+    const boom = async () => {
+      throw new Error('the route handler blew up')
+    }
+    const handler = middleware()
+      .handle((_request, _context, next) => {
+        void callable(next)()
+      })
+      .build()
+
+    await expect(runWebMiddleware(new Request('http://x/'), [handler], {}, boom)).rejects.toThrow(
+      'the route handler blew up',
+    )
+
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    console.warn = realWarn
+
+    expect(
+      warned.filter((w) => w.includes('blew up')),
+      'the rejection the caller is holding was reported again',
+    ).toHaveLength(0)
+  })
 })

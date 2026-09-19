@@ -44,9 +44,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   **A downstream failure does not become the request's answer.** `error-handling.md` forbids
   swallowing an error; it does not require that every error overturn a `Response` the contract
   says wins. A middleware that discarded an invocation's value has already said it does not want
-  that outcome. The failure is reported through `console.warn` instead — and only when nobody
-  downstream is holding it, so the ordinary `const r = await next()` wrap, whose rejection
-  reaches the caller as a 500, logs nothing.
+  that outcome. The failure is reported through `console.warn` instead — **except for the one
+  invocation the frame itself hands back**, whose rejection travels to the caller and would
+  otherwise be logged a second time while somebody is holding it.
+
+  That is the implemented predicate, and the first wording here said "only when nobody
+  downstream is holding it", which is false in both directions: an error-handling middleware
+  that catches and answers 503 IS holding the failure and still gets the warning, while a
+  rejection landing after the frame returned holds nothing and was silently dropped until review
+  measured it.
+
+  **This defect did not exist in a released version.** `next` is new in this same
+  `[Unreleased]`, so there was no promise to orphan before it; the crash was introduced and
+  repaired inside one unreleased window. It is recorded here rather than dropped because the
+  reasoning is what a reader of the contract needs — but nobody running `theokit@0.67.0` ever
+  met it.
 - **The builder's output was never assignable to the runner's parameter, and nothing measured it
   (B-003).** `MiddlewareHandler` admitted `Promise<void>` and `WebMiddleware` did not, so a
   middleware written with `middleware()` and passed to `runWebMiddleware` failed to type-check —

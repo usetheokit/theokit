@@ -115,6 +115,10 @@ export async function runWebMiddleware(
     //: creation, or the process dies while the middleware body runs; reporting can only be
     //: honest once the frame knows which invocation it used and whether it is throwing.
     const rejections = new Map<Promise<Response | undefined>, unknown>()
+    //: Set when the frame chooses, so a rejection landing AFTER that is reported at once
+    //: rather than recorded into a map the frame will never read again.
+    let frameSettled = false
+    let yieldedInvocation: Promise<Response | undefined> | undefined
 
     const next: WebNext = () => {
       const started = runFrom(index + 1)
@@ -129,8 +133,18 @@ export async function runWebMiddleware(
       // its response. A body that THROWS after calling `next()` never reaches the frame's tail
       // at all, which is why no ownership placed after the body can cover it.
       //
-      // Recording rather than reporting: see `report` below.
+      // Recording OR reporting, depending on whether the frame has finished — see `report`.
+      //
+      // A rejection can land after the frame returned, and the first version of this recorded
+      // it into a map nobody reads again. Measured: a route throwing 50ms after a middleware
+      // answered from cache produced ZERO warnings — swallowed, which is what
+      // `rules/error-handling.md § 2` forbids and what the reporting exists to prevent. The
+      // archetype every artifact uses for this feature is that exact middleware.
       started.catch((reason: unknown) => {
+        if (frameSettled) {
+          reportOne(started, reason)
+          return
+        }
         rejections.set(started, reason)
       })
 
@@ -158,15 +172,19 @@ export async function runWebMiddleware(
      * `packages/theo/src/server/agent/configure-agent-registry.ts:62`. Full paths because the
      * short forms resolved from no root that also resolved the first.
      */
+    const reportOne = (invocation: Promise<Response | undefined>, reason: unknown): void => {
+      if (invocation === yieldedInvocation) return
+      const detail = reason instanceof Error ? (reason.stack ?? reason.message) : String(reason)
+      console.warn(
+        '[theokit] a middleware invoked next() and the downstream rejected, but the frame ' +
+          `did not yield that result, so this failure reached no client: ${detail}`,
+      )
+    }
+
     const report = (yielded?: Promise<Response | undefined>): void => {
-      for (const [invocation, reason] of rejections) {
-        if (invocation === yielded) continue
-        const detail = reason instanceof Error ? (reason.stack ?? reason.message) : String(reason)
-        console.warn(
-          '[theokit] a middleware invoked next() and the downstream rejected, but the frame ' +
-            `did not yield that result, so this failure reached no client: ${detail}`,
-        )
-      }
+      yieldedInvocation = yielded
+      frameSettled = true
+      for (const [invocation, reason] of rejections) reportOne(invocation, reason)
     }
 
     // No try/catch here, deliberately: if the middleware throws, the caller is about to hold an
