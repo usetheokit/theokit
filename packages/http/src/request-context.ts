@@ -1,7 +1,7 @@
 /**
  * Request Context — per-request state via AsyncLocalStorage.
  *
- * Inspired by Next.js workAsyncStorage pattern (app-render.tsx:3325).
+ * Per-request context carried through async work via AsyncLocalStorage.
  * Eliminates prop drilling — any code in the request path can access
  * the current request without receiving it as a parameter.
  *

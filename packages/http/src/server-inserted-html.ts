@@ -1,7 +1,7 @@
 /**
  * Server-Inserted HTML — late-stage HTML injection.
  *
- * Inspired by Next.js make-get-server-inserted-html.tsx (app-render/).
+ * Late-stage HTML injection during SSR.
  * Stateful closure pattern that allows adding HTML chunks during SSR
  * (polyfills, traces, analytics) and flushing them once.
  *

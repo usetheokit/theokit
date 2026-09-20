@@ -1,7 +1,7 @@
 /**
  * CSS Resource Injection — render CSS as <link> or <style> tags.
  *
- * Inspired by Next.js render-css-resource.tsx (app-render/).
+ * Renders a CSS resource as a <link> or <style> tag.
  * Supports React 19 precedence attribute for resource ordering.
  */
 

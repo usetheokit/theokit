@@ -1,7 +1,7 @@
 /**
  * Error digestion — converts any thrown value into a stable hash + context.
  *
- * Inspired by Next.js `create-error-handler.tsx`. Produces a deterministic
+ * Produces a deterministic
  * digest ID suitable for logging and client-safe error references without
  * leaking stack traces in production.
  *
