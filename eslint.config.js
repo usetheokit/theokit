@@ -335,10 +335,13 @@ export default tseslint.config(
       // `renderCssResource` and `createServerInsertedHTML` deprecated AND published, so their
       // tests are correct and the rule fires on them for being correct (B-205).
       //
-      // `sonarjs/deprecation` above is the same concern under a name that does not fire here —
-      // measured 2026-09-20, the rule producing all 15 errors is the typescript-eslint one. That
-      // line is left in place rather than tidied away, because it is the trace of which rule was
-      // suppressed by mistake.
+      // `sonarjs/deprecation` above is the SAME concern under a second name, and it is NOT
+      // redundant. An earlier version of this comment said it was "a name that does not fire
+      // here"; a canary on 2026-09-20 disproved that — one production file calling
+      // `renderCssResource` raises BOTH rules, so sonarjs/deprecation fires on exactly this
+      // construct. It produced none of the 15 test errors only because it was already off for
+      // tests, which is also why turning it off harder would have changed nothing. Two rules
+      // cover one concern; both are relaxed here, and both still fire in production source.
       //
       // Scoped to this block on purpose: a deprecated symbol used in PRODUCTION source still
       // fails, which is the half worth keeping.

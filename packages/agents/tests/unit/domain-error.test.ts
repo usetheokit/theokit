@@ -30,13 +30,11 @@ import * as barrel from '../../src/index.js'
  */
 describe('M91 — the delegation error no longer shadows the one from the SDK', () => {
   it('the deprecated alias is the SAME class, not a copy', () => {
-    // eslint-disable-next-line @typescript-eslint/no-deprecated
     expect(AliasDeprecado).toBe(DelegationBudgetExceededError)
   })
 
   it('instanceof holds in BOTH directions through the alias', () => {
     const err = new DelegationBudgetExceededError('an-agent', 1.5, 1)
-    // eslint-disable-next-line @typescript-eslint/no-deprecated
     expect(err).toBeInstanceOf(AliasDeprecado)
   })
 
@@ -59,7 +57,7 @@ describe('M91 — the delegation error no longer shadows the one from the SDK', 
    * test is what prevents the repeat.
    */
   it('NON-BREAKING — the barrel keeps BudgetExceededError = the DELEGATION class', () => {
-    // eslint-disable-next-line @typescript-eslint/no-deprecated -- this is the alias the test protects
+    // deliberately deprecated: this is the alias the test protects
     expect(barrel.BudgetExceededError).toBe(DelegationBudgetExceededError)
   })
 

@@ -237,9 +237,13 @@ describe('Plugin scope encapsulation — BDD scenarios (T1.1)', () => {
     // Intentional reference to the deprecated class — this test exists to
     // assert that consumers who `instanceof DuplicateDecorationError` keep
     // compiling for one minor cycle after T3.1 deprecation. Removal is
-    // scheduled for 0.x+2 per CHANGELOG. Lint suppression is the correct
-    // signal here: the deprecation warning is the contract.
-    // eslint-disable-next-line @typescript-eslint/no-deprecated
+    // scheduled for 0.x+2 per CHANGELOG.
+    //
+    // This block used to end with "lint suppression is the correct signal here:
+    // the deprecation warning is the contract". That stopped being true on
+    // 2026-09-20: B-205 turned `@typescript-eslint/no-deprecated` off for test
+    // code, so no warning fires here and no suppression marks the intent. The
+    // contract now rests on this comment and the test name alone.
     expect(DuplicateDecorationError.name).toBe('DuplicateDecorationError')
   })
 })
