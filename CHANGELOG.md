@@ -19,6 +19,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **The server-rendered document now tells the browser which chunks the route needs (B-035).**
+  A page served by `theokit start` with SSR on carries one `<link rel="modulepreload">` per chunk
+  its route needs beyond the entry, in the `<head>` — so the browser starts fetching them while it
+  parses, instead of discovering them one round trip later when the entry finally executes. A route
+  whose code is already in the entry carries none, and a route the map does not name serves exactly
+  as before. Measured end to end on the scaffold: a real request to `/about` came back with both of
+  that route's chunks in the head and zero preloads in the body. The map is read ONCE at startup —
+  it is a build artifact and cannot change while the server runs — and an absent or malformed map
+  degrades to serving without preloads rather than refusing to boot.
+
 - **A built page now knows which chunks its route needs, so the browser can be told up front (B-035).**
   `theokit build` emits `.theokit/client/assets-map.json`, a route-to-chunks relation derived in
   Rollup's `generateBundle` where chunk names first exist. Each route lists only what it needs

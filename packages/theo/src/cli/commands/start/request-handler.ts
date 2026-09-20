@@ -55,6 +55,12 @@ interface RequestHandlerContext {
   ssrStreamingEnabled: boolean
   htmlHead: string
   htmlTail: string
+  /**
+   * B-035 — the route-to-chunks relation `theokit build` emits, read ONCE at startup and never
+   * per request: it is a build artifact and cannot change while the server runs. Absent when the
+   * build predates the map, which serves without preloads rather than failing the request.
+   */
+  assetsMap?: Record<string, string[]>
   indexHtml: string
   custom500Html: string | null
   /** M7-2: reserved health/ready routes served before the user catch-all. */
@@ -130,14 +136,54 @@ export function withHoistedHead(
   return { head, body: html }
 }
 
-function buildSsrHtml(
+/**
+ * Render one `<link rel="modulepreload">` per chunk the route needs beyond the entry, and
+ * inject them before `</head>`.
+ *
+ * In the HEAD, not the body: a preload the browser meets after parsing the entry teaches it
+ * nothing it was not about to learn, which is the whole defect. `extractHeadTags` hoists what
+ * React rendered; these are not rendered by React at all, so they are injected here.
+ *
+ * The chunk name is a build output and not user input, and it is escaped anyway: the cost is a
+ * regex and the alternative is trusting that no file name will ever contain a quote.
+ */
+export function injectModulePreloads(
+  head: string,
+  // `string[] | undefined` on the VALUE is deliberate, and it is the second time this change
+  // needed it: an index lookup can miss, so the guard below is a runtime check. A type that
+  // could not miss makes a type-based lint call that guard redundant, and obeying the lint
+  // would turn a handled case — a route absent from the map — into a crash per request.
+  assetsMap: Record<string, string[] | undefined> | undefined,
+  url: string,
+): string {
+  if (assetsMap === undefined) return head
+  // The map is keyed by route path; a request carries a query string and may carry a trailing
+  // slash, neither of which changes which route is being served.
+  const path = url.split(/[?#]/)[0] ?? url
+  const route = path.length > 1 ? path.replace(/\/$/, '') : path
+  const chunks = assetsMap[route] ?? assetsMap[path]
+  if (chunks === undefined || chunks.length === 0) return head
+  const links = chunks
+    .map((chunk) => `<link rel="modulepreload" href="/${escapeAttribute(chunk)}">`)
+    .join('')
+  const closing = /<\/head\s*>/i
+  return closing.test(head) ? head.replace(closing, (tag) => links + tag) : head + links
+}
+
+/** Attribute-safe: a chunk name must not be able to close the attribute it sits in. */
+function escapeAttribute(value: string): string {
+  return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')
+}
+
+export function buildSsrHtml(
   ctx: RequestHandlerContext,
   result: string | SsrRenderResult,
   nonce: string,
+  url: string,
 ): string {
   if (typeof result === 'string') {
     const { head, body } = withHoistedHead(ctx.htmlHead, result, nonce)
-    return head + body + ctx.htmlTail
+    return injectModulePreloads(head, ctx.assetsMap, url) + body + ctx.htmlTail
   }
   if (isSsrRenderResult(result)) {
     const rendered = asSsrRenderResult(result)
@@ -146,7 +192,7 @@ function buildSsrHtml(
       nonce ? ` nonce="${nonce}"` : ''
     }>window.__staticRouterHydrationData=${dataJson}</script>`
     const { head, body } = withHoistedHead(ctx.htmlHead, rendered.html, nonce)
-    return head + body + hydrationScript + ctx.htmlTail
+    return injectModulePreloads(head, ctx.assetsMap, url) + body + hydrationScript + ctx.htmlTail
   }
   return applyNonceToInlineScripts(ctx.htmlHead, nonce) + ctx.htmlTail
 }
@@ -205,7 +251,7 @@ async function handleSsrSync(
       return true
     }
     res.writeHead(200, { 'Content-Type': 'text/html' })
-    res.end(buildSsrHtml(ctx, result, nonce))
+    res.end(buildSsrHtml(ctx, result, nonce, url))
     return true
   } catch (ssrErr) {
     console.error('[SSR Error] Falling back to CSR:', (ssrErr as Error).message)

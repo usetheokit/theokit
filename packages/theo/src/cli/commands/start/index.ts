@@ -42,7 +42,7 @@ import { loadRoutesAndActions } from './manifest-loader.js'
 import { assessPublicExposure } from './public-exposure-gate.js'
 import { createRequestHandler } from './request-handler.js'
 import { describeListenTarget, resolveListenTarget } from './resolve-listen-host.js'
-import { setupSsr } from './ssr-setup.js'
+import { loadAssetsMap, setupSsr } from './ssr-setup.js'
 import { attachWebSocketHandler } from './websocket-handler.js'
 
 // Backwards-compat: external test fixtures may import resolveSsrEntry from here.
@@ -72,6 +72,11 @@ export async function startCommand(options: StartOptions): Promise<void> {
 
   const distDir = resolve(cwd, '.theokit')
   const clientDir = resolve(distDir, 'client')
+  // B-035 — the route-to-chunks map `theokit build` emits. Read ONCE: it is a build artifact,
+  // so a per-request read would be a syscall per request for a value that cannot change.
+  // A build that predates the map, or a malformed one, serves without preloads rather than
+  // failing to boot — the page is correct either way and only loses one round trip.
+  const assetsMap = loadAssetsMap(resolve(clientDir, 'assets-map.json'))
   // theokit#123 — compiled controllers, when `theokit build` emitted any.
   //
   // Keyed on the MANIFEST rather than on the directory existing: a stale `dist/controllers` left by
@@ -173,6 +178,7 @@ export async function startCommand(options: StartOptions): Promise<void> {
       ssrStreamingEnabled: ssr.streamingEnabled,
       htmlHead: ssr.htmlHead,
       htmlTail: ssr.htmlTail,
+      assetsMap,
       indexHtml,
       custom500Html,
       // M7-2: serve a built-in liveness route on the Node listener. Readiness

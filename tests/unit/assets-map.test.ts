@@ -6,7 +6,13 @@
  * scaffold does NOT produce — a route whose chunks are all in the entry, a dynamic import that must
  * not be followed, a page outside the app directory.
  */
+import { mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
 import { describe, expect, it } from 'vitest'
+
+import { loadAssetsMap } from '../../packages/theo/src/cli/commands/start/ssr-setup.js'
 
 import {
   buildAssetsMap,
@@ -106,5 +112,45 @@ describe('buildAssetsMap', () => {
       'y.js': chunk({ fileName: 'y.js', imports: ['x.js'] }),
     }
     expect(buildAssetsMap(bundle, APP)).toEqual({ '/': ['page-a.js', 'x.js', 'y.js'] })
+  })
+})
+
+describe('loadAssetsMap', () => {
+  const tmp = (name: string, body: string): string => {
+    const dir = mkdtempSync(join(tmpdir(), 'assets-map-'))
+    const path = join(dir, name)
+    writeFileSync(path, body)
+    return path
+  }
+
+  it('reads a well-formed map', () => {
+    expect(loadAssetsMap(tmp('m.json', '{"/a":["x.js"]}'))).toEqual({ '/a': ['x.js'] })
+  })
+
+  // The negative cases matter more than the positive one here: this runs at server startup, and
+  // every one of them must degrade to "serve without preloads" rather than refuse to boot. A
+  // missing optimisation is not an outage, and turning it into one would be the worse failure.
+  it('returns undefined when the file is absent', () => {
+    expect(loadAssetsMap(join(tmpdir(), 'assets-map-does-not-exist', 'm.json'))).toBeUndefined()
+  })
+
+  it('returns undefined on malformed JSON', () => {
+    expect(loadAssetsMap(tmp('m.json', '{ not json'))).toBeUndefined()
+  })
+
+  it('returns undefined when the document is an array or a scalar', () => {
+    expect(loadAssetsMap(tmp('a.json', '["/a"]'))).toBeUndefined()
+    expect(loadAssetsMap(tmp('b.json', '42'))).toBeUndefined()
+    expect(loadAssetsMap(tmp('c.json', 'null'))).toBeUndefined()
+  })
+
+  it('drops an entry whose value is not an array of strings, keeping the rest', () => {
+    expect(loadAssetsMap(tmp('m.json', '{"/a":["x.js"],"/b":"x.js","/c":[1]}'))).toEqual({
+      '/a': ['x.js'],
+    })
+  })
+
+  it('returns undefined when nothing survives the filter', () => {
+    expect(loadAssetsMap(tmp('m.json', '{"/b":"x.js"}'))).toBeUndefined()
   })
 })
