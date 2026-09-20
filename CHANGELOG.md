@@ -19,6 +19,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **A built page now knows which chunks its route needs, so the browser can be told up front (B-035).**
+  `theokit build` emits `.theokit/client/assets-map.json`, a route-to-chunks relation derived in
+  Rollup's `generateBundle` where chunk names first exist. Each route lists only what it needs
+  BEYOND the entry the document already loads, so a route whose code is in the entry lists nothing
+  and costs no wasted request. The hook declares `apply: 'build'` and is therefore absent from the
+  `theo dev` and `theo agent` plugin chains rather than merely inert in them, and it skips the SSR
+  pass by reading the RESOLVED `build.ssr` — the adapter runs two builds and passes `ssr: true` to
+  the plugin factory in both, so the option in the signature cannot tell them apart. Rendering the
+  preloads from this map is the next step and is not in this change.
+
 - **`theokit/server/rate-limit` now says what it promises, and a gate holds it there (B-203).**
   That subpath's barrel is four `export *` lines, so every exported name reached consumers by
   accident of syntax rather than by decision. `docs/api/rate-limit-subpath-surface.md` records a
