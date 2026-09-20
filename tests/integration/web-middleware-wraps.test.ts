@@ -349,6 +349,56 @@ describe('the public builder runs in the Web runner (B-003)', () => {
     ).toHaveLength(1)
   })
 
+  it('test_a_downstream_that_rejects_with_a_non_error_is_still_named_in_the_warning', async () => {
+    // `reportOne` narrows with `reason instanceof Error ? … : String(reason)`, and every other
+    // case in this file rejects with a real `Error` — so the `String(reason)` arm was taken by
+    // nothing. It is the arm that decides whether an operator can identify the failure at all:
+    // a bare `throw 'boom'` or a `Promise.reject(undefined)` reaches it, and `String(undefined)`
+    // would produce a warning naming nothing. This is the NEGATIVE lens of rules/testing.md 4.1
+    // against the EDGE the other cases cover.
+    const warned: string[] = []
+    const realWarn = console.warn
+    console.warn = (...args: unknown[]) => {
+      warned.push(args.join(' '))
+    }
+
+    let failDownstream!: (reason: unknown) => void
+    let settled!: Promise<unknown>
+    const deferredDownstream = async () => {
+      settled = new Promise((_resolve, reject) => {
+        failDownstream = reject
+      })
+      return settled as Promise<Response>
+    }
+
+    const own = new Response('served from cache', { status: 200 })
+    const handler = middleware()
+      .handle((_request, _context, next) => {
+        void callable(next)()
+        return own
+      })
+      .build()
+
+    const result = await runWebMiddleware(
+      new Request('http://x/'),
+      [handler],
+      {},
+      deferredDownstream,
+    )
+    expect(result, "clause 6 is unchanged: the middleware's own Response wins").toBe(own)
+
+    // Not an Error. The reporter must still say something a reader can act on.
+    failDownstream('the route rejected with a bare string')
+    await settled.catch(() => undefined)
+    await Promise.resolve()
+    console.warn = realWarn
+
+    expect(
+      warned.filter((w) => w.includes('the route rejected with a bare string')),
+      'a non-Error rejection produced a warning that named nothing',
+    ).toHaveLength(1)
+  })
+
   it('test_a_rejection_the_caller_is_already_holding_is_not_reported_twice', async () => {
     // The guard on the case above. `await next()` propagates the downstream's rejection object
     // UNCHANGED, so the caller ends up holding the very error a naive fix would also report --
