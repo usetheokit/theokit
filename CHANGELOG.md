@@ -32,6 +32,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **Streaming SSR preloads its chunks too (B-035).** The injection was wired into the synchronous
+  document assembler, while the streaming branch is tried first — so `ssrStreaming: true` turned
+  the feature off on Node while the Cloudflare worker, which renders only when streaming, kept it
+  on. Found by the independent code-review audit of this same change, which also caught that the
+  entry above claimed the feature worked with SSR on without qualifying WHICH SSR path: the
+  end-to-end measurement cited there ran on the default, `ssrStreaming: false`, which is the path
+  that already worked.
+
 - **A route behind a proxy gets its preloads (B-035).** `theokit start` matched the route against
   the raw request target, so an absolute-form target — `GET http://example.com/about`, which a
   proxy sends and RFC 9112 requires a server to accept — matched no route and the document carried
@@ -41,7 +49,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   remembering.
 
 - **The server-rendered document now tells the browser which chunks the route needs (B-035).**
-  A page served by `theokit start` with SSR on carries one `<link rel="modulepreload">` per chunk
+  A page served by `theokit start` with SSR on — on BOTH the synchronous and the streaming
+  path — carries one `<link rel="modulepreload">` per chunk
   its route needs beyond the entry, in the `<head>` — so the browser starts fetching them while it
   parses, instead of discovering them one round trip later when the entry finally executes. A route
   whose code is already in the entry carries none, and a route the map does not name serves exactly

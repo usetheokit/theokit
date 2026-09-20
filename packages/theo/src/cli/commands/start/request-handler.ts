@@ -184,7 +184,17 @@ async function handleSsrStreaming(
       // RENDERED body for head elements, and nothing is rendered yet when the head
       // has to flush. Metadata hoisting under streaming is the same defect on a
       // different surface, and it is M9's, not this one's.
-      htmlHead: applyNonceToInlineScripts(ctx.htmlHead, nonce),
+      // B-035, found by the independent code-review audit: the preloads were wired into
+      // `buildSsrHtml`, which serves the SYNCHRONOUS path only, while this branch is dispatched
+      // FIRST — so `ssrStreaming: true` turned the feature off on Node while the Cloudflare
+      // worker injected on its equivalent branch. The exclusion argued just above is about
+      // METADATA hoisting, which needs the rendered body; a `modulepreload` link needs nothing
+      // from it, so that argument does not reach here.
+      htmlHead: injectModulePreloads(
+        applyNonceToInlineScripts(ctx.htmlHead, nonce),
+        ctx.assetsMap,
+        url,
+      ),
       htmlTail: ctx.htmlTail,
     })
     if (isRedirectResult(result)) sendRedirect(res, result)
