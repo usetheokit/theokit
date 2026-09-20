@@ -13,6 +13,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import { loadAssetsMap } from '../../packages/theo/src/cli/commands/start/ssr-setup.js'
+import { injectModulePreloads } from '../../packages/theo/src/core/contracts/module-preloads.js'
 
 import {
   buildAssetsMap,
@@ -152,5 +153,34 @@ describe('loadAssetsMap', () => {
 
   it('returns undefined when nothing survives the filter', () => {
     expect(loadAssetsMap(tmp('m.json', '{"/b":"x.js"}'))).toBeUndefined()
+  })
+})
+
+describe('injectModulePreloads — the request target is not always a path', () => {
+  const MAP = { '/about': ['assets/a.js'] }
+  const HEAD = '<head></head>'
+
+  // Found at review, B-035. The two call sites feed this function DIFFERENT shapes:
+  // `request-handler.ts:240` passes `req.url` raw, and `cloudflare.ts:284` passes
+  // `new URL(request.url).pathname`. RFC 9112 §3.2.2 requires a server to accept the
+  // absolute form, and a proxy sends it — so on Node behind a proxy the route never matched
+  // and the whole feature silently did nothing, while the worker worked. The equivalence
+  // test could not see it: it fed both implementations the same string.
+  it('matches the route when the target is absolute-form, as a proxy sends it', () => {
+    expect(injectModulePreloads(HEAD, MAP, 'http://example.com/about')).toContain('modulepreload')
+  })
+
+  it('matches with an absolute-form target carrying a query', () => {
+    expect(injectModulePreloads(HEAD, MAP, 'https://example.com/about?ref=x')).toContain(
+      'modulepreload',
+    )
+  })
+
+  it('still matches an ordinary origin-form target', () => {
+    expect(injectModulePreloads(HEAD, MAP, '/about')).toContain('modulepreload')
+  })
+
+  it('does not invent a route from a target it cannot parse', () => {
+    expect(injectModulePreloads(HEAD, MAP, 'not a url at all')).toBe(HEAD)
   })
 })

@@ -10,7 +10,7 @@
 
 import type { IncomingMessage, ServerResponse } from 'node:http'
 
-import { injectModulePreloads } from '../../../core/module-preloads.js'
+import { injectModulePreloads } from '../../../core/contracts/module-preloads.js'
 import { generateNonce } from '../../../server/auth/nonce.js'
 import { type ReservedRoutes, serveReservedRoute } from '../../../server/define/health-route.js'
 import type { CorsHandler } from '../../../server/http/cors.js'

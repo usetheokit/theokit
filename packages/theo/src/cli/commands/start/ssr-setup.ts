@@ -9,6 +9,7 @@ import { readFileSync } from 'node:fs'
 import type { ServerResponse } from 'node:http'
 
 import { findRootDiv } from '../../../core/contracts/find-root-div.js'
+import { parseAssetsMap } from '../../../core/contracts/module-preloads.js'
 
 import { resolveSsrEntry } from './bootstrap-stages.js'
 
@@ -114,13 +115,7 @@ export async function setupSsr(opts: {
  */
 export function loadAssetsMap(path: string): Record<string, string[]> | undefined {
   try {
-    const parsed: unknown = JSON.parse(readFileSync(path, 'utf8'))
-    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return undefined
-    const entries = Object.entries(parsed).filter(
-      (entry): entry is [string, string[]] =>
-        Array.isArray(entry[1]) && entry[1].every((value) => typeof value === 'string'),
-    )
-    return entries.length > 0 ? Object.fromEntries(entries) : undefined
+    return parseAssetsMap(readFileSync(path, 'utf8'))
   } catch {
     return undefined
   }

@@ -26,9 +26,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   makes zero references to the map file. A build that produced no map emits nothing about preloads
   and the worker behaves exactly as before.
 
-  The worker carries a COPY of the injector rather than importing it, because `theokit`'s package
-  exports declare no subpath that reaches it. The copy is guarded by a test that feeds both
-  implementations the same nine inputs and asserts identical output, so it cannot drift in silence.
+  The worker imports the injector from `theokit/server` rather than carrying a copy. An earlier
+  revision of this entry said it had to carry one; that was wrong, and the copy drifted within a
+  day — the proxy fix below landed in the original only.
+
+### Fixed
+
+- **A route behind a proxy gets its preloads (B-035).** `theokit start` matched the route against
+  the raw request target, so an absolute-form target — `GET http://example.com/about`, which a
+  proxy sends and RFC 9112 requires a server to accept — matched no route and the document carried
+  no preloads at all. The Cloudflare worker was unaffected, because its call site had already
+  normalised the URL. Found at review by asking where the two call sites could disagree; the route
+  path is now derived inside the function, so both agree by construction rather than by each caller
+  remembering.
 
 - **The server-rendered document now tells the browser which chunks the route needs (B-035).**
   A page served by `theokit start` with SSR on carries one `<link rel="modulepreload">` per chunk

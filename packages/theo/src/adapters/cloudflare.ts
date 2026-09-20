@@ -7,6 +7,7 @@ import { resolve } from 'node:path'
 
 import type { TheoConfig } from '../config/schema.js'
 import { findRootDiv } from '../core/contracts/find-root-div.js'
+import { parseAssetsMap } from '../core/contracts/module-preloads.js'
 import type { SecurityHeadersConfig } from '../core/contracts/security-headers.js'
 import { assertServicesUnsupported, readManifest } from '../services/index.js'
 
@@ -155,50 +156,86 @@ function routeRuntimeLines(moduleEntries: string[], tableEntries: string[]): str
  */
 export function readAssetsMapForBake(path: string): Record<string, string[]> | undefined {
   try {
-    const parsed: unknown = JSON.parse(readFileSync(path, 'utf8'))
-    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return undefined
-    const entries = Object.entries(parsed).filter(
-      (entry): entry is [string, string[]] =>
-        Array.isArray(entry[1]) && entry[1].every((value) => typeof value === 'string'),
-    )
-    return entries.length > 0 ? Object.fromEntries(entries) : undefined
+    return parseAssetsMap(readFileSync(path, 'utf8'))
   } catch {
     return undefined
   }
 }
 
 /**
- * The baked map and its injector, as worker source (B-035).
+ * The baked route-to-chunks map, as worker source (B-035).
  *
- * Emitted only when the build produced a map; otherwise the worker carries nothing about
- * preloads and behaves exactly as it did before.
+ * A literal and not a read, for the same reason the document shell is: a Worker has no filesystem
+ * at request time. Emitted only when the build produced a map; otherwise the worker carries
+ * nothing about preloads and behaves exactly as before.
  *
- * This is a COPY of `core/module-preloads.ts`, and it has to be: a Worker cannot import it,
- * because `theokit`'s package exports declare no subpath reaching `core/` and B-035's AC-009
- * forbids adding one. `tests/unit/worker-preloads-without-a-filesystem.test.ts` feeds both the
- * same inputs and asserts identical output across nine cases, so the copy cannot drift in
- * silence — which is the duplication DRY is actually about.
+ * **It emits the DATA and no longer the code.** An earlier revision emitted a hand-written copy of
+ * `injectModulePreloads`, justified by a claim that the worker could not import it. That claim was
+ * false — `theokit/server` re-exports from `core/contracts/` and the generated worker already
+ * imports that subpath — and the copy drifted within a day: a fix for proxy-form request targets
+ * landed in the original and not in the duplicate. The worker now imports the real function, which
+ * is the shape `adapters/security-headers.ts` established one directory over for exactly this
+ * build-half/runtime-half pair.
  */
+/**
+ * Whether this worker can preload at all (B-035).
+ *
+ * ONE predicate, read by the bake, the import and the call. Two conditions for one decision is
+ * how the import came to be emitted for a worker that had no map to give it — found at review, in
+ * the same change where a copy and its original had already drifted apart.
+ *
+ * Streaming is required because the other branch serves the document from `env.ASSETS` as a
+ * static file and can inject nothing into it.
+ */
+function preloadsApplyTo(opts: {
+  ssrStreaming?: boolean
+  assetsMap?: Record<string, string[]>
+}): boolean {
+  return opts.ssrStreaming === true && opts.assetsMap !== undefined
+}
+
 function renderPreloadSupport(assetsMap: Record<string, string[]> | undefined): string {
   if (assetsMap === undefined) return ''
-  return [
-    `const __THEO_ASSETS_MAP = ${JSON.stringify(assetsMap)}`,
-    `function __theoEscapeAttribute(value) {`,
-    `  return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')`,
-    `}`,
-    `function __theoInjectPreloads(head, assetsMap, url) {`,
-    `  if (assetsMap === undefined) return head`,
-    `  const path = url.split(/[?#]/)[0] ?? url`,
-    `  const route = path.length > 1 ? path.replace(/\\/$/, '') : path`,
-    `  const chunks = assetsMap[route] ?? assetsMap[path]`,
-    `  if (chunks === undefined || chunks.length === 0) return head`,
-    `  const links = chunks`,
-    `    .map((chunk) => '<link rel="modulepreload" href="/' + __theoEscapeAttribute(chunk) + '">')`,
-    `    .join('')`,
-    `  const closing = /<\\/head\\s*>/i`,
-    `  return closing.test(head) ? head.replace(closing, (tag) => links + tag) : head + links`,
-    `}`,
-  ].join('\n')
+  return `const __THEO_ASSETS_MAP = ${JSON.stringify(assetsMap)}`
+}
+
+/**
+ * The branch that answers a non-API request: streamed SSR, or the static asset the Worker
+ * platform serves. Extracted at review — it is the one decision in this emitter with two whole
+ * shapes behind it, and keeping it inline pushed the caller past its line budget.
+ */
+function renderNonApiBranch(
+  opts: NonNullable<Parameters<typeof renderCloudflareWorkerEntry>[0]>,
+  preloadsApply: boolean,
+): string {
+  return opts.ssrStreaming
+    ? [
+        `      // T2.3 — streaming SSR for non-API routes`,
+        `      // The same primitive \`theokit start\` uses, not a second one:`,
+        `      // 16 bytes of Web Crypto entropy, base64.`,
+        `      const nonce = generateNonce()`,
+        `      return withSecurityHeaders(`,
+        `        await renderStreamingWeb(request, {`,
+        !preloadsApply
+          ? `          htmlHead: ${JSON.stringify(opts.htmlHead ?? '')},`
+          : `          htmlHead: injectModulePreloads(${JSON.stringify(opts.htmlHead ?? '')}, __THEO_ASSETS_MAP, new URL(request.url).pathname),`,
+        `          htmlTail: ${JSON.stringify(opts.htmlTail ?? '')},`,
+        `          nonce,`,
+        `        }),`,
+        `        buildSecurityHeaders(SECURITY_HEADERS_CONFIG, { production: true }, { nonce }),`,
+        `      )`,
+      ].join('\n')
+    : [
+        `      // #412 — the document, served by the worker so it carries the same baseline every`,
+        `      // API response carries. It used to return 404 here while wrangler.toml declared a`,
+        `      // \`[site]\` bucket nothing read, so the page was missing rather than unprotected.`,
+        `      const assets = env?.ASSETS`,
+        `      // A wrangler.toml that predates this binding has no ASSETS. Reading .fetch off`,
+        `      // undefined would turn every page request into a 500; 404 is what this target`,
+        `      // answered before, which is the honest fallback rather than a new failure.`,
+        `      if (assets === undefined) return notFoundResponse()`,
+        `      return withSecurityHeaders(await assets.fetch(request), SECURITY_HEADERS)`,
+      ].join('\n')
 }
 
 export function renderCloudflareWorkerEntry(
@@ -267,36 +304,15 @@ export function renderCloudflareWorkerEntry(
   // script (`router/entry-server.ts`). Every other response below carries the
   // nonce-less baseline, which is what `buildSecurityHeaders` already does for a
   // prerendered route (EC-4).
-  const preloadSupport = renderPreloadSupport(opts.assetsMap)
+  // Only the streaming branch renders HTML at request time; the other serves the document from
+  // `env.ASSETS` as a static file and can inject nothing. Baking the map for it would ship the whole
+  // route table as dead weight — found at review, where the emitter was measured declaring it with
+  // zero call sites.
+  const preloadsApply = preloadsApplyTo(opts)
+  const preloadSupport = preloadsApply ? renderPreloadSupport(opts.assetsMap) : ''
 
-  const nonApiBranch = opts.ssrStreaming
-    ? [
-        `      // T2.3 — streaming SSR for non-API routes`,
-        `      // The same primitive \`theokit start\` uses, not a second one:`,
-        `      // 16 bytes of Web Crypto entropy, base64.`,
-        `      const nonce = generateNonce()`,
-        `      return withSecurityHeaders(`,
-        `        await renderStreamingWeb(request, {`,
-        opts.assetsMap === undefined
-          ? `          htmlHead: ${JSON.stringify(opts.htmlHead ?? '')},`
-          : `          htmlHead: __theoInjectPreloads(${JSON.stringify(opts.htmlHead ?? '')}, __THEO_ASSETS_MAP, new URL(request.url).pathname),`,
-        `          htmlTail: ${JSON.stringify(opts.htmlTail ?? '')},`,
-        `          nonce,`,
-        `        }),`,
-        `        buildSecurityHeaders(SECURITY_HEADERS_CONFIG, { production: true }, { nonce }),`,
-        `      )`,
-      ].join('\n')
-    : [
-        `      // #412 — the document, served by the worker so it carries the same baseline every`,
-        `      // API response carries. It used to return 404 here while wrangler.toml declared a`,
-        `      // \`[site]\` bucket nothing read, so the page was missing rather than unprotected.`,
-        `      const assets = env?.ASSETS`,
-        `      // A wrangler.toml that predates this binding has no ASSETS. Reading .fetch off`,
-        `      // undefined would turn every page request into a 500; 404 is what this target`,
-        `      // answered before, which is the honest fallback rather than a new failure.`,
-        `      if (assets === undefined) return notFoundResponse()`,
-        `      return withSecurityHeaders(await assets.fetch(request), SECURITY_HEADERS)`,
-      ].join('\n')
+  const nonApiBranch = renderNonApiBranch(opts, preloadsApply)
+
   // CR-006: Workers lack `process.cwd()` and the `node:*` import surface
   // is brittle even under `nodejs_compat`. We use the Web Crypto
   // `crypto.randomUUID()` instead of `node:crypto.randomUUID`, and embed
@@ -321,7 +337,9 @@ export function renderCloudflareWorkerEntry(
     `//     so Wrangler bundles theokit and its transitive deps`,
     `//   - Deploy: wrangler deploy`,
     ``,
-    `import { matchRoute, executeRoute, compilePattern, extractTraceIdFromRequest, TRACE_HEADER, createCorsWebHandler } from 'theokit/server'`,
+    !preloadsApply
+      ? `import { matchRoute, executeRoute, compilePattern, extractTraceIdFromRequest, TRACE_HEADER, createCorsWebHandler } from 'theokit/server'`
+      : `import { matchRoute, executeRoute, compilePattern, extractTraceIdFromRequest, TRACE_HEADER, createCorsWebHandler, injectModulePreloads } from 'theokit/server'`,
     `import { createWebShim } from 'theokit/adapters/web-shim'`,
     opts.ssrStreaming
       ? `import { buildSecurityHeaders, generateNonce, withSecurityHeaders } from 'theokit/adapters/security-headers'`
