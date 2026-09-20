@@ -11,9 +11,15 @@
 allowBuilds:
   # The bundler behind `theokit dev` and `theokit build`; ships a platform binary.
   esbuild: true
-  # A native terminal, reached through @theokit/agents. Compiles or downloads a
-  # prebuild on install. A web-only app never opens one — see usetheokit/theokit#25
-  # if you would rather not pay for it.
+  # A native terminal. Compiles or downloads a prebuild on install, so it is the one
+  # entry here that costs real time — and a scaffolded app does NOT install it.
+  # Measured 2026-09-20 on a scaffold generated from this template: 0 occurrences in
+  # the generated pnpm-lock.yaml, out of 453 resolved packages, and pnpm raised no
+  # ERR_PNPM_IGNORED_BUILDS. It arrives only if you add a package that depends on it.
+  # An earlier version of this comment said it was "reached through @theokit/agents";
+  # that package declares no pty dependency, so the line is corrected rather than
+  # deleted — a wrong reason for a right entry is what sent the last reader looking
+  # in the wrong place (usetheokit/theokit#25).
   node-pty: true
   # Present only if you add them; harmless entries otherwise, and here so the
   # decision is already made the day you do.

@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- **The scaffold no longer says `node-pty` arrives through `@theokit/agents` (B-025).** The
+  generated `pnpm-workspace.yaml` approves four packages for install scripts and explained
+  `node-pty` as a native terminal "reached through `@theokit/agents`". Measured on a scaffold
+  generated from the template: `node-pty` appears **0 times** in the resulting `pnpm-lock.yaml` out
+  of 453 resolved packages, nothing matching lands in `node_modules/`, pnpm raises no
+  `ERR_PNPM_IGNORED_BUILDS`, and `@theokit/agents` declares no pty dependency at all. A scaffolded
+  web app therefore runs **no native build step**. The entry stays — it costs nothing and is there
+  for the day you add a package that needs it, like `better-sqlite3` and `workerd` beside it — and
+  the comment now says what was measured, keeping the wrong reason on the page rather than deleting
+  it, because a right entry with a wrong reason is what sends the next reader to the wrong package.
+
 ### Added
 
 - **A middleware can now run code after the route, because the runner passes it a `next`
