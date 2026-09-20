@@ -11,14 +11,39 @@
 
 | Subpath | Symbol | Importers in `packages/*/src` + `apps/*/src` |
 |---|---|---|
-| `./server-inserted-html` | `createServerInsertedHTML` (`src/server-inserted-html.ts:38`) | 0 |
-| `./css-resource` | `renderCssResource` (`src/css-resource.ts:63`) | 0 |
+| `./server-inserted-html` | `createServerInsertedHTML` (`src/server-inserted-html.ts`) | 0 |
+| `./css-resource` | `renderCssResource` (`src/css-resource.ts`) | 0 |
 
 Measured 2026-09-19, and the negative is controlled rather than assumed: the identical query
 over `renderToStream` returns 6 production sites, and `@theokit/http/app` returns 50 — so the
 zero is a statement about these two symbols, not about the query. The project's own
 `docs/program/capability-matrix.md:106-107` already records both as "no SSR path consumes it"
 and "test-only".
+
+<!-- CORRECTED 2026-09-20 by the independent audit (loop-code-review, findings LCR0205 #90 and #91) -->
+
+> **Corrected 2026-09-20.** An independent audit found two defects in this Context. **The
+> decision below is unchanged** — both corrections are about the measurement that supports it,
+> not about what was decided.
+>
+> **The line pointers had rotted against this ADR's own change.** The table cited
+> `server-inserted-html.ts:38` and `css-resource.ts:63`. Re-measured today the exports sit at
+> `:43` and `:70`, displaced by exactly the `@deprecated` blocks this change set inserted above
+> them — so the pointers were taken before the change and published after it. Line 38 is now the
+> `@deprecated` line itself and line 63 a bare comment opener: both **resolved cleanly and
+> supported nothing**, which is the one failure no pointer checker in this ecosystem catches,
+> since every one of them asks only whether the pointer resolves. They now name the file and the
+> symbol with no line, so they cannot rot against a future diff.
+>
+> **"Two" is a scope, not a total.** Re-measured over `packages/*/src` and `apps/*/src`:
+> `./action-encryption` is a **third** published subpath with the same property —
+> `deriveActionKey`, `encryptActionArgs` and `decryptActionArgs` have zero occurrences outside
+> their own file, against one test file. It sits inside the very `tsup.config.ts:12-14` range
+> this ADR cites, and `docs/program/capability-matrix.md:105` already records it as "callable
+> directly; nothing in the action pipeline uses it". It is **not covered by the decision below**:
+> no `@deprecated` was added to it, and quietly extending an accepted decision to a symbol nobody
+> argued about would be widening it rather than applying it. Registered as its own backlog item.
+
 
 The parsimony ladder's first rung asks whether a thing needs to exist, and for unreferenced
 internal code the answer here would be no. **These are not internal.** `@theokit/http` is

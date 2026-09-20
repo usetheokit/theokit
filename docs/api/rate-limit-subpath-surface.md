@@ -28,7 +28,7 @@ checked. A short row is how that happens.
 | `createRouteRateLimiterWeb` | internal | Zero consumers anywhere. `bakeableRateLimit` throws on `routes` because the matched route is decided after the limit runs, so a deployed entry cannot do per-route limiting and this mirror has no path to a caller today |
 | `deriveKey` | internal | Zero consumers. Every apparent hit belongs to a different function of the same name — `cache/key-derivation.ts:60` or `server/auth/crypto.ts:28` — and `cache/index.ts:49` re-exports from the first, not from here |
 | `deriveKeyFromRequest` | internal | Zero consumers. The generated fragment resolves the address inline as `return <expr> ?? 'unknown'` rather than calling it, so the Web-shaped mirror was superseded by the thing it was built for |
-| `matchRoutePattern` | internal | Zero consumers outside the directory. Its only mention beyond `packages/theo/src` is a docblock example, and per-route matching is refused on a deployed entry for the reason recorded against `createRouteRateLimiterWeb` |
+| `matchRoutePattern` | internal | Zero PRODUCTION consumers outside the directory. Beyond `packages/theo/src` it is called nine times, all in one test — `tests/unit/rate-limit-per-route.test.ts:6` imports it and `:151-166` exercise it, and per-route matching is refused on a deployed entry for the reason recorded against `createRouteRateLimiterWeb` |
 | `InMemoryStore` | internal | Zero consumers. Its single mention outside the directory is a comment at `adapters/deployed-rate-limit.ts:17`; it is the default store the two factories throw for when replaced, which is load-bearing inside the module and unreferenced outside it |
 
 ## What this file does NOT decide
@@ -37,3 +37,25 @@ Whether each verdict is the RIGHT verdict. A gate can hold the surface still and
 disagreement possible; it cannot settle one. `internal` here means *nothing consumes it and nothing
 documents it as a promise* — it is an invitation to argue with a row, which is what the silence it
 replaces could not be.
+
+
+<!-- CORRECTED 2026-09-20 by the independent audit (loop-code-review, finding LCR0205).
+
+     The `matchRoutePattern` row asserted "its only mention beyond `packages/theo/src` is a
+     docblock example". That was FALSE and the tree says so: `matchRoutePattern` is imported at
+     `tests/unit/rate-limit-per-route.test.ts:6` and called at :151, :152, :156, :157, :161, :162
+     and :166 — nine mentions, every one a real call, none a docblock.
+
+     **The verdict does not change and the reason it does not is the point.** `internal` was
+     decided on PRODUCTION consumers, and a test is not one — the same standard
+     `rules/code-quality-golden-rule.md` D3 applies when it says a test is not a consumer. What was
+     wrong is the sentence that justified the verdict, not the verdict: a reader checking the claim
+     would have found it false and had no way to tell whether the verdict was false too.
+
+     **Two seats of the B-203 panel and five REVIEW reviewers read this file and none caught it.**
+     It took an independent audit with its own instruments. Recorded because that is what the
+     `cycle-review.md` argument for an independent auditor predicts, and this is the instance.
+
+     The sibling `createRouteRateLimiter` row was already correct: it counts the lines, says how
+     many are comments, and names the one real call site. This row now does the same.
+-->
