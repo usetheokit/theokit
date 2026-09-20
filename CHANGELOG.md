@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **`theokit/server/rate-limit` now says what it promises, and a gate holds it there (B-203).**
+  That subpath's barrel is four `export *` lines, so every exported name reached consumers by
+  accident of syntax rather than by decision. `docs/api/rate-limit-subpath-surface.md` records a
+  verdict and a reason for each of the nine **value** symbols the built module publishes — two
+  promises and seven internal — and `tests/smoke/rate-limit-subpath-surface-is-decided.test.ts`
+  compares that record against the BUILT module in both directions, so a symbol that starts being
+  published fails the suite until someone decides about it, and a row that outlives its symbol
+  fails too. Types carry no row: they are erased at build, so a consumer cannot import one at
+  runtime, and a type named in a published signature is public by construction.
+
 ### Fixed
 
 - **The scaffold no longer says `node-pty` arrives through `@theokit/agents` (B-025).** The
