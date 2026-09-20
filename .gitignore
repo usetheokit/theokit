@@ -155,5 +155,13 @@ BACKLOG.md
 # file and removes it on release, so a tracked lock is a transient artefact that
 # shows as a deletion after every legitimate run. `.BACKLOG.md.lock` was tracked
 # until 2026-09-20 and did exactly that.
-*.lock
-!pnpm-lock.yaml
+.*.lock
+# CORRECTED 2026-09-20, same day, by the reviewer that had flagged the tracked lock.
+# The first version of this was `*.lock` with `!pnpm-lock.yaml` under it. The negation
+# was INERT — `pnpm-lock.yaml` never matched `*.lock` in the first place — so the check
+# that 'pnpm-lock.yaml is still tracked' would have read identically with the line
+# deleted. It measured something true that did not test the claim. Meanwhile the broad
+# pattern did hide four real dependency records: Cargo.lock, yarn.lock, poetry.lock and
+# bun.lock all resolved here. `.*.lock` matches the dotfile shape `shared_file.locked()`
+# actually produces (`.BACKLOG.md.lock`) and nothing else. Verified both ways after the
+# change rather than asserted.
