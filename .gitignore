@@ -150,3 +150,10 @@ code-review-output/
 
 # Personal maintenance registry — not project documentation (see ~/.claude/CLAUDE.md).
 BACKLOG.md
+
+# Runtime locks. `shared_file.locked()` creates one while a mechanism holds a
+# file and removes it on release, so a tracked lock is a transient artefact that
+# shows as a deletion after every legitimate run. `.BACKLOG.md.lock` was tracked
+# until 2026-09-20 and did exactly that.
+*.lock
+!pnpm-lock.yaml
