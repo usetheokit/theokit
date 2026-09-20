@@ -187,11 +187,36 @@ export async function runWebMiddleware(
       for (const [invocation, reason] of rejections) reportOne(invocation, reason)
     }
 
-    // No try/catch here, deliberately: if the middleware throws, the caller is about to hold an
-    // error for this request, so `report` never runs and nothing is double-reported. A wrapper
-    // that only rethrows is what the linter calls useless, and it would have been — the
-    // behaviour comes from `report` not being reached, not from catching.
-    const own = await middleware[index](request, context, next)
+    // The catch exists for ONE fact the earlier version got half right: when the middleware
+    // throws, the caller holds an error — but not necessarily THE error a pending invocation
+    // failed with, and the two cases are told apart by identity rather than by resemblance.
+    //
+    //   `await next()` and do not catch  -> the object the caller receives IS the downstream's
+    //                                       rejection reason. Reporting it is a duplicate, and
+    //                                       the duplicate is the regression `reportOne`'s
+    //                                       docblock records as having shipped once.
+    //   fire `next()`, then throw        -> the caller receives a DIFFERENT object and never
+    //                                       learns the downstream also failed. Measured before
+    //                                       this branch existed: `reported=0`.
+    //
+    // So the held invocation is handed to `report` as the yielded one — reusing the mechanism
+    // the frame already has for "the caller is holding this one" instead of adding a second rule
+    // beside it — and the rest are reported. The error is rethrown unchanged.
+    // DERIVED from the contract declared above, never a second spelling of its union:
+    // `WebMiddleware` admits `void` so that an async middleware returning nothing stays
+    // assignable, and a hand-written `Response | undefined` here dropped exactly that
+    // member — `tsc` caught it at line 207 rather than any test.
+    let own: Awaited<ReturnType<WebMiddleware>>
+    try {
+      own = await middleware[index](request, context, next)
+    } catch (error) {
+      let held: Promise<Response | undefined> | undefined
+      for (const [invocation, reason] of rejections) {
+        if (reason === error) held = invocation
+      }
+      report(held)
+      throw error
+    }
 
     // Clause 6, unchanged: the middleware's own `Response`, otherwise what the invocation
     // produced, otherwise the rest of the chain. The early return stays FIRST — awaiting the

@@ -291,6 +291,96 @@ describe('the public builder runs in the Web runner (B-003)', () => {
     ).toHaveLength(1)
   })
 
+  // The two cases below use a DEFERRED downstream rather than a sleep. The rejection is fired by
+  // the test and awaited by the test, so the assertion waits exactly as long as the effect takes
+  // and never races it -- which is the shape the audit's finding on wall-clock synchronisation
+  // asks the older cases to adopt.
+  it('test_a_middleware_that_throws_after_firing_next_still_reports_the_downstream_failure', async () => {
+    const warned: string[] = []
+    const realWarn = console.warn
+    console.warn = (...args: unknown[]) => {
+      warned.push(args.join(' '))
+    }
+    const orphaned: unknown[] = []
+    const onUnhandled = (reason: unknown) => orphaned.push(reason)
+    process.on('unhandledRejection', onUnhandled)
+
+    // The downstream never settles on its own: the TEST decides when it fails, so nothing here
+    // depends on a clock.
+    let failDownstream!: (reason: unknown) => void
+    let settled!: Promise<unknown>
+    const deferredDownstream = async () => {
+      settled = new Promise((_resolve, reject) => {
+        failDownstream = reject
+      })
+      return settled as Promise<Response>
+    }
+
+    const OWN = new Error('the middleware rejected the request itself')
+    const DOWNSTREAM = new Error('the route failed for its own unrelated reason')
+    const handler = middleware()
+      .handle((_request, _context, next) => {
+        void callable(next)()
+        throw OWN
+      })
+      .build()
+
+    try {
+      await runWebMiddleware(new Request('http://x/'), [handler], {}, deferredDownstream)
+      expect.unreachable('the middleware threw, so the frame must reject')
+    } catch (error) {
+      expect(error, "the caller holds the MIDDLEWARE's error, not the downstream's").toBe(OWN)
+    }
+
+    // Two DIFFERENT failures: the caller is holding OWN and knows nothing about DOWNSTREAM. That
+    // is what makes reporting it a report rather than a duplicate -- proved by identity, not by
+    // resemblance.
+    failDownstream(DOWNSTREAM)
+    await settled.catch(() => undefined)
+    await Promise.resolve()
+
+    console.warn = realWarn
+    process.off('unhandledRejection', onUnhandled)
+
+    expect(orphaned, 'the downstream rejection was left unowned').toEqual([])
+    expect(
+      warned.filter((w) => w.includes('unrelated reason')),
+      'the middleware threw after firing next(), and the downstream failure reached nobody',
+    ).toHaveLength(1)
+  })
+
+  it('test_a_rejection_the_caller_is_already_holding_is_not_reported_twice', async () => {
+    // The guard on the case above. `await next()` propagates the downstream's rejection object
+    // UNCHANGED, so the caller ends up holding the very error a naive fix would also report --
+    // which is the regression this file's runner docblock records as having shipped once.
+    const warned: string[] = []
+    const realWarn = console.warn
+    console.warn = (...args: unknown[]) => {
+      warned.push(args.join(' '))
+    }
+
+    const DOWNSTREAM = new Error('the route failed and the middleware did not catch it')
+    const boom = async (): Promise<Response> => {
+      throw DOWNSTREAM
+    }
+    const handler = middleware()
+      .handle(async (_request, _context, next) => {
+        await callable(next)()
+      })
+      .build()
+
+    await expect(runWebMiddleware(new Request('http://x/'), [handler], {}, boom)).rejects.toBe(
+      DOWNSTREAM,
+    )
+
+    console.warn = realWarn
+
+    expect(
+      warned.filter((w) => w.includes('did not catch it')),
+      'the error the caller is already holding was reported a second time',
+    ).toHaveLength(0)
+  })
+
   it('test_the_yielded_rejection_is_not_reported_twice', async () => {
     const warned: string[] = []
     const realWarn = console.warn

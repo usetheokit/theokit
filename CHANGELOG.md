@@ -59,6 +59,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   repaired inside one unreleased window. It is recorded here rather than dropped because the
   reasoning is what a reader of the contract needs — but nobody running `theokit@0.67.0` ever
   met it.
+- **A middleware that throws after starting the route no longer loses the route's failure
+  (B-003).** The entry above reports a discarded invocation's rejection through `console.warn`,
+  with one exception: the invocation the frame itself hands back, whose rejection the caller is
+  already holding. A second path was missing from that predicate. When a middleware fires `next()`
+  without awaiting it and then throws its OWN error, the exception leaves the frame before
+  anything settles it, so the route's failure was recorded and read by nobody — **zero warnings**,
+  measured with a probe rather than inferred: `caught=MIDDLEWARE_THREW orphaned=[] reported=0`.
+  The process-death half was already closed, so the failure was owned; it was simply never
+  surfaced.
+
+  **The fix branches on error IDENTITY, and the obvious version of it is wrong.** Reporting
+  everything in the catch re-introduces the duplicate the entry above exists to prevent: measured
+  over both shapes against one shared error object, a middleware that `await`s `next()` and does
+  not catch receives the *identical* object the downstream rejected with
+  (`caught_is_sentinel=true`), while one that fires and throws receives a different one
+  (`caught_is_own=true`). So the catch finds the pending invocation whose recorded reason IS the
+  thrown object and hands it to the reporter as the yielded one — reusing the mechanism the frame
+  already had for "the caller is holding this one" — then rethrows unchanged. Both directions are
+  now regression-tested, and disabling the identity branch turns the second test red.
+
 - **The builder's output was never assignable to the runner's parameter, and nothing measured it
   (B-003).** `MiddlewareHandler` admitted `Promise<void>` and `WebMiddleware` did not, so a
   middleware written with `middleware()` and passed to `runWebMiddleware` failed to type-check —

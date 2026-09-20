@@ -99,6 +99,20 @@ The signature becomes `(request, context, next) => Response | undefined | void`:
    2026-09-19 after review, which found the code and this clause describing different mechanisms
    while the code cited this clause by number.
 
+   **And "reported through `console.warn`" had a hole, closed 2026-09-19 after the review audit.**
+   The reporting ran when the frame SETTLED, and a middleware that fires `next()` without awaiting
+   it and then throws never settles the frame — the exception leaves before anything drains the
+   pending rejections. Probed rather than argued: `caught=MIDDLEWARE_THREW orphaned=[] reported=0`.
+   Owned, and told to nobody.
+
+   The catch that closes it branches on **error identity**, and the naive version is a regression
+   rather than a fix. Reporting everything in the catch re-reports the object the caller already
+   holds, which is precisely the wrong sentence this clause's reporting rule was narrowed to avoid.
+   Measured across both shapes against one shared error: `await next()` without catching delivers
+   the downstream's *identical* rejection reason to the caller, while fire-and-throw delivers a
+   different object. So the catch hands the held invocation to the reporter as the yielded one —
+   the mechanism this clause already had — reports the rest, and rethrows unchanged.
+
    **Retaining is not memoising, and clause 6 requires the first while this clause rejects the
    second.** Retention lets the frame yield what the one invocation produced. Memoising would make a
    SECOND explicit `next()` return the first one's result — silencing a genuinely careless double
