@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- **`npm run lint` is green again, and a test may exercise a deprecated symbol (B-205).**
+  `@typescript-eslint/no-deprecated` was firing 15 errors on the tests for `renderCssResource` and
+  `createServerInsertedHTML` — two symbols `docs/adr/0007` keeps deprecated AND published, so their
+  tests are correct and the rule fired on them for being correct. Because the quality gate lints the
+  whole repository, that failure was charged to every unrelated change that reached it. The rule is
+  now off for test code, in the block that already relaxes rules for the same file set, and still
+  ON for production: a deprecated symbol used in shipped code still fails, proved by an armed canary
+  rather than asserted. No file left the sweep — 50 entries before, 50 after.
+
 ### Added
 
 - **`theokit/server/rate-limit` now says what it promises, and a gate holds it there (B-203).**

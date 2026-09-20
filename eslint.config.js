@@ -330,6 +330,19 @@ export default tseslint.config(
       'sonarjs/no-identical-functions': 'off',
       'sonarjs/prefer-regexp-exec': 'off',
       'sonarjs/deprecation': 'off',
+      // A test that exercises a deprecated symbol is doing what it exists to do: a symbol that
+      // still SHIPS must still have its behaviour pinned. `docs/adr/0007` keeps
+      // `renderCssResource` and `createServerInsertedHTML` deprecated AND published, so their
+      // tests are correct and the rule fires on them for being correct (B-205).
+      //
+      // `sonarjs/deprecation` above is the same concern under a name that does not fire here —
+      // measured 2026-09-20, the rule producing all 15 errors is the typescript-eslint one. That
+      // line is left in place rather than tidied away, because it is the trace of which rule was
+      // suppressed by mistake.
+      //
+      // Scoped to this block on purpose: a deprecated symbol used in PRODUCTION source still
+      // fails, which is the half worth keeping.
+      '@typescript-eslint/no-deprecated': 'off',
       'sonarjs/no-collapsible-if': 'off',
       'sonarjs/no-unused-vars': 'off',
       'sonarjs/no-dead-store': 'off',
