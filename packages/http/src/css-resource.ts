@@ -1,8 +1,8 @@
 /**
  * CSS Resource Injection — render CSS as <link> or <style> tags.
  *
- * Renders a CSS resource as a <link> or <style> tag.
- * Supports React 19 precedence attribute for resource ordering.
+ * Emits the React 19 `precedence` attribute for resource ordering.
+ *
  */
 
 /** Describes a CSS resource — either external (href) or inline (content). */
@@ -59,6 +59,13 @@ function escapeStyleText(value: string): string {
  *
  * @returns HTML string for the CSS resource, or empty string if neither
  *          href nor content is provided.
+ */
+/**
+ * @deprecated Under React 19 this is redundant: React hoists
+ * `<link rel="stylesheet" precedence>` natively. Retained for the React 18 half
+ * of this package's declared peer range (`react >=18.0.0`), where no such
+ * hoisting exists. Zero consumers measured 2026-09-19 — `docs/adr/0007` records
+ * why a published subpath with no visible importer is deprecated, not deleted.
  */
 export function renderCssResource(resource: CssResource, isDev?: boolean): string {
   const precedenceAttr = resource.precedence

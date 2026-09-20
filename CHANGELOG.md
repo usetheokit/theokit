@@ -28,6 +28,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   own `Response` when it returned one, otherwise what its single `next()` call produced — recorded
   with its rejected alternatives in `docs/adr/0006`.
 
+### Deprecated
+
+- **`@theokit/http/css-resource` and `@theokit/http/server-inserted-html` are deprecated, and
+  both keep working (B-012).** Measured 2026-09-19: neither subpath has a single importer
+  anywhere in this monorepo, controlled against `@theokit/http/app` at 50 and `renderToStream`
+  at 6 — so the zero is about these two symbols and not about the query.
+
+  Neither is removed in 2.x. The package is published, so the importers this repository can see
+  are not the importers that exist, and deleting on "no importer I can see" would break
+  consumers nobody can name. `docs/adr/0007` records the decision and the two alternatives
+  rejected.
+
+  Each notice states when the thing is still the right tool: `css-resource` is redundant under
+  React 19, which hoists `<link precedence>` natively, and is retained for the React 18 half of
+  the declared `react >=18.0.0` peer range. `server-inserted-html` has no consumer *here*, which
+  is a claim about this repository rather than about every consumer. A capability that finds a
+  consumer un-deprecates.
+
 ### Fixed
 
 - **A middleware that starts the route and answers from elsewhere no longer kills the server
