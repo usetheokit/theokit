@@ -146,11 +146,72 @@ function routeRuntimeLines(moduleEntries: string[], tableEntries: string[]): str
   ]
 }
 
+/**
+ * Read the map `theokit build` emitted, for baking into the worker (B-035).
+ *
+ * Returns `undefined` — never throws — for an absent or malformed file. A deploy that failed
+ * because an optimisation was missing would turn a lost round trip into a broken build, and the
+ * worker is correct without it.
+ */
+export function readAssetsMapForBake(path: string): Record<string, string[]> | undefined {
+  try {
+    const parsed: unknown = JSON.parse(readFileSync(path, 'utf8'))
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return undefined
+    const entries = Object.entries(parsed).filter(
+      (entry): entry is [string, string[]] =>
+        Array.isArray(entry[1]) && entry[1].every((value) => typeof value === 'string'),
+    )
+    return entries.length > 0 ? Object.fromEntries(entries) : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * The baked map and its injector, as worker source (B-035).
+ *
+ * Emitted only when the build produced a map; otherwise the worker carries nothing about
+ * preloads and behaves exactly as it did before.
+ *
+ * This is a COPY of `core/module-preloads.ts`, and it has to be: a Worker cannot import it,
+ * because `theokit`'s package exports declare no subpath reaching `core/` and B-035's AC-009
+ * forbids adding one. `tests/unit/worker-preloads-without-a-filesystem.test.ts` feeds both the
+ * same inputs and asserts identical output across nine cases, so the copy cannot drift in
+ * silence — which is the duplication DRY is actually about.
+ */
+function renderPreloadSupport(assetsMap: Record<string, string[]> | undefined): string {
+  if (assetsMap === undefined) return ''
+  return [
+    `const __THEO_ASSETS_MAP = ${JSON.stringify(assetsMap)}`,
+    `function __theoEscapeAttribute(value) {`,
+    `  return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')`,
+    `}`,
+    `function __theoInjectPreloads(head, assetsMap, url) {`,
+    `  if (assetsMap === undefined) return head`,
+    `  const path = url.split(/[?#]/)[0] ?? url`,
+    `  const route = path.length > 1 ? path.replace(/\\/$/, '') : path`,
+    `  const chunks = assetsMap[route] ?? assetsMap[path]`,
+    `  if (chunks === undefined || chunks.length === 0) return head`,
+    `  const links = chunks`,
+    `    .map((chunk) => '<link rel="modulepreload" href="/' + __theoEscapeAttribute(chunk) + '">')`,
+    `    .join('')`,
+    `  const closing = /<\\/head\\s*>/i`,
+    `  return closing.test(head) ? head.replace(closing, (tag) => links + tag) : head + links`,
+    `}`,
+  ].join('\n')
+}
+
 export function renderCloudflareWorkerEntry(
   opts: {
     ssrStreaming?: boolean
     htmlHead?: string
     htmlTail?: string
+    /**
+     * B-035 — the route-to-chunks map, baked as a literal for the same reason the shell above
+     * is: a Worker has no filesystem at request time. Absent when the build produced no map,
+     * and then nothing about preloads is emitted at all.
+     */
+    assetsMap?: Record<string, string[]>
     securityHeaders?: SecurityHeadersConfig
     /**
      * The server routes, scanned on the BUILD machine (#369).
@@ -206,6 +267,8 @@ export function renderCloudflareWorkerEntry(
   // script (`router/entry-server.ts`). Every other response below carries the
   // nonce-less baseline, which is what `buildSecurityHeaders` already does for a
   // prerendered route (EC-4).
+  const preloadSupport = renderPreloadSupport(opts.assetsMap)
+
   const nonApiBranch = opts.ssrStreaming
     ? [
         `      // T2.3 — streaming SSR for non-API routes`,
@@ -214,7 +277,9 @@ export function renderCloudflareWorkerEntry(
         `      const nonce = generateNonce()`,
         `      return withSecurityHeaders(`,
         `        await renderStreamingWeb(request, {`,
-        `          htmlHead: ${JSON.stringify(opts.htmlHead ?? '')},`,
+        opts.assetsMap === undefined
+          ? `          htmlHead: ${JSON.stringify(opts.htmlHead ?? '')},`
+          : `          htmlHead: __theoInjectPreloads(${JSON.stringify(opts.htmlHead ?? '')}, __THEO_ASSETS_MAP, new URL(request.url).pathname),`,
         `          htmlTail: ${JSON.stringify(opts.htmlTail ?? '')},`,
         `          nonce,`,
         `        }),`,
@@ -278,6 +343,7 @@ export function renderCloudflareWorkerEntry(
     `// here as a literal because a Worker has no theo.config.ts to read. Same`,
     `// function, same input, so the deployed page and the local one cannot`,
     `// disagree about what the configuration means.`,
+    preloadSupport,
     `const SECURITY_HEADERS_CONFIG = ${renderSecurityHeadersConfigLiteral(opts.securityHeaders)}`,
     `const SECURITY_HEADERS = buildSecurityHeaders(SECURITY_HEADERS_CONFIG, { production: true })`,
     ``,
@@ -436,6 +502,11 @@ export const cloudflareAdapter: DeployAdapter = {
     // Node server uses (`ssr-setup.ts`), so the two paths cannot disagree about
     // where the shell ends (#343).
     const shell = readDocumentShell(cwd, config.ssrStreaming)
+    // B-035 — the route-to-chunks map, read HERE on the build machine for the same reason the
+    // shell above is: a Worker has no filesystem at request time. `nodeAdapter.build` ran
+    // first, so the map the Node build emitted is on disk by now. Absent map -> nothing about
+    // preloads is emitted, and the worker behaves exactly as it did before.
+    const assetsMap = readAssetsMapForBake(resolve(cwd, '.theokit', 'client', 'assets-map.json'))
 
     // #369 — the routes are resolved HERE, on the build machine, for the same reason the document
     // shell above is read here: a Worker has no filesystem at request time, and the worker used to
@@ -463,6 +534,7 @@ export const cloudflareAdapter: DeployAdapter = {
         csrf: config.security?.csrf,
         disallowed: config.security?.disallowed,
         cors: config.security?.cors,
+        assetsMap,
         // #425 — a selector, not a transformer, so it rides as a literal like the values above.
         serialization: config.serialization,
         // #425 — the ONE concern that is not a literal. A closure cannot be baked, so a plugin

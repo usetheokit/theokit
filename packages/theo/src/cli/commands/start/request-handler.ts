@@ -10,6 +10,7 @@
 
 import type { IncomingMessage, ServerResponse } from 'node:http'
 
+import { injectModulePreloads } from '../../../core/module-preloads.js'
 import { generateNonce } from '../../../server/auth/nonce.js'
 import { type ReservedRoutes, serveReservedRoute } from '../../../server/define/health-route.js'
 import type { CorsHandler } from '../../../server/http/cors.js'
@@ -134,45 +135,6 @@ export function withHoistedHead(
   // applications put in `<head>` specifically to avoid a flash of the wrong theme on load.
   const head = applyNonceToInlineScripts(injectIntoHead(htmlHead, headTags), nonce)
   return { head, body: html }
-}
-
-/**
- * Render one `<link rel="modulepreload">` per chunk the route needs beyond the entry, and
- * inject them before `</head>`.
- *
- * In the HEAD, not the body: a preload the browser meets after parsing the entry teaches it
- * nothing it was not about to learn, which is the whole defect. `extractHeadTags` hoists what
- * React rendered; these are not rendered by React at all, so they are injected here.
- *
- * The chunk name is a build output and not user input, and it is escaped anyway: the cost is a
- * regex and the alternative is trusting that no file name will ever contain a quote.
- */
-export function injectModulePreloads(
-  head: string,
-  // `string[] | undefined` on the VALUE is deliberate, and it is the second time this change
-  // needed it: an index lookup can miss, so the guard below is a runtime check. A type that
-  // could not miss makes a type-based lint call that guard redundant, and obeying the lint
-  // would turn a handled case — a route absent from the map — into a crash per request.
-  assetsMap: Record<string, string[] | undefined> | undefined,
-  url: string,
-): string {
-  if (assetsMap === undefined) return head
-  // The map is keyed by route path; a request carries a query string and may carry a trailing
-  // slash, neither of which changes which route is being served.
-  const path = url.split(/[?#]/)[0] ?? url
-  const route = path.length > 1 ? path.replace(/\/$/, '') : path
-  const chunks = assetsMap[route] ?? assetsMap[path]
-  if (chunks === undefined || chunks.length === 0) return head
-  const links = chunks
-    .map((chunk) => `<link rel="modulepreload" href="/${escapeAttribute(chunk)}">`)
-    .join('')
-  const closing = /<\/head\s*>/i
-  return closing.test(head) ? head.replace(closing, (tag) => links + tag) : head + links
-}
-
-/** Attribute-safe: a chunk name must not be able to close the attribute it sits in. */
-function escapeAttribute(value: string): string {
-  return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')
 }
 
 export function buildSsrHtml(

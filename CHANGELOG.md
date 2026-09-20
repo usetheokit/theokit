@@ -19,6 +19,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **The Cloudflare worker preloads a route's chunks without a filesystem (B-035).**
+  `theokit build --target=cloudflare` bakes the route-to-chunks map into the generated worker as a
+  literal, for the same reason the document shell already is: a Worker has no filesystem at request
+  time. Verified on a real build — the emitted worker carries the map with its real chunk names and
+  makes zero references to the map file. A build that produced no map emits nothing about preloads
+  and the worker behaves exactly as before.
+
+  The worker carries a COPY of the injector rather than importing it, because `theokit`'s package
+  exports declare no subpath that reaches it. The copy is guarded by a test that feeds both
+  implementations the same nine inputs and asserts identical output, so it cannot drift in silence.
+
 - **The server-rendered document now tells the browser which chunks the route needs (B-035).**
   A page served by `theokit start` with SSR on carries one `<link rel="modulepreload">` per chunk
   its route needs beyond the entry, in the `<head>` — so the browser starts fetching them while it
