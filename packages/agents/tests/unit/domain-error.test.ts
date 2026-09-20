@@ -4,7 +4,7 @@ import {
   // Proving the alias is the SAME class requires importing it — it is the only legitimate use of the
   // deprecated name in the repository, and this test is what guarantees it stays an alias and does
   // not become a copy (M73).
-  BudgetExceededError as AliasDeprecado,
+  BudgetExceededError as DeprecatedAlias,
   DelegationBudgetExceededError,
 } from '../../src/bridge/delegation-types.js'
 import * as barrel from '../../src/index.js'
@@ -30,12 +30,12 @@ import * as barrel from '../../src/index.js'
  */
 describe('M91 — the delegation error no longer shadows the one from the SDK', () => {
   it('the deprecated alias is the SAME class, not a copy', () => {
-    expect(AliasDeprecado).toBe(DelegationBudgetExceededError)
+    expect(DeprecatedAlias).toBe(DelegationBudgetExceededError)
   })
 
   it('instanceof holds in BOTH directions through the alias', () => {
     const err = new DelegationBudgetExceededError('an-agent', 1.5, 1)
-    expect(err).toBeInstanceOf(AliasDeprecado)
+    expect(err).toBeInstanceOf(DeprecatedAlias)
   })
 
   it('the instance name is the NEW name', () => {
