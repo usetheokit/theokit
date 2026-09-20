@@ -210,13 +210,22 @@ describe('the public builder runs in the Web runner (B-003)', () => {
       warned.push(args.join(' '))
     }
 
+    // Deferred rather than an immediate throw: the middleware body below awaits a macrotask
+    // before returning, and the test needs the rejection to land while the frame is still
+    // running. Firing it explicitly makes that ordering a fact instead of a race.
+    let failRoute!: (reason: unknown) => void
+    let routeSettled!: Promise<unknown>
     const exploding = async () => {
-      throw new Error('the route handler blew up')
+      routeSettled = new Promise((_resolve, reject) => {
+        failRoute = reject
+      })
+      return routeSettled as Promise<Response>
     }
     const own = new Response('served from cache', { status: 200 })
     const handler = middleware()
       .handle(async (_request, _context, next) => {
         void callable(next)()
+        failRoute(new Error('the route handler blew up'))
         // A MACROTASK between the call and the return. This is the shape the first fix missed:
         // owning the invocations after the body returns leaves the promise unowned for as long
         // as the body runs, and a cache lookup is exactly this. Node declares the rejection
@@ -229,7 +238,8 @@ describe('the public builder runs in the Web runner (B-003)', () => {
 
     const result = await runWebMiddleware(new Request('http://x/'), [handler], {}, exploding)
 
-    await new Promise((resolve) => setTimeout(resolve, 20))
+    await routeSettled.catch(() => undefined)
+    await Promise.resolve()
     console.warn = realWarn
     process.off('unhandledRejection', onUnhandled)
 
@@ -265,9 +275,16 @@ describe('the public builder runs in the Web runner (B-003)', () => {
     // it: the rejection was recorded into a per-frame map the frame never reads again, so the
     // failure reached nobody at all. Zero warnings, which is what `error-handling.md § 2`
     // forbids and what the reporting exists to prevent.
+    // The route fails when the TEST says so, not when a timer says so. The frame has already
+    // answered by then — which is the shape under test — and the assertion below waits on this
+    // promise rather than on a clock, so it cannot expire early on a loaded machine.
+    let failRoute!: (reason: unknown) => void
+    let routeSettled!: Promise<unknown>
     const lateBoom = async () => {
-      await new Promise((resolve) => setTimeout(resolve, 30))
-      throw new Error('the route failed after the frame had answered')
+      routeSettled = new Promise((_resolve, reject) => {
+        failRoute = reject
+      })
+      return routeSettled as Promise<Response>
     }
     const handler = middleware()
       .handle((_request, _context, next) => {
@@ -277,7 +294,9 @@ describe('the public builder runs in the Web runner (B-003)', () => {
       .build()
 
     const result = await runWebMiddleware(new Request('http://x/'), [handler], {}, lateBoom)
-    await new Promise((resolve) => setTimeout(resolve, 60))
+    failRoute(new Error('the route failed after the frame had answered'))
+    await routeSettled.catch(() => undefined)
+    await Promise.resolve()
     console.warn = realWarn
     process.off('unhandledRejection', onUnhandled)
 
@@ -459,7 +478,14 @@ describe('the public builder runs in the Web runner (B-003)', () => {
       'the route handler blew up',
     )
 
-    await new Promise((resolve) => setTimeout(resolve, 20))
+    // A NEGATIVE assertion, so a wait that is merely long enough proves nothing: if the report
+    // had not happened YET, the count would read 0 for the wrong reason. The previous 20 ms sleep
+    // could only ever fail toward a false pass. Draining the microtask queue is exact here
+    // because `reportOne` runs synchronously inside the `.catch` handler installed by `next`,
+    // which is a microtask — so by the time these ticks settle, a duplicate report either
+    // happened or never will.
+    await Promise.resolve()
+    await Promise.resolve()
     console.warn = realWarn
 
     expect(
