@@ -8,6 +8,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **A failing test in the Web middleware suite made its siblings fail too (B-220).**
+  Six tests replaced `console.warn` and three installed a `process.on('unhandledRejection')`
+  listener, and every restore sat after the assertions with no `try/finally` and no `afterEach` in
+  the file. One genuine failure therefore skipped its own restore, leaving `console.warn` writing
+  into a finished test's array and a listener installed — and the next tests assert on exactly those
+  two things, so the real diagnostic was buried under false failures. Measured: forcing one
+  assertion to fail produced 3 failures where 1 was real. A describe-level `afterEach` now restores
+  the pristine `console.warn` and removes leaked listeners before asserting, so the test that leaked
+  is the test that fails. The per-test listeners stay: they are the instrument three assertions
+  depend on, not bookkeeping.
+
 - **A deployed target answers the HITL approvals listing instead of the run handler (B-185).**
   `handleListApprovals` shipped in two emitted chunks, and a reachability walk over `dist/` found
   four entries that reach them — `adapters/agent-mount.js`, which every deploy adapter calls, was

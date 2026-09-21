@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import type { MiddlewareNext } from '../../packages/theo/src/server/define/define-middleware.js'
 import { middleware } from '../../packages/theo/src/server/define/middleware-builder.js'
@@ -77,6 +77,49 @@ function countingDownstream(trace: string[] = []) {
 }
 
 describe('the public builder runs in the Web runner (B-003)', () => {
+  // B-220. Six tests in this file replace global `console.warn` and three install a process-level
+  // `unhandledRejection` listener, and every restore sat in the test body — some after the
+  // assertions. A failing assertion skipped the restore, leaving `console.warn` pointing at a dead
+  // closure that writes into a completed test's array and leaving a listener installed. Later
+  // tests assert on exactly those two things, so ONE genuine failure turned its successors into
+  // false failures and buried the real diagnostic under them. Measured by the audit on a scratch
+  // copy: forcing one assertion to fail produced three failures, two of them fabricated.
+  //
+  // The original is captured ONCE, here, rather than per test. A per-test `const realWarn =
+  // console.warn` captures whatever the previous test left behind, so a leak propagates through
+  // every "restore" after it.
+  //
+  // The per-test patches and listeners are DELIBERATELY left in place. Removing them as redundant
+  // was tried and reverted: `process.on('unhandledRejection', onUnhandled)` is not bookkeeping,
+  // it is the INSTRUMENT of the three tests that assert `expect(orphaned).toEqual([])`. Without
+  // the registration nothing ever pushes, and all three assertions pass while measuring nothing —
+  // the exact tautology this file's own items are about. Only the restores are made redundant by
+  // the net below, and a redundant restore costs nothing.
+  const pristineWarn = console.warn
+  let unhandledListenersAtEntry = 0
+
+  beforeEach(() => {
+    unhandledListenersAtEntry = process.listenerCount('unhandledRejection')
+  })
+
+  afterEach(() => {
+    console.warn = pristineWarn
+
+    // Cleaned BEFORE asserted, so one leak cannot cascade into every successor — the cascade is
+    // the damage this item is about, not the leak itself.
+    const leaked = process.listenerCount('unhandledRejection') - unhandledListenersAtEntry
+    if (leaked > 0) {
+      for (const listener of process.listeners('unhandledRejection').slice(-leaked)) {
+        process.off('unhandledRejection', listener)
+      }
+    }
+
+    expect(
+      leaked,
+      'a test left an unhandledRejection listener installed; it is removed now, and this names the test that leaked rather than the one that trips over it',
+    ).toBe(0)
+  })
+
   it('test_a_middleware_that_awaits_next_and_returns_void_yields_the_downstream_response', async () => {
     const seen: string[] = []
     const downstream = countingDownstream(seen)
