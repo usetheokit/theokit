@@ -49,7 +49,7 @@ function escapeAttribute(value: string): string {
  * Returns `undefined` for a target this cannot read. That is deliberate: inventing a route from an
  * unparseable target would preload another route's chunks, which is worse than preloading none.
  */
-export function routePathFromTarget(target: string): string | undefined {
+function routePathFromTarget(target: string): string | undefined {
   if (target.startsWith('/')) return target.split(/[?#]/)[0]
   // Absolute form. `URL` is the platform's own parser and is present in Node and in a Worker —
   // parsimony rung 3, and it is the same parser the worker's call site already uses.
