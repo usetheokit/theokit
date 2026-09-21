@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url'
 
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 
-import { renderBunEntry } from '../../packages/theo/src/adapters/bun.js'
+import { buildBun, renderBunEntry } from '../../packages/theo/src/adapters/bun.js'
 import { renderDenoEntry } from '../../packages/theo/src/adapters/deno-deploy.js'
 
 /**
@@ -25,6 +25,8 @@ import { renderDenoEntry } from '../../packages/theo/src/adapters/deno-deploy.js
  * then finds no node and never reaches `mountAgent`.
  */
 const STUB_SOURCE = `
+import nodeFs from 'node:fs'
+import nodePath from 'node:path'
 export const scanServerRoutes = () => []
 export const scanWebSocketRoutes = () => []
 export const matchRoute = () => null
@@ -48,10 +50,19 @@ export const matchAgentAuxRoute = () => null
 export const serveMatchedAuxRoute = () => new Response('')
 
 // The two halves this file exists to execute.
-globalThis.__theoSeen = { scans: 0, resolverArgs: [] }
-export const scanAgents = (root) => {
+globalThis.__theoSeen = { scans: 0, resolverArgs: [], scanArgs: [] }
+export const scanAgents = (projectRoot, agentsDirName = 'agents') => {
   globalThis.__theoSeen.scans += 1
-  return [{ name: 'chat', filePath: root + '/agents/chat.js', agentPath: '/api/agents/chat' }]
+  globalThis.__theoSeen.scanArgs.push({ projectRoot, agentsDirName })
+  const dir = nodePath.join(projectRoot, agentsDirName)
+  if (!nodeFs.existsSync(dir)) return []
+  return nodeFs
+    .readdirSync(dir)
+    .filter((f) => f.endsWith('.js'))
+    .map((f) => {
+      const name = f.slice(0, -3)
+      return { name, filePath: nodePath.join(dir, f), agentPath: '/api/agents/' + name }
+    })
 }
 export const createAgentSubjectResolver = (deps) => {
   globalThis.__theoSeen.resolverArgs.push(deps)
@@ -62,6 +73,7 @@ export const mountAgent = (mod, request, apiKey, opts) =>
 `
 
 let root: string
+let customDirRoot: string
 let stubUrl: string
 let serial = 0
 
@@ -72,6 +84,18 @@ beforeAll(() => {
   mkdirSync(join(root, 'agents'), { recursive: true })
   writeFileSync(join(root, 'agents', 'chat.js'), `export default { name: 'chat' }\n`)
   mkdirSync(join(root, 'server'), { recursive: true })
+
+  // F-92b7b572. A project whose `agentsDir` is `core/agents` — the value the config's own
+  // docblock gives as its example (`config/schema.ts:66`). No `agents/` directory exists here,
+  // so a scan that ignores the configured name finds nothing at all.
+  customDirRoot = mkdtempSync(join(tmpdir(), 'theo-scanned-customdir-'))
+  writeFileSync(join(customDirRoot, 'theo-stub.mjs'), STUB_SOURCE)
+  mkdirSync(join(customDirRoot, 'core', 'agents'), { recursive: true })
+  writeFileSync(
+    join(customDirRoot, 'core', 'agents', 'chat.js'),
+    `export default { name: 'chat' }\n`,
+  )
+  mkdirSync(join(customDirRoot, 'server'), { recursive: true })
 })
 
 afterEach(() => {
@@ -85,10 +109,15 @@ type Handler = (request: Request) => Promise<Response>
 interface Seen {
   scans: number
   resolverArgs: { serverDir?: string }[]
+  scanArgs: { projectRoot: string; agentsDirName: string }[]
 }
 const seenNow = (): Seen => (globalThis as unknown as { __theoSeen: Seen }).__theoSeen
 const resetSeen = (): void => {
-  ;(globalThis as unknown as { __theoSeen: Seen }).__theoSeen = { scans: 0, resolverArgs: [] }
+  ;(globalThis as unknown as { __theoSeen: Seen }).__theoSeen = {
+    scans: 0,
+    resolverArgs: [],
+    scanArgs: [],
+  }
 }
 
 /**
@@ -97,7 +126,35 @@ const resetSeen = (): void => {
  * no export to import. Both also guard their runtime at module scope and `process.exit(1)` or
  * throw when it is absent, which is why the globals go up BEFORE the import.
  */
-async function loadScanned(kind: 'bun' | 'deno'): Promise<Handler> {
+/** Write a rendered entry into the fixture, import it, and return the handler it hands to serve(). */
+async function executeEmitted(tag: string, source: string, projectRoot: string): Promise<Handler> {
+  let captured: Handler | undefined
+  const previousNodeEnv = process.env.NODE_ENV
+  process.env.NODE_ENV = 'production'
+  ;(globalThis as Record<string, unknown>).Bun = {
+    version: '1.2.0',
+    serve: (options: { fetch: (r: Request, s: unknown) => Promise<Response> }) => {
+      captured = (request: Request) => options.fetch(request, { upgrade: () => false })
+      return { stop() {} }
+    },
+    file: (path: string) => `file:${path}`,
+  }
+  const dir = join(projectRoot, '.theokit', 'built')
+  mkdirSync(dir, { recursive: true })
+  serial += 1
+  const file = join(dir, `entry-${tag}-${serial}.mjs`)
+  writeFileSync(
+    file,
+    `process.chdir(${JSON.stringify(projectRoot)})\n` +
+      source.replace(/^(\s*import[^\n]*?from\s+)'(?!node:|\.)[^']*'/gm, `$1'${stubUrl}'`),
+  )
+  await import(/* @vite-ignore */ pathToFileURL(file).href)
+  process.env.NODE_ENV = previousNodeEnv
+  if (captured === undefined) throw new Error('the built entry never called serve()')
+  return captured
+}
+
+async function loadScanned(kind: 'bun' | 'deno', projectRoot: string = root): Promise<Handler> {
   let captured: Handler | undefined
   const previousNodeEnv = process.env.NODE_ENV
   process.env.NODE_ENV = 'production'
@@ -115,7 +172,7 @@ async function loadScanned(kind: 'bun' | 'deno'): Promise<Handler> {
     ;(globalThis as Record<string, unknown>).Deno = {
       version: { deno: '1.44.0' },
       env: { get: () => undefined },
-      cwd: () => root,
+      cwd: () => projectRoot,
       serve: (_options: unknown, handler: Handler) => {
         captured = handler
         return { finished: Promise.resolve() }
@@ -128,7 +185,7 @@ async function loadScanned(kind: 'bun' | 'deno'): Promise<Handler> {
   // neither signature accepts — it read as configuration and was inert.
   const source = kind === 'bun' ? renderBunEntry(3000) : renderDenoEntry(3000)
 
-  const dir = join(root, '.theokit', kind)
+  const dir = join(projectRoot, '.theokit', kind)
   mkdirSync(dir, { recursive: true })
   serial += 1
   // A fresh filename per load: ESM caches by url, and two of these tests import the same
@@ -137,7 +194,7 @@ async function loadScanned(kind: 'bun' | 'deno'): Promise<Handler> {
   writeFileSync(
     file,
     // Bun's entry reads `process.cwd()`; pinning it to the fixture keeps `serverDir` inside it.
-    `process.chdir(${JSON.stringify(root)})\n` +
+    `process.chdir(${JSON.stringify(projectRoot)})\n` +
       source.replace(/^(\s*import[^\n]*?from\s+)'(?!node:|\.)[^']*'/gm, `$1'${stubUrl}'`),
   )
   await import(/* @vite-ignore */ pathToFileURL(file).href)
@@ -178,6 +235,47 @@ describe('a scanned deploy target serves an agent through its emitted entry', ()
       expect(seen.resolverArgs[0]?.serverDir).toContain('server')
     })
   }
+
+  it('test_a_project_with_a_configured_agents_dir_is_served', async () => {
+    // F-92b7b572 and F-59e471e0. This drives `buildBun` — the PRODUCTION caller — rather than
+    // `renderBunEntry`. The distinction is the whole finding: `serverDirLiteral` existed, and
+    // `deploy-adapters-honour-server-dir.test.ts:29` proved the renderer honours the option by
+    // passing the option itself, while no build ever supplied it. A test that passes the option
+    // here would reproduce that blind spot instead of closing it.
+    resetSeen()
+    let emitted = ''
+    await buildBun(
+      {
+        port: 3000,
+        serverDir: 'core',
+        agentsDir: 'core/agents',
+        appDir: 'app',
+        outDir: 'dist',
+        ssr: false,
+        ssrStreaming: false,
+      } as never,
+      customDirRoot,
+      {
+        runNodeBuild: async () => {},
+        ensureDir: () => {},
+        writeEntry: (_path: string, content: string) => {
+          emitted = content
+        },
+      } as never,
+    )
+
+    expect(emitted, 'the configured server directory never reached the entry').toContain(
+      'resolve(cwd, "core")',
+    )
+    const handler = await executeEmitted('bun-configured-dirs', emitted, customDirRoot)
+    const response = await handler(new Request('https://app.test/api/agents/chat'))
+
+    expect(
+      seenNow().scanArgs[0]?.agentsDirName,
+      'the build passed no directory, so the default won over the configured value',
+    ).toBe('core/agents')
+    expect(response.status, 'an agent under a configured agentsDir was not served').toBe(200)
+  })
 
   it('test_an_agent_the_scan_did_not_report_is_not_served', async () => {
     resetSeen()

@@ -62,6 +62,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   with no `server/context.ts` resolves an anonymous caller, which is the honest answer rather than
   an invented subject.
 
+- **A deploy target honours the `serverDir` and `agentsDir` the project configured (#95).**
+  `serverDirLiteral` existed, `deploy-adapters-honour-server-dir.test.ts` proved the renderer
+  honours the option, and **no build ever passed one** — so both literals fell to their defaults on
+  every deploy target. Measured by executing `buildBun` against a config carrying `serverDir: core`
+  and `agentsDir: core/agents`: the emitted entry said `resolve(cwd, "server")` and
+  `scanAgents(cwd)`. A project that organises its code under a domain root — the arrangement
+  `config/schema.ts` documents with that exact example — therefore resolved a directory it does not
+  have: `scanServerRoutes` returned `[]` and the target served **no routes at all**, while every
+  agent answered 404. Both failures are silent, arrive only after deploy, and look like an app with
+  nothing in it. `buildBun` and the Deno build now pass both values; `deno-deploy` also stopped
+  hard-coding `cwd + '/server'`, which dropped the directory one level earlier than bun did. The
+  regression test drives `buildBun` rather than the renderer, because a test that supplies the
+  option itself is what let this survive.
+
 - **A `server/context.ts` that throws no longer takes the whole deploy target down (B-185).**
   Baking that module (ADR 0014) made a Worker import it, which it never did before — so the
   commonest shape a context file has, a required env var asserted at module scope, went from

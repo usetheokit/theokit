@@ -73,6 +73,25 @@ export function serverDirLiteral(opts: DeployedServerDirOptions): string {
   return JSON.stringify(opts.serverDir ?? 'server')
 }
 
+/**
+ * The agents directory, same shape and same reason as `serverDir` above.
+ *
+ * `scanAgents(projectRoot, agentsDirName = 'agents')` takes the name as its SECOND parameter
+ * (`server/scan/agent-scan.ts:56`). Nine call sites pass the configured value; the generated
+ * deploy entry was the only one that did not, so the default won and a project whose agents live
+ * under the documented `core/agents` (`config/schema.ts:66`) served none of them — 404 per agent,
+ * after deploy, with nothing naming the cause. Measured 2026-09-21 by executing `buildBun`
+ * against a config carrying both directories and reading what it emitted.
+ */
+export interface DeployedAgentsDirOptions {
+  /** Project-relative agents directory. Absent ⇒ the schema default, `agents`. */
+  agentsDir?: string
+}
+
+export function agentsDirLiteral(opts: DeployedAgentsDirOptions): string {
+  return JSON.stringify(opts.agentsDir ?? 'agents')
+}
+
 export interface DeployedRuntimeConfigOptions {
   /**
    * Specifier of the plugins module the build wrote beside the entry, or `undefined` when the app

@@ -113,6 +113,8 @@ export type DeployedAgentsSource =
        * so without this the agent branch would call `null`.
        */
       readonly ensureLoader?: string
+      /** The configured agents directory as a quoted literal. Absent ⇒ `scanAgents` defaults to `agents`. */
+      readonly agentsDirLiteral?: string
       /**
        * B-185 — an expression yielding the app's `server/` directory, which this host already
        * declares (`bun.ts:95`, `deno-deploy.ts:69`) and already hands to `executeRoute`. A host
@@ -447,9 +449,14 @@ function scannedResolution(source: {
   projectRoot: string
   loadModule: string
   ensureLoader?: string
+  agentsDirLiteral?: string
   serverDir?: string
   pluginRunnerExpr?: string
 }): AgentResolution {
+  // The configured directory as a second argument, or nothing. `scanAgents` defaults the name to
+  // `agents`, which is right for a project that never set one and wrong for every project that did.
+  const agentsDirArg = source.agentsDirLiteral === undefined ? '' : `, ${source.agentsDirLiteral}`
+
   return {
     imports: [],
     declarations: [
@@ -484,7 +491,7 @@ function scannedResolution(source: {
       `      // B-185 — hoisted above the lookup so a declined aux route loads no module. The scan`,
       `      // LISTS agent files; it imports none, so moving it here costs a declined request`,
       `      // nothing it was not already paying.`,
-      `      if (!agentsCache) agentsCache = scanAgents(${source.projectRoot})`,
+      `      if (!agentsCache) agentsCache = scanAgents(${source.projectRoot}${agentsDirArg})`,
       `      const auxDeps = {`,
       `        agents: agentsCache,`,
       `        loadModule: ${source.loadModule},`,

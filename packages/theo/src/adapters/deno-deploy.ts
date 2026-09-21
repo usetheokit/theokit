@@ -13,8 +13,12 @@ import { deployedCorsFragment, type DeployedCorsOptions } from './deployed-cors.
 import { deployedCsrfFragment, type DeployedCsrfOptions } from './deployed-csrf.js'
 import { planDeployedPlugins } from './deployed-plugins-module.js'
 import {
+  agentsDirLiteral,
+  type DeployedAgentsDirOptions,
   deployedRuntimeConfigFragment,
   type DeployedRuntimeConfigOptions,
+  type DeployedServerDirOptions,
+  serverDirLiteral,
 } from './deployed-runtime-config.js'
 import { deployedTraceFragment } from './deployed-trace.js'
 import { nodeAdapter } from './node.js'
@@ -30,10 +34,29 @@ export interface DenoBuildDeps {
   ensureDir?: (path: string) => void
 }
 
+/**
+ * The framework imports this entry opens with, as `npm:` specifiers.
+ *
+ * Extracted from `renderDenoEntry` when adding the configured-directory literal pushed it past the
+ * per-function line budget. A cohesive block — every line is one import of the same package family
+ * — so lifting it keeps the budget a signal about the renderer rather than about its preamble.
+ */
+const FRAMEWORK_IMPORTS: readonly string[] = [
+  `// Use npm: specifier so Deno resolves theokit from the user's package.json`,
+  `// equivalent (works in both local 'deno run' and Deno Deploy).`,
+  `import { scanServerRoutes, matchRoute, executeRoute, createProductionLoader, scanWebSocketRoutes, extractTraceIdFromRequest, TRACE_HEADER, createCorsWebHandler } from 'npm:theokit/server'`,
+  `import { createWebShim } from 'npm:theokit/adapters/web-shim'`,
+  `import { buildSecurityHeaders, withSecurityHeaders } from 'npm:theokit/adapters/security-headers'`,
+  `// T3.3 — WS bridge for Deno runtime`,
+  `import { createDenoWsBridge } from 'npm:theokit/adapters/ws-shim'`,
+]
+
 export function renderDenoEntry(
   port: number,
-  opts: { securityHeaders?: SecurityHeadersConfig } & DeployedCsrfOptions &
+  opts: { securityHeaders?: SecurityHeadersConfig } & DeployedAgentsDirOptions &
+    DeployedCsrfOptions &
     DeployedRuntimeConfigOptions &
+    DeployedServerDirOptions &
     DeployedCorsOptions = {},
 ): string {
   const runtimeConfig = deployedRuntimeConfigFragment(opts)
@@ -41,6 +64,7 @@ export function renderDenoEntry(
     {
       kind: 'scan',
       projectRoot: 'cwd',
+      agentsDirLiteral: agentsDirLiteral(opts),
       loadModule: 'loaderCache',
       serverDir: 'serverDir',
       ensureLoader: 'if (!loaderCache) loaderCache = createProductionLoader()',
@@ -65,17 +89,11 @@ export function renderDenoEntry(
     `  throw new Error('TheoDenoDeployAdapter must run inside Deno.')`,
     `}`,
     ``,
-    `// Use npm: specifier so Deno resolves theokit from the user's package.json`,
-    `// equivalent (works in both local 'deno run' and Deno Deploy).`,
-    `import { scanServerRoutes, matchRoute, executeRoute, createProductionLoader, scanWebSocketRoutes, extractTraceIdFromRequest, TRACE_HEADER, createCorsWebHandler } from 'npm:theokit/server'`,
-    `import { createWebShim } from 'npm:theokit/adapters/web-shim'`,
-    `import { buildSecurityHeaders, withSecurityHeaders } from 'npm:theokit/adapters/security-headers'`,
-    `// T3.3 — WS bridge for Deno runtime`,
-    `import { createDenoWsBridge } from 'npm:theokit/adapters/ws-shim'`,
+    ...FRAMEWORK_IMPORTS,
     ``,
     `const port = Number(Deno.env.get('PORT') ?? '${port}')`,
     `const cwd = Deno.cwd()`,
-    `const serverDir = cwd + '/server'`,
+    `const serverDir = cwd + '/' + ${serverDirLiteral(opts)}`,
     `let routesCache = null`,
     `let wsRoutesCache = null`,
     `let loaderCache = null`,
@@ -181,6 +199,11 @@ export async function buildDeno(
     // declared by module specifier is imported by the emitted module instead; a constructed one
     // is refused by name at build time rather than dropped in silence.
     runtimeConfigModule: pluginsPlan?.moduleSpecifier,
+    // #95 — the configured directories, which `build.ts:210` already threads into the Vite
+    // plugins. Without these two lines the literals above fall to their defaults and a project
+    // with a custom dir deploys an entry that resolves a directory it does not have.
+    serverDir: config.serverDir,
+    agentsDir: config.agentsDir,
   })
   const write =
     deps.writeEntry ??
