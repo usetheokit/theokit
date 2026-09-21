@@ -81,6 +81,50 @@ describe('a deploy target resolves a subject (B-185 T1.3)', () => {
     }
   })
 
+  it('test_the_emitted_resolver_binds_the_entry_s_plugin_runner', () => {
+    // The THIRD instance of one pattern. `csrfMode` and `resolveApiKey` were the first two, found
+    // by review; this one was found by the surface-closure inventory judge, whose only question was
+    // what promise the inventory was missing.
+    //
+    // `handlers.ts` binds `c.pluginRunner` at SEVEN call sites. The fragment bound the literal
+    // `undefined`, while `resolve-agent-subject.ts:87` calls `subjectFrom(produced, pluginRunner)`
+    // -- so the runner is what lets a plugin decorate `ctx.subject` -- and the adapter DOES bake the
+    // plugin module into the very target the fragment runs on (`cloudflare.ts:554-558`, and
+    // `:510` declares `plugins` in `appliesConfig`).
+    //
+    // The consequence is the defect B-185 was opened to fix, surviving inside its own fix: a plugin
+    // that decorates the subject identifies the caller in dev and resolves anonymous on deploy, so a
+    // policy judged against that subject refuses a legitimate owner on the deployed target while
+    // admitting them locally.
+    //
+    // `deployedRuntimeConfigFragment` already declares `const THEO_PLUGIN_RUNNER` at module scope
+    // and spreads `pluginRunner: await THEO_PLUGIN_RUNNER` into `executeRoute`. This binds the same
+    // const rather than building a second runner: a runner rebuilt per request re-runs every
+    // plugin's `register`, which is where a plugin allocates the state its hooks then read.
+    for (const source of [
+      { kind: 'baked' as const, agents: AGENTS, contextModule: 'server/context.js' },
+      { kind: 'scan' as const, projectRoot: 'cwd', loadModule: 'loadModule', serverDir: 'serverDir' },
+    ]) {
+      const emit = (host: Parameters<typeof deployedAgentsFragment>[1]): string => {
+        const f = deployedAgentsFragment(source, host)
+        return [...f.imports, ...f.declarations, ...f.branch].join('\n')
+      }
+      const withPlugins = emit({ pluginRunnerExpr: 'await THEO_PLUGIN_RUNNER' })
+      expect(withPlugins, `${source.kind}: the resolver drops the entry's plugin runner`).toContain(
+        'await THEO_PLUGIN_RUNNER',
+      )
+
+      // An app that declared no plugins emits no module, so there is no const to bind. `undefined`
+      // is then the honest value and not an omission -- the same distinction the `contextModule`
+      // branch draws one function away.
+      const withoutPlugins = emit({})
+      expect(
+        withoutPlugins,
+        `${source.kind}: an app with no plugins must not reference a const the entry never declared`,
+      ).not.toContain('THEO_PLUGIN_RUNNER')
+    }
+  })
+
   it('test_an_app_with_no_context_module_still_builds', () => {
     const fragment = deployedAgentsFragment({ kind: 'baked', agents: AGENTS }, {})
     const source = [...fragment.imports, ...fragment.declarations, ...fragment.branch].join('\n')

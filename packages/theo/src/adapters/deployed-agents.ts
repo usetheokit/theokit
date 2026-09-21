@@ -123,6 +123,16 @@ export interface DeployedAgentsHost {
   readonly wrapSecurityHeaders?: boolean
   /** Prefix for bare package specifiers. Deno needs `npm:`; the others need nothing. */
   readonly importPrefix?: string
+  /**
+   * Expression yielding the entry's plugin runner, or `undefined` when the app declared no plugins
+   * and the build emitted no module to bind.
+   *
+   * `deployedRuntimeConfigFragment` already declares `const THEO_PLUGIN_RUNNER` at module scope and
+   * spreads `pluginRunner: await THEO_PLUGIN_RUNNER` into `executeRoute`; an adapter passes that
+   * same expression here rather than building a second runner, because a runner rebuilt per request
+   * re-runs every plugin's `register` -- which is where a plugin allocates the state its hooks read.
+   */
+  readonly pluginRunnerExpr?: string
 }
 
 /**
@@ -169,8 +179,8 @@ export function deployedAgentsFragment(
 
   const resolution =
     source.kind === 'baked'
-      ? bakedResolution(source.agents, source.contextModule)
-      : scannedResolution(source)
+      ? bakedResolution(source.agents, source.contextModule, host.pluginRunnerExpr)
+      : scannedResolution({ ...source, pluginRunnerExpr: host.pluginRunnerExpr })
 
   return {
     imports: [
@@ -272,6 +282,7 @@ interface AgentResolution {
 function bakedResolution(
   agents: readonly DeployedAgent[],
   contextModule: string | undefined,
+  pluginRunnerExpr: string | undefined,
 ): AgentResolution {
   const varOf = (index: number): string => `__theoAgent${String(index)}`
   return {
@@ -329,6 +340,7 @@ function bakedResolution(
             `    __theoContext.createContext,`,
             `    __theoReq,`,
             `    __theoRes,`,
+            `    ${pluginRunnerExpr ?? 'undefined'},`,
             `  )`,
           ],
     auxPrelude: [
@@ -356,6 +368,7 @@ function scannedResolution(source: {
   loadModule: string
   ensureLoader?: string
   serverDir?: string
+  pluginRunnerExpr?: string
 }): AgentResolution {
   return {
     imports: [],
@@ -383,7 +396,7 @@ function scannedResolution(source: {
             `    res: __theoRes,`,
             `    loadModule: ${source.loadModule},`,
             `    serverDir: ${source.serverDir},`,
-            `    pluginRunner: undefined,`,
+            `    pluginRunner: ${source.pluginRunnerExpr ?? 'undefined'},`,
             `        })`,
           ],
     auxPrelude: [

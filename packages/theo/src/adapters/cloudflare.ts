@@ -331,7 +331,14 @@ export function renderCloudflareWorkerEntry(
         // agents and its routes (ADR 0014). `contextModule` is `undefined` for an app that
         // declares none, and the generator then emits no import for it.
         { kind: 'baked', agents: opts.agents, contextModule: opts.contextModule },
-    { wrapSecurityHeaders: true },
+    {
+      wrapSecurityHeaders: true,
+      // B-185 — bound only when the runtime-config fragment declared the const, which is
+      // exactly when a plugins module was emitted. Referencing it otherwise would emit an
+      // identifier the entry never declares.
+      pluginRunnerExpr:
+        opts.runtimeConfigModule === undefined ? undefined : 'await THEO_PLUGIN_RUNNER',
+    },
   )
 
   return [
