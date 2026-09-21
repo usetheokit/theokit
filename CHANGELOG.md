@@ -65,6 +65,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   consumer un-deprecates.
 
 ### Fixed
+- **A release no longer produces a version with no CHANGELOG entry (B-232).** `create-theokit` is
+  bumped by two mechanisms — its own changeset, and the step that corrects the scaffold's framework
+  pin — and the second fired even when the first already had. The published version then existed in
+  `package.json` and in no changelog. Measured on the `Version Packages` commit of 2026-09-21: the
+  manifest said `3.0.2`, the newest entry said `3.0.1`, and the release was refused by the gate that
+  compares them. The pin step now stands down when `changeset version` already bumped the package in
+  the same run, deciding it from the manifest at `HEAD` rather than from a flag somebody must keep
+  true.
 
 - **`npm run lint` is green again, and a test may exercise a deprecated symbol (B-205).**
   `@typescript-eslint/no-deprecated` was firing 15 errors on the tests for `renderCssResource` and
