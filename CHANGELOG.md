@@ -62,6 +62,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   with no `server/context.ts` resolves an anonymous caller, which is the honest answer rather than
   an invented subject.
 
+- **A throwing `onError` hook is reported instead of vanishing (B-213).** The hook is the plugin an
+  operator installs to ship errors to a tracker. When it threw — bad DSN, transport down, a bug in
+  the hook — the failure was caught by a bare `catch` with a comment and nothing else, so every
+  error in the process was lost and the dashboard showed zero incidents, which reads as a healthy
+  service rather than a broken reporting path. Not re-raising is still correct and unchanged: an
+  error thrown while handling an error recurses. Swallowing WITHOUT a report was the separate act
+  that argument never covered. The runner now warns with the hook's index, its name when it has
+  one, and the reason. A failure inside the report itself stays silent, because reporting a
+  reporting failure is that same recursion one level out.
+
 - **A middleware that calls `next()` twice now says so, instead of running your route twice in
   silence (B-212).** Each call really invokes the downstream again — `docs/adr/0006` refuses to
   memoise it precisely so a careless double call stays visible — and only the last result is used.
