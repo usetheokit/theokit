@@ -59,11 +59,18 @@ function claimingRows(markdown: string): { claims: ClaimingRow[]; unchecked: num
   // as a surface claim the moment one of them does.
   const start = markdown.indexOf(SURFACES_HEADING)
   const lineOffset = start < 0 ? 0 : markdown.slice(0, start).split('\n').length - 1
-  const table = start < 0 ? '' : markdown.slice(start, markdown.indexOf('\n## ', start + 4))
+  // `indexOf` returns -1 when this is the LAST `##` section, and -1 as a `slice` end bound means
+  // 'everything except the final character' — which ate the closing backtick of a reader sitting at
+  // the end of the table and turned a verified row into a silent UNCHECKED. Measured, not read.
+  const nextSection = markdown.indexOf('\n## ', start + 4)
+  const tableEnd = nextSection < 0 ? markdown.length : nextSection
+  const table = start < 0 ? '' : markdown.slice(start, tableEnd)
   table.split('\n').forEach((raw, i) => {
     if (!raw.startsWith('|')) return
     const lower = raw.toLowerCase()
-    if (!lower.includes('read')) return
+    // `\bread\b` and not `includes`: `unreadable` contains `read`, and a row saying it was being
+    // classified as a claiming row. Safe direction — it landed in UNCHECKED — and still a wrong count.
+    if (!/\bread\b/.test(lower)) return
     if (lower.includes('out of scope') || lower.includes('refused')) return
     const cells = raw.split('|').map((c) => c.trim())
     const surface = cells[1] ?? ''
