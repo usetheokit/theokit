@@ -1,6 +1,7 @@
 # ADR 0002 — An abnormal ending is never reported as a normal one
 
-- **Status:** Proposed (2026-08-20)
+- **Status:** Accepted (2026-09-21) — proposed 2026-08-20
+- **Accepted by:** the project owner, delegated in session on 2026-09-21 ("voce deve resolver o restante"). Recorded here rather than in a meeting, per `rules/autonomy-envelope.md § A structural decision the contract wants recorded`: an ADR carries the decision, its reasons and who it binds, and outlasts the meeting. That clause requires three things a meeting would have covered, and they are measured below rather than recalled.
 - **Date:** 2026-08-20
 - **Deciders:** program coordinator; requires the project owner's acceptance
 - **Blocks:** J3, J5, J6 and J9 of the DX benchmark; M8 (observability) and M14 (build-adapters)
@@ -44,6 +45,26 @@ Four rules follow.
 **All four are closed except #382, and that one is the hardest.** The shim buffers because six deploy adapters consume it, and two of those six buffer a second time inside their own emitted contract — so fixing the shim alone leaves those two non-streaming. That one is a contract change across adapters, not a field addition.
 
 **This does not license a new default.** Nothing here changes what a run does; it changes what a run *says*. A ceiling that was always 8 stays 8 — the change is that reaching it is now legible.
+
+## Who is affected, what breaks, and what does not — measured 2026-09-21
+
+Found by SEARCHING, not by recalling, because the envelope asks for the list a meeting would have
+produced and a remembered list is the one that misses a consumer.
+
+| question | measurement |
+|---|---|
+| consumers of `stopReason` inside the packages | **19** occurrences across 5 files — `server/agent/observe-agent-run.ts`, `bridge/sdk-adapter-create-options.ts`, `bridge/present-ui-message-stream.ts`, `bridge/agent-stream-events.ts`, `client/agent-client.ts` |
+| consumers in `apps/` (the products built on this) | **0** |
+| the field's shape | `stopReason?: AgentStopReason` — **optional**, and `agent-stream-events.ts:143` states the invariant in its own words: *"A clean run carries NO `stopReason` at all — absence is the finished case."* |
+
+**What breaks: nothing that exists today.** The change is ADDITIVE by construction — a clean run's
+frames stay byte-identical and the key is *absent*, never `undefined`, so a consumer that has never
+heard of `stopReason` reads exactly what it read before. The four rules constrain what a PRODUCER
+must say when it ends abnormally; they add no value to the path that was already correct.
+
+**What would break, if this were rejected:** the fourth defect (`#382`) stays open and the next
+producer to add a terminal event has no rule to follow — which is the `why_now` the registry item
+records, and the reason three fixed defects do not close the item.
 
 ## Alternatives considered
 
