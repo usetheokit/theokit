@@ -162,6 +162,18 @@ const AUX_DEPS_PARITY = [
 const AGENT_PREFIX = '/api/agents/'
 
 /**
+ * The second shape the aux dispatcher owns. `matchGetAuxRoute` serves M15's
+ * `GET /.well-known/<name>/agent-card.json`, and a guard admitting only {@link AGENT_PREFIX} left
+ * five of the dispatcher's six families reachable on a deploy target and excluded the sixth — by
+ * the guard, not by a decision, and silently.
+ *
+ * A prefix rather than the matcher's own `isAgentCardPath`: the guard exists to keep a url nobody
+ * answers from paying for anything, and importing the matcher's predicate into every emitted entry
+ * would buy a narrower pre-filter at the cost of a module the branch already declines without.
+ */
+const WELL_KNOWN_PREFIX = '/.well-known/'
+
+/**
  * What a deployed entry needs in order to serve the app's agents.
  *
  * @param agents - the agents scanned on the build machine. Empty emits nothing at all.
@@ -205,8 +217,10 @@ export function deployedAgentsFragment(
       `    // #367 — the agent convention owns this prefix. It is answered BEFORE the file-route`,
       `    // table because an agent matches no file route: falling through is how a deployed`,
       `    // \`/api/agents/<name>\` used to 404 on every target.`,
-      `    if (${pathname}.startsWith(${JSON.stringify(AGENT_PREFIX)})) {`,
-      `      const agentName = ${pathname}.slice(${String(AGENT_PREFIX.length)}).split('/')[0]`,
+      `    if (`,
+      `      ${pathname}.startsWith(${JSON.stringify(AGENT_PREFIX)}) ||`,
+      `      ${pathname}.startsWith(${JSON.stringify(WELL_KNOWN_PREFIX)})`,
+      `    ) {`,
       ...resolution.auxPrelude,
       `      // B-185 — the aux dispatcher is asked FIRST, and declining costs nothing: the matcher`,
       `      // reads the url and the scanned nodes, never a module (ADR-1). A miss falls through to`,
@@ -224,6 +238,11 @@ export function deployedAgentsFragment(
         ? `        return withSecurityHeaders(auxResponse, SECURITY_HEADERS)`
         : `        return auxResponse`,
       `      }`,
+      `      // B-185 — only the agent prefix has a run handler behind it. A \`.well-known\` url the`,
+      `      // dispatcher declined must NOT slice a prefix it does not carry: the name would be`,
+      `      // garbage and mountAgent would answer 500 for what is a routing miss.`,
+      `      if (!${pathname}.startsWith(${JSON.stringify(AGENT_PREFIX)})) return ${notFound}`,
+      `      const agentName = ${pathname}.slice(${String(AGENT_PREFIX.length)}).split('/')[0]`,
       ...resolution.lookup,
       `      // A name nobody scanned is a 404, exactly like any other unknown path. Handing`,
       `      // \`undefined\` to mountAgent would surface as a 500 for what is a routing miss.`,

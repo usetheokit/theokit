@@ -15,7 +15,7 @@ import { renderDenoEntry } from '../../packages/theo/src/adapters/deno-deploy.js
  * So this renders each adapter's real entry and reads what came out.
  */
 describe('a deploy target binds its plugin runner', () => {
-  const AGENTS = [{ name: 'a', filePath: 'a.ts', importSpecifier: './a.js' }]
+  const AGENTS = [{ name: 'a', filePath: 'a.ts', agentPath: '/api/agents/a' }]
 
   const RENDERERS: readonly (readonly [string, (o: Record<string, unknown>) => string])[] = [
     [
