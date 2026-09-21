@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [create-theokit 3.0.1, @theokit/http 2.2.0, theokit 0.68.0] - 2026-09-21
+
 ### Added
 
 - **The Cloudflare worker preloads a route's chunks without a filesystem (B-035).**
@@ -65,6 +67,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   consumer un-deprecates.
 
 ### Fixed
+
 - **A release no longer produces a version with no CHANGELOG entry (B-232).** `create-theokit` is
   bumped by two mechanisms — its own changeset, and the step that corrects the scaffold's framework
   pin — and the second fired even when the first already had. The published version then existed in
