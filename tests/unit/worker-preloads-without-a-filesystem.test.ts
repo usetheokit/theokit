@@ -52,7 +52,9 @@ describe('the worker preloads without reading a filesystem', () => {
     // export with no subpath of its own has no migration path off the deprecated barrel. A
     // specifier the package does not export resolves at build time here and fails at DEPLOY,
     // so the exact path is the assertion rather than the mere presence of an import.
-    expect(source).toMatch(/import \{[^}]*\binjectModulePreloads\b[^}]*\} from 'theokit\/server\/http'/)
+    expect(source).toMatch(
+      /import \{[^}]*\binjectModulePreloads\b[^}]*\} from 'theokit\/server\/http'/,
+    )
     expect(source).not.toContain('function __theoInjectPreloads')
     expect(source).not.toContain('function __theoEscapeAttribute')
   })
