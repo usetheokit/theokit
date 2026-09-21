@@ -54,7 +54,21 @@ export type WebMiddleware = (
   // eslint-disable-next-line @typescript-eslint/no-invalid-void-type
 ) => Response | undefined | void | Promise<Response | undefined | void>
 
-/** What runs after the last middleware — the route handler, when the caller passes one. */
+/**
+ * What runs after the last middleware — the route handler, when the caller passes one.
+ *
+ * **It must be idempotent.** A middleware may call `next()` more than once, and each call really
+ * invokes this again — `docs/adr/0006` rejects memoising by name, so that a careless double call
+ * stays visible rather than being silently collapsed into one result.
+ *
+ * The consequence is not academic. `context` below is the caller's own object, passed by
+ * reference, so two invocations interleave on one mutable bag with no synchronisation; only the
+ * last result is used, and the discarded one has already performed its side effects. A
+ * non-idempotent handler therefore runs its business effect twice and answers once.
+ *
+ * The runner now warns when it happens (B-212). It cannot prevent it, because preventing it is
+ * the memoisation the ADR refused.
+ */
 export type WebDownstream = (
   request: Request,
   context: Record<string, unknown>,
@@ -185,6 +199,31 @@ export async function runWebMiddleware(
       yieldedInvocation = yielded
       frameSettled = true
       for (const [invocation, reason] of rejections) reportOne(invocation, reason)
+
+      // B-212. `docs/adr/0006` rejects memoising `next` BY NAME, because memoising "would also
+      // silence a genuinely careless double call, which is the one thing the counter in AC-003
+      // exists to detect" — and that counter lived only inside a test. So the design was justified
+      // by a detector the shipped code did not have: a discarded invocation that REJECTS reaches
+      // `reportOne` above, and one that SUCCEEDS reached nothing at all.
+      //
+      // The count, not the discard, is the fact worth saying. `runFrom` passes the caller's own
+      // `context` by reference, so two invocations of the downstream interleave on one mutable
+      // object with no synchronisation, and for a non-idempotent handler the business effect runs
+      // twice. An operator needs to know the route ran twice; "something was discarded" does not
+      // say that.
+      //
+      // Synchronous, and read from the list rather than from settlement: at this point a discarded
+      // invocation may not have settled, and a warning that waited for it would report the
+      // duplicate after the response had already gone out.
+      if (invocations.length > 1) {
+        console.warn(
+          `[theokit] a middleware called next() ${String(invocations.length)} times, so the ` +
+            'downstream ran that many times against the same context object, concurrently and ' +
+            'with no synchronisation. Only the last result is used; the rest are discarded with ' +
+            'their side effects already performed. Call next() once, or make the downstream ' +
+            'idempotent.',
+        )
+      }
     }
 
     // The catch exists for ONE fact the earlier version got half right: when the middleware

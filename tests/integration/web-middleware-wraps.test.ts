@@ -167,6 +167,47 @@ describe('the public builder runs in the Web runner (B-003)', () => {
     expect(result, "and it is not the downstream's").not.toBe(downstream.response)
   })
 
+  it('test_a_discarded_invocation_that_succeeded_is_reported_rather_than_silent', async () => {
+    // B-212. ADR 0006 rejects memoising `next` BY NAME, on the ground that memoising "would also
+    // silence a genuinely careless double call, which is the one thing the counter in AC-003
+    // exists to detect" — and that counter exists only inside a test. In production the second
+    // invocation ran the application's own route handler again, concurrently, against the same
+    // mutable context object, and said nothing: `reportOne` fires for a discarded invocation that
+    // REJECTS, and a discarded invocation that SUCCEEDS produced no diagnostic at all.
+    //
+    // So the design was justified by a detector the shipped code did not have. This asserts the
+    // detector exists where the ADR assumed it did.
+    const downstream = countingDownstream()
+    const warned: string[] = []
+    const realWarn = console.warn
+    console.warn = (...args: unknown[]) => {
+      warned.push(args.join(' '))
+    }
+
+    try {
+      const handler = middleware()
+        .handle(async (_request, _context, next) => {
+          const first = callable(next)()
+          const second = callable(next)()
+          await Promise.allSettled([first, second])
+        })
+        .build()
+
+      await runWebMiddleware(new Request('http://x/'), [handler], {}, downstream.run)
+    } finally {
+      console.warn = realWarn
+    }
+
+    // Both ran — that is clause 7 working, and it is not what this asserts.
+    expect(downstream.calls()).toBe(2)
+    // What it asserts: production said so. The message names the count, because "a downstream ran
+    // twice" is the fact an operator needs and "something was discarded" is not.
+    expect(
+      warned.join('\n'),
+      'the duplicate downstream execution was silent in production',
+    ).toMatch(/next\(\) 2 times/)
+  })
+
   it('test_calling_next_twice_really_invokes_the_downstream_twice', async () => {
     const downstream = countingDownstream()
 

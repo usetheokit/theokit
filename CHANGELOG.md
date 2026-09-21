@@ -62,6 +62,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   with no `server/context.ts` resolves an anonymous caller, which is the honest answer rather than
   an invented subject.
 
+- **A middleware that calls `next()` twice now says so, instead of running your route twice in
+  silence (B-212).** Each call really invokes the downstream again — `docs/adr/0006` refuses to
+  memoise it precisely so a careless double call stays visible — and only the last result is used.
+  The discarded one has already run: the route handler executes twice, concurrently, against the
+  same `context` object passed by reference, with no synchronisation, so a non-idempotent handler
+  performs its business effect twice and answers once. A discarded invocation that REJECTED was
+  reported; one that SUCCEEDED produced no diagnostic at all, and the counter the ADR named as the
+  reason for its own design existed only inside a test. The runner now warns with the count.
+  `WebDownstream` states the idempotence requirement where a consumer declares one.
+
 - **`@theokit/http/action-encryption` says, where a consumer reads it, that the action pipeline
   does not use it (B-211, ADR 0015).** Its three exports occur 1, 2 and 1 times across every
   package and app source tree, every one inside the file that defines them — the same property
