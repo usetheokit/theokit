@@ -68,7 +68,10 @@ beforeAll(() => {
     `export const marker = 'chat'\nexport const mcp = true\n`,
   )
   mkdirSync(join(root, 'server'), { recursive: true })
-  writeFileSync(join(root, 'server', 'context.js'), `export function createContext() { return {} }\n`)
+  writeFileSync(
+    join(root, 'server', 'context.js'),
+    `export function createContext() { return {} }\n`,
+  )
   ;(globalThis as Record<string, unknown>).__THEO_CSRF_HARNESS__ = harness
 })
 
@@ -76,7 +79,10 @@ afterAll(() => {
   delete (globalThis as Record<string, unknown>).__THEO_CSRF_HARNESS__
 })
 
-async function loadWorker(tag: string, csrf: 'off' | undefined): Promise<{
+async function loadWorker(
+  tag: string,
+  csrf: 'off' | undefined,
+): Promise<{
   fetch: (r: Request, e: unknown, c: unknown) => Promise<Response>
 }> {
   const dir = join(root, '.theokit', 'cloudflare')
@@ -98,13 +104,21 @@ async function loadWorker(tag: string, csrf: 'off' | undefined): Promise<{
   return mod.default as { fetch: (r: Request, e: unknown, c: unknown) => Promise<Response> }
 }
 
-const depsOf = (): Record<string, unknown> =>
-  (harness.deps as Record<string, unknown>[]).at(-1) ?? {}
+const depsOf = (before: number): Record<string, unknown> => {
+  expect(
+    (harness.deps as unknown[]).length,
+    'the route never reached the aux dispatcher at all — nothing below is about this request',
+  ).toBeGreaterThan(before)
+  return (harness.deps as Record<string, unknown>[]).at(-1) ?? {}
+}
+
+/** The dispatcher-call count before the request under test — every `depsOf` needs one. */
+const depsMark = (): number => (harness.deps as unknown[]).length
 
 describe('a deployed aux route honours what the app declared', () => {
   it('test_an_app_declaring_csrf_off_gets_off_on_the_mcp_route', async () => {
     const worker = await loadWorker('off', 'off')
-    const before = (harness.deps as unknown[]).length
+    const before = depsMark()
 
     await worker.fetch(
       new Request('https://app.test/api/agents/chat/mcp', { method: 'POST', body: '{}' }),
@@ -112,19 +126,16 @@ describe('a deployed aux route honours what the app declared', () => {
       {},
     )
 
-    expect(
-      (harness.deps as unknown[]).length,
-      'the mcp route never reached the aux dispatcher at all',
-    ).toBeGreaterThan(before)
     // The claim, at the level it is made: the mode the app DECLARED is the mode this route is
     // given. `serve-aux-routes.ts:380` defaults an absent one to 'strict', so reading the value
     // here is what separates honouring from merely carrying.
-    expect(depsOf().csrfMode, 'the declared mode did not reach the mcp route').toBe('off')
+    expect(depsOf(before).csrfMode, 'the declared mode did not reach the mcp route').toBe('off')
   })
 
   it('test_an_app_declaring_nothing_still_gets_the_strict_default', async () => {
     // The control. An assertion that only ever sees 'off' would pass on a fragment that hard-codes
     // it, which is the shape of evidence this pair of items was revoked for.
+    const before = depsMark()
     const worker = await loadWorker('default', undefined)
 
     await worker.fetch(
@@ -133,12 +144,15 @@ describe('a deployed aux route honours what the app declared', () => {
       {},
     )
 
-    expect(depsOf().csrfMode ?? 'strict', 'an undeclared mode is no longer strict').toBe('strict')
+    expect(depsOf(before).csrfMode ?? 'strict', 'an undeclared mode is no longer strict').toBe(
+      'strict',
+    )
   })
 
   it('test_the_thread_follow_up_can_resolve_a_provider_key', async () => {
     // SI-010. The deps must carry a resolver, and it must be CALLABLE — an absent one made the
     // follow-up a permanent NOT_CONFIGURED naming a framework-internal parameter.
+    const before = depsMark()
     const worker = await loadWorker('thread', undefined)
 
     await worker.fetch(
@@ -150,7 +164,7 @@ describe('a deployed aux route honours what the app declared', () => {
       {},
     )
 
-    const resolve = depsOf().resolveApiKey
+    const resolve = depsOf(before).resolveApiKey
     expect(typeof resolve, 'the thread route was handed no provider-key resolver').toBe('function')
     expect(
       (resolve as (m: unknown, p: unknown) => string)('gpt-4', []),

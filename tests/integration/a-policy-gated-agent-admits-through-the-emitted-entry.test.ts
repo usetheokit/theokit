@@ -7,6 +7,11 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { renderCloudflareWorkerEntry } from '../../packages/theo/src/adapters/cloudflare.js'
 import {
+  admitAgentRequest,
+  agentAccessDenied,
+  readAgentPolicy,
+} from '../../packages/theo/src/server/agent/agent-access.js'
+import {
   matchAgentAuxRoute,
   serveMatchedAuxRoute,
 } from '../../packages/theo/src/server/agent/serve-aux-routes.js'
@@ -48,7 +53,15 @@ export const createCorsWebHandler = () => null
 export const createPluginRunnerFromConfig = async () => undefined
 export const resolveTransformer = (s) => ({ name: s })
 export const resolveProvider = () => ({ apiKey: 'sk-test' })
-export const mountAgent = () => new Response('agent ran')
+// SI-012's run half. mount-agent.ts:193 calls the REAL admitAgentRequest with whatever
+// resolveSubject the entry handed it, so delegating to that same function here keeps the POLICY
+// DECISION inside the framework and stubs only the model call. The previous stub returned 200
+// unconditionally, which is why reverting deployed-agents.ts:292 alone survived 274 tests.
+export const mountAgent = async (mod, request, apiKey, opts) => {
+  const params = { agent: opts?.agentName ?? 'unknown', endpoint: 'run' }
+  const decision = await b().admit(b().readPolicy(mod, 'agents/gated.js'), opts?.resolveSubject, params, undefined)
+  return decision.allowed ? new Response('agent ran') : b().denied(decision, params)
+}
 export const scanAgents = () => []
 // The identity factory is the REAL one in shape: async, returning the thunk the policy calls. The
 // harness decides who the caller is from a header, which is what makes an admitted and a refused
@@ -69,6 +82,9 @@ const harness: { currentCaller: string | null; [k: string]: unknown } = {
   currentCaller: null,
   matchAgentAuxRoute,
   serveMatchedAuxRoute,
+  admit: admitAgentRequest,
+  denied: agentAccessDenied,
+  readPolicy: readAgentPolicy,
 }
 
 beforeAll(() => {
@@ -88,7 +104,10 @@ beforeAll(() => {
       `    : { allowed: false, reason: 'not the owner' }\n`,
   )
   mkdirSync(join(root, 'server'), { recursive: true })
-  writeFileSync(join(root, 'server', 'context.js'), `export function createContext() { return {} }\n`)
+  writeFileSync(
+    join(root, 'server', 'context.js'),
+    `export function createContext() { return {} }\n`,
+  )
   ;(globalThis as Record<string, unknown>).__THEO_POLICY_HARNESS__ = harness
 })
 
@@ -127,10 +146,7 @@ describe('a policy-gated agent admits through the emitted entry', () => {
     // `agent-access.ts:146` calling it throws TypeError, which surfaces as a 500 rather than the
     // listing. Asserting the STATUS is what makes this a test of the program instead of its text.
     const body = await response.text()
-    expect(
-      response.status,
-      `the owner was not admitted (body: ${body.slice(0, 200)})`,
-    ).toBe(200)
+    expect(response.status, `the owner was not admitted (body: ${body.slice(0, 200)})`).toBe(200)
   })
 
   it('test_a_stranger_is_refused_rather_than_admitted_or_crashing', async () => {
@@ -142,7 +158,55 @@ describe('a policy-gated agent admits through the emitted entry', () => {
     // Refused, and refused for the policy's reason — not 500, which is what a broken resolver
     // produces and which would otherwise read as "the gate worked".
     expect(response.status, 'a stranger was admitted, or the resolver crashed').not.toBe(200)
-    expect(response.status, 'the refusal is a server fault, not a policy decision').toBeLessThan(500)
+    expect(response.status, 'the refusal is a server fault, not a policy decision').toBeLessThan(
+      500,
+    )
+  })
+
+  // The RUN route, which is a different call site from the three above. They drive
+  // `/api/agents/gated/approvals` — an aux route, emitted at `deployed-agents.ts:271`. The run
+  // route is `:292`, and reverting THAT line alone left every test in this repository green: the
+  // inventory judge measured it surviving 274 of them. These three fail on it.
+  const RUN = 'https://app.test/api/agents/gated'
+
+  it('test_the_owner_is_admitted_on_the_run_route', async () => {
+    harness.currentCaller = OWNER
+    const worker = await loadWorker('run-owner')
+
+    const response = await worker.fetch(new Request(RUN, { method: 'POST', body: '{}' }), {}, {})
+
+    const body = await response.text()
+    expect(response.status, `the owner was not admitted to run (body: ${body.slice(0, 200)})`).toBe(
+      200,
+    )
+    expect(body).toBe('agent ran')
+  })
+
+  it('test_a_stranger_is_refused_on_the_run_route', async () => {
+    harness.currentCaller = 'someone-else'
+    const worker = await loadWorker('run-stranger')
+
+    const response = await worker.fetch(new Request(RUN, { method: 'POST', body: '{}' }), {}, {})
+
+    // `resolveSubject: undefined` makes the policy see `subject: null`, which this fixture refuses
+    // — so a stranger and a broken wiring both land here. The owner case above is what separates
+    // them: it is 200 only when the resolver actually reached the policy.
+    expect(response.status, 'a stranger was admitted to run').not.toBe(200)
+    expect(response.status, 'the refusal is a server fault, not a policy decision').toBeLessThan(
+      500,
+    )
+  })
+
+  it('test_an_anonymous_caller_is_refused_on_the_run_route', async () => {
+    harness.currentCaller = null
+    const worker = await loadWorker('run-anon')
+
+    const response = await worker.fetch(new Request(RUN, { method: 'POST', body: '{}' }), {}, {})
+
+    expect(response.status, 'an anonymous caller was admitted to run').not.toBe(200)
+    expect(response.status, 'the refusal is a server fault, not a policy decision').toBeLessThan(
+      500,
+    )
   })
 
   it('test_an_anonymous_caller_is_refused_by_the_same_gate', async () => {
@@ -152,6 +216,8 @@ describe('a policy-gated agent admits through the emitted entry', () => {
     const response = await worker.fetch(new Request(CARD), {}, {})
 
     expect(response.status, 'an anonymous caller was admitted').not.toBe(200)
-    expect(response.status, 'the refusal is a server fault, not a policy decision').toBeLessThan(500)
+    expect(response.status, 'the refusal is a server fault, not a policy decision').toBeLessThan(
+      500,
+    )
   })
 })
