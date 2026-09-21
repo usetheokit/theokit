@@ -62,6 +62,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   with no `server/context.ts` resolves an anonymous caller, which is the honest answer rather than
   an invented subject.
 
+- **`TrackAgentRunOptions.storage` stops pointing at configuration that does not exist (B-201).**
+  Its docstring read "Adapter resolved from the project config's `cost.storage`", and no `cost` key
+  has ever been in the schema — measured against a control of `observability`, which returns 3. A
+  consumer reading the published type in their editor was sent to write configuration there was
+  none to write. The route is the parameter, and that is a decision: `@theokit/agents/usage`'s
+  `UsageStorageAdapter` says "the framework owns the vocabulary; the app owns the storage", and the
+  price too, since `costUsd` arrives on the record rather than being computed from tokens. An app
+  imports `trackAgentRun` from the published `theokit/server/cost` subpath — it reaches the built
+  `.d.ts` through it — and passes its own adapter. A new test asserts that **every**
+  `theo.config.ts > key` citation across `packages/*/src` names a key the schema declares: 14
+  citations, 7 distinct keys, and this was the one that did not resolve.
+
 - **A middleware that awaits `next` in `server/middleware/*.ts` is refused by name instead of
   continuing silently (B-196).** `next` was OPTIONAL, and the file-scan runner invoked the same type
   with two arguments — so the compiler accepted the omission and an author following the type wrote
