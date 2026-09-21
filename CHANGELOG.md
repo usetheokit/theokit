@@ -62,6 +62,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   with no `server/context.ts` resolves an anonymous caller, which is the honest answer rather than
   an invented subject.
 
+- **`deriveActionKey` accepts a salt that is independent of the secret (B-215).** The salt was
+  `theo-action-salt:${secret.slice(0, 8)}` — a pure function of the secret it exists to protect. A
+  salt is there so key derivation is unique per DEPLOYMENT and precomputation cannot be amortised
+  across targets; derived from the secret, an attacker guessing the secret already knows the salt
+  for every candidate, so one table over likely secrets is valid against every deployment at once
+  and the only per-guess cost left is the iteration count. NIST SP 800-132 § 5.1 requires the salt
+  be generated independently of the secret; OWASP A02:2021 names the same condition. The exposure
+  is offline recovery of this key from a single captured ciphertext — the function's actual threat
+  model, where its docblock had scoped the caveat to password hashing instead. The salt is now an
+  optional second argument: pass a random value generated once and persisted beside the secret.
+  **Omitting it keeps the old derivation**, so payloads already encrypted still decrypt, and warns
+  once per process naming the weakness and the standards. Derivation stays deterministic for a
+  given (secret, salt) pair.
+
 - **`digestError` survives a throw of `undefined`, a symbol or a function (B-214).** Its own
   docblock promises it "handles non-Error throws" and is "safe to call inside catch blocks", and on
   those three kinds it raised a `TypeError` of its own: `JSON.stringify` returns the VALUE
