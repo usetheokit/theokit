@@ -65,6 +65,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   consumer un-deprecates.
 
 ### Fixed
+- **A permanent quality cap no longer holds every plan at 70 (B-189).** `/code-quality` reported
+  `soft_cap_mutation_unconfigured_typescript` on every run, and `cycle-plan` needs a verdict above
+  that cap to start implementing — so the chain was capped by a measurement nobody had performed.
+  `docs/adr/0012` records the decision and what it refuses: configuring the runner inside the gate
+  was measured at 1347s on a smaller codebase, and `/plan-confidence` invokes `/code-quality` per
+  plan. The cap is declared unmeasured instead, once, with a 2026-12-20 sunset. It does not claim
+  the tests are strong — the finding is still reported, one severity lower, saying the question was
+  not asked.
 - **A release no longer produces a version with no CHANGELOG entry (B-232).** `create-theokit` is
   bumped by two mechanisms — its own changeset, and the step that corrects the scaffold's framework
   pin — and the second fired even when the first already had. The published version then existed in
