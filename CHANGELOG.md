@@ -30,6 +30,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   revision of this entry said it had to carry one; that was wrong, and the copy drifted within a
   day — the proxy fix below landed in the original only.
 
+### Added
+
+- **A README row claiming a `.claude/` surface is read now has to name a reader that exists (B-181).**
+  `packages/agents/README.md` publishes which surfaces the package reads; the claim was prose and
+  nothing resolved it. A test now reads the table, and for every row that claims `read` and names a
+  reader, resolves that symbol against the package's sources and the consumer the row cites. Renaming
+  a cited reader fails the suite naming the row and the symbol. Two of the table's fourteen rows carry
+  a verifiable claim today; the other twelve are counted and reported as unchecked rather than passing.
+
 ### Fixed
 
 - **The scaffolded app hydrates again with SSR on (B-228).** `theokit build` + `theokit start` with
