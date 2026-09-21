@@ -339,7 +339,7 @@ export function renderCloudflareWorkerEntry(
     ``,
     !preloadsApply
       ? `import { matchRoute, executeRoute, compilePattern, extractTraceIdFromRequest, TRACE_HEADER, createCorsWebHandler } from 'theokit/server'`
-      : `import { matchRoute, executeRoute, compilePattern, extractTraceIdFromRequest, TRACE_HEADER, createCorsWebHandler, injectModulePreloads } from 'theokit/server'`,
+      : `import { matchRoute, executeRoute, compilePattern, extractTraceIdFromRequest, TRACE_HEADER, createCorsWebHandler } from 'theokit/server'\nimport { injectModulePreloads } from 'theokit/server/http'`,
     `import { createWebShim } from 'theokit/adapters/web-shim'`,
     opts.ssrStreaming
       ? `import { buildSecurityHeaders, generateNonce, withSecurityHeaders } from 'theokit/adapters/security-headers'`

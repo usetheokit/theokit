@@ -5,6 +5,11 @@
 export { fromUnknown, NotFoundError, TheoError } from '../../core/contracts/theo-error.js'
 export { serverErrorToEnvelope } from '../../core/contracts/server-error-to-envelope.js'
 export { envelopeCodeToStatus } from '../../core/contracts/envelope-code-to-status.js'
+// The non-deprecated home for the preload injector. It was added to the `theokit/server` umbrella
+// alone, which `tests/smoke/umbrella-symbols-have-a-subpath.test.ts` correctly refused: a symbol
+// reachable only through a barrel scheduled for removal strands whoever adopts it. Three of this
+// file's exports already come from `core/contracts/`, so the shape is the precedent, not a new one.
+export { injectModulePreloads } from '../../core/contracts/module-preloads.js'
 export { handleRequestError, handleWebRequestError } from './handle-request-error.js'
 export * from './execute.js'
 export * from './action-execute.js'
