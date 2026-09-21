@@ -52,6 +52,26 @@ describe('bumpForTemplatePins', () => {
     expect(() => bumpForTemplatePins(['x: a -> b'], 'not-a-version')).toThrow(/not-a-version/u)
   })
 
+  it('stands down when changesets already bumped the package in this cycle', () => {
+    // B-232, measured 2026-09-21 on the `Version Packages` commit a579fa436 that blocked PR #851.
+    // `create-theokit` had a changeset of its own, so `changeset version` bumped 3.0.0 -> 3.0.1 AND
+    // wrote the CHANGELOG entry for it. This helper then bumped 3.0.1 -> 3.0.2 and wrote nothing, so
+    // the published version had no entry at all and `tests/smoke/changeset-config.test.ts:89`
+    // refused the release: "expected '# create-theo\n\n## 3.0.1…' to contain '3.0.2'".
+    //
+    // The docblock above rests on a premise — "changesets sees package dependencies and this pin
+    // lives in a TEMPLATE FILE it has no reason to read" — which is true of the PIN and false of the
+    // PACKAGE whenever somebody also writes a changeset for it. Then the edge is not invisible, and
+    // the bump this module exists to supply is a second one.
+    expect(bumpForTemplatePins(['theokit: ^0.67.0 -> ^0.68.0'], '3.0.1', true)).toBeNull()
+  })
+
+  it('still bumps when changesets did not touch the package, which is why it exists', () => {
+    // The case the module was written for, asserted beside the one above so neither can be
+    // "fixed" by disabling the other.
+    expect(bumpForTemplatePins(['theokit: ^0.67.0 -> ^0.68.0'], '3.0.0', false)).toBe('3.0.1')
+  })
+
   it('does not bump a prerelease line, where the next patch is not a patch', () => {
     // `3.1.0-rc.2` + patch is ambiguous — rc.3, or 3.1.0? Answering it here would be a guess
     // about a release shape this script does not drive, so it refuses and names the version.
