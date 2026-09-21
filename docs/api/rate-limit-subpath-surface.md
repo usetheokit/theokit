@@ -22,14 +22,14 @@ checked. A short row is how that happens.
 | Symbol | Verdict | Reason |
 |---|---|---|
 | `RateLimited` | promise | `README.md:278` states this subpath *ships* it and `:283` gives the canonical import; `packages/theo/CHANGELOG.md:227` announced the export. Documented in public, so removing it is a breaking change |
-| `createRateLimiterWeb` | promise | Its only consumer is generated code reaching it through `theokit/server`, a DEPRECATED umbrella scheduled for removal at `0.x+2` (`server/index.ts:2`); after that removal the generated worker must import through THIS subpath, so the promise is owed either way |
-| `createRateLimiter` | internal | Consumed at `vite-plugin/api-middleware.ts:332`, which imports through `../server/internal-api.js` — the explicit internal contract, not this subpath. Used, and used internally, which is not the same as promised |
-| `createRouteRateLimiter` | internal | Consumed at `cli/commands/start/index.ts:134`, this repository's own CLI. Four lines match outside the directory and two of them are comments, so one real call site carries it — ours, not a consumer's |
+| `createRateLimiterWeb` | promise | Its only consumer is generated code reaching it through `theokit/server`, a DEPRECATED umbrella scheduled for removal at `0.x+2` (`packages/theo/src/server/index.ts:2`); after that removal the generated worker must import through THIS subpath, so the promise is owed either way |
+| `createRateLimiter` | internal | Consumed at `packages/theo/src/vite-plugin/api-middleware.ts:332`, which imports through `../server/internal-api.js` — the explicit internal contract, not this subpath. Used, and used internally, which is not the same as promised |
+| `createRouteRateLimiter` | internal | Consumed at `packages/theo/src/cli/commands/start/index.ts:134`, this repository's own CLI. Four lines match outside the directory and two of them are comments, so one real call site carries it — ours, not a consumer's |
 | `createRouteRateLimiterWeb` | internal | Zero consumers anywhere. `bakeableRateLimit` throws on `routes` because the matched route is decided after the limit runs, so a deployed entry cannot do per-route limiting and this mirror has no path to a caller today |
-| `deriveKey` | internal | Zero consumers. Every apparent hit belongs to a different function of the same name — `cache/key-derivation.ts:60` or `server/auth/crypto.ts:28` — and `cache/index.ts:49` re-exports from the first, not from here |
+| `deriveKey` | internal | Zero consumers. Every apparent hit belongs to a different function of the same name — `packages/theo/src/cache/key-derivation.ts:60` or `packages/theo/src/server/auth/crypto.ts:28` — and `packages/theo/src/cache/index.ts:49` re-exports from the first, not from here |
 | `deriveKeyFromRequest` | internal | Zero consumers. The generated fragment resolves the address inline as `return <expr> ?? 'unknown'` rather than calling it, so the Web-shaped mirror was superseded by the thing it was built for |
 | `matchRoutePattern` | internal | Zero PRODUCTION consumers outside the directory. Beyond `packages/theo/src` it is called nine times, all in one test — `tests/unit/rate-limit-per-route.test.ts:6` imports it and `:151-166` exercise it, and per-route matching is refused on a deployed entry for the reason recorded against `createRouteRateLimiterWeb` |
-| `InMemoryStore` | internal | Zero consumers. Its single mention outside the directory is a comment at `adapters/deployed-rate-limit.ts:17`; it is the default store the two factories throw for when replaced, which is load-bearing inside the module and unreferenced outside it |
+| `InMemoryStore` | internal | Zero consumers. Its single mention outside the directory is a comment at `packages/theo/src/adapters/deployed-rate-limit.ts:17`; it is the default store the two factories throw for when replaced, which is load-bearing inside the module and unreferenced outside it |
 
 ## What this file does NOT decide
 
