@@ -20,6 +20,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   fragment; `vercel`, `netlify` and `aws-lambda` contain zero occurrences of it and still fall
   through to the run handler. The defect was on all six and the fix is on three — said here because
   the paragraph above, read alone, reads as all six, and nothing in the build warns the other three.
+
+- **A deployed target serves the A2A agent card (B-185).** `matchGetAuxRoute` has served
+  `GET /.well-known/<name>/agent-card.json` since M15, and the branch this change emits guarded on
+  `/api/agents/` alone — so five of the dispatcher's six route families became reachable on a deploy
+  target and the sixth stayed excluded by the guard rather than by a decision. The guard now admits
+  both shapes, and a `.well-known` url the dispatcher declines is refused before the run handler
+  derives a name by slicing a prefix it does not carry.
+
+- **A deployed agent's subject carries the decorations its plugins apply (B-185).** The generated
+  resolver was handed no plugin runner while both dev callers pass one at seven call sites, so a
+  plugin that decorates `ctx.subject` identified the caller locally and resolved anonymous on
+  deploy — and a policy judged against that subject refused a legitimate owner on the deployed
+  target only. The entry already built the runner once at module load for `executeRoute`; the
+  resolver now receives that same one, because a runner rebuilt per request re-runs every plugin's
+  `register`.
 - **A deployed target resolves who is asking, so an owner is served rather than refused (B-185).**
   `mountAgent` has accepted a subject resolver since the approvals scoping landed, and 0 of 23
   adapter files passed one — so every deployed policy was judged against an anonymous caller and an
