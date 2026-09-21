@@ -65,6 +65,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   consumer un-deprecates.
 
 ### Fixed
+- **A review finding that four test stubs had diverged is answered with a measurement, not a
+  refactor (B-190).** `docs/adr/0013` records what was measured: the same symbol is an identity
+  function in one stub and a delegating recorder in another, because one test must not have security
+  headers interfere and the other's entire subject is those headers. A shared helper would need a
+  flag per symbol per test. What WAS duplicated — the list of symbols each stub must export — is now
+  derived from the generator over both streaming shapes, and that derivation found a real gap on its
+  first run.
 - **A permanent quality cap no longer holds every plan at 70 (B-189).** `/code-quality` reported
   `soft_cap_mutation_unconfigured_typescript` on every run, and `cycle-plan` needs a verdict above
   that cap to start implementing — so the chain was capped by a measurement nobody had performed.
