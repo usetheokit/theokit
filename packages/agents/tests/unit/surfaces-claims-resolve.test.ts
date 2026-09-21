@@ -34,6 +34,10 @@ import { join, resolve } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
+/** The section the table lives under. Named, because an indexOf on a wrong string
+ * silently yields an empty table, and an empty table is a check that verifies nothing. */
+const SURFACES_HEADING = '## Foreign configuration surfaces'
+
 const PKG = resolve(import.meta.dirname, '..', '..')
 const REPO = resolve(PKG, '..', '..')
 const README = join(PKG, 'README.md')
@@ -49,7 +53,14 @@ interface ClaimingRow {
 function claimingRows(markdown: string): { claims: ClaimingRow[]; unchecked: number } {
   const claims: ClaimingRow[] = []
   let unchecked = 0
-  markdown.split('\n').forEach((raw, i) => {
+  // Bounded to the surfaces table. Reviewing this file's own first revision found it matching ANY
+  // markdown row containing "read" anywhere in the README — `./tools` at :45 and a row about a
+  // variable at :280 were being counted. Harmless while they name no identifier, and a row checked
+  // as a surface claim the moment one of them does.
+  const start = markdown.indexOf(SURFACES_HEADING)
+  const lineOffset = start < 0 ? 0 : markdown.slice(0, start).split('\n').length - 1
+  const table = start < 0 ? '' : markdown.slice(start, markdown.indexOf('\n## ', start + 4))
+  table.split('\n').forEach((raw, i) => {
     if (!raw.startsWith('|')) return
     const lower = raw.toLowerCase()
     if (!lower.includes('read')) return
@@ -64,7 +75,7 @@ function claimingRows(markdown: string): { claims: ClaimingRow[]; unchecked: num
       unchecked += 1
       return
     }
-    claims.push({ line: i + 1, surface, reader })
+    claims.push({ line: lineOffset + i + 1, surface, reader })
   })
   return { claims, unchecked }
 }
