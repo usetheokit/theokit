@@ -346,7 +346,24 @@ function bakedResolution(
       // B-185 — the app's context module, baked exactly like the agents above it (ADR 0014).
       ...(contextModule === undefined
         ? []
-        : [`import * as __theoContext from '../../${contextModule}'`]),
+        : [
+            // SI-022 — DYNAMIC, not a top-level static import. B-185 added this import; before it
+            // a Worker did not load the app's `server/context.ts` at all. A module-scope throw
+            // there — the commonest shape being a required-env-var check — then went from costing
+            // nothing to taking the ENTIRE target down: the import fails, the module never
+            // evaluates, and every route dies rather than only the one that wanted an identity.
+            //
+            // That is strictly worse than what `resolve-agent-subject.ts:69-72` promises. It says
+            // a throwing `createContext` reaches the branch's own error handler and becomes a 500,
+            // which is a failure scoped to the request that needed identity. A throw at IMPORT
+            // time reaches no handler at all.
+            //
+            // A relative `import()` is statically analysable, so wrangler bundles the module
+            // exactly as it bundled the static form — the reason ADR 0014 bakes it is unaffected.
+            // What changes is WHEN it evaluates, and therefore what a failure costs. It is only
+            // a real improvement if the import stays inside the thunk; see the factory below.
+            `const __theoContext = () => import('../../${contextModule}')`,
+          ]),
     ],
     declarations: [
       `// #367 — the app's agents, keyed by NAME because that is what the URL carries, what the`,
@@ -392,7 +409,15 @@ function bakedResolution(
             `  // for an absent or public policy without ever invoking it.`,
             `        const { req: __theoReq, res: __theoRes } = createWebShim(request)`,
             `  const resolveSubject = createSubjectResolverFromFactory(`,
-            `    __theoContext.createContext,`,
+            // The import happens HERE, inside the factory, and `createSubjectResolverFromFactory`
+            // calls the factory inside the thunk it returns (`resolve-agent-subject.ts:127-133`).
+            // A first version of this fix awaited the import as an ARGUMENT, which evaluated it
+            // eagerly inside `__theoResolveSubject` — both call sites await that before
+            // `agent-access.ts:145` returns early for an absent or `'public'` policy. The blast
+            // radius was then every agent request rather than the one that wanted an identity,
+            // and the laziness invariant the lines above assert was broken. Found by the
+            // inventory judge while the change was still in the working tree.
+            `    async (__theoArgs) => (await __theoContext()).createContext(__theoArgs),`,
             `    __theoReq,`,
             `    __theoRes,`,
             `    ${pluginRunnerExpr ?? 'undefined'},`,

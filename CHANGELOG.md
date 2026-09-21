@@ -61,6 +61,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   members of the request, on a target where that pair is synthesised over a Web `Request`. An app
   with no `server/context.ts` resolves an anonymous caller, which is the honest answer rather than
   an invented subject.
+
+- **A `server/context.ts` that throws no longer takes the whole deploy target down (B-185).**
+  Baking that module (ADR 0014) made a Worker import it, which it never did before — so the
+  commonest shape a context file has, a required env var asserted at module scope, went from
+  costing nothing to failing the entry at LOAD time. Every route died, pages included, with the
+  app's own error text. `resolve-agent-subject.ts:69` promises the opposite: a throwing
+  `createContext` "reaches the branch's own error handler" as a 500 on the request that wanted an
+  identity. The import is now dynamic AND made inside the factory, so it evaluates when the thunk
+  runs — which `agent-access.ts:145` never does for an absent or `'public'` policy. An intermediate
+  version awaited it as an argument instead, which parses, defers the load past module scope, and
+  still killed every agent request; the difference is visible only by running one.
+
 - **A build that drops the approvals handler from the adapter's graph now fails instead of
   shipping (B-185).** The endpoint's absence was a session's measurement, and chunk names are
   content-hashed — a text search for "approvals" in the emitted adapter finds nothing whether or not

@@ -44,11 +44,23 @@ describe('a deploy target resolves a subject (B-185 T1.3)', () => {
       {},
     )
 
-    // No filesystem: the module is a static import decided on the build machine, the same way
-    // routes (#369), agent modules and plugins already are.
-    expect(fragment.imports.join('\n')).toMatch(
-      /import \* as __theoContext from '\.\.\/\.\.\/server\/context\.js'/,
+    // No filesystem: the module is decided on the build machine and travels with the entry, the
+    // same way routes (#369), agent modules and plugins already do. The specifier is relative, so
+    // wrangler bundles it whether the form is `import ... from` or `import(...)`.
+    //
+    // SI-022 changed the form and not the decision. A top-level static import made a module-scope
+    // throw in the app's own context file — a required-env-var check, most often — fail the WHOLE
+    // entry at load, killing every route rather than the one that wanted an identity. The lazy
+    // form keeps the module baked and moves the failure to where `resolve-agent-subject.ts:69-72`
+    // already promises it lands: the branch's error handler, as a 500.
+    const emitted = [...fragment.imports, ...fragment.declarations].join('\n')
+    expect(emitted, 'the context module is no longer referenced by a bundlable specifier').toMatch(
+      /import\('\.\.\/\.\.\/server\/context\.js'\)/,
     )
+    expect(
+      fragment.imports.join('\n'),
+      'a top-level static import is back, and a throwing module takes the target down with it',
+    ).not.toMatch(/^import \* as __theoContext/m)
     expect([...fragment.declarations, ...fragment.branch].join('\n')).toContain(
       'createSubjectResolverFromFactory',
     )
@@ -65,7 +77,12 @@ describe('a deploy target resolves a subject (B-185 T1.3)', () => {
     // found by the surface-closure audit, which asks what a change PROMISES and what proves it.
     for (const source of [
       { kind: 'baked' as const, agents: AGENTS, contextModule: 'server/context.js' },
-      { kind: 'scan' as const, projectRoot: 'cwd', loadModule: 'loadModule', serverDir: 'serverDir' },
+      {
+        kind: 'scan' as const,
+        projectRoot: 'cwd',
+        loadModule: 'loadModule',
+        serverDir: 'serverDir',
+      },
     ]) {
       const emitted = deployedAgentsFragment(source, {}).branch.join('\n')
 
@@ -103,7 +120,12 @@ describe('a deploy target resolves a subject (B-185 T1.3)', () => {
     // plugin's `register`, which is where a plugin allocates the state its hooks then read.
     for (const source of [
       { kind: 'baked' as const, agents: AGENTS, contextModule: 'server/context.js' },
-      { kind: 'scan' as const, projectRoot: 'cwd', loadModule: 'loadModule', serverDir: 'serverDir' },
+      {
+        kind: 'scan' as const,
+        projectRoot: 'cwd',
+        loadModule: 'loadModule',
+        serverDir: 'serverDir',
+      },
     ]) {
       const emit = (host: Parameters<typeof deployedAgentsFragment>[1]): string => {
         const f = deployedAgentsFragment(source, host)
