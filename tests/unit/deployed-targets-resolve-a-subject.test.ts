@@ -54,6 +54,33 @@ describe('a deploy target resolves a subject (B-185 T1.3)', () => {
     )
   })
 
+  it('test_the_emitted_deps_carry_what_dev_passes', () => {
+    // Both dev callers pass six `AuxRouteDeps` fields — `agent-middleware.ts:161,164` and
+    // `handlers.ts:226,229`. A first draft of the fragment passed three, and two reviewers
+    // measured the same two consequences independently: an app declaring `security.csrf: 'off'`
+    // got `off` on the run route and `strict` on its `/mcp` sibling seventeen lines away, and the
+    // thread follow-up answered a permanent 501 naming a framework-internal parameter.
+    //
+    // This test exists because the fix for those two HIGH findings shipped with no test at all —
+    // found by the surface-closure audit, which asks what a change PROMISES and what proves it.
+    for (const source of [
+      { kind: 'baked' as const, agents: AGENTS, contextModule: 'server/context.js' },
+      { kind: 'scan' as const, projectRoot: 'cwd', loadModule: 'loadModule', serverDir: 'serverDir' },
+    ]) {
+      const emitted = deployedAgentsFragment(source, {}).branch.join('\n')
+
+      // `csrfMode` unset defaults to `'strict'` at `serve-aux-routes.ts:379`, so an absent spread
+      // is not a neutral omission — it overrides what the operator declared.
+      expect(emitted, `${source.kind}: the aux deps drop the app's declared CSRF mode`).toContain(
+        '...CSRF_CONFIG',
+      )
+      // `resolveApiKey` unset makes the thread follow-up a permanent 501 (`:359-365`).
+      expect(emitted, `${source.kind}: the aux deps drop the provider key resolver`).toMatch(
+        /resolveApiKey:\s*\(model, plugins\) =>/,
+      )
+    }
+  })
+
   it('test_an_app_with_no_context_module_still_builds', () => {
     const fragment = deployedAgentsFragment({ kind: 'baked', agents: AGENTS }, {})
     const source = [...fragment.imports, ...fragment.declarations, ...fragment.branch].join('\n')
