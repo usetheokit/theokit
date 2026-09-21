@@ -1,0 +1,9 @@
+# The dated run trail is per-machine and per-session: what this checkout's cycles
+# did here says nothing to whoever clones it. `.squad/wiki/` stays versioned —
+# it is durable knowledge (rules/records-location.md draws exactly this line).
+#
+# It is also what the Stop gate reads as production source: `changed_files()` in
+# hooks/stop-validation.py excludes `.claude/` and `study-material/` and predates
+# `.squad/` (created 2026-09-09), so a review plugin's scratch `.ts` under
+# .squad/records/audits/ demanded a CHANGELOG entry for itself.
+.squad/records/

@@ -76,6 +76,14 @@ export {
   type UniversalZodIssue,
 } from '../core/contracts/action-protocol.js'
 
+// B-035 — the route-to-chunks preload injector, re-exported from core/contracts for the same
+// reason the action protocol above is: a consumer imports it `from 'theokit/server'`. The one
+// consumer that makes this load-bearing is the GENERATED Cloudflare worker, which already imports
+// this subpath — so it calls the real function instead of carrying a copy of it. A copy was
+// carried for exactly one day and drifted within it: a proxy-form URL fix landed in the original
+// and not in the duplicate.
+export { injectModulePreloads } from '../core/contracts/module-preloads.js'
+
 // Subdomain sub-barrels (consumers can also import direct: theokit/server/<sub>)
 // (server/agent had only the proprietary surface — removed in the M3 clean break.
 // M79 / ADR 0041: `provider-resolver` is no longer among the internal survivors — it is published

@@ -31,7 +31,9 @@
  */
 import { execFileSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+
+import { bumpForTemplatePins } from './template-pin-bump.mjs'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const TEMPLATE = 'packages/create-theokit/templates/default/package.json.tmpl'
@@ -228,6 +230,23 @@ function main() {
   writeFileSync(TEMPLATE, updated, 'utf8')
   console.log('Template pins updated:')
   for (const c of changed) console.log(`  - ${c}`)
+
+  // The pin is corrected in the repository and that is not the same as corrected for a user.
+  // `changeset publish` keys on "the local version is not on the registry", and nothing has bumped
+  // the package that SHIPS this template — the pin lives in a template file, which changesets has no
+  // reason to read. Measured 2026-09-18: minutes after `theokit@0.67.0` published a security fix,
+  // `npm create theokit@latest` installed `theokit@0.66.1`, inside the advisory's affected range,
+  // because the published CLI still carried `^0.66.0`.
+  //
+  // So the bump the tool could not derive is written here, by the step that knows the pin changed.
+  const shipperPath = resolve(dirname(TEMPLATE), '..', '..', 'package.json')
+  const shipper = JSON.parse(readFileSync(shipperPath, 'utf8'))
+  const next = bumpForTemplatePins(changed, shipper.version)
+  if (next !== null) {
+    shipper.version = next
+    writeFileSync(shipperPath, `${JSON.stringify(shipper, null, 2)}\n`, 'utf8')
+    console.log(`\n${shipper.name} ${next} — bumped so the corrected pin reaches a scaffold.`)
+  }
 }
 
 // Only when run as a script — see main()'s docblock.

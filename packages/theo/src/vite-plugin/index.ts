@@ -187,6 +187,11 @@ export async function theoPluginAsync(
     )
   }
 
+  // B-035 — the route-to-chunks map, emitted from `generateBundle` where chunk names exist.
+  // `apply: 'build'` keeps it out of the dev and agent chains this same plugin set feeds.
+  const { assetsMapPlugin } = await import('./assets-map.js')
+  const assetsMap = assetsMapPlugin({ appDir: resolve(projectRoot, options.appDir ?? 'app') })
+
   // G1 — app typed client (`@theo/client`). Always wired (route detection is
   // cheap and the plugin is a no-op when `server/routes/` is absent).
   const { appTypedClientPlugin } = await import('./app-typed-client.js')
@@ -260,6 +265,7 @@ export async function theoPluginAsync(
     actionsPlugin,
     agentsClientPlugin,
     routesHmrPlugin,
+    assetsMap,
   ]
 }
 

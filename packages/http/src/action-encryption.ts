@@ -1,7 +1,7 @@
 /**
  * Action Encryption — AES-GCM-256 via Web Crypto API.
  *
- * Inspired by Next.js encryption.ts (app-render/).
+ * A server-action payload cipher for the SSR path.
  * Uses crypto.subtle (Web Standard) for action argument encryption.
  * Random IV per call ensures ciphertext is unique even for identical inputs.
  *

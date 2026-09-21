@@ -5,9 +5,11 @@
  * around the React root div. Returns null renderers when SSR is disabled.
  */
 
+import { readFileSync } from 'node:fs'
 import type { ServerResponse } from 'node:http'
 
 import { findRootDiv } from '../../../core/contracts/find-root-div.js'
+import { parseAssetsMap } from '../../../core/contracts/module-preloads.js'
 
 import { resolveSsrEntry } from './bootstrap-stages.js'
 
@@ -101,4 +103,20 @@ export async function setupSsr(opts: {
   }
 
   return { enabled, streamingEnabled, render, renderStreaming, htmlHead, htmlTail }
+}
+
+/**
+ * Read the route-to-chunks map `theokit build` emits (B-035).
+ *
+ * Returns `undefined` — never throws — when the file is absent or unreadable. A server that
+ * refused to boot because a build predated this feature would turn a missing optimisation into an
+ * outage, and the document is correct without it: it simply learns about its chunks one round trip
+ * later, which is exactly the state this feature improves on.
+ */
+export function loadAssetsMap(path: string): Record<string, string[]> | undefined {
+  try {
+    return parseAssetsMap(readFileSync(path, 'utf8'))
+  } catch {
+    return undefined
+  }
 }

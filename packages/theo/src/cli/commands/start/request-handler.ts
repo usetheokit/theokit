@@ -10,6 +10,7 @@
 
 import type { IncomingMessage, ServerResponse } from 'node:http'
 
+import { injectModulePreloads } from '../../../core/contracts/module-preloads.js'
 import { generateNonce } from '../../../server/auth/nonce.js'
 import { type ReservedRoutes, serveReservedRoute } from '../../../server/define/health-route.js'
 import type { CorsHandler } from '../../../server/http/cors.js'
@@ -55,6 +56,12 @@ interface RequestHandlerContext {
   ssrStreamingEnabled: boolean
   htmlHead: string
   htmlTail: string
+  /**
+   * B-035 — the route-to-chunks relation `theokit build` emits, read ONCE at startup and never
+   * per request: it is a build artifact and cannot change while the server runs. Absent when the
+   * build predates the map, which serves without preloads rather than failing the request.
+   */
+  assetsMap?: Record<string, string[]>
   indexHtml: string
   custom500Html: string | null
   /** M7-2: reserved health/ready routes served before the user catch-all. */
@@ -130,14 +137,15 @@ export function withHoistedHead(
   return { head, body: html }
 }
 
-function buildSsrHtml(
+export function buildSsrHtml(
   ctx: RequestHandlerContext,
   result: string | SsrRenderResult,
   nonce: string,
+  url: string,
 ): string {
   if (typeof result === 'string') {
     const { head, body } = withHoistedHead(ctx.htmlHead, result, nonce)
-    return head + body + ctx.htmlTail
+    return injectModulePreloads(head, ctx.assetsMap, url) + body + ctx.htmlTail
   }
   if (isSsrRenderResult(result)) {
     const rendered = asSsrRenderResult(result)
@@ -146,7 +154,7 @@ function buildSsrHtml(
       nonce ? ` nonce="${nonce}"` : ''
     }>window.__staticRouterHydrationData=${dataJson}</script>`
     const { head, body } = withHoistedHead(ctx.htmlHead, rendered.html, nonce)
-    return head + body + hydrationScript + ctx.htmlTail
+    return injectModulePreloads(head, ctx.assetsMap, url) + body + hydrationScript + ctx.htmlTail
   }
   return applyNonceToInlineScripts(ctx.htmlHead, nonce) + ctx.htmlTail
 }
@@ -176,7 +184,17 @@ async function handleSsrStreaming(
       // RENDERED body for head elements, and nothing is rendered yet when the head
       // has to flush. Metadata hoisting under streaming is the same defect on a
       // different surface, and it is M9's, not this one's.
-      htmlHead: applyNonceToInlineScripts(ctx.htmlHead, nonce),
+      // B-035, found by the independent code-review audit: the preloads were wired into
+      // `buildSsrHtml`, which serves the SYNCHRONOUS path only, while this branch is dispatched
+      // FIRST — so `ssrStreaming: true` turned the feature off on Node while the Cloudflare
+      // worker injected on its equivalent branch. The exclusion argued just above is about
+      // METADATA hoisting, which needs the rendered body; a `modulepreload` link needs nothing
+      // from it, so that argument does not reach here.
+      htmlHead: injectModulePreloads(
+        applyNonceToInlineScripts(ctx.htmlHead, nonce),
+        ctx.assetsMap,
+        url,
+      ),
       htmlTail: ctx.htmlTail,
     })
     if (isRedirectResult(result)) sendRedirect(res, result)
@@ -205,7 +223,7 @@ async function handleSsrSync(
       return true
     }
     res.writeHead(200, { 'Content-Type': 'text/html' })
-    res.end(buildSsrHtml(ctx, result, nonce))
+    res.end(buildSsrHtml(ctx, result, nonce, url))
     return true
   } catch (ssrErr) {
     console.error('[SSR Error] Falling back to CSR:', (ssrErr as Error).message)

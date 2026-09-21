@@ -31,7 +31,8 @@ export const compilePattern = () => ({})
 export const executeRoute = () => {}
 export const createProductionLoader = () => () => ({})
 export const createWebShim = () => ({ req: {}, res: { setHeader() {}, statusCode: 200 }, toResponse: () => new Response('route') })
-export const buildSecurityHeaders = () => ({ 'x-frame-options': 'DENY', 'x-content-type-options': 'nosniff' })
+export const generateNonce = () => 'test-nonce'
+  export const buildSecurityHeaders = () => ({ 'x-frame-options': 'DENY', 'x-content-type-options': 'nosniff' })
 export const withSecurityHeaders = (response, headers) => {
   const merged = new Headers(response.headers)
   for (const [k, v] of Object.entries(headers)) merged.set(k, v)

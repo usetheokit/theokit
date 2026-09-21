@@ -34,7 +34,8 @@ export const compilePattern = () => ({})
 export const executeRoute = () => {}
 export const createProductionLoader = () => () => ({})
 export const createWebShim = (r) => ({ req: {}, res: { setHeader() {}, statusCode: 200 }, toResponse: () => new Response('route') })
-export const buildSecurityHeaders = () => ({ 'x-baseline': '1' })
+export const generateNonce = () => 'test-nonce'
+  export const buildSecurityHeaders = () => ({ 'x-baseline': '1' })
 export const withSecurityHeaders = (r) => r
 export const createCloudflareWsBridge = () => ({ handle: () => new Response(null) })
 export const renderStreamingWeb = () => new Response('')
