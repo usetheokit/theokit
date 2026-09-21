@@ -1,6 +1,6 @@
 # TheoClaw — technical pieces
 
-> **DRAFT, unsigned.** Every PIECE cites the REQ it realises (G-B3). A piece that does not live in
+> **SIGNED 2026-09-18 by human/paulo** — see `## Sign-off`. *Amended 2026-09-21: this line read `DRAFT, unsigned` from the document's first commit (`f07069084`), which also carried the ticked box below. paulohenriquevn resolved the divergence on 2026-09-21.* Every PIECE cites the REQ it realises (G-B3). A piece that does not live in
 > `apps/theoclaw` says which repository it lives in and why. `## Sign-off` is UNTICKED.
 
 **This front crosses three repositories**, and that is a property of the product rather than an
@@ -360,7 +360,7 @@ out of the first release.
 - [x] PIECE-9 (authorization) is accepted as a piece, or authorization is declared out of scope with the accepted risk written down. Silence is not one of the two.
 - [x] PIECE-1's FIRST decision is taken — by measurement: three table rows, not ten implementations.
 
-_Signed by: (unsigned)_
+_Signed by: human/paulo, 2026-09-18._ <!-- Amended 2026-09-21: read `(unsigned)` from the first commit, contradicting the ticked box above. Resolved by paulohenriquevn. -->
 
 **Signed 2026-09-18 by `human/paulo` — a person, not a judge.**
 
