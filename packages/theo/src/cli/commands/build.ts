@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs'
-import { dirname, relative, resolve, sep } from 'node:path'
+import { dirname, join, relative, resolve, sep } from 'node:path'
 
 // T1.1 (architecture-medium-deferrals) — nodeAdapter no longer static-imported.
 // All adapters dispatch via `adapterRegistry` (lazy-imported within runAdapterBuild).
@@ -247,6 +247,13 @@ async function runAdapterBuild(
           agentPath: agent.agentPath,
           name: agent.name,
         })),
+        // B-185 — the identity module, decided here for the same reason the agents are: this
+        // provider is handed `serverDir`, and a Worker has no filesystem to look for it on. An app
+        // with no `server/context.ts` yields `undefined`, and the generator then emits no import —
+        // importing a file that is not there would fail the BUILD rather than one request.
+        contextModule: existsSync(join(abs, 'context.ts'))
+          ? toProjectRelative(join(abs, 'context.ts'))
+          : undefined,
       }
     },
   }

@@ -83,6 +83,15 @@ export type DeployedAgentsSource =
       readonly kind: 'baked'
       /** Scanned on the build machine, emitted as static imports. */
       readonly agents: readonly DeployedAgent[]
+      /**
+       * B-185 — the app's `server/context.ts`, as a specifier relative to the emitted entry, or
+       * `undefined` when the app has none. A Worker has no filesystem on which to find it, so it is
+       * baked like the agent modules beside it (ADR 0014). `undefined` is the ordinary case for an
+       * app that declares no context, and emitting an import of a file that is not there would
+       * fail the BUILD rather than the request — which is why `planDeployedPlugins` takes the same
+       * road for plugins.
+       */
+      readonly contextModule?: string
     }
   | {
       readonly kind: 'scan'
@@ -96,6 +105,13 @@ export type DeployedAgentsSource =
        * so without this the agent branch would call `null`.
        */
       readonly ensureLoader?: string
+      /**
+       * B-185 — an expression yielding the app's `server/` directory, which this host already
+       * declares (`bun.ts:95`, `deno-deploy.ts:69`) and already hands to `executeRoute`. A host
+       * with a filesystem locates its own `context.ts`, so it needs no baking (ADR 0014, and the
+       * split `deployed-agents.ts` already argues for routes two docblocks above).
+       */
+      readonly serverDir?: string
     }
 
 export interface DeployedAgentsHost {
@@ -128,17 +144,37 @@ export function deployedAgentsFragment(
   const notFound = host.notFound ?? 'notFoundResponse()'
   const prefix = host.importPrefix ?? ''
 
+  // B-185 — import the identity entry only where identity is actually resolved. A baked target
+  // whose app declares no `server/context.ts` resolves an anonymous caller with no call at all, and
+  // importing a function it never invokes would oblige every stub in the tree to export it for
+  // nothing. The entry differs by host: a filesystem host LOCATES its own module, a Worker is
+  // handed the baked factory (ADR 0014).
+  const identityImport = identityEntryFor(source)
+
   const resolution =
-    source.kind === 'baked' ? bakedResolution(source.agents) : scannedResolution(source)
+    source.kind === 'baked'
+      ? bakedResolution(source.agents, source.contextModule)
+      : scannedResolution(source)
 
   return {
     imports: [
       // `theokit/adapters/agent-mount`, not `theokit/server`: `mount-agent` is deliberately not on
       // the app-facing surface (ADR 0041), and a generated entry is not an app. See that module.
-      `import { mountAgent, resolveProvider, matchAgentAuxRoute, serveMatchedAuxRoute${source.kind === 'scan' ? ', scanAgents' : ''} } from '${prefix}theokit/adapters/agent-mount'`,
+      // B-185 — the identity entry differs by host: a filesystem host LOCATES its own
+      // `context.ts`, a Worker is handed the baked factory (ADR 0014). `createWebShim` is not here
+      // because all three entries already import it at module level.
+      `import { mountAgent, resolveProvider, matchAgentAuxRoute, serveMatchedAuxRoute${identityImport}${source.kind === 'scan' ? ', scanAgents' : ''} } from '${prefix}theokit/adapters/agent-mount'`,
       ...resolution.imports,
     ],
-    declarations: resolution.declarations,
+    declarations: [
+      ...resolution.declarations,
+      // B-185 — one factory, two call sites: the aux branch on a hit, and the run handler below.
+      // Declared rather than inlined twice so the mechanism ADR 0014 decides has a single home.
+      `function __theoResolveSubject(request) {`,
+      ...resolution.identity,
+      `  return resolveSubject`,
+      `}`,
+    ],
     branch: [
       `    // #367 — the agent convention owns this prefix. It is answered BEFORE the file-route`,
       `    // table because an agent matches no file route: falling through is how a deployed`,
@@ -151,7 +187,13 @@ export function deployedAgentsFragment(
       `      // the run handler exactly as before, so this branch owns the sub-paths and nothing more.`,
       `      const auxRoute = await matchAgentAuxRoute(request.method, ${pathname}, auxDeps)`,
       `      if (auxRoute !== null) {`,
-      `        const auxResponse = await serveMatchedAuxRoute(auxRoute, request, auxDeps)`,
+      `        // B-185 — identity is resolved only now. Building it costs a web shim and, where the`,
+      `        // app declares one, a call into its own \`createContext\`; a url this dispatcher`,
+      `        // merely declined must pay for neither (resolve-agent-subject.ts:93-96).`,
+      `        const auxResponse = await serveMatchedAuxRoute(auxRoute, request, {`,
+      `          ...auxDeps,`,
+      `          resolveSubject: __theoResolveSubject(request),`,
+      `        })`,
       host.wrapSecurityHeaders === true
         ? `        return withSecurityHeaders(auxResponse, SECURITY_HEADERS)`
         : `        return auxResponse`,
@@ -162,6 +204,11 @@ export function deployedAgentsFragment(
       `      if (mod === undefined) return ${notFound}`,
       `      const agentResponse = await mountAgent(mod, request, (model, plugins) => resolveProvider(model, { plugins }).apiKey, {`,
       `        agentName,`,
+      `        // B-185 — mount-agent.ts:121 has accepted this since #365 and 0 of 23 adapters passed`,
+      `        // one, so agent-access.ts:146 judged every deployed policy against \`subject: null\`.`,
+      `        // A run is not a decline: it is about to do real work, so the shim this builds is not`,
+      `        // the cost ADR-1 refuses.`,
+      `        resolveSubject: __theoResolveSubject(request),`,
       `        ...CSRF_CONFIG,`,
       `      })`,
       host.wrapSecurityHeaders === true
@@ -183,15 +230,44 @@ interface AgentResolution {
    * no module load, which is what ADR-1 buys and what a later ordering would spend.
    */
   auxPrelude: string[]
+  /**
+   * B-185 — lines that must leave `resolveSubject` bound to a resolver, or to `undefined`. Emitted
+   * only where a match has already happened, because building one costs a web shim and
+   * `resolve-agent-subject.ts:93-96` states that a declined url must never run the application's
+   * `createContext`.
+   */
+  identity: string[]
+}
+
+/**
+ * Which identity entry this host imports, or nothing at all (B-185).
+ *
+ * A filesystem host LOCATES its own `context.ts`; a Worker is handed the baked factory (ADR 0014).
+ * Either one is omitted where identity is not resolved — an app declaring no context resolves an
+ * anonymous caller with no call, and importing a function never invoked would oblige every stub in
+ * the tree to export it for nothing.
+ */
+function identityEntryFor(source: DeployedAgentsSource): string {
+  if (source.kind === 'scan') {
+    return source.serverDir === undefined ? '' : ', createAgentSubjectResolver'
+  }
+  return source.contextModule === undefined ? '' : ', createSubjectResolverFromFactory'
 }
 
 /** No filesystem: every agent module is a static import decided on the build machine. */
-function bakedResolution(agents: readonly DeployedAgent[]): AgentResolution {
+function bakedResolution(
+  agents: readonly DeployedAgent[],
+  contextModule: string | undefined,
+): AgentResolution {
   const varOf = (index: number): string => `__theoAgent${String(index)}`
   return {
-    imports: agents.map(
-      (agent, index) => `import * as ${varOf(index)} from '../../${agent.filePath}'`,
-    ),
+    imports: [
+      ...agents.map((agent, index) => `import * as ${varOf(index)} from '../../${agent.filePath}'`),
+      // B-185 — the app's context module, baked exactly like the agents above it (ADR 0014).
+      ...(contextModule === undefined
+        ? []
+        : [`import * as __theoContext from '../../${contextModule}'`]),
+    ],
     declarations: [
       `// #367 — the app's agents, keyed by NAME because that is what the URL carries, what the`,
       `// access policy is judged under, and what the run's spans are labelled with (#406).`,
@@ -216,6 +292,26 @@ function bakedResolution(agents: readonly DeployedAgent[]): AgentResolution {
       `        ? agents[agentName]`,
       `        : undefined`,
     ],
+    identity:
+      contextModule === undefined
+        ? [
+            `        // B-185 — this app declares no \`server/context.ts\`, so there is no factory to`,
+            `        // bake and an anonymous caller is the honest answer. A policy that admits`,
+            `        // nobody is the correct outcome, not an error.`,
+            `        const resolveSubject = undefined`,
+          ]
+        : [
+            `        // B-185 — a Worker has no filesystem to find \`context.ts\` on, so the module is`,
+            `        // baked and its factory handed straight to the resolver (ADR 0014). The shim is`,
+            `        // built HERE, after the match, because a declined url must never run the app's`,
+            `        // own \`createContext\` (resolve-agent-subject.ts:93-96).`,
+            `        const { req: __theoReq, res: __theoRes } = createWebShim(request)`,
+            `        const resolveSubject = createSubjectResolverFromFactory(`,
+            `          __theoContext.createContext,`,
+            `          __theoReq,`,
+            `          __theoRes,`,
+            `        )`,
+          ],
     auxPrelude: [
       `      // B-185 — the aux dispatcher needs nodes carrying \`filePath\` and a loader keyed by it.`,
       `      // The loader resolves the path to a NAME through the node list, then reads the same`,
@@ -239,6 +335,7 @@ function scannedResolution(source: {
   projectRoot: string
   loadModule: string
   ensureLoader?: string
+  serverDir?: string
 }): AgentResolution {
   return {
     imports: [],
@@ -251,6 +348,22 @@ function scannedResolution(source: {
       `      const agentNode = agentsCache.find((a) => a.name === agentName)`,
       `      const mod = agentNode === undefined ? undefined : await ${source.loadModule}(agentNode.filePath)`,
     ],
+    identity:
+      source.serverDir === undefined
+        ? [`        const resolveSubject = undefined`]
+        : [
+            `        // B-185 — this host HAS a filesystem, so it locates its own \`context.ts\` and`,
+            `        // the existing resolver works unchanged; nothing is baked (ADR 0014). The shim`,
+            `        // is built after the match, for the reason the baked branch gives.`,
+            `        const { req: __theoReq, res: __theoRes } = createWebShim(request)`,
+            `        const resolveSubject = createAgentSubjectResolver({`,
+            `          req: __theoReq,`,
+            `          res: __theoRes,`,
+            `          loadModule: ${source.loadModule},`,
+            `          serverDir: ${source.serverDir},`,
+            `          pluginRunner: undefined,`,
+            `        })`,
+          ],
     auxPrelude: [
       ...(source.ensureLoader === undefined ? [] : [`      ${source.ensureLoader}`]),
       `      // B-185 — hoisted above the lookup so a declined aux route loads no module. The scan`,

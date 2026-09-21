@@ -58,6 +58,15 @@ const ENTRIES: Record<string, () => string> = {
 
   'cloudflare (with an agent)': () =>
     renderCloudflareWorkerEntry({ ssrStreaming: false, agents: AGENTS }),
+  // B-185 — the identity module is baked like the agents beside it, and a wrong specifier or a
+  // malformed factory call is a BUILD failure rather than a request one. This variant is what
+  // catches it, and the one above cannot: with no `contextModule` the generator emits no import.
+  'cloudflare (agents + a baked context module)': () =>
+    renderCloudflareWorkerEntry({
+      ssrStreaming: false,
+      agents: AGENTS,
+      contextModule: 'server/context.ts',
+    }),
   // Bun and Deno take no `agents`: they scan at request time, as they already do for routes, so
   // their entry carries the branch unconditionally and an agent added later needs no rebuild.
   'bun (agent branch)': () => renderBunEntry(3000),

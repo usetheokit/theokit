@@ -53,7 +53,7 @@ export function renderBunEntry(
     : `// (ssrStreaming off)`
   const runtimeConfig = deployedRuntimeConfigFragment(opts)
   const agentsFragment = deployedAgentsFragment(
-    { kind: 'scan', projectRoot: 'cwd', loadModule: 'loadModule' },
+    { kind: 'scan', projectRoot: 'cwd', loadModule: 'loadModule', serverDir: 'serverDir' },
     { pathname: 'pathname' },
   )
   return [

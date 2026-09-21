@@ -46,3 +46,10 @@ export { scanAgents } from './scan/agent-scan.js'
 // `dist/adapters/agent-mount.js` (`tsup.config.ts:46`), and a reachability walk over that entry's
 // import graph does not reach `handleListApprovals` today — which is the defect B-185 measured.
 export { matchAgentAuxRoute, serveMatchedAuxRoute } from './agent/serve-aux-routes.js'
+// B-185 — identity, in the two shapes ADR 0014 decides. A host WITH a filesystem locates its own
+// `context.ts` and uses the first; a Worker has the module baked as a static import and hands the
+// factory to the second. Both are here because both are reached only from a generated fragment.
+export {
+  createAgentSubjectResolver,
+  createSubjectResolverFromFactory,
+} from './http/resolve-agent-subject.js'

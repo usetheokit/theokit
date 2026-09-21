@@ -277,6 +277,8 @@ export function renderCloudflareWorkerEntry(
      * that only consulted the route table answered every `/api/agents/<name>` with a 404.
      */
     agents?: readonly DeployedAgent[]
+    /** B-185 — the app's `server/context.ts`, project-relative, or absent when it declares none. */
+    contextModule?: string
     /** WebSocket route files, scanned on the build machine. Only their presence is used (#369). */
     wsRoutes?: readonly string[]
   } & DeployedServerDirOptions &
@@ -323,7 +325,12 @@ export function renderCloudflareWorkerEntry(
   )
   const runtimeConfig = deployedRuntimeConfigFragment(opts)
   const agentsFragment = deployedAgentsFragment(
-    opts.agents === undefined ? undefined : { kind: 'baked', agents: opts.agents },
+    opts.agents === undefined
+      ? undefined
+      : // B-185 — a Worker has no filesystem, so its identity module is baked exactly like its
+        // agents and its routes (ADR 0014). `contextModule` is `undefined` for an app that
+        // declares none, and the generator then emits no import for it.
+        { kind: 'baked', agents: opts.agents, contextModule: opts.contextModule },
     { wrapSecurityHeaders: true },
   )
 
@@ -534,7 +541,15 @@ export const cloudflareAdapter: DeployAdapter = {
     // edge, which is the layering inversion ADR-0001 v3 removed for `vite-plugin` and which
     // `adapters-may-only-depend-on-core-router-services` refuses. An absent scanner emits a worker
     // with no routes rather than falling back to a runtime scan — the fallback IS the defect.
-    const scanned = ctx?.scanRoutes?.(config.serverDir) ?? { routes: [], wsRoutes: [], agents: [] }
+    const scanned = ctx?.scanRoutes?.(config.serverDir) ?? {
+      routes: [],
+      wsRoutes: [],
+      agents: [],
+      // B-185 — no provider means no scan, and an app whose context nobody looked for is
+      // indistinguishable here from one that has none. Both resolve an anonymous caller, which is
+      // the honest answer rather than an invented subject.
+      contextModule: undefined,
+    }
 
     const pluginsPlan = planDeployedPlugins(config.plugins, 'cloudflare')
     if (pluginsPlan !== undefined) {
@@ -562,6 +577,9 @@ export const cloudflareAdapter: DeployAdapter = {
         routes: scanned.routes,
         // #367 — a Worker has no filesystem, so its agents are decided here like its routes.
         agents: scanned.agents,
+        // B-185 — rides beside the agents because it is decided by the same provider, for the same
+        // reason: `build.ts` holds `serverDir` and a Worker cannot look for the module itself.
+        contextModule: scanned.contextModule,
         wsRoutes: scanned.wsRoutes,
       }),
     )

@@ -15,6 +15,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   target and answered `BAD_REQUEST` for want of a message. The generated fragment now asks the aux
   dispatcher first and falls through to the run handler only on a miss; a declined request loads no
   module, which is what makes asking first free.
+- **A deployed target resolves who is asking, so an owner is served rather than refused (B-185).**
+  `mountAgent` has accepted a subject resolver since the approvals scoping landed, and 0 of 23
+  adapter files passed one — so every deployed policy was judged against an anonymous caller and an
+  owner was refused exactly like a stranger. Identity now travels by the means each host allows:
+  Bun and Deno have a filesystem and locate their own `server/context.ts`, while a Worker has the
+  module baked as a static import the way its routes and agents already are. `docs/adr/0014` records
+  the decision, what it rejected, and what breaks — an app whose `createContext` reads Node-only
+  members of the request, on a target where that pair is synthesised over a Web `Request`. An app
+  with no `server/context.ts` resolves an anonymous caller, which is the honest answer rather than
+  an invented subject.
 
 - **A review finding that four test stubs had diverged is answered with a measurement, not a
   refactor (B-190).** `docs/adr/0013` records what was measured: the same symbol is an identity

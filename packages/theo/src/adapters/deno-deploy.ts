@@ -42,6 +42,7 @@ export function renderDenoEntry(
       kind: 'scan',
       projectRoot: 'cwd',
       loadModule: 'loaderCache',
+      serverDir: 'serverDir',
       ensureLoader: 'if (!loaderCache) loaderCache = createProductionLoader()',
     },
     { notFound: 'notFound()', importPrefix: 'npm:' },
