@@ -39,8 +39,10 @@ describe('a rendered entry routes the agent card', () => {
 
       const lines = entry.split('\n')
       const apiGuard = lines.findIndex((l) => /startsWith\((['"])\/api\/\1\)/.test(l))
-      expect(apiGuard, `${name}: no /api/ prefix guard found — this test is measuring nothing`)
-        .toBeGreaterThan(-1)
+      expect(
+        apiGuard,
+        `${name}: no /api/ prefix guard found — this test is measuring nothing`,
+      ).toBeGreaterThan(-1)
 
       // The guard that decides between the API surface and static assets must itself consult the
       // card predicate. Without this the branch below it is unreachable for the card path, which is

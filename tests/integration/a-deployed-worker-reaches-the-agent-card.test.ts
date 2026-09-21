@@ -67,7 +67,10 @@ beforeAll(() => {
   mkdirSync(join(root, 'agents'), { recursive: true })
   writeFileSync(join(root, 'agents', 'chat.js'), `export const marker = 'chat-module'\n`)
   mkdirSync(join(root, 'server'), { recursive: true })
-  writeFileSync(join(root, 'server', 'context.js'), `export function createContext() { return {} }\n`)
+  writeFileSync(
+    join(root, 'server', 'context.js'),
+    `export function createContext() { return {} }\n`,
+  )
   ;(globalThis as Record<string, unknown>).__THEO_CARD_HARNESS__ = {
     mounted,
     asked,

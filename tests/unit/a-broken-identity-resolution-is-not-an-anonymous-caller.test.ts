@@ -65,7 +65,12 @@ describe('a broken identity resolution is not an anonymous caller', () => {
       const resolve = createAgentSubjectResolver({
         req: {},
         res: {},
-        loadModule: () => Promise.resolve({ createContext: () => { throw BOOM } }),
+        loadModule: () =>
+          Promise.resolve({
+            createContext: () => {
+              throw BOOM
+            },
+          }),
         serverDir: dir,
         pluginRunner: undefined,
       } as unknown as Parameters<typeof createAgentSubjectResolver>[0])
