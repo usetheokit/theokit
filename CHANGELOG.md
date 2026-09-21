@@ -6,17 +6,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-### Fixed
-
-- **`npm run lint` is green again, and a test may exercise a deprecated symbol (B-205).**
-  `@typescript-eslint/no-deprecated` was firing 15 errors on the tests for `renderCssResource` and
-  `createServerInsertedHTML` — two symbols `docs/adr/0007` keeps deprecated AND published, so their
-  tests are correct and the rule fired on them for being correct. Because the quality gate lints the
-  whole repository, that failure was charged to every unrelated change that reached it. The rule is
-  now off for test code, in the block that already relaxes rules for the same file set, and still
-  ON for production: a deprecated symbol used in shipped code still fails, proved by an armed canary
-  rather than asserted. No file left the sweep — 50 entries before, 50 after.
-
 ### Added
 
 - **The Cloudflare worker preloads a route's chunks without a filesystem (B-035).**
@@ -30,8 +19,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   revision of this entry said it had to carry one; that was wrong, and the copy drifted within a
   day — the proxy fix below landed in the original only.
 
-### Added
-
 - **A README row claiming a `.claude/` surface is read now has to name a reader that exists (B-181).**
   `packages/agents/README.md` publishes which surfaces the package reads; the claim was prose and
   nothing resolved it. A test now reads the table, and for every row that claims `read` and names a
@@ -39,7 +26,54 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   a cited reader fails the suite naming the row and the symbol. Two of the table's fourteen rows carry
   a verifiable claim today; the other twelve are counted and reported as unchecked rather than passing.
 
+- **A middleware can now run code after the route, because the runner passes it a `next`
+  (B-003).** `runWebMiddleware` takes the route execution as an optional fourth argument and gives
+  each middleware a `next` that runs the rest of the chain, so a handler authored with the public
+  `middleware()` builder can wrap the response instead of only replacing it **on the Web
+  request path**. The Node file-scan runner — the one `packages/theo/README.md` documents for
+  `server/middleware/*.ts` — still invokes middleware with two arguments, so `next` is
+  `undefined` there and a middleware that relies on it does nothing.
+
+  **And the qualification is narrower than it reads.** Traced 2026-09-19 on re-review:
+  `runWebMiddleware` is reached only from `executeWebRequest`, which is reached only from
+  `executeWebRequestFromNode`, which **nothing calls**. Every deploy entry this framework
+  GENERATES emits `executeRoute` instead — `adapters/bun.ts:86` and its five siblings — and
+  that routes to the two-argument path. So `next` is live for an application that imports
+  `executeWebRequest` from `theokit/server` and calls it directly, and on no surface the
+  framework itself generates. This sentence was unqualified until review measured the second
+  invoker, then still overstated until review traced the first. **B-196** carries both halves. Omit the argument and
+  the runner behaves exactly as before. What a frame returns is one ordered rule — the middleware's
+  own `Response` when it returned one, otherwise what its single `next()` call produced — recorded
+  with its rejected alternatives in `docs/adr/0006`.
+
+### Deprecated
+
+- **`@theokit/http/css-resource` and `@theokit/http/server-inserted-html` are deprecated, and
+  both keep working (B-012).** Measured 2026-09-19: neither subpath has a single importer
+  anywhere in this monorepo, controlled against `@theokit/http/app` at 50 and `renderToStream`
+  at 6 — so the zero is about these two symbols and not about the query.
+
+  Neither is removed in 2.x. The package is published, so the importers this repository can see
+  are not the importers that exist, and deleting on "no importer I can see" would break
+  consumers nobody can name. `docs/adr/0007` records the decision and the two alternatives
+  rejected.
+
+  Each notice states when the thing is still the right tool: `css-resource` is redundant under
+  React 19, which hoists `<link precedence>` natively, and is retained for the React 18 half of
+  the declared `react >=18.0.0` peer range. `server-inserted-html` has no consumer *here*, which
+  is a claim about this repository rather than about every consumer. A capability that finds a
+  consumer un-deprecates.
+
 ### Fixed
+
+- **`npm run lint` is green again, and a test may exercise a deprecated symbol (B-205).**
+  `@typescript-eslint/no-deprecated` was firing 15 errors on the tests for `renderCssResource` and
+  `createServerInsertedHTML` — two symbols `docs/adr/0007` keeps deprecated AND published, so their
+  tests are correct and the rule fired on them for being correct. Because the quality gate lints the
+  whole repository, that failure was charged to every unrelated change that reached it. The rule is
+  now off for test code, in the block that already relaxes rules for the same file set, and still
+  ON for production: a deprecated symbol used in shipped code still fails, proved by an armed canary
+  rather than asserted. No file left the sweep — 50 entries before, 50 after.
 
 - **The scaffolded app hydrates again with SSR on (B-228).** `theokit build` + `theokit start` with
   `ssr: true` served a correct document and then showed "Unexpected Application Error!" instead of
@@ -97,8 +131,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   fails too. Types carry no row: they are erased at build, so a consumer cannot import one at
   runtime, and a type named in a published signature is public by construction.
 
-### Fixed
-
 - **The scaffold no longer says `node-pty` arrives through `@theokit/agents` (B-025).** The
   generated `pnpm-workspace.yaml` approves four packages for install scripts and explained
   `node-pty` as a native terminal "reached through `@theokit/agents`". Measured on a scaffold
@@ -109,48 +141,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   for the day you add a package that needs it, like `better-sqlite3` and `workerd` beside it — and
   the comment now says what was measured, keeping the wrong reason on the page rather than deleting
   it, because a right entry with a wrong reason is what sends the next reader to the wrong package.
-
-### Added
-
-- **A middleware can now run code after the route, because the runner passes it a `next`
-  (B-003).** `runWebMiddleware` takes the route execution as an optional fourth argument and gives
-  each middleware a `next` that runs the rest of the chain, so a handler authored with the public
-  `middleware()` builder can wrap the response instead of only replacing it **on the Web
-  request path**. The Node file-scan runner — the one `packages/theo/README.md` documents for
-  `server/middleware/*.ts` — still invokes middleware with two arguments, so `next` is
-  `undefined` there and a middleware that relies on it does nothing.
-
-  **And the qualification is narrower than it reads.** Traced 2026-09-19 on re-review:
-  `runWebMiddleware` is reached only from `executeWebRequest`, which is reached only from
-  `executeWebRequestFromNode`, which **nothing calls**. Every deploy entry this framework
-  GENERATES emits `executeRoute` instead — `adapters/bun.ts:86` and its five siblings — and
-  that routes to the two-argument path. So `next` is live for an application that imports
-  `executeWebRequest` from `theokit/server` and calls it directly, and on no surface the
-  framework itself generates. This sentence was unqualified until review measured the second
-  invoker, then still overstated until review traced the first. **B-196** carries both halves. Omit the argument and
-  the runner behaves exactly as before. What a frame returns is one ordered rule — the middleware's
-  own `Response` when it returned one, otherwise what its single `next()` call produced — recorded
-  with its rejected alternatives in `docs/adr/0006`.
-
-### Deprecated
-
-- **`@theokit/http/css-resource` and `@theokit/http/server-inserted-html` are deprecated, and
-  both keep working (B-012).** Measured 2026-09-19: neither subpath has a single importer
-  anywhere in this monorepo, controlled against `@theokit/http/app` at 50 and `renderToStream`
-  at 6 — so the zero is about these two symbols and not about the query.
-
-  Neither is removed in 2.x. The package is published, so the importers this repository can see
-  are not the importers that exist, and deleting on "no importer I can see" would break
-  consumers nobody can name. `docs/adr/0007` records the decision and the two alternatives
-  rejected.
-
-  Each notice states when the thing is still the right tool: `css-resource` is redundant under
-  React 19, which hoists `<link precedence>` natively, and is retained for the React 18 half of
-  the declared `react >=18.0.0` peer range. `server-inserted-html` has no consumer *here*, which
-  is a claim about this repository rather than about every consumer. A capability that finds a
-  consumer un-deprecates.
-
-### Fixed
 
 - **A middleware that starts the route and answers from elsewhere no longer kills the server
   (B-003).** `next()` hands back a promise, and the runner's contract lets a frame yield a
