@@ -35,6 +35,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   target only. The entry already built the runner once at module load for `executeRoute`; the
   resolver now receives that same one, because a runner rebuilt per request re-runs every plugin's
   `register`.
+
+- **An app that declares plugins gets a deploy entry that loads (B-185).** The binding above landed
+  inside a non-`async` factory, and `await` is a reserved word everywhere in an ES module — so the
+  emitted entry did not parse at all on cloudflare, bun and deno-deploy. `adapter-entry-parses.test.ts`
+  already guarded this and was red; the factory is now `async` and both call sites await it. Two
+  cross-product rows were added to that matrix: every row varied one feature, and this defect needed
+  a runtime-config module and a baked context module together, so fifteen green rows saw nothing.
+
+- **The agent card reaches the agents branch instead of the asset handler (B-185).** Widening the
+  branch guard was not enough: every host decides between its API surface and static assets first,
+  so the `/.well-known/` arm was present in the source and unreachable in the emitted program. Each
+  host now consults `__theoIsAgentCardPath` — the exact shape `agent-card-handler.ts` matches, not a
+  prefix, so `/.well-known/security.txt` still reaches static assets.
 - **A deployed target resolves who is asking, so an owner is served rather than refused (B-185).**
   `mountAgent` has accepted a subject resolver since the approvals scoping landed, and 0 of 23
   adapter files passed one — so every deployed policy was judged against an anonymous caller and an
