@@ -14,8 +14,16 @@
  * @param changed  the pin changes, in `sync-template-pins`' own `name: from -> to` form. Only the
  *   LENGTH is read; the strings are the caller's log.
  * @param current  the shipping package's version as its manifest states it now.
- * @returns the version to write, or `null` when no pin changed.
+ * @param alreadyBumpedThisCycle  whether `changeset version` has ALREADY bumped this package in
+ *   this run. The caller answers it from a fact — the manifest at `HEAD` against the manifest on
+ *   disk — and this function only decides what follows from the answer (B-232).
+ * @returns the version to write, or `null` when no pin changed, or `null` when changesets already
+ *   bumped the package — its bump carries the CHANGELOG entry that a second one would not.
  * @throws if `current` is a prerelease, or is not `MAJOR.MINOR.PATCH` — both are cases where
  *   choosing a next version would be a guess rather than a derivation.
  */
-export function bumpForTemplatePins(changed: readonly string[], current: string): string | null
+export function bumpForTemplatePins(
+  changed: readonly string[],
+  current: string,
+  alreadyBumpedThisCycle?: boolean,
+): string | null

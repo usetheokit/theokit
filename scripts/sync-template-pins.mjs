@@ -33,10 +33,32 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 
 import { bumpForTemplatePins } from './template-pin-bump.mjs'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const TEMPLATE = 'packages/create-theokit/templates/default/package.json.tmpl'
+
+/**
+ * Whether this package's version on disk differs from the one committed at `HEAD` (B-232).
+ *
+ * `git show` rather than a flag the caller passes down: a flag is a claim somebody has to keep
+ * true, and this is a fact the repository already holds. A failure to read it — a detached tree, a
+ * file that is new, no git at all — answers `false`, which restores the behaviour that existed
+ * before this check and never suppresses a bump on a guess.
+ */
+function bumpedSinceHead(manifestPath, currentVersion) {
+  try {
+    const rel = relative(process.cwd(), manifestPath)
+    // eslint-disable-next-line sonarjs/no-os-command-from-path -- toolchain binary, fixed argv
+    const at = execFileSync('git', ['show', `HEAD:${rel}`], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
+    return JSON.parse(at).version !== currentVersion
+  } catch {
+    return false
+  }
+}
 
 /** Name → version, for every package this repository publishes. */
 function workspaceVersions() {
@@ -241,7 +263,17 @@ function main() {
   // So the bump the tool could not derive is written here, by the step that knows the pin changed.
   const shipperPath = resolve(dirname(TEMPLATE), '..', '..', 'package.json')
   const shipper = JSON.parse(readFileSync(shipperPath, 'utf8'))
-  const next = bumpForTemplatePins(changed, shipper.version)
+  // B-232 — "did changesets already bump this package in this run?" answered from a FACT rather
+  // than inferred. This step runs after `changeset version` in the same `version-packages` chain,
+  // so the manifest at HEAD is the version before that ran; a difference IS the bump.
+  //
+  // Reading the CHANGELOG instead would not discriminate: after any release its newest entry equals
+  // the current version, so the test would stand the script down in exactly the case it exists for.
+  const next = bumpForTemplatePins(
+    changed,
+    shipper.version,
+    bumpedSinceHead(shipperPath, shipper.version),
+  )
   if (next !== null) {
     shipper.version = next
     writeFileSync(shipperPath, `${JSON.stringify(shipper, null, 2)}\n`, 'utf8')
