@@ -47,7 +47,12 @@ describe('the worker preloads without reading a filesystem', () => {
     const source = entry()
     // One implementation, imported. The previous revision emitted a duplicate and it drifted
     // within a day — a fix for proxy-form request targets landed in the original only.
-    expect(source).toMatch(/import \{[^}]*\binjectModulePreloads\b[^}]*\} from 'theokit\/server'/)
+    // The subpath is `theokit/server/http`, not the `theokit/server` umbrella. The symbol was
+    // first added to the umbrella alone, which the package smoke test correctly refused: an
+    // export with no subpath of its own has no migration path off the deprecated barrel. A
+    // specifier the package does not export resolves at build time here and fails at DEPLOY,
+    // so the exact path is the assertion rather than the mere presence of an import.
+    expect(source).toMatch(/import \{[^}]*\binjectModulePreloads\b[^}]*\} from 'theokit\/server\/http'/)
     expect(source).not.toContain('function __theoInjectPreloads')
     expect(source).not.toContain('function __theoEscapeAttribute')
   })
