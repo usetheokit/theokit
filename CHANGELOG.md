@@ -62,6 +62,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   with no `server/context.ts` resolves an anonymous caller, which is the honest answer rather than
   an invented subject.
 
+- **A page component that throws leaves a digest instead of nothing (B-217).** The error boundary
+  implemented only `getDerivedStateFromError`, and that implementation declared no parameter — so
+  the error React passed was dropped: no stack, no message, no digest, no counter. The operator saw
+  a page served successfully. It is the only place this package catches a render error, and the
+  same package ships `error-digest.ts` "suitable for logging" with a phase vocabulary ready for it.
+  `componentDidCatch` now digests the error with `phase: 'handler'` and hands it to a reporter,
+  which `composeComponentTree` takes as an option and defaults to `console.error`. The fallback
+  rendering is unchanged; only the silence is. **Measured while fixing it:** React does not call
+  `componentDidCatch` during server rendering at all — a throw in the shell under `renderToString`
+  throws, the same under `renderToReadableStream` throws, and a `lazy` rejecting inside `Suspense`
+  after the shell streams the fallback and never reaches it. The server defers the error to the
+  client, which is where the boundary runs and where this report is now made.
+
 - **A Suspense failure after the shell degrades to the client's error boundary instead of ending
   the process (B-216).** React's `allReady` rejects when rendering fails outside the shell, and
   this module handed it to the caller with no handler attached on the default path — while
