@@ -17,7 +17,7 @@
  * whether the stage is installed — the point the sibling `start-serves-configured-cors.test.ts`
  * makes for the same reason.
  */
-import { createServer, type Server } from 'node:http'
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
@@ -34,7 +34,15 @@ const headsSeen: string[] = []
 
 beforeAll(async () => {
   const handler = createRequestHandler({
-    buildCtx: (req, res, requestId, startTime): RequestHandlerCtx =>
+    // Typed explicitly. The `as unknown as` on the options object below erases the parameter
+    // types the callback would otherwise infer, and the ROOT `tsc --noEmit` — which the pre-push
+    // hook runs and the per-package one does not — reported six `implicitly any`.
+    buildCtx: (
+      req: IncomingMessage,
+      res: ServerResponse,
+      requestId: string,
+      startTime: number,
+    ): RequestHandlerCtx =>
       ({
         req,
         res,
@@ -53,7 +61,11 @@ beforeAll(async () => {
     securityHeadersConfig: {},
     corsHandler: null,
     ssrRender: null,
-    ssrRenderStreaming: (_url, response, options) => {
+    ssrRenderStreaming: (
+      _url: string,
+      response: ServerResponse,
+      options?: { htmlHead?: string; htmlTail?: string },
+    ) => {
       headsSeen.push(options?.htmlHead ?? '')
       response.writeHead(200, { 'Content-Type': 'text/html' })
       response.end(`${options?.htmlHead ?? ''}<h1>streamed</h1>${options?.htmlTail ?? ''}`)

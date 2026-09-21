@@ -18,11 +18,24 @@ import { injectModulePreloads } from '../../packages/theo/src/core/contracts/mod
 import {
   buildAssetsMap,
   routePathForPageFile,
+  type BundleChunk,
 } from '../../packages/theo/src/vite-plugin/assets-map.js'
 
 const APP = '/project/src/app'
 
-const chunk = (over: Record<string, unknown> = {}) => ({ type: 'chunk', imports: [], ...over })
+/**
+ * A bundle chunk with the two fields every fixture shares, plus whatever the case needs.
+ *
+ * The overrides were typed `Record<string, unknown>`, which erased them: the spread produced
+ * `{ type: string; imports: never[] }` and every `fileName` a fixture passed was invisible to the
+ * compiler. The per-package `tsc` never saw it — these tests live at the root — and the pre-push
+ * hook did, which is where it was caught.
+ */
+const chunk = (over: Partial<BundleChunk> & { fileName: string }): BundleChunk => ({
+  type: 'chunk',
+  imports: [],
+  ...over,
+})
 
 describe('routePathForPageFile', () => {
   it('maps the app root page to /', () => {

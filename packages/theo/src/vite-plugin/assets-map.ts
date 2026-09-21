@@ -25,12 +25,27 @@ import type { Plugin } from 'vite'
 export type AssetsMap = Record<string, string[]>
 
 /** Rollup's `generateBundle` bundle value, narrowed to the fields this hook reads. */
-interface BundleChunk {
+/**
+ * Exported so a fixture can be typed as one. A test that builds a chunk shape by hand and cannot
+ * name the type is a test the compiler checks against `Record<string, unknown>` — which is what
+ * silently erased every `fileName` a fixture passed until the root `tsc` reported it.
+ */
+export interface BundleChunk {
   type: string
   isEntry?: boolean
   fileName: string
   facadeModuleId?: string | null
   imports?: string[]
+  /**
+   * Declared and deliberately NOT walked. A dynamic import is by definition what the browser fetches
+   * later; preloading it would defeat the split that made it dynamic.
+   *
+   * Naming it here is what makes the test asserting that meaningful. The field was absent from this
+   * type while a fixture passed it, so the case named "does not follow dynamic imports" passed
+   * because the walker ignores unknown keys — proving the behaviour by accident rather than by
+   * design. The root `tsc` reported it once the fixture helper stopped erasing its overrides.
+   */
+  dynamicImports?: string[]
 }
 
 /**
