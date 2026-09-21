@@ -62,6 +62,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   with no `server/context.ts` resolves an anonymous caller, which is the honest answer rather than
   an invented subject.
 
+- **`digestError` survives a throw of `undefined`, a symbol or a function (B-214).** Its own
+  docblock promises it "handles non-Error throws" and is "safe to call inside catch blocks", and on
+  those three kinds it raised a `TypeError` of its own: `JSON.stringify` returns the VALUE
+  `undefined` — not a string — for each of them, `extractMessage` returned it under a `: string`
+  annotation, and the digest then read `.length` off it. `throw undefined` and `throw Symbol()` are
+  legal JavaScript and arrive through any `catch (err: unknown)`, so a helper whose whole purpose is
+  to make an arbitrary thrown value safe destroyed the original error inside the handler that called
+  it, turning a recoverable fault into an unhandled one. Each kind now produces a distinct digest
+  and a readable message.
+
 - **A throwing `onError` hook is reported instead of vanishing (B-213).** The hook is the plugin an
   operator installs to ship errors to a tracker. When it threw — bad DSN, transport down, a bug in
   the hook — the failure was caught by a bare `catch` with a comment and nothing else, so every
