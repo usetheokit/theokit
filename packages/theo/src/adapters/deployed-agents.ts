@@ -52,9 +52,17 @@ export interface DeployedAgentsFragment {
   readonly declarations: string[]
   /** The request-handler branch, to be emitted before the file-route table is consulted. */
   readonly branch: string[]
+  /**
+   * SI-020 — the condition a host ANDs into its non-API early-return guard, so an agent card path
+   * is not handed to static assets before this fragment's branch is reached.
+   *
+   * Empty string when the fragment emits nothing, so a host that interpolates it unconditionally
+   * never references a name that was not declared.
+   */
+  readonly hostBypass: string
 }
 
-const EMPTY: DeployedAgentsFragment = { imports: [], declarations: [], branch: [] }
+const EMPTY: DeployedAgentsFragment = { imports: [], declarations: [], branch: [], hostBypass: '' }
 
 /**
  * How the host entry names the things this branch has to use.
@@ -195,6 +203,7 @@ export function deployedAgentsFragment(
       : scannedResolution({ ...source, pluginRunnerExpr: host.pluginRunnerExpr })
 
   return {
+    hostBypass: ` && !__theoIsAgentCardPath(${pathname})`,
     imports: [
       // `theokit/adapters/agent-mount`, not `theokit/server`: `mount-agent` is deliberately not on
       // the app-facing surface (ADR 0041), and a generated entry is not an app. See that module.
@@ -206,9 +215,31 @@ export function deployedAgentsFragment(
     ],
     declarations: [
       ...resolution.declarations,
+      // SI-020 — the host's `/api/` guard decides between the API surface and static assets, and it
+      // runs BEFORE this branch. Widening the branch guard alone left the `.well-known` arm as dead
+      // code on all three targets: present in the source, unreachable in the emitted program. The
+      // host consults this predicate, so the card path escapes the asset branch and NOTHING else
+      // under `/.well-known/` does — a blanket prefix bypass would route `/.well-known/security.txt`
+      // away from assets, trading an unreachable card for a broken namespace.
+      //
+      // Same shape as `agent-card-handler.ts`'s own WELL_KNOWN, so there is one definition of what
+      // an agent card path is rather than two that drift.
+      String.raw`const __theoIsAgentCardPath = (p) => /^\/\.well-known\/[^/]+\/agent-card\.json$/.test(p)`,
       // B-185 — one factory, two call sites: the aux branch on a hit, and the run handler below.
       // Declared rather than inlined twice so the mechanism ADR 0014 decides has a single home.
-      `function __theoResolveSubject(request) {`,
+      // `async` because the entry's plugin runner is a promise: `createPluginRunnerFromConfig` is
+      // async, so the runtime-config fragment declares `const THEO_PLUGIN_RUNNER = createPluginRunnerFromConfig(...)`
+      // WITHOUT awaiting it, and every consumer awaits at the point of use. `await` is a reserved
+      // word everywhere in an ES module, so a non-async factory carrying that binding does not
+      // merely misbehave -- the entry does not parse, and `tests/unit/adapter-entry-parses.test.ts`
+      // is where that is caught. It went red at HEAD before this line existed, on a first version
+      // of this fix whose own test asserted `toContain('await THEO_PLUGIN_RUNNER')`: the presence
+      // of the token that breaks the parse. That test file's header says why, in its own words --
+      // `toContain` does not care whether the string is a program.
+      //
+      // Laziness is unaffected. The shim was always built eagerly inside this factory; what ADR-1
+      // refuses is paying for a url nobody answers, and neither call site is reached by one.
+      `async function __theoResolveSubject(request) {`,
       ...resolution.identity,
       `  return resolveSubject`,
       `}`,
@@ -232,7 +263,7 @@ export function deployedAgentsFragment(
       `        // merely declined must pay for neither (resolve-agent-subject.ts:93-96).`,
       `        const auxResponse = await serveMatchedAuxRoute(auxRoute, request, {`,
       `          ...auxDeps,`,
-      `          resolveSubject: __theoResolveSubject(request),`,
+      `          resolveSubject: await __theoResolveSubject(request),`,
       `        })`,
       host.wrapSecurityHeaders === true
         ? `        return withSecurityHeaders(auxResponse, SECURITY_HEADERS)`
@@ -253,7 +284,7 @@ export function deployedAgentsFragment(
       `        // one, so agent-access.ts:146 judged every deployed policy against \`subject: null\`.`,
       `        // A run is not a decline: it is about to do real work, so the shim this builds is not`,
       `        // the cost ADR-1 refuses.`,
-      `        resolveSubject: __theoResolveSubject(request),`,
+      `        resolveSubject: await __theoResolveSubject(request),`,
       `        ...CSRF_CONFIG,`,
       `      })`,
       host.wrapSecurityHeaders === true

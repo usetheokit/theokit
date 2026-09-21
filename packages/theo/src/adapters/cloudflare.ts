@@ -402,6 +402,7 @@ export function renderCloudflareWorkerEntry(
       nonApiBranch,
       runtimeConfig.executeRouteSpread,
       agentsFragment.branch,
+      agentsFragment.hostBypass,
     ),
   ].join('\n')
 }
@@ -419,10 +420,12 @@ function cloudflareHandleRequestFragment(
   nonApiBranch: string,
   runtimeSpread: string,
   agentBranch: readonly string[],
+  /** SI-020 — the condition that keeps an agent card path out of the static-asset branch. */
+  hostBypass: string,
 ): string[] {
   return [
     `async function handleRequest(request, url, env) {`,
-    `    if (!url.pathname.startsWith('/api/')) {`,
+    `    if (!url.pathname.startsWith('/api/')${hostBypass}) {`,
     nonApiBranch,
     `    }`,
     ``,

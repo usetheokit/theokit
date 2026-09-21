@@ -128,7 +128,7 @@ export function renderDenoEntry(
     `async function handleRequest(request) {`,
     `  const url = new URL(request.url)`,
     ``,
-    `  if (!url.pathname.startsWith('/api/')) {`,
+    `  if (!url.pathname.startsWith('/api/')${agentsFragment.hostBypass}) {`,
     `    // Static + SPA fallback are served by Deno Deploy's static asset handler.`,
     `    return notFound()`,
     `  }`,

@@ -182,7 +182,7 @@ function bunHandleRequestFragment(runtimeSpread: string, agentBranch: readonly s
     `    }`,
     ``,
     `    // 2) API routes through the full executeRoute pipeline via the shim`,
-    `    if (pathname.startsWith('/api/')) {`,
+    `    if (pathname.startsWith('/api/') || __theoIsAgentCardPath(pathname)) {`,
     ...agentBranch,
     ``,
     `      const match = matchRoute(pathname, routes)`,

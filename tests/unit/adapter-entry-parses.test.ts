@@ -67,6 +67,25 @@ const ENTRIES: Record<string, () => string> = {
       agents: AGENTS,
       contextModule: 'server/context.ts',
     }),
+  // SI-019 — the CROSS-PRODUCT, not one axis at a time. Every entry above varies a single feature,
+  // and a defect that needs two of them together is invisible to all of them: the subject-resolver
+  // factory carries the plugin runner only when a runtime-config module exists, and it carries the
+  // baked-context call only when `contextModule` does. The combination is what put `await` inside a
+  // non-async function, and this matrix had no row that rendered both at once — so the entry
+  // shipped unparseable on three targets and the 15 rows above stayed green.
+  'cloudflare (agents + context module + runtime config)': () =>
+    renderCloudflareWorkerEntry({
+      ssrStreaming: false,
+      agents: AGENTS,
+      contextModule: 'server/context.ts',
+      runtimeConfigModule: RUNTIME_CONFIG,
+    }),
+  'cloudflare (agents + runtime config, no context module)': () =>
+    renderCloudflareWorkerEntry({
+      ssrStreaming: false,
+      agents: AGENTS,
+      runtimeConfigModule: RUNTIME_CONFIG,
+    }),
   // Bun and Deno take no `agents`: they scan at request time, as they already do for routes, so
   // their entry carries the branch unconditionally and an agent added later needs no rebuild.
   'bun (agent branch)': () => renderBunEntry(3000),
