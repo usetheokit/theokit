@@ -62,6 +62,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   with no `server/context.ts` resolves an anonymous caller, which is the honest answer rather than
   an invented subject.
 
+- **An Express middleware that calls `next()` from a callback no longer hangs the request
+  (B-218).** `MiddlewareFn` is declared as Express's `(req, res, next)`, under which `next` may be
+  invoked after the function returns — the dominant shape for callback-based I/O. The runner read
+  the flag one microtask later and turned its absence into an abort, so
+  `function (req, res, next) { fs.readFile(p, () => next()) }` made the caller return from the
+  request handler having written nothing: the socket stayed open until a timeout while the eventual
+  `next()` set a flag nobody read. "Did not call next synchronously" and "has taken responsibility
+  for the response" were being treated as one fact. The runner now waits for whichever signal
+  actually arrives — `next()`, or the response finishing — which is what Express does. A middleware
+  that does neither still holds the request, as it does under Express, but the runner names it in a
+  warning after 10s instead of leaving the hang mute.
+
 - **A page component that throws leaves a digest instead of nothing (B-217).** The error boundary
   implemented only `getDerivedStateFromError`, and that implementation declared no parameter — so
   the error React passed was dropped: no stack, no message, no digest, no counter. The operator saw
