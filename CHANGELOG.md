@@ -8,6 +8,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **Three of the six Web deploy targets carried no agents at all (B-235).**
+  B-185 made `GET /api/agents/<name>/approvals` reachable on a deploy target and reached
+  `cloudflare`, `bun` and `deno-deploy`. A user deploying to `vercel`, `netlify` or `aws-lambda`
+  got the pre-B-185 behaviour with no diagnostic: the endpoint fell through to the run handler and
+  answered `BAD_REQUEST` for want of a message. All six now ask the aux dispatcher.
+
+  **The reason the three were skipped did not survive re-measurement.** The finding recorded that
+  they were not a forgotten copy-paste — `vercel` threads a Node `nodeReq` through twelve sites,
+  `netlify` neither that nor a `Request`, `aws-lambda` one `Request` — and concluded the
+  Web-`Request`-shaped branch could not reach them. Re-read: `netlify`'s handler is
+  `(request, context)` and already RECEIVES a Web `Request`; `aws-lambda` already builds one with
+  `eventV2ToRequest(event)` for its CORS matcher; `vercel` already builds one and hands it to
+  `createWebShim`. Counting `new Request` occurrences measured how each entry OBTAINS a request,
+  which is a different question from whether it has one.
+
+  Two behaviour changes worth naming. On `vercel` the Node-to-Web conversion is hoisted above the
+  agents branch, so an unmatched `POST` now has its body drained where it did not — the safer
+  direction, since an unconsumed Node request socket is what holds a connection open. On all three
+  the build now passes the project's configured `agentsDir`, which the option accepted and no
+  build supplied, so a project that configured one was getting the default `agents`.
+
+  A parse check ships with it: every emitted entry is run through the compiler, because these
+  adapters build JavaScript out of template literals and a substring assertion cannot see an
+  unbalanced brace.
+
 - **A failing test in the Web middleware suite made its siblings fail too (B-220).**
   Six tests replaced `console.warn` and three installed a `process.on('unhandledRejection')`
   listener, and every restore sat after the assertions with no `try/finally` and no `afterEach` in
