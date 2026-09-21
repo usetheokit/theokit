@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [create-theokit 3.0.1, @theokit/http 2.2.0, theokit 0.68.0] - 2026-09-21
+
 ### Added
 
 - **The Cloudflare worker preloads a route's chunks without a filesystem (B-035).**
