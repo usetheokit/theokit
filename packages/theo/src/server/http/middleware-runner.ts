@@ -74,6 +74,43 @@ function getCachedScan(serverDir: string): MiddlewareCacheEntry {
  * The `Request` is built by the same converter the agent and action branches use, so a middleware
  * reads the request the way every other Web-shaped surface in the framework does.
  */
+/**
+ * Raised when a `server/middleware/*.ts` middleware awaits `next`.
+ *
+ * Typed rather than a bare `Error` so a caller can tell this apart from a failure inside the
+ * middleware's own body — `rules/error-handling.md` § 2, and the same shape as
+ * `http/in-process-caller.ts`'s three.
+ */
+export class MiddlewareNextUnavailableError extends Error {
+  constructor() {
+    super(
+      '`next` is not available in `server/middleware/*.ts`. That path runs BEFORE routing, so it ' +
+        'has no downstream response to give you: there is nothing to await and nothing to observe ' +
+        'afterwards. Return a `Response` to answer the request, or return nothing to continue. ' +
+        'For code that must run AFTER the route, use the Web path — `executeWebRequest`, whose ' +
+        'runner passes a `next` that reaches the route (`http/web-middleware-runner.ts`).',
+    )
+    this.name = 'MiddlewareNextUnavailableError'
+  }
+}
+
+/**
+ * What this runner supplies for `next`, and why it refuses instead of continuing.
+ *
+ * B-196. `next` used to be OPTIONAL and this runner passed nothing, so the compiler accepted the
+ * two-argument call and an author following the type wrote `next?.()` — a SILENT continue. Silence
+ * is the failure `rules/error-handling.md` exists to prevent: the middleware appears to work, the
+ * code after it never runs, and nothing says so.
+ *
+ * Refusing is not the end state. `docs/adr/0003`'s amendment of 2026-09-21 leaves two large options
+ * open — folding this path so the chain wraps the route, or retiring this contract — after a PLAN
+ * panel refuted the premise that the fold is cheap. This change deliberately decides neither; it
+ * makes the gap loud and typed so that whichever is chosen replaces a refusal rather than a lie.
+ */
+const nodePathHasNoDownstream = (): Promise<Response | undefined> => {
+  throw new MiddlewareNextUnavailableError()
+}
+
 async function runWebShapedMiddleware(
   mw: MiddlewareHandler,
   req: IncomingMessage,
@@ -81,7 +118,7 @@ async function runWebShapedMiddleware(
   context: Record<string, unknown>,
 ): Promise<{ shortCircuited: boolean }> {
   const request = createWebRequestSource(req).toRequest()
-  const result = await mw(request, context)
+  const result = await mw(request, context, nodePathHasNoDownstream)
   if (!(result instanceof Response)) return { shortCircuited: false }
 
   // Written here rather than returned upward: a short-circuit that only ABORTED would leave the

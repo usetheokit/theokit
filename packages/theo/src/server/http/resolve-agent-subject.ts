@@ -84,6 +84,67 @@ async function resolve(sources: AgentSubjectSources): Promise<RouteSubject | nul
   const { req, res, loadModule, serverDir, pluginRunner } = sources
   const produced =
     serverDir === undefined ? {} : await createServerContext(req, res, loadModule, serverDir)
+  return subjectFrom(produced, pluginRunner)
+}
+
+/**
+ * The app's `createContext`, as a host that is not Node sees it.
+ *
+ * Deliberately NOT `middleware-runner`'s `ContextFactory`, which types its argument as
+ * `IncomingMessage`/`ServerResponse`. Those are exactly right for the dev path and wrong here: on
+ * every deploy target the pair is what `createWebShim` synthesises over a Web `Request`. Widening
+ * to `unknown` says what is actually true at this boundary rather than casting a lie past the
+ * type system — the app's own `createContext` is typed by the app, and a generated fragment is the
+ * one caller that cannot promise it Node objects.
+ */
+export type HostContextFactory = (args: { request: unknown; response: unknown }) => unknown
+
+/**
+ * The half that CALLS an already-resolved context factory (B-185, ADR 0014).
+ *
+ * {@link createAgentSubjectResolver} does two things: it LOCATES `context.ts` on a filesystem —
+ * `existsSync` plus `loadModule`, inside `createServerContext` — and then CALLS what it found. A
+ * deploy target with no filesystem can do the second and not the first, so the generator bakes the
+ * module as a static import (the way routes, agents and plugins already are) and hands the factory
+ * here directly.
+ *
+ * Measured before this existed: passing `serverDir: undefined` to the resolver above takes its
+ * `produced = {}` branch, never touches `req`/`res`/`loadModule`, and returns
+ * `subjectFromContext({})` — which is null for every caller. Satisfying its types would have
+ * satisfied nothing.
+ *
+ * `request`/`response` are whatever the host has. On every deploy target that is the
+ * `ShimRequest`/`ShimResponse` pair `createWebShim` synthesises over a Web `Request`, which is the
+ * same contract routes on those targets have crossed since they were baked.
+ */
+export function createSubjectResolverFromFactory(
+  createContext: HostContextFactory | undefined,
+  request: unknown,
+  response: unknown,
+  pluginRunner?: PluginRunner,
+): () => Promise<RouteSubject | null> {
+  let pending: Promise<RouteSubject | null> | undefined
+  return () => {
+    pending ??= (async () =>
+      subjectFrom(
+        // An app with no `context.ts` bakes no factory, and an anonymous caller is the honest
+        // answer — not an error, and not a subject invented to fill the slot.
+        createContext === undefined ? {} : await createContext({ request, response }),
+        pluginRunner,
+      ))()
+    return pending
+  }
+}
+
+/**
+ * Decorations are applied ON TOP of the factory's result, matching `executeRoute`. Shared by both
+ * entries so the rule — and the deliberate non-swallowing of a throwing factory, which reaches the
+ * branch's own error handler as a 500 rather than reading as a clean refusal — has one home.
+ */
+function subjectFrom(
+  produced: unknown,
+  pluginRunner: PluginRunner | undefined,
+): RouteSubject | null {
   const ctx = (produced ?? {}) as Record<string, unknown>
   pluginRunner?.applyDecorations(ctx)
   return subjectFromContext(ctx)

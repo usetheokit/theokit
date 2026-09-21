@@ -1,6 +1,7 @@
 # ADR 0003 — One middleware contract, and it wraps the downstream
 
-- **Status:** Proposed (2026-08-22) — requires the project owner's acceptance
+- **Status:** Accepted IN PRINCIPLE, and its EXECUTION superseded (2026-09-21) — proposed 2026-08-22
+- **Ruled by:** the project owner, delegated in session on 2026-09-21 ("voce deve resolver o restante"). The ⚠️ section below asked for exactly this ruling; it is given in `## The ruling` and the section is kept as the record of the conflict it named.
 - **Date:** 2026-08-22
 - **Deciders:** program coordinator; requires the project owner's acceptance
 - **Blocks:** M13 (middleware-edge) first minimum-contract criterion; usetheokit/theokit#345
@@ -23,6 +24,94 @@ The two positions, stated fairly:
 Both are defensible and they are not compatible. What shipped is reversible: the contract change is a
 type plus a dispatcher, not a pipeline. If this ADR is accepted, the fold replaces it; if it is
 rejected, this section becomes the record of why.
+
+## The ruling — 2026-09-21
+
+**The ADR's PRINCIPLE is accepted. Its EXECUTION is superseded, because the table above is stale.**
+
+The ⚠️ section frames this as two incompatible positions: a contract that wraps, or one that runs
+before. That framing was true on 2026-08-23. Measured today, it is not.
+
+**What actually shipped is `(request, context, next?)`.** `define-middleware.ts:38-50` — the third
+parameter is there, it is OPTIONAL so the two-parameter shape keeps compiling, and
+`web-middleware-runner.ts:124` supplies it with a recursive `runFrom(index + 1)` whose innermost
+call reaches `downstream`, i.e. the route.
+
+So the shipped design **already expresses "around"**. The ADR's argument — *"a contract that cannot
+express 'around' is not a middleware contract; it is a before-hook"* — is correct AND is already
+satisfied on one of the two runners. What is wrong is not the contract; it is that
+`middleware-runner.ts:84` invokes the same type with TWO arguments, so `next` is `undefined` on the
+Node path and a middleware that calls it silently does nothing.
+
+**That defect is B-196, and it is the whole of what remains.** Its measured blast radius is
+`runMiddlewareAndContext` plus **2** production call sites — `packages/theo/src/server/http/execute.ts:189` and
+`packages/theo/src/server/http/action-execute.ts:169`.
+
+### What is accepted
+
+Rule 2 of the Decision, in substance: both runners compose the chain as a fold whose innermost
+`next` executes the route. That is the capability the ADR is right about, and it is what B-196
+delivers.
+
+### AMENDED 2026-09-21, the same day — the ruling below rested on a premise a panel refuted
+
+The ruling said rules 1, 3 and 4 are "not required to obtain the capability", on the ground that
+**two call sites already deliver it**. A full PLAN panel on B-196 measured that ground and it does
+not hold. `vera-technical-arbiter` returned the plan, and the measurements were re-verified:
+
+| the ruling assumed | what the code says |
+|---|---|
+| each caller passes "the route it already runs" | **neither caller has a route VALUE.** In `execute.ts` the route is lines **245-438 inline** — 194 lines, 46 statements, capturing 8 outer variables (`ctx` 14 times, `res` 12, `pluginRunner` 9) |
+| the runner folds one list | `middleware-runner.ts:166-188` is `if (dirExists)` **then** `if (singleFileExists)`. An app with no middleware would never enter a fold, so `downstream` is never invoked and the route runs **zero** times |
+| the context is ready when the chain runs | `createServerContext` runs at `:195` **after** the chain, and the caller merges at `execute.ts:208` and re-applies decorations at `:214`. A route invoked at the chain tail sees none of it — the defect `execute.ts:191-199` records as having shipped once |
+
+So the Web analogue this ADR rests on — `web-handler.ts:574-583`, where `runRoute` IS a closure —
+is not mirrored on the Node side, **and that asymmetry is the whole of the work**. The decision
+between this ADR's rules 1/3/4 and the smaller fix is therefore a decision between two LARGE
+options, not between a large one and a cheap one:
+
+- **the fold** — extract 194 lines into a callable, unify two branches into one list, and move the
+  context pipeline inside it, at the risk of reintroducing a context defect that already shipped;
+- **the retirement** (rules 1, 3, 4 as written) — breaking for every `server/middleware/*.ts`, with
+  a codemod the ADR itself says "cannot rewrite one that writes to `res` directly", against
+  **0 measured consumers in `apps/`**.
+
+**This amendment decides nothing between them.** It withdraws the reason the ruling gave, because
+that reason was false, and states what the next decision must weigh. Deciding on a refuted premise
+and leaving the premise standing is the failure this repository's ADRs exist to prevent; the
+ruling below is kept unedited, as the record of what was believed this morning.
+
+### What is superseded, and why
+
+Rules 1, 3 and 4 — retiring `WebMiddleware` and `MiddlewareFn`, adapting the Node runner at its
+edge, moving per-request state — are **not required to obtain the capability**. They are a
+consolidation, and consolidating is a separate decision from fixing.
+
+Measured 2026-09-21, which is what turns this from preference into a call:
+
+| symbol | occurrences in `packages/*/src` | in `apps/` | in the built `dist/*.d.ts` |
+|---|---|---|---|
+| `MiddlewareHandler` | 16 | 0 | **6** — published, and the one that is KEPT |
+| `WebMiddleware` | 8 | 0 | **2** — published |
+| `MiddlewareFn` | 11 | 0 | **0** — internal only |
+
+Retiring a published type with zero measured consumers is cheap and still not free: it is breaking
+for *"every `server/middleware/` file"* by the ADR's own Consequences, and the codemod it proposes
+*"cannot rewrite one that writes to `res` directly"*. Paying that to obtain a capability that two
+call sites already deliver is the opposite of the parsimony this repository applies everywhere
+else — `rules/parsimony-ladder.md` rung 1: does this need to exist, now?
+
+### What this does NOT decide
+
+Whether the consolidation is worth doing LATER. It probably is — one contract documents better than
+two. That is a separate item, and it should be filed with its own evidence rather than carried as
+an unaccepted ADR that blocks a defect fix.
+
+### What would have to be true to reverse this
+
+A consumer that needs `around` on the Node path and cannot get it from an optional `next` — for
+instance, one that must wrap a route whose middleware file writes to `res` directly. None was found;
+`apps/` returns 0 for all three symbols.
 
 ## Context
 

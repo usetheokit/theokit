@@ -38,6 +38,27 @@ Node `>= 22.12.0`. Peers: `react`, `react-dom`, `react-router`, `zod`, and — w
 | `server/ws/chat.ts` | `ws://…/ws/chat` |
 | `server/middleware/01-cors.ts` | request middleware, in filename order |
 
+### `next` is supported on one of the two paths
+
+A middleware receives `(request, context, next)`. What `next` does depends on which runner is
+executing it, and the two differ today:
+
+| path | `next` |
+|---|---|
+| `executeWebRequest` — the Web runner | runs the rest of the chain **and the route**, so code after `await next()` observes the route's response |
+| `server/middleware/*.ts` — the file-scan runner | **refuses.** It runs BEFORE routing, so there is no downstream to await |
+
+The file-scan path throws `MiddlewareNextUnavailableError`, naming the alternative. It used to
+accept the call and continue silently, which meant the code after `await next()` never ran and
+nothing said so.
+
+**This is a real limitation, not a bug being hidden.** Closing it means either folding the
+file-scan path so the chain wraps the route, or retiring this contract for a single one; both are
+large and the choice is open — `docs/adr/0003` § *AMENDED 2026-09-21* records what each costs.
+
+Write a `server/middleware/*.ts` middleware that returns a `Response` to answer the request, or
+returns nothing to continue. Use the Web path when you need code to run after the route.
+
 ## Authoring surfaces
 
 Every surface is a fluent builder whose `.build()` is a compile error while a required link is

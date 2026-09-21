@@ -14,7 +14,20 @@ export interface TrackAgentRunInput {
 }
 
 export interface TrackAgentRunOptions {
-  /** Adapter resolved from `theo.config.ts > cost.storage`. */
+  /**
+   * Where the run is recorded. Supplied BY THE CALLER, not by configuration.
+   *
+   * This line used to point at a `cost.storage` key in the project config, and no `cost` key has
+   * ever existed in the schema — measured against a control of `observability`, which
+   * returns 3. It pointed a reader at configuration to write and there was none to write.
+   *
+   * The route is the parameter, and that is a decision rather than an omission:
+   * `@theokit/agents/usage`'s `UsageStorageAdapter` says "the framework owns the vocabulary; the
+   * app owns the storage" — and the price too, since `costUsd` arrives on the record rather than
+   * being computed from tokens by anyone here. An app imports `trackAgentRun` from the published
+   * `theokit/server/cost` subpath and passes its own adapter, or passes `undefined` and this is a
+   * no-op.
+   */
   storage: UsageStorageAdapter | undefined
 }
 

@@ -38,16 +38,24 @@ export type MiddlewareNext = () => Promise<Response | undefined>
 export type MiddlewareHandler = (
   request: Request,
   context: Record<string, unknown>,
-  // OPTIONAL, so every middleware written against the two-parameter shape keeps
-  // compiling and keeps behaving identically — `docs/adr/0006` clause 5.
+  // REQUIRED, and that is the fix for B-196 rather than an incompatibility.
   //
-  // SUPPLIED BY THE WEB RUNNER ONLY. `http/web-middleware-runner.ts` passes it;
-  // `http/middleware-runner.ts:84` — the Node file-scan path that `README.md` documents for
-  // `server/middleware/*.ts` — invokes this same type with TWO arguments, so `next` is
-  // `undefined` there and a middleware that depends on it silently does nothing. Measured
-  // 2026-09-19 during review. Until the two runners agree, a middleware that calls `next`
-  // is portable to the Web path and not to the Node one, and B-196 tracks closing that.
-  next?: MiddlewareNext,
+  // A function of two parameters is assignable to a type of three, so every middleware written
+  // against the two-parameter shape keeps compiling unchanged — measured, not assumed:
+  // `(r, c) => {}` assigns, and `mw(request, context)` raises TS2554. `docs/adr/0006` clause 5
+  // wanted the first guarantee; OPTIONAL bought it at the price of the second.
+  //
+  // The price was the whole defect. `next?` taught authors to write `next?.()`, which is a SILENT
+  // continue when the runner supplies nothing, and it let `http/middleware-runner.ts` invoke this
+  // type with two arguments without the compiler objecting. Required inverts both: the author
+  // writes `next()`, and a runner that supplies none does not build.
+  //
+  // What each runner supplies still DIFFERS, and `README.md` says so. `http/web-middleware-runner.ts`
+  // passes a real continuation that reaches the route. The Node file-scan path runs BEFORE routing
+  // and has no downstream to offer, so it supplies one that refuses by name. Which of the two large
+  // options closes that gap — folding the Node path, or retiring this contract — is left open by
+  // `docs/adr/0003`'s amendment of 2026-09-21, and this change deliberately does not pre-empt it.
+  next: MiddlewareNext,
   // `void` is deliberate: returning nothing is how a middleware says "continue". The runner only
   // inspects `instanceof Response`, so there is nothing to distinguish from `undefined`.
   // eslint-disable-next-line @typescript-eslint/no-invalid-void-type

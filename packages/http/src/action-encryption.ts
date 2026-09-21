@@ -6,6 +6,8 @@
  * Random IV per call ensures ciphertext is unique even for identical inputs.
  *
  * Output format: base64url(iv || ciphertext)
+ *
+ * Every export here is deprecated; see the notice on each one, and `docs/adr/0015`.
  */
 
 const ALGORITHM = 'AES-GCM'
@@ -17,6 +19,16 @@ const IV_LENGTH = 12 // 96-bit IV per NIST recommendation for AES-GCM
  * Uses PBKDF2 with a fixed salt derived from the secret itself.
  * Suitable for action encryption where the secret is a server-side
  * session secret — not for password hashing.
+ *
+ * @deprecated Nothing in the action pipeline calls this, measured across every package and
+ * app source tree: the three exports of this module occur 1, 2 and 1 times and every one is inside
+ * this file. Reading the API beside an action pipeline invites the conclusion that action
+ * arguments are encrypted for you — they are not, and that false belief is the reason this
+ * carries a deprecation where an unused CSS helper would not need one.
+ *
+ * Still the right tool when you encrypt an action payload EXPLICITLY, in your own code. It keeps
+ * working: no removal in 2.x, and removal only as a 3.0 change with this notice published ahead
+ * of it (`docs/adr/0015`, on `docs/adr/0007`'s terms).
  */
 export async function deriveActionKey(secret: string): Promise<CryptoKey> {
   const encoder = new TextEncoder()
@@ -48,6 +60,16 @@ export async function deriveActionKey(secret: string): Promise<CryptoKey> {
  * Encrypt a string with AES-GCM-256.
  *
  * @returns base64url-encoded string containing IV + ciphertext.
+ *
+ * @deprecated Nothing in the action pipeline calls this, measured across every package and
+ * app source tree: the three exports of this module occur 1, 2 and 1 times and every one is inside
+ * this file. Reading the API beside an action pipeline invites the conclusion that action
+ * arguments are encrypted for you — they are not, and that false belief is the reason this
+ * carries a deprecation where an unused CSS helper would not need one.
+ *
+ * Still the right tool when you encrypt an action payload EXPLICITLY, in your own code. It keeps
+ * working: no removal in 2.x, and removal only as a 3.0 change with this notice published ahead
+ * of it (`docs/adr/0015`, on `docs/adr/0007`'s terms).
  */
 export async function encryptActionArgs(key: CryptoKey, data: string): Promise<string> {
   const encoder = new TextEncoder()
@@ -68,6 +90,16 @@ export async function encryptActionArgs(key: CryptoKey, data: string): Promise<s
  *
  * @returns The original plaintext string.
  * @throws Error if decryption fails (wrong key, tampered data, etc.).
+ *
+ * @deprecated Nothing in the action pipeline calls this, measured across every package and
+ * app source tree: the three exports of this module occur 1, 2 and 1 times and every one is inside
+ * this file. Reading the API beside an action pipeline invites the conclusion that action
+ * arguments are encrypted for you — they are not, and that false belief is the reason this
+ * carries a deprecation where an unused CSS helper would not need one.
+ *
+ * Still the right tool when you encrypt an action payload EXPLICITLY, in your own code. It keeps
+ * working: no removal in 2.x, and removal only as a 3.0 change with this notice published ahead
+ * of it (`docs/adr/0015`, on `docs/adr/0007`'s terms).
  */
 export async function decryptActionArgs(key: CryptoKey, encrypted: string): Promise<string> {
   const combined = fromBase64Url(encrypted)

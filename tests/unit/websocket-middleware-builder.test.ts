@@ -39,7 +39,8 @@ describe('middleware() builder', () => {
     expect(built).toBe(legacy)
 
     const context: Record<string, unknown> = {}
-    expect(await built(new Request('http://x/some/path'), context)).toBeUndefined()
+    const unusedNext = (): Promise<Response | undefined> => Promise.resolve(undefined)
+    expect(await built(new Request('http://x/some/path'), context, unusedNext)).toBeUndefined()
     expect(context.path).toBe('/some/path')
   })
 

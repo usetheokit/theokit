@@ -732,11 +732,37 @@ async function runErrorHooks(
       response: errorResponse,
       error: err,
     }
-    for (const hook of onError) {
+    for (const [index, hook] of onError.entries()) {
       try {
         await hook(errorCtx)
-      } catch {
-        // EC-9: error in error handler — swallow to avoid recursion.
+      } catch (hookError) {
+        // EC-9 holds: NOT re-raised, because an error thrown while handling an error recurses.
+        //
+        // B-213. Swallowing is a separate act from not re-raising, and the recursion argument
+        // does not cover it. An `onError` hook is the plugin an operator installs to ship errors
+        // to a tracker; when it throws — bad DSN, transport down, a bug in the hook — every error
+        // in the process is lost and the dashboard shows zero incidents, which reads as a healthy
+        // service rather than as a broken reporting path. `rules/error-handling.md` § 5 names the
+        // bare catch as the anti-pattern and § 2 requires the failure be visible somewhere; the
+        // sibling runner two files over goes to considerable length for exactly this class of
+        // unreturnable failure (`http/web-middleware-runner.ts` reports a rejection it cannot
+        // return).
+        //
+        // The index and the name, because "a hook failed" does not tell an operator WHICH of
+        // theirs. Most are anonymous, so the index is the part that always identifies one.
+        try {
+          const reason =
+            hookError instanceof Error ? (hookError.stack ?? hookError.message) : String(hookError)
+          const named = hook.name === '' ? '' : ` (${hook.name})`
+          console.warn(
+            `[theokit] onError hook threw and was swallowed to avoid recursion: hook ` +
+              `${String(index)}${named} — the error it was given still produced a response, but ` +
+              `whatever this hook reports to is NOT receiving it: ${reason}`,
+          )
+        } catch {
+          // The one thing that must stay silent: a failure inside the report itself. Reporting a
+          // reporting failure is the recursion EC-9 refuses, one level out.
+        }
       }
     }
   }

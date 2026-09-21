@@ -47,6 +47,15 @@ export interface AdapterBuildContext {
      * `/api/agents/<name>` was a 404.
      */
     agents?: DeployedAgent[]
+    /**
+     * B-185 — the app's `server/context.ts`, project-relative, or `undefined` when it has none.
+     *
+     * A Worker has no filesystem on which to find it at request time, so a target that bakes its
+     * agents bakes this too (ADR 0014) and hands the factory to the subject resolver. Decided HERE,
+     * beside the agents, because this provider is the only place that holds `serverDir` — the same
+     * inversion argument the `agents` field above records for #367.
+     */
+    contextModule?: string
   }
 }
 

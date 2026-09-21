@@ -8,6 +8,162 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **A deployed target answers the HITL approvals listing instead of the run handler (B-185).**
+  `handleListApprovals` shipped in two emitted chunks, and a reachability walk over `dist/` found
+  four entries that reach them — `adapters/agent-mount.js`, which every deploy adapter calls, was
+  not one. So `GET /api/agents/<name>/approvals` fell through to the run handler on every deploy
+  target and answered `BAD_REQUEST` for want of a message. The generated fragment now asks the aux
+  dispatcher first and falls through to the run handler only on a miss; a declined request loads no
+  module, which is what makes asking first free.
+
+  **It reaches three of the six Web deploy targets.** `cloudflare`, `bun` and `deno-deploy` carry the
+  fragment; `vercel`, `netlify` and `aws-lambda` contain zero occurrences of it and still fall
+  through to the run handler. The defect was on all six and the fix is on three — said here because
+  the paragraph above, read alone, reads as all six, and nothing in the build warns the other three.
+
+- **A deployed target serves the A2A agent card (B-185).** `matchGetAuxRoute` has served
+  `GET /.well-known/<name>/agent-card.json` since M15, and the branch this change emits guarded on
+  `/api/agents/` alone — so five of the dispatcher's six route families became reachable on a deploy
+  target and the sixth stayed excluded by the guard rather than by a decision. The guard now admits
+  both shapes, and a `.well-known` url the dispatcher declines is refused before the run handler
+  derives a name by slicing a prefix it does not carry.
+
+- **A deployed agent's subject carries the decorations its plugins apply (B-185).** The generated
+  resolver was handed no plugin runner while both dev callers pass one at seven call sites, so a
+  plugin that decorates `ctx.subject` identified the caller locally and resolved anonymous on
+  deploy — and a policy judged against that subject refused a legitimate owner on the deployed
+  target only. The entry already built the runner once at module load for `executeRoute`; the
+  resolver now receives that same one, because a runner rebuilt per request re-runs every plugin's
+  `register`.
+
+- **An app that declares plugins gets a deploy entry that loads (B-185).** The binding above landed
+  inside a non-`async` factory, and `await` is a reserved word everywhere in an ES module — so the
+  emitted entry did not parse at all on cloudflare, bun and deno-deploy. `adapter-entry-parses.test.ts`
+  already guarded this and was red; the factory is now `async` and both call sites await it. Two
+  cross-product rows were added to that matrix: every row varied one feature, and this defect needed
+  a runtime-config module and a baked context module together. Two rows DID catch it — `bun (runtime
+  config)` and `deno-deploy (runtime config)` — and they are the two that were red at HEAD: the
+  matrix was not blind, it was unrun. The cloudflare combination was genuinely absent and is the row
+  that was added.
+
+- **The agent card reaches the agents branch instead of the asset handler (B-185).** Widening the
+  branch guard was not enough: every host decides between its API surface and static assets first,
+  so the `/.well-known/` arm was present in the source and unreachable in the emitted program. Each
+  host now consults `__theoIsAgentCardPath` — the exact shape `agent-card-handler.ts` matches, not a
+  prefix, so `/.well-known/security.txt` still reaches static assets.
+- **A deployed target resolves who is asking, so an owner is served rather than refused (B-185).**
+  `mountAgent` has accepted a subject resolver since the approvals scoping landed, and 0 of 23
+  adapter files passed one — so every deployed policy was judged against an anonymous caller and an
+  owner was refused exactly like a stranger. Identity now travels by the means each host allows:
+  Bun and Deno have a filesystem and locate their own `server/context.ts`, while a Worker has the
+  module baked as a static import the way its routes and agents already are. `docs/adr/0014` records
+  the decision, what it rejected, and what breaks — an app whose `createContext` reads Node-only
+  members of the request, on a target where that pair is synthesised over a Web `Request`. An app
+  with no `server/context.ts` resolves an anonymous caller, which is the honest answer rather than
+  an invented subject.
+
+- **A throwing `onError` hook is reported instead of vanishing (B-213).** The hook is the plugin an
+  operator installs to ship errors to a tracker. When it threw — bad DSN, transport down, a bug in
+  the hook — the failure was caught by a bare `catch` with a comment and nothing else, so every
+  error in the process was lost and the dashboard showed zero incidents, which reads as a healthy
+  service rather than a broken reporting path. Not re-raising is still correct and unchanged: an
+  error thrown while handling an error recurses. Swallowing WITHOUT a report was the separate act
+  that argument never covered. The runner now warns with the hook's index, its name when it has
+  one, and the reason. A failure inside the report itself stays silent, because reporting a
+  reporting failure is that same recursion one level out.
+
+- **A middleware that calls `next()` twice now says so, instead of running your route twice in
+  silence (B-212).** Each call really invokes the downstream again — `docs/adr/0006` refuses to
+  memoise it precisely so a careless double call stays visible — and only the last result is used.
+  The discarded one has already run: the route handler executes twice, concurrently, against the
+  same `context` object passed by reference, with no synchronisation, so a non-idempotent handler
+  performs its business effect twice and answers once. A discarded invocation that REJECTED was
+  reported; one that SUCCEEDED produced no diagnostic at all, and the counter the ADR named as the
+  reason for its own design existed only inside a test. The runner now warns with the count.
+  `WebDownstream` states the idempotence requirement where a consumer declares one.
+
+- **`@theokit/http/action-encryption` says, where a consumer reads it, that the action pipeline
+  does not use it (B-211, ADR 0015).** Its three exports occur 1, 2 and 1 times across every
+  package and app source tree, every one inside the file that defines them — the same property
+  ADR 0007 measured for the two subpaths it deprecated, and that ADR declined to absorb a third
+  nobody had argued about. The decision is the same as its siblings': deprecated, still working,
+  no removal in 2.x. The notice carries a sentence the other two did not need, because this one is
+  a cipher published beside an action pipeline that never calls it — an unused CSS helper promises
+  nothing, an unused cipher invites the belief that your action arguments are already encrypted.
+  Nothing breaks: `@deprecated` is an annotation and the algorithm, the subpath and the output
+  format are unchanged.
+
+- **A regression in the Cloudflare document-shell split can no longer reach production unseen
+  (B-202).** #343's symptom was a served document with no `<head>`. The test written for it drives
+  the generated worker against a real `Request` and asserts on the body — and it takes the shell as
+  an ARGUMENT, so it covers an entry FORWARDING a shell and not the adapter DERIVING one. Measured:
+  emptying the head half where it is derived left all five of its cases green, and so did swapping
+  the two halves. `readDocumentShell` now has six cases of its own, including the invariant that
+  makes the split safe wherever it lands — the two halves concatenate back to the template exactly,
+  so nothing is lost and nothing is duplicated. What was NOT the gap, and the item corrected itself
+  on this before anyone acted: the slice semantics were already guarded by `find-root-div.test.ts`'s
+  eight cases one layer down.
+
+- **`TrackAgentRunOptions.storage` stops pointing at configuration that does not exist (B-201).**
+  Its docstring read "Adapter resolved from the project config's `cost.storage`", and no `cost` key
+  has ever been in the schema — measured against a control of `observability`, which returns 3. A
+  consumer reading the published type in their editor was sent to write configuration there was
+  none to write. The route is the parameter, and that is a decision: `@theokit/agents/usage`'s
+  `UsageStorageAdapter` says "the framework owns the vocabulary; the app owns the storage", and the
+  price too, since `costUsd` arrives on the record rather than being computed from tokens. An app
+  imports `trackAgentRun` from the published `theokit/server/cost` subpath — it reaches the built
+  `.d.ts` through it — and passes its own adapter. A new test asserts that **every**
+  `theo.config.ts > key` citation across `packages/*/src` names a key the schema declares: 14
+  citations, 7 distinct keys, and this was the one that did not resolve.
+
+- **A middleware that awaits `next` in `server/middleware/*.ts` is refused by name instead of
+  continuing silently (B-196).** `next` was OPTIONAL, and the file-scan runner invoked the same type
+  with two arguments — so the compiler accepted the omission and an author following the type wrote
+  `next?.()`, which resolved to nothing. The code after it never ran and nothing said so.
+  `next` is now REQUIRED, which makes that omission a compile error: a function of two parameters
+  is still assignable to a type of three, so every middleware written against the two-parameter
+  shape keeps compiling unchanged — measured, not assumed. The file-scan path supplies a `next` that
+  throws `MiddlewareNextUnavailableError`, naming what to do instead; it runs BEFORE routing, so it
+  has no downstream to await. `packages/theo/README.md` now states which of the two paths supports
+  `next` and which refuses. **Breaking for a caller that invokes a `MiddlewareHandler` or a
+  `WebMiddleware` with two arguments** — inside this repository that was one runner line and one
+  test; `apps/` measured zero. Closing the gap itself means either folding the file-scan path or
+  retiring the contract, both large and both left open by `docs/adr/0003` § AMENDED 2026-09-21,
+  whose earlier ruling a PLAN panel refuted the same day.
+
+- **A deploy target honours the `serverDir` and `agentsDir` the project configured (#95).**
+  `serverDirLiteral` existed, `deploy-adapters-honour-server-dir.test.ts` proved the renderer
+  honours the option, and **no build ever passed one** — so both literals fell to their defaults on
+  every deploy target. Measured by executing `buildBun` against a config carrying `serverDir: core`
+  and `agentsDir: core/agents`: the emitted entry said `resolve(cwd, "server")` and
+  `scanAgents(cwd)`. A project that organises its code under a domain root — the arrangement
+  `config/schema.ts` documents with that exact example — therefore resolved a directory it does not
+  have: `scanServerRoutes` returned `[]` and the target served **no routes at all**, while every
+  agent answered 404. Both failures are silent, arrive only after deploy, and look like an app with
+  nothing in it. `buildBun` and the Deno build now pass both values; `deno-deploy` also stopped
+  hard-coding `cwd + '/server'`, which dropped the directory one level earlier than bun did. The
+  regression test drives `buildBun` rather than the renderer, because a test that supplies the
+  option itself is what let this survive.
+
+- **A `server/context.ts` that throws no longer takes the whole deploy target down (B-185).**
+  Baking that module (ADR 0014) made a Worker import it, which it never did before — so the
+  commonest shape a context file has, a required env var asserted at module scope, went from
+  costing nothing to failing the entry at LOAD time. Every route died, pages included, with the
+  app's own error text. `resolve-agent-subject.ts:69` promises the opposite: a throwing
+  `createContext` "reaches the branch's own error handler" as a 500 on the request that wanted an
+  identity. The import is now dynamic AND made inside the factory, so it evaluates when the thunk
+  runs — which `agent-access.ts:145` never does for an absent or `'public'` policy. An intermediate
+  version awaited it as an argument instead, which parses, defers the load past module scope, and
+  still killed every agent request; the difference is visible only by running one.
+
+- **A build that drops the approvals handler from the adapter's graph now fails instead of
+  shipping (B-185).** The endpoint's absence was a session's measurement, and chunk names are
+  content-hashed — a text search for "approvals" in the emitted adapter finds nothing whether or not
+  the code is reachable, so only a walk over the import graph decides it. That walk is now a test,
+  asserting one property with no definitional freedom: does the entry every deploy adapter calls
+  reach the handler at all. It carries its own control, because a walk that reached nothing would
+  report a false absence.
+
 - **A review finding that four test stubs had diverged is answered with a measurement, not a
   refactor (B-190).** `docs/adr/0013` records what was measured: the same symbol is an identity
   function in one stub and a delegating recorder in another, because one test must not have security
