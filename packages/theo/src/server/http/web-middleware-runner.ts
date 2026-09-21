@@ -43,7 +43,7 @@ export type WebNext = MiddlewareNext
 export type WebMiddleware = (
   request: Request,
   context: Record<string, unknown>,
-  next?: WebNext,
+  next: WebNext,
   // A middleware may mutate `context` and return nothing (void) OR return a
   // `Response`. `void` in this union is intentional — the runner only inspects
   // `instanceof Response`, so a void return means "continue".

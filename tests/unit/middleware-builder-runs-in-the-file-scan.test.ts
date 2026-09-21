@@ -132,6 +132,61 @@ describe('the builder from the README runs in server/middleware/', () => {
     expect((result.ctx as Record<string, unknown>).token).toBe('Bearer let-me-in')
   })
 
+  it('test_a_middleware_that_calls_next_on_the_node_path_fails_loudly', async () => {
+    // B-196. `web-middleware-runner.ts:124` supplies `next`; `middleware-runner.ts:84` invoked the
+    // same type with TWO arguments, so on the documented authoring surface — `server/middleware/`,
+    // which `README.md:39` names — `next` was `undefined` and a middleware that called it silently
+    // did nothing. `define-middleware.ts` recorded that in its own docblock and named this item.
+    //
+    // ADR 0003's ruling was amended the same day it was written, because a PLAN panel refuted the
+    // premise that the fold is cheap: the route in `execute.ts` is 194 inline statements capturing
+    // eight outer variables, the runner is two `if` branches rather than one list, and the context
+    // is assembled AFTER the chain. So this closes the item by its DoD's SECOND branch — the type
+    // makes the absence a compile-time error — and leaves the fold-versus-retirement decision
+    // exactly as open as the amendment left it.
+    writeMiddleware(
+      '01-around.ts',
+      `import { middleware } from '../../../../packages/theo/src/server/define/index.js'
+       export default middleware()
+         .handle(async (request, context, next) => {
+           context.before = true
+           await next()
+           context.after = true
+         })
+         .build()`,
+    )
+    const { req, res } = nodePair()
+
+    // Loud, and specific about what to do instead. A silent continue is the defect; a generic
+    // throw would replace it with a mystery.
+    await expect(runMiddlewareAndContext(req, res, loadModule, serverDir)).rejects.toThrow(
+      /next.*not available.*server\/middleware/is,
+    )
+  })
+
+  it('test_the_optional_call_shape_also_fails_loudly_rather_than_continuing', async () => {
+    // The shape the OPTIONAL type taught authors to write. `next?.()` with nothing supplied is a
+    // silent continue — the code after it never runs and nothing says so — and it is the half of
+    // B-196 that `define-middleware.ts` called "silently does nothing". A middleware already
+    // written this way now meets the same refusal as `next()`.
+    writeMiddleware(
+      '01-optional-around.ts',
+      `import { middleware } from '../../../../packages/theo/src/server/define/index.js'
+       export default middleware()
+         .handle(async (request, context, next) => {
+           context.before = true
+           await next?.()
+           context.after = true
+         })
+         .build()`,
+    )
+    const { req, res } = nodePair()
+
+    await expect(runMiddlewareAndContext(req, res, loadModule, serverDir)).rejects.toThrow(
+      /next.*not available.*server\/middleware/is,
+    )
+  })
+
   it('test_returning_a_Response_short_circuits_and_is_written_to_the_client', async () => {
     writeMiddleware(
       '01-gate.ts',

@@ -62,6 +62,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   with no `server/context.ts` resolves an anonymous caller, which is the honest answer rather than
   an invented subject.
 
+- **A middleware that awaits `next` in `server/middleware/*.ts` is refused by name instead of
+  continuing silently (B-196).** `next` was OPTIONAL, and the file-scan runner invoked the same type
+  with two arguments — so the compiler accepted the omission and an author following the type wrote
+  `next?.()`, which resolved to nothing. The code after it never ran and nothing said so.
+  `next` is now REQUIRED, which makes that omission a compile error: a function of two parameters
+  is still assignable to a type of three, so every middleware written against the two-parameter
+  shape keeps compiling unchanged — measured, not assumed. The file-scan path supplies a `next` that
+  throws `MiddlewareNextUnavailableError`, naming what to do instead; it runs BEFORE routing, so it
+  has no downstream to await. `packages/theo/README.md` now states which of the two paths supports
+  `next` and which refuses. **Breaking for a caller that invokes a `MiddlewareHandler` or a
+  `WebMiddleware` with two arguments** — inside this repository that was one runner line and one
+  test; `apps/` measured zero. Closing the gap itself means either folding the file-scan path or
+  retiring the contract, both large and both left open by `docs/adr/0003` § AMENDED 2026-09-21,
+  whose earlier ruling a PLAN panel refuted the same day.
+
 - **A deploy target honours the `serverDir` and `agentsDir` the project configured (#95).**
   `serverDirLiteral` existed, `deploy-adapters-honour-server-dir.test.ts` proved the renderer
   honours the option, and **no build ever passed one** — so both literals fell to their defaults on
