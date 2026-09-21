@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **A deployed target answers the HITL approvals listing instead of the run handler (B-185).**
+  `handleListApprovals` shipped in two emitted chunks, and a reachability walk over `dist/` found
+  four entries that reach them — `adapters/agent-mount.js`, which every deploy adapter calls, was
+  not one. So `GET /api/agents/<name>/approvals` fell through to the run handler on every deploy
+  target and answered `BAD_REQUEST` for want of a message. The generated fragment now asks the aux
+  dispatcher first and falls through to the run handler only on a miss; a declined request loads no
+  module, which is what makes asking first free.
+
 - **A review finding that four test stubs had diverged is answered with a measurement, not a
   refactor (B-190).** `docs/adr/0013` records what was measured: the same symbol is an identity
   function in one stub and a delegating recorder in another, because one test must not have security

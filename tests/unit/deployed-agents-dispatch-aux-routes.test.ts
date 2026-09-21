@@ -26,6 +26,10 @@ import { pathToFileURL } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { renderCloudflareWorkerEntry } from '../../packages/theo/src/adapters/cloudflare.js'
+import {
+  matchAgentAuxRoute,
+  serveMatchedAuxRoute,
+} from '../../packages/theo/src/server/agent/serve-aux-routes.js'
 
 const AGENTS = [{ filePath: 'agents/chat.js', agentPath: '/api/agents/chat', name: 'chat' }]
 
@@ -54,6 +58,12 @@ export const resolveTransformer = (s) => ({ name: s })
 export const resolveProvider = (...a) => ({ apiKey: 'sk-test' })
 export const mountAgent = (...a) => { b().mounted.push(a); return new Response('agent ran') }
 export const scanAgents = () => []
+// NOT stubbed behaviourally — these delegate to the REAL functions, which the harness holds.
+// The stub is a plain .mjs that Node imports directly and cannot read the TypeScript source; the
+// vitest context can, so the real dispatch travels through the harness the same way the test's
+// own assertions about \`mountAgent\` do. Stubbing the dispatch would make this a test of the stub.
+export const matchAgentAuxRoute = (...a) => b().matchAgentAuxRoute(...a)
+export const serveMatchedAuxRoute = (...a) => b().serveMatchedAuxRoute(...a)
 `
 
 let root: string
@@ -68,7 +78,12 @@ beforeAll(() => {
 
   mkdirSync(join(root, 'agents'), { recursive: true })
   writeFileSync(join(root, 'agents', 'chat.js'), `export const marker = 'chat-module'\n`)
-  ;(globalThis as Record<string, unknown>).__THEO_AUX_HARNESS__ = { mounted, shims }
+  ;(globalThis as Record<string, unknown>).__THEO_AUX_HARNESS__ = {
+    mounted,
+    shims,
+    matchAgentAuxRoute,
+    serveMatchedAuxRoute,
+  }
 })
 
 afterAll(() => {

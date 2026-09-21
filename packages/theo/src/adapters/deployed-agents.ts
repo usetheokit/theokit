@@ -135,7 +135,7 @@ export function deployedAgentsFragment(
     imports: [
       // `theokit/adapters/agent-mount`, not `theokit/server`: `mount-agent` is deliberately not on
       // the app-facing surface (ADR 0041), and a generated entry is not an app. See that module.
-      `import { mountAgent, resolveProvider${source.kind === 'scan' ? ', scanAgents' : ''} } from '${prefix}theokit/adapters/agent-mount'`,
+      `import { mountAgent, resolveProvider, matchAgentAuxRoute, serveMatchedAuxRoute${source.kind === 'scan' ? ', scanAgents' : ''} } from '${prefix}theokit/adapters/agent-mount'`,
       ...resolution.imports,
     ],
     declarations: resolution.declarations,
@@ -145,6 +145,17 @@ export function deployedAgentsFragment(
       `    // \`/api/agents/<name>\` used to 404 on every target.`,
       `    if (${pathname}.startsWith(${JSON.stringify(AGENT_PREFIX)})) {`,
       `      const agentName = ${pathname}.slice(${String(AGENT_PREFIX.length)}).split('/')[0]`,
+      ...resolution.auxPrelude,
+      `      // B-185 — the aux dispatcher is asked FIRST, and declining costs nothing: the matcher`,
+      `      // reads the url and the scanned nodes, never a module (ADR-1). A miss falls through to`,
+      `      // the run handler exactly as before, so this branch owns the sub-paths and nothing more.`,
+      `      const auxRoute = await matchAgentAuxRoute(request.method, ${pathname}, auxDeps)`,
+      `      if (auxRoute !== null) {`,
+      `        const auxResponse = await serveMatchedAuxRoute(auxRoute, request, auxDeps)`,
+      host.wrapSecurityHeaders === true
+        ? `        return withSecurityHeaders(auxResponse, SECURITY_HEADERS)`
+        : `        return auxResponse`,
+      `      }`,
       ...resolution.lookup,
       `      // A name nobody scanned is a 404, exactly like any other unknown path. Handing`,
       `      // \`undefined\` to mountAgent would surface as a 500 for what is a routing miss.`,
@@ -166,6 +177,12 @@ interface AgentResolution {
   declarations: string[]
   /** Lines that must leave `mod` bound to the agent's module, or `undefined`. */
   lookup: string[]
+  /**
+   * B-185 — lines that must leave `auxDeps` bound to an `AuxRouteDeps`, plus the expression for
+   * its `agents`. They run BEFORE {@link AgentResolution.lookup} so a declined aux route performs
+   * no module load, which is what ADR-1 buys and what a later ordering would spend.
+   */
+  auxPrelude: string[]
 }
 
 /** No filesystem: every agent module is a static import decided on the build machine. */
@@ -181,11 +198,38 @@ function bakedResolution(agents: readonly DeployedAgent[]): AgentResolution {
       `const agents = {`,
       ...agents.map((agent, index) => `  ${JSON.stringify(agent.name)}: ${varOf(index)},`),
       `}`,
+      `// B-185 — the node list the aux dispatcher matches a url against. There is deliberately NO`,
+      `// second table keyed by file path: \`test_the_table_is_keyed_by_agent_name_not_by_file_path\``,
+      `// forbids one, and the reason it gives is the right one — a path key makes a lookup depend on`,
+      `// the server's directory layout. The loader below reaches the module THROUGH this list, so the`,
+      `// layout appears once, here, and the module table above stays keyed by the name the URL, the`,
+      `// access policy and the run's spans all carry (#406).`,
+      `const agentNodes = [`,
+      ...agents.map(
+        (agent) =>
+          `  { filePath: ${JSON.stringify(agent.filePath)}, agentPath: ${JSON.stringify(agent.agentPath)}, name: ${JSON.stringify(agent.name)} },`,
+      ),
+      `]`,
     ],
     lookup: [
       `      const mod = Object.prototype.hasOwnProperty.call(agents, agentName)`,
       `        ? agents[agentName]`,
       `        : undefined`,
+    ],
+    auxPrelude: [
+      `      // B-185 — the aux dispatcher needs nodes carrying \`filePath\` and a loader keyed by it.`,
+      `      // The loader resolves the path to a NAME through the node list, then reads the same`,
+      `      // name-keyed table the url lookup uses: one map, one layout mention, no filesystem`,
+      `      // (ADR-2). A linear find over a handful of agents is not worth a second table that`,
+      `      // \`test_the_table_is_keyed_by_agent_name_not_by_file_path\` exists to forbid.`,
+      `      const auxDeps = {`,
+      `        agents: agentNodes,`,
+      `        loadModule: async (filePath) => {`,
+      `          const node = agentNodes.find((a) => a.filePath === filePath)`,
+      `          return node === undefined ? undefined : agents[node.name]`,
+      `        },`,
+      `        baseUrl: url.origin,`,
+      `      }`,
     ],
   }
 }
@@ -204,10 +248,20 @@ function scannedResolution(source: {
       `let agentsCache = null`,
     ],
     lookup: [
-      ...(source.ensureLoader === undefined ? [] : [`      ${source.ensureLoader}`]),
-      `      if (!agentsCache) agentsCache = scanAgents(${source.projectRoot})`,
       `      const agentNode = agentsCache.find((a) => a.name === agentName)`,
       `      const mod = agentNode === undefined ? undefined : await ${source.loadModule}(agentNode.filePath)`,
+    ],
+    auxPrelude: [
+      ...(source.ensureLoader === undefined ? [] : [`      ${source.ensureLoader}`]),
+      `      // B-185 — hoisted above the lookup so a declined aux route loads no module. The scan`,
+      `      // LISTS agent files; it imports none, so moving it here costs a declined request`,
+      `      // nothing it was not already paying.`,
+      `      if (!agentsCache) agentsCache = scanAgents(${source.projectRoot})`,
+      `      const auxDeps = {`,
+      `        agents: agentsCache,`,
+      `        loadModule: ${source.loadModule},`,
+      `        baseUrl: url.origin,`,
+      `      }`,
     ],
   }
 }

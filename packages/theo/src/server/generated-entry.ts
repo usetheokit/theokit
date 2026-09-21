@@ -39,3 +39,10 @@ export { resolveProvider } from './agent/provider-resolver.js'
 // same way they already scan their routes. A Worker has neither the filesystem nor the need — its
 // agents are static imports decided on the build machine.
 export { scanAgents } from './scan/agent-scan.js'
+// B-185 — the aux dispatcher, in BOTH halves. `matchAgentAuxRoute` decides and
+// `serveMatchedAuxRoute` answers (`agent/serve-aux-routes.ts:29`), and a generated fragment that
+// imported only the first would answer nothing. They live here rather than being reachable through
+// `mountAgent` because this barrel is the whole surface a deploy fragment can see: it is built as
+// `dist/adapters/agent-mount.js` (`tsup.config.ts:46`), and a reachability walk over that entry's
+// import graph does not reach `handleListApprovals` today — which is the defect B-185 measured.
+export { matchAgentAuxRoute, serveMatchedAuxRoute } from './agent/serve-aux-routes.js'
