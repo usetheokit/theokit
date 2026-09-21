@@ -208,6 +208,113 @@ describe('the public builder runs in the Web runner (B-003)', () => {
     ).toMatch(/next\(\) 2 times/)
   })
 
+  // B-219. Every other call in this file passes a single-element `[handler]`, so the four mutable
+  // per-frame variables inside `runFrom` — `invocations`, `rejections`, `frameSettled`,
+  // `yieldedInvocation` — were only ever observed with ONE frame alive. A repo-wide sweep found no
+  // test anywhere combining a 2+ chain with `next`. The suite was green, and a green suite reports
+  // "covered" and "never exercised" identically.
+  it('test_an_outer_frame_receives_what_the_inner_frame_yielded', async () => {
+    const trace: string[] = []
+    const downstream = countingDownstream(trace)
+
+    // Inner awaits the downstream and answers with its OWN Response. Clause 6's precedence: the
+    // middleware's own return wins over what the invocation produced.
+    const inner = middleware()
+      .handle(async (_request, _context, next) => {
+        trace.push('inner:before')
+        await callable(next)()
+        trace.push('inner:after')
+        return new Response('from the inner frame')
+      })
+      .build()
+
+    // Outer awaits and wraps. What it must see is the INNER's Response, not the downstream's —
+    // the distinction a one-frame chain cannot make, because there the two are the same object.
+    let seenByOuter: Response | undefined
+    const outer = middleware()
+      .handle(async (_request, _context, next) => {
+        trace.push('outer:before')
+        seenByOuter = await callable(next)()
+        trace.push('outer:after')
+        return new Response(`outer saw: ${await seenByOuter!.clone().text()}`)
+      })
+      .build()
+
+    const result = await runWebMiddleware(
+      new Request('http://x/'),
+      [outer, inner],
+      {},
+      downstream.run,
+    )
+
+    expect(
+      await seenByOuter?.text(),
+      "the outer frame did not receive the inner frame's Response",
+    ).toBe('from the inner frame')
+    expect(await result?.text()).toBe('outer saw: from the inner frame')
+    expect(downstream.calls(), 'the downstream ran more than once for one request').toBe(1)
+    expect(trace).toEqual(['outer:before', 'inner:before', 'route', 'inner:after', 'outer:after'])
+  })
+
+  it('test_an_inner_frames_discarded_rejection_does_not_touch_the_outer_frames_bookkeeping', async () => {
+    // The second half of B-219: `reportOne`'s `invocation === yieldedInvocation` skip is per-frame,
+    // and with one frame alive there is only one `yieldedInvocation` to compare against. Here two
+    // frames each hold a different one.
+    const warned: string[] = []
+    const realWarn = console.warn
+    console.warn = (...args: unknown[]) => {
+      warned.push(args.join(' '))
+    }
+
+    try {
+      let failRoute!: (reason: unknown) => void
+      const pending = new Promise<Response | undefined>((_resolve, reject) => {
+        failRoute = reject
+      })
+      let downstreamCalls = 0
+
+      // Inner fires next() WITHOUT awaiting, then answers itself. The invocation it started is
+      // discarded by its own frame, and then rejects.
+      const inner = middleware()
+        .handle((_request, _context, next) => {
+          void callable(next)()
+          return new Response('inner answered without waiting')
+        })
+        .build()
+
+      const outer = middleware()
+        .handle(async (_request, _context, next) => await callable(next)())
+        .build()
+
+      const result = await runWebMiddleware(
+        new Request('http://x/'),
+        [outer, inner],
+        {},
+        async () => {
+          downstreamCalls += 1
+          return await pending
+        },
+      )
+
+      expect(await result?.text(), 'the outer frame did not yield what the inner produced').toBe(
+        'inner answered without waiting',
+      )
+
+      failRoute(new Error('the route failed after the inner frame had answered'))
+      await new Promise((resolve) => setTimeout(resolve, 20))
+
+      expect(downstreamCalls, 'the downstream ran more than once').toBe(1)
+      // Exactly one: the inner frame owns the discarded invocation and reports it. The outer frame
+      // must not report the same failure a second time — its own yielded invocation is a different
+      // object, and a skip that compared against the wrong frame's would either double-report or
+      // stay silent.
+      const reports = warned.filter((w) => w.includes('the frame did not yield that result'))
+      expect(reports.length, `expected exactly one report, got ${String(reports.length)}`).toBe(1)
+    } finally {
+      console.warn = realWarn
+    }
+  })
+
   it('test_calling_next_twice_really_invokes_the_downstream_twice', async () => {
     const downstream = countingDownstream()
 
