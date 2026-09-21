@@ -62,6 +62,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   with no `server/context.ts` resolves an anonymous caller, which is the honest answer rather than
   an invented subject.
 
+- **A Suspense failure after the shell degrades to the client's error boundary instead of ending
+  the process (B-216).** React's `allReady` rejects when rendering fails outside the shell, and
+  this module handed it to the caller with no handler attached on the default path — while
+  `streamToResponse`, the usage its own example documents, reads `stream` and never touches
+  `allReady`. Node has ended the process on unhandled rejections by default since v15, so the
+  documented happy path took the server down on exactly the failure EC-7 says should degrade to a
+  client-side error boundary. The promise is now owned at creation and the failure is reported;
+  `allReady` never rejects, which is stated on the type and matches the string strategy, whose
+  already-resolved promise never could. **`waitForAll: true` still raises** — nothing has been
+  emitted there, so a failure can still become a full 500, and a fix that silenced it would have
+  thrown that away.
+
 - **`deriveActionKey` accepts a salt that is independent of the secret (B-215).** The salt was
   `theo-action-salt:${secret.slice(0, 8)}` — a pure function of the secret it exists to protect. A
   salt is there so key derivation is unique per DEPLOYMENT and precomputation cannot be amortised
