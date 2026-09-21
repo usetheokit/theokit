@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- **A review finding that four test stubs had diverged is answered with a measurement, not a
+  refactor (B-190).** `docs/adr/0013` records what was measured: the same symbol is an identity
+  function in one stub and a delegating recorder in another, because one test must not have security
+  headers interfere and the other's entire subject is those headers. A shared helper would need a
+  flag per symbol per test. What WAS duplicated — the list of symbols each stub must export — is now
+  derived from the generator over both streaming shapes, and that derivation found a real gap on its
+  first run.
+- **A permanent quality cap no longer holds every plan at 70 (B-189).** `/code-quality` reported
+  `soft_cap_mutation_unconfigured_typescript` on every run, and `cycle-plan` needs a verdict above
+  that cap to start implementing — so the chain was capped by a measurement nobody had performed.
+  `docs/adr/0012` records the decision and what it refuses: configuring the runner inside the gate
+  was measured at 1347s on a smaller codebase, and `/plan-confidence` invokes `/code-quality` per
+  plan. The cap is declared unmeasured instead, once, with a 2026-12-20 sunset. It does not claim
+  the tests are strong — the finding is still reported, one severity lower, saying the question was
+  not asked.
+
+## [create-theokit 3.0.1, @theokit/http 2.2.0, theokit 0.68.0] - 2026-09-21
+
 ### Added
 
 - **The Cloudflare worker preloads a route's chunks without a filesystem (B-035).**
