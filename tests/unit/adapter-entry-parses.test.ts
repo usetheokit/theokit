@@ -80,6 +80,11 @@ const ENTRIES: Record<string, () => string> = {
       contextModule: 'server/context.ts',
       runtimeConfigModule: RUNTIME_CONFIG,
     }),
+  // Kept although it does NOT catch the defect the row above does: with `contextModule` undefined
+  // the emission takes the `const resolveSubject = undefined` branch and emits no `await` at all,
+  // so it stays green under that mutation. Verified by the inventory judge, which is the reason
+  // this comment exists rather than the row silently reading as a second guard. What it does cover
+  // is the runtime-config import landing in an entry whose identity branch is the empty one.
   'cloudflare (agents + runtime config, no context module)': () =>
     renderCloudflareWorkerEntry({
       ssrStreaming: false,

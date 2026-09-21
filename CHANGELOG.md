@@ -41,7 +41,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   emitted entry did not parse at all on cloudflare, bun and deno-deploy. `adapter-entry-parses.test.ts`
   already guarded this and was red; the factory is now `async` and both call sites await it. Two
   cross-product rows were added to that matrix: every row varied one feature, and this defect needed
-  a runtime-config module and a baked context module together, so fifteen green rows saw nothing.
+  a runtime-config module and a baked context module together. Two rows DID catch it — `bun (runtime
+  config)` and `deno-deploy (runtime config)` — and they are the two that were red at HEAD: the
+  matrix was not blind, it was unrun. The cloudflare combination was genuinely absent and is the row
+  that was added.
 
 - **The agent card reaches the agents branch instead of the asset handler (B-185).** Widening the
   branch guard was not enough: every host decides between its API surface and static assets first,

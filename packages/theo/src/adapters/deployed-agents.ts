@@ -222,8 +222,13 @@ export function deployedAgentsFragment(
       // under `/.well-known/` does — a blanket prefix bypass would route `/.well-known/security.txt`
       // away from assets, trading an unreachable card for a broken namespace.
       //
-      // Same shape as `agent-card-handler.ts`'s own WELL_KNOWN, so there is one definition of what
-      // an agent card path is rather than two that drift.
+      // Same shape as `agent-card-handler.ts`'s own WELL_KNOWN. That is a COPY, not a shared
+      // definition, and saying otherwise was the claim an inventory judge falsified: changing the
+      // handler to serve `/agent.json` left every card test green, because this guard and that
+      // matcher are checked separately and never against each other. The drift that matters here —
+      // this guard narrowing while the matcher still serves the path — is caught by
+      // `a-deployed-worker-reaches-the-agent-card.test.ts`, which drives a real request. The other
+      // direction is not, and is the honest limit of this line.
       String.raw`const __theoIsAgentCardPath = (p) => /^\/\.well-known\/[^/]+\/agent-card\.json$/.test(p)`,
       // B-185 — one factory, two call sites: the aux branch on a hit, and the run handler below.
       // Declared rather than inlined twice so the mechanism ADR 0014 decides has a single home.
