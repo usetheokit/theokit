@@ -62,6 +62,7 @@ export const scanAgents = () => []
 // The stub is a plain .mjs that Node imports directly and cannot read the TypeScript source; the
 // vitest context can, so the real dispatch travels through the harness the same way the test's
 // own assertions about \`mountAgent\` do. Stubbing the dispatch would make this a test of the stub.
+export const createSubjectResolverFromFactory = () => async () => null
 export const matchAgentAuxRoute = (...a) => b().matchAgentAuxRoute(...a)
 export const serveMatchedAuxRoute = (...a) => b().serveMatchedAuxRoute(...a)
 `
@@ -78,6 +79,16 @@ beforeAll(() => {
 
   mkdirSync(join(root, 'agents'), { recursive: true })
   writeFileSync(join(root, 'agents', 'chat.js'), `export const marker = 'chat-module'\n`)
+
+  // The baked identity module the entry imports. It resolves nobody here — this file's subject is
+  // DISPATCH, and identity is proved behaviourally in
+  // `tests/integration/a-deploy-target-scopes-the-approvals-listing.test.ts`. What it must do is
+  // exist, so the emitted import resolves and a `createWebShim` call is present to count.
+  mkdirSync(join(root, 'server'), { recursive: true })
+  writeFileSync(
+    join(root, 'server', 'context.js'),
+    `export function createContext() { return {} }\n`,
+  )
   ;(globalThis as Record<string, unknown>).__THEO_AUX_HARNESS__ = {
     mounted,
     shims,
@@ -98,10 +109,16 @@ async function loadWorker(): Promise<{
   const file = join(dir, `worker-${String(mounted.length)}-${String(shims.length)}.mjs`)
   writeFileSync(
     file,
-    renderCloudflareWorkerEntry({ ssrStreaming: false, agents: AGENTS }).replace(
-      /^(\s*import[^\n]*?from\s+)'(?!node:|\.)[^']*'/gm,
-      `$1'${stubUrl}'`,
-    ),
+    renderCloudflareWorkerEntry({
+      ssrStreaming: false,
+      agents: AGENTS,
+      // Without this the identity branch emits `const resolveSubject = undefined` and no
+      // `createWebShim` call exists in the entry at all — so the shim count below would be
+      // trivially zero before and after any fix, which is the non-discriminating criterion this
+      // plan spent two panel rounds removing from T1.4. A review found it reappearing here as
+      // scaffolding that looked like a check.
+      contextModule: 'server/context.js',
+    }).replace(/^(\s*import[^\n]*?from\s+)'(?!node:|\.)[^']*'/gm, `$1'${stubUrl}'`),
   )
   const mod = (await import(/* @vite-ignore */ pathToFileURL(file).href)) as Record<string, unknown>
   return mod.default as { fetch: (r: Request, e: unknown, c: unknown) => Promise<Response> }
@@ -131,6 +148,41 @@ describe('a deployed worker serves the approvals listing (B-185)', () => {
 
     // The defect stated directly: the aux path must not reach the run handler at all.
     expect(mounted).toHaveLength(before)
+  })
+
+  it('test_a_declined_url_builds_no_web_shim', async () => {
+    const worker = await loadWorker()
+    const before = shims.length
+
+    // An agent nobody scanned: the matcher declines and the lookup 404s, so nothing downstream
+    // runs. THIS is what ADR-1 buys — asking the dispatcher first costs a declined request nothing.
+    const response = await worker.fetch(
+      new Request('https://app.test/api/agents/does-not-exist/approvals'),
+      {},
+      {},
+    )
+
+    expect(response.status).toBe(404)
+    expect(
+      shims.length - before,
+      'a url this dispatcher declines built a web shim, so asking the matcher first is no longer ' +
+        'free — which is the whole property ADR-1 trades the ordering for',
+    ).toBe(0)
+  })
+
+  it('test_a_served_aux_route_does_build_one', async () => {
+    const worker = await loadWorker()
+    const before = shims.length
+
+    await worker.fetch(new Request('https://app.test/api/agents/chat/approvals'), {}, {})
+
+    // The control. Without it the assertion above passes on an entry that can never build a shim,
+    // which is exactly how the first version of this count was written and why it proved nothing.
+    expect(
+      shims.length - before,
+      'the served path built no shim either, so the count above is measuring an entry with no ' +
+        'shim call in it rather than a decline',
+    ).toBeGreaterThan(0)
   })
 
   it('test_a_run_request_still_reaches_the_run_handler', async () => {

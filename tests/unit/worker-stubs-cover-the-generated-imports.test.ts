@@ -54,6 +54,10 @@ function stubExports(file: string): Set<string> {
 }
 
 const STUB_FILES = [
+  // B-185 — added after this very file's stub broke on the identity import while the guard
+  // reported green, because the guard did not know the file existed. A stub outside this list is
+  // a stub nothing derives, which is the same silence the three blind axes above produced.
+  'deployed-agents-dispatch-aux-routes.test.ts',
   'cloudflare-serves-the-document.test.ts',
   'deployed-agent-is-served.test.ts',
   'deployed-plugins-reach-the-entry.test.ts',
@@ -68,11 +72,19 @@ const STUB_FILES = [
  * mode B-190 built this guard to prevent, arriving through the axis the guard did not turn.
  */
 const AGENTS = [{ filePath: 'agents/chat.js', agentPath: '/api/agents/chat', name: 'chat' }]
+const CONTEXT = 'server/context.js'
 const SHAPES = [
   { ssrStreaming: false },
   { ssrStreaming: true },
   { ssrStreaming: false, agents: AGENTS },
   { ssrStreaming: true, agents: AGENTS },
+  // B-185 — the THIRD conditional axis, and the third time this guard was blind to one. The
+  // identity entry is imported only where identity is resolved, so a shape with agents and no
+  // context module never carries `createSubjectResolverFromFactory`: measured at 16 required
+  // symbols with that name absent, which means deleting it from any stub kept this green. The two
+  // paragraphs above record the same discovery for `ssrStreaming` and for the scan variant — this
+  // one was introduced by the slice that wrote the second of them.
+  { ssrStreaming: false, agents: AGENTS, contextModule: CONTEXT },
 ] as const
 
 function requiredSymbols(): Set<string> {
@@ -118,6 +130,14 @@ describe('the worker stubs cover what the generator imports (B-190)', () => {
       [...withAgents].some((s) => !off.has(s)),
       'an entry WITH agents imported nothing extra, so this test is not covering the agents arm — ' +
         'which is the arm that was missing when a symbol added to it broke 22 tests',
+    ).toBe(true)
+    const withContext = importedSymbols(
+      renderCloudflareWorkerEntry({ ssrStreaming: false, agents: AGENTS, contextModule: CONTEXT }),
+    )
+    expect(
+      [...withContext].some((s) => !withAgents.has(s)),
+      'an entry with a baked context module imported nothing beyond the agents arm, so this test ' +
+        'is not covering the identity axis — the third axis this guard was blind to',
     ).toBe(true)
   })
 
