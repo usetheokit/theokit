@@ -22,7 +22,9 @@ import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
+import { renderBunEntry } from '../../packages/theo/src/adapters/bun.js'
 import { renderCloudflareWorkerEntry } from '../../packages/theo/src/adapters/cloudflare.js'
+import { renderDenoEntry } from '../../packages/theo/src/adapters/deno-deploy.js'
 
 /** Every named symbol the entry imports from a non-relative module — the set a stub must cover. */
 function importedSymbols(entry: string): Set<string> {
@@ -80,6 +82,20 @@ function requiredSymbols(): Set<string> {
   return names
 }
 
+/**
+ * The files above stub a CLOUDFLARE entry, and asking them for bun's symbols would demand coverage
+ * of an entry they never render. The multi-target stub is a different case: it drives all three,
+ * so it owes all three.
+ *
+ * B-185 measured why this needs its own check. The `scan` variant emits a DIFFERENT identity import
+ * from the `baked` one, so a symbol added to it was invisible to a guard that rendered only
+ * Cloudflare — 21 failing tests in one run, the same blindness as the agents axis, one variant over.
+ */
+const MULTI_TARGET_STUBS = [
+  'adapter-security-headers.test.ts',
+  'deployed-plugins-reach-the-entry.test.ts',
+] as const
+
 describe('the worker stubs cover what the generator imports (B-190)', () => {
   it('test_the_symbol_list_is_derivable_from_the_generator', () => {
     // The list is CONDITIONAL — both `ssrStreaming` and `agents` change which modules are
@@ -103,6 +119,21 @@ describe('the worker stubs cover what the generator imports (B-190)', () => {
       'an entry WITH agents imported nothing extra, so this test is not covering the agents arm — ' +
         'which is the arm that was missing when a symbol added to it broke 22 tests',
     ).toBe(true)
+  })
+
+  it.each(MULTI_TARGET_STUBS)('test_%s_covers_bun_and_deno_too', (file) => {
+    const required = new Set([
+      ...importedSymbols(renderBunEntry(3000, {})),
+      ...importedSymbols(renderDenoEntry(3000, {})),
+    ])
+    const exported = stubExports(file)
+
+    const missing = [...required].filter((s) => !exported.has(s))
+    expect(
+      missing,
+      `${file} drives bun and deno as well as the Worker, so it owes every symbol those two ` +
+        `entries import — a scan-variant symbol missing here is 21 failing tests, measured`,
+    ).toEqual([])
   })
 
   it.each(STUB_FILES)('test_%s_exports_every_symbol_the_entry_imports', (file) => {

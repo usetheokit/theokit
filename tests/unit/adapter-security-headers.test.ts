@@ -131,6 +131,11 @@ export const scanAgents = () => []
 // These four stubs stay four because their bodies are opposites (ADR 0013), and the opposite here
 // is behavioural: a test about the document, the run path, plugins or security headers must see
 // the aux matcher decline exactly as it would for a url that is not an aux route.
+// B-185 — inert: the matcher below declines, so no resolver is ever invoked here.
+export const createSubjectResolverFromFactory = () => async () => null
+// B-185 — the scan variant of the fragment imports this one instead; this file drives bun
+// and deno as well as the Worker, so it owes both entries' symbols.
+export const createAgentSubjectResolver = () => async () => null
 export const matchAgentAuxRoute = async () => null
 export const serveMatchedAuxRoute = () => new Response('aux')
 `

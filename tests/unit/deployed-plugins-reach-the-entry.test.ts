@@ -120,6 +120,12 @@ export const createPluginRunnerFromConfig = async (plugins) => {
 // property ADR 0013 derives the list for. Inert here: this file's subject is plugins.
 export const mountAgent = () => new Response('agent')
 export const resolveProvider = () => ({ apiKey: 'sk-test' })
+// B-185 — inert: the matcher below declines, so no resolver is ever invoked here.
+export const createSubjectResolverFromFactory = () => async () => null
+// B-185 — the scan variant of the fragment imports this one instead; this file drives bun
+// and deno as well as the Worker, so it owes both entries' symbols.
+export const createAgentSubjectResolver = () => async () => null
+export const scanAgents = () => []
 export const matchAgentAuxRoute = async () => null
 export const serveMatchedAuxRoute = () => new Response('aux')
 `
