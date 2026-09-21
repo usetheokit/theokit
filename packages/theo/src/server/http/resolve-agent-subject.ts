@@ -88,6 +88,18 @@ async function resolve(sources: AgentSubjectSources): Promise<RouteSubject | nul
 }
 
 /**
+ * The app's `createContext`, as a host that is not Node sees it.
+ *
+ * Deliberately NOT `middleware-runner`'s `ContextFactory`, which types its argument as
+ * `IncomingMessage`/`ServerResponse`. Those are exactly right for the dev path and wrong here: on
+ * every deploy target the pair is what `createWebShim` synthesises over a Web `Request`. Widening
+ * to `unknown` says what is actually true at this boundary rather than casting a lie past the
+ * type system — the app's own `createContext` is typed by the app, and a generated fragment is the
+ * one caller that cannot promise it Node objects.
+ */
+export type HostContextFactory = (args: { request: unknown; response: unknown }) => unknown
+
+/**
  * The half that CALLS an already-resolved context factory (B-185, ADR 0014).
  *
  * {@link createAgentSubjectResolver} does two things: it LOCATES `context.ts` on a filesystem —
@@ -105,18 +117,6 @@ async function resolve(sources: AgentSubjectSources): Promise<RouteSubject | nul
  * `ShimRequest`/`ShimResponse` pair `createWebShim` synthesises over a Web `Request`, which is the
  * same contract routes on those targets have crossed since they were baked.
  */
-/**
- * The app's `createContext`, as a host that is not Node sees it.
- *
- * Deliberately NOT `middleware-runner`'s `ContextFactory`, which types its argument as
- * `IncomingMessage`/`ServerResponse`. Those are exactly right for the dev path and wrong here: on
- * every deploy target the pair is what `createWebShim` synthesises over a Web `Request`. Widening
- * to `unknown` says what is actually true at this boundary rather than casting a lie past the
- * type system — the app's own `createContext` is typed by the app, and a generated fragment is the
- * one caller that cannot promise it Node objects.
- */
-export type HostContextFactory = (args: { request: unknown; response: unknown }) => unknown
-
 export function createSubjectResolverFromFactory(
   createContext: HostContextFactory | undefined,
   request: unknown,
