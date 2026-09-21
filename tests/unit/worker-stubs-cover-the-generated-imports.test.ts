@@ -58,12 +58,37 @@ const STUB_FILES = [
   'adapter-security-headers.test.ts',
 ]
 
+/**
+ * Every shape the generator can emit. `ssrStreaming` was the only axis this guard varied until
+ * B-185, and `agents` is exactly as conditional: with none, `deployedAgentsFragment` returns its
+ * EMPTY fragment and the agent import line is absent from the union, so a symbol added to that line
+ * was invisible here. It cost 22 failing tests across three files in one run — the very failure
+ * mode B-190 built this guard to prevent, arriving through the axis the guard did not turn.
+ */
+const AGENTS = [{ filePath: 'agents/chat.js', agentPath: '/api/agents/chat', name: 'chat' }]
+const SHAPES = [
+  { ssrStreaming: false },
+  { ssrStreaming: true },
+  { ssrStreaming: false, agents: AGENTS },
+  { ssrStreaming: true, agents: AGENTS },
+] as const
+
+function requiredSymbols(): Set<string> {
+  const names = new Set<string>()
+  for (const shape of SHAPES)
+    for (const s of importedSymbols(renderCloudflareWorkerEntry(shape))) names.add(s)
+  return names
+}
+
 describe('the worker stubs cover what the generator imports (B-190)', () => {
   it('test_the_symbol_list_is_derivable_from_the_generator', () => {
-    // The list is CONDITIONAL — ssrStreaming changes which modules are imported — so the union
-    // over both shapes is what a stub has to satisfy, not either one alone.
+    // The list is CONDITIONAL — both `ssrStreaming` and `agents` change which modules are
+    // imported — so the union over every shape is what a stub has to satisfy, not any one alone.
     const off = importedSymbols(renderCloudflareWorkerEntry({ ssrStreaming: false }))
     const on = importedSymbols(renderCloudflareWorkerEntry({ ssrStreaming: true }))
+    const withAgents = importedSymbols(
+      renderCloudflareWorkerEntry({ ssrStreaming: false, agents: AGENTS }),
+    )
 
     expect(
       off.size,
@@ -73,13 +98,15 @@ describe('the worker stubs cover what the generator imports (B-190)', () => {
       [...on].some((s) => !off.has(s)),
       'ssrStreaming: true imported nothing extra, so this test is not covering the conditional arm it claims to',
     ).toBe(true)
+    expect(
+      [...withAgents].some((s) => !off.has(s)),
+      'an entry WITH agents imported nothing extra, so this test is not covering the agents arm — ' +
+        'which is the arm that was missing when a symbol added to it broke 22 tests',
+    ).toBe(true)
   })
 
   it.each(STUB_FILES)('test_%s_exports_every_symbol_the_entry_imports', (file) => {
-    const required = new Set([
-      ...importedSymbols(renderCloudflareWorkerEntry({ ssrStreaming: false })),
-      ...importedSymbols(renderCloudflareWorkerEntry({ ssrStreaming: true })),
-    ])
+    const required = requiredSymbols()
     const exported = stubExports(file)
 
     const missing = [...required].filter((s) => !exported.has(s))

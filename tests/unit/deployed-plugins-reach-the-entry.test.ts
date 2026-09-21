@@ -109,6 +109,19 @@ export const createPluginRunnerFromConfig = async (plugins) => {
     },
   }
 }
+// B-185 — exported so the emitted entry resolves; DECLINING so this file's subject is unchanged.
+// These four stubs stay four because their bodies are opposites (ADR 0013), and the opposite here
+// is behavioural: a test about the document, the run path, plugins or security headers must see
+// the aux matcher decline exactly as it would for a url that is not an aux route.
+// mountAgent and resolveProvider ride the SAME emitted import line as the two below, so they
+// are required by the derived list even though this file renders no entry with agents today. That
+// is the guard being a superset of what this file needs rather than a subset of what it might — a
+// stub covering the generator's whole surface cannot break when a test adds a shape, which is the
+// property ADR 0013 derives the list for. Inert here: this file's subject is plugins.
+export const mountAgent = () => new Response('agent')
+export const resolveProvider = () => ({ apiKey: 'sk-test' })
+export const matchAgentAuxRoute = async () => null
+export const serveMatchedAuxRoute = () => new Response('aux')
 `
 
 let root: string

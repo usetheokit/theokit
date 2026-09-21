@@ -46,6 +46,12 @@ export const createPluginRunnerFromConfig = async () => undefined
 export const resolveTransformer = (s) => ({ name: s })
 export const mountAgent = (...a) => b().mountAgent(...a)
 export const resolveProvider = (...a) => b().resolveProvider(...a)
+// B-185 — exported so the emitted entry resolves; DECLINING so this file's subject is unchanged.
+// These four stubs stay four because their bodies are opposites (ADR 0013), and the opposite here
+// is behavioural: a test about the document, the run path, plugins or security headers must see
+// the aux matcher decline exactly as it would for a url that is not an aux route.
+export const matchAgentAuxRoute = async () => null
+export const serveMatchedAuxRoute = () => new Response('aux')
 `
 
 let root: string

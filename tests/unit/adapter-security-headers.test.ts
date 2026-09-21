@@ -127,6 +127,12 @@ export const createCorsWebHandler = (...a) => b().createCorsWebHandler(...a)
 export const mountAgent = async () => new Response('agent')
 export const resolveProvider = () => ({ apiKey: 'sk-test' })
 export const scanAgents = () => []
+// B-185 — exported so the emitted entry resolves; DECLINING so this file's subject is unchanged.
+// These four stubs stay four because their bodies are opposites (ADR 0013), and the opposite here
+// is behavioural: a test about the document, the run path, plugins or security headers must see
+// the aux matcher decline exactly as it would for a url that is not an aux route.
+export const matchAgentAuxRoute = async () => null
+export const serveMatchedAuxRoute = () => new Response('aux')
 `
 
 /** The nonce the streaming renderer was handed, so the header can be matched to it. */
