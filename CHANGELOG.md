@@ -32,6 +32,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **The scaffolded app hydrates again with SSR on (B-228).** `theokit build` + `theokit start` with
+  `ssr: true` served a correct document and then showed "Unexpected Application Error!" instead of
+  the app: react-router reached the client bundle twice, so the context `RouterProvider` filled was
+  not the one the page's components read. The framework's Vite config now deduplicates
+  `react-router`, `react-router/dom`, `react` and `react-dom`. Measured on the default scaffold in
+  Chrome: the error boundary is gone, the layout's own tree is in the DOM, the page's links are
+  back, and `history.scrollRestoration` reads `manual` — which also proves scroll restoration was
+  mounting correctly the whole time and was hidden by the error.
+
 - **Streaming SSR preloads its chunks too (B-035).** The injection was wired into the synchronous
   document assembler, while the streaming branch is tried first — so `ssrStreaming: true` turned
   the feature off on Node while the Cloudflare worker, which renders only when streaming, kept it

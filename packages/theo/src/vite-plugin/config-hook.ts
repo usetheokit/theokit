@@ -76,6 +76,18 @@ export function runConfigHook(ctx: ConfigHookCtx): Record<string, unknown> {
       },
     },
     resolve: {
+      // B-228 — one module instance per package, or two React contexts reach the client and the
+      // one `RouterProvider` filled is not the one `useLocation()` reads. The alias list below is
+      // what creates the condition: its catch-all maps any unlisted `theokit/*` subpath to
+      // WORKSPACE SOURCE, whose own bare `react-router` import then resolves against the
+      // workspace's node_modules while the app's entry resolves against its own. Measured
+      // 2026-09-20: 7.18.2 and 7.18.4 both reached one bundle, and React Router's ErrorBoundary
+      // replaced the whole tree with "Unexpected Application Error!".
+      //
+      // React and react-dom carry the same hazard by the same route — two React instances would
+      // produce this class of defect with a different symptom — so all four are named rather than
+      // the one that was caught.
+      dedupe: ['react-router', 'react-router/dom', 'react', 'react-dom'],
       alias: [
         // Order still matters — first match wins — but the entries below are
         // EXACT (#377). A Vite alias whose `find` is a string matches by prefix,
