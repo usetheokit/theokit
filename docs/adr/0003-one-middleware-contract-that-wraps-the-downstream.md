@@ -44,8 +44,8 @@ satisfied on one of the two runners. What is wrong is not the contract; it is th
 Node path and a middleware that calls it silently does nothing.
 
 **That defect is B-196, and it is the whole of what remains.** Its measured blast radius is
-`runMiddlewareAndContext` plus **2** production call sites — `http/execute.ts:189` and
-`http/action-execute.ts:169`.
+`runMiddlewareAndContext` plus **2** production call sites — `packages/theo/src/server/http/execute.ts:189` and
+`packages/theo/src/server/http/action-execute.ts:169`.
 
 ### What is accepted
 

@@ -12,7 +12,7 @@ scoping the dev path installed — "an unauthenticated caller refused, an authen
 refused, **an owner served**".
 
 The third case is the one that has no mechanism. The framework reads a caller's identity with
-`subjectFromContext(ctx)` (`core/contracts/route-policy.ts:58`), which returns `ctx.subject`. On the
+`subjectFromContext(ctx)` (`packages/theo/src/core/contracts/route-policy.ts:58`), which returns `ctx.subject`. On the
 Node path that key is set by the application's `server/context.ts`, reached through
 `createServerContext` (`server/http/middleware-runner.ts`), which does exactly three things: locate
 `context.ts` with `existsSync`, load it with `loadModule`, and call its `createContext({request,
@@ -20,7 +20,7 @@ response})`.
 
 A Worker has none of the first two. Measured on 2026-09-21: with `serverDir: undefined` —
 the only value a Worker could supply — `createAgentSubjectResolver` takes the
-`produced = {}` branch (`server/http/resolve-agent-subject.ts:86`), never touches `req`, `res` or
+`produced = {}` branch (`packages/theo/src/server/http/resolve-agent-subject.ts:86`), never touches `req`, `res` or
 `loadModule`, and returns `subjectFromContext({})`, which is `null`. So emitting that resolver into
 the deploy fragment would produce a resolver that provably resolves to `null` for every caller,
 while the plan claimed an owner was served.
@@ -63,9 +63,9 @@ to one more module:
 
 | what is baked | where | since |
 |---|---|---|
-| route modules | `renderBakedRoutes`, cited at `adapters/deployed-agents.ts:21` and `:76` | #369 |
-| agent modules | `adapters/deployed-agents.ts:176` — `import * as __theoAgentN from '../../${filePath}'` | current |
-| plugin modules | `adapters/deployed-plugins-module.ts:12` — "the road `renderBakedRoutes` already takes" | current |
+| route modules | `renderBakedRoutes`, cited at `packages/theo/src/adapters/deployed-agents.ts:21` and `:76` | #369 |
+| agent modules | `packages/theo/src/adapters/deployed-agents.ts:176` — `import * as __theoAgentN from '../../${filePath}'` | current |
+| plugin modules | `packages/theo/src/adapters/deployed-plugins-module.ts:12` — "the road `renderBakedRoutes` already takes" | current |
 | **the context module** | **nothing — measured 0 occurrences across `src/adapters/`** | **this ADR** |
 
 `createServerContext`'s non-portable half is the lookup, not the call. Baking removes the lookup and
@@ -86,7 +86,7 @@ Bun and Deno are unaffected by the paragraphs below: they keep `createServerCont
 `existsSync`/`loadModule` route, so nothing about their contract changes.
 
 **Additive** for a Worker application whose `createContext` reads headers or cookies. That is the
-documented and overwhelmingly common case: `server/http/resolve-agent-subject.ts:21` states
+documented and overwhelmingly common case: `packages/theo/src/server/http/resolve-agent-subject.ts:21` states
 "**Headers and cookies: yes. The request body: no.**", and both survive the Node→Web request shape.
 
 **Breaking** for an application whose `createContext` reads Node-only members of `req`/`res`. It
@@ -112,7 +112,7 @@ no dev-path caller changes.
 `pluginRunner?.applyDecorations(ctx)`, the three adapters already bake plugins, and only the agent
 fragment fails to receive a runner (measured: 0 occurrences of `pluginRunner` in
 `adapters/deployed-agents.ts`). Rejected because the shipped default template documents the other
-source: `create-theokit/templates/default/src/server/agents/chat.ts:47` — "`subject` is whatever
+source: `packages/create-theokit/templates/default/src/server/agents/chat.ts:47` — "`subject` is whatever
 `server/context.ts` put on `ctx.subject`". Choosing the plugin path would make the test pass without
 serving the application the template tells people to write. Worth revisiting as a second source once
 the documented one works.
