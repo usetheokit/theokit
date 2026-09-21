@@ -44,7 +44,11 @@ import type { AdapterBuildContext, DeployAdapter } from './types.js'
  * a correct artifact should say so at build time; the alternative is a deploy
  * that looks successful and serves pages with no stylesheet.
  */
-function readDocumentShell(
+/**
+ * @internal Exported for tests only. Nothing re-exports this module, so this does not reach the
+ * published surface — `findRootDiv`, exported for the same reason, appears 0 times in `dist/`.
+ */
+export function readDocumentShell(
   cwd: string,
   streaming: boolean,
 ): { htmlHead?: string; htmlTail?: string } {

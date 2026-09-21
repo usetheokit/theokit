@@ -62,6 +62,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   with no `server/context.ts` resolves an anonymous caller, which is the honest answer rather than
   an invented subject.
 
+- **A regression in the Cloudflare document-shell split can no longer reach production unseen
+  (B-202).** #343's symptom was a served document with no `<head>`. The test written for it drives
+  the generated worker against a real `Request` and asserts on the body — and it takes the shell as
+  an ARGUMENT, so it covers an entry FORWARDING a shell and not the adapter DERIVING one. Measured:
+  emptying the head half where it is derived left all five of its cases green, and so did swapping
+  the two halves. `readDocumentShell` now has six cases of its own, including the invariant that
+  makes the split safe wherever it lands — the two halves concatenate back to the template exactly,
+  so nothing is lost and nothing is duplicated. What was NOT the gap, and the item corrected itself
+  on this before anyone acted: the slice semantics were already guarded by `find-root-div.test.ts`'s
+  eight cases one layer down.
+
 - **`TrackAgentRunOptions.storage` stops pointing at configuration that does not exist (B-201).**
   Its docstring read "Adapter resolved from the project config's `cost.storage`", and no `cost` key
   has ever been in the schema — measured against a control of `observability`, which returns 3. A
