@@ -109,7 +109,34 @@ export interface ApprovalRegistry {
    * caller against.
    */
   ownerOf(approvalId: string): string | undefined
+  /**
+   * How far this registry's answers reach — B-236.
+   *
+   * `'instance'` means every answer is about ONE process. `getApprovalRegistry()` resolves a
+   * `processSingleton`, and every deploy target the approvals listing became reachable on is
+   * multi-instance by construction: a Worker is isolates, a Lambda is concurrent invocations. So
+   * an owner whose run paused on another instance was answered `200 {approvals: []}`, which is
+   * indistinguishable from "nothing is pending".
+   *
+   * It is declared HERE rather than assumed by the listing handler because the interface is
+   * injectable so a durable implementation can replace this one. A constant in the handler would
+   * become false the day somebody wires that up, which is this defect one layer higher.
+   *
+   * Optional, and an implementation that declares nothing is read as `'instance'`. Silence takes
+   * the narrow claim: a registry that cannot say how far it reaches must not be reported as
+   * speaking for a deployment.
+   */
+  readonly scope?: ApprovalRegistryScope
 }
+
+/**
+ * How far a registry's answers reach.
+ *
+ * `'shared'` is declared by an implementation backed by a store every instance reads — nothing in
+ * this framework ships one today (YAGNI), and the value exists so that wiring one does not mean
+ * editing the listing handler.
+ */
+export type ApprovalRegistryScope = 'instance' | 'shared'
 
 interface Pending {
   settle: (decision: ApprovalDecision) => void
@@ -141,6 +168,9 @@ export function createInProcessApprovalRegistry(): ApprovalRegistry {
   const pending = new Map<string, Pending>()
 
   return {
+    // B-236 — stated rather than left for a caller to infer from the name. This map is one
+    // process's, so every answer built from it is one process's.
+    scope: 'instance',
     register(approvalId, opts) {
       return new Promise<ApprovalDecision>((resolve) => {
         const settle = (decision: ApprovalDecision): void => {

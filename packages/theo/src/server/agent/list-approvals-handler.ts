@@ -39,7 +39,11 @@ export function isListApprovalsPath(urlPath: string): string | null {
 }
 
 /**
- * Serve the pending approvals this caller may see as `{ approvals: [...] }` JSON.
+ * Serve the pending approvals this caller may see as `{ approvals: [...], scope }` JSON.
+ *
+ * `scope` says how far the answer reaches — `'instance'` for the in-process registry this
+ * framework ships, which is every answer it can currently give (B-236). It is present on every
+ * response, empty or not.
  *
  * `subject` is the admitted caller's id, or `undefined` when the agent declares no policy and none
  * was resolved. An approval is included when it has no owner, or when its owner is this subject.
@@ -52,7 +56,11 @@ export function handleListApprovals(
     const owner = registry.ownerOf(approval.approvalId)
     return owner === undefined || owner === subject
   })
-  return new Response(JSON.stringify({ approvals: visible }), {
+  // B-236 — every answer carries how far it reaches, including a non-empty one: a listing of two
+  // from one instance can be two of five, so a caveat that appeared only when the list was empty
+  // would vanish exactly when a caller starts trusting the numbers. Read from the registry, not
+  // written here, so a shared implementation reports itself without this file changing.
+  return new Response(JSON.stringify({ approvals: visible, scope: registry.scope ?? 'instance' }), {
     status: 200,
     headers: { 'content-type': 'application/json; charset=utf-8' },
   })

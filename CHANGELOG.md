@@ -8,6 +8,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **A deployed approvals listing answered for one instance and read as authoritative (B-236).**
+  `getApprovalRegistry()` resolves a process singleton, and every deploy target the listing became
+  reachable on is multi-instance by construction — a Worker is isolates, a Lambda is concurrent
+  invocations. An owner whose run paused on another instance was answered `200 {approvals: []}`,
+  which is indistinguishable from "nothing is pending". Every response now carries
+  `scope: 'instance'`, so the caller is told what the answer covers.
+
+  It is on **every** response, not only the empty one: a listing of two from one instance can be
+  two of five, and a caveat that appeared only when the list was empty would vanish exactly when a
+  caller starts trusting the numbers. The value is read from the registry rather than written in
+  the handler — the interface is injectable so a durable store can replace the in-process one, and
+  a constant here would become false the day somebody wires that up. A registry that declares
+  nothing is read as `'instance'`, because silence must take the narrow claim.
+
 - **Three of the six Web deploy targets carried no agents at all (B-235).**
   B-185 made `GET /api/agents/<name>/approvals` reachable on a deploy target and reached
   `cloudflare`, `bun` and `deno-deploy`. A user deploying to `vercel`, `netlify` or `aws-lambda`
