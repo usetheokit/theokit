@@ -15,6 +15,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   target and answered `BAD_REQUEST` for want of a message. The generated fragment now asks the aux
   dispatcher first and falls through to the run handler only on a miss; a declined request loads no
   module, which is what makes asking first free.
+
+  **It reaches three of the six Web deploy targets.** `cloudflare`, `bun` and `deno-deploy` carry the
+  fragment; `vercel`, `netlify` and `aws-lambda` contain zero occurrences of it and still fall
+  through to the run handler. The defect was on all six and the fix is on three — said here because
+  the paragraph above, read alone, reads as all six, and nothing in the build warns the other three.
 - **A deployed target resolves who is asking, so an owner is served rather than refused (B-185).**
   `mountAgent` has accepted a subject resolver since the approvals scoping landed, and 0 of 23
   adapter files passed one — so every deployed policy was judged against an anonymous caller and an
