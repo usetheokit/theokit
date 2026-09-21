@@ -22,6 +22,14 @@
  * It does NOT check what the line SAYS. That would need a semantic anchor and would fail on every
  * legitimate refactor. The target is the citation that rotted, not the one that moved a line.
  *
+ * It does NOT read source files. The walk is tracked `*.md`, so an `ADR NNNN` inside a `.ts`
+ * docblock is invisible to it — which is exactly where B-238's four citations lived. Extending the
+ * walk was measured before being rejected: `packages/{agents,theo,http}/src` and `tests/` cite 28
+ * ADR numbers that resolve to nothing across 152 references, so turning it on today makes this gate
+ * red on work nobody has scoped. The ADRs for those are B-238's remaining half; until they exist,
+ * a gate that fires on all 152 is a gate somebody disables, which costs the 1344 citations it
+ * currently keeps honest.
+ *
  * It does NOT resolve BARE names (`chat.ts:494`, no directory). Resolving those needs a
  * basename index, and a basename shared by several files makes the answer a guess — the same
  * instrument that reported 945 rotten citations before indexing reported 354 after, with 143 left
@@ -119,13 +127,29 @@ export function extractCitations(text) {
  * Nothing breaks at runtime. What breaks is the ability to verify a documented decision, which is the
  * entire purpose of citing one — and in the document a new consumer reads first.
  */
-const ADR_CITATION = /\bADR-(\d{4})\b/g
+// B-238 — the separator is a hyphen OR a space. Both forms are in use and only the hyphen was
+// matched, so `ADR 0038` — cited 15 times, resolving to nothing — was invisible to this gate. The
+// slash form `ADR 0038/0040` yields the first number only; that is a partial read and not a false
+// one, and closing it would need a second pattern for a shape used twice.
+const ADR_CITATION = /\bADR[ -](\d{4})\b/g
+
+/**
+ * A line may cite a number that resolves nowhere ON PURPOSE, and say why.
+ *
+ * `docs/adr/0005-…` records that it closes five dangling `ADR 0061` citations, and names the number
+ * three times to do it. Reporting those would fail the gate on the document that FIXED the problem
+ * — so an exemption exists, it is per line, and it carries a reason. A marker with nothing after
+ * the colon does not count: a silent opt-out is the thing being prevented, so an opt-out that says
+ * nothing is refused exactly like the citation it was covering.
+ */
+const ADR_CITATION_OK = /<!--\s*adr-citation-ok:\s*(\S.*?)-->/
 
 /** Every `ADR-NNNN` in a document, with the line it sits on. */
 export function extractAdrCitations(text) {
   const out = []
   const lines = text.split('\n')
   for (let i = 0; i < lines.length; i++) {
+    if (ADR_CITATION_OK.test(lines[i])) continue
     for (const m of lines[i].matchAll(ADR_CITATION)) {
       out.push({ raw: m[0], id: m[1], docLine: i + 1 })
     }

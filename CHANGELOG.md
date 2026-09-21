@@ -8,6 +8,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **Four production files rested an argument on an ADR nobody could open (B-238).**
+  `ADR 0038` was cited by the approval registry, the approvals-listing handler, the pause-span
+  store and the harness invariant guard — a test that names itself *"ADR 0038 enforcement teeth"*
+  while asserting what a missing document forbids. `docs/adr/0017` now records that decision (the
+  registry is single-process by design, and every listing declares it), and nine citations point
+  at it.
+
+  **Six are deliberately left dangling and said so.** The `packages/agents/` citations use the same
+  number for a different decision — the adapter seam, *"no second loop"* — so repointing them would
+  replace an unresolvable citation with a resolvable WRONG one, which is the worse defect: a reader
+  following a dead link knows they learned nothing.
+
+  `scripts/check-doc-citations.mjs` matched `ADR-NNNN` and not `ADR NNNN`, so fifteen citations in
+  the space form were invisible to the gate that exists to catch them. Both forms now count, with
+  a per-line `adr-citation-ok:` exemption for a document that records dangling numbers rather than
+  creating them — and a marker with no reason does not exempt.
+
 - **A deployed approvals listing answered for one instance and read as authoritative (B-236).**
   `getApprovalRegistry()` resolves a process singleton, and every deploy target the listing became
   reachable on is multi-instance by construction — a Worker is isolates, a Lambda is concurrent

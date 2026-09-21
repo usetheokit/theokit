@@ -2,7 +2,7 @@
  * M14 (theokit-ai-first) — GET /api/agents/:name/approvals lists pending HITL approvals.
  *
  * The in-process ApprovalRegistry tracks pending-approval metadata and exposes `list()`; the
- * handler serves the subset THIS CALLER may see as JSON. Single-process contract (ADR 0038) — the
+ * handler serves the subset THIS CALLER may see as JSON. Single-process contract (ADR 0017) — the
  * registry is process-wide, and that is exactly why the handler scopes: one admitted tenant of one
  * agent used to receive every pending approval in the process, each with the id the settle route
  * acts on. Scoping is in `packages/theo/tests/server/approvals-listing-is-scoped.test.ts`; this

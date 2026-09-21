@@ -7,7 +7,7 @@
  * the Promise deterministically per the `@HumanInTheLoop` `onTimeout` policy so a hung approval
  * never leaks the paused stream.
  *
- * Single-process contract (ADR 0038 / plan Drawback 2): a multi-instance deploy needs a shared
+ * Single-process contract (ADR 0017 / plan Drawback 2): a multi-instance deploy needs a shared
  * registry — the interface is injectable so a durable impl (Redis, etc.) slots in without touching
  * the harness. We do NOT build a durable store now (YAGNI).
  */
@@ -152,7 +152,7 @@ interface Pending {
  * The in-process impl holds LIVE Promise resolvers in memory — the approval a request awaits and
  * the approval the route resolves MUST be the same object, so a single instance per process is not
  * a convenience but a correctness requirement. Lazily created; a durable/multi-instance deploy
- * swaps this accessor for a shared-store impl (ADR 0038 / plan Drawback 2) without touching callers.
+ * swaps this accessor for a shared-store impl (ADR 0017 / plan Drawback 2) without touching callers.
  * Tests use {@link createInProcessApprovalRegistry} directly — never this singleton.
  */
 export function getApprovalRegistry(): ApprovalRegistry {

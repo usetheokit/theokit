@@ -5,7 +5,7 @@
  *
  * ## Why this is scoped, and what it closes
  *
- * The registry is process-wide by contract (ADR 0038): `list()` returns every pending approval, and
+ * The registry is process-wide by contract (ADR 0017): `list()` returns every pending approval, and
  * the `<name>` segment is accepted for a future per-agent store. That was the whole answer here, so
  * one admitted tenant of one agent received every pending approval in the process — other tenants',
  * other agents' — each with the `approvalId` the settle route needs.
