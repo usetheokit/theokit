@@ -25,6 +25,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   members of the request, on a target where that pair is synthesised over a Web `Request`. An app
   with no `server/context.ts` resolves an anonymous caller, which is the honest answer rather than
   an invented subject.
+- **A build that drops the approvals handler from the adapter's graph now fails instead of
+  shipping (B-185).** The endpoint's absence was a session's measurement, and chunk names are
+  content-hashed — a text search for "approvals" in the emitted adapter finds nothing whether or not
+  the code is reachable, so only a walk over the import graph decides it. That walk is now a test,
+  asserting one property with no definitional freedom: does the entry every deploy adapter calls
+  reach the handler at all. It carries its own control, because a walk that reached nothing would
+  report a false absence.
 
 - **A review finding that four test stubs had diverged is answered with a measurement, not a
   refactor (B-190).** `docs/adr/0013` records what was measured: the same symbol is an identity
