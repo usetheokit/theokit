@@ -102,6 +102,14 @@ function isWebShaped(mw: object): mw is MiddlewareHandler {
  * `server/middleware.ts` are two entry points to the same semantics, and this file has already
  * watched them drift — the single-file arm kept `refuseIncompatibleShape` only because someone
  * remembered to add it twice.
+ *
+ * `refuseIncompatibleShape` NO LONGER EXISTS, and this paragraph keeps its name because the
+ * drift it argues against is why the dispatcher is single. It shipped in `095c786d1` and was
+ * removed the next day by `ab56b3888`, which records the decision: refusing was "the right
+ * interim answer and never the end state", because the README pointed users at a path that did
+ * not work. The end state is the convergence below — an incompatible shape can no longer
+ * ARRIVE: `isWebShaped` runs the builder's `(request, context)` form and everything else runs
+ * the Node `(req, res, next)` form, so both are invocable and there is nothing left to refuse.
  */
 async function runScannedMiddleware(
   mw: MiddlewareFn,

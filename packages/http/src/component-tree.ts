@@ -3,7 +3,7 @@
  * components (layout, page, loading, error, not-found) into a React
  * element tree with Suspense and error boundaries.
  *
- * Inspired by Next.js `create-component-tree.tsx`.
+ * Builds the component tree the SSR renderer walks.
  *
  * React is loaded via dynamic `import('react')` because it is an
  * optional peerDep of @theokit/http (EC-2).

@@ -1,7 +1,7 @@
 /**
  * Streaming SSR — renders a React element tree to a `ReadableStream<Uint8Array>`.
  *
- * Inspired by Next.js `stream-ops.ts`. Uses Web Standard `renderToReadableStream`
+ * Uses Web Standard `renderToReadableStream`
  * (works on Node 18+, Bun, Deno). Falls back to `renderToString` wrapped in a
  * ReadableStream when `renderToReadableStream` is not available (React 17 — EC-4).
  *

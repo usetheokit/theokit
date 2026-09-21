@@ -1,7 +1,6 @@
 /**
- * Server-Inserted HTML — late-stage HTML injection.
+ * Server-Inserted HTML — late-stage HTML injection during SSR.
  *
- * Inspired by Next.js make-get-server-inserted-html.tsx (app-render/).
  * Stateful closure pattern that allows adding HTML chunks during SSR
  * (polyfills, traces, analytics) and flushing them once.
  *
@@ -34,6 +33,12 @@ export interface ServerInsertedHTML {
  * const chunks = inserted.flush() // returns both chunks
  * const empty = inserted.flush()  // returns [] (already flushed)
  * ```
+ */
+/**
+ * @deprecated No path in this repository inserts server HTML this way, measured
+ * 2026-09-19 — a statement about this repository, not about every consumer of a
+ * published package. `docs/adr/0007` records why it is deprecated rather than
+ * deleted. A capability that finds a consumer un-deprecates.
  */
 export function createServerInsertedHTML(): ServerInsertedHTML {
   const pending = new Map<string, string>()

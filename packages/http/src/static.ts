@@ -2,7 +2,7 @@
  * Static file handler — runtime-agnostic (Node/Bun/Deno).
  *
  * Serves files from a root directory (default: `public/`).
- * Derived from Hono's serve-static middleware pattern:
+ * A serve-static middleware:
  *   - MIME type detection from extension
  *   - Path traversal prevention via regex guard
  *   - Runtime-agnostic file reading (Bun.file / Deno.readFile / node:fs)
@@ -70,7 +70,7 @@ const MIME_TYPES: Record<string, string> = {
   '.webmanifest': 'application/manifest+json; charset=utf-8',
 }
 
-// ── Path traversal guard (Hono-derived regex) ──────────
+// ── Path traversal guard ───────────────────────────────
 
 /**
  * Regex that catches path traversal attacks:

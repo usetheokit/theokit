@@ -258,7 +258,7 @@ const ERROR_CASES: readonly ErrorCase[] = [
   {
     className: 'DuplicateDecorationError',
     // @deprecated as of T3.1 — kept for backward compat instanceof checks.
-    // eslint-disable-next-line @typescript-eslint/no-deprecated -- intentional: verifies envelope coverage during the deprecation window
+    // deliberately deprecated: verifies envelope coverage during the deprecation window
     factory: () => new DuplicateDecorationError('user', 'pluginA', 'pluginB'),
     expectedCode: 'INTERNAL_SERVER_ERROR',
     category: 'BUILD_TIME',

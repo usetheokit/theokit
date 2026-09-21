@@ -9,7 +9,7 @@
  * but not executed — no cache engine is wired. When theokit is present, the
  * cache engine reads signals from the request context after the handler completes.
  *
- * Inspired by Next.js cache-signal.ts + revalidateTag/revalidatePath API.
+ * Signals a cache entry as stale, behind the revalidateTag/revalidatePath API.
  */
 import { tryGetRequestContext } from './request-context.js'
 

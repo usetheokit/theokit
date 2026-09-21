@@ -92,6 +92,57 @@ A primitive that genuinely cannot be exercised without a running dev server has
 no automated coverage today. Say so in the PR rather than asserting something
 weaker and calling it covered.
 
+## Where a fixture's shape comes from
+
+A fixture invented alongside the code it tests cannot disagree with it. Both carry the same
+assumption, the test passes, and the assumption is never checked against anything.
+
+Measured on 2026-08-20: five occurrences in one day. Token attributes were read from a flat object
+invented for the test while the code read the same invented shape — and four of the five surfaced
+only because a benchmark graded the output, not because the suite failed.
+
+**A fixture's shape must come from one of three places, and the test says which:**
+
+| Source | Use it when | What it buys |
+|---|---|---|
+| the published `.d.ts` | the thing under test consumes a typed interface | a signature change breaks the mock at `tsc` time |
+| the producer's own builder | the value is normally constructed by code we ship | the fixture cannot drift from the constructor |
+| a recorded payload, dated | the shape belongs to something external | the drift is visible as a stale date, not as a silent pass |
+
+**What is NOT a source: a shape typed out from memory while writing the test.** That is the case
+above, and it fails silently by construction.
+
+### Mocks that stand in for a published interface declare it
+
+A stub written as `export const doThing = () => null` satisfies nothing. Changing the real
+`doThing`'s signature leaves it compiling, and the test keeps passing against a contract that no
+longer exists.
+
+```ts
+// Drifts silently.
+export const resolveThing = () => null
+
+// Breaks at `tsc` the day the signature moves.
+import type { ResolveThing } from '@theokit/http'
+export const resolveThing: ResolveThing = () => null
+```
+
+**Verified by `tsc`, not by review** — which is the whole reason the type is worth writing.
+
+### What this convention does NOT check
+
+Stated rather than implied, because a convention that claims more than it enforces is worse than
+one that claims less:
+
+- **Nothing scans for untyped stubs.** The rule above is honoured by the author and caught in
+  review, not by a gate. The untyped worker stubs under `tests/unit/` predate this section and are
+  the largest known exception — `tests/unit/worker-stubs-cover-the-generated-imports.test.ts` covers
+  their export LIST against the generator, which is a different guarantee from covering their types.
+- **A recorded payload's date is not checked against anything.** A fixture recorded two years ago
+  looks identical to one recorded today.
+- **"From the builder" is not mechanically distinguishable** from a hand-written value that happens
+  to match. The declaration is a statement by the author.
+
 ## Branch + commit conventions
 
 - **Branches**: `feat/<slug>`, `fix/<slug>`, `docs/<slug>`, `refactor/<slug>`.

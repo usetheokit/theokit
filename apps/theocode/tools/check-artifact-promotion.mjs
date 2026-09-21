@@ -49,10 +49,33 @@ import process from 'node:process'
  * Declaring one costs a line the day an ADR is written; declaring it now costs the constant its
  * only property a test can check.
  */
-export const PAIRS = [
-  ['.claude/records/plans', 'docs/plans'],
-  ['.claude/records/reviews', 'docs/reviews'],
-]
+/**
+ * Why this table is empty, as a VALUE rather than a comment.
+ *
+ * A comment is not read by the gate, so rot that removed the rows for a bad reason would be
+ * indistinguishable from the decision recorded here. `check-artifact-promotion.test.mjs` imports
+ * this and asserts the mutual exclusion in both directions: empty implies a reason, rows imply none.
+ *
+ * It is a value and not a marker string the test greps for, because a search over this file's text
+ * is satisfied by the word appearing anywhere — in a comment, in an identifier, in this sentence —
+ * and would also pass while the table was live, where the claim means nothing.
+ */
+export const RETIRED =
+  '2026-09-19 (B-191): both sides of every declared pair had stopped existing. The working side ' +
+  'moved from `.claude/records/` to `.squad/records/` when the write root changed on 2026-09-09 ' +
+  'and this table did not follow — the second such rename it has outlived. The published side was ' +
+  'deleted outright by `41732e6a8`, so there is nothing left to promote INTO. Repointing at ' +
+  '`.squad/records/` was rejected: the published side would still be absent, so a repointed pair ' +
+  'would compare nothing while looking live, and that area is now shared with the framework — a ' +
+  'theocode guard auditing it would audit records this product did not write. The decision ' +
+  'functions below are kept intact and fixture-tested; they are what will police a pairing when ' +
+  'one exists again. Re-adding a row means deleting this constant in the same commit.'
+
+/**
+ * Working area <-> published home, for documents that live in both. Empty by decision — see
+ * `RETIRED` above, and `.squad/records/plans/the-promotion-guard-names-a-dead-pairing-plan.md`.
+ */
+export const PAIRS = []
 
 /**
  * The markdown in a directory, or `null` when the directory is not there.
@@ -161,7 +184,17 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     .filter((p) => !p.compared)
     .map((p) => `    ${p.working} <-> ${p.published} — absent: ${p.absent.join(', ')}`)
 
-  if (comparedPairs === 0) {
+  if (PAIRS.length === 0) {
+    // Split from the branch below on purpose. That one explains that a DECLARED directory was absent
+    // — true when rows exist and their paths do not resolve, and false here, where no row exists at
+    // all. Printing it for an empty table would describe a state that is not the one being reported,
+    // which is the census misleading rather than merely saying little: the defect class this file's
+    // docblock says it exists to prevent. Printed even under `--quiet`, for the same reason.
+    process.stdout.write(
+      'check-artifact-promotion: RETIRED — no pair is declared, so nothing was compared.\n' +
+        `    ${RETIRED}\n`,
+    )
+  } else if (comparedPairs === 0) {
     // Printed even under `--quiet`. A run that compared nothing must not be mistakable for a run
     // that compared everything and found nothing, which is the whole of the finding this replaced.
     process.stdout.write(

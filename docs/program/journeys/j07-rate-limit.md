@@ -957,6 +957,51 @@ to defaults on every deploy target). The rate-limit and security-header halves a
 as `GHSA-87qq-fgcr-384x`.
 
 
+### Correction — 2026-09-20: one of the three addresses is now wired, and the pointer to it rotted
+
+The paragraph above states that three of the six addresses are not headers, and names Bun's as
+`server.requestIP(request)`, *"in scope and unused (`packages/theo/src/adapters/bun.ts:87`)"*.
+
+That was true on 2026-08-21 and stopped being true five days later. It is **not edited**: it is a
+dated measurement, and this journey's own header forbids moving a target after code exists. What
+follows is what the same questions answer today.
+
+**Bun's address is wired.** `695e04239` (2026-08-26, *"bun enforces a declared rate limit instead of
+refusing the deploy"*) passes it in at `packages/theo/src/adapters/bun.ts:115`:
+
+```
+...deployedRateLimitFragment(opts.rateLimit, 'bun', 'server.requestIP(request)?.address'),
+```
+
+and the fragment CONSUMES it rather than merely accepting it — the third parameter is interpolated
+into the generated key function as `return ${addressExpression} ?? 'unknown'`
+(`packages/theo/src/adapters/deployed-rate-limit.ts:146`). So the "in scope and unused" half of the
+claim is false for Bun today.
+
+**The other two did not move.** Measured 2026-09-20 with `grep -ci ratelimit` over
+`packages/theo/src/adapters/*.ts`: `deployed-rate-limit.ts` 29, `config-support.ts` 15, `bun.ts` 8,
+`node.ts` 2 — and **zero** in `netlify.ts`, `aws-lambda.ts`, `cloudflare.ts`, `deno-deploy.ts` and
+`vercel.ts`. `grep -rn 'deployedRateLimitFragment('` over the same directory returns exactly one
+call site, Bun's. Netlify's handler `context` and Lambda's `event.requestContext.http.sourceIp` are
+still dropped.
+
+**The pointer itself rotted, which is the part worth noticing.** `bun.ts:87` today is an `import` of
+`createWebShim` inside an unrelated template — a line that resolves cleanly and supports nothing the
+sentence citing it claims. That is the failure mode a resolving citation cannot catch: the file
+exists, the line exists, and the evidence moved out from under it. The other line-numbered pointers
+in this journey were NOT re-checked, and every adapter they name HAS been touched since the
+measurement — `netlify.ts` on 2026-08-22, and `aws-lambda.ts`, `cloudflare.ts`, `vercel.ts` and
+`bun.ts` all on 2026-08-31. Treat every line number in this journey as dated, not as current.
+
+This paragraph first claimed the opposite — that four of the five had not been touched — and the
+claim was written to support the surrounding argument rather than measured. It is recorded here
+rather than quietly replaced, because a note about rotted citations that carried an unmeasured
+number of its own would have been the same defect one layer up.
+
+**What this does NOT settle.** Whether the journey's criteria are met. That is a measurement this
+note did not run — it corrects one factual claim inside a narrative and leaves the verdict above it
+standing, because re-grading a journey from a grep is exactly the movable target the header refuses.
+
 ## The deliberately broken state
 
 Per `../dx-benchmark.md` § The fifth, which is pass/fail and not a number. The break for J7 is a

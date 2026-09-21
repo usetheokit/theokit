@@ -226,6 +226,48 @@ interval (`packages/agents/src/client/agent-client.ts:105`). What changed is tha
 It is named in § The seam the earlier half missed, and it is the whole difference between "no path" and a
 number.
 
+
+### Correction — 2026-09-20: the framework DID change, five months of reading later
+
+The correction above says, of the re-measurement that rescued this journey: **"What changed is not
+the framework — `readonly #chatId = crypto.randomUUID()` is still a field initializer
+(`packages/agents/src/client/agent-client.ts:117`) and `AgentClientOptions` still carries only an
+emitter."**
+
+That was true when written and stopped being true on 2026-08-21, in commit `a896e4a3c`. It is **not
+edited** — a measurement is evidence of what was true that day, and this journey's own header voids
+a criterion changed after code exists.
+
+Measured 2026-09-20 in `packages/agents/src/client/agent-client.ts`:
+
+| | today |
+|---|---|
+| `AgentClientOptions` | carries `readonly chatId?: string` at `:212` |
+| the constructor | `this.#chatId = options?.chatId ?? crypto.randomUUID()` at `:273` |
+| reading it back | `get chatId(): string` at `:282` |
+
+So both halves B-015 asked for — supply and read — exist, and the docblock at `:208` cites
+usetheokit/theokit#364 by number. The workaround this journey measured at 4 files and 59 glue lines
+is no longer a workaround for a declined option; it is the supported path, and the glue is what an
+application pays to decide *where the id lives*.
+
+**The line number in the quoted sentence also rotted.** `agent-client.ts:117` today is a docblock
+line about approval entries — a citation that resolves cleanly and supports nothing, which is the
+failure no pointer check in this repository can catch. The PATH is correct and was correct when
+written; only the line moved.
+
+*An error of this note's own, recorded rather than silently fixed:* the first draft quoted that
+sentence with the path `packages/theo/src/adapters/agent-client.ts` and then accused the original of
+citing a file that does not exist. The original says `packages/agents/src/client/agent-client.ts`.
+The misquote was mine, and the defect I "found" in it was one I had introduced two paragraphs
+earlier — which is worth leaving on the page, because fabricating a defect and then correcting it is
+harder to notice than missing one.
+
+What this note does NOT do is re-grade the journey. The five criteria passed at the measured cost
+and that verdict stands; what changed is that one sentence explaining *why* they passed is now
+false. The decision behind the change is recorded at
+`docs/adr/0010-the-conversation-id-is-supplied-by-the-application-not-owned-by-the-framework.md`.
+
 ### Versions and commits under test
 
 | Side | Under test |

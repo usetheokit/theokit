@@ -6,7 +6,7 @@
  * adapter path (the Vite dev path uses Vite's `server.proxy` which wraps
  * `http-proxy-3`).
  *
- * Pattern ported from Hono's helper/proxy/index.ts (RFC 2616 §13.5.1 +
+ * Hop-by-hop header handling per RFC 2616 §13.5.1 +
  * RFC 9110 §7.6.1 compliant). TheoKit additions:
  *  - EC-5: Host header set to target host (anti virtual-host leak)
  *  - EC-16: HEAD/OPTIONS requests do NOT forward body

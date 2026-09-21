@@ -336,7 +336,7 @@ describe('PluginRunner — decorateRequest', () => {
     // consumers `instanceof`-checking continue to compile. No `new` happens.
     // The deprecation warning here is INTENTIONAL — this test guards the
     // backward-compat surface until the class removal in 0.x+2.
-    // eslint-disable-next-line @typescript-eslint/no-deprecated -- intentional: guard backward-compat surface
+    // deliberately deprecated: guard backward-compat surface
     expect(DuplicateDecorationError).toBeDefined()
   })
 })

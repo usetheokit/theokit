@@ -2,7 +2,7 @@
  * ConsoleObservabilityAdapter — dev-mode console output.
  *
  * Emits JSON-structured lines to a configurable writer (default: process.stderr).
- * Inspired by Hono middleware timing pattern.
+ * Times each request from the middleware layer.
  */
 import { SpanImpl, NoopSpan, type SpanData } from '../span.js'
 

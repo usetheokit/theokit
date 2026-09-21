@@ -6,7 +6,229 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **The Cloudflare worker preloads a route's chunks without a filesystem (B-035).**
+  `theokit build --target=cloudflare` bakes the route-to-chunks map into the generated worker as a
+  literal, for the same reason the document shell already is: a Worker has no filesystem at request
+  time. Verified on a real build — the emitted worker carries the map with its real chunk names and
+  makes zero references to the map file. A build that produced no map emits nothing about preloads
+  and the worker behaves exactly as before.
+
+  The worker imports the injector from `theokit/server` rather than carrying a copy. An earlier
+  revision of this entry said it had to carry one; that was wrong, and the copy drifted within a
+  day — the proxy fix below landed in the original only.
+
+- **A README row claiming a `.claude/` surface is read now has to name a reader that exists (B-181).**
+  `packages/agents/README.md` publishes which surfaces the package reads; the claim was prose and
+  nothing resolved it. A test now reads the table, and for every row that claims `read` and names a
+  reader, resolves that symbol against the package's sources and the consumer the row cites. Renaming
+  a cited reader fails the suite naming the row and the symbol. Two of the table's fourteen rows carry
+  a verifiable claim today; the other twelve are counted and reported as unchecked rather than passing.
+
+- **A middleware can now run code after the route, because the runner passes it a `next`
+  (B-003).** `runWebMiddleware` takes the route execution as an optional fourth argument and gives
+  each middleware a `next` that runs the rest of the chain, so a handler authored with the public
+  `middleware()` builder can wrap the response instead of only replacing it **on the Web
+  request path**. The Node file-scan runner — the one `packages/theo/README.md` documents for
+  `server/middleware/*.ts` — still invokes middleware with two arguments, so `next` is
+  `undefined` there and a middleware that relies on it does nothing.
+
+  **And the qualification is narrower than it reads.** Traced 2026-09-19 on re-review:
+  `runWebMiddleware` is reached only from `executeWebRequest`, which is reached only from
+  `executeWebRequestFromNode`, which **nothing calls**. Every deploy entry this framework
+  GENERATES emits `executeRoute` instead — `adapters/bun.ts:86` and its five siblings — and
+  that routes to the two-argument path. So `next` is live for an application that imports
+  `executeWebRequest` from `theokit/server` and calls it directly, and on no surface the
+  framework itself generates. This sentence was unqualified until review measured the second
+  invoker, then still overstated until review traced the first. **B-196** carries both halves. Omit the argument and
+  the runner behaves exactly as before. What a frame returns is one ordered rule — the middleware's
+  own `Response` when it returned one, otherwise what its single `next()` call produced — recorded
+  with its rejected alternatives in `docs/adr/0006`.
+
+### Deprecated
+
+- **`@theokit/http/css-resource` and `@theokit/http/server-inserted-html` are deprecated, and
+  both keep working (B-012).** Measured 2026-09-19: neither subpath has a single importer
+  anywhere in this monorepo, controlled against `@theokit/http/app` at 50 and `renderToStream`
+  at 6 — so the zero is about these two symbols and not about the query.
+
+  Neither is removed in 2.x. The package is published, so the importers this repository can see
+  are not the importers that exist, and deleting on "no importer I can see" would break
+  consumers nobody can name. `docs/adr/0007` records the decision and the two alternatives
+  rejected.
+
+  Each notice states when the thing is still the right tool: `css-resource` is redundant under
+  React 19, which hoists `<link precedence>` natively, and is retained for the React 18 half of
+  the declared `react >=18.0.0` peer range. `server-inserted-html` has no consumer *here*, which
+  is a claim about this repository rather than about every consumer. A capability that finds a
+  consumer un-deprecates.
+
 ### Fixed
+
+- **`npm run lint` is green again, and a test may exercise a deprecated symbol (B-205).**
+  `@typescript-eslint/no-deprecated` was firing 15 errors on the tests for `renderCssResource` and
+  `createServerInsertedHTML` — two symbols `docs/adr/0007` keeps deprecated AND published, so their
+  tests are correct and the rule fired on them for being correct. Because the quality gate lints the
+  whole repository, that failure was charged to every unrelated change that reached it. The rule is
+  now off for test code, in the block that already relaxes rules for the same file set, and still
+  ON for production: a deprecated symbol used in shipped code still fails, proved by an armed canary
+  rather than asserted. No file left the sweep — 50 entries before, 50 after.
+
+- **The scaffolded app hydrates again with SSR on (B-228).** `theokit build` + `theokit start` with
+  `ssr: true` served a correct document and then showed "Unexpected Application Error!" instead of
+  the app: react-router reached the client bundle twice, so the context `RouterProvider` filled was
+  not the one the page's components read. The framework's Vite config now deduplicates
+  `react-router`, `react-router/dom`, `react` and `react-dom`. Measured on the default scaffold in
+  Chrome: the error boundary is gone, the layout's own tree is in the DOM, the page's links are
+  back, and `history.scrollRestoration` reads `manual` — which also proves scroll restoration was
+  mounting correctly the whole time and was hidden by the error.
+
+- **Streaming SSR preloads its chunks too (B-035).** The injection was wired into the synchronous
+  document assembler, while the streaming branch is tried first — so `ssrStreaming: true` turned
+  the feature off on Node while the Cloudflare worker, which renders only when streaming, kept it
+  on. Found by the independent code-review audit of this same change, which also caught that the
+  entry above claimed the feature worked with SSR on without qualifying WHICH SSR path: the
+  end-to-end measurement cited there ran on the default, `ssrStreaming: false`, which is the path
+  that already worked.
+
+- **A route behind a proxy gets its preloads (B-035).** `theokit start` matched the route against
+  the raw request target, so an absolute-form target — `GET http://example.com/about`, which a
+  proxy sends and RFC 9112 requires a server to accept — matched no route and the document carried
+  no preloads at all. The Cloudflare worker was unaffected, because its call site had already
+  normalised the URL. Found at review by asking where the two call sites could disagree; the route
+  path is now derived inside the function, so both agree by construction rather than by each caller
+  remembering.
+
+- **The server-rendered document now tells the browser which chunks the route needs (B-035).**
+  A page served by `theokit start` with SSR on — on BOTH the synchronous and the streaming
+  path — carries one `<link rel="modulepreload">` per chunk
+  its route needs beyond the entry, in the `<head>` — so the browser starts fetching them while it
+  parses, instead of discovering them one round trip later when the entry finally executes. A route
+  whose code is already in the entry carries none, and a route the map does not name serves exactly
+  as before. Measured end to end on the scaffold: a real request to `/about` came back with both of
+  that route's chunks in the head and zero preloads in the body. The map is read ONCE at startup —
+  it is a build artifact and cannot change while the server runs — and an absent or malformed map
+  degrades to serving without preloads rather than refusing to boot.
+
+- **A built page now knows which chunks its route needs, so the browser can be told up front (B-035).**
+  `theokit build` emits `.theokit/client/assets-map.json`, a route-to-chunks relation derived in
+  Rollup's `generateBundle` where chunk names first exist. Each route lists only what it needs
+  BEYOND the entry the document already loads, so a route whose code is in the entry lists nothing
+  and costs no wasted request. The hook declares `apply: 'build'` and is therefore absent from the
+  `theo dev` and `theo agent` plugin chains rather than merely inert in them, and it skips the SSR
+  pass by reading the RESOLVED `build.ssr` — the adapter runs two builds and passes `ssr: true` to
+  the plugin factory in both, so the option in the signature cannot tell them apart. Rendering the
+  preloads from this map is the next step and is not in this change.
+
+- **`theokit/server/rate-limit` now says what it promises, and a gate holds it there (B-203).**
+  That subpath's barrel is four `export *` lines, so every exported name reached consumers by
+  accident of syntax rather than by decision. `docs/api/rate-limit-subpath-surface.md` records a
+  verdict and a reason for each of the nine **value** symbols the built module publishes — two
+  promises and seven internal — and `tests/smoke/rate-limit-subpath-surface-is-decided.test.ts`
+  compares that record against the BUILT module in both directions, so a symbol that starts being
+  published fails the suite until someone decides about it, and a row that outlives its symbol
+  fails too. Types carry no row: they are erased at build, so a consumer cannot import one at
+  runtime, and a type named in a published signature is public by construction.
+
+- **The scaffold no longer says `node-pty` arrives through `@theokit/agents` (B-025).** The
+  generated `pnpm-workspace.yaml` approves four packages for install scripts and explained
+  `node-pty` as a native terminal "reached through `@theokit/agents`". Measured on a scaffold
+  generated from the template: `node-pty` appears **0 times** in the resulting `pnpm-lock.yaml` out
+  of 453 resolved packages, nothing matching lands in `node_modules/`, pnpm raises no
+  `ERR_PNPM_IGNORED_BUILDS`, and `@theokit/agents` declares no pty dependency at all. A scaffolded
+  web app therefore runs **no native build step**. The entry stays — it costs nothing and is there
+  for the day you add a package that needs it, like `better-sqlite3` and `workerd` beside it — and
+  the comment now says what was measured, keeping the wrong reason on the page rather than deleting
+  it, because a right entry with a wrong reason is what sends the next reader to the wrong package.
+
+- **A middleware that starts the route and answers from elsewhere no longer kills the server
+  (B-003).** `next()` hands back a promise, and the runner's contract lets a frame yield a
+  different value than that promise produces — a middleware answering from cache, or calling
+  `next()` twice. A rejected promise nobody observes terminates the Node process, so a route
+  handler that threw took the server down AFTER the client had already been answered, with
+  nothing connecting the crash to the request.
+
+  Every invocation is now owned the moment it is created, synchronously inside `next` — not
+  after the middleware body returns, which is too late for a body that awaits anything or
+  throws.
+
+  **A downstream failure does not become the request's answer.** `error-handling.md` forbids
+  swallowing an error; it does not require that every error overturn a `Response` the contract
+  says wins. A middleware that discarded an invocation's value has already said it does not want
+  that outcome. The failure is reported through `console.warn` instead — **except for the one
+  invocation the frame itself hands back**, whose rejection travels to the caller and would
+  otherwise be logged a second time while somebody is holding it.
+
+  That is the implemented predicate, and the first wording here said "only when nobody
+  downstream is holding it", which is false in both directions: an error-handling middleware
+  that catches and answers 503 IS holding the failure and still gets the warning, while a
+  rejection landing after the frame returned holds nothing and was silently dropped until review
+  measured it.
+
+  **This defect did not exist in a released version.** `next` is new in this same
+  `[Unreleased]`, so there was no promise to orphan before it; the crash was introduced and
+  repaired inside one unreleased window. It is recorded here rather than dropped because the
+  reasoning is what a reader of the contract needs — but nobody running `theokit@0.67.0` ever
+  met it.
+- **A middleware that throws after starting the route no longer loses the route's failure
+  (B-003).** The entry above reports a discarded invocation's rejection through `console.warn`,
+  with one exception: the invocation the frame itself hands back, whose rejection the caller is
+  already holding. A second path was missing from that predicate. When a middleware fires `next()`
+  without awaiting it and then throws its OWN error, the exception leaves the frame before
+  anything settles it, so the route's failure was recorded and read by nobody — **zero warnings**,
+  measured with a probe rather than inferred: `caught=MIDDLEWARE_THREW orphaned=[] reported=0`.
+  The process-death half was already closed, so the failure was owned; it was simply never
+  surfaced.
+
+  **The fix branches on error IDENTITY, and the obvious version of it is wrong.** Reporting
+  everything in the catch re-introduces the duplicate the entry above exists to prevent: measured
+  over both shapes against one shared error object, a middleware that `await`s `next()` and does
+  not catch receives the *identical* object the downstream rejected with
+  (`caught_is_sentinel=true`), while one that fires and throws receives a different one
+  (`caught_is_own=true`). So the catch finds the pending invocation whose recorded reason IS the
+  thrown object and hands it to the reporter as the yielded one — reusing the mechanism the frame
+  already had for "the caller is holding this one" — then rethrows unchanged. Both directions are
+  now regression-tested, and disabling the identity branch turns the second test red.
+
+- **The builder's output was never assignable to the runner's parameter, and nothing measured it
+  (B-003).** `MiddlewareHandler` admitted `Promise<void>` and `WebMiddleware` did not, so a
+  middleware written with `middleware()` and passed to `runWebMiddleware` failed to type-check —
+  two structurally similar types for one contract, which `tsc` reported the moment
+  either moved. `next` is now declared once, beside the definition of a middleware, and the Web
+  type aliases it.
+
+- **The artifact-promotion guard no longer names a records root two renames out of date
+  (B-191).** `apps/theocode/tools/check-artifact-promotion.mjs` declared `.claude/records/plans` and
+  `.claude/records/reviews`; both stopped existing when the write root moved to `.squad/` on
+  2026-09-09, which was the theocode suite's single failing test out of 1940. The published half of
+  each pair was deleted separately, so the pairing has nothing left to compare on either side: the
+  constant is now empty and carries an exported `RETIRED` reason naming what happened and when. The
+  reason is a VALUE the tests import rather than a comment, because an assertion satisfied by a word
+  appearing somewhere in a file is not an assertion. The guard's decision functions are unchanged —
+  they are what will police a pairing when one exists again — and the run that compares nothing keeps
+  saying so rather than printing a clean result.
+
+  Review found two more of the same defect and both are fixed here. Emptying the table had turned
+  `test_no_pair_names_the_retired_working_area` into a vacuous pass — 4 assertions before the change,
+  0 after, still green — the identical `for`-over-empty shape forty lines from the one that prompted
+  this item; it now also checks the retirement reason, which is the one string that still names a
+  root. And the split census message shipped with nothing executing it: a case now runs the CLI and
+  asserts that an empty table reports its retirement rather than borrowing the explanation written
+  for a declared directory that was absent.
+
+- **The Cloudflare streaming shell is now proved by execution, not by reading the generator
+  (B-001).** `tests/unit/cloudflare-streaming-shell.test.ts` asserted `expect(entry).toContain('<head>')`
+  over the generated worker SOURCE — a literal present in the emitted text whether or not the worker
+  forwards the shell to the renderer at run time. The file now also loads the emitted worker, calls
+  it with a real `Request`, and asserts on the served body; the stub echoes the `htmlHead` it was
+  handed rather than a canned document, and the test asserts the renderer was invoked BEFORE it
+  asserts anything about the body, because a body assertion is vacuous if the branch was never
+  taken. Both halves of the shell are observed — head and tail, byte-exact. The hydration script is
+  deliberately NOT claimed: the real renderer appends it, and a stub standing in for that renderer
+  cannot produce evidence about it. Both assertions were proved able to fail by canary before the work was accepted. The
+  string-containment test is kept: an entry that stops emitting the call never parses into a `fetch`
+  to execute, so the two fail on different defects.
 
 - **A corrected scaffold pin now reaches a user, not only the repository (B-186).** Minutes after
   `theokit@0.67.0` published the HITL approvals scoping fix, `npm create theokit` still produced an
