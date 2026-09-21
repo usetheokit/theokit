@@ -62,6 +62,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   with no `server/context.ts` resolves an anonymous caller, which is the honest answer rather than
   an invented subject.
 
+- **`@theokit/http/action-encryption` says, where a consumer reads it, that the action pipeline
+  does not use it (B-211, ADR 0015).** Its three exports occur 1, 2 and 1 times across every
+  package and app source tree, every one inside the file that defines them — the same property
+  ADR 0007 measured for the two subpaths it deprecated, and that ADR declined to absorb a third
+  nobody had argued about. The decision is the same as its siblings': deprecated, still working,
+  no removal in 2.x. The notice carries a sentence the other two did not need, because this one is
+  a cipher published beside an action pipeline that never calls it — an unused CSS helper promises
+  nothing, an unused cipher invites the belief that your action arguments are already encrypted.
+  Nothing breaks: `@deprecated` is an annotation and the algorithm, the subpath and the output
+  format are unchanged.
+
 - **A regression in the Cloudflare document-shell split can no longer reach production unseen
   (B-202).** #343's symptom was a served document with no `<head>`. The test written for it drives
   the generated worker against a real `Request` and asserts on the body — and it takes the shell as
