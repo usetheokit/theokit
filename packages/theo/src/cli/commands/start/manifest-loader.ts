@@ -6,8 +6,7 @@
  */
 
 import { existsSync } from 'node:fs'
-import { join } from 'node:path'
-import { dirname } from 'node:path'
+import { dirname, join } from 'node:path'
 
 import { warnOnce } from '../../../server/observability/logger.js'
 import type { ActionNode } from '../../../server/scan/action-scan.js'
@@ -32,11 +31,13 @@ export function loadRoutesAndActions(
   serverDir: string,
   // #95 follow-up — agents dir name (config `agentsDir`, default "agents") for the live-scan fallback.
   agentsDir = 'agents',
+  // #871 — the app root, so agent paths decode against what encoded them.
+  projectRoot: string = dirname(serverDir),
 ): LoadedRoutes {
   const manifestPath = join(distDir, 'manifest.json')
 
   if (existsSync(manifestPath)) {
-    const manifest = loadManifest(distDir, serverDir)
+    const manifest = loadManifest(distDir, serverDir, projectRoot)
     return {
       routes: manifest.routes,
       actions: manifest.actions,
@@ -55,6 +56,6 @@ export function loadRoutesAndActions(
     actions: scanServerActions(serverDir),
     wsRoutes: scanWebSocketRoutes(serverDir),
     // Agents live at <projectRoot>/<agentsDir>; projectRoot = serverDir's parent for the canonical layout.
-    agents: scanAgents(dirname(serverDir), agentsDir),
+    agents: scanAgents(projectRoot, agentsDir),
   }
 }

@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [create-theokit 3.0.3, theokit 0.70.0] - 2026-09-22
+
+Two packages were cut and the heading named one. `record-root-changelog.mjs` runs inside
+`version-packages` and records what `changeset version` bumped; `create-theokit` was bumped
+AFTER it, by `sync-template-pins.mjs`, so the record closed before the second bump existed.
+Corrected here rather than left, because the gate that reads this file is the only thing
+standing between a published version and a record nobody wrote.
+
+`create-theokit@3.0.3` carries the template pin `^0.69.0` -> `^0.70.0`, so an app scaffolded
+after this release installs it. Per-package detail is in each package's own `CHANGELOG.md`.
+
 ## [create-theokit 3.0.2, @theokit/http 2.3.0, theokit 0.69.0] - 2026-09-22
 
 ### Fixed
