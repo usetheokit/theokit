@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- The deploy adapters accept a declared `security.rateLimit` where five of six could not: `DeployedEntryOptions`, and `cloudflare` and `netlify`'s own option objects, now carry `DeployedRateLimitOptions` (B-027). They do not yet ENFORCE it — a target that cannot name its caller must not silently share one bucket, so `theokit build` still refuses for those five until each resolves a real client address. This is the type gate, not the limiter.
+
+
 ## [create-theokit 3.0.4, theokit 0.70.1] - 2026-09-22
 
 Every agent route of a freshly scaffolded, production-built app answered 500 in 0.70.0 — the release
