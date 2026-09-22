@@ -80,6 +80,103 @@ interface BakeableRateLimit {
    * code could not honour it, so a deployment behind a proxy keyed every visitor on the proxy.
    */
   trustProxy: boolean | number
+  /**
+   * B-257 — the durable counter the entry constructs, or `undefined` for the in-process default.
+   *
+   * A reference rather than an instance: this is baked into a generated file, so it must survive
+   * being written as source. `factory` is the one field that cannot be escaped — see
+   * `bakeableStore` below.
+   */
+  store?: BakeableStore
+}
+
+/** A durable store named by `theo.config.ts`, in the form a generated entry can construct. */
+interface BakeableStore {
+  /** The specifier the entry imports from. Written through `JSON.stringify`. */
+  module: string
+  /** The exported name it constructs. VALIDATED, never escaped — it becomes a bare identifier. */
+  factory: string
+  /** Constructor options. Written through `JSON.stringify`. */
+  options?: Record<string, string | number | boolean>
+}
+
+/**
+ * A JavaScript identifier, and nothing else.
+ *
+ * `factory` becomes a bare identifier in `import { <factory> } from …`, where `JSON.stringify` would
+ * emit `import { "x" }` and not parse. So it cannot be escaped — only validated. Without this, a
+ * `theo.config.ts` carrying `factory: "x } from 'evil'; //"` writes arbitrary code into every
+ * generated entry, and that file usually arrives with the clone.
+ */
+const IDENTIFIER = /^[A-Za-z_$][\w$]*$/
+
+/**
+ * Refuse a `store` a generated entry could not construct — or could construct into a hole.
+ *
+ * Extracted from `bakeableRateLimit` because it is its own responsibility and because inlining it
+ * took that function to a cyclomatic complexity of 18 against a ceiling of 15. The three refusals
+ * are one question asked of three fields, which is the shape SRP asks for.
+ *
+ * The third is the one that cannot be solved by escaping. `module` and `options` are written through
+ * `JSON.stringify`, as `trustProxy` already is at the emit site. `factory` lands as a BARE
+ * IDENTIFIER in `import { <factory> } from …`, where a quoted string does not parse — so it is
+ * validated, and a config that fails the check is refused by name rather than interpolated raw.
+ */
+function assertBakeableStore(store: unknown, target: string): void {
+  if (store === undefined) return
+
+  if (typeof store !== 'object' || store === null || Array.isArray(store)) {
+    throw new UnserialisableRateLimitError(
+      target,
+      '`security.rateLimit.store` must be an object naming a module and a factory.',
+      [
+        "declare `store: { module: '@upstash/redis', factory: 'Redis' }`",
+        'omit `store` and let the build refuse this target, which is honest about not limiting',
+      ],
+    )
+  }
+
+  const { module: mod, factory } = store as Record<string, unknown>
+
+  if (typeof mod !== 'string' || mod.length === 0) {
+    throw new UnserialisableRateLimitError(
+      target,
+      '`security.rateLimit.store.module` must be the specifier the entry imports from.',
+      ["declare `module: '@upstash/redis'`", 'omit `store`'],
+    )
+  }
+
+  if (typeof factory !== 'string' || !IDENTIFIER.test(factory)) {
+    throw new UnserialisableRateLimitError(
+      target,
+      '`security.rateLimit.store.factory` must be a plain identifier — it is written into the ' +
+        'generated entry as `import { <factory> }`, where a quoted string would not parse, so it ' +
+        'is validated rather than escaped. Anything else would put arbitrary source in every ' +
+        'deployment this config builds.',
+      [
+        "name the export directly: `factory: 'Redis'`",
+        'omit `store` and let the build refuse this target',
+      ],
+    )
+  }
+}
+
+/**
+ * Does this config name a durable store?
+ *
+ * **The call side and the declaration side must branch on ONE fact**, or the entry declares
+ * `createDurableRateLimiterWeb` and calls it without `await` — a promise compared against a budget,
+ * which never limits and never errors. The PLAN panel found the first draft naming only the
+ * declaration emitter: `deployedRateLimitFragment` writes `const RATE_LIMIT = …` and
+ * `rateLimitCheckFragment` writes `const limit = RATE_LIMIT(caller)`. They are a pair or they are a
+ * defect.
+ *
+ * It reads the config rather than re-running `bakeableRateLimit`, which would re-run the refusals
+ * against a target this function does not receive.
+ */
+function declaresDurableStore(rateLimit: RateLimitConfig | undefined): boolean {
+  const store = (rateLimit as { store?: unknown } | undefined)?.store
+  return typeof store === 'object' && store !== null
 }
 
 /**
@@ -122,6 +219,8 @@ function bakeableRateLimit(
       ],
     )
   }
+  assertBakeableStore(cfg.store, target)
+
   if (cfg.routes !== undefined) {
     throw new UnserialisableRateLimitError(
       target,
@@ -145,6 +244,9 @@ function bakeableRateLimit(
     max,
     trustProxy:
       typeof trustProxy === 'boolean' || typeof trustProxy === 'number' ? trustProxy : false,
+    // Validated above — `module` and `options` are escaped at emit time, `factory` was checked
+    // against IDENTIFIER because it cannot be.
+    store: cfg.store as BakeableStore | undefined,
   }
 }
 
@@ -184,7 +286,21 @@ export function deployedRateLimitFragment(
     `// the limit is PER INSTANCE, and a caller spread across instances gets that many budgets.`,
     `// The address is resolved correctly either way; the counting is what B-257 is about, and`,
     `// \`theokit build\` refuses a declared limit on those five until it is.`,
-    `const RATE_LIMIT = createRateLimiterWeb({ windowMs: ${baked.windowMs}, max: ${baked.max} })`,
+    ...(baked.store === undefined
+      ? [
+          `const RATE_LIMIT = createRateLimiterWeb({ windowMs: ${baked.windowMs}, max: ${baked.max} })`,
+        ]
+      : [
+          // B-257 — a durable counter, named by the app. `module` and the options are JSON literals;
+          // `factory` was validated against IDENTIFIER at bake time because it lands here as a bare
+          // identifier and no escape can make that safe.
+          `import { ${baked.store.factory} } from ${JSON.stringify(baked.store.module)}`,
+          `const RATE_LIMIT_STORE = new ${baked.store.factory}(${JSON.stringify(baked.store.options ?? {})})`,
+          `const RATE_LIMIT = createDurableRateLimiterWeb(`,
+          `  { windowMs: ${baked.windowMs}, max: ${baked.max} },`,
+          `  { store: RATE_LIMIT_STORE },`,
+          `)`,
+        ]),
     ``,
     `// How many proxies the deployment declared in front of it. \`client-ip.ts\` reads a forwarded`,
     `// header only when this says one wrote it: the header is whatever the client typed, so`,
@@ -251,7 +367,10 @@ export function rateLimitCheckFragment(
     `${indent}if (caller === undefined) {`,
     `${indent}  ${refuseUnnamed}`,
     `${indent}}`,
-    `${indent}const limit = RATE_LIMIT(caller)`,
+    // B-257 — the call side of the pair. `deployedRateLimitFragment` emits the DECLARATION; this
+    // emits the CALL, and the two branch on the same fact or the entry names a symbol it never
+    // declared. A durable limiter returns a promise; the sync facade does not.
+    `${indent}const limit = ${declaresDurableStore(rateLimit) ? 'await ' : ''}RATE_LIMIT(caller)`,
     `${indent}if (limit.limited) {`,
     `${indent}  ${refuse}`,
     `${indent}}`,
