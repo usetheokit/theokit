@@ -12,8 +12,7 @@ import {
   scannedFromLoaderCache,
   JSON_NOT_FOUND_RESPONSE,
 } from './deployed-agents.js'
-import { deployedCorsFragment } from './deployed-cors.js'
-import { deployedCsrfFragment } from './deployed-csrf.js'
+import { deployedEntryPreamble } from './deployed-preamble.js'
 import {
   agentsDirLiteral,
   deployedRuntimeConfigFragment,
@@ -21,7 +20,7 @@ import {
 } from './deployed-runtime-config.js'
 import { deployedTraceFragment } from './deployed-trace.js'
 import { nodeAdapter } from './node.js'
-import { describeDeployedSecurityHeaders, securityHeadersDeclarations } from './security-headers.js'
+import { describeDeployedSecurityHeaders } from './security-headers.js'
 import type { AdapterBuildContext, DeployAdapter, DeployedEntryOptions } from './types.js'
 
 export interface AwsLambdaBuildDeps {
@@ -225,15 +224,7 @@ export function renderAwsLambdaEntry(opts: DeployedEntryOptions = {}): string {
     `// theo.config.ts to read. Non-API paths 404 here and the document is served`,
     `// from CloudFront or another static host, so this covers the API and not the`,
     `// page (usetheokit/theokit#412).`,
-    ...securityHeadersDeclarations(opts.securityHeaders),
-    ``,
-    ...runtimeConfig.imports,
-    ...agentsFragment.imports,
-    ...runtimeConfig.declarations,
-    ...agentsFragment.declarations,
-    ...deployedCsrfFragment(opts),
-    ``,
-    ...deployedCorsFragment(opts.cors, 'aws-lambda'),
+    ...deployedEntryPreamble(runtimeConfig, agentsFragment, opts, 'aws-lambda'),
     ``,
     `function eventV2ToRequest(event) {`,
     `  const method = event.requestContext?.http?.method ?? 'GET'`,

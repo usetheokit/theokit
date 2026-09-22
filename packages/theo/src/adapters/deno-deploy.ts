@@ -8,9 +8,8 @@ import type { TheoConfig } from '../config/schema.js'
 import { assertServicesUnsupported, readManifest } from '../services/index.js'
 
 import { deployedAgentsFragment, scannedFromLoaderCache } from './deployed-agents.js'
-import { deployedCorsFragment } from './deployed-cors.js'
-import { deployedCsrfFragment } from './deployed-csrf.js'
 import { planDeployedPlugins } from './deployed-plugins-module.js'
+import { deployedEntryPreamble } from './deployed-preamble.js'
 import {
   agentsDirLiteral,
   deployedRuntimeConfigFragment,
@@ -18,7 +17,7 @@ import {
 } from './deployed-runtime-config.js'
 import { deployedTraceFragment } from './deployed-trace.js'
 import { nodeAdapter } from './node.js'
-import { describeDeployedSecurityHeaders, securityHeadersDeclarations } from './security-headers.js'
+import { describeDeployedSecurityHeaders } from './security-headers.js'
 import type { AdapterBuildContext, DeployAdapter, DeployedEntryOptions } from './types.js'
 
 export interface DenoBuildDeps {
@@ -79,15 +78,7 @@ export function renderDenoEntry(port: number, opts: DeployedEntryOptions = {}): 
     `// theo.config.ts to read. Non-API paths 404 here and are served by Deno`,
     `// Deploy's static asset handler, so this covers the API and not the`,
     `// document (usetheokit/theokit#412).`,
-    ...securityHeadersDeclarations(opts.securityHeaders),
-    ``,
-    ...runtimeConfig.imports,
-    ...agentsFragment.imports,
-    ...runtimeConfig.declarations,
-    ...agentsFragment.declarations,
-    ...deployedCsrfFragment(opts),
-    ``,
-    ...deployedCorsFragment(opts.cors, 'deno-deploy'),
+    ...deployedEntryPreamble(runtimeConfig, agentsFragment, opts, 'deno-deploy'),
     ``,
     `function notFound() {`,
     `  return new Response(JSON.stringify({ error: { code: 'NOT_FOUND' } }), {`,

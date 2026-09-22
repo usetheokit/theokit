@@ -14,8 +14,7 @@ import {
   scannedFromLoaderCache,
   JSON_NOT_FOUND_RESPONSE,
 } from './deployed-agents.js'
-import { deployedCorsFragment } from './deployed-cors.js'
-import { deployedCsrfFragment } from './deployed-csrf.js'
+import { deployedEntryPreamble } from './deployed-preamble.js'
 import {
   agentsDirLiteral,
   deployedRuntimeConfigFragment,
@@ -23,11 +22,7 @@ import {
 } from './deployed-runtime-config.js'
 import { deployedTraceFragment } from './deployed-trace.js'
 import { nodeAdapter } from './node.js'
-import {
-  buildSecurityHeaders,
-  securityHeadersDeclarations,
-  describeDeployedSecurityHeaders,
-} from './security-headers.js'
+import { buildSecurityHeaders, describeDeployedSecurityHeaders } from './security-headers.js'
 import type { AdapterBuildContext, DeployAdapter, DeployedEntryOptions } from './types.js'
 
 /**
@@ -206,15 +201,7 @@ export function renderVercelFunctionEntry(opts: DeployedEntryOptions = {}): stri
     `// theo.config.ts to read. config.json routes only /api/* here, so this`,
     `// covers the API and not the document Vercel's static host serves`,
     `// (usetheokit/theokit#412).`,
-    ...securityHeadersDeclarations(opts.securityHeaders),
-    ``,
-    ...runtimeConfig.imports,
-    ...agentsFragment.imports,
-    ...runtimeConfig.declarations,
-    ...agentsFragment.declarations,
-    ...deployedCsrfFragment(opts),
-    ``,
-    ...deployedCorsFragment(opts.cors, 'vercel'),
+    ...deployedEntryPreamble(runtimeConfig, agentsFragment, opts, 'vercel'),
     ``,
     `// Vercel Functions invoke this default export with a (req, res) pair`,
     `// (Node IncomingMessage-style). \`routeRequest\` produces a Web Response for`,

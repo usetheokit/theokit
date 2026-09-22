@@ -14,8 +14,9 @@ import {
   JSON_NOT_FOUND_RESPONSE,
   scannedFromLoaderCache,
 } from './deployed-agents.js'
-import { deployedCorsFragment, type DeployedCorsOptions } from './deployed-cors.js'
-import { deployedCsrfFragment, type DeployedCsrfOptions } from './deployed-csrf.js'
+import { type DeployedCorsOptions } from './deployed-cors.js'
+import { type DeployedCsrfOptions } from './deployed-csrf.js'
+import { deployedEntryPreamble } from './deployed-preamble.js'
 import {
   agentsDirLiteral,
   type DeployedAgentsDirOptions,
@@ -24,11 +25,7 @@ import {
 } from './deployed-runtime-config.js'
 import { deployedTraceFragment } from './deployed-trace.js'
 import { nodeAdapter } from './node.js'
-import {
-  buildSecurityHeaders,
-  securityHeadersDeclarations,
-  describeDeployedSecurityHeaders,
-} from './security-headers.js'
+import { buildSecurityHeaders, describeDeployedSecurityHeaders } from './security-headers.js'
 import type { AdapterBuildContext, DeployAdapter } from './types.js'
 
 export class NetlifyConflictError extends Error {
@@ -82,15 +79,7 @@ export function renderNetlifyFunction(
     `// theo.config.ts to read. The netlify.toml redirect routes only /api/* here,`,
     `// so this covers the API and not the document Netlify's static host serves`,
     `// (usetheokit/theokit#412).`,
-    ...securityHeadersDeclarations(opts.securityHeaders),
-    ``,
-    ...runtimeConfig.imports,
-    ...agentsFragment.imports,
-    ...runtimeConfig.declarations,
-    ...agentsFragment.declarations,
-    ...deployedCsrfFragment(opts),
-    ``,
-    ...deployedCorsFragment(opts.cors, 'netlify'),
+    ...deployedEntryPreamble(runtimeConfig, agentsFragment, opts, 'netlify'),
     ``,
     `export default async (request, context) => {`,
     `  // #409 — the preflight is answered BEFORE anything routes: an OPTIONS the router`,
