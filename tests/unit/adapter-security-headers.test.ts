@@ -127,6 +127,17 @@ export const createCorsWebHandler = (...a) => b().createCorsWebHandler(...a)
 export const mountAgent = async () => new Response('agent')
 export const resolveProvider = () => ({ apiKey: 'sk-test' })
 export const scanAgents = () => []
+// B-185 — exported so the emitted entry resolves; DECLINING so this file's subject is unchanged.
+// These four stubs stay four because their bodies are opposites (ADR 0013), and the opposite here
+// is behavioural: a test about the document, the run path, plugins or security headers must see
+// the aux matcher decline exactly as it would for a url that is not an aux route.
+// B-185 — inert: the matcher below declines, so no resolver is ever invoked here.
+export const createSubjectResolverFromFactory = () => async () => null
+// B-185 — the scan variant of the fragment imports this one instead; this file drives bun
+// and deno as well as the Worker, so it owes both entries' symbols.
+export const createAgentSubjectResolver = () => async () => null
+export const matchAgentAuxRoute = async () => null
+export const serveMatchedAuxRoute = () => new Response('aux')
 `
 
 /** The nonce the streaming renderer was handed, so the header can be matched to it. */

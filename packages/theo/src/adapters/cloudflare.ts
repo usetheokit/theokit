@@ -23,10 +23,7 @@ import {
 } from './deployed-runtime-config.js'
 import { deployedTraceFragment } from './deployed-trace.js'
 import { nodeAdapter } from './node.js'
-import {
-  describeDeployedSecurityHeaders,
-  renderSecurityHeadersConfigLiteral,
-} from './security-headers.js'
+import { describeDeployedSecurityHeaders, securityHeadersDeclarations } from './security-headers.js'
 import type { AdapterBuildContext, DeployAdapter } from './types.js'
 
 /**
@@ -44,7 +41,11 @@ import type { AdapterBuildContext, DeployAdapter } from './types.js'
  * a correct artifact should say so at build time; the alternative is a deploy
  * that looks successful and serves pages with no stylesheet.
  */
-function readDocumentShell(
+/**
+ * @internal Exported for tests only. Nothing re-exports this module, so this does not reach the
+ * published surface — `findRootDiv`, exported for the same reason, appears 0 times in `dist/`.
+ */
+export function readDocumentShell(
   cwd: string,
   streaming: boolean,
 ): { htmlHead?: string; htmlTail?: string } {
@@ -277,6 +278,8 @@ export function renderCloudflareWorkerEntry(
      * that only consulted the route table answered every `/api/agents/<name>` with a 404.
      */
     agents?: readonly DeployedAgent[]
+    /** B-185 — the app's `server/context.ts`, project-relative, or absent when it declares none. */
+    contextModule?: string
     /** WebSocket route files, scanned on the build machine. Only their presence is used (#369). */
     wsRoutes?: readonly string[]
   } & DeployedServerDirOptions &
@@ -323,8 +326,20 @@ export function renderCloudflareWorkerEntry(
   )
   const runtimeConfig = deployedRuntimeConfigFragment(opts)
   const agentsFragment = deployedAgentsFragment(
-    opts.agents === undefined ? undefined : { kind: 'baked', agents: opts.agents },
-    { wrapSecurityHeaders: true },
+    opts.agents === undefined
+      ? undefined
+      : // B-185 — a Worker has no filesystem, so its identity module is baked exactly like its
+        // agents and its routes (ADR 0014). `contextModule` is `undefined` for an app that
+        // declares none, and the generator then emits no import for it.
+        { kind: 'baked', agents: opts.agents, contextModule: opts.contextModule },
+    {
+      wrapSecurityHeaders: true,
+      // B-185 — bound only when the runtime-config fragment declared the const, which is
+      // exactly when a plugins module was emitted. Referencing it otherwise would emit an
+      // identifier the entry never declares.
+      pluginRunnerExpr:
+        opts.runtimeConfigModule === undefined ? undefined : 'await THEO_PLUGIN_RUNNER',
+    },
   )
 
   return [
@@ -362,8 +377,7 @@ export function renderCloudflareWorkerEntry(
     `// function, same input, so the deployed page and the local one cannot`,
     `// disagree about what the configuration means.`,
     preloadSupport,
-    `const SECURITY_HEADERS_CONFIG = ${renderSecurityHeadersConfigLiteral(opts.securityHeaders)}`,
-    `const SECURITY_HEADERS = buildSecurityHeaders(SECURITY_HEADERS_CONFIG, { production: true })`,
+    ...securityHeadersDeclarations(opts.securityHeaders),
     ``,
     ...deployedCsrfFragment(opts, 'a Worker'),
     ``,
@@ -388,6 +402,7 @@ export function renderCloudflareWorkerEntry(
       nonApiBranch,
       runtimeConfig.executeRouteSpread,
       agentsFragment.branch,
+      agentsFragment.hostBypass,
     ),
   ].join('\n')
 }
@@ -405,10 +420,12 @@ function cloudflareHandleRequestFragment(
   nonApiBranch: string,
   runtimeSpread: string,
   agentBranch: readonly string[],
+  /** SI-020 — the condition that keeps an agent card path out of the static-asset branch. */
+  hostBypass: string,
 ): string[] {
   return [
     `async function handleRequest(request, url, env) {`,
-    `    if (!url.pathname.startsWith('/api/')) {`,
+    `    if (!url.pathname.startsWith('/api/')${hostBypass}) {`,
     nonApiBranch,
     `    }`,
     ``,
@@ -534,7 +551,15 @@ export const cloudflareAdapter: DeployAdapter = {
     // edge, which is the layering inversion ADR-0001 v3 removed for `vite-plugin` and which
     // `adapters-may-only-depend-on-core-router-services` refuses. An absent scanner emits a worker
     // with no routes rather than falling back to a runtime scan — the fallback IS the defect.
-    const scanned = ctx?.scanRoutes?.(config.serverDir) ?? { routes: [], wsRoutes: [], agents: [] }
+    const scanned = ctx?.scanRoutes?.(config.serverDir) ?? {
+      routes: [],
+      wsRoutes: [],
+      agents: [],
+      // B-185 — no provider means no scan, and an app whose context nobody looked for is
+      // indistinguishable here from one that has none. Both resolve an anonymous caller, which is
+      // the honest answer rather than an invented subject.
+      contextModule: undefined,
+    }
 
     const pluginsPlan = planDeployedPlugins(config.plugins, 'cloudflare')
     if (pluginsPlan !== undefined) {
@@ -562,6 +587,9 @@ export const cloudflareAdapter: DeployAdapter = {
         routes: scanned.routes,
         // #367 — a Worker has no filesystem, so its agents are decided here like its routes.
         agents: scanned.agents,
+        // B-185 — rides beside the agents because it is decided by the same provider, for the same
+        // reason: `build.ts` holds `serverDir` and a Worker cannot look for the module itself.
+        contextModule: scanned.contextModule,
         wsRoutes: scanned.wsRoutes,
       }),
     )

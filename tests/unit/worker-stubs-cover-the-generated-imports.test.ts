@@ -22,7 +22,9 @@ import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
+import { renderBunEntry } from '../../packages/theo/src/adapters/bun.js'
 import { renderCloudflareWorkerEntry } from '../../packages/theo/src/adapters/cloudflare.js'
+import { renderDenoEntry } from '../../packages/theo/src/adapters/deno-deploy.js'
 
 /** Every named symbol the entry imports from a non-relative module — the set a stub must cover. */
 function importedSymbols(entry: string): Set<string> {
@@ -52,18 +54,69 @@ function stubExports(file: string): Set<string> {
 }
 
 const STUB_FILES = [
+  // B-185 — added after this very file's stub broke on the identity import while the guard
+  // reported green, because the guard did not know the file existed. A stub outside this list is
+  // a stub nothing derives, which is the same silence the three blind axes above produced.
+  'deployed-agents-dispatch-aux-routes.test.ts',
   'cloudflare-serves-the-document.test.ts',
   'deployed-agent-is-served.test.ts',
   'deployed-plugins-reach-the-entry.test.ts',
   'adapter-security-headers.test.ts',
 ]
 
+/**
+ * Every shape the generator can emit. `ssrStreaming` was the only axis this guard varied until
+ * B-185, and `agents` is exactly as conditional: with none, `deployedAgentsFragment` returns its
+ * EMPTY fragment and the agent import line is absent from the union, so a symbol added to that line
+ * was invisible here. It cost 22 failing tests across three files in one run — the very failure
+ * mode B-190 built this guard to prevent, arriving through the axis the guard did not turn.
+ */
+const AGENTS = [{ filePath: 'agents/chat.js', agentPath: '/api/agents/chat', name: 'chat' }]
+const CONTEXT = 'server/context.js'
+const SHAPES = [
+  { ssrStreaming: false },
+  { ssrStreaming: true },
+  { ssrStreaming: false, agents: AGENTS },
+  { ssrStreaming: true, agents: AGENTS },
+  // B-185 — the THIRD conditional axis, and the third time this guard was blind to one. The
+  // identity entry is imported only where identity is resolved, so a shape with agents and no
+  // context module never carries `createSubjectResolverFromFactory`: measured at 16 required
+  // symbols with that name absent, which means deleting it from any stub kept this green. The two
+  // paragraphs above record the same discovery for `ssrStreaming` and for the scan variant — this
+  // one was introduced by the slice that wrote the second of them.
+  { ssrStreaming: false, agents: AGENTS, contextModule: CONTEXT },
+] as const
+
+function requiredSymbols(): Set<string> {
+  const names = new Set<string>()
+  for (const shape of SHAPES)
+    for (const s of importedSymbols(renderCloudflareWorkerEntry(shape))) names.add(s)
+  return names
+}
+
+/**
+ * The files above stub a CLOUDFLARE entry, and asking them for bun's symbols would demand coverage
+ * of an entry they never render. The multi-target stub is a different case: it drives all three,
+ * so it owes all three.
+ *
+ * B-185 measured why this needs its own check. The `scan` variant emits a DIFFERENT identity import
+ * from the `baked` one, so a symbol added to it was invisible to a guard that rendered only
+ * Cloudflare — 21 failing tests in one run, the same blindness as the agents axis, one variant over.
+ */
+const MULTI_TARGET_STUBS = [
+  'adapter-security-headers.test.ts',
+  'deployed-plugins-reach-the-entry.test.ts',
+] as const
+
 describe('the worker stubs cover what the generator imports (B-190)', () => {
   it('test_the_symbol_list_is_derivable_from_the_generator', () => {
-    // The list is CONDITIONAL — ssrStreaming changes which modules are imported — so the union
-    // over both shapes is what a stub has to satisfy, not either one alone.
+    // The list is CONDITIONAL — both `ssrStreaming` and `agents` change which modules are
+    // imported — so the union over every shape is what a stub has to satisfy, not any one alone.
     const off = importedSymbols(renderCloudflareWorkerEntry({ ssrStreaming: false }))
     const on = importedSymbols(renderCloudflareWorkerEntry({ ssrStreaming: true }))
+    const withAgents = importedSymbols(
+      renderCloudflareWorkerEntry({ ssrStreaming: false, agents: AGENTS }),
+    )
 
     expect(
       off.size,
@@ -73,13 +126,38 @@ describe('the worker stubs cover what the generator imports (B-190)', () => {
       [...on].some((s) => !off.has(s)),
       'ssrStreaming: true imported nothing extra, so this test is not covering the conditional arm it claims to',
     ).toBe(true)
+    expect(
+      [...withAgents].some((s) => !off.has(s)),
+      'an entry WITH agents imported nothing extra, so this test is not covering the agents arm — ' +
+        'which is the arm that was missing when a symbol added to it broke 22 tests',
+    ).toBe(true)
+    const withContext = importedSymbols(
+      renderCloudflareWorkerEntry({ ssrStreaming: false, agents: AGENTS, contextModule: CONTEXT }),
+    )
+    expect(
+      [...withContext].some((s) => !withAgents.has(s)),
+      'an entry with a baked context module imported nothing beyond the agents arm, so this test ' +
+        'is not covering the identity axis — the third axis this guard was blind to',
+    ).toBe(true)
+  })
+
+  it.each(MULTI_TARGET_STUBS)('test_%s_covers_bun_and_deno_too', (file) => {
+    const required = new Set([
+      ...importedSymbols(renderBunEntry(3000, {})),
+      ...importedSymbols(renderDenoEntry(3000, {})),
+    ])
+    const exported = stubExports(file)
+
+    const missing = [...required].filter((s) => !exported.has(s))
+    expect(
+      missing,
+      `${file} drives bun and deno as well as the Worker, so it owes every symbol those two ` +
+        `entries import — a scan-variant symbol missing here is 21 failing tests, measured`,
+    ).toEqual([])
   })
 
   it.each(STUB_FILES)('test_%s_exports_every_symbol_the_entry_imports', (file) => {
-    const required = new Set([
-      ...importedSymbols(renderCloudflareWorkerEntry({ ssrStreaming: false })),
-      ...importedSymbols(renderCloudflareWorkerEntry({ ssrStreaming: true })),
-    ])
+    const required = requiredSymbols()
     const exported = stubExports(file)
 
     const missing = [...required].filter((s) => !exported.has(s))

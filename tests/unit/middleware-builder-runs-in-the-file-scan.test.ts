@@ -132,6 +132,61 @@ describe('the builder from the README runs in server/middleware/', () => {
     expect((result.ctx as Record<string, unknown>).token).toBe('Bearer let-me-in')
   })
 
+  it('test_a_middleware_that_calls_next_on_the_node_path_fails_loudly', async () => {
+    // B-196. `web-middleware-runner.ts:124` supplies `next`; `middleware-runner.ts:84` invoked the
+    // same type with TWO arguments, so on the documented authoring surface — `server/middleware/`,
+    // which `README.md:39` names — `next` was `undefined` and a middleware that called it silently
+    // did nothing. `define-middleware.ts` recorded that in its own docblock and named this item.
+    //
+    // ADR 0003's ruling was amended the same day it was written, because a PLAN panel refuted the
+    // premise that the fold is cheap: the route in `execute.ts` is 194 inline statements capturing
+    // eight outer variables, the runner is two `if` branches rather than one list, and the context
+    // is assembled AFTER the chain. So this closes the item by its DoD's SECOND branch — the type
+    // makes the absence a compile-time error — and leaves the fold-versus-retirement decision
+    // exactly as open as the amendment left it.
+    writeMiddleware(
+      '01-around.ts',
+      `import { middleware } from '../../../../packages/theo/src/server/define/index.js'
+       export default middleware()
+         .handle(async (request, context, next) => {
+           context.before = true
+           await next()
+           context.after = true
+         })
+         .build()`,
+    )
+    const { req, res } = nodePair()
+
+    // Loud, and specific about what to do instead. A silent continue is the defect; a generic
+    // throw would replace it with a mystery.
+    await expect(runMiddlewareAndContext(req, res, loadModule, serverDir)).rejects.toThrow(
+      /next.*not available.*server\/middleware/is,
+    )
+  })
+
+  it('test_the_optional_call_shape_also_fails_loudly_rather_than_continuing', async () => {
+    // The shape the OPTIONAL type taught authors to write. `next?.()` with nothing supplied is a
+    // silent continue — the code after it never runs and nothing says so — and it is the half of
+    // B-196 that `define-middleware.ts` called "silently does nothing". A middleware already
+    // written this way now meets the same refusal as `next()`.
+    writeMiddleware(
+      '01-optional-around.ts',
+      `import { middleware } from '../../../../packages/theo/src/server/define/index.js'
+       export default middleware()
+         .handle(async (request, context, next) => {
+           context.before = true
+           await next?.()
+           context.after = true
+         })
+         .build()`,
+    )
+    const { req, res } = nodePair()
+
+    await expect(runMiddlewareAndContext(req, res, loadModule, serverDir)).rejects.toThrow(
+      /next.*not available.*server\/middleware/is,
+    )
+  })
+
   it('test_returning_a_Response_short_circuits_and_is_written_to_the_client', async () => {
     writeMiddleware(
       '01-gate.ts',
@@ -150,6 +205,64 @@ describe('the builder from the README runs in server/middleware/', () => {
     expect(result.aborted).toBe(true)
     expect(res.statusCode).toBe(401)
     expect(written.join('')).toBe('nope')
+  })
+
+  it('test_an_express_middleware_that_calls_next_from_a_callback_is_not_an_abort', async () => {
+    // B-218. `MiddlewareFn` is declared as the Express contract `(req, res, next)`, under which
+    // `next` may legitimately be invoked from a callback AFTER the function has returned — the
+    // dominant Express shape for callback-based I/O.
+    //
+    // The runner read `nextCalled` immediately after awaiting the middleware and turned
+    // `!nextCalled` into `aborted: true`. So `function (req, res, next) { fs.readFile(p, () =>
+    // next()) }` returned `undefined` synchronously, the flag was still false one microtask later,
+    // the runner reported aborted, and `execute.ts` returned from the handler having written
+    // nothing — leaving the socket open until a timeout, with the eventual `next()` setting a flag
+    // nobody reads.
+    //
+    // "Did not call next synchronously" and "has taken responsibility for the response" are
+    // different facts. They were treated as one.
+    writeMiddleware(
+      '01-async-next.ts',
+      `export default function (req, res, next) {
+         setTimeout(() => { next() }, 5)
+       }`,
+    )
+    const { req, res } = nodePair()
+
+    const result = await runMiddlewareAndContext(req, res, loadModule, serverDir)
+
+    expect(
+      result.aborted,
+      'an Express middleware calling next from a callback was read as an abort, which hangs the request',
+    ).toBe(false)
+  })
+
+  it('test_a_node_middleware_that_answered_short_circuits_even_having_called_next', async () => {
+    // The control on B-218's fix. Waiting for a signal must not remove the OTHER signal: a
+    // middleware that writes a response has taken responsibility, and the runner must report an
+    // abort so the route does not run and write a second time.
+    //
+    // It calls next AS WELL, and that is the whole point of the case. A middleware that answers
+    // and stays silent is already an abort through `!nextCalled`, so it cannot tell whether
+    // `res.writableEnded` is consulted at all — the first version of this control asserted exactly
+    // that and a mutation removing `|| res.writableEnded` left it green.
+    writeMiddleware(
+      '01-answers.ts',
+      `export default function (req, res, next) {
+         res.writeHead(401)
+         res.end('denied')
+         next()
+       }`,
+    )
+    const { req, res, written } = nodePair()
+
+    const result = await runMiddlewareAndContext(req, res, loadModule, serverDir)
+
+    expect(result.aborted, 'a middleware that answered was not treated as having answered').toBe(
+      true,
+    )
+    expect(written.join('')).toContain('denied')
+    expect(res.statusCode).toBe(401)
   })
 
   it('test_a_node_shaped_middleware_still_runs_unchanged', async () => {

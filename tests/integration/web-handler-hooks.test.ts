@@ -243,6 +243,44 @@ describe('executeWebRequest + hooks lifecycle (T5a.2 Phase G slice 1/N)', () => 
     expect(response.status).toBe(500)
   })
 
+  it('EC-9: a throwing onError hook is reported, not only swallowed', async () => {
+    // B-213. Not re-raising is correct and EC-9's recursion argument holds. Swallowing WITHOUT a
+    // report is a separate act that the argument does not cover.
+    //
+    // An onError hook is the plugin an operator installs to ship errors to a tracker. When it
+    // throws — bad DSN, transport down, a bug in the hook — every error in the process is lost and
+    // the dashboard shows zero incidents, which reads as a healthy service. Nothing recorded that
+    // the reporting path was broken. `rules/error-handling.md` names the bare catch as the
+    // anti-pattern, and the sibling runner two files over goes to considerable length for exactly
+    // this class of unreturnable failure.
+    const warned: string[] = []
+    const realWarn = console.warn
+    console.warn = (...args: unknown[]) => {
+      warned.push(args.join(' '))
+    }
+    let response: Response
+    try {
+      const hooks = {
+        onError: [
+          (() => {
+            throw new Error('the tracker DSN is wrong')
+          }) as WebOnErrorHook,
+        ],
+      }
+      const request = new Request('http://example.com/api', { method: 'GET' })
+      response = await executeWebRequest(request, throwingRoute, { hooks })
+    } finally {
+      console.warn = realWarn
+    }
+
+    // Unchanged, and asserted here so the report cannot be bought by breaking the swallow.
+    expect(response.status, 'the error response stopped being returned').toBe(500)
+    // The reason, because "a hook failed" does not tell an operator which of their hooks or why.
+    expect(warned.join('\n'), 'the broken reporting path was silent').toMatch(
+      /onError hook threw.*the tracker DSN is wrong/s,
+    )
+  })
+
   it('requestId defaults to a fresh UUID when not provided', async () => {
     const ids: string[] = []
     const hooks = {

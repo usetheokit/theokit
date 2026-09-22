@@ -1,5 +1,5 @@
 /**
- * M4 (theokit-ai-first) — the invariant guard (ADR 0038 enforcement teeth).
+ * M4 (theokit-ai-first) — the invariant guard (ADR 0017 enforcement teeth).
  *
  * The cohesive harness is an ADAPTER over `@theokit/sdk`, never a parallel runtime. This guard
  * reads the harness source and asserts, mechanically, that it:
@@ -9,7 +9,7 @@
  *      `pre_tool_call` hook — it does NOT reimplement a tool-calling loop.
  *
  * A regression here means someone started growing a second runtime inside the harness — exactly
- * what ADR 0038 forbids. Fail loud.
+ * what ADR 0017 forbids. Fail loud.
  */
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -45,7 +45,7 @@ function read(rel: string): string {
   return readFileSync(join(ROOT, rel), 'utf8')
 }
 
-describe('harness invariant guard — no parallel runtime (M4 / ADR 0038)', () => {
+describe('harness invariant guard — no parallel runtime (M4 / ADR 0017)', () => {
   it('test_every_harness_file_still_exists', () => {
     // Without this assertion a renamed file takes the guard down with `ENOENT` — which reads as "the
     // test broke", not as "the list is stale". That is how M49 left the remaining five files

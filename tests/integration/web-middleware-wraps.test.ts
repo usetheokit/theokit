@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import type { MiddlewareNext } from '../../packages/theo/src/server/define/define-middleware.js'
 import { middleware } from '../../packages/theo/src/server/define/middleware-builder.js'
@@ -77,6 +77,49 @@ function countingDownstream(trace: string[] = []) {
 }
 
 describe('the public builder runs in the Web runner (B-003)', () => {
+  // B-220. Six tests in this file replace global `console.warn` and three install a process-level
+  // `unhandledRejection` listener, and every restore sat in the test body — some after the
+  // assertions. A failing assertion skipped the restore, leaving `console.warn` pointing at a dead
+  // closure that writes into a completed test's array and leaving a listener installed. Later
+  // tests assert on exactly those two things, so ONE genuine failure turned its successors into
+  // false failures and buried the real diagnostic under them. Measured by the audit on a scratch
+  // copy: forcing one assertion to fail produced three failures, two of them fabricated.
+  //
+  // The original is captured ONCE, here, rather than per test. A per-test `const realWarn =
+  // console.warn` captures whatever the previous test left behind, so a leak propagates through
+  // every "restore" after it.
+  //
+  // The per-test patches and listeners are DELIBERATELY left in place. Removing them as redundant
+  // was tried and reverted: `process.on('unhandledRejection', onUnhandled)` is not bookkeeping,
+  // it is the INSTRUMENT of the three tests that assert `expect(orphaned).toEqual([])`. Without
+  // the registration nothing ever pushes, and all three assertions pass while measuring nothing —
+  // the exact tautology this file's own items are about. Only the restores are made redundant by
+  // the net below, and a redundant restore costs nothing.
+  const pristineWarn = console.warn
+  let unhandledListenersAtEntry = 0
+
+  beforeEach(() => {
+    unhandledListenersAtEntry = process.listenerCount('unhandledRejection')
+  })
+
+  afterEach(() => {
+    console.warn = pristineWarn
+
+    // Cleaned BEFORE asserted, so one leak cannot cascade into every successor — the cascade is
+    // the damage this item is about, not the leak itself.
+    const leaked = process.listenerCount('unhandledRejection') - unhandledListenersAtEntry
+    if (leaked > 0) {
+      for (const listener of process.listeners('unhandledRejection').slice(-leaked)) {
+        process.off('unhandledRejection', listener)
+      }
+    }
+
+    expect(
+      leaked,
+      'a test left an unhandledRejection listener installed; it is removed now, and this names the test that leaked rather than the one that trips over it',
+    ).toBe(0)
+  })
+
   it('test_a_middleware_that_awaits_next_and_returns_void_yields_the_downstream_response', async () => {
     const seen: string[] = []
     const downstream = countingDownstream(seen)
@@ -165,6 +208,154 @@ describe('the public builder runs in the Web runner (B-003)', () => {
     // "a Response came back".
     expect(result, "the middleware's own Response wins").toBe(own)
     expect(result, "and it is not the downstream's").not.toBe(downstream.response)
+  })
+
+  it('test_a_discarded_invocation_that_succeeded_is_reported_rather_than_silent', async () => {
+    // B-212. ADR 0006 rejects memoising `next` BY NAME, on the ground that memoising "would also
+    // silence a genuinely careless double call, which is the one thing the counter in AC-003
+    // exists to detect" — and that counter exists only inside a test. In production the second
+    // invocation ran the application's own route handler again, concurrently, against the same
+    // mutable context object, and said nothing: `reportOne` fires for a discarded invocation that
+    // REJECTS, and a discarded invocation that SUCCEEDS produced no diagnostic at all.
+    //
+    // So the design was justified by a detector the shipped code did not have. This asserts the
+    // detector exists where the ADR assumed it did.
+    const downstream = countingDownstream()
+    const warned: string[] = []
+    const realWarn = console.warn
+    console.warn = (...args: unknown[]) => {
+      warned.push(args.join(' '))
+    }
+
+    try {
+      const handler = middleware()
+        .handle(async (_request, _context, next) => {
+          const first = callable(next)()
+          const second = callable(next)()
+          await Promise.allSettled([first, second])
+        })
+        .build()
+
+      await runWebMiddleware(new Request('http://x/'), [handler], {}, downstream.run)
+    } finally {
+      console.warn = realWarn
+    }
+
+    // Both ran — that is clause 7 working, and it is not what this asserts.
+    expect(downstream.calls()).toBe(2)
+    // What it asserts: production said so. The message names the count, because "a downstream ran
+    // twice" is the fact an operator needs and "something was discarded" is not.
+    expect(
+      warned.join('\n'),
+      'the duplicate downstream execution was silent in production',
+    ).toMatch(/next\(\) 2 times/)
+  })
+
+  // B-219. Every other call in this file passes a single-element `[handler]`, so the four mutable
+  // per-frame variables inside `runFrom` — `invocations`, `rejections`, `frameSettled`,
+  // `yieldedInvocation` — were only ever observed with ONE frame alive. A repo-wide sweep found no
+  // test anywhere combining a 2+ chain with `next`. The suite was green, and a green suite reports
+  // "covered" and "never exercised" identically.
+  it('test_an_outer_frame_receives_what_the_inner_frame_yielded', async () => {
+    const trace: string[] = []
+    const downstream = countingDownstream(trace)
+
+    // Inner awaits the downstream and answers with its OWN Response. Clause 6's precedence: the
+    // middleware's own return wins over what the invocation produced.
+    const inner = middleware()
+      .handle(async (_request, _context, next) => {
+        trace.push('inner:before')
+        await callable(next)()
+        trace.push('inner:after')
+        return new Response('from the inner frame')
+      })
+      .build()
+
+    // Outer awaits and wraps. What it must see is the INNER's Response, not the downstream's —
+    // the distinction a one-frame chain cannot make, because there the two are the same object.
+    let seenByOuter: Response | undefined
+    const outer = middleware()
+      .handle(async (_request, _context, next) => {
+        trace.push('outer:before')
+        seenByOuter = await callable(next)()
+        trace.push('outer:after')
+        return new Response(`outer saw: ${await seenByOuter!.clone().text()}`)
+      })
+      .build()
+
+    const result = await runWebMiddleware(
+      new Request('http://x/'),
+      [outer, inner],
+      {},
+      downstream.run,
+    )
+
+    expect(
+      await seenByOuter?.text(),
+      "the outer frame did not receive the inner frame's Response",
+    ).toBe('from the inner frame')
+    expect(await result?.text()).toBe('outer saw: from the inner frame')
+    expect(downstream.calls(), 'the downstream ran more than once for one request').toBe(1)
+    expect(trace).toEqual(['outer:before', 'inner:before', 'route', 'inner:after', 'outer:after'])
+  })
+
+  it('test_an_inner_frames_discarded_rejection_does_not_touch_the_outer_frames_bookkeeping', async () => {
+    // The second half of B-219: `reportOne`'s `invocation === yieldedInvocation` skip is per-frame,
+    // and with one frame alive there is only one `yieldedInvocation` to compare against. Here two
+    // frames each hold a different one.
+    const warned: string[] = []
+    const realWarn = console.warn
+    console.warn = (...args: unknown[]) => {
+      warned.push(args.join(' '))
+    }
+
+    try {
+      let failRoute!: (reason: unknown) => void
+      const pending = new Promise<Response | undefined>((_resolve, reject) => {
+        failRoute = reject
+      })
+      let downstreamCalls = 0
+
+      // Inner fires next() WITHOUT awaiting, then answers itself. The invocation it started is
+      // discarded by its own frame, and then rejects.
+      const inner = middleware()
+        .handle((_request, _context, next) => {
+          void callable(next)()
+          return new Response('inner answered without waiting')
+        })
+        .build()
+
+      const outer = middleware()
+        .handle(async (_request, _context, next) => await callable(next)())
+        .build()
+
+      const result = await runWebMiddleware(
+        new Request('http://x/'),
+        [outer, inner],
+        {},
+        async () => {
+          downstreamCalls += 1
+          return await pending
+        },
+      )
+
+      expect(await result?.text(), 'the outer frame did not yield what the inner produced').toBe(
+        'inner answered without waiting',
+      )
+
+      failRoute(new Error('the route failed after the inner frame had answered'))
+      await new Promise((resolve) => setTimeout(resolve, 20))
+
+      expect(downstreamCalls, 'the downstream ran more than once').toBe(1)
+      // Exactly one: the inner frame owns the discarded invocation and reports it. The outer frame
+      // must not report the same failure a second time — its own yielded invocation is a different
+      // object, and a skip that compared against the wrong frame's would either double-report or
+      // stay silent.
+      const reports = warned.filter((w) => w.includes('the frame did not yield that result'))
+      expect(reports.length, `expected exactly one report, got ${String(reports.length)}`).toBe(1)
+    } finally {
+      console.warn = realWarn
+    }
   })
 
   it('test_calling_next_twice_really_invokes_the_downstream_twice', async () => {

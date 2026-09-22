@@ -9,22 +9,21 @@ import type { TheoConfig } from '../config/schema.js'
 import type { SecurityHeadersConfig } from '../core/contracts/security-headers.js'
 import { assertServicesUnsupported, readManifest } from '../services/index.js'
 
-import { deployedCorsFragment, type DeployedCorsOptions } from './deployed-cors.js'
-import { deployedCsrfFragment, type DeployedCsrfOptions } from './deployed-csrf.js'
 import {
+  deployedAgentsFragment,
+  scannedFromLoaderCache,
+  JSON_NOT_FOUND_RESPONSE,
+} from './deployed-agents.js'
+import { deployedEntryPreamble } from './deployed-preamble.js'
+import {
+  agentsDirLiteral,
   deployedRuntimeConfigFragment,
   serverDirLiteral,
-  type DeployedRuntimeConfigOptions,
-  type DeployedServerDirOptions,
 } from './deployed-runtime-config.js'
 import { deployedTraceFragment } from './deployed-trace.js'
 import { nodeAdapter } from './node.js'
-import {
-  buildSecurityHeaders,
-  describeDeployedSecurityHeaders,
-  renderSecurityHeadersConfigLiteral,
-} from './security-headers.js'
-import type { AdapterBuildContext, DeployAdapter } from './types.js'
+import { buildSecurityHeaders, describeDeployedSecurityHeaders } from './security-headers.js'
+import type { AdapterBuildContext, DeployAdapter, DeployedEntryOptions } from './types.js'
 
 /**
  * T2.2 — Vercel adapter rewritten to consume `theokit/adapters/web-shim`
@@ -111,12 +110,16 @@ function vercelHandlerFragment(): string[] {
 // Generated-code fragments — extracted so the parent emitter stays under the
 // max-lines-per-function ceiling.
 /** Everything that decides WHAT the response is, as a Web Response for every outcome. */
-function vercelRouteRequestFragment(runtimeSpread: string): string[] {
+function vercelRouteRequestFragment(
+  runtimeSpread: string,
+  agentsBranch: readonly string[],
+  agentsHostBypass: string,
+): string[] {
   return [
     `async function routeRequest(nodeReq) {`,
     `  const url = new URL(nodeReq.url ?? '/', 'http://' + (nodeReq.headers?.host ?? 'localhost'))`,
     ``,
-    `  if (!url.pathname.startsWith('/api/')) {`,
+    `  if (!url.pathname.startsWith('/api/')${agentsHostBypass}) {`,
     `    return new Response('Not Found', {`,
     `      status: 404,`,
     `      headers: { 'content-type': 'text/plain; charset=utf-8' },`,
@@ -126,15 +129,16 @@ function vercelRouteRequestFragment(runtimeSpread: string): string[] {
     `  if (!routesCache) routesCache = scanServerRoutes(serverDir)`,
     `  if (!loaderCache) loaderCache = createProductionLoader()`,
     ``,
-    `  const match = matchRoute(url.pathname, routesCache)`,
-    `  if (!match) {`,
-    `    return new Response(JSON.stringify({ error: { code: 'NOT_FOUND' } }), {`,
-    `      status: 404,`,
-    `      headers: { 'content-type': 'application/json' },`,
-    `    })`,
-    `  }`,
-    ``,
-    `  // Convert Node-style req to Web Request for the shim`,
+    // B-235 — the Node-to-Web conversion is hoisted ABOVE the agents branch, which names
+    // `request` like every other host's, and an agent path never reaches a route match. The
+    // rename from `webRequest` is what lets this target share the one fragment instead of a
+    // fourth near-copy of it.
+    //
+    // The body is therefore drained before `matchRoute` rather than after, so an unmatched POST
+    // now has its body read. That is a real change and the safer direction: an unconsumed Node
+    // request socket is what keeps a connection open, and the drain already happened for every
+    // request that matched.
+    `  // Convert Node-style req to a Web Request — for the agents branch and for the shim`,
     `  const headers = new Headers()`,
     `  for (const [k, v] of Object.entries(nodeReq.headers ?? {})) {`,
     `    if (typeof v === 'string') headers.set(k, v)`,
@@ -150,10 +154,15 @@ function vercelRouteRequestFragment(runtimeSpread: string): string[] {
     `    })`,
     `    body = Buffer.concat(chunks)`,
     `  }`,
-    `  const webRequest = new Request(url.toString(), { method, headers, body })`,
+    `  const request = new Request(url.toString(), { method, headers, body })`,
     ``,
-    `  const { req, res, toResponse } = createWebShim(webRequest)`,
-    ...deployedTraceFragment('webRequest', '  '),
+    ...agentsBranch,
+    ``,
+    `  const match = matchRoute(url.pathname, routesCache)`,
+    `  if (!match) return ${JSON_NOT_FOUND_RESPONSE}`,
+    ``,
+    `  const { req, res, toResponse } = createWebShim(request)`,
+    ...deployedTraceFragment('request', '  '),
     `  // #382 — executeRoute() is NOT awaited before the Response is taken:`,
     `  // toResponse() settles at the headers and carries a live body.`,
     `  return toResponse(executeRoute({`,
@@ -164,13 +173,15 @@ function vercelRouteRequestFragment(runtimeSpread: string): string[] {
   ]
 }
 
-export function renderVercelFunctionEntry(
-  opts: { securityHeaders?: SecurityHeadersConfig } & DeployedCsrfOptions &
-    DeployedRuntimeConfigOptions &
-    DeployedServerDirOptions &
-    DeployedCorsOptions = {},
-): string {
+export function renderVercelFunctionEntry(opts: DeployedEntryOptions = {}): string {
   const runtimeConfig = deployedRuntimeConfigFragment(opts)
+  // B-235. This is the target the item's evidence was right about in form and wrong about in
+  // consequence: the handler IS Node-shaped, and it already converts to a Web `Request` before
+  // handing anything to the shim. Threading `nodeReq` through twelve sites says how the entry
+  // RECEIVES a request, not whether it can produce the one this branch needs.
+  const agentsFragment = deployedAgentsFragment(scannedFromLoaderCache(agentsDirLiteral(opts)), {
+    notFound: JSON_NOT_FOUND_RESPONSE,
+  })
   return [
     `// Generated by Theo — Vercel Functions adapter`,
     `// Environment variables are resolved at RUNTIME, not build time.`,
@@ -190,14 +201,7 @@ export function renderVercelFunctionEntry(
     `// theo.config.ts to read. config.json routes only /api/* here, so this`,
     `// covers the API and not the document Vercel's static host serves`,
     `// (usetheokit/theokit#412).`,
-    `const SECURITY_HEADERS_CONFIG = ${renderSecurityHeadersConfigLiteral(opts.securityHeaders)}`,
-    `const SECURITY_HEADERS = buildSecurityHeaders(SECURITY_HEADERS_CONFIG, { production: true })`,
-    ``,
-    ...runtimeConfig.imports,
-    ...runtimeConfig.declarations,
-    ...deployedCsrfFragment(opts),
-    ``,
-    ...deployedCorsFragment(opts.cors, 'vercel'),
+    ...deployedEntryPreamble(runtimeConfig, agentsFragment, opts, 'vercel'),
     ``,
     `// Vercel Functions invoke this default export with a (req, res) pair`,
     `// (Node IncomingMessage-style). \`routeRequest\` produces a Web Response for`,
@@ -205,7 +209,11 @@ export function renderVercelFunctionEntry(
     `// applied at ONE place and no branch can be added that skips it.`,
     ...vercelHandlerFragment(),
     ``,
-    ...vercelRouteRequestFragment(runtimeConfig.executeRouteSpread),
+    ...vercelRouteRequestFragment(
+      runtimeConfig.executeRouteSpread,
+      agentsFragment.branch,
+      agentsFragment.hostBypass,
+    ),
   ].join('\n')
 }
 
@@ -324,6 +332,10 @@ export const vercelAdapter: DeployAdapter = {
       resolve(outputDir, 'functions/api.func/index.mjs'),
       renderVercelFunctionEntry({
         securityHeaders: config.security?.headers,
+        // B-235 — pillar (a): the option existed and no build passed it, so a project with a
+        // configured agents directory got the default `agents` on this target. Same defect
+        // B-185 fixed for bun and deno, one target over.
+        agentsDir: config.agentsDir,
         csrf: config.security?.csrf,
         disallowed: config.security?.disallowed,
         cors: config.security?.cors,

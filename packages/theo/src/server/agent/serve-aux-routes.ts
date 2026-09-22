@@ -293,7 +293,7 @@ export async function serveMatchedAuxRoute(
     })
     if (admission.refusal !== null) return admission.refusal
     // SCOPED to this caller. `admitAux` answered "may you touch this agent's approvals"; it cannot
-    // answer "which of them are yours", and the registry is process-wide by contract (ADR 0038).
+    // answer "which of them are yours", and the registry is process-wide by contract (ADR 0017).
     return handleListApprovals(getApprovalRegistry(), admission.subject)
   }
 

@@ -58,6 +58,39 @@ const ENTRIES: Record<string, () => string> = {
 
   'cloudflare (with an agent)': () =>
     renderCloudflareWorkerEntry({ ssrStreaming: false, agents: AGENTS }),
+  // B-185 — the identity module is baked like the agents beside it, and a wrong specifier or a
+  // malformed factory call is a BUILD failure rather than a request one. This variant is what
+  // catches it, and the one above cannot: with no `contextModule` the generator emits no import.
+  'cloudflare (agents + a baked context module)': () =>
+    renderCloudflareWorkerEntry({
+      ssrStreaming: false,
+      agents: AGENTS,
+      contextModule: 'server/context.ts',
+    }),
+  // SI-019 — the CROSS-PRODUCT, not one axis at a time. Every entry above varies a single feature,
+  // and a defect that needs two of them together is invisible to all of them: the subject-resolver
+  // factory carries the plugin runner only when a runtime-config module exists, and it carries the
+  // baked-context call only when `contextModule` does. The combination is what put `await` inside a
+  // non-async function, and this matrix had no row that rendered both at once — so the entry
+  // shipped unparseable on three targets and the 15 rows above stayed green.
+  'cloudflare (agents + context module + runtime config)': () =>
+    renderCloudflareWorkerEntry({
+      ssrStreaming: false,
+      agents: AGENTS,
+      contextModule: 'server/context.ts',
+      runtimeConfigModule: RUNTIME_CONFIG,
+    }),
+  // Kept although it does NOT catch the defect the row above does: with `contextModule` undefined
+  // the emission takes the `const resolveSubject = undefined` branch and emits no `await` at all,
+  // so it stays green under that mutation. Verified by the inventory judge, which is the reason
+  // this comment exists rather than the row silently reading as a second guard. What it does cover
+  // is the runtime-config import landing in an entry whose identity branch is the empty one.
+  'cloudflare (agents + runtime config, no context module)': () =>
+    renderCloudflareWorkerEntry({
+      ssrStreaming: false,
+      agents: AGENTS,
+      runtimeConfigModule: RUNTIME_CONFIG,
+    }),
   // Bun and Deno take no `agents`: they scan at request time, as they already do for routes, so
   // their entry carries the branch unconditionally and an agent added later needs no rebuild.
   'bun (agent branch)': () => renderBunEntry(3000),
