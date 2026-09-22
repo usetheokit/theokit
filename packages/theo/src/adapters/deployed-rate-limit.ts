@@ -74,6 +74,12 @@ export class UnserialisableRateLimitError extends Error {
 interface BakeableRateLimit {
   windowMs: number
   max: number
+  /**
+   * How many proxies sit in front of the app, for the forwarded-header path. Dropped before the
+   * entry until B-027: the schema declares it (`config/schemas/rate-limit.ts:36`) and the generated
+   * code could not honour it, so a deployment behind a proxy keyed every visitor on the proxy.
+   */
+  trustProxy: boolean | number
 }
 
 /**
@@ -130,7 +136,16 @@ function bakeableRateLimit(
   const windowMs = cfg.windowMs
   const max = cfg.max
   if (typeof windowMs !== 'number' || typeof max !== 'number') return undefined
-  return { windowMs, max }
+  // `?? false` and not `|| false`: `trustProxy: 0` is a number and falsy, and it means the same to
+  // the resolver as `false` — but emitting `false` where the operator wrote `0` makes the generated
+  // entry disagree with the config a reader compares it against.
+  const trustProxy = cfg.trustProxy
+  return {
+    windowMs,
+    max,
+    trustProxy:
+      typeof trustProxy === 'boolean' || typeof trustProxy === 'number' ? trustProxy : false,
+  }
 }
 
 /**
@@ -147,6 +162,15 @@ export function deployedRateLimitFragment(
   rateLimit: RateLimitConfig | undefined,
   target: string,
   addressExpression: string,
+  /**
+   * The parameter list `callerAddress` is DECLARED with, because the runtime source differs per
+   * target and only `bun` binds these two names (`bun.ts:158`). `cloudflare.ts:452` binds
+   * `(request, env, ctx)`, `vercel.ts:39` `(nodeReq, nodeRes)`, `netlify.ts:84` `(request, context)`,
+   * `deno-deploy.ts:90` `(request)` and `aws-lambda.ts:152` `(event)`. An expression naming
+   * `context`, `info`, `event` or `nodeReq` inside a function declared `(request, server)` is an
+   * unbound identifier, and the entry throws on the first limited request.
+   */
+  params = 'request, server',
 ): string[] {
   const baked = bakeableRateLimit(rateLimit, target)
   if (baked === undefined) return []
@@ -155,15 +179,32 @@ export function deployedRateLimitFragment(
     `// theo.config.ts to read. The counter lives in this process, which outlives a request here.`,
     `const RATE_LIMIT = createRateLimiterWeb({ windowMs: ${baked.windowMs}, max: ${baked.max} })`,
     ``,
+    `// How many proxies the deployment declared in front of it. \`client-ip.ts\` reads a forwarded`,
+    `// header only when this says one wrote it: the header is whatever the client typed, so`,
+    `// trusting it unasked lets anyone rotate a forged value past the limiter with one \`curl -H\`.`,
+    `const TRUST_PROXY = ${JSON.stringify(baked.trustProxy)}`,
+    ``,
     `/**`,
     ` * The caller's address, from the connection rather than from a header.`,
     ` *`,
     ` * A header a client can set is a key a client can choose, which makes the bucket theirs to`,
-    ` * split. An unresolved address falls back to one shared bucket — rare here, since that only`,
-    ` * happens for a connection already gone, and the same fallback \`theokit start\` uses.`,
+    ` * split. An address this runtime cannot resolve returns \`undefined\`, and the caller answers`,
+    ` * 503 rather than keying on a constant: one shared bucket is a budget the first caller each`,
+    ` * window exhausts for everyone, which is worse than no limiting at all.`,
     ` */`,
-    `function callerAddress(request, server) {`,
-    `  return ${addressExpression} ?? 'unknown'`,
+    `const addr = (v) => (typeof v === 'string' && v.trim() !== '' ? v.trim() : undefined)`,
+    `function callerAddress(${params}) {`,
+    `  return addr(${addressExpression})`,
+    `}`,
+    ``,
+    `/** The 503 a caller this runtime cannot name gets, instead of everyone's shared bucket. */`,
+    `function unnamedCaller() {`,
+    `  return new Response(`,
+    `    JSON.stringify({ error: { code: 'CALLER_UNRESOLVED', message: ${JSON.stringify(
+      `${target} could not resolve the caller's address, and a rate limit keyed on a constant is a denial of service`,
+    )} } }),`,
+    `    { status: 503, headers: { 'Content-Type': 'application/json' } },`,
+    `  )`,
     `}`,
     ``,
     `/** The 429 a limited caller gets, carrying the limiter's own headers. */`,
@@ -190,12 +231,22 @@ export function deployedRateLimitFragment(
 export function rateLimitCheckFragment(
   rateLimit: RateLimitConfig | undefined,
   indent: string,
+  /** The arguments `callerAddress` is CALLED with — see `deployedRateLimitFragment`'s `params`. */
+  args = 'request, server',
+  /** How this target answers a caller over its budget. Only `bun` can use the default. */
+  refuse = 'return withCors(request, withSecurityHeaders(rateLimited(limit), SECURITY_HEADERS))',
+  /** How it answers a caller it could not name. Same shape, different body. */
+  refuseUnnamed = 'return withCors(request, withSecurityHeaders(unnamedCaller(), SECURITY_HEADERS))',
 ): string[] {
   if (rateLimit === undefined) return []
   return [
-    `${indent}const limit = RATE_LIMIT(callerAddress(request, server))`,
+    `${indent}const caller = callerAddress(${args})`,
+    `${indent}if (caller === undefined) {`,
+    `${indent}  ${refuseUnnamed}`,
+    `${indent}}`,
+    `${indent}const limit = RATE_LIMIT(caller)`,
     `${indent}if (limit.limited) {`,
-    `${indent}  return withCors(request, withSecurityHeaders(rateLimited(limit), SECURITY_HEADERS))`,
+    `${indent}  ${refuse}`,
     `${indent}}`,
   ]
 }
