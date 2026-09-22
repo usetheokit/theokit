@@ -136,7 +136,7 @@ section is the part that does.
    the seventeen the answer was already written here and nobody had read it: `vitest.config.ts` warns
    about prefix-matching aliases six times and records three instances of being caught by it;
    `tsconfig.json` carries `theokit/server/agent` as the standing precedent that a two-level subpath
-   needs its own entry; `cli/commands/build.ts:275-278` says it refuses *"BEFORE the build writes
+   needs its own entry; `packages/theo/src/cli/commands/build.ts:275-278` says it refuses *"BEFORE the build writes
    anything"*, which is why a criterion targeting `cloudflare` could never reach the second error; and
    `tests/integration/every-deployed-entry-limits-its-caller.test.ts:18-21` records, from one item
    earlier, that *"a render-contains assertion cannot see an unbound identifier, an unimported symbol,

@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [create-theokit 3.0.6] - 2026-09-22
+
+### Changed
+
+- The scaffold pins `theokit: ^0.71.0`, so a project created from it installs the version that was
+  just cut rather than the previous one.
+
 ## [theokit 0.71.0] - 2026-09-22
 
 ### Changed

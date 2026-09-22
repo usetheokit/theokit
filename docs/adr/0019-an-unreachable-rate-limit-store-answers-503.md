@@ -66,7 +66,7 @@ incident when something is hammering the endpoint, is indistinguishable from a l
 ## Alternatives rejected
 
 **A — fail open.** Serve the request and log. Rejected: `rateLimit` is, in this codebase's own words
-(`adapters/config-support.ts:213-215`), *"the one whose absence looks exactly like success"*. Failing
+(`packages/theo/src/adapters/config-support.ts:213-215`), *"the one whose absence looks exactly like success"*. Failing
 open makes the absence invisible at the moment it matters most, and the deployment cannot tell a
 healthy limiter from a dead one by observing traffic.
 
