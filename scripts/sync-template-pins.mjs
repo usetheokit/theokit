@@ -277,8 +277,58 @@ function main() {
   if (next !== null) {
     shipper.version = next
     writeFileSync(shipperPath, `${JSON.stringify(shipper, null, 2)}\n`, 'utf8')
-    console.log(`\n${shipper.name} ${next} — bumped so the corrected pin reaches a scaffold.`)
+    const changelogPath = resolve(dirname(shipperPath), 'CHANGELOG.md')
+    const wrote = recordTemplatePinBump(changelogPath, next, changed)
+    console.log(
+      `\n${shipper.name} ${next} — bumped so the corrected pin reaches a scaffold` +
+        `${wrote ? ', and its CHANGELOG entry written.' : ' (its CHANGELOG already names this version).'}`,
+    )
   }
+}
+
+/**
+ * Prepend the entry that documents a bump this script performed.
+ *
+ * B-232. The double-bump half of that item is handled by `bumpForTemplatePins`, which stands down
+ * when `changeset version` already moved the package. This is the other half: when the script DOES
+ * bump — the case it exists for, where changesets could not derive the edge — nothing wrote the
+ * entry, so the release carried a version its CHANGELOG had never heard of.
+ *
+ * Measured twice, on two different releases. `tests/smoke/changeset-config.test.ts` refuses it
+ * ("CHANGELOG should mention the current package.json version"), which is why it surfaced at all
+ * rather than publishing a version nobody could explain.
+ *
+ * The shape is changesets' own — `## X.Y.Z`, `### Patch Changes`, a bullet — so a reader cannot
+ * tell which mechanism wrote which entry, and should not have to.
+ *
+ * @param {string} changelogPath  the shipping package's CHANGELOG.
+ * @param {string} version        the version just written to its manifest.
+ * @param {string[]} changed      the pin lines, as `main()` already formatted them.
+ * @returns {boolean}  whether anything was written.
+ */
+export function recordTemplatePinBump(changelogPath, version, changed) {
+  const heading = `## ${version}`
+  const existing = existsSync(changelogPath) ? readFileSync(changelogPath, 'utf8') : ''
+  // Idempotent: re-running the sync must not stack two entries for one version. The check is on the
+  // heading at a line start, because the version string alone appears inside older entries' prose.
+  if (existing.split('\n').some((line) => line.trimEnd() === heading)) return false
+
+  const pins = changed.map((c) => `  - ${c}`).join('\n')
+  const entry =
+    `${heading}\n\n### Patch Changes\n\n` +
+    `- The scaffold's pins now match what this release publishes, so a project created from it\n` +
+    `  installs the version just cut rather than the previous one:\n\n${pins}\n`
+
+  // After the `# Title` line and before the first existing entry. An absent or title-less file gets
+  // the entry at the top rather than an invented title: guessing a package's display name is how a
+  // generated file starts disagreeing with the one a human wrote.
+  const lines = existing.split('\n')
+  const first = lines.findIndex((line) => line.startsWith('## '))
+  const head = first === -1 ? lines : lines.slice(0, first)
+  const tail = first === -1 ? [] : lines.slice(first)
+  const body = `${head.join('\n').trimEnd()}\n\n${entry}\n${tail.join('\n')}`.trimStart()
+  writeFileSync(changelogPath, `${body.trimEnd()}\n`, 'utf8')
+  return true
 }
 
 // Only when run as a script — see main()'s docblock.
