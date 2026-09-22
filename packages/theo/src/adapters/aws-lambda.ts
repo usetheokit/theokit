@@ -108,6 +108,9 @@ export function responseToLambdaResultV2(
 // max-lines-per-function ceiling.
 /** The v2 result conversion, the handler, and the routing that feeds them. */
 /** The target's name, in the five places that spell it — same gate deno-deploy tripped. */
+/* The name in the places a gate does NOT read. `assertServicesUnsupported` keeps the literal:
+ * `services-other-adapters-reject.test.ts:30` requires each adapter to name ITSELF there, so a
+ * copy-paste carrying another adapter's name cannot hide behind a constant. */
 const TARGET = 'aws-lambda'
 
 function awsLambdaHandlerFragment(
@@ -300,7 +303,7 @@ export async function buildAwsLambda(
   ctx?: AdapterBuildContext,
 ): Promise<void> {
   // Wave 2 (T2.2) — reject polyglot services on this adapter.
-  assertServicesUnsupported(TARGET, readManifest(cwd))
+  assertServicesUnsupported('aws-lambda', readManifest(cwd))
 
   // #382 — refuse by name rather than build something that cannot do what was
   // asked. `ssrStreaming` is the config's declaration that responses stream,

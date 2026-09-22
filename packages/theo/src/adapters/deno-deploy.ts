@@ -45,6 +45,9 @@ const FRAMEWORK_IMPORTS: readonly string[] = [
 ]
 
 /** The target's name, in the five places that spell it. Adding a sixth tripped the duplicate-literal gate. */
+/* The name in the places a gate does NOT read. `assertServicesUnsupported` keeps the literal:
+ * `services-other-adapters-reject.test.ts:30` requires each adapter to name ITSELF there, so a
+ * copy-paste carrying another adapter's name cannot hide behind a constant. */
 const TARGET = 'deno-deploy'
 
 export function renderDenoEntry(port: number, opts: DeployedEntryOptions = {}): string {
@@ -169,7 +172,7 @@ export async function buildDeno(
   ctx?: AdapterBuildContext,
 ): Promise<void> {
   // Wave 2 (T2.2) — reject polyglot services on this adapter.
-  assertServicesUnsupported(TARGET, readManifest(cwd))
+  assertServicesUnsupported('deno-deploy', readManifest(cwd))
 
   const runNodeBuild = deps.runNodeBuild ?? nodeAdapter.build.bind(nodeAdapter)
   await runNodeBuild(config, cwd, ctx)
