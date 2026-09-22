@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [theokit 0.70.2] - 2026-09-22
+
+Released with no entry under `[Unreleased]`. Per-package detail is in each package's
+own `CHANGELOG.md`.
+
 ## [create-theokit 3.0.4, theokit 0.70.1] - 2026-09-22
 
 Every agent route of a freshly scaffolded, production-built app answered 500 in 0.70.0 — the release
