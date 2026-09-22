@@ -260,6 +260,45 @@ export function collectDocs(root, dir = root, acc = [], tracked = trackedDocs(ro
  *
  * @returns {{ ok: number, bare: number, rotten: { doc: string, citation: object, verdict: string }[] }}
  */
+/**
+ * Every ADR citation in tracked source, split into resolved, baselined and rotten.
+ *
+ * Separate from `scanDocs` on purpose: a `.md` is also checked for path citations and a `.ts` is
+ * not, so folding them would make one function answer two questions.
+ *
+ * `sourcesRead` is `null` when git could not be read. That is UNKNOWN rather than zero, and the
+ * caller reports it — a clean run over a tree nobody enumerated would claim coverage it never had.
+ *
+ * @returns {{ ok: number, baselined: number, rotten: object[], sourcesRead: number | null }}
+ */
+export function scanSourceAdrCitations(root) {
+  const baseline = loadBaseline(root)
+  const sources = collectSources(root)
+  if (sources === null) return { ok: 0, baselined: 0, rotten: [], sourcesRead: null }
+
+  let ok = 0
+  let baselined = 0
+  const rotten = []
+  for (const file of sources) {
+    let text
+    try {
+      text = readFileSync(file, 'utf-8')
+    } catch {
+      continue
+    }
+    for (const adr of extractAdrCitations(text)) {
+      if (classifyAdrCitation(adr, root) === 'ok') {
+        ok++
+      } else if (baseline.has(baselineKey(relative(root, file), adr.id))) {
+        baselined++
+      } else {
+        rotten.push({ doc: relative(root, file), citation: adr, verdict: 'missing_adr' })
+      }
+    }
+  }
+  return { ok, baselined, rotten, sourcesRead: sources.length }
+}
+
 export function scanDocs(root) {
   const rotten = []
   let ok = 0
@@ -278,7 +317,81 @@ export function scanDocs(root) {
       else rotten.push({ doc: relative(root, doc), citation: adr, verdict: 'missing_adr' })
     }
   }
-  return { ok, bare, rotten }
+
+  // B-255 — the same ADR question, asked of source. Separate function rather than a widened
+  // `scanDocs`, because the two differ in what they are checked FOR: a `.md` is checked for path
+  // citations as well, and a `.ts` is not.
+  const source = scanSourceAdrCitations(root)
+  return {
+    ok: ok + source.ok,
+    bare,
+    rotten: [...rotten, ...source.rotten],
+    baselined: source.baselined,
+    sourcesRead: source.sourcesRead,
+  }
+}
+
+/**
+ * Source files an ADR citation may sit in.
+ *
+ * B-255 — the ADR pass read markdown only, so a citation in a production `.ts` was invisible.
+ * Measured 2026-09-22: inserting `// See ADR 0099 for why.` into a source file left this gate at
+ * `rc=0`. Meanwhile source carried 252 citations resolving to nothing against 199 that resolve.
+ *
+ * `git ls-files` rather than a walk: it is the tracked set by definition, so a generated file or an
+ * ignored directory cannot creep in and make the number mean something else.
+ */
+export function collectSources(root) {
+  let out
+  try {
+    // The argv is an array so no shell parses it, and every element is a literal.
+    // eslint-disable-next-line sonarjs/no-os-command-from-path -- toolchain binary, fixed argv
+    out = execFileSync('git', ['-C', root, 'ls-files', '-z', '*.ts', '*.tsx', '*.mjs'], {
+      encoding: 'utf-8',
+    })
+  } catch {
+    // A tree git cannot read is a tree this cannot measure. Saying nothing would report zero
+    // citations as zero PROBLEMS, which is the failure this gate exists to refuse.
+    return null
+  }
+  return out
+    .split('\0')
+    .filter((f) => f && !f.includes('/node_modules/'))
+    .map((f) => join(root, f))
+}
+
+/**
+ * The citations that already existed when the gate learned to read source.
+ *
+ * Not forgiveness — a record. Every line is reported on every run and counted separately, so the
+ * debt stays visible; what it stops doing is failing a change that did not cause it. The same shape
+ * `rules/code-quality-baseline.txt` uses, and for the same reason: a gate that fires on ordinary
+ * work is a gate somebody disables.
+ *
+ * TRIAGED 2026-09-22 before the file was written, because a baseline nobody understood would be a
+ * list of excuses. `docs/adr/` holds 0001..0017; every one of the 33 absent numbers is 0018 or
+ * above; and `git log --diff-filter=D -- docs/adr/*.md` returns NOTHING. So not one of them is a
+ * renumbering or a deletion — they cite documents that were never written.
+ */
+function loadBaseline(root) {
+  const file = join(root, 'scripts', 'adr-citation-baseline.txt')
+  if (!existsSync(file)) return new Set()
+  return new Set(
+    readFileSync(file, 'utf-8')
+      .split('\n')
+      // `indexOf` rather than a regex: sonarjs flags `/#.*$/` as super-linear, and a comment
+      // strip is a slice at the first `#` in plainer words anyway.
+      .map((l) => {
+        const hash = l.indexOf('#')
+        return (hash === -1 ? l : l.slice(0, hash)).trim()
+      })
+      .filter(Boolean),
+  )
+}
+
+/** The key a baseline line carries: the file and the number, never the line, which moves. */
+function baselineKey(relPath, id) {
+  return `${relPath}|${id}`
 }
 
 /** What each verdict means to a reader. A table rather than nested ternaries — sonarjs is right that
@@ -300,11 +413,27 @@ function reportRotten(rotten, total) {
 
 function main() {
   const root = resolve(dirname(new URL(import.meta.url).pathname), '..')
-  const { ok, bare, rotten } = scanDocs(root)
+  const { ok, bare, rotten, baselined, sourcesRead } = scanDocs(root)
   if (rotten.length > 0) reportRotten(rotten, ok + bare + rotten.length)
+  if (sourcesRead === null) {
+    // The source half could not be read, so its number is UNKNOWN rather than zero. Reporting a
+    // clean run here would claim coverage the run never had.
+    console.error(
+      'WARNING: `git ls-files` failed — source files were NOT scanned for ADR citations',
+    )
+  }
   console.error(
     `${ok} resolve, ${bare} bare (not resolvable without guessing), ${rotten.length} rotten`,
   )
+  // Printed on every run, green or not. A baseline nobody sees is forgiveness; a baseline in the
+  // summary is a debt with a number on it.
+  if (baselined > 0) {
+    console.error(
+      `${baselined} baselined ADR citation(s) in source — pre-existing, still unresolvable, and ` +
+        `recorded in scripts/adr-citation-baseline.txt rather than forgiven`,
+    )
+  }
+  if (sourcesRead !== null) console.error(`${sourcesRead} source file(s) scanned`)
   if (rotten.length > 0 && !process.argv.includes('--report')) process.exit(1)
 }
 
