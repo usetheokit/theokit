@@ -17,7 +17,7 @@
  * names elsewhere: a gate that reads as enforcement and enforces nothing.
  */
 import { execFileSync } from 'node:child_process'
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
@@ -122,5 +122,56 @@ describe('pre-push reports a killed stage as killed', () => {
 
     expect(code).toBe(0)
     expect(out).toMatch(/pre-push gates passed/u)
+  })
+})
+
+/**
+ * B-241's second Definition-of-done bullet, at the layer the fix actually chose.
+ *
+ * The bullet asks that "a commit that stages an unformatted file cannot complete". It cannot be met
+ * at commit time and should not be: `lint-staged` runs `prettier --write`, so the hook FIXES the
+ * file and exits 0 — measured 2026-09-22 by staging a deliberately unformatted file and running
+ * `.githooks/pre-commit`, which reformatted it and returned 0. Refusing there would be worse UX for
+ * the same outcome.
+ *
+ * What let three unformatted files into the repository is the row the item's own verdict records:
+ * `git -c core.hooksPath=<a directory with no hooks> commit` runs no hook and succeeds, silently.
+ * Nothing at commit time can close that, because the bypass is the commit-time mechanism itself.
+ * So the gate lives in `pre-push`, and these pin it there.
+ */
+describe('the pre-push hook checks formatting, and checks it first (B-241)', () => {
+  const source = (): string => readFileSync(HOOK, 'utf8')
+
+  it('test_format_check_is_one_of_the_stages', () => {
+    expect(
+      source(),
+      'the pre-push hook does not run `pnpm format:check`, so an unformatted file reaches the remote ' +
+        'whenever the commit-time hook was skipped — which is exactly how three of them did',
+    ).toContain('pnpm format:check')
+  })
+
+  it('test_format_check_runs_before_the_expensive_stages', () => {
+    // Line numbers of the INVOCATIONS, not positions of the strings. `pnpm build:packages` appears
+    // first inside an `echo` of the escape-hatch advice at the top of the hook, 76 lines above the
+    // line that runs it — so comparing raw string offsets compared a message against a command and
+    // reported the order backwards. Measured 2026-09-22 when this assertion failed on a hook whose
+    // order was already right.
+    const lines = source().split('\n')
+    const invocation = (command: string): number =>
+      lines.findIndex((line) => line.trimStart().startsWith(`pnpm ${command} ||`))
+
+    const format = invocation('format:check')
+    const build = invocation('build:packages')
+    const typecheck = invocation('typecheck:only')
+
+    expect(format, 'no `pnpm format:check` invocation to order').toBeGreaterThan(-1)
+    expect(build, 'no `pnpm build:packages` invocation to order against').toBeGreaterThan(-1)
+    expect(typecheck, 'no `pnpm typecheck:only` invocation to order against').toBeGreaterThan(-1)
+    // 13s against roughly 90s for the two below it. Ordering is not cosmetic: a formatting refusal
+    // that arrives after a ninety-second build is a refusal people route around.
+    expect(
+      format,
+      'format:check runs after the build or the typecheck, so the cheapest refusal costs the most',
+    ).toBeLessThan(Math.min(build, typecheck))
   })
 })
