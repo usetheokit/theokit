@@ -130,7 +130,19 @@ export function writeManifest(manifest: TheoManifest, outputDir: string): void {
 
 // --- Load ---
 
-export function loadManifest(distDir: string, serverDir: string): LoadedManifest {
+export function loadManifest(
+  distDir: string,
+  serverDir: string,
+  // usetheokit/theokit#871 — agent paths are encoded relative to the PROJECT ROOT by
+  // `generateManifest`, which is told the root. This was not, and derived it as
+  // `dirname(serverDir)`. That is right for `<root>/server` and wrong by one level for
+  // `<root>/src/server` — the layout `create-theokit` scaffolds, so the wrong case was the
+  // DEFAULT case, and every agent route of a freshly scaffolded app answered 500.
+  //
+  // The default preserves the old behaviour for callers that genuinely have only the server
+  // dir; the caller that knows the root passes it, which is every caller that matters.
+  projectRoot: string = dirname(serverDir),
+): LoadedManifest {
   const manifestPath = join(distDir, 'manifest.json')
 
   if (!existsSync(manifestPath)) {
@@ -161,9 +173,8 @@ export function loadManifest(distDir: string, serverDir: string): LoadedManifest
     wsPath: w.wsPath,
   }))
 
-  // M2 — agents resolve relative to the project root (sibling of serverDir).
-  // `?? []` keeps pre-M2 manifests (no `agents` field) loadable (fail-safe).
-  const projectRoot = dirname(serverDir)
+  // M2 — agents resolve relative to the project root, which is now a PARAMETER rather than a
+  // guess (#871). `?? []` keeps pre-M2 manifests (no `agents` field) loadable (fail-safe).
   const agents: AgentNode[] = (raw.agents ?? []).map((a) => ({
     filePath: resolve(projectRoot, a.filePath),
     agentPath: a.agentPath,

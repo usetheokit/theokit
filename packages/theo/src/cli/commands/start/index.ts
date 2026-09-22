@@ -125,7 +125,7 @@ export async function startCommand(options: StartOptions): Promise<void> {
     actions: cachedActions,
     wsRoutes: cachedWsRoutes,
     agents: cachedAgents,
-  } = loadRoutesAndActions(distDir, serverDir, config.agentsDir)
+  } = loadRoutesAndActions(distDir, serverDir, config.agentsDir, cwd)
 
   // `createRouteRateLimiter` accepts BOTH config shapes — it detects the legacy flat form and
   // treats it as the default bucket — so one call covers everything the schema allows.
