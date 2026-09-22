@@ -119,6 +119,28 @@ export async function runWebMiddleware(
       return downstream === undefined ? undefined : await downstream(request, context)
     }
 
+    // B-242 — these four are per-frame, and `runFrom` is RECURSIVE, so "per frame" means one set
+    // per link in the chain rather than one per request. Hoisting any of them to the closure above
+    // compiles, and the whole suite stayed green when that was first measured, which left the
+    // claim "four mutable per-frame variables are the risk" sitting here unverified.
+    //
+    // It is verified now, for two of the four, by cases that did not exist:
+    //
+    //   `invocations`   shared -> a three-middleware chain where each calls next() ONCE counts
+    //                   three and warns about a double call nobody made. A warning that fires on
+    //                   correct code is one the next reader learns to ignore.
+    //   `rejections`    shared -> an inner frame's discarded rejection is attributed across
+    //                   frames, and the "reached no client" report stops matching who discarded it.
+    //
+    // For `frameSettled` and `yieldedInvocation` the mechanism is the same shape and the case is
+    // NOT constructed, which is recorded rather than glossed: both are read at the moment a
+    // rejection lands, so observing a shared one needs that rejection to arrive in the window
+    // between an inner frame settling and an outer one doing so. A test built on that window is
+    // timing-dependent, and `rules/testing.md` § 3 calls a flaky test a bug rather than coverage.
+    // So the honest statement is: mechanism named, consequence argued, case not built.
+    //
+    // Cases: `tests/integration/a-frame-counts-only-its-own-invocations.test.ts`.
+
     // Every invocation this frame creates, in order. A frame yields ONE of them (clause 6)
     // and must still OWN the rest: an invocation whose value is discarded can still reject,
     // and a rejected promise nobody awaits terminates the Node process
