@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- Every deploy target now resolves the caller's address from a source its own runtime controls, or refuses that request by name (B-027). `cloudflare` reads `cf-connecting-ip`, `vercel` the request it already builds, `netlify` its handler `context`, `deno-deploy` the `Deno.serve` info it was always handed and discarded, `aws-lambda` its event's `sourceIp` — and where none resolves, the caller gets a 503 naming the target instead of sharing one bucket with the whole internet. `security.rateLimit.trustProxy` reaches the generated entry for the first time, so a forwarded header is read only where the deployment says a proxy writes it.
+- `theokit/server/rate-limit` publishes `resolveClientIpFromRequest` and `resolveClientIp` (B-027). The first is a promise — the generated entries import it — and the second is internal; both are recorded in `docs/api/rate-limit-subpath-surface.md`.
 - The deploy adapters accept a declared `security.rateLimit` where five of six could not: `DeployedEntryOptions`, and `cloudflare` and `netlify`'s own option objects, now carry `DeployedRateLimitOptions` (B-027). They do not yet ENFORCE it — a target that cannot name its caller must not silently share one bucket, so `theokit build` still refuses for those five until each resolves a real client address. This is the type gate, not the limiter.
 
 
