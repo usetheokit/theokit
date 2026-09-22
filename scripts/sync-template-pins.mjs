@@ -308,7 +308,17 @@ function main() {
  */
 export function recordTemplatePinBump(changelogPath, version, changed) {
   const heading = `## ${version}`
-  const existing = existsSync(changelogPath) ? readFileSync(changelogPath, 'utf8') : ''
+  // Read and handle the absence, rather than asking first: `existsSync` then `readFileSync` is a
+  // time-of-check/time-of-use race, and CodeQL flags it as `js/file-system-race` (high). The window
+  // is small here and the fix is smaller. Only ENOENT is absorbed — an absent CHANGELOG is the
+  // ordinary case for a package that never had one, and a permission error or a directory in its
+  // place is not ours to swallow (`rules/error-handling.md` § 5).
+  let existing = ''
+  try {
+    existing = readFileSync(changelogPath, 'utf8')
+  } catch (err) {
+    if (/** @type {NodeJS.ErrnoException} */ (err).code !== 'ENOENT') throw err
+  }
   // Idempotent: re-running the sync must not stack two entries for one version. The check is on the
   // heading at a line start, because the version string alone appears inside older entries' prose.
   if (existing.split('\n').some((line) => line.trimEnd() === heading)) return false
