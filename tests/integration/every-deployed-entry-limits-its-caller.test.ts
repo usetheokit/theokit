@@ -68,6 +68,17 @@ const THEO = resolve(REPO, 'packages/theo')
 /** A limit small enough that two requests trip it. */
 const LIMIT = { windowMs: 60_000, max: 1 } as const
 
+/** The header that makes a request an upgrade, for the entries that branch on it. */
+const UPGRADE = { upgrade: 'websocket' } as const
+
+/**
+ * The entries carrying a WebSocket upgrade branch. The other four never see one, so asserting a
+ * 429 there would assert that an ordinary request is refused — a different claim, already made by
+ * `refuses_an_over_budget_caller`. Derived by reading the renders, not assumed: `vercel`,
+ * `netlify`, `bun` and `aws-lambda` emit no `upgrade` test at all.
+ */
+const UPGRADE_TARGETS: ReadonlySet<Target> = new Set<Target>(['cloudflare', 'deno-deploy'])
+
 /**
  * The render functions, with the limit passed through.
  *
@@ -187,7 +198,7 @@ function installRuntimeStubs(captured: Captured): () => void {
 async function load(
   target: Target,
   source: string,
-): Promise<(address: string | undefined) => Promise<number>> {
+): Promise<(address: string | undefined, extra?: Record<string, string>) => Promise<number>> {
   const file = writeEntry(target, source)
   const captured: Captured = {}
   const restore = installRuntimeStubs(captured)
@@ -200,20 +211,23 @@ async function load(
 
   const url = 'https://app.test/api/thing'
   /** The header each runtime reads, so `address: undefined` really means "nothing to key on". */
-  function headersFor(address: string | undefined): Record<string, string> {
-    if (address === undefined) return {}
+  function headersFor(
+    address: string | undefined,
+    extra: Record<string, string> = {},
+  ): Record<string, string> {
+    if (address === undefined) return { ...extra }
     // `cf-connecting-ip` is the header the Workers runtime writes and the only one that target
     // reads first; every other Web target falls through to the forwarded chain.
-    if (target === 'cloudflare') return { 'cf-connecting-ip': address }
-    return { 'x-forwarded-for': address }
+    if (target === 'cloudflare') return { 'cf-connecting-ip': address, ...extra }
+    return { 'x-forwarded-for': address, ...extra }
   }
 
   if (target === 'aws-lambda') {
     const handler = mod.handler as (event: unknown) => Promise<{ statusCode: number }>
-    return async (address) => {
+    return async (address, extra) => {
       const result = await handler({
         requestContext: { http: { method: 'GET', path: '/api/thing', sourceIp: address } },
-        headers: headersFor(address),
+        headers: headersFor(address, extra),
         rawPath: '/api/thing',
       })
       return result.statusCode
@@ -222,7 +236,7 @@ async function load(
 
   if (target === 'vercel') {
     const handler = mod.default as (req: unknown, res: unknown) => Promise<void>
-    return async (address) => {
+    return async (address, extra) => {
       let status = 0
       const res = {
         writeHead: (s: number) => {
@@ -237,7 +251,11 @@ async function load(
         destroy: () => res,
       }
       await handler(
-        { method: 'GET', url: '/api/thing', headers: { host: 'app.test', ...headersFor(address) } },
+        {
+          method: 'GET',
+          url: '/api/thing',
+          headers: { host: 'app.test', ...headersFor(address, extra) },
+        },
         res,
       )
       return status
@@ -268,9 +286,9 @@ async function load(
     return undefined
   }
 
-  return async (address) => {
+  return async (address, extra) => {
     const response = await drivable(
-      new Request(url, { headers: headersFor(address) }),
+      new Request(url, { headers: headersFor(address, extra) }),
       second(address),
     )
     // The four Web-shaped targets always answer with a `Response`; the one that returns nothing
@@ -322,6 +340,31 @@ describe('every deployed entry limits its caller (B-027, T0.1)', () => {
         // the SECOND is this test's subject.
         await drive('1.2.3.4')
         expect(await drive('1.2.3.4'), `${target} did not refuse a second request`).toBe(429)
+      })
+
+      it(`test_${target.replace(/-/g, '_')}_counts_a_websocket_upgrade_against_the_budget`, async () => {
+        // Found by `loop-code-review` as LCR0103 against `cloudflare.ts:489`, and the same shape
+        // was then measured in `deno-deploy.ts:121` — two adapters, one reasoning error, and the
+        // audit named only the first.
+        //
+        // Both entries answer a WebSocket upgrade ABOVE the rate-limit check, under the comment
+        // "A 101 carries no document and no script, so the security baseline does not apply to
+        // it." That sentence is true of `withSecurityHeaders` — a document concern — and it is
+        // NOT true of the limiter, which is a resource concern. A long-lived socket is the most
+        // expensive thing this adapter hands out, so the upgrade is the path that most needs the
+        // budget, not the one that may skip it.
+        //
+        // Driven, not grepped: two upgrades against `max: 1`. The second must be refused. Neither
+        // fixture declares a WS route, so today both answer 404 and the caller may repeat that
+        // for free — which is the bypass, independently of whether a route existed.
+        if (!UPGRADE_TARGETS.has(target)) return
+        const drive = await load(target, render())
+        await drive('203.0.113.9', UPGRADE)
+        expect(
+          await drive('203.0.113.9', UPGRADE),
+          `${target} answered a second WebSocket upgrade from one caller under max: 1 without ` +
+            `refusing it: the upgrade branch returns before the limiter is ever consulted.`,
+        ).toBe(429)
       })
 
       it(`test_${target.replace(/-/g, '_')}_refuses_a_caller_it_cannot_name`, async () => {
