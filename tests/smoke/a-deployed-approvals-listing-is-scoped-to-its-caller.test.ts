@@ -71,6 +71,17 @@ beforeAll(async () => {
   mkdirSync(join(root, 'server'), { recursive: true })
   mkdirSync(join(root, '.theokit', 'bun'), { recursive: true })
 
+  // Every real theokit project has one, and the templates declare `"type": "module"`
+  // (`packages/create-theokit/templates/default/package.json.tmpl`). A fixture without one is not a
+  // project shape the framework ever meets: `importUserModule` falls back to `tsx` when a plain
+  // `import()` of a `.ts` cannot resolve, and what tsx does with an undeclared module kind is its
+  // decision rather than ours. Declaring it makes the fixture faithful and the loader's branch
+  // irrelevant.
+  writeFileSync(
+    join(root, 'package.json'),
+    `{"type":"module","name":"theo-scoped-listing-fixture"}\n`,
+  )
+
   // An agent whose policy READS the subject, so identity governs access rather than decorating it.
   writeFileSync(
     join(root, 'agents', 'chat.js'),
