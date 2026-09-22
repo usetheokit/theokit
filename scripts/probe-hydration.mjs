@@ -78,8 +78,20 @@ function cdp(ws) {
   const events = []
   ws.addEventListener('message', (ev) => {
     const msg = JSON.parse(String(ev.data))
-    if (msg.id !== undefined) pending.get(msg.id)?.(msg)
-    else events.push(msg)
+    // The id is validated before it selects anything to call. Everything arriving on this socket is
+    // the browser's, and this probe is pointed at URLs it does not control — so "the peer is a
+    // process we spawned" is an argument about today's caller, not about the code. A Map lookup
+    // does not walk the prototype, so the danger here is narrow; making the boundary explicit
+    // costs two checks and removes the question. (CodeQL js/unvalidated-dynamic-method-call)
+    if (typeof msg.id === 'number') {
+      const resolve = pending.get(msg.id)
+      if (typeof resolve === 'function') {
+        pending.delete(msg.id)
+        resolve(msg)
+      }
+      return
+    }
+    events.push(msg)
   })
   const send = (method, params = {}, sessionId) =>
     new Promise((resolve) => {
@@ -88,6 +100,20 @@ function cdp(ws) {
       ws.send(JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) }))
     })
   return { send, events }
+}
+
+/**
+ * Page-authored text, made safe to print.
+ *
+ * Everything reported here was written by the page, and this probe is pointed at URLs it does not
+ * control. Carriage returns rewrite a terminal line, and ANSI escapes recolour or reposition
+ * whatever follows — so an error message can forge the probe's own verdict in the operator's
+ * scrollback. Newlines survive because an exception's stack is the evidence and folding it to one
+ * line destroys it. (CodeQL js/log-injection)
+ */
+function safe(value) {
+  // eslint-disable-next-line no-control-regex -- matching control characters is the entire job
+  return String(value ?? '').replace(/[\u0000-\u0009\u000b-\u001f\u007f]/g, ' ')
 }
 
 /**
@@ -112,11 +138,11 @@ function report(url, events) {
   for (const d of thrown) {
     const text = d.exception?.description ?? d.text ?? '(no description)'
     console.log(
-      `\n  EXCEPTION ${d.url ?? ''}:${d.lineNumber ?? '?'}\n    ${text.split('\n').join('\n    ')}`,
+      `\n  EXCEPTION ${safe(d.url)}:${d.lineNumber ?? '?'}\n    ${safe(text).split('\n').join('\n    ')}`,
     )
   }
   for (const e of logged) {
-    console.log(`\n  CONSOLE ERROR ${e.url ?? ''}:${e.lineNumber ?? '?'}\n    ${e.text}`)
+    console.log(`\n  CONSOLE ERROR ${safe(e.url)}:${e.lineNumber ?? '?'}\n    ${safe(e.text)}`)
   }
 
   if (thrown.length === 0 && logged.length === 0) {
