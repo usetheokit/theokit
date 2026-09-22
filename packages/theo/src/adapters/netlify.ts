@@ -359,6 +359,8 @@ export const netlifyAdapter: DeployAdapter = {
   // The document is served by Netlify's static host and does not pass through
   // it (usetheokit/theokit#412).
   appliesConfig: ['securityHeaders', 'csrf', 'disallowed', 'cors', 'serialization'],
+  // B-257 — per-invocation: an in-process counter does not survive, so a declared limit needs a durable store.
+  enforcesRateLimit: 'with-a-store',
   build(config, cwd, ctx) {
     return buildNetlify(config, cwd, {}, ctx)
   },

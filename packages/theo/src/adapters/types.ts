@@ -161,6 +161,30 @@ export interface DeployAdapter {
    */
   servesAgents?: boolean
   appliesConfig?: readonly ConfigConcern[] | 'runtime-not-emitted-here'
+
+  /**
+   * B-257 — can the emitted entry ENFORCE a declared rate limit, and under what condition?
+   *
+   * Separate from `appliesConfig` because the two answer different questions and one list could not
+   * carry both. `findUnappliedConfig` reads the first to WARN; `assertRateLimitEnforceable` reads
+   * this one to REFUSE. Welded, adding `'rateLimit'` to stop a warning also satisfied
+   * `applied.includes('rateLimit')` and returned before the throw — switching the refusal off on a
+   * runtime where the limit still cannot hold. `config-support.ts:213-215` wrote that refusal
+   * because "`rateLimit` is the one whose absence looks exactly like success".
+   *
+   * `'always'`            a long-lived process; the in-process counter survives between requests.
+   * `'with-a-store'`      a per-invocation or per-isolate runtime. It enforces only when the config
+   *                       names a durable store, because an in-process counter there forgets, and a
+   *                       limit that forgets is a limit that does not limit.
+   * `'not-ours-to-judge'` this adapter emits no request handler, so the build cannot answer for its
+   *                       runtime. An ABSTAIN and **not** a `'never'`: `config-support.ts:105-108`
+   *                       calls that "a different fact from saying no", and refusing there would
+   *                       assert something unmeasured.
+   *
+   * Omitted means `'not-ours-to-judge'` — the same fail-safe the other claims here take: a target
+   * that has not said it enforces is not thereby said to refuse.
+   */
+  enforcesRateLimit?: 'always' | 'with-a-store' | 'not-ours-to-judge'
   build(config: TheoConfig, cwd: string, ctx?: AdapterBuildContext): Promise<void>
 }
 

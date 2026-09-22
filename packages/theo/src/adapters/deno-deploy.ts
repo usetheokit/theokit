@@ -244,6 +244,8 @@ export const denoDeployAdapter: DeployAdapter = {
   // through it (usetheokit/theokit#412).
   servesAgents: true,
   appliesConfig: ['securityHeaders', 'csrf', 'disallowed', 'cors', 'serialization', 'plugins'],
+  // B-257 — per-invocation: an in-process counter does not survive, so a declared limit needs a durable store.
+  enforcesRateLimit: 'with-a-store',
   build(config, cwd, ctx) {
     return buildDeno(config, cwd, {}, ctx)
   },

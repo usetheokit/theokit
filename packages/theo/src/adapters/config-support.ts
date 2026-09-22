@@ -220,12 +220,33 @@ export class UnenforceableRateLimitError extends Error {
  */
 export function assertRateLimitEnforceable(
   config: TheoConfig,
-  adapter: Pick<DeployAdapter, 'appliesConfig'>,
+  adapter: Pick<DeployAdapter, 'enforcesRateLimit'>,
   target: string,
 ): void {
-  const applied = adapter.appliesConfig ?? []
-  if (applied === 'runtime-not-emitted-here') return
   if (!isDeclared(config, 'rateLimit')) return
-  if (applied.includes('rateLimit')) return
+
+  // B-257 — this reads `enforcesRateLimit`, NOT `appliesConfig`. They were one list until now, and
+  // `applied.includes('rateLimit')` returned before the throw, so adding that entry to silence the
+  // WARNING also switched off this REFUSAL — on a runtime where the limit still cannot hold.
+  const enforces = adapter.enforcesRateLimit ?? 'not-ours-to-judge'
+
+  // An adapter emitting no request handler is not judged. Its runtime is someone else's and this
+  // build cannot answer for it; refusing would assert something unmeasured. An ABSTAIN, and the
+  // reason it is not spelled `'never'`.
+  if (enforces === 'not-ours-to-judge') return
+
+  if (enforces === 'always') return
+
+  // `'with-a-store'`: a per-invocation runtime enforces only when the config names a durable
+  // counter. Without one the in-process count dies with the invocation, and a limit that forgets is
+  // a limit that does not limit — the same class of failure as a shared bucket, by another road.
+  if (declaresRateLimitStore(config)) return
+
   throw new UnenforceableRateLimitError(target)
+}
+
+/** Does the declared `rateLimit` name a store the emitted entry could construct? */
+function declaresRateLimitStore(config: TheoConfig): boolean {
+  const limit = (config as { rateLimit?: { store?: unknown } }).rateLimit
+  return typeof limit?.store === 'object' && limit.store !== null
 }
