@@ -97,15 +97,23 @@ describe('a durable limiter awaits the store it was given (B-257, ADR 0018)', ()
     expect(retryAfter).toBeGreaterThanOrEqual(0)
   })
 
-  it('test_two_concurrent_calls_both_observe_one_increment_each', async () => {
-    // EC-6. The durable path awaits, so two requests for one key can interleave where the sync
-    // facade could not. `rate-limit-store.ts:10-12` requires `incr` to be atomic; this asserts the
-    // limiter does not collapse two increments into one.
+  it('test_two_in_flight_calls_for_one_key_each_reach_the_store', async () => {
+    // EC-6. Two requests for one key, in flight together: each must reach `incr`. A limiter that
+    // deduplicated or coalesced them would count one increment for two requests, and a caller
+    // would get twice the budget it was allocated.
+    //
+    // **What this does NOT prove, despite the shape:** that `incr` is ATOMIC. The name here said
+    // "both observe one increment each" and that claim needs a store that can interleave, which
+    // this one cannot — it is a plain object in a single-threaded runtime, so its two calls are
+    // ordered whatever the limiter does. Atomicity is the STORE's contract
+    // (`rate-limit-store.ts:29-32`) and belongs to whoever implements one against Redis or D1.
+    // Renamed to what it measures, because a test whose name outruns its assertion is a coverage
+    // claim nobody can check.
     const store = recordingStore()
     const check = createDurableRateLimiterWeb({ windowMs: 60_000, max: 10 }, { store })
 
     await Promise.all([check('1.2.3.4'), check('1.2.3.4')])
 
-    expect(store.calls).toHaveLength(2)
+    expect(store.calls, 'two in-flight requests produced fewer than two increments').toHaveLength(2)
   })
 })

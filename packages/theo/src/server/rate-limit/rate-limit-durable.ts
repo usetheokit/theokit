@@ -51,7 +51,7 @@ export function createDurableRateLimiterWeb(
     try {
       const state = await store.incr(key, config.windowMs)
       return resultFromDurableState(state, config)
-    } catch {
+    } catch (reason) {
       // ADR 0019 — a request that could not be COUNTED is refused, not served.
       //
       // The precedent is this repository's own and one item old: when a runtime cannot NAME a
@@ -69,6 +69,22 @@ export function createDurableRateLimiterWeb(
       // proceed, and "the counter is down" is an answer. It is not swallowed either — the refusal
       // carries a header naming the store, so an operator can tell a store outage from every caller
       // suddenly being over budget.
+      // The wiring triad's third pillar (`rules/cycle-implement.md`): without a runtime signal the
+      // behaviour is invisible exactly when it breaks. `X-RateLimit-Unavailable: store` is
+      // addressed to the CALLER and says a store is down; it cannot say WHY, because a timeout, an
+      // auth failure and a DNS error produce the identical header and this `catch` is the last
+      // place the cause exists. An operator watching 503s would have the symptom and nothing to act
+      // on, during the incident that made the store fail.
+      //
+      // `console.warn` with this prefix is what this package already uses for a failure it cannot
+      // return — `server/http/web-middleware-runner.ts:214`, `server/jobs/job-backend-memory.ts:77`,
+      // `server/index.ts:50` — rather than a logger this module would have to invent and every
+      // consumer would have to configure.
+      const detail = reason instanceof Error ? (reason.stack ?? reason.message) : String(reason)
+      console.warn(
+        `[theokit] the rate-limit store could not count a caller, so the request was refused ` +
+          `with 503 rather than served unlimited: ${detail}`,
+      )
       return unavailable(config)
     }
   }

@@ -53,6 +53,44 @@ describe('an unreachable store fails closed (B-257 T3.1, ADR 0019)', () => {
     expect(result.headers['X-RateLimit-Unavailable']).toBe('store')
   })
 
+  it('test_the_store_failure_reaches_an_operator_and_not_only_the_caller', async () => {
+    // The wiring triad's third pillar (`rules/cycle-implement.md`): a behaviour with no runtime
+    // signal is invisible exactly when it breaks.
+    //
+    // The refusal already carries `X-RateLimit-Unavailable: store`, and that is addressed to the
+    // CALLER. It says a store is down; it cannot say WHY — a timeout, an auth failure and a DNS
+    // error produce the identical header, and the `catch` destroyed the only object that knew.
+    // An operator watching 503s then has the symptom and nothing to act on, during the incident
+    // that made the store fail.
+    //
+    // `console.warn` with the `[theokit]` prefix because that is what this package already does for
+    // a failure it cannot return — `server/http/web-middleware-runner.ts:214`,
+    // `server/jobs/job-backend-memory.ts:77`, `server/index.ts:50`. Not `throw`: the limiter's
+    // contract is to answer whether this caller may proceed, and "the counter is down" is an answer.
+    const warnings: string[] = []
+    const warn = console.warn
+    console.warn = (...args: unknown[]) => {
+      warnings.push(args.map(String).join(' '))
+    }
+    try {
+      const failing: RateLimitStore = {
+        incr: () => Promise.reject(new Error('ECONNREFUSED 10.0.0.9:6379')),
+        get: () => Promise.resolve(null),
+        reset: () => Promise.resolve(),
+      }
+      const check = createDurableRateLimiterWeb({ windowMs: 60_000, max: 10 }, { store: failing })
+      await check('1.2.3.4')
+    } finally {
+      console.warn = warn
+    }
+
+    expect(warnings, 'the store failure produced no operator-visible signal').toHaveLength(1)
+    expect(warnings[0], 'the warning does not carry the cause an operator needs').toContain(
+      'ECONNREFUSED 10.0.0.9:6379',
+    )
+    expect(warnings[0], 'the warning is not attributable to this package').toContain('[theokit]')
+  })
+
   it('test_the_rejection_is_not_swallowed_into_a_served_request', async () => {
     // The anti-pattern `rules/error-handling.md` § 5 lists first: a catch that returns
     // `{ limited: false }` makes the failure invisible exactly while the limit is not limiting.
