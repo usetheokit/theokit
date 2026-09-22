@@ -176,7 +176,14 @@ export function deployedRateLimitFragment(
   if (baked === undefined) return []
   return [
     `// #508 — the limit the app declared, carried as a literal because a deployed entry has no`,
-    `// theo.config.ts to read. The counter lives in this process, which outlives a request here.`,
+    `// theo.config.ts to read.`,
+    `//`,
+    `// WHERE THIS COUNTER LIVES, and it is not the same answer per target. On a long-lived server`,
+    `// (\`bun\`) the process outlives a request and the count holds. On a per-invocation or`,
+    `// per-isolate runtime — Cloudflare, AWS Lambda, Netlify, Vercel, Deno Deploy — it does not:`,
+    `// the limit is PER INSTANCE, and a caller spread across instances gets that many budgets.`,
+    `// The address is resolved correctly either way; the counting is what B-257 is about, and`,
+    `// \`theokit build\` refuses a declared limit on those five until it is.`,
     `const RATE_LIMIT = createRateLimiterWeb({ windowMs: ${baked.windowMs}, max: ${baked.max} })`,
     ``,
     `// How many proxies the deployment declared in front of it. \`client-ip.ts\` reads a forwarded`,

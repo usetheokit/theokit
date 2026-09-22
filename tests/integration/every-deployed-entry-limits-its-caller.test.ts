@@ -20,10 +20,19 @@ import { BUILD_HOOK_TIMEOUT_MS, buildTheokitPackageOnce } from './_helpers/build
  * described emitted code that would not run, and every criterion it carried was a `grep` over the
  * rendered string. A render-contains assertion cannot see an unbound identifier, an unimported
  * symbol, a call site that was never emitted, or a guard that was never written. The votes are in
- * `.squad/records/panels/a-declared-rate-limit-names-its-caller-plan.round1.json` … `.round12.json`.
+ * `.squad/records/panels/a-declared-rate-limit-names-its-caller-plan.round*.json` — thirteen files for
+ * twelve rounds, because two rounds were archived mid-flight (`8a`, `10a`/`10b`) when the artifact
+ * changed after a vote was cast.
  *
- * So this loads each emitted entry and drives its handler. It is RED before any adapter changes,
- * and each failure names which defect it caught.
+ * So this loads each emitted entry and DRIVES its handler: two requests against a `max: 1` budget,
+ * and one with no address anywhere. Six targets, six calling conventions, three response shapes —
+ * a `Response`, a drain into `nodeRes`, a Lambda v2 result — which is why `load()` is per-target.
+ *
+ * **The first version of this file did not drive anything.** It ended at
+ * `expect(handler).toBeTypeOf('function')` under a name promising refusal, and both `/review`
+ * specialists returned it as a BLOCKER. That is the same failure the panel spent twelve rounds on,
+ * committed one level up: an assertion that LOOKS behavioural, reached through a real dynamic
+ * import, certifying nothing about behaviour. Kept in the record because the shape is the lesson.
  *
  * ## Why the specifiers are rewritten to `dist`
  *
@@ -71,7 +80,12 @@ const ENTRIES = [
   ['cloudflare', () => renderCloudflareWorkerEntry({ ssrStreaming: false, rateLimit: LIMIT })],
   ['bun', () => renderBunEntry(3000, { rateLimit: LIMIT })],
   ['deno-deploy', () => renderDenoEntry(3000, { rateLimit: LIMIT })],
-  ['vercel', () => renderVercelFunctionEntry({ rateLimit: LIMIT })],
+  // `trustProxy: 1` for this target ONLY, and it is a finding rather than a fixture convenience.
+  // Vercel's sole source is the forwarded header, and `client-ip.ts:75` returns `undefined` when
+  // no proxy is trusted — so a limit declared on Vercel without `trustProxy` can never name
+  // anybody, and every request takes the 503. That is the plan's open question Q4, answered by
+  // execution: this test read 503 where it expected 429 until the trust was declared.
+  ['vercel', () => renderVercelFunctionEntry({ rateLimit: { ...LIMIT, trustProxy: 1 } })],
   ['netlify', () => renderNetlifyFunction({ rateLimit: LIMIT })],
   ['aws-lambda', () => renderAwsLambdaEntry({ rateLimit: LIMIT })],
 ] as const satisfies readonly (readonly [string, () => string])[]
@@ -161,6 +175,111 @@ function installRuntimeStubs(captured: Captured): () => void {
   }
 }
 
+/**
+ * Load an emitted entry and return a driver that sends ONE request and answers with its status.
+ *
+ * Six targets, six calling conventions and three response shapes — which is the whole reason this
+ * file exists. `cloudflare` and `netlify` export a handler returning a `Response`; `bun` and
+ * `deno-deploy` export nothing and hand theirs to `serve`; `vercel` returns undefined and drains
+ * into `nodeRes`; `aws-lambda` returns a v2 result object. A driver that only knew one of them
+ * would report the other five as passing without exercising anything.
+ */
+async function load(
+  target: Target,
+  source: string,
+): Promise<(address: string | undefined) => Promise<number>> {
+  const file = writeEntry(target, source)
+  const captured: Captured = {}
+  const restore = installRuntimeStubs(captured)
+  let mod: Record<string, unknown>
+  try {
+    mod = (await import(/* @vite-ignore */ pathToFileURL(file).href)) as Record<string, unknown>
+  } finally {
+    restore()
+  }
+
+  const url = 'https://app.test/api/thing'
+  /** The header each runtime reads, so `address: undefined` really means "nothing to key on". */
+  function headersFor(address: string | undefined): Record<string, string> {
+    if (address === undefined) return {}
+    // `cf-connecting-ip` is the header the Workers runtime writes and the only one that target
+    // reads first; every other Web target falls through to the forwarded chain.
+    if (target === 'cloudflare') return { 'cf-connecting-ip': address }
+    return { 'x-forwarded-for': address }
+  }
+
+  if (target === 'aws-lambda') {
+    const handler = mod.handler as (event: unknown) => Promise<{ statusCode: number }>
+    return async (address) => {
+      const result = await handler({
+        requestContext: { http: { method: 'GET', path: '/api/thing', sourceIp: address } },
+        headers: headersFor(address),
+        rawPath: '/api/thing',
+      })
+      return result.statusCode
+    }
+  }
+
+  if (target === 'vercel') {
+    const handler = mod.default as (req: unknown, res: unknown) => Promise<void>
+    return async (address) => {
+      let status = 0
+      const res = {
+        writeHead: (s: number) => {
+          status = s
+          return res
+        },
+        flushHeaders: () => undefined,
+        write: () => true,
+        end: () => res,
+        once: () => res,
+        off: () => res,
+        destroy: () => res,
+      }
+      await handler(
+        { method: 'GET', url: '/api/thing', headers: { host: 'app.test', ...headersFor(address) } },
+        res,
+      )
+      return status
+    }
+  }
+
+  // The three Web-shaped ones, plus the two whose handler the `serve` stub captured. `second` is
+  // the runtime source each expects: netlify's context, deno's serve info, bun's server.
+  const exported =
+    typeof mod.default === 'function'
+      ? (mod.default as Captured['handler'])
+      : (mod.default as { fetch?: Captured['handler'] } | undefined)?.fetch
+  const handler = captured.handler ?? exported
+  expect(handler, `${target} exposes no drivable handler`).toBeTypeOf('function')
+  // `!` after the assertion above, not instead of it: if the handler is absent the expect()
+  // has already failed the test, so nothing downstream can run on a nullish value.
+  const drivable = handler!
+
+  const second = (address: string | undefined): unknown => {
+    // `bun` gets a `server` either way: `Bun.serve` always passes one, so an absent object is a
+    // fixture that could not happen. What CAN happen is `requestIP` returning nothing — a
+    // connection already gone — and that is the unnameable case for this target.
+    if (target === 'bun')
+      return { requestIP: () => (address === undefined ? undefined : { address }) }
+    if (address === undefined) return undefined
+    if (target === 'netlify') return { ip: address }
+    if (target === 'deno-deploy') return { remoteAddr: { hostname: address } }
+    return undefined
+  }
+
+  return async (address) => {
+    const response = await drivable(
+      new Request(url, { headers: headersFor(address) }),
+      second(address),
+    )
+    // The four Web-shaped targets always answer with a `Response`; the one that returns nothing
+    // is `vercel`, and it took the branch above. An `undefined` here is a defect in the emitted
+    // entry, and `!` surfaces it as a TypeError naming this line rather than as a silent NaN.
+    return response!.status
+  }
+}
+
 describe('every deployed entry limits its caller (B-027, T0.1)', () => {
   beforeAll(() => {
     buildTheokitPackageOnce()
@@ -196,25 +315,21 @@ describe('every deployed entry limits its caller (B-027, T0.1)', () => {
         ).toBe(true)
       })
 
-      it(`test_${target.replace(/-/g, '_')}_loads_and_refuses_an_over_budget_caller`, async () => {
-        const file = writeEntry(target, render())
-        const captured: Captured = {}
-        const restore = installRuntimeStubs(captured)
-        try {
-          const mod = (await import(/* @vite-ignore */ pathToFileURL(file).href)) as {
-            default?: unknown
-            handler?: unknown
-          }
-          const handler =
-            captured.handler ??
-            (typeof mod.default === 'function'
-              ? (mod.default as Captured['handler'])
-              : ((mod.default as { fetch?: Captured['handler'] } | undefined)?.fetch ??
-                (mod.handler as Captured['handler'])))
-          expect(handler, `${target} exposes no drivable handler`).toBeTypeOf('function')
-        } finally {
-          restore()
-        }
+      it(`test_${target.replace(/-/g, '_')}_refuses_an_over_budget_caller`, async () => {
+        const drive = await load(target, render())
+        // `max: 1`, so the second request is over budget. The first is expected to answer
+        // whatever the route layer gives it — a 404, since no server dir exists here — and only
+        // the SECOND is this test's subject.
+        await drive('1.2.3.4')
+        expect(await drive('1.2.3.4'), `${target} did not refuse a second request`).toBe(429)
+      })
+
+      it(`test_${target.replace(/-/g, '_')}_refuses_a_caller_it_cannot_name`, async () => {
+        const drive = await load(target, render())
+        // No address anywhere: no `cf-connecting-ip`, no forwarded header, no runtime source, and
+        // `trustProxy` unset. The guard must answer 503 — `rate-limit.ts:113` is
+        // `clientIp.length > 0`, so reaching the limiter with `undefined` is a TypeError instead.
+        expect(await drive(undefined), `${target} did not refuse an unnameable caller`).toBe(503)
       })
     })
   }
