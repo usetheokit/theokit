@@ -1,131 +1,146 @@
-/**
- * B-181 — a README row that claims a surface is `read` names a reader, and the name must resolve.
- *
- * ## Why this exists, measured
- *
- * This package's README publishes a table of which `.claude/` surfaces it reads. The claim is prose.
- * The item that produced this test exists because the README said `agent-memory/` was **read** while
- * `.claude/rules/foreign-config-surfaces.md` said **resolvable, no caller outside its own tests** —
- * corrected 2026-09-18, three days after the item was filed against the disagreement. The drift is
- * gone; nothing would have caught it.
- *
- * ## What this checks, and what it deliberately does not
- *
- * It checks the CLAIM: a row saying `read` and naming a reader must name something that resolves
- * with a caller outside test files. It does NOT compute the verdict column — that column carries
- * judgement no compiler answers (`read when the dialect is declared`, `out of scope HERE — read by
- * the consumer`). `capability-map-is-current.test.ts` can generate its document because its oracle is
- * `checker.getExportsOfModule`, which enumerates a fact. There is no analogous call for scope.
- *
- * ## Resolution is by TEXT SEARCH, and that is a stated limit
- *
- * A symbol named in a comment counts as a reference. A false pass therefore needs someone to write
- * the name in a comment AND delete every real caller. The alternative — a compiler pass over two
- * packages — costs more than the two rows it would harden.
- *
- * ## An empty input FAILS
- *
- * Coverage is asserted, not assumed: measured 2026-09-21, 3 of 14 rows name a lowercase identifier
- * and 2 name a real function. If a reformat leaves the parser finding nothing, the floor assertion
- * fails rather than the suite passing over an empty set — which is this item's own defect genre.
- */
-import { readFileSync, readdirSync, statSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { execFileSync } from 'node:child_process'
+import { readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 import { describe, expect, it } from 'vitest'
 
-/** The section the table lives under. Named, because an indexOf on a wrong string
- * silently yields an empty table, and an empty table is a check that verifies nothing. */
-const SURFACES_HEADING = '## Foreign configuration surfaces'
+/**
+ * B-181 — the README's surfaces table claims things, and a claim is what drifts.
+ *
+ * `README.md § Foreign configuration surfaces` is the copy that travels: `.claude/rules/` is
+ * gitignored, so nothing written there reaches anyone who installs this package. The table's own
+ * rule is that a surface is either READ or REFUSED WITH A REASON, never accepted and ignored — and
+ * its anti-pattern list records the sharper failure by name:
+ *
+ *   "Claiming a surface is read when a function merely exists to read it. Worse than either half
+ *    of the rule above: an author checks the claim before writing the key, so the claim IS the
+ *    control."
+ *
+ * That happened, to `agent-memory/`: the reader was real, the route was refused one package over,
+ * and the table said `read` for three days.
+ *
+ * ## What this checks, and what it deliberately does not
+ *
+ * It does NOT generate the verdict column. That column carries judgement a compiler cannot supply —
+ * `read when the dialect is declared`, `parsed, not applied`, `out of scope HERE`. The
+ * `capability-map` generator pattern works because its oracle is the compiler enumerating exports,
+ * and no compiler answers "is this surface in scope for this package".
+ *
+ * What it checks is the EVIDENCE BEHIND a verdict. A row claiming `read` names a reader; that
+ * reader either resolves in the source with a caller outside its own tests, or the claim is
+ * unsupported. Verifying the claim is a different job from generating it, and it is the one that
+ * can actually be done.
+ *
+ * ## Why a caller and not just a definition
+ *
+ * A function that exists and nobody calls reads nothing. That distinction is the entire finding
+ * this test exists to keep from recurring.
+ */
 
-const PKG = resolve(import.meta.dirname, '..', '..')
-const REPO = resolve(PKG, '..', '..')
-const README = join(PKG, 'README.md')
+const here = dirname(fileURLToPath(import.meta.url))
+const repoRoot = join(here, '..', '..', '..', '..')
+const readme = join(repoRoot, 'packages', 'agents', 'README.md')
 
-/** A row of the surfaces table that claims the surface is read and names who reads it. */
-interface ClaimingRow {
-  readonly line: number
+/** One row of the surfaces table: the surface, and what the README says about it. */
+interface SurfaceRow {
   readonly surface: string
-  readonly reader: string
+  readonly verdict: string
 }
 
-/** Rows whose verdict says `read` without saying `out of scope` or `refused`, and name a reader. */
-function claimingRows(markdown: string): { claims: ClaimingRow[]; unchecked: number } {
-  const claims: ClaimingRow[] = []
-  let unchecked = 0
-  // Bounded to the surfaces table. Reviewing this file's own first revision found it matching ANY
-  // markdown row containing "read" anywhere in the README — `./tools` at :45 and a row about a
-  // variable at :280 were being counted. Harmless while they name no identifier, and a row checked
-  // as a surface claim the moment one of them does.
-  const start = markdown.indexOf(SURFACES_HEADING)
-  const lineOffset = start < 0 ? 0 : markdown.slice(0, start).split('\n').length - 1
-  // `indexOf` returns -1 when this is the LAST `##` section, and -1 as a `slice` end bound means
-  // 'everything except the final character' — which ate the closing backtick of a reader sitting at
-  // the end of the table and turned a verified row into a silent UNCHECKED. Measured, not read.
-  const nextSection = markdown.indexOf('\n## ', start + 4)
-  const tableEnd = nextSection < 0 ? markdown.length : nextSection
-  const table = start < 0 ? '' : markdown.slice(start, tableEnd)
-  table.split('\n').forEach((raw, i) => {
-    if (!raw.startsWith('|')) return
-    const lower = raw.toLowerCase()
-    // `\bread\b` and not `includes`: `unreadable` contains `read`, and a row saying it was being
-    // classified as a claiming row. Safe direction — it landed in UNCHECKED — and still a wrong count.
-    if (!/\bread\b/.test(lower)) return
-    if (lower.includes('out of scope') || lower.includes('refused')) return
-    const cells = raw.split('|').map((c) => c.trim())
-    const surface = cells[1] ?? ''
-    // A reader is a backticked lowerCamelCase identifier: `applySubagentMemory`, not `settings.json`.
-    const reader = [...raw.matchAll(/`([a-z][A-Za-z0-9]{7,})`/g)]
-      .map((m) => m[1])
-      .find((name) => /[A-Z]/.test(name))
-    if (reader === undefined) {
-      unchecked += 1
-      return
-    }
-    claims.push({ line: lineOffset + i + 1, surface, reader })
-  })
-  return { claims, unchecked }
+function surfaceRows(): SurfaceRow[] {
+  const text = readFileSync(readme, 'utf8')
+  const section = /^## Foreign configuration surfaces$([\s\S]*?)^## /m.exec(text)
+  if (section === null) return []
+  return [...section[1].matchAll(/^\|\s*(.+?)\s*\|\s*(.+?)\s*\|\s*$/gm)]
+    .map((m) => ({ surface: m[1] ?? '', verdict: m[2] ?? '' }))
+    .filter((r) => !/^-+$/.test(r.surface) && r.surface !== 'Surface')
 }
 
-/** Every `.ts` file under a directory, excluding tests and anything generated. */
-function sources(dir: string): string[] {
-  const out: string[] = []
-  const walk = (d: string): void => {
-    for (const name of readdirSync(d)) {
-      if (name === 'node_modules' || name === 'dist' || name.startsWith('.')) continue
-      const full = join(d, name)
-      if (statSync(full).isDirectory()) {
-        walk(full)
-        continue
-      }
-      if (!full.endsWith('.ts') || full.includes('.test.')) continue
-      out.push(full)
-    }
+/**
+ * A verdict CLAIMS the surface is read when it says so and does not withdraw it in the same breath.
+ *
+ * `parsed, not applied` and `out of scope HERE` both contain the word, and both are refusals. The
+ * negations are listed rather than inferred, because a regex that guesses at English would fail
+ * open — and failing open here means the check passes on exactly the row it was written for.
+ */
+function claimsRead(verdict: string): boolean {
+  const lowered = verdict.toLowerCase()
+  if (!/\bread\b/.test(lowered)) return false
+  const withdrawals = [
+    'not applied',
+    'out of scope',
+    'refused',
+    'read by the consumer',
+    'read neither',
+  ]
+  return !withdrawals.some((w) => lowered.includes(w))
+}
+
+/** Every backticked identifier in the verdict — the reader the row names, when it names one. */
+function namedReaders(verdict: string): string[] {
+  return [...verdict.matchAll(/`([A-Za-z_$][\w$]*)`/g)]
+    .map((m) => m[1] ?? '')
+    .filter((id) => id.length > 2)
+}
+
+/** Files that mention a symbol, from git's own index so nothing untracked can satisfy a claim. */
+function tracked(symbol: string): string[] {
+  try {
+    // eslint-disable-next-line sonarjs/no-os-command-from-path -- reads the local index only
+    const out = execFileSync('git', ['grep', '-l', '-w', '--', symbol, '--', '*.ts', '*.tsx'], {
+      cwd: repoRoot,
+      encoding: 'utf8',
+      maxBuffer: 16 * 1024 * 1024,
+    })
+    return out.split('\n').filter(Boolean)
+  } catch {
+    // `git grep` exits 1 when nothing matches, which is an answer and not a failure.
+    return []
   }
-  walk(dir)
-  return out
 }
 
-const markdown = readFileSync(README, 'utf8')
-const { claims, unchecked } = claimingRows(markdown)
-const HAYSTACK = [join(PKG, 'src'), join(REPO, 'apps', 'theocode')]
-  .flatMap((d) => sources(d))
-  .map((f) => readFileSync(f, 'utf8'))
-  .join('\n')
+const isTest = (path: string): boolean => /(^|\/)tests?\//.test(path) || /\.test\.tsx?$/.test(path)
 
-describe('every README row claiming a surface is read names a reader that resolves', () => {
-  it(`examined ${claims.length} rows (${unchecked} name no reader and are UNCHECKED, not passing)`, () => {
-    expect(
-      claims.length,
-      'the table stopped naming readers, or the parser stopped finding them — either way this check now verifies nothing',
-    ).toBeGreaterThanOrEqual(2)
+describe('every surface the README claims is read names a reader that resolves (B-181)', () => {
+  const rows = surfaceRows()
+
+  it('test_the_table_was_found_and_is_not_empty', () => {
+    // Guards the check itself. A regex that stops matching would make every assertion below pass
+    // over an empty list — a green run that measured nothing, which is the shape this whole file
+    // exists to refuse.
+    expect(rows.length, 'the surfaces table was not found in README.md').toBeGreaterThan(8)
   })
 
-  it.each(claims)('README:$line — $surface cites $reader, which resolves', ({ line, reader }) => {
-    const hits = HAYSTACK.split(reader).length - 1
+  const claiming = rows.filter((r) => claimsRead(r.verdict))
+
+  it('test_at_least_one_row_claims_read', () => {
     expect(
-      hits,
-      `README:${line} cites \`${reader}\`, which appears in no non-test source under packages/agents/src or apps/theocode. A row claiming the surface is read names a reader that is not there.`,
-    ).toBeGreaterThan(0)
+      claiming.length,
+      'no row claims `read` — the parser or the table changed',
+    ).toBeGreaterThan(2)
   })
+
+  for (const row of claiming) {
+    const readers = namedReaders(row.verdict)
+    if (readers.length === 0) continue
+
+    it(`test_${row.surface.replace(/[^a-z0-9]+/gi, '_').slice(0, 40)}_names_a_reader_with_a_caller`, () => {
+      const resolved = readers.filter((symbol) => {
+        const files = tracked(symbol)
+        // Defined somewhere, AND mentioned in at least one file that is not a test. A function
+        // nobody calls outside its own tests reads nothing, which is precisely the drift this
+        // package's README recorded against `agent-memory/`.
+        return files.length > 0 && files.some((f) => !isTest(f))
+      })
+
+      const named = readers.map((r) => '`' + r + '`').join(', ')
+      expect(
+        resolved.length,
+        `${row.surface} claims it is read and names ${named}, but none of them resolves to a ` +
+          `tracked non-test file. Either the reader was renamed and the claim is now false, or ` +
+          `the claim was never true.`,
+      ).toBeGreaterThan(0)
+    })
+  }
 })

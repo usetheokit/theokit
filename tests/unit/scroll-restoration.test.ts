@@ -146,3 +146,84 @@ describe('a storage that refuses to write does not break navigation', () => {
     expect(() => createScrollRestorer(throwing).save('loc-1', [target('main', 1)])).not.toThrow()
   })
 })
+
+/**
+ * B-037 / usetheokit/theokit#421 — what is persisted must be where the user WAS, not where the
+ * incoming route starts.
+ *
+ * Measured 2026-09-22 against `theokit@0.70.1` scaffolded from npm with `.ssr(true)`, driving a
+ * real Chrome: a container scrolled to 2400, a client-side navigation, `history.back()`, and the
+ * offset reads 0. Read straight out of `sessionStorage` on leaving:
+ *
+ *     {"theokit:scroll:default":"{\"main\":0}"}
+ *
+ * It stored 0. Nothing was lost in transit — the wrong number was written. `ElementScrollRestoration`
+ * saves the outgoing key's offsets from inside a `useLayoutEffect`, and React runs that AFTER
+ * committing the incoming route's DOM, so `scrollTop` is already the new page's.
+ *
+ * The fix belongs HERE and not in the shell. This module holds the decisions precisely so they can
+ * be tested without a DOM (`vitest.config.ts` declares `environment: 'node'`), and "which snapshot
+ * gets persisted" is a decision. A shell that reads the DOM at the right moment would put a branch
+ * that matters back into the file whose whole design is to have none.
+ */
+describe('what gets persisted is where the user was (B-037)', () => {
+  function memoryStore(): ScrollStore & { readonly written: Record<string, string> } {
+    const written: Record<string, string> = {}
+    return {
+      written,
+      get: (k) => written[k] ?? null,
+      set: (k, v) => {
+        written[k] = v
+      },
+    }
+  }
+
+  const target = (id: string, scrollTop: number): ScrollTarget => ({ id, scrollTop })
+
+  it('test_save_persists_the_recorded_offset_not_the_live_one', () => {
+    const store = memoryStore()
+    const restorer = createScrollRestorer(store)
+
+    // The user scrolled to 2400 while /tall was on screen.
+    restorer.record('k-tall', [target('main', 2400)])
+
+    // React commits /'s DOM, and only THEN runs the effect that saves. The live element is the new
+    // route's, sitting at 0 — which is exactly what the browser measurement observed.
+    restorer.save('k-tall', [target('main', 0)])
+
+    expect(
+      JSON.parse(store.written['theokit:scroll:k-tall'] ?? '{}'),
+      'the live 0 was persisted over the recorded 2400 — this is the defect',
+    ).toEqual({ main: 2400 })
+  })
+
+  it('test_a_later_record_supersedes_an_earlier_one', () => {
+    const store = memoryStore()
+    const restorer = createScrollRestorer(store)
+    restorer.record('k', [target('main', 100)])
+    restorer.record('k', [target('main', 900)])
+    restorer.save('k', [target('main', 0)])
+    expect(JSON.parse(store.written['theokit:scroll:k'] ?? '{}')).toEqual({ main: 900 })
+  })
+
+  it('test_with_nothing_recorded_save_still_reads_the_targets', () => {
+    // Must SURVIVE. `pagehide` fires with no preceding scroll on a page nobody touched, and a
+    // save that silently wrote nothing would lose the offset of a route restored from a previous
+    // visit and never scrolled again.
+    const store = memoryStore()
+    const restorer = createScrollRestorer(store)
+    restorer.save('k', [target('main', 640)])
+    expect(JSON.parse(store.written['theokit:scroll:k'] ?? '{}')).toEqual({ main: 640 })
+  })
+
+  it('test_recording_one_key_does_not_leak_into_another', () => {
+    const store = memoryStore()
+    const restorer = createScrollRestorer(store)
+    restorer.record('k-tall', [target('main', 2400)])
+    restorer.save('k-other', [target('main', 15)])
+    expect(
+      JSON.parse(store.written['theokit:scroll:k-other'] ?? '{}'),
+      'a snapshot taken on one route was persisted under another',
+    ).toEqual({ main: 15 })
+  })
+})

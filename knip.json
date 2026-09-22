@@ -1,6 +1,6 @@
 {
   "$schema": "https://unpkg.com/knip@5/schema.json",
-  "ignore": ["**/tests/**", "apps/**"],
+  "ignore": ["**/tests/**", "apps/**", ".squad/**"],
   "workspaces": {
     ".": {
       "ignore": ["tests/**", "docs/**", "**/*.d.mts"]
