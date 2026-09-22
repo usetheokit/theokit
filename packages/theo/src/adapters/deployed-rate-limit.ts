@@ -111,6 +111,63 @@ interface BakeableStore {
 const IDENTIFIER = /^[A-Za-z_$][\w$]*$/
 
 /**
+ * The words that are well-formed identifiers and cannot be BOUND.
+ *
+ * `IDENTIFIER` answers "could this be a name?"; the emitter needs "can this be THIS name?", and the
+ * two differ on exactly this set. `factory` lands as a bare binding in
+ * `import { <factory> } from '<module>'`, where `import { default }` is a SyntaxError — so a config
+ * naming one produces a generated entry that does not parse, and the deploy fails pointing at the
+ * emitted file rather than at the line that caused it.
+ *
+ * `default` is the one a real config reaches by accident, because `export default createStore` is
+ * the ordinary shape of the module being named. The rest are here because the cost of the list is
+ * one comparison and the cost of an omission is a deploy that fails somewhere else.
+ *
+ * Reserved words only. `defaultStore` is a legal binding, and a substring match would refuse it —
+ * an over-correction that breaks working configs to protect against a shape they do not have.
+ */
+const NOT_BINDABLE = new Set([
+  'await',
+  'break',
+  'case',
+  'catch',
+  'class',
+  'const',
+  'continue',
+  'debugger',
+  'default',
+  'delete',
+  'do',
+  'else',
+  'enum',
+  'export',
+  'extends',
+  'false',
+  'finally',
+  'for',
+  'function',
+  'if',
+  'import',
+  'in',
+  'instanceof',
+  'new',
+  'null',
+  'return',
+  'super',
+  'switch',
+  'this',
+  'throw',
+  'true',
+  'try',
+  'typeof',
+  'var',
+  'void',
+  'while',
+  'with',
+  'yield',
+])
+
+/**
  * Refuse a `store` a generated entry could not construct — or could construct into a hole.
  *
  * Extracted from `bakeableRateLimit` because it is its own responsibility and because inlining it
@@ -146,7 +203,7 @@ function assertBakeableStore(store: unknown, target: string): void {
     )
   }
 
-  if (typeof factory !== 'string' || !IDENTIFIER.test(factory)) {
+  if (typeof factory !== 'string' || !IDENTIFIER.test(factory) || NOT_BINDABLE.has(factory)) {
     throw new UnserialisableRateLimitError(
       target,
       '`security.rateLimit.store.factory` must be a plain identifier — it is written into the ' +
@@ -158,6 +215,41 @@ function assertBakeableStore(store: unknown, target: string): void {
         'omit `store` and let the build refuse this target',
       ],
     )
+  }
+
+  // `options` is typed `Record<string, string | number | boolean>` and the type is erased before
+  // this runs, so the declaration protects nobody: the value arrives from a config file. Three
+  // measured escapes, and the third is why this is a refusal rather than a comment —
+  // `JSON.stringify` throws a raw TypeError naming JSON on a BigInt and on a cycle, and on a
+  // FUNCTION it throws nothing and omits the key. The option was then simply absent from the
+  // emitted entry, with no diagnostic: a store configured and not configured, which is the same
+  // silence this whole feature exists to remove.
+  const { options } = store as Record<string, unknown>
+  if (options !== undefined) {
+    if (typeof options !== 'object' || options === null || Array.isArray(options)) {
+      throw new UnserialisableRateLimitError(
+        target,
+        '`security.rateLimit.store.options` must be an object of scalar values.',
+        [
+          "declare `options: { url: 'redis://…', retries: 3 }`",
+          'omit `options` and configure the store inside the factory',
+        ],
+      )
+    }
+
+    const offending = Object.entries(options as Record<string, unknown>).find(
+      ([, v]) => typeof v !== 'string' && typeof v !== 'number' && typeof v !== 'boolean',
+    )
+    if (offending !== undefined) {
+      throw new UnserialisableRateLimitError(
+        target,
+        `\`security.rateLimit.store.options.${offending[0]}\` must be a string, number or boolean.`,
+        [
+          'declare scalars only — strings, numbers and booleans',
+          'move anything else into the factory itself, which the generated entry calls at runtime',
+        ],
+      )
+    }
   }
 }
 
