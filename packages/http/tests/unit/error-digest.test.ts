@@ -107,6 +107,32 @@ describe('Error Digest', () => {
     expect(result.status).toBe(500)
   })
 
+  // B-214. `JSON.stringify` returns the VALUE `undefined` — not a string — for `undefined`, for
+  // symbols and for functions. `extractMessage` is annotated `: string` and returned it anyway;
+  // `digestError` then calls `djb2(message)`, whose first statement reads `input.length`.
+  //
+  // `throw undefined` and `throw Symbol()` are legal JavaScript and reach here through any
+  // `catch (err: unknown)`. The function's own docblock promises it "handles non-Error throws" and
+  // is "safe to call inside catch blocks" — a helper whose whole purpose is to make an arbitrary
+  // thrown value safe threw its own TypeError on three input kinds, destroying the original error
+  // inside the handler that called it and turning a recoverable fault into an unhandled one.
+  //
+  // The existing suite covers string, number, object and Error. These are the kinds it did not.
+  for (const [label, thrown] of [
+    ['undefined', undefined],
+    ['a symbol', Symbol('s')],
+    ['a function', function named() {}],
+  ] as [string, unknown][]) {
+    it(`test_digest_survives_a_throw_of_${label.replaceAll(' ', '_')}`, () => {
+      const digest = digestError(thrown)
+
+      expect(typeof digest.message, `${label} produced a non-string message`).toBe('string')
+      expect(digest.message.length, `${label} produced an empty message`).toBeGreaterThan(0)
+      // The digest is what callers key on; an empty one collides every unlike error into a bucket.
+      expect(digest.digest).toMatch(/^[0-9a-f]+$/)
+    })
+  }
+
   it('test_digest_http_exception_preserves_status', () => {
     // Given: an HttpException with specific status
     const err = new NotFoundException('User not found')

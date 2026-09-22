@@ -1,8 +1,38 @@
 import type { Plugin } from 'vite'
 
 import type { TheoConfig } from '../config/schema.js'
+import type { SecurityHeadersConfig } from '../core/contracts/security-headers.js'
 
 import type { DeployedAgent } from './deployed-agents.js'
+import type { DeployedCorsOptions } from './deployed-cors.js'
+import type { DeployedCsrfOptions } from './deployed-csrf.js'
+import type {
+  DeployedAgentsDirOptions,
+  DeployedRuntimeConfigOptions,
+  DeployedServerDirOptions,
+} from './deployed-runtime-config.js'
+
+/**
+ * Everything a filesystem deploy entry accepts.
+ *
+ * `vercel`, `aws-lambda` and `deno-deploy` declared this same six-member intersection, character
+ * for character. Extracted after SonarCloud's duplication gate named it among the repeated blocks
+ * on a pull request — the gate measuring something real, because a member added to the set had to
+ * be added in three places or the targets would silently disagree about what they accept.
+ *
+ * `netlify` is deliberately NOT a user: it resolves `serverDir` as a literal `resolve(cwd, 'server')`
+ * rather than from configuration, so it carries no `DeployedServerDirOptions`. Widening this type to
+ * cover it would let netlify accept a `serverDir` it then ignores, which is the accepted-and-ignored
+ * failure this framework refuses elsewhere. That netlify cannot take one is a separate gap, not a
+ * reason to lie about the type.
+ */
+export type DeployedEntryOptions = {
+  securityHeaders?: SecurityHeadersConfig
+} & DeployedAgentsDirOptions &
+  DeployedCsrfOptions &
+  DeployedRuntimeConfigOptions &
+  DeployedServerDirOptions &
+  DeployedCorsOptions
 
 /**
  * Build context injected by the CLI into adapter.build.

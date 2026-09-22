@@ -23,10 +23,7 @@ import {
 } from './deployed-runtime-config.js'
 import { deployedTraceFragment } from './deployed-trace.js'
 import { nodeAdapter } from './node.js'
-import {
-  describeDeployedSecurityHeaders,
-  renderSecurityHeadersConfigLiteral,
-} from './security-headers.js'
+import { describeDeployedSecurityHeaders, securityHeadersDeclarations } from './security-headers.js'
 import type { AdapterBuildContext, DeployAdapter } from './types.js'
 
 /**
@@ -380,8 +377,7 @@ export function renderCloudflareWorkerEntry(
     `// function, same input, so the deployed page and the local one cannot`,
     `// disagree about what the configuration means.`,
     preloadSupport,
-    `const SECURITY_HEADERS_CONFIG = ${renderSecurityHeadersConfigLiteral(opts.securityHeaders)}`,
-    `const SECURITY_HEADERS = buildSecurityHeaders(SECURITY_HEADERS_CONFIG, { production: true })`,
+    ...securityHeadersDeclarations(opts.securityHeaders),
     ``,
     ...deployedCsrfFragment(opts, 'a Worker'),
     ``,

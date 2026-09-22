@@ -93,7 +93,18 @@ function extractMessage(err: unknown): string {
   }
   // object / null / undefined / symbol / bigint
   try {
-    return JSON.stringify(err)
+    const json = JSON.stringify(err)
+    // B-214. `JSON.stringify` returns the VALUE `undefined` — not a string — for `undefined`, for
+    // symbols and for functions. The `catch` below covers only BigInt, which throws. So this
+    // returned `undefined` under a `: string` annotation, and `digestError` then called
+    // `djb2(message)`, whose first statement reads `input.length`: a TypeError, raised inside the
+    // handler that called this to make an arbitrary thrown value safe.
+    //
+    // `throw undefined` and `throw Symbol()` are legal JavaScript and arrive here through any
+    // `catch (err: unknown)`. `String` is total over every one of those kinds where
+    // `JSON.stringify` is not — `'undefined'`, `'Symbol(s)'`, the function's source — and a
+    // template literal would not be: `${symbol}` throws.
+    return typeof json === 'string' ? json : String(err)
   } catch {
     return 'Unknown error'
   }

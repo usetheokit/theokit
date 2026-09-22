@@ -9,9 +9,10 @@ import type { SecurityHeadersConfig } from '../core/contracts/security-headers.j
 import { assertServicesUnsupported, readManifest } from '../services/index.js'
 
 import { deployedAgentsFragment } from './deployed-agents.js'
-import { deployedCorsFragment, type DeployedCorsOptions } from './deployed-cors.js'
-import { deployedCsrfFragment, type DeployedCsrfOptions } from './deployed-csrf.js'
+import { type DeployedCorsOptions } from './deployed-cors.js'
+import { type DeployedCsrfOptions } from './deployed-csrf.js'
 import { planDeployedPlugins } from './deployed-plugins-module.js'
+import { deployedEntryPreamble } from './deployed-preamble.js'
 import {
   deployedRateLimitFragment,
   rateLimitCheckFragment,
@@ -27,10 +28,7 @@ import {
 } from './deployed-runtime-config.js'
 import { deployedTraceFragment } from './deployed-trace.js'
 import { nodeAdapter } from './node.js'
-import {
-  describeDeployedSecurityHeaders,
-  renderSecurityHeadersConfigLiteral,
-} from './security-headers.js'
+import { describeDeployedSecurityHeaders } from './security-headers.js'
 import type { AdapterBuildContext, DeployAdapter } from './types.js'
 
 export interface BunBuildDeps {
@@ -128,16 +126,7 @@ export function renderBunEntry(
     `// the HTML document (static file + SPA fallback below), so the document gets`,
     `// these headers too -- with a nonce-less CSP, because that HTML was written`,
     `// at build time and carries no nonce on its script tags (EC-4).`,
-    `const SECURITY_HEADERS_CONFIG = ${renderSecurityHeadersConfigLiteral(opts.securityHeaders)}`,
-    `const SECURITY_HEADERS = buildSecurityHeaders(SECURITY_HEADERS_CONFIG, { production: true })`,
-    ``,
-    ...runtimeConfig.imports,
-    ...agentsFragment.imports,
-    ...runtimeConfig.declarations,
-    ...agentsFragment.declarations,
-    ...deployedCsrfFragment(opts),
-    ``,
-    ...deployedCorsFragment(opts.cors, 'bun'),
+    ...deployedEntryPreamble(runtimeConfig, agentsFragment, opts, 'bun'),
     ``,
     ...deployedRateLimitFragment(opts.rateLimit, 'bun', 'server.requestIP(request)?.address'),
     ``,

@@ -188,6 +188,41 @@ const WELL_KNOWN_PREFIX = '/.well-known/'
  *
  * @param agents - the agents scanned on the build machine. Empty emits nothing at all.
  */
+/**
+ * The scan source every filesystem host with a lazily-created loader shares.
+ *
+ * Four adapters — `netlify`, `vercel`, `aws-lambda`, `deno-deploy` — emit an entry that resolves
+ * `serverDir` itself, caches its loader in `loaderCache`, and creates that cache on first use.
+ * They therefore hand this fragment the SAME six fields, and writing them out four times is the
+ * copy `serveThroughPluginLifecycle` was extracted to undo after it had drifted five ways (#405).
+ *
+ * B-235 is what made it four: wiring three more targets duplicated the block three more times, and
+ * the duplication gate on new code is what said so — 4.2% against a 3% ceiling. The gate was right
+ * and the fix is the one it implies, not a threshold.
+ *
+ * `bun` is deliberately NOT a caller. It names its loader `loadModule` and creates it eagerly, so
+ * it has no `ensureLoader` — a parameter to cover that difference would make this function a
+ * switch over its callers, which is the shape that drifts.
+ */
+export function scannedFromLoaderCache(agentsDirLiteral?: string): DeployedAgentsSource {
+  return {
+    kind: 'scan',
+    projectRoot: 'cwd',
+    agentsDirLiteral,
+    loadModule: 'loaderCache',
+    serverDir: 'serverDir',
+    ensureLoader: 'if (!loaderCache) loaderCache = createProductionLoader()',
+  }
+}
+
+/**
+ * The JSON 404 `vercel` and `aws-lambda` answer a routing miss with.
+ *
+ * An expression rather than a call, because the fragment interpolates `notFound` into a `return`
+ * and neither host declares a helper for it.
+ */
+export const JSON_NOT_FOUND_RESPONSE = `new Response(JSON.stringify({ error: { code: 'NOT_FOUND' } }), { status: 404, headers: { 'content-type': 'application/json' } })`
+
 export function deployedAgentsFragment(
   source: DeployedAgentsSource | undefined,
   host: DeployedAgentsHost = {},

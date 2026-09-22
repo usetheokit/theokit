@@ -88,6 +88,23 @@ It is recorded here because a deprecated cipher is exactly the code nobody re-re
 person to consider un-deprecating it should meet this sentence before they do. **It is not a claim
 of a vulnerability** — no exploit was constructed and none is asserted.
 
+## AMENDED 2026-09-21, the same day — the scoping in the section above was wrong
+
+That section recorded the secret-derived salt and scoped it as "a far smaller concern than against
+a password", on the strength of the secret's entropy. B-215 argued it better and the measurement
+agrees: the exposure is not the cost of guessing a secret, it is that a salt derived from the
+secret has no per-DEPLOYMENT uniqueness at all. One precomputed table over likely secrets is valid
+against every deployment simultaneously, whatever each secret's entropy — which is the property a
+salt exists to provide, and NIST SP 800-132 § 5.1 requires it be independent of the secret for this
+reason.
+
+The section is kept unedited above as the record of what was believed this morning. It said "no
+exploit was constructed and none is asserted", and that remains true; what was wrong was the
+comparison it used to size the concern.
+
+Fixed in `d24fb08b2`: the salt is an optional second argument, and omitting it keeps the old
+derivation — so existing ciphertext still decrypts — while warning once per process.
+
 ## What this ADR does NOT settle
 
 Whether the action pipeline should encrypt its payloads. See *What was rejected*.

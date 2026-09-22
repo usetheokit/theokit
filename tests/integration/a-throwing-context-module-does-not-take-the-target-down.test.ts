@@ -43,7 +43,11 @@ export const resolveTransformer = (s) => ({ name: s })
 export const resolveProvider = () => ({ apiKey: 'sk-test' })
 export const mountAgent = () => new Response('agent ran')
 export const scanAgents = () => []
-export const createSubjectResolverFromFactory = () => async () => null
+// B-237 — the real one is \`resolve-agent-subject.ts:120\`: it awaits the factory and does NOT
+// catch, so a throwing \`createContext\` propagates. Stubbing it to \`null\` would make every test
+// below pass on an entry that never calls the app's factory at all, which is the thing under test.
+export const createSubjectResolverFromFactory = (createContext) => async () =>
+  createContext === undefined ? null : ((await createContext({})) ?? null)
 export const matchAgentAuxRoute = () => null
 export const serveMatchedAuxRoute = () => new Response('')
 `
@@ -65,6 +69,14 @@ beforeAll(() => {
     `throw new Error('THEO_TEST_REQUIRED_KEY is not set')\nexport function createContext() { return {} }\n`,
   )
   writeFileSync(join(root, 'server', 'clean.js'), `export function createContext() { return {} }\n`)
+  // B-237 — the INVERSE of `throws.js`: the module evaluates cleanly and the factory throws when
+  // CALLED. `resolve-agent-subject.ts:69-72` promises that becomes a 500 — "an application whose
+  // identity resolution is broken must not be treated as an anonymous caller, because that reads
+  // as a clean refusal and hides the fault".
+  writeFileSync(
+    join(root, 'server', 'factory-throws.js'),
+    `export function createContext() { throw new Error('identity backend unreachable') }\n`,
+  )
 })
 
 afterAll(() => {

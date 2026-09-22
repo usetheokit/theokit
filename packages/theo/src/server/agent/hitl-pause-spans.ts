@@ -23,7 +23,7 @@
  *
  * ## The limit, stated
  *
- * In-process, like the approval registry it shadows (ADR 0038): the span handle is a live object,
+ * In-process, like the approval registry it shadows (ADR 0017): the span handle is a live object,
  * so the pause and the resume must be in one process. A multi-instance deploy resumes on whichever
  * instance the approve request reaches, and there the span falls through to the run's end-of-run
  * sweep and is marked as never observed to resume — the honest reading, and the same envelope

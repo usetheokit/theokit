@@ -3,7 +3,7 @@
 - **Status:** Accepted (2026-09-18) — implemented as `packages/agents/tests/unit/root-bar-coverage.test.ts`
 - **Date:** 2026-09-18
 - **Deciders:** recorded retroactively; see § Provenance
-- **Closes:** five dangling `ADR 0061` citations across three files
+- **Closes:** five dangling `ADR 0061` citations across three files  <!-- adr-citation-ok: this ADR IS the record that closed these citations; see its Provenance -->
 
 ## Context
 
@@ -64,14 +64,14 @@ routes it took — a claim the test checks against `src/index.ts` rather than tr
 
 ## Provenance — why this ADR is numbered 0005 and not 0061
 
-**`ADR 0061` was cited five times across three files** — twice in `root-bar-coverage.test.ts`
+**`ADR 0061` was cited five times across three files** — twice in `root-bar-coverage.test.ts`  <!-- adr-citation-ok: this ADR IS the record that closed these citations; see its Provenance -->
 (including for "alternative 4"), twice in `packages/agents/src/index.ts`, once in
 `packages/agents/tests/type/trust-posture-passthrough.test-d.ts`. Measured 2026-09-18: no file matching
 `*0061*` exists in this repository or in any sibling of the ecosystem, and `docs/adr/` held exactly
 four ADRs, `0001`–`0004`. Every one of the five resolved to nothing.
 
 The cross-validation audit that prompted this work did not flag any of them, and its own remediation
-plan prescribed *"put the 324/422 number into ADR 0061"* — editing a document that does not exist. An
+plan prescribed *"put the 324/422 number into ADR 0061"* — editing a document that does not exist. An  <!-- adr-citation-ok: this ADR IS the record that closed these citations; see its Provenance -->
 audit inherits the citations of the code it reads unless it checks them.
 
 A citation that resolves to nothing reads as evidence and is not — the failure this project's own

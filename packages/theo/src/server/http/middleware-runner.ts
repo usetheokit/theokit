@@ -36,7 +36,19 @@ export function _resetMiddlewareCacheForTests(): void {
   middlewareCache.clear()
 }
 
-// Middleware default-export contract: a function (req, res, next).
+/**
+ * Middleware default-export contract: a function `(req, res, next)` — Express's.
+ *
+ * **`next` may be called asynchronously**, from a callback or a promise, after the function has
+ * returned. That is the dominant Express shape for callback-based I/O and the runner waits for it
+ * (B-218); it used to read the flag one microtask after the function returned and report an abort,
+ * which left the socket open with nothing written.
+ *
+ * Exactly one of two things must eventually happen: `next()` is called, or a response is written.
+ * Doing NEITHER holds the request open — Express behaves the same way, because there is no third
+ * signal to read. This runner names the middleware in a warning after 10s rather than leaving the
+ * hang mute.
+ */
 type MiddlewareFn = (
   req: IncomingMessage,
   res: ServerResponse,
@@ -159,8 +171,14 @@ async function runScannedMiddleware(
     return { aborted: shortCircuited }
   }
   const { nextCalled } = await runOneMiddleware(mw, req, res)
+  // B-218. Decided on EVIDENCE now that the wait above has produced some: `next` was called, or
+  // the response was written. Before, "did not call next synchronously" and "has taken
+  // responsibility for the response" were treated as one fact.
   return { aborted: !nextCalled || res.writableEnded }
 }
+
+/** How long an ambiguous middleware waits before the hang is named rather than mute. */
+const SILENT_MIDDLEWARE_WARNING_MS = 10_000
 
 async function runOneMiddleware(
   mw: MiddlewareFn,
@@ -171,10 +189,67 @@ async function runOneMiddleware(
   // literal `false`, which would make `!nextCalled` an "always-truthy"
   // condition under control-flow analysis.
   const state = { nextCalled: false }
+
+  // B-218. `MiddlewareFn` is the Express contract, under which `next` may be invoked from a
+  // CALLBACK after the function has returned — the dominant Express shape for callback-based I/O.
+  // This used to read the flag immediately after awaiting the middleware, so
+  // `function (req, res, next) { fs.readFile(p, () => next()) }` returned synchronously, the flag
+  // was still false one microtask later, and the runner reported an abort. The caller then
+  // returned from the request handler having written nothing, leaving the socket open until a
+  // timeout while the eventual `next()` set a flag nobody read.
+  let signalNext!: () => void
+  const nextCalled = new Promise<void>((resolve) => {
+    signalNext = resolve
+  })
+
   await mw(req, res, () => {
     state.nextCalled = true
+    signalNext()
   })
+
+  // Already decided: it continued, or it answered. Nothing to wait for.
+  if (state.nextCalled || res.writableEnded) return state
+
+  // Ambiguous, and the two readings are opposite: the middleware is doing I/O and will call
+  // `next`, or it has silently given up. Absence is not evidence of either, so wait for one to
+  // arrive rather than guessing — which is what Express itself does.
+  const signals: Promise<void>[] = [nextCalled, warnAboutSilence(mw)]
+  const ended = responseEnded(res)
+  if (ended !== undefined) signals.push(ended)
+  await Promise.race(signals)
   return state
+}
+
+/** Resolves when the response is finished; `undefined` where there is no emitter to ask. */
+function responseEnded(res: ServerResponse): Promise<void> | undefined {
+  if (typeof res.once !== 'function') return undefined
+  return new Promise<void>((resolve) => {
+    res.once('finish', resolve)
+    res.once('close', resolve)
+  })
+}
+
+/**
+ * Names a hang instead of leaving it mute, then lets the request continue.
+ *
+ * A middleware that neither answers nor calls `next` is a bug in the middleware, and Express hangs
+ * on it too. What Express does not do is hang SILENTLY inside someone else's framework: without
+ * this, the operator sees a request that never returns and nothing anywhere says which middleware
+ * is holding it. The timer is `unref`'d so it never keeps the process alive.
+ */
+function warnAboutSilence(mw: MiddlewareFn): Promise<void> {
+  return new Promise<void>((resolve) => {
+    const timer = setTimeout(() => {
+      const named = mw.name === '' ? 'an anonymous middleware' : `\`${mw.name}\``
+      console.warn(
+        `[theokit] ${named} in server/middleware/ has neither called next() nor written a ` +
+          `response after ${String(SILENT_MIDDLEWARE_WARNING_MS)}ms. The request is waiting on it. ` +
+          'Call next() to continue, or write a response to answer — doing neither holds the socket open.',
+      )
+      resolve()
+    }, SILENT_MIDDLEWARE_WARNING_MS)
+    if (typeof timer.unref === 'function') timer.unref()
+  })
 }
 
 export async function runMiddlewareAndContext(

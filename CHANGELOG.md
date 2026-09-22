@@ -8,6 +8,73 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **Four production files rested an argument on an ADR nobody could open (B-238).**
+  `ADR 0038` was cited by the approval registry, the approvals-listing handler, the pause-span
+  store and the harness invariant guard — a test that names itself *"ADR 0038 enforcement teeth"*
+  while asserting what a missing document forbids. `docs/adr/0017` now records that decision (the
+  registry is single-process by design, and every listing declares it), and nine citations point
+  at it.
+
+  **Six are deliberately left dangling and said so.** The `packages/agents/` citations use the same
+  number for a different decision — the adapter seam, *"no second loop"* — so repointing them would
+  replace an unresolvable citation with a resolvable WRONG one, which is the worse defect: a reader
+  following a dead link knows they learned nothing.
+
+  `scripts/check-doc-citations.mjs` matched `ADR-NNNN` and not `ADR NNNN`, so fifteen citations in
+  the space form were invisible to the gate that exists to catch them. Both forms now count, with
+  a per-line `adr-citation-ok:` exemption for a document that records dangling numbers rather than
+  creating them — and a marker with no reason does not exempt.
+
+- **A deployed approvals listing answered for one instance and read as authoritative (B-236).**
+  `getApprovalRegistry()` resolves a process singleton, and every deploy target the listing became
+  reachable on is multi-instance by construction — a Worker is isolates, a Lambda is concurrent
+  invocations. An owner whose run paused on another instance was answered `200 {approvals: []}`,
+  which is indistinguishable from "nothing is pending". Every response now carries
+  `scope: 'instance'`, so the caller is told what the answer covers.
+
+  It is on **every** response, not only the empty one: a listing of two from one instance can be
+  two of five, and a caveat that appeared only when the list was empty would vanish exactly when a
+  caller starts trusting the numbers. The value is read from the registry rather than written in
+  the handler — the interface is injectable so a durable store can replace the in-process one, and
+  a constant here would become false the day somebody wires that up. A registry that declares
+  nothing is read as `'instance'`, because silence must take the narrow claim.
+
+- **Three of the six Web deploy targets carried no agents at all (B-235).**
+  B-185 made `GET /api/agents/<name>/approvals` reachable on a deploy target and reached
+  `cloudflare`, `bun` and `deno-deploy`. A user deploying to `vercel`, `netlify` or `aws-lambda`
+  got the pre-B-185 behaviour with no diagnostic: the endpoint fell through to the run handler and
+  answered `BAD_REQUEST` for want of a message. All six now ask the aux dispatcher.
+
+  **The reason the three were skipped did not survive re-measurement.** The finding recorded that
+  they were not a forgotten copy-paste — `vercel` threads a Node `nodeReq` through twelve sites,
+  `netlify` neither that nor a `Request`, `aws-lambda` one `Request` — and concluded the
+  Web-`Request`-shaped branch could not reach them. Re-read: `netlify`'s handler is
+  `(request, context)` and already RECEIVES a Web `Request`; `aws-lambda` already builds one with
+  `eventV2ToRequest(event)` for its CORS matcher; `vercel` already builds one and hands it to
+  `createWebShim`. Counting `new Request` occurrences measured how each entry OBTAINS a request,
+  which is a different question from whether it has one.
+
+  Two behaviour changes worth naming. On `vercel` the Node-to-Web conversion is hoisted above the
+  agents branch, so an unmatched `POST` now has its body drained where it did not — the safer
+  direction, since an unconsumed Node request socket is what holds a connection open. On all three
+  the build now passes the project's configured `agentsDir`, which the option accepted and no
+  build supplied, so a project that configured one was getting the default `agents`.
+
+  A parse check ships with it: every emitted entry is run through the compiler, because these
+  adapters build JavaScript out of template literals and a substring assertion cannot see an
+  unbalanced brace.
+
+- **A failing test in the Web middleware suite made its siblings fail too (B-220).**
+  Six tests replaced `console.warn` and three installed a `process.on('unhandledRejection')`
+  listener, and every restore sat after the assertions with no `try/finally` and no `afterEach` in
+  the file. One genuine failure therefore skipped its own restore, leaving `console.warn` writing
+  into a finished test's array and a listener installed — and the next tests assert on exactly those
+  two things, so the real diagnostic was buried under false failures. Measured: forcing one
+  assertion to fail produced 3 failures where 1 was real. A describe-level `afterEach` now restores
+  the pristine `console.warn` and removes leaked listeners before asserting, so the test that leaked
+  is the test that fails. The per-test listeners stay: they are the instrument three assertions
+  depend on, not bookkeeping.
+
 - **A deployed target answers the HITL approvals listing instead of the run handler (B-185).**
   `handleListApprovals` shipped in two emitted chunks, and a reachability walk over `dist/` found
   four entries that reach them — `adapters/agent-mount.js`, which every deploy adapter calls, was
@@ -61,6 +128,67 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   members of the request, on a target where that pair is synthesised over a Web `Request`. An app
   with no `server/context.ts` resolves an anonymous caller, which is the honest answer rather than
   an invented subject.
+
+- **An Express middleware that calls `next()` from a callback no longer hangs the request
+  (B-218).** `MiddlewareFn` is declared as Express's `(req, res, next)`, under which `next` may be
+  invoked after the function returns — the dominant shape for callback-based I/O. The runner read
+  the flag one microtask later and turned its absence into an abort, so
+  `function (req, res, next) { fs.readFile(p, () => next()) }` made the caller return from the
+  request handler having written nothing: the socket stayed open until a timeout while the eventual
+  `next()` set a flag nobody read. "Did not call next synchronously" and "has taken responsibility
+  for the response" were being treated as one fact. The runner now waits for whichever signal
+  actually arrives — `next()`, or the response finishing — which is what Express does. A middleware
+  that does neither still holds the request, as it does under Express, but the runner names it in a
+  warning after 10s instead of leaving the hang mute.
+
+- **A page component that throws leaves a digest instead of nothing (B-217).** The error boundary
+  implemented only `getDerivedStateFromError`, and that implementation declared no parameter — so
+  the error React passed was dropped: no stack, no message, no digest, no counter. The operator saw
+  a page served successfully. It is the only place this package catches a render error, and the
+  same package ships `error-digest.ts` "suitable for logging" with a phase vocabulary ready for it.
+  `componentDidCatch` now digests the error with `phase: 'handler'` and hands it to a reporter,
+  which `composeComponentTree` takes as an option and defaults to `console.error`. The fallback
+  rendering is unchanged; only the silence is. **Measured while fixing it:** React does not call
+  `componentDidCatch` during server rendering at all — a throw in the shell under `renderToString`
+  throws, the same under `renderToReadableStream` throws, and a `lazy` rejecting inside `Suspense`
+  after the shell streams the fallback and never reaches it. The server defers the error to the
+  client, which is where the boundary runs and where this report is now made.
+
+- **A Suspense failure after the shell degrades to the client's error boundary instead of ending
+  the process (B-216).** React's `allReady` rejects when rendering fails outside the shell, and
+  this module handed it to the caller with no handler attached on the default path — while
+  `streamToResponse`, the usage its own example documents, reads `stream` and never touches
+  `allReady`. Node has ended the process on unhandled rejections by default since v15, so the
+  documented happy path took the server down on exactly the failure EC-7 says should degrade to a
+  client-side error boundary. The promise is now owned at creation and the failure is reported;
+  `allReady` never rejects, which is stated on the type and matches the string strategy, whose
+  already-resolved promise never could. **`waitForAll: true` still raises** — nothing has been
+  emitted there, so a failure can still become a full 500, and a fix that silenced it would have
+  thrown that away.
+
+- **`deriveActionKey` accepts a salt that is independent of the secret (B-215).** The salt was
+  `theo-action-salt:${secret.slice(0, 8)}` — a pure function of the secret it exists to protect. A
+  salt is there so key derivation is unique per DEPLOYMENT and precomputation cannot be amortised
+  across targets; derived from the secret, an attacker guessing the secret already knows the salt
+  for every candidate, so one table over likely secrets is valid against every deployment at once
+  and the only per-guess cost left is the iteration count. NIST SP 800-132 § 5.1 requires the salt
+  be generated independently of the secret; OWASP A02:2021 names the same condition. The exposure
+  is offline recovery of this key from a single captured ciphertext — the function's actual threat
+  model, where its docblock had scoped the caveat to password hashing instead. The salt is now an
+  optional second argument: pass a random value generated once and persisted beside the secret.
+  **Omitting it keeps the old derivation**, so payloads already encrypted still decrypt, and warns
+  once per process naming the weakness and the standards. Derivation stays deterministic for a
+  given (secret, salt) pair.
+
+- **`digestError` survives a throw of `undefined`, a symbol or a function (B-214).** Its own
+  docblock promises it "handles non-Error throws" and is "safe to call inside catch blocks", and on
+  those three kinds it raised a `TypeError` of its own: `JSON.stringify` returns the VALUE
+  `undefined` — not a string — for each of them, `extractMessage` returned it under a `: string`
+  annotation, and the digest then read `.length` off it. `throw undefined` and `throw Symbol()` are
+  legal JavaScript and arrive through any `catch (err: unknown)`, so a helper whose whole purpose is
+  to make an arbitrary thrown value safe destroyed the original error inside the handler that called
+  it, turning a recoverable fault into an unhandled one. Each kind now produces a distinct digest
+  and a readable message.
 
 - **A throwing `onError` hook is reported instead of vanishing (B-213).** The hook is the plugin an
   operator installs to ship errors to a tracker. When it threw — bad DSN, transport down, a bug in
