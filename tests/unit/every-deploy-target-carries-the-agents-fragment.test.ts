@@ -58,8 +58,18 @@ describe('every deploy target carries the agents fragment (B-235)', () => {
       // SI-020, which is why the fragment emits `hostBypass` rather than leaving each host to
       // remember. A target that calls the dispatcher behind a guard that already returned is
       // wired on paper only.
+      // Read from the GUARD LINE, not from the file. `.toContain` over the whole entry passed while
+      // the guard had dropped the bypass entirely, because the fragment still DECLARES
+      // `__theoIsAgentCardPath` further up — so the assertion was satisfied by a declaration nothing
+      // used. Measured 2026-09-22 by mutation: deleting `${agentsFragment.hostBypass}` from
+      // netlify's guard left all 19 cases green. The comment above was already describing this
+      // failure and the assertion was an instance of it.
+      const guard = render()
+        .split('\n')
+        .find((line) => line.includes("startsWith('/api/"))
+      expect(guard, `${name} emits no non-API guard at all, so this cannot be judged`).toBeDefined()
       expect(
-        render(),
+        guard,
         `${name} calls ${AUX_DISPATCH} but its non-API guard returns first, so the branch is ` +
           `unreachable for exactly the paths it exists to serve`,
       ).toContain('__theoIsAgentCardPath')
