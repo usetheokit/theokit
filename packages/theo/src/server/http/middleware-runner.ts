@@ -19,6 +19,34 @@ export interface MiddlewareResult {
   aborted: boolean
 }
 
+/**
+ * The extensions a user module may carry — B-250.
+ *
+ * The same set `server/scan/agent-scan.ts:14` accepts, and that is the finding rather than a
+ * preference: an agent may be written `.js` and be found, while the `context` that gives it an
+ * identity was resolved as `.ts` ONLY. A JavaScript project therefore got agents that worked and
+ * identity that silently did not — `createServerContext` returned `{}` and every policy saw
+ * `subject: null`, which is indistinguishable from a caller who sent no credential.
+ *
+ * `.ts` stays FIRST so a project holding both keeps resolving exactly what it resolved before.
+ */
+const USER_MODULE_EXTENSIONS = ['.ts', '.tsx', '.js', '.jsx'] as const
+
+/**
+ * The user module at `<dir>/<base><ext>`, for the first extension that exists.
+ *
+ * `undefined` rather than a guessed path when none does: the callers already treat absence as the
+ * ordinary case — a project with no middleware and no context is the common one — and returning a
+ * path that is not there would turn that into a load error.
+ */
+export function resolveUserModule(dir: string, base: string): string | undefined {
+  for (const ext of USER_MODULE_EXTENSIONS) {
+    const candidate = join(dir, `${base}${ext}`)
+    if (existsSync(candidate)) return candidate
+  }
+  return undefined
+}
+
 // CR-017 fix: in dev `existsSync` + `scanMiddlewares` ran on EVERY request,
 // turning a constant filesystem read into per-request overhead. We cache
 // the scan result by serverDir. In prod the same scan should be done once
@@ -59,7 +87,8 @@ type ContextFactory = (args: { request: IncomingMessage; response: ServerRespons
 function getCachedScan(serverDir: string): MiddlewareCacheEntry {
   let cached = middlewareCache.get(serverDir)
   if (!cached) {
-    const singleFilePath = join(serverDir, 'middleware.ts')
+    const singleFilePath =
+      resolveUserModule(serverDir, 'middleware') ?? join(serverDir, 'middleware.ts')
     cached = {
       singleFilePath,
       singleFileExists: existsSync(singleFilePath),
@@ -329,8 +358,8 @@ export async function createServerContext(
   loadModule: LoadModule,
   serverDir: string,
 ): Promise<unknown> {
-  const contextPath = join(serverDir, 'context.ts')
-  if (!existsSync(contextPath)) return {}
+  const contextPath = resolveUserModule(serverDir, 'context')
+  if (contextPath === undefined) return {}
   const mod = await loadModule(contextPath)
   const createContext = mod.createContext as ContextFactory | undefined
   if (typeof createContext !== 'function') return {}
