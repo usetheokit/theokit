@@ -13,6 +13,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `theokit/server/rate-limit` publishes `resolveClientIpFromRequest` and `resolveClientIp` (B-027). The first is a promise — the generated entries import it — and the second is internal; both are recorded in `docs/api/rate-limit-subpath-surface.md`.
 - The deploy adapters accept a declared `security.rateLimit` where five of six could not: `DeployedEntryOptions`, and `cloudflare` and `netlify`'s own option objects, now carry `DeployedRateLimitOptions` (B-027). They do not yet ENFORCE it — a target that cannot name its caller must not silently share one bucket, so `theokit build` still refuses for those five until each resolves a real client address. This is the type gate, not the limiter.
 
+## [create-theokit 3.0.5] - 2026-09-22
+
+The scaffold's pins now match what the release beside it publishes, so a project created from
+`create-theokit` installs `theokit@^0.70.2` rather than the previous `^0.70.1`.
+
+Recorded separately rather than added to the `theokit 0.70.2` heading below it: that section is a
+released record and this repository does not rewrite those. Both versions were cut in the same run
+— `theokit@0.70.2` at 14:31:58Z and `create-theokit@3.0.5` at 14:32:01Z — and the second reached
+the registry without reaching this file, which `scripts/check-changelog-current.mjs` refused on
+2026-09-22 against `799d4064`. The gate was right and this is the record catching up.
+
+## [theokit 0.70.2] - 2026-09-22
+
+Released with no entry under `[Unreleased]`. Per-package detail is in each package's
+own `CHANGELOG.md`.
 
 ## [create-theokit 3.0.4, theokit 0.70.1] - 2026-09-22
 

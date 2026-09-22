@@ -1,5 +1,56 @@
 # theo
 
+## 0.70.2
+
+### Patch Changes
+
+- 44f6f4a: `scripts/probe-hydration.mjs` — an oracle for hydration errors that anyone can run.
+
+  A hydration mismatch is the server's markup disagreeing with the client's first render, so both
+  halves have to actually run, in a browser, against a built app. jsdom does not hydrate the way React
+  hydrates, and asserting on a console string is not the same as asserting that nothing was thrown.
+
+  It drives Chrome over the DevTools Protocol using Node's built-in `WebSocket` — no browser driver is
+  declared anywhere in this monorepo, and adding one for a single script is the rung of the parsimony
+  ladder this stops at.
+
+  ```
+  node scripts/probe-hydration.mjs --url http://127.0.0.1:3000
+  ```
+
+  Exit 0 clean · 1 the page threw or logged an error, each printed with its stack · **2 could not
+  measure**. The third is the point: a probe that reports an unreachable URL as clean is worse than no
+  probe, and this one did exactly that until a navigation guard was added — Chrome renders its own
+  connection-error document and fires `load` over it.
+
+- ab8295d: Scroll restoration now puts the container back where the user left it, instead of at 0
+  (usetheokit/theokit#421).
+
+  Measured against `theokit@0.70.1` scaffolded from npm with `.ssr(true)`, driving a real Chrome: a
+  container scrolled to 2400, a client-side navigation, `history.back()` — and the offset read 0. Read
+  straight out of `sessionStorage` on leaving the route:
+
+  ```
+  {"theokit:scroll:default":"{\"main\":0}"}
+  ```
+
+  It stored **0**, not 2400. Nothing was lost in transit; the wrong number was written.
+  `ElementScrollRestoration` saved the outgoing route's offsets from inside a `useLayoutEffect`, and
+  React runs that AFTER committing the incoming route's DOM — so every element it queried was the new
+  page's, sitting at the top.
+
+  The restorer gained `record()`, which snapshots offsets while the route that owns them is still on
+  screen, and the shell now calls it on every scroll (capture phase, because `scroll` does not bubble
+  from an element; passive, because it never calls `preventDefault`). `save()` persists the recorded
+  snapshot, falling back to reading the live targets when there is none — a route restored from a
+  previous visit and never scrolled still has exactly one correct offset, and that is it.
+
+  The decision lives in `scroll-restoration.ts` rather than the React shell, which is the split that
+  file already argued for: this package's test environment is `node`, so the testable half is where
+  the branches belong.
+
+  Same journey after the fix: **2400 → navigate → back → 2400**.
+
 ## 0.70.1
 
 ### Patch Changes
