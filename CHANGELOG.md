@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [create-theokit 3.0.4, theokit 0.70.1] - 2026-09-22
+
+Every agent route of a freshly scaffolded, production-built app answered 500 in 0.70.0 — the release
+that had been on npm for about an hour. `generateManifest` encodes agent paths against the project
+root it is told; `loadManifest` guessed it as `dirname(serverDir)`, which is right for `<root>/server`
+and wrong by one level for `<root>/src/server`, the layout `create-theokit` scaffolds. So the failing
+case was the default case.
+
+Verified after publishing, on a scaffold created from the registry: `GET /api/agents/chat/approvals`
+answers 200 where it answered 500, and `POST /api/agents/chat` answers 403 from the CSRF gate — the
+route is reached and its policy runs, where the 500 happened before any policy was consulted.
+
+`create-theokit@3.0.4` carries the template pin `^0.70.0` -> `^0.70.1`, so a scaffold created now
+installs the fixed release. Per-package detail is in each package's own `CHANGELOG.md`.
+
 ## [create-theokit 3.0.3, theokit 0.70.0] - 2026-09-22
 
 Two packages were cut and the heading named one. `record-root-changelog.mjs` runs inside
