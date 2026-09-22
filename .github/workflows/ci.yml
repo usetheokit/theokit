@@ -679,6 +679,30 @@ jobs:
       # No install: node's stdlib plus `git tag`.
       - run: node scripts/check-changelog-current.mjs
 
+  changeset-coverage:
+    name: Changeset coverage (a changed package is named)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # The gate diffs against the base branch, so the base has to be here. A shallow checkout
+          # has no merge base and the script exits 2 — honest, and useless as a gate.
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: '.nvmrc'
+      # No install: node's stdlib plus `git diff`.
+      #
+      # The base is the PR's own, not always `main`. Measured on B-252: four `fix(http)` commits
+      # each changed `packages/http/src` with no changeset, and each would have been refused at its
+      # own merge, when the fix is one `pnpm changeset` away. Comparing everything to `main` would
+      # instead fail whichever PR happened to follow the one that introduced the gap.
+      - run: node scripts/check-changeset-coverage.mjs "origin/${BASE_REF:-main}"
+        env:
+          BASE_REF: ${{ github.base_ref }}
+
   license-compliance:
     name: License compliance (production tree)
     runs-on: ubuntu-latest
@@ -864,6 +888,7 @@ jobs:
       - dead-code
       - package-validation
       - theoclaw
+      - changeset-coverage
       # `theocode` and `env-verdicts` were outside this list until 2026-09-18 (B-183). A job
       # absent from it still runs and still shows a red X on the pull request, and the required
       # check on the branch is `ci-ok` — so it could not hold a merge. `pr-report` stays out
