@@ -6,6 +6,7 @@ import type { SecurityHeadersConfig } from '../core/contracts/security-headers.j
 import type { DeployedAgent } from './deployed-agents.js'
 import type { DeployedCorsOptions } from './deployed-cors.js'
 import type { DeployedCsrfOptions } from './deployed-csrf.js'
+import type { DeployedRateLimitOptions } from './deployed-rate-limit.js'
 import type {
   DeployedAgentsDirOptions,
   DeployedRuntimeConfigOptions,
@@ -32,7 +33,8 @@ export type DeployedEntryOptions = {
   DeployedCsrfOptions &
   DeployedRuntimeConfigOptions &
   DeployedServerDirOptions &
-  DeployedCorsOptions
+  DeployedCorsOptions &
+  DeployedRateLimitOptions
 
 /**
  * Build context injected by the CLI into adapter.build.

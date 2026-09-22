@@ -883,6 +883,41 @@ measured the sentence this paragraph originally carried and refuted it.
 protocols, both sides pass every gradeable criterion, and the journey is reported as not won because
 the cheap side protects `node` and none of the six adapters built on the Web-standards handler.**
 
+### Dated note, 2026-09-22: the sentence holding this journey open is stale
+
+**The verdict above is not changed here.** What follows is a measurement, and moving a verdict on a
+public benchmark is a person's call, not a measurement's.
+
+The paragraph that reports this journey as not won says the six Web-standards adapters take the
+identical line and "declare a budget that nothing reads — parsed, validated, and never handed to a
+limiter, because the Web-shaped factories have no caller."
+
+Measured today against `theokit@0.70.2`, scaffolded from npm:
+
+```
+theo.config.ts:  .set({ rateLimit: { windowMs: 60000, max: 10 } })
+
+npx theokit build --target cloudflare   ->  exit 1
+  ✗ Refusing to build for `cloudflare`: theo.config.ts declares a rate limit and this
+    target does not enforce one.
+    … absence, so the first sign is abuse — which is why this refuses rather than warns.
+
+npx theokit build                       ->  exit 0   (node)
+```
+
+A budget is no longer parsed and dropped on those six: the build refuses, names the target, and
+names the ways out. `assertRateLimitEnforceable` is wired at `packages/theo/src/cli/commands/build.ts:278`
+(usetheokit/theokit#461).
+
+**What this does and does not settle.** It settles that the *mechanism* described in that paragraph
+is gone — nothing silently declares protection it does not have. It does not settle criterion 6,
+which asks that the limit HOLD on Web: refusing is honest, and it is not protecting. Whether a
+journey graded on "costing less to build the thing the criteria describe" is won by a target that
+refuses to build is a judgement this note does not make.
+
+Recorded rather than acted on, and dated, because a criterion changed after the code exists is the
+thing this document's own header refuses.
+
 ### Correction, later on 2026-08-21: "cheap and mechanical" was measured and is false
 
 The verdict above originally closed on this sentence: *"What is left is a single, cheap, entirely

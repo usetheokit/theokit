@@ -6,6 +6,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- A WebSocket upgrade no longer bypasses a declared rate limit on `cloudflare` and `deno-deploy` (B-027). Both generated entries answered the upgrade ABOVE the limiter, so the cheapest way past a declared budget was to ask for the most expensive resource the entry hands out — a long-lived socket. The upgrade branch now sits below the check. The comment that justified the old order — *a 101 carries no document and no script, so the security baseline does not apply to it* — is true of the security HEADERS and false of the limiter: one is a document concern, the other a resource concern. Exercised by driving each emitted handler with two upgrades against `max: 1`, not by reading the rendered source; reverting the fix fails exactly those two cases and leaves the other 28 green.
+- Every deploy target's GENERATED ENTRY now resolves the caller's address from a source its own runtime controls, or refuses that request by name (B-027). **A consumer does not reach this yet**: `theokit build` still exits 1 for a declared `security.rateLimit` on `cloudflare`, `vercel`, `netlify`, `deno-deploy` and `aws-lambda`, because the counter does not survive between invocations there (B-257). `bun` is the one target that both resolves and enforces. What each entry reads: `cloudflare` `cf-connecting-ip`, `vercel` the request it already builds, `netlify` its handler `context`, `deno-deploy` the `Deno.serve` info it was always handed and discarded, `aws-lambda` its event's `sourceIp`. Where none resolves the entry answers 503 naming the target rather than sharing one bucket — exercised by driving each emitted handler, not asserted. `security.rateLimit.trustProxy` reaches the generated entry for the first time, so a forwarded header is read only where the deployment says a proxy writes it.
+- `theokit/server/rate-limit` publishes `resolveClientIpFromRequest` and `resolveClientIp` (B-027). The first is a promise — the generated entries import it — and the second is internal; both are recorded in `docs/api/rate-limit-subpath-surface.md`.
+- The deploy adapters accept a declared `security.rateLimit` where five of six could not: `DeployedEntryOptions`, and `cloudflare` and `netlify`'s own option objects, now carry `DeployedRateLimitOptions` (B-027). They do not yet ENFORCE it — a target that cannot name its caller must not silently share one bucket, so `theokit build` still refuses for those five until each resolves a real client address. This is the type gate, not the limiter.
+
+## [create-theokit 3.0.5] - 2026-09-22
+
+The scaffold's pins now match what the release beside it publishes, so a project created from
+`create-theokit` installs `theokit@^0.70.2` rather than the previous `^0.70.1`.
+
+Recorded separately rather than added to the `theokit 0.70.2` heading below it: that section is a
+released record and this repository does not rewrite those. Both versions were cut in the same run
+— `theokit@0.70.2` at 14:31:58Z and `create-theokit@3.0.5` at 14:32:01Z — and the second reached
+the registry without reaching this file, which `scripts/check-changelog-current.mjs` refused on
+2026-09-22 against `799d4064`. The gate was right and this is the record catching up.
+
+## [theokit 0.70.2] - 2026-09-22
+
+Released with no entry under `[Unreleased]`. Per-package detail is in each package's
+own `CHANGELOG.md`.
+
 ## [create-theokit 3.0.4, theokit 0.70.1] - 2026-09-22
 
 Every agent route of a freshly scaffolded, production-built app answered 500 in 0.70.0 — the release

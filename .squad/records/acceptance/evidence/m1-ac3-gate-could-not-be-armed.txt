@@ -1,0 +1,4 @@
+config() chamado
+opts={"ssr":false}  -> passou
+opts={}             -> passou
+opts={"ssr":true}   -> passou
