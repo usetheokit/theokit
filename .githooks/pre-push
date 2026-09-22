@@ -112,6 +112,23 @@ echo ""
 # Measured 2026-08-30: earlyoom sent SIGTERM to the DTS build (VmRSS 1794 MiB, swap full) and
 # the push printed the raw pnpm error, which reads exactly like a broken build.
 # `|| ...` is a tested command, so `set -e` stands down for it and stays armed everywhere else.
+# B-241 — formatting is checked HERE and not only at commit time, because the commit-time gate
+# can be switched off without saying so. Measured 2026-09-21 in a scratch repository:
+# `git -c core.hooksPath=<a directory with no hooks> commit` runs NOTHING, succeeds, and prints
+# ZERO lines of warning. Three unformatted files reached this repository that way and were caught
+# by CI, on a PR, after the push -- the latest and most expensive place to learn it.
+#
+# No commit hook can defend against a flag that disables commit hooks. This is the next gate that
+# still runs, so it is where "an unformatted file cannot reach the remote" becomes true.
+#
+# First because it is the cheapest: 13s against ~90s for build + typecheck. A push whose only
+# problem is formatting now learns that in 13 seconds instead of after the build.
+format_status=0
+pnpm format:check || format_status=$?
+if [ "$format_status" -ne 0 ]; then
+  report_stage_failure "format check" "$format_status"
+fi
+
 build_status=0
 pnpm build:packages || build_status=$?
 if [ "$build_status" -ne 0 ]; then
@@ -125,4 +142,4 @@ if [ "$typecheck_status" -ne 0 ]; then
 fi
 
 echo ""
-echo "✓ pre-push gates passed (build + typecheck)"
+echo "✓ pre-push gates passed (format + build + typecheck)"
