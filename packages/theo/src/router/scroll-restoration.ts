@@ -56,17 +56,46 @@ function storageKey(locationKey: string): string {
 }
 
 export interface ScrollRestorer {
-  /** Record where each target sits, before leaving `locationKey`. */
+  /**
+   * Take a snapshot of where each target sits, WHILE `locationKey` is still on screen.
+   *
+   * usetheokit/theokit#421 / B-037 — the reason this exists rather than `save` reading the DOM when
+   * it is called. The shell saves from a `useLayoutEffect`, and React runs that AFTER committing the
+   * incoming route's DOM, so by then every element is the new page's and sits at 0. Measured in
+   * Chrome: a container scrolled to 2400 persisted as `{"main":0}`. Nothing was lost in transit —
+   * the wrong number was written, because it was read a moment too late.
+   *
+   * Called on every scroll, so the latest snapshot is always the one the user can see.
+   */
+  record(locationKey: string, targets: Iterable<ScrollTarget>): void
+  /** Persist the offsets for `locationKey` — the recorded snapshot when there is one. */
   save(locationKey: string, targets: Iterable<ScrollTarget>): void
   /** Put each target back where it was, after `locationKey` has rendered. */
   restore(locationKey: string, targets: Iterable<ScrollTarget>): void
 }
 
 export function createScrollRestorer(store: ScrollStore): ScrollRestorer {
+  // The latest snapshot per location key, taken while that location was on screen. In memory and
+  // not in the store: writing to `sessionStorage` on every scroll event would be a write per frame
+  // on a fast wheel, and the only snapshot that has to survive the navigation is the last one.
+  const recorded = new Map<string, Record<string, number>>()
+
+  const snapshot = (targets: Iterable<ScrollTarget>): Record<string, number> => {
+    const offsets: Record<string, number> = {}
+    for (const target of targets) offsets[target.id] = target.scrollTop
+    return offsets
+  }
+
   return {
+    record(locationKey, targets) {
+      recorded.set(locationKey, snapshot(targets))
+    },
+
     save(locationKey, targets) {
-      const offsets: Record<string, number> = {}
-      for (const target of targets) offsets[target.id] = target.scrollTop
+      // The live targets are the fallback, not the preference. With nothing recorded — a route
+      // restored from a previous visit and never scrolled, or a `pagehide` on a page nobody
+      // touched — reading them is the only offset there is, and it is correct.
+      const offsets = recorded.get(locationKey) ?? snapshot(targets)
       try {
         store.set(storageKey(locationKey), JSON.stringify(offsets))
       } catch {

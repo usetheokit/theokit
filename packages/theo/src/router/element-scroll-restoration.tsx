@@ -4,6 +4,7 @@ import { useLocation } from 'react-router'
 import {
   createScrollRestorer,
   SCROLL_CONTAINER_ATTRIBUTE,
+  type ScrollRestorer,
   type ScrollStore,
   type ScrollTarget,
 } from './scroll-restoration.js'
@@ -37,17 +38,48 @@ export function ElementScrollRestoration(): null {
   const location = useLocation()
   const previousKey = useRef<string | undefined>(undefined)
 
+  // ONE restorer for the component's whole life. It carries the snapshot taken on the last scroll,
+  // and a fresh one per effect would throw that away — which is the whole point of #421's fix.
+  const restorer = useRef<ScrollRestorer | undefined>(undefined)
+  restorer.current ??= createScrollRestorer(sessionScrollStore())
+
+  // The key a snapshot lands under, read by a listener installed once. A ref rather than the
+  // closure's location key, which would otherwise be the key at mount forever.
+  const activeKey = useRef(location.key)
+  activeKey.current = location.key
+
+  // Snapshot on every scroll, while the route that owns the offset is still on screen.
+  //
+  // usetheokit/theokit#421 / B-037 — reading the offsets when the effect below runs reads them a
+  // moment too late: React commits the incoming route's DOM first, so every element queried is the
+  // new page's and sits at 0. Measured in Chrome against `theokit@0.70.1`, a container scrolled to
+  // 2400 persisted as `{"main":0}` — nothing was lost in transit, the wrong number was written.
+  //
+  // Capture phase, because `scroll` does not bubble from an element: a listener on `document` sees
+  // it only on the way down. Passive, because this never calls `preventDefault`, and saying so
+  // keeps the browser from waiting to find out.
   useLayoutEffect(() => {
-    const restorer = createScrollRestorer(sessionScrollStore())
+    const onScroll = (): void => {
+      restorer.current?.record(activeKey.current, scrollTargets())
+    }
+    document.addEventListener('scroll', onScroll, { capture: true, passive: true })
+    return () => {
+      document.removeEventListener('scroll', onScroll, { capture: true })
+    }
+  }, [])
+
+  useLayoutEffect(() => {
+    const active = restorer.current
+    if (active === undefined) return
     const leaving = previousKey.current
-    if (leaving !== undefined) restorer.save(leaving, scrollTargets())
+    if (leaving !== undefined) active.save(leaving, scrollTargets())
     previousKey.current = location.key
-    restorer.restore(location.key, scrollTargets())
+    active.restore(location.key, scrollTargets())
 
     // Also on unload: a reload or a close never runs the next effect, so without this the last
     // page's offset is the one that is never recorded.
     const onHide = (): void => {
-      createScrollRestorer(sessionScrollStore()).save(location.key, scrollTargets())
+      active.save(location.key, scrollTargets())
     }
     window.addEventListener('pagehide', onHide)
     return () => {
