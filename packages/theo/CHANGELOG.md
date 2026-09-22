@@ -1,5 +1,64 @@
 # theo
 
+## 0.69.0
+
+### Minor Changes
+
+- fb3ebe7: `GET /api/agents/<name>/approvals` now answers `{ approvals: [...], scope: 'instance' }`. The
+  `scope` field is new and present on every response.
+
+  It matters because the registry behind that listing is a process singleton, and every deploy target
+  the endpoint became reachable on is multi-instance by construction — a Worker is isolates, a Lambda
+  is concurrent invocations. An owner whose run paused on another instance was answered
+  `200 {approvals: []}`, which is indistinguishable from "nothing is pending". A pending approval that
+  reads as absent is worse than an error: the operator stops looking.
+
+  The declaration rides on every response and not only the empty one, because the empty case is the
+  half that is obvious and not the whole of it — a listing of two from one instance can be two of
+  five, and a caveat present only when the list is empty would vanish exactly when a caller starts
+  trusting the numbers.
+
+  The value is read from the registry rather than written into the handler. That interface is
+  injectable so a durable store can replace the in-process one, and a constant in the handler would
+  become false the day somebody wires that up. A registry that declares nothing is read as
+  `'instance'`: silence takes the narrow claim, because a registry that cannot say how far it reaches
+  must not be reported as speaking for a deployment. Nothing shared ships today; `'shared'` exists so
+  that adding one later does not mean editing the listing.
+
+  The decision behind the single-process contract is recorded in `docs/adr/0017`, which four
+  production files had been citing as a document that did not exist.
+
+- fb3ebe7: Three of the six Web deploy targets carried no agents at all. `vercel`, `netlify` and `aws-lambda`
+  emitted an entry that never asked the agent aux dispatcher, so `GET /api/agents/<name>/approvals`
+  fell through to the run handler and answered `BAD_REQUEST` for want of a message — on a target the
+  framework advertises as supported, with no diagnostic anywhere. All six now carry the fragment.
+
+  The reason the three had been skipped did not survive re-measurement, and it is worth recording
+  because it is the kind of mistake that looks like evidence. The three were counted by how many
+  `new Request` occurrences each entry contained — vercel 2, netlify 0, aws-lambda 1 — and the
+  conclusion drawn was that a Web-`Request`-shaped branch could not reach them. That measures how
+  each entry OBTAINS a request, which is a different question from whether it has one: netlify's
+  handler is `(request, context)` and already receives a Web `Request`; aws-lambda already builds one
+  with `eventV2ToRequest(event)` for its CORS matcher; vercel already builds one and hands it to
+  `createWebShim`. All three had the shape the branch needs, so all three now use the ONE fragment
+  rather than getting a near-copy each.
+
+  Two behaviour changes come with it, named rather than left to be discovered. On `vercel` the
+  Node-to-Web conversion is hoisted above the agents branch, so an unmatched `POST` now has its body
+  drained where it did not — the safer direction, since an unconsumed Node request socket is what
+  holds a connection open. And on all three the build now passes the project's configured
+  `agentsDir`, which the option accepted and no build supplied: a project that had configured one was
+  silently getting the default `agents`.
+
+  Every emitted entry is now also run through the compiler as part of the suite. These adapters build
+  JavaScript out of template literals, and an assertion that a string contains the right words cannot
+  see an unbalanced brace.
+
+### Patch Changes
+
+- Updated dependencies [e5c4b19]
+  - @theokit/http@2.3.0
+
 ## 0.68.0
 
 ### Minor Changes
