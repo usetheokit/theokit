@@ -27,10 +27,7 @@ import {
 } from './deployed-runtime-config.js'
 import { deployedTraceFragment } from './deployed-trace.js'
 import { nodeAdapter } from './node.js'
-import {
-  describeDeployedSecurityHeaders,
-  renderSecurityHeadersConfigLiteral,
-} from './security-headers.js'
+import { describeDeployedSecurityHeaders, securityHeadersDeclarations } from './security-headers.js'
 import type { AdapterBuildContext, DeployAdapter } from './types.js'
 
 export interface BunBuildDeps {
@@ -128,8 +125,7 @@ export function renderBunEntry(
     `// the HTML document (static file + SPA fallback below), so the document gets`,
     `// these headers too -- with a nonce-less CSP, because that HTML was written`,
     `// at build time and carries no nonce on its script tags (EC-4).`,
-    `const SECURITY_HEADERS_CONFIG = ${renderSecurityHeadersConfigLiteral(opts.securityHeaders)}`,
-    `const SECURITY_HEADERS = buildSecurityHeaders(SECURITY_HEADERS_CONFIG, { production: true })`,
+    ...securityHeadersDeclarations(opts.securityHeaders),
     ``,
     ...runtimeConfig.imports,
     ...agentsFragment.imports,

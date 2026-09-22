@@ -9,7 +9,11 @@ import type { TheoConfig } from '../config/schema.js'
 import type { SecurityHeadersConfig } from '../core/contracts/security-headers.js'
 import { assertServicesUnsupported, readManifest } from '../services/index.js'
 
-import { deployedAgentsFragment, scannedFromLoaderCache } from './deployed-agents.js'
+import {
+  deployedAgentsFragment,
+  JSON_NOT_FOUND_RESPONSE,
+  scannedFromLoaderCache,
+} from './deployed-agents.js'
 import { deployedCorsFragment, type DeployedCorsOptions } from './deployed-cors.js'
 import { deployedCsrfFragment, type DeployedCsrfOptions } from './deployed-csrf.js'
 import {
@@ -22,8 +26,8 @@ import { deployedTraceFragment } from './deployed-trace.js'
 import { nodeAdapter } from './node.js'
 import {
   buildSecurityHeaders,
+  securityHeadersDeclarations,
   describeDeployedSecurityHeaders,
-  renderSecurityHeadersConfigLiteral,
 } from './security-headers.js'
 import type { AdapterBuildContext, DeployAdapter } from './types.js'
 
@@ -78,8 +82,7 @@ export function renderNetlifyFunction(
     `// theo.config.ts to read. The netlify.toml redirect routes only /api/* here,`,
     `// so this covers the API and not the document Netlify's static host serves`,
     `// (usetheokit/theokit#412).`,
-    `const SECURITY_HEADERS_CONFIG = ${renderSecurityHeadersConfigLiteral(opts.securityHeaders)}`,
-    `const SECURITY_HEADERS = buildSecurityHeaders(SECURITY_HEADERS_CONFIG, { production: true })`,
+    ...securityHeadersDeclarations(opts.securityHeaders),
     ``,
     ...runtimeConfig.imports,
     ...agentsFragment.imports,
@@ -109,12 +112,7 @@ export function renderNetlifyFunction(
     ...agentsFragment.branch,
     ``,
     `  const match = matchRoute(url.pathname, routesCache)`,
-    `  if (!match) {`,
-    `    return new Response(JSON.stringify({ error: { code: 'NOT_FOUND' } }), {`,
-    `      status: 404,`,
-    `      headers: { 'content-type': 'application/json' },`,
-    `    })`,
-    `  }`,
+    `  if (!match) return ${JSON_NOT_FOUND_RESPONSE}`,
     ``,
     `  const { req, res, toResponse } = createWebShim(request)`,
     ...deployedTraceFragment('request', '  '),

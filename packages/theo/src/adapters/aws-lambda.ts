@@ -5,7 +5,6 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import type { TheoConfig } from '../config/schema.js'
-import type { SecurityHeadersConfig } from '../core/contracts/security-headers.js'
 import { assertServicesUnsupported, readManifest } from '../services/index.js'
 
 import {
@@ -13,23 +12,17 @@ import {
   scannedFromLoaderCache,
   JSON_NOT_FOUND_RESPONSE,
 } from './deployed-agents.js'
-import { deployedCorsFragment, type DeployedCorsOptions } from './deployed-cors.js'
-import { deployedCsrfFragment, type DeployedCsrfOptions } from './deployed-csrf.js'
+import { deployedCorsFragment } from './deployed-cors.js'
+import { deployedCsrfFragment } from './deployed-csrf.js'
 import {
   agentsDirLiteral,
-  type DeployedAgentsDirOptions,
   deployedRuntimeConfigFragment,
   serverDirLiteral,
-  type DeployedRuntimeConfigOptions,
-  type DeployedServerDirOptions,
 } from './deployed-runtime-config.js'
 import { deployedTraceFragment } from './deployed-trace.js'
 import { nodeAdapter } from './node.js'
-import {
-  describeDeployedSecurityHeaders,
-  renderSecurityHeadersConfigLiteral,
-} from './security-headers.js'
-import type { AdapterBuildContext, DeployAdapter } from './types.js'
+import { describeDeployedSecurityHeaders, securityHeadersDeclarations } from './security-headers.js'
+import type { AdapterBuildContext, DeployAdapter, DeployedEntryOptions } from './types.js'
 
 export interface AwsLambdaBuildDeps {
   runNodeBuild?: (config: TheoConfig, cwd: string, ctx?: AdapterBuildContext) => Promise<void>
@@ -194,12 +187,7 @@ function awsLambdaHandlerFragment(
     ...agentsBranch,
     ``,
     `  const match = matchRoute(path, routesCache)`,
-    `  if (!match) {`,
-    `    return new Response(JSON.stringify({ error: { code: 'NOT_FOUND' } }), {`,
-    `      status: 404,`,
-    `      headers: { 'content-type': 'application/json' },`,
-    `    })`,
-    `  }`,
+    `  if (!match) return ${JSON_NOT_FOUND_RESPONSE}`,
     ``,
     `  const { req, res, toResponse } = createWebShim(request)`,
     ...deployedTraceFragment('request', '  '),
@@ -209,13 +197,7 @@ function awsLambdaHandlerFragment(
   ]
 }
 
-export function renderAwsLambdaEntry(
-  opts: { securityHeaders?: SecurityHeadersConfig } & DeployedAgentsDirOptions &
-    DeployedCsrfOptions &
-    DeployedRuntimeConfigOptions &
-    DeployedServerDirOptions &
-    DeployedCorsOptions = {},
-): string {
+export function renderAwsLambdaEntry(opts: DeployedEntryOptions = {}): string {
   const runtimeConfig = deployedRuntimeConfigFragment(opts)
   // B-235. The entry already builds a Web `Request` — `eventV2ToRequest(event)`, for the CORS
   // matcher — so the shape this branch needs was here all along. `path` rather than `url.pathname`
@@ -243,8 +225,7 @@ export function renderAwsLambdaEntry(
     `// theo.config.ts to read. Non-API paths 404 here and the document is served`,
     `// from CloudFront or another static host, so this covers the API and not the`,
     `// page (usetheokit/theokit#412).`,
-    `const SECURITY_HEADERS_CONFIG = ${renderSecurityHeadersConfigLiteral(opts.securityHeaders)}`,
-    `const SECURITY_HEADERS = buildSecurityHeaders(SECURITY_HEADERS_CONFIG, { production: true })`,
+    ...securityHeadersDeclarations(opts.securityHeaders),
     ``,
     ...runtimeConfig.imports,
     ...agentsFragment.imports,

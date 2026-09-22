@@ -5,28 +5,21 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import type { TheoConfig } from '../config/schema.js'
-import type { SecurityHeadersConfig } from '../core/contracts/security-headers.js'
 import { assertServicesUnsupported, readManifest } from '../services/index.js'
 
 import { deployedAgentsFragment, scannedFromLoaderCache } from './deployed-agents.js'
-import { deployedCorsFragment, type DeployedCorsOptions } from './deployed-cors.js'
-import { deployedCsrfFragment, type DeployedCsrfOptions } from './deployed-csrf.js'
+import { deployedCorsFragment } from './deployed-cors.js'
+import { deployedCsrfFragment } from './deployed-csrf.js'
 import { planDeployedPlugins } from './deployed-plugins-module.js'
 import {
   agentsDirLiteral,
-  type DeployedAgentsDirOptions,
   deployedRuntimeConfigFragment,
-  type DeployedRuntimeConfigOptions,
-  type DeployedServerDirOptions,
   serverDirLiteral,
 } from './deployed-runtime-config.js'
 import { deployedTraceFragment } from './deployed-trace.js'
 import { nodeAdapter } from './node.js'
-import {
-  describeDeployedSecurityHeaders,
-  renderSecurityHeadersConfigLiteral,
-} from './security-headers.js'
-import type { AdapterBuildContext, DeployAdapter } from './types.js'
+import { describeDeployedSecurityHeaders, securityHeadersDeclarations } from './security-headers.js'
+import type { AdapterBuildContext, DeployAdapter, DeployedEntryOptions } from './types.js'
 
 export interface DenoBuildDeps {
   runNodeBuild?: (config: TheoConfig, cwd: string, ctx?: AdapterBuildContext) => Promise<void>
@@ -51,14 +44,7 @@ const FRAMEWORK_IMPORTS: readonly string[] = [
   `import { createDenoWsBridge } from 'npm:theokit/adapters/ws-shim'`,
 ]
 
-export function renderDenoEntry(
-  port: number,
-  opts: { securityHeaders?: SecurityHeadersConfig } & DeployedAgentsDirOptions &
-    DeployedCsrfOptions &
-    DeployedRuntimeConfigOptions &
-    DeployedServerDirOptions &
-    DeployedCorsOptions = {},
-): string {
+export function renderDenoEntry(port: number, opts: DeployedEntryOptions = {}): string {
   const runtimeConfig = deployedRuntimeConfigFragment(opts)
   const agentsFragment = deployedAgentsFragment(scannedFromLoaderCache(agentsDirLiteral(opts)), {
     notFound: 'notFound()',
@@ -93,8 +79,7 @@ export function renderDenoEntry(
     `// theo.config.ts to read. Non-API paths 404 here and are served by Deno`,
     `// Deploy's static asset handler, so this covers the API and not the`,
     `// document (usetheokit/theokit#412).`,
-    `const SECURITY_HEADERS_CONFIG = ${renderSecurityHeadersConfigLiteral(opts.securityHeaders)}`,
-    `const SECURITY_HEADERS = buildSecurityHeaders(SECURITY_HEADERS_CONFIG, { production: true })`,
+    ...securityHeadersDeclarations(opts.securityHeaders),
     ``,
     ...runtimeConfig.imports,
     ...agentsFragment.imports,

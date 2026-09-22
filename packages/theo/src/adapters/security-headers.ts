@@ -76,6 +76,28 @@ export { generateNonce }
  * (`cli/commands/start/index.ts`). An app with no security block gets the same
  * baseline deployed as it gets locally.
  */
+/**
+ * The two declarations every deploy entry emits to carry the security baseline.
+ *
+ * Four adapters wrote these same two lines — `netlify`, `vercel`, `aws-lambda`, `deno-deploy` —
+ * each under a comment naming its own host's static-asset boundary. The COMMENT differs and is
+ * meant to; the declarations do not.
+ *
+ * Extracted after SonarCloud's duplication gate failed a PR at 4.0% against a 3% ceiling and named
+ * this as the largest repeated block among the changed files. The gate was measuring something
+ * real: a literal renderer and a builder call, copied four times, is four places to update when
+ * either changes.
+ *
+ * Returns the lines rather than a joined string, because every caller splices them into an array
+ * of emitted lines.
+ */
+export function securityHeadersDeclarations(config: SecurityHeadersConfig | undefined): string[] {
+  return [
+    `const SECURITY_HEADERS_CONFIG = ${renderSecurityHeadersConfigLiteral(config)}`,
+    `const SECURITY_HEADERS = buildSecurityHeaders(SECURITY_HEADERS_CONFIG, { production: true })`,
+  ]
+}
+
 export function renderSecurityHeadersConfigLiteral(
   headers: SecurityHeadersConfig | undefined,
 ): string {

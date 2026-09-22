@@ -14,24 +14,21 @@ import {
   scannedFromLoaderCache,
   JSON_NOT_FOUND_RESPONSE,
 } from './deployed-agents.js'
-import { deployedCorsFragment, type DeployedCorsOptions } from './deployed-cors.js'
-import { deployedCsrfFragment, type DeployedCsrfOptions } from './deployed-csrf.js'
+import { deployedCorsFragment } from './deployed-cors.js'
+import { deployedCsrfFragment } from './deployed-csrf.js'
 import {
   agentsDirLiteral,
-  type DeployedAgentsDirOptions,
   deployedRuntimeConfigFragment,
   serverDirLiteral,
-  type DeployedRuntimeConfigOptions,
-  type DeployedServerDirOptions,
 } from './deployed-runtime-config.js'
 import { deployedTraceFragment } from './deployed-trace.js'
 import { nodeAdapter } from './node.js'
 import {
   buildSecurityHeaders,
+  securityHeadersDeclarations,
   describeDeployedSecurityHeaders,
-  renderSecurityHeadersConfigLiteral,
 } from './security-headers.js'
-import type { AdapterBuildContext, DeployAdapter } from './types.js'
+import type { AdapterBuildContext, DeployAdapter, DeployedEntryOptions } from './types.js'
 
 /**
  * T2.2 — Vercel adapter rewritten to consume `theokit/adapters/web-shim`
@@ -167,12 +164,7 @@ function vercelRouteRequestFragment(
     ...agentsBranch,
     ``,
     `  const match = matchRoute(url.pathname, routesCache)`,
-    `  if (!match) {`,
-    `    return new Response(JSON.stringify({ error: { code: 'NOT_FOUND' } }), {`,
-    `      status: 404,`,
-    `      headers: { 'content-type': 'application/json' },`,
-    `    })`,
-    `  }`,
+    `  if (!match) return ${JSON_NOT_FOUND_RESPONSE}`,
     ``,
     `  const { req, res, toResponse } = createWebShim(request)`,
     ...deployedTraceFragment('request', '  '),
@@ -186,13 +178,7 @@ function vercelRouteRequestFragment(
   ]
 }
 
-export function renderVercelFunctionEntry(
-  opts: { securityHeaders?: SecurityHeadersConfig } & DeployedAgentsDirOptions &
-    DeployedCsrfOptions &
-    DeployedRuntimeConfigOptions &
-    DeployedServerDirOptions &
-    DeployedCorsOptions = {},
-): string {
+export function renderVercelFunctionEntry(opts: DeployedEntryOptions = {}): string {
   const runtimeConfig = deployedRuntimeConfigFragment(opts)
   // B-235. This is the target the item's evidence was right about in form and wrong about in
   // consequence: the handler IS Node-shaped, and it already converts to a Web `Request` before
@@ -220,8 +206,7 @@ export function renderVercelFunctionEntry(
     `// theo.config.ts to read. config.json routes only /api/* here, so this`,
     `// covers the API and not the document Vercel's static host serves`,
     `// (usetheokit/theokit#412).`,
-    `const SECURITY_HEADERS_CONFIG = ${renderSecurityHeadersConfigLiteral(opts.securityHeaders)}`,
-    `const SECURITY_HEADERS = buildSecurityHeaders(SECURITY_HEADERS_CONFIG, { production: true })`,
+    ...securityHeadersDeclarations(opts.securityHeaders),
     ``,
     ...runtimeConfig.imports,
     ...agentsFragment.imports,
