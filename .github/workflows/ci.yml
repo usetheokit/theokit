@@ -888,6 +888,7 @@ jobs:
       - dead-code
       - package-validation
       - theoclaw
+      - changeset-coverage
       # `theocode` and `env-verdicts` were outside this list until 2026-09-18 (B-183). A job
       # absent from it still runs and still shows a red X on the pull request, and the required
       # check on the branch is `ci-ok` — so it could not hold a merge. `pr-report` stays out
