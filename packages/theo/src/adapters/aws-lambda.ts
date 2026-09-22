@@ -14,6 +14,11 @@ import {
 } from './deployed-agents.js'
 import { deployedEntryPreamble } from './deployed-preamble.js'
 import {
+  deployedRateLimitFragment,
+  rateLimitCheckFragment,
+  type DeployedRateLimitOptions,
+} from './deployed-rate-limit.js'
+import {
   agentsDirLiteral,
   deployedRuntimeConfigFragment,
   serverDirLiteral,
@@ -102,10 +107,15 @@ export function responseToLambdaResultV2(
 // Generated-code fragments — extracted so the parent emitter stays under the
 // max-lines-per-function ceiling.
 /** The v2 result conversion, the handler, and the routing that feeds them. */
+/** The target's name, in the five places that spell it — same gate deno-deploy tripped. */
+const TARGET = 'aws-lambda'
+
 function awsLambdaHandlerFragment(
   runtimeSpread: string,
   agentsBranch: readonly string[],
   agentsHostBypass: string,
+  /** B-027 — passed, not read: this is a separate function from the parent emitter. */
+  rateLimit: DeployedRateLimitOptions['rateLimit'],
 ): string[] {
   return [
     `// #382 — this target is DELISTED for response streaming, by construction.`,
@@ -149,6 +159,24 @@ function awsLambdaHandlerFragment(
     `// Every outcome — including both 404s — is produced as a Web Response by`,
     `// routeRequest, so the security baseline is applied at ONE place and the`,
     `// v2 result object is built from headers that already carry it.`,
+    ...(rateLimit === undefined
+      ? []
+      : [
+          `import { createRateLimiterWeb } from 'theokit/server'`,
+          `import { resolveClientIpFromRequest } from 'theokit/server/rate-limit'`,
+          ``,
+        ]),
+    ...deployedRateLimitFragment(
+      rateLimit,
+      TARGET,
+      // The v2 payload's own answer, with the v1 `identity.sourceIp` beside it: a v1 event carries
+      // no `http` object at all, and both reads are optional-chained so neither throws on the
+      // other's shape. Same treatment `:153` already gives `requestContext?.http?.path`.
+      `event.requestContext?.http?.sourceIp ?? event.requestContext?.identity?.sourceIp ?? resolveClientIpFromRequest(corsRequest, TRUST_PROXY)`,
+      // `corsRequest`, not `request`: the Web request this entry builds is named that (`:157`).
+      'corsRequest, event',
+    ),
+    ``,
     `export const handler = async (event) => {`,
     `  const path = event.requestContext?.http?.path ?? '/'`,
     `  // #409 — the same event, read as a Web Request so the CORS matcher can see the method and`,
@@ -159,6 +187,15 @@ function awsLambdaHandlerFragment(
     `  // The preflight is answered BEFORE anything routes: an OPTIONS the router handles is an`,
     `  // OPTIONS the browser never gets a CORS answer to.`,
     `  const preflight = corsPreflight(corsRequest)`,
+    ...rateLimitCheckFragment(
+      rateLimit,
+      '  ',
+      'corsRequest, event',
+      // This handler returns a Lambda v2 RESULT, not a Response. A bare `return <Response>` would
+      // hand the runtime an object it does not understand.
+      'return responseToV2Result(withCors(corsRequest, withSecurityHeaders(rateLimited(limit), SECURITY_HEADERS)), path)',
+      'return responseToV2Result(withCors(corsRequest, withSecurityHeaders(unnamedCaller(), SECURITY_HEADERS)), path)',
+    ),
     `  const response = preflight !== null`,
     `    ? withSecurityHeaders(preflight, SECURITY_HEADERS)`,
     `    : withCors(corsRequest, withSecurityHeaders(await routeRequest(event, path), SECURITY_HEADERS))`,
@@ -251,6 +288,7 @@ export function renderAwsLambdaEntry(opts: DeployedEntryOptions = {}): string {
       runtimeConfig.executeRouteSpread,
       agentsFragment.branch,
       agentsFragment.hostBypass,
+      opts.rateLimit,
     ),
   ].join('\n')
 }
@@ -262,7 +300,7 @@ export async function buildAwsLambda(
   ctx?: AdapterBuildContext,
 ): Promise<void> {
   // Wave 2 (T2.2) — reject polyglot services on this adapter.
-  assertServicesUnsupported('aws-lambda', readManifest(cwd))
+  assertServicesUnsupported(TARGET, readManifest(cwd))
 
   // #382 — refuse by name rather than build something that cannot do what was
   // asked. `ssrStreaming` is the config's declaration that responses stream,
@@ -309,7 +347,7 @@ export async function buildAwsLambda(
   // eslint-disable-next-line no-console -- CLI build progress
   console.log(
     `${describeDeployedSecurityHeaders({
-      target: 'aws-lambda',
+      target: TARGET,
       securityHeaders: config.security?.headers,
       mintsNonce: false,
       documentHeaders: 'platform-unmanaged',
@@ -318,7 +356,7 @@ export async function buildAwsLambda(
 }
 
 export const awsLambdaAdapter: DeployAdapter = {
-  name: 'aws-lambda',
+  name: TARGET,
   // #382 — delisted for streaming, deliberately. See DeployAdapter.
   streamsResponses: false,
   // #409 / #410 — the generated entry calls `executeRoute` with routes, loader
