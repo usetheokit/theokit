@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
 import { bumpForTemplatePins } from '../../scripts/template-pin-bump.mjs'
+import { recordTemplatePinBump } from '../../scripts/sync-template-pins.mjs'
 
 /**
  * A template pin that changes without republishing the package that carries it never reaches anyone.
@@ -76,5 +81,52 @@ describe('bumpForTemplatePins', () => {
     // `3.1.0-rc.2` + patch is ambiguous — rc.3, or 3.1.0? Answering it here would be a guess
     // about a release shape this script does not drive, so it refuses and names the version.
     expect(() => bumpForTemplatePins(['x: a -> b'], '3.1.0-rc.2')).toThrow(/prerelease/u)
+  })
+})
+
+/**
+ * B-232, the half that was missing. `bumpForTemplatePins` stops the DOUBLE bump; these cover the
+ * bump this script legitimately performs, which reached the registry twice with no entry naming it.
+ */
+describe('recordTemplatePinBump', () => {
+  const scratch = (): string => mkdtempSync(join(tmpdir(), 'theo-pin-changelog-'))
+
+  it('test_the_bumped_version_gets_an_entry_naming_the_pins', () => {
+    const dir = scratch()
+    const file = join(dir, 'CHANGELOG.md')
+    writeFileSync(file, '# create-theo\n\n## 3.0.1\n\n### Patch Changes\n\n- an older entry\n')
+
+    expect(recordTemplatePinBump(file, '3.0.2', ['theokit: 0.68.0 -> 0.69.0'])).toBe(true)
+
+    const text = readFileSync(file, 'utf8')
+    expect(text, 'the new version has no heading').toContain('## 3.0.2')
+    expect(text, 'the pin that caused the bump is not named').toContain('theokit: 0.68.0 -> 0.69.0')
+    expect(text.indexOf('## 3.0.2'), 'the new entry did not land above the older one').toBeLessThan(
+      text.indexOf('## 3.0.1'),
+    )
+    expect(text.startsWith('# create-theo'), 'the title was displaced').toBe(true)
+  })
+
+  it('test_a_second_run_does_not_stack_a_duplicate_entry', () => {
+    const dir = scratch()
+    const file = join(dir, 'CHANGELOG.md')
+    writeFileSync(file, '# create-theo\n\n## 3.0.1\n')
+
+    expect(recordTemplatePinBump(file, '3.0.2', ['theokit: a -> b'])).toBe(true)
+    expect(recordTemplatePinBump(file, '3.0.2', ['theokit: a -> b'])).toBe(false)
+
+    const headings = readFileSync(file, 'utf8')
+      .split('\n')
+      .filter((line) => line.trimEnd() === '## 3.0.2')
+    expect(headings, 'the version is documented twice').toHaveLength(1)
+  })
+
+  it('test_an_absent_changelog_gets_the_entry_and_no_invented_title', () => {
+    const file = join(scratch(), 'CHANGELOG.md')
+
+    expect(recordTemplatePinBump(file, '1.0.1', ['theokit: a -> b'])).toBe(true)
+
+    const text = readFileSync(file, 'utf8')
+    expect(text.trimStart().startsWith('## 1.0.1'), 'a title was invented').toBe(true)
   })
 })
