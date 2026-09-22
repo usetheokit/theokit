@@ -7,3 +7,5 @@ export * from './rate-limit.js'
 export * from './rate-limit-store.js'
 export * from './rate-limit-per-route.js'
 export * from './rate-limited-guard.js'
+// B-257 — the durable path, beside the sync facade rather than replacing it (ADR 0018).
+export * from './rate-limit-durable.js'
