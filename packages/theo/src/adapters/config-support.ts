@@ -228,7 +228,18 @@ export function assertRateLimitEnforceable(
   // B-257 — this reads `enforcesRateLimit`, NOT `appliesConfig`. They were one list until now, and
   // `applied.includes('rateLimit')` returned before the throw, so adding that entry to silence the
   // WARNING also switched off this REFUSAL — on a runtime where the limit still cannot hold.
-  const enforces = adapter.enforcesRateLimit ?? 'not-ours-to-judge'
+  //
+  // **An omitted field REFUSES.** The first cut defaulted to `'not-ours-to-judge'`, which inverted
+  // the rule it replaced: `appliesConfig ?? []` did not include `'rateLimit'`, so an adapter that
+  // declared nothing was refused; `?? 'not-ours-to-judge'` let it through. Measured on
+  // `static.ts`, which declares neither field and is registered at `registry.ts:28` — it went from
+  // refusing a declared limit to proceeding with a console warning. `:213-215` refuses exactly that
+  // outcome in its own words, and this member is on the EXPORTED `DeployAdapter`, so every
+  // third-party adapter inherited the inversion too.
+  //
+  // Abstaining is a CLAIM about somebody else's runtime, and a claim has to be made rather than
+  // inferred from silence.
+  const enforces = adapter.enforcesRateLimit ?? 'never'
 
   // An adapter emitting no request handler is not judged. Its runtime is someone else's and this
   // build cannot answer for it; refusing would assert something unmeasured. An ABSTAIN, and the
@@ -236,6 +247,11 @@ export function assertRateLimitEnforceable(
   if (enforces === 'not-ours-to-judge') return
 
   if (enforces === 'always') return
+
+  // `'never'`, and the default for an adapter that declared nothing. Refusing here is what the
+  // pre-B-257 rule did; reaching the store check below would let an undeclared adapter enforce by
+  // accident whenever a config happened to name one.
+  if (enforces === 'never') throw new UnenforceableRateLimitError(target)
 
   // `'with-a-store'`: a per-invocation runtime enforces only when the config names a durable
   // counter. Without one the in-process count dies with the invocation, and a limit that forgets is

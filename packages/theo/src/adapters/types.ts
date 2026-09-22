@@ -173,18 +173,25 @@ export interface DeployAdapter {
    * because "`rateLimit` is the one whose absence looks exactly like success".
    *
    * `'always'`            a long-lived process; the in-process counter survives between requests.
+   * `'never'`             this adapter emits no request handler that could enforce anything. A
+   *                       TRUE claim, unlike the abstain below: nothing answers for a static
+   *                       export at runtime, so there is no other runtime to defer to.
    * `'with-a-store'`      a per-invocation or per-isolate runtime. It enforces only when the config
    *                       names a durable store, because an in-process counter there forgets, and a
    *                       limit that forgets is a limit that does not limit.
-   * `'not-ours-to-judge'` this adapter emits no request handler, so the build cannot answer for its
-   *                       runtime. An ABSTAIN and **not** a `'never'`: `config-support.ts:105-108`
-   *                       calls that "a different fact from saying no", and refusing there would
-   *                       assert something unmeasured.
+   * `'not-ours-to-judge'` this adapter emits no request handler OF ITS OWN, and another runtime
+   *                       answers for it. An ABSTAIN: `config-support.ts:105-108` calls that "a
+   *                       different fact from saying no", and refusing there would assert something
+   *                       unmeasured about somebody else's runtime.
    *
-   * Omitted means `'not-ours-to-judge'` — the same fail-safe the other claims here take: a target
-   * that has not said it enforces is not thereby said to refuse.
+   * **Omitted REFUSES**, and it does not abstain. Abstaining is a claim about another runtime, and a
+   * claim is made rather than inferred from silence. The first cut defaulted to the abstain and
+   * inverted the rule it replaced: `appliesConfig ?? []` refused an adapter that declared nothing,
+   * while `?? 'not-ours-to-judge'` let it through. Measured on `static.ts`, which declares neither
+   * field and is registered — it went from refusing a declared limit to proceeding with a warning.
+   * This member is on the EXPORTED interface, so every third-party adapter inherited that inversion.
    */
-  enforcesRateLimit?: 'always' | 'with-a-store' | 'not-ours-to-judge'
+  enforcesRateLimit?: 'always' | 'never' | 'with-a-store' | 'not-ours-to-judge'
   build(config: TheoConfig, cwd: string, ctx?: AdapterBuildContext): Promise<void>
 }
 

@@ -110,6 +110,10 @@ export function renderDenoEntry(port: number, opts: DeployedEntryOptions = {}): 
       // optional chain is what keeps the read from throwing there rather than a guess.
       `info?.remoteAddr?.hostname ?? resolveClientIpFromRequest(request, TRUST_PROXY)`,
       'request, info',
+      // B-257 — `npm:`, like every other specifier this target emits. A bare one does not resolve
+      // on Deno Deploy, and the durable limiter's import is emitted by the fragment rather than
+      // here, so the prefix has to travel with it.
+      'npm:',
     ),
     ``,
     // The serve handler's SECOND parameter is bound here for the first time: `Deno.serve` has

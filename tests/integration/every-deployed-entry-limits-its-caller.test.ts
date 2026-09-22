@@ -101,6 +101,40 @@ const ENTRIES = [
   ['aws-lambda', () => renderAwsLambdaEntry({ rateLimit: LIMIT })],
 ] as const satisfies readonly (readonly [string, () => string])[]
 
+/**
+ * B-257 — the same six renders, with a durable store declared.
+ *
+ * `LIMIT` above exercises the in-process path. A store sends the emitter down a DIFFERENT branch:
+ * it imports the factory from the declared module, constructs it, and calls
+ * `createDurableRateLimiterWeb` instead of `createRateLimiterWeb` — three emitted things that the
+ * first table never produces.
+ *
+ * It is a second table rather than a third assertion on the first, because the branch is chosen by
+ * the CONFIG. A test reading the in-process render can say nothing about the durable one, however
+ * carefully it reads.
+ *
+ * Only the binding is asserted here, not behaviour. Driving this handler would need
+ * `@theo-test/durable-store` to resolve from the temp workspace, and a stub written to satisfy the
+ * import is a stub the assertion is really about. The class this catches is the one the review
+ * named: a symbol used at module scope and never imported throws when the entry LOADS, and no
+ * render-contains assertion can see it.
+ */
+const STORE = { module: '@theo-test/durable-store', factory: 'createStore' } as const
+const DURABLE_ENTRIES = [
+  [
+    'cloudflare',
+    () =>
+      renderCloudflareWorkerEntry({ ssrStreaming: false, rateLimit: { ...LIMIT, store: STORE } }),
+  ],
+  ['deno-deploy', () => renderDenoEntry(3000, { rateLimit: { ...LIMIT, store: STORE } })],
+  [
+    'vercel',
+    () => renderVercelFunctionEntry({ rateLimit: { ...LIMIT, trustProxy: 1, store: STORE } }),
+  ],
+  ['netlify', () => renderNetlifyFunction({ rateLimit: { ...LIMIT, store: STORE } })],
+  ['aws-lambda', () => renderAwsLambdaEntry({ rateLimit: { ...LIMIT, store: STORE } })],
+] as const satisfies readonly (readonly [string, () => string])[]
+
 type Target = (typeof ENTRIES)[number][0]
 
 /** Every bare specifier the six entries emit, measured rather than assumed. */
@@ -373,6 +407,45 @@ describe('every deployed entry limits its caller (B-027, T0.1)', () => {
         // `trustProxy` unset. The guard must answer 503 — `rate-limit.ts:113` is
         // `clientIp.length > 0`, so reaching the limiter with `undefined` is a TypeError instead.
         expect(await drive(undefined), `${target} did not refuse an unnameable caller`).toBe(503)
+      })
+    })
+  }
+
+  for (const [target, render] of DURABLE_ENTRIES) {
+    describe(`${target} with a durable store`, () => {
+      it(`test_${target.replace(/-/g, '_')}_awaits_the_durable_limiter`, () => {
+        // The durable limiter returns a Promise. An entry that emitted the sync call site around
+        // it would read `limited` off a Promise — always `undefined`, always falsy, so every
+        // request passes and the limit silently does nothing.
+        const source = render()
+        expect(
+          source,
+          `${target} declares a store and never reaches the durable limiter`,
+        ).toContain('createDurableRateLimiterWeb')
+        expect(
+          /await\s+RATE_LIMIT\(/.test(source),
+          `${target} calls the durable limiter without awaiting it; every request reads ` +
+            `\`limited\` off a Promise and passes`,
+        ).toBe(true)
+      })
+
+      it(`test_${target.replace(/-/g, '_')}_imports_every_symbol_the_durable_path_uses`, () => {
+        // The class the review named, on the branch the first table never renders: three symbols
+        // are used at module scope here, and each one unbound throws at LOAD time.
+        const source = render()
+        expect(
+          /import\s*\{[^}]*createDurableRateLimiterWeb/.test(source),
+          `${target} uses createDurableRateLimiterWeb and never imports it`,
+        ).toBe(true)
+        expect(
+          new RegExp(
+            `import\\s*\\{[^}]*${STORE.factory}[^}]*\\}\\s*from\\s*['"][^'"]*${STORE.module}`,
+          ).test(source),
+          `${target} constructs ${STORE.factory} without importing it from ${STORE.module}`,
+        ).toBe(true)
+        expect(source, `${target} imports the factory and never calls it`).toContain(
+          `${STORE.factory}(`,
+        )
       })
     })
   }

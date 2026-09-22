@@ -1,6 +1,10 @@
 import type { IncomingMessage } from 'node:http'
 
-import { InMemoryStore, type RateLimitStore } from './rate-limit-store.js'
+import {
+  type BakedStoreDeclaration,
+  InMemoryStore,
+  type RateLimitStore,
+} from './rate-limit-store.js'
 
 /**
  * Rate limit configuration — basic single-bucket shape. Per ADR D2, the
@@ -10,6 +14,16 @@ import { InMemoryStore, type RateLimitStore } from './rate-limit-store.js'
 export interface RateLimitConfig {
   windowMs: number
   max: number
+  /**
+   * B-257 — the durable store a DEPLOYED entry constructs. Declared here because the config schema
+   * accepts it and this type is what the parsed config narrows to.
+   *
+   * The synchronous facades below IGNORE it: they cannot await, which is the whole reason
+   * `createDurableRateLimiterWeb` exists beside them (ADR 0018). A deployed entry reads this field
+   * at BUILD time, through `adapters/deployed-rate-limit.ts`, and constructs the store in the
+   * generated source — it is never read at request time by this module.
+   */
+  store?: RateLimitStore | BakedStoreDeclaration
 }
 
 export interface RateLimitResult {

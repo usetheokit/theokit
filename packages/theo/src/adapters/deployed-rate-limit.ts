@@ -125,7 +125,7 @@ const IDENTIFIER = /^[A-Za-z_$][\w$]*$/
 function assertBakeableStore(store: unknown, target: string): void {
   if (store === undefined) return
 
-  if (typeof store !== 'object' || store === null || Array.isArray(store)) {
+  if (!isStoreShaped(store)) {
     throw new UnserialisableRateLimitError(
       target,
       '`security.rateLimit.store` must be an object naming a module and a factory.',
@@ -175,8 +175,18 @@ function assertBakeableStore(store: unknown, target: string): void {
  * against a target this function does not receive.
  */
 function declaresDurableStore(rateLimit: RateLimitConfig | undefined): boolean {
-  const store = (rateLimit as { store?: unknown } | undefined)?.store
-  return typeof store === 'object' && store !== null
+  return isStoreShaped((rateLimit as { store?: unknown } | undefined)?.store)
+}
+
+/**
+ * The ONE predicate both sides read — the call emitter here and `assertBakeableStore`'s first
+ * refusal. They were two, differing on arrays: this one accepted `store: []` while the refusal
+ * rejected it, so the declaration threw while the call side would still have emitted `await`. The
+ * build refused first, so no bad entry reached disk — and the pair exists to agree BY CONSTRUCTION
+ * rather than because one check happens to run earlier.
+ */
+function isStoreShaped(store: unknown): boolean {
+  return typeof store === 'object' && store !== null && !Array.isArray(store)
 }
 
 /**
@@ -273,6 +283,21 @@ export function deployedRateLimitFragment(
    * unbound identifier, and the entry throws on the first limited request.
    */
   params = 'request, server',
+  /**
+   * The specifier prefix this target needs — `'npm:'` on Deno Deploy, empty everywhere else.
+   *
+   * B-257: this function now emits its OWN import for the durable limiter, rather than relying on
+   * each adapter to remember one. The previous shape had THREE sides to keep in step — the
+   * declaration here, the call in `rateLimitCheckFragment`, and a per-adapter import line — and the
+   * third was not joined: six adapters imported `createRateLimiterWeb` and none imported
+   * `createDurableRateLimiterWeb`, so a store-carrying entry referenced a free variable and would
+   * have thrown `ReferenceError` while evaluating its module body. Not at the first limited request:
+   * at LOAD, taking down every route including those declaring no limit.
+   *
+   * `cloudflare.ts:370-373` documents that exact defect from B-027, one symbol earlier. Owning the
+   * import here is what stops a fourth recurrence.
+   */
+  importPrefix = '',
 ): string[] {
   const baked = bakeableRateLimit(rateLimit, target)
   if (baked === undefined) return []
@@ -294,6 +319,9 @@ export function deployedRateLimitFragment(
           // B-257 — a durable counter, named by the app. `module` and the options are JSON literals;
           // `factory` was validated against IDENTIFIER at bake time because it lands here as a bare
           // identifier and no escape can make that safe.
+          //
+          // The limiter's own import is emitted HERE rather than by each adapter. See `importPrefix`.
+          `import { createDurableRateLimiterWeb } from '${importPrefix}theokit/server/rate-limit'`,
           `import { ${baked.store.factory} } from ${JSON.stringify(baked.store.module)}`,
           `const RATE_LIMIT_STORE = new ${baked.store.factory}(${JSON.stringify(baked.store.options ?? {})})`,
           `const RATE_LIMIT = createDurableRateLimiterWeb(`,

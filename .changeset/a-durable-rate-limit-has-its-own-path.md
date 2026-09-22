@@ -17,6 +17,14 @@ error. Nothing that works today changes; the durable path is reached by naming i
 else satisfying the `RateLimitStore` contract — a framework that shipped one would be choosing every
 deployment's datastore. See `docs/adr/0018`.
 
-**What you do NOT get yet:** a generated deploy entry does not consume this path. `theokit build`
-still refuses a declared rate limit on Cloudflare, Deno Deploy, Netlify, Vercel and AWS Lambda, for
-the reason it always has — the counter would not survive. Wiring the entry is the next step.
+**A generated deploy entry uses it when your config names a store.** Cloudflare, Deno Deploy,
+Netlify, Vercel and AWS Lambda build and enforce; without a store `theokit build` still refuses
+them by name, for the reason it always has — the counter would not survive.
+
+**Two refusals guard the config.** A `store.factory` that is not a plain identifier is rejected at
+build time, because it is written into the generated entry as `import { <factory> }` where no escape
+applies. And silencing the build's unapplied-config warning no longer switches off that refusal: the
+two now read separate declarations.
+
+**An unreachable store refuses the request rather than serving it**, with a header naming the store
+so an outage does not read as every caller hitting their quota. See `docs/adr/0019`.

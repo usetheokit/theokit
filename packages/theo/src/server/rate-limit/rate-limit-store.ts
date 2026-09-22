@@ -24,6 +24,24 @@ export interface RateLimitState {
   resetAt: number
 }
 
+/**
+ * A durable store named at BUILD time, for an adapter to construct in a generated entry.
+ *
+ * B-257 — NOT a `RateLimitStore`. It has no methods, nothing calls it, and it exists only as text
+ * an adapter bakes into a generated entry: `config/schemas/rate-limit.ts` accepts it,
+ * `adapters/deployed-rate-limit.ts` emits it, and `createDurableRateLimiterWeb` receives the store
+ * the generated code constructed from it.
+ *
+ * It lives beside `RateLimitStore` because the two share a config key and a reader meeting one
+ * must be able to see the other. Declared once: the same shape was written inline in two modules
+ * before this, and two copies of one type diverge on the first change to either.
+ */
+export interface BakedStoreDeclaration {
+  module: string
+  factory: string
+  options?: Record<string, string | number | boolean>
+}
+
 export interface RateLimitStore {
   /**
    * Atomic increment-and-get. If the key is missing OR the previous
