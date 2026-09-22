@@ -1,0 +1,56 @@
+{
+  "milestone_id": "M1",
+  "target": {
+    "kind": "library",
+    "package": "theokit@0.70.0",
+    "how": "npm install theokit@0.70.0 into a throwaway project; the published tarball, never the working tree"
+  },
+  "results": [
+    {
+      "id": "AC1",
+      "status": "not_exercised",
+      "evidence": [],
+      "note": "the HITL approval path needs a booted agent server driven by two distinct identities. The published client surface is approve(approvalId, decision) with no subject, so ownership can only be observed server-side, over the wire. Not driven in this run."
+    },
+    {
+      "id": "AC2",
+      "status": "not_exercised",
+      "evidence": [".squad/records/acceptance/evidence/m1-ac2-requireowner.txt"],
+      "note": "the PRIMITIVE passed 4/4 against the published build: owner allowed; a different authenticated caller refused with 'subject does not own this resource'; an unauthenticated caller refused with 'not authenticated'; a resource with no recorded owner refused rather than allowed (fail-safe). The CRITERION is about the approval PATH, and a correct primitive does not prove the path calls it. ROADMAP names the remaining gap itself: the approval ledger records no owner. Path not driven."
+    },
+    {
+      "id": "AC3",
+      "status": "not_exercised",
+      "evidence": [".squad/records/acceptance/evidence/m1-ac3-gate-could-not-be-armed.txt"],
+      "note": "the server-boundary gate could not be armed outside a real build. theoPlugin() yields one plugin with enforce=undefined, while ROADMAP describes the gate as a resolveId hook at enforce:'pre'. Calling resolveId directly after config() passed a server subpath through from a .client.tsx importer under ssr false, true and absent. That is a harness that did not arm the control, NOT a demonstration that the control is broken. Proving it needs a real vite build in a scaffolded app."
+    },
+    {
+      "id": "AC4",
+      "status": "passed",
+      "evidence": [
+        ".squad/records/acceptance/evidence/m1-ac4-csrf-default.txt",
+        ".squad/records/acceptance/evidence/m1-ac4-harness.mjs"
+      ],
+      "note": "3/3 against the published build with NO csrf option passed anywhere. Cross-origin POST with no token: 403 FORBIDDEN, 'CSRF check failed: Missing X-Theo-Action header' — refused by the gate, by name. Same-origin POST carrying the header: 200. Cross-origin GET: 200, so the default does not over-block a non-state-changing request. The route is authored the way the published README authors one; three earlier guesses at the API produced 405 and 500 — rejections for the wrong reason, which read exactly like the right answer."
+    },
+    {
+      "id": "AC5",
+      "status": "not_exercised",
+      "evidence": [],
+      "note": "Web was partially exercised (AC4). Tauri and TUI were not exercised at all in this run."
+    },
+    {
+      "id": "AC6",
+      "status": "not_exercised",
+      "evidence": [],
+      "note": "Tauri authorization ADR. ROADMAP itself records the breaking half as outstanding: absence stops meaning open, and session.ts loses ServerResponse."
+    },
+    {
+      "id": "AC7",
+      "status": "not_exercised",
+      "evidence": [],
+      "note": "TUI surface not exercised."
+    }
+  ],
+  "defects": []
+}

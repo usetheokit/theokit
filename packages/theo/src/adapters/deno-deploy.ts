@@ -10,6 +10,7 @@ import { assertServicesUnsupported, readManifest } from '../services/index.js'
 import { deployedAgentsFragment, scannedFromLoaderCache } from './deployed-agents.js'
 import { planDeployedPlugins } from './deployed-plugins-module.js'
 import { deployedEntryPreamble } from './deployed-preamble.js'
+import { deployedRateLimitFragment, rateLimitCheckFragment } from './deployed-rate-limit.js'
 import {
   agentsDirLiteral,
   deployedRuntimeConfigFragment,
@@ -42,6 +43,12 @@ const FRAMEWORK_IMPORTS: readonly string[] = [
   `// T3.3 — WS bridge for Deno runtime`,
   `import { createDenoWsBridge } from 'npm:theokit/adapters/ws-shim'`,
 ]
+
+/** The target's name, in the five places that spell it. Adding a sixth tripped the duplicate-literal gate. */
+/* The name in the places a gate does NOT read. `assertServicesUnsupported` keeps the literal:
+ * `services-other-adapters-reject.test.ts:30` requires each adapter to name ITSELF there, so a
+ * copy-paste carrying another adapter's name cannot hide behind a constant. */
+const TARGET = 'deno-deploy'
 
 export function renderDenoEntry(port: number, opts: DeployedEntryOptions = {}): string {
   const runtimeConfig = deployedRuntimeConfigFragment(opts)
@@ -78,7 +85,7 @@ export function renderDenoEntry(port: number, opts: DeployedEntryOptions = {}): 
     `// theo.config.ts to read. Non-API paths 404 here and are served by Deno`,
     `// Deploy's static asset handler, so this covers the API and not the`,
     `// document (usetheokit/theokit#412).`,
-    ...deployedEntryPreamble(runtimeConfig, agentsFragment, opts, 'deno-deploy'),
+    ...deployedEntryPreamble(runtimeConfig, agentsFragment, opts, TARGET),
     ``,
     `function notFound() {`,
     `  return new Response(JSON.stringify({ error: { code: 'NOT_FOUND' } }), {`,
@@ -87,7 +94,39 @@ export function renderDenoEntry(port: number, opts: DeployedEntryOptions = {}): 
     `  })`,
     `}`,
     ``,
-    `Deno.serve({ port }, async (request) => {`,
+    // B-027 — `npm:`, like every other specifier this target emits (`:37-43`). A bare one does
+    // not resolve on Deno Deploy, and the harness asserts the prefix is here before rewriting it.
+    ...(opts.rateLimit === undefined
+      ? []
+      : [
+          `import { createRateLimiterWeb } from 'npm:theokit/server'`,
+          `import { resolveClientIpFromRequest } from 'npm:theokit/server/rate-limit'`,
+          ``,
+        ]),
+    ...deployedRateLimitFragment(
+      opts.rateLimit,
+      TARGET,
+      // `info.remoteAddr` is the runtime's own answer. A `UnixAddr` has no `hostname`, so the
+      // optional chain is what keeps the read from throwing there rather than a guess.
+      `info?.remoteAddr?.hostname ?? resolveClientIpFromRequest(request, TRUST_PROXY)`,
+      'request, info',
+    ),
+    ``,
+    // The serve handler's SECOND parameter is bound here for the first time: `Deno.serve` has
+    // always passed it and the emitted entry discarded it.
+    `Deno.serve({ port }, async (request, info) => {`,
+    `  // #409 — the preflight is answered BEFORE anything routes: an OPTIONS the router`,
+    `  // handles is an OPTIONS the browser never gets a CORS answer to.`,
+    `  const preflight = corsPreflight(request)`,
+    `  if (preflight !== null) return withSecurityHeaders(preflight, SECURITY_HEADERS)`,
+    ...rateLimitCheckFragment(opts.rateLimit, '  ', 'request, info'),
+    ``,
+    `  // LCR0103 — the upgrade branch sits BELOW the limiter, and the order is the point.`,
+    `  // It used to sit above, under the comment "a 101 carries no document and no script,`,
+    `  // so the security baseline does not apply to it". That is true of the security`,
+    `  // HEADERS — a document concern — and false of the limiter, which is a resource`,
+    `  // concern: a long-lived socket is the most expensive thing this entry hands out, so`,
+    `  // the upgrade is the path that most needs a budget, not the one that may skip it.`,
     `  // T3.3 — Detect WebSocket upgrade and delegate to the Deno bridge.`,
     `  // A 101 carries no document and no script, so the security baseline does`,
     `  // not apply to it.`,
@@ -101,11 +140,6 @@ export function renderDenoEntry(port: number, opts: DeployedEntryOptions = {}): 
     `    }, Deno)`,
     `    return denoWs.handle(request)`,
     `  }`,
-    ``,
-    `  // #409 — the preflight is answered BEFORE anything routes: an OPTIONS the router`,
-    `  // handles is an OPTIONS the browser never gets a CORS answer to.`,
-    `  const preflight = corsPreflight(request)`,
-    `  if (preflight !== null) return withSecurityHeaders(preflight, SECURITY_HEADERS)`,
     `  return withCors(request, withSecurityHeaders(await handleRequest(request), SECURITY_HEADERS))`,
     `})`,
     ``,
@@ -188,7 +222,7 @@ export async function buildDeno(
   // eslint-disable-next-line no-console -- CLI build progress
   console.log(
     `${describeDeployedSecurityHeaders({
-      target: 'deno-deploy',
+      target: TARGET,
       securityHeaders: config.security?.headers,
       mintsNonce: false,
       documentHeaders: 'platform-unmanaged',

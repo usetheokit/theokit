@@ -16,6 +16,11 @@ import { deployedCorsFragment, type DeployedCorsOptions } from './deployed-cors.
 import { deployedCsrfFragment, type DeployedCsrfOptions } from './deployed-csrf.js'
 import { planDeployedPlugins } from './deployed-plugins-module.js'
 import {
+  deployedRateLimitFragment,
+  rateLimitCheckFragment,
+  type DeployedRateLimitOptions,
+} from './deployed-rate-limit.js'
+import {
   deployedRuntimeConfigFragment,
   serverDirLiteral,
   type DeployedRuntimeConfigOptions,
@@ -284,7 +289,8 @@ export function renderCloudflareWorkerEntry(
     wsRoutes?: readonly string[]
   } & DeployedServerDirOptions &
     DeployedCsrfOptions &
-    DeployedCorsOptions = {},
+    DeployedCorsOptions &
+    DeployedRateLimitOptions = {},
 ): string {
   const streamingImport = opts.ssrStreaming
     ? `import { renderStreamingWeb } from '/@theo/entry-server'`
@@ -361,6 +367,16 @@ export function renderCloudflareWorkerEntry(
       : `import { buildSecurityHeaders, withSecurityHeaders } from 'theokit/adapters/security-headers'`,
     `// T3.4 — WS bridge for Cloudflare Workers`,
     `import { createCloudflareWsBridge } from 'theokit/adapters/ws-shim'`,
+    // B-027 — only when a limit is declared. `createRateLimiterWeb` is used at module scope by the
+    // fragment below and was imported by no target but bun, so an entry that declared a limit threw
+    // when it LOADED. `resolveClientIpFromRequest` is the forwarded-header fallback, behind
+    // `trustProxy`; the primary source is `cf-connecting-ip`, which the Workers runtime writes.
+    ...(opts.rateLimit === undefined
+      ? []
+      : [
+          `import { createRateLimiterWeb } from 'theokit/server'`,
+          `import { resolveClientIpFromRequest } from 'theokit/server/rate-limit'`,
+        ]),
     streamingImport,
     ``,
     ...runtimeConfig.imports,
@@ -403,6 +419,7 @@ export function renderCloudflareWorkerEntry(
       runtimeConfig.executeRouteSpread,
       agentsFragment.branch,
       agentsFragment.hostBypass,
+      opts.rateLimit,
     ),
   ].join('\n')
 }
@@ -422,6 +439,9 @@ function cloudflareHandleRequestFragment(
   agentBranch: readonly string[],
   /** SI-020 — the condition that keeps an agent card path out of the static-asset branch. */
   hostBypass: string,
+  /** B-027 — the declared limit, or `undefined`. Passed rather than read: this fragment is a
+   * separate function from `renderCloudflareWorkerEntry`, where `opts` is bound. */
+  rateLimit: DeployedRateLimitOptions['rateLimit'],
 ): string[] {
   return [
     `async function handleRequest(request, url, env) {`,
@@ -448,10 +468,34 @@ function cloudflareHandleRequestFragment(
     `    })), SECURITY_HEADERS)`,
     `}`,
     ``,
+    ...deployedRateLimitFragment(
+      rateLimit,
+      'cloudflare',
+      // `cf-connecting-ip` is the RUNTIME's answer and a caller cannot forge it through the edge.
+      // A Worker reached directly has none, and then only a declared `trustProxy` produces an
+      // address — otherwise `undefined`, which is the named 503 rather than everyone's bucket.
+      `request.headers.get('cf-connecting-ip') ?? resolveClientIpFromRequest(request, TRUST_PROXY)`,
+      // `request` alone: the handler binds `(request, env, ctx)` and the header is on the request.
+      'request',
+    ),
+    ``,
     `export default {`,
     `  async fetch(request, env, ctx) {`,
     `    const url = new URL(request.url)`,
     ``,
+    `    // #409 — the preflight is answered BEFORE anything routes: an OPTIONS the router handles`,
+    `    // is an OPTIONS the browser never gets a CORS answer to. The WebSocket upgrade above is`,
+    `    // deliberately upstream of it — a 101 is not a CORS-governed response.`,
+    `    const preflight = corsPreflight(request)`,
+    `    if (preflight !== null) return withSecurityHeaders(preflight, SECURITY_HEADERS)`,
+    ...rateLimitCheckFragment(rateLimit, '    ', 'request'),
+    ``,
+    `    // LCR0103 — the upgrade branch sits BELOW the limiter, and the order is the point.`,
+    `    // It used to sit above, under the comment "a 101 carries no document and no script,`,
+    `    // so the security baseline does not apply to it". That is true of the security`,
+    `    // HEADERS — a document concern — and false of the limiter, which is a resource`,
+    `    // concern: a long-lived socket is the most expensive thing this entry hands out, so`,
+    `    // the upgrade is the path that most needs a budget, not the one that may skip it.`,
     `    // T3.4 — Detect WebSocket upgrade and delegate to the CF bridge.`,
     `    // A 101 carries no document and no script, so the security baseline does`,
     `    // not apply to it.`,
@@ -464,12 +508,6 @@ function cloudflareHandleRequestFragment(
     `      })`,
     `      return cfWs.handle(request)`,
     `    }`,
-    ``,
-    `    // #409 — the preflight is answered BEFORE anything routes: an OPTIONS the router handles`,
-    `    // is an OPTIONS the browser never gets a CORS answer to. The WebSocket upgrade above is`,
-    `    // deliberately upstream of it — a 101 is not a CORS-governed response.`,
-    `    const preflight = corsPreflight(request)`,
-    `    if (preflight !== null) return withSecurityHeaders(preflight, SECURITY_HEADERS)`,
     ``,
     `    return withCors(request, await handleRequest(request, url, env))`,
     `  },`,

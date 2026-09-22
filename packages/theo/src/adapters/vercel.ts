@@ -16,6 +16,11 @@ import {
 } from './deployed-agents.js'
 import { deployedEntryPreamble } from './deployed-preamble.js'
 import {
+  deployedRateLimitFragment,
+  rateLimitCheckFragment,
+  type DeployedRateLimitOptions,
+} from './deployed-rate-limit.js'
+import {
   agentsDirLiteral,
   deployedRuntimeConfigFragment,
   serverDirLiteral,
@@ -34,8 +39,50 @@ import type { AdapterBuildContext, DeployAdapter, DeployedEntryOptions } from '.
 // Generated-code fragments — extracted so the parent emitter stays under the
 // max-lines-per-function ceiling.
 /** The exported function Vercel invokes: one security-header call, then the drain. */
-function vercelHandlerFragment(): string[] {
+function vercelHandlerFragment(
+  /** B-027 — passed, not read: this is a separate function from the parent emitter. */
+  rateLimit: DeployedRateLimitOptions['rateLimit'],
+): string[] {
   return [
+    // B-027 — only when a limit is declared. `createRateLimiterWeb` is used at module scope by
+    // the fragment; `resolveClientIpFromRequest` reads the forwarded headers behind `trustProxy`.
+    ...(rateLimit === undefined
+      ? []
+      : [
+          `import { createRateLimiterWeb } from 'theokit/server'`,
+          `import { resolveClientIpFromRequest } from 'theokit/server/rate-limit'`,
+        ]),
+    ...deployedRateLimitFragment(
+      rateLimit,
+      'vercel',
+      // The handler builds a real Web `Request` at the top — `corsRequest` — so the exported Web
+      // resolver applies directly and nothing new has to parse a header. The plan expected a Node
+      // sibling here on the ground that this handler "has no Web Request"; reading the emitted code
+      // refuted that. With no `trustProxy` declared the resolver returns `undefined`, which is the
+      // named 503: on this platform the socket address is always the platform's proxy, so a
+      // fallback to it would be one shared bucket wearing a client's clothes.
+      `resolveClientIpFromRequest(corsRequest, TRUST_PROXY)`,
+      'corsRequest',
+    ),
+    ...(rateLimit === undefined
+      ? []
+      : [
+          ``,
+          `/**`,
+          ` * Write a small, known response and finish.`,
+          ` *`,
+          ` * Not the drain below: that one exists to stream an arbitrary route response chunk by`,
+          ` * chunk, honouring backpressure. A 429 or a 503 is a short JSON literal, so reusing the`,
+          ` * streaming path would buy nothing and duplicating it would be worse.`,
+          ` */`,
+          `async function sendSmall(res, response) {`,
+          `  const h = {}`,
+          `  response.headers.forEach((v, k) => { h[k] = v })`,
+          `  res.writeHead(response.status, h)`,
+          `  res.end(await response.text())`,
+          `}`,
+        ]),
+    ``,
     `export default async function handler(nodeReq, nodeRes) {`,
     `  // #409 — CORS reads only the method and the \`origin\` / \`access-control-request-method\``,
     `  // headers, so this carries exactly those and no body. It is deliberately NOT the routing`,
@@ -53,6 +100,15 @@ function vercelHandlerFragment(): string[] {
     `  // The preflight is answered BEFORE anything routes: an OPTIONS the router handles is an`,
     `  // OPTIONS the browser never gets a CORS answer to.`,
     `  const preflight = corsPreflight(corsRequest)`,
+    ...rateLimitCheckFragment(
+      rateLimit,
+      '  ',
+      'corsRequest',
+      // This handler returns NOTHING — it drains into `nodeRes`. A bare `return <Response>` would
+      // answer the caller with nothing at all.
+      'return sendSmall(nodeRes, withCors(corsRequest, withSecurityHeaders(rateLimited(limit), SECURITY_HEADERS)))',
+      'return sendSmall(nodeRes, withCors(corsRequest, withSecurityHeaders(unnamedCaller(), SECURITY_HEADERS)))',
+    ),
     `  const webResponse = preflight !== null`,
     `    ? withSecurityHeaders(preflight, SECURITY_HEADERS)`,
     `    : withCors(corsRequest, withSecurityHeaders(await routeRequest(nodeReq), SECURITY_HEADERS))`,
@@ -207,7 +263,7 @@ export function renderVercelFunctionEntry(opts: DeployedEntryOptions = {}): stri
     `// (Node IncomingMessage-style). \`routeRequest\` produces a Web Response for`,
     `// every outcome — including the two 404s — so the security baseline is`,
     `// applied at ONE place and no branch can be added that skips it.`,
-    ...vercelHandlerFragment(),
+    ...vercelHandlerFragment(opts.rateLimit),
     ``,
     ...vercelRouteRequestFragment(
       runtimeConfig.executeRouteSpread,

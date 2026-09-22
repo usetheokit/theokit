@@ -1,0 +1,8 @@
+PASS  cross-origin POST, no token  (the criterion itself)
+      -> 403 | {"code":"FORBIDDEN","message":"CSRF check failed: Missing X-Theo-Action header"}
+PASS  same-origin POST with the token header  (must SURVIVE — "reject everything" would pass the case above and break the product)
+      -> 200 | {"hi":"alice"}
+PASS  GET, cross-origin  (not state-changing; refusing it would be over-blocking)
+      -> 200 | {"ok":true}
+
+AC4: 3/3 behaved as the criterion requires

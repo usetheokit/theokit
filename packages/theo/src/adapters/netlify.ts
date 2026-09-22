@@ -17,6 +17,8 @@ import {
 import { type DeployedCorsOptions } from './deployed-cors.js'
 import { type DeployedCsrfOptions } from './deployed-csrf.js'
 import { deployedEntryPreamble } from './deployed-preamble.js'
+import { deployedRateLimitFragment, rateLimitCheckFragment } from './deployed-rate-limit.js'
+import type { DeployedRateLimitOptions } from './deployed-rate-limit.js'
 import {
   agentsDirLiteral,
   type DeployedAgentsDirOptions,
@@ -50,7 +52,8 @@ export function renderNetlifyFunction(
   opts: { securityHeaders?: SecurityHeadersConfig } & DeployedAgentsDirOptions &
     DeployedCsrfOptions &
     DeployedRuntimeConfigOptions &
-    DeployedCorsOptions = {},
+    DeployedCorsOptions &
+    DeployedRateLimitOptions = {},
 ): string {
   const runtimeConfig = deployedRuntimeConfigFragment(opts)
   // B-235. Netlify's handler is `(request, context)` and already RECEIVES a Web `Request`, which
@@ -81,11 +84,33 @@ export function renderNetlifyFunction(
     `// (usetheokit/theokit#412).`,
     ...deployedEntryPreamble(runtimeConfig, agentsFragment, opts, 'netlify'),
     ``,
+    // B-027 — emitted only when a limit is declared.
+    ...(opts.rateLimit === undefined
+      ? []
+      : [
+          `import { createRateLimiterWeb } from 'theokit/server'`,
+          `import { resolveClientIpFromRequest } from 'theokit/server/rate-limit'`,
+          ``,
+        ]),
+    ...deployedRateLimitFragment(
+      opts.rateLimit,
+      'netlify',
+      // `context.ip` is the platform's own answer, read from the handler context Netlify passes.
+      // The forwarded fallback covers a function shape that carries no context, and returns
+      // `undefined` unless a `trustProxy` was declared — which is the named 503, not a shared key.
+      `context?.ip ?? resolveClientIpFromRequest(request, TRUST_PROXY)`,
+      // Both names are bound in the OUTER handler, which is where the check runs. Threading
+      // `context` into `handleRequest` — which the plan called for — buys nothing: the limiter
+      // never runs in there.
+      'request, context',
+    ),
+    ``,
     `export default async (request, context) => {`,
     `  // #409 — the preflight is answered BEFORE anything routes: an OPTIONS the router`,
     `  // handles is an OPTIONS the browser never gets a CORS answer to.`,
     `  const preflight = corsPreflight(request)`,
     `  if (preflight !== null) return withSecurityHeaders(preflight, SECURITY_HEADERS)`,
+    ...rateLimitCheckFragment(opts.rateLimit, '  ', 'request, context'),
     `  return withCors(request, withSecurityHeaders(await handleRequest(request), SECURITY_HEADERS))`,
     `}`,
     ``,

@@ -1,0 +1,10 @@
+PASS  the owner approving their own run
+      -> {"allowed":true}
+PASS  a DIFFERENT authenticated caller
+      -> {"allowed":false,"reason":"subject does not own this resource"}
+PASS  an unauthenticated caller (subject null)
+      -> {"allowed":false,"reason":"not authenticated"}
+PASS  an owner-less resource (ownerId null)
+      -> {"allowed":false,"reason":"resource has no recorded owner"}
+
+AC2 (requireOwner): 4/4 as the criterion requires
