@@ -35,6 +35,7 @@ import type { AgentNode } from '../scan/agent-scan.js'
 import { validateCsrfRequest, type CsrfMode } from '../security/csrf.js'
 
 import {
+  AgentIdentityUnavailableError,
   admitAgentRequest,
   agentAccessDenied,
   readAgentPolicy,
@@ -256,15 +257,43 @@ async function admitAux(
     resolve === undefined
       ? undefined
       : async () => {
-          admitted.subject = await resolve()
+          // B-254 — the APP's resolution is wrapped, not the whole admission. A policy that throws
+          // is a different failure with a different cause, and tagging both the same way would hand
+          // an operator one code for two problems.
+          try {
+            admitted.subject = await resolve()
+          } catch (cause) {
+            throw new AgentIdentityUnavailableError(cause)
+          }
           return admitted.subject
         }
-  const decision = await admitAgentRequest(
-    readAgentPolicy(mod, agent.filePath),
-    recording,
-    params,
-    body,
-  )
+  let decision
+  try {
+    decision = await admitAgentRequest(
+      readAgentPolicy(mod, agent.filePath),
+      recording,
+      params,
+      body,
+    )
+  } catch (err) {
+    // B-254 — only the identity failure is shaped here. Anything else keeps escaping exactly as it
+    // did, because turning every throw on this path into a 500 would swallow the ones a caller
+    // SHOULD see differently — `AgentPolicyTypeError` is a developer's mistake, not an outage.
+    if (!(err instanceof AgentIdentityUnavailableError)) throw err
+    console.error('[theokit] agent identity resolution failed', err)
+    // Returned through `refusal`, which is this function's channel for "answer with this Response"
+    // — the caller writes it out and never looks at `subject`. `subject: undefined` is the honest
+    // value: nobody was identified, and it must not read as an anonymous caller who WAS.
+    return {
+      refusal: jsonError(
+        500,
+        'IDENTITY_UNAVAILABLE',
+        'The application could not resolve the caller. This is not a refusal: `createContext` in ' +
+          'server/context.ts threw, so there was no identity to judge. The server log carries the cause.',
+      ),
+      subject: undefined,
+    }
+  }
   const refusal = decision.allowed ? null : agentAccessDenied(decision, params)
   return { refusal, subject: admitted.subject?.id }
 }

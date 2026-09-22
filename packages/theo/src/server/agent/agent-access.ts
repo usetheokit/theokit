@@ -88,6 +88,34 @@ export interface AgentAccessParams {
 /** Resolve the caller's identity, lazily — see `resolveAgentSubject` for why it must be lazy. */
 export type AgentSubjectResolver = () => RouteSubject | null | Promise<RouteSubject | null>
 
+/**
+ * Thrown when the APPLICATION's own identity resolution fails — B-254.
+ *
+ * Distinct from every other failure on this path on purpose, and the distinction is the whole
+ * point. A policy refusing `subject: null` and an identity source that is DOWN produce the same
+ * `subject: null` if the failure is absorbed, and an operator reading a 403 log line cannot tell
+ * "no credential was sent" from "the thing that reads credentials is broken".
+ *
+ * Measured 2026-09-22 before this existed: a `createContext` that throws escaped `Object.fetch`
+ * entirely on a bun deploy target, so the caller received whatever the runtime made of an unhandled
+ * rejection rather than the envelope this framework produces everywhere else. Loud, which was the
+ * right direction, and unshaped.
+ *
+ * `cause` is kept rather than flattened into the message: `rules/error-handling.md` § 2 asks for
+ * enough context to reproduce without a debugger, and the app's own stack is that context.
+ */
+export class AgentIdentityUnavailableError extends Error {
+  constructor(cause: unknown) {
+    super(
+      `The application's identity resolution threw, so this request has no caller to judge. ` +
+        `This is NOT an anonymous caller — it is \`createContext\` in server/context.ts failing. ` +
+        `The cause is attached.`,
+      { cause },
+    )
+    this.name = 'AgentIdentityUnavailableError'
+  }
+}
+
 /** Thrown when an agent module exports a `policy` that is neither `'public'` nor a function. */
 export class AgentPolicyTypeError extends Error {
   constructor(source: string, actual: string) {

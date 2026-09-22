@@ -53,11 +53,49 @@ export interface AgentNode {
  * M2 — scan the TOP-LEVEL `agents/` convention (sibling of `server/`, per the LOCKED naming
  * decision). Mirrors `scanWebSocketRoutes`: one file → one endpoint, `index` stripped.
  */
-export function scanAgents(projectRoot: string, agentsDirName = 'agents'): AgentNode[] {
+/**
+ * Resolved paths already reported, so a per-request scan says it once — B-249, NFR-001.
+ *
+ * Keyed by the RESOLVED path rather than by the process: a test harness legitimately scans two
+ * roots, and each distinct mistake deserves its own line. Same shape as `warnedAboutLegacySalt` in
+ * `packages/http/src/action-encryption.ts`, and for the same reason: `scanAgents` runs per request
+ * on a scanned deploy target, so an unbounded warning is a log flood on the exact path an anonymous
+ * caller can drive.
+ */
+const reportedMissingDirs = new Set<string>()
+
+export function scanAgents(projectRoot: string, configured?: string): AgentNode[] {
+  const agentsDirName = configured ?? 'agents'
   // `agentsDirName` (config `agentsDir`, default "agents") — the dir holding `<name>.ts` agent
   // definitions, relative to the project root. May be nested (e.g. "core/agents"). (#95 follow-up)
   const agentsDir = join(projectRoot, agentsDirName)
   if (!existsSync(agentsDir) || !statSync(agentsDir).isDirectory()) {
+    // B-249 — the same `[]` as before, and no longer the same silence.
+    //
+    // A configured value that resolves to nothing produced a result byte-identical to "this app
+    // declares no agents", so a deployed `/api/agents/<name>` answered 404 with an empty log and an
+    // operator had no reason to suspect configuration. The loudest way in is an ABSOLUTE path —
+    // this parameter is a NAME joined onto the root, so `join()` silently yields
+    // `<root><abs>` — but a typo, a missing nesting level and a directory a build did not copy all
+    // land in exactly the same place, and one rule covers all four.
+    //
+    // Silent when NOTHING was configured: a project with no agents is the ordinary case, and a gate
+    // that fires on ordinary work is a gate somebody disables. The parameter is OPTIONAL rather
+    // than defaulted for exactly that reason — a default erases the difference between "nobody
+    // configured this" and "somebody configured 'agents'", and only the first should stay quiet.
+    //
+    // The return value does not move (FR-003) and the contract stays relative (FR-004): reporting a
+    // path that does not exist tells the operator what went wrong without widening a documented
+    // public contract, which is a decision for a plan rather than a repair.
+    if (configured !== undefined && !reportedMissingDirs.has(agentsDir)) {
+      reportedMissingDirs.add(agentsDir)
+      console.warn(
+        `[theokit] agentsDir ${JSON.stringify(agentsDirName)} resolves to ${JSON.stringify(agentsDir)}, ` +
+          `which is not a directory, so NO agents were found and every /api/agents/* route will 404. ` +
+          `The value is a path relative to the project root ${JSON.stringify(projectRoot)} — an ` +
+          `absolute path is joined onto it and cannot resolve.`,
+      )
+    }
     return []
   }
 
