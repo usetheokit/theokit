@@ -906,7 +906,7 @@ npx theokit build                       ->  exit 0   (node)
 ```
 
 A budget is no longer parsed and dropped on those six: the build refuses, names the target, and
-names the ways out. `assertRateLimitEnforceable` is wired at `cli/commands/build.ts:278`
+names the ways out. `assertRateLimitEnforceable` is wired at `packages/theo/src/cli/commands/build.ts:278`
 (usetheokit/theokit#461).
 
 **What this does and does not settle.** It settles that the *mechanism* described in that paragraph
