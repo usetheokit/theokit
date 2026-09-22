@@ -1,5 +1,36 @@
 # theo
 
+## 0.70.0
+
+### Minor Changes
+
+- 25d29fc: `server/context` and `server/middleware` are now found as `.ts`, `.tsx`, `.js` or `.jsx` — the same extensions an agent may carry. They were resolved as `.ts` only.
+
+  The consequence for a JavaScript project was silent and pointed the wrong way: its agents were found, because `scanAgents` already accepted four extensions, while its `server/context.js` was not. `createServerContext` returned `{}`, every policy saw `subject: null`, and that is indistinguishable from a caller who sent no credential — so a project whose identity resolution simply was not being loaded looked like a project whose callers were all anonymous.
+
+  `.ts` is tried first, so a project holding both keeps resolving exactly what it resolved before.
+
+- 6416ddd: An identity resolution that throws now answers `500 IDENTITY_UNAVAILABLE` instead of escaping the deploy entry. Previously a `createContext` that threw in `server/context.ts` propagated out of the handler, so what a caller received was whatever the runtime made of an unhandled rejection rather than the error envelope this framework produces everywhere else.
+
+  The new code exists so an operator can tell two things apart that used to look identical: **a caller who sent no credential** (`403 FORBIDDEN`, the policy refusing `subject: null`) and **the thing that reads credentials being broken** (`500 IDENTITY_UNAVAILABLE`). Absorbing the failure would have produced the first for the second, which is the worse of the two errors — a broken identity source reading, in a log, as a routine refusal.
+
+  Only the application's own resolution is shaped this way. A policy that throws, or a `policy` export of the wrong type, still surfaces as it did: those are a developer's mistake rather than a runtime outage, and one code for two problems helps nobody.
+
+### Patch Changes
+
+- 021d11f: A configured `agentsDir` that resolves to nothing now says so instead of finding zero agents in
+  silence. The result was byte-identical to "this app declares no agents" — `[]`, and no output — so
+  a deployed `/api/agents/<name>` answered 404 with an empty server log and an operator had no reason
+  to suspect configuration rather than the agent file.
+
+  The value is a path relative to the project root, so an absolute one is joined onto it and cannot
+  resolve; that is the loudest way in, and the warning names it. A typo, a missing nesting level and
+  a directory a build did not copy reach the same branch and get the same line.
+
+  A project that configures nothing stays silent — having no agents is the ordinary case, and a
+  warning that fires on ordinary work is a warning people learn to ignore. The report is emitted at
+  most once per resolved path, because the scan runs per request on a scanned deploy target.
+
 ## 0.69.0
 
 ### Minor Changes
