@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { useLocation } from 'react-router'
 
 import {
@@ -40,8 +40,13 @@ export function ElementScrollRestoration(): null {
 
   // ONE restorer for the component's whole life. It carries the snapshot taken on the last scroll,
   // and a fresh one per effect would throw that away — which is the whole point of #421's fix.
-  const restorer = useRef<ScrollRestorer | undefined>(undefined)
-  restorer.current ??= createScrollRestorer(sessionScrollStore())
+  //
+  // `useState`'s initialiser rather than a lazily-filled ref: it runs exactly once and hands back a
+  // value that is never `undefined`, so nothing downstream needs a branch to narrow it. This file's
+  // own contract is that it holds no decisions — every one of them lives in `scroll-restoration.ts`
+  // where a test can reach it — and a guard against a state that cannot occur is still a branch
+  // nobody can cover.
+  const [restorer] = useState<ScrollRestorer>(() => createScrollRestorer(sessionScrollStore()))
 
   // The key a snapshot lands under, read by a listener installed once. A ref rather than the
   // closure's location key, which would otherwise be the key at mount forever.
@@ -60,32 +65,30 @@ export function ElementScrollRestoration(): null {
   // keeps the browser from waiting to find out.
   useLayoutEffect(() => {
     const onScroll = (): void => {
-      restorer.current?.record(activeKey.current, scrollTargets())
+      restorer.record(activeKey.current, scrollTargets())
     }
     document.addEventListener('scroll', onScroll, { capture: true, passive: true })
     return () => {
       document.removeEventListener('scroll', onScroll, { capture: true })
     }
-  }, [])
+  }, [restorer])
 
   useLayoutEffect(() => {
-    const active = restorer.current
-    if (active === undefined) return
     const leaving = previousKey.current
-    if (leaving !== undefined) active.save(leaving, scrollTargets())
+    if (leaving !== undefined) restorer.save(leaving, scrollTargets())
     previousKey.current = location.key
-    active.restore(location.key, scrollTargets())
+    restorer.restore(location.key, scrollTargets())
 
     // Also on unload: a reload or a close never runs the next effect, so without this the last
     // page's offset is the one that is never recorded.
     const onHide = (): void => {
-      active.save(location.key, scrollTargets())
+      restorer.save(location.key, scrollTargets())
     }
     window.addEventListener('pagehide', onHide)
     return () => {
       window.removeEventListener('pagehide', onHide)
     }
-  }, [location.key])
+  }, [location.key, restorer])
 
   return null
 }

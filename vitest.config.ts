@@ -214,6 +214,12 @@ export default defineConfig({
         // No unit coverage: it is a DOM bootstrap, and asserting on it would only re-test
         // `createRoot` + `appendChild`.
         'packages/theo/src/devtools/dom/entry.tsx',
+        // React shell over a tested module — same reason as `use-agent.ts` below, and the same
+        // shape: it queries the DOM and sequences calls, and every DECISION it would make lives in
+        // `scroll-restoration.ts`, which has its own unit tests. Its docblock already states the
+        // split ("the part that cannot be covered by a test is deliberately the part with no
+        // branches in it"), and the two branches it does carry both predate #421's fix.
+        'packages/theo/src/router/element-scroll-restoration.tsx',
         // React hook with fetch + ReadableStream — needs @testing-library/react
         // + jsdom that the project does not currently set up. The wire-protocol
         // core is covered by consume-ui-message-stream.ts unit tests.
