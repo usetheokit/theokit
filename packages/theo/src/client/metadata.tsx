@@ -86,6 +86,26 @@ function refuseRelativeOgImage(ogImage: string | undefined): void {
   )
 }
 
+/**
+ * Why `canonical` is NOT refused the way `ogImage` is — B-243, decided 2026-09-21.
+ *
+ * The two look like the same shape and are not. `href` on a `<link>` is a URL-typed attribute: the
+ * HTML parser resolves it against the document's own base, so `canonical="/contacts"` on
+ * `https://mycrm.com/x` IS `https://mycrm.com/contacts` — correct, not broken. `content` on a
+ * `<meta>` is a plain string with no base to resolve against, which is why the Open Graph protocol
+ * requires an absolute URL and why a relative one there produces a tag that is present,
+ * well-formed and wrong.
+ *
+ * So refusing a relative `canonical` would refuse a value that works. The asymmetry is the
+ * decision, and it is written here because the code shows only its result: a reader seeing
+ * `refuseRelativeOgImage` three lines above a `canonical` that passes through unchecked has no way
+ * to tell a decision from an oversight, and the honest answer to that question costs one comment
+ * against a re-investigation.
+ *
+ * What this does NOT claim: that an absolute `canonical` is never better. It usually is, for the
+ * same reason an absolute `og:image` is — it survives being copied into a context with a different
+ * base. That is advice, and this framework does not refuse values on advice.
+ */
 // Same rationale as `image.tsx`: React props are not mutated (agent-builder#319).
 export function Metadata(props: Readonly<MetadataProps>) {
   refuseRelativeOgImage(props.ogImage)
