@@ -15,6 +15,7 @@ import { deployedAgentsFragment, type DeployedAgent } from './deployed-agents.js
 import { deployedCorsFragment, type DeployedCorsOptions } from './deployed-cors.js'
 import { deployedCsrfFragment, type DeployedCsrfOptions } from './deployed-csrf.js'
 import { planDeployedPlugins } from './deployed-plugins-module.js'
+import type { DeployedRateLimitOptions } from './deployed-rate-limit.js'
 import {
   deployedRuntimeConfigFragment,
   serverDirLiteral,
@@ -284,7 +285,8 @@ export function renderCloudflareWorkerEntry(
     wsRoutes?: readonly string[]
   } & DeployedServerDirOptions &
     DeployedCsrfOptions &
-    DeployedCorsOptions = {},
+    DeployedCorsOptions &
+    DeployedRateLimitOptions = {},
 ): string {
   const streamingImport = opts.ssrStreaming
     ? `import { renderStreamingWeb } from '/@theo/entry-server'`

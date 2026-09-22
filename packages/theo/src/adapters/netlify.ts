@@ -17,6 +17,7 @@ import {
 import { type DeployedCorsOptions } from './deployed-cors.js'
 import { type DeployedCsrfOptions } from './deployed-csrf.js'
 import { deployedEntryPreamble } from './deployed-preamble.js'
+import type { DeployedRateLimitOptions } from './deployed-rate-limit.js'
 import {
   agentsDirLiteral,
   type DeployedAgentsDirOptions,
@@ -50,7 +51,8 @@ export function renderNetlifyFunction(
   opts: { securityHeaders?: SecurityHeadersConfig } & DeployedAgentsDirOptions &
     DeployedCsrfOptions &
     DeployedRuntimeConfigOptions &
-    DeployedCorsOptions = {},
+    DeployedCorsOptions &
+    DeployedRateLimitOptions = {},
 ): string {
   const runtimeConfig = deployedRuntimeConfigFragment(opts)
   // B-235. Netlify's handler is `(request, context)` and already RECEIVES a Web `Request`, which
