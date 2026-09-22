@@ -111,39 +111,26 @@ async function bootDeployedEntry(): Promise<Handler> {
   return captured
 }
 
-describe('a throwing createContext is not an anonymous caller (B-237)', () => {
-  it('test_the_failure_is_loud_rather_than_served_as_anonymous', async () => {
+describe('a throwing createContext answers 500, not anonymously (B-237, B-254)', () => {
+  it('test_the_caller_gets_a_shaped_500_rather_than_an_anonymous_refusal', async () => {
     const handler = await bootDeployedEntry()
 
-    const outcome = await handler(new Request('http://x/api/agents/chat/approvals')).then(
-      (response) => ({ kind: 'response' as const, status: response.status }),
-      (error: unknown) => ({ kind: 'threw' as const, message: String(error) }),
+    const response = await handler(new Request('http://x/api/agents/chat/approvals'))
+    const body = (await response.json()) as { error?: { code?: string; message?: string } }
+
+    // 403 would mean the failure was absorbed into an anonymous caller — indistinguishable, to an
+    // operator reading a log, from a caller who simply sent no credential. 200 would serve a
+    // stranger while the identity source was down.
+    expect(response.status, `a createContext that throws answered ${String(response.status)}`).toBe(
+      500,
     )
 
-    // What B-237 is about: the failure must not be absorbed into `subject: null`, because a policy
-    // refusing an anonymous caller is indistinguishable from one refusing a caller whose identity
-    // source is broken. 200 would serve a stranger; 403 would blame the caller for the server.
-    if (outcome.kind === 'response') {
-      expect(
-        outcome.status,
-        `a createContext that throws answered ${String(outcome.status)} — the failure was swallowed ` +
-          `into an anonymous caller, which reads to an operator as "no credential sent"`,
-      ).not.toBe(403)
-      expect(outcome.status, 'a stranger was served while the identity source was down').not.toBe(
-        200,
-      )
-    }
-
-    // MEASURED 2026-09-22, and stated rather than asserted as a promise: today it does not answer at
-    // all. The error escapes `Object.fetch`, so the status a caller sees is whatever the runtime
-    // makes of an unhandled rejection rather than an envelope this framework produced. That is loud,
-    // which is the half B-237 needs, and it is not the 500 its Definition of done names — registered
-    // as its own item rather than widened into this one.
-    expect(outcome.kind, 'the identity failure reached neither a response nor the caller').toBe(
-      'threw',
-    )
-    if (outcome.kind === 'threw') {
-      expect(outcome.message).toContain('the identity source is unreachable')
-    }
+    // B-254's second bullet: the response must SAY which of the two it is. A bare 500 would be
+    // loud and still leave the operator guessing.
+    expect(
+      body.error?.code,
+      'the envelope does not distinguish a broken identity source from a refused caller',
+    ).toBe('IDENTITY_UNAVAILABLE')
+    expect(body.error?.message).toContain('createContext')
   })
 })
