@@ -48,8 +48,51 @@ export function createDurableRateLimiterWeb(
     // No `instanceof` guard, and that is the whole point: this closure can await, so any
     // implementation of the contract works. `server/auth/auth-throttle.ts` already consumes it this
     // way, at `:59`, `:92` and `:99`, with zero guards.
-    const state = await store.incr(key, config.windowMs)
-    return resultFromDurableState(state, config)
+    try {
+      const state = await store.incr(key, config.windowMs)
+      return resultFromDurableState(state, config)
+    } catch {
+      // ADR 0019 — a request that could not be COUNTED is refused, not served.
+      //
+      // The precedent is this repository's own and one item old: when a runtime cannot NAME a
+      // caller, the generated entry answers 503 rather than keying everyone on a constant
+      // (`adapters/deployed-rate-limit.ts:315`). A limiter that cannot identify a caller and one
+      // that cannot count one are both a limiter that is not limiting, and answering differently
+      // would mean one deployment refusing an unresolvable address and serving an unreachable
+      // counter with no argument for the difference.
+      //
+      // Failing OPEN was the alternative, and it is rejected because `rateLimit` is, in
+      // `adapters/config-support.ts:213-215`'s words, "the one whose absence looks exactly like
+      // success" — invisible at the moment it matters, during the incident that made the store fail.
+      //
+      // The error is not re-thrown: a limiter's contract is to answer whether this caller may
+      // proceed, and "the counter is down" is an answer. It is not swallowed either — the refusal
+      // carries a header naming the store, so an operator can tell a store outage from every caller
+      // suddenly being over budget.
+      return unavailable(config)
+    }
+  }
+}
+
+/**
+ * The answer to a request that could not be counted — ADR 0019.
+ *
+ * `limited: true` refuses it. `X-RateLimit-Unavailable: store` says WHY, because a refusal that
+ * looks like a budget refusal turns a dependency outage into "every caller is suddenly rate
+ * limited", which is the wrong incident to page for.
+ *
+ * `Retry-After` is one window: the deployment has no signal about when the store returns, and one
+ * window is the interval the limit already made the caller wait for.
+ */
+function unavailable(config: RateLimitConfig): RateLimitResult {
+  return {
+    limited: true,
+    headers: {
+      'X-RateLimit-Limit': String(config.max),
+      'X-RateLimit-Remaining': '0',
+      'X-RateLimit-Unavailable': 'store',
+      'Retry-After': String(Math.ceil(config.windowMs / 1000)),
+    },
   }
 }
 
