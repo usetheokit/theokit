@@ -1,4 +1,4 @@
-import type { RateLimitStore } from './rate-limit-store.js'
+import { slidingCount, type RateLimitStore } from './rate-limit-store.js'
 import type { RateLimitConfig, RateLimitResult } from './rate-limit.js'
 
 /**
@@ -124,13 +124,17 @@ function unavailable(config: RateLimitConfig): RateLimitResult {
  * is not this invocation's, and `Retry-After: -4` is not a valid header value.
  */
 function resultFromDurableState(
-  state: { count: number; resetAt: number },
+  state: { count: number; resetAt: number; previousCount?: number },
   config: RateLimitConfig,
 ): RateLimitResult {
   const remaining = Math.max(0, config.max - state.count)
   const retryAfter = Math.max(0, Math.ceil((state.resetAt - Date.now()) / 1000))
 
-  if (state.count > config.max) {
+  // The DECISION reads the sliding count; the headers keep reporting the current window, because
+  // `X-RateLimit-Remaining` answers "how many more may I send" and a fractional weight is not a
+  // number of requests. A client that sees 2 remaining and is refused would be told a falsehood, so
+  // the refusal threshold moves and the reported figure stays whole.
+  if (slidingCount(state, config.windowMs) > config.max) {
     return {
       limited: true,
       headers: {

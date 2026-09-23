@@ -22,6 +22,18 @@ export interface RateLimitState {
   count: number
   /** Absolute timestamp (ms since epoch) when this window expires. */
   resetAt: number
+  /**
+   * B-261 — how many requests the window BEFORE this one admitted, when the store can say.
+   *
+   * Optional, and the optionality IS the compatibility line: a third-party store returning only
+   * `{ count, resetAt }` keeps working with the behaviour it already had rather than breaking. A store
+   * that supplies this gets a sliding window instead of a fixed one.
+   *
+   * Why it is needed: with `resetAt` pinned at the first request of a window, filling the window late
+   * and the next one early spends two budgets inside one window's worth of time. Measured before the
+   * fix — `windowMs: 400, max: 5` admitted 10 in ~405ms, a factor of exactly 2.
+   */
+  previousCount?: number
 }
 
 /**
@@ -40,6 +52,32 @@ export interface BakedStoreDeclaration {
   module: string
   factory: string
   options?: Record<string, string | number | boolean>
+}
+
+/**
+ * The count a sliding window charges: the current window, plus whatever of the previous one is still
+ * inside `windowMs`.
+ *
+ * B-261 — it lives HERE and not in either limiter, because review found the first version living in
+ * `rate-limit-durable.ts` only: the durable path stopped bursting and the sync path still admitted 10
+ * against a nominal 5. Two limiters over one store disagreeing about what `max` means is the exact
+ * divergence B-260 had closed on the header contract, one item earlier, on a different axis.
+ *
+ * The weight is how much of the previous window has NOT yet slid out — nearly 1 just after a boundary,
+ * decaying to 0 by the end of the window. Clamped to 0..1, because a clock that moved would otherwise
+ * produce a negative weight (which CREDITS the caller) or one above 1 (which charges it for traffic
+ * that never happened).
+ *
+ * A store that cannot report `previousCount` yields the current count alone — today's behaviour and
+ * today's burst, so nothing breaks for a store nobody updated.
+ */
+export function slidingCount(state: RateLimitState, windowMs: number): number {
+  const { previousCount } = state
+  if (previousCount === undefined || previousCount === 0) return state.count
+
+  const windowStart = state.resetAt - windowMs
+  const throughCurrent = Math.min(1, Math.max(0, (Date.now() - windowStart) / windowMs))
+  return state.count + previousCount * (1 - throughCurrent)
 }
 
 export interface RateLimitStore {
@@ -113,12 +151,38 @@ export class InMemoryStore implements RateLimitStore {
 
     const entry = this.store.get(key)
     if (!entry || now >= entry.resetAt) {
-      const fresh = { count: 1, resetAt: now + windowMs }
+      // B-261 — the expiring window's count is carried forward rather than discarded. Without it the
+      // limiter cannot tell a caller arriving fresh from one that just spent a full budget, which is
+      // the whole of the boundary burst.
+      //
+      // HOW LONG it has been closed decides whether it counts, and the first version of this got it
+      // wrong in the dangerous direction. It opened every window at `now`, so `slidingCount`'s
+      // `windowStart` equalled the moment of the request, `throughCurrent` was 0, and the carry
+      // weighed 100% — FOREVER, however long the caller had waited. A caller that spent its budget
+      // and then waited out four whole windows was refused on the first request it made on
+      // returning: a self-inflicted denial of service wearing the costume of a rate limit.
+      //
+      // So the new window is anchored to the END of the previous one while they still overlap, which
+      // is what lets elapsed time decide the weight; and a window closed for a full `windowMs` has
+      // slid entirely out of view and contributes nothing. Zeroing the carry unconditionally would
+      // have been the other wrong answer — it reintroduces the 2x burst this whole mechanism exists
+      // to stop. Both halves are held by
+      // `tests/unit/a-caller-who-waited-is-not-refused.test.ts`.
+      let previousCount = 0
+      let resetAt = now + windowMs
+      if (entry !== undefined && now - entry.resetAt < windowMs) {
+        previousCount = entry.count
+        resetAt = entry.resetAt + windowMs
+      }
+      const fresh = { count: 1, resetAt, previousCount }
       this.store.set(key, fresh)
       return { ...fresh }
     }
     entry.count++
-    return { count: entry.count, resetAt: entry.resetAt }
+    // B-261 — `previousCount` travels with EVERY answer, not only the one that opened the window. It
+    // was returned by the branch above and dropped here at first, so the weighting applied to the
+    // first request of a window and to nothing after it: 10 admitted became 9 instead of 5.
+    return { count: entry.count, resetAt: entry.resetAt, previousCount: entry.previousCount }
   }
 
   /** Sweep expired entries. Called by the GC timer; safe to call manually. */

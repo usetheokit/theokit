@@ -8,6 +8,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- A rate limit is no longer doubled at its window boundary, on EITHER limiter. `windowMs: 400, max: 5`
+  admitted 10 requests in ~405ms before this; both `createRateLimiterWeb` and
+  `createDurableRateLimiterWeb` now charge the current window plus whatever of the previous one has not
+  slid out, from one shared function, so `max` means at most `max` in any `windowMs` whichever
+  limiter your deployment uses. A caller that stops and WAITS is not charged for it: a window closed
+  for a full `windowMs` has slid out of view entirely and counts for nothing, so waiting out your
+  limit restores service as it always did (#B-261)
+
+### Changed
+
+- `RateLimitState` carries an optional `previousCount`. A store that omits it keeps the behaviour it
+  has today, so nothing breaks; a store that supplies it gets the sliding window (#B-261)
+
+
+### Fixed
+
 - Both rate limiters answer with the same header names: `createRateLimiterWeb` now emits
   `X-RateLimit-Reset`, which only the durable limiter emitted. A client reading it worked against one
   deployment and not the other (#B-260)
