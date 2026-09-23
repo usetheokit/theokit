@@ -262,3 +262,47 @@ describe('summarise — a declared publishing gate is a third class', () => {
     }
   })
 })
+
+/**
+ * B-268 T3.1 — the excluded gate is NAMED, and the count is printed even at zero.
+ *
+ * R1 is the risk this answers: the failure this item could introduce is a preview that silently stops
+ * being published and nobody notices. `honesty-gate-golden-rule.md § 7` names that shape, and the only
+ * defence is that absence is never inferred — so the count prints at zero too, and a reader never has
+ * to decide whether the mechanism ran or found nothing.
+ */
+describe('renderReport — an excluded gate is named, never silent', () => {
+  const PUBLISHING = new Set(['preview'])
+
+  it('Given a gate was excluded, Then the rendered comment names it and its conclusion', () => {
+    const body = renderReport({
+      checkRuns: [passing('unit'), failing('preview')],
+      coverage: COVERAGE,
+      sha: 'abc123def',
+      publishing: PUBLISHING,
+    })
+    expect(body).toContain('preview')
+    expect(body).toContain('failure')
+    expect(body).toMatch(/publishing gate/i)
+  })
+
+  it('Given any run, Then the rendered comment states how many gates were excluded', () => {
+    const withOne = renderReport({
+      checkRuns: [passing('unit'), failing('preview')],
+      coverage: COVERAGE,
+      sha: 'abc123def',
+      publishing: PUBLISHING,
+    })
+    expect(withOne).toContain('1 publishing gate excluded')
+
+    // Printed at zero too. A reader who has to infer from absence whether the mechanism ran is a
+    // reader who cannot tell a working exclusion from a broken one.
+    const withNone = renderReport({
+      checkRuns: [passing('unit'), passing('typecheck')],
+      coverage: COVERAGE,
+      sha: 'abc123def',
+      publishing: PUBLISHING,
+    })
+    expect(withNone).toContain('0 publishing gates excluded')
+  })
+})

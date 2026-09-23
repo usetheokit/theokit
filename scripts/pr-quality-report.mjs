@@ -176,10 +176,33 @@ function checksSection(checkRuns, s) {
       ? ['', '**Needs attention:**', ...s.outstanding.map((n) => `- ${n}`)].join('\n')
       : ''
 
+  // B-268 — an excluded gate is NAMED with its conclusion, and the count prints even at zero.
+  // R1: the failure this item could introduce is a preview that silently stops being published. A
+  // reader who has to infer from absence whether the mechanism ran cannot tell a working exclusion
+  // from a broken one, so the number is always there.
+  const byName = new Map(checkRuns.map((r) => [r.name, r]))
+  const plural = s.excluded.length === 1 ? 'gate' : 'gates'
+  const excluded = [
+    '',
+    `_${s.excluded.length} publishing ${plural} excluded from the verdict._`,
+    ...(s.excluded.length > 0
+      ? [
+          '',
+          'These PUBLISH rather than verify, so their state is not a verdict about this code —',
+          '`rules/publishing-gates.txt` says which, and why:',
+          ...s.excluded.map((n) => {
+            const r = byName.get(n)
+            return `- ${n} — \`${r?.conclusion ?? r?.status ?? 'unknown'}\``
+          }),
+        ]
+      : []),
+  ].join('\n')
+
   return [
     '### Gates',
     '',
     head,
+    excluded,
     outstanding,
     '',
     '| | Gate | Result |',
@@ -193,9 +216,16 @@ function checksSection(checkRuns, s) {
  *                      report is about the diff they are looking at
  * @param coverageFloor the line-coverage floor, for context beside the measured value
  */
-export function renderReport({ checkRuns, coverage, sha, coverageFloor = 80, self }) {
+export function renderReport({
+  checkRuns,
+  coverage,
+  sha,
+  coverageFloor = 80,
+  self,
+  publishing = readPublishingGates(),
+}) {
   const runs = self === undefined ? checkRuns : checkRuns.filter((r) => r.name !== self)
-  const s = summarise(runs)
+  const s = summarise(runs, { publishing })
 
   return [
     REPORT_MARKER,
