@@ -154,11 +154,27 @@ export class InMemoryStore implements RateLimitStore {
       // B-261 — the expiring window's count is carried forward rather than discarded. Without it the
       // limiter cannot tell a caller arriving fresh from one that just spent a full budget, which is
       // the whole of the boundary burst.
-      const fresh = {
-        count: 1,
-        resetAt: now + windowMs,
-        previousCount: entry === undefined ? 0 : entry.count,
+      //
+      // HOW LONG it has been closed decides whether it counts, and the first version of this got it
+      // wrong in the dangerous direction. It opened every window at `now`, so `slidingCount`'s
+      // `windowStart` equalled the moment of the request, `throughCurrent` was 0, and the carry
+      // weighed 100% — FOREVER, however long the caller had waited. A caller that spent its budget
+      // and then waited out four whole windows was refused on the first request it made on
+      // returning: a self-inflicted denial of service wearing the costume of a rate limit.
+      //
+      // So the new window is anchored to the END of the previous one while they still overlap, which
+      // is what lets elapsed time decide the weight; and a window closed for a full `windowMs` has
+      // slid entirely out of view and contributes nothing. Zeroing the carry unconditionally would
+      // have been the other wrong answer — it reintroduces the 2x burst this whole mechanism exists
+      // to stop. Both halves are held by
+      // `tests/unit/a-caller-who-waited-is-not-refused.test.ts`.
+      let previousCount = 0
+      let resetAt = now + windowMs
+      if (entry !== undefined && now - entry.resetAt < windowMs) {
+        previousCount = entry.count
+        resetAt = entry.resetAt + windowMs
       }
+      const fresh = { count: 1, resetAt, previousCount }
       this.store.set(key, fresh)
       return { ...fresh }
     }

@@ -12,7 +12,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   admitted 10 requests in ~405ms before this; both `createRateLimiterWeb` and
   `createDurableRateLimiterWeb` now charge the current window plus whatever of the previous one has not
   slid out, from one shared function, so `max` means at most `max` in any `windowMs` whichever
-  limiter your deployment uses (#B-261)
+  limiter your deployment uses. A caller that stops and WAITS is not charged for it: a window closed
+  for a full `windowMs` has slid out of view entirely and counts for nothing, so waiting out your
+  limit restores service as it always did (#B-261)
 
 ### Changed
 

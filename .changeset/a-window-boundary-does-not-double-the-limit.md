@@ -26,3 +26,18 @@ the behaviour you have today, boundary burst included. To get the fix on your ow
 **Headers are unchanged.** `X-RateLimit-Remaining` still reports the current window, because it
 answers "how many more may I send" and a weighted total is not a number of requests. What moved is the
 threshold at which a request is refused.
+
+**Waiting still works, and the first version of this broke it.** The weighting needs to know how long
+the previous window has been closed. It opened each new window at the moment of the request instead,
+so the previous count weighed 100% no matter how much time had passed — and a caller that spent its
+budget and then waited out four whole windows was refused on the first request it made on returning.
+A self-inflicted denial of service wearing the costume of a rate limit.
+
+A window is now anchored to the end of the one before it while they still overlap, and a window
+closed for a full `windowMs` has slid out of view and counts for nothing. Zeroing the carry
+unconditionally would have been the other wrong answer: that reintroduces the 2x burst. Both halves
+are held by tests.
+
+This was found by the full suite, not by the item's own tests — every one of those measures a burst
+ACROSS a boundary, which is the case where the previous window genuinely should count. None of them
+waits.
