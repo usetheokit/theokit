@@ -1,0 +1,15 @@
+# Check names that PUBLISH rather than verify.
+#
+# A gate listed here ships a convenience artifact and asserts nothing about this code, so its
+# failure is not a defect anybody introduced. It is EXCLUDED from the verdict and still NAMED in
+# the report with its conclusion — `scripts/pr-quality-report.mjs` prints the excluded count even
+# when it is zero, so an excluded gate is never silently excluded.
+#
+# One name per line. Everything after `#` is the reason, and every entry must carry one: an
+# exemption whose justification lives somewhere else is an exemption nobody can review.
+#
+# Declared as data rather than matched by name at runtime (B-268, ADR-1): a rule matched by
+# resemblance fires on a check called `preview-docs-build` that verifies, and misses one called
+# `publish-canary` that does not.
+
+preview / Publish a preview of every publishable package  # publishes to pkg.pr.new; verifies nothing about this code

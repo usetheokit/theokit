@@ -26,6 +26,8 @@
  *   node scripts/pr-quality-report.mjs --checks checks.json --coverage coverage-summary.json \
  *        --sha "$SHA" > report.md
  */
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 
 /** Marker the workflow greps for, so the comment is updated in place instead of duplicated. */
 export const REPORT_MARKER = '<!-- theokit:quality-report -->'
@@ -40,6 +42,36 @@ const PASSING = new Set(['success'])
  * `ok` is deliberately conservative: it requires at least one check, zero failures AND zero pending.
  * An empty list is not green — it means nothing reported, which is a different fact.
  */
+/**
+ * Check names that PUBLISH rather than verify, read from `rules/publishing-gates.txt`.
+ *
+ * B-268 — a publishing gate ships a convenience and asserts nothing about this code, so counting its
+ * failure toward the verdict reports a defect nobody introduced. On PR #897 that produced 34 passes
+ * against one failure caused by `pkg-pr-new` answering 500, and the comment read `Not green.`
+ *
+ * DECLARED, never inferred from the name (ADR-1): a rule matched by resemblance fires on a check
+ * called `preview-docs-build` that verifies, and misses one called `publish-canary` that does not.
+ *
+ * An ABSENT file is an empty set and never a throw. A consumer that has not written the declaration
+ * gets exactly today's behaviour, and a report that dies because a config is missing is a report
+ * nobody sees.
+ */
+export function readPublishingGates(root = process.cwd()) {
+  let raw
+  try {
+    raw = readFileSync(join(root, 'rules', 'publishing-gates.txt'), 'utf8')
+  } catch {
+    return new Set()
+  }
+
+  const names = raw
+    .split('\n')
+    .map((line) => line.split('#')[0].trim())
+    .filter((name) => name.length > 0)
+
+  return new Set(names)
+}
+
 export function summarise(checkRuns, { self } = {}) {
   const s = { passed: 0, failed: 0, pending: 0, skipped: 0, outstanding: [], ok: false }
   // The reporting job is itself a check run, and it is necessarily unfinished while it renders.

@@ -1,6 +1,11 @@
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
 import { describe, it, expect } from 'vitest'
 
 import {
+  readPublishingGates,
   renderReport,
   summarise,
   // @ts-expect-error — plain .mjs gate script, typed here rather than shipped with declarations
@@ -132,5 +137,45 @@ describe('renderReport — it prints what it read, and says when it read nothing
   it('Always carries the marker the workflow uses to update in place', () => {
     const md = renderReport({ checkRuns: [passing('Lint')], coverage: null, sha: 'abc123def' })
     expect(md).toContain('<!-- theokit:quality-report -->')
+  })
+})
+
+/**
+ * B-268 T1.1 — the declaration, and the absent-file case.
+ *
+ * `readPublishingGates` reads `rules/publishing-gates.txt`: check names that PUBLISH rather than
+ * verify. The absent-file case is FR-003's other half and the one worth a test of its own: a consumer
+ * that has not written the file must get exactly today's behaviour, which means an empty set and no
+ * throw. A report that dies because a config is missing is a report nobody sees.
+ */
+describe('readPublishingGates — an absent declaration is an empty one', () => {
+  it('Given NO declaration file, Then zero names are declared and behaviour is unchanged', () => {
+    const empty = mkdtempSync(join(tmpdir(), 'no-gates-'))
+    try {
+      expect(readPublishingGates(empty)).toEqual(new Set())
+    } finally {
+      rmSync(empty, { recursive: true, force: true })
+    }
+  })
+
+  it('Given a declaration with comments and blanks, Then only the entry names are read', () => {
+    const root = mkdtempSync(join(tmpdir(), 'gates-'))
+    try {
+      mkdirSync(join(root, 'rules'), { recursive: true })
+      writeFileSync(
+        join(root, 'rules', 'publishing-gates.txt'),
+        [
+          '# a comment line is not an entry',
+          '',
+          'preview / Publish a preview of every publishable package  # publishes to pkg.pr.new',
+          '   ',
+        ].join('\n'),
+      )
+      expect(readPublishingGates(root)).toEqual(
+        new Set(['preview / Publish a preview of every publishable package']),
+      )
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
   })
 })
