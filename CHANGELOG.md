@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- A generated deploy entry calls one limiter builder and awaits it unconditionally, instead of
+  deciding per config whether the limiter it got was synchronous (#B-262)
+
+### Fixed
+
+- A `null` store passed where one was expected no longer refuses every caller while reporting a
+  store outage; it takes the in-process limiter, which is what an absent store means (#B-262)
+
+
 ## [create-theokit 3.0.6] - 2026-09-22
 
 ### Changed
