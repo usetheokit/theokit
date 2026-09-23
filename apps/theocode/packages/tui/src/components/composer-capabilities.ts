@@ -17,10 +17,12 @@ import type { ComposerCapabilities } from '@theokit/tui'
  *
  * The last two lines look inconsistent and are not.
  *
- * `shell` is absent by DECISION: `docs/adr/0001-shell-shortcut-confinement.md` (B-056) keeps `!`
+ * `shell` is absent by DECISION, and the reasoning is here rather than behind a citation: the file
+ * this line used to name — `0001-shell-shortcut-confinement` (B-056) — has never existed in any
+ * commit, and `0001` at both ADR homes is about something else. The decision keeps `!`
  * unwired because a `!cmd` has no turn, so the approval ledger has nothing to key on — wiring it
  * means building a second approval path beside the first. Flipping this one field to `true` is the
- * escape hatch that ADR describes: it restores the help line with no edit anywhere else.
+ * escape hatch the decision leaves open: it restores the help line with no edit anywhere else.
  *
  * `mentions` is TRUE despite passing nothing, because `ChatComposer` declares
  * `fileSearch = defaultFileSearch` (`chat-composer.tsx:303`) — omitting the prop installs a
