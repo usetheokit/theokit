@@ -1,5 +1,128 @@
 # theo
 
+## 0.72.0
+
+### Minor Changes
+
+- dfbc8ee: A rate limit can now be backed by a store that survives an invocation.
+
+  `createDurableRateLimiterWeb`, new on `theokit/server/rate-limit`, accepts any `RateLimitStore` and
+  awaits it — where the existing `createRateLimiterWeb` refuses anything but the in-memory default,
+  because its closure returns synchronously and cannot await. On a per-invocation runtime an in-process
+  counter does not survive between requests, so a limiter built on one forgets, and a limit that forgets
+  is a limit that does not limit.
+
+  **Your existing code is untouched.** `createRateLimiterWeb` keeps its signature, its guard and its
+  error. Nothing that works today changes; the durable path is reached by naming it.
+
+  **The framework still ships no store.** Bring a Redis client, a Cloudflare KV binding, or anything
+  else satisfying the `RateLimitStore` contract — a framework that shipped one would be choosing every
+  deployment's datastore. See `docs/adr/0018`.
+
+  **A generated deploy entry uses it when your config names a store.** Cloudflare, Deno Deploy,
+  Netlify, Vercel and AWS Lambda build and enforce; without a store `theokit build` still refuses
+  them by name, for the reason it always has — the counter would not survive.
+
+  **Four refusals guard the config**, all at build time, because the generated entry is where a bad
+  value becomes a deploy that does not parse.
+
+  - `store.factory` must be a plain identifier AND a bindable one. It is written as
+    `import { <factory> }`, where no escape applies and `import { default }` is a SyntaxError — so
+    `factory: 'default'`, which `export default createStore` invites, is refused by name rather than
+    emitted. `defaultStore` stays legal.
+  - `store.options` must be strings, numbers and booleans. A function was previously accepted and then
+    silently dropped by `JSON.stringify`, so the store was constructed without an option nobody was
+    told about.
+  - `store.module` must be a specifier.
+  - Silencing the build's unapplied-config warning no longer switches off the refusal: the two read
+    separate declarations.
+
+  **A store declared for deploy no longer stops `theokit start`.** The same `store` key carries a
+  build-time declaration and, programmatically, a live store object; the dev server received the first
+  and refused to boot citing async middleware. It now tells them apart and keeps limiting in process,
+  which is why `node` and `bun` enforce without a store at all.
+
+  **A store outage is visible to an operator, not only to the caller.** The 503 already named the
+  store; the failure's cause now reaches `console.warn`, so a timeout, an auth failure and a DNS error
+  stop looking identical during the incident that caused them.
+
+  **An unreachable store refuses the request rather than serving it**, with a header naming the store
+  so an outage does not read as every caller hitting their quota. See `docs/adr/0019`.
+
+- ae03d1f: A rate limit is no longer doubled at its window boundary.
+
+  Measured before the fix: `windowMs: 400, max: 5` admitted **10 requests in ~405ms**. Both limiters were
+  fixed-window counters, so a caller that filled a window just before it expired and filled the next one
+  just after spent two budgets inside one window's worth of time.
+
+  **Both limiters, and that word is load-bearing.** `createRateLimiterWeb` and
+  `createDurableRateLimiterWeb` now read the same sliding count from the same function, so the guarantee
+  does not depend on which one your deployment uses.
+
+  `max` now means what it says: at most `max` in any `windowMs`.
+
+  **What changed in the contract, and why it is additive.** `RateLimitState` carries an optional
+  `previousCount` — how many requests the window before this one admitted. The limiter charges the
+  current window plus however much of the previous one has not yet slid out.
+
+  **A store you wrote yourself keeps working.** If your `RateLimitStore` returns only
+  `{ count, resetAt }`, nothing breaks: the limiter charges the current window only, which is exactly
+  the behaviour you have today, boundary burst included. To get the fix on your own store, return
+  `previousCount` from `incr` — the count of the window that just expired.
+
+  **Headers are unchanged.** `X-RateLimit-Remaining` still reports the current window, because it
+  answers "how many more may I send" and a weighted total is not a number of requests. What moved is the
+  threshold at which a request is refused.
+
+  **Waiting still works, and the first version of this broke it.** The weighting needs to know how long
+  the previous window has been closed. It opened each new window at the moment of the request instead,
+  so the previous count weighed 100% no matter how much time had passed — and a caller that spent its
+  budget and then waited out four whole windows was refused on the first request it made on returning.
+  A self-inflicted denial of service wearing the costume of a rate limit.
+
+  A window is now anchored to the end of the one before it while they still overlap, and a window
+  closed for a full `windowMs` has slid out of view and counts for nothing. Zeroing the carry
+  unconditionally would have been the other wrong answer: that reintroduces the 2x burst. Both halves
+  are held by tests.
+
+  This was found by the full suite, not by the item's own tests — every one of those measures a burst
+  ACROSS a boundary, which is the case where the previous window genuinely should count. None of them
+  waits.
+
+### Patch Changes
+
+- 3fe7e60: A generated deploy entry now calls one limiter builder, and awaits it unconditionally.
+
+  `buildRateLimiter(config, store)` is new on `theokit/server/rate-limit`. It takes a store or nothing
+  and is always async, so the entry a build emits no longer changes shape with your config.
+
+  **Nothing you wrote changes.** `createRateLimiterWeb` and `createDurableRateLimiterWeb` keep their
+  signatures and their behaviour; this sits above them.
+
+  **What it fixes, for a deployment that declares a store.** The emitted entry used to decide, per
+  config, whether to `await` the limiter — because one of the two limiters returned a value and the
+  other a Promise. A call site whose shape depends on configuration is a call site that can be wrong
+  for one configuration and right for another, and that is the class of defect that shipped a limit
+  which never limited. There is no decision left to get wrong.
+
+  **A null store no longer refuses every caller.** Passing `null` where a store was expected used to
+  fall through to the durable path, throw inside it, and be caught by the unreachable-store handling —
+  so every request was refused with a header blaming the store, for what was an argument mistake.
+  `null` now takes the in-process limiter, which is what an absent store means.
+
+- 5aaebbf: Both rate limiters now answer with the same header names.
+
+  `createRateLimiterWeb` emits `X-RateLimit-Reset` alongside `-Limit`, `-Remaining` and `Retry-After`,
+  which is what `createDurableRateLimiterWeb` already emitted.
+
+  **What this fixes for you.** A client reading `X-RateLimit-Reset` worked against a deployment backed
+  by a durable store and not against `theokit start` — so the header contract depended on which runtime
+  you had picked, which is not something a client can know. It now reads the same names either way.
+
+  The VALUES still differ between the two, deliberately: one counts in your process and the other in
+  your store, so identical numbers would be wrong the moment two instances disagree — which is the case
+  the durable limiter exists for. What is now identical is the set of names.
+
 ## 0.71.0
 
 ### Minor Changes

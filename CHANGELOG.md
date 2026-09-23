@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [theokit 0.72.0] - 2026-09-23
+
+### Changed
+
+- `RateLimitState` carries an optional `previousCount`. A store that omits it keeps the behaviour it
+  has today, so nothing breaks; a store that supplies it gets the sliding window (#B-261)
+
+- A generated deploy entry calls one limiter builder and awaits it unconditionally, instead of
+  deciding per config whether the limiter it got was synchronous (#B-262)
+
 ### Fixed
 
 - A rate limit is no longer doubled at its window boundary, on EITHER limiter. `windowMs: 400, max: 5`
@@ -16,29 +26,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   for a full `windowMs` has slid out of view entirely and counts for nothing, so waiting out your
   limit restores service as it always did (#B-261)
 
-### Changed
-
-- `RateLimitState` carries an optional `previousCount`. A store that omits it keeps the behaviour it
-  has today, so nothing breaks; a store that supplies it gets the sliding window (#B-261)
-
-
-### Fixed
-
 - Both rate limiters answer with the same header names: `createRateLimiterWeb` now emits
   `X-RateLimit-Reset`, which only the durable limiter emitted. A client reading it worked against one
   deployment and not the other (#B-260)
 
-
-### Changed
-
-- A generated deploy entry calls one limiter builder and awaits it unconditionally, instead of
-  deciding per config whether the limiter it got was synchronous (#B-262)
-
-### Fixed
-
 - A `null` store passed where one was expected no longer refuses every caller while reporting a
   store outage; it takes the in-process limiter, which is what an absent store means (#B-262)
-
 
 ## [create-theokit 3.0.6] - 2026-09-22
 
