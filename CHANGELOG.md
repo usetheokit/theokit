@@ -7,12 +7,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Fixed
+
 - A middleware the file-scan runner cannot invoke now says so instead of vanishing. `middleware()` is
   a fluent builder — `middleware('x').handle(fn).build()` — and the plausible `middleware({ name,
   handler })` returns the un-built builder, an object. The runner skipped it in total silence: the
   file found, the module evaluated, the handler never called, and a request that succeeded without it.
   It now names the file and the missing `.build()`, once per file per process, and still answers the
   request — this is a diagnostic, not a refusal (#B-266)
+
+## [create-theokit 3.0.7] - 2026-09-23
+
+### Changed
+
+- The scaffold's pin follows the release it was cut with: `theokit: ^0.71.0 -> ^0.72.0`, so a project
+  created from this version installs the rate-limit fixes below rather than the release before them
+  (#B-261)
+
+## [theokit 0.72.0] - 2026-09-23
+
+### Fixed
 
 - A rate limit is no longer doubled at its window boundary, on EITHER limiter. `windowMs: 400, max: 5`
   admitted 10 requests in ~405ms before this; both `createRateLimiterWeb` and
@@ -22,29 +35,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   for a full `windowMs` has slid out of view entirely and counts for nothing, so waiting out your
   limit restores service as it always did (#B-261)
 
+- Both rate limiters answer with the same header names: `createRateLimiterWeb` now emits
+  `X-RateLimit-Reset`, which only the durable limiter emitted. A client reading it worked against one
+  deployment and not the other (#B-260)
+
+- A `null` store passed where one was expected no longer refuses every caller while reporting a
+  store outage; it takes the in-process limiter, which is what an absent store means (#B-262)
+
 ### Changed
 
 - `RateLimitState` carries an optional `previousCount`. A store that omits it keeps the behaviour it
   has today, so nothing breaks; a store that supplies it gets the sliding window (#B-261)
 
-
-### Fixed
-
-- Both rate limiters answer with the same header names: `createRateLimiterWeb` now emits
-  `X-RateLimit-Reset`, which only the durable limiter emitted. A client reading it worked against one
-  deployment and not the other (#B-260)
-
-
-### Changed
-
 - A generated deploy entry calls one limiter builder and awaits it unconditionally, instead of
   deciding per config whether the limiter it got was synchronous (#B-262)
-
-### Fixed
-
-- A `null` store passed where one was expected no longer refuses every caller while reporting a
-  store outage; it takes the in-process limiter, which is what an absent store means (#B-262)
-
 
 ## [create-theokit 3.0.6] - 2026-09-22
 
