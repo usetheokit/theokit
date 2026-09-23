@@ -292,6 +292,44 @@ one instrument model swap, both in the baseline commit and counted on neither si
 Prettier config (`packages/create-theokit/templates/default/.prettierrc`, `printWidth: 100`,
 `semi: false`), so both sides are counted with the same ruler.
 
+### Re-derived after the wiring — 2026-09-23 (B-027, bullet 5)
+
+The earlier figures were measured before the limiter reached the six Web-standards adapters. B-027's
+last Definition-of-done bullet asks for them again afterwards, on the reasoning that *"the wiring adds
+lines somewhere and the journey is graded on how few it costs"*. Measured, the lines went somewhere the
+metrics do not count.
+
+| Metric | Before | After | Changed? |
+| --- | --- | --- | --- |
+| Files touched | 1 | **1** | no |
+| Glue lines | 2 | **2** | no |
+| Concepts required | 3 | **3** | no |
+| Time to first green run | not measured | **not measured** | no |
+
+**Why nothing moved.** The wiring is emitted, not authored: `deployedRateLimitFragment` writes the
+resolution into the generated entry, and each adapter supplies its own runtime's answer — Cloudflare's
+`cf-connecting-ip`, Deno's `info.remoteAddr.hostname`, Bun's `server.requestIP(request)?.address`. None
+of it is a file the developer opens. The metrics count what the developer touches, so a framework that
+absorbs the work is exactly the case where they should not move.
+
+Confirmed against the schema rather than assumed: the only fields `security.rateLimit` requires are
+`windowMs` and `max`, which the measured diff already carries. `trustProxy` is `.optional()` and the
+generated entry bakes whatever it resolved to (`TRUST_PROXY` at `deployed-rate-limit.ts:416`), so it
+costs the developer no line and no concept. The three concepts stand: the `rateLimit` key, its flat
+`{ windowMs, max }` shape, and `config().set()`.
+
+**What DID change, and it is not a metric.** `theokit build` now refuses a declared limit on the five
+per-invocation runtimes — Cloudflare, AWS Lambda, Netlify, Vercel, Deno Deploy — because
+`InMemoryStore` counts per instance and a caller spread across instances gets that many budgets. The
+generated entry says so in the consumer's own file. That refusal does not touch metrics 1-3, which
+grade a diff; it makes metric 4 **unreachable** on those five, since there is no green run to time.
+A figure measured on `bun` alone would be a figure about one target reported as if it were the journey.
+
+This does not reopen criterion 6. It was ruled on 2026-09-22 that refusing does not satisfy it — the
+criterion asks that the limit HOLD, and refusing to build is the opposite of protecting — so J7 stays
+reported as not won. The re-derivation confirms the cost side is unchanged; the criterion side is
+unchanged too, and both are stated rather than one being used to soften the other.
+
 ### Metrics 1-3
 
 | Metric | TheoKit | Next.js + `@upstash/ratelimit` | Margin | Bar |
