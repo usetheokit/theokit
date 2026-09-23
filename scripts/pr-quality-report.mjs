@@ -97,7 +97,11 @@ export function summarise(checkRuns, { self, publishing = new Set() } = {}) {
     // conclusion is read, so a classification that only looked at `conclusion` would miss the hang
     // path entirely. One `has()` per run, no second pass over the list.
     if (publishing.has(run.name)) {
-      s.excluded.push(run.name)
+      // The CONCLUSION travels with the name. Two check-runs can share one name — run 35820666635
+      // carries `preview / …` as both a `failure` and a `cancelled` on one SHA — and looking the
+      // conclusion up by name afterwards collapses them, so the last one wins and the failure is
+      // lost. Found by RUNNING the script against that run's own list, not by a test.
+      s.excluded.push({ name: run.name, conclusion: run.conclusion ?? run.status })
       continue
     }
     if (run.status !== 'completed') {
@@ -179,45 +183,31 @@ function checksSection(checkRuns, s) {
       ? ['', '**Needs attention:**', ...s.outstanding.map((n) => `- ${n}`)].join('\n')
       : ''
 
-  // B-268 — an excluded gate is NAMED with its conclusion, and the count prints even at zero.
-  // R1: the failure this item could introduce is a preview that silently stops being published. A
-  // reader who has to infer from absence whether the mechanism ran cannot tell a working exclusion
-  // from a broken one, so the number is always there.
-  const byName = new Map(checkRuns.map((r) => [r.name, r]))
+  const plural = (n) => (n === 1 ? 'gate' : 'gates')
+  const listed = (names, heading) => (names.length > 0 ? ['', heading, ...names] : [])
+  const present = new Set(checkRuns.map((r) => r.name))
 
-  // B-268 ADR-3 — a declared name matching no check in this run has quietly stopped applying. This
-  // repository already refuses the identical shape for architecture rules
-  // (`code-quality-golden-rule.md § 2`, `vacuous_architecture_rule_{language}` at FAIL_HARD): a rule
-  // naming something no longer in the tree reads as enforced and enforces nothing. REPORTED rather
-  // than failed, because the report is not a gate — and NAMED rather than counted, because a count
-  // would let a reader believe one entry had matched.
-  const stale = [...(s.declared ?? [])].filter((name) => !byName.has(name))
-  const staleSection =
-    stale.length > 0
-      ? [
-          '',
-          `_${stale.length} declared publishing ${stale.length === 1 ? 'gate' : 'gates'} matched no check in this run — stale:_`,
-          ...stale.map((n) => `- ${n}`),
-          '',
-          'A declaration that matches nothing has stopped applying. Update `rules/publishing-gates.txt`.',
-        ].join('\n')
-      : ''
-  const plural = s.excluded.length === 1 ? 'gate' : 'gates'
+  // B-268 — an excluded gate is NAMED with its conclusion, and the count prints even at zero. R1:
+  // the failure this item could introduce is a preview that silently stops being published, and a
+  // reader who infers from absence whether the mechanism ran cannot tell a working exclusion from a
+  // broken one. `honesty-gate-golden-rule.md § 7` is the general form.
   const excluded = [
     '',
-    `_${s.excluded.length} publishing ${plural} excluded from the verdict._`,
-    ...(s.excluded.length > 0
-      ? [
-          '',
-          'These PUBLISH rather than verify, so their state is not a verdict about this code —',
-          '`rules/publishing-gates.txt` says which, and why:',
-          ...s.excluded.map((n) => {
-            const r = byName.get(n)
-            return `- ${n} — \`${r?.conclusion ?? r?.status ?? 'unknown'}\``
-          }),
-        ]
-      : []),
+    `_${s.excluded.length} publishing ${plural(s.excluded.length)} excluded from the verdict._`,
+    ...listed(
+      s.excluded.map((e) => `- ${e.name} — \`${e.conclusion}\``),
+      'These PUBLISH rather than verify, so their state is not a verdict about this code — `rules/publishing-gates.txt` says which, and why:',
+    ),
   ].join('\n')
+
+  // ADR-3 — a declared name matching no check has quietly stopped applying, the shape this repository
+  // already caps at FAIL_HARD for architecture rules. REPORTED rather than failed (the report is not
+  // a gate); NAMED rather than counted, because a count lets a reader believe one entry matched.
+  const stale = [...(s.declared ?? [])].filter((n) => !present.has(n))
+  const staleSection = listed(
+    stale.map((n) => `- ${n}`),
+    `_${stale.length} declared publishing ${plural(stale.length)} matched no check in this run — stale. A declaration that matches nothing has stopped applying; update \`rules/publishing-gates.txt\`._`,
+  ).join('\n')
 
   return [
     '### Gates',

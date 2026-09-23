@@ -196,7 +196,9 @@ describe('summarise — a declared publishing gate is a third class', () => {
     const s = summarise([passing('unit'), failing('preview')], { publishing: PUBLISHING })
     expect(s.failed).toBe(0)
     expect(s.passed).toBe(1)
-    expect(s.excluded).toEqual(['preview'])
+    // The conclusion travels with the name, so a gate appearing twice keeps both — see the
+    // run-35820666635 case, where `preview / …` is a `failure` and a `cancelled` on one SHA.
+    expect(s.excluded).toEqual([{ name: 'preview', conclusion: 'failure' }])
     expect(s.ok).toBe(true)
   })
 
@@ -210,7 +212,9 @@ describe('summarise — a declared publishing gate is a third class', () => {
   it('Given a declared publishing gate never completed, Then it is not counted as pending', () => {
     const s = summarise([passing('unit'), running('preview')], { publishing: PUBLISHING })
     expect(s.pending).toBe(0)
-    expect(s.excluded).toEqual(['preview'])
+    // `in_progress` rather than a conclusion: the hang path carries the STATUS, because there is no
+    // conclusion to carry — which is the branch a conclusion-based classification never reaches.
+    expect(s.excluded).toEqual([{ name: 'preview', conclusion: 'in_progress' }])
     expect(s.ok).toBe(true)
   })
 
@@ -218,7 +222,7 @@ describe('summarise — a declared publishing gate is a third class', () => {
     const s = summarise([failing('unit'), failing('preview')], { publishing: PUBLISHING })
     expect(s.failed).toBe(1)
     expect(s.outstanding).toEqual(['unit'])
-    expect(s.excluded).toEqual(['preview'])
+    expect(s.excluded).toEqual([{ name: 'preview', conclusion: 'failure' }])
     expect(s.ok).toBe(false)
   })
 
@@ -255,7 +259,7 @@ describe('summarise — a declared publishing gate is a third class', () => {
       // alone passes today and proves nothing about this change — measured: the case was green
       // before a line of production code moved. Asserting the exclusion happened AND that nothing
       // fetched makes it fail today and hold afterwards, which is what a criterion is for.
-      expect(s.excluded).toEqual(['preview'])
+      expect(s.excluded).toEqual([{ name: 'preview', conclusion: 'failure' }])
       expect(called).toBe(0)
     } finally {
       globalThis.fetch = fetchBefore
@@ -413,5 +417,19 @@ describe('the real outage — run 35820666635 reads green', () => {
     })
     expect(body).toContain('2 publishing gates excluded')
     expect(body).not.toContain('Not green.')
+
+    // Found by RUNNING the script against this fixture rather than by testing it: `byName` was a Map
+    // keyed by name, so two check-runs sharing one name collapsed and the LAST conclusion won — both
+    // lines rendered `cancelled` and the failure was lost. Two entries with the same name is exactly
+    // what this run has, and no synthetic fixture would have had it.
+    // Isolated to the excluded lines. Asserting `toContain('`failure`')` over the whole body passes
+    // from the checks TABLE, which lists every run with its conclusion — an assertion satisfiable
+    // elsewhere in the same string is not an assertion about the part it names.
+    const excludedLines = body
+      .split('\n')
+      .filter((l) => l.startsWith('- preview / Publish a preview'))
+    expect(excludedLines).toHaveLength(2)
+    expect(excludedLines.join(' ')).toContain('`failure`')
+    expect(excludedLines.join(' ')).toContain('`cancelled`')
   })
 })
