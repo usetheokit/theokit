@@ -418,10 +418,12 @@ describe('every deployed entry limits its caller (B-027, T0.1)', () => {
         // it would read `limited` off a Promise — always `undefined`, always falsy, so every
         // request passes and the limit silently does nothing.
         const source = render()
-        expect(
-          source,
-          `${target} declares a store and never reaches the durable limiter`,
-        ).toContain('createDurableRateLimiterWeb')
+        // B-262 renamed what the entry calls: `buildRateLimiter` is one signature over both
+        // limiters, so the emitted call no longer names which one it got. What must still hold is
+        // that a declared store REACHES a limiter, and that the call below is awaited.
+        expect(source, `${target} declares a store and never reaches a limiter`).toContain(
+          'buildRateLimiter(',
+        )
         expect(
           /await\s+RATE_LIMIT\(/.test(source),
           `${target} calls the durable limiter without awaiting it; every request reads ` +
@@ -434,8 +436,8 @@ describe('every deployed entry limits its caller (B-027, T0.1)', () => {
         // are used at module scope here, and each one unbound throws at LOAD time.
         const source = render()
         expect(
-          /import\s*\{[^}]*createDurableRateLimiterWeb/.test(source),
-          `${target} uses createDurableRateLimiterWeb and never imports it`,
+          /import\s*\{[^}]*buildRateLimiter/.test(source),
+          `${target} uses buildRateLimiter and never imports it`,
         ).toBe(true)
         expect(
           new RegExp(
@@ -449,4 +451,33 @@ describe('every deployed entry limits its caller (B-027, T0.1)', () => {
       })
     })
   }
+})
+
+describe('the emitted entry calls one limiter builder (B-262)', () => {
+  // The emitter had two branches — `createRateLimiterWeb` for no store, `createDurableRateLimiterWeb`
+  // for a store — and the second returns a Promise where the first does not. That is what forced
+  // `rateLimitCheckFragment` to decide, per config, whether to emit `await`, and a call site that
+  // changes shape with the config is what produced B-257's missing one.
+  //
+  // `buildRateLimiter` has one signature and is always async, so the call site stops having a
+  // decision to make. These cases assert that the emitted entry reflects that.
+  for (const [target, render] of DURABLE_ENTRIES) {
+    it(`test_${target.replace(/-/g, '_')}_awaits_unconditionally`, () => {
+      const source = render()
+      expect(
+        /await\s+RATE_LIMIT\(/.test(source),
+        `${target} does not await the limiter; a Promise read for \`limited\` is always falsy`,
+      ).toBe(true)
+    })
+  }
+
+  it('test_the_no_store_entry_awaits_too', () => {
+    // The case that used to be synchronous. If it still emits a bare call, the two shapes have not
+    // been unified and the decision the call site was making is still there.
+    const source = renderCloudflareWorkerEntry({ ssrStreaming: false, rateLimit: LIMIT })
+    expect(
+      /await\s+RATE_LIMIT\(/.test(source),
+      'the no-store entry emits a synchronous call, so the call site still branches on the config',
+    ).toBe(true)
+  })
 })
