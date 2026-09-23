@@ -7,3 +7,9 @@ export * from './rate-limit.js'
 export * from './rate-limit-store.js'
 export * from './rate-limit-per-route.js'
 export * from './rate-limited-guard.js'
+// B-257 — the durable path, beside the sync facade rather than replacing it (ADR 0018).
+export * from './rate-limit-durable.js'
+
+// B-262 — the one builder a deployed entry calls. One signature, always async, so the emitted
+// call site stops deciding whether to `await` based on what the config declared.
+export { buildRateLimiter } from './build-rate-limiter.js'

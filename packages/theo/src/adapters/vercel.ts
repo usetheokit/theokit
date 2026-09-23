@@ -360,6 +360,8 @@ export const vercelAdapter: DeployAdapter = {
   // The document is served from `.vercel/output/static` and does not pass
   // through it (usetheokit/theokit#412).
   appliesConfig: ['securityHeaders', 'csrf', 'disallowed', 'cors', 'serialization'],
+  // B-257 — per-invocation: an in-process counter does not survive, so a declared limit needs a durable store.
+  enforcesRateLimit: 'with-a-store',
 
   async build(config: TheoConfig, cwd: string, ctx?: AdapterBuildContext): Promise<void> {
     // Wave 2 (T2.2) — reject polyglot services on this adapter.

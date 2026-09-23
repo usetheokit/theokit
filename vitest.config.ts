@@ -251,6 +251,14 @@ export default defineConfig({
       // exits 1 with every one of its 7974 tests green. Measured 2026-09-15.
       'theokit/client/core': path.resolve(__dirname, 'packages/theo/src/client/core.ts'),
       'theokit/client': path.resolve(__dirname, 'packages/theo/src/client/index.ts'),
+      // B-257 — ABOVE `theokit/server`, because a string alias matches by PREFIX. Below it,
+      // `theokit/server/rate-limit` resolves to `…/src/server/index.ts/rate-limit`, which does not
+      // exist, and the symptom is the one recorded above: type errors in an unrelated package while
+      // every test stays green.
+      'theokit/server/rate-limit': path.resolve(
+        __dirname,
+        'packages/theo/src/server/rate-limit/index.ts',
+      ),
       'theokit/server': path.resolve(__dirname, 'packages/theo/src/server/index.ts'),
       theokit: path.resolve(__dirname, 'packages/theo/src/index.ts'),
       // M84 — the subpath BEFORE the bar: a string alias matches by prefix, so `@theokit/agents`

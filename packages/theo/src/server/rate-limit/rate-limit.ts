@@ -1,6 +1,11 @@
 import type { IncomingMessage } from 'node:http'
 
-import { InMemoryStore, type RateLimitStore } from './rate-limit-store.js'
+import {
+  type BakedStoreDeclaration,
+  InMemoryStore,
+  type RateLimitStore,
+  slidingCount,
+} from './rate-limit-store.js'
 
 /**
  * Rate limit configuration — basic single-bucket shape. Per ADR D2, the
@@ -10,6 +15,16 @@ import { InMemoryStore, type RateLimitStore } from './rate-limit-store.js'
 export interface RateLimitConfig {
   windowMs: number
   max: number
+  /**
+   * B-257 — the durable store a DEPLOYED entry constructs. Declared here because the config schema
+   * accepts it and this type is what the parsed config narrows to.
+   *
+   * The synchronous facades below IGNORE it: they cannot await, which is the whole reason
+   * `createDurableRateLimiterWeb` exists beside them (ADR 0018). A deployed entry reads this field
+   * at BUILD time, through `adapters/deployed-rate-limit.ts`, and constructs the store in the
+   * generated source — it is never read at request time by this module.
+   */
+  store?: RateLimitStore | BakedStoreDeclaration
 }
 
 export interface RateLimitResult {
@@ -61,13 +76,33 @@ function resultFromState(
   state: { count: number; resetAt: number },
   config: RateLimitConfig,
 ): RateLimitResult {
-  if (state.count > config.max) {
-    const retryAfter = Math.ceil((state.resetAt - Date.now()) / 1000)
+  // B-260 — the same header NAMES the durable path emits, so a client reads one contract whichever
+  // runtime the operator picked. `X-RateLimit-Reset` was absent here and present at
+  // `rate-limit-durable.ts:139`, which made a client work against a deployment with a store and not
+  // against `theokit start`.
+  //
+  // The VALUES are not made equal and must not be: the two paths count differently by design — one
+  // in process, one in a store — so equal values would assert something about the counters rather
+  // than about the contract.
+  const reset = String(Math.ceil(state.resetAt / 1000))
+
+  // B-261 — the SAME sliding count the durable path uses, from the same function. The first cut put
+  // the weighting in `rate-limit-durable.ts` alone, and review measured the consequence: 10 admitted
+  // here against a nominal 5 while the durable twin held at 5. Two limiters over one store must not
+  // disagree about what `max` means.
+  if (slidingCount(state, config.windowMs) > config.max) {
+    // Floored, matching `rate-limit-durable.ts:131`. DEFENCE IN DEPTH and not a fix: measured
+    // 2026-09-23, no caller reaches a negative value here, because this facade refuses any store but
+    // `InMemoryStore` (`:49`) and `incrSync` restarts the window whenever `now >= resetAt`
+    // (`rate-limit-store.ts:30-31`). One twin flooring while the other does not is the difference a
+    // future store implementation would find the hard way.
+    const retryAfter = Math.max(0, Math.ceil((state.resetAt - Date.now()) / 1000))
     return {
       limited: true,
       headers: {
         'X-RateLimit-Limit': String(config.max),
         'X-RateLimit-Remaining': '0',
+        'X-RateLimit-Reset': reset,
         'Retry-After': String(retryAfter),
       },
     }
@@ -77,6 +112,7 @@ function resultFromState(
     headers: {
       'X-RateLimit-Limit': String(config.max),
       'X-RateLimit-Remaining': String(Math.max(0, config.max - state.count)),
+      'X-RateLimit-Reset': reset,
     },
   }
 }

@@ -27,6 +27,8 @@ export const theoCloudAdapter: DeployAdapter = {
   // serves the bundle. What that runtime applies is not knowable from here, and
   // reporting the config as dropped would be asserting rather than measuring.
   appliesConfig: 'runtime-not-emitted-here',
+  // B-257 — emits no request handler; this build cannot answer for that runtime.
+  enforcesRateLimit: 'not-ours-to-judge',
 
   build(_config: TheoConfig, cwd: string): Promise<void> {
     const manifest = readManifest(cwd)

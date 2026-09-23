@@ -21,6 +21,7 @@
       "theokit": ["./packages/theo/src/index.ts"],
       "theokit/server": ["./packages/theo/src/server/index.ts"],
       "theokit/server/agent": ["./packages/theo/src/server/agent/index.ts"],
+      "theokit/server/rate-limit": ["./packages/theo/src/server/rate-limit/index.ts"],
       "theokit/client": ["./packages/theo/src/client/index.ts"],
       "theokit/*": ["./packages/theo/*"]
     }

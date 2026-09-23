@@ -32,11 +32,21 @@ const withoutRateLimit = { security: { csrf: 'strict' } } as unknown as TheoConf
 /** What the six Web-standards targets declare — no `rateLimit` among them. */
 const WEB_ADAPTER = {
   appliesConfig: ['securityHeaders', 'csrf', 'disallowed', 'cors', 'serialization'],
+  enforcesRateLimit: 'with-a-store',
 } as const
 /** `node` applies it, in `theokit start` rather than an emitted file. */
-const NODE_ADAPTER = { appliesConfig: ['rateLimit', 'csrf', 'securityHeaders'] } as const
+const NODE_ADAPTER = {
+  appliesConfig: ['rateLimit', 'csrf', 'securityHeaders'],
+  // B-257 — the refusal now reads its OWN declaration. `appliesConfig` drives the WARNING; welded,
+  // adding 'rateLimit' there to silence a warning also switched this refusal off.
+  enforcesRateLimit: 'always',
+} as const
 /** TheoCloud answers for its own runtime, so this build cannot judge it. */
-const CLOUD_ADAPTER = { appliesConfig: 'runtime-not-emitted-here' } as const
+const CLOUD_ADAPTER = {
+  appliesConfig: 'runtime-not-emitted-here',
+  // An ABSTAIN, not a refusal — `config-support.ts:105-108` calls it "a different fact from saying no".
+  enforcesRateLimit: 'not-ours-to-judge',
+} as const
 
 describe('assertRateLimitEnforceable', () => {
   it('refuses a target that cannot enforce a declared rate limit', () => {

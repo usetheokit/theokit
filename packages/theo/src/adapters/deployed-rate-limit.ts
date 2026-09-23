@@ -80,6 +80,188 @@ interface BakeableRateLimit {
    * code could not honour it, so a deployment behind a proxy keyed every visitor on the proxy.
    */
   trustProxy: boolean | number
+  /**
+   * B-257 — the durable counter the entry constructs, or `undefined` for the in-process default.
+   *
+   * A reference rather than an instance: this is baked into a generated file, so it must survive
+   * being written as source. `factory` is the one field that cannot be escaped — see
+   * `bakeableStore` below.
+   */
+  store?: BakeableStore
+}
+
+/** A durable store named by `theo.config.ts`, in the form a generated entry can construct. */
+interface BakeableStore {
+  /** The specifier the entry imports from. Written through `JSON.stringify`. */
+  module: string
+  /** The exported name it constructs. VALIDATED, never escaped — it becomes a bare identifier. */
+  factory: string
+  /** Constructor options. Written through `JSON.stringify`. */
+  options?: Record<string, string | number | boolean>
+}
+
+/**
+ * A JavaScript identifier, and nothing else.
+ *
+ * `factory` becomes a bare identifier in `import { <factory> } from …`, where `JSON.stringify` would
+ * emit `import { "x" }` and not parse. So it cannot be escaped — only validated. Without this, a
+ * `theo.config.ts` carrying `factory: "x } from 'evil'; //"` writes arbitrary code into every
+ * generated entry, and that file usually arrives with the clone.
+ */
+const IDENTIFIER = /^[A-Za-z_$][\w$]*$/
+
+/**
+ * The words that are well-formed identifiers and cannot be BOUND.
+ *
+ * `IDENTIFIER` answers "could this be a name?"; the emitter needs "can this be THIS name?", and the
+ * two differ on exactly this set. `factory` lands as a bare binding in
+ * `import { <factory> } from '<module>'`, where `import { default }` is a SyntaxError — so a config
+ * naming one produces a generated entry that does not parse, and the deploy fails pointing at the
+ * emitted file rather than at the line that caused it.
+ *
+ * `default` is the one a real config reaches by accident, because `export default createStore` is
+ * the ordinary shape of the module being named. The rest are here because the cost of the list is
+ * one comparison and the cost of an omission is a deploy that fails somewhere else.
+ *
+ * Reserved words only. `defaultStore` is a legal binding, and a substring match would refuse it —
+ * an over-correction that breaks working configs to protect against a shape they do not have.
+ */
+const NOT_BINDABLE = new Set([
+  'await',
+  'break',
+  'case',
+  'catch',
+  'class',
+  'const',
+  'continue',
+  'debugger',
+  'default',
+  'delete',
+  'do',
+  'else',
+  'enum',
+  'export',
+  'extends',
+  'false',
+  'finally',
+  'for',
+  'function',
+  'if',
+  'import',
+  'in',
+  'instanceof',
+  'new',
+  'null',
+  'return',
+  'super',
+  'switch',
+  'this',
+  'throw',
+  'true',
+  'try',
+  'typeof',
+  'var',
+  'void',
+  'while',
+  'with',
+  'yield',
+])
+
+/**
+ * Refuse a `store` a generated entry could not construct — or could construct into a hole.
+ *
+ * Extracted from `bakeableRateLimit` because it is its own responsibility and because inlining it
+ * took that function to a cyclomatic complexity of 18 against a ceiling of 15. The three refusals
+ * are one question asked of three fields, which is the shape SRP asks for.
+ *
+ * The third is the one that cannot be solved by escaping. `module` and `options` are written through
+ * `JSON.stringify`, as `trustProxy` already is at the emit site. `factory` lands as a BARE
+ * IDENTIFIER in `import { <factory> } from …`, where a quoted string does not parse — so it is
+ * validated, and a config that fails the check is refused by name rather than interpolated raw.
+ */
+function assertBakeableStore(store: unknown, target: string): void {
+  if (store === undefined) return
+
+  if (!isStoreShaped(store)) {
+    throw new UnserialisableRateLimitError(
+      target,
+      '`security.rateLimit.store` must be an object naming a module and a factory.',
+      [
+        "declare `store: { module: '@upstash/redis', factory: 'Redis' }`",
+        'omit `store` and let the build refuse this target, which is honest about not limiting',
+      ],
+    )
+  }
+
+  const { module: mod, factory } = store as Record<string, unknown>
+
+  if (typeof mod !== 'string' || mod.length === 0) {
+    throw new UnserialisableRateLimitError(
+      target,
+      '`security.rateLimit.store.module` must be the specifier the entry imports from.',
+      ["declare `module: '@upstash/redis'`", 'omit `store`'],
+    )
+  }
+
+  if (typeof factory !== 'string' || !IDENTIFIER.test(factory) || NOT_BINDABLE.has(factory)) {
+    throw new UnserialisableRateLimitError(
+      target,
+      '`security.rateLimit.store.factory` must be a plain identifier — it is written into the ' +
+        'generated entry as `import { <factory> }`, where a quoted string would not parse, so it ' +
+        'is validated rather than escaped. Anything else would put arbitrary source in every ' +
+        'deployment this config builds.',
+      [
+        "name the export directly: `factory: 'Redis'`",
+        'omit `store` and let the build refuse this target',
+      ],
+    )
+  }
+
+  // `options` is typed `Record<string, string | number | boolean>` and the type is erased before
+  // this runs, so the declaration protects nobody: the value arrives from a config file. Three
+  // measured escapes, and the third is why this is a refusal rather than a comment —
+  // `JSON.stringify` throws a raw TypeError naming JSON on a BigInt and on a cycle, and on a
+  // FUNCTION it throws nothing and omits the key. The option was then simply absent from the
+  // emitted entry, with no diagnostic: a store configured and not configured, which is the same
+  // silence this whole feature exists to remove.
+  const { options } = store as Record<string, unknown>
+  if (options !== undefined) {
+    if (typeof options !== 'object' || options === null || Array.isArray(options)) {
+      throw new UnserialisableRateLimitError(
+        target,
+        '`security.rateLimit.store.options` must be an object of scalar values.',
+        [
+          "declare `options: { url: 'redis://…', retries: 3 }`",
+          'omit `options` and configure the store inside the factory',
+        ],
+      )
+    }
+
+    const offending = Object.entries(options as Record<string, unknown>).find(
+      ([, v]) => typeof v !== 'string' && typeof v !== 'number' && typeof v !== 'boolean',
+    )
+    if (offending !== undefined) {
+      throw new UnserialisableRateLimitError(
+        target,
+        `\`security.rateLimit.store.options.${offending[0]}\` must be a string, number or boolean.`,
+        [
+          'declare scalars only — strings, numbers and booleans',
+          'move anything else into the factory itself, which the generated entry calls at runtime',
+        ],
+      )
+    }
+  }
+}
+
+/**
+ * The ONE predicate both sides read — the call emitter here and `assertBakeableStore`'s first
+ * refusal. They were two, differing on arrays: this one accepted `store: []` while the refusal
+ * rejected it, so the declaration threw while the call side would still have emitted `await`. The
+ * build refused first, so no bad entry reached disk — and the pair exists to agree BY CONSTRUCTION
+ * rather than because one check happens to run earlier.
+ */
+function isStoreShaped(store: unknown): boolean {
+  return typeof store === 'object' && store !== null && !Array.isArray(store)
 }
 
 /**
@@ -122,6 +304,8 @@ function bakeableRateLimit(
       ],
     )
   }
+  assertBakeableStore(cfg.store, target)
+
   if (cfg.routes !== undefined) {
     throw new UnserialisableRateLimitError(
       target,
@@ -145,6 +329,9 @@ function bakeableRateLimit(
     max,
     trustProxy:
       typeof trustProxy === 'boolean' || typeof trustProxy === 'number' ? trustProxy : false,
+    // Validated above — `module` and `options` are escaped at emit time, `factory` was checked
+    // against IDENTIFIER because it cannot be.
+    store: cfg.store as BakeableStore | undefined,
   }
 }
 
@@ -171,6 +358,21 @@ export function deployedRateLimitFragment(
    * unbound identifier, and the entry throws on the first limited request.
    */
   params = 'request, server',
+  /**
+   * The specifier prefix this target needs — `'npm:'` on Deno Deploy, empty everywhere else.
+   *
+   * B-257: this function now emits its OWN import for the durable limiter, rather than relying on
+   * each adapter to remember one. The previous shape had THREE sides to keep in step — the
+   * declaration here, the call in `rateLimitCheckFragment`, and a per-adapter import line — and the
+   * third was not joined: six adapters imported `createRateLimiterWeb` and none imported
+   * `createDurableRateLimiterWeb`, so a store-carrying entry referenced a free variable and would
+   * have thrown `ReferenceError` while evaluating its module body. Not at the first limited request:
+   * at LOAD, taking down every route including those declaring no limit.
+   *
+   * `cloudflare.ts:370-373` documents that exact defect from B-027, one symbol earlier. Owning the
+   * import here is what stops a fourth recurrence.
+   */
+  importPrefix = '',
 ): string[] {
   const baked = bakeableRateLimit(rateLimit, target)
   if (baked === undefined) return []
@@ -184,7 +386,29 @@ export function deployedRateLimitFragment(
     `// the limit is PER INSTANCE, and a caller spread across instances gets that many budgets.`,
     `// The address is resolved correctly either way; the counting is what B-257 is about, and`,
     `// \`theokit build\` refuses a declared limit on those five until it is.`,
-    `const RATE_LIMIT = createRateLimiterWeb({ windowMs: ${baked.windowMs}, max: ${baked.max} })`,
+    // B-262 — ONE builder, one signature, always async. The emitter used to branch here:
+    // `createRateLimiterWeb` returns a value and `createDurableRateLimiterWeb` returns a Promise, so
+    // the CALL SITE had to know which it got and emit `await` or not. A call site whose shape changes
+    // with the config is what produced B-257's missing `await`, and `buildRateLimiter` removes the
+    // decision rather than documenting it.
+    `import { buildRateLimiter } from '${importPrefix}theokit/server/rate-limit'`,
+    ...(baked.store === undefined
+      ? [
+          `const RATE_LIMIT = buildRateLimiter({ windowMs: ${baked.windowMs}, max: ${baked.max} }, undefined)`,
+        ]
+      : [
+          // B-257 — a durable counter, named by the app. `module` and the options are JSON literals;
+          // `factory` was validated against IDENTIFIER at bake time because it lands here as a bare
+          // identifier and no escape can make that safe.
+          //
+          // The limiter's own import is emitted HERE rather than by each adapter. See `importPrefix`.
+          `import { ${baked.store.factory} } from ${JSON.stringify(baked.store.module)}`,
+          `const RATE_LIMIT_STORE = new ${baked.store.factory}(${JSON.stringify(baked.store.options ?? {})})`,
+          `const RATE_LIMIT = buildRateLimiter(`,
+          `  { windowMs: ${baked.windowMs}, max: ${baked.max} },`,
+          `  RATE_LIMIT_STORE,`,
+          `)`,
+        ]),
     ``,
     `// How many proxies the deployment declared in front of it. \`client-ip.ts\` reads a forwarded`,
     `// header only when this says one wrote it: the header is whatever the client typed, so`,
@@ -251,7 +475,13 @@ export function rateLimitCheckFragment(
     `${indent}if (caller === undefined) {`,
     `${indent}  ${refuseUnnamed}`,
     `${indent}}`,
-    `${indent}const limit = RATE_LIMIT(caller)`,
+    // B-257 — the call side of the pair. `deployedRateLimitFragment` emits the DECLARATION; this
+    // emits the CALL, and the two branch on the same fact or the entry names a symbol it never
+    // declared. A durable limiter returns a promise; the sync facade does not.
+    // B-262 — `await` unconditionally. `buildRateLimiter` is always async, so this line no longer
+    // asks what the config declared. The conditional it replaces is where B-257's defect lived:
+    // a Promise read for `limited` is always `undefined`, always falsy, and every request passes.
+    `${indent}const limit = await RATE_LIMIT(caller)`,
     `${indent}if (limit.limited) {`,
     `${indent}  ${refuse}`,
     `${indent}}`,

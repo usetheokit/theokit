@@ -38,6 +38,8 @@ export const nodeAdapter: DeployAdapter = {
     'securityHeaders',
     'cors',
   ],
+  // B-257 — a long-lived process: the in-process counter survives between requests.
+  enforcesRateLimit: 'always',
 
   async build(config: TheoConfig, cwd: string, ctx?: AdapterBuildContext): Promise<void> {
     // T1.1 (architecture-cleanup) — Vite plugin composition is INJECTED via `ctx.makeVitePlugins`.

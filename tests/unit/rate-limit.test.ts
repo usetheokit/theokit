@@ -23,12 +23,47 @@ describe('Rate Limiter', () => {
     expect(result.limited).toBe(true)
   })
 
-  it('should reset after window expires', async () => {
+  /**
+   * Was `should reset after window expires`, and asserted that 150ms of waiting cleared a spent
+   * budget on a 100ms window. B-261 replaced the fixed window with a SLIDING one, deliberately, and
+   * a sliding window does not reset — it slides. Under it those 150ms are not enough: three requests
+   * inside 150ms against a limit of one per 100ms is genuinely over the limit, and refusing is the
+   * correct answer rather than a regression.
+   *
+   * So the assertion the old name made is no longer true, and keeping it by loosening the limiter
+   * would undo the item. What IS true, and is the property a caller actually cares about, is that
+   * waiting long enough restores service. The threshold is a full window past the close of the
+   * previous one, which is when the previous window has slid entirely out of view — held from the
+   * store's side by `a-caller-who-waited-is-not-refused.test.ts`.
+   */
+  it('a caller that waits out the whole window is served again', async () => {
     const check = createRateLimiter({ windowMs: 100, max: 1 })
     check(mockReq())
     expect(check(mockReq()).limited).toBe(true)
+
+    // 250ms: the first window closed at 100ms, so by 250ms it has been closed for 150ms — more than
+    // the 100ms it takes to slide out of view entirely. 150ms would leave half of it still counting.
+    await new Promise((r) => setTimeout(r, 250))
+    expect(
+      check(mockReq()).limited,
+      'a caller that waited two and a half windows is still refused. The sliding weight is meant ' +
+        'to stop a burst ACROSS a boundary, not to charge a caller for a window that closed long ago.',
+    ).toBe(false)
+  })
+
+  it('and half a window of waiting is NOT enough, which is the point of the slide', async () => {
+    // The mirror of the case above, and the reason the item exists. Under the fixed window this
+    // passed at 150ms — which is exactly how a caller got 2x the limit by straddling a boundary.
+    const check = createRateLimiter({ windowMs: 100, max: 1 })
+    check(mockReq())
+    expect(check(mockReq()).limited).toBe(true)
+
     await new Promise((r) => setTimeout(r, 150))
-    expect(check(mockReq()).limited).toBe(false)
+    expect(
+      check(mockReq()).limited,
+      'half a window of waiting cleared a spent budget, so the previous window stopped counting ' +
+        'too early. That is the boundary burst B-261 closed, reopened.',
+    ).toBe(true)
   })
 
   it('should include X-RateLimit-Limit header', () => {

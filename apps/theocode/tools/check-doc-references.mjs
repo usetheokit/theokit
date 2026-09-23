@@ -1,7 +1,7 @@
 /**
  * Every repository path the README cites resolves — or is deliberately ignored.
  *
- * B-134 was a citation to `docs/adr/0002-cycle-artifacts-are-promoted-to-docs.md`, offered as the
+ * B-134 was a citation to `docs/adr/0002-cycle-artifacts-are-promoted-to-docs.md` <!-- adr-citation-ok: the absent path IS this docblock's subject; naming it is what records the defect -->, offered as the
  * record of a decision. The file did not exist, was not tracked, and was not gitignored — so a
  * reader who cloned and asked why the toolchain was absent was sent to a document they could not
  * open. It was fixed by hand, and nothing stopped the next one.
