@@ -75,13 +75,29 @@ function resultFromState(
   state: { count: number; resetAt: number },
   config: RateLimitConfig,
 ): RateLimitResult {
+  // B-260 — the same header NAMES the durable path emits, so a client reads one contract whichever
+  // runtime the operator picked. `X-RateLimit-Reset` was absent here and present at
+  // `rate-limit-durable.ts:139`, which made a client work against a deployment with a store and not
+  // against `theokit start`.
+  //
+  // The VALUES are not made equal and must not be: the two paths count differently by design — one
+  // in process, one in a store — so equal values would assert something about the counters rather
+  // than about the contract.
+  const reset = String(Math.ceil(state.resetAt / 1000))
+
   if (state.count > config.max) {
-    const retryAfter = Math.ceil((state.resetAt - Date.now()) / 1000)
+    // Floored, matching `rate-limit-durable.ts:131`. DEFENCE IN DEPTH and not a fix: measured
+    // 2026-09-23, no caller reaches a negative value here, because this facade refuses any store but
+    // `InMemoryStore` (`:49`) and `incrSync` restarts the window whenever `now >= resetAt`
+    // (`rate-limit-store.ts:30-31`). One twin flooring while the other does not is the difference a
+    // future store implementation would find the hard way.
+    const retryAfter = Math.max(0, Math.ceil((state.resetAt - Date.now()) / 1000))
     return {
       limited: true,
       headers: {
         'X-RateLimit-Limit': String(config.max),
         'X-RateLimit-Remaining': '0',
+        'X-RateLimit-Reset': reset,
         'Retry-After': String(retryAfter),
       },
     }
@@ -91,6 +107,7 @@ function resultFromState(
     headers: {
       'X-RateLimit-Limit': String(config.max),
       'X-RateLimit-Remaining': String(Math.max(0, config.max - state.count)),
+      'X-RateLimit-Reset': reset,
     },
   }
 }

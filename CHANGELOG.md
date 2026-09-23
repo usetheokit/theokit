@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- Both rate limiters answer with the same header names: `createRateLimiterWeb` now emits
+  `X-RateLimit-Reset`, which only the durable limiter emitted. A client reading it worked against one
+  deployment and not the other (#B-260)
+
+
 ### Changed
 
 - A generated deploy entry calls one limiter builder and awaits it unconditionally, instead of
