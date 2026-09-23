@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 
 import { describe, expect, it } from 'vitest'
 
-import { buildRateLimiter } from '../../packages/theo/src/adapters/entries/rate-limit-entry.js'
+import { buildRateLimiter } from '../../packages/theo/src/server/rate-limit/build-rate-limiter.js'
 import type { RateLimitStore } from '../../packages/theo/src/server/rate-limit/rate-limit-store.js'
 
 /**

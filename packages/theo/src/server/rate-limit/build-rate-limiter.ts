@@ -1,6 +1,15 @@
 /**
  * The limiter's wiring, as a REAL file the compiler reads.
  *
+ * ## Why it lives in `server/` and not beside the adapter that emits its call
+ *
+ * It was written under `adapters/entries/` first, and `/code-quality` refused it: the declared rule
+ * `adapters-may-only-depend-on-core-router-services` lets `adapters/` reach `core/`, `router/`,
+ * `services/` and `config/`, and nothing else. The plan had asserted "architecture boundary crossed:
+ * none" without checking that rule, and the gate was right — this file is RUNTIME wiring. It builds
+ * the limiter a request is answered by; it does not participate in the build. `server/` is where the
+ * thing it wires already lives.
+ *
  * B-262 — this file exists because of a measurement taken while implementing the task that preceded
  * it. The first design moved the limiter's import inside the emitted string, from
  * `theokit/server/rate-limit` to a bundler virtual id, and claimed that gave `tsc` sight of the
@@ -22,10 +31,10 @@
  * decision the call is made of.
  */
 
-import { createDurableRateLimiterWeb } from '../../server/rate-limit/rate-limit-durable.js'
-import type { RateLimitStore } from '../../server/rate-limit/rate-limit-store.js'
-import type { RateLimitConfig, RateLimitResult } from '../../server/rate-limit/rate-limit.js'
-import { createRateLimiterWeb } from '../../server/rate-limit/rate-limit.js'
+import { createDurableRateLimiterWeb } from './rate-limit-durable.js'
+import type { RateLimitStore } from './rate-limit-store.js'
+import type { RateLimitConfig, RateLimitResult } from './rate-limit.js'
+import { createRateLimiterWeb } from './rate-limit.js'
 
 /**
  * The limiter a deployed entry should use, given what the app declared.

@@ -40,9 +40,9 @@ const ENTRY = join(
   'packages',
   'theo',
   'src',
-  'adapters',
-  'entries',
-  'rate-limit-entry.ts',
+  'server',
+  'rate-limit',
+  'build-rate-limiter.ts',
 )
 
 let workspace: string
@@ -50,7 +50,7 @@ let workspace: string
 /** The entry, with its imports rewritten to a stub so the probe needs no workspace resolution. */
 function entryWithStubbedImports(): string {
   const src = readFileSync(ENTRY, 'utf8')
-  return src.replace(/from '\.\.\/\.\.\/server\/rate-limit\/[^']+'/g, "from './stubs.js'")
+  return src.replace(/from '\.\/[^']+'/g, "from './stubs.js'")
 }
 
 describe('the compiler sees an unimported limiter (B-262, T2.1)', () => {
