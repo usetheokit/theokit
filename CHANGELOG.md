@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [create-theokit 3.0.8] - 2026-09-23
+
+### Changed
+
+- The scaffold's pin follows the release it was cut with: `theokit: ^0.72.0 -> ^0.72.1`, so a project
+  created from this version installs the middleware diagnostic below rather than the release before it
+  (#B-266)
+
+## [theokit 0.72.1] - 2026-09-23
+
 ### Fixed
 
 - A middleware the file-scan runner cannot invoke now says so instead of vanishing. `middleware()` is
