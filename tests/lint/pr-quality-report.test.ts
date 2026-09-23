@@ -231,7 +231,7 @@ describe('summarise — a declared publishing gate is a third class', () => {
     const counted = new Proxy(new Set(['preview']), {
       get(target, prop, receiver) {
         if (prop === 'has') {
-          return (name) => {
+          return (name: string) => {
             reads += 1
             return target.has(name)
           }
@@ -427,7 +427,7 @@ describe('the real outage — run 35820666635 reads green', () => {
     // elsewhere in the same string is not an assertion about the part it names.
     const excludedLines = body
       .split('\n')
-      .filter((l) => l.startsWith('- preview / Publish a preview'))
+      .filter((l: string) => l.startsWith('- preview / Publish a preview'))
     expect(excludedLines).toHaveLength(2)
     expect(excludedLines.join(' ')).toContain('`failure`')
     expect(excludedLines.join(' ')).toContain('`cancelled`')
