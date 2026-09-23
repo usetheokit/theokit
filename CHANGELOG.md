@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- A middleware the file-scan runner cannot invoke now says so instead of vanishing. `middleware()` is
+  a fluent builder — `middleware('x').handle(fn).build()` — and the plausible `middleware({ name,
+  handler })` returns the un-built builder, an object. The runner skipped it in total silence: the
+  file found, the module evaluated, the handler never called, and a request that succeeded without it.
+  It now names the file and the missing `.build()`, once per file per process, and still answers the
+  request — this is a diagnostic, not a refusal (#B-266)
+
+## [create-theokit 3.0.7] - 2026-09-23
+
+### Changed
+
+- The scaffold's pin follows the release it was cut with: `theokit: ^0.71.0 -> ^0.72.0`, so a project
+  created from this version installs the rate-limit fixes below rather than the release before them
+  (#B-261)
+
 ## [theokit 0.72.0] - 2026-09-23
 
 ### Changed
