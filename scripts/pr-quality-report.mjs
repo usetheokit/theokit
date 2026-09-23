@@ -72,8 +72,16 @@ export function readPublishingGates(root = process.cwd()) {
   return new Set(names)
 }
 
-export function summarise(checkRuns, { self } = {}) {
-  const s = { passed: 0, failed: 0, pending: 0, skipped: 0, outstanding: [], ok: false }
+export function summarise(checkRuns, { self, publishing = new Set() } = {}) {
+  const s = {
+    passed: 0,
+    failed: 0,
+    pending: 0,
+    skipped: 0,
+    outstanding: [],
+    excluded: [],
+    ok: false,
+  }
   // The reporting job is itself a check run, and it is necessarily unfinished while it renders.
   // Counting it made the first report ever posted announce "Not green — 1 still running", naming
   // itself, with every real gate passing. A report that can never say green is one people stop
@@ -81,6 +89,14 @@ export function summarise(checkRuns, { self } = {}) {
   const runs = self === undefined ? checkRuns : checkRuns.filter((r) => r.name !== self)
 
   for (const run of runs) {
+    // B-268 — a DECLARED publishing gate leaves both totals, and the membership test sits here
+    // rather than above the loop for the reason FR-001 names: `pending` is incremented BEFORE any
+    // conclusion is read, so a classification that only looked at `conclusion` would miss the hang
+    // path entirely. One `has()` per run, no second pass over the list.
+    if (publishing.has(run.name)) {
+      s.excluded.push(run.name)
+      continue
+    }
     if (run.status !== 'completed') {
       s.pending += 1
       s.outstanding.push(run.name)

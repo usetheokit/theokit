@@ -179,3 +179,86 @@ describe('readPublishingGates — an absent declaration is an empty one', () => 
     }
   })
 })
+
+/**
+ * B-268 T2.1 — the third class, in BOTH branches.
+ *
+ * A declared publishing gate counts toward neither `failed` nor `pending`. The second half is where
+ * the bug hides: `summarise` increments `pending` BEFORE any conclusion is read, so a
+ * conclusion-based classification never reaches that branch and a publisher that HANGS produces the
+ * identical misreading. PR #897 carries a `cancelled` beside the `failure` for the same gate on the
+ * same SHA, so a non-completed state is measured rather than hypothetical.
+ */
+describe('summarise — a declared publishing gate is a third class', () => {
+  const PUBLISHING = new Set(['preview'])
+
+  it('Given a DECLARED publishing gate failed, Then it counts as neither passed nor failed', () => {
+    const s = summarise([passing('unit'), failing('preview')], { publishing: PUBLISHING })
+    expect(s.failed).toBe(0)
+    expect(s.passed).toBe(1)
+    expect(s.excluded).toEqual(['preview'])
+    expect(s.ok).toBe(true)
+  })
+
+  it('Given an UNDECLARED check failed, Then it counts as failed exactly as today', () => {
+    const s = summarise([passing('unit'), failing('typecheck')], { publishing: PUBLISHING })
+    expect(s.failed).toBe(1)
+    expect(s.excluded).toEqual([])
+    expect(s.ok).toBe(false)
+  })
+
+  it('Given a declared publishing gate never completed, Then it is not counted as pending', () => {
+    const s = summarise([passing('unit'), running('preview')], { publishing: PUBLISHING })
+    expect(s.pending).toBe(0)
+    expect(s.excluded).toEqual(['preview'])
+    expect(s.ok).toBe(true)
+  })
+
+  it('Given a verifying gate failed AND the publisher failed, Then it reads not green, naming the test', () => {
+    const s = summarise([failing('unit'), failing('preview')], { publishing: PUBLISHING })
+    expect(s.failed).toBe(1)
+    expect(s.outstanding).toEqual(['unit'])
+    expect(s.excluded).toEqual(['preview'])
+    expect(s.ok).toBe(false)
+  })
+
+  it('Given one call, Then classification walks the check list exactly once more', () => {
+    let reads = 0
+    const counted = new Proxy(new Set(['preview']), {
+      get(target, prop, receiver) {
+        if (prop === 'has') {
+          return (name) => {
+            reads += 1
+            return target.has(name)
+          }
+        }
+        return Reflect.get(target, prop, receiver)
+      },
+    })
+    const runs = [passing('a'), failing('b'), running('c'), failing('preview')]
+    summarise(runs, { publishing: counted })
+    // One membership test per run and no more: the declaration is consulted inside the existing
+    // loop rather than in a second pass over the list.
+    expect(reads).toBe(runs.length)
+  })
+
+  it('Given the check list is already fetched, Then classification makes no network call', () => {
+    const fetchBefore = globalThis.fetch
+    let called = 0
+    globalThis.fetch = () => {
+      called += 1
+      return Promise.reject(new Error('classification must not fetch'))
+    }
+    try {
+      const s = summarise([passing('unit'), failing('preview')], { publishing: PUBLISHING })
+      // Bound to the NEW path on purpose. `summarise` never fetched, so asserting `called === 0`
+      // alone passes today and proves nothing about this change — measured: the case was green
+      // before a line of production code moved. Asserting the exclusion happened AND that nothing
+      // fetched makes it fail today and hold afterwards, which is what a criterion is for.
+      expect(s.excluded).toEqual(['preview'])
+      expect(called).toBe(0)
+    } finally {
+      globalThis.fetch = fetchBefore
+    }
+  })
+})
