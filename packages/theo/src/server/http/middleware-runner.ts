@@ -174,6 +174,58 @@ function isWebShaped(mw: object): mw is MiddlewareHandler {
 }
 
 /**
+ * B-266 — a default export the runner cannot invoke names itself instead of vanishing.
+ *
+ * `middleware()` is a fluent builder: `middleware('name').handle(fn).build()`. Called the plausible
+ * other way — `middleware({ name, handler })` — it returns the UN-BUILT builder, an object
+ * `{ handle, build }`. Both load sites below then read `typeof mw !== 'function'` and skip it, so the
+ * file is found, the module is evaluated, and the handler is never called. Measured 2026-09-23: a
+ * `globalThis` array a fixture creates at module scope DOES exist afterwards and is EMPTY —
+ * evaluation happened, invocation did not. No throw, no warning, no log.
+ *
+ * It warns rather than refuses, and that is a decision rather than caution. `refuseIncompatibleShape`
+ * shipped in `095c786d1` and `ab56b3888` removed it the next day, recording that refusing was "the
+ * right interim answer and never the end state" — because the README pointed users at a path that
+ * did not work. That removal was right about the README and it also removed the diagnostic. This is
+ * the diagnostic without the refusal.
+ *
+ * ONCE per path per process, not once per request. The scan is cached (CR-017 above), but
+ * `loadModule` runs per file per request, so an unlatched warning would emit one line per request —
+ * which is how a diagnostic becomes noise and then becomes filtered.
+ */
+const warnedUninvocable = new Set<string>()
+
+/** Describe what arrived, specifically enough that the author recognises their own mistake. */
+function describeUninvocable(value: unknown): string {
+  if (value === undefined) return 'no default export'
+  if (value === null) return 'a default export of `null`'
+  if (typeof value !== 'object') return `a default export of type \`${typeof value}\``
+  const keys = Object.keys(value)
+  if (keys.includes('build') && keys.includes('handle')) {
+    return 'a middleware BUILDER that was never built — call `.handle(fn).build()` on it'
+  }
+  return `an object with keys [${keys.join(', ')}]`
+}
+
+function reportUninvocableMiddleware(path: string, value: unknown): void {
+  if (warnedUninvocable.has(path)) return
+  warnedUninvocable.add(path)
+  // `console.warn` is the only channel a consumer will see, and the rate-limit store already uses it
+  // for a degraded-but-continuing condition. No eslint-disable: `no-console` is not enabled here, and
+  // a disable for a rule that is off is a comment that will outlive its reason.
+  console.warn(
+    `[theokit] middleware not run: ${path} exports ${describeUninvocable(value)}. ` +
+      'The file-scan runner invokes a function; this export is not one, so it was skipped and the ' +
+      'request was answered without it.',
+  )
+}
+
+/** Test seam: the latch is per-process, and a suite needs to assert the FIRST warning repeatedly. */
+export function _resetUninvocableWarningsForTests(): void {
+  warnedUninvocable.clear()
+}
+
+/**
  * Run ONE scanned middleware, whichever shape it declared, and say whether the request is over.
  *
  * One dispatcher rather than a branch at each load site: `server/middleware/` and the single
@@ -308,7 +360,10 @@ export async function runMiddlewareAndContext(
     for (const mwPath of dirMiddlewares) {
       const mod = await loadModule(mwPath)
       const mw = mod.default as MiddlewareFn | undefined
-      if (typeof mw !== 'function') continue
+      if (typeof mw !== 'function') {
+        reportUninvocableMiddleware(mwPath, mod.default)
+        continue
+      }
 
       // Both shapes run, in FILENAME order. Running one family before the other would make the
       // `01-`/`02-` prefixes mean nothing the moment an app mixed them, and the prefixes are the
@@ -325,6 +380,11 @@ export async function runMiddlewareAndContext(
     if (typeof mw === 'function') {
       const { aborted } = await runScannedMiddleware(mw, req, res, middlewareCtx)
       if (aborted) return { ctx: middlewareCtx, aborted: true }
+    } else {
+      // Same report from the same function as the directory arm above. This file has already watched
+      // the two arms drift — `runScannedMiddleware`'s docblock records that the single-file arm kept
+      // `refuseIncompatibleShape` "only because someone remembered to add it twice".
+      reportUninvocableMiddleware(singleFilePath, mod.default)
     }
   }
 
