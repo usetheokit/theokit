@@ -8,9 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
-- A rate limit is no longer doubled at its window boundary. `windowMs: 400, max: 5` admitted 10
-  requests in ~405ms before this; the limiter now charges the current window plus whatever of the
-  previous one has not slid out, so `max` means at most `max` in any `windowMs` (#B-261)
+- A rate limit is no longer doubled at its window boundary, on EITHER limiter. `windowMs: 400, max: 5`
+  admitted 10 requests in ~405ms before this; both `createRateLimiterWeb` and
+  `createDurableRateLimiterWeb` now charge the current window plus whatever of the previous one has not
+  slid out, from one shared function, so `max` means at most `max` in any `windowMs` whichever
+  limiter your deployment uses (#B-261)
 
 ### Changed
 

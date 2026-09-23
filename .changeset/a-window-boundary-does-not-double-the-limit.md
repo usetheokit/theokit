@@ -4,9 +4,13 @@
 
 A rate limit is no longer doubled at its window boundary.
 
-Measured before the fix: `windowMs: 400, max: 5` admitted **10 requests in ~405ms**. The limiter was a
-fixed-window counter, so a caller that filled a window just before it expired and filled the next one
+Measured before the fix: `windowMs: 400, max: 5` admitted **10 requests in ~405ms**. Both limiters were
+fixed-window counters, so a caller that filled a window just before it expired and filled the next one
 just after spent two budgets inside one window's worth of time.
+
+**Both limiters, and that word is load-bearing.** `createRateLimiterWeb` and
+`createDurableRateLimiterWeb` now read the same sliding count from the same function, so the guarantee
+does not depend on which one your deployment uses.
 
 `max` now means what it says: at most `max` in any `windowMs`.
 
