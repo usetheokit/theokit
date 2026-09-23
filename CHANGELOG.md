@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- `pnpm probe:otlp` — an instrument that proves a span produced by a production entry point reaches
+  a real OpenTelemetry collector, and refuses to measure against an endpoint that answers 2xx to a
+  path it does not serve. Until now every in-tree exercise of the span path substituted the
+  transport, so the code that BUILDS a span was covered and the claim that one ARRIVES was not
+  (#B-199)
+
 ## [create-theokit 3.0.8] - 2026-09-23
 
 ### Changed
