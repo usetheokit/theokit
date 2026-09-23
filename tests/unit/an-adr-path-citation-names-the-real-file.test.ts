@@ -71,10 +71,25 @@ describe('an ADR path citation names the real file (B-258)', () => {
   })
 
   it('test_no_source_file_cites_an_adr_path_that_does_not_exist', () => {
-    const tracked = execFileSync(GIT, ['ls-files', '--', '*.ts', '*.tsx', '*.mjs'], {
-      cwd: repoRoot,
-      encoding: 'utf8',
-    })
+    // Tracked AND untracked-but-not-ignored. `ls-files` alone lists only what git already knows,
+    // and a file added in the working tree is exactly where a fresh citation appears — measured:
+    // a new `.ts` carrying `docs/adr/0099-this-does-not-exist.md` left this test green. The CI run
+    // would have caught it after the commit; the point of a local check is to catch it before.
+    const listed = [
+      execFileSync(GIT, ['ls-files', '--', '*.ts', '*.tsx', '*.mjs'], {
+        cwd: repoRoot,
+        encoding: 'utf8',
+      }),
+      execFileSync(
+        GIT,
+        ['ls-files', '--others', '--exclude-standard', '--', '*.ts', '*.tsx', '*.mjs'],
+        {
+          cwd: repoRoot,
+          encoding: 'utf8',
+        },
+      ),
+    ].join('\n')
+    const tracked = listed
       .split('\n')
       .filter(Boolean)
       // A fixture in a checker's own test names a deliberately absent ADR; that is its subject.
