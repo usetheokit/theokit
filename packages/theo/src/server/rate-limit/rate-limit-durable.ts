@@ -123,14 +123,49 @@ function unavailable(config: RateLimitConfig): RateLimitResult {
  * `retryAfter` floors at 0: it is derived from a timestamp the STORE produced, on a host whose clock
  * is not this invocation's, and `Retry-After: -4` is not a valid header value.
  */
+/**
+ * The count a sliding window charges this caller: the current window, plus whatever of the previous
+ * one is still inside `windowMs`.
+ *
+ * B-261 — a fixed window admits twice the limit at its boundary, measured at 10 against a nominal 5
+ * in ~405ms. The cause is that `resetAt` is pinned at the first request of a window, so a caller who
+ * fills it late and fills the next one early spends two budgets inside one window's worth of time.
+ *
+ * The weight is how much of the previous window has NOT yet slid out. Just after a boundary almost all
+ * of it is still inside, so a caller that spent its budget is charged nearly the whole of it; by the
+ * end of the window almost none is, and the charge decays to nothing.
+ *
+ * A store that cannot say returns no `previousCount`, and this charges the current window only —
+ * today's behaviour, today's burst, and nothing breaks for a store nobody updated.
+ */
+function slidingCount(
+  state: { count: number; resetAt: number; previousCount?: number },
+  windowMs: number,
+): number {
+  const { previousCount } = state
+  if (previousCount === undefined || previousCount === 0) return state.count
+
+  const windowStart = state.resetAt - windowMs
+  const elapsed = Date.now() - windowStart
+  // Clamped: a clock that moved, or a store reporting a window that has not started, must not produce
+  // a weight outside 0..1 — a negative one would CREDIT the caller and a weight above 1 would charge
+  // it for traffic that never happened.
+  const throughCurrent = Math.min(1, Math.max(0, elapsed / windowMs))
+  return state.count + previousCount * (1 - throughCurrent)
+}
+
 function resultFromDurableState(
-  state: { count: number; resetAt: number },
+  state: { count: number; resetAt: number; previousCount?: number },
   config: RateLimitConfig,
 ): RateLimitResult {
   const remaining = Math.max(0, config.max - state.count)
   const retryAfter = Math.max(0, Math.ceil((state.resetAt - Date.now()) / 1000))
 
-  if (state.count > config.max) {
+  // The DECISION reads the sliding count; the headers keep reporting the current window, because
+  // `X-RateLimit-Remaining` answers "how many more may I send" and a fractional weight is not a
+  // number of requests. A client that sees 2 remaining and is refused would be told a falsehood, so
+  // the refusal threshold moves and the reported figure stays whole.
+  if (slidingCount(state, config.windowMs) > config.max) {
     return {
       limited: true,
       headers: {

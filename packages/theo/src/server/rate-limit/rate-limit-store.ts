@@ -22,6 +22,18 @@ export interface RateLimitState {
   count: number
   /** Absolute timestamp (ms since epoch) when this window expires. */
   resetAt: number
+  /**
+   * B-261 — how many requests the window BEFORE this one admitted, when the store can say.
+   *
+   * Optional, and the optionality IS the compatibility line: a third-party store returning only
+   * `{ count, resetAt }` keeps working with the behaviour it already had rather than breaking. A store
+   * that supplies this gets a sliding window instead of a fixed one.
+   *
+   * Why it is needed: with `resetAt` pinned at the first request of a window, filling the window late
+   * and the next one early spends two budgets inside one window's worth of time. Measured before the
+   * fix — `windowMs: 400, max: 5` admitted 10 in ~405ms, a factor of exactly 2.
+   */
+  previousCount?: number
 }
 
 /**
@@ -113,12 +125,22 @@ export class InMemoryStore implements RateLimitStore {
 
     const entry = this.store.get(key)
     if (!entry || now >= entry.resetAt) {
-      const fresh = { count: 1, resetAt: now + windowMs }
+      // B-261 — the expiring window's count is carried forward rather than discarded. Without it the
+      // limiter cannot tell a caller arriving fresh from one that just spent a full budget, which is
+      // the whole of the boundary burst.
+      const fresh = {
+        count: 1,
+        resetAt: now + windowMs,
+        previousCount: entry === undefined ? 0 : entry.count,
+      }
       this.store.set(key, fresh)
       return { ...fresh }
     }
     entry.count++
-    return { count: entry.count, resetAt: entry.resetAt }
+    // B-261 — `previousCount` travels with EVERY answer, not only the one that opened the window. It
+    // was returned by the branch above and dropped here at first, so the weighting applied to the
+    // first request of a window and to nothing after it: 10 admitted became 9 instead of 5.
+    return { count: entry.count, resetAt: entry.resetAt, previousCount: entry.previousCount }
   }
 
   /** Sweep expired entries. Called by the GC timer; safe to call manually. */
