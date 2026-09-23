@@ -341,3 +341,77 @@ describe('renderReport — a declaration that matches nothing is named', () => {
     expect(body).not.toMatch(/stale/i)
   })
 })
+
+/**
+ * B-268 T4.1 — the fixture is run 35820666635's own check list, not a shape somebody imagined.
+ *
+ * Fetched from the API on 2026-09-23: head_sha `ba47109c5ceabca90554382c947c027d31c7b942`, 41
+ * check-runs — 34 success, 5 skipped, 1 failure, 1 cancelled. The failure and the cancelled carry the
+ * SAME name, `preview / Publish a preview of every publishable package`, which is the detail nobody
+ * would have invented: one gate appearing twice on one SHA, once through the conclusion branch and
+ * once through the branch that never reads a conclusion.
+ *
+ * `pkg-pr-new@0.0.88` answered `Server error (500)` three times through its own retry and then served
+ * a Cloudflare error page. `gh run rerun --failed` reproduced it identically.
+ */
+const RUN_35820666635 = [
+  // the two entries for the declared publishing gate, verbatim from the API
+  {
+    name: 'preview / Publish a preview of every publishable package',
+    status: 'completed',
+    conclusion: 'failure',
+  },
+  {
+    name: 'preview / Publish a preview of every publishable package',
+    status: 'completed',
+    conclusion: 'cancelled',
+  },
+  // five dep-check matrix legs the run skipped
+  ...[
+    'dep-check / floors the shared pin cannot reach — result',
+    'dep-check / suite at the bottom of every declared range',
+    'dep-check / floors the shared pin cannot reach',
+    'dep-check / consumers this release would strand',
+    'dep-check / the floor only some packages claim',
+  ].map((name) => ({ name, status: 'completed', conclusion: 'skipped' })),
+  // the gates that assert something about the code, all green
+  ...[
+    'CI',
+    'SonarCloud Code Analysis',
+    'sonar / SonarQube Cloud',
+    'Unit + Type tests (22)',
+    'Unit + Type tests (22.12)',
+    'Typecheck + Build',
+    'Lint + Format',
+    'Package validation (publint + ATTW + smoke)',
+    'TheoCode (the consumer that validates this framework)',
+    'trufflehog / TruffleHog',
+    'lint / actionlint + zizmor',
+    'SAST status',
+    'dep-check / dependency gate',
+    'promotion-gate / develop accepts only workspace',
+  ].map((name) => ({ name, status: 'completed', conclusion: 'success' })),
+]
+
+describe('the real outage — run 35820666635 reads green', () => {
+  it('Given the check list from run 35820666635, Then the verdict reads green', () => {
+    const publishing = new Set(['preview / Publish a preview of every publishable package'])
+    const s = summarise(RUN_35820666635, { publishing })
+
+    expect(s.failed).toBe(0)
+    expect(s.pending).toBe(0)
+    expect(s.ok).toBe(true)
+    // BOTH entries for the declared gate are excluded — the failure through the conclusion branch
+    // and the cancelled through the one that never reads a conclusion.
+    expect(s.excluded).toHaveLength(2)
+
+    const body = renderReport({
+      checkRuns: RUN_35820666635,
+      coverage: COVERAGE,
+      sha: 'ba47109c5',
+      publishing,
+    })
+    expect(body).toContain('2 publishing gates excluded')
+    expect(body).not.toContain('Not green.')
+  })
+})
