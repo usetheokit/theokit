@@ -10,7 +10,11 @@ import type { IncomingMessage } from 'node:http'
 import { parseCookieHeader } from '../http/cookies.js'
 
 import { resolveClientIp, type TrustProxy } from './client-ip.js'
-import { InMemoryStore, type RateLimitStore } from './rate-limit-store.js'
+import {
+  type BakedStoreDeclaration,
+  InMemoryStore,
+  type RateLimitStore,
+} from './rate-limit-store.js'
 import type { RateLimitConfig, RateLimitResult } from './rate-limit.js'
 
 /**
@@ -38,8 +42,20 @@ export interface RouteRateLimitConfig {
   keyBy?: KeyByMode
   /** Cookie name used by keyBy='session'. Defaults to 'theo_session'. */
   cookieName?: string
-  /** Optional shared store (for multi-route correlation). Default per-limiter InMemoryStore. */
-  store?: RateLimitStore
+  /**
+   * Optional shared store (for multi-route correlation). Default per-limiter InMemoryStore.
+   *
+   * B-257 widened this to a union, and the second arm is not a store this runner uses. A deployed
+   * entry's BUILD-time declaration — `{ module, factory, options }` from
+   * `config/schemas/rate-limit.ts` — lands on the same key, because `theokit start` hands the
+   * parsed config straight to `createRouteRateLimiter`. `runtimeStore()` below discriminates on
+   * `incr` and drops the declaration.
+   *
+   * The union is declared rather than the parameter widened at the call site: a cast there would
+   * make the collision invisible to every other reader of this type, and the collision is the fact
+   * worth carrying.
+   */
+  store?: RateLimitStore | BakedStoreDeclaration
   /**
    * How many reverse proxies sit in front of the app, for `keyBy: 'ip'`. Default `false` — trust
    * none and key on the socket address.
@@ -148,13 +164,40 @@ export async function deriveKey(
  * Backwards-compatibility (ADR D2): a flat `{ windowMs, max }` config is
  * accepted and treated as `default` (no per-route variants).
  */
+/**
+ * The runtime store, or nothing — a BUILD-time declaration is neither.
+ *
+ * B-257 — `store` is two things under one key. `config/schemas/rate-limit.ts` accepts
+ * `{ module, factory, options }`, which `adapters/deployed-rate-limit.ts` bakes into a deployed
+ * entry at build time; this runner's `store` is a live `RateLimitStore`. `theokit start` hands the
+ * parsed config straight in, so both arrive here.
+ *
+ * Discriminated on `incr` rather than on `module`: `incr` is what this runner would CALL, so the
+ * question asked is the one that matters. Keying on the declaration's shape instead would accept
+ * any other plain object as a store and fail one line later, inside the caller.
+ *
+ * Dropping the declaration is correct and not a silent downgrade: a long-lived process keeps its
+ * counter between requests, which is why `node` and `bun` declare `enforcesRateLimit: 'always'`
+ * while the serverless adapters require a store to enforce at all.
+ */
+function runtimeStore(store: RouteRateLimitConfig['store']): RateLimitStore | undefined {
+  // Optional chaining rather than an explicit `=== null` guard, and the reason is a lint finding
+  // worth keeping visible: `no-unnecessary-condition` calls that comparison dead, because the
+  // TYPE says `| undefined`. It is right about the type and this is a public entry point a
+  // JavaScript caller reaches with no typechecking at all, so `null` arrives here whatever the
+  // signature says. `?.` answers both without asserting a comparison the checker can call dead.
+  return typeof (store as RateLimitStore | undefined)?.incr === 'function'
+    ? (store as RateLimitStore)
+    : undefined
+}
+
 export function createRouteRateLimiter(config: RouteRateLimitConfig | RateLimitConfig) {
   // Detect legacy flat shape
   const isFlat =
     'windowMs' in config && 'max' in config && !('default' in config) && !('routes' in config)
   const cfg: RouteRateLimitConfig = isFlat ? { default: config } : config
 
-  const store = cfg.store ?? new InMemoryStore()
+  const store = runtimeStore(cfg.store) ?? new InMemoryStore()
   // CR-005: validate store shape ONCE at construction. The previous
   // implementation ran `instanceof InMemoryStore` on every request and
   // threw at request-time if a non-InMemoryStore was passed — which
@@ -297,7 +340,7 @@ export function createRouteRateLimiterWeb(config: RouteRateLimitConfig | RateLim
     'windowMs' in config && 'max' in config && !('default' in config) && !('routes' in config)
   const cfg: RouteRateLimitConfig = isFlat ? { default: config } : config
 
-  const store = cfg.store ?? new InMemoryStore()
+  const store = runtimeStore(cfg.store) ?? new InMemoryStore()
   if (!(store instanceof InMemoryStore)) {
     throw new Error(
       'createRouteRateLimiterWeb: async RateLimitStore implementations require a dedicated async middleware path. ' +

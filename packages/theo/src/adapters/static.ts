@@ -282,6 +282,10 @@ export const staticAdapter: DeployAdapter = {
   name: 'static',
   // #382 — no server at all; there is nothing to stream from.
   streamsResponses: false,
+  // B-257 — a static export emits no request handler, so nothing here enforces anything at
+  // runtime. `'never'` rather than the abstain `theo-cloud` uses: abstaining claims another
+  // runtime answers for this, which is false for a static export — no runtime answers at all.
+  enforcesRateLimit: 'never' as const,
   build(config, cwd, ctx) {
     return buildStatic(config, cwd, {}, ctx)
   },

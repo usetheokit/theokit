@@ -304,6 +304,8 @@ export const bunAdapter: DeployAdapter = {
     // already receives `server`, whose `requestIP` gives the peer address without a header.
     'rateLimit',
   ],
+  // B-257 — a long-lived process: the in-process counter survives between requests.
+  enforcesRateLimit: 'always',
   build(config, cwd, ctx) {
     return buildBun(config, cwd, {}, ctx)
   },

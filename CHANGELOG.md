@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [create-theokit 3.0.6] - 2026-09-22
+
+### Changed
+
+- The scaffold pins `theokit: ^0.71.0`, so a project created from it installs the version that was
+  just cut rather than the previous one.
+
+## [theokit 0.71.0] - 2026-09-22
+
 ### Changed
 
 - A WebSocket upgrade no longer bypasses a declared rate limit on `cloudflare` and `deno-deploy` (B-027). Both generated entries answered the upgrade ABOVE the limiter, so the cheapest way past a declared budget was to ask for the most expensive resource the entry hands out — a long-lived socket. The upgrade branch now sits below the check. The comment that justified the old order — *a 101 carries no document and no script, so the security baseline does not apply to it* — is true of the security HEADERS and false of the limiter: one is a document concern, the other a resource concern. Exercised by driving each emitted handler with two upgrades against `max: 1`, not by reading the rendered source; reverting the fix fails exactly those two cases and leaves the other 28 green.

@@ -556,6 +556,8 @@ export const cloudflareAdapter: DeployAdapter = {
   // that can mint one (`adapters/security-headers.ts`).
   servesAgents: true,
   appliesConfig: ['securityHeaders', 'csrf', 'disallowed', 'cors', 'serialization', 'plugins'],
+  // B-257 — per-invocation: an in-process counter does not survive, so a declared limit needs a durable store.
+  enforcesRateLimit: 'with-a-store',
 
   async build(config: TheoConfig, cwd: string, ctx?: AdapterBuildContext): Promise<void> {
     // Wave 2 (T2.2) — reject polyglot services on this adapter.

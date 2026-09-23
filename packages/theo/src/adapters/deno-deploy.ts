@@ -110,6 +110,10 @@ export function renderDenoEntry(port: number, opts: DeployedEntryOptions = {}): 
       // optional chain is what keeps the read from throwing there rather than a guess.
       `info?.remoteAddr?.hostname ?? resolveClientIpFromRequest(request, TRUST_PROXY)`,
       'request, info',
+      // B-257 — `npm:`, like every other specifier this target emits. A bare one does not resolve
+      // on Deno Deploy, and the durable limiter's import is emitted by the fragment rather than
+      // here, so the prefix has to travel with it.
+      'npm:',
     ),
     ``,
     // The serve handler's SECOND parameter is bound here for the first time: `Deno.serve` has
@@ -244,6 +248,8 @@ export const denoDeployAdapter: DeployAdapter = {
   // through it (usetheokit/theokit#412).
   servesAgents: true,
   appliesConfig: ['securityHeaders', 'csrf', 'disallowed', 'cors', 'serialization', 'plugins'],
+  // B-257 — per-invocation: an in-process counter does not survive, so a declared limit needs a durable store.
+  enforcesRateLimit: 'with-a-store',
   build(config, cwd, ctx) {
     return buildDeno(config, cwd, {}, ctx)
   },
