@@ -80,6 +80,9 @@ export function summarise(checkRuns, { self, publishing = new Set() } = {}) {
     skipped: 0,
     outstanding: [],
     excluded: [],
+    // Carried so the render can confront every DECLARED name against the run. Without it the render
+    // would read the file a second time, which is the second pass NFR-001 forbids.
+    declared: publishing,
     ok: false,
   }
   // The reporting job is itself a check run, and it is necessarily unfinished while it renders.
@@ -181,6 +184,24 @@ function checksSection(checkRuns, s) {
   // reader who has to infer from absence whether the mechanism ran cannot tell a working exclusion
   // from a broken one, so the number is always there.
   const byName = new Map(checkRuns.map((r) => [r.name, r]))
+
+  // B-268 ADR-3 — a declared name matching no check in this run has quietly stopped applying. This
+  // repository already refuses the identical shape for architecture rules
+  // (`code-quality-golden-rule.md § 2`, `vacuous_architecture_rule_{language}` at FAIL_HARD): a rule
+  // naming something no longer in the tree reads as enforced and enforces nothing. REPORTED rather
+  // than failed, because the report is not a gate — and NAMED rather than counted, because a count
+  // would let a reader believe one entry had matched.
+  const stale = [...(s.declared ?? [])].filter((name) => !byName.has(name))
+  const staleSection =
+    stale.length > 0
+      ? [
+          '',
+          `_${stale.length} declared publishing ${stale.length === 1 ? 'gate' : 'gates'} matched no check in this run — stale:_`,
+          ...stale.map((n) => `- ${n}`),
+          '',
+          'A declaration that matches nothing has stopped applying. Update `rules/publishing-gates.txt`.',
+        ].join('\n')
+      : ''
   const plural = s.excluded.length === 1 ? 'gate' : 'gates'
   const excluded = [
     '',
@@ -203,6 +224,7 @@ function checksSection(checkRuns, s) {
     '',
     head,
     excluded,
+    staleSection,
     outstanding,
     '',
     '| | Gate | Result |',

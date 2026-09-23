@@ -306,3 +306,38 @@ describe('renderReport — an excluded gate is named, never silent', () => {
     expect(withNone).toContain('0 publishing gates excluded')
   })
 })
+
+/**
+ * B-268 T3.2 — a declaration matching no check has quietly stopped applying.
+ *
+ * This repository already refuses the identical shape for architecture rules:
+ * `code-quality-golden-rule.md § 2` caps `vacuous_architecture_rule_{language}` at FAIL_HARD, because
+ * a rule naming something no longer in the tree reads as enforced and enforces nothing. Reporting
+ * rather than failing is the proportionate form here — the report is not a gate (ADR-3) — but silence
+ * would let the exclusion outlive the thing it was written for.
+ */
+describe('renderReport — a declaration that matches nothing is named', () => {
+  it('Given a declared name matching no check in the run, Then it is reported as stale', () => {
+    const body = renderReport({
+      checkRuns: [passing('unit'), passing('typecheck')],
+      coverage: COVERAGE,
+      sha: 'abc123def',
+      publishing: new Set(['preview / Publish a preview', 'a-check-nobody-runs-any-more']),
+    })
+    // Both declared names are absent from the run, so BOTH are named — a count alone would let a
+    // reader believe one entry had matched.
+    expect(body).toContain('a-check-nobody-runs-any-more')
+    expect(body).toContain('preview / Publish a preview')
+    expect(body).toMatch(/declared .*match(es|ed)? no check|no longer|stale/i)
+  })
+
+  it('Given every declared name present in the run, Then nothing is reported as stale', () => {
+    const body = renderReport({
+      checkRuns: [passing('unit'), failing('preview')],
+      coverage: COVERAGE,
+      sha: 'abc123def',
+      publishing: new Set(['preview']),
+    })
+    expect(body).not.toMatch(/stale/i)
+  })
+})
