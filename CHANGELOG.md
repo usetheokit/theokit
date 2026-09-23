@@ -7,6 +7,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Fixed
+- A middleware the file-scan runner cannot invoke now says so instead of vanishing. `middleware()` is
+  a fluent builder — `middleware('x').handle(fn).build()` — and the plausible `middleware({ name,
+  handler })` returns the un-built builder, an object. The runner skipped it in total silence: the
+  file found, the module evaluated, the handler never called, and a request that succeeded without it.
+  It now names the file and the missing `.build()`, once per file per process, and still answers the
+  request — this is a diagnostic, not a refusal (#B-266)
 
 - A rate limit is no longer doubled at its window boundary, on EITHER limiter. `windowMs: 400, max: 5`
   admitted 10 requests in ~405ms before this; both `createRateLimiterWeb` and
