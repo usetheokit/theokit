@@ -254,23 +254,6 @@ function assertBakeableStore(store: unknown, target: string): void {
 }
 
 /**
- * Does this config name a durable store?
- *
- * **The call side and the declaration side must branch on ONE fact**, or the entry declares
- * `createDurableRateLimiterWeb` and calls it without `await` — a promise compared against a budget,
- * which never limits and never errors. The PLAN panel found the first draft naming only the
- * declaration emitter: `deployedRateLimitFragment` writes `const RATE_LIMIT = …` and
- * `rateLimitCheckFragment` writes `const limit = RATE_LIMIT(caller)`. They are a pair or they are a
- * defect.
- *
- * It reads the config rather than re-running `bakeableRateLimit`, which would re-run the refusals
- * against a target this function does not receive.
- */
-function declaresDurableStore(rateLimit: RateLimitConfig | undefined): boolean {
-  return isStoreShaped((rateLimit as { store?: unknown } | undefined)?.store)
-}
-
-/**
  * The ONE predicate both sides read — the call emitter here and `assertBakeableStore`'s first
  * refusal. They were two, differing on arrays: this one accepted `store: []` while the refusal
  * rejected it, so the declaration threw while the call side would still have emitted `await`. The
@@ -403,9 +386,15 @@ export function deployedRateLimitFragment(
     `// the limit is PER INSTANCE, and a caller spread across instances gets that many budgets.`,
     `// The address is resolved correctly either way; the counting is what B-257 is about, and`,
     `// \`theokit build\` refuses a declared limit on those five until it is.`,
+    // B-262 — ONE builder, one signature, always async. The emitter used to branch here:
+    // `createRateLimiterWeb` returns a value and `createDurableRateLimiterWeb` returns a Promise, so
+    // the CALL SITE had to know which it got and emit `await` or not. A call site whose shape changes
+    // with the config is what produced B-257's missing `await`, and `buildRateLimiter` removes the
+    // decision rather than documenting it.
+    `import { buildRateLimiter } from '${importPrefix}theokit/server/rate-limit'`,
     ...(baked.store === undefined
       ? [
-          `const RATE_LIMIT = createRateLimiterWeb({ windowMs: ${baked.windowMs}, max: ${baked.max} })`,
+          `const RATE_LIMIT = buildRateLimiter({ windowMs: ${baked.windowMs}, max: ${baked.max} }, undefined)`,
         ]
       : [
           // B-257 — a durable counter, named by the app. `module` and the options are JSON literals;
@@ -413,12 +402,11 @@ export function deployedRateLimitFragment(
           // identifier and no escape can make that safe.
           //
           // The limiter's own import is emitted HERE rather than by each adapter. See `importPrefix`.
-          `import { createDurableRateLimiterWeb } from '${importPrefix}theokit/server/rate-limit'`,
           `import { ${baked.store.factory} } from ${JSON.stringify(baked.store.module)}`,
           `const RATE_LIMIT_STORE = new ${baked.store.factory}(${JSON.stringify(baked.store.options ?? {})})`,
-          `const RATE_LIMIT = createDurableRateLimiterWeb(`,
+          `const RATE_LIMIT = buildRateLimiter(`,
           `  { windowMs: ${baked.windowMs}, max: ${baked.max} },`,
-          `  { store: RATE_LIMIT_STORE },`,
+          `  RATE_LIMIT_STORE,`,
           `)`,
         ]),
     ``,
@@ -490,7 +478,10 @@ export function rateLimitCheckFragment(
     // B-257 — the call side of the pair. `deployedRateLimitFragment` emits the DECLARATION; this
     // emits the CALL, and the two branch on the same fact or the entry names a symbol it never
     // declared. A durable limiter returns a promise; the sync facade does not.
-    `${indent}const limit = ${declaresDurableStore(rateLimit) ? 'await ' : ''}RATE_LIMIT(caller)`,
+    // B-262 — `await` unconditionally. `buildRateLimiter` is always async, so this line no longer
+    // asks what the config declared. The conditional it replaces is where B-257's defect lived:
+    // a Promise read for `limited` is always `undefined`, always falsy, and every request passes.
+    `${indent}const limit = await RATE_LIMIT(caller)`,
     `${indent}if (limit.limited) {`,
     `${indent}  ${refuse}`,
     `${indent}}`,

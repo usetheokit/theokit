@@ -65,4 +65,21 @@ describe('the rate-limit entry is a real file (B-262, T1.2)', () => {
     expect((await limit('9.9.9.9')).limited, 'first request inside the budget').toBe(false)
     expect((await limit('9.9.9.9')).limited, 'second request over the budget').toBe(true)
   })
+  it('test_a_null_store_takes_the_fallback_rather_than_refusing_every_caller', async () => {
+    // Found by review, by calling the function the way JavaScript can call it. The signature says
+    // `RateLimitStore | undefined` and the type is erased, so `null` reaches here from any untyped
+    // caller — and `store === undefined` is false for it.
+    //
+    // Measured before the fix: the null fell through to the durable branch, `store.incr` threw, ADR
+    // 0019's fail-closed caught it and answered `limited: true`. So a programmer's null refused
+    // EVERY caller while reporting a store outage — a self-inflicted denial of service wearing the
+    // diagnostic of an infrastructure one. Failing closed is right for an unreachable store and
+    // wrong for an argument that was never a store.
+    const limit = buildRateLimiter({ windowMs: 60_000, max: 2 }, null as never)
+
+    expect(
+      (await limit('7.7.7.7')).limited,
+      'a null store refused a caller inside the budget',
+    ).toBe(false)
+  })
 })

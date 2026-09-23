@@ -47,7 +47,17 @@ export function buildRateLimiter(
   config: RateLimitConfig,
   store: RateLimitStore | undefined,
 ): (clientIp: string) => Promise<RateLimitResult> {
-  if (store === undefined) {
+  // Nullish rather than `=== undefined`, and the difference is a self-inflicted denial of service.
+  // The signature says `RateLimitStore | undefined` and the type is erased before this runs, so a
+  // `null` reaches here from any untyped caller. Measured with `=== undefined`: the null fell to the
+  // durable branch, `store.incr` threw, ADR 0019's fail-closed caught it, and every caller was
+  // refused with a header naming a store outage that had not happened. Failing closed is right for
+  // an unreachable store and wrong for an argument that was never a store.
+  // `== null` is the one comparison that answers both, and it is deliberate: `no-unnecessary-condition`
+  // calls an explicit `=== null` dead here because the TYPE says it cannot happen, and the type is
+  // right about the type and blind to the boundary. The loose form carries no dead comparison for the
+  // checker to object to, and `eqeqeq` permits it for nullish on its own configuration here.
+  if (store == null) {
     // A runtime with a long-lived process keeps its counter between requests, which is why `node`
     // and `bun` declare `enforcesRateLimit: 'always'`. The fallback is not a degradation there —
     // it is the correct limiter for that shape of host.
