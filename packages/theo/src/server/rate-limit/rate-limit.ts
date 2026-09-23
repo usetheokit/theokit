@@ -4,6 +4,7 @@ import {
   type BakedStoreDeclaration,
   InMemoryStore,
   type RateLimitStore,
+  slidingCount,
 } from './rate-limit-store.js'
 
 /**
@@ -85,7 +86,11 @@ function resultFromState(
   // than about the contract.
   const reset = String(Math.ceil(state.resetAt / 1000))
 
-  if (state.count > config.max) {
+  // B-261 — the SAME sliding count the durable path uses, from the same function. The first cut put
+  // the weighting in `rate-limit-durable.ts` alone, and review measured the consequence: 10 admitted
+  // here against a nominal 5 while the durable twin held at 5. Two limiters over one store must not
+  // disagree about what `max` means.
+  if (slidingCount(state, config.windowMs) > config.max) {
     // Floored, matching `rate-limit-durable.ts:131`. DEFENCE IN DEPTH and not a fix: measured
     // 2026-09-23, no caller reaches a negative value here, because this facade refuses any store but
     // `InMemoryStore` (`:49`) and `incrSync` restarts the window whenever `now >= resetAt`

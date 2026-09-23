@@ -86,4 +86,23 @@ describe('a window boundary does not double the limit (B-261)', () => {
       'an idle key was refused — the weighting is mixing callers',
     ).toBe(false)
   })
+  it('test_the_sync_path_gets_the_same_boundary_guarantee', async () => {
+    // Found by review, by driving the OTHER path. I fixed the durable limiter and left the sync one
+    // admitting 10 — which is the exact divergence B-260 had just closed on the header contract,
+    // reintroduced on a different axis one item later. Two limiters over one store must not disagree
+    // about what `max` means.
+    const { createRateLimiterWeb } =
+      await import('../../packages/theo/src/server/rate-limit/rate-limit.js')
+    const limit = createRateLimiterWeb({ windowMs: 300, max: 5 })
+
+    let admitted = 0
+    for (let i = 0; i < 5; i += 1) if (!limit('7.7.7.7').limited) admitted += 1
+    await new Promise((resolve) => setTimeout(resolve, 320))
+    for (let i = 0; i < 5; i += 1) if (!limit('7.7.7.7').limited) admitted += 1
+
+    expect(
+      admitted,
+      `${String(admitted)} admitted on the sync path against a nominal 5 — the two limiters disagree about max`,
+    ).toBeLessThanOrEqual(5)
+  })
 })

@@ -54,6 +54,32 @@ export interface BakedStoreDeclaration {
   options?: Record<string, string | number | boolean>
 }
 
+/**
+ * The count a sliding window charges: the current window, plus whatever of the previous one is still
+ * inside `windowMs`.
+ *
+ * B-261 — it lives HERE and not in either limiter, because review found the first version living in
+ * `rate-limit-durable.ts` only: the durable path stopped bursting and the sync path still admitted 10
+ * against a nominal 5. Two limiters over one store disagreeing about what `max` means is the exact
+ * divergence B-260 had closed on the header contract, one item earlier, on a different axis.
+ *
+ * The weight is how much of the previous window has NOT yet slid out — nearly 1 just after a boundary,
+ * decaying to 0 by the end of the window. Clamped to 0..1, because a clock that moved would otherwise
+ * produce a negative weight (which CREDITS the caller) or one above 1 (which charges it for traffic
+ * that never happened).
+ *
+ * A store that cannot report `previousCount` yields the current count alone — today's behaviour and
+ * today's burst, so nothing breaks for a store nobody updated.
+ */
+export function slidingCount(state: RateLimitState, windowMs: number): number {
+  const { previousCount } = state
+  if (previousCount === undefined || previousCount === 0) return state.count
+
+  const windowStart = state.resetAt - windowMs
+  const throughCurrent = Math.min(1, Math.max(0, (Date.now() - windowStart) / windowMs))
+  return state.count + previousCount * (1 - throughCurrent)
+}
+
 export interface RateLimitStore {
   /**
    * Atomic increment-and-get. If the key is missing OR the previous
