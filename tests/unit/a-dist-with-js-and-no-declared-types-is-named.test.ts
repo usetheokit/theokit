@@ -220,6 +220,44 @@ describe('what the guard reports', () => {
 
     expect(message).toMatch(/exit code|exit 1|exit 143/i)
   })
+
+  /**
+   * Measured 2026-09-24 by consuming this guard, and it corrects the table above a second time.
+   *
+   * The table maps exit 143/137 onto "out of memory, nothing implicated" and exit 1 onto "a real
+   * DTS error, read the `error TS…` above it". A third case satisfies neither row, and it is a
+   * memory event wearing the failure exit code: when the DTS *worker thread* exhausts its heap,
+   * Node raises `ERR_WORKER_OUT_OF_MEMORY` on the parent and tsup exits **1**.
+   *
+   * Reproduced without signalling any process, by capping the heap of a real package build
+   * (`NODE_OPTIONS=--max-old-space-size=256` on `packages/http`, whose DTS step is 59.8s against
+   * 2.0s for its ESM). Counted in that run's log:
+   *
+   *     ERR_WORKER_OUT_OF_MEMORY   2        DTS Build error   0
+   *     DTS Build start            1        error TS          0
+   *     heap out of memory         1        Terminated        0
+   *
+   * So it matches the KILLED row in every observable respect — the log stops at `DTS Build start`,
+   * no error is printed — and carries the FAILED row's exit code. It is also destructive: the same
+   * run took `packages/http/dist` from 10 `.d.ts` to 0, having wiped them at rollup's `buildStart`
+   * (tsup's `tsup:clean` plugin) and then died before writing their replacements.
+   *
+   * A reader who follows the table lands on "a workspace dependency is not built" and goes hunting
+   * a source defect that does not exist — which is this guard's own defect, pointed a third way.
+   */
+  it('names out-of-memory as a cause that presents with exit 1, not only with a signal', () => {
+    const message = describeDtsFinding(FINDING)
+
+    expect(message).toContain('ERR_WORKER_OUT_OF_MEMORY')
+  })
+
+  it('does not let exit 1 stand for "a TS error", which sends the reader after a defect', () => {
+    const message = describeDtsFinding(FINDING)
+
+    // The discriminator inside exit 1 must be stated: a TS error is PRINTED, and a worker that ran
+    // out of heap prints none. Without this the two exit-1 causes are indistinguishable.
+    expect(message).toMatch(/no `?error TS|without .{0,20}error TS|prints no|no TS error/i)
+  })
 })
 
 describe('against this repository as it stands', () => {

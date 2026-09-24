@@ -14,9 +14,27 @@
  * file. A real `pnpm --filter theokit build` here exited **1** with `DTS Build error` and
  * `TS2307: Cannot find module '@theokit/agents/config'` — that workspace dependency was not built
  * yet — and left **201 `.js` and 0 `.d.ts`**, byte for byte what the kill leaves. So the artifact
- * does not record why, and {@link describeDtsFinding} names both causes and points at the exit code
- * instead of asserting one. A guard that picked one would misattribute half the time, which is this
- * item's own defect pointed the other way.
+ * does not record why, and {@link describeDtsFinding} names every cause and points at the exit code
+ * instead of asserting one. A guard that picked one would misattribute, which is this item's own
+ * defect pointed the other way.
+ *
+ * A THIRD cause corrected it again on 2026-09-24, and it is the one the first two hid between them:
+ * the DTS runs in a worker THREAD, so a thread that exhausts its heap is reported to the parent as
+ * `ERR_WORKER_OUT_OF_MEMORY` and tsup exits **1**. A memory event therefore wears the FAILURE exit
+ * code, and the table above mapped exit 1 onto "read the `error TS…`" — sending the reader after a
+ * defect that does not exist. Reproduced without signalling anything, by capping the heap of a real
+ * build (`NODE_OPTIONS=--max-old-space-size=256` on `packages/http`, whose DTS step is 59.8s against
+ * 2.0s for its ESM). Counted in that log: `ERR_WORKER_OUT_OF_MEMORY` 2, `DTS Build start` 1, and
+ * `DTS Build error` 0, `error TS` 0, `Terminated` 0 — it matches the KILLED row in every observable
+ * respect and carries the FAILED row's exit code. The discriminator inside exit 1 is whether a TS
+ * error was PRINTED.
+ *
+ * That run is also what measured the window: it took `packages/http/dist` from 10 `.d.ts` to 0. The
+ * wipe is tsup's own `tsup:clean` rollup plugin, which removes every declaration file under the
+ * outDir in rollup's `buildStart` hook
+ * — so the destructive window is the whole DTS build. At `--max-old-space-size=128` the worker died
+ * BEFORE that hook and all 10 `.d.ts` survived, which is why a build that does not finish only
+ * sometimes poisons the tree.
  *
  * Nothing named that state, and the next reader was told the wrong thing. Measured against a
  * deliberately poisoned dist in this repository:
@@ -221,17 +239,27 @@ export const describeDtsFinding = (finding: DtsFinding): string => {
     ...shown.map((entry) => `    - ${entry}`),
     ...(rest > 0 ? [`    … and ${String(rest)} more`] : []),
     ``,
-    `  This cannot tell you WHY, because two different things leave this exact shape and the`,
-    `  artifact does not record which — read the build's EXIT CODE and output to tell them apart:`,
+    `  This cannot tell you WHY, because THREE different things leave this exact shape and the`,
+    `  artifact does not record which — read the build's EXIT CODE and output to tell them apart.`,
+    `  Only the last of them implicates any code:`,
     ``,
     `    the DTS worker was KILLED    exit 143 (SIGTERM) or 137 (SIGKILL), no error printed, the log`,
     `                                 stopping at \`DTS Build start\`. This repository's DTS worker holds`,
     `                                 a large heap, so a machine short on memory reaches this`,
     `                                 routinely. No source is implicated at all.`,
-    `    the DTS worker FAILED        exit 1, \`DTS Build error\` with \`error TS….\` above it. Measured`,
-    `                                 2026-09-24: a workspace dependency that is not built yet does`,
-    `                                 this — \`@theokit/agents\` absent gave TS2307 and left 201 \`.js\``,
-    `                                 with 0 \`.d.ts\`, byte for byte what the kill leaves.`,
+    `    it RAN OUT OF MEMORY         exit 1 with \`ERR_WORKER_OUT_OF_MEMORY\` and no \`error TS\``,
+    `                                 anywhere. The DTS runs in a worker THREAD, and a thread that`,
+    `                                 exhausts its heap is reported to the parent as an error rather`,
+    `                                 than as a signal — so a memory event wears the failure exit`,
+    `                                 code. Measured 2026-09-24 by capping a real build's heap: the`,
+    `                                 log stops at \`DTS Build start\` exactly as a kill does. No`,
+    `                                 source is implicated here either.`,
+    `    the DTS worker FAILED        exit 1 with \`DTS Build error\` and an \`error TS….\` PRINTED above`,
+    `                                 it — that printed error is what separates this from the row`,
+    `                                 above. Measured 2026-09-24: a workspace dependency that is not`,
+    `                                 built yet does this — \`@theokit/agents\` absent gave TS2307 and`,
+    `                                 left 201 \`.js\` with 0 \`.d.ts\`, byte for byte what the kill`,
+    `                                 leaves.`,
     ``,
     `  Either way \`clean: true\` had already removed the previous types, so what is on disk now is`,
     `  unusable. What is NOT implicated is the source of whichever package IMPORTS ${pkg}: left in`,
