@@ -31,12 +31,13 @@
  *         different facts, and a probe reporting the first as the second is worse than no probe.
  */
 import { AgentBuilder } from '../packages/agents/src/index.js'
-import { endpointCanRefuse } from './lib/endpoint-can-refuse.js'
 import { mountAgent } from '../packages/theo/src/server/agent/mount-agent.js'
 import {
   createObservabilityPluginFromConfig,
   getObservabilityAdapter,
 } from '../packages/theo/src/server/observability-bootstrap.js'
+
+import { endpointCanRefuse } from './lib/endpoint-can-refuse.js'
 
 /**
  * `.at()` rather than `[i + 1]` on purpose. This repository leaves `noUncheckedIndexedAccess` off, so
