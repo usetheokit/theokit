@@ -45,7 +45,8 @@
     "check:changelog": "node scripts/check-changelog-current.mjs",
     "check:audit": "pnpm audit --prod --audit-level=high",
     "typecheck:fast": "tsc --noEmit",
-    "test:dist-gate": "tsx scripts/ensure-theo-dist.ts"
+    "test:dist-gate": "tsx scripts/ensure-theo-dist.ts",
+    "probe:otlp": "npx tsx scripts/probe-otlp-delivery.ts"
   },
   "devDependencies": {
     "@apidevtools/swagger-parser": "^12.1.0",
