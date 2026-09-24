@@ -16,6 +16,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, it, expect } from 'vitest'
 
 import * as clientBarrel from '../src/client/index.js'
+import { withHoistedHead } from '../src/cli/commands/start/request-handler.js'
 import { generateEntryServer } from '../src/router/entry-server.js'
 import { NonceProvider, useNonce } from '../src/client/nonce.js'
 
@@ -65,6 +66,26 @@ describe('useNonce', () => {
     expect(open).toBeGreaterThan(-1)
     const payloadBlock = src.slice(open, src.indexOf('}', open))
     expect(payloadBlock).not.toContain('nonce')
+  })
+
+  it('an unstamped inline script in the body keeps no nonce', () => {
+    // FR-004, as a REGRESSION test over today's behaviour rather than a claim about a change. The
+    // one-line "fix" for this whole item — extending `applyNonceToInlineScripts` to the SSR body —
+    // is a security regression: the regex stamps a script inlined from untrusted content exactly as
+    // readily as a framework one. This case goes red the moment anyone stamps the body, wherever
+    // they add it, which a path-scoped diff could never do: `applyNonceToInlineScripts` has four
+    // call sites and the stamp can also be added in the renderer `entry-server.ts` generates.
+    const { head, body } = withHoistedHead(
+      '<head><script>theme()</script></head>',
+      '<div id="root"><script>untrusted()</script></div>',
+      'nonce-from-the-header',
+    )
+
+    // The head IS stamped — that is the framework's own template, and asserting it here keeps the
+    // case from passing because the nonce never arrived at all.
+    expect(head).toContain('nonce-from-the-header')
+    expect(body).not.toContain('nonce=')
+    expect(body).not.toContain('nonce-from-the-header')
   })
 
   it('useNonce is exported from theokit slash client', () => {
