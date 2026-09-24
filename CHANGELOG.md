@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+
+### Fixed
+
+- The OTLP probe's own control is now a tested module: `endpointCanRefuse` is exported from `scripts/lib/`, and three cases prove it distinguishes a receiver that refuses from one that accepts everything or is unreachable (#B-273)
 ### Added
 
 - `pnpm probe:otlp` — an instrument that proves a span produced by a production entry point reaches

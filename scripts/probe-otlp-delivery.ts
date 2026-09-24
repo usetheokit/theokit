@@ -31,6 +31,7 @@
  *         different facts, and a probe reporting the first as the second is worse than no probe.
  */
 import { AgentBuilder } from '../packages/agents/src/index.js'
+import { endpointCanRefuse } from './lib/endpoint-can-refuse.js'
 import { mountAgent } from '../packages/theo/src/server/agent/mount-agent.js'
 import {
   createObservabilityPluginFromConfig,
@@ -52,19 +53,7 @@ function arg(name: string, fallback: string): string {
 const ingest = arg('ingest', 'http://127.0.0.1:14318/v1/traces')
 const marker = `otlp-probe-${String(Date.now())}`
 
-/** An endpoint that answers 2xx to a path nobody serves cannot tell acceptance from arrival. */
-async function endpointCanRefuse(): Promise<boolean> {
-  const absent = new URL(ingest)
-  absent.pathname = '/a-path-this-collector-does-not-serve'
-  try {
-    const res = await fetch(absent, { method: 'POST', body: '{}' })
-    return res.status >= 400
-  } catch {
-    return false
-  }
-}
-
-if (!(await endpointCanRefuse())) {
+if (!(await endpointCanRefuse(ingest))) {
   console.error(
     `${ingest} answers 2xx (or is unreachable) on a path it does not serve, so a 2xx on the real ` +
       `path would say nothing. Point --ingest at a collector, not at a receiver that accepts ` +
