@@ -6,8 +6,11 @@
  * worked: its failure branch is `return false`, the safe direction, so a broken guard would have
  * turned "could not measure" into "clean" with no signal.
  *
- * Three cases, three branches: permissive, refusing, unreachable. Each drives a real loopback
- * server and asserts the guard's decision — never the OTLP transport, which is a different claim.
+ * Twelve cases over five verdicts — `refuses`, `permissive`, `unreachable`, `timed-out`,
+ * `unparseable`. Each drives a real loopback server and asserts the guard's decision, never the
+ * OTLP transport, which is a different claim. The count is deliberately not a criterion: an
+ * acceptance criterion demanding exactly three cases would be failed by the four that kill
+ * mutants, two of which approved the very receiver this guard exists to reject.
  */
 import { createServer } from 'node:http'
 import { createServer as createSocketServer, type Socket } from 'node:net'
@@ -62,7 +65,7 @@ describe('endpointCanRefuse', () => {
   it('refuses a receiver that answers 2xx on a path it does not serve', async () => {
     const server = await listening(200)
     try {
-      expect(await endpointCanRefuse(server.url)).toBe(false)
+      expect(await endpointCanRefuse(server.url)).toBe('permissive')
     } finally {
       await server.close()
     }
@@ -71,14 +74,37 @@ describe('endpointCanRefuse', () => {
   it('accepts a receiver that answers 4xx on an absent path', async () => {
     const server = await listening(404)
     try {
-      expect(await endpointCanRefuse(server.url)).toBe(true)
+      expect(await endpointCanRefuse(server.url)).toBe('refuses')
     } finally {
       await server.close()
     }
   })
 
   it('refuses when the request throws', async () => {
-    expect(await endpointCanRefuse('http://127.0.0.1:1/v1/traces')).toBe(false)
+    expect(await endpointCanRefuse('http://127.0.0.1:1/v1/traces')).toBe('unreachable')
+  })
+
+  // The boundary is a RANGE, and pinning one status on each side leaves most of it free. Measured
+  // against the twelve cases before this table: `!== 200` survived and failed OPEN — 201, 202 and 204
+  // flipped to `refuses`, so a receiver answering 204 to everything, the most natural swallow-every-
+  // thing stub there is, would have been approved. `>= 300` and `>= 400 && < 500` survived too, for
+  // want of a 3xx and a 5xx. One table pins all of it.
+  it.each([
+    [200, 'permissive'],
+    [204, 'permissive'],
+    [301, 'permissive'],
+    [399, 'permissive'],
+    [400, 'refuses'],
+    [404, 'refuses'],
+    [500, 'refuses'],
+    [502, 'refuses'],
+  ] as const)('reads %i as %s on a path the collector does not serve', async (status, verdict) => {
+    const server = await listening(status)
+    try {
+      expect(await endpointCanRefuse(server.url)).toBe(verdict)
+    } finally {
+      await server.close()
+    }
   })
 
   // 400 is the status the guard's own comparison turns on, and it is the likely reply when a
@@ -88,7 +114,7 @@ describe('endpointCanRefuse', () => {
   it('accepts a receiver that answers exactly 400, the boundary it turns on', async () => {
     const server = await listening(400)
     try {
-      expect(await endpointCanRefuse(server.url)).toBe(true)
+      expect(await endpointCanRefuse(server.url)).toBe('refuses')
     } finally {
       await server.close()
     }
@@ -100,7 +126,7 @@ describe('endpointCanRefuse', () => {
   it.each(['127.0.0.1:4318/v1/traces', '', '/v1/traces', 'not a url'])(
     'refuses an unparseable ingest rather than throwing: %j',
     async (ingest) => {
-      expect(await endpointCanRefuse(ingest)).toBe(false)
+      expect(await endpointCanRefuse(ingest)).toBe('unparseable')
     },
   )
 
@@ -111,7 +137,7 @@ describe('endpointCanRefuse', () => {
   it('refuses a receiver that accepts any POST, even when it would 404 a GET', async () => {
     const server = await discriminating(({ method }) => (method === 'POST' ? 200 : 404))
     try {
-      expect(await endpointCanRefuse(server.url)).toBe(false)
+      expect(await endpointCanRefuse(server.url)).toBe('permissive')
     } finally {
       await server.close()
     }
@@ -124,7 +150,7 @@ describe('endpointCanRefuse', () => {
   it('probes a path the collector does not serve, not the ingest path', async () => {
     const server = await discriminating(({ path }) => (path === '/v1/traces' ? 200 : 404))
     try {
-      expect(await endpointCanRefuse(server.url)).toBe(true)
+      expect(await endpointCanRefuse(server.url)).toBe('refuses')
     } finally {
       await server.close()
     }
@@ -151,7 +177,7 @@ describe('endpointCanRefuse', () => {
     try {
       const started = Date.now()
       expect(await endpointCanRefuse(`http://127.0.0.1:${String(address.port)}/v1/traces`)).toBe(
-        false,
+        'timed-out',
       )
       expect(Date.now() - started).toBeLessThan(15_000)
     } finally {
@@ -163,7 +189,7 @@ describe('endpointCanRefuse', () => {
   it('sends a body, so a receiver that validates one is still seen as permissive', async () => {
     const server = await discriminating(({ bodyLength }) => (bodyLength > 0 ? 200 : 400))
     try {
-      expect(await endpointCanRefuse(server.url)).toBe(false)
+      expect(await endpointCanRefuse(server.url)).toBe('permissive')
     } finally {
       await server.close()
     }
