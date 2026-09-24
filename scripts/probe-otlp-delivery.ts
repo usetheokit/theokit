@@ -23,6 +23,12 @@
  *   docker run -d --name otel -p 14318:4318 otel/opentelemetry-collector-contrib:latest
  *   npx tsx scripts/probe-otlp-delivery.ts --ingest http://127.0.0.1:14318/v1/traces
  *
+ * WHAT MUST EXIST FIRST. `pnpm install && pnpm build:packages`. The probe drives
+ * `packages/agents/src`, which imports a sibling's `dist`, so an unbuilt workspace cannot be loaded
+ * at all. Both are preconditions rather than failures: from a clean checkout this exited 1 twice —
+ * once for an uninstalled `@theokit/sdk`, once for an unbuilt `@theokit/presenter` — and exit 1
+ * means the collector refused a payload (B-303). They exit 2 now, each naming its own command.
+ *
  * WHAT IS OBSERVED, AND WHY THAT IS NOT A STUB. The adapter reports nothing: its `flush()` awaits the
  * POST for its side effect and discards the response, catching and logging a transport error without
  * rethrowing (`adapters/theo-cloud.ts:114-128`). So `await flush()` resolved identically whether the
@@ -43,19 +49,17 @@
  * Exit 1  the run produced no span, the collector refused the payload, or the transport never
  *         reached it. Reachable: point --ingest at a host that answers at or above 400 on the real
  *         path as well as on an unknown one
- * Exit 2  the probe could not measure. Five conditions reach it: `--ingest` is not a URL, nothing
- *         answered at it, it accepted the connection and answered nothing within `--timeout-ms`,
- *         it answered below 400 on a path it does not serve, or the boot resolved no adapter. NOT a pass: "we could not check" and "we checked and it is
+ * Exit 2  the probe could not measure. Seven conditions reach it: a dependency it imports is not
+ *         installed, a workspace sibling it reads through was never built, `--ingest` is not a URL,
+ *         nothing answered at it, it accepted the connection and answered nothing within
+ *         `--timeout-ms`, it answered below 400 on a path it does not serve, or the boot resolved
+ *         no adapter. NOT a pass: "we could not check" and "we checked and it is
  *         clean" are different facts, and a probe reporting the first as the second is worse than
  *         no probe. Each condition prints its own cause — a shared exit code is not a shared
  *         diagnosis, and naming the wrong one sends the reader to the wrong system.
  */
-import { AgentBuilder } from '../packages/agents/src/index.js'
-import { mountAgent } from '../packages/theo/src/server/agent/mount-agent.js'
-import {
-  createObservabilityPluginFromConfig,
-  getObservabilityAdapter,
-} from '../packages/theo/src/server/observability-bootstrap.js'
+import { dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 import {
   DEFAULT_TIMEOUT_MS,
@@ -63,6 +67,7 @@ import {
   type EndpointVerdict,
 } from './lib/endpoint-can-refuse.js'
 import { deliveryVerdict, recordDeliveriesTo } from './lib/otlp-delivery.js'
+import { classifyImportFailure, type ImportPrecondition } from './lib/probe-preconditions.js'
 
 /**
  * `.at()` rather than `[i + 1]` on purpose. This repository leaves `noUncheckedIndexedAccess` off, so
@@ -100,6 +105,72 @@ const NOT_MEASURED: Record<Exclude<EndpointVerdict, 'refuses'>, string> = {
     `${ingest} accepted the connection and sent no answer within ${String(TIMEOUT_MS)}ms. The host ` +
     `is up and the process behind the port is not answering; this is not a wrong address.`,
 }
+
+/**
+ * Why the probe could not load its subject, as one sentence per cause.
+ *
+ * A switch rather than the `Record` above because each sentence needs its own failure's detail. The
+ * rule is the same one the header states: one message per cause, because `pnpm install` and
+ * `pnpm build:packages` send the reader to different work, and a sentence naming the wrong one is
+ * worse than no sentence.
+ */
+function missingPrecondition(gap: ImportPrecondition): string {
+  switch (gap.kind) {
+    case 'dependencies':
+      return (
+        `${gap.specifier} is not installed, so the code this probe measures could not be loaded. ` +
+        `No collector was contacted. Run \`${gap.fix}\` first.`
+      )
+    case 'workspace-build':
+      return (
+        `${gap.pkg} has no build output — ${gap.specifier} does not exist. This probe drives ` +
+        `\`packages/agents/src\`, which imports a sibling's \`dist\`, so the workspace has to be ` +
+        `built before it can be loaded. No collector was contacted. Run \`${gap.fix}\` first.`
+      )
+  }
+}
+
+/** This file is `<repo>/scripts/probe-otlp-delivery.ts`, so the repository root is two levels up. */
+const REPO_ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
+
+/**
+ * The production entry points this probe drives, loaded so that failing to LOAD them can be told
+ * apart from failing to DELIVER a span.
+ *
+ * Dynamic, and that is the whole of what B-303 asked for. A static `import` is resolved before the
+ * first line of this file runs, so an unresolvable one ended the process with Node's own
+ * uncaught-exception exit 1 — the code the header reserves for a payload the collector refused — and
+ * no branch in this file could reach it. Nothing else about the boot changed: these are the same
+ * three modules, loaded at the same point in the sequence, before the endpoint control, because
+ * whether the subject can be loaded at all precedes whether the instrument can be trusted.
+ *
+ * Sequential rather than `Promise.all`, so the FIRST failure is the one reported — the order the two
+ * measured crashes arrived in — and so a second rejection is never left unhandled.
+ */
+async function loadSubject() {
+  try {
+    const agents = await import('../packages/agents/src/index.js')
+    const mount = await import('../packages/theo/src/server/agent/mount-agent.js')
+    const boot = await import('../packages/theo/src/server/observability-bootstrap.js')
+    return {
+      AgentBuilder: agents.AgentBuilder,
+      mountAgent: mount.mountAgent,
+      createObservabilityPluginFromConfig: boot.createObservabilityPluginFromConfig,
+      getObservabilityAdapter: boot.getObservabilityAdapter,
+    }
+  } catch (error) {
+    const gap = classifyImportFailure(error, REPO_ROOT)
+    // RETHROWN when no precondition explains it. A module that resolved and then threw is a defect
+    // in this repository, and answering that with a command to run is the same wrong-system
+    // misdirection this item records, pointed the other way — so the operator gets the stack.
+    if (gap === null) throw error
+    console.error(`${missingPrecondition(gap)} NOT MEASURED.`)
+    process.exit(2)
+  }
+}
+
+const { AgentBuilder, mountAgent, createObservabilityPluginFromConfig, getObservabilityAdapter } =
+  await loadSubject()
 
 const verdict = await endpointCanRefuse(ingest, TIMEOUT_MS)
 if (verdict !== 'refuses') {
