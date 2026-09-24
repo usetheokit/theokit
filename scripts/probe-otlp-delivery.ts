@@ -26,8 +26,8 @@
  * Exit 0  the run produced a span and the exporter reported it accepted; the marker is printed with
  *         the command that reads it back on the collector side
  * Exit 1  the run produced no span, or the collector refused the payload
- * Exit 2  the probe could not measure — no adapter resolved, or the endpoint answers 2xx to a path
- *         that does not exist. NOT a pass: "we could not check" and "we checked and it is clean" are
+ * Exit 2  the probe could not measure — no adapter resolved, or the endpoint answers below 400 on
+ *         a path that does not exist. NOT a pass: "we could not check" and "we checked and it is clean" are
  *         different facts, and a probe reporting the first as the second is worse than no probe.
  */
 import { AgentBuilder } from '../packages/agents/src/index.js'
@@ -56,7 +56,7 @@ const marker = `otlp-probe-${String(Date.now())}`
 
 if (!(await endpointCanRefuse(ingest))) {
   console.error(
-    `${ingest} answers 2xx (or is unreachable) on a path it does not serve, so a 2xx on the real ` +
+    `${ingest} answers below 400 (or is unreachable) on a path it does not serve, so a success on the real ` +
       `path would say nothing. Point --ingest at a collector, not at a receiver that accepts ` +
       `everything. NOT MEASURED.`,
   )

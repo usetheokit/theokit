@@ -6,16 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-
-### Fixed
-
-- The OTLP probe's own control is now a tested module: `endpointCanRefuse` is exported from `scripts/lib/`, and eleven cases prove it distinguishes a receiver that refuses from one that accepts everything, is unreachable, or cannot be addressed at all (#B-273)
-- The OTLP probe no longer approves a collector that accepts everything: its control now checks the method, the path and the body it probes with. Against a receiver that accepts any POST, or one that answers only to requests carrying content, the probe previously reported a delivery it had not verified (#B-273)
-
 ### Added
 
 - `pnpm probe:otlp` — an instrument that proves a span produced by a production entry point reaches
-  a real OpenTelemetry collector, and refuses to measure against an endpoint that answers 2xx to a
+  a real OpenTelemetry collector, and refuses to measure against an endpoint that answers below 400 to a
   path it does not serve. Until now every in-tree exercise of the span path substituted the
   transport, so the code that BUILDS a span was covered and the claim that one ARRIVES was not
   (#B-199)
@@ -26,6 +20,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   run is reported as stale rather than dropped in silence (#B-268)
 
 ### Fixed
+
+- The OTLP probe's own control is now a tested module: `endpointCanRefuse` is exported from `scripts/lib/`, and eleven cases prove it distinguishes a receiver that refuses from one that accepts everything, is unreachable, or cannot be addressed at all (#B-273)
+- The OTLP probe no longer approves a collector that accepts everything: its control now checks the method, the path and the body it probes with. Against a receiver that accepts any POST, or one that answers only to requests carrying content, the probe previously reported a delivery it had not verified (#B-273)
+
 
 - The PR quality report no longer reads green when nothing was verified. `ok` guarded on the raw check
   list, which counts a gate excluded as a publisher — so a run whose every surviving check was a
