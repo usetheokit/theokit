@@ -19,7 +19,7 @@
  * build that baked only the serialisable shapes would produce an app whose CORS silently allowed
  * nothing, which is the exact class of failure this issue reports.
  *
- * `rules/three-target-parity.md` § 3 is explicit about the alternative: "a target that cannot serve
+ * `docs/program/three-target-parity.md` § 3 is explicit about the alternative: "a target that cannot serve
  * a capability refuses by name. Silent degradation is the failure mode this rule exists to
  * prevent." So the build throws, naming the target, the key and the two ways forward.
  */

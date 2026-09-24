@@ -1,10 +1,11 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { describe, it, expect } from 'vitest'
 
 import {
+  readCheckRuns,
   readPublishingGates,
   renderReport,
   summarise,
@@ -455,5 +456,139 @@ describe('the real outage — run 35820666635 reads green', () => {
     expect(excludedLines).toHaveLength(2)
     expect(excludedLines.join(' ')).toContain('`failure`')
     expect(excludedLines.join(' ')).toContain('`cancelled`')
+  })
+})
+
+/**
+ * B-295 — page one is not the run.
+ *
+ * `gh api ".../check-runs?per_page=100"` without `--paginate` returns page ONE and an envelope whose
+ * `total_count` reports the whole run. The script read `.check_runs` and never the count, so above a
+ * hundred checks the verdict was computed over a prefix and the report still printed "N of N gates
+ * passed" — a red gate on page two read as green at the moment a merge is decided. Latent at the 41
+ * checks measured on run 35820666635, and reached by ordinary CI growth.
+ *
+ * Two halves, and the second is what makes the first safe: the payload is read WHOLE, and a payload
+ * that reports more results than it carries is refused rather than summarised.
+ */
+const envelope = (total: number, names: string[]) => ({
+  total_count: total,
+  check_runs: names.map(passing),
+})
+const names = (prefix: string, n: number) => Array.from({ length: n }, (_, i) => `${prefix}-${i}`)
+
+describe('readCheckRuns — the envelope is read, not just its first field', () => {
+  it('Given the pages `gh --paginate --slurp` produces, Then every run across them is read', () => {
+    // `--slurp` wraps the per-page responses in an array; each page repeats the same `total_count`.
+    const { runs, reported } = readCheckRuns([
+      envelope(150, names('page-one', 100)),
+      envelope(150, names('page-two', 50)),
+    ])
+    expect(runs).toHaveLength(150)
+    expect(reported).toBe(150)
+  })
+
+  it('Given a single un-paginated envelope, Then it is read exactly as before', () => {
+    const { runs, reported } = readCheckRuns(envelope(2, ['unit', 'typecheck']))
+    expect(runs.map((r: { name: string }) => r.name)).toEqual(['unit', 'typecheck'])
+    expect(reported).toBe(2)
+  })
+
+  it('Given a bare list with no envelope, Then no count is claimed', () => {
+    // A caller that hands over a plain array has made no statement about a total, and inventing one
+    // from the length would turn "I do not know" into "nothing is missing".
+    const { runs, reported } = readCheckRuns([passing('unit')])
+    expect(runs).toHaveLength(1)
+    expect(reported).toBeNull()
+  })
+
+  it('Given nothing at all, Then it is empty and claims no count', () => {
+    expect(readCheckRuns(null)).toEqual({ runs: [], reported: null })
+  })
+
+  it('Given an envelope reporting more runs than it carries, Then the shortfall is measurable', () => {
+    const { runs, reported } = readCheckRuns(envelope(150, names('page-one', 100)))
+    expect(runs).toHaveLength(100)
+    expect(reported).toBe(150)
+  })
+})
+
+describe('summarise — a check run that never arrived is not a check that passed', () => {
+  it('Given runs were reported and not received, Then the verdict is NOT green', () => {
+    // The same rule this file already holds for a pending check, one step earlier: "I did not see it"
+    // must never resolve to "it passed". Here the unseen ones are not even in the list.
+    const s = summarise([passing('unit'), passing('typecheck')], { missing: 48 })
+    expect(s).toMatchObject({ passed: 2, failed: 0, pending: 0, missing: 48 })
+    expect(s.ok).toBe(false)
+  })
+
+  it('Given every reported run was received, Then nothing changes', () => {
+    const s = summarise([passing('unit'), passing('typecheck')], { missing: 0 })
+    expect(s.ok).toBe(true)
+  })
+})
+
+describe('renderReport — truncation is declared, never summarised away', () => {
+  it('Given the run reported more checks than arrived, Then it says so and does not read green', () => {
+    const body = renderReport({
+      checkRuns: names('page-one', 100).map(passing),
+      reported: 150,
+      coverage: COVERAGE,
+      sha: 'abc123def',
+    })
+    expect(body).not.toMatch(/gates passed/i)
+    expect(body).toContain('Not green.')
+    // The number is named, so a reader can tell a truncated fetch from a quiet one.
+    expect(body).toMatch(/50 .*never (arrived|received)|50 check runs? (were )?not received/i)
+  })
+
+  it('Given the reporting job is excluded, Then its absence is not read as a truncated fetch', () => {
+    // The negative case that guards the obvious wrong fix: comparing the reported total against the
+    // list AFTER `self` was filtered out makes every ordinary run look short by one, and a report
+    // that can never say green is a report people stop reading.
+    const body = renderReport({
+      checkRuns: [passing('Lint'), running('Quality report (PR comment)')],
+      reported: 2,
+      coverage: COVERAGE,
+      sha: 'abc123def',
+      self: 'Quality report (PR comment)',
+    })
+    expect(body).toContain('gates passed')
+    expect(body).not.toMatch(/never (arrived|received)/i)
+  })
+
+  it('Given no reported total, Then nothing is claimed about completeness', () => {
+    const body = renderReport({
+      checkRuns: [passing('Lint')],
+      coverage: COVERAGE,
+      sha: 'abc123def',
+    })
+    expect(body).toContain('gates passed')
+    expect(body).not.toMatch(/never (arrived|received)/i)
+  })
+})
+
+describe('the fetch that feeds the report asks for every page', () => {
+  // Shell continuations are joined first. The first version of this case read the raw lines and
+  // failed against a workflow that DOES paginate, because splitting the command over three lines put
+  // `--paginate` and the URL on different ones — the ruler was wrong, not the thing measured.
+  const collectStep = () => {
+    const ci = readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8')
+    const joined = ci.replace(/\\\n\s*/g, ' ')
+    return joined.split('\n').find((l) => l.includes('/check-runs'))
+  }
+
+  it('Given the collect step, Then it paginates instead of taking page one', () => {
+    // The script cannot fix this on its own: a payload it never received is one it cannot count.
+    // This is the other half of B-295, and it lives here because the two are one contract.
+    const line = collectStep()
+    expect(line).toBeDefined()
+    expect(line).toMatch(/--paginate/)
+  })
+
+  it('Given the pages are folded back into one file, Then the claimed total survives', () => {
+    // `total_count` is what the report confronts against what it received. A merge that dropped it
+    // would leave the fetch paginated and the truncation check blind — green again, quietly.
+    expect(collectStep()).toMatch(/total_count/)
   })
 })

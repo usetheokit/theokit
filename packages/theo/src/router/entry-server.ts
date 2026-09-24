@@ -56,14 +56,16 @@ function buildAppTreeJs(options: EntryServerOptions): string {
   // createBrowserRouter reads it.
   if (options.theoUi) {
     return [
-      `React.createElement(TheoUIProvider, { theme: { defaultTheme: '${theme}' } },`,
-      `      React.createElement(Suspense, { fallback: null },`,
-      `        React.createElement(StaticRouterProvider, { router, context, hydrate: false })`,
+      `React.createElement(NonceProvider, { nonce: options.nonce },`,
+      `      React.createElement(TheoUIProvider, { theme: { defaultTheme: '${theme}' } },`,
+      `        React.createElement(Suspense, { fallback: null },`,
+      `          React.createElement(StaticRouterProvider, { router, context, hydrate: false })`,
+      `        )`,
       `      )`,
       `    )`,
     ].join('\n')
   }
-  return `React.createElement(Suspense, { fallback: null },\n      React.createElement(StaticRouterProvider, { router, context, hydrate: false })\n    )`
+  return `React.createElement(NonceProvider, { nonce: options.nonce },\n      React.createElement(Suspense, { fallback: null },\n        React.createElement(StaticRouterProvider, { router, context, hydrate: false })\n      )\n    )`
 }
 
 /**
@@ -90,6 +92,7 @@ function generateSingleShotEntry(options: EntryServerOptions): string {
     `import { createStaticHandler, createStaticRouter, StaticRouterProvider, matchRoutes } from 'react-router'`,
     `import { PassThrough } from 'node:stream'`,
     `import { routes, __theoPreloadMap, __theoPreloadPathsFor } from '/@theo/route-manifest'`,
+    `import { NonceProvider } from 'theokit/client'`,
     theoUiImport,
     `export async function render(url, options = {}) {`,
     // Resolve the matched pages BEFORE rendering.
@@ -399,6 +402,7 @@ function generateStreamingEntry(options: EntryServerOptions): string {
     `import { renderToPipeableStream, renderToReadableStream } from 'react-dom/server'`,
     `import { createStaticHandler, createStaticRouter, StaticRouterProvider, matchRoutes } from 'react-router'`,
     `import { routes, __theoPreloadMap, __theoPreloadPathsFor } from '/@theo/route-manifest'`,
+    `import { NonceProvider } from 'theokit/client'`,
     theoUiImport,
     ``,
     ...streamingDocumentHelpers(),

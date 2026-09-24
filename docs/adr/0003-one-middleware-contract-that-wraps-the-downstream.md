@@ -208,7 +208,7 @@ Until then the refusal in `095c786d1` stands, and `#345` stays open.
 ## References
 
 - `usetheokit/theokit#345` — the report, and the refusal that made it audible
-- `.claude/rules/three-target-parity.md` — why two contracts is a defect rather than a trade-off
+- `docs/program/three-target-parity.md` — why two contracts is a defect rather than a trade-off
 - `packages/theo/src/server/http/web-middleware-runner.ts` — where the deferral is recorded
 - `docs/adr/0001-authorization-is-transport-independent.md` — the precedent for splitting a concern
   into a transport-independent decision and a per-transport edge

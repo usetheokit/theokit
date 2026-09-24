@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- `useNonce()` on `theokit/client` — an application component can now read the request's CSP nonce,
+  so an inline script it renders is allowed by the framework's own policy. The SSR entry supplies the
+  value through a `NonceProvider` it wraps the app tree in; the nonce is deliberately NOT serialised
+  into the hydration payload, so a consumer's element needs `suppressHydrationWarning`, which
+  `docs/surfaces/csp-nonce.md` documents as mandatory rather than advisory (#B-270)
 - `pnpm probe:otlp` — an instrument that proves a span produced by a production entry point reaches
   a real OpenTelemetry collector, and refuses to measure against an endpoint that answers below 400 to a
   path it does not serve. Until now every in-tree exercise of the span path substituted the
@@ -18,9 +23,52 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   outage as a failure of the change. Each entry carries its reason on the same line, the report names
   every excluded gate with the conclusion it actually had, and a declaration matching no check in the
   run is reported as stale rather than dropped in silence (#B-268)
+- `pnpm check:dts-complete` — a built `dist` carrying JavaScript and none of the type entries its own
+  `package.json` declares is now reported against the package whose DTS is incomplete, and the
+  pre-push hook runs it after the build. `tsup` builds with `clean: true`, so the previous
+  declarations are gone before the DTS worker writes new ones, and that worker reaches the same end
+  state two ways: SIGTERM on a machine short on memory, and an outright failure when a workspace
+  dependency is not built yet — both measured leaving 201 `.js` with 0 `.d.ts`. Unnamed, the next
+  per-package typecheck exits 2 with `TS7016` against a CONSUMER file that did not change, and the
+  investigation starts in the wrong package; that misattribution already cost a wrong diagnosis. The
+  check holds each package to the surface it declares about itself, so `create-theokit` — a pure
+  `bin` with zero declared type entries — is not reported (#B-298)
 
 ### Fixed
 
+- The OTLP probe tells an unmet precondition from a refused delivery. Running it from a clean
+  checkout raised `ERR_MODULE_NOT_FOUND` — first for `@theokit/sdk` with nothing installed, then for
+  `@theokit/presenter/dist/index.js` with the workspace unbuilt — and both left exit 1, which the
+  probe's own header defines as the collector having refused a payload or the transport never having
+  reached it. Neither had happened, and no collector had been contacted at all. The probe's existing
+  "could not measure" band now carries both cases with the command that resolves each, and the three
+  workspace imports are loaded dynamically so the check runs before resolution rather than after the
+  process has already died (#B-303)
+
+- `pnpm check:dts-complete` and the pre-push hook now cover the third way a DTS step ends, which the
+  other two hid between them: the declarations are built in a worker THREAD, so a thread that
+  exhausts its heap is reported to the parent as `ERR_WORKER_OUT_OF_MEMORY` and `tsup` exits **1**.
+  An out-of-memory event therefore wears the FAILURE exit code, and the guard's table mapped exit 1
+  onto "read the `error TS…` above it" — sending a reader after a defect that does not exist.
+  Reproduced without signalling any process, by capping a real build's heap
+  (`--max-old-space-size=256` on `packages/http`): the log carried `ERR_WORKER_OUT_OF_MEMORY` and
+  zero occurrences of `DTS Build error`, `error TS` or `Terminated`, stopping at `DTS Build start`
+  exactly as a kill does. The same run took that `dist` from 10 `.d.ts` to 0, so exit 1 poisons the
+  tree as a signal does — and the hook's poisoned-dist warning lived only in its killed branch,
+  while `report_stage_failure` exits before `check:dts-complete` can run. The case that leaves a
+  poisoned dist was the case nobody was warned about. The warning is now also printed when the
+  package build FAILS, and scoped to that stage, because a format check writes no `dist` (#B-290)
+- A docblock, an ADR, a journey or a milestone DoD that cites the three-target parity rule now names
+  `docs/program/three-target-parity.md`, the copy this repository versions. The path they carried
+  lives under `.claude/`, which is gitignored — so a reader following it received nothing, including
+  the reader most likely to follow it: someone asking why a build refused their configuration, sent
+  there by the two adapters that quote the rule's § 3 by name to justify the refusal. A test now
+  fails when a versioned file cites a `rules/…` path whose document this repository versions under
+  `docs/program/`, so the class cannot return unnoticed (#B-285)
+- The nonce docblock in `adapters/security-headers.ts` no longer claims that exactly one deploy path
+  mints a per-request nonce. The node target does too — `theokit start` mints one and stamps the head,
+  and the node adapter serves through that handler. The same false fact was stated in three places,
+  including a `describe` title, so the suite's own structure asserted it (#B-270)
 - The OTLP probe's own control is now a tested module: `endpointCanRefuse` is exported from `scripts/lib/` and says WHY it refused, not just that it did — `refuses`, `permissive`, `unreachable`, `timed-out` or `unparseable`. The probe prints one message per cause, so an operator whose port has a stuck process is no longer told to replace a working collector (#B-273)
 - The OTLP probe stops hanging on a collector that accepts the connection and never answers. `fetch` has no default timeout, so a port with a stuck process left the probe pending with no message and no exit code — measured still waiting at 8081ms. The control now gives up after 5s and reports NOT MEASURED, which is what it exists to do (#B-273)
 - The OTLP probe names the flag, not the collector, when `--ingest` is not a URL. A missing scheme — the likeliest typo — was answered with the guard's own sentence, *"answers below 400 on a path it does not serve"*, sending the reader to debug a collector when the fault was in their argument. `--ingest` is now validated at the boundary with its own message, and the probe's header names all four conditions that reach exit 2 instead of two of them (#B-273)
@@ -36,6 +84,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - The PR quality report no longer collapses two check runs that share a name: a gate appearing twice
   keeps both conclusions, so a `failure` beside a `cancelled` is visible instead of whichever one was
   read last (#B-268)
+
+- The PR quality report no longer grades page one and calls it the run. The check-runs fetch asked for
+  `per_page=100` without `--paginate`, so it received the first hundred checks and an envelope whose
+  `total_count` described the whole commit — and the script read `.check_runs` and never the count.
+  Past a hundred gates the verdict was computed over a prefix while the report still printed "N of N
+  gates passed", which is a red gate on page two reading as green at the moment a merge is decided.
+  The fetch now pages through the run, and the report confronts what arrived against what the API
+  counted: a shortfall is named and refuses green, because a check run that never arrived is not a
+  check that passed (#B-295)
+
+- The OTLP probe no longer claims an acceptance nobody read. Its header promised *"exit 0 the run
+  produced a span and the exporter reported it accepted"*, and no acceptance result was ever
+  inspected: the adapter's `flush()` awaits the POST for its side effect and discards the response,
+  catching and logging a transport error without rethrowing, so it resolved the same way whether the
+  span was stored, refused with a 500, or never sent. Measured against a receiver that refused an
+  unknown path — so the probe's own control passed — and answered 404 on `/v1/traces`: the span was
+  refused, the probe exited 0, and it printed the epilogue that sends an operator to read back a span
+  the collector had thrown away. Exit 0 is now earned by an observed delivery the collector answered
+  below 400, on the same boundary the control uses; exit 1 is reachable and names the cause; and the
+  probe prints what it observed, so an earned pass is distinguishable from an unconditional one
+  (#B-294)
+- The dead-code audit (`pnpm knip`) completes instead of aborting, so `/code-quality` stops reporting
+  `auditor_unavailable_knip` and its D1 detector is capped at 70 no longer. The configuration expressed
+  "do not audit the applications" with `ignore`, which filters FILES and cannot remove a WORKSPACE — so
+  knip went on building a full TypeScript program for all six `apps/**` members, and for the gitignored
+  `my-test` scaffold that no pattern mentioned at all. Declaring them in `ignoreWorkspaces` drops peak
+  memory from 1,084,608 KB to 698,968 KB with every finding unchanged. Raising the heap ceiling had
+  already been measured to fail at 6144 MB: the wall was scope, not memory (#B-296)
 
 ## [create-theokit 3.0.8] - 2026-09-23
 

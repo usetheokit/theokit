@@ -50,6 +50,16 @@ function materialize(code: string): string {
       ].join('\n'),
     )
     .replace(
+      // The generated entry imports the nonce provider from the package by NAME, which is right for
+      // a consumer and unresolvable here: this repository IS `theokit`, so its own root has no
+      // `node_modules/theokit` to walk up to. Stubbed for the same reason the three below are — the
+      // subject under test is what the generator EMITS around it, not React context plumbing.
+      // Measured: without this the six cases in this file fail with
+      // `Cannot find package 'theokit'`, in CI as well as locally.
+      "import { NonceProvider } from 'theokit/client'",
+      'const NonceProvider = ({ children }) => children',
+    )
+    .replace(
       "import { routes, __theoPreloadMap, __theoPreloadPathsFor } from '/@theo/route-manifest'",
       [
         'const routes = []',

@@ -34,9 +34,13 @@ describe('T1.4 — SSR and CSR React trees mirror each other', () => {
   it('with theoUi enabled: server tree wraps StaticRouterProvider in TheoUIProvider + Suspense', () => {
     const server = generateEntryServer({ theoUi: { theme: 'violet-forge' } })
     const seq = extractWrapSequence(server)
-    expect(seq[0]).toBe('TheoUIProvider')
-    expect(seq[1]).toBe('Suspense')
-    expect(seq[2]).toBe('StaticRouterProvider')
+    // `NonceProvider` is SERVER-ONLY and outermost, and both facts are load-bearing. The nonce is
+    // minted per request, so there is nothing for the client to provide; and it wraps everything
+    // because `useNonce` must resolve for any component below, including the ones TheoUI renders.
+    expect(seq[0]).toBe('NonceProvider')
+    expect(seq[1]).toBe('TheoUIProvider')
+    expect(seq[2]).toBe('Suspense')
+    expect(seq[3]).toBe('StaticRouterProvider')
   })
 
   it('with theoUi enabled: client tree wraps RouterProvider in TheoUIProvider + Suspense', () => {
@@ -50,8 +54,14 @@ describe('T1.4 — SSR and CSR React trees mirror each other', () => {
   it('with theoUi enabled: only the leaf component differs (StaticRouterProvider vs RouterProvider)', () => {
     const server = extractWrapSequence(generateEntryServer({ theoUi: { theme: 'noir' } }))
     const client = extractWrapSequence(generateEntryClient(true, { theoUi: { theme: 'noir' } }))
-    // Strip the leaf, compare wrappers
-    expect(server.slice(0, -1)).toEqual(client.slice(0, -1))
+    // The trees differ in exactly two places now, and naming both is the point of this case:
+    // the leaf (Static vs plain RouterProvider), and the server-only `NonceProvider`. Asserting
+    // the server's extra wrapper HERE rather than tolerating a length difference is what keeps a
+    // third divergence from slipping in unnoticed.
+    expect(server[0]).toBe('NonceProvider')
+    expect(client).not.toContain('NonceProvider')
+    // Strip the server-only wrapper and the leaf, then the wrappers must mirror.
+    expect(server.slice(1, -1)).toEqual(client.slice(0, -1))
     expect(server[server.length - 1]).toBe('StaticRouterProvider')
     expect(client[client.length - 1]).toBe('RouterProvider')
   })
@@ -68,7 +78,11 @@ describe('T1.4 — SSR and CSR React trees mirror each other', () => {
     const client = extractWrapSequence(generateEntryClient(true))
     expect(server).not.toContain('TheoUIProvider')
     expect(client).not.toContain('TheoUIProvider')
-    expect(server[0]).toBe('Suspense')
+    // With TheoUI off, the server still opens with `NonceProvider`: the nonce is independent of
+    // which UI library renders below it. The client, having no per-request nonce, opens with
+    // `Suspense` — which is the same asymmetry the case above names, measured with TheoUI absent.
+    expect(server[0]).toBe('NonceProvider')
+    expect(server[1]).toBe('Suspense')
     expect(client[0]).toBe('Suspense')
   })
 })

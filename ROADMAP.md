@@ -26,7 +26,7 @@ release (`.claude/rules/cycle-acceptance.md § Hard gates`).
 
 ## Three-target parity is transversal
 
-`.claude/rules/three-target-parity.md` (owner-declared, 2026-08-19) constrains every milestone
+`docs/program/three-target-parity.md` (owner-declared, 2026-08-19) constrains every milestone
 rather than adding one of its own. Each Definition of done therefore carries three lines naming
 which targets the surface applies to and how the other two reach it.
 
@@ -78,7 +78,7 @@ its gates preventing elsewhere.
 band** when the framework's own thesis fails without it:
 
 1. an agent or a page is served **wrongly or unsafely** — a defect, not a missing convenience; or
-2. the **three-target split** (`.claude/rules/three-target-parity.md`) breaks, so a capability is
+2. the **three-target split** (`docs/program/three-target-parity.md`) breaks, so a capability is
    reachable from one target only; or
 3. a **benchmark journey already measured as lost or tied** (`docs/program/dx-benchmark.md`)
    depends on it.
@@ -640,7 +640,7 @@ it earns its own milestone through `/backlog-item` and `/discover`, not by being
 
 ## Cross-references
 
-- Transversal target constraint: `.claude/rules/three-target-parity.md`
+- Transversal target constraint: `docs/program/three-target-parity.md`
 - Acceptance contract that grades these criteria: `.claude/rules/cycle-acceptance.md`
 - Checkbox flip invariant: `.claude/skills/release/scripts/flip_milestone_checkbox.py`
 - Session binding for a milestone: `.claude/skills/cycle-goal/SKILL.md`

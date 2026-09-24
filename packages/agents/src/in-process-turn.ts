@@ -53,7 +53,7 @@ export interface StreamAgentTurnInProcessInput {
    * Declared here as well as on the HTTP entry point because the parity gate is right: a masking
    * default that applied over HTTP and not in-process would make "does the server's raw text
    * escape?" depend on which transport the caller picked — a rule nobody could hold, and the exact
-   * asymmetry `rules/three-target-parity.md` exists to refuse.
+   * asymmetry `docs/program/three-target-parity.md` exists to refuse.
    *
    * Absent ⇒ masked to a fixed string, the same default the HTTP path takes.
    */
