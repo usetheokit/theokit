@@ -226,6 +226,30 @@ describe('summarise — a declared publishing gate is a third class', () => {
     expect(s.ok).toBe(false)
   })
 
+  /**
+   * B-268 REVIEW — green is a claim about what was VERIFIED, never about what reported.
+   *
+   * `ok` guarded on the raw run list, which counts an excluded publisher. So a list whose every
+   * surviving check is a declared publisher left the verified set empty and still read green —
+   * "0 of 0 gates passed" — contradicting this file's own invariant two functions up: an empty list
+   * is not green, because nothing reported is a different fact. Found by the review panel's test
+   * auditor from the uncovered TRUE arm of the length guard, and reproduced by execution before the
+   * fix. The ordinary state that reaches it is the reporting job plus a failing publisher, which is
+   * how every run starts.
+   */
+  it('Given every surviving check is a declared publisher, Then nothing was verified and it is NOT green', () => {
+    const s = summarise([failing('preview')], { publishing: PUBLISHING })
+    expect(s).toMatchObject({ passed: 0, failed: 0, pending: 0 })
+    expect(s.excluded).toEqual([{ name: 'preview', conclusion: 'failure' }])
+    expect(s.ok).toBe(false)
+  })
+
+  it('Given only skipped checks, Then nothing was verified and it is NOT green', () => {
+    const s = summarise([{ name: 'Claude', status: 'completed', conclusion: 'skipped' }])
+    expect(s).toMatchObject({ passed: 0, failed: 0, pending: 0, skipped: 1 })
+    expect(s.ok).toBe(false)
+  })
+
   it('Given one call, Then classification walks the check list exactly once more', () => {
     let reads = 0
     const counted = new Proxy(new Set(['preview']), {

@@ -21,6 +21,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- The PR quality report no longer reads green when nothing was verified. `ok` guarded on the raw check
+  list, which counts a gate excluded as a publisher — so a run whose every surviving check was a
+  declared publisher reported "0 of 0 gates passed" as a pass, and a run of only skipped checks did
+  the same. The guard now counts the verified set, restoring the invariant the function already
+  stated: an empty list is not green, because nothing reported is a different fact (#B-268)
+
 - The PR quality report no longer collapses two check runs that share a name: a gate appearing twice
   keeps both conclusions, so a `failure` beside a `cancelled` is visible instead of whichever one was
   read last (#B-268)

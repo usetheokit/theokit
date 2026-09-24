@@ -117,7 +117,13 @@ export function summarise(checkRuns, { self, publishing = new Set() } = {}) {
     }
   }
 
-  s.ok = runs.length > 0 && s.failed === 0 && s.pending === 0
+  // Green is a claim about what was VERIFIED, so the guard counts the verified set and not the raw
+  // list. `runs.length` counted an EXCLUDED publisher: a run whose every surviving check is a
+  // declared publisher left this empty and still read green — "0 of 0 gates passed" — against the
+  // invariant `summarise` states above, that an empty list is not green because nothing reported is
+  // a different fact. Only-skipped reached the same hole by the same route.
+  const verified = s.passed + s.failed + s.pending
+  s.ok = verified > 0 && s.failed === 0 && s.pending === 0
   return s
 }
 
