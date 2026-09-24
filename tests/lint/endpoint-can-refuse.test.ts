@@ -6,11 +6,15 @@
  * worked: its failure branch is `return false`, the safe direction, so a broken guard would have
  * turned "could not measure" into "clean" with no signal.
  *
- * Twelve cases over five verdicts — `refuses`, `permissive`, `unreachable`, `timed-out`,
- * `unparseable`. Each drives a real loopback server and asserts the guard's decision, never the
- * OTLP transport, which is a different claim. The count is deliberately not a criterion: an
- * acceptance criterion demanding exactly three cases would be failed by the four that kill
- * mutants, two of which approved the very receiver this guard exists to reject.
+ * Five verdicts — `refuses`, `permissive`, `unreachable`, `timed-out`, `unparseable` — each driven
+ * against a real loopback server. The guard's decision is what is asserted, never the OTLP transport,
+ * which is a different claim.
+ *
+ * There is deliberately no case count here. It went stale three commits running: written as "three"
+ * against twelve, then "twelve" against twenty, because the commit that corrected the number added
+ * eight cases in the same diff. A count is a census of the work rather than a statement about
+ * behaviour, and an acceptance criterion demanding exactly three cases would be failed by the ones
+ * that kill mutants — two of which approved the very receiver this guard exists to reject.
  */
 import { createServer } from 'node:http'
 import { createServer as createSocketServer, type Socket } from 'node:net'
@@ -156,10 +160,26 @@ describe('endpointCanRefuse', () => {
     }
   })
 
-  // The guard must send a body. Against a permissive receiver that validates one — 200 to a POST
-  // carrying content, 400 to an empty POST — dropping the body made the guard read 400 and APPROVE
-  // the very receiver it exists to reject. Measured here by execution: original false, mutant true.
-  // An audit of this file classified that mutant as failing toward over-refusal; it does not.
+  // The bound is a parameter, and this proves the caller's value is the one used rather than the
+  // default. It also runs in a twentieth of a second, where the default case necessarily spends five.
+  it('honours a caller-supplied timeout instead of the default', async () => {
+    const open: Socket[] = []
+    const server = createSocketServer((socket) => open.push(socket))
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    const address = server.address()
+    if (address === null || typeof address === 'string') throw new Error('no port assigned')
+    try {
+      const started = Date.now()
+      expect(
+        await endpointCanRefuse(`http://127.0.0.1:${String(address.port)}/v1/traces`, 50),
+      ).toBe('timed-out')
+      expect(Date.now() - started).toBeLessThan(2_000)
+    } finally {
+      for (const socket of open) socket.destroy()
+      await new Promise<void>((resolve) => server.close(() => resolve()))
+    }
+  }, 10_000)
+
   // A host that accepts the TCP connection and never answers is the fourth way this guard can fail,
   // and it was the one that returned NOTHING: measured pending at 8081ms against a silent socket.
   // The probe's whole purpose is to say "could not measure"; a guard that hangs says nothing at all,
@@ -179,13 +199,23 @@ describe('endpointCanRefuse', () => {
       expect(await endpointCanRefuse(`http://127.0.0.1:${String(address.port)}/v1/traces`)).toBe(
         'timed-out',
       )
-      expect(Date.now() - started).toBeLessThan(15_000)
+      // Bounded on BOTH sides, because a ceiling alone does not pin a default: `DEFAULT_TIMEOUT_MS`
+      // raised from 5s to 14s survived a `< 15_000` assertion with every case green. The floor
+      // catches the opposite mutation, where a default small enough to refuse a healthy collector
+      // would read as a faster suite.
+      const elapsed = Date.now() - started
+      expect(elapsed).toBeGreaterThanOrEqual(4_000)
+      expect(elapsed).toBeLessThan(8_000)
     } finally {
       for (const socket of open) socket.destroy()
       await new Promise<void>((resolve) => server.close(() => resolve()))
     }
   }, 30_000)
 
+  // The guard must send a body. Against a permissive receiver that validates one — 200 to a POST
+  // carrying content, 400 to an empty POST — dropping the body made the guard read 400 and APPROVE
+  // the very receiver it exists to reject. Measured here by execution: original false, mutant true.
+  // An audit of this file classified that mutant as failing toward over-refusal; it does not.
   it('sends a body, so a receiver that validates one is still seen as permissive', async () => {
     const server = await discriminating(({ bodyLength }) => (bodyLength > 0 ? 200 : 400))
     try {
