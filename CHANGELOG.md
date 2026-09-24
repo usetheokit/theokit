@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- `useNonce()` on `theokit/client` — an application component can now read the request's CSP nonce,
+  so an inline script it renders is allowed by the framework's own policy. The SSR entry supplies the
+  value through a `NonceProvider` it wraps the app tree in; the nonce is deliberately NOT serialised
+  into the hydration payload, so a consumer's element needs `suppressHydrationWarning`, which
+  `docs/surfaces/csp-nonce.md` documents as mandatory rather than advisory (#B-270)
 - `pnpm probe:otlp` — an instrument that proves a span produced by a production entry point reaches
   a real OpenTelemetry collector, and refuses to measure against an endpoint that answers below 400 to a
   path it does not serve. Until now every in-tree exercise of the span path substituted the
@@ -21,6 +26,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- The nonce docblock in `adapters/security-headers.ts` no longer claims that exactly one deploy path
+  mints a per-request nonce. The node target does too — `theokit start` mints one and stamps the head,
+  and the node adapter serves through that handler. The same false fact was stated in three places,
+  including a `describe` title, so the suite's own structure asserted it (#B-270)
 - The OTLP probe's own control is now a tested module: `endpointCanRefuse` is exported from `scripts/lib/` and says WHY it refused, not just that it did — `refuses`, `permissive`, `unreachable`, `timed-out` or `unparseable`. The probe prints one message per cause, so an operator whose port has a stuck process is no longer told to replace a working collector (#B-273)
 - The OTLP probe stops hanging on a collector that accepts the connection and never answers. `fetch` has no default timeout, so a port with a stuck process left the probe pending with no message and no exit code — measured still waiting at 8081ms. The control now gives up after 5s and reports NOT MEASURED, which is what it exists to do (#B-273)
 - The OTLP probe names the flag, not the collector, when `--ingest` is not a URL. A missing scheme — the likeliest typo — was answered with the guard's own sentence, *"answers below 400 on a path it does not serve"*, sending the reader to debug a collector when the fault was in their argument. `--ingest` is now validated at the boundary with its own message, and the probe's header names all four conditions that reach exit 2 instead of two of them (#B-273)
