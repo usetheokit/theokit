@@ -88,6 +88,34 @@ describe('useNonce', () => {
     expect(body).not.toContain('nonce-from-the-header')
   })
 
+  /**
+   * FR-002. Asserted PER BRANCH, on a separate generator call each, because a single count over the
+   * generator's source rewards wrapping only one of the two return shapes — and the `theoUi` branch is
+   * the one `@theokit/ui` consumers hit, which is to say the ones rendering `ThemeScript`.
+   *
+   * Three things per branch, because presence alone is too weak: the import has to be emitted (an
+   * element referencing an unimported name is a module that throws on evaluation), the provider has to
+   * receive `options.nonce` and not some other expression, and it has to sit OUTSIDE
+   * `StaticRouterProvider` — a provider nested inside the thing it should wrap supplies nothing.
+   */
+  function expectWrappedTree(src: string): void {
+    expect(src).toContain("import { NonceProvider } from 'theokit/client'")
+    expect(
+      src.split('React.createElement(NonceProvider, { nonce: options.nonce },').length - 1,
+    ).toBe(1)
+    expect(src.indexOf('React.createElement(NonceProvider')).toBeLessThan(
+      src.indexOf('React.createElement(StaticRouterProvider'),
+    )
+  }
+
+  it('the provider wraps the tree with theoUi on', () => {
+    expectWrappedTree(generateEntryServer({ theoUi: { theme: 'violet-forge' } }))
+  })
+
+  it('the provider wraps the tree with theoUi off', () => {
+    expectWrappedTree(generateEntryServer({}))
+  })
+
   it('useNonce is exported from theokit slash client', () => {
     // FR-001's other half: the value is reachable through the PUBLISHED subpath, not merely from the
     // module that defines it. A deep import into `src/client/nonce.js` is not a surface a consumer has.
