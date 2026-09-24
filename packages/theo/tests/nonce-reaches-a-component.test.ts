@@ -116,6 +116,33 @@ describe('useNonce', () => {
     expectWrappedTree(generateEntryServer({}))
   })
 
+  it('the provider adds exactly one element to the SSR tree', () => {
+    // NFR-001's NUMBER. T2.1 proves the provider wraps both branches and AC-011 proves the client
+    // entry gains none, which together leave "≤ 1 extra element" unasserted — a tree wrapped five
+    // times satisfies both.
+    //
+    // An ABSOLUTE count, not a delta between two generator calls. `EntryServerOptions` declares only
+    // `streaming?` and `theoUi?`: there is no generation-time nonce, so two calls emit byte-identical
+    // text and the delta is 0 in every state. Adding such an option to force one would be worse —
+    // the sole production caller passes neither, so the shipped entry would carry no provider at all
+    // while the criterion went green, rewarding the implementation that breaks FR-002.
+    //
+    // And `React.createElement(NonceProvider` rather than the bare name, because the import statement
+    // contains the name too: the bare count collides, 2 being both "correct single wrap" and "wrapped
+    // twice with the import forgotten". The bare count is asserted as a consistency check beside it.
+    const count = (src: string, lit: string): number => src.split(lit).length - 1
+
+    const themed = generateEntryServer({ theoUi: { theme: 'violet-forge' } })
+    expect(count(themed, 'React.createElement(')).toBe(4)
+    expect(count(themed, 'React.createElement(NonceProvider')).toBe(1)
+    expect(count(themed, 'NonceProvider')).toBe(2)
+
+    const plain = generateEntryServer({})
+    expect(count(plain, 'React.createElement(')).toBe(3)
+    expect(count(plain, 'React.createElement(NonceProvider')).toBe(1)
+    expect(count(plain, 'NonceProvider')).toBe(2)
+  })
+
   it('useNonce is exported from theokit slash client', () => {
     // FR-001's other half: the value is reachable through the PUBLISHED subpath, not merely from the
     // module that defines it. A deep import into `src/client/nonce.js` is not a surface a consumer has.
