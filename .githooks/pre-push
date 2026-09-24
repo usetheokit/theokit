@@ -68,6 +68,32 @@ fi
 # Reporting it as "build failed" sends a developer to look for a defect that does not exist, and —
 # worse — trains them to reach for --no-verify on a message that will one day be true. Same
 # distinction as the pnpm guard above, and the same reason.
+# A build that did not finish can leave a dist with JavaScript and none of its types, and the EXIT
+# CODE does not tell you whether it did.
+#
+# tsup's own `tsup:clean` rollup plugin removes every declaration file from the outDir in
+# `buildStart`, and this repository's DTS step is the expensive one -- so the destructive window is
+# the whole DTS build. Measured 2026-09-24 by capping a real build's heap rather than signalling
+# anything: `--max-old-space-size=256` on packages/http exited **1**, not 143, and took its dist from
+# 10 `.d.ts` to 0. The DTS runs in a worker THREAD, and a thread that exhausts its heap is reported
+# to the parent as `ERR_WORKER_OUT_OF_MEMORY` -- an error, not a signal -- so an out-of-memory event
+# wears the failure exit code.
+#
+# This note therefore belongs to the FAILED branch as well as the killed one. It used to live only in
+# the killed branch, and `report_stage_failure` exits before `pnpm check:dts-complete` can run, so the
+# case that leaves a poisoned dist was the case nobody was warned about. B-298 measured a second
+# route to the same place through exit 1: an unbuilt workspace dependency gives `DTS Build error` and
+# TS2307, leaving 201 `.js` with 0 `.d.ts`.
+report_poisoned_dist_note() {
+  echo ""
+  echo "  It may also have left a POISONED dist behind. tsup builds with \`clean: true\`, so the"
+  echo "  previous .d.ts files are gone before the DTS worker writes the new ones -- a build that"
+  echo "  stops anywhere in that window leaves JavaScript with no types. dist/ is gitignored, so"
+  echo "  nothing else will mention it, and the next per-package typecheck reports TS7016 against a"
+  echo "  CONSUMER's source instead."
+  echo "    pnpm check:dts-complete"
+}
+
 report_stage_failure() {
   stage="$1"
   code="$2"
@@ -83,16 +109,18 @@ report_stage_failure() {
     echo ""
     echo "  Free some memory and push again, or verify by hand and then push:"
     echo "    pnpm build:packages && pnpm typecheck:only && git push --no-verify"
-    echo ""
-    echo "  It may also have left a POISONED dist behind. tsup builds with \`clean: true\`, so the"
-    echo "  previous .d.ts files are gone before the DTS worker writes the new ones -- a kill there"
-    echo "  leaves JavaScript with no types. dist/ is gitignored, so nothing else will mention it,"
-    echo "  and the next per-package typecheck reports TS7016 against a CONSUMER's source instead."
-    echo "    pnpm check:dts-complete"
+    report_poisoned_dist_note
   else
     echo "✗ pre-push: ${stage} failed (see error above)."
     echo "  A break must NOT reach develop. Fix it, or push anyway"
     echo "  (emergencies only): git push --no-verify"
+    # Scoped to the stage that writes a dist. A format check that failed touched none, and the
+    # typecheck runs only after check:dts-complete has already passed -- advising either about a
+    # poisoned dist would be noise, and a note printed when it cannot apply is a note people stop
+    # reading.
+    if [ "$stage" = "package build" ]; then
+      report_poisoned_dist_note
+    fi
   fi
   exit 1
 }

@@ -160,6 +160,43 @@ describe('pre-push reports a killed stage as killed', () => {
     expect(out).toMatch(/check:dts-complete/u)
   })
 
+  /**
+   * Measured 2026-09-24 by capping a real build's heap rather than signalling anything: a DTS
+   * *worker thread* that exhausts its heap raises `ERR_WORKER_OUT_OF_MEMORY` on the parent, and tsup
+   * exits **1**. With `NODE_OPTIONS=--max-old-space-size=256` on `packages/http` that run took its
+   * `dist` from 10 `.d.ts` to 0 — tsup's `tsup:clean` plugin wipes the declarations at rollup's
+   * `buildStart`, and the worker died before writing their replacements.
+   *
+   * So exit 1 poisons the dist exactly as a signal does, and the hook told nobody: the poisoned-dist
+   * note lived only in the `> 128` branch, and `report_stage_failure` exits before
+   * `check:dts-complete` can run. The one case that leaves a poisoned dist was the one never warned
+   * about.
+   *
+   * `check_dts_complete` is also NOT reached by a plain exit-1 failure for a cause B-298 already
+   * measured: an unbuilt workspace dependency gives `DTS Build error` + TS2307 and leaves 201 `.js`
+   * with 0 `.d.ts`. Two measured routes to a poisoned dist, both through exit 1.
+   */
+  it('tells a developer whose build FAILED that a poisoned dist may be left behind too', () => {
+    stubPnpm('build:packages', 1)
+    const { out } = runHook()
+
+    expect(out).toMatch(/POISONED dist/u)
+    expect(out).toMatch(/check:dts-complete/u)
+    // Still a failure, never relabelled as a kill — the negative the sibling test pins.
+    expect(out).not.toMatch(/KILLED/u)
+  })
+
+  it('does not mention a poisoned dist when no build ran', () => {
+    // The load-bearing negative. Without it, printing the note unconditionally satisfies the test
+    // above, and a formatting failure starts advising a dist nothing touched. `format:check` is the
+    // first stage and returns before `build:packages` is invoked at all.
+    stubPnpm('format:check', 1)
+    const { out } = runHook()
+
+    expect(out).toMatch(/format check failed/u)
+    expect(out).not.toMatch(/POISONED dist/u)
+  })
+
   it('passes when both stages pass', () => {
     stubPnpm('nothing-breaks-here', 1)
     const { code, out } = runHook()

@@ -36,6 +36,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- `pnpm check:dts-complete` and the pre-push hook now cover the third way a DTS step ends, which the
+  other two hid between them: the declarations are built in a worker THREAD, so a thread that
+  exhausts its heap is reported to the parent as `ERR_WORKER_OUT_OF_MEMORY` and `tsup` exits **1**.
+  An out-of-memory event therefore wears the FAILURE exit code, and the guard's table mapped exit 1
+  onto "read the `error TS…` above it" — sending a reader after a defect that does not exist.
+  Reproduced without signalling any process, by capping a real build's heap
+  (`--max-old-space-size=256` on `packages/http`): the log carried `ERR_WORKER_OUT_OF_MEMORY` and
+  zero occurrences of `DTS Build error`, `error TS` or `Terminated`, stopping at `DTS Build start`
+  exactly as a kill does. The same run took that `dist` from 10 `.d.ts` to 0, so exit 1 poisons the
+  tree as a signal does — and the hook's poisoned-dist warning lived only in its killed branch,
+  while `report_stage_failure` exits before `check:dts-complete` can run. The case that leaves a
+  poisoned dist was the case nobody was warned about. The warning is now also printed when the
+  package build FAILS, and scoped to that stage, because a format check writes no `dist` (#B-290)
 - A docblock, an ADR, a journey or a milestone DoD that cites the three-target parity rule now names
   `docs/program/three-target-parity.md`, the copy this repository versions. The path they carried
   lives under `.claude/`, which is gitignored — so a reader following it received nothing, including
