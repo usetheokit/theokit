@@ -37,6 +37,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   keeps both conclusions, so a `failure` beside a `cancelled` is visible instead of whichever one was
   read last (#B-268)
 
+- The PR quality report no longer grades page one and calls it the run. The check-runs fetch asked for
+  `per_page=100` without `--paginate`, so it received the first hundred checks and an envelope whose
+  `total_count` described the whole commit — and the script read `.check_runs` and never the count.
+  Past a hundred gates the verdict was computed over a prefix while the report still printed "N of N
+  gates passed", which is a red gate on page two reading as green at the moment a merge is decided.
+  The fetch now pages through the run, and the report confronts what arrived against what the API
+  counted: a shortfall is named and refuses green, because a check run that never arrived is not a
+  check that passed (#B-295)
+
 ## [create-theokit 3.0.8] - 2026-09-23
 
 ### Changed
