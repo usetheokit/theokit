@@ -26,9 +26,12 @@
  * Exit 0  the run produced a span and the exporter reported it accepted; the marker is printed with
  *         the command that reads it back on the collector side
  * Exit 1  the run produced no span, or the collector refused the payload
- * Exit 2  the probe could not measure — no adapter resolved, or the endpoint answers below 400 on
- *         a path that does not exist. NOT a pass: "we could not check" and "we checked and it is clean" are
- *         different facts, and a probe reporting the first as the second is worse than no probe.
+ * Exit 2  the probe could not measure. Four conditions reach it: `--ingest` is not a URL, the
+ *         endpoint is unreachable, the endpoint answers below 400 on a path it does not serve, or
+ *         the boot resolved no adapter. NOT a pass: "we could not check" and "we checked and it is
+ *         clean" are different facts, and a probe reporting the first as the second is worse than
+ *         no probe. Each condition prints its own cause — a shared exit code is not a shared
+ *         diagnosis, and naming the wrong one sends the reader to the wrong system.
  */
 import { AgentBuilder } from '../packages/agents/src/index.js'
 import { mountAgent } from '../packages/theo/src/server/agent/mount-agent.js'
@@ -53,6 +56,20 @@ function arg(name: string, fallback: string): string {
 
 const ingest = arg('ingest', 'http://127.0.0.1:14318/v1/traces')
 const marker = `otlp-probe-${String(Date.now())}`
+
+// `--ingest` is user input at a CLI boundary, so it is validated here rather than inside the guard.
+// The guard answers one question — can this endpoint refuse? — and returns a bare boolean, so a
+// caller cannot tell an unparseable address from a permissive collector. Letting an address that is
+// not a URL fall through produced exactly that: the reader was told the endpoint "answers below 400
+// on a path it does not serve" and sent to debug a collector when the fault was in their flag.
+try {
+  new URL(ingest)
+} catch {
+  console.error(
+    `--ingest is not a URL: ${ingest}. A scheme is required — http:// or https://. NOT MEASURED.`,
+  )
+  process.exit(2)
+}
 
 if (!(await endpointCanRefuse(ingest))) {
   console.error(

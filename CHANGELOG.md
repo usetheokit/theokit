@@ -22,6 +22,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Fixed
 
 - The OTLP probe's own control is now a tested module: `endpointCanRefuse` is exported from `scripts/lib/`, and eleven cases prove it distinguishes a receiver that refuses from one that accepts everything, is unreachable, or cannot be addressed at all (#B-273)
+- The OTLP probe names the flag, not the collector, when `--ingest` is not a URL. A missing scheme — the likeliest typo — was answered with the guard's own sentence, *"answers below 400 on a path it does not serve"*, sending the reader to debug a collector when the fault was in their argument. `--ingest` is now validated at the boundary with its own message, and the probe's header names all four conditions that reach exit 2 instead of two of them (#B-273)
 - The OTLP probe no longer approves a collector that accepts everything: its control now checks the method, the path and the body it probes with. Against a receiver that accepts any POST, or one that answers only to requests carrying content, the probe previously reported a delivery it had not verified (#B-273)
 
 
