@@ -195,7 +195,7 @@ in § Measured - Next.js side, metrics 1-3 - so the comparison this paragraph de
 least code here, is not what the diff showed.
 
 **The three-target criteria cannot be exercised in this repository.** The Tauri and TUI lines need
-`@theokit/tui` and `@theokit/ui`, which live outside it (`.claude/rules/three-target-parity.md`
+`@theokit/tui` and `@theokit/ui`, which live outside it (`docs/program/three-target-parity.md`
 records the same limit). What settles them is the north-star app
 (`.claude/rules/northstar-app.md`), which does not exist yet.
 

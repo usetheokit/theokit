@@ -204,7 +204,7 @@ two encoders emitting different event shapes; this measurement produced no run, 
 which one a benchmark run would exercise.
 
 **The three-target criteria cannot be exercised in this repository.** The Tauri and TUI lines need
-`@theokit/tui` and `@theokit/ui`, which live outside it (`.claude/rules/three-target-parity.md`
+`@theokit/tui` and `@theokit/ui`, which live outside it (`docs/program/three-target-parity.md`
 records the same limit). What settles them is the north-star app
 (`.claude/rules/northstar-app.md`), which does not exist yet.
 

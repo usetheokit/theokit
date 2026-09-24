@@ -63,7 +63,7 @@ Recording those failures is the point. An anchor scenario that only ever passes 
 
 ## Cross-references
 
-- Three-target constraint this proves: `rules/three-target-parity.md`
+- Three-target constraint this proves: `docs/program/three-target-parity.md`
 - Honesty gate this unblocks: `rules/dogfood-golden-rule.md`
 - Per-milestone validation of the released artifact: `rules/cycle-acceptance.md`
 - Presentation adapters it consumes: `packages/presenter/src/presenters/`

@@ -25,7 +25,7 @@
  *
  * - `AsyncLocalStorage` is what an OTel Node SDK does, and it would work here — but it imports
  *   `node:async_hooks`, and `server/` holds a no-`node:*` invariant precisely so the same code
- *   serves the Web, Tauri and TUI targets (`rules/three-target-parity.md`). A `WeakMap` is plain
+ *   serves the Web, Tauri and TUI targets (`docs/program/three-target-parity.md`). A `WeakMap` is plain
  *   ECMAScript and runs unchanged on every one of them.
  * - Threading a resolved context through `mountAgent`'s options is explicit, and it puts a
  *   telemetry concern in the signature of every route that might one day open a span. The entry

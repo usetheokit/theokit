@@ -186,7 +186,7 @@ export interface DeployedSecurityHeaderLimits {
 /**
  * What the build tells the operator, once, per target.
  *
- * Silent degradation is the failure mode `rules/three-target-parity.md` exists
+ * Silent degradation is the failure mode `docs/program/three-target-parity.md` exists
  * to prevent. Two things degrade quietly here and both are named rather than
  * discovered in production: a CSP that refuses inline scripts on a deploy while
  * allowing them locally, and an HTML document that never passes through the

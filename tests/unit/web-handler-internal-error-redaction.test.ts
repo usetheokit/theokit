@@ -1,5 +1,5 @@
 /**
- * One contract, three transports (`rules/three-target-parity.md` rule 2): the same route reaching
+ * One contract, three transports (`docs/program/three-target-parity.md` rule 2): the same route reaching
  * the same failure must not disclose more over one transport than over another.
  *
  * The Node runner replaces an INTERNAL_ERROR's message with a generic one in production

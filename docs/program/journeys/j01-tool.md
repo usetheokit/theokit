@@ -349,7 +349,7 @@ the clause exists for and does not satisfy the clause. Recorded as an open gap r
 by editing the protocol to match what was done.
 
 **The three-target criteria cannot be exercised in this repository.** The Tauri and TUI lines above
-need `@theokit/tui` and `@theokit/ui`, which live outside it (`.claude/rules/three-target-parity.md`
+need `@theokit/tui` and `@theokit/ui`, which live outside it (`docs/program/three-target-parity.md`
 records the same limit). What settles them is the north-star app
 (`.claude/rules/northstar-app.md`), which does not exist yet. Note that this is a dimension the
 Next.js side does not have at all, and the comparison above silently gives it away: a route handler

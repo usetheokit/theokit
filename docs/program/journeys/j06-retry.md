@@ -209,7 +209,7 @@ everything else, so a wrong answer there is invisible to this diff.
 strengthens it, and a passing run would still be consistent with scheduler noise.
 
 **The three-target criteria cannot be exercised in this repository.** The Tauri and TUI lines need
-`@theokit/tui` and `@theokit/ui`, which live outside it (`.claude/rules/three-target-parity.md`
+`@theokit/tui` and `@theokit/ui`, which live outside it (`docs/program/three-target-parity.md`
 records the same limit). What settles them is the north-star app
 (`.claude/rules/northstar-app.md`), which does not exist yet.
 
@@ -500,7 +500,7 @@ configured values are recorded, per this page's own rule: `retries: 3` and a 50 
 | 3 | with ≥ 3 attempts recorded, each interval strictly greater than the one before | **PASS** — 4 attempts, gaps **50, 81, 180 ms**. Achieved with the `rng` override; see below for what the shipped default does | **PASS** — 4 attempts, gaps **77, 167, 394 ms**. Achieved with `randomize: true`; the default `randomize: false` also passes this one and fails criterion 4 |
 | 4 | across ≥ 5 runs of the same transient scenario, the first-retry delays are not all equal | **PASS** — 47, 45, 47, 48, 42 ms; 4 distinct of 5. **The weak oracle this page labelled as such**, and nothing here strengthens it | **PASS** — 54, 61, 81, 63, 54 ms; 4 distinct of 5. Same caveat |
 | 5 | transience is a declared contract the application can read and extend; a tool author can mark an error permanent and criterion 2 then holds for it, with a custom type the framework has never seen | **PASS** — `class NeverSeenBefore extends Error {}`, thrown inside `Retry.create` with the shipped default predicate: **1 attempt**, and the rejection preserves the type (`rejectedWith: "NeverSeenBefore"`). Nothing was configured to make this happen | **PASS** — the same custom class under `shouldRetry`: **1 attempt**, type preserved. The predicate is the application's, which is the difference |
-| 6-8 | Web, Tauri, TUI | **not exercisable here** — `@theokit/tui` and `@theokit/ui` live outside this repository (`.claude/rules/three-target-parity.md` records the same limit) | **not applicable** — a route handler serves one target |
+| 6-8 | Web, Tauri, TUI | **not exercisable here** — `@theokit/tui` and `@theokit/ui` live outside this repository (`docs/program/three-target-parity.md` records the same limit) | **not applicable** — a route handler serves one target |
 
 **Criteria satisfied: 4 of 5 against 5 of 5.**
 
@@ -645,7 +645,7 @@ delays is consistent with jitter and also with scheduler noise, on both sides. N
 measurement strengthens it and the report does not present it as proof of jitter.
 
 **The three-target criteria cannot be exercised in this repository**, for the reason
-`.claude/rules/three-target-parity.md` records. J6 was counted against the Web path alone.
+`docs/program/three-target-parity.md` records. J6 was counted against the Web path alone.
 
 **Neither application is committed** under `docs/program/evidence/j6-retry/`.
 `../dx-benchmark.md` § Evidence asks for both implementations there; that directory does not exist and

@@ -133,7 +133,7 @@ than a change.
 
 ## References
 
-- `rules/three-target-parity.md` § Current state — the measurement this decision responds to
+- `docs/program/three-target-parity.md` § Current state — the measurement this decision responds to
 - `packages/theo/src/server/http/in-process-caller.ts:5-6,69` — the documented no-middleware contract
 - `packages/theo/src/server/auth/session.ts:1,49,141` — the transport coupling to remove
 - `ROADMAP.md` § M1 — the DoD this ADR must satisfy
