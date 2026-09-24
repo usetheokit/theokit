@@ -83,6 +83,12 @@ report_stage_failure() {
     echo ""
     echo "  Free some memory and push again, or verify by hand and then push:"
     echo "    pnpm build:packages && pnpm typecheck:only && git push --no-verify"
+    echo ""
+    echo "  It may also have left a POISONED dist behind. tsup builds with \`clean: true\`, so the"
+    echo "  previous .d.ts files are gone before the DTS worker writes the new ones -- a kill there"
+    echo "  leaves JavaScript with no types. dist/ is gitignored, so nothing else will mention it,"
+    echo "  and the next per-package typecheck reports TS7016 against a CONSUMER's source instead."
+    echo "    pnpm check:dts-complete"
   else
     echo "✗ pre-push: ${stage} failed (see error above)."
     echo "  A break must NOT reach develop. Fix it, or push anyway"
@@ -133,6 +139,35 @@ build_status=0
 pnpm build:packages || build_status=$?
 if [ "$build_status" -ne 0 ]; then
   report_stage_failure "package build" "$build_status"
+fi
+
+# B-298 -- a build that says "success" can still have left a package with JavaScript and none of the
+# types it declares, and the root typecheck below CANNOT see it: tsconfig.json maps `theokit/*` onto
+# packages/theo/src, measured at TS7016 = 0 against a deliberately poisoned dist. The same dist makes
+# `tsc -p packages/tauri` exit 2 with TS7016 located at packages/tauri/src/sidecar.ts -- a consumer
+# file that did not change. That misattribution already cost a wrong diagnosis (B-290, filed against
+# build ordering, which was measured to be correct).
+#
+# Cheap: a filesystem walk, no pack and no compile. It runs here rather than at every import because
+# the state changes only when a build runs.
+dts_status=0
+pnpm check:dts-complete || dts_status=$?
+if [ "$dts_status" -gt 128 ]; then
+  # The CHECK itself was killed. It found nothing, so it may not report anything.
+  report_stage_failure "declared-types check" "$dts_status"
+elif [ "$dts_status" -ne 0 ]; then
+  # Deliberately NOT report_stage_failure: that helper says "a break must NOT reach develop", and
+  # this is not a break. The build above reported success and did not emit the types a package
+  # declares -- a local artifact, gitignored, which never reaches the remote. It blocks anyway
+  # because `pnpm build` is what `pnpm release` runs, and a package published in this state ships
+  # JavaScript with no types. Saying "your code is broken" here would be the same misattribution
+  # this check exists to remove.
+  echo ""
+  echo "✗ pre-push: the package build reported SUCCESS but a package is missing its declared types."
+  echo "  Your source is not implicated -- see the check's own output above for which package it is."
+  echo "  Rebuild that package, then push again:"
+  echo "    pnpm build:packages && pnpm check:dts-complete"
+  exit 1
 fi
 
 typecheck_status=0

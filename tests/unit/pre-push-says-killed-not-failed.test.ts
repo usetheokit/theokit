@@ -116,6 +116,50 @@ describe('pre-push reports a killed stage as killed', () => {
     expect(out).toMatch(/typecheck was KILLED/u)
   })
 
+  /**
+   * B-298. The declared-types stage is the third stage, and it is the one case in this hook where
+   * "a break must NOT reach develop" is the WRONG sentence: the build above reported success, and
+   * what is wrong is a local, gitignored artifact that never reaches the remote.
+   *
+   * Measured 2026-09-24: a `dist` with 201 `.js` and 0 `.d.ts` makes `tsc -p packages/tauri` exit 2
+   * with TS7016 located at `packages/tauri/src/sidecar.ts` — a consumer file that did not change.
+   * Telling the developer their code is broken here would be the same misattribution the stage was
+   * added to remove.
+   */
+  it('does not call an incomplete DTS artifact a break, because the source is not implicated', () => {
+    stubPnpm('check:dts-complete', 1)
+    const { code, out } = runHook()
+
+    expect(code).not.toBe(0)
+    expect(out).toMatch(/missing its declared types/u)
+    expect(out, 'the developer must not go looking for a defect in their own source').toMatch(
+      /Your source is not implicated/u,
+    )
+    expect(out).not.toMatch(/A break must NOT reach develop/u)
+  })
+
+  it('still reports the declared-types check being KILLED as a kill, having verified nothing', () => {
+    // The load-bearing negative for the branch above: without it, "never say killed" satisfies that
+    // test and the stage stops distinguishing a check that died from one that found something.
+    stubPnpm('check:dts-complete', 143)
+    const { code, out } = runHook()
+
+    expect(code).not.toBe(0)
+    expect(out).toMatch(/declared-types check was KILLED/u)
+    expect(out).toMatch(/NOTHING was verified/u)
+    expect(out).not.toMatch(/Your source is not implicated/u)
+  })
+
+  it('tells a developer whose build was killed that a poisoned dist may be left behind', () => {
+    // `clean: true` removes the previous declarations before the DTS worker writes new ones, so a
+    // kill there leaves JS with no types — and dist/ is gitignored, so nothing else will mention it.
+    stubPnpm('build:packages', 143)
+    const { out } = runHook()
+
+    expect(out).toMatch(/POISONED dist/u)
+    expect(out).toMatch(/check:dts-complete/u)
+  })
+
   it('passes when both stages pass', () => {
     stubPnpm('nothing-breaks-here', 1)
     const { code, out } = runHook()

@@ -46,6 +46,7 @@
     "check:audit": "pnpm audit --prod --audit-level=high",
     "typecheck:fast": "tsc --noEmit",
     "test:dist-gate": "tsx scripts/ensure-theo-dist.ts",
+    "check:dts-complete": "tsx scripts/check-dts-complete.ts",
     "probe:otlp": "npx tsx scripts/probe-otlp-delivery.ts"
   },
   "devDependencies": {

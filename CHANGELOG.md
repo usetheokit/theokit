@@ -23,6 +23,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   outage as a failure of the change. Each entry carries its reason on the same line, the report names
   every excluded gate with the conclusion it actually had, and a declaration matching no check in the
   run is reported as stale rather than dropped in silence (#B-268)
+- `pnpm check:dts-complete` — a built `dist` carrying JavaScript and none of the type entries its own
+  `package.json` declares is now reported against the package whose DTS is incomplete, and the
+  pre-push hook runs it after the build. `tsup` builds with `clean: true`, so the previous
+  declarations are gone before the DTS worker writes new ones, and that worker reaches the same end
+  state two ways: SIGTERM on a machine short on memory, and an outright failure when a workspace
+  dependency is not built yet — both measured leaving 201 `.js` with 0 `.d.ts`. Unnamed, the next
+  per-package typecheck exits 2 with `TS7016` against a CONSUMER file that did not change, and the
+  investigation starts in the wrong package; that misattribution already cost a wrong diagnosis. The
+  check holds each package to the surface it declares about itself, so `create-theokit` — a pure
+  `bin` with zero declared type entries — is not reported (#B-298)
 
 ### Fixed
 
