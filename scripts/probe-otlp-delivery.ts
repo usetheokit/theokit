@@ -26,9 +26,12 @@
  * Exit 0  the run produced a span and the exporter reported it accepted; the marker is printed with
  *         the command that reads it back on the collector side
  * Exit 1  the run produced no span, or the collector refused the payload
- * Exit 2  the probe could not measure — no adapter resolved, or the endpoint answers 2xx to a path
- *         that does not exist. NOT a pass: "we could not check" and "we checked and it is clean" are
- *         different facts, and a probe reporting the first as the second is worse than no probe.
+ * Exit 2  the probe could not measure. Five conditions reach it: `--ingest` is not a URL, nothing
+ *         answered at it, it accepted the connection and answered nothing within `--timeout-ms`,
+ *         it answered below 400 on a path it does not serve, or the boot resolved no adapter. NOT a pass: "we could not check" and "we checked and it is
+ *         clean" are different facts, and a probe reporting the first as the second is worse than
+ *         no probe. Each condition prints its own cause — a shared exit code is not a shared
+ *         diagnosis, and naming the wrong one sends the reader to the wrong system.
  */
 import { AgentBuilder } from '../packages/agents/src/index.js'
 import { mountAgent } from '../packages/theo/src/server/agent/mount-agent.js'
@@ -36,6 +39,12 @@ import {
   createObservabilityPluginFromConfig,
   getObservabilityAdapter,
 } from '../packages/theo/src/server/observability-bootstrap.js'
+
+import {
+  DEFAULT_TIMEOUT_MS,
+  endpointCanRefuse,
+  type EndpointVerdict,
+} from './lib/endpoint-can-refuse.js'
 
 /**
  * `.at()` rather than `[i + 1]` on purpose. This repository leaves `noUncheckedIndexedAccess` off, so
@@ -51,25 +60,32 @@ function arg(name: string, fallback: string): string {
 
 const ingest = arg('ingest', 'http://127.0.0.1:14318/v1/traces')
 const marker = `otlp-probe-${String(Date.now())}`
+/** How long the endpoint has to answer. Raise it for a collector behind a slow link. */
+const TIMEOUT_MS = Number(arg('timeout-ms', String(DEFAULT_TIMEOUT_MS)))
 
-/** An endpoint that answers 2xx to a path nobody serves cannot tell acceptance from arrival. */
-async function endpointCanRefuse(): Promise<boolean> {
-  const absent = new URL(ingest)
-  absent.pathname = '/a-path-this-collector-does-not-serve'
-  try {
-    const res = await fetch(absent, { method: 'POST', body: '{}' })
-    return res.status >= 400
-  } catch {
-    return false
-  }
+// One message per cause, because they send the reader to different systems. This used to be a single
+// sentence for every refusal — the guard returned a boolean — and it named a cause it had not
+// observed: a socket that completed the handshake and then said nothing was reported as "answers
+// below 400 (or is unreachable)", sending an operator to replace a collector that worked. The header
+// above states the rule; this switch is what keeps it.
+const NOT_MEASURED: Record<Exclude<EndpointVerdict, 'refuses'>, string> = {
+  unparseable:
+    `--ingest could not be read as a URL: ${ingest}. It needs a scheme — this probe speaks HTTP, so ` +
+    `http:// or https://.`,
+  permissive:
+    `${ingest} answers below 400 on a path it does not serve, so a success on the real path would ` +
+    `say nothing. Point --ingest at a collector, not at a receiver that accepts everything.`,
+  unreachable:
+    `nothing answered at ${ingest} — the connection was refused or the host did not resolve. ` +
+    `Check that the collector is running and the port is right.`,
+  'timed-out':
+    `${ingest} accepted the connection and sent no answer within ${String(TIMEOUT_MS)}ms. The host ` +
+    `is up and the process behind the port is not answering; this is not a wrong address.`,
 }
 
-if (!(await endpointCanRefuse())) {
-  console.error(
-    `${ingest} answers 2xx (or is unreachable) on a path it does not serve, so a 2xx on the real ` +
-      `path would say nothing. Point --ingest at a collector, not at a receiver that accepts ` +
-      `everything. NOT MEASURED.`,
-  )
+const verdict = await endpointCanRefuse(ingest, TIMEOUT_MS)
+if (verdict !== 'refuses') {
+  console.error(`${NOT_MEASURED[verdict]} NOT MEASURED.`)
   process.exit(2)
 }
 

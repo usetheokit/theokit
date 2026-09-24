@@ -9,7 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 - `pnpm probe:otlp` — an instrument that proves a span produced by a production entry point reaches
-  a real OpenTelemetry collector, and refuses to measure against an endpoint that answers 2xx to a
+  a real OpenTelemetry collector, and refuses to measure against an endpoint that answers below 400 to a
   path it does not serve. Until now every in-tree exercise of the span path substituted the
   transport, so the code that BUILDS a span was covered and the claim that one ARRIVES was not
   (#B-199)
@@ -20,6 +20,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   run is reported as stale rather than dropped in silence (#B-268)
 
 ### Fixed
+
+- The OTLP probe's own control is now a tested module: `endpointCanRefuse` is exported from `scripts/lib/` and says WHY it refused, not just that it did — `refuses`, `permissive`, `unreachable`, `timed-out` or `unparseable`. The probe prints one message per cause, so an operator whose port has a stuck process is no longer told to replace a working collector (#B-273)
+- The OTLP probe stops hanging on a collector that accepts the connection and never answers. `fetch` has no default timeout, so a port with a stuck process left the probe pending with no message and no exit code — measured still waiting at 8081ms. The control now gives up after 5s and reports NOT MEASURED, which is what it exists to do (#B-273)
+- The OTLP probe names the flag, not the collector, when `--ingest` is not a URL. A missing scheme — the likeliest typo — was answered with the guard's own sentence, *"answers below 400 on a path it does not serve"*, sending the reader to debug a collector when the fault was in their argument. `--ingest` is now validated at the boundary with its own message, and the probe's header names all four conditions that reach exit 2 instead of two of them (#B-273)
+- The OTLP probe no longer approves a collector that accepts everything. Its control checks the method, the path and the body it probes with, and reads the whole status range rather than one point on each side: a receiver answering 204 to every request — the most natural swallow-everything stub — was previously approved (#B-273)
+
 
 - The PR quality report no longer reads green when nothing was verified. `ok` guarded on the raw check
   list, which counts a gate excluded as a publisher — so a run whose every surviving check was a
