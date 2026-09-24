@@ -66,6 +66,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   below 400, on the same boundary the control uses; exit 1 is reachable and names the cause; and the
   probe prints what it observed, so an earned pass is distinguishable from an unconditional one
   (#B-294)
+- The dead-code audit (`pnpm knip`) completes instead of aborting, so `/code-quality` stops reporting
+  `auditor_unavailable_knip` and its D1 detector is capped at 70 no longer. The configuration expressed
+  "do not audit the applications" with `ignore`, which filters FILES and cannot remove a WORKSPACE — so
+  knip went on building a full TypeScript program for all six `apps/**` members, and for the gitignored
+  `my-test` scaffold that no pattern mentioned at all. Declaring them in `ignoreWorkspaces` drops peak
+  memory from 1,084,608 KB to 698,968 KB with every finding unchanged. Raising the heap ceiling had
+  already been measured to fail at 6144 MB: the wall was scope, not memory (#B-296)
 
 ## [create-theokit 3.0.8] - 2026-09-23
 
