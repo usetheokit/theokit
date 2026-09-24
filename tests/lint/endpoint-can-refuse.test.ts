@@ -50,4 +50,27 @@ describe('endpointCanRefuse', () => {
   it('refuses when the request throws', async () => {
     expect(await endpointCanRefuse('http://127.0.0.1:1/v1/traces')).toBe(false)
   })
+
+  // 400 is the status the guard's own comparison turns on, and it is the likely reply when a
+  // collector receives `POST {}` where protobuf is expected. Without this case `> 400` and
+  // `>= 401` both survive the suite — measured, 0 of 3 red — so the one boundary the guard
+  // exists to draw was the one nothing pinned.
+  it('accepts a receiver that answers exactly 400, the boundary it turns on', async () => {
+    const server = await listening(400)
+    try {
+      expect(await endpointCanRefuse(server.url)).toBe(true)
+    } finally {
+      await server.close()
+    }
+  })
+
+  // `new URL` sat outside the try, so a missing scheme threw out of the function and the probe
+  // exited 1 with a stack instead of the designed exit 2 "NOT MEASURED". A caller keying on 2
+  // could not tell "could not measure" from "crashed".
+  it.each(['127.0.0.1:4318/v1/traces', '', '/v1/traces', 'not a url'])(
+    'refuses an unparseable ingest rather than throwing: %j',
+    async (ingest) => {
+      expect(await endpointCanRefuse(ingest)).toBe(false)
+    },
+  )
 })
