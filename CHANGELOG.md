@@ -46,6 +46,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   counted: a shortfall is named and refuses green, because a check run that never arrived is not a
   check that passed (#B-295)
 
+- The OTLP probe no longer claims an acceptance nobody read. Its header promised *"exit 0 the run
+  produced a span and the exporter reported it accepted"*, and no acceptance result was ever
+  inspected: the adapter's `flush()` awaits the POST for its side effect and discards the response,
+  catching and logging a transport error without rethrowing, so it resolved the same way whether the
+  span was stored, refused with a 500, or never sent. Measured against a receiver that refused an
+  unknown path — so the probe's own control passed — and answered 404 on `/v1/traces`: the span was
+  refused, the probe exited 0, and it printed the epilogue that sends an operator to read back a span
+  the collector had thrown away. Exit 0 is now earned by an observed delivery the collector answered
+  below 400, on the same boundary the control uses; exit 1 is reachable and names the cause; and the
+  probe prints what it observed, so an earned pass is distinguishable from an unconditional one
+  (#B-294)
+
 ## [create-theokit 3.0.8] - 2026-09-23
 
 ### Changed
