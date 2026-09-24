@@ -26,6 +26,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- A docblock, an ADR, a journey or a milestone DoD that cites the three-target parity rule now names
+  `docs/program/three-target-parity.md`, the copy this repository versions. The path they carried
+  lives under `.claude/`, which is gitignored — so a reader following it received nothing, including
+  the reader most likely to follow it: someone asking why a build refused their configuration, sent
+  there by the two adapters that quote the rule's § 3 by name to justify the refusal. A test now
+  fails when a versioned file cites a `rules/…` path whose document this repository versions under
+  `docs/program/`, so the class cannot return unnoticed (#B-285)
 - The nonce docblock in `adapters/security-headers.ts` no longer claims that exactly one deploy path
   mints a per-request nonce. The node target does too — `theokit start` mints one and stamps the head,
   and the node adapter serves through that handler. The same false fact was stated in three places,

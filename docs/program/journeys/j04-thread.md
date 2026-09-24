@@ -204,7 +204,7 @@ side pays for a database and ours pays for identity, and the report must show bo
 netting them into one.
 
 **The three-target criteria cannot be exercised in this repository.** The Tauri and TUI lines need
-`@theokit/tui` and `@theokit/ui`, which live outside it (`.claude/rules/three-target-parity.md`
+`@theokit/tui` and `@theokit/ui`, which live outside it (`docs/program/three-target-parity.md`
 records the same limit). What settles them is the north-star app
 (`.claude/rules/northstar-app.md`), which does not exist yet.
 
@@ -730,7 +730,7 @@ cannot be run: the whole diff exists to stop the id from changing.
 did not create it. **Open for the sixth time**, after J1, J3, J5, J6 and J9.
 
 **The three-target criteria cannot be exercised in this repository.** The Tauri and TUI lines need
-`@theokit/tui` and `@theokit/ui`, which live outside it (`.claude/rules/three-target-parity.md` records the
+`@theokit/tui` and `@theokit/ui`, which live outside it (`docs/program/three-target-parity.md` records the
 same limit). What settles them is the north-star app (`.claude/rules/northstar-app.md`), which does not
 exist yet.
 

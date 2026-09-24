@@ -33,7 +33,7 @@
  * Its own type because the alternative is the defect this whole issue is: hooks that do not fire
  * and nothing that says so. A target that CAN carry a named module but was handed a closure has
  * something actionable to say, so it says it at build time rather than at the first request
- * (`rules/three-target-parity.md` § 3 — refuse by name).
+ * (`docs/program/three-target-parity.md` § 3 — refuse by name).
  */
 export class UnbakeablePluginError extends Error {
   constructor(index: number, name: string, target: string) {

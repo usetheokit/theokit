@@ -238,7 +238,7 @@ rule cannot be applied. § The Next.js side already predicted this is a journey 
 starts ahead, and a one-file count on our side does not settle a race whose other lane is empty.
 
 **The three-target criteria cannot be exercised in this repository.** The Tauri and TUI lines need
-`@theokit/tui` and `@theokit/ui`, which live outside it (`.claude/rules/three-target-parity.md`
+`@theokit/tui` and `@theokit/ui`, which live outside it (`docs/program/three-target-parity.md`
 records the same limit). What settles them is the north-star app
 (`.claude/rules/northstar-app.md`), which does not exist yet.
 

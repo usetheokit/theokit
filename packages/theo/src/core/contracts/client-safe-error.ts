@@ -13,7 +13,7 @@ import type { TheoErrorEnvelope } from './error-envelope.js'
  * Node runner redacted, the Web error builder redacted, and an exception escaping a Web handler
  * took a hand-built path that did neither — same route, same failure, more disclosure depending
  * on which transport served it. That is the "one contract, three transports" rule in
- * `rules/three-target-parity.md` being broken by duplication rather than by design.
+ * `docs/program/three-target-parity.md` being broken by duplication rather than by design.
  */
 
 /** Both spellings the codebase uses for "this is our fault, and the detail is ours too". */
