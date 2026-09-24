@@ -36,6 +36,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- The OTLP probe tells an unmet precondition from a refused delivery. Running it from a clean
+  checkout raised `ERR_MODULE_NOT_FOUND` — first for `@theokit/sdk` with nothing installed, then for
+  `@theokit/presenter/dist/index.js` with the workspace unbuilt — and both left exit 1, which the
+  probe's own header defines as the collector having refused a payload or the transport never having
+  reached it. Neither had happened, and no collector had been contacted at all. The probe's existing
+  "could not measure" band now carries both cases with the command that resolves each, and the three
+  workspace imports are loaded dynamically so the check runs before resolution rather than after the
+  process has already died (#B-303)
+
 - `pnpm check:dts-complete` and the pre-push hook now cover the third way a DTS step ends, which the
   other two hid between them: the declarations are built in a worker THREAD, so a thread that
   exhausts its heap is reported to the parent as `ERR_WORKER_OUT_OF_MEMORY` and `tsup` exits **1**.
