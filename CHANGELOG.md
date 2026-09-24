@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [@theokit/agents 15.0.1, theokit 0.73.0] - 2026-09-24
+
 ### Added
 
 - `useNonce()` on `theokit/client` — an application component can now read the request's CSP nonce,
