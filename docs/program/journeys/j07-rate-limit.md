@@ -184,7 +184,7 @@ rule cannot be applied. A journey is won or tied; a one-sided count is neither.
 page already stated**, and this measurement neither narrows nor widens it.
 
 **The three-target criteria cannot be exercised in this repository.** The Tauri and TUI lines need
-`@theokit/tui` and `@theokit/ui`, which live outside it (`.claude/rules/three-target-parity.md`
+`@theokit/tui` and `@theokit/ui`, which live outside it (`docs/program/three-target-parity.md`
 records the same limit). What settles them is the north-star app
 (`.claude/rules/northstar-app.md`), which does not exist yet. Criterion 7's real question - whether a
 declared budget is enforced off HTTP or refused by name - is untouched by a diff that only declares

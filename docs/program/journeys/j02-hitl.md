@@ -552,7 +552,7 @@ criterion 5 is exercisable, and the configured value is recorded here per J6's r
 | 3 | rejecting does not run it; the side effect is absent; the caller can read a refusal | **PASS** | **PASS** |
 | 4 | the approval id is not sufficient to decide | **FAIL** — a second process, holding nothing, discovered the id and ran the tool | **PASS** — invented id, captured id without signature, and tampered input all refused, side effect absent |
 | 5 | a decision after the timeout is refused by name; the timeout outcome is the documented one | **PASS** | **FAIL** — there is no window, so a signed approval replays and executes |
-| 6-8 | Web, Tauri, TUI | **not exercisable here** — `@theokit/tui` and `@theokit/ui` live outside this repository (`.claude/rules/three-target-parity.md` records the same limit) | **not applicable** — a route handler serves one target |
+| 6-8 | Web, Tauri, TUI | **not exercisable here** — `@theokit/tui` and `@theokit/ui` live outside this repository (`docs/program/three-target-parity.md` records the same limit) | **not applicable** — a route handler serves one target |
 
 **Criteria satisfied: 3 of 5 against 3 of 5.** Level, and level for opposite reasons, which is the
 most interesting sentence this journey produces.

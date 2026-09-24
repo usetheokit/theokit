@@ -782,6 +782,14 @@ jobs:
       # Asking the API for every check run on the head SHA is the complete picture, and it does not
       # have to know any job's name. Bounded: after the wait, whatever is still running is REPORTED
       # as running — never assumed to have passed.
+      #
+      # `--paginate` is what makes "every check run" true. `per_page=100` alone returns page ONE and
+      # an envelope whose `total_count` describes the whole run, so past a hundred checks the report
+      # graded a prefix and printed it as the total — a red gate on page two read as green at the
+      # moment a merge is decided (B-295). `--slurp` wraps the pages, and the jq below folds them
+      # back into one envelope so the shape on disk is the shape a single page had: the wait loop
+      # and the renderer both keep reading `.check_runs`, and `total_count` survives for the
+      # renderer to confront against what it actually received.
       - name: Collect check runs
         env:
           GH_TOKEN: ${{ github.token }}
@@ -790,7 +798,10 @@ jobs:
         run: |
           set -euo pipefail
           for _ in $(seq 1 30); do
-            gh api "repos/${GITHUB_REPOSITORY}/commits/${SHA}/check-runs?per_page=100" > checks.json
+            gh api --paginate --slurp \
+              "repos/${GITHUB_REPOSITORY}/commits/${SHA}/check-runs?per_page=100" \
+              | jq '{ total_count: ([.[].total_count] | max // 0), check_runs: [.[].check_runs[]] }' \
+              > checks.json
             remaining=$(jq --arg self "$SELF" \
               '[.check_runs[] | select(.name != $self and .status != "completed")] | length' checks.json)
             [ "$remaining" = "0" ] && break

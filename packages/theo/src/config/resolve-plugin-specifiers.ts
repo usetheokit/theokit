@@ -25,7 +25,7 @@
  *
  * Resolving a specifier means importing a path, and that means `node:url`/`node:path`. `server/`
  * holds a no-`node:*` invariant so the same code serves the Web, Tauri and TUI targets
- * (`rules/three-target-parity.md`). `config/` already reads the filesystem — `load-config.ts` is
+ * (`docs/program/three-target-parity.md`). `config/` already reads the filesystem — `load-config.ts` is
  * the module that finds `theo.config.ts` at all — and it is the one place BOTH local entry points
  * (`theokit start` and the Vite dev server) already import from. So the specifier is resolved
  * where the config is read, and `createPluginRunnerFromConfig` keeps taking what it always took:

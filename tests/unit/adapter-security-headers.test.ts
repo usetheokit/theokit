@@ -52,6 +52,7 @@ import {
   generateNonce,
   withSecurityHeaders,
 } from '../../packages/theo/src/adapters/security-headers.js'
+import { withHoistedHead } from '../../packages/theo/src/cli/commands/start/request-handler.js'
 import { renderVercelFunctionEntry } from '../../packages/theo/src/adapters/vercel.js'
 import { createWebShim } from '../../packages/theo/src/adapters/web-shim.js'
 import type { SecurityHeadersConfig } from '../../packages/theo/src/core/contracts/security-headers.js'
@@ -541,7 +542,35 @@ describe('a handler that set its own header keeps it', () => {
   })
 })
 
-describe('the per-request nonce: reachable on exactly one deploy path', () => {
+describe('the per-request nonce: which deploy paths reach one', () => {
+  it('the node target serves a nonce CSP', () => {
+    // This suite's own title claimed a single deploy path until 2026-09-24, so the structure of the
+    // file asserted the very thing `security-headers.ts` is being corrected for. Two paths mint a
+    // nonce, not one — and node is the second. The phrase is not quoted here on purpose: AC-013
+    // greps this file for its absence, and a note reproducing what it removed can never pass.
+    //
+    // Composed from the same two functions `cli/commands/start/request-handler.ts:271-276` calls, in
+    // the same order, because that is the node deploy path: `adapters/node.ts:24` says in its own
+    // words that `request-handler.ts` applies the security headers.
+    const nonce = generateNonce()
+    // The empty config is deliberate: `applyCsp` falls back to `DEFAULT_CSP` and then calls
+    // `applyNonceToCsp`, which IS the node path — `request-handler.ts` passes the project's
+    // security config through unchanged, and a project that sets none gets the default. An
+    // earlier form of this call named a `contentSecurityPolicy` field that does not exist on
+    // `SecurityHeadersConfig` (the field is `csp?: string | false`), so it tested a shape the
+    // function never receives; `vitest --typecheck` did not type this file and `tsc` did.
+    const headers = buildSecurityHeaders({}, { production: true }, { nonce })
+    const csp = headers['Content-Security-Policy']
+
+    expect(nonce).toBeTruthy()
+    expect(csp, 'the node path built a CSP with no nonce').toContain(`'nonce-${nonce}'`)
+
+    // And the SAME value reaches the tag: a nonce in the header that the script does not repeat
+    // blocks every inline script, which is the failure mode this whole surface exists around.
+    const { head } = withHoistedHead('<head><script>theme()</script></head>', '<div/>', nonce)
+    expect(head).toContain(`nonce="${nonce}"`)
+  })
+
   it('the streamed Cloudflare document gets a nonce, in the header and in the renderer', async () => {
     observedNonce = undefined
     const mod = await loadEntry(

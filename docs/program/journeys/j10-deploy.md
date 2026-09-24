@@ -236,7 +236,7 @@ rule cannot be applied. § The Next.js side already recorded that the asymmetry 
 stack; a 0 and a 2 on this side do not change that and do not settle it.
 
 **The three-target criteria cannot be exercised in this repository.** The Tauri and TUI lines need
-`@theokit/tui` and `@theokit/ui`, which live outside it (`.claude/rules/three-target-parity.md`
+`@theokit/tui` and `@theokit/ui`, which live outside it (`docs/program/three-target-parity.md`
 records the same limit). The TUI line is explicit that *not applicable* is unavailable to it, so both
 remain open rather than excused.
 
@@ -418,7 +418,7 @@ than by arguing.
 | 4 | build twice, deploy twice | **PASS**, and stronger than asked. Three consecutive `theokit build` runs, all exit 0, all producing a deployable artifact; two `theokit build --target cloudflare` runs produced **byte-identical** `worker.mjs` and `wrangler.toml` (md5 equal). `.theokit/manifest.json` differs run to run, which is `../../../ROADMAP.md` § M3's criterion and deliberately not this one | **PASS**. Three consecutive `next build` runs, all exit 0, all producing `.next/standalone/server.js` |
 | 5 | secret from the target's mechanism, absent from the artifact | **PASS.** A randomized key was set in `.env.local` locally and supplied to the container with `-e`; `grep` for its value across the running image returns nothing, `.env.local` is absent from the image, and the app served. The `.dockerignore` line is what buys it | **PASS.** Same test, same result; the official `.dockerignore` covers `.env*.local` among its 102 entries |
 | 6 | documented path followed verbatim | **FAIL, and it is the same failure the first measurement graded.** `README.md:468` lists nine targets and `theokit build --target <name>` and stops. The base image, the install, the build, the port, the process to run, where the secret comes from **and the host binding** were all invented here. The criterion says a step the operator had to discover is a defect of the criterion; the entire 12-line diff is that defect | **PASS.** `nextjs.org/docs/app/guides/self-hosting` plus the `vercel/next.js` `examples/with-docker` directory supply the Dockerfile, the `.dockerignore`, a `compose.yml` and the one config setting. Nothing was discovered; three files were copied |
-| 7-9 | Web, Tauri, TUI | **not exercisable here** - `@theokit/tui` and `@theokit/ui` live outside this repository (`../../../.claude/rules/three-target-parity.md` records the same limit). The TUI line's own text says *not applicable* is unavailable to it, so both stay open | **not applicable** - a Route Handler serves one target |
+| 7-9 | Web, Tauri, TUI | **not exercisable here** - `@theokit/tui` and `@theokit/ui` live outside this repository (`docs/program/three-target-parity.md` records the same limit). The TUI line's own text says *not applicable* is unavailable to it, so both stay open | **not applicable** - a Route Handler serves one target |
 
 **Criteria satisfied: 4 of 6 gradeable against 5 of 6.** Ours fails 1 and 6; theirs fails 1.
 

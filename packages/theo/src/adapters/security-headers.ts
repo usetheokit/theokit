@@ -28,15 +28,29 @@
  * response — so a target reaches one only if it renders the HTML at request
  * time and can put the same value on the script tags it emits.
  *
- * Exactly one deploy path does: **Cloudflare with `ssrStreaming: true`**, whose
- * worker calls `renderStreamingWeb(request, { nonce })`, and that renderer
- * threads the value into `renderToReadableStream` and into the hydration script
- * (`router/entry-server.ts`). That branch mints a nonce per request and builds
- * its CSP from it. Everything else serves HTML written at build time, or no
- * HTML at all, and carries a **nonce-less CSP** — the same answer
- * `buildSecurityHeaders` already gives a prerendered route (EC-4), for the same
- * reason: a nonce in the header with no nonce on the tag blocks every inline
- * script.
+ * Two paths do, and this docblock named one of them until 2026-09-24:
+ *
+ *   - **Cloudflare with `ssrStreaming: true`** — the worker calls
+ *     `renderStreamingWeb(request, { nonce })`, and that renderer threads the
+ *     value into `renderToReadableStream` and into the hydration script
+ *     (`router/entry-server.ts`).
+ *   - **node** — `theokit start` mints one per request
+ *     (`cli/commands/start/request-handler.ts:272`) and stamps it onto the
+ *     inline scripts in the head. The `node` deploy adapter serves through that
+ *     same handler, which is what its own comment says
+ *     (`adapters/node.ts:24`).
+ *
+ * The six Web-standards targets that DO declare a limit here — aws-lambda, bun,
+ * deno-deploy, netlify, vercel, and Cloudflare without `ssrStreaming` — serve
+ * HTML written at build time, or no HTML at all, and carry a **nonce-less
+ * CSP**: the same answer `buildSecurityHeaders` already gives a prerendered
+ * route (EC-4), for the same reason — a nonce in the header with no nonce on
+ * the tag blocks every inline script.
+ *
+ * `node` declares no `mintsNonce` at all, because it never calls
+ * {@link describeDeployedSecurityHeaders}. That is a gap in what its build
+ * PRINTS, not a wrong declaration, and closing it is its own change rather than
+ * a line in the item that corrected this paragraph.
  *
  * That asymmetry is real and is not smoothed over. It is stated in the emitted
  * entry, printed by the build through
@@ -140,7 +154,9 @@ export interface DeployedSecurityHeaderLimits {
   securityHeaders: SecurityHeadersConfig | undefined
   /**
    * Does the emitted handler render HTML at request time and mint a CSP nonce
-   * for it? True only for Cloudflare with `ssrStreaming: true`.
+   * for it? Among the targets that CALL this function, true only for Cloudflare
+   * with `ssrStreaming: true`. `node` also mints one and is not among them —
+   * see the note in this module's header docblock.
    */
   mintsNonce: boolean
   /**
@@ -170,7 +186,7 @@ export interface DeployedSecurityHeaderLimits {
 /**
  * What the build tells the operator, once, per target.
  *
- * Silent degradation is the failure mode `rules/three-target-parity.md` exists
+ * Silent degradation is the failure mode `docs/program/three-target-parity.md` exists
  * to prevent. Two things degrade quietly here and both are named rather than
  * discovered in production: a CSP that refuses inline scripts on a deploy while
  * allowing them locally, and an HTML document that never passes through the

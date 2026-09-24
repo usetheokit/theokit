@@ -22,10 +22,17 @@
  * coverage — when the artifact is missing, the report says it could not read it rather than omitting
  * the row, because an absent row reads as "there is no coverage gate".
  *
+ * **And a check run that never arrived is not a check that passed.** The API answers with an envelope
+ * whose `total_count` describes the whole run; a fetch that took page one and stopped carries fewer.
+ * `readCheckRuns` confronts the two, `summarise` refuses `ok` on any shortfall, and the report names
+ * it. Silence there is what made a red gate on page two readable as green (B-295).
+ *
  * Usage (in CI):
  *   node scripts/pr-quality-report.mjs --checks checks.json --coverage coverage-summary.json \
  *        --sha "$SHA" > report.md
  */
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 
 /** Marker the workflow greps for, so the comment is updated in place instead of duplicated. */
 export const REPORT_MARKER = '<!-- theokit:quality-report -->'
@@ -40,8 +47,96 @@ const PASSING = new Set(['success'])
  * `ok` is deliberately conservative: it requires at least one check, zero failures AND zero pending.
  * An empty list is not green — it means nothing reported, which is a different fact.
  */
-export function summarise(checkRuns, { self } = {}) {
-  const s = { passed: 0, failed: 0, pending: 0, skipped: 0, outstanding: [], ok: false }
+/**
+ * Check names that PUBLISH rather than verify, read from `rules/publishing-gates.txt`.
+ *
+ * B-268 — a publishing gate ships a convenience and asserts nothing about this code, so counting its
+ * failure toward the verdict reports a defect nobody introduced. On PR #897 that produced 34 passes
+ * against one failure caused by `pkg-pr-new` answering 500, and the comment read `Not green.`
+ *
+ * DECLARED, never inferred from the name (ADR-1): a rule matched by resemblance fires on a check
+ * called `preview-docs-build` that verifies, and misses one called `publish-canary` that does not.
+ *
+ * An ABSENT file is an empty set and never a throw. A consumer that has not written the declaration
+ * gets exactly today's behaviour, and a report that dies because a config is missing is a report
+ * nobody sees.
+ */
+export function readPublishingGates(root = process.cwd()) {
+  let raw
+  try {
+    raw = readFileSync(join(root, 'rules', 'publishing-gates.txt'), 'utf8')
+  } catch {
+    return new Set()
+  }
+
+  const names = raw
+    .split('\n')
+    .map((line) => line.split('#')[0].trim())
+    .filter((name) => name.length > 0)
+
+  return new Set(names)
+}
+
+/**
+ * Read a check-runs payload into the runs it carries and the number it CLAIMS.
+ *
+ * B-295 — `gh api ".../check-runs?per_page=100"` returns page one and an envelope whose
+ * `total_count` reports the whole run. This script read `.check_runs` and never the count, so past a
+ * hundred checks the verdict was computed over a prefix while the report still printed "N of N gates
+ * passed". A red gate on page two read as green at the moment a merge is decided. Latent at the 41
+ * checks run 35820666635 carried, and reached by ordinary CI growth — which is the worst kind of
+ * latent, because nothing announces the crossing.
+ *
+ * Three shapes arrive here, and they make different claims:
+ *
+ * | Payload | `reported` | Why |
+ * |---|---|---|
+ * | `{ total_count, check_runs }` — one page | the count | the API stated a total |
+ * | `[{ total_count, check_runs }, …]` — `--paginate --slurp` | the largest | every page repeats it |
+ * | `[{ name, status, … }, …]` — a bare list | `null` | nobody stated a total |
+ *
+ * `null` rather than the length for the bare list. Deriving a total from what arrived turns "I do not
+ * know how many there were" into "nothing is missing", which is the assertion this whole function
+ * exists to stop the report making.
+ */
+export function readCheckRuns(payload) {
+  if (payload === null || payload === undefined) return { runs: [], reported: null }
+
+  const pages = Array.isArray(payload) ? payload : [payload]
+  const enveloped = pages.filter(
+    (page) => page !== null && typeof page === 'object' && Array.isArray(page.check_runs),
+  )
+
+  // A bare list of check runs, or nothing at all. No envelope means no stated total, and an empty
+  // `--slurp` array is the same fact.
+  if (pages.length === 0 || enveloped.length !== pages.length) {
+    return { runs: Array.isArray(payload) ? payload : [], reported: null }
+  }
+
+  const totals = enveloped.map((page) => page.total_count).filter((n) => Number.isInteger(n))
+  return {
+    runs: enveloped.flatMap((page) => page.check_runs),
+    // Every page of one response repeats the same total, so `max` is that total and survives a page
+    // whose envelope lost the field.
+    reported: totals.length > 0 ? Math.max(...totals) : null,
+  }
+}
+
+export function summarise(checkRuns, { self, publishing = new Set(), missing = 0 } = {}) {
+  const s = {
+    passed: 0,
+    failed: 0,
+    pending: 0,
+    skipped: 0,
+    outstanding: [],
+    excluded: [],
+    // Carried so the render can confront every DECLARED name against the run. Without it the render
+    // would read the file a second time, which is the second pass NFR-001 forbids.
+    declared: publishing,
+    // B-295 — how many check runs the API counted and this report never received.
+    missing,
+    ok: false,
+  }
   // The reporting job is itself a check run, and it is necessarily unfinished while it renders.
   // Counting it made the first report ever posted announce "Not green — 1 still running", naming
   // itself, with every real gate passing. A report that can never say green is one people stop
@@ -49,6 +144,18 @@ export function summarise(checkRuns, { self } = {}) {
   const runs = self === undefined ? checkRuns : checkRuns.filter((r) => r.name !== self)
 
   for (const run of runs) {
+    // B-268 — a DECLARED publishing gate leaves both totals, and the membership test sits here
+    // rather than above the loop for the reason FR-001 names: `pending` is incremented BEFORE any
+    // conclusion is read, so a classification that only looked at `conclusion` would miss the hang
+    // path entirely. One `has()` per run, no second pass over the list.
+    if (publishing.has(run.name)) {
+      // The CONCLUSION travels with the name. Two check-runs can share one name — run 35820666635
+      // carries `preview / …` as both a `failure` and a `cancelled` on one SHA — and looking the
+      // conclusion up by name afterwards collapses them, so the last one wins and the failure is
+      // lost. Found by RUNNING the script against that run's own list, not by a test.
+      s.excluded.push({ name: run.name, conclusion: run.conclusion ?? run.status })
+      continue
+    }
     if (run.status !== 'completed') {
       s.pending += 1
       s.outstanding.push(run.name)
@@ -62,7 +169,16 @@ export function summarise(checkRuns, { self } = {}) {
     }
   }
 
-  s.ok = runs.length > 0 && s.failed === 0 && s.pending === 0
+  // Green is a claim about what was VERIFIED, so the guard counts the verified set and not the raw
+  // list. `runs.length` counted an EXCLUDED publisher: a run whose every surviving check is a
+  // declared publisher left this empty and still read green — "0 of 0 gates passed" — against the
+  // invariant `summarise` states above, that an empty list is not green because nothing reported is
+  // a different fact. Only-skipped reached the same hole by the same route.
+  const verified = s.passed + s.failed + s.pending
+  // B-295 — a check run that never arrived is not a check that passed. This is the invariant at the
+  // top of the file applied one step earlier: `pending` is "I could not tell yet", and `missing` is
+  // "I was never shown it". Both must refuse green, and only the first was refusing.
+  s.ok = verified > 0 && s.failed === 0 && s.pending === 0 && missing === 0
   return s
 }
 
@@ -118,20 +234,63 @@ function checksSection(checkRuns, s) {
         '**Not green.**',
         s.failed > 0 ? `${s.failed} failed` : null,
         s.pending > 0 ? `${s.pending} still running` : null,
+        s.missing > 0 ? `${s.missing} never arrived` : null,
         checkRuns.length === 0 ? 'no check reported at all' : null,
       ]
         .filter(Boolean)
         .join(' · ')
+
+  // B-295 — NAMED rather than folded into the count, for the reason the excluded block above gives:
+  // a reader who has to infer from a number whether the fetch was whole cannot tell a complete run
+  // from a truncated one. What did not arrive is unknown, and unknown is not green.
+  const truncation =
+    s.missing > 0
+      ? [
+          '',
+          `> **${s.missing} check ${s.missing === 1 ? 'run' : 'runs'} never arrived.** GitHub's envelope`,
+          '> counts more for this commit than this report received — an unpaginated fetch reads page',
+          '> one and reports it as the whole run. Nothing is claimed about what is missing.',
+        ].join('\n')
+      : ''
 
   const outstanding =
     s.outstanding.length > 0
       ? ['', '**Needs attention:**', ...s.outstanding.map((n) => `- ${n}`)].join('\n')
       : ''
 
+  const plural = (n) => (n === 1 ? 'gate' : 'gates')
+  const listed = (names, heading) => (names.length > 0 ? ['', heading, ...names] : [])
+  const present = new Set(checkRuns.map((r) => r.name))
+
+  // B-268 — an excluded gate is NAMED with its conclusion, and the count prints even at zero. R1:
+  // the failure this item could introduce is a preview that silently stops being published, and a
+  // reader who infers from absence whether the mechanism ran cannot tell a working exclusion from a
+  // broken one. `honesty-gate-golden-rule.md § 7` is the general form.
+  const excluded = [
+    '',
+    `_${s.excluded.length} publishing ${plural(s.excluded.length)} excluded from the verdict._`,
+    ...listed(
+      s.excluded.map((e) => `- ${e.name} — \`${e.conclusion}\``),
+      'These PUBLISH rather than verify, so their state is not a verdict about this code — `rules/publishing-gates.txt` says which, and why:',
+    ),
+  ].join('\n')
+
+  // ADR-3 — a declared name matching no check has quietly stopped applying, the shape this repository
+  // already caps at FAIL_HARD for architecture rules. REPORTED rather than failed (the report is not
+  // a gate); NAMED rather than counted, because a count lets a reader believe one entry matched.
+  const stale = [...(s.declared ?? [])].filter((n) => !present.has(n))
+  const staleSection = listed(
+    stale.map((n) => `- ${n}`),
+    `_${stale.length} declared publishing ${plural(stale.length)} matched no check in this run — stale. A declaration that matches nothing has stopped applying; update \`rules/publishing-gates.txt\`._`,
+  ).join('\n')
+
   return [
     '### Gates',
     '',
     head,
+    truncation,
+    excluded,
+    staleSection,
     outstanding,
     '',
     '| | Gate | Result |',
@@ -145,9 +304,25 @@ function checksSection(checkRuns, s) {
  *                      report is about the diff they are looking at
  * @param coverageFloor the line-coverage floor, for context beside the measured value
  */
-export function renderReport({ checkRuns, coverage, sha, coverageFloor = 80, self }) {
+/**
+ * @param reported how many check runs the API said exist for this commit, or `null` when the payload
+ *                 stated no total. `readCheckRuns` produces it; nothing here invents one.
+ */
+export function renderReport({
+  checkRuns,
+  coverage,
+  sha,
+  coverageFloor = 80,
+  self,
+  reported = null,
+  publishing = readPublishingGates(),
+}) {
+  // Measured against what ARRIVED, before `self` is filtered out. The reporting job is one of the
+  // runs the API counted, so comparing the total against the filtered list makes every ordinary run
+  // look short by one — and a report that can never say green is a report people stop reading.
+  const missing = reported === null ? 0 : Math.max(0, reported - checkRuns.length)
   const runs = self === undefined ? checkRuns : checkRuns.filter((r) => r.name !== self)
-  const s = summarise(runs)
+  const s = summarise(runs, { publishing, missing })
 
   return [
     REPORT_MARKER,
@@ -184,12 +359,13 @@ async function main() {
     }
   }
 
-  const checks = read(arg('checks'))
+  const { runs, reported } = readCheckRuns(read(arg('checks')))
   const coverageFile = read(arg('coverage'))
 
   process.stdout.write(
     renderReport({
-      checkRuns: checks?.check_runs ?? checks ?? [],
+      checkRuns: runs,
+      reported,
       coverage: coverageFile?.total ?? null,
       sha: arg('sha') ?? 'unknown',
       coverageFloor: Number(arg('floor') ?? 80),

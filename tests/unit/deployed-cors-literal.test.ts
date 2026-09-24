@@ -14,7 +14,7 @@
  *   app whose CORS silently allows nothing.
  *
  * The first is emitted as a regex literal. The second is REFUSED at build time, per
- * `rules/three-target-parity.md` § 3 — "a target that cannot serve a capability refuses by name".
+ * `docs/program/three-target-parity.md` § 3 — "a target that cannot serve a capability refuses by name".
  */
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'

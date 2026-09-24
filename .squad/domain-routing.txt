@@ -27,3 +27,4 @@
 # for why each is so.
 
 theokit | theokit, apps/theocode, apps/theoclaw, packages/agents, packages/agents-pty, packages/create-theokit, packages/http, packages/presenter, packages/tauri, packages/theo | agents/theokit.md
+theokit-ui | theokit-ui | agents/theokit-ui.md
