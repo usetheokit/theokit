@@ -16,6 +16,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, it, expect } from 'vitest'
 
 import * as clientBarrel from '../src/client/index.js'
+import { generateEntryServer } from '../src/router/entry-server.js'
 import { NonceProvider, useNonce } from '../src/client/nonce.js'
 
 /** Render `useNonce()` under a provider and hand back what the child actually saw. */
@@ -40,6 +41,30 @@ describe('useNonce', () => {
     // A build target that mints no nonce is not an error state: the CSP simply carries none, and
     // the consumer's `nonce={useNonce()}` must render the attribute away rather than as "undefined".
     expect(readNonceUnder(undefined).seen).toBeUndefined()
+  })
+
+  it('the nonce is absent from the client bundle state', () => {
+    // FR-003. The whole security argument is that a nonce readable from the page is a nonce an
+    // attacker can copy onto an injected tag, so it must reach the tree WITHOUT reaching the
+    // hydration payload. Two halves, because either alone passes vacuously:
+    //
+    //   1. the value really was in the render  — otherwise "absent from the payload" is trivially
+    //      true of a nonce nobody supplied;
+    //   2. the payload the framework GENERATES carries no nonce key — this is the half that goes
+    //      red the moment someone adds one, because those keys are emitted source text.
+    const sentinel = 'nonce-sentinel-do-not-serialise'
+    const { seen } = readNonceUnder(sentinel)
+    expect(seen).toBe(sentinel)
+
+    const hydrationData = { loaderData: {}, actionData: null, errors: null }
+    expect(JSON.stringify(hydrationData)).not.toContain(sentinel)
+
+    // The generated entry's own payload object, read out of the source it emits.
+    const src = generateEntryServer({ theoUi: { theme: 'violet-forge' } })
+    const open = src.indexOf('const hydrationData = {')
+    expect(open).toBeGreaterThan(-1)
+    const payloadBlock = src.slice(open, src.indexOf('}', open))
+    expect(payloadBlock).not.toContain('nonce')
   })
 
   it('useNonce is exported from theokit slash client', () => {
