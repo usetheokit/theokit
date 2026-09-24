@@ -10,6 +10,7 @@
  * server and asserts the guard's decision — never the OTLP transport, which is a different claim.
  */
 import { createServer } from 'node:http'
+import { createServer as createSocketServer, type Socket } from 'node:net'
 import { describe, expect, it } from 'vitest'
 import { endpointCanRefuse } from '../../scripts/lib/endpoint-can-refuse.js'
 
@@ -133,6 +134,32 @@ describe('endpointCanRefuse', () => {
   // carrying content, 400 to an empty POST — dropping the body made the guard read 400 and APPROVE
   // the very receiver it exists to reject. Measured here by execution: original false, mutant true.
   // An audit of this file classified that mutant as failing toward over-refusal; it does not.
+  // A host that accepts the TCP connection and never answers is the fourth way this guard can fail,
+  // and it was the one that returned NOTHING: measured pending at 8081ms against a silent socket.
+  // The probe's whole purpose is to say "could not measure"; a guard that hangs says nothing at all,
+  // forever, with no message and no exit 2. `fetch` has no default timeout, so the bound is explicit.
+  it('gives up on a host that accepts the connection and never answers', async () => {
+    // The sockets are kept and destroyed by hand. `server.close()` stops accepting and then waits for
+    // every live connection to end, and this server's whole job is to hold one open — so awaiting the
+    // close callback hangs the test even after the guard has correctly given up. Measured: the guard
+    // returned false at 5007ms while the test still timed out at 30000ms.
+    const open: Socket[] = []
+    const server = createSocketServer((socket) => open.push(socket))
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    const address = server.address()
+    if (address === null || typeof address === 'string') throw new Error('no port assigned')
+    try {
+      const started = Date.now()
+      expect(await endpointCanRefuse(`http://127.0.0.1:${String(address.port)}/v1/traces`)).toBe(
+        false,
+      )
+      expect(Date.now() - started).toBeLessThan(15_000)
+    } finally {
+      for (const socket of open) socket.destroy()
+      await new Promise<void>((resolve) => server.close(() => resolve()))
+    }
+  }, 30_000)
+
   it('sends a body, so a receiver that validates one is still seen as permissive', async () => {
     const server = await discriminating(({ bodyLength }) => (bodyLength > 0 ? 200 : 400))
     try {
