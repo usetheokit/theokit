@@ -28,7 +28,7 @@ function readNonceUnder(nonce: string | undefined): { seen: string | undefined; 
     return null
   }
   const html = renderToStaticMarkup(
-    React.createElement(NonceProvider, { nonce }, React.createElement(Child)),
+    React.createElement(NonceProvider, { nonce, children: React.createElement(Child) }),
   )
   return { seen, html }
 }

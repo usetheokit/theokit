@@ -42,11 +42,14 @@ function renderGated(nonce: string, gate: Promise<void>): Promise<string> {
       },
     })
     sink.on('finish', () => resolve(html))
-    const tree = React.createElement(
-      NonceProvider,
-      { nonce },
-      React.createElement(Suspense, { fallback: null }, React.createElement(GatedNonce, { gate })),
-    )
+    const tree = React.createElement(NonceProvider, {
+      nonce,
+      children: React.createElement(
+        Suspense,
+        { fallback: null },
+        React.createElement(GatedNonce, { gate }),
+      ),
+    })
     const { pipe } = renderToPipeableStream(tree, {
       onAllReady() {
         pipe(sink)

@@ -553,11 +553,13 @@ describe('the per-request nonce: which deploy paths reach one', () => {
     // the same order, because that is the node deploy path: `adapters/node.ts:24` says in its own
     // words that `request-handler.ts` applies the security headers.
     const nonce = generateNonce()
-    const headers = buildSecurityHeaders(
-      { contentSecurityPolicy: { 'script-src': ["'self'", "'nonce-{nonce}'"] } },
-      { production: true },
-      { nonce },
-    )
+    // The empty config is deliberate: `applyCsp` falls back to `DEFAULT_CSP` and then calls
+    // `applyNonceToCsp`, which IS the node path — `request-handler.ts` passes the project's
+    // security config through unchanged, and a project that sets none gets the default. An
+    // earlier form of this call named a `contentSecurityPolicy` field that does not exist on
+    // `SecurityHeadersConfig` (the field is `csp?: string | false`), so it tested a shape the
+    // function never receives; `vitest --typecheck` did not type this file and `tsc` did.
+    const headers = buildSecurityHeaders({}, { production: true }, { nonce })
     const csp = headers['Content-Security-Policy']
 
     expect(nonce).toBeTruthy()
