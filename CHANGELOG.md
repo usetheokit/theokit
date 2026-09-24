@@ -13,6 +13,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   path it does not serve. Until now every in-tree exercise of the span path substituted the
   transport, so the code that BUILDS a span was covered and the claim that one ARRIVES was not
   (#B-199)
+- `rules/publishing-gates.txt` — a check can be declared as one that PUBLISHES rather than verifies,
+  and the PR quality report then excludes it from the green/red verdict instead of reading a registry
+  outage as a failure of the change. Each entry carries its reason on the same line, the report names
+  every excluded gate with the conclusion it actually had, and a declaration matching no check in the
+  run is reported as stale rather than dropped in silence (#B-268)
+
+### Fixed
+
+- The PR quality report no longer collapses two check runs that share a name: a gate appearing twice
+  keeps both conclusions, so a `failure` beside a `cancelled` is visible instead of whichever one was
+  read last (#B-268)
 
 ## [create-theokit 3.0.8] - 2026-09-23
 
