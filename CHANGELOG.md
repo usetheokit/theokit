@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- `pnpm try:published` scaffolds a consumer from the registry, outside this workspace, and reports which versions it actually resolved. `try:scaffold` deliberately does the opposite — `link-scaffold-to-workspace.ts` points `my-test` at the working tree, because #420 found that every local verification run through it had been measuring the published package. Both questions are real and they are different scaffolds; this is the second one (#B-309)
+
 ### Changed
 
 - The subpath-coverage suite no longer loses forty verdicts to a hook timeout on a busy machine (#B-307)
