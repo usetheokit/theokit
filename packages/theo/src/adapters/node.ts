@@ -58,7 +58,13 @@ export const nodeAdapter: DeployAdapter = {
     // including @theo/actions virtual module).
     await viteBuild({
       root: cwd,
-      plugins: await ctx.makeVitePlugins({ root: cwd, ssr: config.ssr }),
+      plugins: await ctx.makeVitePlugins({
+        root: cwd,
+        ssr: config.ssr,
+        // The client build carries it too: the flag reaches the route manifest, whose pages
+        // stay `React.lazy` for the browser — and lazy is what makes React suspend at all.
+        ssrStreaming: config.ssrStreaming,
+      }),
       build: {
         outDir: '.theokit/client',
         emptyOutDir: true,
@@ -72,7 +78,11 @@ export const nodeAdapter: DeployAdapter = {
       console.log('\n  Building SSR...\n')
       await viteBuild({
         root: cwd,
-        plugins: await ctx.makeVitePlugins({ root: cwd, ssr: true }),
+        plugins: await ctx.makeVitePlugins({
+          root: cwd,
+          ssr: true,
+          ssrStreaming: config.ssrStreaming,
+        }),
         build: {
           ssr: true,
           outDir: '.theokit/server',

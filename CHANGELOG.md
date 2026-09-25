@@ -6,6 +6,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- `pnpm format:check` no longer refuses a push over files the repository does not carry. `.squad/` is
+  the write root — every cycle's dated trail lands there, nothing in it is authored by hand, and it is
+  gitignored — so formatting it changes a file no commit contains. It was absent from `.prettierignore`
+  and had never fired, because every record written into it was Markdown and `*.md` was already
+  excluded; the first `.json` evidence file failed the check and the pre-push hook rejected a push
+  carrying two verified commits (#B-306)
+
+- `ssrStreaming: true` in `theo.config.ts` is now honoured by the build, so a project that declares
+  streaming actually streams. The flag parsed, validated, and was dropped one layer down:
+  `AdapterBuildContext.makeVitePlugins` declared its options as `{ root, ssr }` with no field for it,
+  so the node adapter could not pass it and the Vite plugin evaluated `options.ssrStreaming === true`
+  on an `undefined` — emitting the buffering server entry, which exports no streaming renderer, so the
+  production server took the synchronous path on every request. Measured on a released build against a
+  route whose Suspense boundary resolves after 800ms, reading the raw TCP socket: **one arrival at
+  815ms became three, the first at 12ms carrying `<head>`**. Note for apps that already declared the
+  flag: the response now arrives in several chunks and the hydration script follows the streamed body,
+  so a whole-document snapshot will see a different shape — the one the flag always promised. Apps that
+  do not declare it are unaffected, and a build that streams when nobody asked is refused by the same
+  tests (#B-306)
+
+## [theokit 0.73.0, @theokit/agents 15.0.1, create-theokit 3.0.9] - 2026-09-24
+
 ### Added
 
 - `useNonce()` on `theokit/client` — an application component can now read the request's CSP nonce,
