@@ -1,0 +1,26 @@
+B-311 — the probe run ON my-test, 2026-09-25
+
+This is the scaffold the operator validates on: a pnpm workspace member, so the framework's
+own packages are LINKED to the working tree (#420) and @theokit/ui comes from the registry.
+
+Versions read off disk:
+  theokit       -> 0.73.0    my-test/node_modules/theokit -> packages/theo   (workspace link)
+  @theokit/ui   -> 1.12.2    from the registry, npm dist-tags.latest
+
+  pnpm build    -> Build complete -> node (SSR)
+  HTTP 200, 14885 bytes, root NOT empty, ThemeSwitcher in the markup
+
+  probe-hydration --url http://127.0.0.1:3000
+    uncaught exceptions: 0
+    console errors:      0
+    clean — nothing thrown, nothing logged at error level
+
+The probe's calibration is the pair measured the same day on the out-of-workspace scaffold:
+  @theokit/ui@1.12.0  -> 1 uncaught (React #418, args[]=HTML)
+  @theokit/ui@1.12.1  -> 0
+
+Gates that a previous attempt broke, both green after this one:
+  zod-single-version + typecheck-clean-gate   11 tests passed, Type Errors: no errors
+
+The committed lockfile carries no my-test: importer. Proven, not assumed: with my-test/ held
+aside, pnpm install --frozen-lockfile exits 0 — which is how release.yml:209 uses it.

@@ -1,0 +1,16 @@
+B-308 — the published registry artifact, fetched from the endpoint a consumer uses, 2026-09-25
+
+GET https://usetheokit.github.io/theokit-ui/r/theme-provider.json
+  @theokit/ui@1.12.2 (npm dist-tags.latest confirmed)
+
+  files shipped:                 25   (was 7)
+  themes/density.ts present:     yes
+  themes/schema.ts present:      yes
+  themes/index.ts present:       yes
+  valibot in dependencies:       yes  (schema.ts imports it)
+  registryDependencies:          cn, env, safe-href, tokens
+  relative imports NOT shipped:  0    (was 26)
+
+This is the artifact, not a report about it. The gate that now refuses the old state is
+packages/ui/scripts/validate-registry.ts, proven armed: injecting an import of a file the
+artifact does not ship exits 1 and names the resolved path; removing it exits 0.
