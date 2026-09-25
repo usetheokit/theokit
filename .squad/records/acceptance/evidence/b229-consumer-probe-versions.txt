@@ -1,0 +1,20 @@
+B-229 / B-309 — the out-of-workspace consumer probe, 2026-09-25
+
+Scaffold: npm create theokit@latest, into /tmp, OUTSIDE the pnpm workspace.
+Install:  npm install (never pnpm — the workspace must not be consulted).
+
+Versions READ OFF DISK, not from the manifest:
+  theokit -> 0.73.0
+  @theokit/ui -> 1.12.1
+
+The component under test is on the page:
+  Header.tsx:1:import { ThemeSwitcher } from '@theokit/ui'
+  Header.tsx:21:        <ThemeSwitcher />
+
+Counterproof — same scaffold, same build, same probe; the version is the only variable:
+  @theokit/ui@1.12.0  uncaught exceptions: 1   Minified React error #418 ... args[]=HTML   probe exit 1
+  @theokit/ui@1.12.1  uncaught exceptions: 0   clean                                      probe exit 0
+
+Server markup was non-empty in both runs and carried the switcher, so neither result is the
+probe reading a page that never hydrated. The probe reports exit 2 for 'could not measure';
+it returned 1 then 0, so it measured both times.

@@ -35,6 +35,13 @@ import { join } from 'node:path'
 /** Permissive licences with no obligation beyond attribution in the distributed source. */
 const ALLOWED = new Set([
   'MIT',
+  // MIT with its one obligation removed — the licence text is MIT's grant with the attribution
+  // clause deleted, so there is nothing to discharge and it belongs here rather than in
+  // ALLOWED_WITH_REASON. Measured in the production tree on 2026-09-25, as this set requires:
+  // `@csstools/color-helpers@5.1.0`, reached through `@csstools/css-color-parser`, which arrived
+  // with `@theokit/ui@1.12.2`. Terms read from the tarball's own LICENSE.md, not inferred from
+  // the SPDX string.
+  'MIT-0',
   'ISC',
   'Apache-2.0',
   'BSD-2-Clause',
