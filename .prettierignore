@@ -41,3 +41,10 @@ packages/agents/tests/unit/__snapshots__/subpath-surface.json
 # recorded; what this line does is stop THIS repository's formatter from claiming authority
 # over a package whose formatter disagrees with it about nothing except which files it reads.
 apps/
+
+# The write root is OUTPUT, never source: every cycle's dated trail lands here and nothing in it is
+# authored by hand (`rules/records-location.md`). It is also gitignored, so formatting it changes a
+# file no commit carries. This never fired before because every record was Markdown, which `*.md`
+# above already covers — the first `.json` evidence file written into it failed `format:check` and
+# refused a push carrying two verified commits.
+.squad/

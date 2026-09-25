@@ -60,7 +60,21 @@ export interface AdapterRoute {
 }
 
 export interface AdapterBuildContext {
-  makeVitePlugins?: (opts: { root: string; ssr?: boolean }) => Plugin[] | Promise<Plugin[]>
+  /**
+   * `ssrStreaming` is here because the flag decides WHICH server entry the plugin emits, and
+   * without a field for it no caller could pass one. `vite-plugin/index.ts` reads
+   * `options.ssrStreaming === true`, so an absent field evaluated `undefined === true` forever:
+   * a project declaring `ssrStreaming: true` got the buffering entry, its server found no
+   * streaming renderer to call, and every response was the fully buffered document. Measured
+   * 2026-09-24 on a released build — TTFB tracked the slowest Suspense boundary (60ms delay ->
+   * 73ms, 800ms -> 815ms) with a single socket arrival. Same shape as `#95`, which added the
+   * three directories to this object for the same reason.
+   */
+  makeVitePlugins?: (opts: {
+    root: string
+    ssr?: boolean
+    ssrStreaming?: boolean
+  }) => Plugin[] | Promise<Plugin[]>
   /**
    * Scan the project's routes, INJECTED for the same reason `makeVitePlugins` is (#369).
    *
