@@ -1,0 +1,9 @@
+### M2/AC2 + AC4(Web) against v1.1.0-rc.2
+
+
+ Test Files  1 passed (1)
+      Tests  6 passed (6)
+Type Errors  no errors
+   Start at  12:39:39
+   Duration  176ms (transform 59ms, setup 17ms, import 52ms, tests 34ms, environment 0ms)
+

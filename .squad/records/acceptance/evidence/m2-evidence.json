@@ -1,0 +1,60 @@
+{
+  "milestone_id": "M2",
+  "target": {
+    "kind": "internal-package",
+    "url": "node SSR build of my-test from the v1.1.0-rc.1 tree, served by `npx theokit start`"
+  },
+  "results": [
+    {
+      "id": "AC1",
+      "status": "passed",
+      "evidence": ["m2-ac1-ac3-live-chunks.txt"],
+      "note": "curl of / against the node SSR build with ssr+ssrStreaming: 200, 15234 bytes, <head> present, window.__staticRouterHydrationData present, real markup inside <div id=\"root\">. The control: the same route with ssrStreaming alone served 531 bytes of static template with an empty root, so the probe discriminates."
+    },
+    {
+      "id": "AC2",
+      "status": "passed",
+      "evidence": ["m2-ac2-ac3-web-entry.txt"],
+      "note": "tests/unit/entry-server-web-execution.test.ts: 6 passed. The generated Web entry is imported and invoked with a real Request and returns a Response without throwing."
+    },
+    {
+      "id": "AC3",
+      "status": "failed",
+      "evidence": [
+        "m2-ac3-socket-arrivals.txt",
+        "m2-ac3-socket-arrivals-800ms.txt",
+        "m2-ac3-live-chunks-suspense.txt"
+      ],
+      "note": "The released node SSR build withholds the whole document until the render finishes. Measured on a route that declares a Suspense boundary, reading the raw TCP socket rather than a fetch body: one arrival, and its arrival time tracks the suspend delay (60ms -> TTFB 73ms; 800ms -> TTFB 815ms). So the first chunk IS the final buffered document, which is the case the criterion excludes by name. The renderer does stream (the document carries the fallback, the resolved value and React's $RC/$RS bootstrap) and Transfer-Encoding: chunked is declared; the transport is what does not flush."
+    },
+    {
+      "id": "AC4",
+      "status": "passed",
+      "evidence": [
+        "m2-ac2-ac3-web-entry.txt",
+        "m2-ac4-ac5-tauri.txt",
+        "m2-ac6-presenter.txt"
+      ],
+      "note": "Each listed target was exercised rather than declared: Web via the generated entry (6 passed), Tauri via packages/tauri (7 passed), TUI via packages/presenter (137 passed)."
+    },
+    {
+      "id": "AC5",
+      "status": "passed",
+      "evidence": ["m2-ac4-ac5-tauri.txt"],
+      "note": "packages/tauri/src declares no renderToString / renderToPipeableStream / renderToReadableStream — grep returns nothing, so there is no Tauri-specific renderer. Suite: 7 passed."
+    },
+    {
+      "id": "AC6",
+      "status": "passed",
+      "evidence": ["m2-ac6-presenter.txt"],
+      "note": "packages/presenter: 12 files, 137 passed. The terminal presenter path is exercised, which is what the criterion asks for in place of an HTML document."
+    }
+  ],
+  "defects": [
+    {
+      "severity": "blocker",
+      "summary": "the node SSR transport buffers the whole document instead of flushing the shell; TTFB tracks the slowest suspended boundary",
+      "issue": "B-306"
+    }
+  ]
+}

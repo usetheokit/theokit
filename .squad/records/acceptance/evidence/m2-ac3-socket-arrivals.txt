@@ -1,0 +1,5 @@
+arrival 1: +73ms bytes=6502 head=true hydration=true
+arrivals=1 total_bytes=6500
+document has fallback "waiting": true
+document has resolved value: true
+document has React inline bootstrap ($RC / $RS): true

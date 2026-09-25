@@ -10,6 +10,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- The subpath-coverage suite no longer loses forty verdicts to a hook timeout on a busy machine (#B-307)
+- `pnpm lint` no longer reports problems in files the repository does not carry. `.squad/` is the write root and was absent from the eslint ignores, so a `/loop-surface-closure` run — which writes eight `.mjs`/`.ts` harness files under `.squad/records/audits/` — turned a clean lint into 17 errors (`sonarjs/slow-regex`, `no-clear-text-protocols`, `code-eval`), none of them in a versioned file. Same class as the `format:check` exclusion, a different tool; invisible to CI, so it only ever appears on a maintainer's machine and only after they run an audit (#B-307)
+
 ### Deprecated
 
 ### Removed

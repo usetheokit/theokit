@@ -1,0 +1,9 @@
+### M2/AC3 against v1.1.0-rc.2 (tree b0edaccedd7b, identical to the tag)
+### route declares a Suspense boundary resolving after 800ms; raw TCP socket, not fetch
+arrival 1: +8ms bytes=5386 head=true hydration=false
+arrival 2: +811ms bytes=987 head=false hydration=false
+arrival 3: +812ms bytes=170 head=false hydration=true
+arrivals=3 total_bytes=6541
+document has fallback "waiting": true
+document has resolved value: true
+document has React inline bootstrap ($RC / $RS): true

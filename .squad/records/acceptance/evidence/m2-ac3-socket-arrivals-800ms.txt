@@ -1,0 +1,7 @@
+### AC3 decisive probe — suspend delay raised 60ms -> 800ms
+### If TTFB tracks the delay, the server withheld the shell; if TTFB stays ~10ms, it flushed.
+arrival 1: +815ms bytes=6502 head=true hydration=true
+arrivals=1 total_bytes=6500
+document has fallback "waiting": true
+document has resolved value: true
+document has React inline bootstrap ($RC / $RS): true

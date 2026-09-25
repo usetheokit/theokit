@@ -1,0 +1,13 @@
+### AC1 AFTER the fix — the ROOT route, through the streaming path
+arrival 1: +21ms bytes=16109 head=true hydration=false
+arrival 2: +21ms bytes=170 head=false hydration=true
+arrivals=2 total_bytes=16275
+document has fallback "waiting": false
+document has resolved value: false
+document has React inline bootstrap ($RC / $RS): true
+
+-- the served document, head + hydration:
+bytes=15326
+2
+window.__staticRouterHydrationData
+<div id="root"><title>TheoKit agent</title><meta name="description" content

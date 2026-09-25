@@ -35,6 +35,20 @@ export default tseslint.config(
       // reasoning as the study zone below, with one addition: these files are invisible to CI,
       // so the failure only ever appears on a maintainer's machine.
       '.claude/**',
+      // The write root. Every cycle's dated trail lands here and none of it is authored by hand
+      // (`rules/records-location.md`), so linting it reports problems in generated evidence that
+      // nobody is going to go back and fix. The same reasoning already excluded it from
+      // `format:check`; measured the day this was added: a `/loop-surface-closure` run left eight
+      // `.mjs`/`.ts` harness files under `.squad/records/audits/`, and `pnpm lint` came back with
+      // 17 errors — `sonarjs/slow-regex`, `no-clear-text-protocols`, `code-eval` — none of them in
+      // a file this repository carries. Like `.claude/**`, it is invisible to CI, so the failure
+      // only ever appears on a maintainer's machine and only after they run an audit.
+      //
+      // This also covers `.squad/records/acceptance/`, which IS versioned (`.gitignore` argues it
+      // in on B-020's reasoning). That is deliberate: an acceptance record is the evidence of one
+      // run on one day, immutable by design, and a lint finding in it names nothing anyone may
+      // change without falsifying the record.
+      '.squad/**',
       '**/dist/**',
       '**/.theokit/**',
       '**/coverage/**',
