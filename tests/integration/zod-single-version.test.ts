@@ -5,6 +5,31 @@ import { execSync } from 'node:child_process'
 
 const REPO = resolve(__dirname, '../..')
 
+/**
+ * Versions of zod the lockfile RESOLVES, peer suffix and all.
+ *
+ * Parsed line by line rather than with one regex: `security/detect-unsafe-regex` refused the pattern
+ * that combined a greedy version tail with an optional peer group, and it was right — that shape
+ * backtracks. Scanning is linear and says what it does.
+ *
+ * A resolved key looks like `  zod@4.4.3:` or `  zod@4.4.3(typescript@5.9.3):`, so the version ends
+ * at whichever of `(` or `:` comes first.
+ */
+function resolvedZodVersions(lockContent: string): Set<string> {
+  const PREFIX = '  zod@'
+  const out = new Set<string>()
+  for (const line of lockContent.split('\n')) {
+    if (!line.startsWith(PREFIX)) continue
+    const rest = line.slice(PREFIX.length)
+    const ends = [rest.indexOf('('), rest.indexOf(':')].filter((i) => i >= 0)
+    if (ends.length === 0) continue
+    const version = rest.slice(0, Math.min(...ends))
+    // a digit first, so `zod@workspace:*` or a name this prefix caught by accident is skipped
+    if (/^\d/.test(version)) out.add(version)
+  }
+  return out
+}
+
 describe('Zod single-version invariant (T0.1)', () => {
   // Repo migrated to Zod v4 (commit 264449e "monorepo infra upgrades — Zod v4").
   // The single-version invariant stands; only the pinned major flipped 3 → 4.
@@ -15,11 +40,69 @@ describe('Zod single-version invariant (T0.1)', () => {
     expect(pkg.pnpm?.overrides?.zod).toBe('^4.0.0')
   })
 
-  it('exactly ONE zod version installed in node_modules/.pnpm/', () => {
-    const pnpmDir = resolve(REPO, 'node_modules/.pnpm')
-    const entries = readdirSync(pnpmDir).filter((e) => /^zod@\d/.test(e))
-    expect(entries.length).toBe(1)
-    expect(entries[0]).toMatch(/^zod@4\./)
+  /**
+   * Read what the project RESOLVES, not what the store happens to hold.
+   *
+   * This used to `readdirSync(node_modules/.pnpm)` and count `zod@*` directories. That directory is
+   * pnpm's content-addressed store: it keeps a directory per version ever materialised, whether or
+   * not any importer still resolves it. So the assertion went red on residue — measured 2026-09-25
+   * while bumping `@theokit/ui` for another item: the store held `zod@4.4.3` and `zod@4.6.5`, this
+   * test failed `expected 2 to be 1`, and `grep -c "zod@4.6.5" pnpm-lock.yaml` returned 0. Nothing
+   * referenced it. `pnpm prune` made the test pass with no dependency change at all.
+   *
+   * That cost was paid in the wrong direction: the failure was read as a second broken invariant and
+   * went into a backlog item as part of the bump's price, which would have made somebody decline a
+   * dependency update over a defect the update did not cause.
+   *
+   * The lockfile is the authority on what this project resolves, and the two assertions around this
+   * one already read authoritative sources — `pnpm.overrides.zod` above, a resolved
+   * `zod/package.json` below. This one was the odd reader.
+   *
+   * The `zod@3` case further down still reads the store, deliberately and narrowly: a `zod@3`
+   * directory is evidence that something pulled the wrong major at some point, and that is worth
+   * seeing even when nothing references it any more. Backlog B-310.
+   */
+  it('exactly ONE zod version is resolved by the project', () => {
+    const lock = readFileSync(resolve(REPO, 'pnpm-lock.yaml'), 'utf8')
+    const versions = resolvedZodVersions(lock)
+    expect(versions.size, `lockfile resolves: ${[...versions].join(', ') || '(none)'}`).toBe(1)
+    expect([...versions][0]).toMatch(/^4\./)
+  })
+
+  /**
+   * The regex is the assertion, so it is tested rather than trusted.
+   *
+   * The first version of it stopped at `(`, which meant a key pnpm writes as
+   * `zod@4.4.3(typescript@5.9.3):` matched NOTHING — and a lockfile whose every zod key carried a
+   * peer suffix would have reported zero versions and failed with `(none)`, which reads as a broken
+   * lockfile rather than as a broken reader. Today's lockfile has no peer-suffixed zod, so nothing
+   * would have caught it.
+   */
+  it('the lockfile reader counts what pnpm actually writes', () => {
+    const one = 'packages:\n  zod@4.4.3:\n    resolution: {}\nsnapshots:\n  zod@4.4.3: {}\n'
+    expect([...resolvedZodVersions(one)]).toEqual(['4.4.3'])
+
+    // two resolved versions is the thing this invariant forbids — it must be SEEN
+    expect(resolvedZodVersions('packages:\n  zod@4.4.3:\n  zod@4.6.5:\n').size).toBe(2)
+    expect(resolvedZodVersions('packages:\n  zod@3.25.76:\n  zod@4.4.3:\n').size).toBe(2)
+
+    // pnpm appends the peers it resolved against; both shapes are one version
+    expect([...resolvedZodVersions('packages:\n  zod@4.4.3(typescript@5.9.3):\n')]).toEqual([
+      '4.4.3',
+    ])
+    expect(
+      resolvedZodVersions(
+        'packages:\n  zod@4.4.3(typescript@5.9.3):\n  zod@4.6.5(typescript@5.9.3):\n',
+      ).size,
+    ).toBe(2)
+
+    // a different package whose name merely starts with `zod` is not zod
+    expect([
+      ...resolvedZodVersions('packages:\n  zod-to-json-schema@3.24.6:\n  zod@4.4.3:\n'),
+    ]).toEqual(['4.4.3'])
+
+    // and a prerelease is still one version
+    expect([...resolvedZodVersions('packages:\n  zod@4.5.0-beta.1:\n')]).toEqual(['4.5.0-beta.1'])
   })
 
   it('require("zod/package.json").version is 4.x', () => {
