@@ -1,0 +1,9 @@
+### AC3 AFTER the fix — same 800ms suspend delay, same socket probe
+### BEFORE: 1 arrival at +815ms (TTFB tracked the delay = the shell was withheld)
+arrival 1: +12ms bytes=5386 head=true hydration=false
+arrival 2: +814ms bytes=987 head=false hydration=false
+arrival 3: +815ms bytes=170 head=false hydration=true
+arrivals=3 total_bytes=6541
+document has fallback "waiting": true
+document has resolved value: true
+document has React inline bootstrap ($RC / $RS): true

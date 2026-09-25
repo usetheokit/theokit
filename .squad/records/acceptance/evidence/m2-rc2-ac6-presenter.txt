@@ -1,0 +1,7 @@
+### M2/AC6 against v1.1.0-rc.2 — the terminal presenter path
+
+ Test Files  12 passed (12)
+      Tests  137 passed (137)
+   Start at  12:39:47
+   Duration  422ms (transform 456ms, setup 0ms, import 998ms, tests 231ms, environment 1ms)
+

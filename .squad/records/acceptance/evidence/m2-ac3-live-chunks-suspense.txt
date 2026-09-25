@@ -1,0 +1,5 @@
+### AC3 — the SAME pipeline, on a route that declares a Suspense boundary
+### target: http://127.0.0.1:4319/stream-probe (node SSR build, ssrStreaming: true)
+chunk 1: bytes=5645 head=true hydration=true
+  first-chunk-prefix: "<!doctype html>\n<html lang=\"en\">\n  <head>\n    <meta charset=\"utf-8\" />\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />\n    <title>The"
+status=200 chunks_observed=1

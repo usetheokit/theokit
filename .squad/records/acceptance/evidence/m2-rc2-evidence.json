@@ -1,0 +1,46 @@
+{
+  "milestone_id": "M2",
+  "target": {
+    "kind": "internal-package",
+    "url": "v1.1.0-rc.2 — the node SSR build of the scaffold from tree b0edaccedd7b, which `git rev-parse` shows is byte-identical to the tag's tree, served by `npx theokit start`"
+  },
+  "results": [
+    {
+      "id": "AC1",
+      "status": "passed",
+      "evidence": ["m2-rc2-ac1-root.txt"],
+      "note": "Root route against the released build with `ssr: true, ssrStreaming: true`: 15326 bytes, `<head>` open and close, `window.__staticRouterHydrationData` present, real markup inside `<div id=\"root\">`, `</html>` present so the document is closed and parseable. One socket arrival at +13ms, which is correct for a route declaring no Suspense boundary — React emits the whole shell in a single flush when nothing suspends."
+    },
+    {
+      "id": "AC2",
+      "status": "passed",
+      "evidence": ["m2-rc2-ac2-web.txt"],
+      "note": "tests/unit/entry-server-web-execution.test.ts — 6 passed. The generated Web entry is imported and invoked with a real `Request`, returning a `Response` without throwing, which is what the criterion asks for in place of `toContain` over a template string."
+    },
+    {
+      "id": "AC3",
+      "status": "passed",
+      "evidence": ["m2-rc2-ac3-socket.txt"],
+      "note": "Measured on a route declaring a Suspense boundary that resolves after 800ms, reading the raw TCP socket rather than a fetch body because fetch coalesces. THREE arrivals: +8ms carrying `<head>`, +811ms carrying the resolved content, +812ms carrying the hydration script. The first chunk carries `<head>` and arrives 800ms before the boundary resolves, so it is observably not the final buffered document — the case the criterion excludes by name. The measurement discriminates: the same probe against v1.1.0-rc.1 returned ONE arrival whose time tracked the delay (60ms -> 73ms, 800ms -> 815ms)."
+    },
+    {
+      "id": "AC4",
+      "status": "passed",
+      "evidence": ["m2-rc2-ac2-web.txt", "m2-rc2-ac4-ac5-tauri.txt", "m2-rc2-ac6-presenter.txt"],
+      "note": "Each listed target exercised rather than declared: Web via the generated entry (6 passed), Tauri via packages/tauri (7 passed), TUI via packages/presenter (137 passed)."
+    },
+    {
+      "id": "AC5",
+      "status": "passed",
+      "evidence": ["m2-rc2-ac4-ac5-tauri.txt"],
+      "note": "`grep -rlE 'renderToString|renderToPipeableStream|renderToReadableStream' packages/tauri/src` returns nothing, so there is no Tauri-specific renderer — the webview goes through the same pipeline. Suite: 7 passed."
+    },
+    {
+      "id": "AC6",
+      "status": "passed",
+      "evidence": ["m2-rc2-ac6-presenter.txt"],
+      "note": "packages/presenter: 12 files, 137 passed. The terminal presenter path is exercised, which is what the criterion asks for in place of an HTML document a terminal cannot have."
+    }
+  ],
+  "defects": []
+}
