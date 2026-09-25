@@ -261,7 +261,7 @@ not itself a dependency — two milestones in the same wave may run in either or
 - [ ] Tauri: the authorization ADR is decided and implemented — **decided, and its core guarantee is implemented as of 2026-08-20**: `RouteConfig.policy` is evaluated by both HTTP executors AND `callProcedure` from one function, verified by `tests/unit/access-decision-parity.test.ts`. The sentence this criterion was written from — "`callProcedure` runs no middleware and no auth" — no longer describes the code. What remains is the ADR's breaking half (absence stops meaning open; `session.ts` loses `ServerResponse`), which is why the box stays `[ ]` — that, and the fact that only `/acceptance` against a published build may flip it. See `docs/adr/0001-authorization-is-transport-independent.md` § Implementation status
 - [ ] TUI: same ADR, same seam — the route's access rules are enforced off-web rather than re-invented per surface. CSRF is *not applicable*: there is no browser origin to forge a request from
 
-### M2 — [ ] rendering-pipeline
+### M2 — [x] rendering-pipeline
 
 **Surface:** `.claude/skills/rendering-pipeline-specialist/` — where markup is produced, when it streams, and what the client re-executes.
 **Dependencies:** none — core surface
