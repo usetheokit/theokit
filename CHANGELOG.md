@@ -28,7 +28,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   do not declare it are unaffected, and a build that streams when nobody asked is refused by the same
   tests (#B-306)
 
-## [theokit 0.73.0, @theokit/agents 15.0.1, create-theokit 3.0.9] - 2026-09-24
+## [@theokit/agents 15.0.1, theokit 0.73.0] - 2026-09-24
 
 ### Added
 
