@@ -10,6 +10,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- The subpath-coverage suite no longer loses forty verdicts to a hook timeout on a busy machine (#B-307)
+
 ### Deprecated
 
 ### Removed

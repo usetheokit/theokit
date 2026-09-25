@@ -30,7 +30,7 @@
  */
 import { createRequire } from 'node:module'
 
-import { beforeAll, describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 
 const require_ = createRequire(import.meta.url)
 
@@ -349,6 +349,41 @@ const SUBPATHS_DO_SDK = Object.keys(
   (require_('@theokit/sdk/package.json') as { exports: Record<string, unknown> }).exports,
 ).filter((k) => k !== './package.json')
 
+/**
+ * Every module the cases read, imported ONCE at module scope.
+ *
+ * This was a `beforeAll` and the comment there claimed it "removes the race instead of lengthening
+ * the track". It shortened the track and left the race: a hook has a bound too, and the default is
+ * 10 s. Measured 2026-09-25 — the file passes alone in 4.96 s (`import 130ms`) and passes with the
+ * whole `packages/agents` suite (289 files), but a full root run (1145 files) produced
+ * `Error: Hook timed out in 10000ms` and the run line read `(40 tests | 40 skipped)`. One reported
+ * failure, forty verdicts that decided nothing.
+ *
+ * Raising `hookTimeout` was the obvious answer and is the wrong one twice over: the number would be
+ * a guess about somebody else's machine, and it keeps the cost inside a bounded hook. Module scope
+ * has no hook bound at all — the same work, outside the thing that was timing it out. A failure
+ * here surfaces as the file failing to load, which is louder and more honest than forty skips.
+ *
+ * Verified after the move: a full root run of 1145 files with the default 10 s hook bound.
+ */
+const LOADED = new Map<string, Record<string, unknown>>()
+{
+  const specifiers = new Set<string>()
+  for (const [, decision] of Object.entries(DECISIONS)) {
+    if (decision.verdict === 'in') specifiers.add(decision.via)
+  }
+  for (const [subpath, decision] of Object.entries(DECISIONS)) {
+    if (decision.verdict === 'in' && decision.coverage === 'total') {
+      specifiers.add(`@theokit/sdk${subpath.slice(1)}`)
+    }
+  }
+  await Promise.all(
+    [...specifiers].map(async (specifier) => {
+      LOADED.set(specifier, (await import(specifier)) as Record<string, unknown>)
+    }),
+  )
+}
+
 describe('M78 T2.1 — subpath coverage policy', () => {
   it('test_every_sdk_subpath_has_a_verdict', () => {
     const withoutDecision = SUBPATHS_DO_SDK.filter((s) => DECISIONS[s] === undefined)
@@ -411,42 +446,11 @@ describe('M78 T2.1 — subpath coverage policy', () => {
     (e): e is [string, Inside] => e[1].verdict === 'in' && e[1].symbols.length > 0,
   )
 
-  /**
-   * Modules resolved ONCE, before the cases.
-   *
-   * Each `it.each` case used to run its own `await import(...)`, and whichever ran first paid for
-   * loading the barrel's entire graph — measured at over 80 s of `collect` on this machine — racing
-   * vitest's 5 s timeout. The test passed or failed depending on ordering and machine load, which is
-   * the definition of flaky (x it or delete
-   * it, never live with it).
-   *
-   * Raising the timeout would hide the symptom. The cost is import, not assertion — paying it once in
-   * `beforeAll` removes the race instead of lengthening the track. Backlog B-M67-04.
-   */
-  const loaded = new Map<string, Record<string, unknown>>()
-
-  beforeAll(async () => {
-    const specifiers = new Set<string>()
-    for (const [, decision] of Object.entries(DECISIONS)) {
-      if (decision.verdict === 'in') specifiers.add(decision.via)
-    }
-    for (const [subpath, decision] of Object.entries(DECISIONS)) {
-      if (decision.verdict === 'in' && decision.coverage === 'total') {
-        specifiers.add(`@theokit/sdk${subpath.slice(1)}`)
-      }
-    }
-    await Promise.all(
-      [...specifiers].map(async (specifier) => {
-        loaded.set(specifier, (await import(specifier)) as Record<string, unknown>)
-      }),
-    )
-  })
-
-  /** Reads from the cache. Fails loud if `beforeAll` missed the specifier — never imports late. */
+  /** Reads the module map. Fails loud if the specifier was never collected — never imports late. */
   const moduleOf = (specifier: string): Record<string, unknown> => {
-    const mod = loaded.get(specifier)
+    const mod = LOADED.get(specifier)
     if (mod === undefined) {
-      throw new Error(`\`${specifier}\` was not pre-loaded; the beforeAll specifier set is stale`)
+      throw new Error(`\`${specifier}\` was not pre-loaded; the specifier set is stale`)
     }
     return mod
   }
