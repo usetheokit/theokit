@@ -36,6 +36,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- `ssrStreaming: true` in `theo.config.ts` is now honoured by the build, so a project that declares
+  streaming actually streams. The flag parsed, validated, and was dropped one layer down:
+  `AdapterBuildContext.makeVitePlugins` declared its options as `{ root, ssr }` with no field for it,
+  so the node adapter could not pass it and the Vite plugin evaluated `options.ssrStreaming === true`
+  on an `undefined` — emitting the buffering server entry, which exports no streaming renderer, so the
+  production server took the synchronous path on every request. Measured on a released build against a
+  route whose Suspense boundary resolves after 800ms, reading the raw TCP socket: **one arrival at
+  815ms became three, the first at 12ms carrying `<head>`**. Note for apps that already declared the
+  flag: the response now arrives in several chunks and the hydration script follows the streamed body,
+  so a whole-document snapshot will see a different shape — the one the flag always promised. Apps that
+  do not declare it are unaffected, and a build that streams when nobody asked is refused by the same
+  tests (#B-306)
+
 - The OTLP probe tells an unmet precondition from a refused delivery. Running it from a clean
   checkout raised `ERR_MODULE_NOT_FOUND` — first for `@theokit/sdk` with nothing installed, then for
   `@theokit/presenter/dist/index.js` with the workspace unbuilt — and both left exit 1, which the
