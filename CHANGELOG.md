@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- The scaffold used for local verification resolves the `@theokit/ui` the package actually publishes. `packages/theo` declared a peer range of `^1.1.0` against a lock that resolved 1.3.2 — nine minors behind — so no fix released in that package reached `my-test`, and a hydration probe run there reported a defect that had been fixed. The framework's own packages stay linked to the working tree, which is what #420 established and is untouched: `@theokit/ui` lives in another repository and has always come from the registry (#B-311)
+
 - `pnpm try:published` scaffolds a consumer from the registry, outside this workspace, and reports which versions it actually resolved. `try:scaffold` deliberately does the opposite — `link-scaffold-to-workspace.ts` points `my-test` at the working tree, because #420 found that every local verification run through it had been measuring the published package. Both questions are real and they are different scaffolds; this is the second one (#B-309)
 
 ### Changed
