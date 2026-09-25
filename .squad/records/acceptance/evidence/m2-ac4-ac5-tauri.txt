@@ -1,0 +1,13 @@
+### packages/tauri (AC4, AC5 — same pipeline, no Tauri-specific renderer)
+
+ RUN  v4.1.9 /home/paulo/Projetos/theo/theokit-framework/theokit/packages/tauri
+
+
+ Test Files  1 passed (1)
+      Tests  7 passed (7)
+   Start at  20:37:00
+   Duration  448ms (transform 229ms, setup 0ms, import 359ms, tests 12ms, environment 0ms)
+
+
+### grep: renderers declared under packages/tauri/src
+  NONE — no Tauri-specific renderer (AC5)

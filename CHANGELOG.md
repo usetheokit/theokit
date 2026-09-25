@@ -8,7 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- `MIT-0` accepted in the production licence audit. It arrived with `@theokit/ui@1.12.2` through `@csstools/css-color-parser` -> `@csstools/color-helpers@5.1.0`, and its terms were read from that tarball's own `LICENSE.md` rather than inferred: MIT's grant with the attribution clause deleted, so there is no obligation to discharge and it sits in `ALLOWED` beside `0BSD`, `Unlicense` and `CC0-1.0` (#B-311)
+
+- The scaffold used for local verification resolves the `@theokit/ui` the package actually publishes. The root lock resolved 1.3.2 while the package published 1.12.x, and `my-test` has no install of its own — `pnpm-workspace.yaml` declares it a member, so the root lock decides. A hydration probe run there reported a defect that had already been fixed. The peer range was NOT the cause and is unchanged: `^1.1.0` means `>=1.1.0 <2.0.0`, which accepts 1.12.2; bumping it to `^1.12.0` broke `test_ui_peer_accepts_the_whole_line_the_template_pins`, because the template pins the floor `^1.1.0` and a consumer's lock at that floor would then hit ERESOLVE. The framework's own packages stay linked to the working tree, which is what #420 established and is untouched: `@theokit/ui` lives in another repository and has always come from the registry (#B-311)
+- `pnpm try:published` scaffolds a consumer from the registry, outside this workspace, and reports which versions it actually resolved. `try:scaffold` deliberately does the opposite — `link-scaffold-to-workspace.ts` points `my-test` at the working tree, because #420 found that every local verification run through it had been measuring the published package. Both questions are real and they are different scaffolds; this is the second one (#B-309)
+
 ### Changed
+
+- The subpath-coverage suite no longer loses forty verdicts to a hook timeout on a busy machine (#B-307)
+- `pnpm lint` no longer reports problems in files the repository does not carry. `.squad/` is the write root and was absent from the eslint ignores, so a `/loop-surface-closure` run — which writes eight `.mjs`/`.ts` harness files under `.squad/records/audits/` — turned a clean lint into 17 errors (`sonarjs/slow-regex`, `no-clear-text-protocols`, `code-eval`), none of them in a versioned file. Same class as the `format:check` exclusion, a different tool; invisible to CI, so it only ever appears on a maintainer's machine and only after they run an audit (#B-307)
 
 ### Deprecated
 

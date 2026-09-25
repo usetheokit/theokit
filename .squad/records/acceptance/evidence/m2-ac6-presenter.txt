@@ -1,0 +1,10 @@
+### packages/presenter (AC6 — terminal presenter path)
+
+ RUN  v4.1.9 /home/paulo/Projetos/theo/theokit-framework/theokit/packages/presenter
+
+
+ Test Files  12 passed (12)
+      Tests  137 passed (137)
+   Start at  20:36:53
+   Duration  426ms (transform 446ms, setup 0ms, import 930ms, tests 218ms, environment 1ms)
+

@@ -1,0 +1,21 @@
+### ROOT CAUSE — the build emitted the NON-streaming entry although theo.config.ts declares ssrStreaming: true
+
+-- exports of my-test/.theokit/server/entry-server.js:
+2446:export {
+2447:  render
+
+-- does it export a streaming renderer at all?
+0
+   (0 = no streaming entry in the build)
+
+-- the buffering the sync entry does (accumulate into a string, resolve at end):
+2423:      html += chunk.toString();
+2426:      resolve({ html, hydrationData });
+
+-- the gate this makes fall through: packages/theo/src/cli/commands/start/request-handler.ts:169
+  if (!ctx.ssrStreamingEnabled || !ctx.ssrRenderStreaming) return false
+
+-- the config that was declared and not honoured:
+20:  // AC1 of M2 asks for a published build WITH `ssrStreaming: true`. The schema defaults it to
+23:  // `schema.ts:170-172` says `ssrStreaming` applies "when true (and ssr === true)", so both are
+26:  .set({ ssr: true, ssrStreaming: true })

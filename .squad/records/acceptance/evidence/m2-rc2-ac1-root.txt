@@ -1,0 +1,13 @@
+### M2/AC1 against v1.1.0-rc.2 — the ROOT route with ssr+ssrStreaming declared
+arrival 1: +13ms bytes=16279 head=true hydration=true
+arrivals=1 total_bytes=16275
+document has fallback "waiting": false
+document has resolved value: false
+document has React inline bootstrap ($RC / $RS): true
+
+-- the served document:
+bytes=15326
+<head> count: 2
+hydration script: window.__staticRouterHydrationData
+root markup: <div id="root"><title>TheoKit agent</title><meta name="description" conte
+parseable (html+head+body+closing): 1

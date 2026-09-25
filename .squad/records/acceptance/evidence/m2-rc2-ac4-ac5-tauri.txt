@@ -1,0 +1,10 @@
+### M2/AC4 + AC5 against v1.1.0-rc.2 — Tauri
+
+ Test Files  1 passed (1)
+      Tests  7 passed (7)
+   Start at  12:39:47
+   Duration  452ms (transform 228ms, setup 0ms, import 360ms, tests 15ms, environment 0ms)
+
+
+### grep: any renderer declared under packages/tauri/src
+  NONE — no Tauri-specific renderer
