@@ -663,6 +663,10 @@ export const cloudflareAdapter: DeployAdapter = {
       resolve(outputDir, 'worker.mjs'),
       renderCloudflareWorkerEntry({
         ssrStreaming: config.ssrStreaming,
+        // B-315 — LATENT here, not broken: the routes are baked (#369) so the worker never scans,
+        // and a live deploy on 2026-09-26 served every route correctly with the wrong literal. It
+        // is still handed to `executeRoute`, so it is one refactor away from mattering.
+        serverDir: config.serverDir,
         ...shell,
         securityHeaders: config.security?.headers,
         csrf: config.security?.csrf,

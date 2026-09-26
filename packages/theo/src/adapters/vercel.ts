@@ -390,6 +390,11 @@ export const vercelAdapter: DeployAdapter = {
       resolve(outputDir, 'functions/api.func/index.mjs'),
       renderVercelFunctionEntry({
         securityHeaders: config.security?.headers,
+        // B-315 — the option existed, the renderer honoured it, and this build never passed
+        // it, so a project declaring `src/server` got a deployed entry resolving `server`.
+        // The fourth occurrence of that exact shape: B-185 (bun, deno), B-235 (`agentsDir`
+        // here), B-312 (the build's agents scan). Measured on the emitted Vercel function.
+        serverDir: config.serverDir,
         // B-235 — pillar (a): the option existed and no build passed it, so a project with a
         // configured agents directory got the default `agents` on this target. Same defect
         // B-185 fixed for bun and deno, one target over.

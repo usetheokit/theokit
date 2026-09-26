@@ -328,6 +328,9 @@ export async function buildAwsLambda(
 
   const entry = renderAwsLambdaEntry({
     securityHeaders: config.security?.headers,
+    // B-315 — the same shape as the B-235 note below, one option over: this build never passed
+    // `serverDir`, so a project declaring `src/server` got an entry resolving `server`.
+    serverDir: config.serverDir,
     // B-235 — pillar (a): the option existed and no build passed it, so a project with a
     // configured agents directory got the default `agents` on this target. Same defect
     // B-185 fixed for bun and deno, one target over.
