@@ -7,6 +7,7 @@ Program governance that must outlive a session and be readable by anyone who clo
 | `adr/` | Architecture decisions. Numbered, immutable once accepted; a reversal is a new ADR, never an edit. |
 | `program/` | Cross-cutting rules and the artifacts the surface-parity program is measured against. |
 | `surfaces/` | One measurement per framework surface, eighteen in all — what exists today, how strong it is, what is missing. Read one before planning work on that surface; several record that a capability does **not** exist, which is the answer a reader who never finds the file will assume the other way. |
+| `wiki/` | Authored procedures and decisions that ship with the product. `wiki/sops/` holds one runnable procedure per operation, under the shape `.claude/rules/sop-schema.md` defines and `mechanisms/gates/check_sop_structure.py` enforces — imperative steps, a decision tree whose every branch closes, and an escalation entry per way reality departs from the happy path. |
 
 ## Why this directory exists
 

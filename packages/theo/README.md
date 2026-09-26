@@ -103,6 +103,8 @@ theokit mcp <agent>                  # serve an agent as an MCP server over stdi
 `theokit build --target <name>`: `node` (default), `theo-cloud`, `vercel`, `netlify`,
 `cloudflare`, `bun`, `deno-deploy`, `aws-lambda`, `static`.
 
+Cloudflare Workers, step by step: [`docs/wiki/sops/cloudflare-deploy.md`](https://github.com/usetheokit/theokit/blob/main/docs/wiki/sops/cloudflare-deploy.md).
+
 ## Licence
 
 Apache-2.0 — see `LICENSE`.
