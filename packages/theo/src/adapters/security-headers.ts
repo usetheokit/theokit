@@ -142,10 +142,33 @@ export function renderSecurityHeadersConfigLiteral(
  * deliberately not routed through here.
  */
 export function withSecurityHeaders(response: Response, headers: Record<string, string>): Response {
-  for (const [key, value] of Object.entries(headers)) {
-    if (!response.headers.has(key)) response.headers.set(key, value)
-  }
-  return response
+  const missing = Object.entries(headers).filter(([key]) => !response.headers.has(key))
+  // Nothing to add, so nothing to rebuild. This also keeps the response IDENTITY for every caller
+  // that already had every header, which is what the mutating version always did.
+  if (missing.length === 0) return response
+
+  // B-263 — a Response the framework did not construct carries an immutable headers guard, and
+  // `headers.set()` on one throws `TypeError: Can't modify immutable headers.` Measured on a live
+  // Cloudflare deploy, 2026-09-26, read from `wrangler tail`: the worker forwarded `/robots.txt`
+  // from its ASSETS binding, this function tried to stamp the baseline onto that response, and the
+  // request answered HTTP 500 / error 1101 instead of a text file.
+  //
+  // It had never fired because every response this had ever been handed was one the framework built
+  // itself. The two paths that hand it a FOREIGN response are Cloudflare's asset branches, and
+  // Cloudflare's asset handler answered those requests before the worker ran until `run_worker_first`
+  // was set in the same session. The line was shipped and unreachable.
+  //
+  // A new Response over the same body is the only way to add a header to an immutable one. Status,
+  // statusText and every header the response already carried are copied, because losing any of them
+  // turns a 404 into a 200 or makes a browser sniff a stylesheet.
+  const next = new Headers(response.headers)
+  for (const [key, value] of missing) next.set(key, value)
+
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: next,
+  })
 }
 
 export interface DeployedSecurityHeaderLimits {

@@ -33,3 +33,62 @@ TWO DEFECTS THE LIVE RESPONSE REVEALED, which no build output predicts:
 
 The precision matters: the worker RUNS. /api/health proves it, with headers. The failure is
 scoped to requests the asset handler intercepts first.
+
+================================================================================
+SECOND RUN, same day, after two more fixes. Version f53798ed-34de-42d6-ad7e-822d1c1fc47f.
+
+FIX 4 — wrangler.toml never set `run_worker_first`, so Cloudflare's asset handler answered
+  every path matching a file (including `/` -> index.html) BEFORE the worker ran. The document
+  came off the CDN as a static shell and the code that renders it, and that stamps the security
+  baseline, never executed. Now:
+      run_worker_first = ["/*", "!/assets/*"]
+      not_found_handling = "none"        (only when ssrStreaming; SPA fallback otherwise)
+  The negation keeps the 307 hashed build outputs on the CDN path.
+
+  Owning `/` also means receiving `/robots.txt` and `/logo.png`, which must NOT be rendered as
+  documents. The worker now splits on an extension in the last path segment.
+
+FIX 5 — `withSecurityHeaders` did `headers.set()` on a response it did not construct. A Response
+  from a binding carries an immutable headers guard. Read from `wrangler tail --format json`:
+
+      TypeError: Can't modify immutable headers.
+        at withSecurityHeaders (worker.js:69439:55)
+        at handleRequest (worker.js:102382:14)
+      GET /robots.txt -> HTTP 500, "error code: 1101"
+
+  It had never fired because every response it had been handed was one the framework built. The
+  only paths handing it a FOREIGN response are Cloudflare's asset branches, which were unreachable
+  until fix 4 landed. The line was shipped and unreachable. The function is shared by all six
+  targets, so the fix is in the shared function.
+
+WHAT THE DEPLOYED WORKER DOES NOW:
+
+  route             code   bytes  security headers   content-type
+  /                  200   14889        6/6          text/html; charset=utf-8
+  /dashboard         200    4130        6/6          text/html; charset=utf-8
+  /robots.txt        200      23        6/6          text/plain
+  /favicon.svg       200    1033        6/6          image/svg+xml
+  /api/health        200      63        6/6          application/json
+  /api/nao-existe    404      58        6/6          application/json
+
+  GET / is real streamed SSR, not the shell:
+    #root holds 3546 chars of React output, opening
+      <div class="grid h-screen w-screen grid-rows-[auto_1fr] bg-background ...
+    <!--$-->                                    React Suspense boundary -> streaming confirmed
+    <script type="module" crossorigin src="/assets/index-cd25Nhzn.js">    client entry
+    <link rel="stylesheet" crossorigin href="/assets/index-DWk5VQIw.css"> stylesheet
+    3 x <script nonce="nPkJ03wGXNqHiJ3bf3jmgg=="> and the SAME nonce inside the CSP
+
+  Before fix 4 this response was 529 bytes, an EMPTY #root, and 0/6 headers.
+
+BULLET 3 — rate-limit headers: STILL ZERO on every route above. That is the confirmation the
+  bullet asked for, and it is an absence rather than a contract.
+
+SIXTH DEFECT, observed in the build output and NOT fixed here:
+  [theokit] agentsDir "src/server/agents" resolves to ".../my-test/src/src/server/agents",
+  which is not a directory, so NO agents were found and every /api/agents/* route will 404.
+  The value is a path relative to the project root ".../my-test/src"
+  -> the project root is computed as `<project>/src`, one level too deep, so a declared
+     `agentsDir` is joined onto it and cannot resolve. Registered separately.
+
+GATE: 573 test files, 4561 tests, 0 failures, no type errors, at 7245e69ed + these two fixes.
