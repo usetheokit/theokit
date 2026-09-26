@@ -1,0 +1,35 @@
+B-263 — Cloudflare Workers, the first real deploy this repository ever made, 2026-09-26
+
+URL:     https://theokit-b263-probe.holy-sun-1073.workers.dev
+Version: 93ad11c4-c742-46d2-9b78-81eb15c7db55
+Account: OAuth session, admin@usetheo.dev
+Upload:  307 assets, 12,695.79 KiB / gzip 2,225.83 KiB
+
+THREE DEFECTS HAD TO BE FIXED BEFORE IT DEPLOYED AT ALL:
+  1. worker imported the vite virtual id '/@theo/entry-server' -> esbuild cannot resolve it
+  2. worker imported the deprecated 'theokit/server' umbrella -> pulled @swc/core's .node addon
+  3. three scanners in server/scan called createRequire(import.meta.url) at MODULE SCOPE
+     -> undefined on Workers. Cloudflare EXECUTES the module at validation; dry-run does not.
+
+WHAT THE DEPLOYED WORKER DOES:
+  GET /api/health      200, 63 bytes, {"status":"ok",...,"framework":"TheoKit"}   0.54s
+    content-security-policy: default-src 'self'; script-src 'self'; style-...
+    x-frame-options: DENY
+    x-content-type-options: nosniff
+  GET /api/nao-existe  404                                          (correct)
+
+TWO DEFECTS THE LIVE RESPONSE REVEALED, which no build output predicts:
+
+  GET /                200, 529 bytes, <div id="root"> EMPTY
+    -> the [assets] binding answers / before the worker runs, so the response is the static
+       shell and not SSR. ssrStreaming: true is set and renderStreamingWeb is imported.
+    -> and NONE of the six security headers is present on that response, while the build
+       prints 'security headers on every response cloudflare returns: Content-Security-Policy,
+       X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy,
+       Strict-Transport-Security'. They ARE present on /api/health, which the worker answers.
+
+  rate-limit headers: NONE on either response. Bullet 3 of this item's DoD asks for the
+    contract confirmed against a real serverless response; what is confirmed is its absence.
+
+The precision matters: the worker RUNS. /api/health proves it, with headers. The failure is
+scoped to requests the asset handler intercepts first.

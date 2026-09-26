@@ -24,6 +24,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- A Cloudflare Workers deploy now succeeds. Three defects stood between the generated worker and `wrangler deploy`, all found by deploying for the first time and none visible to any test: the worker imported the vite virtual id `/@theo/entry-server`, which esbuild cannot resolve (it now imports the `entry-server.js` the same build writes); it imported the deprecated `theokit/server` umbrella, which pulls `@swc/core`'s `.node` native addon into the bundle — workerd cannot load one at any bundler setting (it now imports `theokit/server/scan` and `theokit/server/http`, both probed clean); and three scanners under `server/scan` called `createRequire(import.meta.url)` at module scope, which is `undefined` on Workers (#B-263)
+- The agent-policy, HTTP-method and route-policy scanners load the TypeScript compiler lazily instead of at import time. Two reasons, and only the first is about Cloudflare: `createRequire(import.meta.url)` throws on Workers, and separately, nothing that merely imports a build-time AST scanner should pay for the compiler. `wrangler deploy --dry-run` returns exit 0 on the same bundle — it bundles and does not execute, while Cloudflare executes the module during validation (#B-263)
+
 ### Security
 
 ## [1.1.0] - 2026-09-25

@@ -7,12 +7,30 @@ describe('renderCloudflareWorkerEntry — template (T2.1)', () => {
     expect(out).toContain("from 'theokit/adapters/web-shim'")
   })
 
-  it('imports execute pipeline from theokit/server', () => {
+  it('imports the execute pipeline from the narrow server subpaths', () => {
+    // Was `from 'theokit/server'`. That umbrella is deprecated — the package prints so on import —
+    // and it is what made the first real `wrangler deploy` fail: it pulls `@swc/core`'s `.node`
+    // native addon, which workerd cannot load at any bundler setting (B-263). What this test
+    // protects is unchanged: the worker reaches the execute pipeline.
     const out = renderCloudflareWorkerEntry()
-    expect(out).toContain('scanServerRoutes')
+
     expect(out).toContain('matchRoute')
     expect(out).toContain('executeRoute')
-    expect(out).toContain("from 'theokit/server'")
+    expect(out).toContain("from 'theokit/server/scan'")
+    expect(out).toContain("from 'theokit/server/http'")
+    expect(out).not.toMatch(/from 'theokit\/server'/)
+  })
+
+  it('does not claim scanServerRoutes, which the worker stopped calling', () => {
+    // The assertion this replaces was `expect(out).toContain('scanServerRoutes')`, and it passed by
+    // matching a COMMENT: the emitter says "`scanServerRoutes` on the server directory — a
+    // readdirSync, in a runtime with no filesystem" precisely to record that the worker no longer
+    // calls it. A worker that genuinely called it would be broken, so the old assertion could not
+    // fail for the right reason. This pins the real state instead.
+    const out = renderCloudflareWorkerEntry()
+    const withoutComments = out.replace(/\/\/[^\n]*/g, '')
+
+    expect(withoutComments).not.toContain('scanServerRoutes')
   })
 
   it('does NOT contain inline shim definitions (writeHead/setHeader inline)', () => {

@@ -169,12 +169,24 @@ export const renderStreamingWeb = async (request, options = {}) => {
     // imports from `theokit/...` subpaths that do not resolve from a temp directory. A narrower
     // pattern left them alone and the RED failed with `Cannot find package 'theokit'`, which the
     // plan's TDD step rules out by name — the RED must fail on the assertion, not on the import.
+    //
+    // `../server/entry-server.js` is rewritten TOO, and by a second pass rather than by loosening
+    // the first. It used to be `/@theo/entry-server`, which starts with `/` and so fell inside the
+    // `(?!node:|\.)` exclusion; the real relative path does not, and the fixture failed with
+    // `Cannot find module '…/server/entry-server.js'` (B-263). Widening the first pattern to accept
+    // any `.`-prefixed specifier would send every future relative import to the stub silently — this
+    // names the one path the generator emits.
     writeFileSync(
       file,
-      entry.replace(
-        /^(\s*import[^\n]*?from\s+)'(?!node:|\.)[^']*'/gmu,
-        `$1'${pathToFileURL(stub).href}'`,
-      ),
+      entry
+        .replace(
+          /^(\s*import[^\n]*?from\s+)'(?!node:|\.)[^']*'/gmu,
+          `$1'${pathToFileURL(stub).href}'`,
+        )
+        .replace(
+          /^(\s*import[^\n]*?from\s+)'\.\.\/server\/entry-server\.js'/gmu,
+          `$1'${pathToFileURL(stub).href}'`,
+        ),
       'utf8',
     )
 

@@ -8,8 +8,9 @@
  *
  * `typescript` ships as CommonJS with internal dynamic `require('fs')`.
  * When loaded via ESM `import`, the dynamic requires fail at module-bootstrap.
- * We use `createRequire(import.meta.url)` to keep the package on its native
- * CJS path. The type-only namespace import gives us the AST helpers shape.
+ * A CJS require keeps the package on its native path, and it is taken LAZILY — see `ts_()` below
+ * for what module-scope cost on Cloudflare Workers. The type-only namespace import gives us the AST
+ * helpers shape.
  *
  * Returns the set of HTTP methods (uppercase) the file exports. Empty array
  * means the file has no HTTP exports (the route file is util-only).
@@ -23,16 +24,33 @@ import type * as TS from 'typescript'
 import { HTTP_METHODS, type HttpMethod } from '../../core/contracts/http-methods.js'
 import { compareByCodeUnit } from '../_internal/compare-by-code-unit.js'
 
-const require_ = createRequire(import.meta.url)
+/**
+ * The compiler, loaded on first use and never at import time.
+ *
+ * This was module scope, and a Cloudflare deploy found what that costs: `theokit/server/scan` is
+ * imported by the generated worker, Cloudflare EXECUTES the module during validation, and there
+ * `import.meta.url` is undefined — so `createRequire` threw before the worker answered a request
+ * (B-263, error 10021). `wrangler deploy --dry-run` returns exit 0 on the same bundle: it bundles
+ * and does not execute.
+ *
+ * The second reason holds regardless of Workers: this is a BUILD-TIME AST scanner, and nothing that
+ * merely imports it should pay for the TypeScript compiler.
+ *
+ * Cached, so scanning many files still loads it once.
+ */
+let compiler: typeof TS | undefined
 
-const ts = require_('typescript') as typeof TS
+function ts_(): typeof TS {
+  compiler ??= createRequire(import.meta.url)('typescript') as typeof TS
+  return compiler
+}
 
 const HTTP_METHOD_NAMES = new Set<string>(HTTP_METHODS)
 
 function hasExportModifier(modifiers: readonly TS.Modifier[] | undefined): boolean {
   if (!modifiers) return false
   for (const m of modifiers) {
-    if (m.kind === ts.SyntaxKind.ExportKeyword) return true
+    if (m.kind === ts_().SyntaxKind.ExportKeyword) return true
   }
   return false
 }
@@ -43,9 +61,9 @@ function hasExportModifier(modifiers: readonly TS.Modifier[] | undefined): boole
 // eslint-disable-next-line complexity -- AST visitor, see above
 function collectFromStatement(stmt: TS.Statement, found: Set<HttpMethod>): void {
   // `export const GET = ...` / `export function GET ...` / `export async function GET ...`
-  if (ts.isVariableStatement(stmt) && hasExportModifier(ts.getModifiers(stmt))) {
+  if (ts_().isVariableStatement(stmt) && hasExportModifier(ts_().getModifiers(stmt))) {
     for (const decl of stmt.declarationList.declarations) {
-      if (ts.isIdentifier(decl.name) && HTTP_METHOD_NAMES.has(decl.name.text)) {
+      if (ts_().isIdentifier(decl.name) && HTTP_METHOD_NAMES.has(decl.name.text)) {
         found.add(decl.name.text as HttpMethod)
       }
     }
@@ -53,8 +71,8 @@ function collectFromStatement(stmt: TS.Statement, found: Set<HttpMethod>): void 
   }
 
   if (
-    (ts.isFunctionDeclaration(stmt) || ts.isClassDeclaration(stmt)) &&
-    hasExportModifier(ts.getModifiers(stmt))
+    (ts_().isFunctionDeclaration(stmt) || ts_().isClassDeclaration(stmt)) &&
+    hasExportModifier(ts_().getModifiers(stmt))
   ) {
     if (stmt.name && HTTP_METHOD_NAMES.has(stmt.name.text)) {
       found.add(stmt.name.text as HttpMethod)
@@ -63,7 +81,11 @@ function collectFromStatement(stmt: TS.Statement, found: Set<HttpMethod>): void 
   }
 
   // `export { GET }` / `export { handler as GET } from './shared'` (EC-5)
-  if (ts.isExportDeclaration(stmt) && stmt.exportClause && ts.isNamedExports(stmt.exportClause)) {
+  if (
+    ts_().isExportDeclaration(stmt) &&
+    stmt.exportClause &&
+    ts_().isNamedExports(stmt.exportClause)
+  ) {
     for (const spec of stmt.exportClause.elements) {
       // spec.name is the exported (re-)name; spec.propertyName is the original (when renamed)
       if (HTTP_METHOD_NAMES.has(spec.name.text)) {
@@ -78,12 +100,12 @@ export function detectExportedHttpMethods(filePath: string, content?: string): H
   // user input at runtime. Reading it by a computed path is the whole job of a source scanner.
   // eslint-disable-next-line security/detect-non-literal-fs-filename -- framework-controlled path
   const src = content ?? readFileSync(filePath, 'utf-8')
-  const sourceFile = ts.createSourceFile(
+  const sourceFile = ts_().createSourceFile(
     filePath,
     src,
-    ts.ScriptTarget.Latest,
+    ts_().ScriptTarget.Latest,
     /* setParentNodes */ false,
-    ts.ScriptKind.TS,
+    ts_().ScriptKind.TS,
   )
   const found = new Set<HttpMethod>()
   for (const stmt of sourceFile.statements) {

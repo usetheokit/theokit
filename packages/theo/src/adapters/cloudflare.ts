@@ -292,8 +292,16 @@ export function renderCloudflareWorkerEntry(
     DeployedCorsOptions &
     DeployedRateLimitOptions = {},
 ): string {
+  // `/@theo/entry-server` is a VITE virtual id (`vite-plugin/index.ts`), and `adapters/node.ts`
+  // resolves it by passing it as the vite build's `input`. This file is not bundled by vite: wrangler
+  // hands it to esbuild, which has no such module and fails the build before a request is ever sent —
+  // measured 2026-09-26 on the first real `wrangler deploy` this repository attempted (B-263).
+  //
+  // The same build writes the real thing next door. The worker lands at
+  // `.theokit/cloudflare/worker.mjs` and the renderer at `.theokit/server/entry-server.js`, so one
+  // directory up is the spelling esbuild can follow.
   const streamingImport = opts.ssrStreaming
-    ? `import { renderStreamingWeb } from '/@theo/entry-server'`
+    ? `import { renderStreamingWeb } from '../server/entry-server.js'`
     : `// (ssrStreaming off: renderStreamingWeb not imported)`
   // #343 — the document shell is inlined as a build-time literal because a Worker
   // has no filesystem to read `index.html` from at request time. Without it,
@@ -358,9 +366,22 @@ export function renderCloudflareWorkerEntry(
     `//     so Wrangler bundles theokit and its transitive deps`,
     `//   - Deploy: wrangler deploy`,
     ``,
+    // NEVER the `theokit/server` umbrella. It is deprecated (the package prints so on import) and it
+    // is what made the first real `wrangler deploy` fail: bisected 2026-09-26 with a worker whose
+    // only line was `import { matchRoute } from 'theokit/server'`, and that alone pulled
+    // `@swc/core`'s `.node` native addon into the bundle. workerd cannot load a `.node` at any
+    // bundler setting, so it is not a flag away from working (B-263).
+    //
+    // The narrow subpaths were probed the same way and are clean — `wrangler deploy --dry-run`
+    // exit 0, zero swc, zero errors for both. Which symbol lives where was read from the modules
+    // rather than grepped, since these indexes use `export *`:
+    //
+    //   theokit/server/scan   matchRoute, compilePattern
+    //   theokit/server/http   executeRoute, extractTraceIdFromRequest, TRACE_HEADER,
+    //                         createCorsWebHandler, injectModulePreloads
     !preloadsApply
-      ? `import { matchRoute, executeRoute, compilePattern, extractTraceIdFromRequest, TRACE_HEADER, createCorsWebHandler } from 'theokit/server'`
-      : `import { matchRoute, executeRoute, compilePattern, extractTraceIdFromRequest, TRACE_HEADER, createCorsWebHandler } from 'theokit/server'\nimport { injectModulePreloads } from 'theokit/server/http'`,
+      ? `import { matchRoute, compilePattern } from 'theokit/server/scan'\nimport { executeRoute, extractTraceIdFromRequest, TRACE_HEADER, createCorsWebHandler } from 'theokit/server/http'`
+      : `import { matchRoute, compilePattern } from 'theokit/server/scan'\nimport { executeRoute, extractTraceIdFromRequest, TRACE_HEADER, createCorsWebHandler, injectModulePreloads } from 'theokit/server/http'`,
     `import { createWebShim } from 'theokit/adapters/web-shim'`,
     opts.ssrStreaming
       ? `import { buildSecurityHeaders, generateNonce, withSecurityHeaders } from 'theokit/adapters/security-headers'`
