@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs'
-import { dirname, join, relative, resolve, sep } from 'node:path'
+import { resolve } from 'node:path'
 
 // T1.1 (architecture-medium-deferrals) — nodeAdapter no longer static-imported.
 // All adapters dispatch via `adapterRegistry` (lazy-imported within runAdapterBuild).
@@ -18,10 +18,7 @@ import { writeCronManifest } from '../../server/cron/cron-manifest.js'
 import { scanCronDirs } from '../../server/cron/cron-scan.js'
 import { writeJobManifest } from '../../server/jobs/job-manifest.js'
 import { scanJobs } from '../../server/jobs/job-scan.js'
-import { scanAgents } from '../../server/scan/agent-scan.js'
 import { generateManifest, writeManifest } from '../../server/scan/manifest.js'
-import { scanServerRoutes } from '../../server/scan/scan.js'
-import { scanWebSocketRoutes } from '../../server/scan/ws-scan.js'
 import {
   buildManifest as buildServicesManifest,
   writeManifest as writeServicesManifest,
@@ -37,6 +34,7 @@ import { cleanOutDir } from '../cleanup/cleanup.js'
 import { preflightNodeAndBindings } from '../preflight-node-version.js'
 
 import { describeControllerArtifacts, emitControllerArtifacts } from './build/emit-controllers.js'
+import { createBuildScanRoutes } from './build-scan-routes.js'
 
 // Adapters that do NOT support cron triggers natively. Build still
 // succeeds with crons declared, but emits a warning + skip note.
@@ -223,39 +221,9 @@ async function runAdapterBuild(
     // `adapters → server` edge that `adapters-may-only-depend-on-core-router-services` refuses. The
     // CLI already imports both sides, so it composes the scan and hands over the result.
     //
-    // Paths are made relative to the project root here, where `cwd` is known: that string is both
-    // the emitted import specifier and the key the executor looks a module up by, and the scanners
-    // return absolute paths.
-    scanRoutes: (serverDir) => {
-      const abs = resolve(cwd, serverDir)
-      const toProjectRelative = (p: string): string => relative(cwd, p).split(sep).join('/')
-      return {
-        routes: scanServerRoutes(abs).map((route) => ({
-          filePath: toProjectRelative(route.filePath),
-          routePath: route.routePath,
-          methods: route.methods ?? [],
-        })),
-        wsRoutes: scanWebSocketRoutes(abs).map((ws) =>
-          toProjectRelative(typeof ws === 'string' ? ws : ws.filePath),
-        ),
-        // #367 — agents are a DIFFERENT scan served by a DIFFERENT function, which is why no
-        // adapter had ever heard of them: the entries route `/api/` through `scanServerRoutes` +
-        // `executeRoute` alone, so `/api/agents/<name>` matched nothing and 404'd on every target.
-        // Scanned here, beside the routes, because the same inversion argument applies verbatim.
-        agents: scanAgents(dirname(abs), config.agentsDir).map((agent) => ({
-          filePath: toProjectRelative(agent.filePath),
-          agentPath: agent.agentPath,
-          name: agent.name,
-        })),
-        // B-185 — the identity module, decided here for the same reason the agents are: this
-        // provider is handed `serverDir`, and a Worker has no filesystem to look for it on. An app
-        // with no `server/context.ts` yields `undefined`, and the generator then emits no import —
-        // importing a file that is not there would fail the BUILD rather than one request.
-        contextModule: existsSync(join(abs, 'context.ts'))
-          ? toProjectRelative(join(abs, 'context.ts'))
-          : undefined,
-      }
-    },
+    // A module rather than a closure since B-312: the wrong argument it carried was unreachable from
+    // any test while it lived in here, because reaching it meant running the whole build.
+    scanRoutes: createBuildScanRoutes(cwd, config),
   }
 
   // T1.1 (architecture-medium-deferrals, ADR D1) — Adapter Registry replaces
