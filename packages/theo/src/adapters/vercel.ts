@@ -9,6 +9,7 @@ import type { TheoConfig } from '../config/schema.js'
 import type { SecurityHeadersConfig } from '../core/contracts/security-headers.js'
 import { assertServicesUnsupported, readManifest } from '../services/index.js'
 
+import { bundleDeployedFunction } from './bundle-deployed-function.js'
 import {
   deployedAgentsFragment,
   scannedFromLoaderCache,
@@ -385,10 +386,21 @@ export const vercelAdapter: DeployAdapter = {
       cpSync(clientDir, resolve(outputDir, 'static'), { recursive: true })
     }
 
-    // 4. Emit serverless function entry (now uses shared web-shim)
-    writeFileSync(
-      resolve(outputDir, 'functions/api.func/index.mjs'),
-      renderVercelFunctionEntry({
+    // 4. Emit the serverless function, BUNDLED.
+    //
+    // B-316 / ADR 0020 — Build Output API v3 uploads a `.func` directory as it is: nothing installs
+    // dependencies for it and nothing bundles it. Writing the rendered entry straight out produced a
+    // function that could not start, measured on this repository's own scaffold:
+    //
+    //     cp -a .vercel/output/functions/api.func/. /tmp/fn/ && cd /tmp/fn
+    //     node -e "import('./index.mjs')"
+    //     -> ERR_MODULE_NOT_FOUND: Cannot find package 'theokit'
+    //
+    // The staged entry goes inside the project root because a specifier resolves relative to the
+    // importing file — an entry in `/tmp` makes rollup resolve `theokit/server/scan` from `/tmp`.
+    await bundleDeployedFunction({
+      projectRoot: cwd,
+      entrySource: renderVercelFunctionEntry({
         securityHeaders: config.security?.headers,
         // B-315 — the option existed, the renderer honoured it, and this build never passed
         // it, so a project declaring `src/server` got a deployed entry resolving `server`.
@@ -405,7 +417,10 @@ export const vercelAdapter: DeployAdapter = {
         // #425 — a selector, not a transformer, so it rides as a literal like the values above.
         serialization: config.serialization,
       }),
-    )
+      stagePath: '.theokit/vercel/entry.mjs',
+      outDir: resolve(outputDir, 'functions/api.func'),
+      entryFileName: 'index.mjs',
+    })
 
     // 5. Emit .vc-config.json
     writeFileSync(
