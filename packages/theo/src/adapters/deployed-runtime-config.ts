@@ -148,7 +148,7 @@ export function deployedRuntimeConfigFragment(
 
   if (pluginsModule !== undefined) {
     imports.push(
-      `import { createPluginRunnerFromConfig } from 'theokit/server'`,
+      `import { createPluginRunnerFromConfig } from 'theokit/server/plugins'`,
       `// #425 — the app's own plugins, resolved on the build machine and written beside this entry.`,
       `// A closure has no literal, so this is an import rather than a baked value.`,
       `import theoRuntimeConfig from '${pluginsModule}'`,
@@ -165,7 +165,7 @@ export function deployedRuntimeConfigFragment(
   }
 
   if (serialization !== undefined) {
-    imports.push(`import { resolveTransformer } from 'theokit/server'`)
+    imports.push(`import { resolveTransformer } from 'theokit/server/http'`)
     declarations.push(
       `// #425 — a literal, because \`config.serialization\` is a SELECTOR and not a transformer.`,
       `// Same string, same function \`theokit start\` calls, so the deployed response and the local`,

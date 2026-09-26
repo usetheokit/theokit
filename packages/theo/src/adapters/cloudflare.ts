@@ -407,7 +407,7 @@ export function renderCloudflareWorkerEntry(
     ...(opts.rateLimit === undefined
       ? []
       : [
-          `import { createRateLimiterWeb } from 'theokit/server'`,
+          `import { createRateLimiterWeb } from 'theokit/server/rate-limit'`,
           `import { resolveClientIpFromRequest } from 'theokit/server/rate-limit'`,
         ]),
     streamingImport,

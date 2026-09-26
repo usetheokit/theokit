@@ -165,7 +165,7 @@ function awsLambdaHandlerFragment(
     ...(rateLimit === undefined
       ? []
       : [
-          `import { createRateLimiterWeb } from 'theokit/server'`,
+          `import { createRateLimiterWeb } from 'theokit/server/rate-limit'`,
           `import { resolveClientIpFromRequest } from 'theokit/server/rate-limit'`,
           ``,
         ]),
@@ -250,7 +250,7 @@ export function renderAwsLambdaEntry(opts: DeployedEntryOptions = {}): string {
     `// Use with API Gateway HTTP API v2 (default).`,
     ``,
     `import { resolve } from 'node:path'`,
-    `import { scanServerRoutes, matchRoute, executeRoute, createProductionLoader, extractTraceIdFromRequest, TRACE_HEADER, createCorsWebHandler } from 'theokit/server'`,
+    `import { scanServerRoutes, matchRoute, createProductionLoader } from 'theokit/server/scan'\nimport { executeRoute, extractTraceIdFromRequest, TRACE_HEADER, createCorsWebHandler } from 'theokit/server/http'`,
     `import { createWebShim } from 'theokit/adapters/web-shim'`,
     `import { buildSecurityHeaders, withSecurityHeaders } from 'theokit/adapters/security-headers'`,
     ``,

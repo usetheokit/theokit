@@ -47,9 +47,15 @@ describe('renderBunEntry — template output', () => {
     expect(out).not.toMatch(/from 'node:http'/)
   })
 
-  it('imports scanServerRoutes from theokit/server', () => {
+  it('imports the scanners by their narrow public subpath', () => {
+    // Was `from 'theokit/server'`. B-316 moved every adapter off the umbrella: it re-exports the
+    // whole server half, and `@swc/core`'s native `.node` addon is down that graph, which no bundler
+    // can follow. `scanServerRoutes` and `scanWebSocketRoutes` both live in `theokit/server/scan`,
+    // resolved by importing the built subpath rather than by reading an index file.
     const out = renderBunEntry(3000)
-    expect(out).toContain("from 'theokit/server'")
+
+    expect(out).toContain("from 'theokit/server/scan'")
+    expect(out).not.toContain("from 'theokit/server'")
   })
 })
 
