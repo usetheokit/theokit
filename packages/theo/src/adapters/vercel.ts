@@ -251,6 +251,12 @@ export function renderVercelFunctionEntry(opts: DeployedEntryOptions = {}): stri
     `// Cold-start cache`,
     `let routesCache = null`,
     `let loaderCache = null`,
+    // B-318 — the agents fragment emits `scanAgents(cwd, …)`; `scannedFromLoaderCache` hardcodes
+    // `projectRoot: 'cwd'`, which is an implicit contract on its host. Four adapters call it and this
+    // was the one that never declared the name, so `/api/agents/<name>` answered
+    // `ReferenceError: cwd is not defined` — measured on a live deployment, then reproduced by
+    // invoking the bundled function. `tsc` cannot see it: the entry is a string at compile time.
+    `const cwd = process.cwd()`,
     `const serverDir = resolve(process.cwd(), ${serverDirLiteral(opts)})`,
     ``,
     `// #410 — the security baseline \`theokit start\` puts on every response,`,
