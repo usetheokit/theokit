@@ -61,30 +61,83 @@ interface DurableStreamDeps {
   readonly cache: RunEventCache
 }
 
+/**
+ * Why this stream is PULLED and not pushed.
+ *
+ * The first version ran the whole turn inside `new ReadableStream({ async start(controller) { for
+ * await (…) } })`. `start` is invoked eagerly at construction, its promise is held by nobody, and the
+ * loop enqueued every frame before anything read one.
+ *
+ * On Node that works — the handler returns and the microtask queue keeps draining. **On workerd it
+ * does not.** Once the handler returns a Response, pending work that no consumer is pulling and no
+ * `ctx.waitUntil` registered is torn down. Measured on a deployed Cloudflare worker, 2026-09-28
+ * (B-321), with the provider secret set:
+ *
+ *     POST /api/agents/chat  ->  200, content-type: text/event-stream, 0 bytes, 1.68 s
+ *     the same request against `theokit start`  ->  200, 29 deltas, complete answer
+ *
+ * `pull` instead of `ctx.waitUntil`, deliberately. `waitUntil` keeps an isolate alive for work that
+ * should never have been detached, and it would mean threading an `ExecutionContext` from six
+ * adapters down into a transport. Demand-driven is what the Streams standard is for, and it behaves
+ * the same on Node, workerd, Deno and Bun with no per-platform branch.
+ *
+ * Two guarantees the eager version could not have:
+ *
+ * - **Backpressure** — one frame per pull rather than a whole turn buffered in the controller.
+ * - **Cancellation** — `cancel` releases the upstream iterator, so a client that disconnects stops
+ *   the turn. The eager version had no `cancel`, so an abandoned request ran the agent to completion
+ *   and billed for a response nobody would read. That was a leak on every platform, not just Workers.
+ */
 export function durableUiMessageStreamResponse(
   chunks: AsyncIterable<UIMessageChunk>,
   deps: DurableStreamDeps,
 ): Response {
   const { runId, cache } = deps
+  const iterator = chunks[Symbol.asyncIterator]()
+  let finished = false
+
+  /**
+   * End the run exactly once.
+   *
+   * `pull` can be re-entered after the terminal frame — a consumer may read again before the close
+   * lands — and `cache.end` twice or a second `[DONE]` would corrupt a reconnect replay.
+   */
+  function finish(controller: ReadableStreamDefaultController<Uint8Array>): void {
+    if (finished) return
+    finished = true
+    cache.end(runId)
+    controller.enqueue(encodeSse(SSE_DONE_FRAME))
+    controller.close()
+  }
+
   const stream = new ReadableStream<Uint8Array>({
-    async start(controller) {
+    async pull(controller) {
+      if (finished) return
       try {
-        for await (const chunk of chunks) {
-          const data = JSON.stringify(chunk)
-          const seq = cache.append(runId, data)
-          controller.enqueue(encodeSse(formatSseFrame(seq, data)))
+        const next = await iterator.next()
+        if (next.done === true) {
+          finish(controller)
+          return
         }
+        const data = JSON.stringify(next.value)
+        const seq = cache.append(runId, data)
+        controller.enqueue(encodeSse(formatSseFrame(seq, data)))
       } catch {
-        // Source aborted mid-stream. The upstream translator owns error
-        // semantics (surfaces failures as chunks + closes gracefully); this
-        // transport guarantees only a terminated, cache-ended stream.
-      } finally {
-        cache.end(runId)
-        controller.enqueue(encodeSse(SSE_DONE_FRAME))
-        controller.close()
+        // Source aborted mid-stream. The upstream translator owns error semantics (it surfaces
+        // failures as chunks and closes gracefully); this transport guarantees only a terminated,
+        // cache-ended stream — fail-clear, per `rules/error-handling.md`.
+        finish(controller)
       }
     },
+    async cancel(reason) {
+      // The client went away. Release the turn rather than letting it run to completion, and end the
+      // cached run so a reconnect sees a closed stream instead of one that never terminates.
+      finished = true
+      cache.end(runId)
+      await iterator.return?.(reason)
+    },
   })
+
   return new Response(stream, {
     headers: { ...SSE_BASE_HEADERS, [RUN_ID_HEADER]: runId },
   })

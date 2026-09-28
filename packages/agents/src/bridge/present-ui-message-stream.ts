@@ -156,6 +156,22 @@ const UNMASKED_CODES: ReadonlySet<string> = new Set(['missing_api_key', 'malform
 const MASK_ERROR: MaskError = (error) =>
   error.code !== undefined && UNMASKED_CODES.has(error.code) ? error.message : 'An error occurred.'
 
+/**
+ * The unmasked error, on the server, where the operator can read it.
+ *
+ * `console.error` and not a logger: this package ships no logging abstraction, and every other
+ * diagnostic in this directory uses `console.warn` for the same reason. It is the one channel every
+ * runtime this framework targets forwards — Node's stderr, workerd's tail, a Lambda's CloudWatch
+ * stream — so the message reaches the operator wherever the turn ran.
+ *
+ * The code is included so the failure can be GROUPED. A message alone tells one operator about one
+ * request; the code is what turns that into "this is the failure mode of every turn on this platform",
+ * which is how B-322 was identified in the first place.
+ */
+function recordUnmaskedError(message: string, code: string | undefined): void {
+  console.error(`[theokit] agent turn failed (${code ?? 'no code'}): ${message}`)
+}
+
 function* errorChunks(errorText: string, code: string | undefined): Generator<UIMessageChunk> {
   if (code !== undefined) yield dataPart(ERROR_CODE_DATA_PART, { code })
   yield { type: 'error', errorText }
@@ -289,6 +305,20 @@ export async function* presentUIMessageStream(
       if (event.type === 'error') {
         {
           const code = (event as { code?: string }).code
+          // B-322 — record it BEFORE masking. `MASK_ERROR` replaces every message outside a
+          // two-code allowlist, and that is right: the text can name a host, a path or a
+          // credential, and a browser may not read it. What was wrong is that the unmasked
+          // message went nowhere else, so this line destroyed the only copy of the cause.
+          //
+          // Measured 2026-09-28 on a deployed Cloudflare worker and on `wrangler dev --local`:
+          // an agent turn answered `{"code":"SDK_ERROR"}` and `"An error occurred."`, with empty
+          // server logs. On a serverless runtime no debugger can be attached, so the log IS the
+          // diagnosis — and `rules/error-handling.md` names the shape this was:
+          // "engoliu o erro, ninguem vai saber o que aconteceu".
+          //
+          // Mask outward, log inward. NOT a widening of `UNMASKED_CODES`: the client was never
+          // owed more, the server was owed anything at all.
+          recordUnmaskedError(event.message, code)
           yield* errorChunks(onError({ message: event.message, code }), code)
         }
         break
