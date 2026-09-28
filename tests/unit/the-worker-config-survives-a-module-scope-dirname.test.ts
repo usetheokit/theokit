@@ -33,6 +33,26 @@ import { describe, expect, it } from 'vitest'
 import { renderWranglerToml } from '../../packages/theo/src/adapters/cloudflare.js'
 
 describe('the worker config survives a module-scope dirname', () => {
+  it('test_the_compensation_names_what_removes_it', () => {
+    // B-332 — this block is a compensation for somebody else's defect, and a compensation with no
+    // stated exit is one nobody removes. Worse, it substitutes a literal for an expression, so the
+    // NEXT dependency with the same vice is covered here in silence — which is the cost a reader has
+    // to be told about, not the cause.
+    //
+    // Asserted because the alternative is a comment that drifts. The cause was already named; what was
+    // missing was the exit, and the operator being told at all: the build now prints the caveat, so
+    // learning about it no longer requires opening the generated file.
+    const toml = renderWranglerToml({ ssrStreaming: true })
+
+    expect(toml, 'the compensation does not say what removes it').toMatch(/REMOVE THIS BLOCK/)
+    expect(toml, 'it does not say it is a compensation rather than a setting').toMatch(
+      /compensation for/,
+    )
+    expect(toml, 'it does not warn that the next dependency is covered silently').toMatch(
+      /in silence/,
+    )
+  })
+
   it('test_import_meta_url_is_defined', () => {
     const toml = renderWranglerToml({ ssrStreaming: true })
 

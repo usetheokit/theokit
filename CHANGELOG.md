@@ -16,6 +16,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- The `[define]` block the Cloudflare adapter writes into `wrangler.toml` now says what removes it, and the build says it is there. It compensates for a dependency that resolves a path at module scope — Cloudflare executes the top-level module during validation and rejects the upload otherwise — and it substitutes a literal for an expression, so the next dependency with the same vice is covered in silence. Learning that required opening the generated file; the build prints the caveat now, and the comment names the exit rather than only the cause. The block itself stays until the dependency is published fixed (#B-332)
+
 - The subpath-coverage suite no longer loses forty verdicts to a hook timeout on a busy machine (#B-307)
 - `pnpm lint` no longer reports problems in files the repository does not carry. `.squad/` is the write root and was absent from the eslint ignores, so a `/loop-surface-closure` run — which writes eight `.mjs`/`.ts` harness files under `.squad/records/audits/` — turned a clean lint into 17 errors (`sonarjs/slow-regex`, `no-clear-text-protocols`, `code-eval`), none of them in a versioned file. Same class as the `format:check` exclusion, a different tool; invisible to CI, so it only ever appears on a maintainer's machine and only after they run an audit (#B-307)
 

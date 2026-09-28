@@ -533,6 +533,10 @@ export function renderWranglerToml(opts?: { ssrStreaming?: boolean }): string {
     `# code 10021, because the agent's transitive \\\`@theokit/sdk\\\` does exactly that in`,
     `# \\\`internal/providers/catalog-loader.ts\\\` (upstream: usetheokit/theokit-sdk#705).`,
     `#`,
+    `# REMOVE THIS BLOCK once no dependency resolves a path at module scope. It is a compensation for`,
+    `# somebody else's defect, not a setting this project wants — it substitutes a literal for an`,
+    `# expression, so the NEXT dependency with the same vice is covered here in silence.`,
+    `#`,
     `# This substitutes a literal so that expression resolves. It does NOT create a filesystem: a`,
     `# module that only COMPUTES a path at load time now initialises, and anything that later tries`,
     `# to READ it still fails — with an error about the catalog instead of one about \\\`path\\\`.`,
@@ -655,6 +659,16 @@ export const cloudflareAdapter: DeployAdapter = {
 
     // eslint-disable-next-line no-console -- CLI build progress
     console.log('\n  ✓ Cloudflare output → .theokit/cloudflare/ + wrangler.toml')
+    // B-332 — the generated toml carries a COMPENSATION for a third-party defect, and until now
+    // the only way to learn that was to open the file. A compensation nobody is told about is one
+    // nobody removes, and this one will cover the next dependency with the same vice in silence.
+    // eslint-disable-next-line no-console -- CLI build progress
+    console.log(
+      '    ! [define] "import.meta.url" is set in wrangler.toml, compensating for a dependency\n' +
+        '      that resolves a path at module scope: Cloudflare executes the top-level module\n' +
+        '      during validation and rejects the upload otherwise (usetheokit/theokit-sdk#705).\n' +
+        '      Remove the block once every dependency is past it; nothing here can tell when.',
+    )
     // eslint-disable-next-line no-console -- CLI build progress
     console.log(
       `${describeDeployedSecurityHeaders({
