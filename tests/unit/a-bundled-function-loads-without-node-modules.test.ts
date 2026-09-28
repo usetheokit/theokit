@@ -33,7 +33,10 @@ import { pathToFileURL } from 'node:url'
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
-import { bundleDeployedFunction } from '../../packages/theo/src/adapters/bundle-deployed-function.js'
+import {
+  bundleDeployedFunction,
+  PathOutsideProjectRootError,
+} from '../../packages/theo/src/adapters/bundle-deployed-function.js'
 
 /** A real bare specifier, so `ssr.noExternal` has something to inline. */
 const ENTRY = `import { z } from 'zod'
@@ -107,5 +110,60 @@ describe('a bundled function loads without node_modules', () => {
     // site's static assets is waste; an `index.html` sitting beside a handler is worse, because on
     // some platforms it changes what the directory means.
     expect(existsSync(join(out, 'leaked.txt'))).toBe(false)
+  })
+})
+
+describe('the staged entry stays inside the project root', () => {
+  /** What the guard refused, or `undefined` when it let the call through to the build. */
+  async function refusal(
+    overrides: Partial<Parameters<typeof bundleDeployedFunction>[0]>,
+  ): Promise<string | undefined> {
+    try {
+      await bundleDeployedFunction({
+        projectRoot: '/tmp/theo-root-that-does-not-exist',
+        entrySource: 'export default {}',
+        stagePath: '.theokit/vercel/entry.mjs',
+        outDir: '/tmp/theo-root-that-does-not-exist/out',
+        entryFileName: 'index.mjs',
+        ...overrides,
+      })
+      return undefined
+    } catch (err) {
+      return err instanceof PathOutsideProjectRootError ? err.message : undefined
+    }
+  }
+
+  it('test_a_stage_path_that_escapes_the_root_is_refused', async () => {
+    // The invariant was declared and unenforced. `stagePath`'s own docblock says "inside the root is
+    // not a preference" — an entry staged outside makes rollup resolve `theokit/server/scan` from the
+    // wrong directory. Measured 2026-09-28: `resolve(root, '../outside/entry.mjs')` wrote the file
+    // outside the project and nothing objected.
+    expect(await refusal({ stagePath: '../outside/entry.mjs' })).toMatch(/stagePath/)
+  })
+
+  it('test_an_absolute_stage_path_is_refused', async () => {
+    // `resolve(root, '/etc/x')` returns `/etc/x` — an absolute second argument discards the first
+    // entirely, which is the escape that needs no `..`. Before the guard this reached the filesystem
+    // and was stopped by `EACCES: permission denied, open '/etc/theo-entry.mjs'`. Permissions are not
+    // a boundary check.
+    expect(await refusal({ stagePath: '/etc/theo-entry.mjs' })).toMatch(/stagePath/)
+  })
+
+  it('test_an_out_dir_outside_the_root_is_NOT_refused', async () => {
+    // The guard deliberately stops at `stagePath`. A first version checked `outDir` too, on the
+    // reasoning that it reaches vite with `emptyOutDir: true` and so deletes what is there — which is
+    // true, and is not this function's to police. The option is documented as "the directory the
+    // platform will upload, absolute", and the pre-existing case above passes a SIBLING of
+    // `projectRoot`; the invented invariant broke it. The caution lives in the option's docblock,
+    // where the next caller reads it.
+    expect(await refusal({ outDir: '/tmp/theo-sibling-out' })).toBeUndefined()
+  })
+
+  it('test_a_path_inside_the_root_is_not_refused_by_the_guard', async () => {
+    // COUNTERPROOF: a guard that refuses everything satisfies all three cases above. A legitimate
+    // relative stage path and an `outDir` under the root must reach the build — where they may fail
+    // for build reasons, which is not this guard's business and is why the helper reports only its own
+    // refusals.
+    expect(await refusal({})).toBeUndefined()
   })
 })
