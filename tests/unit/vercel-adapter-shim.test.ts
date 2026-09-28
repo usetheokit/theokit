@@ -46,9 +46,28 @@ describe('renderVercelFunctionEntry — template (T2.2)', () => {
     expect(out).toContain('export default')
   })
 
-  it('caches routes at cold start', () => {
+  it('resolves the routes once, not per request', () => {
+    // The original assertion looked for the cold-start cache (`routesCache`, filled by the first
+    // request's `scanServerRoutes`). B-319 replaced that with a table baked at BUILD time, which
+    // satisfies this intent more strongly — the routes are resolved zero times at runtime, not once
+    // — and had to, because Build Output API v3 uploads the `.func` directory as it is and there is
+    // no server directory in it to scan. Measured on a deployed function: every `/api/*` answered
+    // its own JSON 404 with the route files present in the project.
     const out = renderVercelFunctionEntry()
-    expect(out).toMatch(/routesCache|let.+routes/)
+
+    expect(out).toMatch(/^const routes = \[$/m)
+    expect(out).toMatch(/^const ROUTE_MODULES = \{$/m)
+  })
+
+  it('does not reach for the filesystem at request time', () => {
+    // COUNTERPROOF for the case above: a table can be emitted AND the scan left in place, which
+    // would pass every assertion up there and still answer 404 on the platform.
+    const out = renderVercelFunctionEntry()
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/(^|[^:])\/\/[^\n]*/g, '$1')
+
+    expect(out).not.toContain('scanServerRoutes(')
+    expect(out).not.toContain('scanAgents(')
   })
 
   it('does NOT contain inline string-template shim definitions', () => {

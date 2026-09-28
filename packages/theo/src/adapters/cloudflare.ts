@@ -12,6 +12,7 @@ import type { SecurityHeadersConfig } from '../core/contracts/security-headers.j
 import { assertServicesUnsupported, readManifest } from '../services/index.js'
 
 import { deployedAgentsFragment, type DeployedAgent } from './deployed-agents.js'
+import { renderBakedRoutes, routeRuntimeLines } from './deployed-baked-routes.js'
 import { deployedCorsFragment, type DeployedCorsOptions } from './deployed-cors.js'
 import { deployedCsrfFragment, type DeployedCsrfOptions } from './deployed-csrf.js'
 import { planDeployedPlugins } from './deployed-plugins-module.js'
@@ -78,79 +79,6 @@ export function readDocumentShell(
     htmlHead: indexHtml.slice(0, rootDiv.insertAt),
     htmlTail: indexHtml.slice(rootDiv.insertAt),
   }
-}
-
-/**
- * The routes, turned into source: static imports, a module map and a literal table (#369).
- *
- * Extracted so the worker renderer stays inside its length budget, and because this is the whole of
- * what changed about how a Worker finds a route — it reads as one idea rather than as three loops
- * inside a hundred lines of template.
- *
- * `../../` because the worker is written to `.theokit/cloudflare/worker.mjs` and `filePath` is
- * relative to the project root. The imports are static so Wrangler's bundler follows them:
- * `wrangler.toml` uploads `.theokit/client` and has never uploaded `server/`, so a module not
- * bundled INTO the worker is not on the platform at all.
- */
-function renderBakedRoutes(
-  routes: readonly { filePath: string; routePath: string; methods?: readonly string[] }[],
-): { routeImports: string[]; routeModuleEntries: string[]; routeTableEntries: string[] } {
-  const routeVar = (index: number): string => `__theoRoute${String(index)}`
-  return {
-    routeImports: routes.map(
-      (route, index) => `import * as ${routeVar(index)} from '../../${route.filePath}'`,
-    ),
-    routeModuleEntries: routes.map(
-      (route, index) => `  ${JSON.stringify(route.filePath)}: ${routeVar(index)},`,
-    ),
-    routeTableEntries: routes.map(
-      (route) =>
-        `  { filePath: ${JSON.stringify(route.filePath)}, routePath: ${JSON.stringify(route.routePath)}, ` +
-        `methods: ${JSON.stringify([...(route.methods ?? [])])}, ` +
-        `...compilePattern(${JSON.stringify(route.routePath)}) },`,
-    ),
-  }
-}
-
-/**
- * The route-resolution runtime the Worker gets instead of a directory scan (#369).
- *
- * A module map, the literal table, and a loader that refuses anything the build did not bake.
- * Emitted as its own block because it replaces one idea — "find the routes" — wholesale.
- */
-function routeRuntimeLines(moduleEntries: string[], tableEntries: string[]): string[] {
-  return [
-    `// #369 — the routes are baked at build time. The Worker used to reach for`,
-    `// \`scanServerRoutes\` on the server directory — a readdirSync, in a runtime with no`,
-    `// filesystem. The pattern is recompiled here from the same routePath the scanner`,
-    `// used, so one function decides precedence on every target.`,
-    `const ROUTE_MODULES = {`,
-    ...moduleEntries,
-    `}`,
-    ``,
-    `const routes = [`,
-    ...tableEntries,
-    `]`,
-    ``,
-    `// The executor asks for a module by the path the table names. Anything else was`,
-    `// never bundled, and saying so beats returning undefined and failing later on a`,
-    `// property access far from the cause.`,
-    `async function loadModule(path) {`,
-    `  const mod = ROUTE_MODULES[path]`,
-    `  if (mod === undefined) {`,
-    // No backticks in this message: it is emitted INTO a template literal, and a stray one closes
-    // it. That is how #344 shipped a SyntaxError, and the emitted-entry parse gate caught this one
-    // before it left the branch.
-    "  throw new Error(`Route module '" +
-      '${path}' +
-      "' was not bundled into this Worker. " +
-      'A Worker has no filesystem, so every route is imported at build time. ' +
-      'Re-run: theokit build --target cloudflare`)',
-    `  }`,
-    `  return mod`,
-    `}`,
-    ``,
-  ]
 }
 
 /**
@@ -420,7 +348,7 @@ export function renderCloudflareWorkerEntry(
     `// call process.cwd() and resolving paths at runtime returned '/server'.`,
     `const serverDir = ${serverDirLiteral(opts)}`,
     ``,
-    ...routeRuntimeLines(routeModuleEntries, routeTableEntries),
+    ...routeRuntimeLines(routeModuleEntries, routeTableEntries, 'cloudflare'),
     `// #410 — the security baseline \`theokit start\` puts on every response, carried`,
     `// here as a literal because a Worker has no theo.config.ts to read. Same`,
     `// function, same input, so the deployed page and the local one cannot`,

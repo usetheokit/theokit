@@ -36,6 +36,22 @@ const ENTRIES: Record<string, () => string> = {
       htmlTail: '</body></html>',
     }),
   vercel: () => renderVercelFunctionEntry(),
+  // B-319 — baked routes emit static imports, a module map and a table, which is a different program
+  // from the empty one above. A path with a `[id]` segment is included because it reaches the import
+  // specifier verbatim, and brackets in a specifier are exactly the kind of thing that parses in a
+  // template and not in a module.
+  'vercel (baked routes)': () =>
+    renderVercelFunctionEntry({
+      serverDir: 'src/server',
+      routes: [
+        { filePath: 'src/server/routes/health.ts', routePath: '/api/health', methods: ['GET'] },
+        {
+          filePath: 'src/server/routes/users/[id].ts',
+          routePath: '/api/users/:id',
+          methods: ['GET'],
+        },
+      ],
+    }),
   netlify: () => renderNetlifyFunction(),
   bun: () => renderBunEntry(3000),
   'deno-deploy': () => renderDenoEntry(3000),

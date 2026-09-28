@@ -37,7 +37,12 @@ const TARGETS = [
   ['cloudflare', () => renderCloudflareWorkerEntry({ ssrStreaming: false, agents: AGENTS })],
   ['bun', () => renderBunEntry(3000)],
   ['deno-deploy', () => renderDenoEntry(3000)],
-  ['vercel', () => renderVercelFunctionEntry()],
+  // B-319 — given its agents, like `cloudflare` one row up. This target used to resolve them with a
+  // runtime `scanAgents`, so the fragment appeared whether or not any agent existed; it bakes them
+  // now, because Build Output API v3 uploads the `.func` directory as it is and there is no source
+  // tree there to scan. A baking target with nothing baked correctly emits no agents branch, so the
+  // fragment this file is about is only observable when the agents are supplied.
+  ['vercel', () => renderVercelFunctionEntry({ agents: AGENTS })],
   ['netlify', () => renderNetlifyFunction()],
   ['aws-lambda', () => renderAwsLambdaEntry()],
 ] as const

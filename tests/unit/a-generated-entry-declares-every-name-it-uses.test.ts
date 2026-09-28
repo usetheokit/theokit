@@ -68,20 +68,36 @@ function code(source: string): string {
 }
 
 describe('a generated entry declares every name it uses', () => {
-  it('test_the_agents_branch_is_actually_emitted', () => {
-    // COUNTERPROOF FIRST. Without a configured agents dir the fragment is EMPTY, so the pairing
-    // below would hold trivially over entries that never reference `cwd`. Measured when written:
-    // all four emit the scan.
-    const missing = ENTRIES.filter(([, src]) => !code(src).includes('scanAgents(')).map(([n]) => n)
+  /**
+   * The renderers that still resolve their agents at RUNTIME, which is the population the pairing is
+   * about.
+   *
+   * `vercel` left this set on purpose in B-319: Build Output API v3 uploads the `.func` directory as
+   * it is, so `scanAgents` cannot work there at any value, and the entry bakes its agents instead.
+   * Keeping it in the population would assert that a target must emit a call it is right not to emit.
+   */
+  const SCANNERS = ENTRIES.filter(([, src]) => code(src).includes('scanAgents('))
 
-    expect(
-      missing,
-      'these renderers emitted no agents branch, so the case below proves nothing',
-    ).toEqual([])
+  it('test_the_sweep_found_the_renderers_that_scan_at_runtime', () => {
+    // COUNTERPROOF FIRST. An empty population satisfies the pairing trivially, so this pins that the
+    // set is non-empty AND that the one deliberate absence is the expected one.
+    expect(SCANNERS.length).toBeGreaterThanOrEqual(3)
+    expect(SCANNERS.map(([n]) => n)).not.toContain('vercel')
+    expect(ENTRIES.map(([n]) => n)).toContain('vercel')
+  })
+
+  it('test_the_baked_target_declares_no_dead_cwd', () => {
+    // The other half of B-319's consequence: `vercel` used to declare `const cwd` for the scan it no
+    // longer emits. A declaration nothing reads is what `/code-quality` exists to catch, and this
+    // repository introduced it two commits before removing the scan.
+    const vercel = ENTRIES.find(([n]) => n === 'vercel')?.[1] ?? ''
+    const body = code(vercel)
+
+    expect(body).not.toMatch(/\bconst cwd = /)
   })
 
   it('test_an_entry_referencing_cwd_also_declares_it', () => {
-    const offenders = ENTRIES.filter(([, src]) => {
+    const offenders = SCANNERS.filter(([, src]) => {
       const body = code(src)
       return body.includes('scanAgents(cwd,') && !/\b(const|let|var)\s+cwd\s*=/.test(body)
     }).map(([name]) => name)
