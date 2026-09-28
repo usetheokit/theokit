@@ -42,7 +42,7 @@ async function collect(
 ): Promise<readonly Record<string, unknown>[]> {
   const out: Record<string, unknown>[] = []
   for await (const chunk of presentUIMessageStream(events, { textId: 't' })) {
-    out.push(chunk as unknown as Record<string, unknown>)
+    out.push({ ...chunk })
   }
   return out
 }
