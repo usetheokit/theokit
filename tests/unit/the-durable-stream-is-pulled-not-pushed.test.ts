@@ -193,3 +193,95 @@ describe('the durable stream is pulled, not pushed', () => {
     ).toBe(true)
   })
 })
+
+/**
+ * The terminal frame must survive a failure in the bookkeeping beside it.
+ *
+ * `finish()` set its idempotence flag FIRST, then called `cache.end(runId)`, then enqueued `[DONE]` and
+ * closed. A throw from `cache.end` therefore skipped both terminal operations — and `pull`'s own
+ * `catch { finish(controller) }` then found `finished` already true and returned. The flag that exists to
+ * prevent a double terminator prevented the ONLY one.
+ *
+ * Measured end to end on 2026-09-28 (B-329), on a deployed-shape worker driving a real turn:
+ *
+ *     [PROBE] next resolved done=true
+ *     [PROBE] finish: entrou
+ *     [PROBE] finish: cache.end LANCOU TypeError: buf.evictTimer.unref is not a function
+ *
+ * Every content chunk had arrived, `finish` included. The client then waited until its own timeout: no
+ * `[DONE]`, no close, `curl --max-time 25` exiting 28, three runs. A browser renders the reply and the
+ * turn never completes, because the client keys its terminal state on that frame.
+ *
+ * ## What this case is NOT
+ *
+ * It is not about `unref`. That was the trigger and it is fixed next door in `run-event-cache.ts`, where
+ * a Node-only API was called on a value that is a number under `nodejs_compat`. This asserts the
+ * property that made a one-line trigger cost the whole stream: the terminator does not depend on the
+ * bookkeeping succeeding.
+ */
+describe('the terminal frame survives a failing cache', () => {
+  /**
+   * A cache whose `end` throws, with the exact error the real one threw on workerd.
+   *
+   * Built from `recordingCache()` above rather than as a partial object, for the reason that helper
+   * already states: a cast compiles over a wrong shape and stops being checked.
+   */
+  function throwingCache(): RunEventCache {
+    return {
+      ...recordingCache(),
+      end: (): never => {
+        throw new TypeError('buf.evictTimer.unref is not a function')
+      },
+    }
+  }
+
+  async function* twoChunks(): AsyncGenerator<WireChunk> {
+    yield { type: 'start' } as WireChunk
+    yield { type: 'finish' } as WireChunk
+  }
+
+  it('test_the_done_frame_is_sent_even_when_cache_end_throws', async () => {
+    const body = await durableUiMessageStreamResponse(twoChunks(), {
+      runId: 'throwing-1',
+      cache: throwingCache(),
+    }).text()
+
+    expect(
+      body.trimEnd().endsWith('data: [DONE]'),
+      'the terminator was lost because the bookkeeping beside it threw — the client waits forever',
+    ).toBe(true)
+  })
+
+  it('test_the_stream_closes_even_when_cache_end_throws', async () => {
+    // `text()` above resolving already implies a close, so this asserts the reader side directly: the
+    // failure mode was a body that stays open, which a hanging `read()` is the only way to observe.
+    const response = durableUiMessageStreamResponse(twoChunks(), {
+      runId: 'throwing-2',
+      cache: throwingCache(),
+    })
+    const reader = response.body!.getReader()
+
+    let closed = false
+    for (let i = 0; i < 20; i++) {
+      const { done } = await reader.read()
+      if (done) {
+        closed = true
+        break
+      }
+    }
+
+    expect(closed, 'the stream never reported done, so a client would hang on it').toBe(true)
+  })
+
+  it('test_the_content_still_reaches_the_client', async () => {
+    // COUNTERPROOF: swallowing the failure must not cost the frames. A terminator with no turn in
+    // front of it would satisfy both cases above.
+    const body = await durableUiMessageStreamResponse(twoChunks(), {
+      runId: 'throwing-3',
+      cache: throwingCache(),
+    }).text()
+
+    expect(body).toContain('"type":"start"')
+    expect(body).toContain('"type":"finish"')
+  })
+})

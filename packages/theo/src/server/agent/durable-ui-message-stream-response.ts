@@ -102,12 +102,54 @@ export function durableUiMessageStreamResponse(
    * `pull` can be re-entered after the terminal frame — a consumer may read again before the close
    * lands — and `cache.end` twice or a second `[DONE]` would corrupt a reconnect replay.
    */
+  /**
+   * End the cached run WITHOUT letting a bookkeeping failure cost the caller its own work.
+   *
+   * `cache.end` is bookkeeping BESIDE the terminator, not part of it, and it used to run first with the
+   * idempotence flag already set. So a throw skipped the terminal frame and the close, `pull`'s
+   * `catch { finish(controller) }` then found `finished` already true and returned, and the flag that
+   * exists to prevent a SECOND terminator prevented the ONLY one.
+   *
+   * Measured end to end on 2026-09-28 (B-329), driving a real turn against a deployed-shape worker:
+   *
+   *     [PROBE] next resolved done=true
+   *     [PROBE] finish: cache.end LANCOU TypeError: buf.evictTimer.unref is not a function
+   *
+   * Every chunk had arrived, `finish` included, and the client then waited until its own timeout. The
+   * trigger is fixed where it was, in `run-event-cache.ts`; this is the property that made a one-line
+   * trigger cost the whole stream.
+   *
+   * REPORTED rather than swallowed, per `rules/error-handling.md`. What the failure costs is a reconnect
+   * replay that may be stale — which a reader of the log can act on, while a stream that never ends
+   * gives them nothing to act on at all.
+   */
+  function endCachedRun(): void {
+    try {
+      cache.end(runId)
+    } catch (err) {
+      console.error(
+        `[theokit] durable run ${runId}: cache.end failed, so a reconnect replay may be stale:`,
+        err,
+      )
+    }
+  }
+
   function finish(controller: ReadableStreamDefaultController<Uint8Array>): void {
     if (finished) return
     finished = true
-    cache.end(runId)
-    controller.enqueue(encodeSse(SSE_DONE_FRAME))
-    controller.close()
+    endCachedRun()
+    try {
+      controller.enqueue(encodeSse(SSE_DONE_FRAME))
+      controller.close()
+    } catch (err) {
+      // The consumer is already gone, so both calls above would be writing to a controller that is
+      // closed. Distinct from the case above: there the stream is still owed a terminator, here there
+      // is nobody left to give one to.
+      console.error(
+        `[theokit] durable run ${runId}: could not terminate a stream nobody is reading:`,
+        err,
+      )
+    }
   }
 
   const stream = new ReadableStream<Uint8Array>({
@@ -133,7 +175,10 @@ export function durableUiMessageStreamResponse(
       // The client went away. Release the turn rather than letting it run to completion, and end the
       // cached run so a reconnect sees a closed stream instead of one that never terminates.
       finished = true
-      cache.end(runId)
+      // Same exposure as `finish` had, and it would have cost the release of the turn rather than the
+      // terminator: `cache.end` first, so a throw here meant `iterator.return` never ran and the run
+      // kept going with nobody reading it.
+      endCachedRun()
       await iterator.return?.(reason)
     },
   })
