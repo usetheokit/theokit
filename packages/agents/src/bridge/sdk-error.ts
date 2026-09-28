@@ -26,6 +26,21 @@ export function sdkErrorEvent(err: unknown): {
   code: string
   message: string
   retryable: boolean
+  /**
+   * The thrown Error's stack, for the SERVER only.
+   *
+   * B-323 — this function is the only place the Error OBJECT is still alive; everything downstream
+   * sees the flattened event. Dropping `stack` destroyed the one thing that names WHERE a turn
+   * failed, and the operator was left with a message. Measured 2026-09-28, with the masked message
+   * finally reachable (B-322): `[unenv] fs.readFile is not implemented yet!` — a Node builtin
+   * refusing on Workers, with six plausible call sites in the SDK. Without a stack the next step is
+   * guessing which, and a guess costs a deploy per candidate.
+   *
+   * It never reaches the wire. A stack names files, directories and sometimes an argument, which is
+   * exactly what `MASK_ERROR` exists to keep from a browser — and `errorChunks` constructs each
+   * chunk explicitly rather than spreading the event, so that is structural and not a habit.
+   */
+  stack?: string
 } {
   const sdkErr = err as { code?: string; isRetryable?: boolean }
   return {
@@ -35,5 +50,9 @@ export function sdkErrorEvent(err: unknown): {
     // The SDK computes `isRetryable` per error class at construction; pinning it to `false` here
     // contradicted the error itself.
     retryable: sdkErr.isRetryable === true,
+    // Spread rather than `stack: …`, so a non-Error carries no key at all. `stack: undefined` reads
+    // as the string "undefined" through a template, which a log would then print as if it meant
+    // something.
+    ...(err instanceof Error && err.stack !== undefined ? { stack: err.stack } : {}),
   }
 }

@@ -8,8 +8,7 @@
  * What was wrong is that the unmasked message went nowhere else. `presentUIMessageStream` passed
  * `event.message` straight into `onError` and yielded the result, so the original was destroyed at
  * that line — which is the swallowed-error anti-pattern `rules/error-handling.md` forbids by name:
- * *"`catch (Exception e) { log.error("erro"); }` — engoliu o erro, ninguém vai saber o que
- * aconteceu."*
+ * *"`catch (Exception e) { log.error("error"); }` — swallowed; nobody learns what happened."*
  *
  * Measured, 2026-09-28 (B-322). A deployed Cloudflare worker and a local `wrangler dev --local` both
  * answered an agent turn with exactly this and nothing else:

@@ -168,8 +168,13 @@ const MASK_ERROR: MaskError = (error) =>
  * request; the code is what turns that into "this is the failure mode of every turn on this platform",
  * which is how B-322 was identified in the first place.
  */
-function recordUnmaskedError(message: string, code: string | undefined): void {
+function recordUnmaskedError(message: string, code: string | undefined, stack?: string): void {
   console.error(`[theokit] agent turn failed (${code ?? 'no code'}): ${message}`)
+  // B-323 — the stack on its own line, and only when there is one. `sdkErrorEvent` carries it for
+  // exactly this: a message names WHAT failed and a stack names WHERE, and on a serverless runtime
+  // no debugger can supply the second. Still one logging site, because `error-handling.md` forbids
+  // logging an error twice — what changed is the information, not the number of places that print.
+  if (stack !== undefined) console.error(stack)
 }
 
 function* errorChunks(errorText: string, code: string | undefined): Generator<UIMessageChunk> {
@@ -314,11 +319,11 @@ export async function* presentUIMessageStream(
           // an agent turn answered `{"code":"SDK_ERROR"}` and `"An error occurred."`, with empty
           // server logs. On a serverless runtime no debugger can be attached, so the log IS the
           // diagnosis — and `rules/error-handling.md` names the shape this was:
-          // "engoliu o erro, ninguem vai saber o que aconteceu".
+          // "swallowed; nobody learns what happened".
           //
           // Mask outward, log inward. NOT a widening of `UNMASKED_CODES`: the client was never
           // owed more, the server was owed anything at all.
-          recordUnmaskedError(event.message, code)
+          recordUnmaskedError(event.message, code, (event as { stack?: string }).stack)
           yield* errorChunks(onError({ message: event.message, code }), code)
         }
         break
