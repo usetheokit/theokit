@@ -14,7 +14,7 @@ tone instruction in this file quietly makes `usePersonality` do nothing. Tone be
 
 ## Why this file is here and not at the root
 
-This project installs `@theokit/sdk@^5.3.0`, where **both** locations work: 5.x added a root
+This project installs `@theokit/sdk@^5.9.2`, where **both** locations work: 5.x added a root
 `THEO.md` (`usetheokit/theokit-sdk#531`) at priority 55, and `.theokit/THEO.md` at 60 still wins a
 conflict. The scaffold keeps the file here because it wins, not because the root is unreadable.
 
@@ -25,9 +25,18 @@ halves expired: 5.5.0 is `latest`, and the template's pin moved to `^5.3.0` beca
 parity surface this framework advertises is absent from 4.x. A scaffold that hands a new project an
 SDK delivering none of that, with nothing saying so, is the defect the pin change closes.
 
-The floor is 5.3 rather than 5.0 because the framework's persistence barrel re-exports six names that
+The floor was 5.3 rather than 5.0 because the framework's persistence barrel re-exports six names that
 5.0.0 does not have — measured with controls, 1 of 7 at 5.0.0 and 7 of 7 from 5.3.0 — so the range had
 to name a version that can actually build it.
+
+It moved to 5.9.2 on 2026-09-28, for a reason that is about deployment rather than about exports. Every
+version below it resolves a path at module scope in `internal/providers/catalog-loader.ts`, and Cloudflare
+executes the top-level module during validation — so a Workers deploy of a project declaring an agent was
+refused outright with code 10021. The framework carried a compensation for it in the `wrangler.toml` it
+generates, substituting a literal for `import.meta.url`; that made a broken dependency appear to work and
+would have covered the next one with the same vice in silence. 5.9.2 fixes the cause, measured on the
+published tarball — 0 of 254 executable files resolve a path at module scope — so the compensation is gone
+and the requirement is declared here instead, where a reader can see it.
 
 Two more things worth knowing if you do move it once 5.x is stable:
 

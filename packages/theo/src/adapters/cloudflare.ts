@@ -497,30 +497,17 @@ export function renderWranglerToml(opts?: { ssrStreaming?: boolean }): string {
           `not_found_handling = "single-page-application"`,
         ]),
     ``,
-    `# B-320 — Cloudflare EXECUTES the top-level module during validation, so a dependency that`,
-    `# resolves \\\`__dirname\\\` at load time refuses the whole upload: \\\`import.meta.url\\\` is undefined`,
-    `# here. Measured 2026-09-28 — every deploy of a project declaring an agent was rejected with`,
-    `# code 10021, because the agent's transitive \\\`@theokit/sdk\\\` does exactly that in`,
-    `# \\\`internal/providers/catalog-loader.ts\\\` (upstream: usetheokit/theokit-sdk#705).`,
+    `# B-332 — the [define] "import.meta.url" compensation lived here until 2026-09-28.`,
     `#`,
-    `# REMOVE THIS BLOCK once no dependency resolves a path at module scope. It is a compensation for`,
-    `# somebody else's defect, not a setting this project wants — it substitutes a literal for an`,
-    `# expression, so the NEXT dependency with the same vice is covered here in silence.`,
+    `# Cloudflare executes the top-level module during validation, so a dependency that resolves a`,
+    `# path at load time refused the whole upload (code 10021). The cause was @theokit/sdk, in`,
+    `# internal/providers/catalog-loader.ts, fixed upstream and published in 5.9.2 — measured on the`,
+    `# published tarball: 0 of 254 executable files resolve a path at module scope.`,
     `#`,
-    `# This substitutes a literal so that expression resolves. It does NOT create a filesystem: a`,
-    `# module that only COMPUTES a path at load time now initialises, and anything that later tries`,
-    `# to READ it still fails — with an error about the catalog instead of one about \\\`path\\\`.`,
-    `#`,
-    `# LAST, on purpose. A TOML table owns every key after it until the next header, so this block`,
-    `# must not land between the \`[assets]\` header and the keys under it — \`directory\` and`,
-    `# \`binding\` would parse as define entries and the worker would have no asset binding at all.`,
-    `#`,
-    `# The wording here said "above \`[assets]\`" until 2026-09-28, and a parser measured that to be`,
-    `# imprecise: placed before that header the document still parses correctly, because the header is`,
-    `# then the next one and owns its keys. What breaks it is an insertion that lands one index too`,
-    `# late in this array (B-333, asserted in tests/unit/the-worker-config-parses-as-toml.test.ts).`,
-    `[define]`,
-    `"import.meta.url" = "\\"file:///worker\\""`,
+    `# The floor this framework declares is now ^5.9.2, so the versions that needed the compensation`,
+    `# cannot be installed. A declared dependency is the honest form of that requirement;`,
+    `# substituting a literal for import.meta.url was the form that also covered the NEXT dependency`,
+    `# with the same vice, in silence.`,
     ``,
     `# Environment variables are set via wrangler secret or dashboard`,
     `# Example: wrangler secret put DATABASE_URL`,
@@ -638,16 +625,6 @@ export const cloudflareAdapter: DeployAdapter = {
 
     // eslint-disable-next-line no-console -- CLI build progress
     console.log('\n  ✓ Cloudflare output → .theokit/cloudflare/ + wrangler.toml')
-    // B-332 — the generated toml carries a COMPENSATION for a third-party defect, and until now
-    // the only way to learn that was to open the file. A compensation nobody is told about is one
-    // nobody removes, and this one will cover the next dependency with the same vice in silence.
-    // eslint-disable-next-line no-console -- CLI build progress
-    console.log(
-      '    ! [define] "import.meta.url" is set in wrangler.toml, compensating for a dependency\n' +
-        '      that resolves a path at module scope: Cloudflare executes the top-level module\n' +
-        '      during validation and rejects the upload otherwise (usetheokit/theokit-sdk#705).\n' +
-        '      Remove the block once every dependency is past it; nothing here can tell when.',
-    )
     // eslint-disable-next-line no-console -- CLI build progress
     console.log(
       `${describeDeployedSecurityHeaders({

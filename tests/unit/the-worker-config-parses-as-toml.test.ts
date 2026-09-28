@@ -68,13 +68,17 @@ describe('the generated worker config parses as TOML', () => {
     )
   })
 
-  it('test_the_define_block_is_its_own_table', () => {
-    // The compensation for a dependency that resolves a path at module scope (B-332). It must be a
-    // table of its own: absorbed into `[assets]` it would be a key wrangler ignores, and the upload
-    // would be refused again with an error about `path`.
-    const define = table(config({ ssrStreaming: true }), 'define')
-
-    expect(define['import.meta.url']).toBe('"file:///worker"')
+  it('test_no_define_table_is_emitted', () => {
+    // This case asserted the OPPOSITE until 2026-09-28: `[define]` had to be its own table, because the
+    // config carried a compensation for a dependency that resolved a path at module scope. That cause is
+    // fixed upstream in `@theokit/sdk@5.9.2` and the framework's declared floor is now `^5.9.2`, so the
+    // block is gone and its absence is what the emitter must keep — see
+    // `the-worker-config-carries-no-vendor-compensation.test.ts` for the reasoning and the measurement.
+    //
+    // Kept here rather than deleted because a parse is the only thing that can tell "the table is absent"
+    // from "the table is absent because its header was absorbed by the one before it", and this file is
+    // where that distinction lives.
+    expect(config({ ssrStreaming: true }).define).toBeUndefined()
   })
 
   it('test_the_hazard_is_a_block_between_a_header_and_its_keys', () => {
