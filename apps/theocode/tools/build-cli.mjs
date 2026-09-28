@@ -4,24 +4,13 @@
 // (esbuild ESM). ESM is mandatory — a CJS bundle breaks `import.meta.url` (SDK persistence → "path
 // undefined"). The one native runtime dep, node-pty, is EXTERNAL (loaded via createRequire, esbuild does
 // not follow it) and only touched by run/resume's interactive_shell — goal/review never need it.
-import { chmodSync, copyFileSync } from 'node:fs'
-import { createRequire } from 'node:module'
+import { chmodSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { build } from 'esbuild'
 
 export const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
-
-/**
- * DATA assets esbuild does not bundle, copied beside the output.
- *
- * `provider-catalog.json` is read by the SDK via `import.meta.url` — next to the RUNNING file, so
- * `dist/`. Without it, auto-compaction (context-window management) is silently disabled in every
- * model mode: nothing errors, long sessions just start losing context. Resolved from the SDK's real
- * dist via createRequire so the path holds regardless of hoisting.
- */
-export const DATA_ASSETS = ['provider-catalog.json']
 
 /**
  * Resolves Ink's optional devtools client to an empty module.
@@ -111,20 +100,26 @@ export function bundleOptions(root = REPO_ROOT) {
   }
 }
 
+/**
+ * Builds the bundle. Nothing is copied beside it, and that is a change rather than an omission.
+ *
+ * Until 2026-09-28 this copied `provider-catalog.json` out of the SDK's dist, because the SDK read it
+ * via `import.meta.url` — next to the RUNNING file — and without it auto-compaction was silently
+ * disabled in every model mode. The SDK now imports that catalog with `with { type: "json" }`, so a
+ * bundler inlines it: there is no file to place beside anything, and it can no longer be missing.
+ *
+ * It stopped being true LOUDLY. The SDK stopped shipping the file, `copyFileSync` raised ENOENT, and
+ * `pnpm build` at the repository root exited 1 — a dependency's green suite had measured "nothing
+ * reads it there" against its own tree, and this was the reader outside it.
+ */
 export async function buildCli(root = REPO_ROOT) {
   const options = bundleOptions(root)
   await build(options)
   chmodSync(options.outfile, 0o755)
-
-  const distDir = dirname(options.outfile)
-  const sdkRoot = dirname(createRequire(import.meta.url).resolve('@theokit/sdk/package.json'))
-  for (const asset of DATA_ASSETS) {
-    copyFileSync(join(sdkRoot, 'dist', asset), join(distDir, asset))
-  }
   return options.outfile
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const outfile = await buildCli()
-  process.stdout.write(`built ${outfile} (+ ${DATA_ASSETS.join(', ')})\n`)
+  process.stdout.write(`built ${outfile}\n`)
 }

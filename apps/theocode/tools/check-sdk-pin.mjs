@@ -8,8 +8,12 @@
  *
  * Three declarations now, all load-bearing:
  *
- *   - the root devDependency, because `tools/build-cli.mjs` copies `provider-catalog.json` out of
- *     the SDK, and pnpm is right not to hoist what nobody declared;
+ *   - the root devDependency. Its stated reason expired on 2026-09-28: `tools/build-cli.mjs` copied
+ *     `provider-catalog.json` out of the SDK's dist, and the SDK now inlines that catalog, so nothing
+ *     is copied and the declaration no longer earns its place that way. It is left in place and left
+ *     checked, because whether the root still NEEDS it is a question about pnpm hoisting that this
+ *     guard does not answer — and an undeclared dependency somebody later reaches for is #69 again.
+ *     Recorded rather than quietly kept: a pin whose reason nobody can state is a pin nobody defends;
  *   - the `pnpm-workspace.yaml` override, because it decides what the WHOLE tree resolves to;
  *   - any `packages/*` manifest that declares it, because since #70 one of them imports the SDK
  *     directly — `readSessionMessages` is the read side of a resumed session and

@@ -13,9 +13,22 @@
  * what can regress is the DECISION — someone dropping an entry from `external`, or flipping the
  * format while chasing an unrelated warning.
  */
+import { readFileSync } from 'node:fs'
+
 import { describe, expect, it } from 'vitest'
 
-import { bundleOptions, DATA_ASSETS } from './build-cli.mjs'
+import { bundleOptions } from './build-cli.mjs'
+
+/**
+ * The build script's CODE, with comments stripped.
+ *
+ * The docblock that records why the copy was removed necessarily names `copyFileSync`, so a
+ * file-wide absence assertion would be failed by the very note explaining the absence. What is
+ * asserted below is the code.
+ */
+const source = readFileSync(new URL('./build-cli.mjs', import.meta.url), 'utf8')
+  .replace(/\/\*[\s\S]*?\*\//g, '')
+  .replace(/(^|[^:])\/\/[^\n]*/g, '$1')
 
 const options = bundleOptions('/repo')
 
@@ -93,10 +106,26 @@ describe('bundleOptions', () => {
     expect(options.outfile).toBe('/repo/dist/theocode.mjs')
   })
 
-  it('test_the_provider_catalog_is_shipped_beside_the_bundle', () => {
-    // A DATA asset esbuild does not bundle. The SDK reads it via `import.meta.url`, i.e. next to
-    // the running file. Without it, auto-compaction — context-window management — is silently
-    // disabled in every model mode. Nothing fails; long sessions just start losing context.
-    expect(DATA_ASSETS).toContain('provider-catalog.json')
+  it('test_the_bundle_needs_no_sidecar_data_file', () => {
+    // The inverse of what this asserted until 2026-09-28, and the inversion is the finding.
+    //
+    // The build copied `provider-catalog.json` out of the SDK's dist because the SDK read it via
+    // `import.meta.url` — next to the RUNNING file — and without it auto-compaction was silently
+    // disabled in every model mode. That reason expired: the SDK now imports the catalog with
+    // `with { type: "json" }`, so a bundler inlines it and it cannot be missing.
+    //
+    // It expired LOUDLY here. The SDK stopped shipping the file, `copyFileSync` raised ENOENT, and
+    // `pnpm build` at the repository root exited 1 — a consumer's build broken by a change whose own
+    // suite was green, because "nothing reads it there" was measured against the SDK's own tree.
+    //
+    // Asserted on the source rather than on a built bundle, per this file's own convention: what can
+    // regress is the DECISION to reach for a file the dependency does not promise.
+    // Anti-vacuity FIRST: both assertions below are absences, and an absence over an empty string
+    // passes while proving nothing. If the comment stripping ever over-reaches, this says so.
+    expect(source).toContain('export async function buildCli')
+    expect(source.length).toBeGreaterThan(1000)
+
+    expect(source, 'the build copies a file out of the SDK dist again').not.toContain('copyFileSync')
+    expect(source, 'a data-asset list is back, and its reason expired').not.toContain('DATA_ASSETS')
   })
 })
