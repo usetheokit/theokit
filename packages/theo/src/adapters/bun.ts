@@ -108,7 +108,17 @@ export function renderBunEntry(
     ``,
     `import { resolve, join } from 'node:path'`,
     `import { existsSync } from 'node:fs'`,
-    `import { scanServerRoutes, matchRoute, createProductionLoader } from 'theokit/server/scan'\nimport { executeRoute, extractTraceIdFromRequest, TRACE_HEADER, createCorsWebHandler } from 'theokit/server/http'${opts.rateLimit === undefined ? '' : "\\nimport { createRateLimiterWeb } from 'theokit/server/rate-limit'"}`,
+    // One element per emitted line, like every neighbour, and the conditional import is a spread
+    // rather than an interpolated `\n`. That is not a style preference: this line carried the
+    // fragment inside a nested double-quoted string, where an escaped backslash is a backslash, so
+    // the import reached the module joined by two characters and Bun refused it. A construct that
+    // cannot express a malformed line beats one escaped correctly (B-325), and `sonarjs` refuses the
+    // nesting outright — the lint was naming the cause.
+    `import { scanServerRoutes, matchRoute, createProductionLoader } from 'theokit/server/scan'`,
+    `import { executeRoute, extractTraceIdFromRequest, TRACE_HEADER, createCorsWebHandler } from 'theokit/server/http'`,
+    ...(opts.rateLimit === undefined
+      ? []
+      : [`import { createRateLimiterWeb } from 'theokit/server/rate-limit'`]),
     `import { createWebShim } from 'theokit/adapters/web-shim'`,
     `import { buildSecurityHeaders, withSecurityHeaders } from 'theokit/adapters/security-headers'`,
     `// T3.2 — WS bridge for Bun runtime`,
