@@ -82,12 +82,18 @@ describe('T1.1 — reEmitOpenApi helper (live)', () => {
     const distDir = join(tmpDir, '.theokit')
     mkdirSync(serverDir, { recursive: true })
 
-    await reEmitOpenApi(serverDir, distDir, {
-      servers: [{ url: 'http://localhost:3000' }],
-      specVersion: '3.1.0',
-      title: 'T',
-      version: '0.0.0',
-    })
+    await reEmitOpenApi(
+      serverDir,
+      distDir,
+      {
+        servers: [{ url: 'http://localhost:3000' }],
+        specVersion: '3.1.0',
+        title: 'T',
+        version: '0.0.0',
+      },
+      tmpDir,
+      undefined,
+    )
 
     const raw = readFileSync(join(distDir, 'openapi.json'), 'utf-8')
     const doc = JSON.parse(raw) as { openapi: string; paths: Record<string, unknown> }
@@ -102,12 +108,18 @@ describe('T1.1 — reEmitOpenApi helper (live)', () => {
     const distDir = join(tmpDir, '.theokit')
     mkdirSync(serverDir, { recursive: true })
 
-    await reEmitOpenApi(serverDir, distDir, {
-      servers: [{ url: 'http://localhost:3000' }],
-      specVersion: '3.1.0',
-      title: 'T',
-      version: '0.0.0',
-    })
+    await reEmitOpenApi(
+      serverDir,
+      distDir,
+      {
+        servers: [{ url: 'http://localhost:3000' }],
+        specVersion: '3.1.0',
+        title: 'T',
+        version: '0.0.0',
+      },
+      tmpDir,
+      undefined,
+    )
 
     const doc = JSON.parse(readFileSync(join(distDir, 'openapi.json'), 'utf-8')) as {
       paths: Record<string, unknown>
@@ -122,12 +134,18 @@ describe('T1.1 — reEmitOpenApi helper (live)', () => {
 
     // Pass a serverDir that doesn't exist → generateManifest throws → swallowed
     await expect(
-      reEmitOpenApi(join(tmpDir, 'non-existent-dir'), join(tmpDir, '.theokit'), {
-        servers: [{ url: 'http://localhost:3000' }],
-        specVersion: '3.1.0',
-        title: 'T',
-        version: '0.0.0',
-      }),
+      reEmitOpenApi(
+        join(tmpDir, 'non-existent-dir'),
+        join(tmpDir, '.theokit'),
+        {
+          servers: [{ url: 'http://localhost:3000' }],
+          specVersion: '3.1.0',
+          title: 'T',
+          version: '0.0.0',
+        },
+        tmpDir,
+        undefined,
+      ),
     ).resolves.toBeUndefined()
     // Either a warn captured OR succeeded with empty manifest — both are safe.
     // Assertion: spy was attachable (proves console.warn is mockable here).
@@ -146,18 +164,30 @@ describe('T1.1 — reEmitOpenApi helper (live)', () => {
     // Fire 2 in rapid succession; second MUST detect inFlight and skip + warn.
     // We can't easily make one hang, so we use a synchronous side-channel via
     // the exported flag-reset to simulate concurrent state.
-    const p1 = reEmitOpenApi(serverDir, distDir, {
-      servers: [{ url: 'http://localhost:3000' }],
-      specVersion: '3.1.0',
-      title: 'T',
-      version: '0.0.0',
-    })
-    const p2 = reEmitOpenApi(serverDir, distDir, {
-      servers: [{ url: 'http://localhost:3000' }],
-      specVersion: '3.1.0',
-      title: 'T',
-      version: '0.0.0',
-    })
+    const p1 = reEmitOpenApi(
+      serverDir,
+      distDir,
+      {
+        servers: [{ url: 'http://localhost:3000' }],
+        specVersion: '3.1.0',
+        title: 'T',
+        version: '0.0.0',
+      },
+      tmpDir,
+      undefined,
+    )
+    const p2 = reEmitOpenApi(
+      serverDir,
+      distDir,
+      {
+        servers: [{ url: 'http://localhost:3000' }],
+        specVersion: '3.1.0',
+        title: 'T',
+        version: '0.0.0',
+      },
+      tmpDir,
+      undefined,
+    )
 
     await Promise.all([p1, p2])
     // At least one warn should fire when 2 are sequenced microsecond-apart.

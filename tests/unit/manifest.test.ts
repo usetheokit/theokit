@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import {
   generateManifest,
   writeManifest,
@@ -35,7 +35,7 @@ describe('generateManifest', () => {
       'server/routes/users/[id].ts': "export const GET = { policy: 'public', handler: () => ({}) }",
     })
 
-    const manifest = generateManifest(serverDir)
+    const manifest = generateManifest(serverDir, dirname(serverDir))
 
     expect(manifest.version).toBe(1)
     expect(manifest.routes).toHaveLength(2)
@@ -55,7 +55,7 @@ describe('generateManifest', () => {
       'server/actions/create-user.ts': 'export const createUser = {}',
     })
 
-    const manifest = generateManifest(serverDir)
+    const manifest = generateManifest(serverDir, dirname(serverDir))
 
     expect(manifest.actions).toHaveLength(1)
     expect(manifest.actions[0].actionPath).toBe('create-user')
@@ -67,7 +67,7 @@ describe('generateManifest', () => {
       'server/ws/chat.ts': 'export default {}',
     })
 
-    const manifest = generateManifest(serverDir)
+    const manifest = generateManifest(serverDir, dirname(serverDir))
 
     expect(manifest.websockets).toHaveLength(1)
     expect(manifest.websockets[0].wsPath).toBe('/ws/chat')
@@ -81,7 +81,7 @@ describe('generateManifest', () => {
       'agents/support.ts': "export const policy = 'public'\nexport default {}",
     })
 
-    const manifest = generateManifest(serverDir)
+    const manifest = generateManifest(serverDir, dirname(serverDir))
 
     expect(manifest.agents).toHaveLength(1)
     expect(manifest.agents![0].agentPath).toBe('/api/agents/support')
@@ -94,7 +94,7 @@ describe('generateManifest', () => {
     const serverDir = join(TMP_DIR, 'server')
     mkdirSync(serverDir, { recursive: true })
 
-    const manifest = generateManifest(serverDir)
+    const manifest = generateManifest(serverDir, dirname(serverDir))
 
     expect(manifest.routes).toEqual([])
     expect(manifest.actions).toEqual([])
@@ -163,7 +163,7 @@ describe('loadManifest', () => {
       }),
     )
 
-    const loaded = loadManifest(distDir, serverDir)
+    const loaded = loadManifest(distDir, serverDir, dirname(serverDir))
 
     expect(loaded.routes).toHaveLength(1)
     expect(loaded.routes[0].pattern).toBeInstanceOf(RegExp)
@@ -186,7 +186,7 @@ describe('loadManifest', () => {
       }),
     )
 
-    const loaded = loadManifest(distDir, serverDir)
+    const loaded = loadManifest(distDir, serverDir, dirname(serverDir))
 
     expect(loaded.routes[0].filePath).toBe(resolve(serverDir, 'routes/health.ts'))
     expect(loaded.actions[0].filePath).toBe(resolve(serverDir, 'actions/create-user.ts'))
@@ -207,7 +207,7 @@ describe('loadManifest', () => {
       }),
     )
 
-    const loaded = loadManifest(distDir, deployServerDir)
+    const loaded = loadManifest(distDir, deployServerDir, dirname(deployServerDir))
 
     // filePath should be resolved relative to the DEPLOY serverDir, not the build one
     expect(loaded.routes[0].filePath).toBe(resolve(deployServerDir, 'routes/health.ts'))
@@ -218,6 +218,6 @@ describe('loadManifest', () => {
     const serverDir = join(TMP_DIR, 'server')
     mkdirSync(distDir, { recursive: true })
 
-    expect(() => loadManifest(distDir, serverDir)).toThrow(/theo build/)
+    expect(() => loadManifest(distDir, serverDir, dirname(serverDir))).toThrow(/theo build/)
   })
 })
