@@ -126,6 +126,17 @@ const ENTRIES: Record<string, () => string> = {
   // Every target gets the variant rather than only the one that broke. The conditional fragment has
   // the same shape everywhere, and covering the instance would leave the class open — which is how
   // this arrived in the first place, one target at a time.
+  // B-317 — the Vercel document branch is new emitted code: a conditional import of the app's SSR
+  // entry, a nonce, and a call with two interpolated HTML strings. Every one of those is a place a
+  // template can emit something that no longer parses, and the shell carries quotes and angle brackets.
+  'vercel (ssr document)': () =>
+    renderVercelFunctionEntry({
+      ssr: true,
+      htmlHead:
+        '<!doctype html><html><head><title>It\'s "quoted"</title></head><body><div id="root">',
+      htmlTail: '</div><script type="module" src="/assets/index.js"></script></body></html>',
+    }),
+
   'cloudflare (rate limit)': () =>
     renderCloudflareWorkerEntry({ ssrStreaming: false, rateLimit: RATE_LIMIT }),
   'vercel (rate limit)': () => renderVercelFunctionEntry({ rateLimit: RATE_LIMIT }),

@@ -1,12 +1,7 @@
-/* eslint-disable security/detect-non-literal-fs-filename --
- * Cloudflare deploy adapter. All write paths are under `cwd/.theokit/cloudflare/`
- * and `cwd/wrangler.toml`. Build-time tool — no HTTP input.
- */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import type { TheoConfig } from '../config/schema.js'
-import { findRootDiv } from '../core/contracts/find-root-div.js'
 import { parseAssetsMap } from '../core/contracts/module-preloads.js'
 import type { SecurityHeadersConfig } from '../core/contracts/security-headers.js'
 import { assertServicesUnsupported, readManifest } from '../services/index.js'
@@ -15,6 +10,7 @@ import { deployedAgentsFragment, type DeployedAgent } from './deployed-agents.js
 import { renderBakedRoutes, routeRuntimeLines } from './deployed-baked-routes.js'
 import { deployedCorsFragment, type DeployedCorsOptions } from './deployed-cors.js'
 import { deployedCsrfFragment, type DeployedCsrfOptions } from './deployed-csrf.js'
+import { readDocumentShell } from './deployed-document-shell.js'
 import { planDeployedPlugins } from './deployed-plugins-module.js'
 import {
   deployedRateLimitFragment,
@@ -47,39 +43,12 @@ import type { AdapterBuildContext, DeployAdapter } from './types.js'
  * a correct artifact should say so at build time; the alternative is a deploy
  * that looks successful and serves pages with no stylesheet.
  */
-/**
- * @internal Exported for tests only. Nothing re-exports this module, so this does not reach the
- * published surface — `findRootDiv`, exported for the same reason, appears 0 times in `dist/`.
- */
-export function readDocumentShell(
-  cwd: string,
-  streaming: boolean,
-): { htmlHead?: string; htmlTail?: string } {
-  if (!streaming) return {}
+// `readDocumentShell` moved to `./deployed-document-shell.js` (B-317): the Vercel target needs the
+// same shell, and an adapter importing another adapter is the coupling `deployed-baked-routes.ts`
+// was extracted to avoid.
 
-  const indexPath = resolve(cwd, '.theokit/client/index.html')
-  if (!existsSync(indexPath)) {
-    throw new Error(
-      `[adapter-cloudflare] ssrStreaming is on but ${indexPath} does not exist, so the worker ` +
-        `would serve a document with no <head> and no client entry. Run the client build first, ` +
-        `or set ssrStreaming: false in theo.config.ts.`,
-    )
-  }
-
-  const indexHtml = readFileSync(indexPath, 'utf-8')
-  const rootDiv = findRootDiv(indexHtml)
-  if (rootDiv === undefined) {
-    throw new Error(
-      `[adapter-cloudflare] ${indexPath} has no <div id="root">, so the streamed document has ` +
-        `nowhere to put the app. Add one, or set ssrStreaming: false in theo.config.ts.`,
-    )
-  }
-
-  return {
-    htmlHead: indexHtml.slice(0, rootDiv.insertAt),
-    htmlTail: indexHtml.slice(rootDiv.insertAt),
-  }
-}
+// Re-exported because this module's tests import it from here, and the move is not their subject.
+export { readDocumentShell }
 
 /**
  * Read the map `theokit build` emitted, for baking into the worker (B-035).
@@ -90,6 +59,7 @@ export function readDocumentShell(
  */
 export function readAssetsMapForBake(path: string): Record<string, string[]> | undefined {
   try {
+    // eslint-disable-next-line security/detect-non-literal-fs-filename -- `path` is built by the one caller from a fixed `.theokit/client` layout; this returns `undefined` for anything it cannot read
     return parseAssetsMap(readFileSync(path, 'utf8'))
   } catch {
     return undefined
@@ -583,6 +553,7 @@ export const cloudflareAdapter: DeployAdapter = {
     await nodeAdapter.build(config, cwd, ctx)
 
     const outputDir = resolve(cwd, '.theokit/cloudflare')
+    // eslint-disable-next-line security/detect-non-literal-fs-filename -- build-time output directory, derived from the project root
     mkdirSync(outputDir, { recursive: true })
 
     // 2. Emit Worker entry (now uses the shared web-shim)
@@ -621,9 +592,11 @@ export const cloudflareAdapter: DeployAdapter = {
     if (pluginsPlan !== undefined) {
       // Beside the worker, so the emitted import is a sibling. Wrangler bundles from here, which is
       // what lets the static import reach the app's own module at all (#425).
+      // eslint-disable-next-line security/detect-non-literal-fs-filename -- build-time write under the project's own `.theokit/cloudflare`
       writeFileSync(resolve(outputDir, 'theo.plugins.mjs'), pluginsPlan.source)
     }
 
+    // eslint-disable-next-line security/detect-non-literal-fs-filename -- build-time write under the project's own `.theokit/cloudflare`
     writeFileSync(
       resolve(outputDir, 'worker.mjs'),
       renderCloudflareWorkerEntry({
@@ -655,6 +628,7 @@ export const cloudflareAdapter: DeployAdapter = {
     )
 
     // 3. Emit wrangler.toml (with nodejs_compat enforced)
+    // eslint-disable-next-line security/detect-non-literal-fs-filename -- build-time write under the project's own `.theokit/cloudflare`
     writeFileSync(
       resolve(cwd, 'wrangler.toml'),
       // B-263 — the toml decides whether the worker or the CDN answers the document, and the two

@@ -7,6 +7,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Added
+
+- The Vercel target renders the document. Nothing routed a page request to the function — `{ handle: 'filesystem' }` was followed by `/(.*) -> /index.html` — so `/` was the static host serving an empty `<div id="root">` while the build announced SSR, and the function had no renderer to answer with if it had been asked. The fallback now reaches the function when the project renders, the emitted entry calls the app's own SSR entry (inlined by the function bundler), and the build reads the client shell and passes it. Scoped outside `/api/`, where a path matching no route still owes a JSON 404. Measured by executing the built function: `/` went from `404, 9 bytes, text/plain` to `200, 14827 bytes, text/html` with `<head>`, the root div and the CSP (#B-317)
 - A step-by-step procedure for deploying to Cloudflare Workers, at `docs/wiki/sops/cloudflare-deploy.md`, written from the first real deploy this repository performed. It carries the five defects that sat between a green build and a URL that answered, what each one looked like, and why three of them are invisible to `wrangler deploy --dry-run` — which returned exit 0 on the exact bundle Cloudflare rejected (#263)
 
 - `MIT-0` accepted in the production licence audit. It arrived with `@theokit/ui@1.12.2` through `@csstools/css-color-parser` -> `@csstools/color-helpers@5.1.0`, and its terms were read from that tarball's own `LICENSE.md` rather than inferred: MIT's grant with the attribution clause deleted, so there is no obligation to discharge and it sits in `ALLOWED` beside `0BSD`, `Unlicense` and `CC0-1.0` (#B-311)
