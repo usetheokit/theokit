@@ -31,8 +31,14 @@
  *
  * This is the second file in this repository to assert this property. `B-321` established it for
  * `durableUiMessageStreamResponse` and did not reach the sibling that serves every mounted agent, so
- * the pattern survived one file away from its own fix. The case below is that one's, restated against
- * this encoder.
+ * the pattern survived one file away from its own fix.
+ *
+ * Its case does NOT transfer, and the first version of this file copied it anyway. There the chunks ARE
+ * the source, so `async start` reaches the source synchronously and a counter read at construction is 1
+ * against `pull`'s 0 — measured: reverting that encoder makes 2 of its 5 cases fail. Here
+ * `presentUIMessageStream` sits in between and yields `{ type: 'start' }` before touching anything, so
+ * the first suspension precedes the first source read and the counter is 0 under BOTH shapes. Hence the
+ * declaration assertion below, and hence the paragraph above it.
  */
 import { readFileSync } from 'node:fs'
 
