@@ -204,11 +204,18 @@ export const renderStreamingWeb = async (request, options = {}) => {
 
     // The binding Cloudflare injects. `fetch` records the path so a case can prove WHICH request
     // reached the asset handler, not merely that one did.
+    // What the real binding does under `not_found_handling = "none"`: 200 for a path it has, 404 for
+    // one it does not. A stub that answered 200 for everything could not tell a served asset from a
+    // fallthrough, which is exactly the distinction the worker now depends on.
+    const PRESENT = new Set(['/robots.txt', '/logo.png', '/favicon.svg', '/assets/index-abc123.js'])
     const env = {
       ASSETS: {
         fetch: (request: Request): Response => {
-          probe.assetPaths.push(new URL(request.url).pathname)
-          return new Response('static', { headers: { 'content-type': 'image/png' } })
+          const path = new URL(request.url).pathname
+          probe.assetPaths.push(path)
+          return PRESENT.has(path)
+            ? new Response('static', { headers: { 'content-type': 'image/png' } })
+            : new Response('not found', { status: 404 })
         },
       },
     }
@@ -251,6 +258,24 @@ export const renderStreamingWeb = async (request, options = {}) => {
     expect(worker.seen().ssrCalls, '/robots.txt was rendered as a document').toBe(0)
     expect(worker.seen().assetPaths).toEqual(['/robots.txt'])
     expect(response.headers.get('content-type')).toBe('image/png')
+  })
+
+  it('test_a_route_whose_last_segment_contains_a_dot_is_rendered', async () => {
+    // B-331 — the discriminator was "does the last segment contain a dot", which is a GUESS about
+    // paths rather than a question about assets. `/users/john.doe` is a route, `/v1.2/docs` is a
+    // route, `/reports/2026.q3` is a route; every one of them was answered by the asset handler and,
+    // with `not_found_handling = "none"`, that is a 404 for a page the app renders.
+    //
+    // The real signal is the asset handler's own answer: it knows what it has. Asking it and falling
+    // through on a miss deletes the guess instead of refining it.
+    const worker = await loadWorker()
+    await worker.fetch(new Request('https://app.test/users/john.doe'))
+
+    expect(
+      worker.seen().ssrCalls,
+      'a route with a dot in its last segment was sent to the asset handler, which does not have it ' +
+        '— the user gets a 404 for a page the app renders',
+    ).toBe(1)
   })
 
   it('test_a_hashed_chunk_arriving_at_the_worker_is_not_rendered', async () => {
