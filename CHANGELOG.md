@@ -8,6 +8,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- The Netlify target serves a request at all. Two independent causes, both measured on the Netlify
+  emulator with the adapter's own output: the function was written to `.netlify/functions/` and the
+  `[functions] directory` key was never emitted, so the CLI scanned its default `netlify/functions/`,
+  found nothing, and `/api/*` answered `Function not found...` with a 404 — the target had never
+  served a request. And the entry was written as source importing `theokit/server/scan` and five
+  sibling sub-paths by bare specifier, which Netlify's own bundler turned into a `ReferenceError` on
+  an identifier that was base64 of the source. The entry is now bundled here, as a directory-shaped
+  function so the bundler's 28 chunks travel with it, and the toml declares both keys. `GET
+  /api/health` answers 200 with `x-request-id` and `x-trace-id` echoed. A conflicting value for
+  either key is refused by name rather than overwritten. (#B-339, #B-341)
+
+- The Netlify build refuses a conflicting `netlify.toml` before it runs anything expensive. The merge
+  — the only step that can detect a conflicting `/api/*` redirect or `[functions]` key — ran after the
+  node build and would now have run after bundling, so a configuration error nothing downstream can
+  resolve cost the whole build first. Same reorder as the build command's this cycle. (#B-339)
+
 - A build that refuses no longer destroys the previous build's output. `cleanOutDir` ran before the
   target was even checked, so `theokit build --target <typo>` emptied `.theokit/` and answered with a
   message about the typo — measured: 302 files in `.theokit/client/assets` before, 0 after. The same

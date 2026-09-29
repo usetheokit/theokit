@@ -95,8 +95,14 @@ describe('mergeNetlifyToml (EC-2)', () => {
 })
 
 describe('buildNetlify — orchestration', () => {
-  it('writes function entry + toml when no toml exists', async () => {
+  it('emits the function entry + toml when no toml exists', async () => {
+    // B-339 — the entry now reaches `bundleFunction` rather than `writeFile`: it imports
+    // `theokit/server/scan` by bare specifier, and Netlify's own bundler breaks on the raw source
+    // (measured on the emulator — `the-netlify-function-ships-pre-bundled.test.ts`). It lands in a
+    // DIRECTORY named after the function, so the bundler's chunks travel with it. The toml still
+    // goes through the write seam.
     const written: Record<string, string> = {}
+    const bundledTo: string[] = []
     await buildNetlify(baseConfig, '/cwd', {
       runNodeBuild: async () => {},
       writeFile: (p, c) => {
@@ -104,10 +110,12 @@ describe('buildNetlify — orchestration', () => {
       },
       ensureDir: () => {},
       readTomlIfExists: () => null,
+      bundleFunction: async (o) => {
+        bundledTo.push(`${o.outDir}/${o.entryFileName}`)
+      },
     })
-    const keys = Object.keys(written)
-    expect(keys.some((k) => k.includes('.netlify/functions/theo.mjs'))).toBe(true)
-    expect(keys.some((k) => k.endsWith('netlify.toml'))).toBe(true)
+    expect(bundledTo.some((k) => k.includes('.netlify/functions/theo/theo.mjs'))).toBe(true)
+    expect(Object.keys(written).some((k) => k.endsWith('netlify.toml'))).toBe(true)
   })
 
   it('preserves existing toml content (EC-2)', async () => {
@@ -119,6 +127,7 @@ describe('buildNetlify — orchestration', () => {
       },
       ensureDir: () => {},
       readTomlIfExists: () => '[build]\n  command = "echo custom"',
+      bundleFunction: async () => {},
     })
     expect(tomlWritten).toContain('echo custom')
     expect(tomlWritten).toContain('/api/*')
@@ -132,6 +141,9 @@ describe('buildNetlify — orchestration', () => {
         ensureDir: () => {},
         readTomlIfExists: () =>
           '[[redirects]]\n  from = "/api/*"\n  to = "/elsewhere"\n  status = 200',
+        // Stubbed although the conflict now fires BEFORE the bundle: leaving it out would make the
+        // case pass for the wrong reason the day the order changes back.
+        bundleFunction: async () => {},
       }),
     ).rejects.toThrow(NetlifyConflictError)
   })

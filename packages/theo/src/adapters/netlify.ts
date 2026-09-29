@@ -10,6 +10,10 @@ import type { SecurityHeadersConfig } from '../core/contracts/security-headers.j
 import { assertServicesUnsupported, readManifest } from '../services/index.js'
 
 import {
+  bundleDeployedFunction,
+  type BundleDeployedFunctionOptions,
+} from './bundle-deployed-function.js'
+import {
   deployedAgentsFragment,
   JSON_NOT_FOUND_RESPONSE,
   scannedFromLoaderCache,
@@ -44,11 +48,34 @@ export class NetlifyConflictError extends Error {
   }
 }
 
+export class NetlifyFunctionsConflictError extends Error {
+  constructor(key: string, declared: string, required: string) {
+    super(
+      `netlify.toml declares \`[functions] ${key} = "${declared}"\`, and this adapter needs ` +
+        `"${required}". Measured on the Netlify emulator: \`directory\` is what makes the generated ` +
+        `function discoverable at all (without it the redirect answers "Function not found"), and ` +
+        `\`node_bundler = "none"\` is what stops Netlify re-bundling a function theokit already ` +
+        `bundled — which produces a SyntaxError. Change the value, or remove the key and let this ` +
+        `adapter write it.`,
+    )
+    this.name = 'NetlifyFunctionsConflictError'
+  }
+}
+
 export interface NetlifyBuildDeps {
   runNodeBuild?: (config: TheoConfig, cwd: string, ctx?: AdapterBuildContext) => Promise<void>
   writeFile?: (path: string, content: string) => void
   ensureDir?: (path: string) => void
   readTomlIfExists?: () => string | null
+  /**
+   * Seam for the bundling step, alongside `runNodeBuild` above.
+   *
+   * The entry cannot be written as source: it imports `theokit/server/scan` and five sibling
+   * sub-paths by bare specifier, and Netlify's own bundler breaks on the result (measured on the
+   * emulator — see `the-netlify-function-ships-pre-bundled.test.ts`). Bundling here rather than
+   * through `writeFile` is what lets the toml then say `node_bundler = "none"`.
+   */
+  bundleFunction?: (options: BundleDeployedFunctionOptions) => Promise<void>
 }
 
 export function renderNetlifyFunction(
@@ -213,6 +240,28 @@ function parseRedirectBlocks(lines: readonly string[]): NetlifyRedirectBlock[] {
   return blocks
 }
 
+/**
+ * The `[functions]` keys this adapter requires, and why each one is not optional.
+ *
+ * `directory` — measured on the Netlify emulator 2026-09-29: without it the CLI scans its default
+ * `netlify/functions/`, finds nothing, and `/api/*` answers `Function not found...` with a 404. The
+ * adapter writes to `.netlify/functions/` deliberately (generated output belongs in an ignored
+ * directory, not in the source tree the project commits), so the location has to be declared.
+ *
+ * `node_bundler` — the entry is already bundled here. Netlify re-bundling it produced
+ * `SyntaxError: Invalid left-hand side in assignment`.
+ */
+const THEO_FUNCTIONS_DIR = '.netlify/functions'
+const THEO_FUNCTION_NAME = 'theo'
+const THEO_FUNCTIONS_KEYS: readonly (readonly [string, string])[] = [
+  ['directory', THEO_FUNCTIONS_DIR],
+  ['node_bundler', 'none'],
+]
+const THEO_FUNCTIONS_TARGET = [
+  '[functions]',
+  ...THEO_FUNCTIONS_KEYS.map(([key, value]) => `  ${key} = "${value}"`),
+].join('\n')
+
 const THEO_REDIRECT_TARGET = [
   '[[redirects]]',
   '  from = "/api/*"',
@@ -275,6 +324,86 @@ function withoutGeneratedHeaders(source: string): string {
   return [...lines.slice(0, start), ...lines.slice(end)].join('\n').replace(/\n{3,}/gu, '\n\n')
 }
 
+/**
+ * Declare the `[functions]` keys this adapter requires, without emitting a second table.
+ *
+ * A duplicate table is a TOML parse error, so this is not tidiness: a project that already declares
+ * `[functions]` for `directory`, `included_files` or `external_node_modules` must keep it and gain
+ * one key. Line-level like the rest of this merge, and for the same reason — no TOML parser
+ * dependency. `[functions."name"]` is a DIFFERENT table and is left alone, which is why the match
+ * is exact rather than a prefix.
+ *
+ * An explicit conflicting value is refused rather than overwritten, on the same argument
+ * `NetlifyConflictError` makes about a `/api/*` redirect pointing elsewhere: it is a deliberate
+ * declaration, and silently replacing it breaks their build for a reason nothing states.
+ */
+/**
+ * Read a TOML scalar exactly as written, with no parser.
+ *
+ * Neither "strip the quotes" nor "cut at the first #" is correct alone: TOML allows an inline
+ * comment after a value, and a `#` INSIDE a quoted value is legal. Stripping quotes alone read
+ * `node_bundler = "none"  # keep` as `none"  # keep` and refused a legal file; cutting at `#` alone
+ * would mangle `directory = "a#b"`. Both cases are asserted, in both directions, in
+ * `the-netlify-function-ships-pre-bundled.test.ts`.
+ */
+function readTomlScalar(raw: string): string {
+  for (const quote of ['"', "'"]) {
+    if (!raw.startsWith(quote)) continue
+    const close = raw.indexOf(quote, 1)
+    return close < 0 ? raw.slice(1) : raw.slice(1, close)
+  }
+  const hash = raw.indexOf('#')
+  return (hash < 0 ? raw : raw.slice(0, hash)).trim()
+}
+
+/**
+ * The value a key carries inside one table's line range, or `null` when the table does not set it.
+ *
+ * Split rather than matched: the rest of this merge is line-level by design, and a regex with `\s*`
+ * either side of a lazy group backtracks (sonarjs/slow-regex) for no gain here. A commented-out
+ * `# node_bundler = …` reads as the key `# node_bundler`, which matches nothing — correct, and free.
+ */
+function declaredIn(
+  lines: readonly string[],
+  from: number,
+  to: number,
+  key: string,
+): string | null {
+  for (let i = from; i < to; i += 1) {
+    const line = lines[i] ?? ''
+    const eq = line.indexOf('=')
+    if (eq < 0 || line.slice(0, eq).trim() !== key) continue
+    return readTomlScalar(line.slice(eq + 1).trim())
+  }
+  return null
+}
+
+function withFunctionsDeclared(source: string): string {
+  const lines = source.split(/\r?\n/)
+  const at = lines.findIndex((line) => line.trimEnd() === '[functions]')
+
+  if (at < 0) {
+    const sep = source.endsWith('\n') ? '' : '\n'
+    return `${source}${sep}\n${THEO_FUNCTIONS_TARGET}\n`
+  }
+
+  let end = at + 1
+  while (end < lines.length && !(lines[end] ?? '').startsWith('[')) end += 1
+
+  const missing: string[] = []
+  for (const [key, required] of THEO_FUNCTIONS_KEYS) {
+    const declared = declaredIn(lines, at + 1, end, key)
+    if (declared === null) {
+      missing.push(`  ${key} = "${required}"`)
+      continue
+    }
+    if (declared !== required) throw new NetlifyFunctionsConflictError(key, declared, required)
+  }
+
+  if (missing.length === 0) return source
+  return [...lines.slice(0, at + 1), ...missing, ...lines.slice(at + 1)].join('\n')
+}
+
 export function mergeNetlifyToml(
   existing: string | null,
   securityHeaders?: SecurityHeadersConfig,
@@ -282,7 +411,7 @@ export function mergeNetlifyToml(
   const headersBlock = renderHeadersBlock(securityHeaders)
 
   if (existing === null || existing.trim().length === 0) {
-    return `${THEO_REDIRECT_TARGET}\n\n${headersBlock}\n`
+    return withFunctionsDeclared(`${THEO_REDIRECT_TARGET}\n\n${headersBlock}\n`)
   }
 
   existing = withoutGeneratedHeaders(existing)
@@ -296,14 +425,49 @@ export function mergeNetlifyToml(
       // The redirect is already there. The headers block is regenerated regardless, because it
       // carries configuration and the redirect does not.
       const sep = existing.endsWith('\n') ? '' : '\n'
-      return `${existing}${sep}\n${headersBlock}\n`
+      return withFunctionsDeclared(`${existing}${sep}\n${headersBlock}\n`)
     }
     throw new NetlifyConflictError(b.from, b.to ?? '(unknown)')
   }
 
   // No conflict — append target block.
   const sep = existing.endsWith('\n') ? '' : '\n'
-  return `${existing}${sep}\n${THEO_REDIRECT_TARGET}\n\n${headersBlock}\n`
+  return withFunctionsDeclared(`${existing}${sep}\n${THEO_REDIRECT_TARGET}\n\n${headersBlock}\n`)
+}
+
+/**
+ * Resolve the build's effective dependencies once.
+ *
+ * Extracted when `buildNetlify` crossed the complexity ceiling after B-339 added a fifth seam. The
+ * defaults are a separate concern from the build's sequence (SRP), and the sequence is the part a
+ * reader comes here to follow.
+ */
+function resolveNetlifyDeps(
+  cwd: string,
+  deps: NetlifyBuildDeps,
+): {
+  runNodeBuild: NonNullable<NetlifyBuildDeps['runNodeBuild']>
+  writeFile: NonNullable<NetlifyBuildDeps['writeFile']>
+  ensureDir: NonNullable<NetlifyBuildDeps['ensureDir']>
+  readTomlIfExists: NonNullable<NetlifyBuildDeps['readTomlIfExists']>
+  bundleFunction: NonNullable<NetlifyBuildDeps['bundleFunction']>
+} {
+  return {
+    runNodeBuild: deps.runNodeBuild ?? nodeAdapter.build.bind(nodeAdapter),
+    writeFile:
+      deps.writeFile ??
+      ((path, content) => {
+        writeFileSync(path, content)
+      }),
+    ensureDir: deps.ensureDir ?? ((path: string) => mkdirSync(path, { recursive: true })),
+    readTomlIfExists:
+      deps.readTomlIfExists ??
+      (() => {
+        const path = resolve(cwd, 'netlify.toml')
+        return existsSync(path) ? readFileSync(path, 'utf-8') : null
+      }),
+    bundleFunction: deps.bundleFunction ?? bundleDeployedFunction,
+  }
 }
 
 export async function buildNetlify(
@@ -315,32 +479,26 @@ export async function buildNetlify(
   // Wave 2 (T2.2) — reject polyglot services on this adapter.
   assertServicesUnsupported('netlify', readManifest(cwd))
 
-  const runNodeBuild = deps.runNodeBuild ?? nodeAdapter.build.bind(nodeAdapter)
+  const { runNodeBuild, writeFile, ensureDir, readTomlIfExists, bundleFunction } =
+    resolveNetlifyDeps(cwd, deps)
+
+  const merged = mergeNetlifyToml(readTomlIfExists(), config.security?.headers)
+
   await runNodeBuild(config, cwd, ctx)
 
-  const ensureDir = deps.ensureDir ?? ((p: string) => mkdirSync(p, { recursive: true }))
-  const writeFile =
-    deps.writeFile ??
-    ((p, c) => {
-      writeFileSync(p, c)
-    })
-  const readTomlIfExists =
-    deps.readTomlIfExists ??
-    (() => {
-      const p = resolve(cwd, 'netlify.toml')
-      return existsSync(p) ? readFileSync(p, 'utf-8') : null
-    })
-
-  // B-338 — scanned on the BUILD machine, like cloudflare and vercel. An absent scanner emits a
-  // function with NO routes rather than falling back to a runtime scan: cloudflare's own comment says
-  // it, and this adapter was the fallback.
   const scanned = ctx?.scanRoutes?.(config.serverDir)
 
-  const fnDir = resolve(cwd, '.netlify/functions')
+  const fnDir = resolve(cwd, THEO_FUNCTIONS_DIR)
   ensureDir(fnDir)
-  writeFile(
-    resolve(fnDir, 'theo.mjs'),
-    renderNetlifyFunction({
+  // B-339 — bundled, not written as source. The entry imports `theokit/server/scan` and five
+  // sibling sub-paths by bare specifier; Netlify's own bundler produced a `ReferenceError` on
+  // an identifier that was base64 of the source, and re-bundled an already-bundled file into a
+  // `SyntaxError`. Measured on the emulator: bundled here plus `node_bundler = "none"` below,
+  // `GET /api/health` answers 200. Cloudflare and Vercel already bundle; this was the target
+  // shipping raw source and trusting the platform to resolve it.
+  await bundleFunction({
+    projectRoot: cwd,
+    entrySource: renderNetlifyFunction({
       routes: scanned?.routes,
       securityHeaders: config.security?.headers,
       // B-235 — pillar (a): the option existed and no build passed it, so a project with a
@@ -358,14 +516,20 @@ export async function buildNetlify(
       // #425 — a selector, not a transformer, so it rides as a literal like the values above.
       serialization: config.serialization,
     }),
-  )
+    stagePath: '.theokit/netlify/entry.mjs',
+    // A DIRECTORY, not a bare file. The bundler code-splits: this project emitted `theo.mjs` plus
+    // 40 chunks under `assets/`, which `theo.mjs` imports. Netlify zips a directory-shaped function
+    // whole, so the chunks travel; a bare `theo.mjs` with a sibling `assets/` loads in `netlify dev`
+    // (it reads from disk) and would reach a deploy without them. Vercel already uses a dedicated
+    // `functions/api.func` for the same reason.
+    outDir: resolve(fnDir, THEO_FUNCTION_NAME),
+    entryFileName: `${THEO_FUNCTION_NAME}.mjs`,
+  })
 
-  const existingToml = readTomlIfExists()
-  const merged = mergeNetlifyToml(existingToml, config.security?.headers)
   writeFile(resolve(cwd, 'netlify.toml'), merged)
 
   // eslint-disable-next-line no-console -- CLI build progress
-  console.log('\n  ✓ Netlify output → .netlify/functions/theo.mjs + netlify.toml')
+  console.log(`\n  ✓ Netlify output → ${THEO_FUNCTIONS_DIR}/${THEO_FUNCTION_NAME}/ + netlify.toml`)
   // eslint-disable-next-line no-console -- CLI build progress
   console.log(
     `${describeDeployedSecurityHeaders({
