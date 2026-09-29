@@ -8,6 +8,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- The AWS Lambda handler runs where it is uploaded. Two causes, and the second was invisible until
+  the first was fixed. The handler was written as source importing five `theokit/…` sub-paths by bare
+  specifier, and nothing resolves those for an uploaded function: copied to a directory with no
+  `node_modules` it failed with `ERR_MODULE_NOT_FOUND: Cannot find package 'theokit'`. Bundled, it
+  loaded and answered **404** for `GET /api/health`, because it resolved its routes and agents with a
+  runtime `scanServerRoutes` — a `readdirSync` over a source tree an upload does not carry, and where
+  one IS carried the route files are TypeScript a plain Node runtime cannot compile. Both are baked
+  from the build's scan now, and the handler is bundled: invoked from such a directory it answers 200
+  with `{"status":"ok",...,"framework":"TheoKit"}` and the trace header echoed. The output goes into
+  `.theokit/aws/` itself rather than a subdirectory, because Lambda's handler is `<file>.<export>` and
+  the operator zips the directory. (#B-342, #B-344)
+
+- `buildAwsLambda` no longer accepts a `writeEntry` dependency it cannot use. Bundling removed the
+  raw write, so there was nothing for a caller to intercept, and a dependency a build accepts and
+  ignores is the same defect as a renderer option it accepts and ignores. (#B-344)
+
 - The Netlify agents path answers at all. The emitted entry carried
   `if (!loaderCache) loaderCache = createProductionLoader()` and three more reads of `loaderCache`,
   and its host declared neither name — a `ReferenceError` on the first `/api/agents/<name>` request.

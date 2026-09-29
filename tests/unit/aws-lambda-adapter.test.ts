@@ -110,29 +110,36 @@ describe('renderAwsLambdaEntry — template', () => {
 })
 
 describe('buildAwsLambda — orchestration', () => {
-  it('runs node build before writing the handler', async () => {
+  it('runs node build before bundling the handler', async () => {
+    // B-344 — the handler is BUNDLED now, not written as source: it imports five `theokit/…`
+    // sub-paths by bare specifier and nothing resolves them for an uploaded Lambda. Measured by
+    // copying the written file to a directory with no `node_modules`:
+    // `ERR_MODULE_NOT_FOUND: Cannot find package 'theokit'`.
     const calls: string[] = []
     await buildAwsLambda(baseConfig, '/cwd', {
       runNodeBuild: async () => {
         calls.push('node-build')
       },
-      writeEntry: () => {
-        calls.push('write')
+      bundleFunction: async () => {
+        calls.push('bundle')
       },
       ensureDir: () => {},
     })
-    expect(calls).toEqual(['node-build', 'write'])
+    expect(calls).toEqual(['node-build', 'bundle'])
   })
 
-  it('writes handler.mjs in .theokit/aws/', async () => {
-    let path = ''
+  it('emits handler.mjs in .theokit/aws/', async () => {
+    let target = ''
     await buildAwsLambda(baseConfig, '/test', {
       runNodeBuild: async () => {},
-      writeEntry: (p) => {
-        path = p
+      bundleFunction: async (o) => {
+        target = `${o.outDir}/${o.entryFileName}`
       },
       ensureDir: () => {},
     })
-    expect(path).toContain('/.theokit/aws/handler.mjs')
+    // The directory itself, not a subdirectory: Lambda's handler is `<file>.<export>` and the
+    // operator zips the directory, so the bundler's chunks travel without a per-function folder.
+    // Netlify needed one because it treats each file in its functions directory as a function.
+    expect(target).toContain('/.theokit/aws/handler.mjs')
   })
 })

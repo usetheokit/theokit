@@ -1,28 +1,25 @@
 /* eslint-disable security/detect-non-literal-fs-filename --
  * AWS Lambda adapter. Writes to `cwd/.theokit/lambda/`. Build-time tool.
  */
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import type { TheoConfig } from '../config/schema.js'
 import { assertServicesUnsupported, readManifest } from '../services/index.js'
 
 import {
-  deployedAgentsFragment,
-  scannedFromLoaderCache,
-  JSON_NOT_FOUND_RESPONSE,
-} from './deployed-agents.js'
+  bundleDeployedFunction,
+  type BundleDeployedFunctionOptions,
+} from './bundle-deployed-function.js'
+import { deployedAgentsFragment, JSON_NOT_FOUND_RESPONSE } from './deployed-agents.js'
+import { renderBakedRoutes, routeRuntimeLines, type BakedRoute } from './deployed-baked-routes.js'
 import { deployedEntryPreamble } from './deployed-preamble.js'
 import {
   deployedRateLimitFragment,
   rateLimitCheckFragment,
   type DeployedRateLimitOptions,
 } from './deployed-rate-limit.js'
-import {
-  agentsDirLiteral,
-  deployedRuntimeConfigFragment,
-  serverDirLiteral,
-} from './deployed-runtime-config.js'
+import { deployedRuntimeConfigFragment, serverDirLiteral } from './deployed-runtime-config.js'
 import { deployedTraceFragment } from './deployed-trace.js'
 import { nodeAdapter } from './node.js'
 import { describeDeployedSecurityHeaders } from './security-headers.js'
@@ -30,7 +27,22 @@ import type { AdapterBuildContext, DeployAdapter, DeployedEntryOptions } from '.
 
 export interface AwsLambdaBuildDeps {
   runNodeBuild?: (config: TheoConfig, cwd: string, ctx?: AdapterBuildContext) => Promise<void>
-  writeEntry?: (path: string, content: string) => void
+  /**
+   * Seam for the bundling step, alongside `runNodeBuild`.
+   *
+   * The entry imports five `theokit/…` sub-paths by bare specifier, and nothing resolves them for
+   * an uploaded Lambda: measured 2026-09-29, copying the written handler to a directory with no
+   * `node_modules` gave `ERR_MODULE_NOT_FOUND: Cannot find package 'theokit'`. ADR 0020 names this
+   * target as needing the same call Vercel got.
+   */
+  bundleFunction?: (options: BundleDeployedFunctionOptions) => Promise<void>
+  /**
+   * RETIRED by B-344, kept out rather than left accepting a value nothing reads.
+   *
+   * The handler is bundled now, so there is no raw write for a caller to intercept. A dep a build
+   * accepts and ignores is the same defect as a renderer option it accepts and ignores — see the
+   * `agentsDir` note in `netlify.ts`. Nothing in this repository stubbed it.
+   */
   ensureDir?: (path: string) => void
 }
 
@@ -213,8 +225,6 @@ function awsLambdaHandlerFragment(
     `    )`,
     `  }`,
     ``,
-    `  if (!routesCache) routesCache = scanServerRoutes(serverDir)`,
-    `  if (!loaderCache) loaderCache = createProductionLoader()`,
     ``,
     // B-235 — hoisted above the agents branch, which names `request` like every other host's.
     // It was declared below `matchRoute`, and an agent path never reaches a route match. Building
@@ -225,39 +235,68 @@ function awsLambdaHandlerFragment(
     ``,
     ...agentsBranch,
     ``,
-    `  const match = matchRoute(path, routesCache)`,
+    `  const match = matchRoute(path, routes)`,
     `  if (!match) return ${JSON_NOT_FOUND_RESPONSE}`,
     ``,
     `  const { req, res, toResponse } = createWebShim(request)`,
     ...deployedTraceFragment('request', '  '),
     `  const method = request.method.toUpperCase()`,
-    `  return toResponse(executeRoute({ route: match.route, method, params: match.params, req, res, loadModule: loaderCache, serverDir, requestId, ...CSRF_CONFIG, ${runtimeSpread} }))`,
+    `  return toResponse(executeRoute({ route: match.route, method, params: match.params, req, res, loadModule, serverDir, requestId, ...CSRF_CONFIG, ${runtimeSpread} }))`,
     `}`,
   ]
 }
 
-export function renderAwsLambdaEntry(opts: DeployedEntryOptions = {}): string {
+export function renderAwsLambdaEntry(
+  opts: DeployedEntryOptions & {
+    /**
+     * The routes, baked at build time (B-344).
+     *
+     * The entry used to resolve them with a runtime `scanServerRoutes` — a `readdirSync` over
+     * `serverDir`. An uploaded Lambda has no source tree, so every `/api/*` answered its own JSON 404:
+     * measured 2026-09-29 by bundling this entry, copying it to a directory with no `node_modules`,
+     * importing it and invoking it with a synthetic API Gateway v2 event. Where a tree IS uploaded the
+     * route files are TypeScript, which a plain Node runtime cannot compile — the `SyntaxError`
+     * Netlify answered with before B-338. The fix #369 made for Cloudflare, B-319 for Vercel and B-338
+     * for Netlify, on the fifth target, through the same emitter so the five cannot drift.
+     */
+    routes?: readonly BakedRoute[]
+    /** The agents, for the same reason and from the same scan. */
+    agents?: readonly { filePath: string; agentPath: string; name: string }[]
+    contextModule?: string
+  } = {},
+): string {
   const runtimeConfig = deployedRuntimeConfigFragment(opts)
+  const { routeImports, routeModuleEntries, routeTableEntries } = renderBakedRoutes(
+    opts.routes ?? [],
+  )
   // B-235. The entry already builds a Web `Request` — `eventV2ToRequest(event)`, for the CORS
   // matcher — so the shape this branch needs was here all along. `path` rather than `url.pathname`
   // because that is the name this host reads the route from.
-  const agentsFragment = deployedAgentsFragment(scannedFromLoaderCache(agentsDirLiteral(opts)), {
-    pathname: 'path',
-    notFound: JSON_NOT_FOUND_RESPONSE,
-  })
+  // B-344 — baked, for the reason the routes are: an uploaded function has no source tree, so a
+  // runtime `scanAgents` finds nothing and `createProductionLoader()` would import a path that was
+  // never shipped. Vercel's own note says it best — a fallback "would preserve a behaviour that is
+  // broken by construction: an entry that scans, finds nothing, and answers 404 while looking like it
+  // tried."
+  const agentsFragment = deployedAgentsFragment(
+    { kind: 'baked', agents: opts.agents ?? [], contextModule: opts.contextModule },
+    {
+      pathname: 'path',
+      notFound: JSON_NOT_FOUND_RESPONSE,
+    },
+  )
   return [
     `// Generated by Theo — AWS Lambda Adapter`,
     `// Use with API Gateway HTTP API v2 (default).`,
     ``,
     `import { resolve } from 'node:path'`,
-    `import { scanServerRoutes, matchRoute, createProductionLoader } from 'theokit/server/scan'\nimport { executeRoute, extractTraceIdFromRequest, TRACE_HEADER, createCorsWebHandler } from 'theokit/server/http'`,
+    `import { matchRoute, compilePattern } from 'theokit/server/scan'\nimport { executeRoute, extractTraceIdFromRequest, TRACE_HEADER, createCorsWebHandler } from 'theokit/server/http'`,
+    ...routeImports,
     `import { createWebShim } from 'theokit/adapters/web-shim'`,
     `import { buildSecurityHeaders, withSecurityHeaders } from 'theokit/adapters/security-headers'`,
     ``,
     `const cwd = process.cwd()`,
     `const serverDir = resolve(cwd, ${serverDirLiteral(opts)})`,
-    `let routesCache = null`,
-    `let loaderCache = null`,
+    ...routeRuntimeLines(routeModuleEntries, routeTableEntries, TARGET),
     ``,
     `// #410 — the security baseline \`theokit start\` puts on every response,`,
     `// carried here as a literal because the deployed function has no`,
@@ -296,12 +335,32 @@ export function renderAwsLambdaEntry(opts: DeployedEntryOptions = {}): string {
   ].join('\n')
 }
 
+/**
+ * Resolve the build's effective dependencies once.
+ *
+ * Extracted when `buildAwsLambda` crossed the complexity ceiling after B-344 added the bundling
+ * seam. The defaults are a separate concern from the build's sequence (SRP), and the sequence is
+ * the part a reader comes here to follow. Same extraction as `resolveNetlifyDeps`.
+ */
+function resolveAwsLambdaDeps(deps: AwsLambdaBuildDeps): {
+  runNodeBuild: NonNullable<AwsLambdaBuildDeps['runNodeBuild']>
+  bundleFunction: NonNullable<AwsLambdaBuildDeps['bundleFunction']>
+  ensureDir: NonNullable<AwsLambdaBuildDeps['ensureDir']>
+} {
+  return {
+    runNodeBuild: deps.runNodeBuild ?? nodeAdapter.build.bind(nodeAdapter),
+    bundleFunction: deps.bundleFunction ?? bundleDeployedFunction,
+    ensureDir: deps.ensureDir ?? ((path: string) => mkdirSync(path, { recursive: true })),
+  }
+}
+
 export async function buildAwsLambda(
   config: TheoConfig,
   cwd: string,
   deps: AwsLambdaBuildDeps = {},
   ctx?: AdapterBuildContext,
 ): Promise<void> {
+  const { runNodeBuild, bundleFunction, ensureDir } = resolveAwsLambdaDeps(deps)
   // Wave 2 (T2.2) — reject polyglot services on this adapter.
   assertServicesUnsupported('aws-lambda', readManifest(cwd))
 
@@ -316,14 +375,20 @@ export async function buildAwsLambda(
     assertStreamingSupported(config, awsLambdaAdapter, 'aws-lambda')
   }
 
-  const runNodeBuild = deps.runNodeBuild ?? nodeAdapter.build.bind(nodeAdapter)
   await runNodeBuild(config, cwd, ctx)
 
   const outputDir = resolve(cwd, '.theokit/aws')
-  const ensureDir = deps.ensureDir ?? ((p: string) => mkdirSync(p, { recursive: true }))
   ensureDir(outputDir)
 
+  // B-344 — scanned on the BUILD machine, like cloudflare, vercel and netlify. An absent scanner
+  // emits an entry with NO routes rather than falling back to a runtime scan: that fallback is what
+  // answered 404 from a bundle with no source tree.
+  const scanned = ctx?.scanRoutes?.(config.serverDir)
+
   const entry = renderAwsLambdaEntry({
+    routes: scanned?.routes,
+    agents: scanned?.agents,
+    contextModule: scanned?.contextModule,
     securityHeaders: config.security?.headers,
     // B-315 — the same shape as the B-235 note below, one option over: this build never passed
     // `serverDir`, so a project declaring `src/server` got an entry resolving `server`.
@@ -338,12 +403,17 @@ export async function buildAwsLambda(
     // #425 — a selector, not a transformer, so it rides as a literal like the values above.
     serialization: config.serialization,
   })
-  const write =
-    deps.writeEntry ??
-    ((p, c) => {
-      writeFileSync(p, c)
-    })
-  write(resolve(outputDir, 'handler.mjs'), entry)
+  // B-344 — bundled, not written as source. Unlike netlify the output goes into the directory
+  // itself rather than a subdirectory: Lambda's handler is `<file>.<export>` and the operator zips
+  // the directory, so the bundler's chunks travel without a per-function folder. Netlify needed one
+  // because its platform treats each file in the functions directory as a separate function.
+  await bundleFunction({
+    projectRoot: cwd,
+    entrySource: entry,
+    stagePath: '.theokit/aws/handler.entry.mjs',
+    outDir: outputDir,
+    entryFileName: 'handler.mjs',
+  })
 
   // eslint-disable-next-line no-console -- CLI build progress
   console.log('\n  ✓ AWS Lambda output → .theokit/aws/handler.mjs')

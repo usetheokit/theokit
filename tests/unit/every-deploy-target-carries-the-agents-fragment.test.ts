@@ -50,7 +50,11 @@ const TARGETS = [
   // the host had stopped declaring — a ReferenceError on the first /api/agents/<name> request, found
   // by `a-generated-entry-declares-every-identifier.test.ts`.
   ['netlify', () => renderNetlifyFunction({ agents: AGENTS })],
-  ['aws-lambda', () => renderAwsLambdaEntry()],
+  // B-344 — given its agents for the reason the two rows above give, on the fifth target. Measured by
+  // bundling this entry, copying it to a directory with no `node_modules` and INVOKING it with a
+  // synthetic API Gateway v2 event: it loaded and answered 404, because the runtime `scanServerRoutes`
+  // had no source tree. It bakes both routes and agents now.
+  ['aws-lambda', () => renderAwsLambdaEntry({ agents: AGENTS })],
 ] as const
 
 describe('every deploy target carries the agents fragment (B-235)', () => {

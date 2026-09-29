@@ -19,7 +19,7 @@
  *     adapter       uses scannedFromLoaderCache   emits `const cwd`
  *     vercel        yes                           NO        <- the defect
  *     netlify       yes                           yes    (until B-339: it bakes now, like vercel)
- *     aws-lambda    yes                           yes
+ *     aws-lambda    yes                           yes    (until B-344: it bakes now, like the two above)
  *     deno-deploy   yes                           yes
  *     bun           no (names its loader differently, by decision)
  *     cloudflare    no (bakes its agents, #367)
@@ -105,10 +105,18 @@ describe('a generated entry declares every name it uses', () => {
     // B-319: the target began BUNDLING, so a runtime `scanAgents` has no source tree to read and its
     // agents are baked from the build's scan instead. This case failing is what surfaced the change
     // rather than letting the population shrink in silence — which is the whole reason it counts.
-    expect(SCANNERS.length).toBeGreaterThanOrEqual(2)
+    // The population is SHRINKING by design, and that is worth stating rather than hiding behind a
+    // number: every target that began bundling had to bake its agents, because a bundle carries no
+    // source tree for a runtime scan to read. vercel left in B-319, netlify in B-339, aws-lambda in
+    // B-344. `deno-deploy` is what remains — it runs from a filesystem it can read.
+    //
+    // When this reaches ZERO the file should be RETIRED, not relaxed to `>= 0`: the `cwd` pairing it
+    // asserts is a property of runtime scanners, and a suite full of green no-ops is worse than one
+    // file fewer.
+    expect(SCANNERS.length).toBeGreaterThanOrEqual(1)
+    expect(SCANNERS.map(([n]) => n)).toEqual(['deno-deploy'])
     expect(SCANNERS.map(([n]) => n)).not.toContain('vercel')
     expect(SCANNERS.map(([n]) => n)).not.toContain('netlify')
-    expect(SCANNERS.map(([n]) => n)).toEqual(expect.arrayContaining(['aws-lambda', 'deno-deploy']))
     expect(ENTRIES.map(([n]) => n)).toContain('vercel')
     expect(ENTRIES.map(([n]) => n)).toContain('netlify')
   })
