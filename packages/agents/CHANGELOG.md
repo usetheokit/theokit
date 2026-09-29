@@ -1,5 +1,58 @@
 # @theokit/agents
 
+## 15.0.2
+
+### Patch Changes
+
+- 2efbaa0: The stream a mounted agent answers with is pulled, not pushed
+
+  `streamAgentResponse` built its body with `new ReadableStream({ async start })`. That runs eagerly and
+  leaves a floating promise: Node drains the microtask queue after the handler returns, and workerd tears
+  down pending work — so the continuation after an `await` is not guaranteed to run, and the two
+  operations at the end of the loop are the terminal `[DONE]` frame and `controller.close()`. A client
+  keys its terminal state on that frame.
+
+  The same rewrite landed in `server/agent/durable-ui-message-stream-response.ts` for a teardown measured
+  on a deployed worker, and did not reach this encoder — so the pattern survived one module away from its
+  own fix. `pull` is demand-driven, behaves identically across Node, workerd, Deno and Bun, and brings
+  backpressure — one frame per pull rather than a whole turn buffered in the controller — and
+  cancellation, which the eager shape could not express at all.
+
+  `cancel` receives a reason, and it is neither forwarded nor dropped. It cannot be forwarded: the chunk
+  generator's `TReturn` is `void`, so `return()` accepts nothing else, and a cast would be a lie about
+  the type — the sibling encoder appears to forward one only because it holds a loosely typed
+  `AsyncIterable`, where the value reaches nobody either. It is recorded on the `THEOKIT_DEBUG` channel
+  instead, because a turn released before it finished is a fact an operator wants, while a client
+  navigating away is normal and must not write to stdout by default.
+
+  The guard is an assertion on the declaration, because the behavioural one cannot be written in-process
+  and was tried first: "nothing is consumed before the body is read" PASSES with the defect in place.
+  `async start` is invoked during construction and runs synchronously only to its first suspension, and
+  that suspension is the first `.next()` of the chunk generator, which yields its opening chunk before
+  touching the source. A test that passes before the fix guards nothing.
+
+- 74e5db8: A flattened SDK error carries its stack for the server logger, so a failing turn names where it failed
+
+  `sdkErrorEvent` is the only place the thrown `Error` object is still alive — everything downstream sees
+  the flattened `{ type, code, message, retryable }` — and it dropped `stack`. So the one field naming
+  WHERE a turn failed was destroyed at the boundary, and an operator was left with a message.
+
+  Measured on a deployed Cloudflare worker, 2026-09-28. A companion fix had just made the masked message
+  reachable, and the message alone was not enough to act on:
+
+      [theokit] agent turn failed (SDK_ERROR): [unenv] fs.readFile is not implemented yet!
+
+  That is a Node builtin refusing on Workers, and `readFile` had six plausible call sites in the
+  dependency. Without a stack the next step is guessing which one, and a guess costs a deploy per
+  candidate.
+
+  It does not reach the wire. A stack names files, directories and sometimes an argument, which is
+  exactly what `MASK_ERROR` exists to keep from a browser — so the field is carried for the server
+  logger, and `errorChunks` constructs each chunk explicitly rather than spreading the event, which
+  makes that guarantee structural rather than a habit. A non-`Error` carries no `stack` key at all,
+  rather than the string `undefined` that a template would produce and a log would print as if it meant
+  something.
+
 ## 15.0.1
 
 ### Patch Changes
