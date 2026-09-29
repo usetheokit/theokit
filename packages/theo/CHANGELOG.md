@@ -1,5 +1,274 @@
 # theo
 
+## 0.74.0
+
+### Minor Changes
+
+- cd5967f: `ssrStreaming: true` now reaches the build, so a declared streaming config actually streams
+
+  A project declaring `ssrStreaming: true` in `theo.config.ts` was served the fully buffered document:
+  nothing reached the browser until the render finished, so the shell could not paint early and TTFB
+  tracked the slowest Suspense boundary in the page.
+
+  The flag was accepted by the schema and dropped one layer down. `AdapterBuildContext.makeVitePlugins`
+  declared its options as `{ root, ssr }` with no field for streaming, so the node adapter could not
+  pass it, and the Vite plugin evaluated `options.ssrStreaming === true` on an `undefined` — emitting
+  the buffering server entry. That entry exports no streaming renderer, so the production server found
+  no streaming path to take and used the synchronous one on every request.
+
+  Measured on a released build, reading the raw TCP socket on a route with a Suspense boundary that
+  resolves after 800ms:
+
+  |                    | before             | after                    |
+  | ------------------ | ------------------ | ------------------------ |
+  | socket arrivals    | 1                  | 3                        |
+  | time to first byte | 815ms              | 12ms                     |
+  | first arrival      | the whole document | the shell, with `<head>` |
+
+  **Behaviour changes for apps that already declared the flag**, which is why this is a minor rather
+  than a patch: the response now arrives in several chunks instead of one, and the hydration script is
+  written after the streamed body rather than inside a single buffered write. An app that declared
+  `ssrStreaming: true` and asserted on a whole-document snapshot will see a different shape — the shape
+  the flag always promised.
+
+  Apps that do not declare the flag are unaffected: the buffering entry remains the default, and a
+  build that streams when nobody asked is refused by the same tests that cover this fix.
+
+- 60c4dab: The Vercel target renders the document, so an SSR project stops being served an empty shell
+
+  `renderVercelConfigJson` emitted, in order: a header rule on `/(.*)` with `continue: true`;
+  `/api/(.*) -> /api`; `{ handle: 'filesystem' }`; `/(.*) -> /index.html`. Nothing routed a page request to
+  the function, so `/` was Vercel's static host serving `index.html` — an empty `<div id="root">` —
+  whatever the project declared, while the build printed `✓ Build complete → vercel (SSR)`.
+
+  The function could not have answered if it had been asked: `renderStreamingWeb`, `htmlHead` and
+  `injectModulePreloads` each appeared ZERO times in the Vercel adapter, against six, five and one in the
+  Cloudflare one.
+
+  Three things changed. The fallback route reaches the function when the project renders (`{ handle:
+'filesystem' }` still precedes it, so every real file is still served by the platform). The emitted entry
+  grew a document branch that calls the app's own SSR entry — the same module the Cloudflare worker imports,
+  inlined by the function bundler. And the build now reads the client shell and passes it, which is the step
+  `B-185`, `B-235`, `B-312` and `B-315` each had to fix one target at a time: the option existing and no
+  build passing it.
+
+  The branch is scoped OUTSIDE `/api/`: a path under that prefix which matches no route is a routing miss
+  and owes a JSON 404, not a document. A static project emits no branch at all and keeps the shell.
+
+  Measured by executing the built function, before and after: `/` went from `404, 9 bytes, text/plain` to
+  `200, 14827 bytes, text/html` with `<head>`, `<div id="root">` and the CSP; `/dashboard` likewise;
+  `/api/health` unchanged.
+
+- 809f023: The generated `wrangler.toml` carries no compensation for a dependency's defect; the requirement is declared instead
+
+  From 2026-09-26 the config carried `[define] "import.meta.url" = "\"file:///worker\""`. Cloudflare executes
+  the top-level module during validation, so a dependency that resolves a path at load time refused the whole
+  upload — every deploy of a project declaring an agent was rejected with code 10021, because the transitive
+  `@theokit/sdk` did exactly that in `internal/providers/catalog-loader.ts`.
+
+  It was never a hidden lie: the emitted comment said what it was and what it was not. What it WAS is
+  unconditional, permanent, and a substitution — so the NEXT dependency with the same vice would be covered
+  here in silence, and its symptom would be a wrong path rather than a refusal.
+
+  The cause is fixed upstream and published as `@theokit/sdk@5.9.2`. Measured on the published tarball: 254
+  executable files in `dist`, and ZERO resolve a path at module scope — the five remaining textual hits are
+  two source maps and three `.d.ts` declarations, none executed.
+
+  So the `peerDependencies` floor moves to `^5.9.2`, and the `create-theokit` template pin with it. **That is
+  the trade**: a declared dependency is the honest form of "this needs a fixed SDK"; a `define` that makes a
+  broken one appear to work is the form that hides it. A consumer resolving below 5.9.2 now fails at install
+  with a range it can read, rather than at deploy with `code 10021`.
+
+  `@theokit/agents` and `@theokit/presenter` keep `^5.3.0` deliberately. `agents` carries its own guard
+  forbidding a raise past 5.4, with a measured reason — the features beyond it already throw a typed error
+  naming the version, so raising would strand consumers to duplicate a refusal that announces itself. It does
+  not weaken the guarantee: a real install must satisfy BOTH ranges, and `^5.9.2 ∩ ^5.3.0` is `^5.9.2`.
+
+  Validated end to end on workerd with the published package and no compensation: the worker loads, `/`
+  returns a 14889-byte document, and an agent turn streams a real reply in 1.6s and terminates.
+
+### Patch Changes
+
+- 721157c: The Bun entry's rate-limit import is preceded by a newline, so a project that declares a limit builds
+
+  `renderBunEntry` emits three imports where it used to emit one, and the third is conditional on the
+  project declaring `rateLimit`. That fragment sat in a nested double-quoted string inside a template
+  literal, where an escaped backslash is a backslash — so the import was joined to the one before it by
+  two characters, a backslash and an `n`, instead of by a line break. Bun refused the entry:
+
+      SyntaxError: Invalid or unexpected token
+
+  Every entry in the parse test, and the scaffold used to verify deploys, declare no rate limit, so the
+  whole conditional family had never been handed to a parser. The existing unit test renders the
+  fragment and asserts on the STRING, which a module carrying a literal backslash-n satisfies perfectly.
+
+  `tests/unit/adapter-entry-parses.test.ts` now parses a rate-limit variant for all six targets rather
+  than for the one that broke. The fragment has the same shape everywhere, and covering the instance
+  would leave the class open — which is how this arrived, one target at a time.
+
+- 1306d64: A deployed agent answers on AWS Lambda, instead of 502
+
+  The generated agents fragment emitted the literal `baseUrl: url.origin` — an unwritten contract that
+  the host declares a `URL` object named `url` in the scope the fragment lands in. `vercel` and
+  `netlify` satisfy it; `aws-lambda` failed it twice over: its `url` is a STRING built from the event
+  headers, and it lives in `eventV2ToRequest` while the fragment lands in `routeRequest`.
+
+  Measured on a real Function URL: `/api/health` answered 200 while `/api/agents/chat` answered 502,
+  CloudWatch naming `ReferenceError: url is not defined at routeRequest (handler.mjs:45990:16)`. After
+  the fix, the same URL streams — `delta:"P"` then `delta:"ONG"` — in 2.16s.
+
+  The base-URL expression is now a parameter of the fragment, the way the request path already was, so
+  a host states what it has instead of being assumed to have it. A target whose entry does not declare
+  a `URL` named `url` passes its own expression; nothing changes for the two that did.
+
+- cab8d8b: A route whose last segment contains a dot is rendered, not handed to the asset handler
+
+  The Cloudflare worker owns `/` — `run_worker_first` is what stops the asset handler answering the
+  document — so it also receives `/robots.txt` and `/logo.png`, and rendering SSR for those would answer
+  a text file with HTML. The discriminator was an extension on the last segment, and that DECIDED: a dot
+  meant "static file".
+
+  It is a guess about paths, and it is wrong for real routes. `/users/john.doe`, `/v1.2/docs` and
+  `/reports/2026.q3` were each handed to a handler that does not have them, and with
+  `not_found_handling = "none"` that is a 404 for a page the app renders.
+
+  The extension is now a pre-filter rather than the decision: a miss falls through to SSR, so a wrong
+  guess costs one local binding lookup instead of the response. Keeping the pre-filter is what keeps that
+  lookup off every ordinary page request — `/dashboard` never touches the binding, which a
+  "always ask first" version would have changed.
+
+  Still uncovered, and stated rather than implied: a static file with no extension, such as a
+  `public/CNAME`. The pre-filter never asks for it, so it renders as a document. That is the
+  pre-existing behaviour and the rarer of the two directions.
+
+  The test stub for the `ASSETS` binding now answers 404 for a path it does not have, which is what the
+  real one does under `not_found_handling = "none"`. A stub that answered 200 for everything could not
+  tell a served asset from a fallthrough.
+
+- 5314c92: An ordinary project stops being warned that every agent route will 404
+
+  A nested-layout project with no agents — the layout `create-theokit` scaffolds — was told, on every dev
+  start and every build that reached this path:
+
+      [theokit] agentsDir "agents" resolves to "<root>/src/agents", which is not a directory, so NO agents
+      were found and every /api/agents/* route will 404.
+
+  About routes it does not have, and a directory it never configured. Two defects in one line.
+
+  `generateManifest` defaulted `projectRoot` to `dirname(serverDir)` and `agentsDir` to `'agents'`. The pair
+  is correct exactly when the layout is flat, so the guess was `<root>/src` and wrong by one level — and the
+  default value made `scanAgents` believe a directory HAD been configured. That layer reports a configured
+  directory resolving to nothing and stays silent when nothing was configured; its docblock says why in its
+  own words, that "a default erases the difference between 'nobody configured this' and 'somebody configured
+  agents'". This erased it. A parameter default also applies to an explicit `undefined`, so passing the
+  absence through was impossible while the default existed.
+
+  Both parameters are now supplied by every caller: `projectRoot` is required, and `agentsDir` is optional
+  WITHOUT a default so the absence reaches the layer that decided to stay quiet.
+
+  `loadManifest` in the same file had the same default, and it is the one theokit#871 was about — `Cannot
+find module '<root>/src/src/server/agents/chat.ts'`, a 500 on every agent route of a freshly scaffolded
+  app. That was fixed by passing the root at its one production call site and the default stayed behind, so
+  any caller omitting it re-created the bug. It is required now too; its production caller was already
+  correct, so nothing else changed.
+
+  Neither function is public API — neither appears in any `.d.ts` this package publishes — so no consumer
+  signature moved.
+
+- 108579a: A build that refuses no longer empties the output first.
+
+  `cleanOutDir` ran at the top of `buildCommand`, above even the check that the target exists. Measured on
+  a real project: a successful build leaves 302 files in `.theokit/client/assets`, and
+
+      theokit build --target not-a-target
+      ✗ Invalid build target "not-a-target". Available targets: node, vercel, cloudflare, …
+
+  left 0. One mistyped character cost a working build, and nothing in the error said anything was destroyed.
+
+  The same order defeated two refusals that are decidable from the target and the config alone: the
+  `aws-lambda` streaming refusal, and `assertRateLimitEnforceable` — whose own comment claimed the
+  combination was "refused by name, BEFORE the build writes anything" while being reached a hundred lines
+  after the clean. Three instances of one cause, and the cause was the order rather than any of the checks.
+
+  Both messages survive unchanged. The `aws-lambda` refusal still explains that the Lambda v2 result object
+  carries the body as a string and that `awslambda.streamifyResponse` plus a Function URL in
+  RESPONSE_STREAM invoke mode would be needed — the adapter declares that detail now, so the check could
+  move without the guidance moving with it. The list of streaming alternatives is derived from the registry
+  rather than written into the sentence.
+
+- fe3e10c: The Bun target renders the document it was already announcing, and the build stops claiming what the
+  target cannot do.
+
+  A project with `ssr: true` built for Bun was answered `.theokit/client/index.html` — an empty
+  `<div id="root">` — while the build printed `✓ Build complete → bun (SSR)`. Measured on Bun 1.3.14: 531
+  bytes before, 14732 after, 3546 of them rendered markup with the hydration data inside the root.
+
+  Three things were wrong and they are one shape — the build asserting what a target does instead of
+  deriving it:
+
+  - The whole implementation of `ssrStreaming` in the Bun adapter was which comment landed on line 4 of
+    the emitted file. The renderer it needed was already built and shipped for this target
+    (`.theokit/server/entry-server.js`, 95513 bytes, its own header naming Bun) and nothing imported it.
+  - The streaming SSR bundle could not be loaded on any Web runtime. It imported `renderToPipeableStream`
+    and `renderToReadableStream` from `react-dom/server` by name, and Bun resolves that specifier to
+    `server.bun.js`, which exports the second and not the first — a named import of a missing export is a
+    link-time error. Deno and workerd are affected by the same mechanism.
+  - `(SSR)` came from `config.ssr` alone, so `netlify`, `aws-lambda` and `deno-deploy` were announced as
+    server-rendering while their own emitted comments say they delegate the document to a static host. And
+    the Vercel build told the operator no nonce is minted while its function mints one — advice to work
+    around a restriction the deployment did not have.
+
+  Found because a backlog item claimed every deploy target needed credentials nobody had. Bun is a local
+  server and never needed an account: one build and one request found a defect in four targets.
+
+- 7cafca4: The Deno entry imports sub-paths instead of the umbrella the framework schedules for removal.
+
+  `deno-deploy.ts` emitted `from 'npm:theokit/server'` twice, and `server/index.ts` warns on that import in
+  the framework's own words: deprecated, "Removal scheduled for 0.x+2". A warning is a nuisance; a scheduled
+  removal is a dated failure — the entry stops loading on that release, before a request exists, which is
+  the same shape as a named import of an export a runtime does not have.
+
+  It was the only adapter still on the umbrella. Four siblings already use `theokit/server/scan`,
+  `theokit/server/http` and `theokit/server/rate-limit`, so the mapping was already written down and proven
+  by a Bun entry that runs.
+
+  Verified on Deno 2.9.5 by running the emitted entry: the deprecation warning printed on every start before
+  and prints zero times now; `GET /api/health` answers 200 with `x-request-id` and `x-trace-id` echoed, and
+  `GET /` answers 404, which is correct because this adapter delegates the document to the platform's static
+  handler.
+
+  A sweep test now covers every adapter, with the `npm:` prefix included in the pattern — a search written
+  without it matched nothing while the string was present in six files.
+
+- 9a8a9fa: An agent stream on Cloudflare Workers terminates, so a client stops waiting after the reply arrives
+
+  Two defects, one visible symptom: every chunk of a turn arrived — `finish` included — and the request
+  then never ended. A browser rendered the reply and the turn never completed, because a client keys its
+  terminal state on the `[DONE]` frame.
+
+  **The trigger.** `RunEventCache.end()` called `buf.evictTimer.unref()` unconditionally. `unref` is
+  Node-only, and the result is the opposite of the intuition: probed with two workers differing only in one
+  line of `wrangler.toml`, workerd WITHOUT `compatibility_flags` returns a Timeout whose `unref` works, and
+  with `["nodejs_compat"]` — exactly what this framework's Cloudflare adapter emits — `setTimeout` returns a
+  NUMBER and the call throws `TypeError: buf.evictTimer.unref is not a function`. The Node-compat flag is
+  what removed the Node API. It is feature-detected now, so a runtime that has `unref` still gets it.
+
+  **What made a one-line trigger cost the whole stream.** `durableUiMessageStreamResponse`'s `finish()` set
+  its idempotence flag FIRST, then called `cache.end(runId)`, then enqueued the terminator and closed. The
+  throw skipped both terminal operations, `pull`'s own `catch { finish(controller) }` found the flag already
+  set and returned, and the flag that exists to prevent a SECOND terminator prevented the ONLY one. The
+  bookkeeping is isolated now and reported rather than swallowed: what its failure costs is a reconnect
+  replay that may be stale, which a reader of the log can act on, while a stream that never ends gives them
+  nothing. `cancel` had the same exposure, where it would have cost the release of the turn.
+
+  Measured end to end against a real turn on workerd: before, `curl --max-time 25` exited 28 with no
+  `[DONE]`; after, it exits 0 in 3.5s with the reply and the terminator. The regression test reproduces the
+  hang as a hang — the three cases time out at 30s without the fix.
+
+- Updated dependencies [2efbaa0]
+- Updated dependencies [74e5db8]
+  - @theokit/agents@15.0.2
+
 ## 0.73.0
 
 ### Minor Changes
