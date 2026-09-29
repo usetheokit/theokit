@@ -562,7 +562,12 @@ export const vercelAdapter: DeployAdapter = {
       `${describeDeployedSecurityHeaders({
         target: 'vercel',
         securityHeaders: config.security?.headers,
-        mintsNonce: false,
+        // Derived, and it was a literal `false` for the hours between B-317 shipping and B-334. The
+        // function B-317 emits calls `generateNonce()` and feeds the value to both `renderStreamingWeb`
+        // and `buildSecurityHeaders`, so the deployment DID mint one while the build told the operator
+        // it did not — and the printed advice was to move inline scripts out to work around a
+        // restriction that was no longer there.
+        mintsNonce: config.ssr,
         documentHeaders: 'platform-configured',
       })}\n`,
     )

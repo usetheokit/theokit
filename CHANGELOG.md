@@ -6,6 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- The Bun target serves a server-rendered document instead of the client shell. A project with
+  `ssr: true` was answered `.theokit/client/index.html` — an empty `<div id="root">` — while the build
+  printed `(SSR)`. Measured on Bun 1.3.14: 531 bytes before, 14732 after, with 3546 bytes of rendered
+  markup and the hydration data inside the root. The renderer was already being built and shipped for
+  this target and nothing imported it. (#B-334)
+- The streaming SSR bundle loads on Web runtimes at all. It imported `renderToPipeableStream` and
+  `renderToReadableStream` from `react-dom/server` by name; Bun resolves that specifier to
+  `server.bun.js`, which exports the second and not the first, and a named import of a missing export is
+  a link-time error — so the whole bundle was unloadable and the Web renderer it exists to provide could
+  never be reached. It is a namespace import now. Deno and workerd are affected by the same mechanism.
+  (#B-334)
+- The build no longer announces `(SSR)` for a target whose entry cannot render. The note came from
+  `config.ssr` alone, so `netlify`, `aws-lambda` and `deno-deploy` — which delegate the document to a
+  static host and say so in their own emitted comments — were reported as server-rendering. (#B-334)
+- The Vercel build no longer tells the operator that no nonce is minted when its function mints one. The
+  deployed function calls `generateNonce()` and feeds the value to `buildSecurityHeaders`, while the
+  build printed "The CSP carries no nonce … Move inline scripts to `<script src="...">`" — advice to
+  work around a restriction the deployment did not have. (#B-334)
+
+
 ### Added
 
 - The Vercel target renders the document. Nothing routed a page request to the function — `{ handle: 'filesystem' }` was followed by `/(.*) -> /index.html` — so `/` was the static host serving an empty `<div id="root">` while the build announced SSR, and the function had no renderer to answer with if it had been asked. The fallback now reaches the function when the project renders, the emitted entry calls the app's own SSR entry (inlined by the function bundler), and the build reads the client shell and passes it. Scoped outside `/api/`, where a path matching no route still owes a JSON 404. Measured by executing the built function: `/` went from `404, 9 bytes, text/plain` to `200, 14827 bytes, text/html` with `<head>`, the root div and the CSP (#B-317)

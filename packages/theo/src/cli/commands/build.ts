@@ -3,7 +3,12 @@ import { resolve } from 'node:path'
 
 // T1.1 (architecture-medium-deferrals) — nodeAdapter no longer static-imported.
 // All adapters dispatch via `adapterRegistry` (lazy-imported within runAdapterBuild).
-import { VALID_TARGETS, type BuildTarget, type AdapterBuildContext } from '../../adapters/types.js'
+import {
+  VALID_TARGETS,
+  targetRendersDocument,
+  type BuildTarget,
+  type AdapterBuildContext,
+} from '../../adapters/types.js'
 import { loadConfig } from '../../config/load-config.js'
 import { loadEnv } from '../../config/load-env.js'
 import { validateProjectStructure } from '../../config/validate-structure.js'
@@ -174,7 +179,10 @@ export async function buildCommand(options?: { target?: string }): Promise<void>
     console.log(`  ✓ OpenAPI (dist): ${distResult.path}`)
   }
 
-  const ssrNote = config.ssr ? ' (SSR)' : ''
+  // Derived, not asserted. This read `config.ssr` alone, so a target whose entry delegates the
+  // document to a static host was announced as server-rendering — measured on `--target bun`, which
+  // printed `(SSR)` and served an empty `<div id="root">` (B-334).
+  const ssrNote = config.ssr && targetRendersDocument(target) ? ' (SSR)' : ''
   console.log(`\n  ✓ Build complete → ${target}${ssrNote}\n`)
 }
 
