@@ -281,6 +281,9 @@ export function renderAwsLambdaEntry(
     { kind: 'baked', agents: opts.agents ?? [], contextModule: opts.contextModule },
     {
       pathname: 'path',
+      // This entry has no `url` object: `eventV2ToRequest` builds a STRING, in another function.
+      // `request` is what routeRequest holds, and it carries the same absolute URL that string was.
+      baseUrl: 'new URL(request.url).origin',
       notFound: JSON_NOT_FOUND_RESPONSE,
     },
   )

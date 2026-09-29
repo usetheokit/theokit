@@ -1,0 +1,55 @@
+B-263 — Vercel: the function bundle driven through a faithful launcher emulation, 2026-09-29
+
+NOT A DEPLOY. Read the boundary before the result.
+
+WHAT WAS DRIVEN
+  theokit build --target vercel, on a real project (my-test), exit 0
+  -> .vercel/output/{config.json, static/, functions/api.func/{index.mjs, assets/, .vc-config.json}}
+
+  .vc-config.json declares:
+    { "runtime": "nodejs22.x", "handler": "index.mjs", "launcherType": "Nodejs",
+      "shouldAddHelpers": true, "supportsResponseStreaming": true }
+
+  So Vercel's launcher hands the exported function a Node (req, res) pair. The probe creates an
+  http server whose request listener IS that function, which is the same shape. A first attempt
+  passed a single Web `Request` and threw
+  `TypeError: Cannot read properties of undefined (reading 'writeHead')` — the probe's error, not
+  the product's, and worth recording because it looked exactly like a defect for one minute.
+
+  api.func/ was COPIED to a directory with no node_modules in any ancestor before loading, so a
+  bundle that had not inlined its imports could not have loaded at all.
+
+RESULT
+  loads standalone: yes, `default` is a function
+  GET /api/health      200  {"status":"ok","timestamp":...,"framework":"TheoKit"}
+      content-type: application/json
+      x-request-id: 1be90444-d5b9-4203-ad22-9baa55fec89a
+      x-trace-id:   1be90444-d5b9-4203-ad22-9baa55fec89a
+      content-security-policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline...
+  GET /api/nao-existe  404  {"error":{"code":"NOT_FOUND"}}
+
+  routing config.json (version 3), in order:
+      /(.*)          headers (the security baseline)
+      /api/(.*)   -> /api      the function
+      handle: filesystem       static assets
+      /(.*)       -> /api      SSR fallback
+
+WHY THIS IS MEANINGFUL AND NOT THEATRE
+  All three defects that blocked the Cloudflare deploy on 2026-09-26 were of a kind this probe
+  catches: a vite virtual id esbuild cannot resolve, the deprecated `theokit/server` umbrella
+  pulling a native addon, and `createRequire(import.meta.url)` at MODULE SCOPE. Each fails at
+  import, and this probe imports from a directory with nothing installed.
+
+WHAT IT DOES NOT ESTABLISH
+  That Vercel's own launcher invokes it. That `config.json`'s routing layer behaves as written —
+  no local probe covers that, and it is the one layer a deploy would test.
+  That the static host serves the document with the headers route 1 declares.
+
+WHAT THE DEPLOY NEEDS
+  The Vercel CLI (60.1.3) is present and NOT authenticated; no VERCEL_TOKEN in the environment.
+  The MCP plugin IS authenticated (project `theokit-b263-vercel` exists, created 2026-09-26), but a
+  prebuilt Build Output deploy through it means uploading every file by sha, which is the wrong
+  instrument for this.
+  One command from the operator: `npx vercel login`, or a VERCEL_TOKEN.
+
+  No secrets in this file.

@@ -90,6 +90,14 @@ beforeAll(() => {
     join(project, 'src/server/routes/health.ts'),
     `export const GET = () => Response.json({ status: 'ok', framework: 'TheoKit' })\n`,
   )
+  // An agent, because the branch that serves one is a DIFFERENT branch of `routeRequest` and the
+  // case below is the only thing in this repository that enters it.
+  mkdirSync(join(project, 'src/server/agents'), { recursive: true })
+  writeFileSync(
+    join(project, 'src/server/agents/chat.ts'),
+    `export default { name: 'chat', model: 'openai/gpt-4o-mini', instructions: 'be brief' }\n`,
+  )
+
   // `out/` must look like ESM on its own, the way an uploaded directory does.
   writeFileSync(join(out, 'package.json'), JSON.stringify({ type: 'module' }))
 })
@@ -160,6 +168,110 @@ describe('the Lambda handler answers where it is uploaded', () => {
         'returned 200',
     ).toBeTruthy()
   }, 120_000)
+
+  it('answers an agent route without a ReferenceError', async () => {
+    // The branch the case above never enters. `agents: []` there means the agents fragment is emitted
+    // and never reached, so a free identifier inside it costs nothing locally and a 502 on the
+    // platform — which is exactly what happened.
+    //
+    // Measured 2026-09-29 on a real deployed Function URL: `/api/health` answered 200 while
+    // `/api/agents/chat` answered 502, CloudWatch naming `ReferenceError: url is not defined at
+    // routeRequest`. The fragment read `url.origin`, an unwritten contract that the host declares a
+    // `URL` named `url` in the scope the fragment lands in; this entry builds a STRING, in another
+    // function. Reproduced locally at the SAME line and function as production once an agent was in
+    // the scan.
+    //
+    // What is asserted is the absence of a 5xx, not a 200: a 4xx from the agent IS the proof the
+    // branch ran, because a ReferenceError never reaches it, and demanding a 200 would make this case
+    // depend on a provider credential.
+    //
+    // THE BODY BELOW IS DELIBERATELY THE SHAPE THE AGENT REFUSES, and a reader who "fixes" it breaks
+    // this case. `parseAgentRequestBody` accepts `{ message }` or `{ messages: [{ parts: [...] }] }`;
+    // an AI SDK v5 UIMessage carries `parts`, never `content`. So this payload reaches the agent, is
+    // refused at 400, and stops BEFORE the provider call — which is what keeps the case credential-free.
+    // A valid body here would try to reach a provider, fail for want of a key, and answer 5xx.
+    //
+    // Measured 2026-09-29 against the deployed Function URL, with a credential present and the same
+    // valid shape: 200 in 2.16s, streaming `delta:"P"` then `delta:"ONG"`. Recorded under
+    // `.squad/records/acceptance/evidence/b347-aws-lambda-agent-after-fix.txt`.
+    const agentOut = join(root, 'out-agent')
+    mkdirSync(agentOut, { recursive: true })
+
+    await buildAwsLambda(
+      {
+        serverDir: 'src/server',
+        agentsDir: 'src/server/agents',
+        appDir: 'src/app',
+        distDir: '.theokit',
+        ssr: false,
+        ssrStreaming: false,
+        security: {},
+      } as never,
+      project,
+      { runNodeBuild: async () => {} },
+      {
+        scanRoutes: () => ({
+          routes: [
+            {
+              filePath: 'src/server/routes/health.ts',
+              routePath: '/api/health',
+              methods: ['GET'],
+            },
+          ],
+          agents: [
+            {
+              filePath: 'src/server/agents/chat.ts',
+              agentPath: '/api/agents/chat',
+              name: 'chat',
+            },
+          ],
+        }),
+      } as never,
+    )
+
+    cpSync(join(project, '.theokit/aws'), agentOut, { recursive: true })
+    writeFileSync(join(agentOut, 'package.json'), JSON.stringify({ type: 'module' }))
+
+    const mod: Record<string, unknown> = await import(
+      pathToFileURL(join(agentOut, 'handler.mjs')).href
+    )
+    const handler = (mod.handler ?? mod.default) as (
+      e: unknown,
+      c: unknown,
+    ) => Promise<{ statusCode?: number; body?: string }>
+
+    const res = await handler(
+      {
+        version: '2.0',
+        routeKey: 'POST /api/agents/chat',
+        rawPath: '/api/agents/chat',
+        rawQueryString: '',
+        // `x-theo-action` and a matching Origin, or the CSRF guard answers 403 BEFORE the agent
+        // branch runs and this case proves nothing about the line that threw.
+        headers: {
+          host: 'x.example',
+          'x-forwarded-proto': 'https',
+          'content-type': 'application/json',
+          'x-theo-action': '1',
+          origin: 'https://x.example',
+        },
+        requestContext: {
+          http: { method: 'POST', path: '/api/agents/chat', sourceIp: '1.2.3.4' },
+          domainName: 'x.example',
+        },
+        body: JSON.stringify({ messages: [{ role: 'user', content: 'ping' }] }),
+        isBase64Encoded: false,
+      },
+      { awsRequestId: 'test-agent' },
+    )
+
+    expect(
+      res.statusCode,
+      `the agent branch threw instead of answering. Before the fix this was a ReferenceError on ` +
+        `\`url\` at routeRequest, identical to the one a deployed Function URL produced. Body: ` +
+        (res.body ?? '').slice(0, 200),
+    ).toBeLessThan(500)
+  })
 
   it('proves the isolation it depends on', async () => {
     // COUNTERPROOF, and it is load-bearing. If `out/` could see the project's node_modules, an entry

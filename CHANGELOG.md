@@ -8,6 +8,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- A deployed agent answers on AWS Lambda. The generated agents fragment hardcoded `baseUrl:
+  url.origin`, an unwritten contract that the host declares a `URL` object named `url` in the scope
+  the fragment lands in. `vercel` and `netlify` satisfy it; `aws-lambda` failed it twice over — its
+  `url` is a STRING built from the event headers, and it lives in a different function. Measured on a
+  real deployed Function URL: `/api/health` answered 200 while `/api/agents/chat` answered 502, with
+  `ReferenceError: url is not defined at routeRequest` in CloudWatch. The base-URL expression is now
+  a parameter of the fragment, the way the request path already was, so a host states what it has
+  instead of being assumed to have it. (#B-347)
+
+- The entry guard reads TS2552 as well as TS2304. TypeScript emits 2552 — `Cannot find name 'url'.
+  Did you mean 'URL'?` — rather than 2304 whenever a similar name is in scope, so the guard that
+  exists to catch an undeclared identifier in generated code called the Lambda entry clean while the
+  deployed function threw on it. Its shared fixture also passed no agents to three of the six
+  renderers, so their agents fragment was never emitted and never checked. Both halves now carry a
+  sabotage case, and the 2552 one asserts the diagnostic code rather than only the name — without
+  that it would pass identically on a 2304 and prove nothing the older case does not. (#B-347)
+
+- A Vercel project with `ssr: true` serves its server-rendered document instead of the client shell.
+  The build copied `.theokit/client/index.html` into `.vercel/output/static/`, and Vercel's
+  `{ handle: 'filesystem' }` satisfies a directory path with the `index.html` inside it — so `/` was a
+  real file, the SSR route below the handler was never reached, and the deployed page answered 694
+  bytes with an empty `<div id="root">` while the build announced `(SSR)`. B-317 had already pointed
+  that route at the function; what it could not see without a deployment is that the route is never
+  reached. Measured on two real deploys: 0 bytes inside `#root` before, 3546 after — the same
+  rendered-markup figure `node` produces — with `/api/health`, `/robots.txt` and `/favicon.svg`
+  unchanged. The shell is withheld only when the project renders its own document, and only for the
+  basename the platform resolves a directory to. (#B-346)
+
 - The AWS Lambda handler runs where it is uploaded. Two causes, and the second was invisible until
   the first was fixed. The handler was written as source importing five `theokit/…` sub-paths by bare
   specifier, and nothing resolves those for an uploaded function: copied to a directory with no

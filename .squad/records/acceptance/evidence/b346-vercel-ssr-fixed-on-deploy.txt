@@ -1,0 +1,54 @@
+B-346 — Vercel SSR: the defect and its repair, both measured on real deploys. 2026-09-29.
+
+THE DEFECT, on the first real Vercel deploy this repository ever made
+  https://theokit-b263-vercel-qik1b3h4e-paulohenriquevn.vercel.app
+  project: ssr: true, ssrStreaming: true;  build printed `✓ Build complete → vercel (SSR)`
+
+  GET /   200   694 bytes   text/html
+      <div id="root">  ->  0 bytes inside, no hydration script
+
+  cause, three facts on disk:
+    .vercel/output/static/index.html          531 bytes, the client shell
+    config.json v3 route order                [headers] -> /api/(.*) -> handle:filesystem -> /(.*) -> /api
+    theo.config                               ssr: true
+
+  Vercel's `{ handle: 'filesystem' }` satisfies a directory path with the `index.html` inside it, so
+  `/` IS a real file whenever the build copied one. The SSR route below the handler is never reached.
+
+WHY B-317 DID NOT CLOSE IT
+  `renderVercelConfigJson` already switches that last route: `dest: opts.ssr === true ? '/api' : '/index.html'`.
+  Its comment states the premise that made it sufficient — "`{ handle: 'filesystem' }` above still
+  serves every real file, so this is reached only by a page request". That premise is false for `/`.
+  B-317 fixed where the route POINTS; this fixes the fact that the route is never REACHED.
+
+WHY NO LOCAL PROBE FOUND IT
+  The same function, driven through an http server with the `launcherType: "Nodejs"` shape its own
+  .vc-config.json declares, rendered correctly and came back with ZERO defects
+  (evidence/b263-vercel-function-driven-locally.txt). A local probe calls the function directly and
+  never crosses the routing layer.
+
+THE REPAIR, on a second real deploy
+  https://theokit-b263-vercel-cz3xh4gho-paulohenriquevn.vercel.app
+
+                          before        after
+  total bytes              694         14,990
+  bytes inside #root         0          3,546      <- the subject
+  hydration script          no            yes
+  nonce on script           no            yes
+
+  3,546 is the same rendered-markup figure B-263 recorded for `node` under `theokit start`. Not
+  "more bytes" — the same markup.
+
+  no regression:
+    GET /api/health   200  63    application/json
+    GET /robots.txt   200  23    text/plain
+    GET /favicon.svg  200  1033  image/svg+xml
+
+  The filter withholds `index.html` and nothing else; pruning a DIRECTORY would have taken every
+  asset with it, which is the failure mode that turns one empty page into a site with no stylesheet.
+
+WHAT THIS DOES NOT ESTABLISH
+  Anything about the other adapters, and anything about Vercel production (these are preview
+  deployments). The site is public; no credential is reproduced here.
+
+  No secrets in this file.
