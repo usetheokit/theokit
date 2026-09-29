@@ -28,10 +28,10 @@
  */
 import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { basename, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
 import {
   bundleDeployedFunction,
@@ -114,16 +114,40 @@ describe('a bundled function loads without node_modules', () => {
 })
 
 describe('the staged entry stays inside the project root', () => {
+  // Two `mkdtempSync` roots, and the reason is a HIGH CodeQL alert this file earned on PR #919:
+  // `js/insecure-temporary-file`, traced from a literal `/tmp/theo-root-that-does-not-exist` here to the
+  // `mkdirSync` in `bundle-deployed-function.ts:110`. Two of the four cases below are NOT refused, so
+  // they reach that call and create the path — and a fixed name under the OS temp dir is the
+  // symlink-attack shape: another user on the machine pre-creates it as a link and the build writes
+  // through it. `mkdtempSync` gives a name nobody can predict.
+  //
+  // The old name encoded something worth keeping: a root that does not exist proved the refusal happened
+  // before any filesystem work. A real temp dir cannot prove that by existing, so the two refusal cases
+  // now assert the escaped path was never written — the same guarantee, stated about the thing that
+  // matters rather than about the root.
+  let root = ''
+  let sibling = ''
+
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), 'theokit-refusal-root-'))
+    sibling = mkdtempSync(join(tmpdir(), 'theokit-refusal-sibling-'))
+  })
+
+  afterEach(() => {
+    rmSync(root, { recursive: true, force: true })
+    rmSync(sibling, { recursive: true, force: true })
+  })
+
   /** What the guard refused, or `undefined` when it let the call through to the build. */
   async function refusal(
     overrides: Partial<Parameters<typeof bundleDeployedFunction>[0]>,
   ): Promise<string | undefined> {
     try {
       await bundleDeployedFunction({
-        projectRoot: '/tmp/theo-root-that-does-not-exist',
+        projectRoot: root,
         entrySource: 'export default {}',
         stagePath: '.theokit/vercel/entry.mjs',
-        outDir: '/tmp/theo-root-that-does-not-exist/out',
+        outDir: join(root, 'out'),
         entryFileName: 'index.mjs',
         ...overrides,
       })
@@ -138,7 +162,14 @@ describe('the staged entry stays inside the project root', () => {
     // not a preference" — an entry staged outside makes rollup resolve `theokit/server/scan` from the
     // wrong directory. Measured 2026-09-28: `resolve(root, '../outside/entry.mjs')` wrote the file
     // outside the project and nothing objected.
-    expect(await refusal({ stagePath: '../outside/entry.mjs' })).toMatch(/stagePath/)
+    // The escape target is unique per run. `../outside/entry.mjs` resolves to `/tmp/outside/entry.mjs`,
+    // which a pre-guard run of this very case CREATED — the comment above records it — so asserting its
+    // absence measured a leftover rather than this call. Uniqueness is what makes the assertion about
+    // the call.
+    const escape = `../outside-${basename(root)}/entry.mjs`
+    expect(await refusal({ stagePath: escape })).toMatch(/stagePath/)
+    // What the old literal root proved by not existing: the refusal precedes the write.
+    expect(existsSync(resolve(root, escape))).toBe(false)
   })
 
   it('test_an_absolute_stage_path_is_refused', async () => {
@@ -147,6 +178,7 @@ describe('the staged entry stays inside the project root', () => {
     // and was stopped by `EACCES: permission denied, open '/etc/theo-entry.mjs'`. Permissions are not
     // a boundary check.
     expect(await refusal({ stagePath: '/etc/theo-entry.mjs' })).toMatch(/stagePath/)
+    expect(existsSync('/etc/theo-entry.mjs')).toBe(false)
   })
 
   it('test_an_out_dir_outside_the_root_is_NOT_refused', async () => {
@@ -156,7 +188,7 @@ describe('the staged entry stays inside the project root', () => {
     // platform will upload, absolute", and the pre-existing case above passes a SIBLING of
     // `projectRoot`; the invented invariant broke it. The caution lives in the option's docblock,
     // where the next caller reads it.
-    expect(await refusal({ outDir: '/tmp/theo-sibling-out' })).toBeUndefined()
+    expect(await refusal({ outDir: join(sibling, 'out') })).toBeUndefined()
   })
 
   it('test_a_path_inside_the_root_is_not_refused_by_the_guard', async () => {
