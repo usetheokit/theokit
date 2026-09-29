@@ -23,6 +23,6 @@
     "@theokit/agents-pty": "workspace:*",
     "smol-toml": "^1.7.0",
     "zod": "^4.0.0",
-    "@theokit/sdk": "5.9.0"
+    "@theokit/sdk": "5.9.2"
   }
 }
