@@ -39,8 +39,11 @@ import ts from 'typescript'
 import { describe, expect, it } from 'vitest'
 
 import { renderAwsLambdaEntry } from '../../packages/theo/src/adapters/aws-lambda.js'
+import { renderBunEntry } from '../../packages/theo/src/adapters/bun.js'
+import { renderCloudflareWorkerEntry } from '../../packages/theo/src/adapters/cloudflare.js'
 import { renderDenoEntry } from '../../packages/theo/src/adapters/deno-deploy.js'
 import { renderNetlifyFunction } from '../../packages/theo/src/adapters/netlify.js'
+import { VALID_TARGETS } from '../../packages/theo/src/adapters/types.js'
 import { renderVercelFunctionEntry } from '../../packages/theo/src/adapters/vercel.js'
 
 /**
@@ -51,6 +54,10 @@ import { renderVercelFunctionEntry } from '../../packages/theo/src/adapters/verc
  * source, and `renderBakedRoutes([])` emits an empty table — so a fixture missing either one makes
  * every name used only on that path invisible.
  */
+const AGENTS = [
+  { filePath: 'agents/chat.js', agentPath: '/api/agents/chat', name: 'chat' },
+] as const
+
 const FIXTURE = {
   agentsDir: 'src/server/agents',
   serverDir: 'src/server',
@@ -100,10 +107,30 @@ function freeIdentifiers(source: string): string[] {
 }
 
 const ENTRIES: readonly (readonly [string, string])[] = [
-  ['vercel', renderVercelFunctionEntry(FIXTURE)],
+  ['vercel', renderVercelFunctionEntry({ ...FIXTURE, agents: AGENTS })],
   ['aws-lambda', renderAwsLambdaEntry(FIXTURE)],
-  ['netlify', renderNetlifyFunction(FIXTURE)],
+  ['netlify', renderNetlifyFunction({ ...FIXTURE, agents: AGENTS })],
   ['deno-deploy', renderDenoEntry(3000, FIXTURE)],
+  ['cloudflare', renderCloudflareWorkerEntry({ ...FIXTURE, ssrStreaming: false, agents: AGENTS })],
+  ['bun', renderBunEntry(3000, FIXTURE)],
+]
+
+/**
+ * Targets that emit no generated entry for this check to read, each with the reason.
+ *
+ * Declared rather than omitted, because the completeness case below derives its population from
+ * `VALID_TARGETS`: a tenth target then has to be classified into one list or the other, and cannot
+ * end up in neither. That is the argument
+ * `every-deploy-target-carries-the-agents-fragment.test.ts` makes in its own header — two lists is
+ * how a new adapter gets added to neither, since the excluding list is the one that costs nothing.
+ */
+const NO_GENERATED_ENTRY: readonly string[] = [
+  // Runs from the project directory against real source; there is no emitted entry string.
+  'node',
+  // Emits static assets and no server entry at all.
+  'static',
+  // Ships no adapter in this repository yet, so there is nothing to render.
+  'theo-cloud',
 ]
 
 describe('a generated entry declares every identifier it uses', () => {
@@ -123,9 +150,27 @@ describe('a generated entry declares every identifier it uses', () => {
   })
 
   it('finds nothing free in an entry that declares what it uses', () => {
-    // COUNTERPROOF for the sweep itself: an empty population would satisfy the assertion below.
-    expect(ENTRIES.length).toBe(4)
+    // COUNTERPROOF for the sweep itself: an empty population would satisfy the assertion below. The
+    // EXACT population is pinned by the derived case above rather than by a number here — two places
+    // asserting one fact is how the two diverge.
+    expect(ENTRIES.length).toBeGreaterThan(0)
     expect(freeIdentifiers(renderVercelFunctionEntry(FIXTURE))).toEqual([])
+  })
+
+  it('covers every target that emits an entry, derived rather than listed', () => {
+    // The population gap is the defect this repository keeps paying for: a guard whose INPUT excludes
+    // the case looks green and proves nothing. This file shipped covering 4 of the 6 renderers, and
+    // that was found by asking rather than by a failure — so the question is asked mechanically now.
+    const covered = new Set([...ENTRIES.map(([n]) => n), ...NO_GENERATED_ENTRY])
+    const unclassified = VALID_TARGETS.filter((target) => !covered.has(target))
+
+    expect(
+      unclassified,
+      'these build targets are in neither list, so nothing says whether their emitted entry is ' +
+        'checked or why it cannot be. Add the renderer to ENTRIES, or the target to ' +
+        'NO_GENERATED_ENTRY with the reason',
+    ).toEqual([])
+    expect(ENTRIES.length + NO_GENERATED_ENTRY.length).toBe(VALID_TARGETS.length)
   })
 
   it.each(ENTRIES.map(([name, src]) => ({ name, src })))(
