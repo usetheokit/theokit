@@ -46,10 +46,9 @@ import {
   renderVercelFunctionEntry,
 } from '../../packages/theo/src/adapters/vercel.js'
 
-/** Source with comments removed, so prose naming a call is not read as the call. */
-function code(source: string): string {
-  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1')
-}
+// The string-aware stripper, shared. Seven files carried a byte-identical regex copy that read
+// `"/*"` in netlify.ts as a comment opener and deleted 36% of that file (B-338).
+import { withoutComments as code } from './_helpers/adapter-source.js'
 
 const HEAD = '<!doctype html><html><head></head><body><div id="root">'
 const TAIL = '</div></body></html>'

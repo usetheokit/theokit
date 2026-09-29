@@ -31,13 +31,11 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
+// The string-aware stripper, shared. Seven files carried a byte-identical regex copy that read
+// `"/*"` in netlify.ts as a comment opener and deleted 36% of that file (B-338).
+import { withoutComments as code } from './_helpers/adapter-source.js'
 
 const ADAPTERS = resolve(__dirname, '../../packages/theo/src/adapters')
-
-/** Source with comments removed, so a docblock example is not read as an import. */
-function code(source: string): string {
-  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1')
-}
 
 /** Every adapter source file, so a target added later is swept without editing this test. */
 function adapterSources(): { file: string; source: string }[] {

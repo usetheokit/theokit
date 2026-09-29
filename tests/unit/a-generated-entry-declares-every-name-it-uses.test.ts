@@ -44,6 +44,9 @@ import { renderAwsLambdaEntry } from '../../packages/theo/src/adapters/aws-lambd
 import { renderDenoEntry } from '../../packages/theo/src/adapters/deno-deploy.js'
 import { renderNetlifyFunction } from '../../packages/theo/src/adapters/netlify.js'
 import { renderVercelFunctionEntry } from '../../packages/theo/src/adapters/vercel.js'
+// The string-aware stripper, shared. Seven files carried a byte-identical regex copy that read
+// `"/*"` in netlify.ts as a comment opener and deleted 36% of that file (B-338).
+import { withoutComments as code } from './_helpers/adapter-source.js'
 
 /**
  * Agents must be CONFIGURED or the fragment is never emitted at all.
@@ -61,11 +64,6 @@ const ENTRIES: readonly (readonly [string, string])[] = [
   ['netlify', renderNetlifyFunction(WITH_AGENTS)],
   ['deno-deploy', renderDenoEntry(3000, WITH_AGENTS)],
 ]
-
-/** Source with comments removed, so prose naming an identifier is not read as code. */
-function code(source: string): string {
-  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1')
-}
 
 describe('a generated entry declares every name it uses', () => {
   /**
