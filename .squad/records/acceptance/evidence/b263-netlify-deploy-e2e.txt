@@ -1,0 +1,61 @@
+B-263 — Netlify: the second real deploy this repository ever made, and the first with an agent
+answering end to end. 2026-09-29.
+
+URL:      https://theokit-b263-netlify.netlify.app
+Site:     theokit-b263-netlify  (9faae4bb-c303-4907-8678-300e6880b2e9)
+Team:     paulohenrique-java (Free, nf_team_dev)
+Deploy:   308 files hashed, 1 function, `node_bundler = "none"` honoured
+
+TWO DEFECTS HAD BEEN FIXED THE SAME DAY, AND EACH ALONE MADE THE TARGET UNABLE TO SERVE:
+  B-341  no `[functions] directory` was emitted -> the CLI scanned its default `netlify/functions/`
+         and `/api/*` answered `Function not found...` 404. The target had never served a request.
+  B-339  the entry shipped as SOURCE with five bare `theokit/…` specifiers -> Netlify's own bundler
+         produced a ReferenceError on an identifier that was base64 of the source.
+  B-343  the agents branch referenced `loaderCache` / `createProductionLoader`, which the host had
+         stopped declaring -> ReferenceError on the first /api/agents/<name> request.
+
+WHAT THE DEPLOYED SITE DOES
+
+  Measured through the operator's own Chrome, because the account has `sso_login = True` with
+  `account_sso_login_context = all` — the CDN answers every unauthenticated request with a 401
+  "Login Redirect" page. That is an ENVIRONMENT fact and says nothing about the code; a `curl` from
+  here cannot reach the function at all.
+
+  GET  /                      200  text/html   the client shell, BY DESIGN on this target: the
+                                               adapter delegates the document to the static host
+                                               and declares `documentHeaders: 'platform-configured'`
+  POST /api/agents/chat       200  text/event-stream
+
+  x-theokit-run-id:               run-b05a1074-e4e4-4870-8f9b-7db6bc8f2689
+  x-accel-buffering:              no            (the CDN does not buffer the stream)
+  x-vercel-ai-ui-message-stream:  v1
+  security headers:               6/6, CSP on every response
+
+  the stream, 626 bytes, in order:
+      start -> text-start -> delta:"P" -> delta:"ONG" -> text-end -> finish
+      error events: 0
+
+  TWO deltas. The "P" arrived before the "ONG", so this is real token streaming crossing Netlify's
+  CDN rather than a response assembled and delivered whole.
+
+  Prompt: "Responda apenas com a palavra PONG."   Answer: "PONG"
+
+BEFORE THE PROVIDER KEY WAS SET, the same path returned the honest typed failure rather than
+silence — worth recording because it is the error-handling contract working:
+
+      data: {"type":"data-error-code","data":{"code":"malformed_api_key"},"transient":true}
+      data: {"type":"error","errorText":"API key for provider \"openrouter\" expected to start
+             with \"sk-or-\"."}
+
+  and the UI surfaced it as `role=alert` with `live="assertive"`, a heading, the actionable message
+  and a "New chat" recovery button. The operator had reported "it rendered but the agent does not
+  respond"; the error WAS displayed, and the cause was an unset environment variable on a site
+  deployed minutes earlier.
+
+WHAT THIS DOES NOT ESTABLISH
+  Anything about a public visitor: the site is private (`sso_login`), so every measurement above
+  passed through an authenticated session.
+  Anything about the other four targets.
+
+  No secrets in this file. The provider key is set as a site environment variable and is not
+  reproduced here; it was exposed in the session transcript and must be rotated.
