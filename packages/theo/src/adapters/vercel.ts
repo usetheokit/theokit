@@ -449,6 +449,11 @@ export function renderVercelVcConfigJson(): {
 }
 
 export const vercelAdapter: DeployAdapter = {
+  // B-316 / B-319 — Build Output API v3 uploads the `.func` directory as it is: nothing
+  // installs and nothing bundles. Driven 2026-09-29 from a directory with no `node_modules`:
+  // 200 with the trace header and the CSP (`records/acceptance/evidence/b263-vercel-function-driven-locally.txt`).
+  readsSourceAtRunTime: false,
+  specifiersResolvedBy: 'this-adapter',
   name: 'vercel',
   streamsResponses: true,
   // #409 / #410 — the generated entry calls `executeRoute` with routes, loader

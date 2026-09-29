@@ -241,6 +241,10 @@ export async function buildDeno(
 }
 
 export const denoDeployAdapter: DeployAdapter = {
+  // Same as `bun`, plus the runtime compiles the TypeScript it finds — which is why a scan that
+  // answered `SyntaxError` on netlify is legitimate here. The last runtime scanner in the fleet.
+  readsSourceAtRunTime: true,
+  specifiersResolvedBy: 'the-project-at-run-time',
   name: 'deno-deploy',
   streamsResponses: true,
   // #409 / #410 — the generated entry calls `executeRoute` with routes, loader

@@ -515,6 +515,12 @@ export function renderWranglerToml(opts?: { ssrStreaming?: boolean }): string {
 }
 
 export const cloudflareAdapter: DeployAdapter = {
+  // #367 / #369 and `docs/adr/0020`. Wrangler runs esbuild at deploy time, so bundling here
+  // twice would be work with no observable effect — validated live 2026-09-26
+  // (`records/acceptance/evidence/b263-cloudflare-deploy.txt`). There is still no source tree in
+  // a Worker, which is why it bakes.
+  readsSourceAtRunTime: false,
+  specifiersResolvedBy: 'the-platform',
   name: 'cloudflare',
   streamsResponses: true,
   // #409 / #410 — the generated entry calls `executeRoute` with routes, loader

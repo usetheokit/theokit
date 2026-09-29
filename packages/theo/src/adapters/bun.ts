@@ -363,6 +363,11 @@ export async function buildBun(
 }
 
 export const bunAdapter: DeployAdapter = {
+  // The entry runs IN the project: it resolves `serverDir` against `cwd`, so `node_modules` is
+  // present and the scan has a tree to read. `docs/adr/0020` leaves this target alone for exactly
+  // that reason.
+  readsSourceAtRunTime: true,
+  specifiersResolvedBy: 'the-project-at-run-time',
   name: 'bun',
   streamsResponses: true,
   // #409 / #410 — the generated entry calls `executeRoute` with routes, loader

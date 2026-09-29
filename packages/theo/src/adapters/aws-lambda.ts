@@ -429,6 +429,11 @@ export async function buildAwsLambda(
 }
 
 export const awsLambdaAdapter: DeployAdapter = {
+  // B-342 / B-344 — measured by INVOKING the handler from a directory with no `node_modules`:
+  // `ERR_MODULE_NOT_FOUND: Cannot find package 'theokit'` as source, then 404 once bundled but
+  // still scanning, then 200 with routes and agents baked.
+  readsSourceAtRunTime: false,
+  specifiersResolvedBy: 'this-adapter',
   name: TARGET,
   // #382 — delisted for streaming, deliberately. See DeployAdapter.
   streamsResponses: false,

@@ -94,6 +94,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- `DeployAdapter` declares two facts about where its entry will run, and a guard checks the
+  consequence of each. `readsSourceAtRunTime` answers whether the deployed entry can read the
+  project's source tree — `false` means its routes and agents must be baked at build time, because a
+  runtime `scanServerRoutes` is a `readdirSync` that finds nothing where the artifact was uploaded
+  alone. `specifiersResolvedBy` answers who makes `theokit/server/…` resolvable: this adapter (it
+  bundles), the platform (wrangler, at deploy time), or the project at run time. Both are additive and
+  optional on the exported interface, so a third-party adapter is unaffected; both are REFUSED when
+  omitted on this repository's own six, because a permissive default would excuse exactly the defect
+  they exist to catch — the lesson `enforcesRateLimit`'s own docblock records about its first cut.
+
+  The class this closes shipped four times, once per target: cloudflare (#369, #367), vercel (B-319,
+  B-316), netlify (B-338, B-339) and aws-lambda (B-344, B-342). The partition is measured rather than
+  asserted — four of the six targets have now been driven at or toward their platform, and four of
+  four behaved as it predicts. Each assertion was sabotaged and shown to fail naming its own cause.
+  (#B-345)
+
 - A guard that a generated deploy entry declares every identifier it references. The entry is
   written to a temp file and handed to the TypeScript compiler, reading only TS2304
   ("Cannot find name"); unresolved bare specifiers (TS2307) and runtime globals (TS2591) are

@@ -560,6 +560,11 @@ export async function buildNetlify(
 }
 
 export const netlifyAdapter: DeployAdapter = {
+  // B-339 / B-341 / B-343 — measured on the Netlify emulator. Its own bundler turned the raw
+  // source into a `ReferenceError`, and re-bundled an already-bundled file into a `SyntaxError`;
+  // the toml declares `node_bundler = "none"` so the bundle this adapter produces ships intact.
+  readsSourceAtRunTime: false,
+  specifiersResolvedBy: 'this-adapter',
   name: 'netlify',
   streamsResponses: true,
   // #409 / #410 — the generated entry calls `executeRoute` with routes, loader
