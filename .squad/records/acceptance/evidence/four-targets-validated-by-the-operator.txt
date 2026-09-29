@@ -1,0 +1,42 @@
+Four deploy targets exercised by a person and confirmed working
+date: 2026-09-29
+validated_by: human/paulo
+build: workspace at d24d160d9, merged to develop as 00a4d7981
+
+What was handed over, and what the operator confirmed by using it:
+
+  cloudflare   https://theo-app.holy-sun-1073.workers.dev
+  vercel       https://my-test-alpha-five.vercel.app
+  netlify      https://theokit-b263-netlify.netlify.app
+  aws-lambda   https://7wmpyqptkna3x7zfgkux5iwmgm0axgvr.lambda-url.us-east-1.on.aws
+
+Reachability measured before handover: GET / -> 200 / 200 / 200 / 404, /api/health -> 200 on
+all four. The 404 is the aws-lambda adapter by design — it answers /api/* and the document is
+served by a separate static host, so on that target the exercise is the API.
+
+Each was built from the workspace source, not the published package: my-test/node_modules/theokit
+is a symlink to packages/theo, and its dist carried the B-347 expression.
+
+TWO THINGS THAT WERE NOT THE CODE, and each cost measurements before it was named:
+
+  1. Netlify answered 401 on every path, including /api/health, with a 'Login Redirect' page
+     pointing at app.netlify.com/edge-access. The site object carried sso_login: true AND
+     account_sso_login: true, context 'all' — an ACCOUNT-level setting inherited by the site,
+     with has_password: false. Nothing about the deploy or the function was wrong. Cleared with
+     `netlify api updateSite --data '{"site_id":"...","body":{"sso_login":false}}'`, after
+     which the same deploy answered 200. A deploy that is refused at the edge is
+     indistinguishable from a broken one unless the response body is read.
+
+  2. aws-lambda REFUSES ssrStreaming: true, and the refusal is correct. A Lambda v2 result
+     carries its body as a string, so nothing can leave the function before the run ends;
+     streaming would need awslambda.streamifyResponse plus a Function URL in RESPONSE_STREAM
+     mode, which this adapter does not emit. The build names the six targets that do stream.
+     Built from a scratch copy with streaming off rather than by editing the shared project.
+
+TARGETS NOT PROVISIONED, with the reason rather than a silence:
+  deno-deploy   no deployctl and no DENO_DEPLOY_TOKEN on this machine
+  bun, node     runtimes, not hosting platforms — no public URL without a host
+  static        emits files only; no API and no agent to exercise
+  theo-cloud    ships no adapter in this repository
+
+No credential appears in this record.
