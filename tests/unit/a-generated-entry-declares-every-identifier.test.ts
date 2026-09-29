@@ -14,7 +14,8 @@
  * function parameters — that is a type-checker, written worse.
  *
  * So the entry is written to a temp file and handed to the TypeScript compiler already installed here
- * (parsimony ladder, rung 4), and only diagnostic **TS2304 — "Cannot find name"** is read. The
+ * (parsimony ladder, rung 4), and the diagnostics that mean "this name is not declared here" are
+ * read — **TS2304 and TS2552**; see `UNDECLARED_NAME` for why the second is not optional. The
  * unresolved bare specifiers produce TS2307 and Node globals produce TS2591; both are expected and
  * neither is a finding. TS still learns the imported NAMES from an import statement whose module it
  * cannot resolve, which is what makes the check discriminate at all.
@@ -54,14 +55,16 @@ import { renderVercelFunctionEntry } from '../../packages/theo/src/adapters/verc
  * source, and `renderBakedRoutes([])` emits an empty table — so a fixture missing either one makes
  * every name used only on that path invisible.
  */
-const AGENTS = [
-  { filePath: 'agents/chat.js', agentPath: '/api/agents/chat', name: 'chat' },
-] as const
-
 const FIXTURE = {
   agentsDir: 'src/server/agents',
   serverDir: 'src/server',
   routes: [{ filePath: 'src/server/routes/health.ts', routePath: '/api/health', methods: ['GET'] }],
+  // IN the shared fixture, not on the rows that remembered it. Three of the six rows passed
+  // `FIXTURE` bare — `aws-lambda`, `deno-deploy` and `bun` — so their agents fragment was never
+  // emitted and every name used only on that path was invisible here. That is how
+  // `ReferenceError: url is not defined` reached a live Lambda while this file called the target
+  // clean. A per-row option is a population gap waiting for the next row.
+  agents: [{ filePath: 'agents/chat.js', agentPath: '/api/agents/chat', name: 'chat' }],
 } as const
 
 /**
@@ -74,7 +77,34 @@ const RUNTIME_GLOBALS: Readonly<Record<string, readonly string[]>> = {
   'deno-deploy': ['Deno'],
 }
 
-function freeIdentifiers(source: string): string[] {
+/**
+ * The diagnostics that mean "this name is not declared here".
+ *
+ * TS2304 is the plain one. **TS2552 is the SAME defect when a similar name exists** — TypeScript
+ * swaps the message for `Cannot find name 'x'. Did you mean 'Y'?` and changes the code with it.
+ *
+ * Reading only 2304 cost a live 502. Measured 2026-09-29 on a real AWS Lambda deployment: the
+ * emitted entry referenced `url` in the agents fragment while `const url` lived in a different
+ * function, and the compiler reported
+ *
+ *     TS2552: Cannot find name 'url'. Did you mean 'URL'?
+ *
+ * so this file called `aws-lambda` clean, the defect shipped, and `/api/agents/chat` answered
+ * `502 ReferenceError: url is not defined`. A guard written for exactly this class had a hole the
+ * width of one diagnostic code — and the global `URL` is what made the code differ.
+ */
+const UNDECLARED_NAME: ReadonlySet<number> = new Set([2304, 2552])
+
+/**
+ * Every undeclared-name diagnostic, WITH its code.
+ *
+ * Split out of `freeIdentifiers` so a test can assert WHICH code TypeScript emitted. Without that,
+ * a sabotage proving the 2552 half would pass identically if the compiler had emitted 2304 — and
+ * 2304 is the half that was already read.
+ */
+function undeclaredNames(
+  source: string,
+): readonly { readonly name: string; readonly code: number }[] {
   const dir = mkdtempSync(join(tmpdir(), 'theo-entry-'))
   const file = join(dir, 'entry.mjs')
   writeFileSync(file, source)
@@ -92,26 +122,26 @@ function freeIdentifiers(source: string): string[] {
     skipLibCheck: true,
   })
 
-  return [
-    ...new Set(
-      ts
-        .getPreEmitDiagnostics(program)
-        .filter((d) => d.code === 2304)
-        .map(
-          (d) =>
-            /'([^']+)'/u.exec(ts.flattenDiagnosticMessageText(d.messageText, ' '))?.[1] ??
-            'unknown',
-        ),
-    ),
-  ]
+  return ts
+    .getPreEmitDiagnostics(program)
+    .filter((d) => UNDECLARED_NAME.has(d.code))
+    .map((d) => ({
+      name:
+        /'([^']+)'/u.exec(ts.flattenDiagnosticMessageText(d.messageText, ' '))?.[1] ?? 'unknown',
+      code: d.code,
+    }))
+}
+
+function freeIdentifiers(source: string): string[] {
+  return [...new Set(undeclaredNames(source).map((d) => d.name))]
 }
 
 const ENTRIES: readonly (readonly [string, string])[] = [
-  ['vercel', renderVercelFunctionEntry({ ...FIXTURE, agents: AGENTS })],
+  ['vercel', renderVercelFunctionEntry(FIXTURE)],
   ['aws-lambda', renderAwsLambdaEntry(FIXTURE)],
-  ['netlify', renderNetlifyFunction({ ...FIXTURE, agents: AGENTS })],
+  ['netlify', renderNetlifyFunction(FIXTURE)],
   ['deno-deploy', renderDenoEntry(3000, FIXTURE)],
-  ['cloudflare', renderCloudflareWorkerEntry({ ...FIXTURE, ssrStreaming: false, agents: AGENTS })],
+  ['cloudflare', renderCloudflareWorkerEntry({ ...FIXTURE, ssrStreaming: false })],
   ['bun', renderBunEntry(3000, FIXTURE)],
 ]
 
@@ -147,6 +177,27 @@ describe('a generated entry declares every identifier it uses', () => {
 
     expect(sabotaged, 'the sabotage did not apply, so this case proves nothing').not.toBe(entry)
     expect(freeIdentifiers(sabotaged)).toContain('compilePattern')
+  })
+
+  it('reports a name TypeScript reports as TS2552, which the case above never exercises', () => {
+    // The SECOND counterproof, and it exists because the first one does not cover the half that
+    // shipped a 502. `compilePattern` has no similar name in scope, so TypeScript emits 2304 — the
+    // code this guard already read. `url` has the global `URL` one keystroke away, so the same
+    // defect arrives as 2552, and the guard called the aws-lambda entry clean while a deployed
+    // `/api/agents/chat` answered `ReferenceError: url is not defined`.
+    //
+    // The code is asserted, not just the name. Without that, this case would pass identically if
+    // the compiler had emitted 2304, and would prove nothing the case above does not.
+    const source = 'export function route(request) { return { baseUrl: url.origin, request } }\n'
+
+    const found = undeclaredNames(source)
+
+    expect(found.map((d) => d.name)).toContain('url')
+    expect(
+      found.find((d) => d.name === 'url')?.code,
+      'this case is meant to exercise TS2552 specifically; a 2304 here means it duplicates the ' +
+        'case above and the second half of UNDECLARED_NAME is still unproven',
+    ).toBe(2552)
   })
 
   it('finds nothing free in an entry that declares what it uses', () => {

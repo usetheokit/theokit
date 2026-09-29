@@ -127,6 +127,22 @@ export type DeployedAgentsSource =
 export interface DeployedAgentsHost {
   /** Expression yielding the request path inside the handler. Default `url.pathname`. */
   readonly pathname?: string
+  /**
+   * Expression yielding the request's origin inside the handler. Default `url.origin`.
+   *
+   * The default is an implicit contract on the HOST: it must declare a `URL` object named `url`, in
+   * the same scope the fragment lands in. `vercel` and `netlify` satisfy it — `aws-lambda` did not,
+   * and the two ways it failed are worth naming because a host author hits one or the other:
+   *
+   *   - **scope** — its `url` lives in `eventV2ToRequest`, and the fragment lands in `routeRequest`
+   *   - **type**  — its `url` is a STRING (`'https://' + host + path`), so `.origin` is `undefined`
+   *
+   * Measured 2026-09-29 on a real deployed Function URL: `/api/health` answered 200 and
+   * `/api/agents/chat` answered 502, with `ReferenceError: url is not defined at routeRequest`.
+   * Parameterising it makes the requirement a signature rather than a convention — the same move
+   * `pathname` above already made for the other half of the same expression.
+   */
+  readonly baseUrl?: string
   /** Call producing the 404 response. Default `notFoundResponse()`. */
   readonly notFound?: string
   /** Whether THIS branch applies the security baseline, or the caller already does. */
@@ -231,13 +247,14 @@ export function deployedAgentsFragment(
   if (source.kind === 'baked' && source.agents.length === 0) return EMPTY
 
   const pathname = host.pathname ?? 'url.pathname'
+  const baseUrl = host.baseUrl ?? 'url.origin'
   const notFound = host.notFound ?? 'notFoundResponse()'
   const prefix = host.importPrefix ?? ''
 
   const resolution =
     source.kind === 'baked'
-      ? bakedResolution(source.agents, source.contextModule, host.pluginRunnerExpr)
-      : scannedResolution({ ...source, pluginRunnerExpr: host.pluginRunnerExpr })
+      ? bakedResolution(source.agents, source.contextModule, host.pluginRunnerExpr, baseUrl)
+      : scannedResolution({ ...source, pluginRunnerExpr: host.pluginRunnerExpr, baseUrl })
 
   return {
     hostBypass: ` && !__theoIsAgentCardPath(${pathname})`,
@@ -375,6 +392,7 @@ function bakedResolution(
   agents: readonly DeployedAgent[],
   contextModule: string | undefined,
   pluginRunnerExpr: string | undefined,
+  baseUrl: string,
 ): AgentResolution {
   const varOf = (index: number): string => `__theoAgent${String(index)}`
   return {
@@ -472,7 +490,7 @@ function bakedResolution(
       `          const node = agentNodes.find((a) => a.filePath === filePath)`,
       `          return node === undefined ? undefined : agents[node.name]`,
       `        },`,
-      `        baseUrl: url.origin,`,
+      `        baseUrl: ${baseUrl},`,
       ...AUX_DEPS_PARITY,
       `      }`,
     ],
@@ -487,6 +505,7 @@ function scannedResolution(source: {
   agentsDirLiteral?: string
   serverDir?: string
   pluginRunnerExpr?: string
+  baseUrl: string
 }): AgentResolution {
   // The configured directory as a second argument, or nothing. `scanAgents` defaults the name to
   // `agents`, which is right for a project that never set one and wrong for every project that did.
@@ -530,7 +549,7 @@ function scannedResolution(source: {
       `      const auxDeps = {`,
       `        agents: agentsCache,`,
       `        loadModule: ${source.loadModule},`,
-      `        baseUrl: url.origin,`,
+      `        baseUrl: ${source.baseUrl},`,
       ...AUX_DEPS_PARITY,
       `      }`,
     ],
