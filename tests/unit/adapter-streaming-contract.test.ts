@@ -117,15 +117,56 @@ describe('#382 — asking a delisted target for streaming fails by name', () => 
     ).rejects.toThrow(/aws-lambda.*does not stream/s)
   })
 
-  it('the refusal recommends exactly the targets that actually stream', async () => {
-    // The refusal above is exemplary — it names the cause, the mechanism, and both ways out. What it
-    // also does is HARDCODE its list of alternatives: `(cloudflare, vercel, netlify, bun, deno-deploy,
-    // node)`. That list is correct today, and nothing keeps it correct.
+  it('the refusal names the alternatives it is given, and the list is derived', async () => {
+    // This case used to parse `instead (…)` out of a DIRECT `buildAwsLambda` rejection, because the
+    // sentence hardcoded `(cloudflare, vercel, netlify, bun, deno-deploy, node)`. Deriving that list
+    // removed the drift by construction — and removed it from the adapter's own message too, for a
+    // reason worth keeping: asking the registry from inside an adapter closes
+    // `aws-lambda -> config-support -> registry -> aws-lambda`, which `dependency-cruiser` refuses as
+    // `no-circular`. So the CLI passes the list it already has and an adapter's guard refuses without it.
     //
-    // This is the shape this repository keeps paying for: one place updated and another forgotten.
-    // `EXPECTED` above pins each flag, so flipping one is a deliberate edit — and this sentence would
-    // drift in silence, either recommending a target that cannot do the job or omitting one that can.
-    // BOTH sides below are derived, so this test adds no third copy of the list.
+    // What is left to pin is not the sentence but the two things that can still be wrong: that the
+    // message uses the list it is HANDED rather than one of its own, and that the handed list is the
+    // declared streaming set.
+    const { assertStreamingSupported } =
+      await import('../../packages/theo/src/adapters/config-support.js')
+    const { streamingTargets } = await import('../../packages/theo/src/adapters/registry.js')
+
+    const derived = await streamingTargets()
+    const declared: string[] = []
+    for (const target of VALID_TARGETS) {
+      const adapter = await resolveAdapter(target)
+      if (adapter.streamsResponses === true) declared.push(target)
+    }
+    const byName = (a: string, b: string): number => a.localeCompare(b)
+    const sorted = (xs: readonly string[]): string[] => [...xs].sort(byName)
+
+    expect(
+      sorted(derived),
+      'streamingTargets() no longer derives the list from what the adapters declare',
+    ).toEqual(sorted(declared))
+
+    // And the message carries exactly what it was handed — a sentinel no adapter could produce.
+    let message = ''
+    try {
+      assertStreamingSupported({ ssrStreaming: true }, { streamsResponses: false }, 'a-target', [
+        'only-this-one',
+      ])
+    } catch (err: unknown) {
+      message = err instanceof Error ? err.message : String(err)
+    }
+
+    expect(
+      message,
+      'the refusal ignored the list it was given, so it is naming alternatives of its own',
+    ).toContain('instead (only-this-one)')
+    expect(message).toContain('a-target')
+  })
+
+  it('an adapter guard refuses without naming alternatives it cannot know', async () => {
+    // COUNTERPROOF at the cycle boundary. A direct call to an adapter's build must still REFUSE — that
+    // guarantee predates this change — and must not name a list, because knowing one would mean
+    // importing the registry from inside an adapter and reopening the cycle.
     const message = await buildAwsLambda(config, '/cwd', {
       runNodeBuild: async () => {},
       writeEntry: () => {},
@@ -135,30 +176,12 @@ describe('#382 — asking a delisted target for streaming fails by name', () => 
       (err: unknown) => (err instanceof Error ? err.message : String(err)),
     )
 
-    const listed = /instead \(([^)]+)\)/.exec(message)?.[1]
+    expect(message).toMatch(/aws-lambda.*does not stream/s)
+    expect(message).toContain('awslambda.streamifyResponse')
     expect(
-      listed,
-      'the refusal no longer carries a parenthesised list after "instead", so either the message was ' +
-        'reworded or the build stopped refusing at all',
-    ).toBeDefined()
-
-    // A copy plus an explicit comparator, on both sides. The bare `.sort()` is locale-unaware and
-    // mutates in place, and `sonarjs` refuses both; `toSorted` answers both and needs `lib: es2023`,
-    // which this workspace does not set — and widening the workspace lib for a test's convenience is
-    // moving a threshold to pass a gate. What matters here is only that the two sides are ordered the
-    // SAME way, which any total order gives.
-    const byName = (a: string, b: string): number => a.localeCompare(b)
-    const sorted = (xs: readonly string[]): string[] => [...xs].sort(byName)
-    const recommended = sorted((listed ?? '').split(',').map((s) => s.trim()))
-    const streaming: string[] = []
-    for (const target of VALID_TARGETS) {
-      const adapter = await resolveAdapter(target)
-      if (adapter.streamsResponses === true) streaming.push(target)
-    }
-
-    expect(
-      recommended,
-      'the refusal recommends a different set of targets than the ones declaring streamsResponses',
-    ).toEqual(sorted(streaming))
+      message,
+      'the adapter guard names alternatives, which it can only know by importing the registry — the ' +
+        'edge that closes `aws-lambda -> config-support -> registry -> aws-lambda`',
+    ).not.toContain('instead (')
   })
 })

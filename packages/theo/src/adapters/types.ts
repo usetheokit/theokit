@@ -206,6 +206,18 @@ export interface DeployAdapter {
    * This member is on the EXPORTED interface, so every third-party adapter inherited that inversion.
    */
   enforcesRateLimit?: 'always' | 'never' | 'with-a-store' | 'not-ours-to-judge'
+  /**
+   * Why THIS target cannot stream, in the words its own maintainer would use.
+   *
+   * The refusal is computed centrally so it can run before anything is destroyed (B-336), and a central
+   * check cannot know that Lambda's v2 result object carries the body as a string or that
+   * `awslambda.streamifyResponse` is what would be needed. Declared here for the same reason
+   * `streamsResponses` is: the adapter is the only thing that knows.
+   *
+   * Read only when `streamsResponses` is not `true`. Absent is fine — the generic refusal still names
+   * the target, the config key and the alternatives.
+   */
+  streamingUnsupportedDetail?: string
   build(config: TheoConfig, cwd: string, ctx?: AdapterBuildContext): Promise<void>
 }
 

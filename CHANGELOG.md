@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- A build that refuses no longer destroys the previous build's output. `cleanOutDir` ran before the
+  target was even checked, so `theokit build --target <typo>` emptied `.theokit/` and answered with a
+  message about the typo — measured: 302 files in `.theokit/client/assets` before, 0 after. The same
+  order cost the `aws-lambda` streaming refusal and the rate-limit refusal, whose own comment claimed it
+  was "refused by name, BEFORE the build writes anything". Every refusal decidable from the target and
+  the config alone now runs first; both messages are unchanged, and the list of streaming alternatives is
+  derived from the registry instead of written into the sentence. (#B-336)
+
 - The Deno entry no longer imports the umbrella the framework schedules for removal. It emitted
   `from 'npm:theokit/server'`, which `server/index.ts` warns is deprecated with a removal scheduled — so
   that deployment would stop loading on the release that drops it, before a request exists. It was the

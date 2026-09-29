@@ -8,6 +8,7 @@ import {
   targetRendersDocument,
   type BuildTarget,
   type AdapterBuildContext,
+  type DeployAdapter,
 } from '../../adapters/types.js'
 import { loadConfig } from '../../config/load-config.js'
 import { loadEnv } from '../../config/load-env.js'
@@ -62,10 +63,12 @@ export async function buildCommand(options?: { target?: string }): Promise<void>
   // #95 — honor config.appDir so a custom frontend dir (e.g. apps/web) passes the structure gate.
   validateProjectStructure(cwd, config.appDir)
 
-  // T2.2 — Clean .theokit/ at build start (Astro pattern). Skip .git*.
-  const distDirAbs = resolve(cwd, config.distDir)
-  await cleanOutDir({ dir: distDirAbs })
-
+  // B-336 — EVERY refusal that is decidable from the target and the config alone runs BEFORE the
+  // clean. `cleanOutDir` used to sit here, above even the check that the target EXISTS: measured on a
+  // real project, `theokit build --target nao-existe` destroyed 302 files in `.theokit/client/assets`
+  // and answered with a message about the typo. The comment above
+  // `assertRateLimitEnforceable` already stated this intent in its own words — "refused by name,
+  // BEFORE the build writes anything" — and the order defeated it.
   const target = (options?.target ?? 'node') as BuildTarget
 
   if (!VALID_TARGETS.includes(target)) {
@@ -73,6 +76,21 @@ export async function buildCommand(options?: { target?: string }): Promise<void>
       `Invalid build target "${target}". Available targets: ${VALID_TARGETS.join(', ')}`,
     )
   }
+
+  const { resolveAdapter, streamingTargets } = await import('../../adapters/registry.js')
+  const adapter = await resolveAdapter(target)
+  const { assertRateLimitEnforceable, assertStreamingSupported } =
+    await import('../../adapters/config-support.js')
+
+  // #461 — a dropped `cors` degrades where someone can see it; a dropped RATE LIMIT looks exactly like
+  // success until the abuse it was meant to stop. Refused by name, and now genuinely before anything is
+  // written or destroyed.
+  assertRateLimitEnforceable(config, adapter, target)
+  assertStreamingSupported(config, adapter, target, await streamingTargets())
+
+  // T2.2 — Clean .theokit/ at build start (Astro pattern). Skip .git*.
+  const distDirAbs = resolve(cwd, config.distDir)
+  await cleanOutDir({ dir: distDirAbs })
 
   // EC-201 — cross-reference note when config.adapters[] diverges from
   // the --target flag. --target is authoritative per ADR D2.
@@ -164,7 +182,7 @@ export async function buildCommand(options?: { target?: string }): Promise<void>
   }
 
   // Now run the adapter-specific bundling (Vite + adapter-specific work).
-  await runAdapterBuild(target, config, cwd)
+  await runAdapterBuild(target, config, cwd, adapter)
 
   // G2 T2.2 — OpenAPI build-artifact emit (post-Vite, EC-2 gated on success).
   // If runAdapterBuild threw, execution never reaches this point — no stale
@@ -190,6 +208,9 @@ async function runAdapterBuild(
   target: BuildTarget,
   config: Awaited<ReturnType<typeof loadConfig>>,
   cwd: string,
+  // Resolved by the caller, which needs it before `cleanOutDir` to run the refusals (B-336). Passing it
+  // in rather than resolving again keeps one answer to "which adapter is this build".
+  adapter: DeployAdapter,
 ): Promise<void> {
   // T1.1 (architecture-cleanup) — CLI composes the Vite Plugin[] and INJECTS it into
   // the adapter via ctx.makeVitePlugins. This inverts the previous `adapters → vite-plugin`
@@ -237,21 +258,14 @@ async function runAdapterBuild(
   // T1.1 (architecture-medium-deferrals, ADR D1) — Adapter Registry replaces
   // the previous 9-case switch. New adapters add 1 line in `adapters/registry.ts`;
   // CLI is closed for modification (OCP).
-  const { resolveAdapter } = await import('../../adapters/registry.js')
-  const adapter = await resolveAdapter(target)
-
   // #409 / #410 — a config key that validates and is then never read makes the
   // deployed app behave as if the operator had not written it, with nothing
   // anywhere saying so. Name it before the build output scrolls past.
-  const { warnUnappliedConfig, assertRateLimitEnforceable } =
-    await import('../../adapters/config-support.js')
+  const { warnUnappliedConfig } = await import('../../adapters/config-support.js')
 
-  // #461 — one of those keys does not get a warning. A dropped `cors` degrades where someone can
-  // see it; a dropped RATE LIMIT looks exactly like success until the abuse it was meant to stop.
-  // #321 and #322 are that lesson twice. So this target/config combination is refused by name,
-  // BEFORE the build writes anything — the same answer `MissingRoutePolicyError` gives an
-  // undeclared route policy, and the public-bind refusal gives an unauthenticated write.
-  assertRateLimitEnforceable(config, adapter, target)
+  // #461 / #321 / #322 — the rate-limit refusal moved to `buildCommand`, above `cleanOutDir`, because
+  // this position made its own comment false: it claimed the combination was refused "BEFORE the build
+  // writes anything" and it is reached a hundred lines after the output has been emptied (B-336).
 
   warnUnappliedConfig(config, adapter, target, (message) => {
     console.log(message)
