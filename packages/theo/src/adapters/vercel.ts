@@ -9,7 +9,10 @@ import type { TheoConfig } from '../config/schema.js'
 import type { SecurityHeadersConfig } from '../core/contracts/security-headers.js'
 import { assertServicesUnsupported, readManifest } from '../services/index.js'
 
-import { bundleDeployedFunction } from './bundle-deployed-function.js'
+import {
+  bundleDeployedFunction,
+  type BundleDeployedFunctionOptions,
+} from './bundle-deployed-function.js'
 import { deployedAgentsFragment, JSON_NOT_FOUND_RESPONSE } from './deployed-agents.js'
 import { renderBakedRoutes, routeRuntimeLines, type BakedRoute } from './deployed-baked-routes.js'
 import { readDocumentShell } from './deployed-document-shell.js'
@@ -475,6 +478,156 @@ export function shouldCopyIntoStatic(source: string, ssr: boolean): boolean {
   return basename(source) !== 'index.html'
 }
 
+export interface VercelBuildDeps {
+  runNodeBuild?: (config: TheoConfig, cwd: string, ctx?: AdapterBuildContext) => Promise<void>
+  bundleFunction?: (options: BundleDeployedFunctionOptions) => Promise<void>
+}
+
+/**
+ * The Vercel build, as a function with a dependency seam — the shape `buildNetlify` and
+ * `buildAwsLambda` already have.
+ *
+ * It was inline on the adapter object until B-346, and nothing could drive it: measured, NO test
+ * ran it to completion, so `buildVercel` carried zero coverage while a defect shipped inside it and
+ * reached a live deployment. The seam is what lets a test assert the wiring — that the copy is
+ * handed the filter that withholds the shell — without a client bundle.
+ */
+/**
+ * The injectable seam's defaults, in one place.
+ *
+ * The same shape `resolveNetlifyDeps` and `resolveAwsLambdaDeps` already have, and here for the same
+ * reason plus one measured one: the two `??` defaults lived inside `buildVercel`, which put it at a
+ * complexity of 16 against a maximum of 15. The body was unchanged from the method it was extracted
+ * from — 14 — so the seam that made the copy testable is what crossed the line. Moving the defaults
+ * out is the convention this file was not following, not a contortion to satisfy the counter.
+ */
+function resolveVercelDeps(deps: VercelBuildDeps): {
+  runNodeBuild: NonNullable<VercelBuildDeps['runNodeBuild']>
+  bundleFunction: NonNullable<VercelBuildDeps['bundleFunction']>
+} {
+  return {
+    runNodeBuild: deps.runNodeBuild ?? nodeAdapter.build.bind(nodeAdapter),
+    bundleFunction: deps.bundleFunction ?? bundleDeployedFunction,
+  }
+}
+
+export async function buildVercel(
+  config: TheoConfig,
+  cwd: string,
+  deps: VercelBuildDeps = {},
+  ctx?: AdapterBuildContext,
+): Promise<void> {
+  const { runNodeBuild, bundleFunction } = resolveVercelDeps(deps)
+
+  // Wave 2 (T2.2) — reject polyglot services on this adapter.
+  // Per 2026-05-27 owner decision, polyglot is wired via `node` (local
+  // docker-compose harness) + `theo-cloud` (Wave 3). Vercel adapter
+  // wire-up is deferred to a fresh ADR with demand evidence.
+  assertServicesUnsupported('vercel', readManifest(cwd))
+
+  // 1. Run the standard Node build first (ctx forwarded so nodeAdapter has makeVitePlugins)
+  await runNodeBuild(config, cwd, ctx)
+
+  const clientDir = resolve(cwd, '.theokit/client')
+  const outputDir = resolve(cwd, '.vercel/output')
+
+  // 2. Create .vercel/output structure
+  mkdirSync(resolve(outputDir, 'static'), { recursive: true })
+  mkdirSync(resolve(outputDir, 'functions/api.func'), { recursive: true })
+
+  // 3. Copy static assets
+  if (existsSync(clientDir)) {
+    // B-346 — the shell is withheld when this project renders its own document. See
+    // `shouldCopyIntoStatic`: shipping it makes `/` a real file, and the SSR route never runs.
+    cpSync(clientDir, resolve(outputDir, 'static'), {
+      recursive: true,
+      filter: (source) => shouldCopyIntoStatic(source, config.ssr),
+    })
+  }
+
+  // B-319 — the routes, agents and identity module are resolved HERE, on the build machine, for
+  // the reason #369 gives for Cloudflare: Build Output API v3 uploads the `.func` directory as it
+  // is, so a runtime `scanServerRoutes` reads a directory that is not there. Measured on a
+  // deployed function — every `/api/*` answered its own JSON 404 with the route files present in
+  // the project. An absent provider bakes nothing and the entry falls back to the scan, which is
+  // what it did before.
+  const scanned = ctx?.scanRoutes?.(config.serverDir)
+
+  // 4. Emit the serverless function, BUNDLED.
+  //
+  // B-316 / ADR 0020 — Build Output API v3 uploads a `.func` directory as it is: nothing installs
+  // dependencies for it and nothing bundles it. Writing the rendered entry straight out produced a
+  // function that could not start, measured on this repository's own scaffold:
+  //
+  //     cp -a .vercel/output/functions/api.func/. /tmp/fn/ && cd /tmp/fn
+  //     node -e "import('./index.mjs')"
+  //     -> ERR_MODULE_NOT_FOUND: Cannot find package 'theokit'
+  //
+  // The staged entry goes inside the project root because a specifier resolves relative to the
+  // importing file — an entry in `/tmp` makes rollup resolve `theokit/server/scan` from `/tmp`.
+  await bundleFunction({
+    projectRoot: cwd,
+    entrySource: renderVercelFunctionEntry({
+      // B-317 — the three options the renderer honoured and no build passed, which is the shape
+      // B-185, B-235, B-312 and B-315 each fixed one target at a time. The shell is read here
+      // rather than in the renderer because reading a file is the build's job, not a string
+      // emitter's.
+      ssr: config.ssr,
+      ...readDocumentShell(cwd, config.ssr),
+      routes: scanned?.routes,
+      agents: scanned?.agents,
+      contextModule: scanned?.contextModule,
+      securityHeaders: config.security?.headers,
+      // B-315 — the option existed, the renderer honoured it, and this build never passed
+      // it, so a project declaring `src/server` got a deployed entry resolving `server`.
+      // The fourth occurrence of that exact shape: B-185 (bun, deno), B-235 (`agentsDir`
+      // here), B-312 (the build's agents scan). Measured on the emitted Vercel function.
+      serverDir: config.serverDir,
+      // B-235 — pillar (a): the option existed and no build passed it, so a project with a
+      // configured agents directory got the default `agents` on this target. Same defect
+      // B-185 fixed for bun and deno, one target over.
+      agentsDir: config.agentsDir,
+      csrf: config.security?.csrf,
+      disallowed: config.security?.disallowed,
+      cors: config.security?.cors,
+      // #425 — a selector, not a transformer, so it rides as a literal like the values above.
+      serialization: config.serialization,
+    }),
+    stagePath: '.theokit/vercel/entry.mjs',
+    outDir: resolve(outputDir, 'functions/api.func'),
+    entryFileName: 'index.mjs',
+  })
+
+  // 5. Emit .vc-config.json
+  writeFileSync(
+    resolve(outputDir, 'functions/api.func/.vc-config.json'),
+    JSON.stringify(renderVercelVcConfigJson(), null, 2),
+  )
+
+  // 6. Emit config.json (routing)
+  writeFileSync(
+    resolve(outputDir, 'config.json'),
+    JSON.stringify(renderVercelConfigJson(config.security?.headers, { ssr: config.ssr }), null, 2),
+  )
+
+  // eslint-disable-next-line no-console -- CLI build progress
+  console.log('\n  ✓ Vercel output → .vercel/output/')
+  // eslint-disable-next-line no-console -- CLI build progress
+  console.log(
+    `${describeDeployedSecurityHeaders({
+      target: 'vercel',
+      securityHeaders: config.security?.headers,
+      // Derived, and it was a literal `false` for the hours between B-317 shipping and B-334. The
+      // function B-317 emits calls `generateNonce()` and feeds the value to both `renderStreamingWeb`
+      // and `buildSecurityHeaders`, so the deployment DID mint one while the build told the operator
+      // it did not — and the printed advice was to move inline scripts out to work around a
+      // restriction that was no longer there.
+      mintsNonce: config.ssr,
+      documentHeaders: 'platform-configured',
+    })}\n`,
+  )
+}
+
 export const vercelAdapter: DeployAdapter = {
   // B-316 / B-319 — Build Output API v3 uploads the `.func` directory as it is: nothing
   // installs and nothing bundles. Driven 2026-09-29 from a directory with no `node_modules`:
@@ -497,116 +650,6 @@ export const vercelAdapter: DeployAdapter = {
   enforcesRateLimit: 'with-a-store',
 
   async build(config: TheoConfig, cwd: string, ctx?: AdapterBuildContext): Promise<void> {
-    // Wave 2 (T2.2) — reject polyglot services on this adapter.
-    // Per 2026-05-27 owner decision, polyglot is wired via `node` (local
-    // docker-compose harness) + `theo-cloud` (Wave 3). Vercel adapter
-    // wire-up is deferred to a fresh ADR with demand evidence.
-    assertServicesUnsupported('vercel', readManifest(cwd))
-
-    // 1. Run the standard Node build first (ctx forwarded so nodeAdapter has makeVitePlugins)
-    await nodeAdapter.build(config, cwd, ctx)
-
-    const clientDir = resolve(cwd, '.theokit/client')
-    const outputDir = resolve(cwd, '.vercel/output')
-
-    // 2. Create .vercel/output structure
-    mkdirSync(resolve(outputDir, 'static'), { recursive: true })
-    mkdirSync(resolve(outputDir, 'functions/api.func'), { recursive: true })
-
-    // 3. Copy static assets
-    if (existsSync(clientDir)) {
-      // B-346 — the shell is withheld when this project renders its own document. See
-      // `shouldCopyIntoStatic`: shipping it makes `/` a real file, and the SSR route never runs.
-      cpSync(clientDir, resolve(outputDir, 'static'), {
-        recursive: true,
-        filter: (source) => shouldCopyIntoStatic(source, config.ssr),
-      })
-    }
-
-    // B-319 — the routes, agents and identity module are resolved HERE, on the build machine, for
-    // the reason #369 gives for Cloudflare: Build Output API v3 uploads the `.func` directory as it
-    // is, so a runtime `scanServerRoutes` reads a directory that is not there. Measured on a
-    // deployed function — every `/api/*` answered its own JSON 404 with the route files present in
-    // the project. An absent provider bakes nothing and the entry falls back to the scan, which is
-    // what it did before.
-    const scanned = ctx?.scanRoutes?.(config.serverDir)
-
-    // 4. Emit the serverless function, BUNDLED.
-    //
-    // B-316 / ADR 0020 — Build Output API v3 uploads a `.func` directory as it is: nothing installs
-    // dependencies for it and nothing bundles it. Writing the rendered entry straight out produced a
-    // function that could not start, measured on this repository's own scaffold:
-    //
-    //     cp -a .vercel/output/functions/api.func/. /tmp/fn/ && cd /tmp/fn
-    //     node -e "import('./index.mjs')"
-    //     -> ERR_MODULE_NOT_FOUND: Cannot find package 'theokit'
-    //
-    // The staged entry goes inside the project root because a specifier resolves relative to the
-    // importing file — an entry in `/tmp` makes rollup resolve `theokit/server/scan` from `/tmp`.
-    await bundleDeployedFunction({
-      projectRoot: cwd,
-      entrySource: renderVercelFunctionEntry({
-        // B-317 — the three options the renderer honoured and no build passed, which is the shape
-        // B-185, B-235, B-312 and B-315 each fixed one target at a time. The shell is read here
-        // rather than in the renderer because reading a file is the build's job, not a string
-        // emitter's.
-        ssr: config.ssr,
-        ...readDocumentShell(cwd, config.ssr),
-        routes: scanned?.routes,
-        agents: scanned?.agents,
-        contextModule: scanned?.contextModule,
-        securityHeaders: config.security?.headers,
-        // B-315 — the option existed, the renderer honoured it, and this build never passed
-        // it, so a project declaring `src/server` got a deployed entry resolving `server`.
-        // The fourth occurrence of that exact shape: B-185 (bun, deno), B-235 (`agentsDir`
-        // here), B-312 (the build's agents scan). Measured on the emitted Vercel function.
-        serverDir: config.serverDir,
-        // B-235 — pillar (a): the option existed and no build passed it, so a project with a
-        // configured agents directory got the default `agents` on this target. Same defect
-        // B-185 fixed for bun and deno, one target over.
-        agentsDir: config.agentsDir,
-        csrf: config.security?.csrf,
-        disallowed: config.security?.disallowed,
-        cors: config.security?.cors,
-        // #425 — a selector, not a transformer, so it rides as a literal like the values above.
-        serialization: config.serialization,
-      }),
-      stagePath: '.theokit/vercel/entry.mjs',
-      outDir: resolve(outputDir, 'functions/api.func'),
-      entryFileName: 'index.mjs',
-    })
-
-    // 5. Emit .vc-config.json
-    writeFileSync(
-      resolve(outputDir, 'functions/api.func/.vc-config.json'),
-      JSON.stringify(renderVercelVcConfigJson(), null, 2),
-    )
-
-    // 6. Emit config.json (routing)
-    writeFileSync(
-      resolve(outputDir, 'config.json'),
-      JSON.stringify(
-        renderVercelConfigJson(config.security?.headers, { ssr: config.ssr }),
-        null,
-        2,
-      ),
-    )
-
-    // eslint-disable-next-line no-console -- CLI build progress
-    console.log('\n  ✓ Vercel output → .vercel/output/')
-    // eslint-disable-next-line no-console -- CLI build progress
-    console.log(
-      `${describeDeployedSecurityHeaders({
-        target: 'vercel',
-        securityHeaders: config.security?.headers,
-        // Derived, and it was a literal `false` for the hours between B-317 shipping and B-334. The
-        // function B-317 emits calls `generateNonce()` and feeds the value to both `renderStreamingWeb`
-        // and `buildSecurityHeaders`, so the deployment DID mint one while the build told the operator
-        // it did not — and the printed advice was to move inline scripts out to work around a
-        // restriction that was no longer there.
-        mintsNonce: config.ssr,
-        documentHeaders: 'platform-configured',
-      })}\n`,
-    )
+    return buildVercel(config, cwd, {}, ctx)
   },
 }
