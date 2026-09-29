@@ -8,6 +8,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- A Vercel project with `ssr: true` serves its server-rendered document instead of the client shell.
+  The build copied `.theokit/client/index.html` into `.vercel/output/static/`, and Vercel's
+  `{ handle: 'filesystem' }` satisfies a directory path with the `index.html` inside it — so `/` was a
+  real file, the SSR route below the handler was never reached, and the deployed page answered 694
+  bytes with an empty `<div id="root">` while the build announced `(SSR)`. B-317 had already pointed
+  that route at the function; what it could not see without a deployment is that the route is never
+  reached. Measured on two real deploys: 0 bytes inside `#root` before, 3546 after — the same
+  rendered-markup figure `node` produces — with `/api/health`, `/robots.txt` and `/favicon.svg`
+  unchanged. The shell is withheld only when the project renders its own document, and only for the
+  basename the platform resolves a directory to. (#B-346)
+
 - The AWS Lambda handler runs where it is uploaded. Two causes, and the second was invisible until
   the first was fixed. The handler was written as source importing five `theokit/…` sub-paths by bare
   specifier, and nothing resolves those for an uploaded function: copied to a directory with no

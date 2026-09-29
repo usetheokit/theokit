@@ -3,7 +3,7 @@
  * `.theokit/vercel/` output layout. Build-time tool — no HTTP input.
  */
 import { existsSync, mkdirSync, writeFileSync, cpSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { basename, resolve } from 'node:path'
 
 import type { TheoConfig } from '../config/schema.js'
 import type { SecurityHeadersConfig } from '../core/contracts/security-headers.js'
@@ -448,6 +448,33 @@ export function renderVercelVcConfigJson(): {
   }
 }
 
+/**
+ * Whether a file from the client build belongs in `.vercel/output/static`.
+ *
+ * With `ssr: true` the shell does NOT, and the reason is the routing layer rather than the file:
+ * Vercel's `{ handle: 'filesystem' }` satisfies a directory path with the `index.html` inside it, so
+ * `/` is a REAL FILE whenever the build copied one — and the SSR route below the handler is never
+ * reached. Measured on the first real deploy of this adapter, 2026-09-29: `GET /` answered 200 with
+ * 694 bytes and `<div id="root">` carrying zero, while the build announced `(SSR)`.
+ *
+ * B-317 already made the last route point at the function when `ssr` is on, and its comment states
+ * the premise that made that sufficient — *"`{ handle: 'filesystem' }` above still serves every real
+ * file, so this is reached only by a page request"*. That premise is false for a path the platform
+ * resolves to an `index.html`. This closes the half B-317 could not see without a deployment.
+ *
+ * **The basename is the mechanism, not a heuristic.** It is what the platform uses to satisfy a
+ * directory path, so it is what shadows a page route, at any depth. `foo.html` is served at the
+ * explicit `/foo.html`, which no page route claims, and dropping it would take a document the
+ * project meant to publish.
+ *
+ * Directories always pass: `cpSync`'s filter is asked about them too, and refusing one prunes the
+ * whole subtree — refusing `assets/` would turn one empty page into a site with no stylesheet.
+ */
+export function shouldCopyIntoStatic(source: string, ssr: boolean): boolean {
+  if (!ssr) return true
+  return basename(source) !== 'index.html'
+}
+
 export const vercelAdapter: DeployAdapter = {
   // B-316 / B-319 — Build Output API v3 uploads the `.func` directory as it is: nothing
   // installs and nothing bundles. Driven 2026-09-29 from a directory with no `node_modules`:
@@ -488,7 +515,12 @@ export const vercelAdapter: DeployAdapter = {
 
     // 3. Copy static assets
     if (existsSync(clientDir)) {
-      cpSync(clientDir, resolve(outputDir, 'static'), { recursive: true })
+      // B-346 — the shell is withheld when this project renders its own document. See
+      // `shouldCopyIntoStatic`: shipping it makes `/` a real file, and the SSR route never runs.
+      cpSync(clientDir, resolve(outputDir, 'static'), {
+        recursive: true,
+        filter: (source) => shouldCopyIntoStatic(source, config.ssr),
+      })
     }
 
     // B-319 — the routes, agents and identity module are resolved HERE, on the build machine, for
