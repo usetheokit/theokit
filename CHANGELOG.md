@@ -6,6 +6,54 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [@theokit/agents 15.0.2, theokit 0.74.0] - 2026-09-29
+
+### Added
+
+- `DeployAdapter` declares two facts about where its entry will run, and a guard checks the
+  consequence of each. `readsSourceAtRunTime` answers whether the deployed entry can read the
+  project's source tree — `false` means its routes and agents must be baked at build time, because a
+  runtime `scanServerRoutes` is a `readdirSync` that finds nothing where the artifact was uploaded
+  alone. `specifiersResolvedBy` answers who makes `theokit/server/…` resolvable: this adapter (it
+  bundles), the platform (wrangler, at deploy time), or the project at run time. Both are additive and
+  optional on the exported interface, so a third-party adapter is unaffected; both are REFUSED when
+  omitted on this repository's own six, because a permissive default would excuse exactly the defect
+  they exist to catch — the lesson `enforcesRateLimit`'s own docblock records about its first cut.
+
+  The class this closes shipped four times, once per target: cloudflare (#369, #367), vercel (B-319,
+  B-316), netlify (B-338, B-339) and aws-lambda (B-344, B-342). The partition is measured rather than
+  asserted — four of the six targets have now been driven at or toward their platform, and four of
+  four behaved as it predicts. Each assertion was sabotaged and shown to fail naming its own cause.
+  (#B-345)
+
+- A guard that a generated deploy entry declares every identifier it references. The entry is
+  written to a temp file and handed to the TypeScript compiler, reading only TS2304
+  ("Cannot find name"); unresolved bare specifiers (TS2307) and runtime globals (TS2591) are
+  expected and are not findings. Nothing else in this repository could see this class: generated
+  code is a string at type-check time, `node --check` sees syntax alone, and the symbol detector
+  reads this repository rather than the text an adapter emits. It found the defect above on the day
+  it was written, and its counterproof is the `compilePattern` regression from the same cycle. Its
+  population covers every one of the six targets that emit an entry, and is checked against
+  `VALID_TARGETS` rather than listed — a target in neither the covered set nor the declared
+  no-entry set fails the suite, so a new adapter cannot end up silently unchecked. (#B-340)
+
+- The Vercel target renders the document. Nothing routed a page request to the function — `{ handle: 'filesystem' }` was followed by `/(.*) -> /index.html` — so `/` was the static host serving an empty `<div id="root">` while the build announced SSR, and the function had no renderer to answer with if it had been asked. The fallback now reaches the function when the project renders, the emitted entry calls the app's own SSR entry (inlined by the function bundler), and the build reads the client shell and passes it. Scoped outside `/api/`, where a path matching no route still owes a JSON 404. Measured by executing the built function: `/` went from `404, 9 bytes, text/plain` to `200, 14827 bytes, text/html` with `<head>`, the root div and the CSP (#B-317)
+- A step-by-step procedure for deploying to Cloudflare Workers, at `docs/wiki/sops/cloudflare-deploy.md`, written from the first real deploy this repository performed. It carries the five defects that sat between a green build and a URL that answered, what each one looked like, and why three of them are invisible to `wrangler deploy --dry-run` — which returned exit 0 on the exact bundle Cloudflare rejected (#263)
+
+- `MIT-0` accepted in the production licence audit. It arrived with `@theokit/ui@1.12.2` through `@csstools/css-color-parser` -> `@csstools/color-helpers@5.1.0`, and its terms were read from that tarball's own `LICENSE.md` rather than inferred: MIT's grant with the attribution clause deleted, so there is no obligation to discharge and it sits in `ALLOWED` beside `0BSD`, `Unlicense` and `CC0-1.0` (#B-311)
+
+- The scaffold used for local verification resolves the `@theokit/ui` the package actually publishes. The root lock resolved 1.3.2 while the package published 1.12.x, and `my-test` has no install of its own — `pnpm-workspace.yaml` declares it a member, so the root lock decides. A hydration probe run there reported a defect that had already been fixed. The peer range was NOT the cause and is unchanged: `^1.1.0` means `>=1.1.0 <2.0.0`, which accepts 1.12.2; bumping it to `^1.12.0` broke `test_ui_peer_accepts_the_whole_line_the_template_pins`, because the template pins the floor `^1.1.0` and a consumer's lock at that floor would then hit ERESOLVE. The framework's own packages stay linked to the working tree, which is what #420 established and is untouched: `@theokit/ui` lives in another repository and has always come from the registry (#B-311)
+- `pnpm try:published` scaffolds a consumer from the registry, outside this workspace, and reports which versions it actually resolved. `try:scaffold` deliberately does the opposite — `link-scaffold-to-workspace.ts` points `my-test` at the working tree, because #420 found that every local verification run through it had been measuring the published package. Both questions are real and they are different scaffolds; this is the second one (#B-309)
+
+### Changed
+
+- The generated `wrangler.toml` no longer compensates for a dependency's defect, and the requirement is declared instead. It carried `[define] "import.meta.url"` because Cloudflare executes the top-level module during validation and a dependency resolving a path at load time refused the whole upload (code 10021) — a substitution that made a broken dependency appear to work and would have covered the next one with the same vice in silence. The cause is fixed in `@theokit/sdk@5.9.2`, measured on the published tarball (0 of 254 executable files resolve a path at module scope), so the `peerDependencies` floor and the `create-theokit` template pin move to `^5.9.2`. A consumer below it now fails at install with a range it can read rather than at deploy with an opaque code. `@theokit/agents` and `@theokit/presenter` keep `^5.3.0` on their own guards' measured reasons, which costs nothing: a real install satisfies both ranges and the intersection is `^5.9.2` (#B-332)
+
+- The `[define]` block the Cloudflare adapter writes into `wrangler.toml` now says what removes it, and the build says it is there. It compensates for a dependency that resolves a path at module scope — Cloudflare executes the top-level module during validation and rejects the upload otherwise — and it substitutes a literal for an expression, so the next dependency with the same vice is covered in silence. Learning that required opening the generated file; the build prints the caveat now, and the comment names the exit rather than only the cause. The block itself stays until the dependency is published fixed (#B-332)
+
+- The subpath-coverage suite no longer loses forty verdicts to a hook timeout on a busy machine (#B-307)
+- `pnpm lint` no longer reports problems in files the repository does not carry. `.squad/` is the write root and was absent from the eslint ignores, so a `/loop-surface-closure` run — which writes eight `.mjs`/`.ts` harness files under `.squad/records/audits/` — turned a clean lint into 17 errors (`sonarjs/slow-regex`, `no-clear-text-protocols`, `code-eval`), none of them in a versioned file. Same class as the `format:check` exclusion, a different tool; invisible to CI, so it only ever appears on a maintainer's machine and only after they run an audit (#B-307)
+
 ### Fixed
 
 - A deployed agent answers on AWS Lambda. The generated agents fragment hardcoded `baseUrl:
@@ -119,59 +167,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   build printed "The CSP carries no nonce … Move inline scripts to `<script src="...">`" — advice to
   work around a restriction the deployment did not have. (#B-334)
 
-
-### Added
-
-- `DeployAdapter` declares two facts about where its entry will run, and a guard checks the
-  consequence of each. `readsSourceAtRunTime` answers whether the deployed entry can read the
-  project's source tree — `false` means its routes and agents must be baked at build time, because a
-  runtime `scanServerRoutes` is a `readdirSync` that finds nothing where the artifact was uploaded
-  alone. `specifiersResolvedBy` answers who makes `theokit/server/…` resolvable: this adapter (it
-  bundles), the platform (wrangler, at deploy time), or the project at run time. Both are additive and
-  optional on the exported interface, so a third-party adapter is unaffected; both are REFUSED when
-  omitted on this repository's own six, because a permissive default would excuse exactly the defect
-  they exist to catch — the lesson `enforcesRateLimit`'s own docblock records about its first cut.
-
-  The class this closes shipped four times, once per target: cloudflare (#369, #367), vercel (B-319,
-  B-316), netlify (B-338, B-339) and aws-lambda (B-344, B-342). The partition is measured rather than
-  asserted — four of the six targets have now been driven at or toward their platform, and four of
-  four behaved as it predicts. Each assertion was sabotaged and shown to fail naming its own cause.
-  (#B-345)
-
-- A guard that a generated deploy entry declares every identifier it references. The entry is
-  written to a temp file and handed to the TypeScript compiler, reading only TS2304
-  ("Cannot find name"); unresolved bare specifiers (TS2307) and runtime globals (TS2591) are
-  expected and are not findings. Nothing else in this repository could see this class: generated
-  code is a string at type-check time, `node --check` sees syntax alone, and the symbol detector
-  reads this repository rather than the text an adapter emits. It found the defect above on the day
-  it was written, and its counterproof is the `compilePattern` regression from the same cycle. Its
-  population covers every one of the six targets that emit an entry, and is checked against
-  `VALID_TARGETS` rather than listed — a target in neither the covered set nor the declared
-  no-entry set fails the suite, so a new adapter cannot end up silently unchecked. (#B-340)
-
-- The Vercel target renders the document. Nothing routed a page request to the function — `{ handle: 'filesystem' }` was followed by `/(.*) -> /index.html` — so `/` was the static host serving an empty `<div id="root">` while the build announced SSR, and the function had no renderer to answer with if it had been asked. The fallback now reaches the function when the project renders, the emitted entry calls the app's own SSR entry (inlined by the function bundler), and the build reads the client shell and passes it. Scoped outside `/api/`, where a path matching no route still owes a JSON 404. Measured by executing the built function: `/` went from `404, 9 bytes, text/plain` to `200, 14827 bytes, text/html` with `<head>`, the root div and the CSP (#B-317)
-- A step-by-step procedure for deploying to Cloudflare Workers, at `docs/wiki/sops/cloudflare-deploy.md`, written from the first real deploy this repository performed. It carries the five defects that sat between a green build and a URL that answered, what each one looked like, and why three of them are invisible to `wrangler deploy --dry-run` — which returned exit 0 on the exact bundle Cloudflare rejected (#263)
-
-- `MIT-0` accepted in the production licence audit. It arrived with `@theokit/ui@1.12.2` through `@csstools/css-color-parser` -> `@csstools/color-helpers@5.1.0`, and its terms were read from that tarball's own `LICENSE.md` rather than inferred: MIT's grant with the attribution clause deleted, so there is no obligation to discharge and it sits in `ALLOWED` beside `0BSD`, `Unlicense` and `CC0-1.0` (#B-311)
-
-- The scaffold used for local verification resolves the `@theokit/ui` the package actually publishes. The root lock resolved 1.3.2 while the package published 1.12.x, and `my-test` has no install of its own — `pnpm-workspace.yaml` declares it a member, so the root lock decides. A hydration probe run there reported a defect that had already been fixed. The peer range was NOT the cause and is unchanged: `^1.1.0` means `>=1.1.0 <2.0.0`, which accepts 1.12.2; bumping it to `^1.12.0` broke `test_ui_peer_accepts_the_whole_line_the_template_pins`, because the template pins the floor `^1.1.0` and a consumer's lock at that floor would then hit ERESOLVE. The framework's own packages stay linked to the working tree, which is what #420 established and is untouched: `@theokit/ui` lives in another repository and has always come from the registry (#B-311)
-- `pnpm try:published` scaffolds a consumer from the registry, outside this workspace, and reports which versions it actually resolved. `try:scaffold` deliberately does the opposite — `link-scaffold-to-workspace.ts` points `my-test` at the working tree, because #420 found that every local verification run through it had been measuring the published package. Both questions are real and they are different scaffolds; this is the second one (#B-309)
-
-### Changed
-
-- The generated `wrangler.toml` no longer compensates for a dependency's defect, and the requirement is declared instead. It carried `[define] "import.meta.url"` because Cloudflare executes the top-level module during validation and a dependency resolving a path at load time refused the whole upload (code 10021) — a substitution that made a broken dependency appear to work and would have covered the next one with the same vice in silence. The cause is fixed in `@theokit/sdk@5.9.2`, measured on the published tarball (0 of 254 executable files resolve a path at module scope), so the `peerDependencies` floor and the `create-theokit` template pin move to `^5.9.2`. A consumer below it now fails at install with a range it can read rather than at deploy with an opaque code. `@theokit/agents` and `@theokit/presenter` keep `^5.3.0` on their own guards' measured reasons, which costs nothing: a real install satisfies both ranges and the intersection is `^5.9.2` (#B-332)
-
-- The `[define]` block the Cloudflare adapter writes into `wrangler.toml` now says what removes it, and the build says it is there. It compensates for a dependency that resolves a path at module scope — Cloudflare executes the top-level module during validation and rejects the upload otherwise — and it substitutes a literal for an expression, so the next dependency with the same vice is covered in silence. Learning that required opening the generated file; the build prints the caveat now, and the comment names the exit rather than only the cause. The block itself stays until the dependency is published fixed (#B-332)
-
-- The subpath-coverage suite no longer loses forty verdicts to a hook timeout on a busy machine (#B-307)
-- `pnpm lint` no longer reports problems in files the repository does not carry. `.squad/` is the write root and was absent from the eslint ignores, so a `/loop-surface-closure` run — which writes eight `.mjs`/`.ts` harness files under `.squad/records/audits/` — turned a clean lint into 17 errors (`sonarjs/slow-regex`, `no-clear-text-protocols`, `code-eval`), none of them in a versioned file. Same class as the `format:check` exclusion, a different tool; invisible to CI, so it only ever appears on a maintainer's machine and only after they run an audit (#B-307)
-
-### Deprecated
-
-### Removed
-
-### Fixed
-
 - An ordinary nested-layout project with no agents stops being told that "every /api/agents/* route will 404". `generateManifest` defaulted `projectRoot` to the server dir's parent and `agentsDir` to `'agents'`, so the warning named a directory the project never configured under a root that was wrong by one level — and the default value itself made `scanAgents` believe something HAD been configured, erasing the distinction that layer exists to keep ("a default erases the difference between 'nobody configured this' and 'somebody configured agents'"). Both are now supplied by every caller, with `agentsDir` optional and undefaulted so an absence passes through as itself. `loadManifest` carried the same default — the one theokit#871 was about, `Cannot find module '<root>/src/src/server/agents/chat.ts'` — and is required now too, so no caller can re-create it (#B-313)
 
 - The generated `wrangler.toml` is checked by a TOML parser instead of by a regex over its text, and the hazard its own comment describes is now stated accurately. Ten test files asserted on that output and none parsed it, so a document whose STRUCTURE was wrong satisfied all of them — which matters because a table owns every key after it until the next header, and this file has paid for that once. Measured while adding the parse: the comment claimed that placing `[define]` "above `[assets]`" would absorb `directory` and `binding`, and it does not — before that header the document still parses correctly. What breaks it is the block landing between a header and the keys under it, which is what an insertion one index too late produces. `smol-toml` is the parser wrangler itself applies to this file and was already in the store as a transitive dependency of it; it is declared rather than imported as a phantom (#B-333)
@@ -205,8 +200,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - A Cloudflare Workers deploy now succeeds. Three defects stood between the generated worker and `wrangler deploy`, all found by deploying for the first time and none visible to any test: the worker imported the vite virtual id `/@theo/entry-server`, which esbuild cannot resolve (it now imports the `entry-server.js` the same build writes); it imported the deprecated `theokit/server` umbrella, which pulls `@swc/core`'s `.node` native addon into the bundle — workerd cannot load one at any bundler setting (it now imports `theokit/server/scan` and `theokit/server/http`, both probed clean); and three scanners under `server/scan` called `createRequire(import.meta.url)` at module scope, which is `undefined` on Workers (#B-263)
 - The agent-policy, HTTP-method and route-policy scanners load the TypeScript compiler lazily instead of at import time. Two reasons, and only the first is about Cloudflare: `createRequire(import.meta.url)` throws on Workers, and separately, nothing that merely imports a build-time AST scanner should pay for the compiler. `wrangler deploy --dry-run` returns exit 0 on the same bundle — it bundles and does not execute, while Cloudflare executes the module during validation (#B-263)
-
-### Security
 
 ## [1.1.0] - 2026-09-25
 
