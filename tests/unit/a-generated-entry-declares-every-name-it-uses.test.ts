@@ -56,7 +56,28 @@ import { withoutComments as code } from './_helpers/adapter-source.js'
  * exercise the path. The same trap the Cloudflare preload tests hit: without `assetsMap` they went
  * green on unfixed code.
  */
-const WITH_AGENTS = { agentsDir: 'src/server/agents', serverDir: 'src/server' } as const
+// A ROUTE is part of the fixture, and it was not until 2026-09-29. Without one, `renderBakedRoutes([])`
+// emits an empty table and every name used only on the baked path is invisible to this file — which is
+// how `netlify` shipped an entry calling `compilePattern(...)` without importing it, while these four
+// cases passed. The guard covered the adapter and its INPUT excluded the case (B-339).
+// WHAT THIS FILE ACTUALLY CHECKS, because its name says more than it does.
+//
+// Every case below is about ONE identifier: `cwd`. The name reads as a general guarantee — that a
+// generated entry declares every name it uses — and on 2026-09-29 a reader took it that way and was
+// wrong: `netlify` shipped an entry calling `compilePattern(...)` without importing it, the emulator
+// answered `ReferenceError: compilePattern is not defined`, and these cases passed before and after.
+// Reintroducing the defect deliberately did not turn them red.
+//
+// The general check does not exist anywhere: `adapter-entry-parses.test.ts` runs `node --check`, which
+// sees syntax and not an undeclared identifier, and `/code-quality`'s symbol detector reads this
+// repository's own source rather than the text an adapter emits. Registered as its own item rather than
+// implied by this filename.
+
+const WITH_AGENTS = {
+  agentsDir: 'src/server/agents',
+  serverDir: 'src/server',
+  routes: [{ filePath: 'src/server/routes/health.ts', routePath: '/api/health', methods: ['GET'] }],
+} as const
 
 const ENTRIES: readonly (readonly [string, string])[] = [
   ['vercel', renderVercelFunctionEntry(WITH_AGENTS)],
