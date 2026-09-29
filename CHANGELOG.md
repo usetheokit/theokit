@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- The Deno entry no longer imports the umbrella the framework schedules for removal. It emitted
+  `from 'npm:theokit/server'`, which `server/index.ts` warns is deprecated with a removal scheduled — so
+  that deployment would stop loading on the release that drops it, before a request exists. It was the
+  only adapter still on the umbrella; four siblings already used sub-paths. Verified on Deno 2.9.5: the
+  warning printed on every start before and prints zero times now, with `/api/health` answering 200 and
+  the trace headers echoed. (#B-335)
+
 - The Bun target serves a server-rendered document instead of the client shell. A project with
   `ssr: true` was answered `.theokit/client/index.html` — an empty `<div id="root">` — while the build
   printed `(SSR)`. Measured on Bun 1.3.14: 531 bytes before, 14732 after, with 3546 bytes of rendered
