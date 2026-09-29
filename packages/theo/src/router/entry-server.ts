@@ -399,7 +399,26 @@ function generateStreamingEntry(options: EntryServerOptions): string {
   const appTree = buildAppTreeJs(options)
   return [
     `import React, { Suspense } from 'react'`,
-    `import { renderToPipeableStream, renderToReadableStream } from 'react-dom/server'`,
+    // A NAMESPACE import, deliberately. `react-dom/server` resolves to `server.bun.js` under Bun,
+    // which exports `renderToReadableStream`, `renderToStaticMarkup`, `renderToString`, `resume` and
+    // `version` — and NOT `renderToPipeableStream`, the Node-only API. A NAMED import of a missing
+    // export is a link-time error, so importing both by name made this entire bundle unloadable on
+    // every Web runtime, and the Web renderer it exists to provide could never be reached:
+    //
+    //     SyntaxError: Export named 'renderToPipeableStream' not found in module
+    //       .../react-dom/server.bun.js
+    //
+    // Measured on Bun 1.3.14 and Node 22 by importing the namespace on both: it loads on both, and the
+    // Node-only binding is a function on Node and `undefined` on Bun. The Node renderers below are
+    // never reached on a Web runtime — `renderBunEntry` calls `renderStreamingWeb` and nothing else —
+    // so the destructure is safe and the call sites keep their original text.
+    //
+    // A lazy `await import('react-dom/server')` was tried first and rejected: it cost a helper, an
+    // await inside a Promise executor that is not async, and it broke
+    // `entry-server-web-execution.test.ts`, which materializes the generated module in a temp
+    // directory where a dynamic specifier does not resolve.
+    `import * as __theoReactDOMServer from 'react-dom/server'`,
+    `const { renderToReadableStream, renderToPipeableStream } = __theoReactDOMServer`,
     `import { createStaticHandler, createStaticRouter, StaticRouterProvider, matchRoutes } from 'react-router'`,
     `import { routes, __theoPreloadMap, __theoPreloadPathsFor } from '/@theo/route-manifest'`,
     `import { NonceProvider } from 'theokit/client'`,

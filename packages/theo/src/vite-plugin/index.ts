@@ -199,6 +199,8 @@ export async function theoPluginAsync(
     cwd: projectRoot,
     serverDir: serverDirAbs,
     distDir: resolve(projectRoot, '.theokit'),
+    // B-313 — the same name line 226 already passes. This call passed neither it nor the root.
+    agentsDir: agentsDirName,
   })
 
   // G3 — actions virtual module (`@theo/actions`). Always wired; the plugin

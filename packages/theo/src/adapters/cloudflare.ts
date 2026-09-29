@@ -1,19 +1,16 @@
-/* eslint-disable security/detect-non-literal-fs-filename --
- * Cloudflare deploy adapter. All write paths are under `cwd/.theokit/cloudflare/`
- * and `cwd/wrangler.toml`. Build-time tool — no HTTP input.
- */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import type { TheoConfig } from '../config/schema.js'
-import { findRootDiv } from '../core/contracts/find-root-div.js'
 import { parseAssetsMap } from '../core/contracts/module-preloads.js'
 import type { SecurityHeadersConfig } from '../core/contracts/security-headers.js'
 import { assertServicesUnsupported, readManifest } from '../services/index.js'
 
 import { deployedAgentsFragment, type DeployedAgent } from './deployed-agents.js'
+import { renderBakedRoutes, routeRuntimeLines } from './deployed-baked-routes.js'
 import { deployedCorsFragment, type DeployedCorsOptions } from './deployed-cors.js'
 import { deployedCsrfFragment, type DeployedCsrfOptions } from './deployed-csrf.js'
+import { readDocumentShell } from './deployed-document-shell.js'
 import { planDeployedPlugins } from './deployed-plugins-module.js'
 import {
   deployedRateLimitFragment,
@@ -46,112 +43,12 @@ import type { AdapterBuildContext, DeployAdapter } from './types.js'
  * a correct artifact should say so at build time; the alternative is a deploy
  * that looks successful and serves pages with no stylesheet.
  */
-/**
- * @internal Exported for tests only. Nothing re-exports this module, so this does not reach the
- * published surface — `findRootDiv`, exported for the same reason, appears 0 times in `dist/`.
- */
-export function readDocumentShell(
-  cwd: string,
-  streaming: boolean,
-): { htmlHead?: string; htmlTail?: string } {
-  if (!streaming) return {}
+// `readDocumentShell` moved to `./deployed-document-shell.js` (B-317): the Vercel target needs the
+// same shell, and an adapter importing another adapter is the coupling `deployed-baked-routes.ts`
+// was extracted to avoid.
 
-  const indexPath = resolve(cwd, '.theokit/client/index.html')
-  if (!existsSync(indexPath)) {
-    throw new Error(
-      `[adapter-cloudflare] ssrStreaming is on but ${indexPath} does not exist, so the worker ` +
-        `would serve a document with no <head> and no client entry. Run the client build first, ` +
-        `or set ssrStreaming: false in theo.config.ts.`,
-    )
-  }
-
-  const indexHtml = readFileSync(indexPath, 'utf-8')
-  const rootDiv = findRootDiv(indexHtml)
-  if (rootDiv === undefined) {
-    throw new Error(
-      `[adapter-cloudflare] ${indexPath} has no <div id="root">, so the streamed document has ` +
-        `nowhere to put the app. Add one, or set ssrStreaming: false in theo.config.ts.`,
-    )
-  }
-
-  return {
-    htmlHead: indexHtml.slice(0, rootDiv.insertAt),
-    htmlTail: indexHtml.slice(rootDiv.insertAt),
-  }
-}
-
-/**
- * The routes, turned into source: static imports, a module map and a literal table (#369).
- *
- * Extracted so the worker renderer stays inside its length budget, and because this is the whole of
- * what changed about how a Worker finds a route — it reads as one idea rather than as three loops
- * inside a hundred lines of template.
- *
- * `../../` because the worker is written to `.theokit/cloudflare/worker.mjs` and `filePath` is
- * relative to the project root. The imports are static so Wrangler's bundler follows them:
- * `wrangler.toml` uploads `.theokit/client` and has never uploaded `server/`, so a module not
- * bundled INTO the worker is not on the platform at all.
- */
-function renderBakedRoutes(
-  routes: readonly { filePath: string; routePath: string; methods?: readonly string[] }[],
-): { routeImports: string[]; routeModuleEntries: string[]; routeTableEntries: string[] } {
-  const routeVar = (index: number): string => `__theoRoute${String(index)}`
-  return {
-    routeImports: routes.map(
-      (route, index) => `import * as ${routeVar(index)} from '../../${route.filePath}'`,
-    ),
-    routeModuleEntries: routes.map(
-      (route, index) => `  ${JSON.stringify(route.filePath)}: ${routeVar(index)},`,
-    ),
-    routeTableEntries: routes.map(
-      (route) =>
-        `  { filePath: ${JSON.stringify(route.filePath)}, routePath: ${JSON.stringify(route.routePath)}, ` +
-        `methods: ${JSON.stringify([...(route.methods ?? [])])}, ` +
-        `...compilePattern(${JSON.stringify(route.routePath)}) },`,
-    ),
-  }
-}
-
-/**
- * The route-resolution runtime the Worker gets instead of a directory scan (#369).
- *
- * A module map, the literal table, and a loader that refuses anything the build did not bake.
- * Emitted as its own block because it replaces one idea — "find the routes" — wholesale.
- */
-function routeRuntimeLines(moduleEntries: string[], tableEntries: string[]): string[] {
-  return [
-    `// #369 — the routes are baked at build time. The Worker used to reach for`,
-    `// \`scanServerRoutes\` on the server directory — a readdirSync, in a runtime with no`,
-    `// filesystem. The pattern is recompiled here from the same routePath the scanner`,
-    `// used, so one function decides precedence on every target.`,
-    `const ROUTE_MODULES = {`,
-    ...moduleEntries,
-    `}`,
-    ``,
-    `const routes = [`,
-    ...tableEntries,
-    `]`,
-    ``,
-    `// The executor asks for a module by the path the table names. Anything else was`,
-    `// never bundled, and saying so beats returning undefined and failing later on a`,
-    `// property access far from the cause.`,
-    `async function loadModule(path) {`,
-    `  const mod = ROUTE_MODULES[path]`,
-    `  if (mod === undefined) {`,
-    // No backticks in this message: it is emitted INTO a template literal, and a stray one closes
-    // it. That is how #344 shipped a SyntaxError, and the emitted-entry parse gate caught this one
-    // before it left the branch.
-    "  throw new Error(`Route module '" +
-      '${path}' +
-      "' was not bundled into this Worker. " +
-      'A Worker has no filesystem, so every route is imported at build time. ' +
-      'Re-run: theokit build --target cloudflare`)',
-    `  }`,
-    `  return mod`,
-    `}`,
-    ``,
-  ]
-}
+// Re-exported because this module's tests import it from here, and the move is not their subject.
+export { readDocumentShell }
 
 /**
  * Read the map `theokit build` emitted, for baking into the worker (B-035).
@@ -162,6 +59,7 @@ function routeRuntimeLines(moduleEntries: string[], tableEntries: string[]): str
  */
 export function readAssetsMapForBake(path: string): Record<string, string[]> | undefined {
   try {
+    // eslint-disable-next-line security/detect-non-literal-fs-filename -- `path` is built by the one caller from a fixed `.theokit/client` layout; this returns `undefined` for anything it cannot read
     return parseAssetsMap(readFileSync(path, 'utf8'))
   } catch {
     return undefined
@@ -216,6 +114,30 @@ function renderNonApiBranch(
 ): string {
   return opts.ssrStreaming
     ? [
+        `      // B-263 — a worker that owns \`/\` also receives \`/robots.txt\` and \`/logo.png\`, because`,
+        `      // \`run_worker_first\` in wrangler.toml is what stops the asset handler answering the`,
+        `      // document before this code runs. Rendering SSR for those would answer a text file with HTML.`,
+        `      //`,
+        `      // B-331 — the extension is a PRE-FILTER, no longer the decision. It used to decide: a dot in`,
+        `      // the last segment meant "static file", so \`/users/john.doe\`, \`/v1.2/docs\` and`,
+        `      // \`/reports/2026.q3\` were handed to a handler that does not have them, and with`,
+        `      // \`not_found_handling = "none"\` that is a 404 for a page the app renders.`,
+        `      //`,
+        `      // Now a miss falls through to SSR, so a wrong guess costs one local lookup instead of the`,
+        `      // response. Keeping the pre-filter is what keeps that lookup OFF every ordinary page`,
+        `      // request: \`/dashboard\` never touches the binding.`,
+        `      //`,
+        `      // Still uncovered, and stated rather than implied: a static file with NO extension, such as`,
+        `      // a \`public/CNAME\`. The pre-filter never asks for it, so it renders as a document. That`,
+        `      // is the pre-existing behaviour and the rarer direction of the two.`,
+        `      const lastSegment = url.pathname.slice(url.pathname.lastIndexOf('/') + 1)`,
+        `      if (lastSegment.includes('.')) {`,
+        `        const staticAssets = env?.ASSETS`,
+        `        if (staticAssets === undefined) return notFoundResponse()`,
+        `        const hit = await staticAssets.fetch(request)`,
+        `        if (hit.status !== 404) return withSecurityHeaders(hit, SECURITY_HEADERS)`,
+        `      }`,
+        ``,
         `      // T2.3 — streaming SSR for non-API routes`,
         `      // The same primitive \`theokit start\` uses, not a second one:`,
         `      // 16 bytes of Web Crypto entropy, base64.`,
@@ -292,8 +214,16 @@ export function renderCloudflareWorkerEntry(
     DeployedCorsOptions &
     DeployedRateLimitOptions = {},
 ): string {
+  // `/@theo/entry-server` is a VITE virtual id (`vite-plugin/index.ts`), and `adapters/node.ts`
+  // resolves it by passing it as the vite build's `input`. This file is not bundled by vite: wrangler
+  // hands it to esbuild, which has no such module and fails the build before a request is ever sent —
+  // measured 2026-09-26 on the first real `wrangler deploy` this repository attempted (B-263).
+  //
+  // The same build writes the real thing next door. The worker lands at
+  // `.theokit/cloudflare/worker.mjs` and the renderer at `.theokit/server/entry-server.js`, so one
+  // directory up is the spelling esbuild can follow.
   const streamingImport = opts.ssrStreaming
-    ? `import { renderStreamingWeb } from '/@theo/entry-server'`
+    ? `import { renderStreamingWeb } from '../server/entry-server.js'`
     : `// (ssrStreaming off: renderStreamingWeb not imported)`
   // #343 — the document shell is inlined as a build-time literal because a Worker
   // has no filesystem to read `index.html` from at request time. Without it,
@@ -358,9 +288,22 @@ export function renderCloudflareWorkerEntry(
     `//     so Wrangler bundles theokit and its transitive deps`,
     `//   - Deploy: wrangler deploy`,
     ``,
+    // NEVER the `theokit/server` umbrella. It is deprecated (the package prints so on import) and it
+    // is what made the first real `wrangler deploy` fail: bisected 2026-09-26 with a worker whose
+    // only line was `import { matchRoute } from 'theokit/server'`, and that alone pulled
+    // `@swc/core`'s `.node` native addon into the bundle. workerd cannot load a `.node` at any
+    // bundler setting, so it is not a flag away from working (B-263).
+    //
+    // The narrow subpaths were probed the same way and are clean — `wrangler deploy --dry-run`
+    // exit 0, zero swc, zero errors for both. Which symbol lives where was read from the modules
+    // rather than grepped, since these indexes use `export *`:
+    //
+    //   theokit/server/scan   matchRoute, compilePattern
+    //   theokit/server/http   executeRoute, extractTraceIdFromRequest, TRACE_HEADER,
+    //                         createCorsWebHandler, injectModulePreloads
     !preloadsApply
-      ? `import { matchRoute, executeRoute, compilePattern, extractTraceIdFromRequest, TRACE_HEADER, createCorsWebHandler } from 'theokit/server'`
-      : `import { matchRoute, executeRoute, compilePattern, extractTraceIdFromRequest, TRACE_HEADER, createCorsWebHandler } from 'theokit/server'\nimport { injectModulePreloads } from 'theokit/server/http'`,
+      ? `import { matchRoute, compilePattern } from 'theokit/server/scan'\nimport { executeRoute, extractTraceIdFromRequest, TRACE_HEADER, createCorsWebHandler } from 'theokit/server/http'`
+      : `import { matchRoute, compilePattern } from 'theokit/server/scan'\nimport { executeRoute, extractTraceIdFromRequest, TRACE_HEADER, createCorsWebHandler, injectModulePreloads } from 'theokit/server/http'`,
     `import { createWebShim } from 'theokit/adapters/web-shim'`,
     opts.ssrStreaming
       ? `import { buildSecurityHeaders, generateNonce, withSecurityHeaders } from 'theokit/adapters/security-headers'`
@@ -374,7 +317,7 @@ export function renderCloudflareWorkerEntry(
     ...(opts.rateLimit === undefined
       ? []
       : [
-          `import { createRateLimiterWeb } from 'theokit/server'`,
+          `import { createRateLimiterWeb } from 'theokit/server/rate-limit'`,
           `import { resolveClientIpFromRequest } from 'theokit/server/rate-limit'`,
         ]),
     streamingImport,
@@ -387,7 +330,7 @@ export function renderCloudflareWorkerEntry(
     `// call process.cwd() and resolving paths at runtime returned '/server'.`,
     `const serverDir = ${serverDirLiteral(opts)}`,
     ``,
-    ...routeRuntimeLines(routeModuleEntries, routeTableEntries),
+    ...routeRuntimeLines(routeModuleEntries, routeTableEntries, 'cloudflare'),
     `// #410 — the security baseline \`theokit start\` puts on every response, carried`,
     `// here as a literal because a Worker has no theo.config.ts to read. Same`,
     `// function, same input, so the deployed page and the local one cannot`,
@@ -515,7 +458,7 @@ function cloudflareHandleRequestFragment(
   ]
 }
 
-export function renderWranglerToml(): string {
+export function renderWranglerToml(opts?: { ssrStreaming?: boolean }): string {
   return [
     `# Generated by Theo — Cloudflare Workers`,
     `name = "theo-app"`,
@@ -532,9 +475,39 @@ export function renderWranglerToml(): string {
     `[assets]`,
     `directory = ".theokit/client"`,
     `binding = "ASSETS"`,
-    `# A client-routed app asks for /dashboard, which is no file. Without this the asset`,
-    `# handler 404s a deep link and the SPA never boots.`,
-    `not_found_handling = "single-page-application"`,
+    `# B-263 — WITHOUT this key Cloudflare's asset handler answers before the worker for any path`,
+    `# that matches a file, and \`.theokit/client/index.html\` matches \`/\`. Measured on the first real`,
+    `# deploy: \`GET /\` returned 200 with an empty \`<div id="root">\` and NONE of the six security`,
+    `# headers, while \`/api/health\` — a path no file matches — was answered by the worker and carried`,
+    `# them. The document was coming off the CDN and the code that renders it never ran.`,
+    `#`,
+    `# The negation keeps the 300-odd hashed build outputs on the CDN path: \`true\` would satisfy the`,
+    `# precedence and pay a JS invocation per stylesheet and chunk.`,
+    `run_worker_first = ["/*", "!/assets/*"]`,
+    ...(opts?.ssrStreaming === true
+      ? [
+          `# The worker renders every extension-less path itself, so an asset MISS is a genuine 404.`,
+          `# \`single-page-application\` here would answer \`/nope.png\` with 200 and an HTML body.`,
+          `not_found_handling = "none"`,
+        ]
+      : [
+          `# A client-routed app asks for /dashboard, which is no file, and with streaming off the`,
+          `# worker forwards it to ASSETS rather than rendering it. Without this the asset handler`,
+          `# 404s a deep link and the SPA never boots.`,
+          `not_found_handling = "single-page-application"`,
+        ]),
+    ``,
+    `# B-332 — the [define] "import.meta.url" compensation lived here until 2026-09-28.`,
+    `#`,
+    `# Cloudflare executes the top-level module during validation, so a dependency that resolves a`,
+    `# path at load time refused the whole upload (code 10021). The cause was @theokit/sdk, in`,
+    `# internal/providers/catalog-loader.ts, fixed upstream and published in 5.9.2 — measured on the`,
+    `# published tarball: 0 of 254 executable files resolve a path at module scope.`,
+    `#`,
+    `# The floor this framework declares is now ^5.9.2, so the versions that needed the compensation`,
+    `# cannot be installed. A declared dependency is the honest form of that requirement;`,
+    `# substituting a literal for import.meta.url was the form that also covered the NEXT dependency`,
+    `# with the same vice, in silence.`,
     ``,
     `# Environment variables are set via wrangler secret or dashboard`,
     `# Example: wrangler secret put DATABASE_URL`,
@@ -542,6 +515,12 @@ export function renderWranglerToml(): string {
 }
 
 export const cloudflareAdapter: DeployAdapter = {
+  // #367 / #369 and `docs/adr/0020`. Wrangler runs esbuild at deploy time, so bundling here
+  // twice would be work with no observable effect — validated live 2026-09-26
+  // (`records/acceptance/evidence/b263-cloudflare-deploy.txt`). There is still no source tree in
+  // a Worker, which is why it bakes.
+  readsSourceAtRunTime: false,
+  specifiersResolvedBy: 'the-platform',
   name: 'cloudflare',
   streamsResponses: true,
   // #409 / #410 — the generated entry calls `executeRoute` with routes, loader
@@ -567,6 +546,7 @@ export const cloudflareAdapter: DeployAdapter = {
     await nodeAdapter.build(config, cwd, ctx)
 
     const outputDir = resolve(cwd, '.theokit/cloudflare')
+    // eslint-disable-next-line security/detect-non-literal-fs-filename -- build-time output directory, derived from the project root
     mkdirSync(outputDir, { recursive: true })
 
     // 2. Emit Worker entry (now uses the shared web-shim)
@@ -605,13 +585,19 @@ export const cloudflareAdapter: DeployAdapter = {
     if (pluginsPlan !== undefined) {
       // Beside the worker, so the emitted import is a sibling. Wrangler bundles from here, which is
       // what lets the static import reach the app's own module at all (#425).
+      // eslint-disable-next-line security/detect-non-literal-fs-filename -- build-time write under the project's own `.theokit/cloudflare`
       writeFileSync(resolve(outputDir, 'theo.plugins.mjs'), pluginsPlan.source)
     }
 
+    // eslint-disable-next-line security/detect-non-literal-fs-filename -- build-time write under the project's own `.theokit/cloudflare`
     writeFileSync(
       resolve(outputDir, 'worker.mjs'),
       renderCloudflareWorkerEntry({
         ssrStreaming: config.ssrStreaming,
+        // B-315 — LATENT here, not broken: the routes are baked (#369) so the worker never scans,
+        // and a live deploy on 2026-09-26 served every route correctly with the wrong literal. It
+        // is still handed to `executeRoute`, so it is one refactor away from mattering.
+        serverDir: config.serverDir,
         ...shell,
         securityHeaders: config.security?.headers,
         csrf: config.security?.csrf,
@@ -635,7 +621,13 @@ export const cloudflareAdapter: DeployAdapter = {
     )
 
     // 3. Emit wrangler.toml (with nodejs_compat enforced)
-    writeFileSync(resolve(cwd, 'wrangler.toml'), renderWranglerToml())
+    // eslint-disable-next-line security/detect-non-literal-fs-filename -- build-time write under the project's own `.theokit/cloudflare`
+    writeFileSync(
+      resolve(cwd, 'wrangler.toml'),
+      // B-263 — the toml decides whether the worker or the CDN answers the document, and the two
+      // modes need different `not_found_handling`. Passing the flag is what keeps them apart.
+      renderWranglerToml({ ssrStreaming: config.ssrStreaming }),
+    )
 
     // eslint-disable-next-line no-console -- CLI build progress
     console.log('\n  ✓ Cloudflare output → .theokit/cloudflare/ + wrangler.toml')

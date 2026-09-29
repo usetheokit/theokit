@@ -19,7 +19,7 @@
  * pins both lists to the same `BuildTarget` union to prevent drift.
  */
 
-import type { BuildTarget, DeployAdapter } from './types.js'
+import { VALID_TARGETS, type BuildTarget, type DeployAdapter } from './types.js'
 
 const adapterRegistry: Record<BuildTarget, () => Promise<DeployAdapter>> = {
   node: async () => (await import('./node.js')).nodeAdapter,
@@ -43,4 +43,21 @@ export async function resolveAdapter(target: BuildTarget): Promise<DeployAdapter
   // accessor still returns the typed factory; we call it directly.
   const factory = adapterRegistry[target]
   return factory()
+}
+
+/**
+ * The targets whose adapters declare that they stream, asked of the registry rather than written down.
+ *
+ * Lives HERE and not beside `assertStreamingSupported`: resolving an adapter from `config-support.ts`
+ * closed `aws-lambda -> config-support -> registry -> aws-lambda`, which `dependency-cruiser` refuses as
+ * `no-circular`. This module already imports every adapter, so deriving the list adds no edge.
+ *
+ * A hardcoded list was correct when it was written and nothing kept it correct.
+ */
+export async function streamingTargets(): Promise<string[]> {
+  const out: string[] = []
+  for (const target of VALID_TARGETS) {
+    if ((await resolveAdapter(target)).streamsResponses === true) out.push(target)
+  }
+  return out
 }

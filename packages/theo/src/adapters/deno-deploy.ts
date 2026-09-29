@@ -37,7 +37,13 @@ export interface DenoBuildDeps {
 const FRAMEWORK_IMPORTS: readonly string[] = [
   `// Use npm: specifier so Deno resolves theokit from the user's package.json`,
   `// equivalent (works in both local 'deno run' and Deno Deploy).`,
-  `import { scanServerRoutes, matchRoute, executeRoute, createProductionLoader, scanWebSocketRoutes, extractTraceIdFromRequest, TRACE_HEADER, createCorsWebHandler } from 'npm:theokit/server'`,
+  // Sub-paths, not the umbrella. `theokit/server` is DEPRECATED by the framework itself with a
+  // REMOVAL scheduled, so this entry would stop loading on that release, before a request exists —
+  // measured on Deno 2.9.5, where the warning printed on every start. This was the only adapter still
+  // on the umbrella; the split below is the mapping four siblings already use and Bun proves by
+  // running.
+  `import { scanServerRoutes, matchRoute, createProductionLoader, scanWebSocketRoutes } from 'npm:theokit/server/scan'`,
+  `import { executeRoute, extractTraceIdFromRequest, TRACE_HEADER, createCorsWebHandler } from 'npm:theokit/server/http'`,
   `import { createWebShim } from 'npm:theokit/adapters/web-shim'`,
   `import { buildSecurityHeaders, withSecurityHeaders } from 'npm:theokit/adapters/security-headers'`,
   `// T3.3 — WS bridge for Deno runtime`,
@@ -99,7 +105,7 @@ export function renderDenoEntry(port: number, opts: DeployedEntryOptions = {}): 
     ...(opts.rateLimit === undefined
       ? []
       : [
-          `import { createRateLimiterWeb } from 'npm:theokit/server'`,
+          `import { createRateLimiterWeb } from 'npm:theokit/server/rate-limit'`,
           `import { resolveClientIpFromRequest } from 'npm:theokit/server/rate-limit'`,
           ``,
         ]),
@@ -235,6 +241,10 @@ export async function buildDeno(
 }
 
 export const denoDeployAdapter: DeployAdapter = {
+  // Same as `bun`, plus the runtime compiles the TypeScript it finds — which is why a scan that
+  // answered `SyntaxError` on netlify is legitimate here. The last runtime scanner in the fleet.
+  readsSourceAtRunTime: true,
+  specifiersResolvedBy: 'the-project-at-run-time',
   name: 'deno-deploy',
   streamsResponses: true,
   // #409 / #410 — the generated entry calls `executeRoute` with routes, loader

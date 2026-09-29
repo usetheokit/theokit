@@ -44,11 +44,33 @@ describe('cf/bun/vercel adapters consume renderStreamingWeb when streaming on', 
     expect(out).toMatch(/renderStreamingWeb|ssrStreaming/)
   })
 
-  it('bun adapter mentions streaming branch when feature wired', async () => {
+  it('bun adapter imports the renderer when the feature is wired', async () => {
+    // This asserted `/renderStreamingWeb|ssrStreaming|streaming/` against `renderBunEntry(3000)` —
+    // no options at all, so the feature its own name calls "wired" was off. It passed on the string
+    // `// (ssrStreaming off)`, which is a COMMENT: the entire implementation of `ssrStreaming` in that
+    // adapter was which comment landed on line 4, and this test was what made that look covered.
+    //
+    // Measured on Bun 1.3.14 with the feature genuinely on: 531 bytes and an empty `<div id="root">`
+    // before, 14732 bytes with 3546 bytes of rendered markup after (B-334).
+    const { renderBunEntry } = await import('../../packages/theo/src/adapters/bun.js')
+    const out = renderBunEntry(3000, { ssr: true, htmlHead: '<head></head>', htmlTail: '</html>' })
+
+    expect(
+      out,
+      'the bun entry does not import the renderer, so an ssr build answers the client shell while ' +
+        'the build announces (SSR)',
+    ).toContain("import { renderStreamingWeb } from '../server/entry-server.js'")
+    expect(out).toContain('await renderStreamingWeb(request, {')
+  })
+
+  it('bun adapter serves the built shell when ssr is off', async () => {
+    // COUNTERPROOF, and the half the original test lacked: with the feature off the import must be
+    // ABSENT. Without this, `toContain` would pass over an adapter that imports the renderer
+    // unconditionally and pays for an SSR bundle on a static build.
     const { renderBunEntry } = await import('../../packages/theo/src/adapters/bun.js')
     const out = renderBunEntry(3000)
-    // Bun template should reference the streaming entry name when streaming
-    // is part of the build output.
-    expect(out).toMatch(/renderStreamingWeb|ssrStreaming|streaming/)
+
+    expect(out).not.toContain('renderStreamingWeb')
+    expect(out).toContain("const indexPath = join(clientDir, 'index.html')")
   })
 })

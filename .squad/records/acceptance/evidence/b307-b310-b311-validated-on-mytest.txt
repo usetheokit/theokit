@@ -1,0 +1,30 @@
+B-307 / B-310 / B-311 — validated ON my-test, 2026-09-25
+tree: 8da293978, git status clean
+
+WHAT my-test CONSUMES, read from the links rather than the manifest:
+  theokit          -> LINK to packages/theo      (workspace:*)
+  @theokit/agents  -> LINK to packages/agents    (workspace:*)   <- carries B-307
+  @theokit/ui      -> registry 1.12.2            (^1.12.0)       <- carries B-229, B-308
+
+B-310 — exactly one zod, and the residue that proves the fix was the right one:
+  the lock resolves        zod@4.4.3          (one version)
+  my-test resolves         zod 4.4.3          from node_modules/.pnpm/zod@4.4.3
+  the STORE still holds    zod@4.6.5          residue the lock names nowhere
+  => the old test read the store and would be RED on that residue. It reads the lock now.
+  tests/integration/zod-single-version.test.ts   7 passed
+
+B-307 — the cost is out of the hook, in the package my-test links:
+  beforeAll( occurrences in the file            0
+  LOADED at module scope                        1
+  the test lives in packages/agents, which my-test links   yes
+  subpath-coverage.test.ts   40 passed, Type Errors: no errors
+
+B-311 — behaviour, on the built my-test:
+  pnpm build      Build complete -> node (SSR)
+  HTTP 200, 14885 bytes, root NOT empty, ThemeSwitcher in the markup
+  probe-hydration  uncaught exceptions: 0, console errors: 0    clean
+
+The probe's calibration, measured the same day on an out-of-workspace scaffold:
+  @theokit/ui@1.12.0  -> 1 uncaught (React #418, args[]=HTML)
+  @theokit/ui@1.12.1  -> 0
+A clean result here is therefore a measurement, not an instrument that cannot fail.

@@ -175,21 +175,39 @@ export async function runConfigureServer(
     const isRouteFileForOpenApi = (file: string): boolean =>
       file.startsWith(openApiServerDir) && /\.(ts|tsx|js|mjs)$/.test(file)
     // Boot emit (fire-and-forget — boot doesn't await)
-    void reEmitOpenApi(openApiServerDir, openApiDistDir, openApiCfg)
+    void reEmitOpenApi(openApiServerDir, openApiDistDir, openApiCfg, ctx.projectRoot, ctx.agentsDir)
     // Watcher emit
     server.watcher.on('change', (file: string) => {
       if (isRouteFileForOpenApi(file)) {
-        void reEmitOpenApi(openApiServerDir, openApiDistDir, openApiCfg)
+        void reEmitOpenApi(
+          openApiServerDir,
+          openApiDistDir,
+          openApiCfg,
+          ctx.projectRoot,
+          ctx.agentsDir,
+        )
       }
     })
     server.watcher.on('add', (file: string) => {
       if (isRouteFileForOpenApi(file)) {
-        void reEmitOpenApi(openApiServerDir, openApiDistDir, openApiCfg)
+        void reEmitOpenApi(
+          openApiServerDir,
+          openApiDistDir,
+          openApiCfg,
+          ctx.projectRoot,
+          ctx.agentsDir,
+        )
       }
     })
     server.watcher.on('unlink', (file: string) => {
       if (isRouteFileForOpenApi(file)) {
-        void reEmitOpenApi(openApiServerDir, openApiDistDir, openApiCfg)
+        void reEmitOpenApi(
+          openApiServerDir,
+          openApiDistDir,
+          openApiCfg,
+          ctx.projectRoot,
+          ctx.agentsDir,
+        )
       }
     })
   }

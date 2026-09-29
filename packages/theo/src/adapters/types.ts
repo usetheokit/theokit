@@ -206,6 +206,69 @@ export interface DeployAdapter {
    * This member is on the EXPORTED interface, so every third-party adapter inherited that inversion.
    */
   enforcesRateLimit?: 'always' | 'never' | 'with-a-store' | 'not-ours-to-judge'
+
+  /**
+   * Whether the deployed entry can read the project's SOURCE TREE while serving a request.
+   *
+   * The question behind four separate repairs, asked too late every time:
+   *
+   *     cloudflare   #369 / #367        routes and agents baked
+   *     vercel       B-319              routes baked
+   *     netlify      B-338              routes and agents baked
+   *     aws-lambda   B-344              routes and agents baked
+   *
+   * `false` means the entry MUST bake its routes and agents at build time. A runtime
+   * `scanServerRoutes` is a `readdirSync`, and where the artifact was uploaded alone there is nothing
+   * to read: measured on netlify and aws-lambda, every `/api/*` answered its own 404. Where a tree IS
+   * carried the route files are TypeScript, which a plain Node runtime cannot compile — the
+   * `SyntaxError: Unexpected token ')'` netlify answered with before B-338.
+   *
+   * `true` means the project directory is present at run time, so the scan is legitimate and cheaper
+   * than baking. `bun` and `deno-deploy` are the two, and `deno-deploy` can additionally compile the
+   * TypeScript it finds.
+   *
+   * **Omitted is neither answer**, and `a-deployed-entry-is-self-contained-where-it-must-be.test.ts`
+   * refuses it. This follows `enforcesRateLimit`'s own lesson one field up: its first cut defaulted to
+   * the permissive value and inverted the rule it replaced. A default of `true` would excuse a scan on
+   * a platform that cannot serve it; a default of `false` would demand baking from an adapter that
+   * has no reason to. Neither silence is safe, so silence is refused.
+   */
+  readsSourceAtRunTime?: boolean
+
+  /**
+   * Who makes the entry's bare specifiers resolvable.
+   *
+   * The entry imports `theokit/server/scan` and its siblings by bare specifier, and whether that
+   * breaks depends entirely on who resolves it afterwards — the table `docs/adr/0020` opens with:
+   *
+   * `'this-adapter'`             nobody else does, so the adapter bundles the entry itself through
+   *                              `bundleDeployedFunction`. Omitting the call ships source, and the
+   *                              platform answers
+   *                              `ERR_MODULE_NOT_FOUND: Cannot find package 'theokit'` — measured on
+   *                              vercel (B-316), netlify (B-339) and aws-lambda (B-342).
+   * `'the-platform'`             the platform's own bundler resolves at deploy time. `cloudflare`
+   *                              only: wrangler runs esbuild, validated live on 2026-09-26. Bundling
+   *                              twice would be work with no observable effect.
+   * `'the-project-at-run-time'`  the project's `node_modules` is present when the entry runs, so
+   *                              nothing has to be inlined. `bun` and `deno-deploy`.
+   *
+   * **Omitted is refused**, for the reason given on the field above: an entry whose specifiers nobody
+   * resolves does not fail late, it fails at import, and a silence that reads as one of the three
+   * answers would let that ship.
+   */
+  specifiersResolvedBy?: 'this-adapter' | 'the-platform' | 'the-project-at-run-time'
+  /**
+   * Why THIS target cannot stream, in the words its own maintainer would use.
+   *
+   * The refusal is computed centrally so it can run before anything is destroyed (B-336), and a central
+   * check cannot know that Lambda's v2 result object carries the body as a string or that
+   * `awslambda.streamifyResponse` is what would be needed. Declared here for the same reason
+   * `streamsResponses` is: the adapter is the only thing that knows.
+   *
+   * Read only when `streamsResponses` is not `true`. Absent is fine — the generic refusal still names
+   * the target, the config key and the alternatives.
+   */
+  streamingUnsupportedDetail?: string
   build(config: TheoConfig, cwd: string, ctx?: AdapterBuildContext): Promise<void>
 }
 
@@ -219,6 +282,35 @@ export type BuildTarget =
   | 'netlify'
   | 'aws-lambda'
   | 'theo-cloud'
+
+/**
+ * Whether a target's emitted entry renders the HTML document on the server.
+ *
+ * The build printed `(SSR)` from `config.ssr` alone, so a target that delegates the document to a
+ * static host was announced as server-rendering. Measured 2026-09-28 on a real project built with
+ * `--target bun` and driven under Bun 1.3.14: the build said `✓ Build complete → bun (SSR)` and `GET /`
+ * answered 531 bytes whose body was an empty `<div id="root">`.
+ *
+ * This answers CAN the target render, not WILL it on this build — the config flag that turns rendering
+ * on differs per target (`ssrStreaming` for Cloudflare, `ssr` for the rest), and each adapter already
+ * knows its own. A caller wanting the second question asks both.
+ *
+ * Kept beside `VALID_TARGETS` rather than on `DeployAdapter`, because the CLI prints the note before
+ * and after the adapter runs and never holds the emitted text. `check` in the test suite compares this
+ * table against what each adapter's source actually reaches, in both directions, so it cannot drift
+ * into describing a fleet that moved.
+ */
+const RENDERS_DOCUMENT: ReadonlySet<BuildTarget> = new Set<BuildTarget>([
+  'cloudflare',
+  'vercel',
+  'node',
+  'static',
+  'bun',
+])
+
+export function targetRendersDocument(target: BuildTarget): boolean {
+  return RENDERS_DOCUMENT.has(target)
+}
 
 export const VALID_TARGETS: BuildTarget[] = [
   'node',

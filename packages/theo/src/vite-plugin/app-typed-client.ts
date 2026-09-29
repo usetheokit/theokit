@@ -450,6 +450,14 @@ interface AppTypedClientPluginOptions {
    * decorator package (the walk happens in http-decorators; only data arrives here).
    */
   extraRoutes?: ManifestRoute[]
+  /**
+   * The agents dir NAME, relative to `cwd` (config `agentsDir`).
+   *
+   * B-313 — `cwd` was already here and the `generateManifest` call below passed neither, so the manifest
+   * guessed the root as the server dir's parent and the agents dir as `'agents'`. Optional and
+   * undefaulted, so "the project configured nothing" passes through as itself.
+   */
+  agentsDir?: string
 }
 
 const VIRTUAL_APP_CLIENT_ID = '@theo/client'
@@ -512,7 +520,7 @@ async function emitClientDts(
       path: stubPath,
     }
   }
-  const manifest = generateManifest(opts.serverDir)
+  const manifest = generateManifest(opts.serverDir, opts.cwd, opts.agentsDir)
 
   // Decorator-client-bridge: merge extra routes (from @theokit/http
   // or any other source) into the manifest so generateClientDts() produces a

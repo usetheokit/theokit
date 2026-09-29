@@ -166,3 +166,84 @@ describe('M37 — createInMemoryRunEventCache', () => {
     ).toBe(false)
   })
 })
+
+/**
+ * `end()` must not require a Node timer.
+ *
+ * It called `buf.evictTimer.unref()` unconditionally. `unref` is Node-only, and this module runs on
+ * Workers too — so on a runtime where `setTimeout` returns a number, every terminated run threw
+ * `TypeError: buf.evictTimer.unref is not a function`.
+ *
+ * ## The result is the opposite of the intuition, which is why it is measured and not reasoned
+ *
+ * Probed with two identical workers differing only in one line of `wrangler.toml`, 2026-09-28 (B-329):
+ *
+ *     workerd, no compatibility_flags        typeof setTimeout(...) = object   .unref() works
+ *     workerd, ["nodejs_compat"]             typeof setTimeout(...) = number   .unref() THROWS
+ *
+ * The Node-compat flag is what removed the Node API — and that flag is exactly what this framework's
+ * own Cloudflare adapter emits, so the failing configuration is the shipped one.
+ *
+ * ## What it cost, and why the cost was not local
+ *
+ * `durableUiMessageStreamResponse` called `cache.end(runId)` from `finish()` AFTER setting its
+ * idempotence flag and BEFORE the terminal `[DONE]` frame. The throw skipped the terminator, the retry
+ * found the flag set and returned, and the client waited until its own timeout. Both halves are fixed:
+ * the trigger here, and the ordering there.
+ */
+describe('end() does not require a Node timer', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('test_end_survives_a_setTimeout_that_returns_a_number', () => {
+    // Exactly what workerd under `nodejs_compat` does. Stubbed rather than described, because the
+    // whole defect was a claim about what `setTimeout` returns.
+    vi.stubGlobal('setTimeout', (): number => 1)
+    const cache = createInMemoryRunEventCache()
+    cache.begin('r1')
+    cache.append('r1', '{"type":"start"}')
+
+    expect(() => {
+      cache.end('r1')
+    }, 'end() reached for a Node-only API, so every terminated run threw on Workers').not.toThrow()
+  })
+
+  it('test_end_still_unrefs_where_a_timer_has_it', () => {
+    // COUNTERPROOF: the point of the call is not to keep a Node process alive for an eviction timer,
+    // and a feature check that never fires would silently drop that. Asserted on the timer the stub
+    // hands back.
+    let unrefCalls = 0
+    vi.stubGlobal('setTimeout', () => ({
+      unref: (): void => {
+        unrefCalls += 1
+      },
+    }))
+    const cache = createInMemoryRunEventCache()
+    cache.begin('r2')
+    cache.end('r2')
+
+    expect(
+      unrefCalls,
+      'the timer was never unref-ed, so a Node process is held open by an eviction',
+    ).toBe(1)
+  })
+
+  it('test_end_still_marks_the_run_ended', () => {
+    // COUNTERPROOF: a guard that swallowed the whole body would satisfy the first case. `has` is the
+    // observable the transport and the reconnect path both read.
+    vi.stubGlobal('setTimeout', (): number => 1)
+    const cache = createInMemoryRunEventCache()
+    cache.begin('r3')
+    cache.end('r3')
+
+    expect(
+      cache.attach(
+        'r3',
+        0,
+        () => undefined,
+        () => undefined,
+      ).ended,
+    ).toBe(true)
+  })
+})

@@ -6,7 +6,151 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- A deployed agent answers on AWS Lambda. The generated agents fragment hardcoded `baseUrl:
+  url.origin`, an unwritten contract that the host declares a `URL` object named `url` in the scope
+  the fragment lands in. `vercel` and `netlify` satisfy it; `aws-lambda` failed it twice over — its
+  `url` is a STRING built from the event headers, and it lives in a different function. Measured on a
+  real deployed Function URL: `/api/health` answered 200 while `/api/agents/chat` answered 502, with
+  `ReferenceError: url is not defined at routeRequest` in CloudWatch. The base-URL expression is now
+  a parameter of the fragment, the way the request path already was, so a host states what it has
+  instead of being assumed to have it. (#B-347)
+
+- The entry guard reads TS2552 as well as TS2304. TypeScript emits 2552 — `Cannot find name 'url'.
+  Did you mean 'URL'?` — rather than 2304 whenever a similar name is in scope, so the guard that
+  exists to catch an undeclared identifier in generated code called the Lambda entry clean while the
+  deployed function threw on it. Its shared fixture also passed no agents to three of the six
+  renderers, so their agents fragment was never emitted and never checked. Both halves now carry a
+  sabotage case, and the 2552 one asserts the diagnostic code rather than only the name — without
+  that it would pass identically on a 2304 and prove nothing the older case does not. (#B-347)
+
+- A Vercel project with `ssr: true` serves its server-rendered document instead of the client shell.
+  The build copied `.theokit/client/index.html` into `.vercel/output/static/`, and Vercel's
+  `{ handle: 'filesystem' }` satisfies a directory path with the `index.html` inside it — so `/` was a
+  real file, the SSR route below the handler was never reached, and the deployed page answered 694
+  bytes with an empty `<div id="root">` while the build announced `(SSR)`. B-317 had already pointed
+  that route at the function; what it could not see without a deployment is that the route is never
+  reached. Measured on two real deploys: 0 bytes inside `#root` before, 3546 after — the same
+  rendered-markup figure `node` produces — with `/api/health`, `/robots.txt` and `/favicon.svg`
+  unchanged. The shell is withheld only when the project renders its own document, and only for the
+  basename the platform resolves a directory to. (#B-346)
+
+- The AWS Lambda handler runs where it is uploaded. Two causes, and the second was invisible until
+  the first was fixed. The handler was written as source importing five `theokit/…` sub-paths by bare
+  specifier, and nothing resolves those for an uploaded function: copied to a directory with no
+  `node_modules` it failed with `ERR_MODULE_NOT_FOUND: Cannot find package 'theokit'`. Bundled, it
+  loaded and answered **404** for `GET /api/health`, because it resolved its routes and agents with a
+  runtime `scanServerRoutes` — a `readdirSync` over a source tree an upload does not carry, and where
+  one IS carried the route files are TypeScript a plain Node runtime cannot compile. Both are baked
+  from the build's scan now, and the handler is bundled: invoked from such a directory it answers 200
+  with `{"status":"ok",...,"framework":"TheoKit"}` and the trace header echoed. The output goes into
+  `.theokit/aws/` itself rather than a subdirectory, because Lambda's handler is `<file>.<export>` and
+  the operator zips the directory. (#B-342, #B-344)
+
+- `buildAwsLambda` no longer accepts a `writeEntry` dependency it cannot use. Bundling removed the
+  raw write, so there was nothing for a caller to intercept, and a dependency a build accepts and
+  ignores is the same defect as a renderer option it accepts and ignores. (#B-344)
+
+- The Netlify agents path answers at all. The emitted entry carried
+  `if (!loaderCache) loaderCache = createProductionLoader()` and three more reads of `loaderCache`,
+  and its host declared neither name — a `ReferenceError` on the first `/api/agents/<name>` request.
+  It passed a full suite, `node --check`, six static gates and a 200 from the emulator, because the
+  reference sits on the agents branch and `/api/health` goes through the baked route table. The
+  agents are baked from the build's scan now, for the same reason the routes are: this target
+  bundles, so a runtime scan has no source tree to read and a dynamic `import()` would reach for a
+  path that was never shipped. Verified on the emulator — `/api/agents/chat` returns theokit's own
+  typed `CSRF_FAILED`, then `BAD_REQUEST` from the agent's own validation once the header is sent,
+  with zero `ReferenceError`. (#B-343)
+
+- `renderNetlifyFunction` no longer accepts an `agentsDir` it cannot read. Baking the agents made
+  the option unreadable in the entry, and a renderer that accepts a value and ignores it is the
+  defect `rules/foreign-config-surfaces.md` is about. The build's scan still honours
+  `config.agentsDir`, which is where the option belongs. (#B-343)
+
+
+- The Netlify target serves a request at all. Two independent causes, both measured on the Netlify
+  emulator with the adapter's own output: the function was written to `.netlify/functions/` and the
+  `[functions] directory` key was never emitted, so the CLI scanned its default `netlify/functions/`,
+  found nothing, and `/api/*` answered `Function not found...` with a 404 — the target had never
+  served a request. And the entry was written as source importing `theokit/server/scan` and five
+  sibling sub-paths by bare specifier, which Netlify's own bundler turned into a `ReferenceError` on
+  an identifier that was base64 of the source. The entry is now bundled here, as a directory-shaped
+  function so the bundler's 28 chunks travel with it, and the toml declares both keys. `GET
+  /api/health` answers 200 with `x-request-id` and `x-trace-id` echoed. A conflicting value for
+  either key is refused by name rather than overwritten. (#B-339, #B-341)
+
+- The Netlify build refuses a conflicting `netlify.toml` before it runs anything expensive. The merge
+  — the only step that can detect a conflicting `/api/*` redirect or `[functions]` key — ran after the
+  node build and would now have run after bundling, so a configuration error nothing downstream can
+  resolve cost the whole build first. Same reorder as the build command's this cycle. (#B-339)
+
+- A build that refuses no longer destroys the previous build's output. `cleanOutDir` ran before the
+  target was even checked, so `theokit build --target <typo>` emptied `.theokit/` and answered with a
+  message about the typo — measured: 302 files in `.theokit/client/assets` before, 0 after. The same
+  order cost the `aws-lambda` streaming refusal and the rate-limit refusal, whose own comment claimed it
+  was "refused by name, BEFORE the build writes anything". Every refusal decidable from the target and
+  the config alone now runs first; both messages are unchanged, and the list of streaming alternatives is
+  derived from the registry instead of written into the sentence. (#B-336)
+
+- The Deno entry no longer imports the umbrella the framework schedules for removal. It emitted
+  `from 'npm:theokit/server'`, which `server/index.ts` warns is deprecated with a removal scheduled — so
+  that deployment would stop loading on the release that drops it, before a request exists. It was the
+  only adapter still on the umbrella; four siblings already used sub-paths. Verified on Deno 2.9.5: the
+  warning printed on every start before and prints zero times now, with `/api/health` answering 200 and
+  the trace headers echoed. (#B-335)
+
+- The Bun target serves a server-rendered document instead of the client shell. A project with
+  `ssr: true` was answered `.theokit/client/index.html` — an empty `<div id="root">` — while the build
+  printed `(SSR)`. Measured on Bun 1.3.14: 531 bytes before, 14732 after, with 3546 bytes of rendered
+  markup and the hydration data inside the root. The renderer was already being built and shipped for
+  this target and nothing imported it. (#B-334)
+- The streaming SSR bundle loads on Web runtimes at all. It imported `renderToPipeableStream` and
+  `renderToReadableStream` from `react-dom/server` by name; Bun resolves that specifier to
+  `server.bun.js`, which exports the second and not the first, and a named import of a missing export is
+  a link-time error — so the whole bundle was unloadable and the Web renderer it exists to provide could
+  never be reached. It is a namespace import now. Deno and workerd are affected by the same mechanism.
+  (#B-334)
+- The build no longer announces `(SSR)` for a target whose entry cannot render. The note came from
+  `config.ssr` alone, so `netlify`, `aws-lambda` and `deno-deploy` — which delegate the document to a
+  static host and say so in their own emitted comments — were reported as server-rendering. (#B-334)
+- The Vercel build no longer tells the operator that no nonce is minted when its function mints one. The
+  deployed function calls `generateNonce()` and feeds the value to `buildSecurityHeaders`, while the
+  build printed "The CSP carries no nonce … Move inline scripts to `<script src="...">`" — advice to
+  work around a restriction the deployment did not have. (#B-334)
+
+
 ### Added
+
+- `DeployAdapter` declares two facts about where its entry will run, and a guard checks the
+  consequence of each. `readsSourceAtRunTime` answers whether the deployed entry can read the
+  project's source tree — `false` means its routes and agents must be baked at build time, because a
+  runtime `scanServerRoutes` is a `readdirSync` that finds nothing where the artifact was uploaded
+  alone. `specifiersResolvedBy` answers who makes `theokit/server/…` resolvable: this adapter (it
+  bundles), the platform (wrangler, at deploy time), or the project at run time. Both are additive and
+  optional on the exported interface, so a third-party adapter is unaffected; both are REFUSED when
+  omitted on this repository's own six, because a permissive default would excuse exactly the defect
+  they exist to catch — the lesson `enforcesRateLimit`'s own docblock records about its first cut.
+
+  The class this closes shipped four times, once per target: cloudflare (#369, #367), vercel (B-319,
+  B-316), netlify (B-338, B-339) and aws-lambda (B-344, B-342). The partition is measured rather than
+  asserted — four of the six targets have now been driven at or toward their platform, and four of
+  four behaved as it predicts. Each assertion was sabotaged and shown to fail naming its own cause.
+  (#B-345)
+
+- A guard that a generated deploy entry declares every identifier it references. The entry is
+  written to a temp file and handed to the TypeScript compiler, reading only TS2304
+  ("Cannot find name"); unresolved bare specifiers (TS2307) and runtime globals (TS2591) are
+  expected and are not findings. Nothing else in this repository could see this class: generated
+  code is a string at type-check time, `node --check` sees syntax alone, and the symbol detector
+  reads this repository rather than the text an adapter emits. It found the defect above on the day
+  it was written, and its counterproof is the `compilePattern` regression from the same cycle. Its
+  population covers every one of the six targets that emit an entry, and is checked against
+  `VALID_TARGETS` rather than listed — a target in neither the covered set nor the declared
+  no-entry set fails the suite, so a new adapter cannot end up silently unchecked. (#B-340)
+
+- The Vercel target renders the document. Nothing routed a page request to the function — `{ handle: 'filesystem' }` was followed by `/(.*) -> /index.html` — so `/` was the static host serving an empty `<div id="root">` while the build announced SSR, and the function had no renderer to answer with if it had been asked. The fallback now reaches the function when the project renders, the emitted entry calls the app's own SSR entry (inlined by the function bundler), and the build reads the client shell and passes it. Scoped outside `/api/`, where a path matching no route still owes a JSON 404. Measured by executing the built function: `/` went from `404, 9 bytes, text/plain` to `200, 14827 bytes, text/html` with `<head>`, the root div and the CSP (#B-317)
+- A step-by-step procedure for deploying to Cloudflare Workers, at `docs/wiki/sops/cloudflare-deploy.md`, written from the first real deploy this repository performed. It carries the five defects that sat between a green build and a URL that answered, what each one looked like, and why three of them are invisible to `wrangler deploy --dry-run` — which returned exit 0 on the exact bundle Cloudflare rejected (#263)
 
 - `MIT-0` accepted in the production licence audit. It arrived with `@theokit/ui@1.12.2` through `@csstools/css-color-parser` -> `@csstools/color-helpers@5.1.0`, and its terms were read from that tarball's own `LICENSE.md` rather than inferred: MIT's grant with the attribution clause deleted, so there is no obligation to discharge and it sits in `ALLOWED` beside `0BSD`, `Unlicense` and `CC0-1.0` (#B-311)
 
@@ -14,6 +158,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `pnpm try:published` scaffolds a consumer from the registry, outside this workspace, and reports which versions it actually resolved. `try:scaffold` deliberately does the opposite — `link-scaffold-to-workspace.ts` points `my-test` at the working tree, because #420 found that every local verification run through it had been measuring the published package. Both questions are real and they are different scaffolds; this is the second one (#B-309)
 
 ### Changed
+
+- The generated `wrangler.toml` no longer compensates for a dependency's defect, and the requirement is declared instead. It carried `[define] "import.meta.url"` because Cloudflare executes the top-level module during validation and a dependency resolving a path at load time refused the whole upload (code 10021) — a substitution that made a broken dependency appear to work and would have covered the next one with the same vice in silence. The cause is fixed in `@theokit/sdk@5.9.2`, measured on the published tarball (0 of 254 executable files resolve a path at module scope), so the `peerDependencies` floor and the `create-theokit` template pin move to `^5.9.2`. A consumer below it now fails at install with a range it can read rather than at deploy with an opaque code. `@theokit/agents` and `@theokit/presenter` keep `^5.3.0` on their own guards' measured reasons, which costs nothing: a real install satisfies both ranges and the intersection is `^5.9.2` (#B-332)
+
+- The `[define]` block the Cloudflare adapter writes into `wrangler.toml` now says what removes it, and the build says it is there. It compensates for a dependency that resolves a path at module scope — Cloudflare executes the top-level module during validation and rejects the upload otherwise — and it substitutes a literal for an expression, so the next dependency with the same vice is covered in silence. Learning that required opening the generated file; the build prints the caveat now, and the comment names the exit rather than only the cause. The block itself stays until the dependency is published fixed (#B-332)
 
 - The subpath-coverage suite no longer loses forty verdicts to a hook timeout on a busy machine (#B-307)
 - `pnpm lint` no longer reports problems in files the repository does not carry. `.squad/` is the write root and was absent from the eslint ignores, so a `/loop-surface-closure` run — which writes eight `.mjs`/`.ts` harness files under `.squad/records/audits/` — turned a clean lint into 17 errors (`sonarjs/slow-regex`, `no-clear-text-protocols`, `code-eval`), none of them in a versioned file. Same class as the `format:check` exclusion, a different tool; invisible to CI, so it only ever appears on a maintainer's machine and only after they run an audit (#B-307)
@@ -23,6 +171,40 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Removed
 
 ### Fixed
+
+- An ordinary nested-layout project with no agents stops being told that "every /api/agents/* route will 404". `generateManifest` defaulted `projectRoot` to the server dir's parent and `agentsDir` to `'agents'`, so the warning named a directory the project never configured under a root that was wrong by one level — and the default value itself made `scanAgents` believe something HAD been configured, erasing the distinction that layer exists to keep ("a default erases the difference between 'nobody configured this' and 'somebody configured agents'"). Both are now supplied by every caller, with `agentsDir` optional and undefaulted so an absence passes through as itself. `loadManifest` carried the same default — the one theokit#871 was about, `Cannot find module '<root>/src/src/server/agents/chat.ts'` — and is required now too, so no caller can re-create it (#B-313)
+
+- The generated `wrangler.toml` is checked by a TOML parser instead of by a regex over its text, and the hazard its own comment describes is now stated accurately. Ten test files asserted on that output and none parsed it, so a document whose STRUCTURE was wrong satisfied all of them — which matters because a table owns every key after it until the next header, and this file has paid for that once. Measured while adding the parse: the comment claimed that placing `[define]` "above `[assets]`" would absorb `directory` and `binding`, and it does not — before that header the document still parses correctly. What breaks it is the block landing between a header and the keys under it, which is what an insertion one index too late produces. `smol-toml` is the parser wrangler itself applies to this file and was already in the store as a transitive dependency of it; it is declared rather than imported as a phantom (#B-333)
+
+- An agent stream on Cloudflare Workers terminates. Every chunk of a turn arrived, `finish` included, and the request then never ended — a browser rendered the reply and the turn never completed, because a client keys its terminal state on the `[DONE]` frame. The trigger was `RunEventCache.end()` calling the Node-only `unref()` on a timer that is a NUMBER under `nodejs_compat`, which is the flag this framework's own Cloudflare adapter emits; it is feature-detected now. What made one line cost the whole stream was the terminator running AFTER that bookkeeping with the idempotence flag already set, so the throw skipped it and the retry found the flag set and returned — the guard against a second terminator prevented the only one. Measured against a real turn: `curl --max-time 25` exited 28 with no terminator before, and exits 0 in 3.5s with it after (#B-329)
+
+- A route whose last segment contains a dot is rendered instead of being handed to the Cloudflare asset handler. The worker owns `/`, so it also receives `/robots.txt` and `/logo.png`, and the discriminator was an extension on the last segment — which DECIDED, and is a guess about paths: `/users/john.doe`, `/v1.2/docs` and `/reports/2026.q3` were each sent to a handler that does not have them, and with `not_found_handling = "none"` that is a 404 for a page the app renders. The extension is now a pre-filter whose miss falls through to SSR, so a wrong guess costs one local lookup instead of the response, and `/dashboard` still never touches the binding. A static file with no extension, such as a `public/CNAME`, remains uncovered — the rarer direction, and pre-existing (#B-331)
+
+- The staged entry a deployed-function build writes is refused when it would leave the project. `bundleDeployedFunction`'s own option docblock declared the invariant — "inside the root is not a preference", because an entry staged elsewhere makes rollup resolve `theokit/server/scan` from the wrong directory — and nothing checked it: `../outside/entry.mjs` wrote the file outside the project, and an absolute `stagePath` discarded the root entirely and was stopped only by filesystem permissions. It is now validated at the boundary with a typed error, before anything is written, which also let the file-wide `eslint-disable security/detect-non-literal-fs-filename` become two per-call exemptions whose justification is a proof above them rather than a claim about callers (#B-330)
+
+- The stream a mounted agent answers with is pulled rather than pushed. `streamAgentResponse` built its body with `new ReadableStream({ async start })`, which runs eagerly and leaves a floating promise — Node drains the microtask queue after the handler returns and workerd tears down pending work, so the terminal `[DONE]` frame and `controller.close()` sit exactly where the continuation is not guaranteed to run. The same rewrite had already landed in the durable encoder for a teardown measured on a deployed worker and did not reach this one. The guard asserts the declaration, because the behavioural version passes with the defect present: `async start` runs synchronously only to its first suspension, and that suspension yields the opening chunk before the source is touched. The `cancel` it gains releases the upstream turn and records the cancellation reason on the `THEOKIT_DEBUG` channel — it cannot be forwarded, because the chunk generator's `TReturn` is `void`, and dropping it would leave a turn released early with no trace (#B-327)
+
+- A turn that fails on a deployed runtime names its call site. `sdkErrorEvent` flattens a thrown `Error` into the event every later layer sees, and it dropped `stack` — the only field saying WHERE the failure was, destroyed at the one place the object still existed. It is carried for the server logger and never reaches the wire: a stack names files and arguments, which is what `MASK_ERROR` exists to keep from a browser, and `errorChunks` builds each chunk explicitly instead of spreading the event (#B-323)
+
+- A project that declares `rateLimit` builds for Bun. The conditional rate-limit import was joined to the one before it by two characters — a backslash and an `n` — because the fragment sat in a nested double-quoted string inside a template literal, where an escaped backslash is a backslash. Bun answered `SyntaxError: Invalid or unexpected token`. Every entry the parse test covered, and the verification scaffold itself, declare no limit, so the whole conditional family had never been parsed; a rate-limit variant now covers all six targets rather than the one that broke (#B-325)
+
+- `pnpm build` at the repository root succeeds again. `apps/theocode` copied `provider-catalog.json` out of the SDK's dist, because the SDK read it via `import.meta.url` — next to the running file — and without it auto-compaction was silently disabled in every model mode. That reason expired when the SDK began inlining the catalog, and it expired loudly: the file stopped being shipped, `copyFileSync` raised `ENOENT`, and a consumer's build broke on a change whose own suite was green. The copy is gone and the pin that cited it records why its justification no longer holds (#B-324)
+
+- A smoke test's specifier map is derived from the package's own `exports` instead of mirroring it by hand. Five entries were maintained against twenty-seven exported subpaths, and the rewrite passed an unmapped specifier through — so changing an emitted import surfaced as `Cannot find package 'theokit'` from a temp directory, three hops from the cause. An unmapped `theokit` specifier is now refused by name (#B-326)
+- `/api/*` answers on Vercel. The emitted function scanned for its routes at request time — a `readdirSync` against a directory Build Output API v3 never uploads — so every route the project declares answered its own JSON 404 on a deployed function. Routes, agents and the identity module are baked at build time now, through the same emitter Cloudflare has used since #369 rather than a copy of it, and the loader names the build command that fixes an unbundled path. There is no scan fallback on this target: a scan cannot work where there is no source tree, and a fallback would preserve a behaviour that is broken by construction (#319)
+- An agent turn streams on Cloudflare Workers. The SSE transport ran the whole turn inside a `ReadableStream`'s `start()`, whose promise is held by nobody — Node keeps draining it, workerd discards it the instant the handler returns, so a deployed chat answered 200 `text/event-stream` with **zero bytes**. The stream is demand-driven now, which behaves the same on Node, workerd, Deno and Bun with no per-platform branch, and brings two guarantees the eager version could not have: backpressure, and a client disconnect that releases the turn instead of running it to completion (#321)
+- A masked agent error is recorded server-side before it is masked. Every message outside a two-code allowlist is replaced with `An error occurred.` so a browser cannot read a host, a path or a credential — correctly — but the unmasked text went nowhere else, so a failing turn left the operator that string and empty logs. It reached a Cloudflare worker and a local `wrangler dev` alike; logging it named the cause in one run (#322)
+- The generated `wrangler.toml` defines `import.meta.url`, so a project declaring an agent can deploy to Cloudflare Workers at all. Cloudflare executes the top-level module during validation, and a dependency resolving `__dirname` at load time refused the entire upload with code 10021. The compensation states its own limit: a module that only computes a path now initialises, and anything that later reads it still fails (#320)
+- The Vercel function no longer crashes on `/api/agents/<name>`. The shared agents fragment emits `scanAgents(cwd, …)` — an implicit contract on the host adapter — and this was the one of its four callers that never declared `cwd`, so the route answered HTTP 500 `FUNCTION_INVOCATION_FAILED` with `ReferenceError: cwd is not defined`. Invisible to `tsc`, because a generated entry is a string at compile time; measured on a live deployment and reproduced by invoking the bundled function (#318)
+- The Vercel function is bundled, so the deployed `.func` directory loads with no `node_modules` beside it. Build Output API v3 uploads that directory as it is — nothing installs dependencies for it and nothing bundles it — so the emitted entry's `import … from 'theokit/…'` could never resolve and `/api/*` could not answer on any Vercel deployment this framework had ever produced. The step uses vite, which the repository already declares and already runs for the SSR build, and lives in one module so `netlify` and `aws-lambda` can share it rather than grow a copy. ADR 0020 records the decision and the three rejected alternatives (#316)
+- No deploy adapter emits the deprecated `theokit/server` umbrella into a generated entry any more. The umbrella re-exports the whole server half, and `@swc/core`'s native `.node` addon is down that graph — wrangler refuses to bundle it and vite refuses to parse it, so the Vercel function could not be bundled at all and the Cloudflare worker failed to upload. Eleven imports across six files now name `theokit/server/scan`, `theokit/server/http`, `theokit/server/rate-limit` or `theokit/server/plugins`, including the shared fragment module that reaches every target and a rate-limit line an earlier fix had missed because it is emitted only when a project declares a limit (#316)
+- Three deploy adapters resolve the server directory the project declared, instead of the default. `vercel`, `aws-lambda` and `cloudflare` emitted a `serverDir` literal and their build never passed the configured value, so a project declaring `src/server` got a deployed entry resolving `server` — load-bearing on Vercel, where the entry scans that directory at runtime. The fourth occurrence of one shape: an option that exists, is honoured by the renderer, and is not passed by the caller (#315)
+- The build scans agents from the project root, so an app whose `serverDir` is nested more than one level deep gets its agents into the built output instead of none. The scan root was the parent of `serverDir`, which is the project root only for a flat layout — with the scaffold's own `src/server` it resolved `agentsDir` against `<root>/src` and every `/api/agents/*` route 404'd on every scanned deploy target, silently, because finding no agents is indistinguishable from declaring none (#312)
+- Cloudflare: `GET /` is answered by the worker instead of the CDN, so the page is server-rendered and carries the security headers. Cloudflare's asset handler answers before the worker for any path matching a file, and `index.html` matches `/` — measured on a live deploy, the document came back as a 529-byte empty shell with none of the six headers the build announces. The generated `wrangler.toml` now sets `run_worker_first`, excluding the hashed build output so static assets keep the CDN path, and the worker forwards a request whose last path segment has an extension to the asset binding rather than rendering it as a document (#263)
+- Security headers are added to a response the framework did not create, such as one returned by a storage or asset binding. Stamping the baseline onto such a response threw `TypeError: Can't modify immutable headers.` and answered HTTP 500; it had never surfaced because every response the function had been handed was one the framework built itself. Applies to all six deploy targets (#263)
+
+- A Cloudflare Workers deploy now succeeds. Three defects stood between the generated worker and `wrangler deploy`, all found by deploying for the first time and none visible to any test: the worker imported the vite virtual id `/@theo/entry-server`, which esbuild cannot resolve (it now imports the `entry-server.js` the same build writes); it imported the deprecated `theokit/server` umbrella, which pulls `@swc/core`'s `.node` native addon into the bundle — workerd cannot load one at any bundler setting (it now imports `theokit/server/scan` and `theokit/server/http`, both probed clean); and three scanners under `server/scan` called `createRequire(import.meta.url)` at module scope, which is `undefined` on Workers (#B-263)
+- The agent-policy, HTTP-method and route-policy scanners load the TypeScript compiler lazily instead of at import time. Two reasons, and only the first is about Cloudflare: `createRequire(import.meta.url)` throws on Workers, and separately, nothing that merely imports a build-time AST scanner should pay for the compiler. `wrangler deploy --dry-run` returns exit 0 on the same bundle — it bundles and does not execute, while Cloudflare executes the module during validation (#B-263)
 
 ### Security
 

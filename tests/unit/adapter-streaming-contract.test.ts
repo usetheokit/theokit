@@ -111,9 +111,77 @@ describe('#382 — asking a delisted target for streaming fails by name', () => 
     await expect(
       buildAwsLambda(config, '/cwd', {
         runNodeBuild: async () => {},
-        writeEntry: () => {},
+        bundleFunction: async () => {},
         ensureDir: () => {},
       }),
     ).rejects.toThrow(/aws-lambda.*does not stream/s)
+  })
+
+  it('the refusal names the alternatives it is given, and the list is derived', async () => {
+    // This case used to parse `instead (…)` out of a DIRECT `buildAwsLambda` rejection, because the
+    // sentence hardcoded `(cloudflare, vercel, netlify, bun, deno-deploy, node)`. Deriving that list
+    // removed the drift by construction — and removed it from the adapter's own message too, for a
+    // reason worth keeping: asking the registry from inside an adapter closes
+    // `aws-lambda -> config-support -> registry -> aws-lambda`, which `dependency-cruiser` refuses as
+    // `no-circular`. So the CLI passes the list it already has and an adapter's guard refuses without it.
+    //
+    // What is left to pin is not the sentence but the two things that can still be wrong: that the
+    // message uses the list it is HANDED rather than one of its own, and that the handed list is the
+    // declared streaming set.
+    const { assertStreamingSupported } =
+      await import('../../packages/theo/src/adapters/config-support.js')
+    const { streamingTargets } = await import('../../packages/theo/src/adapters/registry.js')
+
+    const derived = await streamingTargets()
+    const declared: string[] = []
+    for (const target of VALID_TARGETS) {
+      const adapter = await resolveAdapter(target)
+      if (adapter.streamsResponses === true) declared.push(target)
+    }
+    const byName = (a: string, b: string): number => a.localeCompare(b)
+    const sorted = (xs: readonly string[]): string[] => [...xs].sort(byName)
+
+    expect(
+      sorted(derived),
+      'streamingTargets() no longer derives the list from what the adapters declare',
+    ).toEqual(sorted(declared))
+
+    // And the message carries exactly what it was handed — a sentinel no adapter could produce.
+    let message = ''
+    try {
+      assertStreamingSupported({ ssrStreaming: true }, { streamsResponses: false }, 'a-target', [
+        'only-this-one',
+      ])
+    } catch (err: unknown) {
+      message = err instanceof Error ? err.message : String(err)
+    }
+
+    expect(
+      message,
+      'the refusal ignored the list it was given, so it is naming alternatives of its own',
+    ).toContain('instead (only-this-one)')
+    expect(message).toContain('a-target')
+  })
+
+  it('an adapter guard refuses without naming alternatives it cannot know', async () => {
+    // COUNTERPROOF at the cycle boundary. A direct call to an adapter's build must still REFUSE — that
+    // guarantee predates this change — and must not name a list, because knowing one would mean
+    // importing the registry from inside an adapter and reopening the cycle.
+    const message = await buildAwsLambda(config, '/cwd', {
+      runNodeBuild: async () => {},
+      bundleFunction: async () => {},
+      ensureDir: () => {},
+    }).then(
+      () => '',
+      (err: unknown) => (err instanceof Error ? err.message : String(err)),
+    )
+
+    expect(message).toMatch(/aws-lambda.*does not stream/s)
+    expect(message).toContain('awslambda.streamifyResponse')
+    expect(
+      message,
+      'the adapter guard names alternatives, which it can only know by importing the registry — the ' +
+        'edge that closes `aws-lambda -> config-support -> registry -> aws-lambda`',
+    ).not.toContain('instead (')
   })
 })

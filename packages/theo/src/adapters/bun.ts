@@ -11,6 +11,7 @@ import { assertServicesUnsupported, readManifest } from '../services/index.js'
 import { deployedAgentsFragment } from './deployed-agents.js'
 import { type DeployedCorsOptions } from './deployed-cors.js'
 import { type DeployedCsrfOptions } from './deployed-csrf.js'
+import { readDocumentShell } from './deployed-document-shell.js'
 import { planDeployedPlugins } from './deployed-plugins-module.js'
 import { deployedEntryPreamble } from './deployed-preamble.js'
 import {
@@ -69,6 +70,18 @@ export function renderBunEntry(
   port: number,
   opts: {
     ssrStreaming?: boolean
+    /**
+     * Whether this build renders the document on the server.
+     *
+     * Bun is the one Web target whose own handler answers the HTML document, and it answered it from
+     * `.theokit/client/index.html` — the client shell. So an `ssr: true` project was served an empty
+     * `<div id="root">` while the build printed `(SSR)` (B-334).
+     */
+    ssr?: boolean
+    /** The document up to `<div id="root">`, read from the built client shell. */
+    htmlHead?: string
+    /** The document from `<div id="root">` on. */
+    htmlTail?: string
     securityHeaders?: SecurityHeadersConfig
   } & DeployedAgentsDirOptions &
     DeployedCsrfOptions &
@@ -77,9 +90,16 @@ export function renderBunEntry(
     DeployedCorsOptions &
     DeployedRateLimitOptions = {},
 ): string {
-  const streamingComment = opts.ssrStreaming
-    ? `// T2.3 — ssrStreaming on; renderStreamingWeb may be consumed by app code`
-    : `// (ssrStreaming off)`
+  // The whole implementation of `ssrStreaming` in this adapter used to be the text of this comment:
+  // `opts.ssrStreaming` was read, and its only effect was which string landed on line 4 of the emitted
+  // file. `rules/foreign-config-surfaces.md` names that exact failure — "A surface is read, or it is
+  // refused with a reason. It is never accepted and ignored" — and it was in this adapter.
+  const document =
+    opts.ssr === true ? { htmlHead: opts.htmlHead, htmlTail: opts.htmlTail } : undefined
+  const streamingComment =
+    document !== undefined
+      ? `// ssr on — the document is rendered by this handler, not read from .theokit/client`
+      : `// ssr off — the document is the built client shell, served from disk`
   const runtimeConfig = deployedRuntimeConfigFragment(opts)
   const agentsFragment = deployedAgentsFragment(
     {
@@ -108,12 +128,29 @@ export function renderBunEntry(
     ``,
     `import { resolve, join } from 'node:path'`,
     `import { existsSync } from 'node:fs'`,
-    `import { scanServerRoutes, matchRoute, executeRoute, createProductionLoader, extractTraceIdFromRequest, TRACE_HEADER, createCorsWebHandler${opts.rateLimit === undefined ? '' : ', createRateLimiterWeb'} } from 'theokit/server'`,
+    // One element per emitted line, like every neighbour, and the conditional import is a spread
+    // rather than an interpolated `\n`. That is not a style preference: this line carried the
+    // fragment inside a nested double-quoted string, where an escaped backslash is a backslash, so
+    // the import reached the module joined by two characters and Bun refused it. A construct that
+    // cannot express a malformed line beats one escaped correctly (B-325), and `sonarjs` refuses the
+    // nesting outright — the lint was naming the cause.
+    `import { scanServerRoutes, matchRoute, createProductionLoader } from 'theokit/server/scan'`,
+    `import { executeRoute, extractTraceIdFromRequest, TRACE_HEADER, createCorsWebHandler } from 'theokit/server/http'`,
+    ...(opts.rateLimit === undefined
+      ? []
+      : [`import { createRateLimiterWeb } from 'theokit/server/rate-limit'`]),
     `import { createWebShim } from 'theokit/adapters/web-shim'`,
     `import { buildSecurityHeaders, withSecurityHeaders } from 'theokit/adapters/security-headers'`,
+    // The renderer the node build already emits for this target and nothing imported. Its own header
+    // names Bun: "Web Standards streaming entry for edge runtimes (Cloudflare, Bun, Deno, Vercel
+    // Edge)". Measured on a real build: `.theokit/server/entry-server.js` is 95513 bytes and exports
+    // the render, and `.theokit/bun/server.mjs` referenced it zero times.
+    ...(document === undefined
+      ? []
+      : [`import { renderStreamingWeb } from '../server/entry-server.js'`]),
     `// T3.2 — WS bridge for Bun runtime`,
     `import { createBunWsBridge } from 'theokit/adapters/ws-shim'`,
-    `import { scanWebSocketRoutes } from 'theokit/server'`,
+    `import { scanWebSocketRoutes } from 'theokit/server/scan'`,
     ``,
     `const cwd = process.cwd()`,
     `const clientDir = resolve(cwd, '.theokit/client')`,
@@ -165,7 +202,7 @@ export function renderBunEntry(
     `  },`,
     `})`,
     ``,
-    ...bunHandleRequestFragment(runtimeConfig.executeRouteSpread, agentsFragment.branch),
+    ...bunHandleRequestFragment(runtimeConfig.executeRouteSpread, agentsFragment.branch, document),
   ].join('\n')
 }
 
@@ -176,19 +213,38 @@ export function renderBunEntry(
  * literal, so every line the entry gains counts against `max-lines-per-function`, and #410 added
  * the CSRF literal to an emitter that was already sitting exactly at the ceiling.
  */
-function bunHandleRequestFragment(runtimeSpread: string, agentBranch: readonly string[]): string[] {
+function bunHandleRequestFragment(
+  runtimeSpread: string,
+  agentBranch: readonly string[],
+  document: { htmlHead?: string; htmlTail?: string } | undefined,
+): string[] {
   return [
     `async function handleRequest(request) {`,
     `    const url = new URL(request.url)`,
     `    const pathname = url.pathname`,
     ``,
     `    // 1) Static assets`,
-    `    const staticPath = pathname === '/' ? '/index.html' : pathname`,
-    `    const fullStatic = join(clientDir, staticPath)`,
-    `    if (existsSync(fullStatic)) {`,
-    `      const file = Bun.file(fullStatic)`,
-    `      if (await file.exists()) return new Response(file)`,
-    `    }`,
+    ...(document === undefined
+      ? [
+          `    const staticPath = pathname === '/' ? '/index.html' : pathname`,
+          `    const fullStatic = join(clientDir, staticPath)`,
+          `    if (existsSync(fullStatic)) {`,
+          `      const file = Bun.file(fullStatic)`,
+          `      if (await file.exists()) return new Response(file)`,
+          `    }`,
+        ]
+      : [
+          `    // \`/\` is deliberately NOT mapped to index.html here: that file is the client shell,`,
+          `    // and answering the document from it is what served an empty <div id="root"> on an`,
+          `    // ssr build. Real assets still come from disk; the document falls through to (3).`,
+          `    if (pathname !== '/') {`,
+          `      const fullStatic = join(clientDir, pathname)`,
+          `      if (existsSync(fullStatic)) {`,
+          `        const file = Bun.file(fullStatic)`,
+          `        if (await file.exists()) return new Response(file)`,
+          `      }`,
+          `    }`,
+        ]),
     ``,
     `    // 2) API routes through the full executeRoute pipeline via the shim`,
     `    if (pathname.startsWith('/api/') || __theoIsAgentCardPath(pathname)) {`,
@@ -204,9 +260,24 @@ function bunHandleRequestFragment(runtimeSpread: string, agentBranch: readonly s
     `      return toResponse(executeRoute({ route: match.route, method, params: match.params, req, res, loadModule, serverDir, requestId, ...CSRF_CONFIG, ${runtimeSpread} }))`,
     `    }`,
     ``,
-    `    // 3) SPA fallback`,
-    `    const indexPath = join(clientDir, 'index.html')`,
-    `    if (existsSync(indexPath)) return new Response(Bun.file(indexPath))`,
+    ...(document === undefined
+      ? [
+          `    // 3) SPA fallback`,
+          `    const indexPath = join(clientDir, 'index.html')`,
+          `    if (existsSync(indexPath)) return new Response(Bun.file(indexPath))`,
+        ]
+      : [
+          `    // 3) The document, rendered here rather than read from disk.`,
+          `    //`,
+          `    // No nonce is minted: the outer wrapper applies a precomputed SECURITY_HEADERS constant,`,
+          `    // so a per-request value would have to be threaded through it. That is a separate change`,
+          `    // with its own blast radius, and the shell this replaces carries only external`,
+          `    // <script src> tags, which \`script-src 'self'\` already allows.`,
+          `    return await renderStreamingWeb(request, {`,
+          `      htmlHead: ${JSON.stringify(document.htmlHead ?? '')},`,
+          `      htmlTail: ${JSON.stringify(document.htmlTail ?? '')},`,
+          `    })`,
+        ]),
     ``,
     `    return notFoundResponse()`,
     `}`,
@@ -234,6 +305,12 @@ export async function buildBun(
   const pluginsPlan = planDeployedPlugins(config.plugins, 'bun')
   const entry = renderBunEntry(config.port, {
     ssrStreaming: config.ssrStreaming,
+    // B-334 — the sixth time this shape has been fixed one target at a time: the renderer honoured an
+    // option no build passed (B-185, B-235, B-312, B-315, B-317). Here it was worse — the option only
+    // changed a comment. The shell is read HERE rather than in the emitter, because reading a file is
+    // the build's job and not a string emitter's.
+    ssr: config.ssr,
+    ...readDocumentShell(cwd, config.ssr),
     securityHeaders: config.security?.headers,
     csrf: config.security?.csrf,
     disallowed: config.security?.disallowed,
@@ -269,8 +346,14 @@ export async function buildBun(
     `${describeDeployedSecurityHeaders({
       target: 'bun',
       securityHeaders: config.security?.headers,
-      // No deploy target other than the streamed Cloudflare worker renders HTML
-      // at request time, so none of the rest can mint a nonce.
+      // Bun renders the document at request time when `ssr` is on (B-334), and still mints no nonce:
+      // the outer wrapper applies a precomputed SECURITY_HEADERS constant, so a per-request value
+      // would have to be threaded through it.
+      //
+      // This used to read "No deploy target other than the streamed Cloudflare worker renders HTML at
+      // request time, so none of the rest can mint a nonce." True when written, false the moment B-317
+      // shipped — a CONSEQUENCE of the fleet at the time, never a prohibition, which is why rendering
+      // here is consistent with the intent rather than against it.
       mintsNonce: false,
       // Bun serves `.theokit/client` itself, so the document DOES pass through
       // the handler these headers are attached to.
@@ -280,6 +363,11 @@ export async function buildBun(
 }
 
 export const bunAdapter: DeployAdapter = {
+  // The entry runs IN the project: it resolves `serverDir` against `cwd`, so `node_modules` is
+  // present and the scan has a tree to read. `docs/adr/0020` leaves this target alone for exactly
+  // that reason.
+  readsSourceAtRunTime: true,
+  specifiersResolvedBy: 'the-project-at-run-time',
   name: 'bun',
   streamsResponses: true,
   // #409 / #410 — the generated entry calls `executeRoute` with routes, loader

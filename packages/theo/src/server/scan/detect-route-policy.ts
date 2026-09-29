@@ -42,9 +42,26 @@ import type * as TS from 'typescript'
 
 import { HTTP_METHODS, type HttpMethod } from '../../core/contracts/http-methods.js'
 
-const require_ = createRequire(import.meta.url)
+/**
+ * The compiler, loaded on first use and never at import time.
+ *
+ * This was module scope, and a Cloudflare deploy found what that costs: `theokit/server/scan` is
+ * imported by the generated worker, Cloudflare EXECUTES the module during validation, and there
+ * `import.meta.url` is undefined — so `createRequire` threw before the worker answered a request
+ * (B-263, error 10021). `wrangler deploy --dry-run` returns exit 0 on the same bundle: it bundles
+ * and does not execute.
+ *
+ * The second reason holds regardless of Workers: this is a BUILD-TIME AST scanner, and nothing that
+ * merely imports it should pay for the TypeScript compiler.
+ *
+ * Cached, so scanning many files still loads it once.
+ */
+let compiler: typeof TS | undefined
 
-const ts = require_('typescript') as typeof TS
+function ts_(): typeof TS {
+  compiler ??= createRequire(import.meta.url)('typescript') as typeof TS
+  return compiler
+}
 
 const HTTP_METHOD_NAMES = new Set<string>(HTTP_METHODS)
 
@@ -53,7 +70,7 @@ const POLICY_KEY = 'policy'
 function hasExportModifier(modifiers: readonly TS.Modifier[] | undefined): boolean {
   if (!modifiers) return false
   for (const m of modifiers) {
-    if (m.kind === ts.SyntaxKind.ExportKeyword) return true
+    if (m.kind === ts_().SyntaxKind.ExportKeyword) return true
   }
   return false
 }
@@ -63,10 +80,10 @@ function unwrap(expression: TS.Expression): TS.Expression {
   let current = expression
   for (;;) {
     if (
-      ts.isParenthesizedExpression(current) ||
-      ts.isAsExpression(current) ||
-      ts.isSatisfiesExpression(current) ||
-      ts.isNonNullExpression(current)
+      ts_().isParenthesizedExpression(current) ||
+      ts_().isAsExpression(current) ||
+      ts_().isSatisfiesExpression(current) ||
+      ts_().isNonNullExpression(current)
     ) {
       current = current.expression
       continue
@@ -77,8 +94,8 @@ function unwrap(expression: TS.Expression): TS.Expression {
 
 function propertyNameIsPolicy(name: TS.PropertyName | undefined): boolean {
   if (name === undefined) return false
-  if (ts.isIdentifier(name)) return name.text === POLICY_KEY
-  if (ts.isStringLiteral(name)) return name.text === POLICY_KEY
+  if (ts_().isIdentifier(name)) return name.text === POLICY_KEY
+  if (ts_().isStringLiteral(name)) return name.text === POLICY_KEY
   return false
 }
 
@@ -104,17 +121,17 @@ export type RoutePolicyKind = 'public' | 'guarded'
  */
 function policyKindOfArgument(expression: TS.Expression): RoutePolicyKind {
   const arg = unwrap(expression)
-  return ts.isStringLiteral(arg) && arg.text === 'public' ? 'public' : 'guarded'
+  return ts_().isStringLiteral(arg) && arg.text === 'public' ? 'public' : 'guarded'
 }
 
 /** A `policy` key at the TOP level of a config object literal. Never deeper. */
 function objectPolicyKind(literal: TS.ObjectLiteralExpression): RoutePolicyKind | undefined {
   for (const property of literal.properties) {
-    if (ts.isSpreadAssignment(property)) continue
+    if (ts_().isSpreadAssignment(property)) continue
     if (!propertyNameIsPolicy(property.name)) continue
     // `{ policy: x }` carries an initializer; `{ policy }` shorthand does not, and a shorthand
     // reference is exactly the unreadable case that takes the safe label.
-    return ts.isPropertyAssignment(property)
+    return ts_().isPropertyAssignment(property)
       ? policyKindOfArgument(property.initializer)
       : 'guarded'
   }
@@ -131,27 +148,27 @@ function objectPolicyKind(literal: TS.ObjectLiteralExpression): RoutePolicyKind 
 function policyKind(expression: TS.Expression): RoutePolicyKind | undefined {
   const expr = unwrap(expression)
 
-  if (ts.isObjectLiteralExpression(expr)) return objectPolicyKind(expr)
+  if (ts_().isObjectLiteralExpression(expr)) return objectPolicyKind(expr)
 
-  if (!ts.isCallExpression(expr)) return undefined
+  if (!ts_().isCallExpression(expr)) return undefined
 
   const callee = unwrap(expr.expression)
 
-  if (ts.isPropertyAccessExpression(callee) && callee.name.text === POLICY_KEY) {
+  if (ts_().isPropertyAccessExpression(callee) && callee.name.text === POLICY_KEY) {
     // `.policy()` with no argument declares the key and says nothing readable.
     return expr.arguments.length === 0 ? 'guarded' : policyKindOfArgument(expr.arguments[0])
   }
 
   for (const argument of expr.arguments) {
     const arg = unwrap(argument)
-    if (!ts.isObjectLiteralExpression(arg)) continue
+    if (!ts_().isObjectLiteralExpression(arg)) continue
     const kind = objectPolicyKind(arg)
     if (kind !== undefined) return kind
   }
 
   // Keep walking the chain: `route().policy(p).handler(h).build()` reaches
   // `.policy` only by stepping left through `.build` and `.handler`.
-  if (ts.isPropertyAccessExpression(callee)) return policyKind(callee.expression)
+  if (ts_().isPropertyAccessExpression(callee)) return policyKind(callee.expression)
 
   return undefined
 }
@@ -160,9 +177,9 @@ function policyKind(expression: TS.Expression): RoutePolicyKind | undefined {
 function collectLocalInitializers(sourceFile: TS.SourceFile): Map<string, TS.Expression> {
   const locals = new Map<string, TS.Expression>()
   for (const stmt of sourceFile.statements) {
-    if (!ts.isVariableStatement(stmt)) continue
+    if (!ts_().isVariableStatement(stmt)) continue
     for (const decl of stmt.declarationList.declarations) {
-      if (ts.isIdentifier(decl.name) && decl.initializer !== undefined) {
+      if (ts_().isIdentifier(decl.name) && decl.initializer !== undefined) {
         locals.set(decl.name.text, decl.initializer)
       }
     }
@@ -175,9 +192,9 @@ function collectFromVariableStatement(
   stmt: TS.VariableStatement,
   declared: Map<HttpMethod, RoutePolicyKind>,
 ): void {
-  if (!hasExportModifier(ts.getModifiers(stmt))) return
+  if (!hasExportModifier(ts_().getModifiers(stmt))) return
   for (const decl of stmt.declarationList.declarations) {
-    if (!ts.isIdentifier(decl.name) || !HTTP_METHOD_NAMES.has(decl.name.text)) continue
+    if (!ts_().isIdentifier(decl.name) || !HTTP_METHOD_NAMES.has(decl.name.text)) continue
     if (decl.initializer === undefined) continue
     const kind = policyKind(decl.initializer)
     if (kind !== undefined) declared.set(decl.name.text as HttpMethod, kind)
@@ -194,7 +211,7 @@ function collectFromExportDeclaration(
   declared: Map<HttpMethod, RoutePolicyKind>,
 ): void {
   if (stmt.moduleSpecifier !== undefined) return
-  if (!stmt.exportClause || !ts.isNamedExports(stmt.exportClause)) return
+  if (!stmt.exportClause || !ts_().isNamedExports(stmt.exportClause)) return
   for (const spec of stmt.exportClause.elements) {
     if (!HTTP_METHOD_NAMES.has(spec.name.text)) continue
     const local = locals.get((spec.propertyName ?? spec.name).text)
@@ -209,11 +226,11 @@ function collectFromStatement(
   locals: Map<string, TS.Expression>,
   declared: Map<HttpMethod, RoutePolicyKind>,
 ): void {
-  if (ts.isVariableStatement(stmt)) {
+  if (ts_().isVariableStatement(stmt)) {
     collectFromVariableStatement(stmt, declared)
     return
   }
-  if (ts.isExportDeclaration(stmt)) {
+  if (ts_().isExportDeclaration(stmt)) {
     collectFromExportDeclaration(stmt, locals, declared)
   }
   // `export function GET() {}` and `export class GET {}` reach neither branch,
@@ -234,12 +251,12 @@ export function detectRoutePolicyKinds(
   filePath: string,
   content: string,
 ): Map<HttpMethod, RoutePolicyKind> {
-  const sourceFile = ts.createSourceFile(
+  const sourceFile = ts_().createSourceFile(
     filePath,
     content,
-    ts.ScriptTarget.Latest,
+    ts_().ScriptTarget.Latest,
     /* setParentNodes */ false,
-    ts.ScriptKind.TS,
+    ts_().ScriptKind.TS,
   )
   const locals = collectLocalInitializers(sourceFile)
   const declared = new Map<HttpMethod, RoutePolicyKind>()
