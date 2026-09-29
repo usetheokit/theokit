@@ -181,9 +181,19 @@ describe('the Lambda handler answers where it is uploaded', () => {
     // function. Reproduced locally at the SAME line and function as production once an agent was in
     // the scan.
     //
-    // What is asserted is the absence of a 5xx, not a 200: without a provider credential the agent's
-    // own validation answers 4xx, and demanding a 200 would make this case depend on a key. A 4xx
-    // from the agent IS the proof the branch ran — a ReferenceError never reaches it.
+    // What is asserted is the absence of a 5xx, not a 200: a 4xx from the agent IS the proof the
+    // branch ran, because a ReferenceError never reaches it, and demanding a 200 would make this case
+    // depend on a provider credential.
+    //
+    // THE BODY BELOW IS DELIBERATELY THE SHAPE THE AGENT REFUSES, and a reader who "fixes" it breaks
+    // this case. `parseAgentRequestBody` accepts `{ message }` or `{ messages: [{ parts: [...] }] }`;
+    // an AI SDK v5 UIMessage carries `parts`, never `content`. So this payload reaches the agent, is
+    // refused at 400, and stops BEFORE the provider call — which is what keeps the case credential-free.
+    // A valid body here would try to reach a provider, fail for want of a key, and answer 5xx.
+    //
+    // Measured 2026-09-29 against the deployed Function URL, with a credential present and the same
+    // valid shape: 200 in 2.16s, streaming `delta:"P"` then `delta:"ONG"`. Recorded under
+    // `.squad/records/acceptance/evidence/b347-aws-lambda-agent-after-fix.txt`.
     const agentOut = join(root, 'out-agent')
     mkdirSync(agentOut, { recursive: true })
 

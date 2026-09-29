@@ -1,0 +1,42 @@
+B-347 — the deployed AWS Lambda agent answers, after the fix
+date: 2026-09-29
+target: AWS Lambda Function URL (the RELEASED artifact: a bundle built from the fixed adapter,
+        zipped and uploaded; not a local build)
+function: theokit-b263-lambda-probe  runtime nodejs22.x  LastUpdateStatus Successful
+
+BEFORE (the code that was deployed, measured at 2026-09-29T19:0x before the update)
+  GET  /api/health      -> 200
+  POST /api/agents/chat -> 502   body: Internal Server Error
+  CloudWatch: ReferenceError: url is not defined
+                at routeRequest (file:///var/task/handler.mjs:45990:16)
+
+AFTER (same Function URL, code updated 2026-09-29T19:29:01Z)
+  GET  /api/health      -> 200
+  POST /api/agents/chat -> 200 in 2.16s, streamed
+    id: 0
+    data: {"type":"start"}
+    
+    id: 1
+    data: {"type":"text-start","id":"70fb9142-eefa-40a6-9268-8dc71d2fed7d"}
+    
+    id: 2
+    data: {"type":"text-delta","id":"70fb9142-eefa-40a6-9268-8dc71d2fed7d","delta":"P"}
+    
+    id: 3
+    data: {"type":"text-delta","id":"70fb9142-eefa-40a6-9268-8dc71d2fed7d","delta":"ONG"}
+    
+    id: 4
+    data: {"type":"text-end","id":"70fb9142-eefa-40a6-9268-8dc71d2fed7d"}
+
+  usage reported by the provider: inputTokens 503, outputTokens 3, totalTokens 506
+
+A 400 measured on the way is NOT a defect, and reading it as one cost a diagnosis:
+  {"messages":[{"role":"user","content":"..."}]}  -> 400 BAD_REQUEST
+  parseAgentRequestBody accepts { message } or { messages: [{ parts: [...] }] }.
+  The AI SDK v5 UIMessage carries `parts`, never `content`, so the probe was malformed
+  and the 400 was the correct answer. The subject was right; the query was wrong.
+
+Local counterproof, identical to production: the same probe against the pre-fix adapter
+threw at the SAME line and the SAME function (handler.mjs:45990, routeRequest).
+
+No credential appears in this record.
