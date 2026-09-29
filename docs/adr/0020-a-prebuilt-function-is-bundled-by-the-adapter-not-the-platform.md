@@ -113,7 +113,27 @@ scaffold.
 
 **Two targets are NOT changed by this ADR.** `netlify` and `aws-lambda` emit the same shape and need
 the same call; they are named in `B-316` rather than changed here, because neither has been exercised
-against its platform and a fix nobody can verify is a claim rather than a repair. `cloudflare` and
+against its platform and a fix nobody can verify is a claim rather than a repair.
+
+> **Amended 2026-09-29 — both have since been changed, and the condition above is what released
+> them.** `netlify` was exercised on the Netlify emulator (B-339, B-341, B-343): `GET /api/health`
+> answers 200 and `/api/agents/chat` reaches theokit's own typed errors, from output the adapter
+> produced. `aws-lambda` needed no emulator — its handler is a function taking an event, so the whole
+> path is exercisable locally, and `tests/integration/the-lambda-handler-answers-where-it-is-uploaded.test.ts`
+> bundles it, copies it to a directory with no `node_modules`, imports it and INVOKES it: 200 with the
+> trace header echoed (B-342, B-344).
+>
+> That is strictly more than the property this ADR accepted as sufficient for `vercel` one paragraph
+> below — "the directory loads standalone under `node`" — which it changed with no Vercel deployment
+> either. The deferral reason as written did not actually distinguish `aws-lambda` from `vercel`; what
+> distinguished them was effort, and saying so is cheaper than leaving a reader to reconcile the two.
+>
+> Both targets also needed their ROUTES baked, which this ADR does not mention because bundling is
+> what creates the requirement: a bundle carries no source tree, so the runtime `scanServerRoutes` that
+> worked before the bundle answers 404 after it. Measured in that order on both targets.
+>
+> What is still NOT established for either: that the platform invokes the artifact. `B-263` holds both
+> credentials as retained `access` impediments. `cloudflare` and
 `bun` are deliberately left alone — wrangler and the Bun runtime each resolve the specifier already,
 and bundling twice would be work with no observable effect.
 

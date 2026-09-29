@@ -18,8 +18,8 @@
  *
  *     adapter       uses scannedFromLoaderCache   emits `const cwd`
  *     vercel        yes                           NO        <- the defect
- *     netlify       yes                           yes
- *     aws-lambda    yes                           yes
+ *     netlify       yes                           yes    (until B-339: it bakes now, like vercel)
+ *     aws-lambda    yes                           yes    (until B-344: it bakes now, like the two above)
  *     deno-deploy   yes                           yes
  *     bun           no (names its loader differently, by decision)
  *     cloudflare    no (bakes its agents, #367)
@@ -44,6 +44,9 @@ import { renderAwsLambdaEntry } from '../../packages/theo/src/adapters/aws-lambd
 import { renderDenoEntry } from '../../packages/theo/src/adapters/deno-deploy.js'
 import { renderNetlifyFunction } from '../../packages/theo/src/adapters/netlify.js'
 import { renderVercelFunctionEntry } from '../../packages/theo/src/adapters/vercel.js'
+// The string-aware stripper, shared. Seven files carried a byte-identical regex copy that read
+// `"/*"` in netlify.ts as a comment opener and deleted 36% of that file (B-338).
+import { withoutComments as code } from './_helpers/adapter-source.js'
 
 /**
  * Agents must be CONFIGURED or the fragment is never emitted at all.
@@ -53,7 +56,28 @@ import { renderVercelFunctionEntry } from '../../packages/theo/src/adapters/verc
  * exercise the path. The same trap the Cloudflare preload tests hit: without `assetsMap` they went
  * green on unfixed code.
  */
-const WITH_AGENTS = { agentsDir: 'src/server/agents', serverDir: 'src/server' } as const
+// A ROUTE is part of the fixture, and it was not until 2026-09-29. Without one, `renderBakedRoutes([])`
+// emits an empty table and every name used only on the baked path is invisible to this file — which is
+// how `netlify` shipped an entry calling `compilePattern(...)` without importing it, while these four
+// cases passed. The guard covered the adapter and its INPUT excluded the case (B-339).
+// WHAT THIS FILE ACTUALLY CHECKS, because its name says more than it does.
+//
+// Every case below is about ONE identifier: `cwd`. The name reads as a general guarantee — that a
+// generated entry declares every name it uses — and on 2026-09-29 a reader took it that way and was
+// wrong: `netlify` shipped an entry calling `compilePattern(...)` without importing it, the emulator
+// answered `ReferenceError: compilePattern is not defined`, and these cases passed before and after.
+// Reintroducing the defect deliberately did not turn them red.
+//
+// The general check does not exist anywhere: `adapter-entry-parses.test.ts` runs `node --check`, which
+// sees syntax and not an undeclared identifier, and `/code-quality`'s symbol detector reads this
+// repository's own source rather than the text an adapter emits. Registered as its own item rather than
+// implied by this filename.
+
+const WITH_AGENTS = {
+  agentsDir: 'src/server/agents',
+  serverDir: 'src/server',
+  routes: [{ filePath: 'src/server/routes/health.ts', routePath: '/api/health', methods: ['GET'] }],
+} as const
 
 const ENTRIES: readonly (readonly [string, string])[] = [
   ['vercel', renderVercelFunctionEntry(WITH_AGENTS)],
@@ -61,11 +85,6 @@ const ENTRIES: readonly (readonly [string, string])[] = [
   ['netlify', renderNetlifyFunction(WITH_AGENTS)],
   ['deno-deploy', renderDenoEntry(3000, WITH_AGENTS)],
 ]
-
-/** Source with comments removed, so prose naming an identifier is not read as code. */
-function code(source: string): string {
-  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1')
-}
 
 describe('a generated entry declares every name it uses', () => {
   /**
@@ -80,10 +99,26 @@ describe('a generated entry declares every name it uses', () => {
 
   it('test_the_sweep_found_the_renderers_that_scan_at_runtime', () => {
     // COUNTERPROOF FIRST. An empty population satisfies the pairing trivially, so this pins that the
-    // set is non-empty AND that the one deliberate absence is the expected one.
-    expect(SCANNERS.length).toBeGreaterThanOrEqual(3)
+    // set is non-empty AND that every deliberate absence is an expected one.
+    //
+    // `netlify` left this set on 2026-09-29 (B-339), for exactly the reason `vercel` left it in
+    // B-319: the target began BUNDLING, so a runtime `scanAgents` has no source tree to read and its
+    // agents are baked from the build's scan instead. This case failing is what surfaced the change
+    // rather than letting the population shrink in silence — which is the whole reason it counts.
+    // The population is SHRINKING by design, and that is worth stating rather than hiding behind a
+    // number: every target that began bundling had to bake its agents, because a bundle carries no
+    // source tree for a runtime scan to read. vercel left in B-319, netlify in B-339, aws-lambda in
+    // B-344. `deno-deploy` is what remains — it runs from a filesystem it can read.
+    //
+    // When this reaches ZERO the file should be RETIRED, not relaxed to `>= 0`: the `cwd` pairing it
+    // asserts is a property of runtime scanners, and a suite full of green no-ops is worse than one
+    // file fewer.
+    expect(SCANNERS.length).toBeGreaterThanOrEqual(1)
+    expect(SCANNERS.map(([n]) => n)).toEqual(['deno-deploy'])
     expect(SCANNERS.map(([n]) => n)).not.toContain('vercel')
+    expect(SCANNERS.map(([n]) => n)).not.toContain('netlify')
     expect(ENTRIES.map(([n]) => n)).toContain('vercel')
+    expect(ENTRIES.map(([n]) => n)).toContain('netlify')
   })
 
   it('test_the_baked_target_declares_no_dead_cwd', () => {

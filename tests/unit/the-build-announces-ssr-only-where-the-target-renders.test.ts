@@ -33,6 +33,9 @@ import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import { VALID_TARGETS, targetRendersDocument } from '../../packages/theo/src/adapters/types.js'
+// The string-aware stripper, shared. Seven files carried a byte-identical regex copy that read
+// `"/*"` in netlify.ts as a comment opener and deleted 36% of that file (B-338).
+import { withoutComments as code } from './_helpers/adapter-source.js'
 
 const ADAPTERS = resolve(__dirname, '../../packages/theo/src/adapters')
 
@@ -54,10 +57,6 @@ const SOURCE: Record<string, string> = {
  * measured this session by grepping raw source, and `bun.ts` carried a COMMENT reading
  * "ssrStreaming on; renderStreamingWeb may be consumed by app code" with no code behind it.
  */
-function code(source: string): string {
-  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1')
-}
-
 /** Whether the adapter's own source reaches a server-side render of the document. */
 function emitsDocumentRender(target: string): boolean {
   const file = SOURCE[target]

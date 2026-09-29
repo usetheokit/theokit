@@ -43,8 +43,18 @@ const TARGETS = [
   // tree there to scan. A baking target with nothing baked correctly emits no agents branch, so the
   // fragment this file is about is only observable when the agents are supplied.
   ['vercel', () => renderVercelFunctionEntry({ agents: AGENTS })],
-  ['netlify', () => renderNetlifyFunction()],
-  ['aws-lambda', () => renderAwsLambdaEntry()],
+  // B-339 — given its agents for the identical reason the row above gives, one target later. This
+  // target began BUNDLING (Netlify re-bundling a pre-bundled function produced a SyntaxError), so its
+  // runtime `scanAgents` had no source tree to read and its `createProductionLoader()` would import a
+  // path that was never shipped. Its previous source, `scannedFromLoaderCache`, referenced two names
+  // the host had stopped declaring — a ReferenceError on the first /api/agents/<name> request, found
+  // by `a-generated-entry-declares-every-identifier.test.ts`.
+  ['netlify', () => renderNetlifyFunction({ agents: AGENTS })],
+  // B-344 — given its agents for the reason the two rows above give, on the fifth target. Measured by
+  // bundling this entry, copying it to a directory with no `node_modules` and INVOKING it with a
+  // synthetic API Gateway v2 event: it loaded and answered 404, because the runtime `scanServerRoutes`
+  // had no source tree. It bakes both routes and agents now.
+  ['aws-lambda', () => renderAwsLambdaEntry({ agents: AGENTS })],
 ] as const
 
 describe('every deploy target carries the agents fragment (B-235)', () => {

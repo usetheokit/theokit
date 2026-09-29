@@ -8,6 +8,55 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- The AWS Lambda handler runs where it is uploaded. Two causes, and the second was invisible until
+  the first was fixed. The handler was written as source importing five `theokit/…` sub-paths by bare
+  specifier, and nothing resolves those for an uploaded function: copied to a directory with no
+  `node_modules` it failed with `ERR_MODULE_NOT_FOUND: Cannot find package 'theokit'`. Bundled, it
+  loaded and answered **404** for `GET /api/health`, because it resolved its routes and agents with a
+  runtime `scanServerRoutes` — a `readdirSync` over a source tree an upload does not carry, and where
+  one IS carried the route files are TypeScript a plain Node runtime cannot compile. Both are baked
+  from the build's scan now, and the handler is bundled: invoked from such a directory it answers 200
+  with `{"status":"ok",...,"framework":"TheoKit"}` and the trace header echoed. The output goes into
+  `.theokit/aws/` itself rather than a subdirectory, because Lambda's handler is `<file>.<export>` and
+  the operator zips the directory. (#B-342, #B-344)
+
+- `buildAwsLambda` no longer accepts a `writeEntry` dependency it cannot use. Bundling removed the
+  raw write, so there was nothing for a caller to intercept, and a dependency a build accepts and
+  ignores is the same defect as a renderer option it accepts and ignores. (#B-344)
+
+- The Netlify agents path answers at all. The emitted entry carried
+  `if (!loaderCache) loaderCache = createProductionLoader()` and three more reads of `loaderCache`,
+  and its host declared neither name — a `ReferenceError` on the first `/api/agents/<name>` request.
+  It passed a full suite, `node --check`, six static gates and a 200 from the emulator, because the
+  reference sits on the agents branch and `/api/health` goes through the baked route table. The
+  agents are baked from the build's scan now, for the same reason the routes are: this target
+  bundles, so a runtime scan has no source tree to read and a dynamic `import()` would reach for a
+  path that was never shipped. Verified on the emulator — `/api/agents/chat` returns theokit's own
+  typed `CSRF_FAILED`, then `BAD_REQUEST` from the agent's own validation once the header is sent,
+  with zero `ReferenceError`. (#B-343)
+
+- `renderNetlifyFunction` no longer accepts an `agentsDir` it cannot read. Baking the agents made
+  the option unreadable in the entry, and a renderer that accepts a value and ignores it is the
+  defect `rules/foreign-config-surfaces.md` is about. The build's scan still honours
+  `config.agentsDir`, which is where the option belongs. (#B-343)
+
+
+- The Netlify target serves a request at all. Two independent causes, both measured on the Netlify
+  emulator with the adapter's own output: the function was written to `.netlify/functions/` and the
+  `[functions] directory` key was never emitted, so the CLI scanned its default `netlify/functions/`,
+  found nothing, and `/api/*` answered `Function not found...` with a 404 — the target had never
+  served a request. And the entry was written as source importing `theokit/server/scan` and five
+  sibling sub-paths by bare specifier, which Netlify's own bundler turned into a `ReferenceError` on
+  an identifier that was base64 of the source. The entry is now bundled here, as a directory-shaped
+  function so the bundler's 28 chunks travel with it, and the toml declares both keys. `GET
+  /api/health` answers 200 with `x-request-id` and `x-trace-id` echoed. A conflicting value for
+  either key is refused by name rather than overwritten. (#B-339, #B-341)
+
+- The Netlify build refuses a conflicting `netlify.toml` before it runs anything expensive. The merge
+  — the only step that can detect a conflicting `/api/*` redirect or `[functions]` key — ran after the
+  node build and would now have run after bundling, so a configuration error nothing downstream can
+  resolve cost the whole build first. Same reorder as the build command's this cycle. (#B-339)
+
 - A build that refuses no longer destroys the previous build's output. `cleanOutDir` ran before the
   target was even checked, so `theokit build --target <typo>` emptied `.theokit/` and answered with a
   message about the typo — measured: 302 files in `.theokit/client/assets` before, 0 after. The same
@@ -44,6 +93,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 
 ### Added
+
+- `DeployAdapter` declares two facts about where its entry will run, and a guard checks the
+  consequence of each. `readsSourceAtRunTime` answers whether the deployed entry can read the
+  project's source tree — `false` means its routes and agents must be baked at build time, because a
+  runtime `scanServerRoutes` is a `readdirSync` that finds nothing where the artifact was uploaded
+  alone. `specifiersResolvedBy` answers who makes `theokit/server/…` resolvable: this adapter (it
+  bundles), the platform (wrangler, at deploy time), or the project at run time. Both are additive and
+  optional on the exported interface, so a third-party adapter is unaffected; both are REFUSED when
+  omitted on this repository's own six, because a permissive default would excuse exactly the defect
+  they exist to catch — the lesson `enforcesRateLimit`'s own docblock records about its first cut.
+
+  The class this closes shipped four times, once per target: cloudflare (#369, #367), vercel (B-319,
+  B-316), netlify (B-338, B-339) and aws-lambda (B-344, B-342). The partition is measured rather than
+  asserted — four of the six targets have now been driven at or toward their platform, and four of
+  four behaved as it predicts. Each assertion was sabotaged and shown to fail naming its own cause.
+  (#B-345)
+
+- A guard that a generated deploy entry declares every identifier it references. The entry is
+  written to a temp file and handed to the TypeScript compiler, reading only TS2304
+  ("Cannot find name"); unresolved bare specifiers (TS2307) and runtime globals (TS2591) are
+  expected and are not findings. Nothing else in this repository could see this class: generated
+  code is a string at type-check time, `node --check` sees syntax alone, and the symbol detector
+  reads this repository rather than the text an adapter emits. It found the defect above on the day
+  it was written, and its counterproof is the `compilePattern` regression from the same cycle. Its
+  population covers every one of the six targets that emit an entry, and is checked against
+  `VALID_TARGETS` rather than listed — a target in neither the covered set nor the declared
+  no-entry set fails the suite, so a new adapter cannot end up silently unchecked. (#B-340)
 
 - The Vercel target renders the document. Nothing routed a page request to the function — `{ handle: 'filesystem' }` was followed by `/(.*) -> /index.html` — so `/` was the static host serving an empty `<div id="root">` while the build announced SSR, and the function had no renderer to answer with if it had been asked. The fallback now reaches the function when the project renders, the emitted entry calls the app's own SSR entry (inlined by the function bundler), and the build reads the client shell and passes it. Scoped outside `/api/`, where a path matching no route still owes a JSON 404. Measured by executing the built function: `/` went from `404, 9 bytes, text/plain` to `200, 14827 bytes, text/html` with `<head>`, the root div and the CSP (#B-317)
 - A step-by-step procedure for deploying to Cloudflare Workers, at `docs/wiki/sops/cloudflare-deploy.md`, written from the first real deploy this repository performed. It carries the five defects that sat between a green build and a URL that answered, what each one looked like, and why three of them are invisible to `wrangler deploy --dry-run` — which returned exit 0 on the exact bundle Cloudflare rejected (#263)

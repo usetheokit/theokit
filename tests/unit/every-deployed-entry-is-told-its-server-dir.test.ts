@@ -38,6 +38,9 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import { serverDirLiteral } from '../../packages/theo/src/adapters/deployed-runtime-config.js'
+// The string-aware stripper, shared. Seven files carried a byte-identical regex copy that read
+// `"/*"` in netlify.ts as a comment opener and deleted 36% of that file (B-338).
+import { withoutComments as code } from './_helpers/adapter-source.js'
 
 const ADAPTERS_DIR = join(import.meta.dirname, '../../packages/theo/src/adapters')
 
@@ -45,20 +48,34 @@ const ADAPTERS = readdirSync(ADAPTERS_DIR)
   .filter((f) => f.endsWith('.ts') && !f.endsWith('.test.ts'))
   .map((f) => [f, readFileSync(join(ADAPTERS_DIR, f), 'utf8')] as const)
 
-/** Source with block and line comments removed, so prose about a call is not read as the call. */
-function code(source: string): string {
-  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1')
-}
-
-/** Adapters whose emitted entry resolves a server directory at runtime. */
-const RESOLVERS = ADAPTERS.filter(([, src]) => code(src).includes('serverDirLiteral(opts)'))
+/**
+ * Adapters whose emitted entry resolves a server directory at runtime.
+ *
+ * The population used to be `includes('serverDirLiteral(opts)')` — the adapters that call the HELPER.
+ * That is a sweep keyed on the presence of the FIX, so an adapter that never adopted it is invisible to
+ * the case below, and the one adapter in that state was the only broken one: measured 2026-09-29,
+ * `netlify.ts` emitted `const serverDir = resolve(cwd, 'server')` as a literal and answered 404 for every
+ * route on the Netlify emulator (B-338). The counterproof named the five it found and netlify was not
+ * among them, so nothing about the list looked wrong.
+ *
+ * The question is whether the emitted entry resolves a server dir AT ALL, however it spells it.
+ */
+const RESOLVERS = ADAPTERS.filter(([, src]) =>
+  /(?:serverDirLiteral\(opts\)|serverDir = resolve\()/.test(code(src)),
+)
 
 describe('every deployed entry is told its server dir', () => {
   it('test_the_sweep_found_the_adapters_that_resolve_a_server_dir', () => {
-    // COUNTERPROOF FIRST: an empty list satisfies the case below trivially. Measured when written,
-    // five adapters call `serverDirLiteral(opts)` — vercel, aws-lambda, cloudflare, bun, deno-deploy.
-    expect(RESOLVERS.length).toBeGreaterThanOrEqual(5)
+    // COUNTERPROOF FIRST: an empty list satisfies the case below trivially. Six adapters resolve a
+    // server dir — vercel, aws-lambda, cloudflare, bun, deno-deploy and netlify. The last one is named
+    // explicitly because it is the one the old population could not see, and a widened sweep that
+    // silently narrowed again would look exactly like this test passing.
+    expect(RESOLVERS.length).toBeGreaterThanOrEqual(6)
     expect(RESOLVERS.map(([name]) => name)).toContain('vercel.ts')
+    expect(
+      RESOLVERS.map(([name]) => name),
+      'netlify is outside the population again, so this file cannot see the adapter it was widened for',
+    ).toContain('netlify.ts')
   })
 
   it('test_each_one_passes_the_configured_value', () => {

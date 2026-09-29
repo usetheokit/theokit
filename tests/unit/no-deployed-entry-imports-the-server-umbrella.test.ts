@@ -46,17 +46,15 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
+// The string-aware stripper, shared. Seven files carried a byte-identical regex copy that read
+// `"/*"` in netlify.ts as a comment opener and deleted 36% of that file (B-338).
+import { withoutComments as code } from './_helpers/adapter-source.js'
 
 const ADAPTERS_DIR = join(import.meta.dirname, '../../packages/theo/src/adapters')
 
 const ADAPTERS = readdirSync(ADAPTERS_DIR)
   .filter((f) => f.endsWith('.ts') && !f.endsWith('.test.ts'))
   .map((f) => [f, readFileSync(join(ADAPTERS_DIR, f), 'utf8')] as const)
-
-/** Source with comments removed, so prose naming the import is not read as the import. */
-function code(source: string): string {
-  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1')
-}
 
 /**
  * An emitted import of the umbrella, and ONLY of the umbrella.

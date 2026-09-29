@@ -111,7 +111,7 @@ describe('#382 — asking a delisted target for streaming fails by name', () => 
     await expect(
       buildAwsLambda(config, '/cwd', {
         runNodeBuild: async () => {},
-        writeEntry: () => {},
+        bundleFunction: async () => {},
         ensureDir: () => {},
       }),
     ).rejects.toThrow(/aws-lambda.*does not stream/s)
@@ -169,7 +169,7 @@ describe('#382 — asking a delisted target for streaming fails by name', () => 
     // importing the registry from inside an adapter and reopening the cycle.
     const message = await buildAwsLambda(config, '/cwd', {
       runNodeBuild: async () => {},
-      writeEntry: () => {},
+      bundleFunction: async () => {},
       ensureDir: () => {},
     }).then(
       () => '',

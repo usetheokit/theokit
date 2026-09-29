@@ -31,16 +31,14 @@
 import { describe, expect, it } from 'vitest'
 
 import { renderVercelFunctionEntry } from '../../packages/theo/src/adapters/vercel.js'
+// The string-aware stripper, shared. Seven files carried a byte-identical regex copy that read
+// `"/*"` in netlify.ts as a comment opener and deleted 36% of that file (B-338).
+import { withoutComments as code } from './_helpers/adapter-source.js'
 
 const ROUTES = [
   { filePath: 'src/server/routes/health.ts', routePath: '/api/health', methods: ['GET'] },
   { filePath: 'src/server/routes/users/[id].ts', routePath: '/api/users/:id', methods: ['GET'] },
 ] as const
-
-/** Source with comments removed, so prose naming a call is not read as the call. */
-function code(source: string): string {
-  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1')
-}
 
 describe('a prebuilt function bakes its routes', () => {
   it('test_each_route_is_imported_statically', () => {
