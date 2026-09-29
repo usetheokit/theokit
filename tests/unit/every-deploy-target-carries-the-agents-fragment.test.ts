@@ -43,7 +43,13 @@ const TARGETS = [
   // tree there to scan. A baking target with nothing baked correctly emits no agents branch, so the
   // fragment this file is about is only observable when the agents are supplied.
   ['vercel', () => renderVercelFunctionEntry({ agents: AGENTS })],
-  ['netlify', () => renderNetlifyFunction()],
+  // B-339 — given its agents for the identical reason the row above gives, one target later. This
+  // target began BUNDLING (Netlify re-bundling a pre-bundled function produced a SyntaxError), so its
+  // runtime `scanAgents` had no source tree to read and its `createProductionLoader()` would import a
+  // path that was never shipped. Its previous source, `scannedFromLoaderCache`, referenced two names
+  // the host had stopped declaring — a ReferenceError on the first /api/agents/<name> request, found
+  // by `a-generated-entry-declares-every-identifier.test.ts`.
+  ['netlify', () => renderNetlifyFunction({ agents: AGENTS })],
   ['aws-lambda', () => renderAwsLambdaEntry()],
 ] as const
 

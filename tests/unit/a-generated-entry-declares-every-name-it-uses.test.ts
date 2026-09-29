@@ -18,7 +18,7 @@
  *
  *     adapter       uses scannedFromLoaderCache   emits `const cwd`
  *     vercel        yes                           NO        <- the defect
- *     netlify       yes                           yes
+ *     netlify       yes                           yes    (until B-339: it bakes now, like vercel)
  *     aws-lambda    yes                           yes
  *     deno-deploy   yes                           yes
  *     bun           no (names its loader differently, by decision)
@@ -99,10 +99,18 @@ describe('a generated entry declares every name it uses', () => {
 
   it('test_the_sweep_found_the_renderers_that_scan_at_runtime', () => {
     // COUNTERPROOF FIRST. An empty population satisfies the pairing trivially, so this pins that the
-    // set is non-empty AND that the one deliberate absence is the expected one.
-    expect(SCANNERS.length).toBeGreaterThanOrEqual(3)
+    // set is non-empty AND that every deliberate absence is an expected one.
+    //
+    // `netlify` left this set on 2026-09-29 (B-339), for exactly the reason `vercel` left it in
+    // B-319: the target began BUNDLING, so a runtime `scanAgents` has no source tree to read and its
+    // agents are baked from the build's scan instead. This case failing is what surfaced the change
+    // rather than letting the population shrink in silence — which is the whole reason it counts.
+    expect(SCANNERS.length).toBeGreaterThanOrEqual(2)
     expect(SCANNERS.map(([n]) => n)).not.toContain('vercel')
+    expect(SCANNERS.map(([n]) => n)).not.toContain('netlify')
+    expect(SCANNERS.map(([n]) => n)).toEqual(expect.arrayContaining(['aws-lambda', 'deno-deploy']))
     expect(ENTRIES.map(([n]) => n)).toContain('vercel')
+    expect(ENTRIES.map(([n]) => n)).toContain('netlify')
   })
 
   it('test_the_baked_target_declares_no_dead_cwd', () => {
