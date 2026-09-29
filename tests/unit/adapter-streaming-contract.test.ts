@@ -116,4 +116,49 @@ describe('#382 — asking a delisted target for streaming fails by name', () => 
       }),
     ).rejects.toThrow(/aws-lambda.*does not stream/s)
   })
+
+  it('the refusal recommends exactly the targets that actually stream', async () => {
+    // The refusal above is exemplary — it names the cause, the mechanism, and both ways out. What it
+    // also does is HARDCODE its list of alternatives: `(cloudflare, vercel, netlify, bun, deno-deploy,
+    // node)`. That list is correct today, and nothing keeps it correct.
+    //
+    // This is the shape this repository keeps paying for: one place updated and another forgotten.
+    // `EXPECTED` above pins each flag, so flipping one is a deliberate edit — and this sentence would
+    // drift in silence, either recommending a target that cannot do the job or omitting one that can.
+    // BOTH sides below are derived, so this test adds no third copy of the list.
+    const message = await buildAwsLambda(config, '/cwd', {
+      runNodeBuild: async () => {},
+      writeEntry: () => {},
+      ensureDir: () => {},
+    }).then(
+      () => '',
+      (err: unknown) => (err instanceof Error ? err.message : String(err)),
+    )
+
+    const listed = /instead \(([^)]+)\)/.exec(message)?.[1]
+    expect(
+      listed,
+      'the refusal no longer carries a parenthesised list after "instead", so either the message was ' +
+        'reworded or the build stopped refusing at all',
+    ).toBeDefined()
+
+    // A copy plus an explicit comparator, on both sides. The bare `.sort()` is locale-unaware and
+    // mutates in place, and `sonarjs` refuses both; `toSorted` answers both and needs `lib: es2023`,
+    // which this workspace does not set — and widening the workspace lib for a test's convenience is
+    // moving a threshold to pass a gate. What matters here is only that the two sides are ordered the
+    // SAME way, which any total order gives.
+    const byName = (a: string, b: string): number => a.localeCompare(b)
+    const sorted = (xs: readonly string[]): string[] => [...xs].sort(byName)
+    const recommended = sorted((listed ?? '').split(',').map((s) => s.trim()))
+    const streaming: string[] = []
+    for (const target of VALID_TARGETS) {
+      const adapter = await resolveAdapter(target)
+      if (adapter.streamsResponses === true) streaming.push(target)
+    }
+
+    expect(
+      recommended,
+      'the refusal recommends a different set of targets than the ones declaring streamsResponses',
+    ).toEqual(sorted(streaming))
+  })
 })
