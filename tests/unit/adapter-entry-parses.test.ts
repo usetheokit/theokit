@@ -36,6 +36,22 @@ const ENTRIES: Record<string, () => string> = {
       htmlTail: '</body></html>',
     }),
   vercel: () => renderVercelFunctionEntry(),
+  // B-319 — baked routes emit static imports, a module map and a table, which is a different program
+  // from the empty one above. A path with a `[id]` segment is included because it reaches the import
+  // specifier verbatim, and brackets in a specifier are exactly the kind of thing that parses in a
+  // template and not in a module.
+  'vercel (baked routes)': () =>
+    renderVercelFunctionEntry({
+      serverDir: 'src/server',
+      routes: [
+        { filePath: 'src/server/routes/health.ts', routePath: '/api/health', methods: ['GET'] },
+        {
+          filePath: 'src/server/routes/users/[id].ts',
+          routePath: '/api/users/:id',
+          methods: ['GET'],
+        },
+      ],
+    }),
   netlify: () => renderNetlifyFunction(),
   bun: () => renderBunEntry(3000),
   'deno-deploy': () => renderDenoEntry(3000),
@@ -95,7 +111,43 @@ const ENTRIES: Record<string, () => string> = {
   // their entry carries the branch unconditionally and an agent added later needs no rebuild.
   'bun (agent branch)': () => renderBunEntry(3000),
   'deno-deploy (agent branch)': () => renderDenoEntry(3000),
+
+  // B-325 — the rate-limit fragment is emitted ONLY when a project declares a limit, and every entry
+  // above declares none. So this whole family of emissions had never been parsed by anything:
+  // `tests/unit/bun-adapter-rate-limit.test.ts` renders it and asserts on the STRING, which a module
+  // carrying a literal backslash-n satisfies perfectly.
+  //
+  // Measured: `renderBunEntry(3000, { rateLimit })` emitted the rate-limit import joined to the one
+  // before it by two characters — a backslash and an `n` — rather than by a newline, because the
+  // fragment sat in a nested double-quoted string inside a template literal, where an escaped
+  // backslash is a backslash. Bun refused it with `SyntaxError: Invalid or unexpected token`, and two
+  // smoke tests failed on a defect no unit test could see.
+  //
+  // Every target gets the variant rather than only the one that broke. The conditional fragment has
+  // the same shape everywhere, and covering the instance would leave the class open — which is how
+  // this arrived in the first place, one target at a time.
+  // B-317 — the Vercel document branch is new emitted code: a conditional import of the app's SSR
+  // entry, a nonce, and a call with two interpolated HTML strings. Every one of those is a place a
+  // template can emit something that no longer parses, and the shell carries quotes and angle brackets.
+  'vercel (ssr document)': () =>
+    renderVercelFunctionEntry({
+      ssr: true,
+      htmlHead:
+        '<!doctype html><html><head><title>It\'s "quoted"</title></head><body><div id="root">',
+      htmlTail: '</div><script type="module" src="/assets/index.js"></script></body></html>',
+    }),
+
+  'cloudflare (rate limit)': () =>
+    renderCloudflareWorkerEntry({ ssrStreaming: false, rateLimit: RATE_LIMIT }),
+  'vercel (rate limit)': () => renderVercelFunctionEntry({ rateLimit: RATE_LIMIT }),
+  'netlify (rate limit)': () => renderNetlifyFunction({ rateLimit: RATE_LIMIT }),
+  'bun (rate limit)': () => renderBunEntry(3000, { rateLimit: RATE_LIMIT }),
+  'deno-deploy (rate limit)': () => renderDenoEntry(3000, { rateLimit: RATE_LIMIT }),
+  'aws-lambda (rate limit)': () => renderAwsLambdaEntry({ rateLimit: RATE_LIMIT }),
 }
+
+/** A limit a project could declare; the shape `bun-adapter-rate-limit.test.ts` already uses. */
+const RATE_LIMIT = { windowMs: 60_000, max: 100 }
 
 /** What the build writes beside the entry; the specifier is what the emitted source imports. */
 const RUNTIME_CONFIG = './theo.runtime-config.mjs'

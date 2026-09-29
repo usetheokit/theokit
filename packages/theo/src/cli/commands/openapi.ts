@@ -51,7 +51,7 @@ export async function openapiCommand(options: OpenApiCommandOptions = {}): Promi
   }
 
   const serverDir = resolve(cwd, config.serverDir)
-  const manifest = generateManifest(serverDir)
+  const manifest = generateManifest(serverDir, cwd, config.agentsDir)
   const hydrated = await loadRoutesForOpenApi({ serverDir, routes: manifest.routes })
 
   if (options.dryRun) {

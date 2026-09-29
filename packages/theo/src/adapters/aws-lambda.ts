@@ -165,7 +165,7 @@ function awsLambdaHandlerFragment(
     ...(rateLimit === undefined
       ? []
       : [
-          `import { createRateLimiterWeb } from 'theokit/server'`,
+          `import { createRateLimiterWeb } from 'theokit/server/rate-limit'`,
           `import { resolveClientIpFromRequest } from 'theokit/server/rate-limit'`,
           ``,
         ]),
@@ -250,7 +250,7 @@ export function renderAwsLambdaEntry(opts: DeployedEntryOptions = {}): string {
     `// Use with API Gateway HTTP API v2 (default).`,
     ``,
     `import { resolve } from 'node:path'`,
-    `import { scanServerRoutes, matchRoute, executeRoute, createProductionLoader, extractTraceIdFromRequest, TRACE_HEADER, createCorsWebHandler } from 'theokit/server'`,
+    `import { scanServerRoutes, matchRoute, createProductionLoader } from 'theokit/server/scan'\nimport { executeRoute, extractTraceIdFromRequest, TRACE_HEADER, createCorsWebHandler } from 'theokit/server/http'`,
     `import { createWebShim } from 'theokit/adapters/web-shim'`,
     `import { buildSecurityHeaders, withSecurityHeaders } from 'theokit/adapters/security-headers'`,
     ``,
@@ -308,15 +308,12 @@ export async function buildAwsLambda(
   // #382 — refuse by name rather than build something that cannot do what was
   // asked. `ssrStreaming` is the config's declaration that responses stream,
   // and this target is delisted for that (see `awsLambdaAdapter.streamsResponses`).
+  // Kept as a guard for a DIRECT call to this function, which bypasses the CLI. The normal path is
+  // refused earlier, before anything is emptied — see `assertStreamingSupported` (B-336). One message,
+  // declared in one place, so the two cannot drift apart.
   if (config.ssrStreaming) {
-    throw new Error(
-      '[adapter-aws-lambda] ssrStreaming is on, but the aws-lambda target does not stream ' +
-        'responses: the Lambda v2 result object carries the body as a string, so nothing can ' +
-        'leave the function before the run ends. Response streaming would need ' +
-        'awslambda.streamifyResponse plus a Function URL in RESPONSE_STREAM invoke mode, which ' +
-        'this adapter does not emit. Build a streaming target instead (cloudflare, vercel, ' +
-        'netlify, bun, deno-deploy, node), or set ssrStreaming: false in theo.config.ts.',
-    )
+    const { assertStreamingSupported } = await import('./config-support.js')
+    assertStreamingSupported(config, awsLambdaAdapter, 'aws-lambda')
   }
 
   const runNodeBuild = deps.runNodeBuild ?? nodeAdapter.build.bind(nodeAdapter)
@@ -328,6 +325,9 @@ export async function buildAwsLambda(
 
   const entry = renderAwsLambdaEntry({
     securityHeaders: config.security?.headers,
+    // B-315 — the same shape as the B-235 note below, one option over: this build never passed
+    // `serverDir`, so a project declaring `src/server` got an entry resolving `server`.
+    serverDir: config.serverDir,
     // B-235 — pillar (a): the option existed and no build passed it, so a project with a
     // configured agents directory got the default `agents` on this target. Same defect
     // B-185 fixed for bun and deno, one target over.
@@ -362,6 +362,10 @@ export const awsLambdaAdapter: DeployAdapter = {
   name: TARGET,
   // #382 — delisted for streaming, deliberately. See DeployAdapter.
   streamsResponses: false,
+  streamingUnsupportedDetail:
+    'The Lambda v2 result object carries the body as a string, so nothing can leave the function ' +
+    'before the run ends. Response streaming would need awslambda.streamifyResponse plus a Function ' +
+    'URL in RESPONSE_STREAM invoke mode, which this adapter does not emit.',
   // #409 / #410 — the generated entry calls `executeRoute` with routes, loader
   // and serverDir only. CSRF, route policy, file middleware and Zod validation
   // still run because they live inside `executeRoute`; none of the remaining

@@ -30,37 +30,54 @@ import { createRequire } from 'node:module'
 
 import type * as TS from 'typescript'
 
-const require_ = createRequire(import.meta.url)
+/**
+ * The compiler, loaded on first use and never at import time.
+ *
+ * This was module scope, and a Cloudflare deploy found what that costs: `theokit/server/scan` is
+ * imported by the generated worker (through `agent-scan.ts`), Cloudflare EXECUTES the module during
+ * validation, and there `import.meta.url` is undefined — so `createRequire` threw before the worker
+ * ever answered a request (B-263, error 10021). `wrangler deploy --dry-run` had returned exit 0 on
+ * the same bundle minutes earlier: it bundles and does not execute.
+ *
+ * The second reason is independent of Workers and would hold anyway: this is a BUILD-TIME AST
+ * scanner, and nothing that merely imports the module should pay for the TypeScript compiler.
+ *
+ * Cached, so scanning many files still loads it once.
+ */
+let compiler: typeof TS | undefined
 
-const ts = require_('typescript') as typeof TS
+function ts_(): typeof TS {
+  compiler ??= createRequire(import.meta.url)('typescript') as typeof TS
+  return compiler
+}
 
 const POLICY_EXPORT = 'policy'
 
 function hasExportModifier(modifiers: readonly TS.Modifier[] | undefined): boolean {
   if (!modifiers) return false
   for (const m of modifiers) {
-    if (m.kind === ts.SyntaxKind.ExportKeyword) return true
+    if (m.kind === ts_().SyntaxKind.ExportKeyword) return true
   }
   return false
 }
 
 /** `export const policy = ...` (also `let`/`var`, which are legal if unusual). */
 function variableStatementDeclaresPolicy(stmt: TS.VariableStatement): boolean {
-  if (!hasExportModifier(ts.getModifiers(stmt))) return false
+  if (!hasExportModifier(ts_().getModifiers(stmt))) return false
   return stmt.declarationList.declarations.some(
-    (decl) => ts.isIdentifier(decl.name) && decl.name.text === POLICY_EXPORT,
+    (decl) => ts_().isIdentifier(decl.name) && decl.name.text === POLICY_EXPORT,
   )
 }
 
 /** `export { policy }`, `export { p as policy }`, `export { p as policy } from './shared'`. */
 function exportDeclarationDeclaresPolicy(stmt: TS.ExportDeclaration): boolean {
-  if (!stmt.exportClause || !ts.isNamedExports(stmt.exportClause)) return false
+  if (!stmt.exportClause || !ts_().isNamedExports(stmt.exportClause)) return false
   return stmt.exportClause.elements.some((spec) => spec.name.text === POLICY_EXPORT)
 }
 
 /** `export function policy() {}` — a function declaration is a policy as much as a const is. */
 function functionDeclarationDeclaresPolicy(stmt: TS.FunctionDeclaration): boolean {
-  return hasExportModifier(ts.getModifiers(stmt)) && stmt.name?.text === POLICY_EXPORT
+  return hasExportModifier(ts_().getModifiers(stmt)) && stmt.name?.text === POLICY_EXPORT
 }
 
 /**
@@ -70,17 +87,17 @@ function functionDeclarationDeclaresPolicy(stmt: TS.FunctionDeclaration): boolea
  * contract `detectRoutePolicyKinds` follows.
  */
 export function declaresAgentPolicy(filePath: string, content: string): boolean {
-  const sourceFile = ts.createSourceFile(
+  const sourceFile = ts_().createSourceFile(
     filePath,
     content,
-    ts.ScriptTarget.Latest,
+    ts_().ScriptTarget.Latest,
     /* setParentNodes */ false,
-    ts.ScriptKind.TS,
+    ts_().ScriptKind.TS,
   )
   for (const stmt of sourceFile.statements) {
-    if (ts.isVariableStatement(stmt) && variableStatementDeclaresPolicy(stmt)) return true
-    if (ts.isExportDeclaration(stmt) && exportDeclarationDeclaresPolicy(stmt)) return true
-    if (ts.isFunctionDeclaration(stmt) && functionDeclarationDeclaresPolicy(stmt)) return true
+    if (ts_().isVariableStatement(stmt) && variableStatementDeclaresPolicy(stmt)) return true
+    if (ts_().isExportDeclaration(stmt) && exportDeclarationDeclaresPolicy(stmt)) return true
+    if (ts_().isFunctionDeclaration(stmt) && functionDeclarationDeclaresPolicy(stmt)) return true
   }
   return false
 }

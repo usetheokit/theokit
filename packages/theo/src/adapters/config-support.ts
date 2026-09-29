@@ -218,6 +218,46 @@ export class UnenforceableRateLimitError extends Error {
  * `'runtime-not-emitted-here'` is not judged. That adapter's runtime is someone else's and this
  * build cannot answer for it; refusing there would be asserting something unmeasured.
  */
+/**
+ * Refuse a target that cannot stream when the config says responses stream.
+ *
+ * Lives here rather than inside an adapter's `build()` because of WHEN it has to run. The refusal was
+ * thrown from `buildAwsLambda`, which `runAdapterBuild` reaches a hundred lines after `cleanOutDir` has
+ * emptied the output — so a project with `ssrStreaming: true` lost a working build to a refusal about
+ * streaming. Measured 2026-09-28: 302 files in `.theokit/client/assets` before, 0 after (B-336).
+ *
+ * The alternatives are DERIVED from the registry rather than written into the sentence. A hardcoded
+ * list was correct when it was written and nothing kept it correct, which is the same class of drift
+ * `adapter-streaming-contract.test.ts` now pins.
+ */
+export function assertStreamingSupported(
+  config: Pick<TheoConfig, 'ssrStreaming'>,
+  adapter: Pick<DeployAdapter, 'streamsResponses' | 'streamingUnsupportedDetail'>,
+  target: string,
+  streamingTargets?: readonly string[],
+): void {
+  if (!config.ssrStreaming) return
+  if (adapter.streamsResponses === true) return
+
+  const detail =
+    adapter.streamingUnsupportedDetail === undefined ? '' : ` ${adapter.streamingUnsupportedDetail}`
+
+  // The alternatives are named only when the CALLER could know them. An adapter cannot: asking the
+  // registry from inside one closes `adapter -> config-support -> registry -> adapter`, and the Acyclic
+  // Dependencies Principle is not negotiable here (`rules/architecture.md`). So the CLI passes the list
+  // it already has, and a direct call to an adapter's build gets the same refusal without it.
+  const alternatives =
+    streamingTargets === undefined || streamingTargets.length === 0
+      ? ''
+      : ` Build a streaming target instead (${streamingTargets.join(', ')}), or set`
+  const orSet = alternatives === '' ? ' Set' : alternatives
+
+  throw new Error(
+    `[adapter-${target}] ssrStreaming is on, but the ${target} target does not stream responses.` +
+      `${detail}${orSet} ssrStreaming: false in theo.config.ts.`,
+  )
+}
+
 export function assertRateLimitEnforceable(
   config: TheoConfig,
   adapter: Pick<DeployAdapter, 'enforcesRateLimit'>,

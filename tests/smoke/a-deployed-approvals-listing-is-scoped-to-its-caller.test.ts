@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -30,22 +30,54 @@ import { renderBunEntry } from '../../packages/theo/src/adapters/bun.js'
  * the registry the emitted entry resolves, even though they reach it through different import
  * paths.
  */
-const DIST = resolve(__dirname, '../../packages/theo/dist')
+const PACKAGE_ROOT = resolve(__dirname, '../../packages/theo')
 
-/** Each bare specifier a rendered entry imports, mapped to the file the build produced. */
-const BUILT: Record<string, string> = {
-  'theokit/server': `${DIST}/server/index.js`,
-  'theokit/adapters/web-shim': `${DIST}/adapters/web-shim.js`,
-  'theokit/adapters/security-headers': `${DIST}/adapters/security-headers.js`,
-  'theokit/adapters/ws-shim': `${DIST}/adapters/ws-shim.js`,
-  'theokit/adapters/agent-mount': `${DIST}/adapters/agent-mount.js`,
-}
+/**
+ * Each bare specifier a rendered entry can import, DERIVED from the package's own `exports`.
+ *
+ * It was a hand-written list of five until 2026-09-28. `596daa69c` changed the emitted imports from
+ * `theokit/server` to the narrow `theokit/server/scan`, `/http` and `/rate-limit` — a fix for a real
+ * bundler failure — and this list did not move. The rewrite below passed the unknown specifier
+ * through, so the entry ran with a bare `theokit` import in a temp directory and failed with
+ * `Cannot find package 'theokit'`: a message about the directory rather than about the map, three
+ * hops from the cause.
+ *
+ * Derived, it cannot drift. A subpath the package exports is a subpath this resolves, and one it does
+ * not export is refused below rather than passed on.
+ */
+const BUILT: Record<string, string> = Object.fromEntries(
+  Object.entries(
+    JSON.parse(readFileSync(resolve(PACKAGE_ROOT, 'package.json'), 'utf8')).exports as Record<
+      string,
+      { import?: string } | string
+    >,
+  )
+    .filter(
+      (entry): entry is [string, { import: string }] =>
+        entry[0].startsWith('./') && typeof (entry[1] as { import?: string })?.import === 'string',
+    )
+    .map(([subpath, target]) => [
+      `theokit${subpath.slice(1)}`,
+      resolve(PACKAGE_ROOT, target.import),
+    ]),
+)
 
 function againstTheBuild(source: string): string {
   return source.replace(
     /^(\s*import[^\n]*?from\s+)'([^']+)'/gm,
-    (whole: string, prefix: string, specifier: string) =>
-      specifier in BUILT ? `${prefix}'${pathToFileURL(BUILT[specifier]).href}'` : whole,
+    (whole: string, prefix: string, specifier: string) => {
+      if (specifier in BUILT) return `${prefix}'${pathToFileURL(BUILT[specifier]).href}'`
+      // Fail-fast, per `rules/error-handling.md`. Passing an unmapped `theokit` specifier through is
+      // what turned a one-line map omission into `Cannot find package 'theokit'` from a temp
+      // directory. The specifier IS the diagnosis, so it is named here rather than three hops later.
+      if (specifier === 'theokit' || specifier.startsWith('theokit/')) {
+        throw new Error(
+          `the rendered entry imports '${specifier}', which packages/theo does not export. ` +
+            `Add the subpath to the package's \`exports\`, or stop emitting it.`,
+        )
+      }
+      return whole
+    },
   )
 }
 

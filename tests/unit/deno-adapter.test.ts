@@ -49,9 +49,19 @@ describe('renderDenoEntry — template', () => {
   })
 
   it('imports theokit via npm: specifier (Deno Deploy compat)', () => {
+    // The policy this case defends is the `npm:` PREFIX, which Deno Deploy needs to resolve a bare
+    // npm package. It was checked by pinning `from 'npm:theokit/server'` — the umbrella — which the
+    // framework itself deprecates with a removal scheduled, so the assertion held the entry on an
+    // import that will stop loading (B-335). The prefix is asserted here without requiring the
+    // umbrella, and the second half of the case now states the rule instead of implying it.
     const out = renderDenoEntry(8000)
-    expect(out).toContain("from 'npm:theokit/server'")
+
+    expect(out).toContain("from 'npm:theokit/server/")
     expect(out).toContain("from 'npm:theokit/adapters/web-shim'")
+    expect(
+      out,
+      'the entry is back on the deprecated umbrella, which the framework schedules for removal',
+    ).not.toContain("from 'npm:theokit/server'")
   })
 
   it('wires the full executeRoute pipeline through the shim', () => {

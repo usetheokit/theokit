@@ -136,9 +136,22 @@ export function createInMemoryRunEventCache(opts: RunEventCacheOptions = {}): Ru
         }
       }
       buf.listeners.clear()
-      buf.evictTimer = setTimeout(() => runs.delete(runId), evictAfterMs)
-      // Never keep the process alive just for an eviction timer.
-      buf.evictTimer.unref()
+      const timer = setTimeout(() => runs.delete(runId), evictAfterMs)
+      buf.evictTimer = timer
+      // Never keep the process alive just for an eviction timer — where there IS a process to keep
+      // alive. `unref` is Node-only, and this module runs on Workers too.
+      //
+      // Measured on 2026-09-28 (B-329), and the result is the opposite of the intuition: workerd
+      // WITHOUT `nodejs_compat` returns a Timeout whose `unref` works, and WITH the flag — which is
+      // exactly what this framework's Cloudflare adapter emits — `setTimeout` returns a NUMBER, so
+      // this line threw `TypeError: buf.evictTimer.unref is not a function` on every terminated run.
+      // The Node-compat flag is what removed the Node API.
+      //
+      // Feature-detected rather than branched on a runtime name: a runtime that grows `unref` gets it,
+      // and one that never had it is not asked twice.
+      if (typeof timer === 'object' && typeof timer.unref === 'function') {
+        timer.unref()
+      }
     },
 
     attach(runId, afterSeq, onFrame, onEnd) {

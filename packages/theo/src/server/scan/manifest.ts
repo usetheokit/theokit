@@ -3,7 +3,7 @@
  * + `serverDir`, themselves resolved from `process.cwd()`. No HTTP input.
  */
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs'
-import { join, resolve, relative, dirname } from 'node:path'
+import { join, resolve, relative } from 'node:path'
 
 import { scanServerActions } from './action-scan.js'
 import type { ActionNode } from './action-scan.js'
@@ -82,11 +82,29 @@ export interface LoadedManifest {
 
 export function generateManifest(
   serverDir: string,
-  // Agents live at `<projectRoot>/<agentsDir>`. Defaults to the server dir's parent; overridable
-  // for tests / non-standard layouts.
-  projectRoot: string = dirname(serverDir),
-  // Agents dir NAME (config `agentsDir`, default "agents"), relative to projectRoot (#95 follow-up).
-  agentsDir = 'agents',
+  /**
+   * The project root. Agents live at `<projectRoot>/<agentsDir>`.
+   *
+   * REQUIRED since B-313. It defaulted to `dirname(serverDir)`, which is correct exactly when the layout
+   * is flat — and the layout `create-theokit` scaffolds is not: `serverDir` is `<root>/src/server`, so
+   * the guess was `<root>/src` and wrong by one level. Three read-only callers took it and two passed it
+   * explicitly, so the correct shape was known and never reached them.
+   */
+  projectRoot: string,
+  /**
+   * The agents dir NAME, relative to `projectRoot` (config `agentsDir`).
+   *
+   * Optional WITHOUT a default, and that distinction is the whole point. `scanAgents` reports a
+   * configured directory that resolves to nothing and stays silent when nothing was configured — its
+   * docblock says why: "a default erases the difference between 'nobody configured this' and 'somebody
+   * configured agents', and only the first should stay quiet."
+   *
+   * This defaulted it to `'agents'`, which erased exactly that difference. Measured: an ordinary project
+   * with no agents was told `agentsDir "agents" resolves to "<root>/src/agents" … every /api/agents/*
+   * route will 404`, about routes it does not have and a directory it never configured. A parameter
+   * default also applies to an explicit `undefined`, so pass-through was impossible while it existed.
+   */
+  agentsDir?: string,
 ): TheoManifest {
   const routes = scanServerRoutes(serverDir)
   const actions = scanServerActions(serverDir)
@@ -141,7 +159,19 @@ export function loadManifest(
   //
   // The default preserves the old behaviour for callers that genuinely have only the server
   // dir; the caller that knows the root passes it, which is every caller that matters.
-  projectRoot: string = dirname(serverDir),
+  /**
+   * The project root the writer encoded against.
+   *
+   * REQUIRED since B-313, and this is the default that #871 was about: `generateManifest` is TOLD the
+   * root and writes `relative(projectRoot, …)`, while this GUESSED it as `dirname(serverDir)`. The guess
+   * is right for `<root>/server` and wrong by one level for `<root>/src/server` — the layout the default
+   * scaffold declares — which produced `Cannot find module '<root>/src/src/server/agents/chat.ts'` and a
+   * 500 on every agent route of a freshly scaffolded app.
+   *
+   * #871 was fixed by passing it at the one production call site. The DEFAULT stayed, so any caller that
+   * omitted it re-created the bug; required, none can.
+   */
+  projectRoot: string,
 ): LoadedManifest {
   const manifestPath = join(distDir, 'manifest.json')
 

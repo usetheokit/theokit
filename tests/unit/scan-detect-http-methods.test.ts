@@ -1,6 +1,6 @@
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 
 import { beforeEach, describe, expect, it } from 'vitest'
 
@@ -150,17 +150,17 @@ describe('manifest round-trip with methods field', () => {
       'server/routes/x.ts',
       "export const GET = { policy: 'public' }\nexport const DELETE = { policy: 'public' }\n",
     )
-    const manifest = generateManifest(serverDir)
+    const manifest = generateManifest(serverDir, dirname(serverDir))
     const x = manifest.routes.find((r) => r.routePath === '/api/x')
     expect(x?.methods).toEqual(['DELETE', 'GET'])
   })
 
   it('write + load preserves methods field', () => {
     write('server/routes/x.ts', "export const GET = { policy: 'public' }\n")
-    const manifest = generateManifest(serverDir)
+    const manifest = generateManifest(serverDir, dirname(serverDir))
     const distDir = join(sandbox, '.theokit')
     writeManifest(manifest, distDir)
-    const loaded = loadManifest(distDir, serverDir)
+    const loaded = loadManifest(distDir, serverDir, dirname(serverDir))
     const x = loaded.routes.find((r) => r.routePath === '/api/x')
     expect(x?.methods).toEqual(['GET'])
   })
@@ -176,7 +176,7 @@ describe('manifest round-trip with methods field', () => {
       websockets: [],
     }
     writeFileSync(join(distDir, 'manifest.json'), JSON.stringify(legacy))
-    const loaded = loadManifest(distDir, serverDir)
+    const loaded = loadManifest(distDir, serverDir, dirname(serverDir))
     expect(loaded.routes).toHaveLength(1)
     expect(loaded.routes[0].methods).toBeUndefined()
   })

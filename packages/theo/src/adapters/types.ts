@@ -206,6 +206,18 @@ export interface DeployAdapter {
    * This member is on the EXPORTED interface, so every third-party adapter inherited that inversion.
    */
   enforcesRateLimit?: 'always' | 'never' | 'with-a-store' | 'not-ours-to-judge'
+  /**
+   * Why THIS target cannot stream, in the words its own maintainer would use.
+   *
+   * The refusal is computed centrally so it can run before anything is destroyed (B-336), and a central
+   * check cannot know that Lambda's v2 result object carries the body as a string or that
+   * `awslambda.streamifyResponse` is what would be needed. Declared here for the same reason
+   * `streamsResponses` is: the adapter is the only thing that knows.
+   *
+   * Read only when `streamsResponses` is not `true`. Absent is fine — the generic refusal still names
+   * the target, the config key and the alternatives.
+   */
+  streamingUnsupportedDetail?: string
   build(config: TheoConfig, cwd: string, ctx?: AdapterBuildContext): Promise<void>
 }
 
@@ -219,6 +231,35 @@ export type BuildTarget =
   | 'netlify'
   | 'aws-lambda'
   | 'theo-cloud'
+
+/**
+ * Whether a target's emitted entry renders the HTML document on the server.
+ *
+ * The build printed `(SSR)` from `config.ssr` alone, so a target that delegates the document to a
+ * static host was announced as server-rendering. Measured 2026-09-28 on a real project built with
+ * `--target bun` and driven under Bun 1.3.14: the build said `✓ Build complete → bun (SSR)` and `GET /`
+ * answered 531 bytes whose body was an empty `<div id="root">`.
+ *
+ * This answers CAN the target render, not WILL it on this build — the config flag that turns rendering
+ * on differs per target (`ssrStreaming` for Cloudflare, `ssr` for the rest), and each adapter already
+ * knows its own. A caller wanting the second question asks both.
+ *
+ * Kept beside `VALID_TARGETS` rather than on `DeployAdapter`, because the CLI prints the note before
+ * and after the adapter runs and never holds the emitted text. `check` in the test suite compares this
+ * table against what each adapter's source actually reaches, in both directions, so it cannot drift
+ * into describing a fleet that moved.
+ */
+const RENDERS_DOCUMENT: ReadonlySet<BuildTarget> = new Set<BuildTarget>([
+  'cloudflare',
+  'vercel',
+  'node',
+  'static',
+  'bun',
+])
+
+export function targetRendersDocument(target: BuildTarget): boolean {
+  return RENDERS_DOCUMENT.has(target)
+}
 
 export const VALID_TARGETS: BuildTarget[] = [
   'node',

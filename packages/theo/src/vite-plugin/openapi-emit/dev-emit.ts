@@ -35,6 +35,10 @@ export async function reEmitOpenApi(
   serverDir: string,
   distDir: string,
   openApiConfig: DevEmitConfig,
+  /** The project root. B-313 — `generateManifest` guessed it as the server dir's parent. */
+  projectRoot: string,
+  /** The agents dir NAME relative to the root, passed through undefaulted. */
+  agentsDir: string | undefined,
 ): Promise<void> {
   if (inFlight) {
     console.warn(
@@ -44,7 +48,7 @@ export async function reEmitOpenApi(
   }
   inFlight = true
   try {
-    const manifest = generateManifest(serverDir)
+    const manifest = generateManifest(serverDir, projectRoot, agentsDir)
     const hydrated = await loadRoutesForOpenApi({ serverDir, routes: manifest.routes })
     emitOpenApi({
       manifest: hydrated,

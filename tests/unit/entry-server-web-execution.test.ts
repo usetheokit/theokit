@@ -24,49 +24,74 @@ afterAll(() => {
   for (const dir of created) rmSync(dir, { recursive: true, force: true })
 })
 
+/**
+ * Replace an anchor in the generated source, and REFUSE when it is not there.
+ *
+ * Every stub below is keyed on an exact emitted line, and `String.replace` with no match is a silent
+ * no-op — so a change to the generator does not break this file loudly, it removes a stub and the test
+ * then exercises the real module and fails somewhere else entirely.
+ *
+ * Measured 2026-09-28: the react-dom import became a namespace import (B-334), this anchor stopped
+ * matching, the stub was never installed, and the failure surfaced as
+ * `expected 21 to be less than -1` — an order assertion about markup, four layers from the cause.
+ */
+function stub(code: string, anchor: string, replacement: string): string {
+  if (!code.includes(anchor)) {
+    throw new Error(
+      `[entry-server-web-execution] the generated source no longer contains this anchor, so its stub ` +
+        `was never installed and every assertion below is about the real module:\n\n${anchor}`,
+    )
+  }
+  return code.replace(anchor, replacement)
+}
+
 function materialize(code: string): string {
-  const runnable = code
-    .replace(
-      "import { renderToPipeableStream, renderToReadableStream } from 'react-dom/server'",
-      [
-        // Faithful enough to drive the Node path: React calls `onShellReady`,
-        // and `pipe(dest)` writes the app markup and ends the destination, which
-        // is what makes the tail observable at all.
-        'const renderToPipeableStream = (app, opts) => {',
-        '  queueMicrotask(() => opts.onShellReady && opts.onShellReady())',
-        "  return { pipe(dest) { dest.end('<span>app</span>') }, abort() {} }",
-        '}',
-        'const renderToReadableStream = async () =>',
-        '  new ReadableStream({ start(controller) { controller.close() } })',
-      ].join('\n'),
-    )
-    .replace(
-      "import { createStaticHandler, createStaticRouter, StaticRouterProvider, matchRoutes } from 'react-router'",
-      [
-        'const createStaticHandler = () => ({ dataRoutes: [], query: async () => ({}) })',
-        'const createStaticRouter = () => ({})',
-        'const StaticRouterProvider = () => null',
-        'const matchRoutes = () => []',
-      ].join('\n'),
-    )
-    .replace(
-      // The generated entry imports the nonce provider from the package by NAME, which is right for
-      // a consumer and unresolvable here: this repository IS `theokit`, so its own root has no
-      // `node_modules/theokit` to walk up to. Stubbed for the same reason the three below are — the
-      // subject under test is what the generator EMITS around it, not React context plumbing.
-      // Measured: without this the six cases in this file fail with
-      // `Cannot find package 'theokit'`, in CI as well as locally.
-      "import { NonceProvider } from 'theokit/client'",
-      'const NonceProvider = ({ children }) => children',
-    )
-    .replace(
-      "import { routes, __theoPreloadMap, __theoPreloadPathsFor } from '/@theo/route-manifest'",
-      [
-        'const routes = []',
-        'const __theoPreloadMap = {}',
-        'const __theoPreloadPathsFor = () => []',
-      ].join('\n'),
-    )
+  let runnable = stub(
+    code,
+    "import * as __theoReactDOMServer from 'react-dom/server'\n" +
+      'const { renderToReadableStream, renderToPipeableStream } = __theoReactDOMServer',
+    [
+      // Faithful enough to drive the Node path: React calls `onShellReady`,
+      // and `pipe(dest)` writes the app markup and ends the destination, which
+      // is what makes the tail observable at all.
+      'const renderToPipeableStream = (app, opts) => {',
+      '  queueMicrotask(() => opts.onShellReady && opts.onShellReady())',
+      "  return { pipe(dest) { dest.end('<span>app</span>') }, abort() {} }",
+      '}',
+      'const renderToReadableStream = async () =>',
+      '  new ReadableStream({ start(controller) { controller.close() } })',
+    ].join('\n'),
+  )
+  runnable = stub(
+    runnable,
+    "import { createStaticHandler, createStaticRouter, StaticRouterProvider, matchRoutes } from 'react-router'",
+    [
+      'const createStaticHandler = () => ({ dataRoutes: [], query: async () => ({}) })',
+      'const createStaticRouter = () => ({})',
+      'const StaticRouterProvider = () => null',
+      'const matchRoutes = () => []',
+    ].join('\n'),
+  )
+  runnable = stub(
+    runnable,
+    // The generated entry imports the nonce provider from the package by NAME, which is right for
+    // a consumer and unresolvable here: this repository IS `theokit`, so its own root has no
+    // `node_modules/theokit` to walk up to. Stubbed for the same reason the three below are — the
+    // subject under test is what the generator EMITS around it, not React context plumbing.
+    // Measured: without this the six cases in this file fail with
+    // `Cannot find package 'theokit'`, in CI as well as locally.
+    "import { NonceProvider } from 'theokit/client'",
+    'const NonceProvider = ({ children }) => children',
+  )
+  runnable = stub(
+    runnable,
+    "import { routes, __theoPreloadMap, __theoPreloadPathsFor } from '/@theo/route-manifest'",
+    [
+      'const routes = []',
+      'const __theoPreloadMap = {}',
+      'const __theoPreloadPathsFor = () => []',
+    ].join('\n'),
+  )
 
   mkdirSync(CACHE, { recursive: true })
   const dir = mkdtempSync(join(CACHE, 'theo-entry-exec-'))

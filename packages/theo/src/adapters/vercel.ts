@@ -9,22 +9,17 @@ import type { TheoConfig } from '../config/schema.js'
 import type { SecurityHeadersConfig } from '../core/contracts/security-headers.js'
 import { assertServicesUnsupported, readManifest } from '../services/index.js'
 
-import {
-  deployedAgentsFragment,
-  scannedFromLoaderCache,
-  JSON_NOT_FOUND_RESPONSE,
-} from './deployed-agents.js'
+import { bundleDeployedFunction } from './bundle-deployed-function.js'
+import { deployedAgentsFragment, JSON_NOT_FOUND_RESPONSE } from './deployed-agents.js'
+import { renderBakedRoutes, routeRuntimeLines, type BakedRoute } from './deployed-baked-routes.js'
+import { readDocumentShell } from './deployed-document-shell.js'
 import { deployedEntryPreamble } from './deployed-preamble.js'
 import {
   deployedRateLimitFragment,
   rateLimitCheckFragment,
   type DeployedRateLimitOptions,
 } from './deployed-rate-limit.js'
-import {
-  agentsDirLiteral,
-  deployedRuntimeConfigFragment,
-  serverDirLiteral,
-} from './deployed-runtime-config.js'
+import { deployedRuntimeConfigFragment, serverDirLiteral } from './deployed-runtime-config.js'
 import { deployedTraceFragment } from './deployed-trace.js'
 import { nodeAdapter } from './node.js'
 import { buildSecurityHeaders, describeDeployedSecurityHeaders } from './security-headers.js'
@@ -49,7 +44,7 @@ function vercelHandlerFragment(
     ...(rateLimit === undefined
       ? []
       : [
-          `import { createRateLimiterWeb } from 'theokit/server'`,
+          `import { createRateLimiterWeb } from 'theokit/server/rate-limit'`,
           `import { resolveClientIpFromRequest } from 'theokit/server/rate-limit'`,
         ]),
     ...deployedRateLimitFragment(
@@ -170,20 +165,35 @@ function vercelRouteRequestFragment(
   runtimeSpread: string,
   agentsBranch: readonly string[],
   agentsHostBypass: string,
+  /**
+   * The document shell, when this function renders one (B-317).
+   *
+   * Its PRESENCE is the signal rather than a separate boolean: a shell with no renderer and a
+   * renderer with no shell are both states this cannot be in, and a flag beside the data would
+   * allow them.
+   */
+  document?: { htmlHead?: string; htmlTail?: string },
 ): string[] {
   return [
     `async function routeRequest(nodeReq) {`,
     `  const url = new URL(nodeReq.url ?? '/', 'http://' + (nodeReq.headers?.host ?? 'localhost'))`,
     ``,
-    `  if (!url.pathname.startsWith('/api/')${agentsHostBypass}) {`,
-    `    return new Response('Not Found', {`,
-    `      status: 404,`,
-    `      headers: { 'content-type': 'text/plain; charset=utf-8' },`,
-    `    })`,
-    `  }`,
+    // B-317 — emitted only when this function does NOT render the document. With a document branch
+    // every path is legitimate: `/api/*` is a route and everything else is a page, so refusing
+    // non-`/api` paths here would make that branch unreachable — which is exactly what it did, and
+    // the first version of the fix shipped it: the branch was present, asserted present, and never
+    // entered. `/` answered this 9-byte `Not Found` instead of a document.
+    ...(document === undefined
+      ? [
+          `  if (!url.pathname.startsWith('/api/')${agentsHostBypass}) {`,
+          `    return new Response('Not Found', {`,
+          `      status: 404,`,
+          `      headers: { 'content-type': 'text/plain; charset=utf-8' },`,
+          `    })`,
+          `  }`,
+        ]
+      : []),
     ``,
-    `  if (!routesCache) routesCache = scanServerRoutes(serverDir)`,
-    `  if (!loaderCache) loaderCache = createProductionLoader()`,
     ``,
     // B-235 — the Node-to-Web conversion is hoisted ABOVE the agents branch, which names
     // `request` like every other host's, and an agent path never reaches a route match. The
@@ -214,8 +224,32 @@ function vercelRouteRequestFragment(
     ``,
     ...agentsBranch,
     ``,
-    `  const match = matchRoute(url.pathname, routesCache)`,
-    `  if (!match) return ${JSON_NOT_FOUND_RESPONSE}`,
+    `  const match = matchRoute(url.pathname, routes)`,
+    ...(document !== undefined
+      ? [
+          `  if (!match) {`,
+          `    // B-317 — a path with no matching file arrives here because config.json routes it to this`,
+          `    // function. Before this branch it answered a JSON 404, so the config sent every page to the`,
+          `    // static shell instead and an SSR project was served an empty \`<div id="root">\` while the`,
+          `    // build announced SSR.`,
+          `    //`,
+          `    // Only OUTSIDE \`/api/\`: a path under it that matches no route is a routing miss and owes a`,
+          `    // JSON 404, not a document. Rendering one there would answer a fetch with HTML.`,
+          `    if (!url.pathname.startsWith('/api/')) {`,
+          `      const nonce = generateNonce()`,
+          `      return withSecurityHeaders(`,
+          `        await renderStreamingWeb(request, {`,
+          `          htmlHead: ${JSON.stringify(document.htmlHead ?? '')},`,
+          `          htmlTail: ${JSON.stringify(document.htmlTail ?? '')},`,
+          `          nonce,`,
+          `        }),`,
+          `        buildSecurityHeaders(SECURITY_HEADERS_CONFIG, { production: true }, { nonce }),`,
+          `      )`,
+          `    }`,
+          `    return ${JSON_NOT_FOUND_RESPONSE}`,
+          `  }`,
+        ]
+      : [`  if (!match) return ${JSON_NOT_FOUND_RESPONSE}`]),
     ``,
     `  const { req, res, toResponse } = createWebShim(request)`,
     ...deployedTraceFragment('request', '  '),
@@ -223,33 +257,81 @@ function vercelRouteRequestFragment(
     `  // toResponse() settles at the headers and carries a live body.`,
     `  return toResponse(executeRoute({`,
     `    route: match.route, method, params: match.params,`,
-    `    req, res, loadModule: loaderCache, serverDir, requestId, ...CSRF_CONFIG, ${runtimeSpread}`,
+    `    req, res, loadModule, serverDir, requestId, ...CSRF_CONFIG, ${runtimeSpread}`,
     `  }))`,
     `}`,
   ]
 }
 
-export function renderVercelFunctionEntry(opts: DeployedEntryOptions = {}): string {
+export function renderVercelFunctionEntry(
+  opts: DeployedEntryOptions & {
+    /**
+     * The routes, scanned on the BUILD machine (B-319).
+     *
+     * Build Output API v3 uploads a `.func` directory as it is, so the emitted entry's runtime
+     * `scanServerRoutes` was a `readdirSync` against a directory that is not there — measured on a
+     * deployed function: every `/api/*` answered its own JSON 404. Baked here for the reason
+     * Cloudflare bakes (#369), through the same emitter, so the two cannot drift.
+     */
+    routes?: readonly BakedRoute[]
+    /** The agents, for the same reason and from the same scan. */
+    agents?: readonly { filePath: string; agentPath: string; name: string }[]
+    /**
+     * Whether this function renders the DOCUMENT as well as the routes (B-317).
+     *
+     * `renderVercelConfigJson` sends a path with no matching file here when it is on, and Vercel's
+     * `{ handle: 'filesystem' }` has already served every real file — so the branch below needs no
+     * asset fallthrough, unlike the Cloudflare worker's, which owns `/` and therefore also receives
+     * `/robots.txt`.
+     */
+    ssr?: boolean
+    /** The document up to `<div id="root">`, read from the built client shell. */
+    htmlHead?: string
+    /** The document from `<div id="root">` on. */
+    htmlTail?: string
+    /** The app's identity module, when it has one. */
+    contextModule?: string
+  } = {},
+): string {
   const runtimeConfig = deployedRuntimeConfigFragment(opts)
+  const { routeImports, routeModuleEntries, routeTableEntries } = renderBakedRoutes(
+    opts.routes ?? [],
+  )
   // B-235. This is the target the item's evidence was right about in form and wrong about in
   // consequence: the handler IS Node-shaped, and it already converts to a Web `Request` before
   // handing anything to the shim. Threading `nodeReq` through twelve sites says how the entry
   // RECEIVES a request, not whether it can produce the one this branch needs.
-  const agentsFragment = deployedAgentsFragment(scannedFromLoaderCache(agentsDirLiteral(opts)), {
-    notFound: JSON_NOT_FOUND_RESPONSE,
-  })
+  // B-319 — ALWAYS baked, with no scan fallback. This platform uploads only what the build
+  // bundled, so `scanAgents` cannot work here at any value: there is no source tree to read. A
+  // fallback would preserve a behaviour that is broken by construction — an entry that scans, finds
+  // nothing, and answers 404 while looking like it tried. With nothing baked the agents fragment is
+  // empty, `/api/agents/<name>` falls through to the route matcher, and the 404 is honest.
+  const agentsFragment = deployedAgentsFragment(
+    { kind: 'baked', agents: opts.agents ?? [], contextModule: opts.contextModule },
+    { notFound: JSON_NOT_FOUND_RESPONSE },
+  )
   return [
     `// Generated by Theo — Vercel Functions adapter`,
     `// Environment variables are resolved at RUNTIME, not build time.`,
     ``,
     `import { resolve } from 'node:path'`,
-    `import { scanServerRoutes, matchRoute, executeRoute, createProductionLoader, extractTraceIdFromRequest, TRACE_HEADER, createCorsWebHandler } from 'theokit/server'`,
+    `import { matchRoute, compilePattern } from 'theokit/server/scan'\nimport { executeRoute, extractTraceIdFromRequest, TRACE_HEADER, createCorsWebHandler } from 'theokit/server/http'`,
+    ...routeImports,
     `import { createWebShim } from 'theokit/adapters/web-shim'`,
-    `import { buildSecurityHeaders, withSecurityHeaders } from 'theokit/adapters/security-headers'`,
+    opts.ssr === true
+      ? `import { buildSecurityHeaders, generateNonce, withSecurityHeaders } from 'theokit/adapters/security-headers'`
+      : `import { buildSecurityHeaders, withSecurityHeaders } from 'theokit/adapters/security-headers'`,
+    ...(opts.ssr === true
+      ? [`import { renderStreamingWeb } from '../server/entry-server.js'`]
+      : []),
     ``,
-    `// Cold-start cache`,
-    `let routesCache = null`,
-    `let loaderCache = null`,
+    ...routeRuntimeLines(routeModuleEntries, routeTableEntries, 'vercel'),
+    // B-318 / B-319 — `const cwd` used to be declared here, because the agents fragment emitted
+    // `scanAgents(cwd, …)` and this was the one of its four callers that never declared the name.
+    // B-319 then removed the scan entirely from this target — there is no source tree to read on a
+    // platform that uploads only its bundle — so the declaration became dead code. The pairing is
+    // still enforced for the three adapters that DO scan, by
+    // `tests/unit/a-generated-entry-declares-every-name-it-uses.test.ts`.
     `const serverDir = resolve(process.cwd(), ${serverDirLiteral(opts)})`,
     ``,
     `// #410 — the security baseline \`theokit start\` puts on every response,`,
@@ -269,6 +351,7 @@ export function renderVercelFunctionEntry(opts: DeployedEntryOptions = {}): stri
       runtimeConfig.executeRouteSpread,
       agentsFragment.branch,
       agentsFragment.hostBypass,
+      opts.ssr === true ? { htmlHead: opts.htmlHead, htmlTail: opts.htmlTail } : undefined,
     ),
   ].join('\n')
 }
@@ -307,7 +390,20 @@ export interface VercelRoutingRule {
  * repository deploys to no Vercel project from CI. The emitted configuration is verifiable; the
  * platform honouring it is not, and the difference is stated rather than glossed.
  */
-export function renderVercelConfigJson(securityHeaders?: SecurityHeadersConfig): {
+export function renderVercelConfigJson(
+  securityHeaders?: SecurityHeadersConfig,
+  opts: {
+    /**
+     * Whether a path with no matching file reaches the function instead of the static shell.
+     *
+     * A SECOND parameter rather than a field on the first, and the reason is a trap: the first is
+     * `SecurityHeadersConfig`, which is all-optional, so `renderVercelConfigJson({ ssr: true })`
+     * compiles, passes the flag as a headers object and does nothing. A bag in the position of another
+     * all-optional bag is accepted by the type system and ignored by the code (B-317).
+     */
+    ssr?: boolean
+  } = {},
+): {
   version: number
   routes: VercelRoutingRule[]
 } {
@@ -321,7 +417,12 @@ export function renderVercelConfigJson(securityHeaders?: SecurityHeadersConfig):
       },
       { src: '/api/(.*)', dest: '/api' },
       { handle: 'filesystem' },
-      { src: '/(.*)', dest: '/index.html' },
+      // B-317 — where a path with no matching file goes. `{ handle: 'filesystem' }` above still
+      // serves every real file, so this is reached only by a page request: to the function when the
+      // project renders one, and to the static shell when it does not. It sent every page to the shell
+      // regardless, so an SSR project was served an empty `<div id="root">` while the build announced
+      // SSR.
+      { src: '/(.*)', dest: opts.ssr === true ? '/api' : '/index.html' },
     ],
   }
 }
@@ -385,11 +486,44 @@ export const vercelAdapter: DeployAdapter = {
       cpSync(clientDir, resolve(outputDir, 'static'), { recursive: true })
     }
 
-    // 4. Emit serverless function entry (now uses shared web-shim)
-    writeFileSync(
-      resolve(outputDir, 'functions/api.func/index.mjs'),
-      renderVercelFunctionEntry({
+    // B-319 — the routes, agents and identity module are resolved HERE, on the build machine, for
+    // the reason #369 gives for Cloudflare: Build Output API v3 uploads the `.func` directory as it
+    // is, so a runtime `scanServerRoutes` reads a directory that is not there. Measured on a
+    // deployed function — every `/api/*` answered its own JSON 404 with the route files present in
+    // the project. An absent provider bakes nothing and the entry falls back to the scan, which is
+    // what it did before.
+    const scanned = ctx?.scanRoutes?.(config.serverDir)
+
+    // 4. Emit the serverless function, BUNDLED.
+    //
+    // B-316 / ADR 0020 — Build Output API v3 uploads a `.func` directory as it is: nothing installs
+    // dependencies for it and nothing bundles it. Writing the rendered entry straight out produced a
+    // function that could not start, measured on this repository's own scaffold:
+    //
+    //     cp -a .vercel/output/functions/api.func/. /tmp/fn/ && cd /tmp/fn
+    //     node -e "import('./index.mjs')"
+    //     -> ERR_MODULE_NOT_FOUND: Cannot find package 'theokit'
+    //
+    // The staged entry goes inside the project root because a specifier resolves relative to the
+    // importing file — an entry in `/tmp` makes rollup resolve `theokit/server/scan` from `/tmp`.
+    await bundleDeployedFunction({
+      projectRoot: cwd,
+      entrySource: renderVercelFunctionEntry({
+        // B-317 — the three options the renderer honoured and no build passed, which is the shape
+        // B-185, B-235, B-312 and B-315 each fixed one target at a time. The shell is read here
+        // rather than in the renderer because reading a file is the build's job, not a string
+        // emitter's.
+        ssr: config.ssr,
+        ...readDocumentShell(cwd, config.ssr),
+        routes: scanned?.routes,
+        agents: scanned?.agents,
+        contextModule: scanned?.contextModule,
         securityHeaders: config.security?.headers,
+        // B-315 — the option existed, the renderer honoured it, and this build never passed
+        // it, so a project declaring `src/server` got a deployed entry resolving `server`.
+        // The fourth occurrence of that exact shape: B-185 (bun, deno), B-235 (`agentsDir`
+        // here), B-312 (the build's agents scan). Measured on the emitted Vercel function.
+        serverDir: config.serverDir,
         // B-235 — pillar (a): the option existed and no build passed it, so a project with a
         // configured agents directory got the default `agents` on this target. Same defect
         // B-185 fixed for bun and deno, one target over.
@@ -400,7 +534,10 @@ export const vercelAdapter: DeployAdapter = {
         // #425 — a selector, not a transformer, so it rides as a literal like the values above.
         serialization: config.serialization,
       }),
-    )
+      stagePath: '.theokit/vercel/entry.mjs',
+      outDir: resolve(outputDir, 'functions/api.func'),
+      entryFileName: 'index.mjs',
+    })
 
     // 5. Emit .vc-config.json
     writeFileSync(
@@ -411,7 +548,11 @@ export const vercelAdapter: DeployAdapter = {
     // 6. Emit config.json (routing)
     writeFileSync(
       resolve(outputDir, 'config.json'),
-      JSON.stringify(renderVercelConfigJson(config.security?.headers), null, 2),
+      JSON.stringify(
+        renderVercelConfigJson(config.security?.headers, { ssr: config.ssr }),
+        null,
+        2,
+      ),
     )
 
     // eslint-disable-next-line no-console -- CLI build progress
@@ -421,7 +562,12 @@ export const vercelAdapter: DeployAdapter = {
       `${describeDeployedSecurityHeaders({
         target: 'vercel',
         securityHeaders: config.security?.headers,
-        mintsNonce: false,
+        // Derived, and it was a literal `false` for the hours between B-317 shipping and B-334. The
+        // function B-317 emits calls `generateNonce()` and feeds the value to both `renderStreamingWeb`
+        // and `buildSecurityHeaders`, so the deployment DID mint one while the build told the operator
+        // it did not — and the printed advice was to move inline scripts out to work around a
+        // restriction that was no longer there.
+        mintsNonce: config.ssr,
         documentHeaders: 'platform-configured',
       })}\n`,
     )

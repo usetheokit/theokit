@@ -564,6 +564,8 @@ prefer the list whenever the hostname is knowable. Dev only; `theokit start` has
 | `bun`, `deno-deploy`, `aws-lambda` | Alternative runtimes |
 | `static` | Prerendered output |
 
+Step by step, with the traps a green build does not show: [`docs/wiki/sops/cloudflare-deploy.md`](docs/wiki/sops/cloudflare-deploy.md). Five defects sat between that build and a URL that answered, and three of them are invisible to `wrangler deploy --dry-run`.
+
 ## Built With
 
 | Layer | Technology |

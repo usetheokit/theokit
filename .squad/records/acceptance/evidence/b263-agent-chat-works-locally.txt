@@ -1,0 +1,88 @@
+THE CHAT WORKS. Measured end to end, 2026-09-28, on the local production build.
+
+QUESTION ASKED: "estamos conseguindo usar o chat e interagir com o agente?"
+ANSWER:         locally YES, with a real streamed model turn. On both deployed targets NO.
+
+================================================================================
+LOCAL — `theokit build` then `theokit start`, port 3392
+
+  GET  /                        200   14889 B    real SSR, 3546 chars in #root
+  GET  /api/health              200      63 B
+  GET  /api/agents/chat         405     130 B    {"code":"METHOD_NOT_ALLOWED",
+                                                  "message":"Agent endpoints accept POST"}
+  POST /api/agents/chat         200    1188 B    text/event-stream, 34.2s
+
+  reconstructed answer : 'A capital do Brasil é Brasília.'
+  event sequence       : start -> text-start -> text-delta -> text-end -> finish
+  errors in stream     : none
+  errors in server log : 0 lines matching error|fail|throw
+
+  The 405 matters: it proves the route EXISTS and knows its own contract, which is a
+  different fact from a 404.
+
+THE PIPELINE WAS WALKED ONE REFUSAL AT A TIME. Each one was a different layer saying no,
+and reading each instead of guessing is what got to the turn:
+
+  1. POST with {messages:[{role,content}]}   -> 403 CSRF_FAILED: Missing X-Theo-Action
+  2. + X-Theo-Action                          -> 400 "must contain a non-empty message
+                                                      or messages[]"
+     cause: parseAgentRequestBody accepts the ai-sdk shape {id, messages:[{parts:[...]}]}
+     or the simple {message}. A {role,content} array matches the first branch's guard and
+     has no `parts`, so the extracted text is empty.
+  3. {message: "..."}                         -> 500 'Model "openrouter/openai/gpt-4o-mini"
+                                                  declares provider "openrouter", but
+                                                  OPENROUTER_API_KEY is not set.'
+  4. LLM_MODEL=ollama/qwen2.5:1.5b            -> 200, the stream above
+
+  Step 3 is CONFIGURATION, not a defect, and the error names the model, the provider, the
+  variable and the two ways to fix it. No provider key exists in this session's environment:
+  OPENROUTER, ANTHROPIC, OPENAI, GOOGLE, GROQ, MISTRAL, TOGETHER, DEEPINFRA, CEREBRAS, XAI
+  all absent. Step 4 used a model already on this machine (4 pulled, nothing downloaded)
+  through the keyless local path (`KEYLESS_API_KEY = 'local'`).
+
+THE BROWSER UI IS WIRED. The built client bundle contains both `/api/agents/chat` and
+`X-Theo-Action` — the header whose absence produced refusal 1 — so the UI sends what the
+server requires.
+
+================================================================================
+DEPLOYED — the chat does NOT work on either target, for framework reasons
+
+  cloudflare  /api/agents/chat -> 404
+    The worker in the air predates B-312, which was silently dropping every agent. With
+    agents included the upload now fails: @theokit/sdk resolves __dirname at module scope
+    (B-314 / usetheokit/theokit-sdk#705), and Cloudflare executes the module at validation.
+
+  vercel      /api/agents/chat -> 404   (was 500 before B-318)
+    The function loads and runs — it answers its own JSON 404 — and finds nothing, because
+    scanServerRoutes/scanAgents do a readdirSync against directories that are not in the
+    lambda bundle. B-319. Cloudflare solved the same problem by baking the routes (#369);
+    build-scan-routes.ts already produces that list and vercel.ts does not consume it.
+
+  So the gap between "the chat works" and "the chat works where a user can reach it" is
+  B-319 (vercel), B-314 + a redeploy (cloudflare), and B-317 for the document.
+
+================================================================================
+RE-VALIDATED AGAINST THE PROJECT'S OWN PROVIDER, same day.
+
+The turn above used a local ollama model because no provider key existed in the session.
+The operator then supplied an OpenRouter key, so the default model the project actually
+declares was exercised:
+
+  model  : openrouter/openai/gpt-4o-mini   (the theo.config default, not an override)
+  POST /api/agents/chat  ->  200, 3234 B, text/event-stream, 1.91 s
+  deltas : 29
+  events : start -> text-start -> text-delta -> text-end -> finish
+  answer : "O TheoKit é um aplicativo assistente pessoal que ajuda a organizar tarefas e
+            fornece informações úteis, como previsão do tempo e atualizações diárias."
+  errors : none in the stream, none in the server log
+
+  So the keyless ollama run and the real-provider run agree: the framework's whole agent
+  path is sound. Step 3's 500 was the missing variable and nothing else.
+
+  The key was passed in the process environment for one run and written nowhere. Verified:
+  0 occurrences of the key prefix in the server log. It is not in this file, in any commit,
+  or in any issue — and because it was pasted into a chat transcript it should be rotated.
+
+STILL NOT ESTABLISHED: a chat turn on a DEPLOYED target. Both still answer 404 on
+/api/agents/chat, for the reasons in the section above. That is the remaining work, not a
+gap in the measurement.
