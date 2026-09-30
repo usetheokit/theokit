@@ -72,6 +72,23 @@ Two separations that took measuring rather than reasoning:
 So resolution — the thing a deploy needs — works. What fails under `deno check` is type
 inference on four cache variables in the emitted entry, and Deno Deploy does not type-check.
 
+CORRECTED, same session: the paragraph above named the age policy as THE cause of the
+platform failure, and a single-variable test refuted that as stated. Setting
+`minimumDependencyAge: "0s"` in the generated `deno.json` did NOT make the deploy succeed.
+
+What the deploy failure actually turns on, isolated by changing one thing at a time in one
+directory:
+
+    main.ts + deno.json + src/ + client/ + theo.config.ts      -> exit 0, /api/health 200,
+                                                                  agent deltas "P" + "ONG"
+    the same directory, plus package.json                      -> exit 1, revision failed
+
+So the cause is `package.json` being in the upload. The age policy is the mechanism — Deno
+reads the manifest, applies `^15.0.2`, and refuses a version inside its 24-hour window —
+and the `deno.json` knob does not override it, because the manifest is what Deno resolves
+against. Both halves are needed to state this correctly, and the first version of this
+record had only one.
+
 The adapter does NOT set `minimumDependencyAge`. Lowering it removes a supply-chain
 protection, and that is the project owner's decision rather than a code generator's; a
 default of 0 shipped by us would silently withdraw it from every consumer. What the
