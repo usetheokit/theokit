@@ -8,6 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Every `theokit dev` boot of a scaffolded app stops warning about a dependency it cannot resolve. The
+  Vite plugin pushed the bare specifier `devalue` into `optimizeDeps.include`, under a comment that
+  already said why that cannot work — *"devalue lives in theokit's node_modules subtree, not the
+  consumer root"*. Vite resolves those entries from its ROOT, which is the consumer, so the hint asked
+  it to look exactly where the comment says the package is not. Measured on a scaffold installed from
+  npm: `devalue` does not resolve from the app, and the boot printed `Failed to resolve dependency:
+  devalue, present in client 'optimizeDeps.include'` every time. Now `theokit > devalue` — Vite's
+  documented form for a dependency reached through another one. Sabotage-verified on the platform: 0
+  occurrences with the nested form, 1 with the bare one, same scaffold and same boot. (#B-351)
+
 - The `theo-cloud` target builds the bundle it says is ready. Its `build` read
   `.theokit/services.json`, checked the version, logged `Bundle ready for upload` and returned —
   building nothing. Measured on a fresh `create-theokit` scaffold: `.theokit/` held `crons.json`,
