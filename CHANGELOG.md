@@ -8,6 +8,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- The `theo-cloud` target builds the bundle it says is ready. Its `build` read
+  `.theokit/services.json`, checked the version, logged `Bundle ready for upload` and returned —
+  building nothing. Measured on a fresh `create-theokit` scaffold: `.theokit/` held `crons.json`,
+  `jobs.json`, `manifest.json` and `services.json`, with no client and no server entry. Because a
+  build empties its output directory first, running this target **destroyed** whatever the previous
+  build left and reported a bundle in its place.
+
+  The thinness is the documented design and is unchanged: TheoKit does not emit a proprietary
+  platform's orchestration format. That argument is about the PLATFORM'S format, and two documents in
+  this repository state the other half of the contract — `docs/surfaces/build-adapters.md` ("hands over
+  a bundle") and the capability matrix ("prepares the bundle"). Declared twice, implemented nowhere.
+  The target now delegates to the node build, which is what produces an application, and leaves exactly
+  what the `node` target leaves. The message names where the bundle is. (#B-353)
+
 - A Cloudflare deploy of a scaffolded app is possible at all. `@theokit/sdk` reaches its optional
   storage backends through bare dynamic imports behind a loader-override seam — the seam is right, and
   the fallback is statically resolvable, so wrangler's esbuild resolved it at BUILD time and a project
