@@ -8,6 +8,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- A Cloudflare deploy of a scaffolded app is possible at all. `@theokit/sdk` reaches its optional
+  storage backends through bare dynamic imports behind a loader-override seam — the seam is right, and
+  the fallback is statically resolvable, so wrangler's esbuild resolved it at BUILD time and a project
+  that never installed the package could not be bundled. Measured on a fresh `create-theokit` scaffold
+  installed from npm: `Could not resolve "better-sqlite3"`, from the SDK's dist, before any request
+  existed. `my-test` in this repository deployed throughout, which is why nothing caught it — it
+  resolves those names through the workspace.
+
+  The generated `wrangler.toml` now carries an `[alias]` table **derived** from every direct
+  dependency's `peerDependenciesMeta.<name>.optional`, pointing each absent one at a stub that throws
+  and names the remedy. Derived rather than listed: the first cut hardcoded the three names a grep
+  produced and was already incomplete — the SDK declares seven optional peers and `@lancedb/lancedb`,
+  another native module, was not among them. An installed optional peer is left alone, so the table
+  shrinks by itself the day a consumer adds one, and `@types/*` is skipped because a types package
+  never appears in a runtime import graph. (#B-352)
+
 - A scaffolded app stops installing a dependency three majors behind. `sync-template-pins` built its
   rewrite pattern with one escape level too many — `name.replaceAll('/', '\\\\/')`, four backslashes in
   source — so the regex demanded a literal backslash before the slash and **could not match any scoped

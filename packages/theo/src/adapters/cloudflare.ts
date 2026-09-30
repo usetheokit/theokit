@@ -1,4 +1,5 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { resolve } from 'node:path'
 
 import type { TheoConfig } from '../config/schema.js'
@@ -458,7 +459,134 @@ function cloudflareHandleRequestFragment(
   ]
 }
 
-export function renderWranglerToml(opts?: { ssrStreaming?: boolean }): string {
+/** Where the build writes the stub every alias points at, relative to the project root. */
+export const WORKERS_UNSUPPORTED_STUB_PATH = '.theokit/cloudflare/unsupported-on-workers.mjs'
+
+/** What `absentOptionalPeers` needs to know, injectable so the decision is testable without a tree. */
+export interface OptionalPeerProject {
+  /** The project's own direct dependency names. */
+  readonly directDependencies: readonly string[]
+  /** The names each dependency declares as `peerDependenciesMeta.<name>.optional === true`. */
+  readonly optionalPeersOf: (name: string) => readonly string[]
+  /** Whether a name resolves from the project. */
+  readonly isInstalled: (name: string) => boolean
+}
+
+/**
+ * The optional peer dependencies this project does NOT have, which wrangler will try to resolve.
+ *
+ * A dependency that reaches an optional backend through `import('better-sqlite3')` leaves a
+ * statically resolvable specifier in its dist. `nodejs_compat` does not help — these are npm
+ * packages, not builtins — so esbuild fails the whole bundle at BUILD time over a module the code
+ * only reaches when a consumer asked for that backend and supplied no override.
+ *
+ * Measured 2026-09-30 on a fresh `create-theokit` scaffold installed from npm: `wrangler deploy`
+ * answered `Could not resolve "better-sqlite3"` from `@theokit/sdk/dist/chunk-XZHJYSPB.js:76`, and
+ * the scaffold had 28 absent optional peers across four owners.
+ *
+ * **Derived, never written down.** The first cut of this listed the three names a grep of that dist
+ * produced, and was already incomplete — the SDK declares seven optional peers and `@lancedb/lancedb`
+ * was not among the three. A list of names here is a second copy of a fact the dependency publishes,
+ * and it rots on the release where the dependency adds the eighth.
+ *
+ * Two filters, both load-bearing:
+ *
+ * - an INSTALLED optional peer is left alone. The consumer installed it deliberately, and the table
+ *   shrinks by itself the day they do.
+ * - `@types/*` is skipped: a types package never appears in a runtime import graph.
+ *
+ * Aliasing a module the worker graph never imports is inert — it changes nothing. That is why this
+ * does not try to decide which owners are "server-side"; that judgement is the hardcoding this
+ * design removes.
+ *
+ * @param project the dependency facts, read from the project or injected by a test
+ * @returns the names to alias, in first-seen order, each appearing once
+ */
+export function absentOptionalPeers(project: OptionalPeerProject): string[] {
+  const names: string[] = []
+  for (const dependency of project.directDependencies) {
+    for (const peer of project.optionalPeersOf(dependency)) {
+      if (peer.startsWith('@types/')) continue
+      if (project.isInstalled(peer)) continue
+      if (!names.includes(peer)) names.push(peer)
+    }
+  }
+  return names
+}
+
+/**
+ * The module every alias resolves to: it throws when the import is actually reached.
+ *
+ * Reaching it means the code asked for an optional backend and no override was supplied, which is
+ * precisely the condition the calling seam exists for. The message names the module and the remedy,
+ * because without it the runtime error is about a path inside `.theokit`.
+ *
+ * @returns the stub's source
+ */
+/**
+ * `absentOptionalPeers` against the project on disk.
+ *
+ * Separated from the decision so the decision stays testable without a `node_modules` tree, which is
+ * the same split `unpublished-pins.ts` makes and for the same reason. A dependency whose manifest
+ * cannot be read contributes nothing rather than failing the build: an unreadable manifest is a
+ * different problem, and a build that refuses over it would refuse over a shape nobody predicted.
+ *
+ * @param cwd the project root
+ * @returns the names to alias, or an empty list when the project's own manifest cannot be read
+ */
+function absentOptionalPeersOnDisk(cwd: string): string[] {
+  const require_ = createRequire(resolve(cwd, 'package.json'))
+  const readManifestOf = (name: string): Record<string, unknown> | undefined => {
+    try {
+      return require_(`${name}/package.json`) as Record<string, unknown>
+    } catch {
+      return undefined
+    }
+  }
+
+  let own: Record<string, unknown>
+  try {
+    // eslint-disable-next-line security/detect-non-literal-fs-filename -- the project's own manifest
+    own = JSON.parse(readFileSync(resolve(cwd, 'package.json'), 'utf-8')) as Record<string, unknown>
+  } catch {
+    return []
+  }
+
+  return absentOptionalPeers({
+    directDependencies: Object.keys(own.dependencies ?? {}),
+    optionalPeersOf: (name) => {
+      const meta = readManifestOf(name)?.peerDependenciesMeta as
+        | Record<string, { optional?: boolean }>
+        | undefined
+      return Object.entries(meta ?? {})
+        .filter(([, value]) => value.optional === true)
+        .map(([peer]) => peer)
+    },
+    isInstalled: (name) => readManifestOf(name) !== undefined,
+  })
+}
+
+export function renderWorkersUnsupportedStub(): string {
+  return [
+    '// Generated by Theo — Cloudflare adapter',
+    '//',
+    '// Every optional peer dependency this project did not install is aliased here, because',
+    '// wrangler resolves a bare dynamic import at BUILD time and a missing one fails the whole',
+    '// bundle. Reaching this module means the code asked for an optional backend and no loader',
+    '// override was supplied.',
+    'throw new Error(',
+    "  'An optional dependency was imported on Cloudflare Workers and this project did not install " +
+      'it. Supply a loader override for it, or install it and rebuild — the build regenerates the ' +
+      "[alias] table in wrangler.toml from what is present.',",
+    ')',
+    '',
+  ].join('\n')
+}
+
+export function renderWranglerToml(opts?: {
+  ssrStreaming?: boolean
+  workersUnsupported?: readonly string[]
+}): string {
   return [
     `# Generated by Theo — Cloudflare Workers`,
     `name = "theo-app"`,
@@ -511,6 +639,26 @@ export function renderWranglerToml(opts?: { ssrStreaming?: boolean }): string {
     ``,
     `# Environment variables are set via wrangler secret or dashboard`,
     `# Example: wrangler secret put DATABASE_URL`,
+    // Emitted only when something is absent: an empty `[alias]` reads as a decision nobody made.
+    // After `[assets]` on purpose — TOML tables are positional, so these keys must open their own.
+    ...((opts?.workersUnsupported ?? []).length === 0
+      ? []
+      : [
+          ``,
+          `# Optional peer dependencies this project did not install, derived from every direct`,
+          `# dependency's \`peerDependenciesMeta.<name>.optional\`. Wrangler resolves a bare dynamic`,
+          `# import at BUILD time, so one absent module fails the whole bundle over a code path that`,
+          `# only runs when a consumer asked for that backend and supplied no override. Measured`,
+          `# 2026-09-30 on a fresh scaffold: \`Could not resolve "better-sqlite3"\` from`,
+          `# @theokit/sdk/dist, before any request existed.`,
+          `#`,
+          `# Install one of these and rebuild: it leaves this table, because the build derives it from`,
+          `# what is present rather than from a list written here.`,
+          `[alias]`,
+          ...(opts?.workersUnsupported ?? []).map(
+            (name) => `"${name}" = "./${WORKERS_UNSUPPORTED_STUB_PATH}"`,
+          ),
+        ]),
   ].join('\n')
 }
 
@@ -620,14 +768,34 @@ export const cloudflareAdapter: DeployAdapter = {
       }),
     )
 
-    // 3. Emit wrangler.toml (with nodejs_compat enforced)
+    // 3. Emit the stub every alias resolves to, then wrangler.toml.
+    //
+    // The stub is written whether or not the table needs it: an alias pointing at a path nothing
+    // wrote fails the same way the missing module failed, one layer down, and the file costs nothing.
+    const workersUnsupported = absentOptionalPeersOnDisk(cwd)
+    // eslint-disable-next-line security/detect-non-literal-fs-filename -- build-time write under the project's own `.theokit/cloudflare`
+    writeFileSync(resolve(cwd, WORKERS_UNSUPPORTED_STUB_PATH), renderWorkersUnsupportedStub())
+
     // eslint-disable-next-line security/detect-non-literal-fs-filename -- build-time write under the project's own `.theokit/cloudflare`
     writeFileSync(
       resolve(cwd, 'wrangler.toml'),
       // B-263 — the toml decides whether the worker or the CDN answers the document, and the two
       // modes need different `not_found_handling`. Passing the flag is what keeps them apart.
-      renderWranglerToml({ ssrStreaming: config.ssrStreaming }),
+      renderWranglerToml({ ssrStreaming: config.ssrStreaming, workersUnsupported }),
     )
+
+    if (workersUnsupported.length > 0) {
+      // The COUNT on every build, and the names in the file. Printing all 25 of them — measured on a
+      // fresh scaffold — buries the rest of the build output in a list nobody reads twice, and the
+      // list is already written where a reader can look it up.
+      //
+      // eslint-disable-next-line no-console -- CLI build progress
+      console.log(
+        `  ℹ ${String(workersUnsupported.length)} absent optional peer dependenc${
+          workersUnsupported.length === 1 ? 'y' : 'ies'
+        } aliased so wrangler can bundle — see [alias] in wrangler.toml`,
+      )
+    }
 
     // eslint-disable-next-line no-console -- CLI build progress
     console.log('\n  ✓ Cloudflare output → .theokit/cloudflare/ + wrangler.toml')
