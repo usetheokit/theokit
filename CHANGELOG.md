@@ -8,6 +8,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- A scaffolded app stops installing a dependency three majors behind. `sync-template-pins` built its
+  rewrite pattern with one escape level too many — `name.replaceAll('/', '\\\\/')`, four backslashes in
+  source — so the regex demanded a literal backslash before the slash and **could not match any scoped
+  package**. Measured by running both patterns against `"@theokit/agents": "^12.1.0"`: the rewrite
+  returned false, the audit path (one level down) returned true, and an unscoped `theokit` matched
+  either way. So `theokit` was bumped on every release and `@theokit/agents` never was — the template
+  pinned `^12.1.0` while npm served `15.0.2`, and every scaffolded app imports that package from
+  `src/server/agents/chat.ts`. The guard for exactly this returns 1 on a pin that excludes the
+  published stable and runs only in prerelease mode, which is off, so nothing audited either. Both
+  sites now read one `pinLinePattern`, because holding the same knowledge in two spellings is what let
+  them diverge by an invisible character. (#B-350)
+
 - A template install that produces nothing says which kind of nothing it was. The pnpm-11 compat test
   asserts `existsSync(node_modules/theokit)` and, when that is false, printed `pnpm stderr:` above
   whatever a thrown error carried. Measured on the v1.2.0-rc.2 cut (CI run 36636655271): the install
