@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- The `deno-deploy` target emits an entry the platform can upload, an import map its specifiers resolve through, and the `sloppy-imports` its own template needs (#930)
 - Every `theokit dev` boot of a scaffolded app stops warning about a dependency it cannot resolve. The
   Vite plugin pushed the bare specifier `devalue` into `optimizeDeps.include`, under a comment that
   already said why that cannot work — *"devalue lives in theokit's node_modules subtree, not the

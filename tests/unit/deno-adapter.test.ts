@@ -79,24 +79,52 @@ describe('buildDeno — orchestration', () => {
       runNodeBuild: async () => {
         calls.push('node-build')
       },
-      writeEntry: () => {
-        calls.push('write')
+      writeEntry: (path) => {
+        calls.push(path.endsWith('deno.json') ? 'write-config' : 'write-entry')
       },
       ensureDir: () => {},
+      readProjectSources: () => [],
+      readDenoConfig: () => undefined,
     })
-    expect(calls).toEqual(['node-build', 'write'])
+    // The config is written too, and after the entry. Both are build output; asserting only
+    // the entry is what let the config's absence go unnoticed until a deploy failed.
+    expect(calls).toEqual(['node-build', 'write-entry', 'write-config'])
   })
 
-  it('writes the entry as .theokit/deno/server.ts', async () => {
-    let writtenPath = ''
+  /*
+   * The path left `.theokit/` on 2026-09-30, measured against the real platform with a
+   * control: a dot directory is never uploaded. `./.theokit/deno/probe.ts` failed the
+   * revision where the byte-identical `./visible/probe.ts` served HTTP 200 — so the entry
+   * the build reported writing was one the deploy could never see, and the build said
+   * nothing either way.
+   */
+  it('writes the entry where the platform upload can reach it', async () => {
+    const written: string[] = []
     await buildDeno(baseConfig, '/test', {
       runNodeBuild: async () => {},
       writeEntry: (p) => {
-        writtenPath = p
+        written.push(p)
       },
       ensureDir: () => {},
+      readProjectSources: () => [],
+      readDenoConfig: () => undefined,
     })
-    expect(writtenPath).toContain('/.theokit/deno/server.ts')
+    expect(written).toContain('/test/theokit-deploy/server.ts')
+    expect(written.some((w) => w.includes('/.theokit/'))).toBe(false)
+  })
+
+  it('writes the Deno config at the upload root, the only place the platform reads it', async () => {
+    const contents = new Map<string, string>()
+    await buildDeno(baseConfig, '/test', {
+      runNodeBuild: async () => {},
+      writeEntry: (path, content) => contents.set(path, content),
+      ensureDir: () => {},
+      readProjectSources: () => ["import { defineRoute } from 'theokit/server/define'"],
+      readDenoConfig: () => undefined,
+    })
+    const config = JSON.parse(contents.get('/test/deno.json') ?? '{}')
+    expect(config.imports['theokit/server/define']).toBe('npm:theokit/server/define')
+    expect(config.unstable).toContain('sloppy-imports')
   })
 
   it('propagates node build errors', async () => {
