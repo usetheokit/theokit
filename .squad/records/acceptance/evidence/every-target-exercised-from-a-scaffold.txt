@@ -1,0 +1,47 @@
+Every VALID_TARGET exercised from one create-theokit scaffold — 2026-09-30
+=========================================================================
+
+Scaffold: create-theokit --template=default, `theokit` installed from a pnpm-packed
+tarball (npm pack does NOT rewrite the `workspace:` protocol; pnpm pack does, and the
+resulting manifest is identical to the published one).
+
+  cloudflare     deployed, agent streaming, validated by the operator
+  vercel         deployed, agent streaming, validated by the operator
+  netlify        deployed, agent streaming, validated by the operator
+  aws-lambda     deployed, agent streaming, validated by the operator
+  deno-deploy    deployed to console.deno.com/paulohenriquejava/theokit-deno-full
+                 /api/health -> 200 {"status":"ok","framework":"TheoKit"}
+                 POST /api/agents/chat -> 200, deltas "P" + "ONG", finish with token usage
+  node           real runtime, serves document + api + agent
+  bun            real runtime (production-only by design)
+  static         built and served
+  theo-cloud     built and RUN as a service on :4319
+                 /api/health -> 200, / -> 200 with <head>, agent deltas "P" + "ONG"
+
+What theo-cloud does NOT have, stated rather than implied
+--------------------------------------------------------
+A platform to upload to. The target builds and the artifact runs — measured above, and
+its output is byte-for-byte the count the `node` target leaves (29 files each). There is
+no TheoCloud service, and no command in this repository sends anything anywhere. That is
+a product that does not exist yet, not a defect in the target, and the distinction
+matters: a missing platform is closed by building one, while a broken target is closed by
+a fix.
+
+Four defects the deno-deploy path cost, each measured with a control
+-------------------------------------------------------------------
+1. A dot directory is never uploaded. `./.theokit/deno/probe.ts` failed the revision
+   where the byte-identical `./visible/probe.ts` served HTTP 200.
+2. No import map was emitted, and a prefix cannot stand in for one: Deno refuses
+   `"theokit/": "npm:theokit/"` because the portion after the prefix is not URL-joinable
+   onto an `npm:` URL. Exact per-specifier entries resolve.
+3. `sloppy-imports` was absent; the default template carries six relative imports
+   written with a `.js` extension against files on disk ending `.ts`.
+4. The emitted instruction named `deployctl`, which talks to the previous Deno Deploy
+   platform and answers 401 against a current token.
+
+None was reachable by the 8747-test suite, and the build reported success in every case.
+Two hypotheses were refuted along the way and are recorded because a refuted hypothesis
+is what makes the surviving one worth something: the dot-directory theory was dismissed
+once on a test whose upload still carried node_modules (so it failed for the other
+reason), and the pnpm symlink theory was dismissed once against a cached upload that had
+not changed at all.
