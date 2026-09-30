@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- A template install that produces nothing says which kind of nothing it was. The pnpm-11 compat test
+  asserts `existsSync(node_modules/theokit)` and, when that is false, printed `pnpm stderr:` above
+  whatever a thrown error carried. Measured on the v1.2.0-rc.2 cut (CI run 36636655271): the install
+  **exited 0**, so nothing was thrown, nothing was captured, and the whole payload was that literal
+  line over a blank one. Three outcomes were indistinguishable through `existsSync` and call for
+  opposite next steps — pnpm failed and said why; pnpm exited 0 and installed nothing; the symlink
+  exists and its target does not, which `existsSync` reports as absent because it follows links.
+  `describeInstallOutcome` names which one and carries stdout as well as stderr, on both the throwing
+  and the non-throwing path. **This does not close the publish/registry race** that turned the trunk
+  red — it makes the next occurrence readable in one pass instead of an investigation. (#B-349)
+
 ## [@theokit/agents 15.0.2, theokit 0.74.0] - 2026-09-29
 
 ### Added

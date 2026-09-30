@@ -1,10 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import { execFileSync, spawn } from 'node:child_process'
-import { mkdtempSync, rmSync, existsSync, readFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, existsSync, lstatSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir as osTmpdir } from 'node:os'
 
 import { unpublishedPins } from '../../scripts/unpublished-pins.js'
+import { describeInstallOutcome } from '../../scripts/describe-install-outcome.js'
 import { localUrl, LOOPBACK_HOSTS, rememberHost } from './helpers/local-url.js'
 
 /**
@@ -258,25 +259,49 @@ describe.skipIf(!infraReady)('pnpm 11 compat — scaffold + install + dev boot',
         // ERR_PNPM_IGNORED_BUILDS even when install completed. Check by file
         // presence, not exit code.
         let installStderr = ''
+        let installStdout = ''
+        let installThrew = false
         try {
           // eslint-disable-next-line sonarjs/no-os-command-from-path -- integration test invokes pnpm via PATH
-          execFileSync('pnpm', ['install', '--prefer-offline'], {
+          const out = execFileSync('pnpm', ['install', '--prefer-offline'], {
             cwd: appDir,
             stdio: 'pipe',
             env: PNPM_ENV,
             timeout: 120_000,
           })
+          installStdout = String(out ?? '')
         } catch (cause) {
           // A non-zero exit is EXPECTED here: pnpm 11 exits non-zero on ERR_PNPM_IGNORED_BUILDS even
           // when the install completed, and distinguishing that from a real failure is what the file
           // check below is for. What is NOT acceptable is discarding the output: the previous version
           // swallowed it, so a genuinely broken install surfaced as a bare `expected false to be
           // true` with nothing pointing at the cause.
+          installThrew = true
           installStderr = String((cause as { stderr?: Buffer }).stderr ?? cause)
+          installStdout = String((cause as { stdout?: Buffer }).stdout ?? '')
+        }
+
+        // stdout is captured on BOTH paths, and the throw is recorded, because the previous version
+        // could only describe the case where pnpm errored. Measured on the v1.2.0-rc.2 cut: the
+        // install exited 0, so `installStderr` was empty and the message's whole payload was the
+        // literal `pnpm stderr:` over a blank line. `lstatSync` rather than `existsSync` for the
+        // link, because `existsSync` follows it and a dangling link is a different failure.
+        const pkgPath = join(appDir, 'node_modules/theokit')
+        let linkPresent = false
+        try {
+          lstatSync(pkgPath)
+          linkPresent = true
+        } catch {
+          /* absent entirely */
         }
         expect(
-          existsSync(join(appDir, 'node_modules/theokit')),
-          `pnpm install did not produce node_modules/theokit.\npnpm stderr:\n${installStderr.slice(-2000)}`,
+          existsSync(pkgPath),
+          `pnpm install did not produce node_modules/theokit. ${describeInstallOutcome({
+            threw: installThrew,
+            stdout: installStdout,
+            stderr: installStderr,
+            linkPresent,
+          })}`,
         ).toBe(true)
 
         // The title's promise, asserted. Until #397 this test tolerated
