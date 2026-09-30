@@ -98,3 +98,24 @@ describe('reading the project from disk', () => {
     await expect(emittedConfig(root)).rejects.toThrow(/deno\.json exists and is not valid JSON/u)
   })
 })
+
+describe('what the reader declines to read', () => {
+  it('ignores a file that is not TypeScript, so a fixture beside a route contributes nothing', async () => {
+    const root = projectAt({
+      'src/server/routes/fixtures/sample.json': '{ "from": "not-a-specifier" }',
+      'src/server/routes/health.ts': "import { z } from 'zod'\n",
+    })
+    const imports = (await emittedConfig(root)).imports as Record<string, string>
+    expect(Object.keys(imports)).toEqual(['zod'])
+  })
+
+  it('keeps an import map entry the project wrote itself', async () => {
+    const root = projectAt({
+      'deno.json': JSON.stringify({ imports: { '@std/fs': 'jsr:@std/fs@^1' } }),
+      'src/server/routes/health.ts': "import { z } from 'zod'\n",
+    })
+    const imports = (await emittedConfig(root)).imports as Record<string, string>
+    expect(imports['@std/fs']).toBe('jsr:@std/fs@^1')
+    expect(imports.zod).toBe('npm:zod')
+  })
+})

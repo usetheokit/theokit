@@ -45,3 +45,42 @@ is what makes the surviving one worth something: the dot-directory theory was di
 once on a test whose upload still carried node_modules (so it failed for the other
 reason), and the pnpm symlink theory was dismissed once against a cached upload that had
 not changed at all.
+
+The fifth cause, which is not ours and is left with a warning
+-------------------------------------------------------------
+Deploying the whole project root kept failing after the four fixes, and the cause turned
+out to be Deno's own supply-chain policy rather than anything in the adapter. Measured by
+reproducing the platform's condition locally — `deno check --node-modules-dir=none`:
+
+    error: Could not find npm package '@theokit/agents' matching '^15.0.2'.
+    A newer matching version was found, but it was not used because it was newer than the
+    specified minimum dependency date of 2026-09-29 19:41:05 UTC.
+    hint: This version is blocked by the minimum dependency age policy...
+
+Deno refuses an npm version published inside a 24-hour window. The range comes from the
+project's own `package.json`, which the upload carries — so a consumer who scaffolds right
+after a TheoKit release cannot deploy to Deno until the window clears. It also explains
+every earlier observation: the flat directory that DID serve carried no `package.json`, so
+no range was applied and `npm:` resolved at latest.
+
+Two separations that took measuring rather than reasoning:
+
+  deno cache  --node-modules-dir=none   exit 0   module resolution is fine
+  deno check  --node-modules-dir=none   exit 1   only TYPE checking fails (TS7034 on the
+                                                 entry's lazily-initialised caches)
+
+So resolution — the thing a deploy needs — works. What fails under `deno check` is type
+inference on four cache variables in the emitted entry, and Deno Deploy does not type-check.
+
+The adapter does NOT set `minimumDependencyAge`. Lowering it removes a supply-chain
+protection, and that is the project owner's decision rather than a code generator's; a
+default of 0 shipped by us would silently withdraw it from every consumer. What the
+adapter now owes, and does, is that the failure be legible: the emitted entry names the
+policy and the flag, because the error names the PACKAGE and nothing in it reads as
+temporary.
+
+Verified without the platform, which is what makes this claim checkable: the generated
+entry and the generated config were run together under real Deno 2.9.5 from the scaffold
+root — `/api/health` 200, `POST /api/agents/chat` 200 with deltas "P" + "ONG". The 8
+specifiers the reader omits (test-only and client-side) are omitted correctly: the server
+graph never needs them, measured rather than argued.
