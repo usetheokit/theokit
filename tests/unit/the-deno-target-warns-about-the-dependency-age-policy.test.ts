@@ -35,3 +35,29 @@ describe('the emitted entry', () => {
     expect(entry).not.toContain('minimumDependencyAge:')
   })
 })
+
+describe('the deploy command the entry prescribes', () => {
+  const entry = renderDenoEntry(3000)
+
+  /*
+   * Isolated on the platform by changing one thing at a time in one directory:
+   *
+   *   entry + deno.json + src/ + client/ + theo.config.ts     exit 0, /api/health 200,
+   *                                                           agent deltas "P" + "ONG"
+   *   the same directory, plus package.json                   exit 1, revision failed
+   *   the same directory, with --ignore package.json          exit 0, and serving again
+   *
+   * The manifest is what Deno resolves npm specifiers against, so its ranges bring the
+   * minimum-dependency-age policy with them. The entry reaches the framework through
+   * `npm:` specifiers that carry no range, and resolves them at latest — which is what
+   * the working deploys did, and why excluding the manifest is a correction rather than
+   * a workaround.
+   */
+  it('excludes the manifest, which is what carries the version ranges', () => {
+    expect(entry).toContain('--ignore package.json')
+  })
+
+  it('still excludes node_modules, which the upload cannot carry', () => {
+    expect(entry).toContain('--ignore node_modules')
+  })
+})
