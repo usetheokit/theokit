@@ -72,6 +72,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   and the non-throwing path. **This does not close the publish/registry race** that turned the trunk
   red — it makes the next occurrence readable in one pass instead of an investigation. (#B-349)
 
+### Security
+
+- `theokit` requires `devalue@^5.9.3`, the first release without the three high-severity advisories against the serializer behind every server action result (GHSA-j22f-vq7h-c4qm, GHSA-mcm9-63f2-9j32, GHSA-x5rw-q4pp-hg5g) (#927)
+
 ## [@theokit/agents 15.0.2, theokit 0.74.0] - 2026-09-29
 
 ### Added

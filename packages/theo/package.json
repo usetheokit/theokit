@@ -148,7 +148,7 @@
     "busboy": "^1.6.0",
     "cac": "^6.7.14",
     "cron-parser": "^5.5.0",
-    "devalue": "^5.8.1",
+    "devalue": "^5.9.3",
     "dotenv": "^16.6.1",
     "dotenv-expand": "^11.0.7",
     "goober": "^2.1.19",
