@@ -534,7 +534,7 @@ export function absentOptionalPeers(project: OptionalPeerProject): string[] {
  * @param cwd the project root
  * @returns the names to alias, or an empty list when the project's own manifest cannot be read
  */
-function absentOptionalPeersOnDisk(cwd: string): string[] {
+export function absentOptionalPeersOnDisk(cwd: string): string[] {
   const require_ = createRequire(resolve(cwd, 'package.json'))
   const readManifestOf = (name: string): Record<string, unknown> | undefined => {
     try {
