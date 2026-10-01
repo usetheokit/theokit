@@ -279,7 +279,7 @@ export async function theoPluginAsync(
  * — without this hint Vite fails to resolve dynamic `import('mermaid')`
  * inside an installed plugin at dev time). T4.1 of canvas-ecosystem-refactor.
  */
-function buildOptimizeDepsInclude(
+export function buildOptimizeDepsInclude(
   projectRoot: string,
   viteOptimizeDeps: readonly string[] | undefined,
 ): string[] {
@@ -290,11 +290,17 @@ function buildOptimizeDepsInclude(
   if (existsSync(resolve(projectRoot, 'node_modules', 'lucide-react'))) {
     include.push('lucide-react')
   }
-  // T7.1 — devalue is a peer of the @theo/actions virtual module facade.
-  // Without this include hint, Vite import-analysis fails to resolve the
-  // facade's `await import('devalue')` from the consumer context (devalue
-  // lives in theokit's node_modules subtree, not the consumer root).
-  include.push('devalue')
+  // T7.1 — devalue is a peer of the @theo/actions virtual module facade. Without an include hint,
+  // Vite import-analysis fails to resolve the facade's `await import('devalue')` from the consumer
+  // context, because devalue lives in theokit's node_modules subtree and not the consumer root.
+  //
+  // `'theokit > devalue'`, not `'devalue'`. The bare specifier is resolved from the Vite ROOT — which
+  // is the consumer — so the hint used the very mechanism whose failure the paragraph above describes.
+  // Measured 2026-09-30 on a scaffold installed from npm: `devalue` does not resolve from the app
+  // (pnpm does not hoist it), and every `theokit dev` boot printed
+  // `Failed to resolve dependency: devalue, present in client 'optimizeDeps.include'`. The nested form
+  // is Vite's documented answer for a dependency reached THROUGH another one.
+  include.push('theokit > devalue')
   if (Array.isArray(viteOptimizeDeps)) {
     for (const pkg of viteOptimizeDeps) {
       if (typeof pkg === 'string' && pkg.length > 0 && !include.includes(pkg)) {

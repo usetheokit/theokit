@@ -1,9 +1,23 @@
+/**
+ * SETUP UPDATED 2026-09-30, assertions untouched.
+ *
+ * These cases called `theoCloudAdapter.build(cfg, cwd)` with no `ctx`, which was right while the
+ * adapter built nothing: it read the manifest, logged, and returned. It now delegates to the node
+ * build — because `.theokit/` afterwards held four manifests and no application, while two documents
+ * in this repository declared that it "hands over a bundle" — and `nodeAdapter.build` refuses without
+ * `ctx.makeVitePlugins`, a framework-internal invariant the CLI satisfies (ADR-0001 v3).
+ *
+ * So each case now drives `buildTheoCloud` with the node build stubbed. Every assertion below is the
+ * one that was there: no `.theokit/theo-cloud/`, no YAML, and the log's two invariant phrases. What
+ * changed is how the function is reached, not what is claimed about it.
+ */
 import { describe, it, expect, vi } from 'vitest'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { theoCloudAdapter } from '../../packages/theo/src/adapters/theo-cloud.js'
+import { buildTheoCloud } from '../../packages/theo/src/adapters/theo-cloud.js'
 import { VALID_TARGETS } from '../../packages/theo/src/adapters/types.js'
 
 describe('T2.3 — theo-cloud adapter (Wave 3 v2.0 thin)', () => {
@@ -19,7 +33,9 @@ describe('T2.3 — theo-cloud adapter (Wave 3 v2.0 thin)', () => {
     const tmp = mkdtempSync(join(tmpdir(), 'wave2-theocloud-'))
     try {
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-      await theoCloudAdapter.build({ port: 3000, ssr: false } as never, tmp)
+      await buildTheoCloud({ port: 3000, ssr: false } as never, tmp, {
+        runNodeBuild: async () => {},
+      })
       const logCalls = consoleSpy.mock.calls.map((c) => String(c[0]))
       expect(logCalls.some((l) => l.includes('Wave 3 v2.0'))).toBe(true)
       expect(logCalls.some((l) => l.includes('TS-only app (no services)'))).toBe(true)
@@ -54,7 +70,9 @@ describe('T2.3 — theo-cloud adapter (Wave 3 v2.0 thin)', () => {
       )
 
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-      await theoCloudAdapter.build({ port: 3000, ssr: false } as never, tmp)
+      await buildTheoCloud({ port: 3000, ssr: false } as never, tmp, {
+        runNodeBuild: async () => {},
+      })
       const logCalls = consoleSpy.mock.calls.map((c) => String(c[0]))
       expect(logCalls.some((l) => l.includes('services=agent'))).toBe(true)
       expect(logCalls.some((l) => l.includes('Wave 3'))).toBe(true)
@@ -94,7 +112,7 @@ describe('T2.3 — theo-cloud adapter (Wave 3 v2.0 thin)', () => {
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
       // The bug surfaced as a thrown Error before this resolved.
       await expect(
-        theoCloudAdapter.build({ port: 3000, ssr: false } as never, tmp),
+        buildTheoCloud({ port: 3000, ssr: false } as never, tmp, { runNodeBuild: async () => {} }),
       ).resolves.toBeUndefined()
       const logCalls = consoleSpy.mock.calls.map((c) => String(c[0]))
       expect(logCalls.some((l) => l.includes('schemaVersion=2'))).toBe(true)

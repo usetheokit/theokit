@@ -126,6 +126,31 @@ function inPrereleaseMode() {
  * `undefined`, never `false`: a wrong "does not admit" would fail a release on a shape nobody
  * taught it.
  */
+/**
+ * The dependency line for exactly one package name, capturing its prefix and its range.
+ *
+ * Two sites built this inline and they diverged by one invisible character. The rewrite used
+ * `name.replaceAll('/', '\\\\/')` — four backslashes in source — so its regex source was
+ * `("@theokit\\\\/agents"\\s*:\\s*)"([^"]+)"`, demanding a LITERAL BACKSLASH before the slash.
+ * Measured 2026-09-30 against `  "@theokit/agents": "^12.1.0",`: the rewrite pattern returned false
+ * and the audit pattern, one escape level down, returned true. An unscoped name matched either way.
+ *
+ * So every scoped package was skipped in silence: the template pinned `@theokit/agents@^12.1.0`
+ * while npm `latest` was `15.0.2`, three majors, in every scaffolded app.
+ *
+ * A slash needs no escaping inside a `RegExp` built from a string — only a literal `/.../` needs it,
+ * which is what the extra level was copied from. Group 1 is everything up to and including the colon
+ * and its spacing, because the caller replaces with `$1"<wanted>"` and would otherwise destroy the key.
+ *
+ * @param {string} name  the package name, scoped or not
+ * @returns {RegExp} the pattern, with the prefix as group 1 and the range as group 2
+ */
+export function pinLinePattern(name) {
+  // `\\b` would not do: `theokit` must not match `"theokit-devtools"`, and the closing quote is what
+  // bounds the name. Escaping is unnecessary for `/` and wrong for it here.
+  return new RegExp(`("${name}"\\s*:\\s*)"([^"]+)"`, 'u')
+}
+
 export function caretAdmits(range, version) {
   const r = /^\^(\d+)\.(\d+)\.(\d+)/u.exec(range)
   const v = /^(\d+)\.(\d+)\.(\d+)/u.exec(version)
@@ -161,8 +186,7 @@ function auditPrereleasePins() {
   const unknown = []
 
   for (const name of workspaceVersions().keys()) {
-    const line = new RegExp(`"${name.replaceAll('/', '\\/')}"\\s*:\\s*"([^"]+)"`, 'u')
-    const match = line.exec(template)
+    const match = pinLinePattern(name).exec(template)
     if (match === null) continue
 
     const latest = publishedLatest(name)
@@ -171,9 +195,13 @@ function auditPrereleasePins() {
       continue
     }
 
-    const admits = caretAdmits(match[1], latest)
-    if (admits === false) stale.push(`${name}: template pins ${match[1]}, npm latest is ${latest}`)
-    else if (admits === undefined) unknown.push(`${name} (range ${match[1]} is not a plain caret)`)
+    // Group 2, not 1. The audit built its own single-group pattern until `pinLinePattern` replaced
+    // both; the shared one captures the prefix as group 1 so the rewrite can keep it, and reading
+    // group 1 here would hand `"@theokit/agents": ` to `caretAdmits` as if it were a range.
+    const range = match[2]
+    const admits = caretAdmits(range, latest)
+    if (admits === false) stale.push(`${name}: template pins ${range}, npm latest is ${latest}`)
+    else if (admits === undefined) unknown.push(`${name} (range ${range} is not a plain caret)`)
   }
 
   return { stale, unknown }
@@ -224,8 +252,7 @@ function main() {
 
   let updated = template
   for (const [name, version] of versions) {
-    // Matches the dependency line for this exact package name, capturing its current range.
-    const line = new RegExp(`("${name.replaceAll('/', '\\\\/')}"\\s*:\\s*)"([^"]+)"`, 'u')
+    const line = pinLinePattern(name)
     const match = line.exec(updated)
     if (match === null) continue
 
