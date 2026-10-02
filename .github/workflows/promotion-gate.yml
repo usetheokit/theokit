@@ -26,4 +26,4 @@ permissions:
 
 jobs:
   promotion-gate:
-    uses: usetheokit/shared-workflows/.github/workflows/promotion-gate.yml@v1 # zizmor: ignore[unpinned-uses]
+    uses: usetheokit/shared-workflows/.github/workflows/promotion-gate.yml@v1 # zizmor: ignore[unpinned-uses] first-party moving major, ADR-0021

@@ -84,7 +84,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: usetheokit/shared-workflows/actions/setup@v1 # zizmor: ignore[unpinned-uses]
+      - uses: usetheokit/shared-workflows/actions/setup@v1 # zizmor: ignore[unpinned-uses] first-party moving major, ADR-0021
       - uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
         with:
           name: package-dist
@@ -111,7 +111,7 @@ jobs:
       # `@v1` is a moving ref by design — a policy fix in shared-workflows must reach every
       # caller without nine pull requests, which is the reason that repo exists.
       - name: Published manifests satisfy the contract
-        uses: usetheokit/shared-workflows/actions/manifest-check@v1 # zizmor: ignore[unpinned-uses]
+        uses: usetheokit/shared-workflows/actions/manifest-check@v1 # zizmor: ignore[unpinned-uses] first-party moving major, ADR-0021
 
   typecheck-build:
     name: Typecheck + Build
@@ -121,7 +121,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: usetheokit/shared-workflows/actions/setup@v1 # zizmor: ignore[unpinned-uses]
+      - uses: usetheokit/shared-workflows/actions/setup@v1 # zizmor: ignore[unpinned-uses] first-party moving major, ADR-0021
       # Build BEFORE typecheck: tests/smoke/import-validation.test.ts
       # imports from `packages/theo/dist/*` to validate the npm publish
       # surface — those files don't exist until build runs.
@@ -172,7 +172,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: usetheokit/shared-workflows/actions/setup@v1 # zizmor: ignore[unpinned-uses]
+      - uses: usetheokit/shared-workflows/actions/setup@v1 # zizmor: ignore[unpinned-uses] first-party moving major, ADR-0021
         with:
           node-version: ${{ matrix.node-version }}
       - uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
@@ -271,7 +271,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: usetheokit/shared-workflows/actions/setup@v1 # zizmor: ignore[unpinned-uses]
+      - uses: usetheokit/shared-workflows/actions/setup@v1 # zizmor: ignore[unpinned-uses] first-party moving major, ADR-0021
         with:
           node-version: '22'
       - uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
@@ -309,7 +309,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: usetheokit/shared-workflows/actions/setup@v1 # zizmor: ignore[unpinned-uses]
+      - uses: usetheokit/shared-workflows/actions/setup@v1 # zizmor: ignore[unpinned-uses] first-party moving major, ADR-0021
       - uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
         with:
           name: package-dist
@@ -361,7 +361,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: usetheokit/shared-workflows/actions/setup@v1 # zizmor: ignore[unpinned-uses]
+      - uses: usetheokit/shared-workflows/actions/setup@v1 # zizmor: ignore[unpinned-uses] first-party moving major, ADR-0021
       - uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
         with:
           name: package-dist
@@ -383,7 +383,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: usetheokit/shared-workflows/actions/setup@v1 # zizmor: ignore[unpinned-uses]
+      - uses: usetheokit/shared-workflows/actions/setup@v1 # zizmor: ignore[unpinned-uses] first-party moving major, ADR-0021
       - uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
         with:
           name: package-dist
@@ -435,7 +435,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: usetheokit/shared-workflows/actions/setup@v1 # zizmor: ignore[unpinned-uses]
+      - uses: usetheokit/shared-workflows/actions/setup@v1 # zizmor: ignore[unpinned-uses] first-party moving major, ADR-0021
       - uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
         with:
           name: package-dist
@@ -592,7 +592,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: usetheokit/shared-workflows/actions/setup@v1 # zizmor: ignore[unpinned-uses]
+      - uses: usetheokit/shared-workflows/actions/setup@v1 # zizmor: ignore[unpinned-uses] first-party moving major, ADR-0021
 
       # The three gates this package declares, each as its own step so a red run names which one
       # failed rather than reporting "the job failed". They were verified by hand in the session
@@ -614,7 +614,7 @@ jobs:
           persist-credentials: false
       # SHA-pinned, unlike the tag references elsewhere in this file. A supply-chain gate that
       # resolves its own tooling through a movable tag can be silenced by whoever moves the tag.
-      - uses: usetheokit/shared-workflows/actions/setup@v1 # zizmor: ignore[unpinned-uses]
+      - uses: usetheokit/shared-workflows/actions/setup@95ef5a1ea79f0c4065fa7ca0466b0b07b4c7799d # v1
         with:
           install-args: --ignore-scripts
       # `--ignore-scripts`: this job never builds or runs the tree, it only reads it. Executing
@@ -712,7 +712,7 @@ jobs:
         with:
           persist-credentials: false
       # Pinned and script-free for the same reason as `dependency-audit` above.
-      - uses: usetheokit/shared-workflows/actions/setup@v1 # zizmor: ignore[unpinned-uses]
+      - uses: usetheokit/shared-workflows/actions/setup@v1 # zizmor: ignore[unpinned-uses] first-party moving major, ADR-0021
         with:
           # NOT .nvmrc, and this is the one job where that is right. `rollup` carries
           # `@napi-rs/lzma-linux-x64-gnu` as an optionalDependency, and that package
@@ -857,7 +857,7 @@ jobs:
     needs: test
     # `@v1` is a moving ref by design — a policy fix in shared-workflows must reach every
     # caller without eleven pull requests, which is the reason that repository exists.
-    uses: usetheokit/shared-workflows/.github/workflows/sonar.yml@v1 # zizmor: ignore[unpinned-uses]
+    uses: usetheokit/shared-workflows/.github/workflows/sonar.yml@v1 # zizmor: ignore[unpinned-uses] first-party moving major, ADR-0021
     # Named rather than inherited: `secrets: inherit` would hand the scanner every secret
     # this repository holds.
     secrets:
@@ -921,7 +921,7 @@ jobs:
       #
       # `@v1` is a moving ref by design — a policy fix in shared-workflows must reach
       # every caller without nine pull requests, which is the reason that repo exists.
-      - uses: usetheokit/shared-workflows/actions/checks-pass@v1 # zizmor: ignore[unpinned-uses]
+      - uses: usetheokit/shared-workflows/actions/checks-pass@v1 # zizmor: ignore[unpinned-uses] first-party moving major, ADR-0021
         with:
           needs: ${{ toJSON(needs) }}
 
@@ -937,4 +937,4 @@ jobs:
           persist-credentials: false
       # `@v1` is a moving ref by design — a policy fix in shared-workflows must reach every caller
       # without seven pull requests, which is the reason that repository exists.
-      - uses: usetheokit/shared-workflows/actions/release-channel@v1 # zizmor: ignore[unpinned-uses]
+      - uses: usetheokit/shared-workflows/actions/release-channel@v1 # zizmor: ignore[unpinned-uses] first-party moving major, ADR-0021

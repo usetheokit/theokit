@@ -53,7 +53,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: usetheokit/shared-workflows/actions/release-channel@v1 # zizmor: ignore[unpinned-uses]
+      - uses: usetheokit/shared-workflows/actions/release-channel@95ef5a1ea79f0c4065fa7ca0466b0b07b4c7799d # v1
 
   release:
     name: Publish release
@@ -125,10 +125,11 @@ jobs:
           # request was opened by the App. Both halves have to be the App or neither is.
           token: ${{ steps.app-token.outputs.token }}
           fetch-depth: 0
-      # `@v1` is a moving ref by design — a policy fix in shared-workflows must reach every
-      # caller without nine pull requests, which is the reason that repository exists. What the
-      # action RUNS stays pinned: every action inside it by digest, Node from `.nvmrc`, and pnpm
-      # from `packageManager`, so neither version is named twice.
+      # Pinned by digest, unlike the `@v1` callers elsewhere: this job publishes to npm, so what
+      # it runs changes only through a reviewed pull request (ADR-0021). Renovate proposes the
+      # bump when `v1` moves. What the action RUNS is pinned too: every action inside it by
+      # digest, Node from `.nvmrc`, and pnpm from `packageManager`, so neither version is named
+      # twice.
       #
       # It carries the cache key this block spelled out — `package.json` beside `pnpm-lock.yaml`,
       # because setup-node keys the pnpm store on the lockfile alone, so a pnpm 9 → 10 bump would
@@ -142,7 +143,7 @@ jobs:
       #
       # `install: false` — the frozen install stays where it is below, AFTER the npm upgrade,
       # because the order is load-bearing and this change is about the toolchain block only.
-      - uses: usetheokit/shared-workflows/actions/setup@v1 # zizmor: ignore[unpinned-uses]
+      - uses: usetheokit/shared-workflows/actions/setup@95ef5a1ea79f0c4065fa7ca0466b0b07b4c7799d # v1
         with:
           install: 'false'
           # NO `registry-url`. It looks harmless and is not: setup-node writes
@@ -170,7 +171,7 @@ jobs:
       # an ARRAY where earlier npm returned an object, so changesets reads no
       # published versions and tries to publish everything.
       - name: Install an npm that speaks OIDC (>= 11.5.1) but tolerates pnpm's forwarded flag
-        uses: usetheokit/shared-workflows/actions/npm-oidc@v1 # zizmor: ignore[unpinned-uses]
+        uses: usetheokit/shared-workflows/actions/npm-oidc@95ef5a1ea79f0c4065fa7ca0466b0b07b4c7799d # v1
       # #169 — an `npm install -g npm@latest` step used to sit here, and it kept this workflow red
       # from 2026-07-24 to 2026-08-06 (7 consecutive runs):
       #
