@@ -50,6 +50,19 @@ describe('the release records the root CHANGELOG (#561 follow-up)', () => {
     )
   })
 
+  it('...and after `sync-template-pins`, which bumps `create-theokit` on its own', () => {
+    // The template pin sync bumps `create-theokit` when it rewrites the scaffold's pins, and that
+    // bump is not in any changeset. With the recorder ahead of it, the 2026-10-02 release recorded
+    // `## [theokit 0.74.1]` while `create-theokit@3.0.12` shipped too, and the release-record gate
+    // failed on the next pull request because the newest tag was named nowhere.
+    const script = versionPackagesScript()
+
+    expect(script.indexOf('sync-template-pins.mjs')).toBeGreaterThan(-1)
+    expect(script.indexOf('sync-template-pins.mjs')).toBeLessThan(
+      script.indexOf('record-root-changelog.mjs'),
+    )
+  })
+
   it('the recorder refuses to invent an entry', () => {
     // The one behaviour that must never drift: it MOVES prose a human wrote. A release with no
     // consumer-visible change is a real thing, and a generated line for it would be worse than the
