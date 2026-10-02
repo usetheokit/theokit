@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [theokit 0.74.1] - 2026-10-02
+
 ### Fixed
 
 - The `deno-deploy` target emits an entry the platform can upload, an import map its specifiers resolve through, and the `sloppy-imports` its own template needs (#927)
