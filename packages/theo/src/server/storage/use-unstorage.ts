@@ -10,10 +10,12 @@
  * under no number at all. A citation that RESOLVES and supports nothing is harder to notice than one
  * that 404s, which is why it survived as long as the file did.
  *
- * The reasoning, from the entry that announced this helper (`CHANGELOG.md:7389`, released): KV drivers
- * are delegated to `unstorage` because it already carries 20+ of them — Redis, S3, Cloudflare KV,
- * Vercel KV — and it is an OPTIONAL peer dependency, so an app that uses no KV pays no bundle cost.
- * Writing one driver per backend here would be the reinvention that decision avoided.
+ * The reasoning, from the entry that announced this helper (the `0.2.2` section of `CHANGELOG.md`,
+ * released 2026-06-02; cited by version because a line number in a changelog moves with every
+ * release): KV drivers are delegated to `unstorage` because it already carries 20+ of them — Redis,
+ * S3, Cloudflare KV, Vercel KV — and it is an OPTIONAL peer dependency, so an app that uses no KV
+ * pays no bundle cost. Writing one driver per backend here would be the reinvention that decision
+ * avoided.
  *
  * No ADR is written to replace the citation, and that is deliberate: the decision was made before
  * this file was read, and an ADR authored now would be a reconstruction of someone else's reasoning
