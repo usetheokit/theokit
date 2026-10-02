@@ -17,7 +17,10 @@ import type { Shutdown } from '@theokit/agents/commands'
 import { resolveSession } from '../runtime/index.js'
 import { fireSessionStart } from '../runtime/session-start.js'
 import { diagnosticsEnabled } from '@theocode/shared/diagnostic-sink'
-import { turnFailureReporting, type TurnFailureHooks } from '@theocode/shared/turn-failure-reporting'
+import {
+  turnFailureReporting,
+  type TurnFailureHooks,
+} from '@theocode/shared/turn-failure-reporting'
 
 function readPrompt(args: ExecRun): string {
   if (args.stdinBehavior === 'required' || args.stdinBehavior === 'forced') {
@@ -87,11 +90,7 @@ export function perTurnStream(
   }
 }
 
-function createProcessor(
-  json: boolean,
-  sessionId: string,
-  shellTimeoutMs: number,
-): ExecProcessor {
+function createProcessor(json: boolean, sessionId: string, shellTimeoutMs: number): ExecProcessor {
   const io = {
     out: (l: string) => process.stdout.write(`${l}\n`),
     err: (l: string) => process.stderr.write(`${l}\n`),
@@ -186,11 +185,34 @@ async function openSession(args: ExecRun): Promise<string> {
   return sessionId
 }
 
+/**
+ * The stderr line for a headless run whose approvals will all be refused, or `null` when they will
+ * not be (#939). The reason used to reach only the model, as a tool result, so the operator learned
+ * that an edit was blocked from the model's paraphrase and never learned why.
+ */
+export function headlessRefusalNotice(decision: {
+  readonly approved: boolean
+  readonly reason: string
+}): string | null {
+  return decision.approved
+    ? null
+    : `[approval] tool calls that need approval will be refused: ${decision.reason}\n`
+}
+
+function printHeadlessRefusal(decision: {
+  readonly approved: boolean
+  readonly reason: string
+}): void {
+  const notice = headlessRefusalNotice(decision)
+  if (notice !== null) process.stderr.write(notice)
+}
+
 export async function runCommand(args: ExecRun, shutdown: Shutdown): Promise<void> {
   const prompt = readPrompt(args)
 
   const { streamAgentTurnInProcess } = await import('@theokit/agents')
   const { headlessPolicy, mod, apiKey, shellTimeoutMs } = await resolveRunTarget(args)
+  printHeadlessRefusal(headlessPolicy)
 
   const sessionId = await openSession(args)
   const processor = createProcessor(args.json === true, sessionId, shellTimeoutMs)
@@ -209,19 +231,21 @@ export async function runCommand(args: ExecRun, shutdown: Shutdown): Promise<voi
     // the user as `rate_limit (HTTP 429)` (see the ORDER note above, which fixed that specific
     // case). The count comes from the SDK's own `rate_limit` event, not from anything invented here.
     const failure = turnFailureReporting({ diagnosticsEnabled })
-    const openStream = perTurnStream(failure, (sessionId) =>
-      streamAgentTurnInProcess(mod, apiKey, {
-        message: prompt,
-        sessionId: sessionId,
-        awaitApproval: async () => headlessPolicy,
-        // Without this the framework masks every failure to "An error occurred." — the right
-        // default for a public HTTP endpoint and the wrong one here, where the caller IS the
-        // operator. See `@theocode/shared/turn-error`.
-        onError: failure.onError,
-        // The only member read is `rate_limit`; every other event is ignored, the same discipline
-        // the TUI's MCP sink applies to the same stream.
-        onRunEvent: failure.onRunEvent,
-      }) as AsyncIterable<unknown>,
+    const openStream = perTurnStream(
+      failure,
+      (sessionId) =>
+        streamAgentTurnInProcess(mod, apiKey, {
+          message: prompt,
+          sessionId: sessionId,
+          awaitApproval: async () => headlessPolicy,
+          // Without this the framework masks every failure to "An error occurred." — the right
+          // default for a public HTTP endpoint and the wrong one here, where the caller IS the
+          // operator. See `@theocode/shared/turn-error`.
+          onError: failure.onError,
+          // The only member read is `rate_limit`; every other event is ignored, the same discipline
+          // the TUI's MCP sink applies to the same stream.
+          onRunEvent: failure.onRunEvent,
+        }) as AsyncIterable<unknown>,
     )
     await consumeWithForkIfBusy(
       sessionId,

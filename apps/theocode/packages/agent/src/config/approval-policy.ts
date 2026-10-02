@@ -9,6 +9,24 @@ export interface ApprovalDecision {
   reason: string
 }
 
+/**
+ * What would make the sandbox enforceable, chosen from the reason it is not.
+ *
+ * #939 — the hint was always "Install bwrap". On stock Ubuntu 24.04 bwrap IS installed and fails
+ * anyway: AppArmor refuses unprivileged user namespaces by default, which bwrap needs, and the probe
+ * reports exactly that. Telling that operator to install bwrap sends them after something they have.
+ */
+function remediationFor(detail: string): string {
+  if (/user namespaces/i.test(detail)) {
+    return (
+      'bwrap needs unprivileged user namespaces, and this kernel refuses them. On Ubuntu 23.10 and ' +
+      'later that is AppArmor (`sysctl kernel.apparmor_restrict_unprivileged_userns` prints 1): ' +
+      'allow them for bwrap with an AppArmor profile, or run where user namespaces are available.'
+    )
+  }
+  return 'Install bwrap, or set an explicit sandbox_mode with kernel enforcement.'
+}
+
 export function resolveHeadlessApproval(
   policy: ApprovalPolicy,
   // B-021 — REQUIRED. Omitting it used to return `approved: true` for full-auto, skipping the
@@ -23,7 +41,7 @@ export function resolveHeadlessApproval(
         reason:
           `approval_policy="${policy}" would run without asking, but there is NO enforced sandbox ` +
           `(${posture.detail}) — refusing instead of claiming a confinement that does not exist. ` +
-          'Install bwrap, or set an explicit sandbox_mode with kernel enforcement.',
+          remediationFor(posture.detail),
       }
     }
     return {
