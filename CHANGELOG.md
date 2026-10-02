@@ -6,6 +6,76 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- The `deno-deploy` target emits an entry the platform can upload, an import map its specifiers resolve through, and the `sloppy-imports` its own template needs (#927)
+- Every `theokit dev` boot of a scaffolded app stops warning about a dependency it cannot resolve. The
+  Vite plugin pushed the bare specifier `devalue` into `optimizeDeps.include`, under a comment that
+  already said why that cannot work — *"devalue lives in theokit's node_modules subtree, not the
+  consumer root"*. Vite resolves those entries from its ROOT, which is the consumer, so the hint asked
+  it to look exactly where the comment says the package is not. Measured on a scaffold installed from
+  npm: `devalue` does not resolve from the app, and the boot printed `Failed to resolve dependency:
+  devalue, present in client 'optimizeDeps.include'` every time. Now `theokit > devalue` — Vite's
+  documented form for a dependency reached through another one. Sabotage-verified on the platform: 0
+  occurrences with the nested form, 1 with the bare one, same scaffold and same boot. (#B-351)
+
+- The `theo-cloud` target builds the bundle it says is ready. Its `build` read
+  `.theokit/services.json`, checked the version, logged `Bundle ready for upload` and returned —
+  building nothing. Measured on a fresh `create-theokit` scaffold: `.theokit/` held `crons.json`,
+  `jobs.json`, `manifest.json` and `services.json`, with no client and no server entry. Because a
+  build empties its output directory first, running this target **destroyed** whatever the previous
+  build left and reported a bundle in its place.
+
+  The thinness is the documented design and is unchanged: TheoKit does not emit a proprietary
+  platform's orchestration format. That argument is about the PLATFORM'S format, and two documents in
+  this repository state the other half of the contract — `docs/surfaces/build-adapters.md` ("hands over
+  a bundle") and the capability matrix ("prepares the bundle"). Declared twice, implemented nowhere.
+  The target now delegates to the node build, which is what produces an application, and leaves exactly
+  what the `node` target leaves. The message names where the bundle is. (#B-353)
+
+- A Cloudflare deploy of a scaffolded app is possible at all. `@theokit/sdk` reaches its optional
+  storage backends through bare dynamic imports behind a loader-override seam — the seam is right, and
+  the fallback is statically resolvable, so wrangler's esbuild resolved it at BUILD time and a project
+  that never installed the package could not be bundled. Measured on a fresh `create-theokit` scaffold
+  installed from npm: `Could not resolve "better-sqlite3"`, from the SDK's dist, before any request
+  existed. `my-test` in this repository deployed throughout, which is why nothing caught it — it
+  resolves those names through the workspace.
+
+  The generated `wrangler.toml` now carries an `[alias]` table **derived** from every direct
+  dependency's `peerDependenciesMeta.<name>.optional`, pointing each absent one at a stub that throws
+  and names the remedy. Derived rather than listed: the first cut hardcoded the three names a grep
+  produced and was already incomplete — the SDK declares seven optional peers and `@lancedb/lancedb`,
+  another native module, was not among them. An installed optional peer is left alone, so the table
+  shrinks by itself the day a consumer adds one, and `@types/*` is skipped because a types package
+  never appears in a runtime import graph. (#B-352)
+
+- A scaffolded app stops installing a dependency three majors behind. `sync-template-pins` built its
+  rewrite pattern with one escape level too many — `name.replaceAll('/', '\\\\/')`, four backslashes in
+  source — so the regex demanded a literal backslash before the slash and **could not match any scoped
+  package**. Measured by running both patterns against `"@theokit/agents": "^12.1.0"`: the rewrite
+  returned false, the audit path (one level down) returned true, and an unscoped `theokit` matched
+  either way. So `theokit` was bumped on every release and `@theokit/agents` never was — the template
+  pinned `^12.1.0` while npm served `15.0.2`, and every scaffolded app imports that package from
+  `src/server/agents/chat.ts`. The guard for exactly this returns 1 on a pin that excludes the
+  published stable and runs only in prerelease mode, which is off, so nothing audited either. Both
+  sites now read one `pinLinePattern`, because holding the same knowledge in two spellings is what let
+  them diverge by an invisible character. (#B-350)
+
+- A template install that produces nothing says which kind of nothing it was. The pnpm-11 compat test
+  asserts `existsSync(node_modules/theokit)` and, when that is false, printed `pnpm stderr:` above
+  whatever a thrown error carried. Measured on the v1.2.0-rc.2 cut (CI run 36636655271): the install
+  **exited 0**, so nothing was thrown, nothing was captured, and the whole payload was that literal
+  line over a blank one. Three outcomes were indistinguishable through `existsSync` and call for
+  opposite next steps — pnpm failed and said why; pnpm exited 0 and installed nothing; the symlink
+  exists and its target does not, which `existsSync` reports as absent because it follows links.
+  `describeInstallOutcome` names which one and carries stdout as well as stderr, on both the throwing
+  and the non-throwing path. **This does not close the publish/registry race** that turned the trunk
+  red — it makes the next occurrence readable in one pass instead of an investigation. (#B-349)
+
+### Security
+
+- `theokit` requires `devalue@^5.9.3`, the first release without the three high-severity advisories against the serializer behind every server action result (GHSA-j22f-vq7h-c4qm, GHSA-mcm9-63f2-9j32, GHSA-x5rw-q4pp-hg5g) (#927)
+
 ## [@theokit/agents 15.0.2, theokit 0.74.0] - 2026-09-29
 
 ### Added

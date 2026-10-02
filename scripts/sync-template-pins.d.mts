@@ -20,6 +20,14 @@
  * @param range a range as written in the template, e.g. `^12.1.0`
  * @param version a concrete version, e.g. the one npm serves on `latest`
  */
+/**
+ * The dependency line for exactly one package name: group 1 the prefix, group 2 the range.
+ *
+ * Declared here because this file is what `tsc` reads for the module, and an export missing from it
+ * is refused at the consumer rather than at the source.
+ */
+export function pinLinePattern(name: string): RegExp
+
 export function caretAdmits(range: string, version: string): boolean | undefined
 
 /**
