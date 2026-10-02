@@ -101,7 +101,7 @@ export function installAuthHome(env: Record<string, string | undefined>, home: s
 
 export { CredentialError }
 
-class MissingCredentialError extends CredentialError {
+export class MissingCredentialError extends CredentialError {
   override readonly name = 'MissingCredentialError'
   readonly attempts: readonly string[]
   constructor(message: string, attempts: readonly string[]) {

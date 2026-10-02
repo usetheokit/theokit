@@ -25,7 +25,7 @@ afterAll(() => {
   for (const r of roots) rmSync(r, { recursive: true, force: true })
 })
 
-import { credentialState } from '../../src/commands/doctor.js'
+import { credentialState, runtimeCredentialState } from '../../src/commands/doctor.js'
 
 const NOW = 1_700_000_000_000
 
@@ -100,5 +100,34 @@ describe('credentialState', () => {
     // A string date would be `<= now` under no comparison that means anything. Refusing to guess
     // is the difference between a diagnostic and a rumour.
     expect(credentialState(credentialFile('{"provider":"openai","expires":"2020-01-01"}'), NOW)).toBe('present')
+  })
+})
+
+describe('runtimeCredentialState', () => {
+  // #938 — `doctor` read only the stored file, so with `OPENROUTER_API_KEY` exported and no file it
+  // printed `✗ credential: absent` and exited 1, while a turn in the same shell authenticated from
+  // that variable and spent tokens. The row has to describe the credential a turn will use.
+  const absentFile = (): string => join(mkdtempSync(join(tmpdir(), 'theocode-doctor-')), 'auth.json')
+
+  it('test_a_provider_key_in_the_environment_is_present_without_a_file', () => {
+    const path = absentFile()
+    roots.push(join(path, '..'))
+
+    const state = runtimeCredentialState(path, { OPENROUTER_API_KEY: 'sk-or-v1-' + 'x'.repeat(32) }, NOW)
+
+    expect(state).toBe('present')
+  })
+
+  it('test_no_key_and_no_file_is_still_absent', () => {
+    const path = absentFile()
+    roots.push(join(path, '..'))
+
+    expect(runtimeCredentialState(path, {}, NOW)).toBe('absent')
+  })
+
+  it('test_an_expired_file_is_reported_when_the_environment_has_no_key', () => {
+    const path = credentialFile('{"provider":"openai","expires":1}')
+
+    expect(runtimeCredentialState(path, {}, NOW)).toBe('expired')
   })
 })
