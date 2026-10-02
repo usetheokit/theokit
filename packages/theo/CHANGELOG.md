@@ -1,5 +1,61 @@
 # theo
 
+## 0.74.1
+
+### Patch Changes
+
+- 771eee2: A scaffolded app deploys to Cloudflare, boots without an unresolvable dependency, and `theo-cloud` builds what it says it built
+
+  Three defects found by exercising all nine `VALID_TARGETS` from one `create-theokit` scaffold installed from npm. None was reachable by the test suite: two needed a scaffold rather than this repository, and one needed the platform.
+
+  **Cloudflare could not bundle a scaffold at all.** `@theokit/sdk` reaches its optional storage backends through `overrides?.betterSqlite3?.() ?? import('better-sqlite3')`. The override seam is correct and the fallback is statically resolvable, so wrangler's esbuild resolved it at BUILD time and a project that never installed the package failed before a request existed — `Could not resolve "better-sqlite3"`. `my-test` in this repository deployed throughout because it resolves those names through the workspace.
+
+  The generated `wrangler.toml` now carries an `[alias]` table DERIVED from every direct dependency's `peerDependenciesMeta.<name>.optional`, each absent one pointing at a stub that throws and names the remedy. Derived rather than listed: the first attempt hardcoded the three names a grep produced and was already incomplete, since the SDK declares seven optional peers and `@lancedb/lancedb` was not among them. An installed optional peer is left alone, so the table shrinks by itself when a consumer adds one.
+
+  **Every `theokit dev` boot warned about a dependency it could not resolve.** The Vite plugin pushed the bare specifier `devalue` into `optimizeDeps.include`, under a comment that already said why that cannot work — the package lives in theokit's subtree and Vite resolves those entries from its root, which is the consumer. Now `theokit > devalue`, Vite's documented form for a dependency reached through another one.
+
+  **`theo-cloud` reported `Bundle ready for upload` and built nothing.** After it, the dist directory held four manifests and no application; because a build empties its output first, running the target destroyed whatever the previous build left. The thinness is the documented design and is unchanged — TheoKit does not emit a proprietary platform's orchestration format — but two documents in this repository declared that it hands over a bundle. It now delegates to the node build and leaves exactly what the `node` target leaves.
+
+- faa9827: The `devalue` floor moves to the first release without the three high-severity advisories
+
+  `devalue` serializes every server action result, and versions up to 5.9.2 carry three high-severity advisories: `stringify` serializing shared memory (GHSA-j22f-vq7h-c4qm), quadratic expansion in `uneval` (GHSA-mcm9-63f2-9j32), and an unhandled rejection from `stringifyAsync` (GHSA-x5rw-q4pp-hg5g). The declared range was `^5.8.1`, so an install could still resolve a vulnerable version. The floor is now `^5.9.3`, the first patched release, and the same major line is kept.
+
+- 92f80ed: The emitted Deno deploy command excludes the manifest, which is what blocked the revision
+
+  Isolated on the real platform by changing one thing at a time in one directory:
+
+      entry + deno.json + src/ + client/ + theo.config.ts     exit 0, `/api/health` 200, agent deltas "P" + "ONG"
+      the same directory, plus `package.json`                  exit 1, revision failed
+      the same directory, with `--ignore package.json`         exit 0, and serving again
+
+  `package.json` is what Deno resolves `npm:` specifiers against, so its version ranges bring the minimum-dependency-age policy with them — Deno refuses a version published inside a 24-hour window and says `Could not find npm package <name> matching <range>`, naming the package rather than the policy. The emitted entry reaches the framework through `npm:` specifiers that carry no range and resolve at latest, which is why excluding the manifest is a correction rather than a workaround.
+
+  Setting `minimumDependencyAge` in the generated config does NOT substitute for this; it was tried and the revision still failed, because the manifest is what resolution consults. Nothing here sets that value: lowering it withdraws a supply-chain protection, and that belongs to whoever owns the project.
+
+- bda5a4c: The Deno entry names the dependency-age policy that can block its own deploy
+
+  Deno refuses an npm version published inside a 24-hour window — a supply-chain protection it applies at resolution time — and the error it raises names the PACKAGE rather than the policy:
+
+      Could not find npm package '@theokit/agents' matching '^15.0.2'.
+
+  The range comes from the project's own `package.json`, which the upload carries, so a consumer who scaffolds right after a TheoKit release meets this and has no reason to read it as temporary. The emitted entry now names the policy and the flag that overrides it.
+
+  It does not set `minimumDependencyAge`. Lowering it withdraws a protection, which is the project owner's decision and not a code generator's — a default of 0 shipped here would remove it from every consumer silently.
+
+- 07004c2: The `deno-deploy` target produces output the platform can actually run
+
+  Four defects, each measured against the real Deno Deploy platform with a control, and none of them reachable by the test suite or by a build that checks its own output. The build reported success in every case.
+
+  **The entry was written where the upload cannot see it.** A dot directory is never carried: deploying `./.theokit/deno/probe.ts` failed the revision while the byte-identical file at `./visible/probe.ts` served HTTP 200. The entry now lands at `theokit-deploy/server.ts` — one directory deep, so the upload root stays the project root, which the entry needs because it scans `<cwd>/src/server` for the project's own route modules. Rooted anywhere else it finds no routes and answers 404 on every path.
+
+  **No import map was emitted, so every route failed at import time.** The generated entry reaches the framework through `npm:theokit/...`; a project's own modules import the bare `theokit/server/define`. A prefix mapping cannot bridge them — Deno refuses `"theokit/": "npm:theokit/"` because the portion after the prefix is not URL-joinable onto an `npm:` URL — so each specifier is now mapped exactly. The list is derived from what the project's own sources import rather than from its manifest: a declared dependency nobody imports needs no entry, and a subpath appears in no manifest at all.
+
+  **`sloppy-imports` was absent**, and the default template needs it: its agent modules carry six relative imports written with a `.js` extension against files on disk ending `.ts`. Deno refuses that pairing by design.
+
+  **The emitted deploy instruction named `deployctl`**, which talks to the previous Deno Deploy platform and answers 401 against a current token. It now names `deno deploy`, and says to exclude `node_modules` — pnpm's is a symlink farm the upload cannot carry, and an entry reaching the framework through `npm:` specifiers needs none of it.
+
+  The config is written at the project root because that is the only place the platform reads it: moving it one directory down failed the revision.
+
 ## 0.74.0
 
 ### Minor Changes
@@ -150,8 +206,8 @@
   A nested-layout project with no agents — the layout `create-theokit` scaffolds — was told, on every dev
   start and every build that reached this path:
 
-      [theokit] agentsDir "agents" resolves to "<root>/src/agents", which is not a directory, so NO agents
-      were found and every /api/agents/* route will 404.
+        [theokit] agentsDir "agents" resolves to "<root>/src/agents", which is not a directory, so NO agents
+        were found and every /api/agents/* route will 404.
 
   About routes it does not have, and a directory it never configured. Two defects in one line.
 
