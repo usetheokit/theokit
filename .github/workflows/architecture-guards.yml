@@ -71,7 +71,7 @@ jobs:
       # store the new pnpm reads as inconsistent (`ERR_PNPM_MISSING_PACKAGE_INDEX_FILE`).
       #
       # The frozen install is the action's default, so the separate step is gone.
-      - uses: usetheokit/shared-workflows/actions/setup@v1 # zizmor: ignore[unpinned-uses]
+      - uses: usetheokit/shared-workflows/actions/setup@v1 # zizmor: ignore[unpinned-uses] first-party moving major, ADR-0021
       # The M90 surface gate (`subpath-surface.test.ts` in the package) reads `dist/*.d.ts`, not the
       # source, because the `.d.ts` is what the consumer actually sees. Without a build it dies on
       # ENOENT and the whole job fails without measuring anything — which is what happened on every
@@ -102,7 +102,7 @@ jobs:
       # store the new pnpm reads as inconsistent (`ERR_PNPM_MISSING_PACKAGE_INDEX_FILE`).
       #
       # The frozen install is the action's default, so the separate step is gone.
-      - uses: usetheokit/shared-workflows/actions/setup@v1 # zizmor: ignore[unpinned-uses]
+      - uses: usetheokit/shared-workflows/actions/setup@v1 # zizmor: ignore[unpinned-uses] first-party moving major, ADR-0021
       - run: pnpm check:deps
 
   ls-lint:
@@ -124,7 +124,7 @@ jobs:
       # store the new pnpm reads as inconsistent (`ERR_PNPM_MISSING_PACKAGE_INDEX_FILE`).
       #
       # The frozen install is the action's default, so the separate step is gone.
-      - uses: usetheokit/shared-workflows/actions/setup@v1 # zizmor: ignore[unpinned-uses]
+      - uses: usetheokit/shared-workflows/actions/setup@v1 # zizmor: ignore[unpinned-uses] first-party moving major, ADR-0021
       - run: pnpm check:naming
 
   wire-ownership:
@@ -150,7 +150,7 @@ jobs:
       # only builds and inspects, no lifecycle script is needed, and allowing them would widen the
       # supply-chain surface for nothing. A conversion that dropped it would trade a documented
       # security decision for tidier YAML.
-      - uses: usetheokit/shared-workflows/actions/setup@v1 # zizmor: ignore[unpinned-uses]
+      - uses: usetheokit/shared-workflows/actions/setup@v1 # zizmor: ignore[unpinned-uses] first-party moving major, ADR-0021
         with:
           install-args: '--ignore-scripts'
       - run: TURBO_CONCURRENCY=1 pnpm --filter "./packages/*" build

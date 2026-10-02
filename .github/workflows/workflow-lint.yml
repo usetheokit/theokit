@@ -36,4 +36,4 @@ jobs:
   lint:
     # @v1 is a moving major on purpose: one correction reaches every caller on its next
     # run. What it RUNS stays pinned — the actionlint image by digest, zizmor by version.
-    uses: usetheokit/shared-workflows/.github/workflows/workflow-lint.yml@v1 # zizmor: ignore[unpinned-uses]
+    uses: usetheokit/shared-workflows/.github/workflows/workflow-lint.yml@v1 # zizmor: ignore[unpinned-uses] first-party moving major, ADR-0021

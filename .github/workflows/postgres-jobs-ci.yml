@@ -82,7 +82,7 @@ jobs:
       # store the new pnpm reads as inconsistent (`ERR_PNPM_MISSING_PACKAGE_INDEX_FILE`).
       #
       # The frozen install is the action's default, so the separate step is gone.
-      - uses: usetheokit/shared-workflows/actions/setup@v1 # zizmor: ignore[unpinned-uses]
+      - uses: usetheokit/shared-workflows/actions/setup@v1 # zizmor: ignore[unpinned-uses] first-party moving major, ADR-0021
       # dogfood-regressions-fix-plan v1.1 T4.2 — defense in depth.
       # Even Node-pinned workflows benefit: pnpm cache could carry a
       # binding compiled for a different patch version.

@@ -62,22 +62,55 @@ on:
 
 permissions: {}
 
-# Keyed on the COMMIT, not the ref. A push to `workspace` and the `workspace -> develop` pull
-# request that carries the same commit are two events with two refs -- `refs/heads/workspace` and
-# `refs/pull/N/merge` -- so a ref-keyed group put them in different buckets and both produced a
-# preview of identical content. Measured: runs 2 seconds apart on the same head SHA.
+# Keyed on the EVENT and the COMMIT. One group per commit used to collapse the `push` run and the
+# pull-request run that carry the same SHA, and it did publish one preview. The cost was that the
+# loser was CANCELLED, and GitHub reports a cancelled run as a failed check, so every promotion pull
+# request carried a red `preview` on a commit whose preview had succeeded (#903).
 #
-# Collapsing them is safe here in a way it is NOT safe in `ci.yml`: a cancelled preview loses a
-# convenience artifact, where a cancelled CI run leaves a commit with no verdict. The pull-request
-# run is the one that survives (it starts later) and it is the better of the two -- it comments on
-# the pull request, where the push run only moves a `@workspace` tag.
+# Now the two never share a group, so neither cancels the other, and the duplicate is avoided
+# before it starts instead: the `push` run asks whether an open pull request already carries this
+# commit, and stands down if one does. A standing-down job reports `skipped`, which is not red. The
+# pull-request run is still the one that publishes, for the reason it was before: it comments on the
+# pull request, where the push run only moves a `@workspace` tag.
+#
+# Inside a group, a newer run of the same event on the same commit (a re-run) still replaces an
+# older one.
 concurrency:
-  group: preview-${{ github.event.pull_request.head.sha || github.sha }}
+  group: preview-${{ github.event_name }}-${{ github.event.pull_request.head.sha || github.sha }}
   cancel-in-progress: true
 
 jobs:
+  # Only the `push` run asks. If the lookup itself fails, `carried` stays empty and the preview
+  # runs: a duplicate preview costs a minute, a missing one costs the verification it was for.
+  pull-request-carries-this-commit:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: read
+    outputs:
+      carried: ${{ steps.lookup.outputs.carried }}
+    steps:
+      - id: lookup
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        # The bases are the ones `on.pull_request.branches` previews. A pull request into any other
+        # base gets no preview run of its own, so the push run must not stand down for it.
+        run: |
+          count="$(gh api "repos/${REPO}/commits/${SHA}/pulls" \
+            --jq "[.[] | select(.state == \"open\" and .head.sha == \"${SHA}\" and (.base.ref == \"develop\" or .base.ref == \"main\"))] | length")"
+          if [ "${count}" -gt 0 ]; then carried=true; else carried=false; fi
+          echo "carried=${carried}" >> "$GITHUB_OUTPUT"
+          echo "open pull requests into develop/main carrying ${SHA}: ${count}"
+
   preview:
-    uses: usetheokit/shared-workflows/.github/workflows/preview.yml@v1 # zizmor: ignore[unpinned-uses]
+    needs: pull-request-carries-this-commit
+    # `!cancelled()` because `needs` is skipped on a pull-request run, and a skipped dependency
+    # would otherwise skip this job too.
+    if: ${{ !cancelled() && needs.pull-request-carries-this-commit.outputs.carried != 'true' }}
+    uses: usetheokit/shared-workflows/.github/workflows/preview.yml@v1 # zizmor: ignore[unpinned-uses] first-party moving major, ADR-0021
     with:
       # #632 — publish the packages THIS commit touched, not all seven.
       #

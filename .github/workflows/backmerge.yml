@@ -27,7 +27,7 @@ permissions:
 
 jobs:
   backmerge:
-    uses: usetheokit/shared-workflows/.github/workflows/backmerge.yml@v1 # zizmor: ignore[unpinned-uses]
+    uses: usetheokit/shared-workflows/.github/workflows/backmerge.yml@v1 # zizmor: ignore[unpinned-uses] first-party moving major, ADR-0021
     permissions:
       contents: read # Read both branches to compute the back-merge.
       pull-requests: write # Open the back-merge pull request. The only write, per the note above.

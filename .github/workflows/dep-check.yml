@@ -63,7 +63,7 @@ jobs:
     #
     # The suppression rides ON the `uses:` line because that is where zizmor reads it; a
     # reason parked in the block above documents a finding that still fails the lint.
-    uses: usetheokit/shared-workflows/.github/workflows/dep-check.yml@v1 # zizmor: ignore[unpinned-uses]
+    uses: usetheokit/shared-workflows/.github/workflows/dep-check.yml@v1 # zizmor: ignore[unpinned-uses] first-party moving major, ADR-0021
     with:
       # On an ordinary push only the offline check runs, so the feedback stays about a
       # minute. The three expensive ones turn on for the release pull request — the last
