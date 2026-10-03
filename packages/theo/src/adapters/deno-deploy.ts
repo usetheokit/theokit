@@ -1,7 +1,15 @@
 /* eslint-disable security/detect-non-literal-fs-filename --
  * Deno Deploy adapter. Writes to `cwd/.theokit/deno-deploy/`. Build-time.
  */
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { resolve } from 'node:path'
 
 import type { TheoConfig } from '../config/schema.js'
@@ -29,6 +37,8 @@ export interface DenoBuildDeps {
   readProjectSources?: (cwd: string, config: TheoConfig) => string[]
   /** The Deno config already on disk, merged rather than replaced. */
   readDenoConfig?: (cwd: string) => DenoConfig | undefined
+  /** Copies the client build to where the entry serves it from. */
+  copyClient?: (from: string, to: string) => void
 }
 
 /**
@@ -45,6 +55,63 @@ export interface DenoBuildDeps {
  * comment lines that pushed the renderer past its line budget, where the budget is meant to
  * be a signal about the renderer rather than about its preamble.
  */
+/** Where the entry serves the client build from — beside it, inside the upload (#951). */
+export const DENO_DEPLOY_CLIENT_DIR = 'theokit-deploy/client'
+
+/**
+ * The client build, served by the entry itself (#951).
+ *
+ * Measured 2026-10-03: on a dynamic Deno Deploy app `/`, `/about` and every asset answered this
+ * entry's JSON 404, because it returned `notFound()` for each non-API path on the assumption that
+ * "Deno Deploy's static asset handler" serves them. A dynamic app has no such handler.
+ *
+ * Served from `theokit-deploy/client`, a copy the build writes, and not from `.theokit/client`.
+ * Measured on the platform the same day: the upload honours `.gitignore`, and the scaffold ignores
+ * `.theokit/`, so the build output never arrived. Uploading `.theokit` anyway broke every agent
+ * route, because its `manifest.json` carries the build machine's absolute paths.
+ *
+ * `Deno.readFile` rather than `jsr:@std/http`'s `serveDir`: no new specifier for the platform to
+ * resolve. An extensionless path is a client route and gets the document; a missing asset stays a
+ * 404 so a broken chunk is not answered with HTML. A decoded `..` segment is refused before the
+ * path is joined, so nothing outside the build is readable.
+ */
+const CLIENT_SERVER_FRAGMENT: readonly string[] = [
+  `const CLIENT_DIR = cwd + '/${DENO_DEPLOY_CLIENT_DIR}'`,
+  `const CLIENT_TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.map': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.avif': 'image/avif', '.ico': 'image/x-icon', '.woff': 'font/woff', '.woff2': 'font/woff2', '.txt': 'text/plain; charset=utf-8', '.wasm': 'application/wasm' }`,
+  ``,
+  `async function readClientFile(path) {`,
+  `  try {`,
+  `    return await Deno.readFile(CLIENT_DIR + path)`,
+  `  } catch (err) {`,
+  `    if (err instanceof Deno.errors.NotFound || err?.code === 'EISDIR' || err?.name === 'IsADirectory') return null`,
+  `    throw err`,
+  `  }`,
+  `}`,
+  ``,
+  `async function serveClient(request, url) {`,
+  `  if (request.method !== 'GET' && request.method !== 'HEAD') return notFound()`,
+  `  let path`,
+  `  try { path = decodeURIComponent(url.pathname) } catch { return notFound() }`,
+  `  if (path.split('/').includes('..')) return notFound()`,
+  `  if (path.endsWith('/')) path += 'index.html'`,
+  `  const dot = path.lastIndexOf('.')`,
+  `  const ext = dot > path.lastIndexOf('/') ? path.slice(dot).toLowerCase() : ''`,
+  `  const body = await readClientFile(path)`,
+  `  if (body !== null) {`,
+  `    const headers = { 'Content-Type': CLIENT_TYPES[ext] ?? 'application/octet-stream' }`,
+  `    if (path.startsWith('/assets/')) headers['Cache-Control'] = 'public, max-age=31536000, immutable'`,
+  `    return new Response(request.method === 'HEAD' ? null : body, { status: 200, headers })`,
+  `  }`,
+  `  if (ext !== '') return notFound()`,
+  `  const document = await readClientFile('/index.html')`,
+  `  if (document === null) return notFound()`,
+  `  return new Response(request.method === 'HEAD' ? null : document, {`,
+  `    status: 200,`,
+  `    headers: { 'Content-Type': 'text/html; charset=utf-8' },`,
+  `  })`,
+  `}`,
+]
+
 const DEPLOY_INSTRUCTIONS: readonly string[] = [
   `// Deploy from the project root, so the entry finds its own src/server tree:`,
   `//   deno deploy --org <org> --app <name> --prod \\`,
@@ -121,10 +188,11 @@ export function renderDenoEntry(port: number, opts: DeployedEntryOptions = {}): 
     ``,
     `// #410 — the security baseline \`theokit start\` puts on every response,`,
     `// carried here as a literal because the deployed isolate has no`,
-    `// theo.config.ts to read. Non-API paths 404 here and are served by Deno`,
-    `// Deploy's static asset handler, so this covers the API and not the`,
-    `// document (usetheokit/theokit#412).`,
+    `// theo.config.ts to read. The document is served by this entry too`,
+    `// (usetheokit/theokit#951), so it carries the baseline as well.`,
     ...deployedEntryPreamble(runtimeConfig, agentsFragment, opts, TARGET),
+    ``,
+    ...CLIENT_SERVER_FRAGMENT,
     ``,
     `function notFound() {`,
     `  return new Response(JSON.stringify({ error: { code: 'NOT_FOUND' } }), {`,
@@ -190,8 +258,7 @@ export function renderDenoEntry(port: number, opts: DeployedEntryOptions = {}): 
     `  const url = new URL(request.url)`,
     ``,
     `  if (!url.pathname.startsWith('/api/')${agentsFragment.hostBypass}) {`,
-    `    // Static + SPA fallback are served by Deno Deploy's static asset handler.`,
-    `    return notFound()`,
+    `    return serveClient(request, url)`,
     `  }`,
     ``,
     `  if (!routesCache) routesCache = scanServerRoutes(serverDir)`,
@@ -260,6 +327,8 @@ export async function buildDeno(
   }
   write(resolve(cwd, DENO_DEPLOY_ENTRY_PATH), entry)
 
+  copyClientBesideEntry(cwd, deps)
+
   // The import map and `sloppy-imports`, at the upload root. Measured on the platform: a
   // config in a subdirectory failed the revision, so this path is not a preference.
   const readSources = deps.readProjectSources ?? readProjectSourcesFromDisk
@@ -301,6 +370,19 @@ export async function buildDeno(
  * finds no routes and answers 404 on every path.
  */
 export const DENO_DEPLOY_ENTRY_PATH = 'theokit-deploy/server.ts'
+
+/** Copy `.theokit/client` to where the entry serves it from. Split out of `buildDeno` for its complexity ceiling. */
+function copyClientBesideEntry(cwd: string, deps: DenoBuildDeps): void {
+  const copy = deps.copyClient ?? copyClientOnDisk
+  copy(resolve(cwd, '.theokit', 'client'), resolve(cwd, DENO_DEPLOY_CLIENT_DIR))
+}
+
+/** Replace the served copy with the current build. No build output means an API-only project. */
+function copyClientOnDisk(from: string, to: string): void {
+  if (!existsSync(from)) return
+  rmSync(to, { recursive: true, force: true })
+  cpSync(from, to, { recursive: true })
+}
 
 /** Where the Deno config is written. The upload root, and nowhere else — see below. */
 export const DENO_DEPLOY_CONFIG_PATH = 'deno.json'
@@ -426,9 +508,9 @@ export const denoDeployAdapter: DeployAdapter = {
   // configurable concerns reach it. Declared explicitly rather than omitted so
   // the gap is a statement in the source and not an absence.
   //
-  // `securityHeaders` IS applied -- to every response this isolate returns. The
-  // document comes from Deno Deploy's static asset handler and does not pass
-  // through it (usetheokit/theokit#412).
+  // `securityHeaders` IS applied -- to every response this isolate returns,
+  // the document included, since the entry serves the client build itself
+  // (usetheokit/theokit#951).
   servesAgents: true,
   appliesConfig: ['securityHeaders', 'csrf', 'disallowed', 'cors', 'serialization', 'plugins'],
   // B-257 — per-invocation: an in-process counter does not survive, so a declared limit needs a durable store.
