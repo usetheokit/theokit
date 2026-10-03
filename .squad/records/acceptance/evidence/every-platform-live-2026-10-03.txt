@@ -1,0 +1,34 @@
+The published scaffold, deployed live to every hosted target, with the agent answering: 2026-10-03
+=================================================================================================
+
+Artifact: `npm create theokit@3.0.14 v3-app -- --yes`, which resolved theokit@0.74.3 and
+@theokit/agents@15.0.2 from npm. No file of the scaffold was edited. The agent calls OpenRouter with
+a real key, set on each platform as a secret or environment variable. The key was passed from the
+shell environment and does not appear in any log or in this record.
+
+The probe: the eight checks of the 2026-10-02 record.
+  health, document, about-route, api-404-json, client-asset, agent-approvals,
+  agent-stream (deltas spelling PONG, then finish), agent-csrf (no X-Theo-Action -> 403)
+
+Target          Result on 0.74.3 as published     With the fixes on workspace
+Cloudflare      8/8                                -
+Vercel          8/8                                -
+AWS Lambda      health, 404 JSON, approvals,       -
+                agent PONG, CSRF 403 (Lambda
+                serves /api/* only)
+Netlify         7/8: /about 404 (#949)             8/8
+Deno Deploy     5/8: /, /about, asset 404 (#951)   8/8
+
+Platform notes measured on the way
+  Netlify: a new account makes new sites private ("Private by default"); every path answered 401
+  with a login redirect until the site's visibility was set to public.
+  Deno Deploy: `deno deploy create` without --do-not-use-detected-build-config applied a detected
+  static configuration and ignored --runtime-mode dynamic. The upload honours .gitignore, which in
+  the scaffold excludes .theokit/. On the platform npm:theokit resolved to 0.74.1, because of the
+  24h minimum dependency age the entry's header already describes; the agent worked on it.
+  AWS Lambda: function, Function URL, role, bucket and log group were created for this run and
+  deleted after it.
+
+Fixed in this run (PR #950): #949 (Netlify SPA fallback), #951 (Deno Deploy serves the client).
+Not covered: none of the hosted targets was left out. The deployed test apps on Cloudflare,
+Vercel, Netlify and Deno Deploy are still up.
