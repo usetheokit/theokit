@@ -1,5 +1,12 @@
 # theo
 
+## 0.74.3
+
+### Patch Changes
+
+- f5473c6: A deployed agent whose provider key is missing answers `500` with the JSON `INTERNAL` error naming the variable, instead of letting the error escape the generated entry. On AWS Lambda that escape surfaced as a bare `502 Internal Server Error` with the reason only in CloudWatch (#941).
+- b06e0bb: `theokit build --target bun` prints the command that starts its output, and the emitted entry names that command when `NODE_ENV` is not `production` (#936). The `services.json` v1 warning prints only for `--target theo-cloud` and no longer names a sunset version that passed long ago (#935).
+
 ## 0.74.2
 
 ### Patch Changes
@@ -212,8 +219,8 @@
   A nested-layout project with no agents — the layout `create-theokit` scaffolds — was told, on every dev
   start and every build that reached this path:
 
-          [theokit] agentsDir "agents" resolves to "<root>/src/agents", which is not a directory, so NO agents
-          were found and every /api/agents/* route will 404.
+            [theokit] agentsDir "agents" resolves to "<root>/src/agents", which is not a directory, so NO agents
+            were found and every /api/agents/* route will 404.
 
   About routes it does not have, and a directory it never configured. Two defects in one line.
 
