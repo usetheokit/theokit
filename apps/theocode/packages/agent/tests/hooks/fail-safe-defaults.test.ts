@@ -81,6 +81,24 @@ describe('B-021 — a gate cannot be disabled by omitting its argument', () => {
     expect(d.approved, 'full-auto was approved with no enforced sandbox').toBe(false)
   })
 
+  it('test_the_refusal_points_at_the_userns_restriction_instead_of_installing_bwrap', () => {
+    // #939 — on stock Ubuntu 24.04 bwrap is installed and still fails, because AppArmor refuses
+    // unprivileged user namespaces. "Install bwrap" sent the operator after something they had.
+    const d = resolveHeadlessApproval('never', {
+      enforced: false,
+      detail: 'user namespaces unavailable (container/kernel restriction)',
+    })
+
+    expect(d.reason).toContain('kernel.apparmor_restrict_unprivileged_userns')
+    expect(d.reason).not.toContain('Install bwrap')
+  })
+
+  it('test_the_refusal_still_says_to_install_bwrap_when_bwrap_is_missing', () => {
+    const d = resolveHeadlessApproval('never', { enforced: false, detail: 'bwrap not installed' })
+
+    expect(d.reason).toContain('Install bwrap')
+  })
+
   it('test_full_auto_is_approved_when_the_sandbox_is_enforced', () => {
     // Anti-vacuity floor: refusing everything would satisfy the assertion above.
     const d = resolveHeadlessApproval('never', { enforced: true, detail: 'bwrap' })

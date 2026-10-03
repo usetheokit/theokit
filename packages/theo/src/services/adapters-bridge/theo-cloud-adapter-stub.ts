@@ -36,7 +36,7 @@ export function prepareTheoCloudArtifacts(
   if (manifest === null) {
     return { manifestVersion: 1, services: [] }
   }
-  // v1 (deprecated, sunset 0.6.0) and v2 (current, adds `project`) share the
+  // v1 (deprecated, still accepted) and v2 (current, adds `project`) share the
   // same `services[]` shape the adapter consumes — both are accepted. Any
   // other version is a forward-compat guard: bump handling here before the
   // builder emits a newer schema. (Regression: usetheokit/theokit#9 — the

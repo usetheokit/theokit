@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { bunAdapter, buildBun, renderBunEntry } from '../../packages/theo/src/adapters/bun.js'
 import { VALID_TARGETS } from '../../packages/theo/src/adapters/types.js'
 import type { TheoConfig } from '../../packages/theo/src/config/schema.js'
@@ -32,6 +32,15 @@ describe('renderBunEntry — template output', () => {
     const out = renderBunEntry(3000)
     expect(out).toMatch(/NODE_ENV.+production/)
     expect(out).toMatch(/TheoBunAdapter is production-only/)
+  })
+
+  it('names the command that runs it when the guard refuses', () => {
+    // Measured 2026-10-02: `bun .theokit/bun/server.mjs`, the path the build printed, exited 1 with
+    // "Use 'theokit dev' (Node) for development", which is no help to someone running a
+    // production build. What it was missing is NODE_ENV, and the message now says so.
+    const out = renderBunEntry(3000)
+
+    expect(out).toContain('NODE_ENV=production bun .theokit/bun/server.mjs')
   })
 
   it('embeds the Bun version check (>= 1.1)', () => {
@@ -84,6 +93,22 @@ describe('buildBun — orchestration', () => {
       ensureDir: () => {},
     })
     expect(writtenPath).toContain('/.theokit/bun/server.mjs')
+  })
+
+  it('prints the command that starts the build it wrote', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    try {
+      await buildBun(baseConfig, '/cwd', {
+        runNodeBuild: async () => {},
+        writeEntry: () => {},
+        ensureDir: () => {},
+      })
+
+      const printed = log.mock.calls.map((c) => String(c[0])).join('\n')
+      expect(printed).toContain('NODE_ENV=production bun .theokit/bun/server.mjs')
+    } finally {
+      log.mockRestore()
+    }
   })
 
   it('propagates node build errors', async () => {

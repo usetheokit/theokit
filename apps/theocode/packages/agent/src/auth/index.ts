@@ -5,6 +5,8 @@ export {
   // the variable the SDK reads. Publishing the read-only pair beside it is how the CLI came to call
   // the one that changes nothing and believe it had bootstrapped the credential store.
   installAuthHome,
+  // Exported so a caller can tell "no credential anywhere" from a real failure by type (#938).
+  MissingCredentialError,
   resolveCredential,
   resolveCredentialForModel,
   resolveFreshCredential,

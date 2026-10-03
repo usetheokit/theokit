@@ -12,6 +12,8 @@ import process from 'node:process'
 import { homedir } from 'node:os'
 import { existsSync, readFileSync } from 'node:fs'
 
+import { MissingCredentialError, resolveCredential } from '@theocode/agent/auth'
+
 // From the package entry, not `@theocode/agent/doctor`: that subpath is NOT in the package's
 // `exports` map, and `tsconfig.json` maps `@theocode/agent/*` straight onto `src/*` — so TypeScript
 // resolves it happily and the bundle would fail at runtime. README.md names this exact trap.
@@ -65,6 +67,29 @@ export function credentialState(path: string, now: number = Date.now()): Credent
   return typeof expires === 'number' && expires <= now ? 'expired' : 'present'
 }
 
+/**
+ * The state of the credential a turn will actually use (#938).
+ *
+ * The runtime resolves a provider key from the environment BEFORE it reads the stored file, so a
+ * report built from the file alone said `absent` and exited 1 while turns in the same shell
+ * authenticated from `OPENROUTER_API_KEY`. `resolveCredential` with no `home` consults only the
+ * environment, which makes it the same rule rather than a second copy of the variable names. The
+ * key itself is never read past that call.
+ */
+export function runtimeCredentialState(
+  path: string,
+  env: Record<string, string | undefined>,
+  now: number = Date.now(),
+): CredentialState {
+  try {
+    resolveCredential({ env, home: undefined })
+    return 'present'
+  } catch (err) {
+    if (!(err instanceof MissingCredentialError)) throw err
+  }
+  return credentialState(path, now)
+}
+
 export async function doctorCommand(opts: { json: boolean; cd?: string }): Promise<void> {
   const agent = await import('@theocode/agent')
   const { authFilePath, strayCredentialFiles } = await import('@theocode/agent/auth')
@@ -105,7 +130,7 @@ export async function doctorCommand(opts: { json: boolean; cd?: string }): Promi
     // it reads. MEASURED, not assumed: with the current store `~/.theocode/auth.json` is the answer
     // either way, but computing the path a second way here would be the divergence a diagnostic
     // must never introduce — it would report on a file the product does not use.
-    credential: credentialState(authFilePath(homedir(), process.env)),
+    credential: runtimeCredentialState(authFilePath(homedir(), process.env), process.env),
     // #72 — the split between our two state directories left a credential behind once already:
     // `~/.theokit/auth.json`, written by the SDK before `installAuthHome` pointed it at ours, then
     // read by nothing and rotated by nothing. The store is deliberately NOT moved — that is the one

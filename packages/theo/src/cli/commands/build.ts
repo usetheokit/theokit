@@ -39,6 +39,7 @@ import { loadRoutesForOpenApi } from '../../vite-plugin/openapi-emit/load-routes
 import { cleanOutDir } from '../cleanup/cleanup.js'
 import { preflightNodeAndBindings } from '../preflight-node-version.js'
 
+import { describeServicesManifest } from './build/describe-services-manifest.js'
 import { describeControllerArtifacts, emitControllerArtifacts } from './build/emit-controllers.js'
 import { createBuildScanRoutes } from './build-scan-routes.js'
 
@@ -153,21 +154,8 @@ export async function buildCommand(options?: { target?: string }): Promise<void>
   const projectName = config.name
   const servicesManifest = buildServicesManifest(config.services, projectName)
   writeServicesManifest(cwd, servicesManifest)
-  if (servicesManifest.services.length > 0) {
-    const versionLabel = `v${String(servicesManifest.version)}`
-    const projectLabel =
-      servicesManifest.version === 2 ? ` project="${servicesManifest.project}"` : ''
-    console.log(
-      `  ✓ Services manifest (${versionLabel}${projectLabel}): ${String(servicesManifest.services.length)} service(s) ` +
-        `(${servicesManifest.services.map((s) => s.name).join(', ')})`,
-    )
-  } else if (servicesManifest.version === 1) {
-    console.log(
-      '  ⚠ services.json emitted as v1 (no `name` in theo.config.ts). ' +
-        'TheoCloud will accept this with a deprecation warning; sunset in theokit 0.6.0. ' +
-        'Run `theokit migrate services-json-v1-to-v2` to upgrade.',
-    )
-  }
+  const servicesLine = describeServicesManifest(servicesManifest, target)
+  if (servicesLine !== null) console.log(`  ${servicesLine}`)
 
   // G2 T2.2 — OpenAPI dev-surface emit (pre-Vite, sibling of manifests).
   // Opt-in: only when config.openapi is defined. Best-effort: a route load

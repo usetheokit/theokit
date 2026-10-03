@@ -197,6 +197,31 @@ async function admitRequest(
 }
 
 /**
+ * The credential for the model the agent declares, or the error response when the resolver throws.
+ *
+ * A resolver that throws (a declared provider with no key) is answered here, in the envelope the
+ * Node server produces for the same throw. The generated deploy entries call `mountAgent` with
+ * nothing around it, so on AWS Lambda the throw escaped the handler and the caller got a bare
+ * `502 Internal Server Error` while the reason sat only in CloudWatch (#941).
+ */
+function resolveKeyOrError(
+  apiKey: string | ApiKeyResolver,
+  compiled: { readonly model?: string; readonly plugins?: Parameters<ApiKeyResolver>[1] },
+  identity: string,
+): { readonly key: string; readonly failure: undefined } | { readonly failure: Response } {
+  try {
+    return {
+      key: typeof apiKey === 'function' ? apiKey(compiled.model, compiled.plugins) : apiKey,
+      failure: undefined,
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    console.error(`[theokit] agent "${identity}" cannot resolve a provider credential: ${message}`)
+    return { failure: jsonError(500, 'INTERNAL', message) }
+  }
+}
+
+/**
  * Mount a loaded agent module as a `Response`.
  *
  * `apiKey` accepts either a resolved string or an {@link ApiKeyResolver}. The resolver form exists
@@ -263,8 +288,9 @@ export async function mountAgent(
   // `compiled.plugins` reaches the resolver so a provider the agent DECLARED can serve the model
   // (#579). Without it, `.plugins(Provider.builtins())` was invisible at resolution time and the
   // prefix came back "not registered".
-  const resolvedApiKey =
-    typeof apiKey === 'function' ? apiKey(compiled.model, compiled.plugins) : apiKey
+  const keyResult = resolveKeyOrError(apiKey, compiled, identity)
+  if (keyResult.failure !== undefined) return keyResult.failure
+  const resolvedApiKey = keyResult.key
 
   // M13 — resolve a per-request skills selector (from `defineAgent({ skills: (ctx) => [...] })`)
   // against the M7 run-context, setting `skills.enabled` before the SDK runs. `undefined` ⇒ the
