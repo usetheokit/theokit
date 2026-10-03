@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- On Netlify, a client-routed page opened directly or reloaded gets the document instead of a 404. The emitted `netlify.toml` now ends with an unforced `/*` to `/index.html` rule after the `/api/*` one, which Vercel and Cloudflare already had in their own form; a project's own `/*` rule is kept (#949)
+
 ## [create-theokit 3.0.14, theokit 0.74.3] - 2026-10-03
 
 ### Fixed
