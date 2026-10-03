@@ -284,7 +284,7 @@ const THEO_REDIRECT_TARGET = [
 ].join('\n')
 
 /**
- * The client router's fallback: any path no file and no earlier rule answers gets the document.
+ * The client router's fallback: a path that no file and no earlier rule answers gets the document.
  *
  * #949 — measured 2026-10-03 on Netlify production: `GET /about` answered 404 while the same build
  * answered 200 on Vercel and Cloudflare (whose `wrangler.toml` carries `not_found_handling =
