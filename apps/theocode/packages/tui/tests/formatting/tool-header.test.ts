@@ -239,3 +239,104 @@ describe('the explored grouping is worth more than a verb on a card', () => {
     ).toBe('Viewed a.png')
   })
 })
+
+/**
+ * A call a policy refused must not be reported as one that ran either.
+ *
+ * Measured in the TUI on 2026-10-02 (TheoCode 0.27.0 on `@theokit/agents@15.0.2`): the operator's
+ * `~/.claude/settings.json` carried a `permissions.allow` list without `ApplyPatch`, so the
+ * permissions gate refused the call before it ran. `ctrl+o` showed
+ *
+ *     •  Edited hello.txt (+1 -0)
+ *       ⎿ {"stdout":"","stderr":"`ApplyPatch` matched no rule in your `permissions` block, ...",
+ *          "exitCode":126}
+ *
+ * and no `hello.txt` existed. The human-rejection branch above only recognises "denied by human
+ * approver", so every other refusal fell through to the past tense.
+ */
+const refused = (name: string, input: Record<string, unknown>) =>
+  ({
+    kind: 'tool',
+    name,
+    status: 'failed',
+    input,
+    output: JSON.stringify({
+      stdout: '',
+      stderr:
+        `\`${name}\` matched no rule in your \`permissions\` block, so it needs a decision, and ` +
+        'approval_policy="on-request" means that decision is yours.',
+      exitCode: 126,
+    }),
+  }) as never
+
+describe('a tool call a policy refused is not reported as one that ran', () => {
+  it('test_a_refused_patch_is_not_reported_as_an_edit', () => {
+    const header = formatToolHeader(
+      refused('ApplyPatch', { patch: '*** Begin Patch\n*** Add File: hello.txt\n+tui-ok\n*** End Patch' }),
+    )
+
+    expect(header?.name, 'the transcript claims a refused patch edited a file').not.toMatch(/^Edited /)
+    expect(header?.name).toBe('Blocked the patch')
+    expect(header?.summary).toContain('nothing ran')
+  })
+
+  it('test_the_payload_as_the_TUI_receives_it_with_the_diagnostics_hint_appended', () => {
+    // The fixture above is the runtime's payload; the event the renderer received on 2026-10-02 had
+    // already gone through `turnErrorText`, which appends ` — <hint>` after the JSON. A unit test on
+    // the bare payload passed while the real binary still printed `Edited hello.txt (+1 -0)`.
+    const raw = (refused('ApplyPatch', {}) as { output: string }).output
+    const received = {
+      kind: 'tool',
+      name: 'ApplyPatch',
+      status: 'failed',
+      input: {},
+      output: `${raw} — set THEOCODE_DIAGNOSTICS=stderr to see the retry sequence and the underlying error`,
+    } as never
+
+    expect(formatToolHeader(received)?.name).toBe('Blocked the patch')
+  })
+
+  it('test_a_refused_command_is_not_reported_as_run', () => {
+    expect(formatToolHeader(refused('Bash', { command: 'ls' }))?.name).toBe('Blocked ls')
+  })
+
+  it('test_the_shell_body_says_it_was_blocked_and_why', () => {
+    const raw = (refused('Bash', { command: 'ls' }) as { output: string }).output
+    const body = formatToolResult({ name: 'Bash', status: 'failed' } as never, raw)?.output
+
+    expect(body).toMatch(/^blocked — nothing ran: /)
+    expect(body).toContain('matched no rule in your `permissions` block')
+  })
+
+  it('test_the_header_recognises_the_body_the_result_formatter_produced', () => {
+    const raw = (refused('Bash', { command: 'ls' }) as { output: string }).output
+    const body = formatToolResult({ name: 'Bash', status: 'failed' } as never, raw)?.output
+    const afterResultFormatter = {
+      kind: 'tool',
+      name: 'Bash',
+      status: 'failed',
+      input: { command: 'ls' },
+      output: body,
+    } as never
+
+    expect(formatToolHeader(afterResultFormatter)?.name).toBe('Blocked ls')
+  })
+
+  it('test_a_human_rejection_still_reads_as_a_rejection', () => {
+    expect(formatToolHeader(denied('ApplyPatch', {}))?.name).toBe('Rejected the patch')
+  })
+
+  it('test_a_real_shell_126_is_not_a_block', () => {
+    // snake_case `exit_code` is what a real shell run carries; only the runtime's camelCase veto
+    // shape is a refusal.
+    const ran = {
+      kind: 'tool',
+      name: 'Bash',
+      status: 'failed',
+      input: { command: './x' },
+      output: JSON.stringify({ stdout: '', stderr: 'bash: ./x: Permission denied', exit_code: 126 }),
+    } as never
+
+    expect(formatToolHeader(ran)?.name).toBe('Ran ./x')
+  })
+})

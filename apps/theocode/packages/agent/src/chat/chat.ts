@@ -484,26 +484,39 @@ function withShellTools(
       // approval. The run pauses and the surface shows an approval card — allow or reject — before it runs.
       // M23 — the approval map must reference ONLY registered tools (the framework fail-fasts otherwise),
       // so the write-tool gates appear exactly when the sandbox mode granted those tools.
-      .approvals({
-        ...(writePolicy.writes
-          ? {
-              ApplyPatch: { question: 'Apply this file patch?' },
-              Edit: { question: 'Apply this edit?' },
-              delegate_to_team: {
-                question: 'Delegate this task to the team (the worker may edit/run files)?',
-              },
-            }
-          : {}),
-        Bash: { question: 'Run this shell command?' },
-        interactive_shell: { question: 'Start this interactive session?' },
-        write_stdin: { question: 'Send this input to the interactive session?' },
-        web_fetch: { question: 'Fetch this URL?' },
-        // Present only when the tool is. An approval entry for a tool the agent was not given is
-        // refused by the framework at construction, so this ternary is load-bearing, not cosmetic.
-        ...(ctx.searchConfigured ? { web_search: { question: 'Search the web for this?' } } : {}),
-      })
+      .approvals(approvalGates({ writes: writePolicy.writes, searchConfigured: ctx.searchConfigured }))
   )
 }
+
+/**
+ * The human-in-the-loop gates, one per side-effecting tool this process registers. Also the set an
+ * unmatched `permissions` verdict is handed to (#945), so the card and that set cannot drift apart.
+ */
+export function approvalGates(opts: { writes: boolean; searchConfigured: boolean }) {
+  return {
+    ...(opts.writes
+      ? {
+          ApplyPatch: { question: 'Apply this file patch?' },
+          Edit: { question: 'Apply this edit?' },
+          delegate_to_team: {
+            question: 'Delegate this task to the team (the worker may edit/run files)?',
+          },
+        }
+      : {}),
+    Bash: { question: 'Run this shell command?' },
+    interactive_shell: { question: 'Start this interactive session?' },
+    write_stdin: { question: 'Send this input to the interactive session?' },
+    web_fetch: { question: 'Fetch this URL?' },
+    // Present only when the tool is. An approval entry for a tool the agent was not given is
+    // refused by the framework at construction, so this ternary is load-bearing, not cosmetic.
+    ...(opts.searchConfigured ? { web_search: { question: 'Search the web for this?' } } : {}),
+  }
+}
+
+/** Every gated name. `writes: true` is a superset, not a claim: an ungranted write tool is never registered. */
+const ALL_GATED: ReadonlySet<string> = new Set(
+  Object.keys(approvalGates({ writes: true, searchConfigured: true })),
+)
 
 /**
  * The entities read from the project's own disk: MCP servers, skills, setting sources, hooks.
@@ -666,7 +679,7 @@ function baseAgent(ctx: {
       // The DECISION remains the product's: each headless surface declares its posture at the composition
       // point (`exec/main.ts`), derived from `headlessApprovalPosture` — including the F-arch-3 refusal
       // ("no bwrap means no confinement") that M70 added.
-      .plugins([...providerPlugins, ...permissionsPluginsFor(ctx.cwd, ctx.operatorHome, ctx.cfg.approval_policy)])
+      .plugins([...providerPlugins, ...permissionsPluginsFor(ctx.cwd, ctx.operatorHome, ctx.cfg.approval_policy, ALL_GATED)])
       // M20 — reasoning budget from config (default "medium" matches Codex's own default, so the harness
       // comparison still isolates harness behavior when no config overrides it).
       .reasoningEffort(overrides?.reasoning_effort ?? cfg.reasoning_effort)
