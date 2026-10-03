@@ -183,7 +183,8 @@ function posturePlugins(
             `${posturePolicy.confinedBy.detail} (mode: ${posturePolicy.confinedBy.mode}). ` +
             `Auto-approving gated tools without enforced confinement runs arbitrary commands with ` +
             `no human and no sandbox. Use "interactive" (a human decides) or "auto-reject" ` +
-            `(fail-closed) until the sandbox reports enforced.`,
+            `(fail-closed) until the sandbox reports enforced, or set sandbox mode ` +
+            `"danger-full-access" to run unconfined on purpose.`,
         )
       }
       // A hook that always allows is observable, and that is the difference between the NAMED

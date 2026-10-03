@@ -120,7 +120,12 @@ export function generateEntryClient(ssr?: boolean, opts: EntryClientOptions = {}
     `// T1.3 — side-effect import sets globalThis.__THEO_TRANSFORMER__ for theoFetch`,
     `import '/@theo/runtime-config'`,
     ...theoUiImports,
+    // #937: zod probes for eval with `new Function` on its first object parse. The default CSP
+    // refuses it, zod falls back to this same jitless path, and the browser files a script-src
+    // report on every page load. `zod` is a required peer, so this is the instance the page uses.
+    `import { config as __theoConfigureZod } from 'zod'`,
     ``,
+    `__theoConfigureZod({ jitless: true })`,
     hydrationLine,
     `const el = document.getElementById('root')`,
     ...renderBlock,

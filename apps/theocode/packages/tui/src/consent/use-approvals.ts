@@ -1,3 +1,4 @@
+import type { SandboxPosture } from '@theokit/agents/sandbox'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import type { ApprovalMode } from './approval-mode.js'
@@ -23,7 +24,9 @@ export interface Approvals {
 export function useApprovals(
   agent: AgentWithApproval,
   approvalMode: ApprovalMode,
-  sandboxPosture?: { enforced: boolean; detail: string },
+  sandboxPosture?: Pick<SandboxPosture, 'enforced' | 'detail'> & {
+    readonly mode?: SandboxPosture['mode']
+  },
 ): Approvals {
   const registry = useRef<ApprovalLedger>(createApprovalLedger())
   const [epoch, setEpoch] = useState(0)
