@@ -186,24 +186,27 @@ async function openSession(args: ExecRun): Promise<string> {
 }
 
 /**
- * The stderr line for a headless run whose approvals will all be refused, or `null` when they will
- * not be (#939). The reason used to reach only the model, as a tool result, so the operator learned
- * that an edit was blocked from the model's paraphrase and never learned why.
+ * The stderr line that says, before the turn, what will happen to tool calls that need approval, or
+ * `null` when they run inside the kernel sandbox (#939). A refusal used to reach only the model, as a
+ * tool result, so the operator learned that an edit was blocked from the model's paraphrase and never
+ * learned why. An unconfined approval is announced for the same reason: nothing else in a headless
+ * run would tell the operator that commands are about to run with no sandbox.
  */
-export function headlessRefusalNotice(decision: {
+export function headlessApprovalNotice(decision: {
   readonly approved: boolean
+  readonly unconfined?: boolean
   readonly reason: string
 }): string | null {
-  return decision.approved
-    ? null
-    : `[approval] tool calls that need approval will be refused: ${decision.reason}\n`
+  if (!decision.approved) {
+    return `[approval] tool calls that need approval will be refused: ${decision.reason}\n`
+  }
+  return decision.unconfined === true
+    ? `[approval] WARNING: tool calls will run without asking and with NO sandbox: ${decision.reason}\n`
+    : null
 }
 
-function printHeadlessRefusal(decision: {
-  readonly approved: boolean
-  readonly reason: string
-}): void {
-  const notice = headlessRefusalNotice(decision)
+function printHeadlessApprovalNotice(decision: Parameters<typeof headlessApprovalNotice>[0]): void {
+  const notice = headlessApprovalNotice(decision)
   if (notice !== null) process.stderr.write(notice)
 }
 
@@ -212,7 +215,7 @@ export async function runCommand(args: ExecRun, shutdown: Shutdown): Promise<voi
 
   const { streamAgentTurnInProcess } = await import('@theokit/agents')
   const { headlessPolicy, mod, apiKey, shellTimeoutMs } = await resolveRunTarget(args)
-  printHeadlessRefusal(headlessPolicy)
+  printHeadlessApprovalNotice(headlessPolicy)
 
   const sessionId = await openSession(args)
   const processor = createProcessor(args.json === true, sessionId, shellTimeoutMs)

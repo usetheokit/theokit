@@ -29,10 +29,12 @@ const enforced: SandboxPosture = {
   enforced: true,
   detail: 'bwrap: user namespaces + seccomp',
 }
+// The shape `resolveSandboxPosture` returns when bwrap cannot run. Not `danger-full-access`: that
+// mode is the operator waiving confinement on purpose, and it auto-approves (#939).
 const unenforced: SandboxPosture = {
-  mode: 'danger-full-access',
+  mode: 'workspace-write',
   enforced: false,
-  detail: 'bwrap unavailable: no user namespaces',
+  detail: 'tool-gating only, bwrap unavailable: no user namespaces',
 }
 
 describe('auto-approve requires evidence of confinement', () => {

@@ -1,4 +1,4 @@
-import type { SandboxPosture } from '@theokit/agents/sandbox'
+import { resolveSandboxPosture, type SandboxPosture } from '@theokit/agents/sandbox'
 import { describe, expect, it } from 'vitest'
 
 import { headlessApprovalPosture, resolveHeadlessApproval } from '../../src/config/approval-policy.js'
@@ -30,8 +30,10 @@ const enforced: SandboxPosture = {
   enforced: true,
   detail: 'bubblewrap available',
 }
+// What a workspace-write session reports when bwrap cannot run. `danger-full-access` is a different
+// case, the operator waiving confinement on purpose, and has its own tests (#939).
 const unenforced: SandboxPosture = {
-  mode: 'danger-full-access',
+  mode: 'workspace-write',
   enforced: false,
   detail: 'no kernel sandbox available',
 }
@@ -74,5 +76,33 @@ describe('resolveHeadlessApproval — the decision the posture is built from', (
     expect(decision.approved).toBe(false)
     // The detail is quoted so an operator reads WHICH confinement was missing, not just that one was.
     expect(decision.reason).toContain('no kernel sandbox available')
+  })
+})
+
+describe('#939: an explicit danger-full-access runs headless without confinement', () => {
+  // The SDK's own posture for the mode, not a hand-written one: it is what production passes.
+  const waived = resolveSandboxPosture({ mode: 'danger-full-access' })
+
+  it('test_never_under_danger_full_access_is_approved_and_flagged_unconfined', () => {
+    const decision = resolveHeadlessApproval('never', waived)
+
+    expect(decision.approved).toBe(true)
+    expect(decision.unconfined).toBe(true)
+    expect(decision.reason).toMatch(/NO confinement/)
+  })
+
+  it('test_the_posture_auto_approves_with_the_waiver_as_its_evidence', () => {
+    const posture = headlessApprovalPosture('never', waived)
+
+    expect(posture.kind).toBe('auto-approve')
+    expect(posture.kind === 'auto-approve' && posture.confinedBy).toBe(waived)
+  })
+
+  it('test_a_policy_that_keeps_a_human_in_the_loop_is_still_refused_under_danger_full_access', () => {
+    expect(resolveHeadlessApproval('on-request', waived).approved).toBe(false)
+  })
+
+  it('test_an_enforced_sandbox_is_not_flagged_unconfined', () => {
+    expect(resolveHeadlessApproval('never', enforced).unconfined).toBe(false)
   })
 })
