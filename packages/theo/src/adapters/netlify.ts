@@ -284,6 +284,32 @@ const THEO_REDIRECT_TARGET = [
 ].join('\n')
 
 /**
+ * The client router's fallback: a path that no file and no earlier rule answers gets the document.
+ *
+ * #949 — measured 2026-10-03 on Netlify production: `GET /about` answered 404 while the same build
+ * answered 200 on Vercel and Cloudflare (whose `wrangler.toml` carries `not_found_handling =
+ * "single-page-application"` for this). Unforced, so a real file such as `/assets/*.js` still wins,
+ * and appended after `/api/*` because Netlify applies the first rule that matches.
+ */
+const THEO_SPA_FALLBACK_FROM = '/*'
+const THEO_SPA_FALLBACK_TARGET = [
+  '[[redirects]]',
+  '  from = "/*"',
+  '  to = "/index.html"',
+  '  status = 200',
+].join('\n')
+
+/** Append the fallback unless some `/*` rule exists — the project's own wins. */
+function withSpaFallback(source: string): string {
+  const declared = parseRedirectBlocks(source.split(/\r?\n/)).some(
+    (b) => b.from === THEO_SPA_FALLBACK_FROM,
+  )
+  if (declared) return source
+  const sep = source.endsWith('\n') ? '' : '\n'
+  return `${source}${sep}\n${THEO_SPA_FALLBACK_TARGET}\n`
+}
+
+/**
  * Marks the block this build owns, so it can be REGENERATED rather than merely not duplicated.
  *
  * Idempotence alone would be the wrong contract here: the block carries configuration, so a
@@ -424,7 +450,7 @@ export function mergeNetlifyToml(
   const headersBlock = renderHeadersBlock(securityHeaders)
 
   if (existing === null || existing.trim().length === 0) {
-    return withFunctionsDeclared(`${THEO_REDIRECT_TARGET}\n\n${headersBlock}\n`)
+    return withFunctionsDeclared(withSpaFallback(`${THEO_REDIRECT_TARGET}\n\n${headersBlock}\n`))
   }
 
   existing = withoutGeneratedHeaders(existing)
@@ -438,14 +464,16 @@ export function mergeNetlifyToml(
       // The redirect is already there. The headers block is regenerated regardless, because it
       // carries configuration and the redirect does not.
       const sep = existing.endsWith('\n') ? '' : '\n'
-      return withFunctionsDeclared(`${existing}${sep}\n${headersBlock}\n`)
+      return withFunctionsDeclared(withSpaFallback(`${existing}${sep}\n${headersBlock}\n`))
     }
     throw new NetlifyConflictError(b.from, b.to ?? '(unknown)')
   }
 
   // No conflict — append target block.
   const sep = existing.endsWith('\n') ? '' : '\n'
-  return withFunctionsDeclared(`${existing}${sep}\n${THEO_REDIRECT_TARGET}\n\n${headersBlock}\n`)
+  return withFunctionsDeclared(
+    withSpaFallback(`${existing}${sep}\n${THEO_REDIRECT_TARGET}\n\n${headersBlock}\n`),
+  )
 }
 
 /**
