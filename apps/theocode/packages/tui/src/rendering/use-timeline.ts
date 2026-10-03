@@ -6,6 +6,7 @@ import { formatToolHeader, formatToolResult } from '../formatting/index.js'
 import { latestUsage } from '../formatting/index.js'
 import { TUI_MAX_FPS, coalesceWindowMs } from './frame-budget.js'
 import { greetingFor } from './resumed-banner.js'
+import { withInterruptMarks } from './interrupt-marks.js'
 import { deriveTimeline, prepareThread } from './timeline-memo.js'
 
 interface AgentWithThread {
@@ -16,6 +17,8 @@ export interface TuiTimeline {
   readonly events: ReturnType<typeof deriveTimeline>
   readonly lastUsage: ReturnType<typeof readTurnUsage> | undefined
 }
+
+const NO_INTERRUPTS: ReadonlySet<string> = new Set()
 
 export function useTimeline(
   agent: AgentWithThread,
@@ -31,6 +34,8 @@ export function useTimeline(
    * argument there would be call sites passing `[]` to say nothing.
    */
   history: readonly UIMessageLike[] = [],
+  /** #948: messages the user stopped with Esc; each gets an `Interrupted by user` line after it. */
+  interrupted: ReadonlySet<string> = NO_INTERRUPTS,
 ): TuiTimeline {
   const greeting: UIMessageLike = {
     id: 'greeting',
@@ -42,13 +47,19 @@ export function useTimeline(
       },
     ],
   }
-  const coalesceKey = useMemo(() => [agent.thread, history], [agent.thread, history])
+  const coalesceKey = useMemo(
+    () => [agent.thread, history, interrupted],
+    [agent.thread, history, interrupted],
+  )
   const events = useCoalesced(
     () =>
-      deriveTimeline([greeting, ...history, ...prepareThread(agent.thread)], {
-        formatToolHeader,
-        formatToolResult,
-      }),
+      deriveTimeline(
+        withInterruptMarks([greeting, ...history, ...prepareThread(agent.thread)], interrupted),
+        {
+          formatToolHeader,
+          formatToolResult,
+        },
+      ),
     // Both inputs, so a history that arrives AFTER mount — the read is asynchronous — still
     // repaints. Keying on the thread alone left a resumed screen empty until the next turn.
     //

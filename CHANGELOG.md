@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [@theokit/agents 15.1.0, create-theokit 3.0.16, theokit 0.74.5] - 2026-10-03
+
 ### Fixed
 
 - A page load no longer files a CSP violation report. zod probed for `eval` on its first object parse in the browser, the default CSP refused it, and every visitor sent a `script-src` report to `/__theo/csp-report`; the client entry now turns on zod's `jitless` mode, the path it fell back to anyway (#937)
