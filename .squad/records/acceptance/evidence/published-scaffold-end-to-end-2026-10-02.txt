@@ -1,0 +1,62 @@
+The published scaffold, end to end, on every target this machine could reach: 2026-10-02
+====================================================================================
+
+Artifact: `npm create theokit@3.0.13 e2e-app -- --yes`, which resolved theokit@0.74.2,
+@theokit/agents@15.0.2, @theokit/sdk@5.9.2, @theokit/ui@1.12.2 and devalue@5.9.4 from npm. No file of
+the scaffold was edited. Node v22.23.3, Bun 1.4.2, Deno 2.9.7, Ubuntu 24.04.5, Chrome 154.
+
+The probe (one script, the same eight checks everywhere it applies):
+  health          GET  /api/health                 200 and {"status":"ok"}
+  document        GET  /                           200, <head> and <div id="root">
+  about-route     GET  /about                      200
+  api-404-json    GET  /api/does-not-exist         404 with a JSON body
+  client-asset    the module script the document references answers 200
+  agent-approvals GET  /api/agents/chat/approvals  200
+  agent-stream    POST /api/agents/chat            streamed deltas spelling PONG, then finish
+  agent-csrf      POST /api/agents/chat, no X-Theo-Action header -> 403
+
+The scaffold's own gates
+  tsc --noEmit 0 errors; vitest 6/6; eslint clean; prettier --check clean
+
+Local runtimes
+  theokit dev                  8/8 (client asset is /@theo/entry-client under Vite)
+  node        theokit start    8/8
+  theo-cloud  theokit start    8/8, and the build leaves 29 files as `node` does
+  bun         8/8, but ONLY with NODE_ENV=production; the build never said so (#936, fixed)
+  static      document, route and asset pass; the API checks do not apply (no server)
+  deno-deploy (0.74.1, same session) emitted entry run under Deno with no node_modules and no
+              package.json: health 200, agent deltas "P" + "ONG"
+  cloudflare  (0.74.1, same session) `wrangler deploy --dry-run` bundles; no live deploy
+
+Browser, node target, Chrome
+  The document hydrates: header, theme switch, chat composer and starters render.
+  A message typed into the composer is answered in the transcript (PONG).
+  Clicking "About" navigates client-side: a marker set on window before the click survives it.
+  Console: one CSP issue, zod's JIT probe `new Function("")` refused by script-src (#937, open),
+  and a form field without id/name.
+
+AWS Lambda, real Function URL (us-east-1, nodejs22.x, created for this run and deleted after)
+  health 200; api-404-json 404; approvals 200; POST without the header 403; security headers present.
+  The function had no OPENROUTER_API_KEY on purpose: no key value is placed in a tool call.
+  Before the fix: POST /api/agents/chat -> 502 "Internal Server Error", reason only in CloudWatch.
+  After the fix, same function: 500 {"error":{"code":"INTERNAL","message":"... OPENROUTER_API_KEY
+  is not set ..."}}, which is what `theokit start` answers (#941).
+  So on Lambda this run proves the agent module loads and reaches provider resolution; the model
+  answering on Lambda was last observed on 2026-09-29 (b347-aws-lambda-agent-after-fix.txt).
+
+TheoCode against the PUBLISHED packages (a copy of apps/theocode with @theokit/agents 15.0.2,
+agents-pty 0.2.1 and presenter 0.10.0 from npm instead of workspace:*)
+  vitest: all passing once the copy is a git repository (one gitGate case needs one)
+  tsc --noEmit 0 errors
+  `theocode doctor` exited 1 with "credential: absent" while turns authenticated from the
+  environment (#938, fixed)
+  headless `exec` could not edit a file on stock Ubuntu 24.04 under any flag, and said to
+  install a bwrap that was installed (#939, the message is fixed; whether danger-full-access
+  should run unconfined is open)
+
+What this run did NOT cover
+  Live deploys to Cloudflare, Vercel, Netlify and Deno Deploy: no CLI on this machine was
+  authenticated. Their last live evidence is 2026-09-30 (every-target-exercised-from-a-scaffold.txt).
+  The TheoCode interactive TUI.
+
+No credential appears in this record.

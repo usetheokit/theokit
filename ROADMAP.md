@@ -555,6 +555,16 @@ opt-in compatibility surface — TheoCloud is the only end-to-end-validated depl
 
 **Measured 2026-08-21:** Streaming and the security headers landed. The decisive criterion did not: `agent` appears in zero of the files under `packages/theo/src/adapters/`, so no listed target serves the thing the framework exists to ship.
 
+**Measured 2026-10-02, which makes the 2026-08-21 sentence above stale:** an agent endpoint now
+answers on the deployed targets. On 2026-09-30 a person deployed one `create-theokit` scaffold to
+`cloudflare`, `vercel`, `netlify`, `aws-lambda` and `deno-deploy` and watched the agent stream on each
+(`.squad/records/acceptance/evidence/every-target-exercised-from-a-scaffold.txt`). On 2026-10-02 the
+published `theokit@0.74.2` was run again on `node`, `bun`, `theo-cloud` and `theokit dev` (8/8 checks
+each, the agent streaming), on a real AWS Lambda Function URL (routing, CSRF and agent loading; no
+model key was given to that function), and in Chrome on `node`
+(`.squad/records/acceptance/evidence/published-scaffold-end-to-end-2026-10-02.txt`). No box below is
+flipped by this note: that is `/acceptance`'s job against a released tag.
+
 **Definition of done (all must hold):**
 
 - [ ] a streaming `/api/*` route streams on every listed adapter — chunks observed arriving before the response completes — or the adapter is delisted; the `web-shim` buffering the whole response is the current blocker across six targets. **Addressed 2026-08-20** (usetheokit/theokit#382), and the measurement corrected the criterion's own count: **all six** emitted handlers buffered a second time, not two — each awaited `executeRoute` before calling `toResponse()`, and `executeRoute` does not return until it has drained the body. Measured through the shim, before and after: one chunk at millisecond 1123 of an 1123 ms run, against 9 chunks with headers at 1 ms and the first at 121 ms. **AWS Lambda is delisted for streaming**, which this bullet authorises in writing, and the delisting is audible three ways rather than silent: the build refuses by name on `ssrStreaming`, the emitted handler logs the route when it buffers a `text/event-stream`, and every one of the nine targets is now forced to declare whether it streams. `node` is exercised end to end; the other five are correct in the emitted contract and **unproven on the platform**, because no deploy exists in CI — which is what this bullet's `/acceptance` has to settle
