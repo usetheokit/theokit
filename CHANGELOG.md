@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [create-theokit 3.0.14, theokit 0.74.3] - 2026-10-03
+
 ### Fixed
 
 - A deployed agent whose provider key is missing answers `500` with the JSON `INTERNAL` error that names the variable, on AWS Lambda, Vercel and Netlify as it already did under `theokit start`. On Lambda the error escaped the handler as a bare `502 Internal Server Error`, and the reason was only in CloudWatch (#941)
