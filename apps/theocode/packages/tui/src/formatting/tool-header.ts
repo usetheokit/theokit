@@ -47,6 +47,37 @@ const DENIED_MARK = 'denied by human approver'
 export const REJECTED_BODY = 'rejected — nothing ran'
 
 /**
+ * The prefix `shellBody` puts on a call something OTHER than the human refused — the permissions
+ * gate, the sandbox's tool-level gating, a hook. Measured 2026-10-02: a refusal from the permissions
+ * gate arrives in the same veto shape as a human rejection (camelCase `exitCode` 126, the reason on
+ * `stderr`) and the header printed `Edited hello.txt (+1 -0)` for a patch that wrote nothing.
+ */
+const BLOCKED_BODY_PREFIX = 'blocked — nothing ran: '
+
+/**
+ * The JSON object `output` starts with. The TUI's `onError` passes every failure through
+ * `turnErrorText`, which appends ` — <hint>` after the payload, so the event the header sees is
+ * `{...} — set THEOCODE_DIAGNOSTICS=stderr ...` and not parseable as a whole.
+ */
+function leadingJsonObject(output: string): Record<string, unknown> | undefined {
+  const whole = parseJsonObject(output)
+  if (whole !== undefined) return whole
+  for (let end = output.indexOf('} — '); end !== -1; end = output.indexOf('} — ', end + 1)) {
+    const prefix = parseJsonObject(output.slice(0, end + 1))
+    if (prefix !== undefined) return prefix
+  }
+  return undefined
+}
+
+/** The reason a policy gave for refusing, when `output` is the runtime's raw veto payload. */
+function vetoReason(output: string): string | undefined {
+  if (!output.startsWith('{')) return undefined
+  const p = leadingJsonObject(output)
+  if (p === undefined || p.exitCode !== 126 || typeof p.stderr !== 'string') return undefined
+  return p.stderr.includes(DENIED_MARK) ? undefined : p.stderr
+}
+
+/**
  * Whether this event is a call the human refused.
  *
  * TWO forms are accepted, and the reason is the order the framework applies things in: since
@@ -64,6 +95,14 @@ function wasDenied(event: AgentToolEvent): boolean {
   const output = (event as { output?: unknown }).output
   if (typeof output !== 'string') return false
   return output === REJECTED_BODY || output.includes(DENIED_MARK)
+}
+
+/** Whether this event is a call a policy refused before it ran — raw payload or `shellBody` form. */
+function wasBlocked(event: AgentToolEvent): boolean {
+  if (event.status !== 'failed') return false
+  const output = (event as { output?: unknown }).output
+  if (typeof output !== 'string') return false
+  return output.startsWith(BLOCKED_BODY_PREFIX) || vetoReason(output) !== undefined
 }
 
 /**
@@ -96,33 +135,39 @@ export function formatToolHeader(
   const input = (event.input ?? {}) as Record<string, unknown>
   const header = HEADERS_BY_TOOL.get(String(event.name))?.(input, active)
   if (header === undefined) return undefined
+  if (wasBlocked(event)) {
+    return {
+      name: refusedName('Blocked', String(event.name), input),
+      summary: 'refused before it ran — nothing ran and nothing changed',
+    }
+  }
   if (!wasDenied(event)) return header
 
   // The past tense was a lie. A rejected call renders `status: "failed"`, and every header here
   // reads that as "not active" and prints `Ran <cmd>` — for a command that never ran. Whether the
   // shell executed is the single fact this line exists to convey.
   return {
-    name: deniedName(String(event.name), input),
+    name: refusedName('Rejected', String(event.name), input),
     summary: 'you rejected this call — nothing ran and nothing changed',
   }
 }
 
-/** `Ran x` → `Rejected x`, per tool, so the noun still matches what was refused. */
-function deniedName(tool: string, input: Record<string, unknown>): string {
+/** `Ran x` → `Rejected x` / `Blocked x`, per tool, so the noun still matches what was refused. */
+function refusedName(verb: 'Rejected' | 'Blocked', tool: string, input: Record<string, unknown>): string {
   const cmd = typeof input.command === 'string' ? oneLine(input.command) : ''
   switch (tool) {
     case 'Bash':
-      return `Rejected ${cmd}`.trim()
+      return `${verb} ${cmd}`.trim()
     case 'interactive_shell':
-      return 'Rejected the interactive session'
+      return `${verb} the interactive session`
     case 'write_stdin':
-      return 'Rejected the input to the session'
+      return `${verb} the input to the session`
     case 'ApplyPatch':
-      return 'Rejected the patch'
+      return `${verb} the patch`
     case 'Edit':
-      return 'Rejected the edit'
+      return `${verb} the edit`
     default:
-      return `Rejected ${tool}`
+      return `${verb} ${tool}`
   }
 }
 
@@ -276,6 +321,9 @@ function shellBody(p: ParsedResult): { output: string } | undefined {
   // shell means "not executable", which deserves different words.
   if (typeof p.stderr === 'string' && p.stderr.includes(DENIED_MARK)) {
     return { output: REJECTED_BODY }
+  }
+  if (p.exitCode === 126 && typeof p.stderr === 'string') {
+    return { output: `${BLOCKED_BODY_PREFIX}${p.stderr}` }
   }
   const body = [p.stdout, p.stderr]
     .map((s) =>
