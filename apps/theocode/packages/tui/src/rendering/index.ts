@@ -4,3 +4,4 @@ export { useTimeline } from './use-timeline.js'
 export { useContextWarning } from './use-context-warning.js'
 
 export { useResumedHistory } from './use-resumed-history.js'
+export { lastMessageId, useInterruptMarks } from './interrupt-marks.js'

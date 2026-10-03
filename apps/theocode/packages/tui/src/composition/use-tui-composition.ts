@@ -15,6 +15,8 @@ import {
   useScreenState,
   useContextWarning,
   useResumedHistory,
+  lastMessageId,
+  useInterruptMarks,
 } from '../rendering/index.js'
 import { useTuiKeyboard } from '../terminal-io/index.js'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -83,18 +85,22 @@ function useConversationState(s: ReturnType<typeof useTuiSession>) {
 }
 
 function turnInterrupt(d: {
-  agent: { abort: () => void }
+  agent: { abort: () => void; thread: Parameters<typeof lastMessageId>[0] }
+  markInterrupted: (id: string | undefined) => void
   streaming: boolean
   pendingApproval: unknown
   forkCurrentSession: ReturnType<typeof getTuiRoot>['sessionFork']
   screen: { setToast: ReturnType<typeof useScreenState>['setToast'] }
 }) {
-  const { agent, streaming, pendingApproval, forkCurrentSession, screen } = d
+  const { agent, streaming, pendingApproval, forkCurrentSession, screen, markInterrupted } = d
   const interruptTurn = makeInterruptTurn({
     abort: () => {
       agent.abort()
     },
     forkSession: forkCurrentSession,
+    onInterrupted: () => {
+      markInterrupted(lastMessageId(agent.thread))
+    },
     hasActiveTurn: () => streaming,
     hasPendingApproval: () => pendingApproval !== undefined && pendingApproval !== null,
     onForkFailure: (e) => {
@@ -108,9 +114,10 @@ function turnInterrupt(d: {
   return interruptTurn
 }
 
-function useInterruptAndBacktrack(d: {
+interface InterruptAndBacktrackDeps {
   screen: ReturnType<typeof useScreenState>
-  agent: Parameters<typeof useBacktrack>[0]['agent'] & { abort: () => void }
+  agent: Parameters<typeof useBacktrack>[0]['agent'] & Parameters<typeof turnInterrupt>[0]['agent']
+  markInterrupted: (id: string | undefined) => void
   stdout: Parameters<typeof useBacktrack>[0]['stdout']
   streaming: boolean
   pendingApproval: unknown
@@ -124,7 +131,9 @@ function useInterruptAndBacktrack(d: {
   setSessionAndPersist: ReturnType<typeof getTuiRoot>['pointToSession']
   setPendingQuestion: Dispatch<SetStateAction<string | undefined>>
   exit: () => void
-}) {
+}
+
+function useInterruptAndBacktrack(d: InterruptAndBacktrackDeps) {
   const {
     screen,
     agent,
@@ -253,7 +262,8 @@ export function useTuiComposition() {
   // when `/resume` repoints the session and re-renders. Passing the callback would hand the hook a
   // stable identity that never signals the switch.
   const history = useResumedHistory(currentSessionId(), screen.resumed)
-  const { events, lastUsage } = useTimeline(agent, screen.resumed, history)
+  const marks = useInterruptMarks()
+  const { events, lastUsage } = useTimeline(agent, screen.resumed, history, marks.interrupted)
   useSessionToasts(s, screen.setToast, lastUsage?.inputTokens)
   const posture = s.SESSION.cfg().sandboxPosture
   const { pendingApproval, settleApproval } = useApprovals(agent, conv.approvalMode, posture)
@@ -266,6 +276,7 @@ export function useTuiComposition() {
   const backtrack = useInterruptAndBacktrack({
     screen,
     agent,
+    markInterrupted: marks.mark,
     stdout,
     streaming,
     pendingApproval,
