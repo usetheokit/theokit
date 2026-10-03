@@ -154,22 +154,31 @@ export function reviewerShape(ctx: SpecContext): AgentShape {
  * the policy to a mode, and `full-auto` is precisely "the operator said do not ask me". A second
  * mapping here would be a second source of truth for one decision.
  *
- * `suggest` refuses, and says what would change it. Routing an unmatched tool to the interactive
- * approval card instead is the better answer and is NOT what this does: that card is keyed by the
- * build-time `.approvals({...})` map, and reaching it needs a general asker this composition does not
- * have. Refusing with a reason an operator can act on is honest; refusing with "requires approval"
- * was not.
+ * `suggest` hands a tool that HAS an approval card to that card, and refuses the rest with what
+ * would change it. #945 — measured in the TUI on 2026-10-02: the refusal used to cover every tool,
+ * so a `permissions.allow` list without `ApplyPatch` meant no file could be written and no card was
+ * shown, while the same request with no `permissions` block got the card. The card is keyed by the
+ * build-time `.approvals({...})` map (`humanGated`), and letting `ask` through for those tools is
+ * what reaches it: the TUI shows it, and a headless run answers it with its approval posture. A tool
+ * outside that map has no asker, and for it the refusal below is still the honest answer.
  */
-function askGateFor(policy: ApprovalPolicy): PermissionsPluginOptions['onAsk'] {
+export function askGateFor(
+  policy: ApprovalPolicy,
+  humanGated: ReadonlySet<string>,
+): PermissionsPluginOptions['onAsk'] {
   if (approvalModeFor(policy) === 'full-auto') return () => ({ behavior: 'allow' })
-  return (toolName) => ({
-    behavior: 'deny',
+  return (toolName) => (humanGated.has(toolName) ? { behavior: 'allow' } : refusal(toolName, policy))
+}
+
+function refusal(toolName: string, policy: ApprovalPolicy) {
+  return {
+    behavior: 'deny' as const,
     message:
       `\`${toolName}\` matched no rule in your \`permissions\` block, so it needs a decision, and ` +
       `approval_policy="${policy}" means that decision is yours. Nothing here can ask you for it. ` +
       `Add \`${toolName}\` to \`permissions.allow\`, or set approval_policy="never" to let ` +
       `unmatched tools run.`,
-  })
+  }
 }
 
 /**
@@ -210,7 +219,8 @@ export function permissionsPluginsFor(
   cwd: string,
   operatorHome: string,
   approvalPolicy: ApprovalPolicy,
+  humanGated: ReadonlySet<string>,
 ): readonly Plugin[] {
-  const plugin = createPermissionsPlugin(orderedPermissionRules(cwd, operatorHome), { onAsk: askGateFor(approvalPolicy) })
+  const plugin = createPermissionsPlugin(orderedPermissionRules(cwd, operatorHome), { onAsk: askGateFor(approvalPolicy, humanGated) })
   return plugin === undefined ? [] : [plugin]
 }
