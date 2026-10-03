@@ -31,9 +31,11 @@ describe('T1.2 — build.ts wires services manifest', () => {
     expect(idxEmit).toBeLessThan(idxAdapter)
   })
 
-  it('logs the service count when non-empty', () => {
+  it('logs the services line through describeServicesManifest, which knows the target', () => {
+    // The wording moved into `describe-services-manifest.ts` (#935), whose unit test asserts the
+    // service count and the theo-cloud-only v1 warning. What build.ts must still do is call it.
     const src = readFileSync(BUILD_TS, 'utf-8')
-    expect(src).toMatch(/Services manifest/)
+    expect(src).toMatch(/describeServicesManifest\(servicesManifest, target\)/)
   })
 })
 

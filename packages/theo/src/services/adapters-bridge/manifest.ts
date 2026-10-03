@@ -51,8 +51,8 @@ export interface ManifestServiceEntry {
 /**
  * Plan v1.2 T2.1 — services.json now ships in 2 shapes:
  *
- *   v1 (deprecated, sunset theokit 0.6.0): { version: 1, services: [...] }
- *   v2 (current):                          { version: 2, project: <name>, services: [...] }
+ *   v1 (deprecated, still accepted): { version: 1, services: [...] }
+ *   v2 (current):                    { version: 2, project: <name>, services: [...] }
  *
  * `buildManifest()` selects which version to emit based on whether a
  * project name is supplied. Consumers (TheoCloud Go-side validator)
@@ -147,8 +147,8 @@ function definitionToEntry(name: string, def: ServiceDefinition): ManifestServic
 
 /**
  * Build a services manifest. Plan v1.2 T2.1: pass a `project` name to emit
- * v2; omit it to emit v1 (deprecated, accepted by TheoCloud until 0.6.0
- * sunset).
+ * v2; omit it to emit v1 (deprecated, still accepted by TheoCloud; no removal
+ * is scheduled).
  */
 export function buildManifest(services: ServicesConfig, project?: string): ServicesManifest {
   const ordered = topoSort(services)

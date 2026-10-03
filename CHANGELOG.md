@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- A deployed agent whose provider key is missing answers `500` with the JSON `INTERNAL` error that names the variable, on AWS Lambda, Vercel and Netlify as it already did under `theokit start`. On Lambda the error escaped the handler as a bare `502 Internal Server Error`, and the reason was only in CloudWatch (#941)
+- `theokit build --target bun` prints the command that starts its output, `NODE_ENV=production bun .theokit/bun/server.mjs`, and the emitted entry names that command when it refuses to start without `NODE_ENV=production`. It used to tell a user who had just made a production build to use `theokit dev` (#936)
+- The `services.json` v1 warning prints only for `--target theo-cloud`, the one target that reads the file, and no longer promises a sunset in `theokit 0.6.0` (#935)
+
 ## [create-theokit 3.0.13, theokit 0.74.2] - 2026-10-02
 
 Released with no entry under `[Unreleased]`. Per-package detail is in each package's

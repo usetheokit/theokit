@@ -39,6 +39,13 @@ export interface BunBuildDeps {
 }
 
 /**
+ * How a person starts the emitted entry. Printed by the build and repeated by the dev-mode guard,
+ * because the guard is what someone meets after running the path the build printed without
+ * `NODE_ENV` (measured 2026-10-02).
+ */
+const BUN_START_COMMAND = 'NODE_ENV=production bun .theokit/bun/server.mjs'
+
+/**
  * The module-scope refusals: this entry is production-only and Bun-only.
  *
  * Extracted from `renderBunEntry` when adding the configured-directory literal pushed it past the
@@ -48,7 +55,7 @@ export interface BunBuildDeps {
 const RUNTIME_GUARDS: readonly string[] = [
   `// EC-1: dev-mode guard`,
   `if (process.env.NODE_ENV !== 'production') {`,
-  `  console.error('TheoBunAdapter is production-only. Use \\'theokit dev\\' (Node) for development.')`,
+  `  console.error('TheoBunAdapter is production-only: start it with \\'${BUN_START_COMMAND}\\' from the project root. For development, use \\'theokit dev\\' (Node).')`,
   `  process.exit(1)`,
   `}`,
   ``,
@@ -341,6 +348,8 @@ export async function buildBun(
 
   // eslint-disable-next-line no-console -- CLI build progress
   console.log('\n  ✓ Bun output → .theokit/bun/server.mjs')
+  // eslint-disable-next-line no-console -- CLI build progress
+  console.log(`    start it with: ${BUN_START_COMMAND}`)
   // eslint-disable-next-line no-console -- CLI build progress
   console.log(
     `${describeDeployedSecurityHeaders({
