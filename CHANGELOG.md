@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [create-theokit 3.0.15, theokit 0.74.4] - 2026-10-03
+
 ### Fixed
 
 - On Deno Deploy, the app's pages are served. The emitted entry answered its JSON 404 for `/`, every client route and every asset, leaving them to a static handler a dynamic Deno Deploy app does not have; the build now copies the client to `theokit-deploy/client`, which the upload carries (it skips `.theokit/` through the scaffold's `.gitignore`), and the entry serves it with the security headers (#951)
