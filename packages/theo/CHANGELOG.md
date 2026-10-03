@@ -1,5 +1,12 @@
 # theo
 
+## 0.74.4
+
+### Patch Changes
+
+- 87dc545: `theokit build --target deno-deploy` copies the client build to `theokit-deploy/client`, and the emitted `theokit-deploy/server.ts` serves it: the file when it exists, `index.html` for a client route, a 404 for a missing asset, with `..` refused. A dynamic Deno Deploy app answered 404 for `/` and every page, because the entry left them to a static handler the platform does not have for that app type, and the upload skips `.theokit/` through the scaffold's `.gitignore`. The document now also carries the security headers. (#951)
+- 19ed36e: `theokit build --target netlify` adds an SPA fallback to `netlify.toml` (`/*` to `/index.html`, status 200, after the `/api/*` rule and unforced), so a client-routed page opened directly or reloaded on Netlify gets the document instead of a 404. A project's own `/*` rule is left as it is. (#949)
+
 ## 0.74.3
 
 ### Patch Changes
@@ -219,8 +226,8 @@
   A nested-layout project with no agents — the layout `create-theokit` scaffolds — was told, on every dev
   start and every build that reached this path:
 
-            [theokit] agentsDir "agents" resolves to "<root>/src/agents", which is not a directory, so NO agents
-            were found and every /api/agents/* route will 404.
+              [theokit] agentsDir "agents" resolves to "<root>/src/agents", which is not a directory, so NO agents
+              were found and every /api/agents/* route will 404.
 
   About routes it does not have, and a directory it never configured. Two defects in one line.
 
