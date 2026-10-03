@@ -166,8 +166,9 @@ export function askGateFor(
   policy: ApprovalPolicy,
   humanGated: ReadonlySet<string>,
 ): PermissionsPluginOptions['onAsk'] {
-  if (approvalModeFor(policy) === 'full-auto') return () => ({ behavior: 'allow' })
-  return (toolName) => (humanGated.has(toolName) ? { behavior: 'allow' } : refusal(toolName, policy))
+  if (approvalModeFor(policy) === 'full-auto') return (_toolName, _input) => ({ behavior: 'allow' })
+  return (toolName, _input) =>
+    humanGated.has(toolName) ? { behavior: 'allow' } : refusal(toolName, policy)
 }
 
 function refusal(toolName: string, policy: ApprovalPolicy) {

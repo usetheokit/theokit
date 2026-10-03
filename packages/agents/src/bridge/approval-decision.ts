@@ -14,8 +14,8 @@
  *
  * ## The invariant, stated once
  *
- * **Nothing auto-approves without positive evidence of enforced confinement.** Two consumer defects
- * reduce to it:
+ * **Nothing auto-approves without positive evidence of enforced confinement**, or the operator's
+ * explicit `danger-full-access` waiver (#939). Two consumer defects reduce to it:
  *
  *  - *B-006* — an absent posture counts as unconfined. Absence of evidence is not evidence of
  *    confinement, and defaulting the other way silently disables the guard anywhere the posture has
@@ -141,12 +141,14 @@ export interface ShouldAutoApproveOptions {
  * @param mode - what the user chose.
  * @param toolName - the name the model sees, which is also the approval key.
  * @param posture - the sandbox's own answer to "am I kernel-enforced right now?". Absent or
- *   unenforced means NOT confined, and nothing auto-approves.
+ *   unenforced means NOT confined, and nothing auto-approves, unless its `mode` is
+ *   `danger-full-access`, the operator's explicit request to run without confinement.
  */
 export function shouldAutoApprove(
   mode: ApprovalMode,
   toolName: string,
-  posture?: Pick<SandboxPosture, 'enforced'>,
+  // `mode` is a plain string so callers already passing a wider vocabulary keep compiling.
+  posture?: Pick<SandboxPosture, 'enforced'> & { readonly mode?: string },
   options?: ShouldAutoApproveOptions,
 ): boolean {
   switch (mode) {
@@ -166,6 +168,14 @@ export function shouldAutoApprove(
       return options?.writeScopedTools?.has(toolName) ?? false
     case 'full-auto':
       // The one place the sandbox's own report is the deciding evidence.
-      return posture?.enforced === true
+      //
+      // #939: or the operator's recorded waiver. `danger-full-access` is the mode that asks for NO
+      // confinement, and the SDK reports it `enforced: false`, so reading only `enforced` refused
+      // it everywhere: the flag existed and could never take effect headlessly. The mode comes from
+      // configuration, never from detection, so a workspace-write session whose bwrap failed still
+      // reports workspace-write and is still refused here. Codex runs the same combination
+      // unconfined. Whoever can set this mode is decided upstream: a product's security floor keeps
+      // a cloned repository from choosing it.
+      return posture?.enforced === true || posture?.mode === 'danger-full-access'
   }
 }

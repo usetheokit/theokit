@@ -16,6 +16,8 @@ import {
   withName,
 } from '@theokit/agents/tools'
 
+import { anchorRelativeWrites } from './anchor-relative-writes.js'
+
 export interface ToolScope {
   cwd: string
   writeRoot: string
@@ -62,6 +64,35 @@ export const REGISTRY_TOOL_NAMES = [
 
 export type RegistryToolName = (typeof REGISTRY_TOOL_NAMES)[number]
 
+/**
+ * The two write tools. For them the project root IS the write root, so they take `scope.writeRoot`
+ * explicitly. When the two roots diverge (`danger-full-access`), relative paths are anchored to the
+ * project first, or `hello.txt` would mean `/hello.txt` (#939).
+ */
+function writeToolEntries(
+  bound: ReturnType<typeof bindToolScope>,
+  scope: ToolScope,
+): [string, CustomTool][] {
+  const anchored = (tool: CustomTool, field: 'patch' | 'path'): CustomTool =>
+    scope.writeRoot === scope.cwd ? tool : anchorRelativeWrites(tool, scope.cwd, field)
+  return [
+    [
+      'ApplyPatch',
+      anchored(
+        withName(bound.bind(createApplyPatchTool)({ projectRoot: scope.writeRoot }), 'ApplyPatch'),
+        'patch',
+      ),
+    ],
+    [
+      'Edit',
+      anchored(
+        withName(bound.bind(createEditFileTool)({ projectRoot: scope.writeRoot }), 'Edit'),
+        'path',
+      ),
+    ],
+  ]
+}
+
 export class ToolRegistry {
   readonly #toolset: Toolset<CustomTool>
 
@@ -91,10 +122,7 @@ export class ToolRegistry {
           'Read',
         ),
       ],
-      [
-        'Glob',
-        withName(bound.bind(createListDirTool)({ allowAbsolute: true }), 'Glob'),
-      ],
+      ['Glob', withName(bound.bind(createListDirTool)({ allowAbsolute: true }), 'Glob')],
       [
         'Grep',
         withName(bound.bind(createSearchTextTool)({ regex: true, allowAbsolute: true }), 'Grep'),
@@ -112,15 +140,7 @@ export class ToolRegistry {
       // keeping: "an image reader that honours any path is a file exfiltration primitive with a
       // friendly name" — not code to maintain one copy of per product.
       ['ViewImage', withName(bound.bind(createViewImageTool)(), 'ViewImage')],
-      // Explicit override: for a write tool, the project root IS the write root.
-      [
-        'ApplyPatch',
-        withName(bound.bind(createApplyPatchTool)({ projectRoot: scope.writeRoot }), 'ApplyPatch'),
-      ],
-      [
-        'Edit',
-        withName(bound.bind(createEditFileTool)({ projectRoot: scope.writeRoot }), 'Edit'),
-      ],
+      ...writeToolEntries(bound, scope),
       [
         'Bash',
         withName(

@@ -11,6 +11,7 @@
  * Trusting a directory is not the same as consenting to run unconfined: the trust gate answers
  * "may this repo configure the agent?", and this one answers "may commands run without me looking?".
  */
+import { resolveSandboxPosture } from '@theokit/agents/sandbox'
 import { describe, expect, it } from 'vitest'
 
 import { shouldAutoApprove } from '../../src/consent/approval-mode.js'
@@ -36,6 +37,22 @@ describe('B-006 — full-auto requires an enforced sandbox', () => {
     // Absence of evidence is not evidence of confinement. Defaulting the other way would make the
     // guard vanish wherever the posture has not been threaded through yet.
     expect(shouldAutoApprove('full-auto', 'shell', undefined)).toBe(false)
+  })
+})
+
+describe('#939: an explicit danger-full-access agrees with the headless surface', () => {
+  it('test_full_auto_under_danger_full_access_auto_approves', () => {
+    // The operator chose no confinement. Headless now runs this combination, and B-006 is the rule
+    // that the two surfaces answer the same way.
+    const waived = resolveSandboxPosture({ mode: 'danger-full-access' })
+
+    expect(shouldAutoApprove('full-auto', 'shell', waived)).toBe(true)
+  })
+
+  it('test_suggest_under_danger_full_access_still_asks', () => {
+    const waived = resolveSandboxPosture({ mode: 'danger-full-access' })
+
+    expect(shouldAutoApprove('suggest', 'shell', waived)).toBe(false)
   })
 })
 

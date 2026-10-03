@@ -1,3 +1,4 @@
+import type { SandboxPosture } from '@theokit/agents/sandbox'
 import {
   APPROVAL_MODES,
   shouldAutoApprove as decide,
@@ -31,11 +32,16 @@ const EDIT_TOOLS: ReadonlySet<string> = new Set(['ApplyPatch'])
  * means "run commands without asking", which is only defensible when something else is confining
  * them, so an absent or unenforced sandbox posture auto-approves nothing (B-006) — absence of
  * evidence is not evidence of confinement.
+ *
+ * #939: the posture carries `mode` when the caller has it, because `danger-full-access` is
+ * the operator waiving confinement and auto-approves in `full-auto`, the same as headless.
  */
 export function shouldAutoApprove(
   mode: ApprovalMode,
   toolName: string,
-  posture?: { enforced: boolean; detail: string },
+  posture?: Pick<SandboxPosture, 'enforced' | 'detail'> & {
+    readonly mode?: SandboxPosture['mode']
+  },
 ): boolean {
   return decide(mode, toolName, posture, { writeScopedTools: EDIT_TOOLS })
 }
