@@ -1,6 +1,6 @@
 {
   "name": "@theocode/agent",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "private": true,
   "type": "module",
   "description": "The agent and everything that composes it.",
