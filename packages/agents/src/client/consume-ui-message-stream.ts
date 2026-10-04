@@ -132,8 +132,29 @@ export async function consumeChunkStream(
       },
     }),
   )
+  let lastYield = performance.now()
   for await (const message of readMessageStream(watched)) {
     onMessage(message)
+    if (performance.now() - lastYield >= YIELD_EVERY_MS) {
+      await yieldToEventLoop()
+      lastYield = performance.now()
+    }
   }
   return { terminated, chunksReceived }
+}
+
+/**
+ * #964: how long the loop above may run before it lets the event loop take a turn.
+ *
+ * A renderer answers `onMessage` with a synchronous commit in a microtask, and when the chunks are
+ * already buffered, reading the next one resolves in a microtask too. Without a yield the whole
+ * backlog drains with no macrotask in between: no input, no timers. Measured on the TheoCode TUI, a
+ * 400-line reply ran at 130-140% CPU and Esc was ignored until it ended. One frame at 60 Hz keeps
+ * the UI responsive and costs a `setTimeout` hop roughly every frame, only while work is queued.
+ */
+const YIELD_EVERY_MS = 16
+
+/** A macrotask hop. `setTimeout` exists in Node, browsers and workers alike. */
+function yieldToEventLoop(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0))
 }
