@@ -5,6 +5,7 @@
 // undefined"). The one native runtime dep, node-pty, is EXTERNAL (loaded via createRequire, esbuild does
 // not follow it) and only touched by run/resume's interactive_shell — goal/review never need it.
 import { chmodSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -44,6 +45,42 @@ const devtoolsStub = {
 }
 
 /**
+ * #964: React's runtime packages, which pick their development or production build from
+ * `process.env.NODE_ENV` when they load.
+ *
+ * Nothing sets NODE_ENV when a user runs this CLI, so the bundle carried React's DEVELOPMENT build:
+ * a CPU profile of a long streamed reply showed `runWithFiberInDEV`, `logComponentRender` with
+ * `performance.measure`, and a `structuredClone` on every render. Those renders run in microtasks,
+ * so the TUI stopped reading stdin until the reply ended and Esc could not interrupt it.
+ *
+ * A global `define` is the usual fix and the wrong one here: it would also flip theokit's own
+ * NODE_ENV checks, some of which refuse development defaults in production.
+ */
+const REACT_RUNTIME = /[\\/]node_modules[\\/](?:react|react-dom|react-reconciler|scheduler)[\\/]/
+
+export function isReactRuntimeFile(path) {
+  return REACT_RUNTIME.test(path)
+}
+
+export function pinReactToProduction(source) {
+  return source.replaceAll('process.env.NODE_ENV', "'production'")
+}
+
+const reactProduction = {
+  name: 'react-production',
+  setup(build) {
+    build.onLoad({ filter: /\.js$/ }, async (args) => {
+      if (!isReactRuntimeFile(args.path)) return undefined
+      return {
+        contents: pinReactToProduction(await readFile(args.path, 'utf8')),
+        loader: 'js',
+        resolveDir: dirname(args.path),
+      }
+    })
+  },
+}
+
+/**
  * The esbuild configuration, as a value.
  *
  * Separated from the build 2026-09-10. Everything here used to run at module top level, so the
@@ -76,7 +113,7 @@ export function bundleOptions(root = REPO_ROOT) {
     external: ['node-pty', 'better-sqlite3', 'proper-lockfile', '*.node'],
     // Ink's optional devtools client, resolved to an empty module — see `devtoolsStub` above
     // for why `external` does not work here.
-    plugins: [devtoolsStub],
+    plugins: [devtoolsStub, reactProduction],
     // A shebang makes the artifact directly executable (`./dist/theocode.mjs`); chmod below sets
     // the exec bit.
     //
