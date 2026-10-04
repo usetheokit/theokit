@@ -17,7 +17,7 @@ import { readFileSync } from 'node:fs'
 
 import { describe, expect, it } from 'vitest'
 
-import { bundleOptions } from './build-cli.mjs'
+import { bundleOptions, isReactRuntimeFile, pinReactToProduction } from './build-cli.mjs'
 
 /**
  * The build script's CODE, with comments stripped.
@@ -127,5 +127,29 @@ describe('bundleOptions', () => {
 
     expect(source, 'the build copies a file out of the SDK dist again').not.toContain('copyFileSync')
     expect(source, 'a data-asset list is back, and its reason expired').not.toContain('DATA_ASSETS')
+  })
+
+  it('test_react_is_bundled_in_its_production_build', () => {
+    // #964: the bundle carried React's DEVELOPMENT build, because nothing sets NODE_ENV when a user
+    // runs the CLI. A CPU profile of a long streamed reply showed `runWithFiberInDEV`,
+    // `logComponentRender` with `performance.measure` and a `structuredClone` per render; together
+    // with the renders running in microtasks, the TUI stopped reading stdin until the reply ended,
+    // so Esc could not interrupt it.
+    const names = (options.plugins ?? []).map((plugin) => plugin.name)
+    expect(names).toContain('react-production')
+  })
+
+  it('test_only_reacts_own_files_are_pinned_to_production', () => {
+    // A global `define` would also flip theokit's own `NODE_ENV` checks, some of which refuse
+    // development defaults in production. Only the React runtime is pinned.
+    expect(isReactRuntimeFile('/r/node_modules/.pnpm/react@19.2.7/node_modules/react/index.js')).toBe(true)
+    expect(isReactRuntimeFile('/r/node_modules/react-reconciler/cjs/x.js')).toBe(true)
+    expect(isReactRuntimeFile('/r/node_modules/scheduler/index.js')).toBe(true)
+    expect(isReactRuntimeFile('/r/node_modules/theokit/dist/index.js')).toBe(false)
+    expect(isReactRuntimeFile('/r/node_modules/react-router/dist/index.js')).toBe(false)
+
+    expect(pinReactToProduction("if (process.env.NODE_ENV === 'production') a()")).toBe(
+      "if ('production' === 'production') a()",
+    )
   })
 })
