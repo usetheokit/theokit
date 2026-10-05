@@ -87,3 +87,7 @@ What a signature asserts is that someone read this and is willing to say it hold
 **Signed 2026-10-05 by `human/paulo` — a person, not a judge.**
 
 What a signature asserts is that someone read this and is willing to say it holds. It does not assert that a machine checked it: the deterministic score sits above, and the two are separate claims on purpose.
+
+**Signed 2026-10-05 by `human/paulo` — a person, not a judge.**
+
+What a signature asserts is that someone read this and is willing to say it holds. It does not assert that a machine checked it: the deterministic score sits above, and the two are separate claims on purpose.

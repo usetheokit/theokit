@@ -258,10 +258,10 @@ silently dropped, which is the one outcome OBJ-6 forbids.
 ## REQ-11 - Every channel OpenClaw ships has a gateway package
 
 serves: OBJ-1
-statement: each of the 25 surfaces in OBJ-1 has a package in `theokit-gateways`, driven through `GatewayRunner` or `deliver()`, with no channel protocol written in `apps/theoclaw`.
-acceptance: for each of the 25 surfaces, a send-and-receive run against a real account is recorded with its date.
+statement: each of the 24 third-party surfaces in OBJ-1 has a package in `theokit-gateways`, driven through `GatewayRunner` or `deliver()`, with no channel protocol written in `apps/theoclaw`; the 25th, WebChat, is the browser UI TheoClaw serves itself, built from `theokit-ui` and the agent stream, and has no gateway package.
+acceptance: for each of the 24 third-party surfaces, a send-and-receive run against a real account is recorded with its date; for WebChat, a browser conversation with the served TheoClaw against a real model is recorded with its date.
 
-Fifteen of the 25 have no package today. Writing them in the app would be faster and is forbidden by
+WebChat has no third party behind it: a gateway package would be a browser talking to the instance that serves it, so it is the app's own web surface (amended 2026-10-05 by Paulo after B-368's DISCOVER). Fourteen of the other 24 have no package today. Writing them in the app would be faster and is forbidden by
 REQ-7: platform knowledge belongs in the repository that holds platform knowledge.
 
 ## REQ-12 - A skill the agent wrote is loadable only after its example ran green

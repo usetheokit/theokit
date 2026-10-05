@@ -374,7 +374,7 @@ responsibility: hold one entry per OpenClaw and Hermes row and fail when an entr
 The ledger is the oracle for OBJ-6, in the way PIECE-8 is the oracle for OBJ-5: without it, "all
 113 rows answered" is a count done by eye.
 
-## PIECE-13 - The fifteen new gateway packages
+## PIECE-13 - The fourteen new gateway packages
 
 realises: REQ-11
 responsibility: add a package per missing channel to `theokit-gateways`, each implementing `BasePlatformAdapter` with `deliver()` and proven send-and-receive on a real account.
@@ -382,9 +382,9 @@ responsibility: add a package per missing channel to `theokit-gateways`, each im
 **Repository:** `theokit-gateways`.
 
 Signal, iMessage, Google Chat, IRC, Nextcloud Talk, Nostr, Feishu/Lark, Synology Chat, Tlon/Urbit,
-Twitch, Zalo, Zalo Personal, ClickClack, Buzz and WebChat. WebChat may belong in the framework
-instead, because the theokit web surface already streams agent turns; that is decided per item, not
-here.
+Twitch, Zalo, Zalo Personal, ClickClack and Buzz. WebChat is not a gateway package: it is the
+browser UI TheoClaw serves, built from `theokit-ui` and the agent stream (REQ-11, amended
+2026-10-05).
 
 ## PIECE-14 - Skill authoring with an executed oracle
 
