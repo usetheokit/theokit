@@ -1,4 +1,7 @@
-# TheoClaw — technical requirements
+# TheoKit - technical requirements
+
+> **Rewritten 2026-10-05: one cascade, three products.** REQ-1 to REQ-12 are TheoClaw's, unchanged.
+> REQ-13 to REQ-15 are the framework's, and REQ-16 and REQ-17 are TheoCode's.
 
 > **DRAFT, unsigned.** Every REQ cites the OBJ it serves (G-B3). Requirements whose value depends
 > on an unanswered question carry `_pending_` rather than a number. `## Sign-off` is UNTICKED.
@@ -6,6 +9,8 @@
 ## REQ-1 — The gateway runner is consumed, not reimplemented
 
 serves: OBJ-1
+statement: the product drives `GatewayRunner` for every platform that delivers inbound in-process, one runner per platform, and writes no connection lifecycle of its own.
+acceptance: with one platform's token revoked, a test shows the other platforms' runners still start and reply.
 
 The product SHALL drive `GatewayRunner` from `@theokit/gateway` for every platform that delivers
 inbound in-process. It SHALL NOT write its own connection lifecycle.
@@ -21,8 +26,10 @@ every other platform. Per-platform runners cost one map and buy failure isolatio
 ## REQ-2 — Presentation is a presenter, never a loop
 
 serves: OBJ-2, OBJ-3
+statement: agent output reaches a channel only through a registered `Presenter`, which emits exactly one `OutboundMessage` per turn and never splits it.
+acceptance: a test feeds every `AgentOutputEvent` variant through the chat presenter and the adapter receives one message per turn with no reasoning text in it.
 
-Agent output SHALL reach a channel through a `Presenter<OutboundMessage>` registered in
+Agent output SHALL reach a channel through a `Presenter` typed to emit `OutboundMessage`, registered in
 `PresenterRegistry`, never through a hand-written stream loop.
 
 `AgentOutputEvent` is a discriminated union of eight variants and the compiler enforces
@@ -36,6 +43,8 @@ so a pre-splitting presenter would double-split).
 ## REQ-3 — Dialect translation is presentation, and it is new
 
 serves: OBJ-3
+statement: the presenter translates markdown into the target channel's dialect, through a pure function exported by `@theokit/gateway`, before emitting.
+acceptance: on real accounts, `**bold**` arrives as `*bold*` on WhatsApp and as plain text on LINE.
 
 The presenter SHALL translate markdown into the target channel's dialect before emitting.
 
@@ -51,6 +60,8 @@ and CALLED by the presenter in `theokit`. `@theokit/gateway` must never depend o
 ## REQ-4 — A failed run is told, not swallowed
 
 serves: OBJ-2
+statement: an `error` event becomes a user-facing message, and the event's `message` and `code` never reach the channel.
+acceptance: a forced run failure produces a reply on the channel that contains neither the error's message nor its code.
 
 An `error` event SHALL become a user-facing message. The event's `message` and `code` SHALL NOT
 reach the channel — they may carry internal detail.
@@ -60,6 +71,8 @@ On a channel, silence is indistinguishable from an agent that ignored the user.
 ## REQ-5 — Memory is consumed from the SDK
 
 serves: OBJ-4
+statement: memory comes from `@theokit/sdk-memory`, with a declared ceiling per store that refuses an over-ceiling write with an error, truncation reported to the caller, and `session_search` across every surface.
+acceptance: a write over the ceiling returns an error naming what to consolidate, and `session_search` returns a session that was stored from a different surface.
 
 The product SHALL use `@theokit/sdk-memory` and SHALL NOT implement its own store. The dreaming
 sweep (light → REM → deep) is the consolidation mechanism.
@@ -116,6 +129,8 @@ path nobody exercises, and the local default must therefore be the one that is t
 ## REQ-6 — Composition is declared, not wired by hand
 
 serves: OBJ-1
+statement: request-scoped agents are composed through `createAgentProvider` and `@InjectAgent`, and nothing is built on the metadata-only decorators.
+acceptance: no agent in `apps/theoclaw/src` is constructed outside a provider registered with `@theokit/di`, checked by a test over the composition root.
 
 Where the product composes an agent with its tools, memory and channels, it SHALL use
 `@theokit/di` + `@theokit/di-agent` rather than hand-wiring, unless a measurement shows the
@@ -143,6 +158,8 @@ that records and stops.
 ## REQ-7 — The joinery the framework should own is not written here
 
 serves: OBJ-5
+statement: where a seam exists between the agent and a channel, the product consumes a public framework or gateway API, and where none exists the gap is closed in the framework.
+acceptance: `measure-app-joinery.mjs` reports 0 lines under `framework gap` and 0 under `presenter` for `apps/theoclaw`.
 
 Where a seam exists between the agent and a channel, the product SHALL consume a public API
 of the framework or a gateway package. Where no such API exists, the product SHALL close the
@@ -163,6 +180,8 @@ channel presenter).
 ## REQ-8 — What a consumer installs is what we reviewed
 
 serves: OBJ-5
+statement: the product publishes exact dependency versions and ships a command that reports known vulnerabilities in what it pinned.
+acceptance: `apps/theoclaw/package.json` carries no `^` or `~` range, and the audit command exits non-zero when a pinned version has a known vulnerability.
 
 The product SHALL publish with exact dependency versions rather than ranges, and a new version of
 any dependency SHALL reach a user only through an intentional update here.
@@ -197,6 +216,8 @@ inherited by default.
 ## REQ-9 — Unattended work is a first-class path, not a chat that happens to repeat
 
 serves: OBJ-6
+statement: the product runs a task on a schedule with nobody present and delivers the result to the surface the user chose.
+acceptance: a job created from natural language runs unattended, delivers to a configured platform, can suppress its own delivery, and a second run sees the first's output.
 
 The product SHALL be able to run a task on a schedule, without a person present, and deliver the
 result to the surface the user chooses.
@@ -225,12 +246,77 @@ platform, can suppress its own delivery, and a second run can see the first's ou
 **Explicitly NOT required:** the scheduler does not need a hibernating host. That was decided out on
 2026-09-17 and row 6 of OBJ-6 is answered by that decision.
 
+## REQ-10 - Every row of the bar has an answer a machine can check
+
+serves: OBJ-6
+statement: the product keeps a parity ledger with one entry per OpenClaw and Hermes row, each one either shipped with the path of its end-to-end check or out with its written reason.
+acceptance: the ledger holds 113 entries, and a check fails on any entry that has neither a passing end-to-end check nor a reason.
+
+OBJ-6 counts rows. Without a ledger the count is done by reading, and a row nobody reads is a row
+silently dropped, which is the one outcome OBJ-6 forbids.
+
+## REQ-11 - Every channel OpenClaw ships has a gateway package
+
+serves: OBJ-1
+statement: each of the 25 surfaces in OBJ-1 has a package in `theokit-gateways`, driven through `GatewayRunner` or `deliver()`, with no channel protocol written in `apps/theoclaw`.
+acceptance: for each of the 25 surfaces, a send-and-receive run against a real account is recorded with its date.
+
+Fifteen of the 25 have no package today. Writing them in the app would be faster and is forbidden by
+REQ-7: platform knowledge belongs in the repository that holds platform knowledge.
+
+## REQ-12 - A skill the agent wrote is loadable only after its example ran green
+
+serves: OBJ-7
+statement: a skill authored by the agent stays inactive until its example has been executed and passed, and a failing example keeps it inactive.
+acceptance: a test authors two skills, one whose example passes and one whose example fails; only the first becomes loadable.
+
+## REQ-13 - Each pillar has an end-to-end test in a proof, against a real model
+
+serves: OBJ-8
+statement: for every pillar kept in OBJ-8, TheoClaw or TheoCode holds a test that drives the pillar through a public theokit API on a real model run, and a pillar map names that test or the reason the pillar is out.
+acceptance: a check over the pillar map fails when a pillar has neither a named end-to-end test that passed on its last run nor a written reason.
+
+A unit test in `packages/` does not satisfy this, however good it is. The point is the call a
+developer would make, made by a product a developer would ship.
+
+## REQ-14 - A finding is closed by a test that failed first, and CI runs a live model
+
+serves: OBJ-9
+statement: each finding of the 2026-10-04 audit is fixed in the framework package that owns it, after a regression test that fails on the current code; and CI runs a job that calls a real model on every push to `develop`.
+acceptance: each finding's fix commit is preceded by a commit whose test fails, and the CI job's log shows a model response on the last push to `develop`, or a failure stating that the provider could not be reached.
+
+A provider that cannot be reached is a job that could not run. It is reported as such and never
+as a pass.
+
+## REQ-15 - The proofs reach theokit only through what a consumer can import
+
+serves: OBJ-8, OBJ-5
+statement: `apps/theoclaw` and `apps/theocode` import theokit packages only through their published entry points, never through a package's `src/`.
+acceptance: a check fails on any import from either app that resolves into a theokit package's `src/` directory.
+
+Without this the proofs prove less than they claim: an app that reaches into `src/` uses an API no
+consumer has, so it can work while the published package does not.
+
+## REQ-16 - TheoCode keeps a parity ledger against Codex and Claude Code
+
+serves: OBJ-10
+statement: TheoCode keeps one entry per row of a Codex and Claude Code capability inventory, each entry either shipped with the path of its end-to-end check or out with its written reason.
+acceptance: a check fails on any entry that has neither a passing end-to-end check nor a reason, and on any Codex command that `check-codex-parity.mjs` reports as `unknown command`.
+
+## REQ-17 - Side-by-side results are recorded with their method, and the verdict is computed
+
+serves: OBJ-11
+statement: every side-by-side run against Codex or Claude Code records the prompt, the seed hash, the provider, the model, the effort and the verification command, and the win, tie or loss is computed from the command's pass and fail count.
+acceptance: a recorded run whose seeds differ by hash, or whose two sides used different models without saying so, is refused by the script that computes the verdict.
+
 ## Out of scope
 
 - Multi-tenancy, per-tenant credential vaults, onboarding. One instance serves one person;
   the product is open source and self-hosted, so "anyone can use it" is satisfied by anyone
   running their own rather than by tenancy inside one.
 - A hosted service. There is no signup, no billing and no quota.
+- **Declared out on 2026-10-04 against OpenClaw**: native mobile apps and device nodes, telephony
+  and joining meetings, the team server. Reasons in `objectives.md` OBJ-6.
 - Replacing TheoCode. That is a coding agent in a terminal; convergence would be a later
   decision, never a premise.
 - **Hibernation and remote-host operation.** Decided out by Paulo on 2026-09-17: with one
@@ -249,6 +335,9 @@ is the product working.
 
 ## Sign-off
 
+**2026-10-05:** the boxes below are the 2026-09-18 signature of REQ-1 to REQ-8. The signature
+that covers this rewritten cascade, REQ-1 to REQ-17, is the one in `alignment.md`.
+
 - [x] REQ-1..8 are the right requirements.  <!-- signed-by: human/paulo -->
 - [x] REQ-7 is accepted, including that it forbids the faster local workaround — decided on the vision's sign-off, 2026-09-17, over dropping it and over keeping it non-blocking.
 - [x] Leaving gateway ownership OPEN rather than excluded is deliberate.
@@ -260,3 +349,8 @@ _Signed by: (unsigned)_
 **Signed 2026-09-18 by `human/paulo` — a person, not a judge.**
 
 What a signature asserts is that someone read this and is willing to say it holds. It does not assert that a machine checked it: the deterministic score sits above, and the two are separate claims on purpose.
+
+**Amended 2026-10-04**, after the signature above: OpenClaw joined the bar (Paulo, opening the
+backlog), and the cascade was brought back to the alignment scorer's current criteria. The boxes in
+this section record the 2026-09-18 signature of the earlier text; the signature that covers the
+amended cascade is the one in `alignment.md`.

@@ -1,4 +1,9 @@
-# TheoClaw — objectives
+# TheoKit - objectives
+
+> **Rewritten 2026-10-05: one cascade, three products** (see the note at the top of
+> `product-vision.md`). OBJ-1 to OBJ-7 are TheoClaw's and keep their numbers and wording. OBJ-8 and
+> OBJ-9 are the framework's own. OBJ-10 and OBJ-11 are TheoCode's. Every horizon is 2026-10-09,
+> decided by Paulo for all three products on 2026-10-05.
 
 > **DRAFT, unsigned.** Phase 2 of `cycle-brainstorm`. Every OBJ below is derived from a
 > measurement recorded in `product-vision.md`; the ones that need an answer from Paulo carry
@@ -7,6 +12,11 @@
 Each objective carries a metric and a horizon (G-B2). "First release" means the first tag a
 person can clone, configure and run on their own host.
 
+**Horizons dated 2026-10-04.** Every horizon read "first release", which names no date and so can
+never be missed. Paulo set one date for everything kept: **2026-10-09**, five days after the
+decision. That is the date each objective is judged on, and its risk is written once, under OBJ-6,
+rather than repeated six times.
+
 **Read the vision's split before ranking these.** The problem stated there is assembly and
 memory; the capability bar set there is Hermes-or-better; and the purpose stated there is
 demonstrating theokit. An objective can serve one without serving the others, and each one
@@ -14,8 +24,9 @@ below names which it serves.
 
 ## OBJ-1 — The assistant answers where its user already writes
 
-metric: the agent replies on 10 platforms, end to end, on real accounts.
-horizon: first release.
+metric: the agent replies on 25 surfaces, end to end, on real accounts: every channel OpenClaw
+ships in its repository (OC-1 to OC-10, OC-12, and e-mail from OC-17).
+horizon: 2026-10-09.
 serves: the problem (assembly) and the purpose (demonstration).
 
 **All ten, decided by Paulo on 2026-09-17** over two cheaper options (the six that already
@@ -37,11 +48,23 @@ was chosen deliberately, so the cost is written here rather than discovered late
 Against Hermes, which speaks 20+, ten is the strongest parity claim reachable from the
 catalog that exists.
 
+**Widened 2026-10-04 to every channel OpenClaw ships**, decided by Paulo over two cheaper options
+(the ten plus the four largest, or the ten alone). The fifteen added are Signal, iMessage, Google
+Chat, IRC, Nextcloud Talk, Nostr, Feishu/Lark, Synology Chat, Tlon/Urbit, Twitch, Zalo, Zalo
+Personal, ClickClack, Buzz and a browser WebChat. None of them has a package in
+`theokit-gateways` today, so each is a new package there before it is a route here. Two carry a
+cost the others do not: iMessage needs a signed-in Mac to drive `imsg`, and Signal needs the
+`signal-cli` binary.
+
+**Not counted, with the reason:** WeChat, WeCom, Yuanbao, Zalo ClawBot and QQ Bot (OC-11). OpenClaw
+does not ship them; its docs point at plugins maintained outside its repository, so they are not
+part of the product being matched.
+
 ## OBJ-2 — Nothing reaches the user that was not meant for them
 
 metric: 0 non-user-facing events delivered to a channel, covered by a test that fails on the
 hand-written loop.
-horizon: first release.
+horizon: 2026-10-09.
 serves: the capability bar.
 
 The measurement that makes this an objective rather than a nicety: a reply arrived on a real
@@ -50,7 +73,7 @@ phone as `"TheOi! 👋"`, the `"The"` being a fragment of the model's own reason
 ## OBJ-3 — Formatting arrives rendered, not literal
 
 metric: 0 literal markdown characters delivered on a platform that cannot parse them.
-horizon: first release.
+horizon: 2026-10-09.
 serves: the capability bar.
 
 Measured: the agent answered `**Bom Sucesso (MG)**` and both LINE and WhatsApp delivered the
@@ -62,7 +85,7 @@ text — this is new work, not misplaced work.
 metric: 0 facts dropped without the caller being told, under a declared ceiling of 800
 tokens of environment memory and 500 tokens of user model; `session_search` reaches 100% of
 stored sessions across every surface.
-horizon: first release.
+horizon: 2026-10-09.
 serves: the problem (memory) and the capability bar.
 
 **The number is not invented and it is not mine.** Asked what "remembering well" means,
@@ -126,7 +149,7 @@ fabricated defect into a product objective.
 ## OBJ-5 — The product shows the framework doing the work
 
 metric: `measure-app-joinery.mjs` exits 0 with gap 0 and presenter 0.
-horizon: first release.
+horizon: 2026-10-09.
 serves: the purpose (demonstration).
 
 **This objective exists because the vision's purpose is not decoration.** If TheoClaw
@@ -179,10 +202,38 @@ the first task of PIECE-8, not an afterthought.
 
 ## OBJ-6 — It does what an assistant is for, not just what a chat is for
 
-metric: all 7 of Hermes' headline capability rows are answered — each one shipped, or declared out
-of scope with the reason written. 0 silently dropped.
-horizon: first release for the rows kept; the declaration itself before implementation starts.
+metric: all 113 rows are answered (the 106 of OpenClaw's inventory of 2026-10-04 and the 7 of
+Hermes' headline list), each one shipped and verified on a real run, or declared out of scope with
+the reason written. 0 silently dropped.
+horizon: 2026-10-09.
 serves: the capability bar, and the problem it turned out to be hiding.
+
+### Amended 2026-10-04: OpenClaw joins the bar
+
+Paulo widened the bar from Hermes to OpenClaw and Hermes. The 106 OpenClaw rows are in
+`.squad/wiki/references/openclaw-capability-inventory.md`, each with the path in OpenClaw's source
+that shows it. The rule is the one this objective already had for Hermes: a row is shipped or
+declared out, and nothing disappears.
+
+**Declared out by Paulo on 2026-10-04, with the reasons:**
+
+| Rows | What | Why out |
+|---|---|---|
+| OC-37 to OC-43, and the iOS/Android part of OC-36 | native mobile apps and device nodes (camera, screen, location, node file transfer) | a native app per OS is a product of its own; the desktop stays in through `@theokit/tauri` |
+| OC-15, OC-16 | telephony (Twilio, Telnyx, Plivo) and joining Meet, Zoom, Teams or FaceTime calls | real-time voice over phone and meeting infrastructure is a different product from a messaging assistant |
+| OC-29 | team server, roles, shared sessions | the first non-goal in `product-vision.md`: one instance serves one person |
+| OC-11 | WeChat, WeCom, Yuanbao, Zalo ClawBot, QQ Bot | OpenClaw does not ship them; see OBJ-1 |
+
+Every other row is in, including the ones that look far from a chat: browser control, canvas,
+computer use, media generation, code mode, typed workflows, cloud workers, backup, telemetry and
+voice.
+
+**The risk of the date, written once.** 2026-10-09 is five days after the decision. On
+2026-10-04 TheoClaw is one file (`src/composition.ts`); the gateways cover 10 of the 25 channels;
+and the framework audit of the same day found A2A broken, handoffs, prompt caching, evals and an
+ACP server absent, and scheduled agent runs stubbed. A row that misses the date is reported as
+missed, not quietly moved: the date is the instrument, and moving it would make it measure
+nothing.
 
 **This objective exists because the other five never said what the assistant DOES.** OBJ-1 says it
 answers on ten platforms; nothing said what it answers. Asked, Paulo pointed at Hermes — and Hermes
@@ -232,9 +283,93 @@ hypothetical. The two rank differently and phase 2 must keep them apart.
 **Two rows are the real work: 3 (skill authoring) and 4 (unattended automation).** Row 6 is already
 answered. The rest is assembly or measurement.
 
+## OBJ-7 - Skills the agent writes are proven before they act
 
+metric: 100% of the skills the agent authors pass an executed check before they become loadable;
+0 activated without a passing run.
+horizon: 2026-10-09.
+serves: the capability bar, above it rather than level with it.
+
+**This is where TheoClaw must be better, chosen by Paulo on 2026-10-04.** Both competitors let the
+agent write skills: OpenClaw through `skill_workshop` and `/learn` (OC-73), Hermes through its
+background review (row 3). Neither runs what was written before using it. The synthesis already in
+`product-vision.md` is the one taken: the agent authors the skill with an example, the example is
+executed, and only a passing run makes the skill loadable.
+
+**What this reverses.** `technical-pieces.md` put skill authoring out of the first release
+because the generator it relied on did not exist. Keeping OC-73 in OBJ-6 brings authoring back, so
+the question left is only whether it has an oracle, and this objective answers yes.
+
+**The second axis of superiority is OBJ-5**, also chosen on 2026-10-04: each capability is a public
+theokit API a reader can copy, and the joinery measurement proves it.
+
+
+
+## OBJ-8 - Every pillar the framework advertises works on a real run of a proof
+
+metric: 33 of 33 pillars named in the readiness audit of 2026-10-04 are exercised end to end by
+TheoClaw or TheoCode through a public theokit API on a run against a real model, or declared out
+with the reason written; 0 pillars proven only by a suite that mocks the SDK.
+horizon: 2026-10-09.
+serves: the framework problem.
+
+**This is the objective the two proofs exist for.** The audit read the framework pillar by pillar
+(agents, file-based config, providers and models, prompts, reasoning, tools, streaming, workflows,
+squad, memory, sessions, context, compaction, structured output, goals, tasks, subagents, A2A,
+handoffs, guardrails, permissions, resilience, hooks, schedules, cache, personalities, evals, cost,
+observability, MCP, sandbox, filesystem, ACP server) and found that a green suite says little about
+a real call. A pillar counts here when a proof uses it, not when a unit test covers it.
+
+**A pillar neither proof needs is a real outcome, not a failure to hide.** It is declared out with
+its reason, or a proof grows a use for it. What is forbidden is a pillar that is neither.
+
+## OBJ-9 - The audit's findings are closed, and CI meets a real model
+
+metric: 8 of 8 rows of the finding table in `product-vision.md` closed, each one by a test that
+failed before its fix; at least 1 job in CI calls a real model on every push to `develop`.
+horizon: 2026-10-09.
+serves: the framework problem.
+
+**The last row is the one that keeps the other seven closed.** The suites import `src/` and mock
+the SDK, so they cannot see a wire format that drifts, which is exactly how the A2A client came to
+read JSON from a route that answers with SSE. A job that calls a real model is the instrument that
+would have caught it, and its absence is why it was not caught.
+
+**The cost, declared:** a live job spends tokens on every push and depends on a provider being up.
+A provider outage must show as the job being unable to run, never as the job passing.
+
+## OBJ-10 - TheoCode answers every row of the Codex and Claude Code bar
+
+metric: 100% of the rows of a Codex and Claude Code capability inventory are answered, each one
+shipped and verified on a real run or declared out with the reason written, 0 silently dropped;
+and `apps/theocode/tools/check-codex-parity.mjs` reports 0 Codex commands answered with
+`unknown command`.
+horizon: 2026-10-09.
+serves: TheoCode's bar.
+
+**The rule is the one OBJ-6 already applies to TheoClaw**, moved to the other proof. Codex has an
+instrument and Claude Code does not: TheoCode reads Claude Code's `settings.json` and names the keys
+it ignores, and nothing compares the rest of Claude Code's surface (hooks, skills, subagents, MCP,
+slash commands). The inventory is therefore the first deliverable, in the way the OpenClaw inventory
+came before OBJ-6 could be counted.
+
+## OBJ-11 - TheoCode does as well as Codex and Claude Code on the same task
+
+metric: 0 tasks lost on the side-by-side set in `apps/theocode/docs/parity/`: run with the
+method of 2026-08-25 (same prompt, byte-identical seeds, a pass and fail count from a command),
+TheoCode passes every task that Codex passes and every task that Claude Code passes.
+horizon: 2026-10-09.
+serves: TheoCode's bar.
+
+**Codex is already measured: equal on the tasks run**, re-measured on 2026-09-02 across a major of
+the framework. Claude Code is not. The method requires the same provider, model and effort on both
+sides; where that cannot be arranged against Claude Code, the run is reported as not like for like
+rather than counted.
 
 ## Sign-off
+
+**2026-10-05:** the boxes below are the 2026-09-18 signature of OBJ-1 to OBJ-6. The signature
+that covers this rewritten cascade, OBJ-1 to OBJ-11, is the one in `alignment.md`.
 
 - [x] These six are the objectives, and each serves what it says it serves.  <!-- signed-by: human/paulo -->
 - [x] OBJ-6 is accepted, including that it puts autonomy and self-authored skills back IN scope as capabilities after they were declined as problems.
@@ -249,3 +384,8 @@ _Signed by: (unsigned)_
 **Signed 2026-09-18 by `human/paulo` — a person, not a judge.**
 
 What a signature asserts is that someone read this and is willing to say it holds. It does not assert that a machine checked it: the deterministic score sits above, and the two are separate claims on purpose.
+
+**Amended 2026-10-04**, after the signature above: OpenClaw joined the bar (Paulo, opening the
+backlog), and the cascade was brought back to the alignment scorer's current criteria. The boxes in
+this section record the 2026-09-18 signature of the earlier text; the signature that covers the
+amended cascade is the one in `alignment.md`.

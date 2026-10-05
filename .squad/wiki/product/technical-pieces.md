@@ -1,4 +1,7 @@
-# TheoClaw — technical pieces
+# TheoKit - technical pieces
+
+> **Rewritten 2026-10-05: one cascade, three products.** PIECE-1 to PIECE-15 are TheoClaw's,
+> unchanged. PIECE-16 to PIECE-18 are the framework's, and PIECE-19 and PIECE-20 are TheoCode's.
 
 > **SIGNED 2026-09-18 by human/paulo** — see `## Sign-off`. *Amended 2026-09-21: this line read `DRAFT, unsigned` from the document's first commit (`f07069084`), which also carried the ticked box below. paulohenriquevn resolved the divergence on 2026-09-21.* Every PIECE cites the REQ it realises (G-B3). A piece that does not live in
 > `apps/theoclaw` says which repository it lives in and why. `## Sign-off` is UNTICKED.
@@ -26,8 +29,8 @@ is: a table. **The variation is three table rows, not ten classes.**
 authorised cloning it, so the answer was read out of its source rather than designed here.
 
 **And the source says the question had the wrong shape.** "Do they appear?" is not a boolean in
-Hermes. `gateway/display_config.py` is a per-platform resolver — `display.platforms.<platform>.<key>`
-→ `display.<key>` → platform default → global default — over four tiers chosen by ONE property:
+Hermes. `gateway/display_config.py` is a per-platform resolver — `display.platforms.PLATFORM.KEY`
+→ `display.KEY` → platform default → global default — over four tiers chosen by ONE property:
 whether the platform can edit a message it already sent.
 
 | Tier | Meaning | `tool_progress` |
@@ -71,6 +74,7 @@ commit that implements it.
 
 
 realises: REQ-2, REQ-4
+responsibility: turn one agent run into exactly one channel message, dropping reasoning and partial tool calls and turning an error into a user-facing reply.
 
 **Repository:** `theokit`, `packages/presenter`.
 **Why there:** it consumes `AgentOutputEvent`, and that type lives there. Putting it in the
@@ -104,6 +108,7 @@ Three refinements the implementation added to this description:
 
 
 realises: REQ-3
+responsibility: rewrite inline markdown into a platform's dialect as a pure function, leaving untaught platforms unchanged.
 
 **Repository:** `theokit-gateways`.
 **Why there:** it is knowledge ABOUT a platform, which is what that repository is. Exported as a
@@ -114,6 +119,7 @@ pure function, called by PIECE-1 — the dependency points gateway ← theokit, 
 ## PIECE-3 — `splitForDiscord` export
 
 realises: REQ-2
+responsibility: make the Discord splitter reachable from outside the package, so the presenter never splits a second time.
 
 **Repository:** `theokit-gateways`. **DONE 2026-09-17.**
 
@@ -125,6 +131,7 @@ all eight.
 ## PIECE-4 — The channel loop
 
 realises: REQ-1
+responsibility: route each inbound message to the agent and its reply back, through one `GatewayRunner` per platform.
 
 **Repository:** `apps/theoclaw`.
 
@@ -135,6 +142,7 @@ it should eventually move into the framework: 268 of 537 lines.
 ## PIECE-5 — Webhook ingest for the four that the runner cannot reach
 
 realises: REQ-1, REQ-7
+responsibility: hand webhook payloads from the app's routes into the adapters through `deliver()`, mapping its three results onto the HTTP response.
 
 **Repository:** `theokit-gateways` (the public API) + `apps/theoclaw` (the routes).
 
@@ -206,6 +214,7 @@ cost and survives the correction with room to spare.
 ## PIECE-6 — Memory
 
 realises: REQ-5
+responsibility: give memory a declared ceiling that refuses instead of evicting, and report every truncation to the caller.
 
 **Repository:** consumed from `@theokit/sdk-memory`. No code here beyond configuration.
 
@@ -226,6 +235,7 @@ So this piece carries real work in `theokit-sdk`, a fourth repository:
 ## PIECE-7 — Composition
 
 realises: REQ-6
+responsibility: compose request-scoped agents through `createAgentProvider` and `@InjectAgent`.
 
 **Repository:** `apps/theoclaw`, consuming `@theokit/di` + `@theokit/di-agent`.
 
@@ -244,6 +254,7 @@ against `@Workflow` and `@Step`, it would be written against a vocabulary that r
 ## PIECE-8 — The joinery gate
 
 realises: REQ-7
+responsibility: run the joinery measurement against this app as a gate that cannot pass on an empty directory.
 
 **Repository:** `apps/theoclaw` (the gate) consuming
 `theokit-gateways/tools/measure-app-joinery.mjs` (the measurement).
@@ -281,6 +292,7 @@ accident.
 ## PIECE-9 — Authorization: who may talk to this agent
 
 realises: REQ-1
+responsibility: decide who may talk to the agent on each platform, what an unauthorized sender sees, and stop two instances from replying to each other forever.
 
 **Repository:** `apps/theoclaw`.
 
@@ -320,6 +332,7 @@ answers any inbound message from anyone is a decision, and it should be one some
 ## PIECE-10 — The scheduler and its delivery path
 
 realises: REQ-9
+responsibility: run scheduled jobs unattended with their injected contract, and deliver success and failure to the targets the user chose.
 
 **Repository:** `apps/theoclaw`, consuming `@theokit/sdk`'s `cron.ts` and the gateway adapters.
 
@@ -341,14 +354,123 @@ Three parts, and the second is the one that gets forgotten:
 execution record, an incident ledger, and a notepad that survives between runs. Hermes has all
 three; nobody has looked at ours.
 
+## PIECE-11 - Pinned dependencies and their audit
+
+realises: REQ-8
+responsibility: publish TheoClaw with exact dependency versions and ship the command that reports known vulnerabilities in them.
+
+**Repository:** `apps/theoclaw`.
+
+**Added 2026-10-04.** REQ-8 had no piece, which the alignment scorer reports as
+`requirement_realised_by_no_piece`. The requirement was signed and nothing was going to build it.
+
+## PIECE-12 - The parity ledger
+
+realises: REQ-10
+responsibility: hold one entry per OpenClaw and Hermes row and fail when an entry has neither a passing end-to-end check nor a written reason.
+
+**Repository:** `apps/theoclaw`.
+
+The ledger is the oracle for OBJ-6, in the way PIECE-8 is the oracle for OBJ-5: without it, "all
+113 rows answered" is a count done by eye.
+
+## PIECE-13 - The fifteen new gateway packages
+
+realises: REQ-11
+responsibility: add a package per missing channel to `theokit-gateways`, each implementing `BasePlatformAdapter` with `deliver()` and proven send-and-receive on a real account.
+
+**Repository:** `theokit-gateways`.
+
+Signal, iMessage, Google Chat, IRC, Nextcloud Talk, Nostr, Feishu/Lark, Synology Chat, Tlon/Urbit,
+Twitch, Zalo, Zalo Personal, ClickClack, Buzz and WebChat. WebChat may belong in the framework
+instead, because the theokit web surface already streams agent turns; that is decided per item, not
+here.
+
+## PIECE-14 - Skill authoring with an executed oracle
+
+realises: REQ-12
+responsibility: let the agent author a skill with an example, execute the example, and make the skill loadable only after a passing run.
+
+**Repository:** `apps/theoclaw` for the loop, `theokit-skills` for the check if it already holds one.
+
+## PIECE-15 - The capability surface consumed from theokit
+
+realises: REQ-10
+responsibility: reach every kept OpenClaw row that is not a channel (tools, MCP, sandbox, providers, browser, voice, media, workflows, automation, ops) through public theokit APIs.
+
+**Repository:** `apps/theoclaw` consuming `theokit`, `theokit-sdk` and `theokit-plugins`.
+
+Most of OpenClaw's rows are a capability the framework holds or should hold, which is the
+demonstration purpose at its widest. Where the framework lacks one, REQ-7 sends the work to the
+framework, and the 2026-10-04 audit already names several such gaps.
+
+## PIECE-16 - The framework fixes the audit named
+
+realises: REQ-14
+responsibility: fix each finding of the 2026-10-04 audit in the package that owns it, each fix preceded by a regression test that fails on the current code.
+
+**Repository:** `theokit`, mostly `packages/agents` and `packages/theo`.
+
+The A2A client and the ACP tool are wire-format fixes. `maxCostUsd`, prompt caching and the cron
+`generate schedule` path are features that are declared and do not act. Handoffs, evals and an ACP
+server do not exist at all. Each is its own backlog item: they share an audit, not a cause.
+
+## PIECE-17 - The live-model CI job
+
+realises: REQ-14
+responsibility: run a job in CI that calls a real model on every push to `develop`, and report an unreachable provider as a job that could not run.
+
+**Repository:** `theokit`, `.github/workflows/`.
+
+The credential comes from the CI secret store and never appears in a log. Which provider and model,
+and the budget per run, are decided in the item that builds it.
+
+## PIECE-18 - The pillar map and the import gate
+
+realises: REQ-13, REQ-15
+responsibility: hold one row per OBJ-8 pillar naming the proof test that exercises it or the reason it is out, and refuse any proof import that reaches into a theokit package's `src/`.
+
+**Repository:** `theokit`, beside the two apps.
+
+The map is to OBJ-8 what the parity ledger (PIECE-12) is to OBJ-6: without it, "33 of 33" is a
+count done by eye.
+
+## PIECE-19 - TheoCode's capability inventory and parity ledger
+
+realises: REQ-16
+responsibility: inventory Codex and Claude Code row by row with the evidence for each row, and hold TheoCode's answer to every row.
+
+**Repository:** `apps/theocode`, extending `tools/check-codex-parity.mjs` rather than starting a
+second checker.
+
+The Codex half has an instrument already. The Claude Code half starts from nothing beyond the
+`settings.json` compatibility `theocode doctor` reports, so its inventory is the first task.
+
+## PIECE-20 - The side-by-side harness
+
+realises: REQ-17
+responsibility: run the same task on TheoCode and on Codex or Claude Code under the 2026-08-25 method, and compute the result from the verification command's pass and fail count.
+
+**Repository:** `apps/theocode`, `docs/parity/` for the records and `tools/` for the script.
+
+Today the method is a document followed by hand. This piece turns it into a script that refuses a
+run whose seeds differ or whose two sides used different models without saying so.
+
 ## What is NOT a piece
 
-Skills the agent writes and improves. The synthesis exists — the agent authors the EXAMPLE, CI
-decides whether it becomes a skill — but the generator it depends on does not, and it lives in a
-FOURTH repository (`theokit-skills`). It is named here so nobody builds it by accident, and it is
-out of the first release.
+**Amended 2026-10-04: skill authoring is now a piece (PIECE-14).** It was left out because the
+generator it depended on did not exist. OBJ-7 brought it back as the place TheoClaw must be better
+than both competitors, so the generator is part of the work rather than a reason to defer it.
+
+The original text, kept for the record: *Skills the agent writes and improves. The synthesis
+exists, the agent authors the EXAMPLE and CI decides whether it becomes a skill, but the generator
+it depends on does not, and it lives in a FOURTH repository (`theokit-skills`). It is named here so
+nobody builds it by accident, and it is out of the first release.*
 
 ## Sign-off
+
+**2026-10-05:** the boxes below are the 2026-09-18 signature of PIECE-1 to PIECE-10. The
+signature that covers this rewritten cascade, PIECE-1 to PIECE-20, is the one in `alignment.md`.
 
 - [x] The ten pieces are the right decomposition.  <!-- signed-by: human/paulo -->
 - [x] PIECE-10 (unattended work) is accepted as first-release scope, or deferred with the consequence written.
@@ -365,3 +487,8 @@ _Signed by: human/paulo, 2026-09-18._ <!-- Amended 2026-09-21: read `(unsigned)`
 **Signed 2026-09-18 by `human/paulo` — a person, not a judge.**
 
 What a signature asserts is that someone read this and is willing to say it holds. It does not assert that a machine checked it: the deterministic score sits above, and the two are separate claims on purpose.
+
+**Amended 2026-10-04**, after the signature above: OpenClaw joined the bar (Paulo, opening the
+backlog), and the cascade was brought back to the alignment scorer's current criteria. The boxes in
+this section record the 2026-09-18 signature of the earlier text; the signature that covers the
+amended cascade is the one in `alignment.md`.

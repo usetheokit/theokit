@@ -1,13 +1,107 @@
-# TheoClaw — product vision
+# TheoKit - product vision
 
-> **DRAFT, unsigned.** Phase 1 of `cycle-brainstorm`, run as an interview with Paulo on
-> 2026-09-17. His answers are quoted in the original Portuguese where the exact wording is
-> the evidence; the session record is
-> `.squad/records/brainstorms/2026-09-17-session.md`. Every inference is labelled as one.
-> The `## Sign-off` is UNTICKED and only Paulo may tick it — `cycle-brainstorm.md` G-B5
-> forbids a judge from signing this one.
+> **Rewritten 2026-10-05: one cascade, three products.** Until this date the cascade described
+> TheoClaw alone and lived under `apps/theoclaw/.squad/`. Paulo, on reading it: *"temos dois
+> produtos o theokit e theoclaw (esse prova que o theokit cumpri o que promete)"*, and then
+> *"insira tambem o theocode no mesmo nivel que o theoclaw"*. So the product is theokit, and
+> TheoClaw and TheoCode are the two products that prove it. One cascade and one backlog, because
+> a backlog item can trace to only one set of objectives.
+>
+> The TheoClaw text signed on 2026-09-18 is kept below as a section, with its headings one level
+> down and its wording unchanged. Objective, requirement and piece ids keep their numbers: OBJ-1 to
+> OBJ-7, REQ-1 to REQ-12 and PIECE-1 to PIECE-15 are TheoClaw's as before, and the framework and
+> TheoCode take the ids after them.
 
 ## What it is
+
+TheoKit is a TypeScript framework for building agents and the app each agent lives in: the agent
+runtime (`@theokit/agents`), routing, auth, real-time and deploy, wired. Its README states the
+promise in one line: *"Build the app your agent lives in."*
+
+**A promise is kept when a real product keeps it.** Two products in this repository exist to
+show that, and each is held to an outside bar:
+
+| Proof | What it is | Its bar |
+|---|---|---|
+| **TheoClaw** (`apps/theoclaw`) | an open-source, self-hosted personal assistant on every messaging surface | OpenClaw and Hermes, equal or better |
+| **TheoCode** (`apps/theocode`) | a terminal coding agent with a TUI and a headless CLI | Codex and Claude Code, equal or better |
+
+Both are built only on theokit's public surface. That rule is what turns them into evidence: a
+capability theokit claims is done when one of the two uses it through a public API on a real run.
+If a proof has to work around the framework, the framework failed that promise, and the fix goes
+into the framework, not into the proof.
+
+## Who it is for
+
+**A developer building an agent in TypeScript** who wants the runtime, the tools, memory,
+delegation, the surfaces and the deploy target from one framework instead of assembling them.
+
+The two proofs have users of their own, and their bars are set by those users: anyone who
+self-hosts TheoClaw (see its section below), and a developer working in a terminal with TheoCode.
+Those users are why the bars are outside products rather than our own feature lists: a person
+choosing between TheoCode and Codex compares the two, not TheoCode against a checklist.
+
+## The problem
+
+**The framework's claims are mostly proven by tests that never reach a real agent.** Measured in
+the readiness audit of 2026-10-04, pillar by pillar across the 33 capabilities the framework
+advertises:
+
+| Finding | Evidence |
+|---|---|
+| the A2A client posts JSON and reads `res.json()`, while the route it talks to answers with SSE | `packages/agents/src/a2a/a2a-client.ts:61-69` |
+| the ACP tool sends `session/prompt` with no `initialize` or `session/new` before it | `packages/theo/src/server/agent/acp-tool.ts:85` |
+| `BudgetOptions.maxCostUsd` is declared and never read | `packages/agents/src/types.ts:99` |
+| handoffs between agents do not exist | audit, 2026-10-04 |
+| the cron `generate schedule` path is a stub | audit, 2026-10-04 |
+| prompt caching never turns on | audit, 2026-10-04 |
+| evals do not exist, and neither does an ACP server | audit, 2026-10-04 |
+| suites import `src/` and mock the SDK; no test in CI calls a real model | audit, 2026-10-04 |
+
+**The cost:** a developer adopting one of these pillars meets the failure first, because the suite
+that should have met it never left the mock. Green CI says nothing about whether the A2A call
+works.
+
+**What the two proofs add to that.** TheoClaw carries two problems of its own, chosen by Paulo on
+2026-09-17 and kept unchanged in its section: the pieces exist and nothing is assembled, and the
+agent forgets between sessions. No separate problem was stated for TheoCode; it is held here as a
+proof of the framework problem above, and that is recorded as an open question rather than filled
+in.
+
+## What it is NOT
+
+- **Not a hosted service for TheoClaw.** There is no signup page; TheoClaw is software a person
+  runs. Decided 2026-09-17, unchanged.
+- **Not multi-tenant in TheoClaw.** One instance serves one person. Decided 2026-09-17, unchanged.
+- **TheoClaw and TheoCode do not replace each other.** One is a personal assistant on any surface,
+  the other a coding agent in a terminal. If they converge, that is a later decision, never a
+  premise here. Decided 2026-09-17, unchanged, and now true in both directions.
+
+No non-goal for the framework itself was decided in this rewrite. It is listed under the open
+questions so it is not mistaken for "everything is in scope".
+
+## Why now
+
+**For TheoClaw: the competitive window**, answered by Paulo on 2026-09-17 and kept in its section.
+OpenClaw and Hermes are defining the category now.
+
+**For the framework, inferred and not yet confirmed:** the 2026-10-04 audit found that several
+advertised pillars fail on first contact. Every week they stay that way is a week a developer can
+adopt one and meet the failure. This paragraph is an inference from the audit and is listed as an
+open question.
+
+## Open questions
+
+1. **The framework's non-goals.** None decided in the 2026-10-05 rewrite.
+2. **TheoCode's own problem.** It is held as a proof; whether it has a user problem of its own,
+   stated the way TheoClaw's two are, was not asked.
+3. **Why now, for the framework.** The paragraph above is an inference.
+
+## Proof 1 - TheoClaw
+
+The TheoClaw vision as signed on 2026-09-18 and amended on 2026-10-04, wording unchanged.
+
+### What TheoClaw is
 
 TheoClaw is an open-source personal AI assistant, and a direct competitor to OpenClaw and
 Hermes Agent. Anyone installs their own: it comes to live inside the messaging apps they
@@ -37,7 +131,7 @@ one. The rejected ordering would have said that when *the feature works* and *th
 shows the framework* conflict, the second wins. This ordering does not say that. Later
 phases must not assume it does.
 
-## Who it is for
+### Who TheoClaw is for
 
 **Anyone who installs it.** TheoClaw is open source and self-hosted: one instance, one
 person. Paulo is a user of it, not *the* user.
@@ -61,7 +155,7 @@ AO HERMES"*. The capability bar is absolute rather than situational. A surface t
 do what another surface does is not an answer to this, which is what makes the presentation
 layer a product requirement instead of a rendering detail.
 
-## The problem
+### The problems TheoClaw answers
 
 Two, stated as what the person does today and what it costs — both chosen by Paulo from
 four candidates.
@@ -73,7 +167,7 @@ four candidates.
 | ten chat platforms, eight proven send-and-receive against the real API | `theokit-gateways` — 11 packages, `GatewayRunner` with lifecycle, drain, rollback, hooks |
 | memory that survives sessions | `sdk-memory` — FTS5 + sqlite-vec + LanceDB, plus `memory-honcho` |
 | memory the agent curates itself | `sdk-memory/internal/dreaming` — light / REM / deep consolidation sweep |
-| one event, N surfaces | `@theokit/presenter` — `Presenter<TOut>` Strategy + `PresenterRegistry` |
+| one event, N surfaces | `@theokit/presenter` — `Presenter` Strategy (generic over its output) + `PresenterRegistry` |
 | tools, MCP, delegation, budget, cron | `sdk-tools`, `@theokit/agents`, `sdk-budget`, `sdk/cron.ts` |
 | composition with request-scoped agents | `@theokit/di-agent` v0.4.0 |
 
@@ -94,7 +188,7 @@ one: **the problem he feels is assembly and memory; the capability bar he set is
 better.** A capability can be required by the bar without being the problem that motivates
 the product, and the two rank differently.
 
-## What it is NOT
+### What TheoClaw is NOT
 
 Three, chosen from four candidates. They are what make this a decision rather than a wish.
 
@@ -114,7 +208,7 @@ how deeply TheoClaw may change `theokit-gateways` is an open scope question and 
 settled boundary. Under the demonstration purpose that is coherent: fixing the framework IS
 the product working.
 
-## Why now
+### Why TheoClaw now
 
 **ANSWERED by Paulo, 2026-09-17: the competitive window.**
 
@@ -133,7 +227,7 @@ about the market's clock).
 objectives do not carry, and it is the one reason in this document that gets worse while
 nothing is done.
 
-## Open questions — named rather than guessed
+### Open questions from 2026-09-17
 
 1. ~~**Which platforms actually matter.**~~ **ANSWERED 2026-09-17: all ten.** The four
    webhook-only ones (line, whatsapp, teams, sms) cost more than the other six — their
@@ -151,9 +245,28 @@ nothing is done.
    admiration for the Hermes ops story and moved to the TRD's out-of-scope, which is what
    stops it from quietly shaping the architecture toward webhook-only gateways.
 
-## Parity target
+### TheoClaw's parity target
 
-Hermes Agent, or better. Measured 2026-09-17:
+**Amended 2026-10-04: OpenClaw AND Hermes, equal or better.** Paulo, opening the backlog for this
+product: *"criando um sistmea IGUAL OU SUPERIOR AO OpenClaw"*. The bar was Hermes alone; it is now
+both. OpenClaw's surface is inventoried row by row in
+`.squad/wiki/references/openclaw-capability-inventory.md` (106 rows, version `2026.9.8`, measured
+2026-10-04), and `objectives.md` OBJ-6 holds the rule every row is judged by: shipped, or declared
+out with the reason written.
+
+Decided by Paulo on 2026-10-04, in one session:
+
+- **Every channel OpenClaw ships in its repository is in scope**, not only the ten the gateways
+  already have.
+- **Three areas are declared out**: mobile apps and device nodes (OC-37 to OC-43), telephony and
+  joining meetings (OC-15, OC-16), and the team or multi-user deployment (OC-29, which the first
+  non-goal above already excludes).
+- **Where TheoClaw must be better, not level**: skills the agent writes are verified by an
+  executed check before they act (OBJ-7), and every capability is visibly the framework doing the
+  work (OBJ-5).
+- **The horizon is 2026-10-09** for everything kept.
+
+The Hermes comparison below is kept as it was measured on 2026-09-17. Hermes Agent, or better:
 
 | Hermes capability | Status here |
 |---|---|
@@ -174,7 +287,37 @@ third repository in this front), the loop has CI latency where Hermes improves d
 and it assumes the guarantee transfers from tool-skills to runtime-skills — **which is a
 hypothesis, not a measurement.**
 
+## Proof 2 - TheoCode
+
+**What it is.** A terminal coding agent with one agent core and two surfaces, the Ink TUI and a
+headless CLI (`apps/theocode/README.md`). `@theocode/agent` composes `@theokit/agents` with this
+product's policy, and the README is explicit that it is *"Not a library of agents - the SDK is
+`@theokit/agents`"*.
+
+**Its bar: Codex and Claude Code, equal or better.** Decided by Paulo on 2026-10-05. Two parts of
+it already have instruments:
+
+- **Codex, measured.** `apps/theocode/docs/parity/2026-08-25-codex-parity.md` runs both agents on
+  the same prompt, in byte-identical seed directories, with the same provider, model and effort,
+  and verifies each result by a command with a pass and fail count. Re-measured on 2026-09-02:
+  equal on the tasks run. `tools/check-codex-parity.mjs` compares the Codex slash-command surface
+  with ours and reports any Codex command this product answers with `unknown command`.
+- **Claude Code, configuration only.** TheoCode reads `settings.json` under the same names and
+  paths as Claude Code, and `theocode doctor` names every key it does not implement. Nothing yet
+  measures Claude Code's other surface (hooks, skills, subagents, MCP, slash commands) against
+  TheoCode. That inventory does not exist, which is the TheoCode equivalent of the OpenClaw
+  inventory TheoClaw already has.
+
+**Why it proves the framework.** A coding agent leans on the pillars a messaging assistant barely
+touches: long sessions and compaction, the PTY, sandboxed file and shell tools, subagents, goals,
+review, and an ACP entry (`dist/acp-entry.mjs`). TheoClaw proves theokit can reach a person; TheoCode
+proves it can do sustained work for one.
+
 ## Sign-off
+
+**2026-10-05:** the boxes below are the 2026-09-18 signature of the TheoClaw vision, now the
+"Proof 1" section above. The signature that covers this rewritten cascade is the one in
+`alignment.md`.
 
 - [x] The user is anyone who self-hosts it, and Paulo is one of them rather than the one.  <!-- signed-by: human/paulo -->
 - [x] The demonstration purpose is as load-bearing as written — a capability that cannot be seen to be easy fails it. **Confirmed by Paulo 2026-09-17**, over two weaker readings (drop it, or keep it as a non-blocking measurement). OBJ-5, REQ-7 and PIECE-8 rest on a decision now, not on an inference.
@@ -188,3 +331,8 @@ _Signed by: (unsigned)_
 **Signed 2026-09-18 by `human/paulo` — a person, not a judge.**
 
 What a signature asserts is that someone read this and is willing to say it holds. It does not assert that a machine checked it: the deterministic score sits above, and the two are separate claims on purpose.
+
+**Amended 2026-10-04**, after the signature above: OpenClaw joined the bar (Paulo, opening the
+backlog), and the cascade was brought back to the alignment scorer's current criteria. The boxes in
+this section record the 2026-09-18 signature of the earlier text; the signature that covers the
+amended cascade is the one in `alignment.md`.
