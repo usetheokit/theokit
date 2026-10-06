@@ -14,20 +14,66 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { createACPTool, NodeAcpTransport } from '../../packages/theo/src/server/agent/acp-tool.js'
 
-/** A fake transport that auto-answers session/prompt and forwards permission requests. */
-function scriptedTransport(onSend?: (msg: Record<string, unknown>) => void): AcpTransport {
+/** ACP v1 params of the permission request the scripted agent sends mid-prompt. */
+const PERMISSION_PARAMS = {
+  sessionId: 's1',
+  toolCall: { toolCallId: 't1', title: 'rm', kind: 'delete', status: 'pending' },
+  options: [
+    { optionId: 'allow', name: 'Allow', kind: 'allow_once' },
+    { optionId: 'deny', name: 'Deny', kind: 'reject_once' },
+  ],
+}
+
+/**
+ * A fake ACP agent: answers `initialize` and `session/new`, and answers `session/prompt` the way
+ * ACP does, with the text as a `session/update` `agent_message_chunk` and only `stopReason` in the
+ * result. With `askPermission`, it first sends `session/request_permission` (id 7), records the
+ * client's response in `permissionReplies`, and only then finishes the turn.
+ */
+function scriptedTransport(
+  options: {
+    onSend?: (msg: Record<string, unknown>) => void
+    askPermission?: boolean
+    permissionReplies?: Record<string, unknown>[]
+  } = {},
+): AcpTransport {
   const dec = new AcpMessageDecoder()
   let sink: ((chunk: string) => void) | undefined
+  let finishTurn: (() => void) | undefined
+  const reply = (message: Record<string, unknown>) =>
+    sink?.(encodeAcpMessage({ jsonrpc: '2.0', ...message }))
+  const onPrompt = (msg: Record<string, unknown>) => {
+    const p = msg.params as { sessionId: string; prompt: { text: string }[] }
+    finishTurn = () => {
+      reply({
+        method: 'session/update',
+        params: {
+          sessionId: p.sessionId,
+          update: {
+            sessionUpdate: 'agent_message_chunk',
+            content: { type: 'text', text: `echo:${p.prompt.map((b) => b.text).join('')}` },
+          },
+        },
+      })
+      reply({ id: msg.id, result: { stopReason: 'end_turn' } })
+    }
+    if (options.askPermission) {
+      reply({ id: 7, method: 'session/request_permission', params: PERMISSION_PARAMS })
+    } else {
+      finishTurn()
+    }
+  }
   return {
     send: (line) => {
       for (const m of dec.push(line)) {
         const msg = m as Record<string, unknown>
-        onSend?.(msg)
-        if (msg.method === 'session/prompt') {
-          const p = msg.params as { message: string }
-          sink?.(
-            encodeAcpMessage({ jsonrpc: '2.0', id: msg.id, result: { text: `echo:${p.message}` } }),
-          )
+        options.onSend?.(msg)
+        if (msg.method === 'initialize') reply({ id: msg.id, result: { protocolVersion: 1 } })
+        else if (msg.method === 'session/new') reply({ id: msg.id, result: { sessionId: 's1' } })
+        else if (msg.method === 'session/prompt') onPrompt(msg)
+        else if (msg.id === 7 && msg.method === undefined) {
+          options.permissionReplies?.push(msg)
+          finishTurn?.()
         }
       }
     },
@@ -65,34 +111,33 @@ describe('createACPTool', () => {
 
   it('routes a permission request from the agent to onPermissionRequest', async () => {
     const onPermissionRequest = vi.fn(() => ({ granted: false }))
-    let sink: ((chunk: string) => void) | undefined
-    const transport: AcpTransport = {
-      send: () => {},
-      subscribe: (cb) => {
-        sink = cb
-      },
-    }
+    const sent: unknown[] = []
+    const permissionReplies: Record<string, unknown>[] = []
     const tool = createACPTool({
       command: 'noop',
       name: 'code_agent',
       description: 'd',
       onPermissionRequest,
-      transportFactory: () => transport,
+      transportFactory: () =>
+        scriptedTransport({
+          askPermission: true,
+          permissionReplies,
+          onSend: (msg) => {
+            if (typeof msg.method === 'string') sent.push(msg.method)
+          },
+        }),
     })
-    // Trigger a handler run so the client is wired, then simulate an agent permission request.
-    Promise.resolve(tool.handler({ message: 'hi' })).catch(() => {})
-    await Promise.resolve()
-    sink?.(
-      encodeAcpMessage({
-        jsonrpc: '2.0',
-        id: 7,
-        method: 'session/request_permission',
-        params: { tool: 'rm' },
-      }),
-    )
-    await Promise.resolve()
-    await Promise.resolve()
-    expect(onPermissionRequest).toHaveBeenCalledWith({ tool: 'rm' })
+
+    const output = await tool.handler({ message: 'hi' })
+
+    expect(onPermissionRequest).toHaveBeenCalledWith(PERMISSION_PARAMS)
+    expect(permissionReplies).toHaveLength(1)
+    expect(permissionReplies[0].error).toBeUndefined()
+    expect(permissionReplies[0].result).toEqual({
+      outcome: { outcome: 'selected', optionId: 'deny' },
+    })
+    expect(sent).toEqual(['initialize', 'session/new', 'session/prompt'])
+    expect(output).toBe('echo:hi')
   })
 })
 

@@ -3,10 +3,15 @@
  *
  * Spawns the agent as a subprocess (Node `child_process` — an adapter concern per G8), drives it
  * with the transport-agnostic {@link AcpClient} over newline-delimited JSON-RPC, and returns a
- * `CustomTool`. `onPermissionRequest` is REQUIRED — security by default (no default-allow for file/
- * shell operations). The transport is injectable for tests.
+ * `CustomTool`. Each call runs the ACP handshake: `initialize`, then `session/new`, then
+ * `session/prompt` naming the session it got back. The agent streams its reply as `session/update`
+ * notifications, so the call returns the text of the `agent_message_chunk` updates for its session.
+ * `onPermissionRequest` is REQUIRED — security by default (no default-allow for file/shell
+ * operations); its decision is answered as an ACP permission outcome. The transport is injectable
+ * for tests.
  */
 import { spawn, type ChildProcessByStdio } from 'node:child_process'
+import { resolve } from 'node:path'
 import type { Readable, Writable } from 'node:stream'
 
 import { AcpClient, type AcpTransport } from '@theokit/agents'
@@ -60,6 +65,69 @@ function defaultTransport(config: AcpToolConfig): AcpTransport {
   return new NodeAcpTransport(config.command, config.args, config.cwd)
 }
 
+/** The ACP protocol version this client speaks. */
+const ACP_PROTOCOL_VERSION = 1
+
+type AcpPermissionResponse =
+  | { outcome: { outcome: 'selected'; optionId: string } }
+  | { outcome: { outcome: 'cancelled' } }
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+/**
+ * Translate the callback's decision into an ACP `RequestPermissionResponse`. The option is chosen
+ * by `kind`: a grant selects `allow_once` (never `allow_always`, which grants more than was
+ * approved); a denial selects `reject_once`, else `reject_always`. No option of the needed kind
+ * answers `cancelled`, which an agent treats as a veto.
+ */
+function toAcpPermissionResponse(
+  params: unknown,
+  decision: { granted: boolean },
+): AcpPermissionResponse {
+  const options = isRecord(params) && Array.isArray(params.options) ? params.options : []
+  const wanted = decision.granted ? ['allow_once'] : ['reject_once', 'reject_always']
+  for (const kind of wanted) {
+    const option: unknown = options.find((o) => isRecord(o) && o.kind === kind)
+    if (isRecord(option) && typeof option.optionId === 'string') {
+      return { outcome: { outcome: 'selected', optionId: option.optionId } }
+    }
+  }
+  return { outcome: { outcome: 'cancelled' } }
+}
+
+/** The text of an `agent_message_chunk` update for `sessionId`, or `undefined` for anything else. */
+function agentTextChunk(params: unknown, sessionId: string): string | undefined {
+  if (!isRecord(params) || params.sessionId !== sessionId || !isRecord(params.update))
+    return undefined
+  const { sessionUpdate, content } = params.update
+  if (sessionUpdate !== 'agent_message_chunk' || !isRecord(content)) return undefined
+  return content.type === 'text' && typeof content.text === 'string' ? content.text : undefined
+}
+
+/**
+ * Run one ACP turn: handshake, prompt, and the reply text streamed for the session. Updates are
+ * buffered as they arrive (before `session/prompt` resolves) and filtered by the session after.
+ */
+async function runTurn(client: AcpClient, cwd: string, message: string): Promise<string> {
+  const updates: unknown[] = []
+  client.onNotification('session/update', (params) => {
+    updates.push(params)
+  })
+  await client.request('initialize', {
+    protocolVersion: ACP_PROTOCOL_VERSION,
+    clientCapabilities: {},
+  })
+  const created = await client.request('session/new', { cwd, mcpServers: [] })
+  const sessionId =
+    isRecord(created) && typeof created.sessionId === 'string' ? created.sessionId : undefined
+  await client.request('session/prompt', { sessionId, prompt: [{ type: 'text', text: message }] })
+  if (sessionId === undefined) return ''
+  const texts = updates.map((params) => agentTextChunk(params, sessionId))
+  return texts.filter((text): text is string => text !== undefined).join('')
+}
+
 /** Wrap a coding agent as a `CustomTool`. Fails fast if `onPermissionRequest` is missing. */
 export function createACPTool(config: AcpToolConfig): CustomTool {
   if (typeof config.onPermissionRequest !== 'function') {
@@ -81,9 +149,10 @@ export function createACPTool(config: AcpToolConfig): CustomTool {
     handler: async (input: Record<string, unknown>): Promise<string> => {
       const message = typeof input.message === 'string' ? input.message : ''
       const client = new AcpClient(makeTransport(config))
-      client.onRequest('session/request_permission', (params) => config.onPermissionRequest(params))
-      const result = (await client.request('session/prompt', { message })) as { text?: string }
-      return result.text ?? ''
+      client.onRequest('session/request_permission', async (params) =>
+        toAcpPermissionResponse(params, await config.onPermissionRequest(params)),
+      )
+      return runTurn(client, resolve(config.cwd ?? process.cwd()), message)
     },
   }
 }
