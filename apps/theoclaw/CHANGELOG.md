@@ -21,6 +21,18 @@ and versioning follows [Semantic Versioning](https://semver.org/).
   dependencies resolve to registry versions rather than workspace links, so there is nothing built
   in this repository for it to wait on.
 
+- A parity ledger and the command that checks it. OBJ-6 counts 113 rows, the 106 capabilities of
+  the OpenClaw inventory and the 7 Hermes rows, and until now they were counted by eye.
+  `parity/ledger.json` answers each row as `open`, `out` (a reason of 8 words or more, a
+  `human/<name>` declarer and a date) or `shipped` (a test file inside this repository that
+  contains the named test, and a `verified_on` date no later than today).
+  `pnpm --filter theoclaw run parity` reads both source tables where they live, prints
+  `shipped N · out M · open K` and one line per violation, and exits 1 while any violation
+  remains. On day one it prints `shipped 0 · out 9 · open 104` and exits 1: that red run is the
+  count. H-7 is among the open rows because no reason for keeping or dropping it is written in
+  the ledger yet. The command is not a CI step yet; the checker's tests run in the existing
+  `test` step.
+
 ### Fixed
 
 - This app's vitest config was the only one of ten in the monorepo without a `maxWorkers` cap —
