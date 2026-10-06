@@ -7,5 +7,10 @@ import { defineConfig } from 'vitest/config'
  *   node --env-file=<path>/.env node_modules/vitest/vitest.mjs run --config vitest.live.config.ts
  */
 export default defineConfig({
-  test: { include: ['tests/live/**/*.test.ts'], testTimeout: 120_000 },
+  test: {
+    include: ['tests/live/**/*.test.ts'],
+    testTimeout: 120_000,
+    // Under THEOKIT_LIVE_REQUIRED=1 an absent provider key fails the run instead of skipping it.
+    globalSetup: ['tests/live/require-provider-key.ts'],
+  },
 })
