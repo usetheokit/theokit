@@ -168,7 +168,13 @@ describe('theokit#379 a run that finishes on its own is untouched', () => {
     h.waitResult = {
       result: 'all done',
       usage: { inputTokens: 3, outputTokens: 4 },
-      cost: { amount: 0.5 },
+      cost: {
+        amountUsd: 0.5,
+        status: 'estimated',
+        currency: 'USD',
+        source: 'litellm_snapshot',
+        pricingVersion: undefined,
+      },
     }
 
     const metadata = await finishMetadata()
