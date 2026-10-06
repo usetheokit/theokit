@@ -137,8 +137,24 @@ describe('Bundle size regression', () => {
    * So the ceiling comes down with it. The raise above was paid for by a capability; this is dead
    * surface leaving, and a budget that kept the slack would be holding room for the next addition
    * nobody asked about. Headroom is 118 bytes.
+   *
+   * ## Raised to 39 200 for B-408: a decision, made by a person
+   *
+   * The ACP tool never opened a session: it sent `session/prompt` alone, and an ACP agent streams
+   * its reply as `session/update` notifications that `AcpClient` dropped. The fix needs
+   * `AcpClient.onNotification`, and `AcpClient` is in the root barrel through
+   * `export * from './acp/client.js'`. Attributed by control, swapping only `src/acp/client.ts`:
+   * 38 417 bytes before, 39 121 with it, so about 700 bytes.
+   *
+   * Shrinking was measured first. With no comment and the guard inlined into `dispatch` the bundle
+   * is still 38 720, 120 over the old ceiling, because the method, its map and the dispatch branch
+   * are the behavior itself. Moving `AcpClient` to a subpath would break every importer of it from
+   * the barrel, `createACPTool` in `theokit` among them.
+   *
+   * Moving a threshold so a gate passes is not something an implementation run may decide, so the
+   * run stopped and asked. Paulo approved this raise on 2026-10-06. Headroom is 79 bytes.
    */
-  it('agents main bundle under 38.7KB', (ctx) => {
+  it('agents main bundle under 39.2KB', (ctx) => {
     const path = resolve(distDir, 'index.js')
     if (!existsSync(path)) {
       // `ctx.skip()`, not `return`. A bare return reports the test as PASSED, so a suite run with no
@@ -148,7 +164,7 @@ describe('Bundle size regression', () => {
       return
     }
     const size = statSync(path).size
-    expect(size).toBeLessThan(38_600)
+    expect(size).toBeLessThan(39_200)
     console.log(`  agents/dist/index.js: ${(size / 1024).toFixed(1)} KB`)
   })
 
