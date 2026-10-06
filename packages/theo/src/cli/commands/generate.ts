@@ -1,11 +1,12 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
-import { resolve, dirname } from 'node:path'
+import { resolve, dirname, isAbsolute, relative, sep } from 'node:path'
 
 import {
   UNDECIDED_POLICY_IDENT,
   undecidedPolicyDeclaration,
 } from './generate-policy-placeholder.js'
 import { generateResource } from './generate-resource.js'
+import { resolveScheduleTarget } from './generate-schedule.js'
 import {
   VALID_TYPES,
   type GeneratorType,
@@ -47,13 +48,14 @@ function hasReservedSegment(name: string): boolean {
  * Returns `true` when path is safe (stays inside), `false` when it escapes via
  * `..`, absolute path, null byte, or similar traversal vector.
  */
-function isPathInside(cwd: string, targetSubpath: string): boolean {
-  if (targetSubpath.includes('\x00')) return false
-  if (targetSubpath.startsWith('/') || targetSubpath.startsWith('\\')) return false
-  const resolved = resolve(cwd, targetSubpath)
-  const cwdResolved = resolve(cwd)
-  const sep = process.platform === 'win32' ? '\\' : '/'
-  return resolved === cwdResolved || resolved.startsWith(cwdResolved + sep)
+/**
+ * Whether `filePath` lies strictly inside `cwd`. Decided by `path.relative`, never by a string
+ * prefix: `/tmp/x/app-outside/...` starts with `/tmp/x/app` and is still outside it.
+ */
+function isPathInside(cwd: string, filePath: string): boolean {
+  if (filePath.includes('\x00')) return false
+  const fromRoot = relative(resolve(cwd), filePath)
+  return fromRoot !== '' && !isAbsolute(fromRoot) && fromRoot.split(sep)[0] !== '..'
 }
 
 function toPascalCase(name: string): string {
@@ -234,31 +236,6 @@ function generateSandboxTemplate(name: string): string {
   ].join('\n')
 }
 
-function generateScheduleTemplate(name: string): string {
-  const base = name.split('/').pop() ?? name
-  return [
-    `import { defineCron } from 'theokit/server/cron'`,
-    ``,
-    `/**`,
-    ` * A scheduled agent run — a first-class TheoKit cron. \`theokit build\` discovers it automatically and`,
-    ` * translates the schedule to your deploy target's native cron (Vercel / Cloudflare / AWS). No manual`,
-    ` * scheduler to start. The handler is where you invoke your agent — POST to \`/api/agents/chat\`, or use`,
-    ` * \`@theokit/sdk\`'s \`Agent\` with the same model + system prompt as \`agents/chat.ts\`.`,
-    ` *`,
-    ` * Schedules are UTC (https://crontab.guru). \`signal\` aborts when the scheduler stops.`,
-    ` */`,
-    `export default defineCron('${base}', {`,
-    `  schedule: '0 9 * * *', // every day at 09:00 UTC`,
-    `  async handler({ traceId, scheduledAt, signal }) {`,
-    `    void signal`,
-    `    // Invoke your agent here — e.g. fetch your own \`/api/agents/chat\` endpoint, or call the SDK Agent.`,
-    `    console.log(\`[${base}] fired at \${scheduledAt.toISOString()} (trace \${traceId})\`)`,
-    `  },`,
-    `})`,
-    ``,
-  ].join('\n')
-}
-
 function generateMemoryTemplate(_name: string): string {
   return [
     `/**`,
@@ -302,11 +279,6 @@ function resolveTemplate(
       return {
         filePath: resolve(cwd, 'agents/sandbox', `${name}.ts`),
         content: generateSandboxTemplate(name),
-      }
-    case 'schedule':
-      return {
-        filePath: resolve(cwd, 'agents/schedules', `${name}.ts`),
-        content: generateScheduleTemplate(name),
       }
     case 'memory':
       return {
@@ -398,7 +370,6 @@ function generateWsTemplate(_name: string): string {
  * Studio (`theokit_generate` tool) consumes this directly. The CLI wrapper
  * below maps the structured result to console output + exit code semantics.
  */
-// eslint-disable-next-line @typescript-eslint/require-await
 export async function generate(opts: GenerateOptions): Promise<GenerateResult> {
   const { cwd, type, name } = opts
 
@@ -437,22 +408,23 @@ export async function generate(opts: GenerateOptions): Promise<GenerateResult> {
     return generateResource(cwd, name, opts.fields ?? [])
   }
 
-  const resolved = resolveTemplate(cwd, type as GeneratorType, name)
+  // A schedule's directory comes from the project config, so resolving it is async and may refuse.
+  const resolved =
+    type === 'schedule'
+      ? await resolveScheduleTarget(cwd, name)
+      : resolveTemplate(cwd, type as GeneratorType, name)
   if (resolved === null) {
     return { status: 'invalid_kind', message: `Unknown type: ${type}` }
   }
+  if ('status' in resolved) return resolved
   const { filePath, content } = resolved
 
-  // EC-4: confirm the resolved filePath stays inside cwd. `toKebabCase`
-  // already rejects most traversal vectors but a defense-in-depth check
-  // against `..` slipping in via valid-looking segments is cheap.
-  const relativeFromCwd = filePath.startsWith(resolve(cwd))
-    ? filePath.slice(resolve(cwd).length + 1)
-    : filePath
-  if (!isPathInside(cwd, relativeFromCwd)) {
+  // EC-4: confirm the resolved filePath stays inside cwd. `toKebabCase` rejects most traversal
+  // vectors in the name, but a directory read from config (`agentsDir`) can still point outside.
+  if (!isPathInside(cwd, filePath)) {
     return {
       status: 'invalid_name',
-      message: `Path traversal denied: "${name}" would escape project root.`,
+      message: `Path traversal denied: "${filePath}" is outside the project root ${resolve(cwd)}.`,
     }
   }
 
@@ -495,6 +467,8 @@ export async function generateCommand(
       throw new Error(
         `Invalid name "${name}". Use kebab-case: lowercase letters, numbers, hyphens. Example: my-route`,
       )
+    case 'invalid_config':
+      throw new Error(result.message ?? 'Invalid theo.config.ts')
     case 'already_exists':
       console.log(`\n  ⚠ ${result.filePath} already exists. Skipping.\n`)
       return

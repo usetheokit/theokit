@@ -35,6 +35,7 @@ export type GenerateStatus =
   | 'invalid_kind'
   | 'invalid_name'
   | 'not_a_project'
+  | 'invalid_config'
 
 export interface GenerateResult {
   status: GenerateStatus
