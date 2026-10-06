@@ -163,7 +163,13 @@ export interface DoneEvent {
     cacheWriteTokens?: number
   }
   durationMs: number
-  /** Total cost in USD for this agent run (EC-2: added for budget tracking). */
+  /**
+   * Total cost in USD for this agent run, as the SDK priced it (`CostBreakdown.amountUsd`).
+   *
+   * Absent when the run's price is not known (the SDK has no pricing data for the model); 0 means
+   * the SDK priced the run at zero, for example a subscription-included route. A consumer summing
+   * runs must not read an absent cost as 0 (usetheokit/theokit#969).
+   */
   cost?: number
   /**
    * theokit#379 — why the run stopped, when it did NOT stop because the agent was done.
