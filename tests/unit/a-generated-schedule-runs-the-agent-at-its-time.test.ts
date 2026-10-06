@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest'
+import { afterAll, afterEach, beforeEach, describe, it, expect, vi } from 'vitest'
 import {
   copyFileSync,
   mkdirSync,
@@ -110,6 +110,20 @@ async function generatedSchedule(dir: string): Promise<CronDefinition> {
   return mod.default as CronDefinition
 }
 
+/**
+ * The generated schedule the firing tests share. `importUserModule` loads it through tsx's
+ * `tsImport`, which evaluates a fresh module graph per call (the framework and agents builds
+ * included); measured in this file, the third such load in one worker did not settle within 60 s.
+ * The definition is stateless, so the firing tests load it once and each gets a fresh probe.
+ */
+let sharedDir: string | undefined
+let sharedDefinition: Promise<CronDefinition> | undefined
+function sharedSchedule(): Promise<CronDefinition> {
+  sharedDir ??= scheduleProject()
+  sharedDefinition ??= generatedSchedule(sharedDir)
+  return sharedDefinition
+}
+
 function importSpecifiers(source: string): string[] {
   return [...source.matchAll(/^import\s[^'"]*['"]([^'"]+)['"]/gm)].map((m) => m[1]!)
 }
@@ -129,6 +143,10 @@ describe('a generated schedule runs the agent at its time', () => {
     })
   })
 
+  afterAll(() => {
+    if (sharedDir !== undefined) rmSync(sharedDir, { recursive: true, force: true })
+  })
+
   afterEach(() => {
     vi.useRealTimers()
     vi.restoreAllMocks()
@@ -139,7 +157,7 @@ describe('a generated schedule runs the agent at its time', () => {
   })
 
   it('test_a_generated_schedule_runs_the_agent_at_its_time', async () => {
-    const def = await generatedSchedule(dir)
+    const def = await sharedSchedule()
     const probe = globalThis.__scheduleProbe!
     const traced = (): string[] =>
       logLines.filter((l) => l.includes('daily-digest') && l.includes('(trace '))
@@ -198,7 +216,7 @@ describe('a generated schedule runs the agent at its time', () => {
   })
 
   it('test_an_unattended_schedule_never_runs_a_gated_tool', async () => {
-    const def = await generatedSchedule(dir)
+    const def = await sharedSchedule()
     const probe = globalThis.__scheduleProbe!
 
     vi.useFakeTimers()
@@ -215,6 +233,76 @@ describe('a generated schedule runs the agent at its time', () => {
     expect(probe.runs[0]!.input.approvals?.kind).toBe('auto-reject')
     expect(probe.chunksConsumed).toBe(1)
     expect(probe.toolRuns).toBe(0)
+  })
+
+  it('test_a_failed_run_does_not_stop_the_next_tick', async () => {
+    const def = await sharedSchedule()
+    const probe = globalThis.__scheduleProbe!
+    const errorLines: string[] = []
+    vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
+      errorLines.push(args.map(String).join(' '))
+    })
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const handlerErrors = (): string[] =>
+      errorLines.filter((l) => l.includes('"daily-digest" handler error:'))
+    const traced = (): string[] =>
+      logLines.filter((l) => l.includes('daily-digest') && l.includes('(trace '))
+    const DAY = 24 * 3600_000
+
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-10-06T08:59:59Z'))
+    const scheduler = createCronScheduler([def])
+    scheduler.start()
+    try {
+      // Day 1: the provider is unreachable and the stream throws.
+      probe.stream = async function* () {
+        yield* []
+        throw new Error('provider unreachable')
+      }
+      await vi.advanceTimersByTimeAsync(2001)
+      expect(probe.runs).toHaveLength(1)
+      expect(handlerErrors()).toHaveLength(1)
+      expect(handlerErrors()[0]).toContain('provider unreachable')
+      expect(traced()).toHaveLength(1)
+      expect(traced()[0]).toContain('fire failed: provider unreachable')
+
+      // Day 2: the next tick still fires and succeeds.
+      probe.stream = askThenAnswer
+      await vi.advanceTimersByTimeAsync(DAY)
+      expect(probe.runs).toHaveLength(2)
+      expect(traced()).toHaveLength(2)
+      expect(traced()[1]).toContain('fire ok')
+
+      // Day 3: the SDK reports the failure as an error chunk instead of throwing.
+      probe.stream = async function* () {
+        yield { type: 'error', errorText: 'rate limited' }
+      }
+      await vi.advanceTimersByTimeAsync(DAY)
+      expect(probe.runs).toHaveLength(3)
+      expect(handlerErrors()).toHaveLength(2)
+      expect(handlerErrors()[1]).toContain('rate limited')
+      expect(traced()).toHaveLength(3)
+      expect(traced()[2]).toContain('fire failed:')
+
+      // Day 4: the provider key is missing, so the run never reaches the stream.
+      probe.stream = askThenAnswer
+      delete process.env.OPENROUTER_API_KEY
+      await vi.advanceTimersByTimeAsync(DAY)
+      expect(probe.runs).toHaveLength(3)
+      expect(handlerErrors()).toHaveLength(3)
+      expect(handlerErrors()[2]).toContain('OPENROUTER_API_KEY is not set')
+      expect(traced()).toHaveLength(4)
+      expect(traced()[3]).toContain('fire failed:')
+
+      // Day 5: with the key back, the next tick runs again.
+      process.env.OPENROUTER_API_KEY = 'test-key'
+      await vi.advanceTimersByTimeAsync(DAY)
+      expect(probe.runs).toHaveLength(4)
+      expect(traced()).toHaveLength(5)
+      expect(traced()[4]).toContain('fire ok')
+    } finally {
+      scheduler.stop()
+    }
   })
 
   it('test_a_generated_schedule_imports_only_what_the_scaffold_declares', async () => {
