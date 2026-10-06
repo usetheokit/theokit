@@ -107,6 +107,27 @@ function agentTextChunk(params: unknown, sessionId: string): string | undefined 
 }
 
 /**
+ * Send one step of the turn. A refusal rejects with an error naming the method, keeping the
+ * agent's error as `cause`, so the caller learns which step failed and nothing later is sent.
+ */
+async function step(client: AcpClient, method: string, params: unknown): Promise<unknown> {
+  try {
+    return await client.request(method, params)
+  } catch (cause) {
+    const reason = cause instanceof Error ? cause.message : String(cause)
+    throw new Error(`[theokit] createACPTool: the agent refused ${method}: ${reason}`, { cause })
+  }
+}
+
+/** The `sessionId` a `session/new` result carries; a result without one is a refusal. */
+function sessionIdOf(created: unknown): string {
+  if (isRecord(created) && typeof created.sessionId === 'string') return created.sessionId
+  throw new Error(
+    `[theokit] createACPTool: the agent refused session/new: returned no sessionId (got ${JSON.stringify(created)})`,
+  )
+}
+
+/**
  * Run one ACP turn: handshake, prompt, and the reply text streamed for the session. Updates are
  * buffered as they arrive (before `session/prompt` resolves) and filtered by the session after.
  */
@@ -115,15 +136,12 @@ async function runTurn(client: AcpClient, cwd: string, message: string): Promise
   client.onNotification('session/update', (params) => {
     updates.push(params)
   })
-  await client.request('initialize', {
+  await step(client, 'initialize', {
     protocolVersion: ACP_PROTOCOL_VERSION,
     clientCapabilities: {},
   })
-  const created = await client.request('session/new', { cwd, mcpServers: [] })
-  const sessionId =
-    isRecord(created) && typeof created.sessionId === 'string' ? created.sessionId : undefined
-  await client.request('session/prompt', { sessionId, prompt: [{ type: 'text', text: message }] })
-  if (sessionId === undefined) return ''
+  const sessionId = sessionIdOf(await step(client, 'session/new', { cwd, mcpServers: [] }))
+  await step(client, 'session/prompt', { sessionId, prompt: [{ type: 'text', text: message }] })
   const texts = updates.map((params) => agentTextChunk(params, sessionId))
   return texts.filter((text): text is string => text !== undefined).join('')
 }

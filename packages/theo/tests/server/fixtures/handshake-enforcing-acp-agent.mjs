@@ -12,6 +12,9 @@ import { createInterface } from 'node:readline'
 
 let initialized = false
 const sessions = new Set()
+// `--refuse=<method>` makes the agent answer that method with an error that does not name it, so
+// a caller can only report which step failed by adding the method itself.
+const refused = process.argv.find((arg) => arg.startsWith('--refuse='))?.slice('--refuse='.length)
 
 function send(message) {
   process.stdout.write(`${JSON.stringify({ jsonrpc: '2.0', ...message })}\n`)
@@ -22,6 +25,7 @@ function fail(id, code, message) {
 }
 
 function onRequest({ id, method, params }) {
+  if (method === refused) return fail(id, -32602, 'invalid params')
   if (method === 'initialize') {
     if (typeof params?.protocolVersion !== 'number') {
       return fail(id, -32602, 'initialize requires a numeric protocolVersion')

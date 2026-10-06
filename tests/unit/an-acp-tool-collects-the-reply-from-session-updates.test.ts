@@ -251,4 +251,19 @@ describe('createACPTool collects the reply from session updates', () => {
     expect(agents.map((a) => a.sent)).toEqual([HANDSHAKE, HANDSHAKE])
     expect(outputs).toEqual(['echo:a', 'echo:b'])
   })
+
+  it('test_a_session_new_without_a_session_id_rejects', async () => {
+    const agent = scriptedAgent({ sessionNewResult: {} })
+    let failure: unknown
+    try {
+      await toolFor(() => agent.transport).handler({ message: 'hi' })
+    } catch (err) {
+      failure = err
+    }
+
+    expect(agent.sent).toEqual(['initialize', 'session/new'])
+    expect(failure).toBeInstanceOf(Error)
+    expect((failure as Error).message).toMatch(/session\/new/)
+    expect((failure as Error).message).toMatch(/sessionId/)
+  })
 })
