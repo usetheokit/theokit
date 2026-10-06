@@ -203,3 +203,40 @@ describe('the canonical names are the objective’s own', () => {
     expect(names).toEqual(declared)
   })
 })
+
+describe('the committed map answers for every pillar', () => {
+  const COMMITTED_MAP = join(ROOT, 'docs/program/pillar-map.json')
+  const SUMMARY = /^\d+ of 33 pillars (not proven|proven or out)$/m
+
+  it('the committed map names every pillar exactly once', () => {
+    // Throws, and so fails, while the map is absent.
+    const map = JSON.parse(readFileSync(COMMITTED_MAP, 'utf8')) as { pillars: Row[] }
+    const out = run([])
+
+    expect(out.status).toBe(map.pillars.every((row) => row.status === 'out') ? 0 : 1)
+    expect(out.stdout).toMatch(SUMMARY)
+    expect(out.stdout).not.toMatch(/no row|rows$|unknown pillar/m)
+  })
+
+  it('the committed map fails only on pending rows or missing runs', () => {
+    const out = run([])
+    const lines = out.stdout.split('\n').filter((line) => line !== '' && !SUMMARY.test(line))
+
+    expect(out.status).toBe(1)
+    expect(out.stdout).toMatch(/^\d+ of 33 pillars not proven$/m)
+    expect(lines.length).toBeGreaterThan(0)
+    expect(
+      lines.filter(
+        (line) => !/: (pending|no recorded passing run|last recorded run is \w+)$/.test(line),
+      ),
+    ).toEqual([])
+  })
+
+  it('the root package exposes check:pillars', () => {
+    const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')) as {
+      scripts: Record<string, string>
+    }
+
+    expect(pkg.scripts['check:pillars']).toBe('node scripts/check-pillar-map.mjs')
+  })
+})
