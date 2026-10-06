@@ -1,6 +1,8 @@
-import { readFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 
 import { checkLedger } from './check-parity-ledger.mjs'
 
@@ -121,7 +123,143 @@ describe('check-parity-ledger: the id set', () => {
       'y',
     ])
     const source = readFileSync(fileURLToPath(new URL('./check-parity-ledger.mjs', import.meta.url)), 'utf8')
+    expect(collect(source).length).toBeGreaterThan(0)
     expect(collect(source).filter((s) => !/^node:(fs|path|url)$/.test(s))).toEqual([])
     expect(source).not.toMatch(/child_process|node:https?|\bfetch\(/)
+  })
+})
+
+const tempRoots = []
+afterEach(() => {
+  for (const root of tempRoots.splice(0)) rmSync(root, { recursive: true, force: true })
+})
+
+function tempRepo(files = {}) {
+  const root = mkdtempSync(join(tmpdir(), 'parity-repo-'))
+  tempRoots.push(root)
+  for (const [path, content] of Object.entries(files)) {
+    mkdirSync(dirname(join(root, path)), { recursive: true })
+    writeFileSync(join(root, path), content)
+  }
+  return root
+}
+
+function shipped(id, path, test = `proves ${id}`, verified_on = TODAY) {
+  return { id, status: 'shipped', check: { path, test }, verified_on }
+}
+
+function judge(entries, repoRoot) {
+  const byId = new Map(entries.map((entry) => [entry.id, entry]))
+  const ledger = [...ALL_IDS.filter((id) => !byId.has(id)).map(validOut), ...entries]
+  return run(ledger, repoRoot === undefined ? {} : { repoRoot })
+}
+
+const dayAfter = (iso) => new Date(Date.parse(`${iso}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10)
+
+describe('check-parity-ledger: each entry answer', () => {
+  it('fails on an entry with neither a check nor a reason', () => {
+    const result = judge([{ id: 'OC-1', status: 'open' }])
+    const found = rulesOf(result, 'OC-1')
+    expect(found).toEqual(['open'])
+  })
+
+  it('fails on a shipped entry whose check path leaves the repository', () => {
+    const root = tempRepo()
+    const result = judge([shipped('OC-1', '../outside.test.ts')], root)
+    expect(rulesOf(result, 'OC-1')).toContain('check-outside-repo')
+  })
+
+  it('fails on a shipped entry whose check path does not exist', () => {
+    const root = tempRepo()
+    const result = judge([shipped('OC-1', 'tests/e2e/absent.test.ts')], root)
+    expect(rulesOf(result, 'OC-1')).toContain('check-missing')
+  })
+
+  it('fails on a shipped entry whose check file does not contain the named test', () => {
+    const root = tempRepo({ 'tests/e2e/proof.test.ts': "it('proves something else', () => {})\n" })
+    const result = judge([shipped('OC-1', 'tests/e2e/proof.test.ts')], root)
+    expect(rulesOf(result, 'OC-1')).toContain('check-test-absent')
+  })
+
+  it('fails on an out entry not declared by a human', () => {
+    const result = judge([{ ...validOut('OC-11'), declared_by: 'judge/alignment-judge' }])
+    expect(rulesOf(result, 'OC-11')).toContain('declarer-not-human')
+  })
+
+  it('fails on Hermes row 7 while it carries no decision', () => {
+    const open = judge([{ id: 'H-7', status: 'open' }])
+    expect(open.violations.map((v) => v.id)).toContain('H-7')
+    expect(rulesOf(open, 'H-7')).toEqual(['open'])
+    const byAgent = judge([{ ...validOut('H-7'), declared_by: 'judge/alignment-judge' }])
+    expect(byAgent.violations.map((v) => v.id)).toContain('H-7')
+    expect(rulesOf(byAgent, 'H-7')).toEqual(['declarer-not-human'])
+  })
+
+  it('fails on a shipped entry whose check path is a symlink leaving the repository', () => {
+    const elsewhere = tempRepo({ 'proof.test.ts': "it('proves OC-1', () => {})\n" })
+    const root = tempRepo()
+    mkdirSync(join(root, 'tests'), { recursive: true })
+    symlinkSync(join(elsewhere, 'proof.test.ts'), join(root, 'tests/link.test.ts'))
+    const result = judge([shipped('OC-1', 'tests/link.test.ts')], root)
+    expect(rulesOf(result, 'OC-1')).toContain('check-outside-repo')
+  })
+
+  it('fails on a shipped entry whose check path is a directory', () => {
+    const root = tempRepo({ 'tests/keep.txt': 'x' })
+    const result = judge([shipped('OC-1', 'tests')], root)
+    expect(rulesOf(result, 'OC-1')).toContain('check-missing')
+  })
+
+  it('fails on a shipped entry with an empty test name', () => {
+    const root = tempRepo({ 'tests/e2e/proof.test.ts': "it('proves OC-1', () => {})\n" })
+    const result = judge([shipped('OC-1', 'tests/e2e/proof.test.ts', '  ')], root)
+    expect(rulesOf(result, 'OC-1')).toContain('check-test-absent')
+  })
+
+  it('accepts verified_on today and refuses a later or impossible date', () => {
+    const root = tempRepo({ 'tests/e2e/proof.test.ts': "it('proves OC-1', () => {})\n" })
+    const path = 'tests/e2e/proof.test.ts'
+    expect(rulesOf(judge([shipped('OC-1', path, 'proves OC-1', TODAY)], root), 'OC-1')).toEqual([])
+    for (const date of [dayAfter(TODAY), '2026-02-30', '2026-13-01', '2026-01-32']) {
+      expect(rulesOf(judge([shipped('OC-1', path, 'proves OC-1', date)], root), 'OC-1')).toContain('verified-on')
+    }
+    for (const date of ['2026-02-30', '2026-13-01', '2026-01-32']) {
+      expect(rulesOf(judge([{ ...validOut('OC-11'), declared_on: date }]), 'OC-11')).toContain('declared-on')
+    }
+    expect(rulesOf(judge([{ ...validOut('OC-11'), declared_on: dayAfter(TODAY) }]), 'OC-11')).toEqual([])
+  })
+
+  it('fails on an entry whose status is not open, shipped or out', () => {
+    const result = judge([{ id: 'OC-1', status: 'banana' }])
+    expect(rulesOf(result, 'OC-1')).toEqual(['unknown-status'])
+  })
+
+  it('judges an extra entry as well as reporting it extra', () => {
+    const result = run([...ALL_IDS.map(validOut), { id: 'OC-999', status: 'banana' }])
+    expect(rulesOf(result, 'OC-999').sort()).toEqual(['extra', 'unknown-status'])
+  })
+
+  it('reports an unreadable cited test file as a violation and keeps going', () => {
+    const root = tempRepo()
+    const result = judge([shipped('OC-1', 'tests/a\u0000b.test.ts'), { id: 'OC-2', status: 'open' }], root)
+    expect(rulesOf(result, 'OC-1')).toEqual(['check-unreadable'])
+    expect(rulesOf(result, 'OC-2')).toEqual(['open'])
+  })
+
+  it('accepts a check path whose first segment only starts with two dots', () => {
+    const root = tempRepo({ '..proof/valid.test.ts': "it('proves OC-1', () => {})\nit('proves OC-2', () => {})\n" })
+    const result = judge(
+      [shipped('OC-1', '..proof/valid.test.ts'), shipped('OC-2', '../proof/valid.test.ts')],
+      root,
+    )
+    expect(rulesOf(result, 'OC-1')).toEqual([])
+    expect(rulesOf(result, 'OC-2')).toContain('check-outside-repo')
+  })
+
+  it('accepts an 8-word reason and refuses a 7-word one', () => {
+    const eight = { ...validOut('OC-11'), reason: 'one two three four five six seven eight' }
+    expect(rulesOf(judge([eight]), 'OC-11')).toEqual([])
+    const seven = { ...validOut('OC-11'), reason: 'one two three four five six seven' }
+    expect(rulesOf(judge([seven]), 'OC-11')).toContain('reason-short')
   })
 })

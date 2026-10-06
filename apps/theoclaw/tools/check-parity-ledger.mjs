@@ -10,6 +10,8 @@
  *
  * Every rule runs on every entry and nothing returns early: one run reports every violation.
  */
+import { readFileSync, realpathSync, statSync } from 'node:fs'
+import { isAbsolute, relative, resolve, sep } from 'node:path'
 
 export const INVENTORY_PATH = '.squad/wiki/references/openclaw-capability-inventory.md'
 export const HERMES_PATH = '.squad/wiki/product/objectives.md'
@@ -105,8 +107,98 @@ function repeated(ids) {
   return [...twice]
 }
 
+const HUMAN_DECLARER = /^human\/[A-Za-z0-9][A-Za-z0-9._-]*$/
+const MIN_REASON_WORDS = 8
+
+/**
+ * True for a real calendar date written `YYYY-MM-DD`. Never throws: `Number.isFinite` is checked
+ * before `toISOString`, which throws `RangeError` on `2026-13-01`; the round trip rejects a date
+ * JavaScript would normalise, such as `2026-02-30`.
+ */
+function isIsoDate(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+  const time = Date.parse(`${value}T00:00:00Z`)
+  return Number.isFinite(time) && new Date(time).toISOString().slice(0, 10) === value
+}
+
+/** EC-5: a blank test name proves nothing, so the file is not read for it. */
+const hasTestName = (check) => typeof check.test === 'string' && check.test.trim() !== ''
+
+/** Outside when the relative path is empty, absolute, or its FIRST segment is exactly `..`. */
+function leavesRoot(root, target) {
+  const rel = relative(root, target)
+  return rel === '' || isAbsolute(rel) || rel.split(sep)[0] === '..'
+}
+
+/** The violations of the cited test file, or `[]` when it is a regular file inside the root holding the test. */
+function judgeCheckFile(id, check, repoRoot) {
+  if (typeof check?.path !== 'string') return [{ id, rule: 'check-missing', detail: 'no check.path' }]
+  const target = resolve(repoRoot, check.path)
+  if (leavesRoot(repoRoot, target)) {
+    return [{ id, rule: 'check-outside-repo', detail: check.path }]
+  }
+  try {
+    if (leavesRoot(realpathSync(repoRoot), realpathSync(target))) {
+      return [{ id, rule: 'check-outside-repo', detail: `${check.path} resolves outside the repository` }]
+    }
+    if (!statSync(target).isFile()) return [{ id, rule: 'check-missing', detail: `${check.path} is not a file` }]
+    if (!hasTestName(check) || readFileSync(target, 'utf8').includes(check.test)) return []
+    return [{ id, rule: 'check-test-absent', detail: `${check.path} does not contain "${check.test}"` }]
+  } catch (error) {
+    if (error.code === 'ENOENT' || error.code === 'ENOTDIR') {
+      return [{ id, rule: 'check-missing', detail: check.path }]
+    }
+    return [{ id, rule: 'check-unreadable', detail: `${error.code ?? error.name} on ${JSON.stringify(check.path)}` }]
+  }
+}
+
+function judgeShipped(entry, repoRoot, today) {
+  const { id, check } = entry
+  const violations = judgeCheckFile(id, check, repoRoot)
+  if (!hasTestName(check ?? {})) violations.push({ id, rule: 'check-test-absent', detail: 'check.test is empty' })
+  if (!isIsoDate(entry.verified_on) || entry.verified_on > today) {
+    violations.push({ id, rule: 'verified-on', detail: String(entry.verified_on) })
+  }
+  return violations
+}
+
+/** An `out` answer: a reason of 8 words or more, a person as declarer, a real date (no future rule, FR-005). */
+function judgeOut(entry) {
+  const { id } = entry
+  const violations = []
+  const words = typeof entry.reason === 'string' ? entry.reason.trim().split(/\s+/).filter(Boolean).length : 0
+  if (words < MIN_REASON_WORDS) {
+    violations.push({ id, rule: 'reason-short', detail: `${words} words, at least ${MIN_REASON_WORDS} required` })
+  }
+  if (typeof entry.declared_by !== 'string' || !HUMAN_DECLARER.test(entry.declared_by)) {
+    violations.push({ id, rule: 'declarer-not-human', detail: String(entry.declared_by) })
+  }
+  if (!isIsoDate(entry.declared_on)) violations.push({ id, rule: 'declared-on', detail: String(entry.declared_on) })
+  return violations
+}
+
+/** The violations of one entry's answer, whatever its id. */
+function judgeEntry(entry, repoRoot, today) {
+  switch (entry.status) {
+    case 'open':
+      return [{ id: entry.id, rule: 'open', detail: 'no check and no reason' }]
+    case 'shipped':
+      return judgeShipped(entry, repoRoot, today)
+    case 'out':
+      return judgeOut(entry)
+    default:
+      return [{ id: entry.id, rule: 'unknown-status', detail: String(entry.status) }]
+  }
+}
+
 /** Every violation of the ledger against the two sources, and the counts of its statuses. */
-export function checkLedger({ inventoryText, hermesText, ledgerText }) {
+export function checkLedger({ inventoryText, hermesText, ledgerText, repoRoot, today }) {
+  // Caller contract, not ledger content: without them a cited path cannot be resolved and a
+  // future verified_on compares false against undefined, so the rule would pass in silence.
+  if (typeof repoRoot !== 'string' || !isAbsolute(repoRoot)) {
+    throw new TypeError(`checkLedger: repoRoot must be an absolute path, got ${JSON.stringify(repoRoot)}`)
+  }
+  if (!isIsoDate(today)) throw new TypeError(`checkLedger: today must be a YYYY-MM-DD date, got ${JSON.stringify(today)}`)
   const violations = []
   const ledger = parseLedger(ledgerText, violations)
   const inventory = readSource(inventoryText, parseInventoryIds, INVENTORY_FLOOR, INVENTORY_PATH, violations)
@@ -128,6 +220,8 @@ export function checkLedger({ inventoryText, hermesText, ledgerText }) {
       }
     }
   }
+
+  for (const entry of entries) violations.push(...judgeEntry(entry, repoRoot, today))
 
   const counts = { shipped: 0, out: 0, open: 0 }
   for (const entry of entries) {
