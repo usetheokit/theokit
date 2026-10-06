@@ -14,7 +14,12 @@
  *
  * - `out`: counted, with a `reason` of 8 words or more.
  * - `pending`: always fails.
- * - `proven`: fails until a recorded passing run is found for it.
+ * - `proven`: names `app`, a test `file` in a `tests/live/` directory of `apps/theoclaw` or
+ *   `apps/theocode`, and the vitest `fullName` of the test. It counts only when the newest run of
+ *   that file, in the vitest JSON reports passed with `--results`, records the assertion as
+ *   `passed`. A skip is not a pass: the live tests skip when no model server answers. A title
+ *   written as a template literal with `${` cannot be found in the file, so such a row fails
+ *   closed.
  *
  * ## Exit codes
  *
@@ -23,8 +28,8 @@
  * unexpected error is 2 as well: Node's default of 1 would read as "pillars failing" when the truth
  * is that nothing was checked.
  */
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { existsSync, readFileSync } from 'node:fs'
+import { isAbsolute, posix, resolve } from 'node:path'
 
 const ROOT = resolve(import.meta.dirname, '..')
 const DEFAULT_MAP = resolve(ROOT, 'docs/program/pillar-map.json')
@@ -99,20 +104,104 @@ function wordCount(text) {
   return text.trim().split(/\s+/).filter(Boolean).length
 }
 
+/** `apps/<app>/.../tests/live/<name>.test.ts(x)`: where a live proof test lives (D6). */
+const LIVE_PROOF_PATH = /^apps\/(theoclaw|theocode)\/(.+\/)?tests\/live\/[^/]+\.test\.tsx?$/
+
+/**
+ * Test titles declared with a literal: `it('...')`, `test.skip("...")`, `it.concurrent(`...`)`. A
+ * template literal with `${` is not a fixed title and is not returned, so its row fails closed.
+ */
+const TITLE = /\b(?:it|test)(?:\.(?:skip|only|concurrent))*\(\s*(['"`])((?:(?!\1)[^\\]|\\.)*?)\1/g
+
+function isLiveProofPath(file) {
+  return (
+    typeof file === 'string' &&
+    !isAbsolute(file) &&
+    !file.split('/').includes('..') &&
+    posix.normalize(file) === file &&
+    LIVE_PROOF_PATH.test(file)
+  )
+}
+
+function extractTitles(source) {
+  return [...source.matchAll(TITLE)].map((m) => m[2]).filter((title) => !title.includes('${'))
+}
+
+/** Every file record of every report, read once. */
+function loadReports(paths) {
+  return paths.flatMap((path) => {
+    const report = loadJson(path)
+    if (!Array.isArray(report?.testResults)) {
+      throw new UnreadableInput(`cannot read ${path}: "testResults" is not an array`)
+    }
+    // A record with no file name cannot be matched to any row, so skipping it could hide a newer
+    // failed run. The report is malformed, which is exit 2, not a row that silently passes.
+    const unnamed = report.testResults.findIndex((record) => typeof record?.name !== 'string')
+    if (unnamed !== -1) {
+      throw new UnreadableInput(`cannot read ${path}: testResults[${unnamed}] has no file name`)
+    }
+    return report.testResults
+  })
+}
+
+/**
+ * The newest run of the row's file decides (D1): the file records are selected FIRST, by the
+ * largest `startTime`, and only then searched for the assertion, so a newer run that failed to
+ * collect outranks an older pass. Every record tied on that time must hold the passed assertion.
+ */
+function newestRunProblem(row, records) {
+  const ofFile = records.filter((record) =>
+    record.name.replaceAll('\\', '/').endsWith(`/${row.file}`),
+  )
+  if (ofFile.length === 0) return 'no recorded passing run'
+  // A run with no numeric time cannot be ordered against the others, so nobody can say it is not
+  // the newest. Failing the row is the only answer that does not guess.
+  if (ofFile.some((record) => !Number.isFinite(record.startTime))) {
+    return 'a recorded run of the file has no start time'
+  }
+  const newest = ofFile.reduce((max, record) => Math.max(max, record.startTime), -Infinity)
+  for (const record of ofFile.filter((r) => r.startTime === newest)) {
+    const assertions = Array.isArray(record.assertionResults) ? record.assertionResults : []
+    // vitest accepts two tests with the same title; every one of them must have passed.
+    const matching = assertions.filter((a) => a?.fullName === row.fullName)
+    if (matching.length === 0) return 'newest run of the file has no result for this test'
+    const notPassed = matching.find((a) => a.status !== 'passed')
+    if (notPassed) return `last recorded run is ${notPassed.status}`
+  }
+  return null
+}
+
+function provenRowProblem(row, records) {
+  if (!isLiveProofPath(row.file)) {
+    return 'file must sit under apps/theoclaw or apps/theocode in a tests/live directory'
+  }
+  if (row.app !== row.file.split('/')[1]) {
+    return `app ${JSON.stringify(row.app)} does not match file`
+  }
+  const absolute = resolve(ROOT, row.file)
+  if (!existsSync(absolute)) return 'file does not exist'
+  const titles = extractTitles(readFileSync(absolute, 'utf8'))
+  const fullName = typeof row.fullName === 'string' ? row.fullName : ''
+  if (!titles.some((t) => fullName === t || fullName.endsWith(` ${t}`))) {
+    return 'title not found in file'
+  }
+  return newestRunProblem(row, records)
+}
+
 /** The reason a single row does not answer for its pillar, or null when it does. */
-function rowProblem(row) {
+function rowProblem(row, records) {
   if (row.status === 'pending') return 'pending'
   if (row.status === 'out') {
     if (typeof row.reason !== 'string') return 'out row has no reason'
     const words = wordCount(row.reason)
     return words >= MIN_REASON_WORDS ? null : `reason has ${words} words, needs ${MIN_REASON_WORDS}`
   }
-  if (row.status === 'proven') return 'no recorded passing run'
+  if (row.status === 'proven') return provenRowProblem(row, records)
   return `unknown status ${JSON.stringify(row.status)}`
 }
 
 /** Returns `{ lines, failing }`: one line per failing pillar, and the count of failing pillars. */
-function checkRows(rows) {
+function checkRows(rows, records) {
   const byName = new Map()
   const unknown = []
   rows.forEach((row, index) => {
@@ -128,7 +217,7 @@ function checkRows(rows) {
     let problem
     if (list.length === 0) problem = 'no row'
     else if (list.length > 1) problem = `${list.length} rows`
-    else problem = rowProblem(list[0])
+    else problem = rowProblem(list[0], records)
     if (problem) lines.push(`${name}: ${problem}`)
   }
   return { lines: [...lines, ...unknown], failing: lines.length }
@@ -145,9 +234,9 @@ function main() {
   if (!Array.isArray(map?.pillars)) {
     throw new UnreadableInput(`cannot read ${args.map}: "pillars" is not an array`)
   }
-  for (const path of args.results) loadJson(path)
+  const records = loadReports(args.results)
 
-  const { lines, failing } = checkRows(map.pillars)
+  const { lines, failing } = checkRows(map.pillars, records)
   for (const line of lines) console.log(line)
   if (lines.length === 0) {
     console.log(`${PILLARS.length} of ${PILLARS.length} pillars proven or out`)
