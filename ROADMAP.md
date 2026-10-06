@@ -1,6 +1,6 @@
 # ROADMAP — framework surface parity
 
-Sixteen milestones, one per framework surface. Each surface is a `*-specialist` skill under
+Sixteen milestones, one per framework surface, plus delivery milestones (M17 onward) that close a sprint. Each surface is a `*-specialist` skill under
 `.claude/skills/`; a milestone closes when the published packages meet that surface's contract and
 `/acceptance` says so against the released artifact.
 
@@ -618,6 +618,29 @@ exists.
 - [ ] Applies to: Web, Tauri, TUI — each listed target is exercised in acceptance, not merely declared
 - [ ] Tauri: *not applicable while deprioritized* — a desktop shell composes no zones today
 - [ ] TUI: *not applicable* — there is no origin behind which to compose
+
+### M17 — [ ] theoclaw-first-channel
+
+**Surface:** not a framework surface. This milestone closes sprint S-001 (opened by human/paulo on 2026-10-06), whose goal is that the framework's audited defects are closed and TheoClaw answers a real person on a channel that already exists, with every answer recorded in the parity ledger. Its release is the sprint's single final cut.
+**Dependencies:** none.
+
+**Band: delivery milestone.** It is graded by the same rule as every other milestone: `/acceptance` against the released packages and the released TheoClaw, never the working tree.
+
+**Definition of done (all must hold):**
+
+- [ ] TheoClaw replies to a real account on each of the ten existing gateway platforms, e-mail included, and with one platform's token revoked the other platforms still start and reply (B-369)
+- [ ] `@theokit/gateway-teams` from the published registry refuses a forged or unsigned inbound activity with a typed refusal and accepts a genuine one, called from a plain `Request` handler (B-420)
+- [ ] `@theokit/gateway-whatsapp` from the published registry turns a Cloud API webhook into a deliverable event with the sender allowlist and the group drop applied, and refuses to verify with an empty app secret (B-421)
+- [ ] the published A2A client completes a call against a served A2A route backed by a real model (B-407)
+- [ ] the published ACP tool sends `initialize`, `session/new` and `session/prompt`, in that order, to a real ACP agent process (B-408)
+- [ ] a run whose next call would exceed `maxCostUsd` stops with a typed error naming the limit and the spend, and a run whose provider reports no cost is not treated as free (B-409, B-419)
+- [ ] `theo generate schedule` in a freshly scaffolded app produces a schedule that runs the chat agent at its time (B-411)
+- [ ] `pnpm --filter theoclaw run parity` lists every one of the 113 OpenClaw and Hermes rows with either a passing end-to-end check or a written reason, and fails on any row that has neither (B-404)
+- [ ] the pillar check fails on a pillar with no passing named end-to-end test and no written reason, and on any import from `apps/` into a package's `src/` (B-416)
+- [ ] the CI job on the last push to `develop` shows a real model response, or states that the provider could not be reached, and no credential value appears in its log (B-415)
+- [ ] Applies to: Web. The changed packages run in the Node server runtime that the published build serves, and acceptance exercises them there
+- [ ] Tauri: not applicable. No desktop surface or sidecar API changes in this milestone; the agents APIs touched are runtime agnostic and are graded in Node
+- [ ] TUI: not applicable. No terminal surface changes in this milestone
 
 ## Programme completion
 
