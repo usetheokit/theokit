@@ -3,8 +3,9 @@
  *
  * Drives a coding agent (Claude Code, Amp, Codex) over an INJECTED {@link AcpTransport}. The
  * subprocess spawn is a Node API and lives in the adapter layer (G8); this client is transport-
- * agnostic and testable. It correlates responses to requests by `id`, and dispatches server→client
- * requests (e.g. `session/request_permission`) to a registered handler, replying with its decision.
+ * agnostic and testable. It correlates responses to requests by `id`, dispatches server→client
+ * requests (e.g. `session/request_permission`) to a registered handler, replying with its decision,
+ * and delivers notifications (a `method` with no `id`, e.g. `session/update`) to their handler.
  */
 import { AcpMessageDecoder, encodeAcpMessage } from './protocol.js'
 
@@ -33,6 +34,8 @@ interface Pending {
 }
 /** Return a value or a Promise — `unknown` already includes `Promise<unknown>`; `await` handles both. */
 type ServerRequestHandler = (params: unknown) => unknown
+/** Called synchronously with a notification's `params`; nothing is sent back. */
+type NotificationHandler = (params: unknown) => void
 
 function isResponse(m: Record<string, unknown>): m is JsonRpcResponse & Record<string, unknown> {
   return typeof m.id === 'number' && ('result' in m || 'error' in m) && !('method' in m)
@@ -42,11 +45,17 @@ function isServerRequest(
 ): m is JsonRpcServerRequest & Record<string, unknown> {
   return typeof m.method === 'string' && typeof m.id === 'number'
 }
+function isNotification(
+  m: Record<string, unknown>,
+): m is { method: string; params?: unknown } & Record<string, unknown> {
+  return typeof m.method === 'string' && !('id' in m)
+}
 
 export class AcpClient {
   private nextId = 1
   private readonly pending = new Map<number, Pending>()
   private readonly handlers = new Map<string, ServerRequestHandler>()
+  private readonly notificationHandlers = new Map<string, NotificationHandler>()
   private readonly decoder = new AcpMessageDecoder()
 
   constructor(private readonly transport: AcpTransport) {
@@ -71,6 +80,15 @@ export class AcpClient {
     this.handlers.set(method, handler)
   }
 
+  /**
+   * Register a handler for a notification method (e.g. `session/update`). A notification with no
+   * handler is ignored. A handler that throws is not caught here: the error reaches the transport,
+   * and the messages after it in the same chunk are not dispatched, so a handler should not throw.
+   */
+  onNotification(method: string, handler: NotificationHandler): void {
+    this.notificationHandlers.set(method, handler)
+  }
+
   private dispatch(message: Record<string, unknown>): void {
     if (isResponse(message)) {
       const entry = this.pending.get(message.id)
@@ -82,6 +100,10 @@ export class AcpClient {
     }
     if (isServerRequest(message)) {
       void this.handleServerRequest(message)
+      return
+    }
+    if (isNotification(message)) {
+      this.notificationHandlers.get(message.method)?.(message.params)
     }
   }
 
