@@ -1,8 +1,21 @@
 import { describe, it, expect } from 'vitest'
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs'
+import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { generate } from '../../packages/theo/src/cli/commands/generate.js'
+import { scanCronDirs } from '../../packages/theo/src/server/cron/cron-scan.js'
+
+const REPO = resolve(__dirname, '../..')
+const SCAFFOLD_CONFIG = resolve(REPO, 'packages/create-theokit/templates/default/theo.config.ts')
 
 /**
  * A project at `<tmp>/app` whose `agentsDir` points outside it, with a real `chat` agent waiting
@@ -47,6 +60,36 @@ describe('a schedule is written only where it can run', () => {
       expect(existsSync(join(tmp, 'app-outside/agents/schedules/daily-digest.ts'))).toBe(false)
     } finally {
       rmSync(tmp, { recursive: true, force: true })
+    }
+  })
+
+  it('test_a_nested_schedule_imports_its_agent', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'theo-gen-schedule-nested-'))
+    try {
+      copyFileSync(SCAFFOLD_CONFIG, join(dir, 'theo.config.ts'))
+      writeFileSync(join(dir, 'package.json'), '{ "type": "module" }\n')
+      mkdirSync(join(dir, 'node_modules/@theokit'), { recursive: true })
+      symlinkSync(resolve(REPO, 'packages/theo'), join(dir, 'node_modules/theokit'), 'dir')
+      symlinkSync(
+        resolve(REPO, 'packages/agents'),
+        join(dir, 'node_modules/@theokit/agents'),
+        'dir',
+      )
+      mkdirSync(join(dir, 'src/server/agents'), { recursive: true })
+      writeFileSync(join(dir, 'src/server/agents/chat.ts'), 'export default {}\n')
+
+      const result = await generate({ cwd: dir, type: 'schedule', name: 'reports/daily' })
+
+      expect(result.status).toBe('created')
+      const source = readFileSync(join(dir, 'src/server/agents/schedules/reports/daily.ts'), 'utf8')
+      expect(source).toMatch(/^import chat from '\.\.\/\.\.\/chat\.js'$/m)
+      const nodes = await scanCronDirs([
+        join(dir, 'src/server/crons'),
+        join(dir, 'src/server/agents/schedules'),
+      ])
+      expect(nodes).toHaveLength(1)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
     }
   })
 })

@@ -9,7 +9,7 @@
  * importing a module that does not exist would make `theokit build` fail on it.
  */
 import { existsSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { dirname, relative, resolve, sep } from 'node:path'
 
 import { loadConfig } from '../../config/load-config.js'
 
@@ -44,31 +44,53 @@ export async function resolveScheduleTarget(
         'A schedule runs the chat agent; create it first.',
     }
   }
-  return {
-    filePath: resolve(agentsRoot, 'schedules', `${name}.ts`),
-    content: generateScheduleTemplate(name),
-  }
+  const filePath = resolve(agentsRoot, 'schedules', `${name}.ts`)
+  return { filePath, content: generateScheduleTemplate(name, importSpecifier(filePath, chatPath)) }
 }
 
-function generateScheduleTemplate(name: string): string {
+/** The ESM specifier the schedule at `fromFile` uses to import `toFile` (`../chat.js`). */
+function importSpecifier(fromFile: string, toFile: string): string {
+  const path = relative(dirname(fromFile), toFile)
+    .split(sep)
+    .join('/')
+    .replace(/\.(ts|tsx|js)$/, '.js')
+  return path.startsWith('.') ? path : `./${path}`
+}
+
+function generateScheduleTemplate(name: string, chatSpecifier: string): string {
   const base = name.split('/').pop() ?? name
   return [
     `import { defineCron } from 'theokit/server/cron'`,
+    `import { resolveProvider } from 'theokit/server/agent'`,
+    `import { streamAgentTurnInProcess } from '@theokit/agents'`,
+    ``,
+    `import chat from '${chatSpecifier}'`,
     ``,
     `/**`,
-    ` * A scheduled agent run — a first-class TheoKit cron. \`theokit build\` discovers it automatically and`,
-    ` * translates the schedule to your deploy target's native cron (Vercel / Cloudflare / AWS). No manual`,
-    ` * scheduler to start. The handler is where you invoke your agent — POST to \`/api/agents/chat\`, or use`,
-    ` * \`@theokit/sdk\`'s \`Agent\` with the same model + system prompt as \`agents/chat.ts\`.`,
+    ` * A scheduled agent run, a first-class TheoKit cron. \`theokit build\` discovers it and translates the`,
+    ` * schedule to your deploy target's native cron; \`theokit start\` runs it in-process.`,
+    ` *`,
+    ` * Each fire is one model run of your \`chat\` agent, so it spends tokens. Nobody is present to approve`,
+    ` * a gated tool, so the run uses the \`auto-reject\` posture: every approval is answered "no" and the`,
+    ` * gated tool does not run.`,
     ` *`,
     ` * Schedules are UTC (https://crontab.guru). \`signal\` aborts when the scheduler stops.`,
     ` */`,
     `export default defineCron('${base}', {`,
     `  schedule: '0 9 * * *', // every day at 09:00 UTC`,
     `  async handler({ traceId, scheduledAt, signal }) {`,
-    `    void signal`,
-    `    // Invoke your agent here — e.g. fetch your own \`/api/agents/chat\` endpoint, or call the SDK Agent.`,
-    `    console.log(\`[${base}] fired at \${scheduledAt.toISOString()} (trace \${traceId})\`)`,
+    `    const agent = chat as { model?: string; plugins?: readonly unknown[] }`,
+    `    const { apiKey } = resolveProvider(agent.model, { plugins: agent.plugins })`,
+    `    const run = streamAgentTurnInProcess(chat, apiKey, {`,
+    `      message: \`Scheduled run "${base}" at \${scheduledAt.toISOString()}\`,`,
+    `      signal,`,
+    `      approvals: {`,
+    `        kind: 'auto-reject',`,
+    `        reason: 'unattended schedule "${base}": nobody is present to approve',`,
+    `      },`,
+    `    })`,
+    `    for await (const chunk of run) void chunk`,
+    `    console.log(\`[${base}] fire ok at \${scheduledAt.toISOString()} (trace \${traceId})\`)`,
     `  },`,
     `})`,
     ``,
