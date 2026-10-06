@@ -8,16 +8,31 @@
  * **Only rules that can fire are declared here.** The golden rule caps a vacuous
  * architecture rule at FAIL_HARD alongside a violated one, and for good reason: a rule
  * naming a directory that does not exist passes green forever and reads as protection.
- * The first rule below was proven to arm by a deliberate violation; the second names a directory
+ * `proof-imports-only-published-entry-points` is armed by deliberate violations that a test runs
+ * on every suite run (B-416). `production-must-not-import-tests` was proven to arm by a deliberate
+ * violation; `composition-root-is-the-top-layer` names a directory
  * that exists and has an EMPTY source set today, because `src/` holds one file and the rule's own
  * negative lookahead excludes it. It arms — proven under a second importer in a throwaway tree —
  * and it cannot fire here until `src/` has a second file. Stated because this file's whole premise
- * is that a rule which cannot fire is the hazard, and an earlier draft of this line claimed both
- * had fired.
- * before being committed.
+ * is that a rule which cannot fire is the hazard, and an earlier draft of this line claimed the
+ * two older rules had both fired.
  */
 module.exports = {
   forbidden: [
+    {
+      // REQ-15, B-416: a proof exercises the framework through what a consumer can reach, so an
+      // import, from source or test, that resolves into a package's `src/` proves nothing. The
+      // `from.pathNot` keeps the framework's own internal edges out: without it one violating
+      // import reported 139 errors, because the cruise follows into `packages/agents/src`. Armed by
+      // `tests/unit/a-proof-import-into-a-package-src-fails-the-boundary-check.test.ts`.
+      name: 'proof-imports-only-published-entry-points',
+      severity: 'error',
+      comment:
+        'A proof imports a theokit package only through its published entry points (the exports ' +
+        'map, which points into dist). Reaching into src tests code no consumer can import.',
+      from: { pathNot: '^(\\.\\./\\.\\./packages|node_modules)/' },
+      to: { path: '^(\\.\\./\\.\\./packages|node_modules/@theokit)/[^/]+/src/' },
+    },
     {
       name: 'production-must-not-import-tests',
       severity: 'error',
@@ -41,6 +56,8 @@ module.exports = {
   options: {
     doNotFollow: { path: 'node_modules' },
     tsConfig: { fileName: 'tsconfig.json' },
-    exclude: { path: 'node_modules|dist' },
+    // Whole path segments only: a substring match also dropped app files such as
+    // `distribution.ts` from the cruise, and every rule then passed them unread (B-416).
+    exclude: { path: '(^|/)(node_modules|dist)/' },
   },
 }
