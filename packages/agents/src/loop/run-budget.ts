@@ -9,7 +9,17 @@
  *
  * Kept out of `run-reflective-loop.ts`, which is already past the file-size budget.
  */
-import { DelegationBudgetExceededError } from '../bridge/delegation-types.js'
+import {
+  DelegationBudgetCostUnknownError,
+  DelegationBudgetExceededError,
+} from '../bridge/delegation-types.js'
+
+/** What the refusal reads from the last completed round. */
+interface LastRound {
+  readonly cost: number
+  /** False when the round reported no finite cost, or reported no `done` at all. */
+  readonly costKnown: boolean
+}
 
 /**
  * The refusal to raise before the next round, or `undefined` when the next round is affordable.
@@ -20,14 +30,17 @@ import { DelegationBudgetExceededError } from '../bridge/delegation-types.js'
  */
 function refuseNextRound(
   spent: number,
-  lastRoundCost: number,
+  lastRound: LastRound,
   ceiling: number,
   agentName: string,
 ): DelegationBudgetExceededError | undefined {
   if (!Number.isFinite(ceiling)) return undefined
-  if (spent + lastRoundCost > ceiling) {
+  // An unpriced round cannot be projected from, and reading it as free is how a ceiling stops
+  // being enforced: with a ceiling set, stop (fail closed). Checked before the projection.
+  if (!lastRound.costKnown) return new DelegationBudgetCostUnknownError(agentName, spent, ceiling)
+  if (spent + lastRound.cost > ceiling) {
     return new DelegationBudgetExceededError(agentName, spent, ceiling, {
-      projectedRoundCost: lastRoundCost,
+      projectedRoundCost: lastRound.cost,
     })
   }
   return undefined
@@ -41,12 +54,12 @@ function refuseNextRound(
  */
 export function throwIfNextRoundRefused(
   spent: number,
-  lastRoundCost: number,
+  lastRound: LastRound,
   ceiling: number,
   agentName: string,
   signal: AbortSignal | undefined,
 ): void {
   if (signal?.aborted) return
-  const refusal = refuseNextRound(spent, lastRoundCost, ceiling, agentName)
+  const refusal = refuseNextRound(spent, lastRound, ceiling, agentName)
   if (refusal) throw refusal
 }

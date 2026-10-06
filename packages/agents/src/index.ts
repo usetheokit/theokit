@@ -272,7 +272,10 @@ export type { RuntimeOverrides } from './bridge/sdk-adapter.js'
 // the same referential identity as always, zero breakage for anyone on `^4.25`. The SDK class
 // crosses under a name that does not collide, closing the original gap without reusing anybody's
 // name: "enriching never reduces" (M73) also means not redefining what a name means.
-export { DelegationBudgetExceededError } from './bridge/delegation-types.js'
+export {
+  DelegationBudgetCostUnknownError,
+  DelegationBudgetExceededError,
+} from './bridge/delegation-types.js'
 export {
   // The alias EXISTS to be deprecated; re-exporting it is the compatibility contract, not an oversight.
   // eslint-disable-next-line @typescript-eslint/no-deprecated

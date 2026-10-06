@@ -39,10 +39,11 @@ export interface DelegationResult {
  * overspend (`$actual > $limit`), which is only true once the spend passed the limit; a refusal
  * stops while the spend is still under it, so it needs wording that does not claim otherwise.
  */
-interface BudgetRefusal {
+type BudgetRefusal =
   /** The next round's projected cost (the last completed round's), which would pass the limit. */
-  readonly projectedRoundCost: number
-}
+  | { readonly projectedRoundCost: number }
+  /** The last round's cost is not known, so the limit cannot be enforced for the next one. */
+  | { readonly costUnknown: true }
 
 function budgetMessage(
   agentName: string,
@@ -53,6 +54,12 @@ function budgetMessage(
   const limit = `$${budgetLimit.toFixed(4)}`
   if (refusal === undefined) {
     return `Agent "${agentName}" exceeded budget: $${actualCost.toFixed(4)} > ${limit}`
+  }
+  if ('costUnknown' in refusal) {
+    return (
+      `Agent "${agentName}" stopped before its next round: the cost of its last round is not known, ` +
+      `so the ${limit} limit cannot be enforced (known spend $${actualCost.toFixed(4)})`
+    )
   }
   return (
     `Agent "${agentName}" stopped before its next round: spent $${actualCost.toFixed(4)}, ` +
@@ -100,7 +107,26 @@ export class DelegationBudgetExceededError extends TheokitAgentError {
       // The budget does not refill on retry.
       isRetryable: false,
     })
-    this.projectedRoundCost = refusal?.projectedRoundCost
+    this.projectedRoundCost =
+      refusal !== undefined && 'projectedRoundCost' in refusal
+        ? refusal.projectedRoundCost
+        : undefined
+  }
+}
+
+/**
+ * A run with a USD ceiling stopped because the cost of its last round is not known (B-409).
+ *
+ * A model with no price reports no cost, and reading that as $0 would let the run keep spending
+ * against a limit it can no longer check, so the run stops instead (fail closed). `actualCost` is
+ * the spend that IS known. A subclass so it can be caught on its own while every existing
+ * `instanceof DelegationBudgetExceededError` and the `DELEGATION_BUDGET_EXCEEDED` code still match;
+ * `name` is inherited because the parent declares it as a string literal, which a subclass cannot
+ * override with another.
+ */
+export class DelegationBudgetCostUnknownError extends DelegationBudgetExceededError {
+  constructor(agentName: string, knownSpend: number, budgetLimit: number) {
+    super(agentName, knownSpend, budgetLimit, { costUnknown: true })
   }
 }
 

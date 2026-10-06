@@ -75,10 +75,6 @@ function asString(value: unknown, fallback: string): string {
   return typeof value === 'string' ? value : fallback
 }
 
-function asNumber(value: unknown, fallback: number): number {
-  return typeof value === 'number' ? value : fallback
-}
-
 /** Consecutive no-progress rounds before terminating with `'no_progress'` (K=2 tolerates one retry — V4-D). */
 const NO_PROGRESS_THRESHOLD = 2
 
@@ -246,6 +242,8 @@ interface RoundResult {
   responseText: string
   toolCalls: { id: string; name: string; input: unknown; output: string }[]
   cost: number
+  /** B-409: false until a `done` reports a finite cost; an unpriced round folds as 0 into `cost`. */
+  costKnown: boolean
   tokens: number
   tokensInput: number
   tokensOutput: number
@@ -315,7 +313,8 @@ function pushToolResult(
 
 /** V4-N: fold a `done` event's cost + split/total token usage into the round (V4-O: + buckets). */
 function applyDone(event: StreamEvent, r: RoundResult): void {
-  r.cost = asNumber(event.cost, 0)
+  r.costKnown = typeof event.cost === 'number' && Number.isFinite(event.cost)
+  r.cost = r.costKnown ? (event.cost as number) : 0 // EC-2: NaN/Infinity never reach the spend
   const usage = event.usage as
     | {
         totalTokens?: number
@@ -413,6 +412,7 @@ async function* consumeOneRound(
     responseText: '',
     toolCalls: [],
     cost: 0,
+    costKnown: false,
     tokens: 0,
     tokensInput: 0,
     tokensOutput: 0,
@@ -564,7 +564,7 @@ export async function* runReflectiveLoopStream(
       return finalize(acc, round, reason, loop.name)
     }
 
-    throwIfNextRoundRefused(acc.cost, r.cost, budget, agentName, signal) // B-409, before paying
+    throwIfNextRoundRefused(acc.cost, r, budget, agentName, signal) // B-409, before paying
 
     feedback = reflectionResult.feedback
     round += 1
