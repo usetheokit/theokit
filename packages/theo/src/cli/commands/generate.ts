@@ -469,6 +469,8 @@ export async function generateCommand(
       )
     case 'invalid_config':
       throw new Error(result.message ?? 'Invalid theo.config.ts')
+    case 'agent_not_found':
+      throw new Error(result.message ?? 'No chat agent found')
     case 'already_exists':
       console.log(`\n  ⚠ ${result.filePath} already exists. Skipping.\n`)
       return

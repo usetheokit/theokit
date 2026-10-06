@@ -36,6 +36,7 @@ export type GenerateStatus =
   | 'invalid_name'
   | 'not_a_project'
   | 'invalid_config'
+  | 'agent_not_found'
 
 export interface GenerateResult {
   status: GenerateStatus

@@ -4,12 +4,19 @@
  * A schedule must land where `theokit build` scans (`<agentsDir>/schedules`), so its directory is
  * read from the project config through `loadConfig`, the same reader the build uses. When the
  * config cannot be read the generator refuses by name instead of guessing a directory.
+ *
+ * A schedule runs the app's `chat` agent, so a project without one is refused too: a schedule
+ * importing a module that does not exist would make `theokit build` fail on it.
  */
+import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { loadConfig } from '../../config/load-config.js'
 
 import type { GenerateResult } from './generate-types.js'
+
+/** The files a `chat` agent may live in, in lookup order. */
+const CHAT_AGENT_FILES = ['chat.ts', 'chat.tsx', 'chat.js'] as const
 
 /** Where the schedule goes and what it says, or the refusal that explains why it cannot be written. */
 export async function resolveScheduleTarget(
@@ -25,8 +32,20 @@ export async function resolveScheduleTarget(
       message: `Cannot read ${resolve(cwd, 'theo.config.ts')}: ${(err as Error).message}`,
     }
   }
+  const agentsRoot = resolve(cwd, agentsDir)
+  const chatPath = CHAT_AGENT_FILES.map((file) => resolve(agentsRoot, file)).find((path) =>
+    existsSync(path),
+  )
+  if (chatPath === undefined) {
+    return {
+      status: 'agent_not_found',
+      message:
+        `No "chat" agent in ${agentsRoot} (looked for ${CHAT_AGENT_FILES.join(', ')}). ` +
+        'A schedule runs the chat agent; create it first.',
+    }
+  }
   return {
-    filePath: resolve(cwd, agentsDir, 'schedules', `${name}.ts`),
+    filePath: resolve(agentsRoot, 'schedules', `${name}.ts`),
     content: generateScheduleTemplate(name),
   }
 }
