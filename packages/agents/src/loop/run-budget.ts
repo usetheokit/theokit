@@ -12,7 +12,9 @@
 import {
   DelegationBudgetCostUnknownError,
   DelegationBudgetExceededError,
+  DelegationError,
 } from '../bridge/delegation-types.js'
+import type { BudgetOptions } from '../types.js'
 
 /** What the refusal reads from the last completed round. */
 interface LastRound {
@@ -62,4 +64,37 @@ export function throwIfNextRoundRefused(
   if (signal?.aborted) return
   const refusal = refuseNextRound(spent, lastRound, ceiling, agentName)
   if (refusal) throw refusal
+}
+
+/**
+ * The run's USD ceiling from the run option `budget`, checked before any round (B-409, FR-005).
+ *
+ * A number is the ceiling as it always was, unvalidated, so an existing caller sees no change. A
+ * `BudgetOptions` contributes its `maxCostUsd`; one the run cannot enforce is refused here, at the
+ * call, rather than honoured partially: `window` asks for spend kept across runs, which a single run
+ * has nowhere to keep, and a `maxCostUsd` that is not a finite number of zero or more caps nothing.
+ * `null`, which an untyped caller can pass, means no ceiling, the same as leaving `budget` out.
+ */
+export function resolveRunBudget(
+  budget: number | BudgetOptions | null | undefined,
+  agentName: string,
+): number | undefined {
+  if (budget == null) return undefined
+  if (typeof budget === 'number') return budget
+  if (budget.window !== undefined) {
+    throw new DelegationError(
+      agentName,
+      new Error(
+        'budget.window is not supported: a rolling budget needs spend persisted across runs',
+      ),
+    )
+  }
+  const { maxCostUsd } = budget as { maxCostUsd: unknown }
+  if (typeof maxCostUsd !== 'number' || !Number.isFinite(maxCostUsd) || maxCostUsd < 0) {
+    throw new DelegationError(
+      agentName,
+      new Error(`budget.maxCostUsd must be a finite number >= 0, got ${String(maxCostUsd)}`),
+    )
+  }
+  return maxCostUsd
 }

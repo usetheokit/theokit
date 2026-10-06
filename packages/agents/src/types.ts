@@ -93,11 +93,11 @@ export interface ToolOptions {
   risk?: 'low' | 'medium' | 'high'
 }
 
-/** Budget configuration for @Budget() decorator. */
+/** USD budget for one run, passed as the run option `budget` (`AgentRunner.run` / `stream`). */
 export interface BudgetOptions {
-  /** Maximum cost in USD for this scope. */
+  /** Maximum cost in USD for the run; the run stops before a round that would exceed it. */
   maxCostUsd: number
-  /** Rolling window for budget tracking. */
+  /** Rolling window for budget tracking. Not supported by a run, which refuses it before any round. */
   window?: 'daily' | 'monthly'
 }
 

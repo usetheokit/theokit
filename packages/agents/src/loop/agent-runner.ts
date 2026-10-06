@@ -24,7 +24,7 @@ import type { DelegationResult } from '../bridge/delegation-types.js'
 import { createSdkAgentStream } from '../bridge/sdk-adapter.js'
 import { moderateOutputStream, runInputGuards, textPayloadExtractor } from '../guardrails/index.js'
 import { mirrorModeratedText } from '../guardrails/terminal-frame.js'
-import type { MainLoopMeta, ReasoningEffort } from '../types.js'
+import type { BudgetOptions, MainLoopMeta, ReasoningEffort } from '../types.js'
 
 import {
   resolveCompactionStrategy,
@@ -40,6 +40,7 @@ import {
   noopReflectionStrategy,
   type ReflectionStrategy,
 } from './reflection-strategy.js'
+import { resolveRunBudget } from './run-budget.js'
 import { type RoundStreamFactory, runReflectiveLoopStream } from './run-reflective-loop.js'
 
 /**
@@ -64,8 +65,11 @@ export interface AgentRunnerRunOptions {
   readonly apiKey: string | CredentialResolver
   /** Session id override (default: a fresh isolated id). */
   readonly sessionId?: string
-  /** Cumulative USD budget across rounds. */
-  readonly budget?: number
+  /**
+   * The run's USD ceiling across rounds: a number, or `{ maxCostUsd }`. The run stops before a
+   * round the ceiling cannot cover. `window` and an unusable `maxCostUsd` are refused at the call.
+   */
+  readonly budget?: number | BudgetOptions
   /** Cancellation — aborts stop the reflective loop from re-entering. */
   readonly signal?: AbortSignal
   /**
@@ -239,6 +243,8 @@ export class AgentRunner {
     message: string,
     opts: AgentRunnerRunOptions,
   ): AsyncGenerator<StreamEvent, DelegationResult> {
+    // B-409: resolve the ceiling once, before any round, so both paths below see one number.
+    const runOpts = { ...opts, budget: resolveRunBudget(opts.budget, this.agentName) }
     // M9 — apply input guardrails at the boundary BEFORE the SDK runtime sees the message.
     // A `block` throws GuardrailViolationError fail-fast; a `redact` rewrites the message.
     // Absent/empty guard list ⇒ no wrapper, zero overhead (identity path).
@@ -246,7 +252,7 @@ export class AgentRunner {
     if (guardrails && guardrails.length > 0) {
       // Arrow captures `this` lexically (no `const self = this` aliasing) for the generator below.
       const runUnguarded = (m: string): AsyncGenerator<StreamEvent, DelegationResult> =>
-        this.streamUnguarded(m, opts)
+        this.streamUnguarded(m, runOpts)
       return (async function* guarded(): AsyncGenerator<StreamEvent, DelegationResult> {
         const safe = await runInputGuards(message, guardrails)
         // Output guards moderate the accumulated text before it reaches the client (M9).
@@ -327,13 +333,13 @@ export class AgentRunner {
         )
       })()
     }
-    return this.streamUnguarded(message, opts)
+    return this.streamUnguarded(message, runOpts)
   }
 
   /** The core stream path, after input guardrails have run (M9). */
   private streamUnguarded(
     message: string,
-    opts: AgentRunnerRunOptions,
+    opts: AgentRunnerRunOptions & { readonly budget: number | undefined },
   ): AsyncGenerator<StreamEvent, DelegationResult> {
     // V4-J: per-run tool override replaces compiled.tools for this call only.
     const tools = opts.tools ? [...opts.tools] : this.compiled.tools
