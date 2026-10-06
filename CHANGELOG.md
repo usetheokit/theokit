@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- A CI job calls a real model on every push to `develop`. `live-model.yml` sends one request to OpenRouter and then runs the `@theokit/agents` live suite; a run that cannot reach the provider, or has no key, ends red and prints why (`provider could not be reached: …`, `provider key absent: …`) instead of skipping green (#B-415)
+
 ### Changed
 
 - `@theokit/agents`: a run with a USD ceiling stops before the round that would exceed it, and the ceiling can be given as `budget: { maxCostUsd }`. `maxCostUsd` used to be exported and read by nothing, and a numeric `budget` was checked only after a round had been paid for, so the round that crossed it always ran. The loop now assumes the next round costs what the last one did and refuses it when that would pass the ceiling, so such a run stops one round earlier than before; with a ceiling set, a round whose cost is not known also stops the run, with the new `DelegationBudgetCostUnknownError`. `budget: { window }` is refused before any round (#970)

@@ -1,0 +1,41 @@
+# A real model on every push to develop (B-415, OBJ-9). The preflight sends one request to
+# OpenRouter and prints why the job could not run; the live suite then runs with the key
+# required, so an absent key or an unreachable provider ends red with its reason, never green.
+#
+# No run group is declared: GitHub keeps one pending run per group and cancels it when another
+# push arrives, so any shared group drops pushes. Every push gets its own run (D7).
+name: Live model
+
+on:
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  live-model:
+    name: Live model (real provider)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: usetheokit/shared-workflows/actions/setup@v1 # zizmor: ignore[unpinned-uses] first-party moving major, ADR-0021
+      - name: Preflight (reach the provider)
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          LIVE_MODEL: ${{ vars.LIVE_MODEL || 'google/gemini-2.5-flash-lite' }}
+        run: node scripts/live-model-preflight.mjs
+      - name: Build the live suite's workspace dependencies
+        run: TURBO_CONCURRENCY=1 pnpm --filter "@theokit/agents..." build
+      - name: Live suite (THEOKIT_LIVE_REQUIRED)
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          LIVE_MODEL: ${{ vars.LIVE_MODEL || 'google/gemini-2.5-flash-lite' }}
+          THEOKIT_LIVE_REQUIRED: '1'
+        # bash -eo pipefail: the suite's exit code survives the pipe (D8)
+        shell: bash
+        run: pnpm --filter @theokit/agents test:live 2>&1 | node scripts/redact-key-shapes.mjs
