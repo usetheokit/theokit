@@ -4,7 +4,14 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { checkLedger } from './check-parity-ledger.mjs'
+import {
+  checkLedger,
+  HERMES_PATH,
+  INVENTORY_PATH,
+  LEDGER_PATH,
+  parseHermesIds,
+  parseInventoryIds,
+} from './check-parity-ledger.mjs'
 
 const TODAY = '2026-10-06'
 const OC_IDS = Array.from({ length: 106 }, (_, i) => `OC-${i + 1}`)
@@ -261,5 +268,45 @@ describe('check-parity-ledger: each entry answer', () => {
     expect(rulesOf(judge([eight]), 'OC-11')).toEqual([])
     const seven = { ...validOut('OC-11'), reason: 'one two three four five six seven' }
     expect(rulesOf(judge([seven]), 'OC-11')).toContain('reason-short')
+  })
+})
+
+const REPO_ROOT = fileURLToPath(new URL('../../../', import.meta.url))
+const SEED_OUT = ['OC-11', 'OC-15', 'OC-16', 'OC-29', 'OC-38', 'OC-39', 'OC-42', 'OC-43', 'H-6']
+const readReal = (path) => readFileSync(join(REPO_ROOT, path), 'utf8')
+
+function readRealInputs() {
+  return {
+    inventoryText: readReal(INVENTORY_PATH),
+    hermesText: readReal(HERMES_PATH),
+    ledgerText: readReal(LEDGER_PATH),
+    repoRoot: REPO_ROOT,
+    today: TODAY,
+  }
+}
+
+describe('check-parity-ledger: the real ledger', () => {
+  it('the real ledger holds exactly the 113 source ids', () => {
+    const realLedger = JSON.parse(readReal(LEDGER_PATH))
+    const sourceIds = [...parseInventoryIds(readReal(INVENTORY_PATH)), ...parseHermesIds(readReal(HERMES_PATH))]
+    expect(sourceIds).toHaveLength(113)
+    expect(realLedger).toHaveLength(113)
+    expect(realLedger.map((e) => e.id).sort()).toEqual([...sourceIds].sort())
+  })
+
+  it('the real ledger seeds only the out rows a person declared', () => {
+    const realLedger = JSON.parse(readReal(LEDGER_PATH))
+    const byId = Object.fromEntries(realLedger.map((e) => [e.id, e]))
+    const outEntries = realLedger.filter((e) => e.status === 'out')
+    expect(outEntries.filter((e) => !/^human\/[A-Za-z0-9][A-Za-z0-9._-]*$/.test(e.declared_by))).toEqual([])
+    expect(outEntries.filter((e) => typeof e.declared_at !== 'string' || e.declared_at.trim() === '')).toEqual([])
+    expect(SEED_OUT.filter((id) => !['out', 'shipped'].includes(byId[id]?.status))).toEqual([])
+  })
+
+  it('checks the real ledger in under 10 seconds', () => {
+    const inputs = readRealInputs()
+    const t = performance.now()
+    checkLedger(inputs)
+    expect(performance.now() - t).toBeLessThan(10000)
   })
 })
