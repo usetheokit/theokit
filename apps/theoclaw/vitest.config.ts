@@ -25,7 +25,7 @@ export default defineConfig({
     // config carries the same note and the reason it gives is measured: copying one without the
     // name produced a project that was in the list and matched no filter.
     name: 'theoclaw',
-    include: ['tests/**/*.test.ts'],
+    include: ['tests/**/*.test.ts', 'tools/**/*.test.mjs'],
     environment: 'node',
   },
 })
