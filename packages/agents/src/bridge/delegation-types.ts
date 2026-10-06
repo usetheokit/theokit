@@ -35,6 +35,32 @@ export interface DelegationResult {
 }
 
 /**
+ * Why a run stopped BEFORE a round rather than after one. Without it the error reports an
+ * overspend (`$actual > $limit`), which is only true once the spend passed the limit; a refusal
+ * stops while the spend is still under it, so it needs wording that does not claim otherwise.
+ */
+interface BudgetRefusal {
+  /** The next round's projected cost (the last completed round's), which would pass the limit. */
+  readonly projectedRoundCost: number
+}
+
+function budgetMessage(
+  agentName: string,
+  actualCost: number,
+  budgetLimit: number,
+  refusal: BudgetRefusal | undefined,
+): string {
+  const limit = `$${budgetLimit.toFixed(4)}`
+  if (refusal === undefined) {
+    return `Agent "${agentName}" exceeded budget: $${actualCost.toFixed(4)} > ${limit}`
+  }
+  return (
+    `Agent "${agentName}" stopped before its next round: spent $${actualCost.toFixed(4)}, ` +
+    `next round projected at $${refusal.projectedRoundCost.toFixed(4)}, which would pass the ${limit} limit`
+  )
+}
+
+/**
  * DELEGATION budget exceeded — the dollar cost of a delegated agent.
  *
  * ## Why the name changed in M91
@@ -61,19 +87,20 @@ export interface DelegationResult {
  */
 export class DelegationBudgetExceededError extends TheokitAgentError {
   override readonly name = 'DelegationBudgetExceededError'
+  /** The cost the refused round was projected at; absent when the spend already passed the limit. */
+  public readonly projectedRoundCost: number | undefined
   constructor(
     public readonly agentName: string,
     public readonly actualCost: number,
     public readonly budgetLimit: number,
+    refusal?: BudgetRefusal,
   ) {
-    super(
-      `Agent "${agentName}" exceeded budget: $${actualCost.toFixed(4)} > $${budgetLimit.toFixed(4)}`,
-      {
-        code: 'DELEGATION_BUDGET_EXCEEDED',
-        // The budget does not refill on retry.
-        isRetryable: false,
-      },
-    )
+    super(budgetMessage(agentName, actualCost, budgetLimit, refusal), {
+      code: 'DELEGATION_BUDGET_EXCEEDED',
+      // The budget does not refill on retry.
+      isRetryable: false,
+    })
+    this.projectedRoundCost = refusal?.projectedRoundCost
   }
 }
 

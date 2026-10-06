@@ -27,6 +27,7 @@ import { GuardrailError } from '../guardrails/index.js'
 
 import type { LoopFinishReason, LoopOutcome, LoopStrategy } from './loop-strategy.js'
 import type { ReflectionContext, ReflectionStrategy } from './reflection-strategy.js'
+import { throwIfNextRoundRefused } from './run-budget.js'
 
 /** One SDK stream turn: `createSdkAgentStream(...)` returns this shape. */
 /**
@@ -562,6 +563,8 @@ export async function* runReflectiveLoopStream(
       )
       return finalize(acc, round, reason, loop.name)
     }
+
+    throwIfNextRoundRefused(acc.cost, r.cost, budget, agentName, signal) // B-409, before paying
 
     feedback = reflectionResult.feedback
     round += 1
