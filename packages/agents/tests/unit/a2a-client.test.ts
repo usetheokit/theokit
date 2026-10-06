@@ -87,6 +87,24 @@ describe('createA2ATool', () => {
     await expect(tool.handler({ message: 'hi' })).rejects.toThrow('A2A call to "ask" failed: 502')
   })
 
+  it('test_a_static_action_header_in_another_case_replaces_the_default', async () => {
+    let action: string | null = null
+    const fetchImpl = sseFetch('ok', (_url, init) => {
+      action = new Headers(init.headers).get('x-theo-action')
+    })
+    const tool = createA2ATool({
+      url: 'https://x/agents/a',
+      name: 'ask',
+      description: 'd',
+      headers: { 'X-Theo-Action': '0' },
+      fetchImpl,
+    })
+
+    await tool.handler({ message: 'hi' })
+
+    expect(action).toBe('0')
+  })
+
   it('test_two_concurrent_calls_each_return_their_own_reply', async () => {
     const replies: Record<string, string> = { a: 'alpha', b: 'beta' }
     const fetchImpl = vi.fn(async (_url: string, init: RequestInit) => {

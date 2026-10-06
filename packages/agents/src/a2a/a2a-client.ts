@@ -37,11 +37,20 @@ export interface A2AToolConfig {
   fetchImpl?: (url: string, init: RequestInit) => Promise<Response>
 }
 
-/** Build the request headers from static headers + auth. */
-function buildHeaders(config: A2AToolConfig): Record<string, string> {
-  const headers: Record<string, string> = { 'content-type': 'application/json', ...config.headers }
-  if (config.auth?.bearer) headers.authorization = `Bearer ${config.auth.bearer}`
-  if (config.auth?.apiKey) headers[config.auth.apiKey.header] = config.auth.apiKey.value
+/**
+ * Build the request headers in the HTTP transport's order: the stream and action defaults, then the
+ * static headers, then auth. `Headers.set` is case-insensitive, so a static `X-Theo-Action` replaces
+ * the default instead of reaching the route as `1, 0`.
+ */
+function buildHeaders(config: A2AToolConfig): Headers {
+  const headers = new Headers({
+    'content-type': 'application/json',
+    accept: 'text/event-stream',
+    'x-theo-action': '1',
+  })
+  for (const [name, value] of Object.entries(config.headers ?? {})) headers.set(name, value)
+  if (config.auth?.bearer) headers.set('authorization', `Bearer ${config.auth.bearer}`)
+  if (config.auth?.apiKey) headers.set(config.auth.apiKey.header, config.auth.apiKey.value)
   return headers
 }
 
