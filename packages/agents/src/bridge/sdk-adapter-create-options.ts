@@ -9,7 +9,7 @@
 import { createRequire } from 'node:module'
 
 import type { ContextSettings, SkillsSettings, SystemPromptResolver } from '@theokit/sdk'
-import type { MemorySettings, TelemetrySettings } from '@theokit/sdk'
+import type { CostBreakdown, MemorySettings, TelemetrySettings } from '@theokit/sdk'
 import { PermissionEngine, PermissionPlugin } from '@theokit/sdk'
 import { TheokitAgentError } from '@theokit/sdk/errors'
 
@@ -653,7 +653,7 @@ export function realUsageDone(
       cacheReadTokens?: number
       cacheWriteTokens?: number
     }
-    cost?: { amount?: number }
+    cost?: CostBreakdown
     // theokit#379: the SDK's truncation flags. Optional — absent on a clean finish and on an SDK
     // that predates them, which is the degradation this layer wants.
     stoppedAtIterationLimit?: boolean
@@ -689,7 +689,7 @@ export function realUsageDone(
       cacheWriteTokens: u?.cacheWriteTokens ?? 0,
     },
     durationMs: Date.now() - t0,
-    cost: result.cost?.amount ?? 0,
+    ...knownCost(result.cost),
     ...terminalExtras(stopReason, model),
   }
 }
@@ -714,4 +714,19 @@ function terminalExtras(
   if (stopReason !== undefined) extras.stopReason = stopReason
   if (model !== undefined) extras.model = model
   return extras
+}
+
+/**
+ * The terminal frame's `cost` key: the run's USD cost as the SDK priced it, or nothing.
+ *
+ * usetheokit/theokit#969: the SDK's `CostBreakdown` carries the amount as `amountUsd`, and its own
+ * docblock says that when the price is not known the amount is `undefined` and must NOT be
+ * defaulted to 0. An unpriced run reported as cost 0 reads as a free run, and a USD ceiling never
+ * trips on it. So the key is present only for a finite number, 0 included: a 0 the SDK reports
+ * is a price, not an absence. A missing or `null` cost, `NaN` and `Infinity` all leave it out,
+ * because a `NaN` folded into a running total makes every later `total > ceiling` comparison false.
+ */
+function knownCost(cost: CostBreakdown | undefined): { cost?: number } {
+  const amountUsd = cost?.amountUsd
+  return typeof amountUsd === 'number' && Number.isFinite(amountUsd) ? { cost: amountUsd } : {}
 }

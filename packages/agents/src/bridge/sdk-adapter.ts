@@ -11,7 +11,7 @@
 // +11 lines, enough to blow the gate. The `prettier-ignore` must be the LAST comment before the node.
 // When `sdk-adapter.ts` is split, the directive goes with it.
 // prettier-ignore
-import type { AgentDefinition, BudgetTracker, CustomTool, InlineSkill, InteractionUpdate, ModelSelection, Plugin, PluginsSettings, ProviderRoutingSettings, RunEventSink, SendOptions } from '@theokit/sdk'
+import type { AgentDefinition, BudgetTracker, CostBreakdown, CustomTool, InlineSkill, InteractionUpdate, ModelSelection, Plugin, PluginsSettings, ProviderRoutingSettings, RunEventSink, SendOptions } from '@theokit/sdk'
 import type { RetryOptions } from '@theokit/sdk/retry'
 
 import { debugLog } from '../debug-log.js'
@@ -293,7 +293,7 @@ interface SdkAgentApi {
           cacheReadTokens?: number
           cacheWriteTokens?: number
         }
-        cost?: { amount?: number }
+        cost?: CostBreakdown
         stoppedAtIterationLimit?: boolean
         stoppedByDoomLoop?: boolean
         /**
