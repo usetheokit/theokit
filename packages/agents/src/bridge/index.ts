@@ -147,6 +147,10 @@ export {
 
 export {
   delegate,
+  // B-409 review F-wire-2: SIXTH instance of the shape the #686 block above enumerates. The
+  // unpriced-round refusal reached the root barrel and not this subpath, which serves `delegate()`,
+  // the path that inherits it, while its parent class sat one line below.
+  DelegationBudgetCostUnknownError,
   DelegationBudgetExceededError,
   // The alias EXISTS to be deprecated; re-exporting it is M91's compatibility contract, not careless
   // usage. It goes in a major.

@@ -37,6 +37,8 @@ import { createSdkAgentStream } from './sdk-adapter.js'
 // Re-export the delegation value types for backward compatibility — they moved
 // to delegation-types.js to break the orchestrator↔loop import cycle (G1).
 export {
+  // B-409: the unpriced-round refusal travels with its parent, so `./bridge` can name it too.
+  DelegationBudgetCostUnknownError,
   DelegationBudgetExceededError,
   /** @deprecated M91 — use `DelegationBudgetExceededError`; it is the SAME class, aliased for one major. */
   BudgetExceededError,
