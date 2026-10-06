@@ -153,8 +153,22 @@ describe('Bundle size regression', () => {
    *
    * Moving a threshold so a gate passes is not something an implementation run may decide, so the
    * run stopped and asked. Paulo approved this raise on 2026-10-06. Headroom is 79 bytes.
+   *
+   * ## Raised to 40 500 for B-407: a decision, made by a person
+   *
+   * `createA2ATool` called `res.json()` on the reply, and every agent route the framework serves
+   * answers with a UIMessage event stream. The fix reads that stream with `consumeUIMessageStream`,
+   * rejects an error frame or a stream cut before `finish` naming the tool, and sends
+   * `accept: text/event-stream` and `X-Theo-Action: 1`. Measured 40 328 bytes after it, against
+   * 39 121 before, so about 1 200 bytes. The reader itself already lives in a shared chunk; what
+   * lands in `index.js` is the A2A module (2 497 bytes, `buildHeaders`, `textOf`,
+   * `cutStreamMessage`, the handler) and one import line. `createA2ATool` is in the root barrel
+   * through `export * from './a2a/a2a-client.js'`.
+   *
+   * The run stopped at the cap and did not move it. Paulo decided this raise on 2026-10-06, relayed
+   * to the run by the orchestrator. Headroom is 172 bytes.
    */
-  it('agents main bundle under 39.2KB', (ctx) => {
+  it('agents main bundle under 40.5KB', (ctx) => {
     const path = resolve(distDir, 'index.js')
     if (!existsSync(path)) {
       // `ctx.skip()`, not `return`. A bare return reports the test as PASSED, so a suite run with no
@@ -164,7 +178,7 @@ describe('Bundle size regression', () => {
       return
     }
     const size = statSync(path).size
-    expect(size).toBeLessThan(39_200)
+    expect(size).toBeLessThan(40_500)
     console.log(`  agents/dist/index.js: ${(size / 1024).toFixed(1)} KB`)
   })
 
