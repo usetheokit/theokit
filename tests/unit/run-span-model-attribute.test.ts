@@ -89,7 +89,13 @@ async function producedChunks(model: string | undefined): Promise<unknown[]> {
   const runResult = {
     result: 'done',
     usage: { inputTokens: 1200, outputTokens: 340 },
-    cost: { amount: 0.0031 },
+    cost: {
+      amountUsd: 0.0031,
+      status: 'estimated',
+      currency: 'USD',
+      source: 'litellm_snapshot',
+      pricingVersion: undefined,
+    } as const,
   }
   const done = realUsageDone(runResult, Date.now() - 8, model) as unknown as AgentStreamEvent
   async function* events(): AsyncGenerator<AgentStreamEvent> {
