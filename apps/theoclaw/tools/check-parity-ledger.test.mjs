@@ -6,11 +6,13 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import {
   checkLedger,
+  formatReport,
   HERMES_PATH,
   INVENTORY_PATH,
   LEDGER_PATH,
   parseHermesIds,
   parseInventoryIds,
+  runCli,
 } from './check-parity-ledger.mjs'
 
 const TODAY = '2026-10-06'
@@ -308,5 +310,53 @@ describe('check-parity-ledger: the real ledger', () => {
     const t = performance.now()
     checkLedger(inputs)
     expect(performance.now() - t).toBeLessThan(10000)
+  })
+})
+
+function cliRepo({ withInventory = true } = {}) {
+  const ledger = [...ALL_IDS.filter((id) => id !== 'OC-1').map(validOut), shipped('OC-1', 'tests/e2e/proof.test.ts')]
+  const files = {
+    [HERMES_PATH]: hermesText(7),
+    'tests/e2e/proof.test.ts': "it('proves OC-1', () => {})\n",
+    [LEDGER_PATH]: JSON.stringify(ledger),
+  }
+  if (withInventory) files[INVENTORY_PATH] = inventoryText(106)
+  return tempRepo(files)
+}
+
+function runCliCapturing(repoRoot) {
+  const lines = []
+  const code = runCli({ repoRoot, today: TODAY, write: (line) => lines.push(line) })
+  return { code, lines }
+}
+
+describe('check-parity-ledger: the parity command', () => {
+  it('formats the counts line and one line per violation', () => {
+    const lines = formatReport({
+      counts: { shipped: 1, out: 2, open: 1 },
+      violations: [{ id: 'H-7', rule: 'open', detail: 'no check and no reason' }],
+    })
+    expect(lines).toEqual(['shipped 1 · out 2 · open 1', 'H-7 open: no check and no reason'])
+  })
+
+  it('runCli returns 0 and prints only the counts for a fully answered ledger', () => {
+    const { code, lines } = runCliCapturing(cliRepo())
+    expect(code).toBe(0)
+    expect(lines).toEqual(['shipped 1 · out 112 · open 0'])
+  })
+
+  it('runCli reports an absent inventory as source-parse and returns 1', () => {
+    const { code, lines } = runCliCapturing(cliRepo({ withInventory: false }))
+    expect(code).toBe(1)
+    expect(lines.some((l) => l.startsWith(`${INVENTORY_PATH} source-parse: absent`))).toBe(true)
+  })
+
+  it('runCli reports an unreadable ledger file as ledger-parse and returns 1', () => {
+    const root = cliRepo()
+    rmSync(join(root, LEDGER_PATH))
+    mkdirSync(join(root, LEDGER_PATH))
+    const { code, lines } = runCliCapturing(root)
+    expect(code).toBe(1)
+    expect(lines.some((l) => /ledger-parse: unreadable: EISDIR/.test(l))).toBe(true)
   })
 })

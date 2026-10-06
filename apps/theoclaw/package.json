@@ -20,6 +20,7 @@
     "build": "tsc -p tsconfig.json",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json",
-    "boundaries": "depcruise --config .dependency-cruiser.cjs src tests"
+    "boundaries": "depcruise --config .dependency-cruiser.cjs src tests",
+    "parity": "node tools/check-parity-ledger.mjs"
   }
 }

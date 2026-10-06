@@ -11,7 +11,8 @@
  * Every rule runs on every entry and nothing returns early: one run reports every violation.
  */
 import { readFileSync, realpathSync, statSync } from 'node:fs'
-import { isAbsolute, relative, resolve, sep } from 'node:path'
+import { isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 export const INVENTORY_PATH = '.squad/wiki/references/openclaw-capability-inventory.md'
 export const HERMES_PATH = '.squad/wiki/product/objectives.md'
@@ -48,9 +49,9 @@ export function parseHermesIds(text) {
 }
 
 /** The ledger's entries, or `null` when it cannot be read as an array at all (EC-2). */
-function parseLedger(ledgerText, violations) {
+function parseLedger(ledgerText, violations, reason = 'absent') {
   if (ledgerText === null) {
-    violations.push({ id: LEDGER_PATH, rule: 'ledger-parse', detail: 'absent' })
+    violations.push({ id: LEDGER_PATH, rule: 'ledger-parse', detail: reason })
     return null
   }
   let parsed
@@ -76,9 +77,9 @@ function parseLedger(ledgerText, violations) {
 }
 
 /** The source's ids when it holds exactly `floor` distinct rows; otherwise `null` and violations (EC-1). */
-function readSource(text, parse, floor, path, violations) {
+function readSource(text, parse, floor, path, violations, reason = 'absent') {
   if (text === null) {
-    violations.push({ id: path, rule: 'source-parse', detail: 'absent' })
+    violations.push({ id: path, rule: 'source-parse', detail: reason })
     return null
   }
   const ids = parse(text)
@@ -191,8 +192,11 @@ function judgeEntry(entry, repoRoot, today) {
   }
 }
 
-/** Every violation of the ledger against the two sources, and the counts of its statuses. */
-export function checkLedger({ inventoryText, hermesText, ledgerText, repoRoot, today }) {
+/**
+ * Every violation of the ledger against the two sources, and the counts of its statuses. A `null`
+ * text is an input the caller could not read; `reasons` names why (default `absent`).
+ */
+export function checkLedger({ inventoryText, hermesText, ledgerText, repoRoot, today, reasons = {} }) {
   // Caller contract, not ledger content: without them a cited path cannot be resolved and a
   // future verified_on compares false against undefined, so the rule would pass in silence.
   if (typeof repoRoot !== 'string' || !isAbsolute(repoRoot)) {
@@ -200,9 +204,16 @@ export function checkLedger({ inventoryText, hermesText, ledgerText, repoRoot, t
   }
   if (!isIsoDate(today)) throw new TypeError(`checkLedger: today must be a YYYY-MM-DD date, got ${JSON.stringify(today)}`)
   const violations = []
-  const ledger = parseLedger(ledgerText, violations)
-  const inventory = readSource(inventoryText, parseInventoryIds, INVENTORY_FLOOR, INVENTORY_PATH, violations)
-  const hermes = readSource(hermesText, parseHermesIds, HERMES_FLOOR, HERMES_PATH, violations)
+  const ledger = parseLedger(ledgerText, violations, reasons.ledger)
+  const inventory = readSource(
+    inventoryText,
+    parseInventoryIds,
+    INVENTORY_FLOOR,
+    INVENTORY_PATH,
+    violations,
+    reasons.inventory,
+  )
+  const hermes = readSource(hermesText, parseHermesIds, HERMES_FLOOR, HERMES_PATH, violations, reasons.hermes)
   const entries = ledger ?? []
 
   if (ledger !== null) {
@@ -228,4 +239,65 @@ export function checkLedger({ inventoryText, hermesText, ledgerText, repoRoot, t
     if (Object.hasOwn(counts, entry.status)) counts[entry.status] += 1
   }
   return { counts, violations }
+}
+
+/** The counts line, then `<id> <rule>: <detail>` for each violation. */
+export function formatReport({ counts, violations }) {
+  return [
+    `shipped ${counts.shipped} · out ${counts.out} · open ${counts.open}`,
+    ...violations.map((v) => `${v.id} ${v.rule}: ${v.detail}`),
+  ]
+}
+
+/** `{ text }`, or `{ text: null, reason }` so an input the run cannot read is a violation, never a throw. */
+function readInput(path) {
+  try {
+    return { text: readFileSync(path, 'utf8') }
+  } catch (error) {
+    return { text: null, reason: error.code === 'ENOENT' ? 'absent' : `unreadable: ${error.code ?? error.name}` }
+  }
+}
+
+/** Reads the real files under `repoRoot`, writes the report line by line, and returns the exit code. */
+export function runCli({ repoRoot, today, write }) {
+  const inventory = readInput(join(repoRoot, INVENTORY_PATH))
+  const hermes = readInput(join(repoRoot, HERMES_PATH))
+  const ledger = readInput(join(repoRoot, LEDGER_PATH))
+  const result = checkLedger({
+    inventoryText: inventory.text,
+    hermesText: hermes.text,
+    ledgerText: ledger.text,
+    repoRoot,
+    today,
+    reasons: { inventory: inventory.reason, hermes: hermes.reason, ledger: ledger.reason },
+  })
+  for (const line of formatReport(result)) write(line)
+  return result.violations.length > 0 ? 1 : 0
+}
+
+/** The local calendar date as `YYYY-MM-DD`; CI runs in UTC, where it equals the UTC date. */
+function localToday() {
+  const now = new Date()
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
+}
+
+const REPO_ROOT = fileURLToPath(new URL('../../../', import.meta.url))
+
+/**
+ * True when Node was started on this file. Real paths on both sides, because a symlinked argv[1]
+ * would otherwise skip the run and exit 0; an argv[1] that is not a file (an importer's own
+ * argument) means this module was imported, not run.
+ */
+function isDirectRun() {
+  try {
+    return Boolean(process.argv[1]) && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)
+  } catch (error) {
+    if (error.code === 'ENOENT' || error.code === 'ENOTDIR') return false
+    throw error
+  }
+}
+
+if (isDirectRun()) {
+  process.exitCode = runCli({ repoRoot: REPO_ROOT, today: localToday(), write: console.log })
 }
