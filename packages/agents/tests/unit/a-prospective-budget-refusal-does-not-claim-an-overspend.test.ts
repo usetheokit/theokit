@@ -15,8 +15,11 @@ import { ModelCapability } from '../../src/capability/capabilities.js'
 import { applyCapabilities } from '../../src/capability/capability.js'
 import { AgentRunner, DelegationBudgetExceededError } from '../../src/index.js'
 
-/** Each call is one round: a distinct tool result (so the loop continues) and a done with `cost`. */
-function roundsCosting(cost: number): {
+/**
+ * Each call is one round: a distinct tool result (so the loop continues) and a done with `cost`.
+ * Given several costs, round N costs the Nth and every later round the last one.
+ */
+function roundsCosting(...costs: number[]): {
   factory: () => AsyncIterable<StreamEvent>
   calls: () => number
 } {
@@ -24,6 +27,7 @@ function roundsCosting(cost: number): {
   const factory = (): AsyncIterable<StreamEvent> => {
     calls += 1
     const round = calls
+    const cost = costs[Math.min(round, costs.length) - 1]
     return (async function* () {
       yield { type: 'tool_result', toolName: `t${String(round)}`, input: {}, output: 'r' }
       yield { type: 'done', cost }
@@ -45,13 +49,20 @@ function buildRunner() {
 }
 
 async function runAndCatch(budget: number, cost: number): Promise<unknown> {
-  const { factory } = roundsCosting(cost)
+  return (await runCounting(budget, cost)).threw
+}
+
+async function runCounting(
+  budget: number,
+  ...costs: number[]
+): Promise<{ threw: unknown; calls: number }> {
+  const { factory, calls } = roundsCosting(...costs)
   try {
     await buildRunner().run('go', { apiKey: 'k', budget, streamFactory: factory })
   } catch (err) {
-    return err
+    return { threw: err, calls: calls() }
   }
-  return undefined
+  return { threw: undefined, calls: calls() }
 }
 
 describe('the budget refusal and the overspend are worded as what they are', () => {
@@ -64,6 +75,34 @@ describe('the budget refusal and the overspend are worded as what they are', () 
     expect(message).toContain('0.0100')
     expect(message).toContain('projected')
     expect(message).not.toContain('$0.0100 > $0.0150')
+  })
+
+  it('test_a_prospective_refusal_reports_the_projected_round_cost', async () => {
+    const threw = await runAndCatch(0.015, 0.01)
+
+    expect(threw).toBeInstanceOf(DelegationBudgetExceededError)
+    const error = threw as InstanceType<typeof DelegationBudgetExceededError>
+    expect(error.projectedRoundCost).toBe(0.01)
+  })
+
+  it('test_an_overspend_reports_no_projected_round_cost', async () => {
+    const threw = await runAndCatch(0.005, 0.01)
+
+    expect(threw).toBeInstanceOf(DelegationBudgetExceededError)
+    const error = threw as InstanceType<typeof DelegationBudgetExceededError>
+    expect(error.projectedRoundCost).toBeUndefined()
+  })
+
+  it('test_a_round_costlier_than_the_last_is_still_caught_after_it_runs', async () => {
+    // Round 1 costs $0.01, so round 2 is projected at $0.01 and $0.02 fits under $0.03. Round 2
+    // then costs $0.05, which only the post-round check can see.
+    const { threw, calls } = await runCounting(0.03, 0.01, 0.05)
+
+    expect(calls).toBe(2)
+    expect(threw).toBeInstanceOf(DelegationBudgetExceededError)
+    const error = threw as InstanceType<typeof DelegationBudgetExceededError>
+    expect(error.message).toContain('$0.0600 > $0.0300')
+    expect(error.projectedRoundCost).toBeUndefined()
   })
 
   it('test_an_overspend_after_a_round_keeps_its_overspend_wording', async () => {

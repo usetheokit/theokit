@@ -77,6 +77,23 @@ describe('a round whose cost is not known, against a USD ceiling', () => {
     expect(message).toContain('is not known')
   })
 
+  it('test_an_unpriced_refusal_reports_no_projected_round_cost', async () => {
+    const { threw } = await runAndCatch({ type: 'done' }, 0.015)
+
+    expect(threw).toBeInstanceOf(DelegationBudgetCostUnknownError)
+    const error = threw as InstanceType<typeof DelegationBudgetExceededError>
+    expect(error.projectedRoundCost).toBeUndefined()
+  })
+
+  it('test_an_unpriced_refusal_keeps_the_budget_exceeded_code_and_name', async () => {
+    const { threw } = await runAndCatch({ type: 'done' }, 0.015)
+
+    expect(threw).toBeInstanceOf(DelegationBudgetCostUnknownError)
+    const error = threw as InstanceType<typeof DelegationBudgetExceededError>
+    expect(error.code).toBe('DELEGATION_BUDGET_EXCEEDED')
+    expect(error.name).toBe('DelegationBudgetExceededError')
+  })
+
   it('test_a_round_with_no_price_continues_when_no_ceiling_is_set', async () => {
     expect(await runWithoutCeiling({ type: 'done' })).toBe(2)
   })
