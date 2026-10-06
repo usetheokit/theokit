@@ -160,3 +160,49 @@ describe('the probes never touch the repository', () => {
     expect(existsSync(seen)).toBe(false)
   })
 })
+
+describe('theocode refuses a proof import into a package src, from source and from tests', () => {
+  it(
+    'theocode: a source file importing packages/agents/src fails depcruise',
+    () => {
+      expectRefused(cruiseProbe('theocode', 'probe.ts', SRC_IMPORT))
+    },
+    TIMEOUT_MS,
+  )
+
+  it(
+    'theocode: a test file importing packages/agents/src fails depcruise',
+    () => {
+      // Fails while TheoCode's config excludes test files: the probe is then not cruised at all.
+      expectRefused(cruiseProbe('theocode', 'probe.test.ts', SRC_IMPORT))
+    },
+    TIMEOUT_MS,
+  )
+
+  it(
+    'theocode: a distribution.test.ts file importing packages/agents/src fails depcruise',
+    () => {
+      expectRefused(cruiseProbe('theocode', 'distribution.test.ts', SRC_IMPORT))
+    },
+    TIMEOUT_MS,
+  )
+
+  it(
+    'theocode: a test file importing @theokit/agents resolves to dist and passes',
+    () => {
+      expect(
+        existsSync(join(REPO, 'packages/agents/dist/index.js')),
+        'build packages/agents first (pnpm build:packages)',
+      ).toBe(true)
+      const result = cruiseProbe('theocode', 'control.test.ts', CONTROL_IMPORT)
+      const control = result.modules.find((m) => m.source.endsWith('control.test.ts'))
+      const edge = control?.dependencies.find((d) => d.resolved.includes('packages/agents'))
+
+      expect(result.errExit).toBe(0)
+      expect(result.errors).toBe(0)
+      expect(edge?.couldNotResolve).toBe(false)
+      expect(edge?.resolved).toMatch(/^\.\.\/\.\.\/packages\/agents\/dist\//)
+    },
+    TIMEOUT_MS,
+  )
+})

@@ -8,9 +8,27 @@
  *
  * dependency-cruiser was already a devDependency and unconfigured. These rules are the enforcement
  * the sentence promised.
+ *
+ * B-416 added `proof-imports-only-published-entry-points` and brought the test files into the
+ * cruise: REQ-15 covers the proof tests themselves, and a test probe importing a package's `src/`
+ * passed while `*.test.ts` was excluded. The five rules after it now govern test files as well.
  */
 module.exports = {
   forbidden: [
+    {
+      // REQ-15, B-416: a proof exercises the framework through what a consumer can reach, so an
+      // import, from source or test, that resolves into a theokit package's `src/` proves nothing.
+      // The `from.pathNot` keeps the framework's own internal edges out: without it one violating
+      // import reported 139 errors. Armed by
+      // `tests/unit/a-proof-import-into-a-package-src-fails-the-boundary-check.test.ts`.
+      name: 'proof-imports-only-published-entry-points',
+      comment:
+        'A proof imports a theokit package only through its published entry points (the exports ' +
+        'map, which points into dist). Reaching into src tests code no consumer can import.',
+      severity: 'error',
+      from: { pathNot: '^(\\.\\./\\.\\./packages|node_modules)/' },
+      to: { path: '^(\\.\\./\\.\\./packages|node_modules/@theokit)/[^/]+/src/' },
+    },
     {
       name: 'agent-never-consumes-a-surface',
       comment:
@@ -57,6 +75,7 @@ module.exports = {
   options: {
     doNotFollow: { path: 'node_modules' },
     tsConfig: { fileName: 'tsconfig.json' },
-    exclude: { path: '\\.test\\.tsx?$' },
+    // Test files are cruised (B-416); only a node_modules path segment is excluded.
+    exclude: { path: '(^|/)node_modules/' },
   },
 }

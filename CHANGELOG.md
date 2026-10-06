@@ -10,6 +10,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - A CI job calls a real model on every push to `develop`. `live-model.yml` sends one request to OpenRouter and then runs the `@theokit/agents` live suite; a run that cannot reach the provider, or has no key, ends red and prints why (`provider could not be reached: …`, `provider key absent: …`) instead of skipping green (#B-415)
 
+- `pnpm check:pillars` counts the 33 OBJ-8 pillars in `docs/program/pillar-map.json` and fails every pillar that is neither declared out with a reason of 8 words or more nor proven by a recorded passing run of a live TheoClaw or TheoCode test, read from vitest JSON reports passed with `--results`. It is red by design today (`33 of 33 pillars not proven`) and stays out of CI until each pillar is proven or declared out. TheoClaw's `boundaries` and TheoCode's `depcruise` now carry `proof-imports-only-published-entry-points`, which refuses an import, from source or test, that resolves into a theokit package's `src/`; TheoCode's cruise now includes its test files (#B-416)
+
 ### Changed
 
 - `@theokit/agents`: a run with a USD ceiling stops before the round that would exceed it, and the ceiling can be given as `budget: { maxCostUsd }`. `maxCostUsd` used to be exported and read by nothing, and a numeric `budget` was checked only after a round had been paid for, so the round that crossed it always ran. The loop now assumes the next round costs what the last one did and refuses it when that would pass the ceiling, so such a run stops one round earlier than before; with a ceiling set, a round whose cost is not known also stops the run, with the new `DelegationBudgetCostUnknownError`. `budget: { window }` is refused before any round (#970)
