@@ -13,9 +13,13 @@ export const MAX_OUTPUT_TOKENS: number
 /** The model used when `LIVE_MODEL` is unset or blank. */
 export const DEFAULT_LIVE_MODEL: string
 
+/** The shortest run of the configured key that `redact` replaces on its own. */
+export const MIN_KEY_FRAGMENT: number
+
 /**
- * Replace every occurrence of `key`, then every `sk-or-v1-` key shape of 16 or more hex
- * characters, with `***`. A blank `key` skips the first pass only.
+ * Replace every run of `MIN_KEY_FRAGMENT` or more characters of `key` (the whole key, a head, a
+ * tail or a middle), then every `sk-or-v1-` prefix with the hex that follows it, with `***`. A
+ * blank `key` skips the first pass only.
  */
 export function redact(text: string, key: string): string
 

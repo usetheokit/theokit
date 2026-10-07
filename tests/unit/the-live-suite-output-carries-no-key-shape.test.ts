@@ -55,6 +55,33 @@ describe('redactStream', () => {
     expect(output).not.toMatch(SHAPE)
   })
 
+  it('redacts a head cut to 10 hex digits after the prefix', async () => {
+    const head = KEY.slice(0, 'sk-or-v1-'.length + 10)
+    expect(await filter([`[live] answer: ${head}\n`], KEY)).toBe('[live] answer: ***\n')
+  })
+
+  it('redacts a tail of the configured key that carries no prefix', async () => {
+    const tail = KEY.slice(-24)
+    expect(await filter([`echo ${tail} end\n`], KEY)).toBe('echo *** end\n')
+  })
+
+  it('redacts the configured key echoed and cut by the M55 300-character slice', async () => {
+    // The cut leaves the prefix and 10 hex digits, below the 16 the key shape needs.
+    const echo = 'x'.repeat(300 - 'sk-or-v1-'.length - 10) + KEY
+    const line = `[live] answer: ${echo.slice(0, 300)}\n`
+    expect(await filter([line], KEY)).toBe(`[live] answer: ${'x'.repeat(281)}***\n`)
+  })
+
+  it('redacts the sk-or-v1- prefix at any length with no configured key', async () => {
+    expect(await filter(['cut sk-or-v1-0123 here\n'], '')).toBe('cut *** here\n')
+  })
+
+  it('leaves a 7-character run shared with the key untouched', async () => {
+    // Eight characters is the floor: shorter runs occur in ordinary hex output by chance.
+    const line = `sha ${KEY.slice(12, 19)} ok\n`
+    expect(await filter([line], KEY)).toBe(line)
+  })
+
   it('redacts a foreign key-shaped string with no configured key', async () => {
     const output = await filter([`answer sk-or-v1-${'a'.repeat(40)} end\n`], '')
     expect(output).toBe('answer *** end\n')

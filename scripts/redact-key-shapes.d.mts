@@ -4,8 +4,9 @@
  */
 
 /**
- * Write every line of `input` to `output` with the configured key and every `sk-or-v1-` key shape
- * replaced by `***`, each line ending in a newline. Resolves when `input` ends.
+ * Write every line of `input` to `output` with every run of 8 or more characters of the configured
+ * key, and every `sk-or-v1-` prefix with the hex after it, replaced by `***`, each line ending in a
+ * newline. Resolves when `input` ends.
  */
 export function redactStream(
   input: NodeJS.ReadableStream,

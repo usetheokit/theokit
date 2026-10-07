@@ -5,8 +5,9 @@
  *
  *   node scripts/live-model-preflight.mjs        (reads OPENROUTER_API_KEY and LIVE_MODEL)
  *
- * Every printed line goes through `redact` on its full text first, so neither the configured key
- * nor any other `sk-or-v1-` key shape reaches the log, even cut in half by a later truncation.
+ * Every printed line goes through `redact` on its full text first, so neither the configured key,
+ * nor any run of 8 or more of its characters, nor any `sk-or-v1-` prefix reaches the log, even cut
+ * in half by a truncation that ran before or after it.
  */
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -17,18 +18,54 @@ export const DEFAULT_LIVE_MODEL = 'google/gemini-2.5-flash-lite'
 
 const ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions'
 const KEY_ABSENT = 'provider key absent: the live-model job could not run'
-const KEY_SHAPE = /sk-or-v1-[0-9a-f]{16,}/gi
+// The prefix at any length, with whatever hex follows it: a head cut a few digits after the prefix
+// is still a fragment of some key (B-415, audit L1, review #121).
+const KEY_SHAPE = /sk-or-v1-[0-9a-f]*/gi
+// The shortest run of the configured key that is redacted on its own. Shorter runs turn up in
+// ordinary hex output (a commit SHA, a request id) by chance, and say little about the key.
+export const MIN_KEY_FRAGMENT = 8
 const RESPONSE_LIMIT = 200
 
 /**
- * Replace the configured key, then every `sk-or-v1-` key shape, with `***`.
+ * Replace every run of `MIN_KEY_FRAGMENT` or more characters of `key` with `***`, scanning left to
+ * right and taking the longest run at each position, so a head, a tail or a middle of the key cut
+ * by a truncation is redacted as well as the whole key. A key shorter than the minimum is replaced
+ * only whole.
+ * @param {string} text
+ * @param {string} key
+ * @returns {string}
+ */
+function redactKeyRuns(text, key) {
+  if (key === '') return text
+  if (key.length < MIN_KEY_FRAGMENT) return text.split(key).join('***')
+  let out = ''
+  let i = 0
+  while (i < text.length) {
+    let run = 0
+    if (i + MIN_KEY_FRAGMENT <= text.length && key.includes(text.slice(i, i + MIN_KEY_FRAGMENT))) {
+      run = MIN_KEY_FRAGMENT
+      while (i + run < text.length && key.includes(text.slice(i, i + run + 1))) run += 1
+    }
+    if (run > 0) {
+      out += '***'
+      i += run
+    } else {
+      out += text[i]
+      i += 1
+    }
+  }
+  return out
+}
+
+/**
+ * Replace every run of 8 or more characters of the configured key, then every `sk-or-v1-` prefix
+ * with the hex that follows it, with `***`.
  * @param {string} text
  * @param {string} key
  * @returns {string}
  */
 export function redact(text, key) {
-  const withoutKey = key === '' ? text : text.split(key).join('***')
-  return withoutKey.replace(KEY_SHAPE, '***')
+  return redactKeyRuns(text, key).replace(KEY_SHAPE, '***')
 }
 
 /** @param {string} text already redacted */

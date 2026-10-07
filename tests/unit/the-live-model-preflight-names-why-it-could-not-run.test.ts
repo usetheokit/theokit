@@ -152,6 +152,15 @@ describe('runPreflight', () => {
     }
   })
 
+  it('redacts a tail of the configured key the answer echoes without its prefix', async () => {
+    const key = 'sk-or-v1-' + HEX64
+    const { lines, run } = harness(answer(`the key ends ${key.slice(-20)} ok`), {
+      OPENROUTER_API_KEY: key,
+    })
+    expect(await run).toBe(0)
+    expect(lines).toEqual(['[live] model response: the key ends *** ok'])
+  })
+
   it('redacts a key-shaped string that is not the configured key', async () => {
     const { lines, run } = harness(answer('x'.repeat(150) + 'sk-or-v1-' + 'a'.repeat(64)))
     expect(await run).toBe(0)
