@@ -66,8 +66,11 @@ export interface AgentRunnerRunOptions {
   /** Session id override (default: a fresh isolated id). */
   readonly sessionId?: string
   /**
-   * The run's USD ceiling across rounds: a number, or `{ maxCostUsd }`. The run stops before a
-   * round the ceiling cannot cover. `window` and an unusable `maxCostUsd` are refused at the call.
+   * The run's USD ceiling across rounds: a number, or `{ maxCostUsd }`. The first round always
+   * runs, because no earlier round exists to project its cost from; when that round alone passes
+   * the ceiling, the run then stops with `DelegationBudgetExceededError`. Every later round is
+   * projected at the last round's cost, and the run stops before a round the ceiling cannot cover.
+   * `window`, and a `maxCostUsd` that is not a finite number above zero, are refused at the call.
    */
   readonly budget?: number | BudgetOptions
   /** Cancellation — aborts stop the reflective loop from re-entering. */

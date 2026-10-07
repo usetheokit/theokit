@@ -95,7 +95,12 @@ export interface ToolOptions {
 
 /** USD budget for one run, passed as the run option `budget` (`AgentRunner.run` / `stream`). */
 export interface BudgetOptions {
-  /** Maximum cost in USD for the run; the run stops before a round that would exceed it. */
+  /**
+   * Maximum cost in USD for the run; must be a finite number above zero. The first round always
+   * runs, because no earlier round exists to project its cost from, and when it alone passes this
+   * ceiling the run then stops with `DelegationBudgetExceededError`. Later rounds are projected at
+   * the last round's cost, and the run stops before a round that would exceed the ceiling.
+   */
   maxCostUsd: number
   /** Rolling window for budget tracking. Not supported by a run, which refuses it before any round. */
   window?: 'daily' | 'monthly'

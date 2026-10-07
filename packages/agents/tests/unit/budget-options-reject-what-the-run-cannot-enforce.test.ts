@@ -3,7 +3,9 @@
  *
  * `window` asks for a rolling daily or monthly budget, which needs spend persisted across runs; a
  * single run has nowhere to keep it, so honouring the field silently would cap nothing. A
- * `maxCostUsd` that is missing, negative, not finite or not a number is no ceiling either. All of
+ * `maxCostUsd` that is missing, zero, negative, not finite or not a number is no ceiling either:
+ * zero cannot be enforced, because the first round has no earlier round to project its cost from
+ * and so always runs, which would charge one round against a ceiling meant to forbid spend. All of
  * these are refused at the call, with the round factory never invoked. A `null` budget, which an
  * untyped caller can pass, means no ceiling, the same as leaving `budget` out.
  */
@@ -14,7 +16,12 @@ import type { StreamEvent } from '../../src/bridge/agent-sse-handler.js'
 import { MainLoopCapability } from '../../src/capability/agent-capabilities.js'
 import { ModelCapability } from '../../src/capability/capabilities.js'
 import { applyCapabilities } from '../../src/capability/capability.js'
-import { AgentRunner, type BudgetOptions, DelegationError } from '../../src/index.js'
+import {
+  AgentRunner,
+  type BudgetOptions,
+  DelegationBudgetExceededError,
+  DelegationError,
+} from '../../src/index.js'
 
 function buildRunner() {
   const compiled = applyCapabilities([
@@ -67,6 +74,20 @@ describe('a BudgetOptions the run cannot enforce', () => {
   it('test_a_negative_or_non_finite_max_cost_usd_is_refused_before_any_round', async () => {
     await expectRefusedNaming({ maxCostUsd: -1 }, 'maxCostUsd')
     await expectRefusedNaming({ maxCostUsd: Number.NaN }, 'maxCostUsd')
+  })
+
+  it('test_a_zero_max_cost_usd_is_refused_before_any_round', async () => {
+    await expectRefusedNaming({ maxCostUsd: 0 }, 'maxCostUsd')
+  })
+
+  it('test_a_positive_ceiling_below_one_round_runs_one_round_then_stops_overspent', async () => {
+    const { threw, calls } = await refusal({ maxCostUsd: 0.005 })
+    expect(calls).toBe(1)
+    expect(threw).toBeInstanceOf(DelegationBudgetExceededError)
+    const error = threw as InstanceType<typeof DelegationBudgetExceededError>
+    expect(error.budgetLimit).toBe(0.005)
+    expect(error.actualCost).toBe(0.01)
+    expect(error.projectedRoundCost).toBeUndefined()
   })
 
   it('test_a_missing_or_string_max_cost_usd_is_refused_before_any_round', async () => {

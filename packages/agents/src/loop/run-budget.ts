@@ -72,7 +72,9 @@ export function throwIfNextRoundRefused(
  * A number is the ceiling as it always was, unvalidated, so an existing caller sees no change. A
  * `BudgetOptions` contributes its `maxCostUsd`; one the run cannot enforce is refused here, at the
  * call, rather than honoured partially: `window` asks for spend kept across runs, which a single run
- * has nowhere to keep, and a `maxCostUsd` that is not a finite number of zero or more caps nothing.
+ * has nowhere to keep, and a `maxCostUsd` that is not a finite number above zero caps nothing. Zero
+ * is refused too: the first round always runs, because no earlier round exists to project its cost
+ * from, so a ceiling of zero would be charged one round and then raise the overspend error.
  * `null`, which an untyped caller can pass, means no ceiling, the same as leaving `budget` out.
  */
 export function resolveRunBudget(
@@ -90,10 +92,10 @@ export function resolveRunBudget(
     )
   }
   const { maxCostUsd } = budget as { maxCostUsd: unknown }
-  if (typeof maxCostUsd !== 'number' || !Number.isFinite(maxCostUsd) || maxCostUsd < 0) {
+  if (typeof maxCostUsd !== 'number' || !Number.isFinite(maxCostUsd) || maxCostUsd <= 0) {
     throw new DelegationError(
       agentName,
-      new Error(`budget.maxCostUsd must be a finite number >= 0, got ${String(maxCostUsd)}`),
+      new Error(`budget.maxCostUsd must be a finite number > 0, got ${String(maxCostUsd)}`),
     )
   }
   return maxCostUsd
