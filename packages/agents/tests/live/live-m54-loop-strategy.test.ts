@@ -18,6 +18,8 @@ import { ToolboxCapability, type ToolDeclaration } from '../../src/capability/to
 import { AgentRunner } from '../../src/loop/agent-runner.js'
 import type { LoopStrategy, LoopOutcome } from '../../src/loop/loop-strategy.js'
 
+import { redactThenCut } from './provider-text.js'
+
 const MODEL = process.env.LIVE_MODEL ?? 'google/gemini-2.5-flash-lite'
 const KEYS = ['OPENROUTER_API_KEY', 'ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'THEOKIT_API_KEY']
 const HAS_KEY = KEYS.some((n) => (process.env[n] ?? '').length > 0)
@@ -86,7 +88,7 @@ describe.skipIf(!HAS_KEY)('M54 LIVE — custom loopStrategy against a real provi
 
     console.log(`[live] rounds observed by the custom shouldContinue: ${JSON.stringify(rounds)}`)
     console.log(`[live] finishReason: ${result.finishReason}`)
-    console.log(`[live] response: ${result.response.slice(0, 200)}`)
+    console.log(`[live] response: ${redactThenCut(result.response, 200)}`)
 
     // The custom ran (it observed at least one round) and the runner bounded it at maxIterations=2.
     expect(rounds.length).toBeGreaterThan(0)
