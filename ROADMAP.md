@@ -635,7 +635,7 @@ exists.
 - [ ] the published ACP tool sends `initialize`, `session/new` and `session/prompt`, in that order, to a real ACP agent process (B-408)
 - [ ] a run whose next call would exceed `maxCostUsd` stops with a typed error naming the limit and the spend, and a run whose provider reports no cost is not treated as free (B-409, B-419)
 - [ ] `theo generate schedule` in a freshly scaffolded app produces a schedule that runs the chat agent at its time (B-411)
-- [ ] `pnpm --filter theoclaw run parity` lists every one of the 113 OpenClaw and Hermes rows with either a passing end-to-end check or a written reason, and fails on any row that has neither (B-404)
+- [ ] `pnpm --filter theoclaw run parity` reads every one of the 113 OpenClaw and Hermes rows, accepts a row only with a passing end-to-end check or a written reason, and exits non-zero naming each row that has neither (B-404). Answering every open row is the parity programme of later sprints, not this milestone (decided by Paulo on 2026-10-07)
 - [ ] the pillar check fails on a pillar with no passing named end-to-end test and no written reason, and on any import from `apps/` into a package's `src/` (B-416)
 - [ ] the CI job on the last push to `develop` shows a real model response, or states that the provider could not be reached, and no credential value appears in its log (B-415)
 - [ ] Applies to: Web. The changed packages run in the Node server runtime that the published build serves, and acceptance exercises them there
