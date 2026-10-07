@@ -18,8 +18,9 @@ export const MIN_KEY_FRAGMENT: number
 
 /**
  * Replace every run of `MIN_KEY_FRAGMENT` or more characters of `key` (the whole key, a head, a
- * tail or a middle), then every `sk-or-v1-` prefix with the hex that follows it, with `***`. A
- * blank `key` skips the first pass only.
+ * tail or a middle) and every `sk-or-v1-` prefix with the hex that follows it with `***`. Both are
+ * found on the original text and merged, so a configured key never hides another key from the
+ * prefix pattern. A blank `key` applies the prefix pattern only.
  */
 export function redact(text: string, key: string): string
 

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { PREFLIGHT_TIMEOUT_MS, runPreflight } from '../../scripts/live-model-preflight.mjs'
+import { PREFLIGHT_TIMEOUT_MS, redact, runPreflight } from '../../scripts/live-model-preflight.mjs'
 
 /**
  * The live-model job's first step sends one request to OpenRouter and prints why it could not
@@ -165,5 +165,32 @@ describe('runPreflight', () => {
     const { lines, run } = harness(answer('x'.repeat(150) + 'sk-or-v1-' + 'a'.repeat(64)))
     expect(await run).toBe(0)
     for (const line of lines) expect(line).not.toMatch(SHAPE)
+  })
+})
+
+/**
+ * A configured key must never stop the prefix-shape redaction from reaching another key. Measured
+ * by the surface-closure audit (F-9fe94e30, case C-25): the configured key's own `sk-or-v1-` is a
+ * run of 8 or more of its characters, so redacting that run first removed the prefix the shape
+ * needs and the other key's 64 hex digits reached the log whole.
+ */
+describe('redact', () => {
+  const configured = 'sk-or-v1-' + HEX64
+  const other = 'sk-or-v1-' + 'f7e6d5c4b3a29180'.repeat(4)
+
+  it('redacts the prefix and every hex digit of another key while a key is configured', () => {
+    expect(redact(`other ${other}`, configured)).toBe('other ***')
+  })
+
+  it('redacts another key that directly follows a fragment of the configured key', () => {
+    const output = redact(`${configured.slice(-20)}${other} end`, configured)
+    expect(output).not.toMatch(/[0-9a-f]{8,}/i)
+    expect(output).toMatch(/^\*+ end$/)
+  })
+
+  it('still redacts a run of the configured key with no prefix next to another key', () => {
+    expect(redact(`tail ${configured.slice(-12)} and ${other}`, configured)).toBe(
+      'tail *** and ***',
+    )
   })
 })

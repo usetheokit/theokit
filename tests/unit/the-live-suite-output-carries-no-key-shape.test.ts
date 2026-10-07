@@ -87,6 +87,24 @@ describe('redactStream', () => {
     expect(output).toBe('answer *** end\n')
   })
 
+  it('redacts every hex digit of another key while a key is configured', async () => {
+    // F-9fe94e30, case C-25: the configured key's own prefix was redacted as a run first, which
+    // left the other key's prefix unmatched and its hex in the log.
+    const other = 'sk-or-v1-' + 'f7e6d5c4b3a29180'.repeat(4)
+    expect(await filter([`other ${other}\n`], KEY)).toBe('other ***\n')
+  })
+
+  it('redacts another key as a process with OPENROUTER_API_KEY set', () => {
+    const other = 'sk-or-v1-' + 'f7e6d5c4b3a29180'.repeat(4)
+    const result = spawnSync(process.execPath, [FILTER], {
+      input: `other ${other}\n`,
+      env: { OPENROUTER_API_KEY: KEY },
+      encoding: 'utf8',
+    })
+    expect(result.status).toBe(0)
+    expect(result.stdout).toBe('other ***\n')
+  })
+
   it('passes ordinary lines through unchanged and keeps a last line with no newline', async () => {
     const input = 'Test Files  3 passed (3)\n      Tests  4 passed (4)'
     expect(await filter([input], KEY)).toBe(input + '\n')
