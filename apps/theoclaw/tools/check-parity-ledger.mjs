@@ -192,17 +192,65 @@ function judgeEntry(entry, repoRoot, today) {
   }
 }
 
+/** Caller contract, not ledger content: without them a cited path cannot be resolved and a
+ * future verified_on compares false against undefined, so the rule would pass in silence. */
+function assertCallerContract(repoRoot, today) {
+  if (typeof repoRoot !== 'string' || !isAbsolute(repoRoot)) {
+    throw new TypeError(`checkLedger: repoRoot must be an absolute path, got ${JSON.stringify(repoRoot)}`)
+  }
+  if (!isIsoDate(today)) throw new TypeError(`checkLedger: today must be a YYYY-MM-DD date, got ${JSON.stringify(today)}`)
+}
+
+/** Every ledger id answered more than once. */
+function judgeDuplicates(entries) {
+  return repeated(entries.map((entry) => entry.id)).map((id) => ({
+    id,
+    rule: 'duplicate',
+    detail: 'the ledger answers this row more than once',
+  }))
+}
+
+/** Every id a readable source declares and the ledger does not answer. */
+function judgeMissing(ledgerIds, inventory, hermes) {
+  return [...(inventory ?? []), ...(hermes ?? [])]
+    .filter((id) => !ledgerIds.has(id))
+    .map((id) => ({ id, rule: 'missing', detail: 'no ledger entry' }))
+}
+
+/** Every ledger id no source declares; judged only when both sources were read. */
+function judgeExtra(ledgerIds, inventory, hermes) {
+  if (inventory === null || hermes === null) return []
+  const sourceIds = new Set([...inventory, ...hermes])
+  return [...ledgerIds]
+    .filter((id) => !sourceIds.has(id))
+    .map((id) => ({ id, rule: 'extra', detail: 'no source declares this row' }))
+}
+
+/** The violations of the ledger's coverage of the two sources: duplicates, then missing, then extra. */
+function judgeCoverage(entries, inventory, hermes) {
+  const ledgerIds = new Set(entries.map((entry) => entry.id))
+  return [
+    ...judgeDuplicates(entries),
+    ...judgeMissing(ledgerIds, inventory, hermes),
+    ...judgeExtra(ledgerIds, inventory, hermes),
+  ]
+}
+
+/** How many entries carry each known status; an unknown status is counted nowhere. */
+function countStatuses(entries) {
+  const counts = { shipped: 0, out: 0, open: 0 }
+  for (const entry of entries) {
+    if (Object.hasOwn(counts, entry.status)) counts[entry.status] += 1
+  }
+  return counts
+}
+
 /**
  * Every violation of the ledger against the two sources, and the counts of its statuses. A `null`
  * text is an input the caller could not read; `reasons` names why (default `absent`).
  */
 export function checkLedger({ inventoryText, hermesText, ledgerText, repoRoot, today, reasons = {} }) {
-  // Caller contract, not ledger content: without them a cited path cannot be resolved and a
-  // future verified_on compares false against undefined, so the rule would pass in silence.
-  if (typeof repoRoot !== 'string' || !isAbsolute(repoRoot)) {
-    throw new TypeError(`checkLedger: repoRoot must be an absolute path, got ${JSON.stringify(repoRoot)}`)
-  }
-  if (!isIsoDate(today)) throw new TypeError(`checkLedger: today must be a YYYY-MM-DD date, got ${JSON.stringify(today)}`)
+  assertCallerContract(repoRoot, today)
   const violations = []
   const ledger = parseLedger(ledgerText, violations, reasons.ledger)
   const inventory = readSource(
@@ -216,29 +264,10 @@ export function checkLedger({ inventoryText, hermesText, ledgerText, repoRoot, t
   const hermes = readSource(hermesText, parseHermesIds, HERMES_FLOOR, HERMES_PATH, violations, reasons.hermes)
   const entries = ledger ?? []
 
-  if (ledger !== null) {
-    const ledgerIds = new Set(entries.map((entry) => entry.id))
-    for (const id of repeated(entries.map((entry) => entry.id))) {
-      violations.push({ id, rule: 'duplicate', detail: 'the ledger answers this row more than once' })
-    }
-    for (const id of [...(inventory ?? []), ...(hermes ?? [])]) {
-      if (!ledgerIds.has(id)) violations.push({ id, rule: 'missing', detail: 'no ledger entry' })
-    }
-    if (inventory !== null && hermes !== null) {
-      const sourceIds = new Set([...inventory, ...hermes])
-      for (const id of ledgerIds) {
-        if (!sourceIds.has(id)) violations.push({ id, rule: 'extra', detail: 'no source declares this row' })
-      }
-    }
-  }
-
+  if (ledger !== null) violations.push(...judgeCoverage(entries, inventory, hermes))
   for (const entry of entries) violations.push(...judgeEntry(entry, repoRoot, today))
 
-  const counts = { shipped: 0, out: 0, open: 0 }
-  for (const entry of entries) {
-    if (Object.hasOwn(counts, entry.status)) counts[entry.status] += 1
-  }
-  return { counts, violations }
+  return { counts: countStatuses(entries), violations }
 }
 
 /** The counts line, then `<id> <rule>: <detail>` for each violation. */
