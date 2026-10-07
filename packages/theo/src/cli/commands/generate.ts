@@ -390,7 +390,7 @@ export async function generate(opts: GenerateOptions): Promise<GenerateResult> {
   if (!name || !toKebabCase(name)) {
     return {
       status: 'invalid_name',
-      message: `Invalid name "${name}". Use kebab-case: lowercase letters, numbers, hyphens.`,
+      message: `Invalid name "${name}". Use kebab-case: lowercase letters, numbers, hyphens. Example: my-route`,
     }
   }
 
@@ -464,9 +464,9 @@ export async function generateCommand(
     case 'invalid_kind':
       throw new Error(result.message ?? 'Invalid kind')
     case 'invalid_name':
-      throw new Error(
-        `Invalid name "${name}". Use kebab-case: lowercase letters, numbers, hyphens. Example: my-route`,
-      )
+      // `generate` returns invalid_name for a malformed name, a reserved name and a path that
+      // resolves outside the project; each message says which, so the CLI must not replace it.
+      throw new Error(result.message ?? `Invalid name "${name}"`)
     case 'invalid_config':
       throw new Error(result.message ?? 'Invalid theo.config.ts')
     case 'agent_not_found':

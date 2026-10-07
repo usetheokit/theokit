@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import {
   copyFileSync,
   existsSync,
@@ -11,7 +11,7 @@ import {
 } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
-import { generate } from '../../packages/theo/src/cli/commands/generate.js'
+import { generate, generateCommand } from '../../packages/theo/src/cli/commands/generate.js'
 import { scanCronDirs } from '../../packages/theo/src/server/cron/cron-scan.js'
 
 const REPO = resolve(__dirname, '../..')
@@ -44,6 +44,25 @@ describe('a schedule is written only where it can run', () => {
       expect(result.message).toContain('outside the project root')
       expect(existsSync(join(tmp, 'elsewhere/agents/schedules/daily-digest.ts'))).toBe(false)
     } finally {
+      rmSync(tmp, { recursive: true, force: true })
+    }
+  })
+
+  it('test_the_cli_names_an_agents_dir_outside_the_project_as_path_traversal', async () => {
+    // F-00958182: the CLI printed a fixed "Invalid name ... Use kebab-case" for a valid name, so
+    // the user was told to rename the schedule and never that the configured agentsDir escaped.
+    const tmp = mkdtempSync(join(tmpdir(), 'theo-gen-schedule-cli-outside-'))
+    const cwd = vi.spyOn(process, 'cwd')
+    try {
+      const app = projectWithExternalAgentsDir(tmp, '../outside')
+      cwd.mockReturnValue(app)
+
+      const run = generateCommand('schedule', 'escaped')
+
+      await expect(run).rejects.toThrow(/^Path traversal denied: ".*" is outside the project root /)
+      expect(existsSync(join(tmp, 'outside/schedules/escaped.ts'))).toBe(false)
+    } finally {
+      cwd.mockRestore()
       rmSync(tmp, { recursive: true, force: true })
     }
   })
