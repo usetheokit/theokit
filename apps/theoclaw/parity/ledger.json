@@ -35,10 +35,10 @@
   {"id":"OC-34","status":"open"},
   {"id":"OC-35","status":"open"},
   {"id":"OC-36","status":"open"},
-  {"id":"OC-37","status":"open"},
+  {"id":"OC-37","status":"out","reason":"A native desktop app per operating system is a product of its own; the desktop stays in through @theokit/tauri.","declared_by":"human/paulo","declared_on":"2026-10-06","declared_at":"apps/theoclaw/parity/decisions-2026-10-06.md"},
   {"id":"OC-38","status":"out","reason":"Native mobile apps and device nodes are a product of their own; the desktop stays in through @theokit/tauri.","declared_by":"human/paulo","declared_on":"2026-10-04","declared_at":".squad/wiki/product/objectives.md:222"},
   {"id":"OC-39","status":"out","reason":"Native mobile apps and device nodes are a product of their own; the desktop stays in through @theokit/tauri.","declared_by":"human/paulo","declared_on":"2026-10-04","declared_at":".squad/wiki/product/objectives.md:222"},
-  {"id":"OC-40","status":"open"},
+  {"id":"OC-40","status":"out","reason":"A native companion app per operating system is a product of its own; the desktop stays in through @theokit/tauri.","declared_by":"human/paulo","declared_on":"2026-10-06","declared_at":"apps/theoclaw/parity/decisions-2026-10-06.md"},
   {"id":"OC-41","status":"open"},
   {"id":"OC-42","status":"out","reason":"Native mobile apps and device nodes are a product of their own; the desktop stays in through @theokit/tauri.","declared_by":"human/paulo","declared_on":"2026-10-04","declared_at":".squad/wiki/product/objectives.md:222"},
   {"id":"OC-43","status":"out","reason":"Native mobile apps and device nodes are a product of their own; the desktop stays in through @theokit/tauri.","declared_by":"human/paulo","declared_on":"2026-10-04","declared_at":".squad/wiki/product/objectives.md:222"},
@@ -111,5 +111,5 @@
   {"id":"H-4","status":"open"},
   {"id":"H-5","status":"open"},
   {"id":"H-6","status":"out","reason":"Hibernating when idle solves a cloud cost nobody pays with one self-hosted instance per person.","declared_by":"human/paulo","declared_on":"2026-09-17","declared_at":".squad/wiki/product/product-vision.md:243"},
-  {"id":"H-7","status":"open"}
+  {"id":"H-7","status":"out","reason":"Batch trajectory generation for training tool-calling models is model-training tooling, not a capability of a personal messaging assistant.","declared_by":"human/paulo","declared_on":"2026-10-06","declared_at":"apps/theoclaw/parity/decisions-2026-10-06.md"}
 ]
