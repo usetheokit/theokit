@@ -8,13 +8,23 @@
  * agent's reply text arrives the way ACP delivers it, as a "session/update" notification
  * carrying an `agent_message_chunk`, and the prompt response itself carries only `stopReason`.
  */
+import { writeFileSync } from 'node:fs'
 import { createInterface } from 'node:readline'
 
 let initialized = false
 const sessions = new Set()
 // `--refuse=<method>` makes the agent answer that method with an error that does not name it, so
 // a caller can only report which step failed by adding the method itself.
-const refused = process.argv.find((arg) => arg.startsWith('--refuse='))?.slice('--refuse='.length)
+const flag = (name) =>
+  process.argv.find((arg) => arg.startsWith(`--${name}=`))?.slice(`--${name}=`.length)
+const refused = flag('refuse')
+// `--exit-on=<method>` exits with code 3 on receiving that method, an agent dying mid-turn.
+const exitOn = flag('exit-on')
+// `--silent-on=<method>` never answers that method, an agent that is stuck.
+const silentOn = flag('silent-on')
+// `--pid-file=<path>` writes this process's pid there, so a test can check it is gone afterwards.
+const pidFile = flag('pid-file')
+if (pidFile) writeFileSync(pidFile, String(process.pid))
 
 function send(message) {
   process.stdout.write(`${JSON.stringify({ jsonrpc: '2.0', ...message })}\n`)
@@ -68,5 +78,7 @@ function onRequest({ id, method, params }) {
 createInterface({ input: process.stdin }).on('line', (line) => {
   if (line.trim().length === 0) return
   const message = JSON.parse(line)
-  if (typeof message.id === 'number' && typeof message.method === 'string') onRequest(message)
+  if (typeof message.id !== 'number' || typeof message.method !== 'string') return
+  if (message.method === exitOn) process.exit(3)
+  if (message.method !== silentOn) onRequest(message)
 })
