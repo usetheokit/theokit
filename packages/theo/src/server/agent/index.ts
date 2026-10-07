@@ -11,8 +11,14 @@
 // Agent-tool adapters — wrap an external runtime (coding agent, SDK workflow) as a `CustomTool`.
 export { createWorkflowTool } from './workflow-tool.js'
 export type { WorkflowLike, WorkflowToolConfig } from './workflow-tool.js'
-export { createACPTool, NodeAcpTransport } from './acp-tool.js'
-export type { AcpToolConfig } from './acp-tool.js'
+export {
+  createACPTool,
+  NodeAcpTransport,
+  AcpTransportClosedError,
+  AcpRequestTimeoutError,
+  DEFAULT_ACP_TIMEOUT_MS,
+} from './acp-tool.js'
+export type { AcpToolConfig, AcpToolTransport } from './acp-tool.js'
 export { createVendorAgentTool } from './vendor-agent-tool.js'
 export type { VendorAgentClient, VendorAgentToolConfig } from './vendor-agent-tool.js'
 

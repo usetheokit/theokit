@@ -9,6 +9,11 @@
  * `onPermissionRequest` is REQUIRED — security by default (no default-allow for file/shell
  * operations); its decision is answered as an ACP permission outcome. The transport is injectable
  * for tests.
+ *
+ * Each call owns its transport: it is closed when the call ends, on a reply, a refusal or an
+ * error, so no agent process outlives the call that spawned it. A process that cannot start or
+ * exits mid-turn rejects the call with {@link AcpTransportClosedError}; a request the agent does
+ * not answer within `timeoutMs` rejects it with {@link AcpRequestTimeoutError}.
  */
 import { spawn, type ChildProcessByStdio } from 'node:child_process'
 import { resolve } from 'node:path'
@@ -17,17 +22,79 @@ import type { Readable, Writable } from 'node:stream'
 import { AcpClient, type AcpTransport } from '@theokit/agents'
 import type { CustomTool } from '@theokit/sdk'
 
+/** The agent process could not start, failed, or exited before the call finished. */
+export class AcpTransportClosedError extends Error {
+  override readonly name = 'AcpTransportClosedError'
+
+  constructor(
+    /** The agent executable, as configured. */
+    readonly command: string,
+    /** What happened to the process, e.g. `exited with code 3` or `failed: spawn x ENOENT`. */
+    readonly reason: string,
+    options?: { cause?: unknown },
+  ) {
+    super(`[theokit] createACPTool: the agent process "${command}" ${reason}`, options)
+  }
+}
+
+/** The agent did not answer one request of the turn within the configured timeout. */
+export class AcpRequestTimeoutError extends Error {
+  override readonly name = 'AcpRequestTimeoutError'
+
+  constructor(
+    /** The agent executable, as configured. */
+    readonly command: string,
+    /** The ACP method left unanswered, e.g. `session/prompt`. */
+    readonly method: string,
+    /** The timeout that elapsed, in milliseconds. */
+    readonly timeoutMs: number,
+  ) {
+    super(
+      `[theokit] createACPTool: the agent "${command}" did not answer ${method} within ${String(timeoutMs)}ms`,
+    )
+  }
+}
+
+/**
+ * A transport {@link createACPTool} can release. `close` is called once when the call ends;
+ * `onClose` reports a channel that closed on its own (the process failed or exited), which rejects
+ * the request in flight. Both are optional so a plain {@link AcpTransport} still works.
+ */
+export interface AcpToolTransport extends AcpTransport {
+  close?(): void
+  onClose?(listener: (error: AcpTransportClosedError) => void): void
+}
+
 /** Stdio transport backed by a spawned subprocess (the default for {@link createACPTool}). */
-export class NodeAcpTransport implements AcpTransport {
+export class NodeAcpTransport implements AcpToolTransport {
   // stdin=pipe, stdout=pipe, stderr=inherit → the third stream is null.
   private readonly proc: ChildProcessByStdio<Writable, Readable, null>
+  private closed: AcpTransportClosedError | undefined
+  private readonly listeners: ((error: AcpTransportClosedError) => void)[] = []
 
-  constructor(command: string, args: string[] = [], cwd?: string) {
+  constructor(
+    private readonly command: string,
+    args: string[] = [],
+    cwd?: string,
+  ) {
     this.proc = spawn(command, args, { cwd, stdio: ['pipe', 'pipe', 'inherit'] })
+    // Without an 'error' listener a spawn failure (ENOENT) is thrown as an uncaught exception that
+    // takes the host down; stdin raises EPIPE when the process is gone. Both end the channel.
+    this.proc.on('error', (err) => {
+      this.end(`failed: ${err.message}`, err)
+    })
+    this.proc.stdin.on('error', (err) => {
+      this.end(`closed its stdin: ${err.message}`, err)
+    })
+    // 'close', not 'exit': it fires after stdout is drained, so a reply written just before the
+    // process exits is still delivered.
+    this.proc.on('close', (code, signal) => {
+      this.end(code === null ? `exited on signal ${String(signal)}` : `exited with code ${code}`)
+    })
   }
 
   send(line: string): void {
-    this.proc.stdin.write(line)
+    if (this.closed === undefined) this.proc.stdin.write(line)
   }
 
   subscribe(onData: (chunk: string) => void): void {
@@ -36,8 +103,22 @@ export class NodeAcpTransport implements AcpTransport {
     })
   }
 
+  onClose(listener: (error: AcpTransportClosedError) => void): void {
+    if (this.closed !== undefined) listener(this.closed)
+    else this.listeners.push(listener)
+  }
+
   close(): void {
+    this.end('was closed by the caller')
     this.proc.kill()
+  }
+
+  /** Record the first way the channel ended and tell every listener; later endings are ignored. */
+  private end(reason: string, cause?: unknown): void {
+    if (this.closed !== undefined) return
+    const error = new AcpTransportClosedError(this.command, reason, { cause })
+    this.closed = error
+    for (const listener of this.listeners.splice(0)) listener(error)
   }
 }
 
@@ -57,11 +138,20 @@ export interface AcpToolConfig {
    * there is NO default-allow. Return `{ granted: boolean }` (may be async).
    */
   onPermissionRequest: (params: unknown) => { granted: boolean } | Promise<{ granted: boolean }>
+  /**
+   * How long one request of the turn (`initialize`, `session/new`, `session/prompt`) may wait for
+   * the agent's answer, in milliseconds. Defaults to {@link DEFAULT_ACP_TIMEOUT_MS}. A request
+   * past it rejects the call with {@link AcpRequestTimeoutError} and the agent process is closed.
+   */
+  timeoutMs?: number
   /** Injected transport factory (defaults to spawning via {@link NodeAcpTransport}) — for tests. */
-  transportFactory?: (config: AcpToolConfig) => AcpTransport
+  transportFactory?: (config: AcpToolConfig) => AcpToolTransport
 }
 
-function defaultTransport(config: AcpToolConfig): AcpTransport {
+/** Default per-request timeout: ten minutes, room for a long coding turn without hanging forever. */
+export const DEFAULT_ACP_TIMEOUT_MS = 600_000
+
+function defaultTransport(config: AcpToolConfig): AcpToolTransport {
   return new NodeAcpTransport(config.command, config.args, config.cwd)
 }
 
@@ -106,16 +196,46 @@ function agentTextChunk(params: unknown, sessionId: string): string | undefined 
   return content.type === 'text' && typeof content.text === 'string' ? content.text : undefined
 }
 
+/** What one turn needs besides the client: who to name in errors, and how long to wait. */
+interface Turn {
+  client: AcpClient
+  command: string
+  timeoutMs: number
+  /** Set when the transport closed on its own; every later step rejects with it. */
+  closed?: AcpTransportClosedError
+  /** Rejects the step in flight, so a transport that closes mid-request ends it. */
+  abort?: (error: Error) => void
+}
+
 /**
  * Send one step of the turn. A refusal rejects with an error naming the method, keeping the
- * agent's error as `cause`, so the caller learns which step failed and nothing later is sent.
+ * agent's error as `cause`, so the caller learns which step failed and nothing later is sent. A
+ * closed transport or an elapsed timeout rejects with its own typed error, unwrapped.
  */
-async function step(client: AcpClient, method: string, params: unknown): Promise<unknown> {
+async function step(turn: Turn, method: string, params: unknown): Promise<unknown> {
+  if (turn.closed) throw turn.closed
+  let timer: ReturnType<typeof setTimeout> | undefined
   try {
-    return await client.request(method, params)
-  } catch (cause) {
-    const reason = cause instanceof Error ? cause.message : String(cause)
-    throw new Error(`[theokit] createACPTool: the agent refused ${method}: ${reason}`, { cause })
+    return await new Promise<unknown>((resolve, reject) => {
+      turn.abort = reject
+      timer = setTimeout(() => {
+        reject(new AcpRequestTimeoutError(turn.command, method, turn.timeoutMs))
+      }, turn.timeoutMs)
+      turn.client
+        .request(method, params)
+        .then(resolve)
+        .catch((cause: unknown) => {
+          const reason = cause instanceof Error ? cause.message : String(cause)
+          reject(
+            new Error(`[theokit] createACPTool: the agent refused ${method}: ${reason}`, {
+              cause,
+            }),
+          )
+        })
+    })
+  } finally {
+    clearTimeout(timer)
+    turn.abort = undefined
   }
 }
 
@@ -131,17 +251,17 @@ function sessionIdOf(created: unknown): string {
  * Run one ACP turn: handshake, prompt, and the reply text streamed for the session. Updates are
  * buffered as they arrive (before `session/prompt` resolves) and filtered by the session after.
  */
-async function runTurn(client: AcpClient, cwd: string, message: string): Promise<string> {
+async function runTurn(turn: Turn, cwd: string, message: string): Promise<string> {
   const updates: unknown[] = []
-  client.onNotification('session/update', (params) => {
+  turn.client.onNotification('session/update', (params) => {
     updates.push(params)
   })
-  await step(client, 'initialize', {
+  await step(turn, 'initialize', {
     protocolVersion: ACP_PROTOCOL_VERSION,
     clientCapabilities: {},
   })
-  const sessionId = sessionIdOf(await step(client, 'session/new', { cwd, mcpServers: [] }))
-  await step(client, 'session/prompt', { sessionId, prompt: [{ type: 'text', text: message }] })
+  const sessionId = sessionIdOf(await step(turn, 'session/new', { cwd, mcpServers: [] }))
+  await step(turn, 'session/prompt', { sessionId, prompt: [{ type: 'text', text: message }] })
   const texts = updates.map((params) => agentTextChunk(params, sessionId))
   return texts.filter((text): text is string => text !== undefined).join('')
 }
@@ -151,6 +271,12 @@ export function createACPTool(config: AcpToolConfig): CustomTool {
   if (typeof config.onPermissionRequest !== 'function') {
     throw new Error(
       '[theokit] createACPTool requires onPermissionRequest (security by default — no default-allow)',
+    )
+  }
+  const timeoutMs = config.timeoutMs ?? DEFAULT_ACP_TIMEOUT_MS
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    throw new RangeError(
+      `[theokit] createACPTool: timeoutMs must be a positive finite number of milliseconds (got ${String(timeoutMs)})`,
     )
   }
   const makeTransport = config.transportFactory ?? defaultTransport
@@ -166,11 +292,21 @@ export function createACPTool(config: AcpToolConfig): CustomTool {
     },
     handler: async (input: Record<string, unknown>): Promise<string> => {
       const message = typeof input.message === 'string' ? input.message : ''
-      const client = new AcpClient(makeTransport(config))
-      client.onRequest('session/request_permission', async (params) =>
-        toAcpPermissionResponse(params, await config.onPermissionRequest(params)),
-      )
-      return runTurn(client, resolve(config.cwd ?? process.cwd()), message)
+      const transport = makeTransport(config)
+      try {
+        const turn: Turn = { client: new AcpClient(transport), command: config.command, timeoutMs }
+        transport.onClose?.((error) => {
+          turn.closed = error
+          turn.abort?.(error)
+        })
+        turn.client.onRequest('session/request_permission', async (params) =>
+          toAcpPermissionResponse(params, await config.onPermissionRequest(params)),
+        )
+        return await runTurn(turn, resolve(config.cwd ?? process.cwd()), message)
+      } finally {
+        // The agent is a long-lived stdio server: left open, every call would leave one running.
+        transport.close?.()
+      }
     },
   }
 }

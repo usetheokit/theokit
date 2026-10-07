@@ -12,7 +12,12 @@ import type { AcpTransport } from '../../packages/agents/src/acp/client.js'
 import { encodeAcpMessage, AcpMessageDecoder } from '../../packages/agents/src/acp/protocol.js'
 import { describe, expect, it, vi } from 'vitest'
 
-import { createACPTool, NodeAcpTransport } from '../../packages/theo/src/server/agent/acp-tool.js'
+import {
+  AcpRequestTimeoutError,
+  AcpTransportClosedError,
+  createACPTool,
+  NodeAcpTransport,
+} from '../../packages/theo/src/server/agent/acp-tool.js'
 
 /** ACP v1 params of the permission request the scripted agent sends mid-prompt. */
 const PERMISSION_PARAMS = {
@@ -35,6 +40,10 @@ function scriptedTransport(
     onSend?: (msg: Record<string, unknown>) => void
     askPermission?: boolean
     permissionReplies?: Record<string, unknown>[]
+    /** Answer this method with a JSON-RPC error, the way an agent refuses a step. */
+    refuse?: string
+    /** Never answer this method, the way a stuck agent behaves. */
+    silentOn?: string
   } = {},
 ): AcpTransport {
   const dec = new AcpMessageDecoder()
@@ -68,7 +77,12 @@ function scriptedTransport(
       for (const m of dec.push(line)) {
         const msg = m as Record<string, unknown>
         options.onSend?.(msg)
-        if (msg.method === 'initialize') reply({ id: msg.id, result: { protocolVersion: 1 } })
+        if (options.refuse !== undefined && msg.method === options.refuse) {
+          reply({ id: msg.id, error: { code: -32602, message: 'invalid params' } })
+        } else if (options.silentOn !== undefined && msg.method === options.silentOn) {
+          // no answer: the request stays pending on the agent side forever
+        } else if (msg.method === 'initialize')
+          reply({ id: msg.id, result: { protocolVersion: 1 } })
         else if (msg.method === 'session/new') reply({ id: msg.id, result: { sessionId: 's1' } })
         else if (msg.method === 'session/prompt') onPrompt(msg)
         else if (msg.id === 7 && msg.method === undefined) {
@@ -179,5 +193,108 @@ describe('NodeAcpTransport (real subprocess smoke)', () => {
       received.join(''),
       'the echo agent never answered within 10s — this is the round-trip failing, not the machine',
     ).toContain('ok:hey')
+  })
+})
+
+/** A scripted transport that counts `close()` calls and can report it closed on its own. */
+function recordingTransport(options: Parameters<typeof scriptedTransport>[0] = {}) {
+  const inner = scriptedTransport(options)
+  const record = {
+    closes: 0,
+    signalClosed: (_error: AcpTransportClosedError): void => undefined,
+  }
+  const transport = {
+    send: (line: string) => {
+      inner.send(line)
+    },
+    subscribe: (onData: (chunk: string) => void) => {
+      inner.subscribe(onData)
+    },
+    close: () => {
+      record.closes += 1
+    },
+    onClose: (listener: (error: AcpTransportClosedError) => void) => {
+      record.signalClosed = listener
+    },
+  }
+  return { transport, record }
+}
+
+function toolOver(
+  transport: ReturnType<typeof recordingTransport>['transport'],
+  extra: { timeoutMs?: number } = {},
+) {
+  return createACPTool({
+    command: 'scripted-agent',
+    name: 'code_agent',
+    description: 'd',
+    onPermissionRequest: () => ({ granted: false }),
+    transportFactory: () => transport,
+    ...extra,
+  })
+}
+
+describe('createACPTool releases its transport', () => {
+  it('test_the_transport_is_closed_after_a_successful_call', async () => {
+    const { transport, record } = recordingTransport()
+
+    await expect(toolOver(transport).handler({ message: 'hi' })).resolves.toBe('echo:hi')
+
+    expect(record.closes).toBe(1)
+  })
+
+  it('test_the_transport_is_closed_after_a_refused_step', async () => {
+    const { transport, record } = recordingTransport({ refuse: 'session/new' })
+
+    await expect(toolOver(transport).handler({ message: 'hi' })).rejects.toThrow(
+      /refused session\/new: invalid params/,
+    )
+
+    expect(record.closes).toBe(1)
+  })
+
+  it('test_a_transport_that_closes_mid_turn_rejects_the_call_with_the_closed_error', async () => {
+    const closed = new AcpTransportClosedError('scripted-agent', 'exited with code 3')
+    const { transport, record } = recordingTransport({
+      silentOn: 'session/prompt',
+      onSend: (msg) => {
+        if (msg.method === 'session/prompt') queueMicrotask(() => record.signalClosed(closed))
+      },
+    })
+
+    const failure: unknown = await Promise.resolve(
+      toolOver(transport).handler({ message: 'hi' }),
+    ).then(
+      () => undefined,
+      (err: unknown) => err,
+    )
+
+    expect(failure).toBe(closed)
+    expect(record.closes).toBe(1)
+  })
+
+  it('test_an_agent_that_never_answers_rejects_with_the_timeout_error', async () => {
+    const { transport, record } = recordingTransport({ silentOn: 'session/prompt' })
+
+    const failure: unknown = await Promise.resolve(
+      toolOver(transport, { timeoutMs: 50 }).handler({ message: 'hi' }),
+    ).then(
+      () => undefined,
+      (err: unknown) => err,
+    )
+
+    expect(failure).toBeInstanceOf(AcpRequestTimeoutError)
+    expect((failure as AcpRequestTimeoutError).method).toBe('session/prompt')
+    expect((failure as AcpRequestTimeoutError).timeoutMs).toBe(50)
+    expect((failure as Error).message).toMatch(/scripted-agent.*session\/prompt.*50ms/)
+    expect(record.closes).toBe(1)
+  })
+
+  it('test_a_timeout_that_is_not_a_positive_number_is_refused_at_creation', () => {
+    for (const timeoutMs of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(() => toolOver(recordingTransport().transport, { timeoutMs })).toThrow(
+        /timeoutMs must be a positive finite number/,
+      )
+    }
   })
 })
