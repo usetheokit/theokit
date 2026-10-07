@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
@@ -43,7 +43,10 @@ function stepIndex(fragment: string): number {
 }
 
 const PREFLIGHT = STEPS[stepIndex('live-model-preflight.mjs')] as Step
-const SUITE = STEPS[stepIndex('test:live')] as Step
+const SUITE = STEPS[stepIndex('@theokit/agents test:live')] as Step
+
+const THEOCODE = resolve(__dirname, '../../apps/theocode')
+const A2A_LIVE_TEST = 'packages/agent/tests/live/an-a2a-call-reaches-a-real-model.test.ts'
 
 describe('live-model.yml', () => {
   it('runs on push to develop and on dispatch, and on no other trigger', () => {
@@ -64,11 +67,11 @@ describe('live-model.yml', () => {
   })
 
   it('hands the key only through step env and never names it in a run line', () => {
-    expect(RAW.match(/secrets\.OPENROUTER_API_KEY/g)).toHaveLength(2)
+    expect(RAW.match(/secrets\.OPENROUTER_API_KEY/g)).toHaveLength(3)
     const fromEnv = STEPS.filter((step) =>
       (step.env?.OPENROUTER_API_KEY ?? '').includes('secrets.OPENROUTER_API_KEY'),
     )
-    expect(fromEnv).toHaveLength(2)
+    expect(fromEnv).toHaveLength(3)
     for (const step of STEPS) expect(step.run ?? '').not.toContain('OPENROUTER_API_KEY')
   })
 
@@ -101,6 +104,34 @@ describe('live-model.yml', () => {
   it('pipes the suite output through the key-shape redactor under pipefail', () => {
     expect(SUITE.shell).toBe('bash')
     expect(SUITE.run?.trim()).toMatch(/2>&1 \| node scripts\/redact-key-shapes\.mjs$/)
+  })
+
+  // F-2f1674cd (B-407): the A2A real-model test ran only under `pnpm --filter theocode test` in
+  // ci.yml, which holds no provider key, so it skipped green on every push.
+  it('runs the A2A real-model test after the build, with the key required and redacted', () => {
+    const a2a = stepIndex('--filter theocode test:live')
+    expect(a2a).toBeGreaterThan(stepIndex('pnpm --filter "@theokit/agents..." build'))
+    const A2A_SUITE = STEPS[a2a] as Step
+    expect(A2A_SUITE.env?.OPENROUTER_API_KEY).toContain('secrets.OPENROUTER_API_KEY')
+    expect(A2A_SUITE.env?.THEOKIT_LIVE_REQUIRED).toBe('1')
+    expect(A2A_SUITE.env?.LIVE_MODEL).toBe(SUITE.env?.LIVE_MODEL)
+    expect(A2A_SUITE.shell).toBe('bash')
+    expect(A2A_SUITE.run?.trim()).toMatch(/2>&1 \| node scripts\/redact-key-shapes\.mjs$/)
+  })
+
+  it('points theocode test:live at the A2A live test behind the provider-key guard', async () => {
+    const pkg = JSON.parse(readFileSync(resolve(THEOCODE, 'package.json'), 'utf8')) as {
+      scripts: Record<string, string>
+    }
+    expect(pkg.scripts['test:live']).toBe('vitest run --config vitest.live.config.ts')
+    const configPath = resolve(THEOCODE, 'vitest.live.config.ts')
+    expect(existsSync(configPath), configPath).toBe(true)
+    const { default: LIVE_A2A_CONFIG } = (await import(configPath)) as {
+      default: { test?: { include?: string[]; globalSetup?: string[] } }
+    }
+    expect(LIVE_A2A_CONFIG.test?.include).toEqual([A2A_LIVE_TEST])
+    expect(existsSync(resolve(THEOCODE, A2A_LIVE_TEST))).toBe(true)
+    expect(LIVE_A2A_CONFIG.test?.globalSetup).toEqual(['tools/require-provider-key.mjs'])
   })
 
   it('feeds the same model to the preflight and the suite', () => {

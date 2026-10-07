@@ -39,3 +39,13 @@ jobs:
         # bash -eo pipefail: the suite's exit code survives the pipe (D8)
         shell: bash
         run: pnpm --filter @theokit/agents test:live 2>&1 | node scripts/redact-key-shapes.mjs
+      # The A2A real-model test (B-407) lives in TheoCode, whose ci.yml job holds no key, so there it
+      # skipped green on every push. Run here with the key required, the same way as the suite above.
+      - name: A2A live test (THEOKIT_LIVE_REQUIRED)
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          LIVE_MODEL: ${{ vars.LIVE_MODEL || 'google/gemini-2.5-flash-lite' }}
+          THEOKIT_LIVE_REQUIRED: '1'
+        # bash -eo pipefail: the test's exit code survives the pipe (D8)
+        shell: bash
+        run: pnpm --filter theocode test:live 2>&1 | node scripts/redact-key-shapes.mjs
