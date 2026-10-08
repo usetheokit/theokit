@@ -633,6 +633,40 @@ function stopReasonOf(result: {
   return undefined
 }
 
+/** The SDK `TokenUsage` fields the terminal frame reads; V4-O added the reasoning/cache buckets. */
+interface SdkRunUsage {
+  inputTokens?: number
+  outputTokens?: number
+  reasoningTokens?: number
+  cacheReadTokens?: number
+  cacheWriteTokens?: number
+}
+
+/**
+ * The terminal frame's `usage`: the total derived from input + output, and the SDK reasoning/cache
+ * buckets forwarded (0 when the provider omits them) so a consumer keeps full per-turn usage
+ * through the loop into DelegationResult (passthrough — ADR D1). Split out of
+ * {@link realUsageDone} to keep its complexity within budget (G6).
+ */
+function doneUsage(sdkUsage: SdkRunUsage | undefined): DoneEvent['usage'] {
+  const usage = sdkUsage ?? {}
+  const inputTokens = countOrZero(usage.inputTokens)
+  const outputTokens = countOrZero(usage.outputTokens)
+  return {
+    inputTokens,
+    outputTokens,
+    totalTokens: inputTokens + outputTokens,
+    reasoningTokens: countOrZero(usage.reasoningTokens),
+    cacheReadTokens: countOrZero(usage.cacheReadTokens),
+    cacheWriteTokens: countOrZero(usage.cacheWriteTokens),
+  }
+}
+
+/** A token count the SDK may omit (`undefined` or `null`), read as 0. */
+function countOrZero(count: number | undefined): number {
+  return count ?? 0
+}
+
 /**
  * V4-N.1: build the terminal `done` event from the SDK `RunResult` (real per-run token usage +
  * cost). Extracted from the stream generator to keep its complexity within budget (G6).
@@ -645,14 +679,7 @@ function stopReasonOf(result: {
 export function realUsageDone(
   result: {
     result?: string
-    usage?: {
-      inputTokens?: number
-      outputTokens?: number
-      // V4-O: optional reasoning/cache buckets from the SDK TokenUsage.
-      reasoningTokens?: number
-      cacheReadTokens?: number
-      cacheWriteTokens?: number
-    }
+    usage?: SdkRunUsage
     cost?: CostBreakdown
     // theokit#379: the SDK's truncation flags. Optional — absent on a clean finish and on an SDK
     // that predates them, which is the degradation this layer wants.
@@ -671,23 +698,11 @@ export function realUsageDone(
    */
   model?: string,
 ): StreamEvent {
-  const u = result.usage
-  const inputTokens = u?.inputTokens ?? 0
-  const outputTokens = u?.outputTokens ?? 0
   const stopReason = stopReasonOf(result)
   return {
     type: 'done',
     result: result.result ?? '',
-    // V4-O: forward the SDK reasoning/cache buckets (0 when the provider omits them) so a
-    // consumer keeps full per-turn usage through the loop into DelegationResult (passthrough — ADR D1).
-    usage: {
-      inputTokens,
-      outputTokens,
-      totalTokens: inputTokens + outputTokens,
-      reasoningTokens: u?.reasoningTokens ?? 0,
-      cacheReadTokens: u?.cacheReadTokens ?? 0,
-      cacheWriteTokens: u?.cacheWriteTokens ?? 0,
-    },
+    usage: doneUsage(result.usage),
     durationMs: Date.now() - t0,
     ...knownCost(result.cost),
     ...terminalExtras(stopReason, model),
