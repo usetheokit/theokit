@@ -59,9 +59,19 @@ export class AcpClient {
   private readonly decoder = new AcpMessageDecoder()
 
   constructor(private readonly transport: AcpTransport) {
+    // The agent's stdout is untrusted, and the Node transport calls this from a `data` listener,
+    // where a throw ends the host. A line that is not JSON fails the requests in flight instead.
+    // `dispatch` does not throw (a notification handler is isolated there), so what lands in the
+    // catch is the decode.
     transport.subscribe((chunk) => {
-      for (const message of this.decoder.push(chunk)) {
-        this.dispatch(message as Record<string, unknown>)
+      try {
+        for (const message of this.decoder.push(chunk)) {
+          this.dispatch(message as Record<string, unknown>)
+        }
+      } catch (err) {
+        if (!this.pending.size) console.warn(err)
+        for (const entry of this.pending.values()) entry.reject(err as Error)
+        this.pending.clear()
       }
     })
   }
@@ -80,11 +90,7 @@ export class AcpClient {
     this.handlers.set(method, handler)
   }
 
-  /**
-   * Register a handler for a notification method (e.g. `session/update`). A notification with no
-   * handler is ignored. A handler that throws is not caught here: the error reaches the transport,
-   * and the messages after it in the same chunk are not dispatched, so a handler should not throw.
-   */
+  /** Register a notification handler; one that throws is reported. */
   onNotification(method: string, handler: NotificationHandler): void {
     this.notificationHandlers.set(method, handler)
   }
@@ -103,7 +109,11 @@ export class AcpClient {
       return
     }
     if (isNotification(message)) {
-      this.notificationHandlers.get(message.method)?.(message.params)
+      try {
+        this.notificationHandlers.get(message.method)?.(message.params)
+      } catch (err) {
+        console.warn('[@theokit/agents] ACP notification handler threw', err)
+      }
     }
   }
 
