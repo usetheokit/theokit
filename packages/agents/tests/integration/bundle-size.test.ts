@@ -167,6 +167,11 @@ describe('Bundle size regression', () => {
    *
    * The run stopped at the cap and did not move it. Paulo decided this raise on 2026-10-06, relayed
    * to the run by the orchestrator. Headroom is 172 bytes.
+   *
+   * Review fixes #78 and #85 then spent 160 of those bytes without moving the cap: `AcpClient` turns
+   * an agent stdout line that is not JSON into a rejection of the requests in flight and isolates a
+   * throwing notification handler, and `createA2ATool` passes the run's signal to `fetch`. Measured
+   * 40 488 bytes after them, so headroom is 12 bytes.
    */
   it('agents main bundle under 40.5KB', (ctx) => {
     const path = resolve(distDir, 'index.js')

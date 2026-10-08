@@ -7,7 +7,7 @@
  * (`openrouter.ai|api.openai.com|api.anthropic.com`) is unaffected. `fetchImpl` is injectable for tests.
  */
 import type { WireMessage } from '@theokit/presenter/wire'
-import type { CustomTool } from '@theokit/sdk'
+import type { CustomTool, ToolContext } from '@theokit/sdk'
 
 import {
   consumeUIMessageStream,
@@ -87,13 +87,16 @@ export function createA2ATool(config: A2AToolConfig): CustomTool {
       },
       required: ['message'],
     },
-    handler: async (input: Record<string, unknown>): Promise<string> => {
+    handler: async (input: Record<string, unknown>, ctx?: ToolContext): Promise<string> => {
       // The input schema requires `message: string`; narrow defensively (never base-to-string).
       const message = typeof input.message === 'string' ? input.message : ''
+      // The run's signal: a cancelled run aborts the request and the stream it holds open, and the
+      // call rejects with the abort reason rather than as a failure of the remote.
       const res = await doFetch(config.url, {
         method: 'POST',
         headers: buildHeaders(config),
         body: JSON.stringify({ message }),
+        signal: ctx?.signal,
       })
       if (!res.ok) {
         throw new Error(`A2A call to "${config.name}" failed: ${res.status} ${res.statusText}`)
@@ -105,6 +108,7 @@ export function createA2ATool(config: A2AToolConfig): CustomTool {
           last = m
         })
       } catch (err) {
+        ctx?.signal?.throwIfAborted()
         const reason = err instanceof Error ? err.message : String(err)
         throw new Error(`A2A call to "${config.name}" failed: ${reason}`, { cause: err })
       }
