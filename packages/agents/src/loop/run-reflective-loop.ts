@@ -320,27 +320,35 @@ function pushToolResult(
   })
 }
 
+/**
+ * Each round field a `done` event's usage sets, beside the usage key it reads (V4-N; V4-O: the
+ * reasoning/cache buckets). A key the provider/adapter omits sets the field to 0.
+ */
+const DONE_USAGE_FIELDS = [
+  ['tokens', 'totalTokens'],
+  ['tokensInput', 'inputTokens'],
+  ['tokensOutput', 'outputTokens'],
+  ['reasoningTokens', 'reasoningTokens'],
+  ['cacheReadTokens', 'cacheReadTokens'],
+  ['cacheWriteTokens', 'cacheWriteTokens'],
+] as const
+
+/** The usage a `done` event carries; every key optional, and absent means 0. */
+interface DoneUsage {
+  totalTokens?: number
+  inputTokens?: number
+  outputTokens?: number
+  reasoningTokens?: number
+  cacheReadTokens?: number
+  cacheWriteTokens?: number
+}
+
 /** V4-N: fold a `done` event's cost + split/total token usage into the round (V4-O: + buckets). */
 function applyDone(event: StreamEvent, r: RoundResult): void {
   r.costKnown = typeof event.cost === 'number' && Number.isFinite(event.cost)
   r.cost = r.costKnown ? (event.cost as number) : 0 // EC-2: NaN/Infinity never reach the spend
-  const usage = event.usage as
-    | {
-        totalTokens?: number
-        inputTokens?: number
-        outputTokens?: number
-        reasoningTokens?: number
-        cacheReadTokens?: number
-        cacheWriteTokens?: number
-      }
-    | undefined
-  r.tokens = usage?.totalTokens ?? 0
-  r.tokensInput = usage?.inputTokens ?? 0
-  r.tokensOutput = usage?.outputTokens ?? 0
-  // V4-O: fold the reasoning/cache buckets (0 when the provider/adapter omits them).
-  r.reasoningTokens = usage?.reasoningTokens ?? 0
-  r.cacheReadTokens = usage?.cacheReadTokens ?? 0
-  r.cacheWriteTokens = usage?.cacheWriteTokens ?? 0
+  const usage = (event.usage ?? {}) as DoneUsage
+  for (const [field, key] of DONE_USAGE_FIELDS) r[field] = usage[key] ?? 0
 }
 
 /**
