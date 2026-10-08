@@ -16,7 +16,17 @@ import type { LoopFinishReason } from '../loop/loop-strategy.js'
 export interface DelegationResult {
   response: string
   toolCalls: { id: string; name: string; input: unknown; output: string }[]
+  /**
+   * USD the run's priced rounds cost. A round the SDK could not price adds nothing here, so read it
+   * with {@link costUnknown}: when that is set, this is the known spend and not the run's cost.
+   */
   cost: number
+  /**
+   * Present, and `true`, when at least one round reported no finite cost (B-409): the run cost
+   * {@link cost} plus an amount nobody knows. Absent on a run whose every round was priced. A
+   * consumer summing runs must not read such a `cost` as the run's price (#969).
+   */
+  costUnknown?: true
   tokens: number
   /** V4-N: split token usage accumulated across rounds (`tokens` stays as the total). Absent for the single-shot path. */
   tokensInput?: number

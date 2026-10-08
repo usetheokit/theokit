@@ -209,19 +209,28 @@ async function* consumeRoundOrThrow(
   }
 }
 
+/** The token buckets a round adds to the run, each optional on {@link DelegationResult}. */
+const TOKEN_BUCKETS = [
+  'tokensInput',
+  'tokensOutput',
+  'reasoningTokens',
+  'cacheReadTokens',
+  'cacheWriteTokens',
+] as const
+
 /**
  * V4-N/V4-O: fold one round's usage into the accumulator — cost + total/split tokens (V4-N) and
  * the reasoning/cache buckets (V4-O). Extracted from the loop body to keep its complexity within
  * budget (G6); the optional `acc` fields default to 0 before adding.
+ *
+ * B-409: an unpriced round adds 0 to `cost`, which stays the known spend the ceiling reads, and
+ * marks the run `costUnknown` so the result does not report that spend as the run's price.
  */
 function accumulateUsage(acc: DelegationResult, r: RoundResult): void {
   acc.cost += r.cost
+  if (!r.costKnown) acc.costUnknown = true
   acc.tokens += r.tokens
-  acc.tokensInput = (acc.tokensInput ?? 0) + r.tokensInput
-  acc.tokensOutput = (acc.tokensOutput ?? 0) + r.tokensOutput
-  acc.reasoningTokens = (acc.reasoningTokens ?? 0) + r.reasoningTokens
-  acc.cacheReadTokens = (acc.cacheReadTokens ?? 0) + r.cacheReadTokens
-  acc.cacheWriteTokens = (acc.cacheWriteTokens ?? 0) + r.cacheWriteTokens
+  for (const bucket of TOKEN_BUCKETS) acc[bucket] = (acc[bucket] ?? 0) + r[bucket]
 }
 
 /** Stamp the terminal state on the accumulator + emit the runtime metric (DRY for the 2 exit points). */
