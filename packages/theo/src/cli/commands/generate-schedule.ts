@@ -7,11 +7,17 @@
  *
  * A schedule runs the app's `chat` agent, so a project without one is refused too: a schedule
  * importing a module that does not exist would make `theokit build` fail on it.
+ *
+ * The schedule declares `defineCron('<last segment of the name>')`, so that segment is checked with
+ * `defineCron`'s own rule and the scanner's own discovery: a name the build would reject, skip, or
+ * find already used by another cron file is refused as `invalid_name` before anything is written.
  */
 import { existsSync } from 'node:fs'
-import { dirname, relative, resolve, sep } from 'node:path'
+import { basename, dirname, extname, relative, resolve, sep } from 'node:path'
 
 import { loadConfig } from '../../config/load-config.js'
+import { isDiscoverableCronFile, listCronFiles } from '../../server/cron/cron-scan.js'
+import { CRON_NAME_RULE, isValidCronName } from '../../server/cron/define-cron.js'
 
 import type { GenerateResult } from './generate-types.js'
 
@@ -23,15 +29,18 @@ export async function resolveScheduleTarget(
   cwd: string,
   name: string,
 ): Promise<{ filePath: string; content: string } | GenerateResult> {
-  let agentsDir: string
+  const malformed = cronNameRefusal(name)
+  if (malformed !== undefined) return malformed
+  let config: Awaited<ReturnType<typeof loadConfig>>
   try {
-    agentsDir = (await loadConfig(cwd)).agentsDir
+    config = await loadConfig(cwd)
   } catch (err) {
     return {
       status: 'invalid_config',
       message: `Cannot read ${resolve(cwd, 'theo.config.ts')}: ${(err as Error).message}`,
     }
   }
+  const { agentsDir, serverDir } = config
   const agentsRoot = resolve(cwd, agentsDir)
   const chatPath = CHAT_AGENT_FILES.map((file) => resolve(agentsRoot, file)).find((path) =>
     existsSync(path),
@@ -45,7 +54,55 @@ export async function resolveScheduleTarget(
     }
   }
   const filePath = resolve(agentsRoot, 'schedules', `${name}.ts`)
+  // The build scans both homes with one duplicate-name guard (build.ts, emitCronArtifacts).
+  const cronDirs = [resolve(cwd, serverDir, 'crons'), resolve(agentsRoot, 'schedules')]
+  const taken = cronNameTaken(name, filePath, cronDirs)
+  if (taken !== undefined) return taken
   return { filePath, content: generateScheduleTemplate(name, importSpecifier(filePath, chatPath)) }
+}
+
+/** The cron name a schedule called `name` declares: its last `/` segment. */
+function cronNameOf(name: string): string {
+  return name.split('/').pop() ?? name
+}
+
+/** A refusal when the build would skip the file or `defineCron` would reject its name. */
+function cronNameRefusal(name: string): GenerateResult | undefined {
+  const cronName = cronNameOf(name)
+  if (!isDiscoverableCronFile(`${cronName}.ts`)) {
+    return {
+      status: 'invalid_name',
+      message: `Invalid schedule name "${name}": the build does not discover a cron file named "${cronName}.ts".`,
+    }
+  }
+  if (!isValidCronName(cronName)) {
+    return {
+      status: 'invalid_name',
+      message: `Invalid schedule name "${name}": its cron name "${cronName}" is one defineCron rejects. ${CRON_NAME_RULE}`,
+    }
+  }
+  return undefined
+}
+
+/**
+ * A refusal when another cron file already carries this schedule's cron name. The generator names
+ * a cron after its file, so a file of the same name in either cron home is the clash the build's
+ * duplicate-name guard would fail on. The target itself is left to the `already_exists` answer.
+ */
+function cronNameTaken(
+  name: string,
+  filePath: string,
+  cronDirs: readonly string[],
+): GenerateResult | undefined {
+  const cronName = cronNameOf(name)
+  const clash = listCronFiles(cronDirs).find(
+    (path) => path !== filePath && basename(path, extname(path)) === cronName,
+  )
+  if (clash === undefined) return undefined
+  return {
+    status: 'invalid_name',
+    message: `Invalid schedule name "${name}": the cron name "${cronName}" is already used by ${clash}. Cron names must be unique across server/crons/ and agents/schedules/.`,
+  }
 }
 
 /** The ESM specifier the schedule at `fromFile` uses to import `toFile` (`../chat.js`). */
@@ -58,7 +115,7 @@ function importSpecifier(fromFile: string, toFile: string): string {
 }
 
 function generateScheduleTemplate(name: string, chatSpecifier: string): string {
-  const base = name.split('/').pop() ?? name
+  const base = cronNameOf(name)
   return [
     `import { defineCron } from 'theokit/server/cron'`,
     `import { resolveProvider } from 'theokit/server/agent'`,

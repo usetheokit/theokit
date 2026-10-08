@@ -55,6 +55,29 @@ function isCronDefinition(value: unknown): value is CronDefinition {
 }
 
 /**
+ * Whether the scanner treats a file named `fileName` as a cron. Private helpers (`_helper.ts`) and
+ * dotfiles (`.DS_Store`, or `.ts` from an empty name) are skipped.
+ */
+export function isDiscoverableCronFile(fileName: string): boolean {
+  return !fileName.startsWith('_') && !fileName.startsWith('.')
+}
+
+/**
+ * The cron files {@link scanCronDirs} would import from `dirs`, without importing them. Missing
+ * dirs are skipped.
+ */
+export function listCronFiles(dirs: readonly string[]): string[] {
+  const filePaths: string[] = []
+  for (const dir of dirs) {
+    if (!existsSync(dir)) continue
+    walkSourceFiles(dir, { extensions: CRON_EXTENSIONS }, (p) => {
+      if (isDiscoverableCronFile(basename(p))) filePaths.push(p)
+    })
+  }
+  return filePaths
+}
+
+/**
  * Scan a directory for cron definition files and return the discovered
  * `CronNode[]` sorted by name. Throws `DuplicateCronNameError` on name
  * collision and `Error` on missing default export.
@@ -76,16 +99,7 @@ export async function scanCrons(cronsDir: string): Promise<CronNode[]> {
  * by name for a stable manifest.
  */
 export async function scanCronDirs(dirs: readonly string[]): Promise<CronNode[]> {
-  const filePaths: string[] = []
-  for (const dir of dirs) {
-    if (!existsSync(dir)) continue
-    walkSourceFiles(dir, { extensions: CRON_EXTENSIONS }, (p) => {
-      const base = basename(p)
-      // Skip private helpers (`_helper.ts`) and OS junk (`.DS_Store`).
-      if (base.startsWith('_') || base.startsWith('.')) return
-      filePaths.push(p)
-    })
-  }
+  const filePaths = listCronFiles(dirs)
 
   const nodes: CronNode[] = []
   for (const filePath of filePaths) {
