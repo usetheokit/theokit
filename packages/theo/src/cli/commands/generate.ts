@@ -12,6 +12,7 @@ import {
   type GeneratorType,
   type GenerateOptions,
   type GenerateResult,
+  type GenerateStatus,
 } from './generate-types.js'
 
 export {}
@@ -256,70 +257,47 @@ function generateMemoryTemplate(_name: string): string {
   ].join('\n')
 }
 
+/** Where a single-file kind is written, relative to the project root, and what it says. */
+interface SingleFileKind {
+  path: (name: string) => string
+  template: (name: string) => string
+}
+
+/**
+ * The single-file kinds. `resource` writes several files and `schedule` reads its directory from
+ * the project config, so neither is here.
+ */
+const SINGLE_FILE_KINDS: Partial<Record<GeneratorType, SingleFileKind>> = {
+  // Agent-capability generators. These live UNDER `agents/` — they are facets of the agent domain,
+  // not standalone top-level concerns — and the folder-semantic scanner treats each as composition
+  // (never a phantom route).
+  workflow: { path: (name) => `agents/workflows/${name}.ts`, template: generateWorkflowTemplate },
+  eval: { path: (name) => `agents/evals/${name}.ts`, template: generateEvalTemplate },
+  sandbox: { path: (name) => `agents/sandbox/${name}.ts`, template: generateSandboxTemplate },
+  memory: { path: (name) => `agents/memory/${name}.ts`, template: generateMemoryTemplate },
+  route: { path: (name) => `server/routes/${name}.ts`, template: generateRouteTemplate },
+  action: { path: (name) => `server/actions/${name}.ts`, template: generateActionTemplate },
+  page: { path: (name) => `app/${name}/page.tsx`, template: generatePageTemplate },
+  ws: { path: (name) => `server/ws/${name}.ts`, template: generateWsTemplate },
+  controller: {
+    path: (name) => `server/controllers/${name}.controller.ts`,
+    template: generateControllerTemplate,
+  },
+  agent: { path: (name) => `server/agents/${name}.agent.ts`, template: generateAgentTemplate },
+  toolbox: {
+    path: (name) => `server/toolboxes/${name}.tools.ts`,
+    template: generateToolboxTemplate,
+  },
+}
+
 function resolveTemplate(
   cwd: string,
-  type: GeneratorType,
+  kind: GeneratorType,
   name: string,
 ): { filePath: string; content: string } | null {
-  switch (type) {
-    // Agent-capability generators. These live UNDER `agents/` — they are facets of the agent domain,
-    // not standalone top-level concerns — and the folder-semantic scanner treats each as composition
-    // (never a phantom route).
-    case 'workflow':
-      return {
-        filePath: resolve(cwd, 'agents/workflows', `${name}.ts`),
-        content: generateWorkflowTemplate(name),
-      }
-    case 'eval':
-      return {
-        filePath: resolve(cwd, 'agents/evals', `${name}.ts`),
-        content: generateEvalTemplate(name),
-      }
-    case 'sandbox':
-      return {
-        filePath: resolve(cwd, 'agents/sandbox', `${name}.ts`),
-        content: generateSandboxTemplate(name),
-      }
-    case 'memory':
-      return {
-        filePath: resolve(cwd, 'agents/memory', `${name}.ts`),
-        content: generateMemoryTemplate(name),
-      }
-    case 'route':
-      return {
-        filePath: resolve(cwd, 'server/routes', `${name}.ts`),
-        content: generateRouteTemplate(name),
-      }
-    case 'action':
-      return {
-        filePath: resolve(cwd, 'server/actions', `${name}.ts`),
-        content: generateActionTemplate(name),
-      }
-    case 'page':
-      return { filePath: resolve(cwd, `app/${name}/page.tsx`), content: generatePageTemplate(name) }
-    case 'ws':
-      return {
-        filePath: resolve(cwd, 'server/ws', `${name}.ts`),
-        content: generateWsTemplate(name),
-      }
-    case 'controller':
-      return {
-        filePath: resolve(cwd, 'server/controllers', `${name}.controller.ts`),
-        content: generateControllerTemplate(name),
-      }
-    case 'agent':
-      return {
-        filePath: resolve(cwd, 'server/agents', `${name}.agent.ts`),
-        content: generateAgentTemplate(name),
-      }
-    case 'toolbox':
-      return {
-        filePath: resolve(cwd, 'server/toolboxes', `${name}.tools.ts`),
-        content: generateToolboxTemplate(name),
-      }
-    default:
-      return null
-  }
+  const spec = SINGLE_FILE_KINDS[kind]
+  if (spec === undefined) return null
+  return { filePath: resolve(cwd, spec.path(name)), content: spec.template(name) }
 }
 
 function generateActionTestTemplate(name: string): string {
@@ -365,14 +343,22 @@ function generateWsTemplate(_name: string): string {
   ].join('\n')
 }
 
-/**
- * Programmatic generate. Returns a structured result instead of throwing —
- * Studio (`theokit_generate` tool) consumes this directly. The CLI wrapper
- * below maps the structured result to console output + exit code semantics.
- */
-export async function generate(opts: GenerateOptions): Promise<GenerateResult> {
-  const { cwd, type, name } = opts
+/** A file to write: where it goes and what it says. */
+interface Target {
+  filePath: string
+  content: string
+}
 
+/** Whether `value` names a generator kind. */
+function isGeneratorType(value: string): value is GeneratorType {
+  return (VALID_TYPES as readonly string[]).includes(value)
+}
+
+/**
+ * The refusal for options `generate` cannot act on: not a project, an unknown kind, a name that is
+ * not kebab-case, or a reserved basename. `undefined` when the options are acceptable.
+ */
+function refuseOptions({ cwd, type, name }: GenerateOptions): GenerateResult | undefined {
   if (!existsSync(resolve(cwd, 'theo.config.ts')) && !existsSync(resolve(cwd, 'theo.config.js'))) {
     return {
       status: 'not_a_project',
@@ -380,7 +366,7 @@ export async function generate(opts: GenerateOptions): Promise<GenerateResult> {
     }
   }
 
-  if (!VALID_TYPES.includes(type as GeneratorType)) {
+  if (!isGeneratorType(type)) {
     return {
       status: 'invalid_kind',
       message: `Invalid generator type "${type}". Available: ${VALID_TYPES.join(', ')}`,
@@ -402,23 +388,29 @@ export async function generate(opts: GenerateOptions): Promise<GenerateResult> {
       message: `Reserved name "${name}" — basename collides with built-in identifier (index/constructor/__proto__/prototype/hasOwnProperty).`,
     }
   }
+  return undefined
+}
 
-  // Resource generates multiple files — handle separately
-  if (type === 'resource') {
-    return generateResource(cwd, name, opts.fields ?? [])
-  }
-
+/** Where a single-file kind goes and what it says, or the refusal that explains why it cannot. */
+async function resolveTarget(
+  cwd: string,
+  type: GeneratorType,
+  name: string,
+): Promise<Target | GenerateResult> {
   // A schedule's directory comes from the project config, so resolving it is async and may refuse.
-  const resolved =
-    type === 'schedule'
-      ? await resolveScheduleTarget(cwd, name)
-      : resolveTemplate(cwd, type as GeneratorType, name)
-  if (resolved === null) {
-    return { status: 'invalid_kind', message: `Unknown type: ${type}` }
-  }
-  if ('status' in resolved) return resolved
-  const { filePath, content } = resolved
+  if (type === 'schedule') return resolveScheduleTarget(cwd, name)
+  const target = resolveTemplate(cwd, type, name)
+  if (target === null) return { status: 'invalid_kind', message: `Unknown type: ${type}` }
+  return target
+}
 
+/** Write `target` unless it escapes the project or already exists. */
+function writeTarget(
+  cwd: string,
+  type: GeneratorType,
+  name: string,
+  { filePath, content }: Target,
+): GenerateResult {
   // EC-4: confirm the resolved filePath stays inside cwd. `toKebabCase` rejects most traversal
   // vectors in the name, but a directory read from config (`agentsDir`) can still point outside.
   if (!isPathInside(cwd, filePath)) {
@@ -429,7 +421,7 @@ export async function generate(opts: GenerateOptions): Promise<GenerateResult> {
   }
 
   if (existsSync(filePath)) {
-    return { status: 'already_exists', filePath, kind: type as GeneratorType, name }
+    return { status: 'already_exists', filePath, kind: type, name }
   }
 
   mkdirSync(dirname(filePath), { recursive: true })
@@ -445,7 +437,43 @@ export async function generate(opts: GenerateOptions): Promise<GenerateResult> {
     }
   }
 
-  return { status: 'created', filePath, kind: type as GeneratorType, name }
+  return { status: 'created', filePath, kind: type, name }
+}
+
+/**
+ * Programmatic generate. Returns a structured result instead of throwing —
+ * Studio (`theokit_generate` tool) consumes this directly. The CLI wrapper
+ * below maps the structured result to console output + exit code semantics.
+ */
+export async function generate(opts: GenerateOptions): Promise<GenerateResult> {
+  const refused = refuseOptions(opts)
+  if (refused !== undefined) return refused
+  const { cwd, name } = opts
+  // refuseOptions refused every value that is not a generator kind.
+  const kind = opts.type as GeneratorType
+
+  // Resource generates multiple files — handle separately
+  if (kind === 'resource') {
+    return generateResource(cwd, name, opts.fields ?? [])
+  }
+
+  const resolved = await resolveTarget(cwd, kind, name)
+  if ('status' in resolved) return resolved
+  return writeTarget(cwd, kind, name, resolved)
+}
+
+/** The statuses the CLI reports by throwing, and the message each throws. */
+const CLI_REFUSALS: Record<
+  Exclude<GenerateStatus, 'created' | 'already_exists'>,
+  (result: GenerateResult, name: string) => string
+> = {
+  not_a_project: () => 'Not a Theo project. Run this from a project root with theo.config.ts',
+  invalid_kind: (result) => result.message ?? 'Invalid kind',
+  // `generate` returns invalid_name for a malformed name, a reserved name and a path that
+  // resolves outside the project; each message says which, so the CLI must not replace it.
+  invalid_name: (result, name) => result.message ?? `Invalid name "${name}"`,
+  invalid_config: (result) => result.message ?? 'Invalid theo.config.ts',
+  agent_not_found: (result) => result.message ?? 'No chat agent found',
 }
 
 /**
@@ -458,24 +486,11 @@ export async function generateCommand(
   fields?: string[],
 ): Promise<void> {
   const result = await generate({ cwd: process.cwd(), type, name, fields })
-  switch (result.status) {
-    case 'not_a_project':
-      throw new Error('Not a Theo project. Run this from a project root with theo.config.ts')
-    case 'invalid_kind':
-      throw new Error(result.message ?? 'Invalid kind')
-    case 'invalid_name':
-      // `generate` returns invalid_name for a malformed name, a reserved name and a path that
-      // resolves outside the project; each message says which, so the CLI must not replace it.
-      throw new Error(result.message ?? `Invalid name "${name}"`)
-    case 'invalid_config':
-      throw new Error(result.message ?? 'Invalid theo.config.ts')
-    case 'agent_not_found':
-      throw new Error(result.message ?? 'No chat agent found')
-    case 'already_exists':
-      console.log(`\n  ⚠ ${result.filePath} already exists. Skipping.\n`)
-      return
-    case 'created':
-      console.log(`\n  ✓ Created ${type}: ${result.filePath}\n`)
-      return
+  if (result.status === 'already_exists') {
+    console.log(`\n  ⚠ ${result.filePath} already exists. Skipping.\n`)
+  } else if (result.status === 'created') {
+    console.log(`\n  ✓ Created ${type}: ${result.filePath}\n`)
+  } else {
+    throw new Error(CLI_REFUSALS[result.status](result, name))
   }
 }
