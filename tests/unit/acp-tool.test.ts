@@ -72,23 +72,35 @@ function scriptedTransport(
       finishTurn()
     }
   }
+  /** The methods the agent answers by name; anything else is a response or ignored. */
+  const answers = new Map<string, (msg: Record<string, unknown>) => void>([
+    ['initialize', (msg) => reply({ id: msg.id, result: { protocolVersion: 1 } })],
+    ['session/new', (msg) => reply({ id: msg.id, result: { sessionId: 's1' } })],
+    ['session/prompt', onPrompt],
+  ])
+  /** Whether `msg` calls the method an option names; an unset option names nothing. */
+  const calls = (msg: Record<string, unknown>, method: string | undefined) =>
+    method !== undefined && msg.method === method
+  const respond = (msg: Record<string, unknown>) => {
+    if (calls(msg, options.refuse)) {
+      reply({ id: msg.id, error: { code: -32602, message: 'invalid params' } })
+      return
+    }
+    // A silent method gets no answer: the request stays pending on the agent side forever.
+    if (calls(msg, options.silentOn)) return
+    const answer = typeof msg.method === 'string' ? answers.get(msg.method) : undefined
+    if (answer !== undefined) answer(msg)
+    else if (msg.id === 7 && msg.method === undefined) {
+      options.permissionReplies?.push(msg)
+      finishTurn?.()
+    }
+  }
   return {
     send: (line) => {
       for (const m of dec.push(line)) {
         const msg = m as Record<string, unknown>
         options.onSend?.(msg)
-        if (options.refuse !== undefined && msg.method === options.refuse) {
-          reply({ id: msg.id, error: { code: -32602, message: 'invalid params' } })
-        } else if (options.silentOn !== undefined && msg.method === options.silentOn) {
-          // no answer: the request stays pending on the agent side forever
-        } else if (msg.method === 'initialize')
-          reply({ id: msg.id, result: { protocolVersion: 1 } })
-        else if (msg.method === 'session/new') reply({ id: msg.id, result: { sessionId: 's1' } })
-        else if (msg.method === 'session/prompt') onPrompt(msg)
-        else if (msg.id === 7 && msg.method === undefined) {
-          options.permissionReplies?.push(msg)
-          finishTurn?.()
-        }
+        respond(msg)
       }
     },
     subscribe: (cb) => {
@@ -188,7 +200,7 @@ describe('NodeAcpTransport (real subprocess smoke)', () => {
     while (!received.join('').includes('ok:hey') && Date.now() < deadline) {
       await new Promise((r) => setTimeout(r, 10))
     }
-    transport.close()
+    await transport.close()
     expect(
       received.join(''),
       'the echo agent never answered within 10s — this is the round-trip failing, not the machine',

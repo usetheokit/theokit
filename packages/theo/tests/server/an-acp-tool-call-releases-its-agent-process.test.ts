@@ -152,3 +152,58 @@ describe('an ACP tool call against a process that fails', LIMIT, () => {
     expect((result as Error).message).toMatch(/code 3/)
   })
 })
+
+/** Run `work` while recording every uncaught exception, so a crash of the host is an assertion. */
+async function recordingUncaught<T>(
+  work: () => Promise<T>,
+): Promise<{ value: T; uncaught: unknown[] }> {
+  const uncaught: unknown[] = []
+  const onUncaught = (err: unknown) => {
+    uncaught.push(err)
+  }
+  process.on('uncaughtException', onUncaught)
+  try {
+    const value = await work()
+    // A throw from a stream listener surfaces on a later turn of the event loop; give it one.
+    await new Promise((r) => setTimeout(r, 50))
+    return { value, uncaught }
+  } finally {
+    process.off('uncaughtException', onUncaught)
+  }
+}
+
+describe('an ACP tool call against an agent that misbehaves on its channel', LIMIT, () => {
+  it('test_a_non_json_stdout_line_rejects_the_call_typed_and_the_host_keeps_running', async () => {
+    const { value, uncaught } = await recordingUncaught(() =>
+      callAndReadPid(['--banner=starting agent v1.2']),
+    )
+
+    expect(uncaught, `the bad line escaped as ${String(uncaught[0])}`).toEqual([])
+    expect(value.result).not.toBe(HANG)
+    expect(value.result).toBeInstanceOf(AcpTransportClosedError)
+    expect((value.result as Error).message).toContain('starting agent v1.2')
+    expect(
+      await goneWithin(value.pid),
+      `agent process ${value.pid} still running after the call`,
+    ).toBe(true)
+  })
+
+  it('test_a_multibyte_character_split_across_two_chunks_reaches_the_reply_intact', async () => {
+    const pidFile = join(scratch, 'agent.pid')
+    const result = await outcome(
+      Promise.resolve(
+        agentTool(['--split-writes', `--pid-file=${pidFile}`]).handler({ message: 'ação' }),
+      ),
+    )
+
+    expect(result).toBe('echo:ação')
+  })
+
+  it('test_an_agent_that_ignores_sigterm_is_gone_when_the_call_returns', async () => {
+    const { result, pid } = await callAndReadPid(['--ignore-sigterm'])
+
+    expect(result).toBe('echo:hi')
+    // No polling: the call itself must not return while its agent is still running.
+    expect(isAlive(pid), `agent process ${pid} outlived the call that spawned it`).toBe(false)
+  })
+})

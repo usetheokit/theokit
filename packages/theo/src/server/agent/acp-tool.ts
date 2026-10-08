@@ -11,15 +11,17 @@
  * for tests.
  *
  * Each call owns its transport: it is closed when the call ends, on a reply, a refusal or an
- * error, so no agent process outlives the call that spawned it. A process that cannot start or
- * exits mid-turn rejects the call with {@link AcpTransportClosedError}; a request the agent does
- * not answer within `timeoutMs` rejects it with {@link AcpRequestTimeoutError}.
+ * error, and the call waits for the process to exit, so no agent process outlives the call that
+ * spawned it. Closing asks with SIGTERM and, past a grace period, ends the process with SIGKILL. A
+ * process that cannot start, exits mid-turn or writes something that is not ACP JSON-RPC on stdout
+ * rejects the call with {@link AcpTransportClosedError}; a request the agent does not answer within
+ * `timeoutMs` rejects it with {@link AcpRequestTimeoutError}.
  */
 import { spawn, type ChildProcessByStdio } from 'node:child_process'
 import { resolve } from 'node:path'
 import type { Readable, Writable } from 'node:stream'
 
-import { AcpClient, type AcpTransport } from '@theokit/agents'
+import { AcpClient, AcpMessageDecoder, type AcpTransport } from '@theokit/agents'
 import type { CustomTool } from '@theokit/sdk'
 
 /** The agent process could not start, failed, or exited before the call finished. */
@@ -56,14 +58,20 @@ export class AcpRequestTimeoutError extends Error {
 }
 
 /**
- * A transport {@link createACPTool} can release. `close` is called once when the call ends;
- * `onClose` reports a channel that closed on its own (the process failed or exited), which rejects
- * the request in flight. Both are optional so a plain {@link AcpTransport} still works.
+ * A transport {@link createACPTool} can release. `close` is called once when the call ends, and the
+ * call waits for it when it returns a promise; `onClose` reports a channel that closed on its own
+ * (the process failed or exited), which rejects the request in flight. Both are optional so a plain
+ * {@link AcpTransport} still works.
  */
 export interface AcpToolTransport extends AcpTransport {
-  close?(): void
+  close?(): void | Promise<void>
   onClose?(listener: (error: AcpTransportClosedError) => void): void
 }
+
+/** How long {@link NodeAcpTransport.close} waits after SIGTERM before it sends SIGKILL. */
+const SIGTERM_GRACE_MS = 2_000
+/** How long it waits for the exit SIGKILL causes; the signal cannot be ignored, so this is a bound. */
+const SIGKILL_WAIT_MS = 2_000
 
 /** Stdio transport backed by a spawned subprocess (the default for {@link createACPTool}). */
 export class NodeAcpTransport implements AcpToolTransport {
@@ -71,6 +79,10 @@ export class NodeAcpTransport implements AcpToolTransport {
   private readonly proc: ChildProcessByStdio<Writable, Readable, null>
   private closed: AcpTransportClosedError | undefined
   private readonly listeners: ((error: AcpTransportClosedError) => void)[] = []
+  /** Set once the agent wrote something the client could not process; later output is dropped. */
+  private broke = false
+  /** Settles when the process has exited (or never started). */
+  private readonly exited: Promise<void>
 
   constructor(
     private readonly command: string,
@@ -78,6 +90,15 @@ export class NodeAcpTransport implements AcpToolTransport {
     cwd?: string,
   ) {
     this.proc = spawn(command, args, { cwd, stdio: ['pipe', 'pipe', 'inherit'] })
+    // A pipe cuts stdout wherever it likes; a streaming decoder carries a multibyte character split
+    // across two chunks instead of turning each half into U+FFFD.
+    this.proc.stdout.setEncoding('utf8')
+    // 'exit', not 'close': a grandchild holding stdout open delays 'close' but not the exit.
+    this.exited = new Promise((resolve) => {
+      this.proc.once('exit', () => {
+        resolve()
+      })
+    })
     // Without an 'error' listener a spawn failure (ENOENT) is thrown as an uncaught exception that
     // takes the host down; stdin raises EPIPE when the process is gone. Both end the channel.
     this.proc.on('error', (err) => {
@@ -98,8 +119,20 @@ export class NodeAcpTransport implements AcpToolTransport {
   }
 
   subscribe(onData: (chunk: string) => void): void {
-    this.proc.stdout.on('data', (buf: Buffer) => {
-      onData(buf.toString('utf8'))
+    // The agent's stdout is untrusted. A line that is not JSON (a banner, a log line) breaks the
+    // protocol: it is caught here, by the same decoder the client uses, before the client sees it,
+    // and it ends this channel so the call in flight rejects typed. A throw from the client itself
+    // ends it the same way; escaping this listener it would be an uncaught exception in the host.
+    const probe = new AcpMessageDecoder()
+    this.proc.stdout.on('data', (chunk: string) => {
+      if (this.broke) return
+      try {
+        probe.push(chunk)
+        onData(chunk)
+      } catch (err) {
+        this.broke = true
+        this.end(`broke the ACP protocol: ${err instanceof Error ? err.message : String(err)}`, err)
+      }
     })
   }
 
@@ -108,9 +141,39 @@ export class NodeAcpTransport implements AcpToolTransport {
     else this.listeners.push(listener)
   }
 
-  close(): void {
+  /**
+   * End the channel and the process, and settle once the process has exited: SIGTERM first, then
+   * SIGKILL for a process still running after {@link SIGTERM_GRACE_MS}.
+   */
+  async close(): Promise<void> {
     this.end('was closed by the caller')
-    this.proc.kill()
+    if (!this.running()) return
+    this.proc.kill('SIGTERM')
+    if (await this.exitsWithin(SIGTERM_GRACE_MS)) return
+    this.proc.kill('SIGKILL')
+    await this.exitsWithin(SIGKILL_WAIT_MS)
+  }
+
+  /** Whether the process started and has not exited yet. */
+  private running(): boolean {
+    return (
+      this.proc.pid !== undefined && this.proc.exitCode === null && this.proc.signalCode === null
+    )
+  }
+
+  /** Wait up to `ms` for the process to exit; `true` when it did. */
+  private async exitsWithin(ms: number): Promise<boolean> {
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const elapsed = new Promise<false>((resolve) => {
+      timer = setTimeout(() => {
+        resolve(false)
+      }, ms)
+    })
+    try {
+      return await Promise.race([this.exited.then(() => true as const), elapsed])
+    } finally {
+      clearTimeout(timer)
+    }
   }
 
   /** Record the first way the channel ended and tell every listener; later endings are ignored. */
@@ -305,7 +368,8 @@ export function createACPTool(config: AcpToolConfig): CustomTool {
         return await runTurn(turn, resolve(config.cwd ?? process.cwd()), message)
       } finally {
         // The agent is a long-lived stdio server: left open, every call would leave one running.
-        transport.close?.()
+        // Awaited, so the call does not return while its agent is still running.
+        await transport.close?.()
       }
     },
   }
