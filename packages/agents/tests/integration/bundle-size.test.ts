@@ -182,8 +182,17 @@ describe('Bundle size regression', () => {
    * was left open on 2026-10-07 because a minimal version measured 40 517 bytes against this cap.
    * With 12 bytes of headroom none of the four fits. Paulo decided this raise on 2026-10-09, before
    * the fixes were written.
+   *
+   * ## Raised to 42 000 for the AcpClient error taxonomy and the unmatched JSON-RPC object
+   *
+   * The same review found two more defects in `AcpClient`: `AcpProtocolError` and
+   * `AcpConnectionClosedError` extended plain `Error` (#83), and an object matching no JSON-RPC shape
+   * was dropped while the request it answered stayed pending (#66). Measured on 41 496 bytes, so 4
+   * bytes of headroom: #66 alone came to 41 556, #83 alone to 41 741, both to 41 801. Most of #83 is
+   * the separate `@theokit/sdk/errors` import the bundler writes per module. Paulo decided this
+   * raise on 2026-10-09, after the two fixes were measured.
    */
-  it('agents main bundle under 41.5KB', (ctx) => {
+  it('agents main bundle under 42KB', (ctx) => {
     const path = resolve(distDir, 'index.js')
     if (!existsSync(path)) {
       // `ctx.skip()`, not `return`. A bare return reports the test as PASSED, so a suite run with no
@@ -193,7 +202,7 @@ describe('Bundle size regression', () => {
       return
     }
     const size = statSync(path).size
-    expect(size).toBeLessThan(41_500)
+    expect(size).toBeLessThan(42_000)
     console.log(`  agents/dist/index.js: ${(size / 1024).toFixed(1)} KB`)
   })
 
