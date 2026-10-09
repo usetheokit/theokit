@@ -6,7 +6,8 @@
  * The key names match the `KEYS` list each live file reads. The message names variables, never
  * values, so nothing here can print a credential.
  */
-const LIVE_KEY_NAMES = [
+/** Every variable the live tests read a provider key from. */
+export const LIVE_KEY_NAMES = [
   'OPENROUTER_API_KEY',
   'ANTHROPIC_API_KEY',
   'OPENAI_API_KEY',
