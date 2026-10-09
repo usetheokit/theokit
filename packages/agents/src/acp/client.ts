@@ -153,7 +153,9 @@ export class AcpClient {
   }
 
   private fail(err: Error): void {
-    if (!this.pending.size) console.warn(err)
+    // A close with nothing in flight is the channel's normal end (the caller closing after the last
+    // answer), not a fault: only a line the agent should not have written is worth a warning.
+    if (!this.pending.size && err instanceof AcpProtocolError) console.warn(err)
     for (const entry of this.pending.values()) entry.reject(err)
     this.pending.clear()
   }

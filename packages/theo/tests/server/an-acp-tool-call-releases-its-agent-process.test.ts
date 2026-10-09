@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   AcpRequestTimeoutError,
@@ -30,6 +30,7 @@ beforeEach(() => {
 })
 afterEach(() => {
   rmSync(scratch, { recursive: true, force: true })
+  vi.restoreAllMocks()
 })
 
 const HANG = Symbol('no answer within the deadline')
@@ -95,6 +96,17 @@ describe('an ACP tool call releases the agent process it spawned', LIMIT, () => 
 
     expect(result).toBe('echo:hi')
     expect(await goneWithin(pid), `agent process ${pid} still running after the call`).toBe(true)
+  })
+
+  // Review finding F-arch-2: closing the transport at the end of a call fired the client's onClose,
+  // which warned because nothing was in flight, so every successful call logged a fault.
+  it('test_a_successful_call_logs_no_warning', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    const { result } = await callAndReadPid([])
+
+    expect(result).toBe('echo:hi')
+    expect(warn).not.toHaveBeenCalled()
   })
 
   it('test_the_agent_process_is_gone_after_a_refused_step', async () => {
