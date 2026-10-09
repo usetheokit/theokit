@@ -104,7 +104,9 @@ function cruiseProbe(app: App, name: string, content: string): Cruise {
 function expectRefused(result: Cruise): void {
   expect(result.errors).toBe(1)
   expect(result.violations).toEqual([RULE])
-  expect(result.errExit).not.toBe(0)
+  // Exactly 1, the count of error violations the `err` reporter exits with: `not 0` also held
+  // when the run was killed or never started and spawnSync returned a null status.
+  expect(result.errExit).toBe(1)
 }
 
 describe('theoclaw refuses a proof import into a package src', () => {
