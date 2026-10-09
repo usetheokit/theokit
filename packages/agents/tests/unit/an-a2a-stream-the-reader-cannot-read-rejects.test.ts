@@ -32,7 +32,7 @@ describe('an A2A stream the reader cannot read', () => {
     ])
 
     await expect(tool(fetchImpl).handler({ message: 'hi' })).rejects.toThrow(
-      'A2A call to "ask" failed: the stream finished with no text after 2 frames the reader could not read',
+      'A2A call to "ask" failed: no text after 2 unreadable frames',
     )
   })
 

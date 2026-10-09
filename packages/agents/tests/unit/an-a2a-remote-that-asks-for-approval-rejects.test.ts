@@ -56,7 +56,7 @@ describe('an A2A remote that asks for approval', () => {
 
     expect(outcome).toBeInstanceOf(Error)
     expect((outcome as Error).message).toBe(
-      'A2A call to "ask" failed: the remote agent asked for approval of "deploy", which an A2A call cannot answer',
+      'A2A call to "ask" failed: the remote awaits approval of "deploy", which A2A cannot give',
     )
   })
 

@@ -1,5 +1,5 @@
 import { parseWireStream, readMessageStream } from '@theokit/presenter/wire'
-import type { ParseWireStreamOptions, WireChunk, WireMessage } from '@theokit/presenter/wire'
+import type { WireChunk, WireMessage } from '@theokit/presenter/wire'
 
 type UIMessage = WireMessage
 type UIMessageChunk = WireChunk
@@ -26,27 +26,30 @@ type UIMessageChunk = WireChunk
  * behaviour a consumer sees is identical; the regression test for #136 still guards it.
  *
  * `onMessage` is invoked on every reconstruction step with the latest snapshot of the assistant
- * message, so a caller (the `useAgent` hook) can render streaming updates. `options` reaches the
- * wire parser; its `onWarn` hears every frame the parser drops, so a caller can tell a turn that
- * said nothing from one whose frames it could not read.
+ * message, so a caller (the `useAgent` hook) can render streaming updates.
+ *
+ * Because this path parses the bytes itself, its outcome also carries `framesDropped`: how many
+ * frames the wire parser could not read and discarded. A turn that said nothing and a turn whose
+ * frames were all unreadable both reconstruct to no text; that count is what tells them apart.
  */
 export async function consumeUIMessageStream(
   response: Response,
   onMessage: (message: UIMessage) => void,
-  options?: ParseWireStreamOptions,
 ): Promise<ChunkStreamOutcome> {
-  const chunkStream = await responseToChunkStream(response, options)
-  return consumeChunkStream(chunkStream, onMessage)
+  let framesDropped = 0
+  const chunkStream = await responseToChunkStream(response, () => (framesDropped += 1))
+  const outcome = await consumeChunkStream(chunkStream, onMessage)
+  return { ...outcome, framesDropped }
 }
 
 /**
  * A UIMessageStream SSE `Response` → `ReadableStream<UIMessageChunk>`. This is precisely what a
  * `ChatTransport.sendMessages` returns, so `HttpTransport` builds on it directly. A body-less
- * response yields an empty stream.
+ * response yields an empty stream. `onWarn` hears each frame the wire parser discards.
  */
 export function responseToChunkStream(
   response: Response,
-  options?: ParseWireStreamOptions,
+  onWarn?: (message: string) => void,
 ): Promise<ReadableStream<UIMessageChunk>> {
   if (response.body === null) {
     return Promise.resolve(
@@ -57,7 +60,7 @@ export function responseToChunkStream(
       }),
     )
   }
-  return Promise.resolve(parseWireStream(response.body, options))
+  return Promise.resolve(parseWireStream(response.body, { onWarn }))
 }
 
 /**
@@ -101,6 +104,12 @@ export interface ChunkStreamOutcome {
    * (`n > 0`), which are different failures with different first suspects.
    */
   readonly chunksReceived: number
+  /**
+   * How many frames the wire parser discarded as unreadable (invalid JSON, an unknown variant).
+   * Present only when this module parsed the bytes ({@link consumeUIMessageStream}); a caller
+   * handing in an already-parsed chunk stream has no frames to count.
+   */
+  readonly framesDropped?: number
 }
 
 /**
