@@ -163,6 +163,33 @@ describe('createA2ATool', () => {
     expect(await tool.handler({ message: 'hi' })).toBe('')
   })
 
+  it('test_text_parts_on_either_side_of_a_tool_call_are_joined_by_a_newline', async () => {
+    const frames = [
+      { type: 'start' },
+      { type: 'text-start', id: 't1' },
+      { type: 'text-delta', id: 't1', delta: 'Let me check.' },
+      { type: 'text-end', id: 't1' },
+      { type: 'tool-input-available', toolCallId: 'c1', toolName: 'calc', input: {} },
+      { type: 'tool-output-available', toolCallId: 'c1', output: 4 },
+      { type: 'text-start', id: 't2' },
+      { type: 'text-delta', id: 't2', delta: 'The answer is 4' },
+      { type: 'text-end', id: 't2' },
+      { type: 'finish' },
+    ]
+    const body = frames.map((f) => `data: ${JSON.stringify(f)}\n\n`).join('')
+    const fetchImpl = vi.fn(
+      async () => new Response(body, { headers: { 'content-type': 'text/event-stream' } }),
+    )
+    const tool = createA2ATool({
+      url: 'https://x/agents/a',
+      name: 'ask',
+      description: 'd',
+      fetchImpl,
+    })
+
+    expect(await tool.handler({ message: 'hi' })).toBe('Let me check.\nThe answer is 4')
+  })
+
   it('test_a_json_answer_rejects_naming_the_content_type', async () => {
     const fetchImpl = vi.fn(
       async () =>

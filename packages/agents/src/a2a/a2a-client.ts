@@ -53,12 +53,17 @@ function buildHeaders(config: A2AToolConfig): Record<string, string> {
   )
 }
 
-/** The assistant message's text parts, joined in order; `''` when the turn produced no text. */
+/**
+ * The assistant message's non-empty text parts, in order, one per line; `''` when the turn produced
+ * no text. A turn that speaks before and after a tool call has two parts, and joining them with
+ * nothing would run the two sentences together in what the calling model reads.
+ */
 function textOf(message: WireMessage | undefined): string {
   if (message === undefined) return ''
   return message.parts
     .map((part) => (part.type === 'text' && typeof part.text === 'string' ? part.text : ''))
-    .join('')
+    .filter((text) => text !== '')
+    .join('\n')
 }
 
 /** Why a stream that never reached its `finish` frame is not an answer. */
