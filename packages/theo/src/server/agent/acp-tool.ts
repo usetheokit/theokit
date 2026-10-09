@@ -63,13 +63,13 @@ export class AcpRequestTimeoutError extends Error {
 
 /**
  * A transport {@link createACPTool} can release. `close` is called once when the call ends, and the
- * call waits for it when it returns a promise; `onClose` reports a channel that closed on its own
- * (the process failed or exited), which rejects the request in flight. Both are optional so a plain
- * {@link AcpTransport} still works.
+ * call waits for it when it returns a promise. `onClose`, inherited from {@link AcpTransport},
+ * reports a channel that closed on its own (the process failed or exited), which rejects the request
+ * in flight with the error it reports: {@link NodeAcpTransport} reports an
+ * {@link AcpTransportClosedError}. Both are optional so a plain {@link AcpTransport} still works.
  */
 export interface AcpToolTransport extends AcpTransport {
   close?(): void | Promise<void>
-  onClose?(listener: (error: AcpTransportClosedError) => void): void
 }
 
 /** How long {@link NodeAcpTransport.close} waits after SIGTERM before it sends SIGKILL. */
@@ -334,7 +334,7 @@ interface Turn {
   /** The run's signal; once it aborts, no further step is sent. */
   signal?: AbortSignal
   /** Set when the transport closed on its own; every later step rejects with it. */
-  closed?: AcpTransportClosedError
+  closed?: Error
   /** Rejects the step in flight, so a transport that closes or a run that is cancelled ends it. */
   abort?: (reason: unknown) => void
 }

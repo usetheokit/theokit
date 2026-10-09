@@ -15,6 +15,11 @@ export interface AcpTransport {
   send(line: string): void
   /** Subscribe to raw lines/chunks from the agent's stdout. */
   subscribe(onData: (chunk: string) => void): void
+  /**
+   * Report a channel that closed on its own (the process exited or failed). Optional: a transport
+   * that has it lets the client reject the requests no reply will ever answer.
+   */
+  onClose?(listener: (cause: Error) => void): void
 }
 
 /**
@@ -29,6 +34,15 @@ export class AcpProtocolError extends Error {
     options?: { cause?: unknown },
   ) {
     super(`[@theokit/agents] ACP decode failed on line: ${line}`, options)
+  }
+}
+
+/** The transport closed; `cause` is what the transport reported. */
+export class AcpConnectionClosedError extends Error {
+  override readonly name = 'AcpConnectionClosedError'
+
+  constructor(cause: Error) {
+    super(`[@theokit/agents] ACP transport closed: ${cause.message}`, { cause })
   }
 }
 
@@ -72,16 +86,22 @@ export class AcpClient {
   private readonly handlers = new Map<string, ServerRequestHandler>()
   private readonly notificationHandlers = new Map<string, NotificationHandler>()
   private buffer = ''
+  private closed: AcpConnectionClosedError | undefined
 
   constructor(private readonly transport: AcpTransport) {
     // The agent's stdout is untrusted, and the Node transport calls this from a `data` listener,
     // where a throw ends the host. Each line is handled on its own: a bad one fails the requests in
     // flight when it arrives, and the well-formed lines around it are still dispatched. `buffer`
-    // carries a partial trailing line to the next chunk.
+    // carries a partial trailing line to the next chunk. A transport that reports its own close
+    // fails every pending request, and every later one, with the same typed error.
     transport.subscribe((chunk) => {
       const lines = (this.buffer + chunk).split('\n')
       this.buffer = lines.pop() ?? ''
       for (const line of lines) this.receive(line.trim())
+    })
+    transport.onClose?.((cause) => {
+      this.closed ??= new AcpConnectionClosedError(cause)
+      this.fail(this.closed)
     })
   }
 
@@ -89,6 +109,7 @@ export class AcpClient {
   request(method: string, params: unknown): Promise<unknown> {
     const id = this.nextId++
     return new Promise<unknown>((resolve, reject) => {
+      if (this.closed) throw this.closed
       this.pending.set(id, { resolve, reject })
       this.transport.send(encodeAcpMessage({ jsonrpc: '2.0', id, method, params }))
     })
