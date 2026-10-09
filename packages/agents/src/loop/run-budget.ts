@@ -69,34 +69,40 @@ export function throwIfNextRoundRefused(
 /**
  * The run's USD ceiling from the run option `budget`, checked before any round (B-409, FR-005).
  *
- * A number is the ceiling as it always was, unvalidated, so an existing caller sees no change. A
- * `BudgetOptions` contributes its `maxCostUsd`; one the run cannot enforce is refused here, at the
- * call, rather than honoured partially: `window` asks for spend kept across runs, which a single run
- * has nowhere to keep, and a `maxCostUsd` that is not a finite number above zero caps nothing. Zero
- * is refused too: the first round always runs, because no earlier round exists to project its cost
- * from, so a ceiling of zero would be charged one round and then raise the overspend error.
- * `null`, which an untyped caller can pass, means no ceiling, the same as leaving `budget` out.
+ * A number is the ceiling; a `BudgetOptions` contributes its `maxCostUsd`. One the run cannot
+ * enforce is refused here, at the call, rather than honoured partially: `window` asks for spend
+ * kept across runs, which a single run has nowhere to keep, and a ceiling that is not a finite
+ * number above zero caps nothing. Zero is refused too: the first round always runs, because no
+ * earlier round exists to project its cost from, so a ceiling of zero would be charged one round
+ * and then raise the overspend error. Both spellings are refused on the same terms with the same
+ * `DelegationError` (B-433): the number form used to be returned unchecked, so `budget: NaN` read
+ * as set and enforced nothing. `null`, which an untyped caller can pass, means no ceiling, the same
+ * as leaving `budget` out.
  */
 export function resolveRunBudget(
   budget: number | BudgetOptions | null | undefined,
   agentName: string,
 ): number | undefined {
   if (budget == null) return undefined
-  if (typeof budget === 'number') return budget
-  if (budget.window !== undefined) {
+  let field = 'budget'
+  let ceiling: unknown = budget
+  if (typeof budget !== 'number') {
+    if (budget.window !== undefined) {
+      throw new DelegationError(
+        agentName,
+        new Error(
+          'budget.window is not supported: a rolling budget needs spend persisted across runs',
+        ),
+      )
+    }
+    field = 'budget.maxCostUsd'
+    ceiling = (budget as { maxCostUsd: unknown }).maxCostUsd
+  }
+  if (typeof ceiling !== 'number' || !Number.isFinite(ceiling) || ceiling <= 0) {
     throw new DelegationError(
       agentName,
-      new Error(
-        'budget.window is not supported: a rolling budget needs spend persisted across runs',
-      ),
+      new Error(`${field} must be a finite number > 0, got ${String(ceiling)}`),
     )
   }
-  const { maxCostUsd } = budget as { maxCostUsd: unknown }
-  if (typeof maxCostUsd !== 'number' || !Number.isFinite(maxCostUsd) || maxCostUsd <= 0) {
-    throw new DelegationError(
-      agentName,
-      new Error(`budget.maxCostUsd must be a finite number > 0, got ${String(maxCostUsd)}`),
-    )
-  }
-  return maxCostUsd
+  return ceiling
 }
