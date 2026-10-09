@@ -27,6 +27,15 @@
  * whatever those produce. Change either shape and this test goes red rather than staying green
  * against a fiction.
  *
+ * ## The cost reaches the span, and its absence does too
+ *
+ * `cost.usd` is the attribute an operator sums. Before usetheokit/theokit#969 the adapter put a
+ * number on every `done`, so every span carried `cost.usd`, `0` for a run nobody priced, and no
+ * test read the attribute, so that went unnoticed. The cases below drive the three meanings of the
+ * SDK's `CostBreakdown.amountUsd` through the same producers: a price, a price of zero, and no
+ * price. Only the last leaves the attribute off, because an unpriced run summed as `$0` is the
+ * defect.
+ *
  * ## Where the other half lives
  *
  * This file grades the SPAN side: given what the producer emits, does the model reach the
@@ -35,6 +44,7 @@
  * `packages/agents/tests/integration/effective-model-on-the-wire.test.ts`, against a mocked SDK and
  * the real adapter, because that is the layer where the resolution happens.
  */
+import type { CostBreakdown } from '@theokit/sdk'
 import { describe, expect, it } from 'vitest'
 
 import { presentUIMessageStream } from '../../packages/agents/src/bridge/present-ui-message-stream.js'
@@ -83,19 +93,41 @@ function createExportProbe() {
  *
  * `realUsageDone` is what the SDK adapter yields as the terminal frame, over the `RunResult` shape
  * the SDK returns; `presentUIMessageStream` is what turns that into the chunks a surface receives.
- * The `model` argument is the value the adapter resolves before the turn starts.
+ * The `model` argument is the value the adapter resolves before the turn starts; `cost` is the
+ * SDK's `CostBreakdown` for the run, priced by default.
  */
-async function producedChunks(model: string | undefined): Promise<unknown[]> {
+const PRICED: CostBreakdown = {
+  amountUsd: 0.0031,
+  status: 'estimated',
+  currency: 'USD',
+  source: 'litellm_snapshot',
+  pricingVersion: undefined,
+}
+
+const PRICED_AT_ZERO: CostBreakdown = {
+  amountUsd: 0,
+  status: 'included',
+  currency: 'USD',
+  source: 'subscription_included',
+  pricingVersion: undefined,
+}
+
+const UNPRICED: CostBreakdown = {
+  amountUsd: undefined,
+  status: 'unknown',
+  currency: 'USD',
+  source: 'unknown',
+  pricingVersion: undefined,
+}
+
+async function producedChunks(
+  model: string | undefined,
+  cost: CostBreakdown = PRICED,
+): Promise<unknown[]> {
   const runResult = {
     result: 'done',
     usage: { inputTokens: 1200, outputTokens: 340 },
-    cost: {
-      amountUsd: 0.0031,
-      status: 'estimated',
-      currency: 'USD',
-      source: 'litellm_snapshot',
-      pricingVersion: undefined,
-    } as const,
+    cost,
   }
   const done = realUsageDone(runResult, Date.now() - 8, model) as unknown as AgentStreamEvent
   async function* events(): AsyncGenerator<AgentStreamEvent> {
@@ -106,9 +138,12 @@ async function producedChunks(model: string | undefined): Promise<unknown[]> {
   return out
 }
 
-async function runSpanFor(model: string | undefined): Promise<ExportedSpan> {
+async function runSpanFor(
+  model: string | undefined,
+  cost: CostBreakdown = PRICED,
+): Promise<ExportedSpan> {
   const probe = createExportProbe()
-  const chunks = await producedChunks(model)
+  const chunks = await producedChunks(model, cost)
   async function* replay(): AsyncGenerator {
     for (const chunk of chunks) yield chunk
   }
@@ -156,5 +191,32 @@ describe('the exported run span answers what the run cost (B-019)', () => {
     // which is worse than leaving the question open.
     expect(attributeOf(run, 'gen_ai.request.model')).toBeUndefined()
     expect(attributeOf(run, 'tokens.total')).toEqual({ intValue: '1540' })
+  })
+})
+
+describe('the exported run span carries the cost the SDK priced, and none when it has no price', () => {
+  it('test_a_priced_run_exports_cost_usd_as_a_double', async () => {
+    const run = await runSpanFor(MODEL, PRICED)
+
+    // A fractional price goes out as `doubleValue` (usetheokit/theokit#380); as `intValue` it was a
+    // string a collector could not sum.
+    expect(attributeOf(run, 'cost.usd')).toEqual({ doubleValue: 0.0031 })
+  })
+
+  it('test_a_run_priced_at_zero_exports_cost_usd_zero', async () => {
+    const run = await runSpanFor(MODEL, PRICED_AT_ZERO)
+
+    // Zero is a price the SDK reported, so the attribute is present.
+    expect(attributeOf(run, 'cost.usd')).toEqual({ intValue: '0' })
+  })
+
+  it('test_an_unpriced_run_exports_no_cost_usd', async () => {
+    const run = await runSpanFor(MODEL, UNPRICED)
+
+    // Absent, not 0: a span claiming the run was free would be summed as free.
+    expect(attributeOf(run, 'cost.usd')).toBeUndefined()
+    expect(attributeOf(run, 'tokens.total'), 'the rest of the span is still recorded').toEqual({
+      intValue: '1540',
+    })
   })
 })
