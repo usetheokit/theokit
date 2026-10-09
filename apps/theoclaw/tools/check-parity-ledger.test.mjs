@@ -1,4 +1,5 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -265,6 +266,46 @@ describe('check-parity-ledger: each entry answer', () => {
     expect(rulesOf(result, 'OC-2')).toContain('check-outside-repo')
   })
 
+  it('fails on a shipped entry with an absent or malformed verified_on', () => {
+    const root = tempRepo({ 'tests/e2e/proof.test.ts': "it('proves OC-1', () => {})\n" })
+    const path = 'tests/e2e/proof.test.ts'
+    for (const date of [undefined, '2026-1-5', '2026/10/06', 20261006]) {
+      const entry = { ...shipped('OC-1', path, 'proves OC-1'), verified_on: date }
+      expect(rulesOf(judge([entry], root), 'OC-1')).toEqual(['verified-on'])
+    }
+  })
+
+  it('fails on an out entry with an absent or malformed declared_on', () => {
+    for (const date of [undefined, '06/10/2026', 20261006]) {
+      expect(rulesOf(judge([{ ...validOut('OC-11'), declared_on: date }]), 'OC-11')).toEqual(['declared-on'])
+    }
+  })
+
+  it('fails on an out entry with no reason', () => {
+    const { reason: _dropped, ...noReason } = validOut('OC-11')
+    expect(rulesOf(judge([noReason]), 'OC-11')).toEqual(['reason-short'])
+    expect(rulesOf(judge([{ ...validOut('OC-11'), reason: 42 }]), 'OC-11')).toEqual(['reason-short'])
+  })
+
+  it('fails on a shipped entry with no check path', () => {
+    const root = tempRepo()
+    const noCheck = { id: 'OC-1', status: 'shipped', verified_on: TODAY }
+    expect(rulesOf(judge([noCheck], root), 'OC-1')).toEqual(['check-missing', 'check-test-absent'])
+    expect(rulesOf(judge([{ ...noCheck, check: {} }], root), 'OC-1')).toEqual(['check-missing', 'check-test-absent'])
+    expect(rulesOf(judge([{ ...noCheck, check: { path: 42, test: 'proves OC-1' } }], root), 'OC-1')).toEqual([
+      'check-missing',
+    ])
+  })
+
+  it('checkLedger refuses a relative repoRoot or an invalid today', () => {
+    const ledger = ALL_IDS.map(validOut)
+    expect(() => run(ledger, { repoRoot: 'repo' })).toThrow(TypeError)
+    expect(() => run(ledger, { repoRoot: 'repo' })).toThrow(/repoRoot must be an absolute path/)
+    for (const today of [undefined, '2026-13-01', '2026/10/06']) {
+      expect(() => run(ledger, { today })).toThrow(/today must be a YYYY-MM-DD date/)
+    }
+  })
+
   it('accepts an 8-word reason and refuses a 7-word one', () => {
     const eight = { ...validOut('OC-11'), reason: 'one two three four five six seven eight' }
     expect(rulesOf(judge([eight]), 'OC-11')).toEqual([])
@@ -351,6 +392,20 @@ describe('check-parity-ledger: the parity command', () => {
     expect(lines.some((l) => l.startsWith(`${INVENTORY_PATH} source-parse: absent`))).toBe(true)
   })
 
+  it('runCli reports an absent or unreadable objectives file as source-parse and returns 1', () => {
+    const absent = cliRepo()
+    rmSync(join(absent, HERMES_PATH))
+    const first = runCliCapturing(absent)
+    expect(first.code).toBe(1)
+    expect(first.lines).toContain(`${HERMES_PATH} source-parse: absent`)
+    const directory = cliRepo()
+    rmSync(join(directory, HERMES_PATH))
+    mkdirSync(join(directory, HERMES_PATH))
+    const second = runCliCapturing(directory)
+    expect(second.code).toBe(1)
+    expect(second.lines).toContain(`${HERMES_PATH} source-parse: unreadable: EISDIR`)
+  })
+
   it('runCli reports an unreadable ledger file as ledger-parse and returns 1', () => {
     const root = cliRepo()
     rmSync(join(root, LEDGER_PATH))
@@ -358,5 +413,52 @@ describe('check-parity-ledger: the parity command', () => {
     const { code, lines } = runCliCapturing(root)
     expect(code).toBe(1)
     expect(lines.some((l) => /ledger-parse: unreadable: EISDIR/.test(l))).toBe(true)
+  })
+})
+
+const MODULE_PATH = fileURLToPath(new URL('./check-parity-ledger.mjs', import.meta.url))
+const COUNTS_LINE = /^shipped \d+ · out \d+ · open \d+$/
+
+function localDate() {
+  const now = new Date()
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
+}
+
+/** Runs the module the way `pnpm run parity` does: a fresh node process, no injected inputs. */
+function runNode(modulePath, cwd) {
+  return spawnSync(process.execPath, [modulePath], { cwd, encoding: 'utf8' })
+}
+
+describe('check-parity-ledger: the command run by node', () => {
+  it('node on the module exits 1 and prints the counts line while a row is open', () => {
+    const today = localDate()
+    const ledger = [
+      ...ALL_IDS.filter((id) => id !== 'OC-1' && id !== 'OC-2').map(validOut),
+      shipped('OC-1', 'tests/e2e/proof.test.ts', 'proves OC-1', today),
+      { id: 'OC-2', status: 'open' },
+    ]
+    const root = tempRepo({
+      [INVENTORY_PATH]: inventoryText(106),
+      [HERMES_PATH]: hermesText(7),
+      [LEDGER_PATH]: JSON.stringify(ledger),
+      'tests/e2e/proof.test.ts': "it('proves OC-1', () => {})\n",
+    })
+    const copy = join(root, 'apps/theoclaw/tools/check-parity-ledger.mjs')
+    mkdirSync(dirname(copy), { recursive: true })
+    copyFileSync(MODULE_PATH, copy)
+    const result = runNode(copy, root)
+    expect(result.stderr).toBe('')
+    expect(result.status).toBe(1)
+    expect(result.stdout.trimEnd().split('\n')).toEqual(['shipped 1 · out 111 · open 1', 'OC-2 open: no check and no reason'])
+  })
+
+  it('node on the real tree prints what runCli computes and exits with its code', () => {
+    const lines = []
+    const code = runCli({ repoRoot: REPO_ROOT, today: localDate(), write: (line) => lines.push(line) })
+    const result = runNode(MODULE_PATH, dirname(MODULE_PATH))
+    expect(lines[0]).toMatch(COUNTS_LINE)
+    expect(result.status).toBe(code)
+    expect(result.stdout.trimEnd().split('\n')).toEqual(lines)
   })
 })
