@@ -18,9 +18,11 @@ import { ToolboxCapability, type ToolDeclaration } from '../../src/capability/to
 import { AgentRunner } from '../../src/loop/agent-runner.js'
 import type { LoopStrategy, LoopOutcome } from '../../src/loop/loop-strategy.js'
 
+import { resolveLiveModel } from '../../../../scripts/live-model.mjs'
+
 import { redactThenCut } from './provider-text.js'
 
-const MODEL = process.env.LIVE_MODEL ?? 'google/gemini-2.5-flash-lite'
+const MODEL = resolveLiveModel(process.env)
 const KEYS = ['OPENROUTER_API_KEY', 'ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'THEOKIT_API_KEY']
 const HAS_KEY = KEYS.some((n) => (process.env[n] ?? '').length > 0)
 

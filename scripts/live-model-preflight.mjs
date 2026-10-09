@@ -12,11 +12,12 @@
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { DEFAULT_LIVE_MODEL, resolveLiveModel } from './live-model.mjs'
 import { redact } from './redact-provider-keys.mjs'
 
 export const PREFLIGHT_TIMEOUT_MS = 30_000
 export const MAX_OUTPUT_TOKENS = 16
-export const DEFAULT_LIVE_MODEL = 'google/gemini-2.5-flash-lite'
+export { DEFAULT_LIVE_MODEL }
 
 const ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions'
 const KEY_ABSENT = 'provider key absent: the live-model job could not run'
@@ -25,12 +26,6 @@ const RESPONSE_LIMIT = 200
 /** @param {string} text already redacted */
 function oneLine(text) {
   return text.replace(/\r?\n/g, ' ').slice(0, RESPONSE_LIMIT)
-}
-
-/** @param {Record<string, string | undefined>} env */
-function liveModel(env) {
-  const configured = (env.LIVE_MODEL ?? '').trim()
-  return configured === '' ? DEFAULT_LIVE_MODEL : configured
 }
 
 /**
@@ -110,7 +105,7 @@ export async function runPreflight({ env, fetchImpl, log, timeoutMs = PREFLIGHT_
       method: 'POST',
       headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: liveModel(env),
+        model: resolveLiveModel(env),
         messages: [{ role: 'user', content: 'Reply with the single word: pong' }],
         max_tokens: MAX_OUTPUT_TOKENS,
       }),

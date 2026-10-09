@@ -25,11 +25,14 @@ import {
 } from '@theokit/agents/bridge'
 import { afterAll, describe, expect, it } from 'vitest'
 
-const MODEL = process.env.LIVE_MODEL ?? 'google/gemini-2.5-flash-lite'
-// The default model id is an OpenRouter id, so without LIVE_MODEL only an OpenRouter key can run
-// it. Another provider's key alone skips the test rather than failing it on a model it cannot serve.
+import { DEFAULT_LIVE_MODEL, resolveLiveModel } from './live-model.js'
+
+const MODEL = resolveLiveModel(process.env)
+// The default model id is an OpenRouter id, so on the default model (LIVE_MODEL unset, empty or
+// whitespace) only an OpenRouter key can run it. Another provider's key alone skips the test rather
+// than failing it on a model it cannot serve.
 const KEYS =
-  process.env.LIVE_MODEL === undefined
+  MODEL === DEFAULT_LIVE_MODEL
     ? ['OPENROUTER_API_KEY']
     : ['OPENROUTER_API_KEY', 'ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'THEOKIT_API_KEY']
 
