@@ -31,16 +31,17 @@ describe('redactThenCut', () => {
 })
 
 describe('the live suite', () => {
-  it('cuts no logged text except through redactThenCut', () => {
+  // Any cut, not only one on the same line as a console call: a slice stored in a variable and
+  // logged later, or written with process.stdout.write, leaks the same fragment (review F-tests-6).
+  // A live test has no other reason to cut text, so every cut goes through redactThenCut.
+  it('cuts no text except through redactThenCut', () => {
     const files = readdirSync(LIVE_DIR).filter((name) => name.endsWith('.test.ts'))
     expect(files.length).toBeGreaterThan(0)
     const offenders = files.flatMap((name) =>
       readFileSync(join(LIVE_DIR, name), 'utf8')
         .split('\n')
         .map((line, index) => ({ line, at: `${name}:${String(index + 1)}` }))
-        .filter(
-          ({ line }) => /console\.(log|error)\(/.test(line) && /\.(slice|substring)\(/.test(line),
-        )
+        .filter(({ line }) => /\.(slice|substring|substr)\(/.test(line))
         .map(({ at }) => at),
     )
     expect(offenders).toEqual([])
