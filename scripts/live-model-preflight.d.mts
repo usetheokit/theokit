@@ -13,17 +13,6 @@ export const MAX_OUTPUT_TOKENS: number
 /** The model used when `LIVE_MODEL` is unset or blank. */
 export const DEFAULT_LIVE_MODEL: string
 
-/** The shortest run of the configured key that `redact` replaces on its own. */
-export const MIN_KEY_FRAGMENT: number
-
-/**
- * Replace every run of `MIN_KEY_FRAGMENT` or more characters of `key` (the whole key, a head, a
- * tail or a middle) and every `sk-or-v1-` prefix with the hex that follows it with `***`. Both are
- * found on the original text and merged, so a configured key never hides another key from the
- * prefix pattern. A blank `key` applies the prefix pattern only.
- */
-export function redact(text: string, key: string): string
-
 /**
  * Send one chat request to OpenRouter and print one named line through `log`. Resolves 0 only on
  * a 2xx whose answer carries non-blank content, 1 otherwise. Never prints the key.

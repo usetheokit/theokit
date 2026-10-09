@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { PREFLIGHT_TIMEOUT_MS, redact, runPreflight } from '../../scripts/live-model-preflight.mjs'
+import { PREFLIGHT_TIMEOUT_MS, runPreflight } from '../../scripts/live-model-preflight.mjs'
+import { redact } from '../../scripts/redact-provider-keys.mjs'
 
 /**
  * The live-model job's first step sends one request to OpenRouter and prints why it could not

@@ -4,7 +4,7 @@
  * delivery audit L1). The CI step also pipes the output through `scripts/redact-key-shapes.mjs`;
  * this is the half that runs before the truncation.
  */
-import { redact } from '../../../../scripts/live-model-preflight.mjs'
+import { redact } from '../../../../scripts/redact-provider-keys.mjs'
 
 /** Every variable the live tests read a provider key from. */
 const PROVIDER_KEY_NAMES = [

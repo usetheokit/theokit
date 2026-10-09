@@ -2,10 +2,11 @@
  * A stdin-to-stdout filter the live-model job pipes the live suite's whole output through, so no
  * fragment of the configured key reaches the CI log (B-415, NFR-004). Provider text cut at a fixed
  * length can leave part of a key behind where GitHub's exact-value masking does not see it; this
- * filter redacts every line with the preflight's `redact` before it is written: any run of 8 or more
- * characters of `OPENROUTER_API_KEY`, and any `sk-or-v1-` prefix with the hex after it. Runs of 7
- * or fewer characters are not redacted, and neither is a fragment of a key nobody configured unless
- * it still carries the prefix. The live suites also redact before they truncate.
+ * filter redacts every line with `redact` (`redact-provider-keys.mjs`) before it is written: any
+ * run of 8 or more characters of `OPENROUTER_API_KEY`, and any `sk-or-v1-` prefix with the hex
+ * after it. Runs of 7 or fewer characters are not redacted, and neither is a fragment of a key
+ * nobody configured unless it still carries the prefix. The live suites also redact before they
+ * truncate.
  *
  *   pnpm --filter @theokit/agents test:live 2>&1 | node scripts/redact-key-shapes.mjs
  *
@@ -16,7 +17,7 @@ import { resolve } from 'node:path'
 import { createInterface } from 'node:readline'
 import { fileURLToPath } from 'node:url'
 
-import { redact } from './live-model-preflight.mjs'
+import { redact } from './redact-provider-keys.mjs'
 
 /**
  * Write every line of `input` to `output`, redacted, each ending in a newline. Line-based, so a
