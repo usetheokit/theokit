@@ -467,6 +467,26 @@ describe('check-parity-ledger: the command run by node', () => {
     expect(result.stdout.trimEnd().split('\n')).toEqual(['shipped 1 · out 111 · open 1', 'OC-2 open: no check and no reason'])
   })
 
+  it('node on the module exits 0 and prints only the counts for a fully answered ledger', () => {
+    const ledger = [
+      ...ALL_IDS.filter((id) => id !== 'OC-1').map(validOut),
+      shipped('OC-1', 'tests/e2e/proof.test.ts', 'proves OC-1', localDate()),
+    ]
+    const root = tempRepo({
+      [INVENTORY_PATH]: inventoryText(106),
+      [HERMES_PATH]: hermesText(7),
+      [LEDGER_PATH]: JSON.stringify(ledger),
+      'tests/e2e/proof.test.ts': "it('proves OC-1', () => {})\n",
+    })
+    const copy = join(root, 'apps/theoclaw/tools/check-parity-ledger.mjs')
+    mkdirSync(dirname(copy), { recursive: true })
+    copyFileSync(MODULE_PATH, copy)
+    const result = runNode(copy, root)
+    expect(result.stderr).toBe('')
+    expect(result.status).toBe(0)
+    expect(result.stdout.trimEnd().split('\n')).toEqual(['shipped 1 · out 112 · open 0'])
+  })
+
   it('node on the real tree prints what runCli computes and exits with its code', () => {
     const lines = []
     const code = runCli({ repoRoot: REPO_ROOT, today: localDate(), write: (line) => lines.push(line) })
