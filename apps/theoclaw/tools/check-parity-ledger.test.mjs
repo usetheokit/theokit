@@ -220,6 +220,14 @@ describe('check-parity-ledger: each entry answer', () => {
     expect(rulesOf(result, 'OC-1')).toContain('check-missing')
   })
 
+  it('matches the named test as a whole quoted title, not as a substring', () => {
+    const root = tempRepo({ 'tests/e2e/proof.test.ts': "it('proves OC-10', () => {})\ntest(\"proves OC-2\", () => {})\n" })
+    const path = 'tests/e2e/proof.test.ts'
+    const result = judge([shipped('OC-1', path, 'proves OC-1'), shipped('OC-2', path, 'proves OC-2')], root)
+    expect(rulesOf(result, 'OC-1')).toEqual(['check-test-absent'])
+    expect(rulesOf(result, 'OC-2')).toEqual([])
+  })
+
   it('fails on a shipped entry with an empty test name', () => {
     const root = tempRepo({ 'tests/e2e/proof.test.ts': "it('proves OC-1', () => {})\n" })
     const result = judge([shipped('OC-1', 'tests/e2e/proof.test.ts', '  ')], root)

@@ -125,14 +125,27 @@ function isIsoDate(value) {
 /** EC-5: a blank test name proves nothing, so the file is not read for it. */
 const hasTestName = (check) => typeof check.test === 'string' && check.test.trim() !== ''
 
+/**
+ * True when `text` holds `name` as a whole quoted string: a quote, the name, the same quote. A plain
+ * substring search let `proves OC-1` pass on a file holding only `it('proves OC-10', ...)`.
+ */
+function holdsQuotedTitle(text, name) {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return new RegExp(`(['"\`])${escaped}\\1`).test(text)
+}
+
 /** Outside when the relative path is empty, absolute, or its FIRST segment is exactly `..`. */
 function leavesRoot(root, target) {
   const rel = relative(root, target)
   return rel === '' || isAbsolute(rel) || rel.split(sep)[0] === '..'
 }
 
-/** The violations of the cited test file, or `[]` when it is a regular file inside the root holding the test. */
-function judgeCheckFile(id, check, repoRoot) {
+/**
+ * Where the check points: `check-missing`, `check-outside-repo` or `check-unreadable`, and, for a
+ * regular file inside the root, `check-test-absent` when `named` and the file holds no quoted title
+ * equal to `check.test`. A blank name is not looked for (EC-5); `judgeCheckFile` reports it.
+ */
+function locateCheckFile(id, check, repoRoot, named) {
   if (typeof check?.path !== 'string') return [{ id, rule: 'check-missing', detail: 'no check.path' }]
   const target = resolve(repoRoot, check.path)
   if (leavesRoot(repoRoot, target)) {
@@ -143,8 +156,8 @@ function judgeCheckFile(id, check, repoRoot) {
       return [{ id, rule: 'check-outside-repo', detail: `${check.path} resolves outside the repository` }]
     }
     if (!statSync(target).isFile()) return [{ id, rule: 'check-missing', detail: `${check.path} is not a file` }]
-    if (!hasTestName(check) || readFileSync(target, 'utf8').includes(check.test)) return []
-    return [{ id, rule: 'check-test-absent', detail: `${check.path} does not contain "${check.test}"` }]
+    if (!named || holdsQuotedTitle(readFileSync(target, 'utf8'), check.test)) return []
+    return [{ id, rule: 'check-test-absent', detail: `${check.path} has no test titled "${check.test}"` }]
   } catch (error) {
     if (error.code === 'ENOENT' || error.code === 'ENOTDIR') {
       return [{ id, rule: 'check-missing', detail: check.path }]
@@ -153,12 +166,21 @@ function judgeCheckFile(id, check, repoRoot) {
   }
 }
 
+/**
+ * Every violation of a shipped entry's `check`, both halves in one place: where it points
+ * (`locateCheckFile`), then `check-test-absent` when the name is blank. `[]` when the check holds.
+ */
+function judgeCheckFile(id, check, repoRoot) {
+  const named = hasTestName(check ?? {})
+  const violations = locateCheckFile(id, check, repoRoot, named)
+  if (!named) violations.push({ id, rule: 'check-test-absent', detail: 'check.test is empty' })
+  return violations
+}
+
 function judgeShipped(entry, repoRoot, today) {
-  const { id, check } = entry
-  const violations = judgeCheckFile(id, check, repoRoot)
-  if (!hasTestName(check ?? {})) violations.push({ id, rule: 'check-test-absent', detail: 'check.test is empty' })
+  const violations = judgeCheckFile(entry.id, entry.check, repoRoot)
   if (!isIsoDate(entry.verified_on) || entry.verified_on > today) {
-    violations.push({ id, rule: 'verified-on', detail: String(entry.verified_on) })
+    violations.push({ id: entry.id, rule: 'verified-on', detail: String(entry.verified_on) })
   }
   return violations
 }
