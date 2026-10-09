@@ -3,7 +3,7 @@
  * input ever reaches these fs calls.
  */
 import { existsSync } from 'node:fs'
-import { basename } from 'node:path'
+import { basename, resolve } from 'node:path'
 
 import { importUserModule } from '../../config/import-user-module.js'
 import { compareByCodeUnit } from '../_internal/compare-by-code-unit.js'
@@ -52,6 +52,22 @@ function isCronDefinition(value: unknown): value is CronDefinition {
     typeof def.handler === 'function' &&
     (def.concurrency === 'forbid' || def.concurrency === 'allow')
   )
+}
+
+/**
+ * The two homes `theokit build` scans for crons, absolute: `<serverDir>/crons` (a backend trigger)
+ * and `<agentsDir>/schedules` (a scheduled agent run). One definition, read by the build and by the
+ * schedule generator, so a generated schedule lands where the build looks.
+ */
+export function cronScanDirs(
+  cwd: string,
+  serverDir: string,
+  agentsDir: string,
+): { readonly crons: string; readonly schedules: string } {
+  return {
+    crons: resolve(cwd, serverDir, 'crons'),
+    schedules: resolve(cwd, agentsDir, 'schedules'),
+  }
 }
 
 /**

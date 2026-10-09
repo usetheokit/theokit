@@ -15,7 +15,7 @@
 import { basename, dirname, extname, relative, resolve, sep } from 'node:path'
 
 import { loadConfig } from '../../config/load-config.js'
-import { isDiscoverableCronFile, listCronFiles } from '../../server/cron/cron-scan.js'
+import { cronScanDirs, isDiscoverableCronFile, listCronFiles } from '../../server/cron/cron-scan.js'
 import { CRON_NAME_RULE, isValidCronName } from '../../server/cron/define-cron.js'
 import { findAgentFile } from '../../server/scan/agent-scan.js'
 
@@ -40,7 +40,8 @@ export async function resolveScheduleTarget(
   }
   const { agentsDir, serverDir } = config
   const agentsRoot = resolve(cwd, agentsDir)
-  const filePath = resolve(agentsRoot, 'schedules', `${name}.ts`)
+  const cronDirs = cronScanDirs(cwd, serverDir, agentsDir)
+  const filePath = resolve(cronDirs.schedules, `${name}.ts`)
   // Before the agent lookup: a chat agent missing from a directory outside the project is not
   // something to create, and the refusal must name the escape, not the missing file.
   const escaped = pathTraversalRefusal(cwd, filePath)
@@ -56,8 +57,7 @@ export async function resolveScheduleTarget(
     }
   }
   // The build scans both homes with one duplicate-name guard (build.ts, emitCronArtifacts).
-  const cronDirs = [resolve(cwd, serverDir, 'crons'), resolve(agentsRoot, 'schedules')]
-  const taken = cronNameTaken(name, filePath, cronDirs)
+  const taken = cronNameTaken(name, filePath, [cronDirs.crons, cronDirs.schedules])
   if (taken !== undefined) return taken
   return { filePath, content: generateScheduleTemplate(name, importSpecifier(filePath, chatPath)) }
 }
@@ -89,6 +89,13 @@ function cronNameRefusal(name: string): GenerateResult | undefined {
  * A refusal when another cron file already carries this schedule's cron name. The generator names
  * a cron after its file, so a file of the same name in either cron home is the clash the build's
  * duplicate-name guard would fail on. The target itself is left to the `already_exists` answer.
+ *
+ * Compared by FILE name, while the build compares the name each file passes to `defineCron`, which
+ * it learns only by importing the file. A hand-written `foo.ts` declaring `defineCron('bar')` is
+ * not seen here, so schedule `bar` is written and the build then fails with
+ * `DuplicateCronNameError`; and a `bar.ts` declaring another name refuses schedule `bar` although
+ * the build would accept it. Importing every cron file to read its name would run user code at
+ * generate time, which this generator does not do.
  */
 function cronNameTaken(
   name: string,
