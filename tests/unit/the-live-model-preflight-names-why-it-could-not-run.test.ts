@@ -123,6 +123,35 @@ describe('runPreflight', () => {
     expect(lines).toEqual(['provider answered without content (HTTP 200)'])
   })
 
+  // A JSON body that is not an object is still an answer without content. `null` used to throw a
+  // TypeError that printed as an outage, and a `choices` object keyed "0" was read as an answer
+  // (plan panel round 3, finding null_json_response_misclassified_as_unreachable).
+  it.each([
+    'null',
+    '[]',
+    '[{"message":{"content":"pong"}}]',
+    '"pong"',
+    '42',
+    '{"choices":"pong"}',
+    '{"choices":null}',
+    '{"choices":{"0":{"message":{"content":"pong"}}}}',
+    '{"choices":[null]}',
+    '{"choices":[{"message":null}]}',
+  ])(
+    'names a 200 whose JSON is not a chat answer as answered without content: %s',
+    async (body) => {
+      const { lines, run } = harness(() => Promise.resolve(new Response(body, { status: 200 })))
+      expect(await run).toBe(1)
+      expect(lines).toEqual(['provider answered without content (HTTP 200)'])
+    },
+  )
+
+  it('names the HTTP code of a 2xx whose JSON is null', async () => {
+    const { lines, run } = harness(() => Promise.resolve(new Response('null', { status: 203 })))
+    expect(await run).toBe(1)
+    expect(lines).toEqual(['provider answered without content (HTTP 203)'])
+  })
+
   it('treats a whitespace-only key as absent', async () => {
     const { lines, fetchImpl, run } = harness(answer('pong'), { OPENROUTER_API_KEY: '   ' })
     expect(await run).toBe(1)

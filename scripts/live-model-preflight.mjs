@@ -36,14 +36,21 @@ function liveModel(env) {
 /**
  * @param {Response} res
  * @returns {Promise<string>} the answer's non-blank content, or '' when it carries none: no body,
- *   a body that is not JSON, or a `content` that is not a string (an array of parts)
+ *   a body that is not JSON, JSON that is not an object (`null`, an array, a string), `choices`
+ *   that is not an array, or a `content` that is not a string (an array of parts)
  */
 async function contentOf(res) {
   try {
-    const body = /** @type {{ choices?: { message?: { content?: unknown } }[] }} */ (
-      await res.json()
-    )
-    const content = body.choices?.[0]?.message?.content
+    /** @type {unknown} */
+    const body = await res.json()
+    const choices =
+      typeof body === 'object' && body !== null && !Array.isArray(body)
+        ? /** @type {{ choices?: unknown }} */ (body).choices
+        : undefined
+    const first = Array.isArray(choices)
+      ? /** @type {{ message?: { content?: unknown } | null } | null | undefined} */ (choices[0])
+      : undefined
+    const content = first?.message?.content
     return typeof content === 'string' ? content.trim() : ''
   } catch (error) {
     // A body that is not JSON carries no content, which the caller names. Anything else, such as
