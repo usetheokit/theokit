@@ -73,7 +73,8 @@ function cutStreamMessage(name: string, chunksReceived: number, res: Response): 
  * a UIMessage event stream, as the routes `generateAgentRoutes` and `mountAgent` serve do; the tool
  * returns the text of the streamed assistant message. A stream that carries an error frame, or that
  * ends before its `finish` frame, rejects naming the tool rather than returning partial text; so
- * does a turn that finished with no text after frames the reader could not read.
+ * does a turn that finished with no text after frames the reader could not read. A remote whose
+ * turn waits on a tool approval rejects when the gate appears: an A2A call cannot answer it.
  */
 export function createA2ATool(config: A2AToolConfig): CustomTool {
   const doFetch = config.fetchImpl ?? fetch
@@ -111,6 +112,14 @@ export function createA2ATool(config: A2AToolConfig): CustomTool {
           res,
           (m) => {
             last = m
+            // A gated tool parks the remote run until its approve endpoint is called, which this
+            // tool cannot do. Throwing here ends the read and cancels the stream it holds.
+            const gate = m.parts.find((part) => part.state === 'approval-requested')
+            if (gate !== undefined) {
+              throw new Error(
+                `the remote agent asked for approval of "${String(gate.toolName)}", which an A2A call cannot answer`,
+              )
+            }
           },
           { onWarn: () => (dropped += 1) },
         )
