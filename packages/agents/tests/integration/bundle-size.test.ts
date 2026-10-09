@@ -172,8 +172,18 @@ describe('Bundle size regression', () => {
    * an agent stdout line that is not JSON into a rejection of the requests in flight and isolates a
    * throwing notification handler, and `createA2ATool` passes the run's signal to `fetch`. Measured
    * 40 488 bytes after them, so headroom is 12 bytes.
+   *
+   * ## Raised to 41 500 for AcpClient robustness and B-434: a decision, made by a person
+   *
+   * The code review of the ci-live-model-job change found three more ways the agent's stdout
+   * reaches `AcpClient` badly (#69 a JSON line that is not an object, #70 a bad line discarding the
+   * good messages beside it, #71 an async notification handler whose rejection nobody catches), and
+   * B-434 asks `AcpClient` to reject its pending requests itself when its transport closes. B-434
+   * was left open on 2026-10-07 because a minimal version measured 40 517 bytes against this cap.
+   * With 12 bytes of headroom none of the four fits. Paulo decided this raise on 2026-10-09, before
+   * the fixes were written.
    */
-  it('agents main bundle under 40.5KB', (ctx) => {
+  it('agents main bundle under 41.5KB', (ctx) => {
     const path = resolve(distDir, 'index.js')
     if (!existsSync(path)) {
       // `ctx.skip()`, not `return`. A bare return reports the test as PASSED, so a suite run with no
@@ -183,7 +193,7 @@ describe('Bundle size regression', () => {
       return
     }
     const size = statSync(path).size
-    expect(size).toBeLessThan(40_500)
+    expect(size).toBeLessThan(41_500)
     console.log(`  agents/dist/index.js: ${(size / 1024).toFixed(1)} KB`)
   })
 
