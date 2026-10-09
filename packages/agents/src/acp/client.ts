@@ -25,9 +25,9 @@ export interface AcpTransport {
 }
 
 /**
- * The agent wrote a stdout line that does not decode to a JSON-RPC message: it is not JSON, or it
- * is JSON but not an object (`null`, a number, a string, an array). `line` is the line, trimmed.
- * Code `ACP_PROTOCOL_ERROR`.
+ * The agent wrote a stdout line that does not decode to a JSON-RPC message: it is not JSON, it is
+ * JSON but not an object (`null`, a number, a string, an array), or it is an object that is not a
+ * response, a request or a notification. `line` is the line, trimmed. Code `ACP_PROTOCOL_ERROR`.
  */
 export class AcpProtocolError extends TheokitAgentError {
   override readonly name = 'AcpProtocolError'
@@ -145,7 +145,7 @@ export class AcpClient {
       cause = err
     }
     if (message instanceof Object && !Array.isArray(message)) {
-      this.dispatch(message as Record<string, unknown>)
+      this.dispatch(message as Record<string, unknown>, line)
     } else {
       // Not JSON, or JSON that is not an object: both fail the requests in flight, or are reported.
       this.fail(new AcpProtocolError(line, { cause }))
@@ -158,7 +158,7 @@ export class AcpClient {
     this.pending.clear()
   }
 
-  private dispatch(message: Record<string, unknown>): void {
+  private dispatch(message: Record<string, unknown>, line: string): void {
     if (isResponse(message)) {
       const entry = this.pending.get(message.id)
       if (!entry) return
@@ -172,6 +172,8 @@ export class AcpClient {
       return
     }
     if (isNotification(message)) void this.notify(message)
+    // An object of no JSON-RPC shape answers nothing: fail what it was meant to answer.
+    else this.fail(new AcpProtocolError(line))
   }
 
   private async notify(m: { method: string; params?: unknown }): Promise<void> {

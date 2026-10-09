@@ -113,6 +113,28 @@ describe('AcpClient against lines that are JSON but not a JSON-RPC message', () 
   )
 })
 
+// Code review #66 / #79: an object that decodes but matches no JSON-RPC shape the client dispatches
+// was dropped, and the request it was meant to answer stayed pending until the transport closed.
+describe('AcpClient against objects that match no JSON-RPC message shape', () => {
+  it.each([
+    '{"jsonrpc":"2.0","id":1}',
+    '{"jsonrpc":"2.0","id":"1","result":"x"}',
+    '{"jsonrpc":"2.0","method":"session/update","id":null}',
+  ])('test_a_%s_line_fails_the_request_in_flight_with_a_protocol_error_naming_it', async (line) => {
+    const { transport, raw } = fakeTransport()
+    const client = new AcpClient(transport)
+    const pending = client.request('session/prompt', {})
+
+    expect(() => raw(`${line}\n`)).not.toThrow()
+
+    expect(await outcome(pending)).toMatchObject({
+      name: 'AcpProtocolError',
+      line,
+      message: expect.stringContaining(`line: ${line}`) as unknown,
+    })
+  })
+})
+
 describe('AcpClient with one bad line among good ones in a chunk', () => {
   it('test_every_well_formed_message_of_the_chunk_is_dispatched_around_the_bad_line', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
