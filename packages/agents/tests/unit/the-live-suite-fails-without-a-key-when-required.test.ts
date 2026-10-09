@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
+import LIVE_CONFIG from '../../vitest.live.config.js'
+
 import {
   MissingProviderKeyError,
   assertProviderKeyWhenRequired,
@@ -38,9 +40,18 @@ describe('assertProviderKeyWhenRequired', () => {
     expect(() => assertProviderKeyWhenRequired({})).not.toThrow()
   })
 
-  it('returns when the flag is 0', () => {
-    expect(() => assertProviderKeyWhenRequired({ THEOKIT_LIVE_REQUIRED: '0' })).not.toThrow()
+  it.each(['0', 'true', '', 'yes'])('returns when the flag is %j, which is not 1', (flag) => {
+    expect(() => assertProviderKeyWhenRequired({ THEOKIT_LIVE_REQUIRED: flag })).not.toThrow()
   })
+
+  it.each(['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'THEOKIT_API_KEY'])(
+    'returns when required and only %s holds a key',
+    (name) => {
+      expect(() =>
+        assertProviderKeyWhenRequired({ THEOKIT_LIVE_REQUIRED: '1', [name]: 'present' }),
+      ).not.toThrow()
+    },
+  )
 
   it('names variables and never values in the message', () => {
     const fakeKey = 'sk-or-v1-' + 'f'.repeat(32)
@@ -57,5 +68,15 @@ describe('assertProviderKeyWhenRequired', () => {
     }
     expect(message).toBe(ABSENT_MESSAGE)
     expect(message).not.toContain('sk-or-v1-fff')
+  })
+})
+
+// The guard only acts when the live config registers it. Without this case, deleting the
+// globalSetup line would leave every test green while the CI suite step skipped green again on a
+// missing key (review F-tests-1, F-wire-1).
+describe('vitest.live.config.ts', () => {
+  it('registers the provider-key guard as the live suite globalSetup', () => {
+    expect(LIVE_CONFIG.test?.globalSetup).toEqual(['tests/live/require-provider-key.ts'])
+    expect(LIVE_CONFIG.test?.include).toEqual(['tests/live/**/*.test.ts'])
   })
 })
