@@ -12,7 +12,9 @@
  *
  * Each call owns its transport: it is closed when the call ends, on a reply, a refusal or an
  * error, and the call waits for the process to exit, so no agent process outlives the call that
- * spawned it. Closing asks with SIGTERM and, past a grace period, ends the process with SIGKILL. A
+ * spawned it. Closing asks with SIGTERM and, past a grace period, ends the process with SIGKILL. On
+ * Linux and macOS the agent runs in its own process group and closing signals the whole group, so
+ * an agent started through a launcher (`npx`, a shell script) ends with the launcher. A
  * process that cannot start, exits mid-turn or writes something that is not ACP JSON-RPC on stdout
  * rejects the call with {@link AcpTransportClosedError}; a request the agent does not answer within
  * `timeoutMs` rejects it with {@link AcpRequestTimeoutError}. A cancelled run (the `signal` the SDK
@@ -74,6 +76,17 @@ export interface AcpToolTransport extends AcpTransport {
 const SIGTERM_GRACE_MS = 2_000
 /** How long it waits for the exit SIGKILL causes; the signal cannot be ignored, so this is a bound. */
 const SIGKILL_WAIT_MS = 2_000
+/** How often {@link NodeAcpTransport.close} checks whether the agent's process group is gone. */
+const GROUP_POLL_MS = 20
+
+/**
+ * Whether the agent gets its own process group. A launcher (`npx`, a shell script) runs the agent
+ * as its child, so signalling only the pid the transport spawned ends the launcher and leaves the
+ * agent running; signalling the group ends both. Windows has no process groups to signal this way:
+ * there the transport signals the spawned process alone, as it always did, and an agent behind a
+ * launcher can outlive the call.
+ */
+const OWN_PROCESS_GROUP = process.platform !== 'win32'
 
 /** Stdio transport backed by a spawned subprocess (the default for {@link createACPTool}). */
 export class NodeAcpTransport implements AcpToolTransport {
@@ -91,7 +104,12 @@ export class NodeAcpTransport implements AcpToolTransport {
     args: string[] = [],
     cwd?: string,
   ) {
-    this.proc = spawn(command, args, { cwd, stdio: ['pipe', 'pipe', 'inherit'] })
+    // `detached` makes the agent the leader of a new process group (POSIX), the group close signals.
+    this.proc = spawn(command, args, {
+      cwd,
+      stdio: ['pipe', 'pipe', 'inherit'],
+      detached: OWN_PROCESS_GROUP,
+    })
     // A pipe cuts stdout wherever it likes; a streaming decoder carries a multibyte character split
     // across two chunks instead of turning each half into U+FFFD.
     this.proc.stdout.setEncoding('utf8')
@@ -144,16 +162,24 @@ export class NodeAcpTransport implements AcpToolTransport {
   }
 
   /**
-   * End the channel and the process, and settle once the process has exited: SIGTERM first, then
-   * SIGKILL for a process still running after {@link SIGTERM_GRACE_MS}.
+   * End the channel and the process, and settle once the process and its group have exited:
+   * SIGTERM first, then SIGKILL for anything still running after {@link SIGTERM_GRACE_MS}.
    */
   async close(): Promise<void> {
     this.end('was closed by the caller')
-    if (!this.running()) return
-    this.proc.kill('SIGTERM')
-    if (await this.exitsWithin(SIGTERM_GRACE_MS)) return
-    this.proc.kill('SIGKILL')
-    await this.exitsWithin(SIGKILL_WAIT_MS)
+    try {
+      if (!this.running() && !this.groupAlive()) return
+      this.signal('SIGTERM')
+      if (await this.goneWithin(SIGTERM_GRACE_MS)) return
+      this.signal('SIGKILL')
+      await this.goneWithin(SIGKILL_WAIT_MS)
+    } finally {
+      // Nothing is read or written after close; a process that escaped its group and still holds
+      // the pipes must not keep the host's event loop alive.
+      this.proc.stdin.destroy()
+      this.proc.stdout.destroy()
+      this.proc.unref()
+    }
   }
 
   /** Whether the process started and has not exited yet. */
@@ -161,6 +187,45 @@ export class NodeAcpTransport implements AcpToolTransport {
     return (
       this.proc.pid !== undefined && this.proc.exitCode === null && this.proc.signalCode === null
     )
+  }
+
+  /** Whether a process of the agent's group is still running (always `false` without a group). */
+  private groupAlive(): boolean {
+    const pid = this.proc.pid
+    if (!OWN_PROCESS_GROUP || pid === undefined) return false
+    try {
+      process.kill(-pid, 0)
+      return true
+    } catch (err) {
+      // ESRCH: no process is left in the group. EPERM: one is, and it is not ours to signal.
+      return (err as NodeJS.ErrnoException).code === 'EPERM'
+    }
+  }
+
+  /** Send `signal` to the agent's process group, or to the spawned process without one. */
+  private signal(signal: NodeJS.Signals): void {
+    const pid = this.proc.pid
+    if (!OWN_PROCESS_GROUP || pid === undefined) {
+      this.proc.kill(signal)
+      return
+    }
+    try {
+      process.kill(-pid, signal)
+    } catch (err) {
+      // The group emptied between the check and the signal: there is nothing left to end.
+      if ((err as NodeJS.ErrnoException).code !== 'ESRCH') throw err
+    }
+  }
+
+  /** Wait up to `ms` for the process and every process of its group to exit; `true` when they did. */
+  private async goneWithin(ms: number): Promise<boolean> {
+    const deadline = Date.now() + ms
+    if (!(await this.exitsWithin(ms))) return false
+    while (this.groupAlive()) {
+      if (Date.now() >= deadline) return false
+      await new Promise((resolve) => setTimeout(resolve, GROUP_POLL_MS))
+    }
+    return true
   }
 
   /** Wait up to `ms` for the process to exit; `true` when it did. */
