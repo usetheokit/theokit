@@ -10,16 +10,18 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1076 export(s) across 20 entry point(s).
+1080 export(s) across 21 entry point(s).
 
-Measured against `@theokit/sdk@5.9.0`.
+Measured against `@theokit/sdk@5.9.2`.
 
 ## `@theokit/agents`
 
 | Symbol | Kind |
 |---|---|
 | `AcpClient` | value |
+| `AcpConnectionClosedError` | value |
 | `AcpMessageDecoder` | value |
+| `AcpProtocolError` | value |
 | `Agent` | value |
 | `AGENT_BRAND` | value |
 | `AgentBuilder` | value |
@@ -67,7 +69,6 @@ Measured against `@theokit/sdk@5.9.0`.
 | `costAmountUsd` | value |
 | `CostBudgetExceededError` | value |
 | `costGuard` | value |
-| `createA2ATool` | value |
 | `createAgentExecutionContext` | value |
 | `createApiErrorHandler` | value |
 | `createDraft` | value |
@@ -83,6 +84,7 @@ Measured against `@theokit/sdk@5.9.0`.
 | `delegate` | value |
 | `delegateBackground` | value |
 | `delegateWithScoring` | value |
+| `DelegationBudgetCostUnknownError` | value |
 | `DelegationBudgetExceededError` | value |
 | `DelegationError` | value |
 | `DelegationTimeoutError` | value |
@@ -226,10 +228,8 @@ Measured against `@theokit/sdk@5.9.0`.
 | `withEphemeralAgent` | value |
 | `withPreCompaction` | value |
 | `WRITE_SCOPED_TOOLS` | value |
-| `A2AAuth` | type |
 | `A2ACapabilities` | type |
 | `A2ASkill` | type |
-| `A2AToolConfig` | type |
 | `AcpTransport` | type |
 | `AfterToolCallContext` | type |
 | `AgentCard` | type |
@@ -464,6 +464,7 @@ Measured against `@theokit/sdk@5.9.0`.
 | `delegate` | value |
 | `delegateBackground` | value |
 | `delegateWithScoring` | value |
+| `DelegationBudgetCostUnknownError` | value |
 | `DelegationBudgetExceededError` | value |
 | `DelegationError` | value |
 | `DelegationTimeoutError` | value |
@@ -1120,6 +1121,14 @@ Measured against `@theokit/sdk@5.9.0`.
 | `SandboxWritePolicy` | type |
 | `ToolScope` | type |
 | `ToolScopeInput` | type |
+
+## `@theokit/agents/a2a`
+
+| Symbol | Kind |
+|---|---|
+| `createA2ATool` | value |
+| `A2AAuth` | type |
+| `A2AToolConfig` | type |
 
 ## `@theokit/agents/mcp-health`
 

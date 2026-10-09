@@ -22,7 +22,7 @@ export * from './loop/index.js'
 export * from './guardrails/index.js'
 export * from './a2a/agent-card.js'
 export * from './a2a/mcp-server-manifest.js'
-export * from './a2a/a2a-client.js'
+// `createA2ATool` ships from `@theokit/agents/a2a` (`src/a2a-entry.ts`), not from here.
 export * from './conversation-scope.js'
 export * from './skills-resolver.js'
 export * from './acp/protocol.js'

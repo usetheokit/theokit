@@ -7,3 +7,5 @@
 Every agent route this framework serves, from `generateAgentRoutes` or `mountAgent`, answers with an event stream, and the tool used to call `res.json()` on that response, so it failed on the first byte of a real reply. The tool now returns the text of the streamed assistant message. A stream that carries an error frame, or that ends before its `finish` frame, rejects with an error naming the tool instead of returning partial text.
 
 **Migration:** answer the `{ message }` POST with the event stream `generateAgentRoutes` or `mountAgent` produce, or stay on 15.x.
+
+**Breaking:** `createA2ATool` and its `A2AToolConfig` and `A2AAuth` types now import from `@theokit/agents/a2a`, not from the package root. Change `import { createA2ATool } from '@theokit/agents'` to `import { createA2ATool } from '@theokit/agents/a2a'`. The root bundle was at its size cap, and an app that does not delegate to a remote agent no longer loads the client. (B-407)

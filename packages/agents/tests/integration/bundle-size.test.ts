@@ -191,6 +191,15 @@ describe('Bundle size regression', () => {
    * bytes of headroom: #66 alone came to 41 556, #83 alone to 41 741, both to 41 801. Most of #83 is
    * the separate `@theokit/sdk/errors` import the bundler writes per module. Paulo decided this
    * raise on 2026-10-09, after the two fixes were measured.
+   *
+   * ## NOT raised for F-arch-5 — `createA2ATool` moved to `./a2a` (B-407)
+   *
+   * The root bundle then stood at 41 992 bytes, 8 under this cap. B-024's answer applied this time:
+   * the A2A client is a lone module most agents never import, so the shape changed rather than the
+   * number. Paulo decided on 2026-10-09 to move `createA2ATool`, `A2AToolConfig` and `A2AAuth` to
+   * `@theokit/agents/a2a` (`src/a2a-entry.ts`) in the major B-407 already carries. Measured after
+   * the move: `dist/index.js` 39 332 bytes, `dist/a2a.js` 2 750. The cap stays at 42 000.
+   * `the-a2a-tool-ships-on-its-own-subpath.test.ts` keeps the module out of the root bundle.
    */
   it('agents main bundle under 42KB', (ctx) => {
     const path = resolve(distDir, 'index.js')

@@ -17,7 +17,7 @@
  */
 import { writeFileSync } from 'node:fs'
 
-import { createA2ATool } from '@theokit/agents'
+import { createA2ATool } from '@theokit/agents/a2a'
 import {
   createSdkAgentStream,
   generateAgentRoutes,
