@@ -22,6 +22,9 @@ import { describe, expect, it } from 'vitest'
 const REPO = resolve(import.meta.dirname, '../..')
 const RULE = 'proof-imports-only-published-entry-points'
 const SRC_IMPORT = `import * as src from '${join(REPO, 'packages/agents/src/index.ts')}'\nexport const touched = src\n`
+/** The same reach into `src/`, written as a package specifier instead of a path. */
+const SPECIFIER_SRC_IMPORT =
+  "import * as src from '@theokit/agents/src/index.ts'\nexport const touched = src\n"
 const CONTROL_IMPORT =
   "import { tokenBudgetCompactionStrategy } from '@theokit/agents'\nexport const touched = tokenBudgetCompactionStrategy\n"
 const TIMEOUT_MS = 60_000
@@ -133,6 +136,14 @@ describe('theoclaw refuses a proof import into a package src', () => {
   )
 
   it(
+    'theoclaw: a test file importing @theokit/agents/src by package name fails boundaries',
+    () => {
+      expectRefused(cruiseProbe('theoclaw', 'specifier.test.ts', SPECIFIER_SRC_IMPORT))
+    },
+    TIMEOUT_MS,
+  )
+
+  it(
     'theoclaw: a test file importing @theokit/agents passes boundaries',
     () => {
       // TheoClaw's exclusion drops every edge into a dist/ directory, so this control can show
@@ -183,6 +194,22 @@ describe('theocode refuses a proof import into a package src, from source and fr
     'theocode: a distribution.test.ts file importing packages/agents/src fails depcruise',
     () => {
       expectRefused(cruiseProbe('theocode', 'distribution.test.ts', SRC_IMPORT))
+    },
+    TIMEOUT_MS,
+  )
+
+  it(
+    'theocode: a test file importing @theokit/agents/src by package name fails depcruise',
+    () => {
+      // The specifier resolves through the workspace symlink to ../../packages/agents/src, which
+      // is the only path shape the rule's to.path names.
+      const result = cruiseProbe('theocode', 'specifier.test.ts', SPECIFIER_SRC_IMPORT)
+      const probe = result.modules.find((m) => m.source.endsWith('specifier.test.ts'))
+
+      expectRefused(result)
+      expect(probe?.dependencies.map((d) => d.resolved)).toContain(
+        '../../packages/agents/src/index.ts',
+      )
     },
     TIMEOUT_MS,
   )
