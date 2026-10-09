@@ -120,8 +120,10 @@ describe('AcpClient against objects that match no JSON-RPC message shape', () =>
     '{"jsonrpc":"2.0","id":1}',
     '{"jsonrpc":"2.0","id":"1","result":"x"}',
     '{"jsonrpc":"2.0","method":"session/update","id":null}',
-    // Review finding F-dom-5: a server request with a string id, which the client cannot answer.
-    '{"jsonrpc":"2.0","id":"7","method":"session/request_permission","params":{}}',
+    // A server request whose id is neither a number nor a string cannot be answered by its id.
+    '{"jsonrpc":"2.0","id":null,"method":"session/request_permission","params":{}}',
+    '{"jsonrpc":"2.0","id":{"n":7},"method":"session/request_permission","params":{}}',
+    '{"jsonrpc":"2.0","id":[7],"method":"session/request_permission","params":{}}',
     // loop-code-review #92 / #106: an `error` member that is not a JSON-RPC error object. Null
     // resolved the request with `undefined`; the others rejected it with an `undefined` message.
     '{"jsonrpc":"2.0","id":1,"error":null}',
@@ -209,5 +211,47 @@ describe('AcpClient with an async notification handler', () => {
     expect(warn.mock.calls[0]).toContainEqual(
       expect.objectContaining({ message: 'async handler bug' }),
     )
+  })
+})
+
+// loop-code-review LCR0602 (#92): JSON-RPC 2.0 lets a request carry a string id, and the answer must
+// carry that same id. The client failed every request in flight on one instead of answering it.
+describe('AcpClient answers an agent request by the id it carried', () => {
+  it.each([['perm-1'], [7]])(
+    'test_a_request_with_id_%j_is_answered_with_that_id_and_leaves_the_pending_request_open',
+    async (id) => {
+      const { transport, sent, raw } = fakeTransport()
+      const client = new AcpClient(transport)
+      client.onRequest('session/request_permission', () => ({ outcome: { outcome: 'cancelled' } }))
+      const pending = client.request('session/prompt', {})
+
+      raw(
+        encodeAcpMessage({ jsonrpc: '2.0', id, method: 'session/request_permission', params: {} }),
+      )
+      await new Promise((resolve) => setTimeout(resolve, 0))
+
+      expect(sent.slice(1).map((line) => JSON.parse(line) as unknown)).toEqual([
+        { jsonrpc: '2.0', id, result: { outcome: { outcome: 'cancelled' } } },
+      ])
+      expect(await outcome(pending)).toBe('pending')
+    },
+  )
+
+  it('test_a_string_id_request_with_no_handler_gets_method_not_found_with_that_id', async () => {
+    const { transport, sent, raw } = fakeTransport()
+    const client = new AcpClient(transport)
+    const pending = client.request('session/prompt', {})
+
+    raw(encodeAcpMessage({ jsonrpc: '2.0', id: 'fs-9', method: 'fs/read_text_file', params: {} }))
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(sent.slice(1).map((line) => JSON.parse(line) as unknown)).toEqual([
+      {
+        jsonrpc: '2.0',
+        id: 'fs-9',
+        error: { code: -32601, message: 'No handler: fs/read_text_file' },
+      },
+    ])
+    expect(await outcome(pending)).toBe('pending')
   })
 })

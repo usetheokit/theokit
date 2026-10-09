@@ -203,11 +203,12 @@ describe('an ACP tool call against an agent that misbehaves on its channel', LIM
 
   // Code review #75 / #80: a scalar reached the caller as "the agent refused initialize" and a
   // wrong-shaped object was dropped. Both break the protocol and must reject the call typed, like a
-  // non-JSON line. Review finding F-dom-5: a server request with a string id is refused the same way.
+  // non-JSON line. A server request whose id is neither a number nor a string is refused the same
+  // way (a string id is answered: see the test after this one).
   it.each([
     '42',
     '{"jsonrpc":"2.0","id":1}',
-    '{"jsonrpc":"2.0","id":"7","method":"session/request_permission","params":{}}',
+    '{"jsonrpc":"2.0","id":{"n":7},"method":"session/request_permission","params":{}}',
   ])('test_a_json_line_that_is_not_a_json_rpc_message_rejects_the_call_typed: %s', async (line) => {
     const { value, uncaught } = await recordingUncaught(() => callAndReadPid([`--banner=${line}`]))
 
@@ -217,6 +218,16 @@ describe('an ACP tool call against an agent that misbehaves on its channel', LIM
       await goneWithin(value.pid),
       `agent process ${value.pid} still running after the call`,
     ).toBe(true)
+  })
+
+  // loop-code-review LCR0602 (#92): JSON-RPC 2.0 allows a string id, so the request is answered
+  // (the tool's permission handler denies it) and the call goes on to the agent's reply.
+  it('test_a_permission_request_with_a_string_id_is_answered_and_the_call_completes', async () => {
+    const line = '{"jsonrpc":"2.0","id":"perm-1","method":"session/request_permission","params":{}}'
+    const { value, uncaught } = await recordingUncaught(() => callAndReadPid([`--banner=${line}`]))
+
+    expect(uncaught, `the request escaped as ${String(uncaught[0])}`).toEqual([])
+    expect(value.result).toBe('echo:hi')
   })
 
   it('test_a_multibyte_character_split_across_two_chunks_reaches_the_reply_intact', async () => {

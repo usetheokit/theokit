@@ -63,7 +63,8 @@ interface JsonRpcResponse {
   error?: { code: number; message: string }
 }
 interface JsonRpcServerRequest {
-  id: number
+  /** JSON-RPC 2.0 allows a string or a number; the answer carries the same id back. */
+  id: number | string
   method: string
   params?: unknown
 }
@@ -89,7 +90,11 @@ function isResponse(m: Record<string, unknown>): m is JsonRpcResponse & Record<s
 function isServerRequest(
   m: Record<string, unknown>,
 ): m is JsonRpcServerRequest & Record<string, unknown> {
-  return typeof m.method === 'string' && typeof m.id === 'number'
+  // JSON-RPC 2.0 lets a request id be a number or a string (#92 of loop-code-review, LCR0602). A
+  // parsed line can only give `typeof` number, string, boolean, object or undefined, so the pattern
+  // admits exactly the first two. It is a pattern rather than two comparisons because the root
+  // bundle of @theokit/agents sits 9 bytes under its 42 000-byte cap.
+  return typeof m.method === 'string' && /^[ns]/.test(typeof m.id)
 }
 function isNotification(
   m: Record<string, unknown>,
