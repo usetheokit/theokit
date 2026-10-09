@@ -188,6 +188,27 @@ describe('an ACP tool call against an agent that misbehaves on its channel', LIM
     ).toBe(true)
   })
 
+  // Code review #75 / #80: a line that IS JSON passed the transport's probe, which only parsed it,
+  // so a scalar reached the caller as "the agent refused initialize" and a wrong-shaped object was
+  // dropped. Both break the protocol and must close the channel typed, like a non-JSON line.
+  it.each(['42', '{"jsonrpc":"2.0","id":1}'])(
+    'test_a_json_line_that_is_not_a_json_rpc_message_rejects_the_call_typed: %s',
+    async (line) => {
+      const { value, uncaught } = await recordingUncaught(() =>
+        callAndReadPid([`--banner=${line}`]),
+      )
+
+      expect(uncaught, `the bad line escaped as ${String(uncaught[0])}`).toEqual([])
+      expect(value.result).toBeInstanceOf(AcpTransportClosedError)
+      expect((value.result as Error).message).toContain(`broke the ACP protocol`)
+      expect((value.result as Error).message).toContain(line)
+      expect(
+        await goneWithin(value.pid),
+        `agent process ${value.pid} still running after the call`,
+      ).toBe(true)
+    },
+  )
+
   it('test_a_multibyte_character_split_across_two_chunks_reaches_the_reply_intact', async () => {
     const pidFile = join(scratch, 'agent.pid')
     const result = await outcome(

@@ -3,7 +3,11 @@ import { fileURLToPath } from 'node:url'
 import type { AcpTransport } from '@theokit/agents'
 import { describe, expect, it } from 'vitest'
 
-import { createACPTool, NodeAcpTransport } from '../../src/server/agent/acp-tool.js'
+import {
+  AcpTransportClosedError,
+  createACPTool,
+  NodeAcpTransport,
+} from '../../src/server/agent/acp-tool.js'
 
 /**
  * When the agent refuses one step of the ACP handshake, the tool call rejects with an error that
@@ -57,13 +61,15 @@ async function callRefusing(method: string): Promise<{ sent: string[]; failure: 
   } catch (err) {
     failure = err
   } finally {
-    for (const t of transports) t.close()
+    for (const t of transports) void t.close()
   }
   return { sent, failure }
 }
 
 function messageOf(failure: unknown): string {
   expect(failure).toBeInstanceOf(Error)
+  // A refusal, not a protocol break: the message alone cannot tell them apart (review #80).
+  expect(failure).not.toBeInstanceOf(AcpTransportClosedError)
   return (failure as Error).message
 }
 

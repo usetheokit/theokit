@@ -28,6 +28,18 @@ import type { Readable, Writable } from 'node:stream'
 import { AcpClient, AcpMessageDecoder, type AcpTransport } from '@theokit/agents'
 import type { CustomTool, ToolContext } from '@theokit/sdk'
 
+/**
+ * Whether `m` is one of the JSON-RPC shapes `AcpClient` dispatches: a response (numeric `id` with
+ * `result` or `error`, no `method`), a request (`method` and numeric `id`) or a notification
+ * (`method`, no `id`). The client keeps these predicates private, so the rule is restated here.
+ */
+function isJsonRpcMessage(m: unknown): boolean {
+  if (!(m instanceof Object) || Array.isArray(m)) return false
+  const { id, method } = m as Record<string, unknown>
+  if (typeof method === 'string') return typeof id === 'number' || !('id' in m)
+  return !('method' in m) && typeof id === 'number' && ('result' in m || 'error' in m)
+}
+
 /** The agent process could not start, failed, or exited before the call finished. */
 export class AcpTransportClosedError extends Error {
   override readonly name = 'AcpTransportClosedError'
@@ -139,15 +151,20 @@ export class NodeAcpTransport implements AcpToolTransport {
   }
 
   subscribe(onData: (chunk: string) => void): void {
-    // The agent's stdout is untrusted. A line that is not JSON (a banner, a log line) breaks the
-    // protocol: it is caught here, by the same decoder the client uses, before the client sees it,
-    // and it ends this channel so the call in flight rejects typed. A throw from the client itself
-    // ends it the same way; escaping this listener it would be an uncaught exception in the host.
+    // The agent's stdout is untrusted. A line that is not JSON (a banner, a log line), or JSON that
+    // is not a JSON-RPC message the client dispatches (`42`, an id with no result), breaks the
+    // protocol: it is caught here, before the client sees it, and it ends this channel so the call
+    // in flight rejects typed. A throw from the client itself ends it the same way; escaping this
+    // listener it would be an uncaught exception in the host.
     const probe = new AcpMessageDecoder()
     this.proc.stdout.on('data', (chunk: string) => {
       if (this.broke) return
       try {
-        probe.push(chunk)
+        for (const message of probe.push(chunk)) {
+          if (!isJsonRpcMessage(message)) {
+            throw new Error(`not a JSON-RPC message: ${JSON.stringify(message)}`)
+          }
+        }
         onData(chunk)
       } catch (err) {
         this.broke = true
