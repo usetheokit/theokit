@@ -1,10 +1,10 @@
 import { fileURLToPath } from 'node:url'
 
-import type { AcpTransport } from '@theokit/agents'
 import { describe, expect, it } from 'vitest'
 
 import {
   AcpTransportClosedError,
+  type AcpToolTransport,
   createACPTool,
   NodeAcpTransport,
 } from '../../src/server/agent/acp-tool.js'
@@ -38,7 +38,7 @@ async function callRefusing(method: string): Promise<{ sent: string[]; failure: 
     name: 'code_agent',
     description: 'A coding agent',
     onPermissionRequest: () => ({ granted: false }),
-    transportFactory: (config): AcpTransport => {
+    transportFactory: (config): AcpToolTransport => {
       const real = new NodeAcpTransport(config.command, config.args, config.cwd)
       transports.push(real)
       return {
@@ -52,6 +52,11 @@ async function callRefusing(method: string): Promise<{ sent: string[]; failure: 
         subscribe: (onData) => {
           real.subscribe(onData)
         },
+        // Forwarded, so the tool releases the real process and hears it close on its own.
+        close: () => real.close(),
+        onClose: (listener) => {
+          real.onClose(listener)
+        },
       }
     },
   })
@@ -61,7 +66,7 @@ async function callRefusing(method: string): Promise<{ sent: string[]; failure: 
   } catch (err) {
     failure = err
   } finally {
-    for (const t of transports) void t.close()
+    await Promise.all(transports.map((t) => t.close()))
   }
   return { sent, failure }
 }

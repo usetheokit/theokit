@@ -1,9 +1,12 @@
 import { fileURLToPath } from 'node:url'
 
-import type { AcpTransport } from '@theokit/agents'
 import { describe, expect, it } from 'vitest'
 
-import { createACPTool, NodeAcpTransport } from '../../src/server/agent/acp-tool.js'
+import {
+  type AcpToolTransport,
+  createACPTool,
+  NodeAcpTransport,
+} from '../../src/server/agent/acp-tool.js'
 
 /**
  * B-408: one call of an ACP tool, against a spawned ACP agent process, must open a session
@@ -39,7 +42,7 @@ describe('an ACP tool call against a real agent process', () => {
       name: 'code_agent',
       description: 'A coding agent',
       onPermissionRequest: () => ({ granted: false }),
-      transportFactory: (config): AcpTransport => {
+      transportFactory: (config): AcpToolTransport => {
         const real = new NodeAcpTransport(config.command, config.args, config.cwd)
         transports.push(real)
         return {
@@ -53,6 +56,11 @@ describe('an ACP tool call against a real agent process', () => {
           subscribe: (onData) => {
             real.subscribe(onData)
           },
+          // Forwarded, so the tool releases the real process and hears it close on its own.
+          close: () => real.close(),
+          onClose: (listener) => {
+            real.onClose(listener)
+          },
         }
       },
     })
@@ -64,7 +72,7 @@ describe('an ACP tool call against a real agent process', () => {
     } catch (err) {
       failure = err
     } finally {
-      for (const t of transports) t.close()
+      await Promise.all(transports.map((t) => t.close()))
     }
 
     expect(
