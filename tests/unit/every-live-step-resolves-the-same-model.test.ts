@@ -63,8 +63,12 @@ describe('the live files', () => {
     liveTests(join(THEOCODE_PACKAGES, pkg, 'tests/live')),
   )
 
+  // Any LIVE_MODEL token in the code, not one spelling of the read: a destructured
+  // `const { LIVE_MODEL } = process.env` and `process.env?.LIVE_MODEL` are reads too (plan panel
+  // round 6). Comments are stripped first, so a file may still explain the variable.
   it.each([...agentsFiles, ...theocodeFiles])('%s never reads LIVE_MODEL itself', (file) => {
-    expect(readFileSync(file, 'utf8')).not.toMatch(/process\.env(\.LIVE_MODEL|\[['"`]LIVE_MODEL)/)
+    const code = readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '')
+    expect(code).not.toMatch(/\bLIVE_MODEL\b/)
   })
 
   it.each([...agentsFiles, THEOCODE_A2A_TEST])(
