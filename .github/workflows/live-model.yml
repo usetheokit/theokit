@@ -19,6 +19,10 @@ jobs:
     name: Live model (real provider)
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # One model for the preflight and both live steps. The default must equal DEFAULT_LIVE_MODEL in
+    # scripts/live-model-preflight.mjs; the workflow test pins that.
+    env:
+      LIVE_MODEL: ${{ vars.LIVE_MODEL || 'google/gemini-2.5-flash-lite' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -27,14 +31,12 @@ jobs:
       - name: Preflight (reach the provider)
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-          LIVE_MODEL: ${{ vars.LIVE_MODEL || 'google/gemini-2.5-flash-lite' }}
         run: node scripts/live-model-preflight.mjs
       - name: Build the live suite's workspace dependencies
         run: TURBO_CONCURRENCY=1 pnpm --filter "@theokit/agents..." build
       - name: Live suite (THEOKIT_LIVE_REQUIRED)
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-          LIVE_MODEL: ${{ vars.LIVE_MODEL || 'google/gemini-2.5-flash-lite' }}
           THEOKIT_LIVE_REQUIRED: '1'
         # bash -eo pipefail: the suite's exit code survives the pipe (D8)
         shell: bash
@@ -44,7 +46,6 @@ jobs:
       - name: A2A live test (THEOKIT_LIVE_REQUIRED)
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-          LIVE_MODEL: ${{ vars.LIVE_MODEL || 'google/gemini-2.5-flash-lite' }}
           THEOKIT_LIVE_REQUIRED: '1'
         # bash -eo pipefail: the test's exit code survives the pipe (D8)
         shell: bash

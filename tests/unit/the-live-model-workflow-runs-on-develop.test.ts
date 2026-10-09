@@ -4,6 +4,8 @@ import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 
+import { DEFAULT_LIVE_MODEL } from '../../scripts/live-model-preflight.mjs'
+
 /**
  * No CI job reached a model: 0 of 12 workflows triggered on push to `develop`, and the live suite
  * skipped green with no key (B-415, OBJ-9). `live-model.yml` is that job. Each case below pins
@@ -20,6 +22,7 @@ interface Step {
 
 interface Job {
   'timeout-minutes'?: number
+  env?: Record<string, string>
   steps: Step[]
 }
 
@@ -42,7 +45,6 @@ function stepIndex(fragment: string): number {
   return index
 }
 
-const PREFLIGHT = STEPS[stepIndex('live-model-preflight.mjs')] as Step
 const SUITE = STEPS[stepIndex('@theokit/agents test:live')] as Step
 
 const THEOCODE = resolve(__dirname, '../../apps/theocode')
@@ -114,7 +116,6 @@ describe('live-model.yml', () => {
     const A2A_SUITE = STEPS[a2a] as Step
     expect(A2A_SUITE.env?.OPENROUTER_API_KEY).toContain('secrets.OPENROUTER_API_KEY')
     expect(A2A_SUITE.env?.THEOKIT_LIVE_REQUIRED).toBe('1')
-    expect(A2A_SUITE.env?.LIVE_MODEL).toBe(SUITE.env?.LIVE_MODEL)
     expect(A2A_SUITE.shell).toBe('bash')
     expect(A2A_SUITE.run?.trim()).toMatch(/2>&1 \| node scripts\/redact-key-shapes\.mjs$/)
   })
@@ -134,9 +135,12 @@ describe('live-model.yml', () => {
     expect(LIVE_A2A_CONFIG.test?.globalSetup).toEqual(['tools/require-provider-key.mjs'])
   })
 
-  it('feeds the same model to the preflight and the suite', () => {
-    expect(PREFLIGHT.env?.LIVE_MODEL).toBe(SUITE.env?.LIVE_MODEL)
-    expect(SUITE.env?.LIVE_MODEL).toContain('vars.LIVE_MODEL')
-    expect(SUITE.env?.LIVE_MODEL).toContain('google/gemini-2.5-flash-lite')
+  // One job-level LIVE_MODEL feeds the preflight and both live steps, and its default is the
+  // preflight's own DEFAULT_LIVE_MODEL, so the default is spelled once in the job and cannot drift
+  // from the code (review F-arch-5, F-dom-1).
+  it('feeds every step one model, defaulting to DEFAULT_LIVE_MODEL', () => {
+    expect(JOB.env?.LIVE_MODEL).toBe(`\${{ vars.LIVE_MODEL || '${DEFAULT_LIVE_MODEL}' }}`)
+    for (const step of STEPS) expect(step.env?.LIVE_MODEL).toBeUndefined()
+    expect(RAW.split(DEFAULT_LIVE_MODEL)).toHaveLength(2)
   })
 })
