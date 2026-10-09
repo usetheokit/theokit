@@ -120,6 +120,8 @@ describe('AcpClient against objects that match no JSON-RPC message shape', () =>
     '{"jsonrpc":"2.0","id":1}',
     '{"jsonrpc":"2.0","id":"1","result":"x"}',
     '{"jsonrpc":"2.0","method":"session/update","id":null}',
+    // Review finding F-dom-5: a server request with a string id, which the client cannot answer.
+    '{"jsonrpc":"2.0","id":"7","method":"session/request_permission","params":{}}',
   ])('test_a_%s_line_fails_the_request_in_flight_with_a_protocol_error_naming_it', async (line) => {
     const { transport, raw } = fakeTransport()
     const client = new AcpClient(transport)

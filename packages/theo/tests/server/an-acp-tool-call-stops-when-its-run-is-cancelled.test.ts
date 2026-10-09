@@ -3,9 +3,13 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { createACPTool } from '../../src/server/agent/acp-tool.js'
+import {
+  type AcpToolConfig,
+  createACPTool,
+  NodeAcpTransport,
+} from '../../src/server/agent/acp-tool.js'
 
 /**
  * B-408, review findings 77 and 87: the SDK passes the run's AbortSignal to a tool handler as
@@ -93,20 +97,33 @@ describe('an ACP tool call stops when its run is cancelled', { timeout: 25_000 }
     expect(isAlive(pid), `agent process ${pid} outlived the cancelled call`).toBe(false)
   })
 
+  // Review finding F-tests-7: the oracle is the transport factory, not a pid file read after a fixed
+  // wait, which an agent slow to start under load would pass while the defect was present.
   it('test_a_run_cancelled_before_the_call_starts_no_agent', async () => {
     const pidFile = join(scratch, 'agent.pid')
     const reason = new Error('cancelled before the tool ran')
+    const transportFactory = vi.fn(
+      (config: AcpToolConfig) => new NodeAcpTransport(config.command, config.args, config.cwd),
+    )
+    const tool = createACPTool({
+      command: process.execPath,
+      args: [AGENT, '--silent-on=session/prompt', `--pid-file=${pidFile}`],
+      name: 'code_agent',
+      description: 'A coding agent',
+      onPermissionRequest: () => ({ granted: false }),
+      timeoutMs: TIMEOUT_MS,
+      transportFactory,
+    })
 
     const result = await outcome(
-      Promise.resolve(
-        stuckAgentTool(pidFile).handler({ message: 'hi' }, { signal: AbortSignal.abort(reason) }),
-      ),
+      Promise.resolve(tool.handler({ message: 'hi' }, { signal: AbortSignal.abort(reason) })),
       5_000,
     )
-    // Give a spawned process the time it needs to write its pid, so "no file" means "no agent".
-    await new Promise((r) => setTimeout(r, 500))
 
     expect(result).toBe(reason)
-    expect(existsSync(pidFile), 'an agent was started for a run already cancelled').toBe(false)
+    expect(
+      transportFactory,
+      'a transport was opened for a run already cancelled',
+    ).not.toHaveBeenCalled()
   })
 })

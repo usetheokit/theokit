@@ -83,9 +83,16 @@ describe('an ACP tool call against an agent that refuses a step', () => {
     const { sent, failure } = await callRefusing('session/new')
 
     expect(sent).toEqual(['initialize', 'session/new'])
-    const message = messageOf(failure)
-    expect(message).toMatch(/invalid params/)
-    expect(message).toMatch(/session\/new/)
+    expect(messageOf(failure)).toMatch(/refused session\/new: invalid params/)
+  })
+
+  // Review finding F-tests-2: the refusal keeps the agent's error, so a caller can read its message.
+  it('test_a_refusal_keeps_the_agent_error_as_its_cause', async () => {
+    const { failure } = await callRefusing('session/new')
+
+    const cause = (failure as Error).cause
+    expect(cause).toBeInstanceOf(Error)
+    expect((cause as Error).message).toBe('invalid params')
   })
 
   it('test_a_refused_initialize_sends_nothing_after_it', async () => {

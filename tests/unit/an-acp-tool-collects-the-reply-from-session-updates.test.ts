@@ -238,8 +238,10 @@ describe('createACPTool collects the reply from session updates', () => {
     expect(output).toBe('echo:hi')
   })
 
+  // Review findings F-dom-6 and F-tests-4: the two agents hand out different session ids, so a
+  // session id shared across calls would name the wrong session in one of the prompts.
   it('test_two_concurrent_calls_keep_their_replies_apart', async () => {
-    const agents = [scriptedAgent(), scriptedAgent()]
+    const agents = [scriptedAgent(), scriptedAgent({ sessionNewResult: { sessionId: 's2' } })]
     let next = 0
     const tool = toolFor(() => agents[next++].transport)
 
@@ -249,7 +251,25 @@ describe('createACPTool collects the reply from session updates', () => {
     ])
 
     expect(agents.map((a) => a.sent)).toEqual([HANDSHAKE, HANDSHAKE])
+    expect(
+      agents.map((a) => (a.sentParams['session/prompt'] as { sessionId: string }).sessionId),
+    ).toEqual(['s1', 's2'])
     expect(outputs).toEqual(['echo:a', 'echo:b'])
+  })
+
+  // Review finding F-tests-3: a turn that streams no text chunk (a tool call, a permission) ends
+  // with an empty reply, not with undefined or an error.
+  it('test_a_turn_with_no_text_chunk_returns_an_empty_string', async () => {
+    const agent = scriptedAgent({
+      updates: (sessionId) => [
+        { sessionId, update: { sessionUpdate: 'tool_call', toolCallId: 't1', title: 'ls' } },
+      ],
+    })
+
+    const output = await toolFor(() => agent.transport).handler({ message: 'hi' })
+
+    expect(agent.sent).toEqual(HANDSHAKE)
+    expect(output).toBe('')
   })
 
   it('test_a_session_new_without_a_session_id_rejects', async () => {
