@@ -110,14 +110,18 @@ describe('a round whose cost is not known, against a USD ceiling', () => {
     expect(await runWithoutCeiling(undefined)).toBe(2)
   })
 
-  it('test_a_non_finite_round_cost_is_refused_with_a_finite_spend', async () => {
-    const { threw, calls } = await runAndCatch({ type: 'done', cost: Number.NaN }, 0.015)
+  it.each([Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])(
+    'test_a_round_cost_of_%s_is_refused_with_a_finite_spend',
+    async (cost) => {
+      const { threw, calls } = await runAndCatch({ type: 'done', cost }, 0.015)
 
-    // The round after an unpriced one never starts.
-    expect(calls).toBe(1)
-    expect(threw).toBeInstanceOf(DelegationBudgetCostUnknownError)
-    const error = threw as InstanceType<typeof DelegationBudgetExceededError>
-    expect(Number.isFinite(error.actualCost)).toBe(true)
-    expect(error.message).not.toContain('NaN')
-  })
+      // The round after an unpriced one never starts.
+      expect(calls).toBe(1)
+      expect(threw).toBeInstanceOf(DelegationBudgetCostUnknownError)
+      const error = threw as InstanceType<typeof DelegationBudgetExceededError>
+      expect(Number.isFinite(error.actualCost)).toBe(true)
+      expect(error.message).not.toContain('NaN')
+      expect(error.message).not.toContain('Infinity')
+    },
+  )
 })

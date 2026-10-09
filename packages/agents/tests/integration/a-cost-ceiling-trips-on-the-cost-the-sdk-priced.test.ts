@@ -128,4 +128,21 @@ describe('the USD ceiling acts on the cost the real adapter reports', () => {
     expect(h.sends).toBe(1)
     expect(threw).toBeInstanceOf(DelegationBudgetCostUnknownError)
   })
+
+  it('test_an_unpriced_run_through_the_sdk_says_its_cost_is_unknown_with_no_ceiling', async () => {
+    const cost: CostBreakdown = {
+      amountUsd: undefined,
+      status: 'unknown',
+      currency: 'USD',
+      source: 'unknown',
+      pricingVersion: undefined,
+    }
+    h.cost = cost
+
+    const result = await buildRunner().run('go', { apiKey: 'k', maxIterations: 2 })
+
+    expect(h.sends).toBe(2)
+    expect(result.cost).toBe(0)
+    expect(result.costUnknown).toBe(true)
+  })
 })
