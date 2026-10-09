@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     # One model for the preflight and both live steps. The default must equal DEFAULT_LIVE_MODEL in
-    # scripts/live-model-preflight.mjs; the workflow test pins that.
+    # scripts/live-model.mjs, which the preflight re-exports; the workflow test pins that.
     env:
       LIVE_MODEL: ${{ vars.LIVE_MODEL || 'google/gemini-2.5-flash-lite' }}
     steps:
