@@ -15,14 +15,16 @@
  * spawned it. Closing asks with SIGTERM and, past a grace period, ends the process with SIGKILL. A
  * process that cannot start, exits mid-turn or writes something that is not ACP JSON-RPC on stdout
  * rejects the call with {@link AcpTransportClosedError}; a request the agent does not answer within
- * `timeoutMs` rejects it with {@link AcpRequestTimeoutError}.
+ * `timeoutMs` rejects it with {@link AcpRequestTimeoutError}. A cancelled run (the `signal` the SDK
+ * passes as the handler's context) rejects the call with the signal's abort reason and closes the
+ * agent the same way; a run already cancelled starts no agent.
  */
 import { spawn, type ChildProcessByStdio } from 'node:child_process'
 import { resolve } from 'node:path'
 import type { Readable, Writable } from 'node:stream'
 
 import { AcpClient, AcpMessageDecoder, type AcpTransport } from '@theokit/agents'
-import type { CustomTool } from '@theokit/sdk'
+import type { CustomTool, ToolContext } from '@theokit/sdk'
 
 /** The agent process could not start, failed, or exited before the call finished. */
 export class AcpTransportClosedError extends Error {
@@ -264,10 +266,12 @@ interface Turn {
   client: AcpClient
   command: string
   timeoutMs: number
+  /** The run's signal; once it aborts, no further step is sent. */
+  signal?: AbortSignal
   /** Set when the transport closed on its own; every later step rejects with it. */
   closed?: AcpTransportClosedError
-  /** Rejects the step in flight, so a transport that closes mid-request ends it. */
-  abort?: (error: Error) => void
+  /** Rejects the step in flight, so a transport that closes or a run that is cancelled ends it. */
+  abort?: (reason: unknown) => void
 }
 
 /**
@@ -276,6 +280,7 @@ interface Turn {
  * closed transport or an elapsed timeout rejects with its own typed error, unwrapped.
  */
 async function step(turn: Turn, method: string, params: unknown): Promise<unknown> {
+  turn.signal?.throwIfAborted()
   if (turn.closed) throw turn.closed
   let timer: ReturnType<typeof setTimeout> | undefined
   try {
@@ -353,11 +358,24 @@ export function createACPTool(config: AcpToolConfig): CustomTool {
       },
       required: ['message'],
     },
-    handler: async (input: Record<string, unknown>): Promise<string> => {
+    handler: async (input: Record<string, unknown>, ctx?: ToolContext): Promise<string> => {
       const message = typeof input.message === 'string' ? input.message : ''
+      const signal = ctx?.signal
+      // A run cancelled before the call starts gets no agent at all.
+      signal?.throwIfAborted()
       const transport = makeTransport(config)
+      let onAbort: (() => void) | undefined
       try {
-        const turn: Turn = { client: new AcpClient(transport), command: config.command, timeoutMs }
+        const turn: Turn = {
+          client: new AcpClient(transport),
+          command: config.command,
+          timeoutMs,
+          signal,
+        }
+        // A cancelled run rejects the step in flight with the abort reason; the finally below then
+        // closes the agent, so a cancellation does not wait for the request timeout.
+        onAbort = () => turn.abort?.(signal?.reason)
+        signal?.addEventListener('abort', onAbort, { once: true })
         transport.onClose?.((error) => {
           turn.closed = error
           turn.abort?.(error)
@@ -367,6 +385,7 @@ export function createACPTool(config: AcpToolConfig): CustomTool {
         )
         return await runTurn(turn, resolve(config.cwd ?? process.cwd()), message)
       } finally {
+        if (onAbort !== undefined) signal?.removeEventListener('abort', onAbort)
         // The agent is a long-lived stdio server: left open, every call would leave one running.
         // Awaited, so the call does not return while its agent is still running.
         await transport.close?.()
