@@ -57,9 +57,15 @@ export interface DelegateOptions {
    * unlike the budget errors — is marked retryable, because a hang is often transient.
    */
   readonly timeoutMs?: number
-  /** Max USD for this sub-agent call: a finite number > 0, else `DelegationError`. */
+  /**
+   * Max USD for this sub-agent call. `NaN` is refused with `DelegationError`; 0 or below stops the
+   * call before any round with `DelegationBudgetExceededError`; `Infinity` is no ceiling.
+   */
   budget?: number
-  /** Parent's remaining budget (for clamping), refused on the same terms as `budget`. */
+  /**
+   * Parent's remaining budget (for clamping), read on the same terms as `budget`: a parent that
+   * has spent its ceiling (0 or below) ends the call as budget exceeded before any round.
+   */
   parentBudgetRemaining?: number
   /** Parent's tools (for sharing — sub-agent inherits these). */
   parentTools?: CompiledTool[]
@@ -233,6 +239,7 @@ export async function delegate(
   const apiKey = requireApiKey(opts, spec.name)
   // Both ceilings are checked on the terms `AgentRunner` applies (B-409, review #67), before any
   // hook or round: `Math.min` with `NaN` is `NaN`, which every later budget check reads as unset.
+  // A spent parent (`parentBudgetRemaining <= 0`) ends as budget exceeded (docs/adr/0023).
   const budget = Math.min(
     resolveRunBudget(opts.budget, spec.name) ?? Infinity,
     resolveRunBudget(opts.parentBudgetRemaining, spec.name, 'parentBudgetRemaining') ?? Infinity,

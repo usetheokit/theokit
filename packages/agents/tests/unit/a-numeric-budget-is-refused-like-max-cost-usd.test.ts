@@ -1,9 +1,10 @@
 /**
- * B-433, code review #72: the run option `budget` has two spellings of one ceiling, a number and
- * `{ maxCostUsd }`. The object form refused 0, a negative and a non-finite value before any round,
- * while the number form was returned unchecked, so `budget: NaN` (from `Number(process.env.X)` on
- * an unset variable) read as set and enforced nothing, and `budget: 0` was charged one round. The
- * number is now refused on the same terms, with the same typed error, naming `budget`.
+ * B-433, code review #72, review 2026-10-09: the run option `budget` has two spellings of one
+ * ceiling, a number and `{ maxCostUsd }`, read on the same terms. `budget: NaN` (from
+ * `Number(process.env.X)` on an unset variable) read as set and enforced nothing; it is refused with
+ * a `DelegationError` naming `budget`. A ceiling of 0 or below leaves nothing to spend: it ends the
+ * run with `DelegationBudgetExceededError`, the class it always ended in, but before the first
+ * round instead of after paying for it. `Infinity` keeps meaning no ceiling (docs/adr/0023).
  */
 import 'reflect-metadata'
 import { describe, expect, it } from 'vitest'
@@ -12,7 +13,7 @@ import type { StreamEvent } from '../../src/bridge/agent-sse-handler.js'
 import { MainLoopCapability } from '../../src/capability/agent-capabilities.js'
 import { ModelCapability } from '../../src/capability/capabilities.js'
 import { applyCapabilities } from '../../src/capability/capability.js'
-import { AgentRunner, DelegationError } from '../../src/index.js'
+import { AgentRunner, DelegationBudgetExceededError, DelegationError } from '../../src/index.js'
 
 function buildRunner() {
   const compiled = applyCapabilities([
@@ -44,21 +45,31 @@ async function runWith(budget: number): Promise<{ threw: unknown; calls: number 
 }
 
 describe('a numeric budget the run cannot enforce', () => {
-  it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY])(
-    'test_a_numeric_budget_of_%s_is_refused_before_any_round',
+  it('test_a_nan_numeric_budget_is_refused_before_any_round', async () => {
+    const { threw, calls } = await runWith(Number.NaN)
+
+    expect(calls).toBe(0)
+    expect(threw).toBeInstanceOf(DelegationError)
+    expect((threw as DelegationError).cause).toMatchObject({
+      message: 'budget must be a number, got NaN',
+    })
+  })
+
+  it.each([0, -1, Number.NEGATIVE_INFINITY])(
+    'test_a_numeric_budget_of_%s_stops_as_budget_exceeded_before_any_round',
     async (budget) => {
       const { threw, calls } = await runWith(budget)
 
       expect(calls).toBe(0)
-      expect(threw).toBeInstanceOf(DelegationError)
-      expect((threw as DelegationError).cause).toMatchObject({
-        message: `budget must be a finite number > 0, got ${String(budget)}`,
-      })
+      expect(threw).toBeInstanceOf(DelegationBudgetExceededError)
+      const error = threw as InstanceType<typeof DelegationBudgetExceededError>
+      expect(error.actualCost).toBe(0)
+      expect(error.budgetLimit).toBe(budget)
     },
   )
 
-  it('test_a_positive_numeric_budget_still_runs', async () => {
-    const { threw, calls } = await runWith(1)
+  it.each([1, Number.POSITIVE_INFINITY])('test_a_numeric_budget_of_%s_runs', async (budget) => {
+    const { threw, calls } = await runWith(budget)
 
     expect(threw).toBeUndefined()
     expect(calls).toBe(1)

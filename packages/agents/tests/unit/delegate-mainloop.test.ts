@@ -154,14 +154,15 @@ describe('the delegate tool over a budgeted delegate() (B-409)', () => {
 })
 
 /**
- * Code review #67 / #81: `delegate()` clamped `budget` and `parentBudgetRemaining` with `Math.min`
- * and validated neither, so `NaN` (from `Number(process.env.X)`, or a parent spend nobody priced)
- * disabled both ceilings and `0` or a negative value was charged one round. Both are refused on
- * the terms `AgentRunner` applies, before any round, naming the field.
+ * Code review #67 / #81, review 2026-10-09: `delegate()` clamped `budget` and
+ * `parentBudgetRemaining` with `Math.min` and validated neither, so `NaN` disabled both ceilings.
+ * A value that is not a number is refused with `DelegationError`, naming the field. A ceiling of 0
+ * or below is a budget with nothing left, which a parent that has spent its ceiling passes as its
+ * remainder: it stops the run before any round with `DelegationBudgetExceededError`, the class it
+ * ended in before, and the delegate tool reports it as `delegation_budget_exceeded`. `Infinity`
+ * keeps meaning no ceiling, which a remainder computed from an unbounded parent evaluates to.
  */
 describe('delegate() refuses a ceiling it cannot enforce', () => {
-  const unenforceable = [0, -1, Number.NaN, Number.POSITIVE_INFINITY]
-
   async function refusalOf(opts: { budget?: number; parentBudgetRemaining?: number }) {
     script([[{ type: 'done', cost: 0.01 }]])
     try {
@@ -172,26 +173,56 @@ describe('delegate() refuses a ceiling it cannot enforce', () => {
     return undefined
   }
 
-  it.each(unenforceable)('test_a_delegate_budget_of_%s_is_refused_before_any_round', async (v) => {
-    const threw = await refusalOf({ budget: v })
-
-    expect(h.calls).toBe(0)
-    expect(threw).toBeInstanceOf(DelegationError)
-    expect((threw as InstanceType<typeof DelegationError>).cause).toMatchObject({
-      message: `budget must be a finite number > 0, got ${String(v)}`,
-    })
-  })
-
-  it.each(unenforceable)(
-    'test_a_parent_budget_remaining_of_%s_is_refused_before_any_round',
-    async (v) => {
-      const threw = await refusalOf({ budget: 1, parentBudgetRemaining: v })
+  it.each(['budget', 'parentBudgetRemaining'] as const)(
+    'test_a_nan_%s_is_refused_before_any_round',
+    async (field) => {
+      const threw = await refusalOf({ budget: 1, [field]: Number.NaN })
 
       expect(h.calls).toBe(0)
       expect(threw).toBeInstanceOf(DelegationError)
       expect((threw as InstanceType<typeof DelegationError>).cause).toMatchObject({
-        message: `parentBudgetRemaining must be a finite number > 0, got ${String(v)}`,
+        message: `${field} must be a number, got NaN`,
       })
     },
   )
+
+  it.each([0, -0.5, Number.NEGATIVE_INFINITY])(
+    'test_a_parent_budget_remaining_of_%s_stops_the_run_as_budget_exceeded_before_any_round',
+    async (remaining) => {
+      const threw = await refusalOf({ budget: 1, parentBudgetRemaining: remaining })
+
+      expect(h.calls).toBe(0)
+      expect(threw).toBeInstanceOf(DelegationBudgetExceededError)
+      const error = threw as InstanceType<typeof DelegationBudgetExceededError>
+      expect(error.actualCost).toBe(0)
+      expect(error.budgetLimit).toBe(remaining)
+      expect(error.message).toContain('before its first round')
+    },
+  )
+
+  it.each([0, -1])('test_a_delegate_budget_of_%s_stops_before_any_round', async (budget) => {
+    const threw = await refusalOf({ budget })
+
+    expect(h.calls).toBe(0)
+    expect(threw).toBeInstanceOf(DelegationBudgetExceededError)
+  })
+
+  it('test_an_infinite_parent_budget_remaining_means_no_ceiling', async () => {
+    const threw = await refusalOf({ parentBudgetRemaining: Number.POSITIVE_INFINITY })
+
+    expect(threw).toBeUndefined()
+    expect(h.calls).toBe(1)
+  })
+
+  it('test_the_delegate_tool_reports_a_spent_parent_budget_as_budget_exceeded', async () => {
+    script([[{ type: 'done', cost: 0.01 }]])
+    const tool = createDelegateTool({
+      roster: [{ name: 'worker', target: reflectAgent }],
+      defaults: { apiKey: 'test', parentBudgetRemaining: 0 },
+    })
+    const payload = JSON.parse((await tool.handler({ agent: 'worker', task: 't' })) as string)
+
+    expect(h.calls).toBe(0)
+    expect(payload).toMatchObject({ ok: false, error: 'delegation_budget_exceeded' })
+  })
 })

@@ -54,6 +54,8 @@ type BudgetRefusal =
   | { readonly projectedRoundCost: number }
   /** The last round's cost is not known, so the limit cannot be enforced for the next one. */
   | { readonly costUnknown: true }
+  /** The limit is 0 or below, so no round fits: the run stops before its first one. */
+  | { readonly nothingToSpend: true }
 
 function budgetMessage(
   agentName: string,
@@ -64,6 +66,9 @@ function budgetMessage(
   const limit = `$${budgetLimit.toFixed(4)}`
   if (refusal === undefined) {
     return `Agent "${agentName}" exceeded budget: $${actualCost.toFixed(4)} > ${limit}`
+  }
+  if ('nothingToSpend' in refusal) {
+    return `Agent "${agentName}" stopped before its first round: its ${limit} limit leaves nothing to spend`
   }
   if ('costUnknown' in refusal) {
     return (

@@ -69,15 +69,15 @@ export function throwIfNextRoundRefused(
 /**
  * The run's USD ceiling from the run option `budget`, checked before any round (B-409, FR-005).
  *
- * A number is the ceiling; a `BudgetOptions` contributes its `maxCostUsd`. One the run cannot
- * enforce is refused here, at the call, rather than honoured partially: `window` asks for spend
- * kept across runs, which a single run has nowhere to keep, and a ceiling that is not a finite
- * number above zero caps nothing. Zero is refused too: the first round always runs, because no
- * earlier round exists to project its cost from, so a ceiling of zero would be charged one round
- * and then raise the overspend error. Both spellings are refused on the same terms with the same
- * `DelegationError` (B-433): the number form used to be returned unchecked, so `budget: NaN` read
- * as set and enforced nothing. `null`, which an untyped caller can pass, means no ceiling, the same
- * as leaving `budget` out.
+ * A number is the ceiling; a `BudgetOptions` contributes its `maxCostUsd`. Both spellings are read
+ * on the same terms (docs/adr/0023):
+ * - `window` asks for spend kept across runs, which a single run has nowhere to keep, and a value
+ *   that is not a number, or is `NaN`, caps nothing while reading as set (`Number(process.env.X)`
+ *   on an unset variable is `NaN`). Both throw `DelegationError` naming the field.
+ * - 0 or below leaves nothing to spend. It throws `DelegationBudgetExceededError`, the class such a
+ *   ceiling always ended in, but before the first round instead of after paying for it. A parent
+ *   that has spent its ceiling passes this as `parentBudgetRemaining`, so it reads as exhaustion.
+ * - `Infinity` is no ceiling, as it is for the loop itself; so are `null` and `undefined`.
  */
 export function resolveRunBudget(
   budget: number | BudgetOptions | null | undefined,
@@ -93,18 +93,21 @@ export function resolveRunBudget(
       throw new DelegationError(
         agentName,
         new Error(
-          'budget.window is not supported: a rolling budget needs spend persisted across runs',
+          `${name}.window is not supported: a rolling budget needs spend persisted across runs`,
         ),
       )
     }
-    field = 'budget.maxCostUsd'
+    field = `${name}.maxCostUsd`
     ceiling = (budget as { maxCostUsd: unknown }).maxCostUsd
   }
-  if (typeof ceiling !== 'number' || !Number.isFinite(ceiling) || ceiling <= 0) {
+  if (typeof ceiling !== 'number' || Number.isNaN(ceiling)) {
     throw new DelegationError(
       agentName,
-      new Error(`${field} must be a finite number > 0, got ${String(ceiling)}`),
+      new Error(`${field} must be a number, got ${String(ceiling)}`),
     )
+  }
+  if (ceiling <= 0) {
+    throw new DelegationBudgetExceededError(agentName, 0, ceiling, { nothingToSpend: true })
   }
   return ceiling
 }

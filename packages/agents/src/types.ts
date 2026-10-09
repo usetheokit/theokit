@@ -96,8 +96,9 @@ export interface ToolOptions {
 /** USD budget for one run, passed as the run option `budget` (`AgentRunner.run` / `stream`). */
 export interface BudgetOptions {
   /**
-   * Maximum cost in USD for the run; must be a finite number above zero. The first round always
-   * runs, because no earlier round exists to project its cost from, and when it alone passes this
+   * Maximum cost in USD for the run. `NaN` or a non-number is refused with `DelegationError`; 0 or
+   * below stops the run before any round with `DelegationBudgetExceededError`; `Infinity` is no
+   * ceiling. Above zero, the first round always runs, because no earlier round exists to project its cost from, and when it alone passes this
    * ceiling the run then stops with `DelegationBudgetExceededError`. Later rounds are projected at
    * the last round's cost, and the run stops before a round that would exceed the ceiling.
    */

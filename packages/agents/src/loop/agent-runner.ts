@@ -70,8 +70,9 @@ export interface AgentRunnerRunOptions {
    * runs, because no earlier round exists to project its cost from; when that round alone passes
    * the ceiling, the run then stops with `DelegationBudgetExceededError`. Every later round is
    * projected at the last round's cost, and the run stops before a round the ceiling cannot cover.
-   * `window`, and a ceiling (either spelling) that is not a finite number above zero, are refused
-   * at the call with a `DelegationError`.
+   * `window`, and a ceiling (either spelling) that is `NaN` or not a number, are refused at the
+   * call with a `DelegationError`; a ceiling of 0 or below throws `DelegationBudgetExceededError`
+   * at the call, before any round; `Infinity` is no ceiling.
    */
   readonly budget?: number | BudgetOptions
   /** Cancellation — aborts stop the reflective loop from re-entering. */
