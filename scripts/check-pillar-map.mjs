@@ -17,9 +17,10 @@
  * - `proven`: names `app`, a test `file` in a `tests/live/` directory of `apps/theoclaw` or
  *   `apps/theocode`, and the vitest `fullName` of the test. It counts only when the newest run of
  *   that file, in the vitest JSON reports passed with `--results`, records the assertion as
- *   `passed`. A skip is not a pass: the live tests skip when no model server answers. A title
- *   written as a template literal with `${` cannot be found in the file, so such a row fails
- *   closed.
+ *   `passed`. A skip is not a pass: the live tests skip when no model server answers. Titles are
+ *   read from the source as written, so three shapes are never found and their rows fail closed:
+ *   a template literal with `${`, a literal holding an escape sequence (`'doesn\'t'` is read with
+ *   its backslash while vitest reports `doesn't`), and an `it.each(...)` title.
  *
  * ## Exit codes
  *
@@ -28,6 +29,13 @@
  * have no string `pillar`), 2 when an input cannot be read or has the wrong shape. An
  * unexpected error is 2 as well: Node's default of 1 would read as "pillars failing" when the truth
  * is that nothing was checked.
+ *
+ * ## Paths
+ *
+ * `--map` and `--results` resolve against the process's working directory. Under
+ * `pnpm check:pillars` that is the repository root, not the directory pnpm was called from, so a
+ * report written under `apps/theocode` is passed as `--results apps/theocode/<report>.json`. A
+ * path that resolves to nothing is exit 2 and names the absolute path it tried.
  */
 import { existsSync, readFileSync } from 'node:fs'
 import { isAbsolute, posix, resolve } from 'node:path'
@@ -257,6 +265,9 @@ function main() {
 try {
   process.exitCode = main()
 } catch (err) {
+  // No known input reaches the second branch: every malformed input is turned into an
+  // UnreadableInput where it is read. It stays so that a defect in this script reads as exit 2,
+  // "nothing was checked", and never as Node's default exit 1, "pillars failing".
   const message = err instanceof UnreadableInput ? err.message : `unexpected error: ${err.stack}`
   console.error(`check-pillar-map: ${message}`)
   console.error('  Nothing was checked. This is not a pass.')
