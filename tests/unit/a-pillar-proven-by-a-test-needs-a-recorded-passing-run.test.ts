@@ -226,12 +226,18 @@ describe('a proven row names a live proof test that exists and declares the titl
     expect(out.stdout).toContain('file must sit under apps/theoclaw or apps/theocode')
   })
 
-  it('fails an absolute path and a path with a ./ segment', () => {
-    const absolute = check([], compactionRow({ file: `/${LIVE_FILE}` }))
-    const dotted = check([], compactionRow({ file: LIVE_FILE.replace('/tests/', '/./tests/') }))
+  it('fails an absolute path', () => {
+    const out = check([], compactionRow({ file: `/${LIVE_FILE}` }))
 
-    expect(absolute.stdout).toContain('file must sit under apps/theoclaw or apps/theocode')
-    expect(dotted.stdout).toContain('file must sit under apps/theoclaw or apps/theocode')
+    expect(out.status).toBe(1)
+    expect(out.stdout).toContain('file must sit under apps/theoclaw or apps/theocode')
+  })
+
+  it('fails a path with a ./ segment', () => {
+    const out = check([], compactionRow({ file: LIVE_FILE.replace('/tests/', '/./tests/') }))
+
+    expect(out.status).toBe(1)
+    expect(out.stdout).toContain('file must sit under apps/theoclaw or apps/theocode')
   })
 
   it('fails a fullName whose title the file does not declare', () => {
