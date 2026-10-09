@@ -7,6 +7,8 @@
  * requests (e.g. `session/request_permission`) to a registered handler, replying with its decision,
  * and delivers notifications (a `method` with no `id`, e.g. `session/update`) to their handler.
  */
+import { TheokitAgentError } from '@theokit/sdk/errors'
+
 import { encodeAcpMessage } from './protocol.js'
 
 /** The stdio channel to the coding-agent subprocess (abstracted for testability + G8). */
@@ -25,24 +27,33 @@ export interface AcpTransport {
 /**
  * The agent wrote a stdout line that does not decode to a JSON-RPC message: it is not JSON, or it
  * is JSON but not an object (`null`, a number, a string, an array). `line` is the line, trimmed.
+ * Code `ACP_PROTOCOL_ERROR`.
  */
-export class AcpProtocolError extends Error {
+export class AcpProtocolError extends TheokitAgentError {
   override readonly name = 'AcpProtocolError'
 
   constructor(
     readonly line: string,
     options?: { cause?: unknown },
   ) {
-    super(`[@theokit/agents] ACP decode failed on line: ${line}`, options)
+    super(`[@theokit/agents] ACP decode failed on line: ${line}`, {
+      ...options,
+      code: 'ACP_PROTOCOL_ERROR',
+      isRetryable: false,
+    })
   }
 }
 
-/** The transport closed; `cause` is what the transport reported. */
-export class AcpConnectionClosedError extends Error {
+/** The transport closed; `cause` is what the transport reported. Code `ACP_CONNECTION_CLOSED`. */
+export class AcpConnectionClosedError extends TheokitAgentError {
   override readonly name = 'AcpConnectionClosedError'
 
   constructor(cause: Error) {
-    super(`[@theokit/agents] ACP transport closed: ${cause.message}`, { cause })
+    super(`[@theokit/agents] ACP transport closed: ${cause.message}`, {
+      cause,
+      code: 'ACP_CONNECTION_CLOSED',
+      isRetryable: false,
+    })
   }
 }
 
