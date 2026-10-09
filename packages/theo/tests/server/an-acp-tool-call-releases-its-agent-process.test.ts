@@ -185,6 +185,8 @@ async function recordingUncaught<T>(
 }
 
 describe('an ACP tool call against an agent that misbehaves on its channel', LIMIT, () => {
+  // Review finding F-arch-1: the protocol rule has one owner, AcpClient, for every transport, so
+  // the error is the client's AcpProtocolError naming the line, not a closed channel.
   it('test_a_non_json_stdout_line_rejects_the_call_typed_and_the_host_keeps_running', async () => {
     const { value, uncaught } = await recordingUncaught(() =>
       callAndReadPid(['--banner=starting agent v1.2']),
@@ -192,34 +194,30 @@ describe('an ACP tool call against an agent that misbehaves on its channel', LIM
 
     expect(uncaught, `the bad line escaped as ${String(uncaught[0])}`).toEqual([])
     expect(value.result).not.toBe(HANG)
-    expect(value.result).toBeInstanceOf(AcpTransportClosedError)
-    expect((value.result as Error).message).toContain('starting agent v1.2')
+    expect(value.result).toMatchObject({ name: 'AcpProtocolError', line: 'starting agent v1.2' })
     expect(
       await goneWithin(value.pid),
       `agent process ${value.pid} still running after the call`,
     ).toBe(true)
   })
 
-  // Code review #75 / #80: a line that IS JSON passed the transport's probe, which only parsed it,
-  // so a scalar reached the caller as "the agent refused initialize" and a wrong-shaped object was
-  // dropped. Both break the protocol and must close the channel typed, like a non-JSON line.
-  it.each(['42', '{"jsonrpc":"2.0","id":1}'])(
-    'test_a_json_line_that_is_not_a_json_rpc_message_rejects_the_call_typed: %s',
-    async (line) => {
-      const { value, uncaught } = await recordingUncaught(() =>
-        callAndReadPid([`--banner=${line}`]),
-      )
+  // Code review #75 / #80: a scalar reached the caller as "the agent refused initialize" and a
+  // wrong-shaped object was dropped. Both break the protocol and must reject the call typed, like a
+  // non-JSON line. Review finding F-dom-5: a server request with a string id is refused the same way.
+  it.each([
+    '42',
+    '{"jsonrpc":"2.0","id":1}',
+    '{"jsonrpc":"2.0","id":"7","method":"session/request_permission","params":{}}',
+  ])('test_a_json_line_that_is_not_a_json_rpc_message_rejects_the_call_typed: %s', async (line) => {
+    const { value, uncaught } = await recordingUncaught(() => callAndReadPid([`--banner=${line}`]))
 
-      expect(uncaught, `the bad line escaped as ${String(uncaught[0])}`).toEqual([])
-      expect(value.result).toBeInstanceOf(AcpTransportClosedError)
-      expect((value.result as Error).message).toContain(`broke the ACP protocol`)
-      expect((value.result as Error).message).toContain(line)
-      expect(
-        await goneWithin(value.pid),
-        `agent process ${value.pid} still running after the call`,
-      ).toBe(true)
-    },
-  )
+    expect(uncaught, `the bad line escaped as ${String(uncaught[0])}`).toEqual([])
+    expect(value.result).toMatchObject({ name: 'AcpProtocolError', line })
+    expect(
+      await goneWithin(value.pid),
+      `agent process ${value.pid} still running after the call`,
+    ).toBe(true)
+  })
 
   it('test_a_multibyte_character_split_across_two_chunks_reaches_the_reply_intact', async () => {
     const pidFile = join(scratch, 'agent.pid')

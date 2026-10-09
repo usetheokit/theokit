@@ -15,9 +15,10 @@
  * spawned it. Closing asks with SIGTERM and, past a grace period, ends the process with SIGKILL. On
  * Linux and macOS the agent runs in its own process group and closing signals the whole group, so
  * an agent started through a launcher (`npx`, a shell script) ends with the launcher. A
- * process that cannot start, exits mid-turn or writes something that is not ACP JSON-RPC on stdout
- * rejects the call with {@link AcpTransportClosedError}; a request the agent does not answer within
- * `timeoutMs` rejects it with {@link AcpRequestTimeoutError}. A cancelled run (the `signal` the SDK
+ * process that cannot start or exits mid-turn rejects the call with {@link AcpTransportClosedError};
+ * a stdout line that is not a JSON-RPC message rejects it with the client's `AcpProtocolError`,
+ * naming the line; a request the agent does not answer within `timeoutMs` rejects it with
+ * {@link AcpRequestTimeoutError}. A cancelled run (the `signal` the SDK
  * passes as the handler's context) rejects the call with the signal's abort reason and closes the
  * agent the same way; a run already cancelled starts no agent.
  */
@@ -28,23 +29,10 @@ import type { Readable, Writable } from 'node:stream'
 import {
   AcpClient,
   AcpConnectionClosedError,
-  AcpMessageDecoder,
   AcpProtocolError,
   type AcpTransport,
 } from '@theokit/agents'
 import type { CustomTool, ToolContext } from '@theokit/sdk'
-
-/**
- * Whether `m` is one of the JSON-RPC shapes `AcpClient` dispatches: a response (numeric `id` with
- * `result` or `error`, no `method`), a request (`method` and numeric `id`) or a notification
- * (`method`, no `id`). The client keeps these predicates private, so the rule is restated here.
- */
-function isJsonRpcMessage(m: unknown): boolean {
-  if (!(m instanceof Object) || Array.isArray(m)) return false
-  const { id, method } = m as Record<string, unknown>
-  if (typeof method === 'string') return typeof id === 'number' || !('id' in m)
-  return !('method' in m) && typeof id === 'number' && ('result' in m || 'error' in m)
-}
 
 /** The agent process could not start, failed, or exited before the call finished. */
 export class AcpTransportClosedError extends Error {
@@ -112,8 +100,6 @@ export class NodeAcpTransport implements AcpToolTransport {
   private readonly proc: ChildProcessByStdio<Writable, Readable, null>
   private closed: AcpTransportClosedError | undefined
   private readonly listeners: ((error: AcpTransportClosedError) => void)[] = []
-  /** Set once the agent wrote something the client could not process; later output is dropped. */
-  private broke = false
   /** Settles when the process has exited (or never started). */
   private readonly exited: Promise<void>
 
@@ -157,26 +143,9 @@ export class NodeAcpTransport implements AcpToolTransport {
   }
 
   subscribe(onData: (chunk: string) => void): void {
-    // The agent's stdout is untrusted. A line that is not JSON (a banner, a log line), or JSON that
-    // is not a JSON-RPC message the client dispatches (`42`, an id with no result), breaks the
-    // protocol: it is caught here, before the client sees it, and it ends this channel so the call
-    // in flight rejects typed. A throw from the client itself ends it the same way; escaping this
-    // listener it would be an uncaught exception in the host.
-    const probe = new AcpMessageDecoder()
-    this.proc.stdout.on('data', (chunk: string) => {
-      if (this.broke) return
-      try {
-        for (const message of probe.push(chunk)) {
-          if (!isJsonRpcMessage(message)) {
-            throw new Error(`not a JSON-RPC message: ${JSON.stringify(message)}`)
-          }
-        }
-        onData(chunk)
-      } catch (err) {
-        this.broke = true
-        this.end(`broke the ACP protocol: ${err instanceof Error ? err.message : String(err)}`, err)
-      }
-    })
+    // A byte pipe: what the agent writes is judged by AcpClient, the one owner of the JSON-RPC
+    // shape rule for every transport, which never throws back into this listener.
+    this.proc.stdout.on('data', onData)
   }
 
   onClose(listener: (error: AcpTransportClosedError) => void): void {
