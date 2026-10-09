@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
@@ -16,10 +16,19 @@ import { DEFAULT_LIVE_MODEL, resolveLiveModel } from '../../scripts/live-model.m
  */
 const ROOT = resolve(__dirname, '../..')
 const AGENTS_LIVE = join(ROOT, 'packages/agents/tests/live')
-const THEOCODE_LIVE_TEST = join(
-  ROOT,
-  'apps/theocode/packages/agent/tests/live/an-a2a-call-reaches-a-real-model.test.ts',
+const THEOCODE_PACKAGES = join(ROOT, 'apps/theocode/packages')
+const THEOCODE_A2A_TEST = join(
+  THEOCODE_PACKAGES,
+  'agent/tests/live/an-a2a-call-reaches-a-real-model.test.ts',
 )
+
+function liveTests(dir: string): string[] {
+  return existsSync(dir)
+    ? readdirSync(dir)
+        .filter((name) => /\.test\.(ts|tsx|mjs)$/.test(name))
+        .map((name) => join(dir, name))
+    : []
+}
 
 const CASES: [Record<string, string | undefined>, string][] = [
   [{}, DEFAULT_LIVE_MODEL],
@@ -47,20 +56,26 @@ describe('resolveLiveModel', () => {
 })
 
 describe('the live files', () => {
-  const agentsFiles = readdirSync(AGENTS_LIVE)
-    .filter((name) => name.endsWith('.test.ts'))
-    .map((name) => join(AGENTS_LIVE, name))
+  const agentsFiles = liveTests(AGENTS_LIVE)
+  // Every live test of every TheoCode package, so a live file added later is checked without
+  // anyone remembering to list it here (plan panel round 4).
+  const theocodeFiles = readdirSync(THEOCODE_PACKAGES).flatMap((pkg) =>
+    liveTests(join(THEOCODE_PACKAGES, pkg, 'tests/live')),
+  )
 
-  it.each([...agentsFiles, THEOCODE_LIVE_TEST])(
-    '%s resolves its model through resolveLiveModel and never reads LIVE_MODEL itself',
+  it.each([...agentsFiles, ...theocodeFiles])('%s never reads LIVE_MODEL itself', (file) => {
+    expect(readFileSync(file, 'utf8')).not.toMatch(/process\.env(\.LIVE_MODEL|\[['"`]LIVE_MODEL)/)
+  })
+
+  it.each([...agentsFiles, THEOCODE_A2A_TEST])(
+    '%s resolves its model through resolveLiveModel',
     (file) => {
-      const source = readFileSync(file, 'utf8')
-      expect(source).toMatch(/const MODEL = resolveLiveModel\(process\.env\)/)
-      expect(source).not.toMatch(/process\.env\.LIVE_MODEL/)
+      expect(readFileSync(file, 'utf8')).toMatch(/const MODEL = resolveLiveModel\(process\.env\)/)
     },
   )
 
-  it('covers the three agents live files', () => {
+  it('covers the three agents live files and the TheoCode A2A test', () => {
     expect(agentsFiles).toHaveLength(3)
+    expect(theocodeFiles).toContain(THEOCODE_A2A_TEST)
   })
 })
