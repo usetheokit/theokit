@@ -125,9 +125,11 @@ describe('consumeUIMessageStream (#136 — SSE/HTTP path surfaces errors)', () =
     const seen: UIMessage[] = []
     // theokit#384 — same outcome across the SSE path: the `Response` reader forwards what the chunk
     // reader observed, so a custom transport built on it can tell a cut stream from a complete one.
+    // Parsing the bytes itself, it also counts the frames the parser dropped: none here.
     await expect(consumeUIMessageStream(response, (m) => seen.push(m))).resolves.toEqual({
       terminated: true,
       chunksReceived: 5,
+      framesDropped: 0,
     })
     expect(seen.length).toBeGreaterThan(0)
   })
