@@ -102,14 +102,18 @@ describe('runPreflight', () => {
     expect(lines).toContain('provider refused the request (HTTP 404)')
   })
 
-  it.each(['{}', 'not json', '{"choices":[{"message":{"content":"  "}}]}'])(
-    'returns 1 on a 200 without content: %s',
-    async (body) => {
-      const { lines, run } = harness(() => Promise.resolve(new Response(body, { status: 200 })))
-      expect(await run).toBe(1)
-      expect(lines).toContain('provider could not be reached: answer carried no content (HTTP 200)')
-    },
-  )
+  // The provider was reached and answered, so the line must not read as an outage: an empty
+  // answer is a configuration or wire-format problem a maintainer fixes (review F-dom-2).
+  it.each([
+    '{}',
+    'not json',
+    '{"choices":[{"message":{"content":"  "}}]}',
+    '{"choices":[{"message":{"content":[{"type":"text","text":"pong"}]}}]}',
+  ])('names a 200 without string content as answered without content: %s', async (body) => {
+    const { lines, run } = harness(() => Promise.resolve(new Response(body, { status: 200 })))
+    expect(await run).toBe(1)
+    expect(lines).toEqual(['provider answered without content (HTTP 200)'])
+  })
 
   it('treats a whitespace-only key as absent', async () => {
     const { fetchImpl, run } = harness(answer('pong'), { OPENROUTER_API_KEY: '   ' })

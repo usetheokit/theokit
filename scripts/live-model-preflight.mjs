@@ -35,7 +35,8 @@ function liveModel(env) {
 
 /**
  * @param {Response} res
- * @returns {Promise<string>} the answer's non-blank content, or '' when it carries none
+ * @returns {Promise<string>} the answer's non-blank content, or '' when it carries none: no body,
+ *   a body that is not JSON, or a `content` that is not a string (an array of parts)
  */
 async function contentOf(res) {
   try {
@@ -73,7 +74,7 @@ async function classify(res, say) {
   }
   const content = await contentOf(res)
   if (content === '') {
-    say(`provider could not be reached: answer carried no content (HTTP ${String(code)})`)
+    say(`provider answered without content (HTTP ${String(code)})`)
     return 1
   }
   say(`[live] model response: ${content}`)
