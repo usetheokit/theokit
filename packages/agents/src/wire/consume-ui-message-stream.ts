@@ -1,5 +1,5 @@
 import { parseWireStream, readMessageStream } from '@theokit/presenter/wire'
-import type { WireChunk, WireMessage } from '@theokit/presenter/wire'
+import type { ParseWireStreamOptions, WireChunk, WireMessage } from '@theokit/presenter/wire'
 
 type UIMessage = WireMessage
 type UIMessageChunk = WireChunk
@@ -26,13 +26,16 @@ type UIMessageChunk = WireChunk
  * behaviour a consumer sees is identical; the regression test for #136 still guards it.
  *
  * `onMessage` is invoked on every reconstruction step with the latest snapshot of the assistant
- * message, so a caller (the `useAgent` hook) can render streaming updates.
+ * message, so a caller (the `useAgent` hook) can render streaming updates. `options` reaches the
+ * wire parser; its `onWarn` hears every frame the parser drops, so a caller can tell a turn that
+ * said nothing from one whose frames it could not read.
  */
 export async function consumeUIMessageStream(
   response: Response,
   onMessage: (message: UIMessage) => void,
+  options?: ParseWireStreamOptions,
 ): Promise<ChunkStreamOutcome> {
-  const chunkStream = await responseToChunkStream(response)
+  const chunkStream = await responseToChunkStream(response, options)
   return consumeChunkStream(chunkStream, onMessage)
 }
 
@@ -41,7 +44,10 @@ export async function consumeUIMessageStream(
  * `ChatTransport.sendMessages` returns, so `HttpTransport` builds on it directly. A body-less
  * response yields an empty stream.
  */
-export function responseToChunkStream(response: Response): Promise<ReadableStream<UIMessageChunk>> {
+export function responseToChunkStream(
+  response: Response,
+  options?: ParseWireStreamOptions,
+): Promise<ReadableStream<UIMessageChunk>> {
   if (response.body === null) {
     return Promise.resolve(
       new ReadableStream<UIMessageChunk>({
@@ -51,7 +57,7 @@ export function responseToChunkStream(response: Response): Promise<ReadableStrea
       }),
     )
   }
-  return Promise.resolve(parseWireStream(response.body))
+  return Promise.resolve(parseWireStream(response.body, options))
 }
 
 /**

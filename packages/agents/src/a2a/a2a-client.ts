@@ -72,7 +72,8 @@ function cutStreamMessage(name: string, chunksReceived: number, res: Response): 
  * Create a tool that delegates to a remote A2A agent. The remote answers the `{ message }` POST with
  * a UIMessage event stream, as the routes `generateAgentRoutes` and `mountAgent` serve do; the tool
  * returns the text of the streamed assistant message. A stream that carries an error frame, or that
- * ends before its `finish` frame, rejects naming the tool rather than returning partial text.
+ * ends before its `finish` frame, rejects naming the tool rather than returning partial text; so
+ * does a turn that finished with no text after frames the reader could not read.
  */
 export function createA2ATool(config: A2AToolConfig): CustomTool {
   const doFetch = config.fetchImpl ?? fetch
@@ -102,10 +103,17 @@ export function createA2ATool(config: A2AToolConfig): CustomTool {
       }
       let last: WireMessage | undefined
       let outcome: ChunkStreamOutcome
+      // Frames the wire parser dropped (invalid JSON, a variant it does not know). They separate an
+      // agent that said nothing from a remote whose answer this reader could not read.
+      let dropped = 0
       try {
-        outcome = await consumeUIMessageStream(res, (m) => {
-          last = m
-        })
+        outcome = await consumeUIMessageStream(
+          res,
+          (m) => {
+            last = m
+          },
+          { onWarn: () => (dropped += 1) },
+        )
       } catch (err) {
         ctx?.signal?.throwIfAborted()
         const reason = err instanceof Error ? err.message : String(err)
@@ -114,7 +122,13 @@ export function createA2ATool(config: A2AToolConfig): CustomTool {
       if (!outcome.terminated) {
         throw new Error(cutStreamMessage(config.name, outcome.chunksReceived, res))
       }
-      return textOf(last)
+      const text = textOf(last)
+      if (text === '' && dropped > 0) {
+        throw new Error(
+          `A2A call to "${config.name}" failed: the stream finished with no text after ${String(dropped)} frames the reader could not read`,
+        )
+      }
+      return text
     },
   }
 }
