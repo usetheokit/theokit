@@ -72,8 +72,8 @@ export function throwIfNextRoundRefused(
  * A number is the ceiling; a `BudgetOptions` contributes its `maxCostUsd`. Both spellings are read
  * on the same terms (docs/adr/0023):
  * - `window` asks for spend kept across runs, which a single run has nowhere to keep, and a value
- *   that is not a number, or is `NaN`, caps nothing while reading as set (`Number(process.env.X)`
- *   on an unset variable is `NaN`). Both throw `DelegationError` naming the field.
+ *   that is not a number, or is `NaN`, caps nothing while reading as set (converting an unset
+ *   environment variable with `Number` gives `NaN`). Both throw `DelegationError` naming the field.
  * - 0 or below leaves nothing to spend. It throws `DelegationBudgetExceededError`, the class such a
  *   ceiling always ended in, but before the first round instead of after paying for it. A parent
  *   that has spent its ceiling passes this as `parentBudgetRemaining`, so it reads as exhaustion.
