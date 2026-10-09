@@ -280,6 +280,17 @@ describe('check-parity-ledger: each entry answer', () => {
     expect(rulesOf(result, 'OC-2')).toContain('check-outside-repo')
   })
 
+  // FR-004 of the signed brief: the checker proves the named test exists and the claim is dated;
+  // running the test belongs to the item that marks the row shipped. A recorded passing run is NOT
+  // required, so this pins the acceptance on purpose (loop-code-review finding 114). Requiring one
+  // is a change to FR-004, registered as a followup in the plan.
+  it('accepts a shipped entry with no recorded passing run, as FR-004 decides', () => {
+    const root = tempRepo({ 'tests/e2e/proof.test.ts': "it('proves OC-1', () => {})\n" })
+    const entry = shipped('OC-1', 'tests/e2e/proof.test.ts', 'proves OC-1', TODAY)
+    expect(Object.keys(entry).sort()).toEqual(['check', 'id', 'status', 'verified_on'])
+    expect(rulesOf(judge([entry], root), 'OC-1')).toEqual([])
+  })
+
   it('fails on a shipped entry with an absent or malformed verified_on', () => {
     const root = tempRepo({ 'tests/e2e/proof.test.ts': "it('proves OC-1', () => {})\n" })
     const path = 'tests/e2e/proof.test.ts'
