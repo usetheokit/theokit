@@ -128,6 +128,9 @@ export function createA2ATool(config: A2AToolConfig): CustomTool {
         const reason = err instanceof Error ? err.message : String(err)
         throw new Error(`A2A call to "${config.name}" failed: ${reason}`, { cause: err })
       }
+      // A stream the caller's abort closed cleanly also ends before `finish`; that is a
+      // cancellation, not a remote failure.
+      ctx?.signal?.throwIfAborted()
       if (!outcome.terminated) {
         throw new Error(cutStreamMessage(config.name, outcome.chunksReceived, res))
       }

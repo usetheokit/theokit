@@ -26,6 +26,23 @@ function holdingFetch() {
   })
 }
 
+/**
+ * A remote that closes the stream cleanly on abort instead of erroring it, as an in-process route
+ * handler used as `fetchImpl` can. The reader then sees a stream that ended before `finish`.
+ */
+function closingFetch() {
+  return vi.fn(async (_url: string, init: RequestInit) => {
+    const signal = init.signal ?? undefined
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('data: {"type":"start"}\n\n'))
+        signal?.addEventListener('abort', () => controller.close(), { once: true })
+      },
+    })
+    return new Response(body, { headers: { 'content-type': 'text/event-stream' } })
+  })
+}
+
 /** Settle within `ms`, or report that the promise is still pending. */
 async function settledWithin(promise: Promise<unknown>, ms: number): Promise<unknown> {
   const pending = Symbol('pending')
@@ -59,6 +76,22 @@ describe('createA2ATool against a cancelled run', () => {
     expect(outcome).toBe(controller.signal.reason)
     expect((outcome as Error).name).toBe('AbortError')
     expect(fetchImpl.mock.calls[0]?.[1].signal).toBe(controller.signal)
+  })
+
+  it('test_a_cancelled_run_whose_stream_closes_cleanly_rejects_with_the_abort_reason', async () => {
+    const tool = createA2ATool({
+      url: 'https://x/agents/a',
+      name: 'ask',
+      description: 'd',
+      fetchImpl: closingFetch(),
+    })
+    const controller = new AbortController()
+
+    const call = Promise.resolve(tool.handler({ message: 'hi' }, { signal: controller.signal }))
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    controller.abort()
+
+    expect(await settledWithin(call, 500)).toBe(controller.signal.reason)
   })
 
   it('test_a_run_cancelled_before_the_call_never_reaches_the_remote_body', async () => {
