@@ -13,7 +13,7 @@ import { describe, expect, it } from 'vitest'
 // against an error that is, in every other respect, the same.
 import { WireStreamError } from '@theokit/presenter/wire'
 
-import { consumeUIMessageStream } from '../../packages/agents/src/client/consume-ui-message-stream.js'
+import { consumeUIMessageStream } from '../../packages/agents/src/wire/consume-ui-message-stream.js'
 
 /** Build a fake SSE Response on the UIMessageStream wire from a list of chunks. */
 function sseResponse(chunks: Array<Record<string, unknown>>): Response {

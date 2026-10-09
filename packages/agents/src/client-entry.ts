@@ -66,10 +66,10 @@ export {
   consumeUIMessageStream,
   responseToChunkStream,
   consumeChunkStream,
-} from './client/consume-ui-message-stream.js'
+} from './wire/consume-ui-message-stream.js'
 // theokit#384 — a custom transport reading the wire itself needs the same distinction the store
 // makes, and it is the reader's return type.
-export type { ChunkStreamOutcome } from './client/consume-ui-message-stream.js'
+export type { ChunkStreamOutcome } from './wire/consume-ui-message-stream.js'
 
 export { extractLastUserText } from './client/last-user-text.js'
 

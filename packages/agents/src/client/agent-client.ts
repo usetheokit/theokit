@@ -5,7 +5,8 @@ import type {
 } from '@theokit/presenter/wire'
 import { TheokitAgentError } from '@theokit/sdk/errors'
 
-import { consumeChunkStream } from './consume-ui-message-stream.js'
+import { consumeChunkStream } from '../wire/consume-ui-message-stream.js'
+
 import type { AgentTransport, ApprovalDecision, RequestContext } from './transport.js'
 
 export type UseAgentStatus = 'idle' | 'streaming' | 'done' | 'error'

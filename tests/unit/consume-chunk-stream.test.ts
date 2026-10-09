@@ -13,7 +13,7 @@ import type { WireMessage as UIMessage, WireChunk as UIMessageChunk } from '@the
 import {
   consumeChunkStream,
   consumeUIMessageStream,
-} from '../../packages/agents/src/client/consume-ui-message-stream.js'
+} from '../../packages/agents/src/wire/consume-ui-message-stream.js'
 
 /** Build a ReadableStream<UIMessageChunk> from literal chunks. */
 function chunkStream(chunks: Array<Record<string, unknown>>): ReadableStream<UIMessageChunk> {

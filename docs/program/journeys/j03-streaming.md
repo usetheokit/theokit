@@ -626,7 +626,7 @@ What is wired end to end:
   through the generator at `packages/agents/src/bridge/present-ui-message-stream.ts:144`.
 - The client reads it as a stream, not a body
   (`packages/agents/src/client/http-transport.ts:79`, decode at
-  `packages/agents/src/client/consume-ui-message-stream.ts:44`), and the React binding subscribes to
+  `packages/agents/src/wire/consume-ui-message-stream.ts`), and the React binding subscribes to
   a store rather than re-rendering per token
   (`packages/agents/src/client/use-agent.ts:113`).
 - Reconnect exists and is a real route (`packages/theo/src/server/agent/handle-agent-run-reconnect.ts:38`,

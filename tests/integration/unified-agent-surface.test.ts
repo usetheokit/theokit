@@ -48,7 +48,7 @@ const { generateManifest } = await import('../../packages/theo/src/server/scan/m
 const { mountAgent } = await import('../../packages/theo/src/server/agent/mount-agent.js')
 const { importUserModule } = await import('../../packages/theo/src/config/import-user-module.js')
 const { consumeUIMessageStream } =
-  await import('../../packages/agents/src/client/consume-ui-message-stream.js')
+  await import('../../packages/agents/src/wire/consume-ui-message-stream.js')
 
 let projectDir: string
 

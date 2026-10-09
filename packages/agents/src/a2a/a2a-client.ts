@@ -12,7 +12,7 @@ import type { CustomTool, ToolContext } from '@theokit/sdk'
 import {
   consumeUIMessageStream,
   type ChunkStreamOutcome,
-} from '../client/consume-ui-message-stream.js'
+} from '../wire/consume-ui-message-stream.js'
 
 /** How to authenticate to the remote agent. */
 export interface A2AAuth {

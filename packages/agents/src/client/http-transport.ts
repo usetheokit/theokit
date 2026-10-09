@@ -3,7 +3,8 @@ import type {
   WireChunk as UIMessageChunk,
 } from '@theokit/presenter/wire'
 
-import { responseToChunkStream } from './consume-ui-message-stream.js'
+import { responseToChunkStream } from '../wire/consume-ui-message-stream.js'
+
 import type { AgentTransport, ApprovalDecision } from './transport.js'
 
 /** Extra request headers — a static record OR a resolver called per request (for dynamic auth). */
