@@ -5,7 +5,7 @@
  * TheoKit devtools + SSE handler expect AgentStreamEvent (run_started/text_delta/tool_call/done).
  * This module bridges the two — Adapter pattern (per sdk-integration-blueprint ADR-D2).
  */
-import type { InteractionUpdate } from '@theokit/sdk'
+import type { CostBreakdown, InteractionUpdate } from '@theokit/sdk'
 
 import type { StreamEvent } from './agent-sse-handler.js'
 
@@ -150,6 +150,30 @@ function translateToolCallEvent(msg: SdkMessage): StreamEvent[] {
   return [] // unknown status → no event
 }
 
+/**
+ * The terminal frame's `cost` key: the run's USD cost as the SDK priced it, or nothing.
+ *
+ * usetheokit/theokit#969: the SDK's `CostBreakdown` carries the amount as `amountUsd`, and its own
+ * docblock says that when the price is not known the amount is `undefined` and must NOT be
+ * defaulted to 0. An unpriced run reported as cost 0 reads as a free run, and a USD ceiling never
+ * trips on it. So the key is present only for a finite number, 0 included: a 0 the SDK reports
+ * is a price, not an absence. A missing or `null` cost, `NaN` and `Infinity` all leave it out,
+ * because a `NaN` folded into a running total makes every later `total > ceiling` comparison false.
+ * Shared by the SDK adapter's `done` and {@link translateSdkEvent}'s, so both mean the same by 0
+ * (B-424); not part of the bridge barrel.
+ */
+export function knownCost(cost: CostBreakdown | undefined): { cost?: number } {
+  const amountUsd = cost?.amountUsd
+  return typeof amountUsd === 'number' && Number.isFinite(amountUsd) ? { cost: amountUsd } : {}
+}
+
+/** The `cost` of a status message's `result`, when it carries one; read untrusted. */
+function costOf(result: unknown): CostBreakdown | undefined {
+  return typeof result === 'object' && result !== null && 'cost' in result
+    ? (result.cost as CostBreakdown | undefined)
+    : undefined
+}
+
 function translateStatusEvent(msg: SdkMessage): StreamEvent[] {
   // Real SDKStatusMessage (messages.ts:106): status is UPPERCASE cloud-run lifecycle;
   // error text (when present) is in `msg.message`. FINISHED/CANCELLED are terminal-clean;
@@ -163,7 +187,9 @@ function translateStatusEvent(msg: SdkMessage): StreamEvent[] {
         result: '',
         usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
         durationMs: 0,
-        cost: 0,
+        // A status message carries no price of its own; one whose `result` carries the SDK's cost
+        // reports it, and otherwise the key is left out, never written as 0 (B-424).
+        ...knownCost(costOf(msg.result)),
       },
     ]
   }

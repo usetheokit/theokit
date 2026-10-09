@@ -20,6 +20,7 @@ import type { StreamEvent } from './agent-sse-handler.js'
 import type { AgentStopReason, DoneEvent } from './agent-stream-events.js'
 import { assertCodePlugins } from './code-plugins.js'
 import { compileProjectContext } from './compile-project-context.js'
+import { knownCost } from './event-translator.js'
 import type { ResolvedCompatSource } from './setting-sources-gate.js'
 
 /** Extra `Agent.create()` options compiled from the M8 declarative decorators. */
@@ -729,19 +730,4 @@ function terminalExtras(
   if (stopReason !== undefined) extras.stopReason = stopReason
   if (model !== undefined) extras.model = model
   return extras
-}
-
-/**
- * The terminal frame's `cost` key: the run's USD cost as the SDK priced it, or nothing.
- *
- * usetheokit/theokit#969: the SDK's `CostBreakdown` carries the amount as `amountUsd`, and its own
- * docblock says that when the price is not known the amount is `undefined` and must NOT be
- * defaulted to 0. An unpriced run reported as cost 0 reads as a free run, and a USD ceiling never
- * trips on it. So the key is present only for a finite number, 0 included: a 0 the SDK reports
- * is a price, not an absence. A missing or `null` cost, `NaN` and `Infinity` all leave it out,
- * because a `NaN` folded into a running total makes every later `total > ceiling` comparison false.
- */
-function knownCost(cost: CostBreakdown | undefined): { cost?: number } {
-  const amountUsd = cost?.amountUsd
-  return typeof amountUsd === 'number' && Number.isFinite(amountUsd) ? { cost: amountUsd } : {}
 }
