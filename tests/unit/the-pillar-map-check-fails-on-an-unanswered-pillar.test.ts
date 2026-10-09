@@ -242,18 +242,51 @@ describe('the committed map answers for every pillar', () => {
     expect(out.stdout).not.toMatch(/no row|rows$|unknown pillar/m)
   })
 
-  it('the committed map fails only on pending rows or missing runs', () => {
+  /** The committed rows, read fresh so each test sees the map as it is on disk. */
+  function committedRows(): Row[] {
+    return (JSON.parse(readFileSync(COMMITTED_MAP, 'utf8')) as { pillars: Row[] }).pillars
+  }
+
+  /** What the check must print last when `failing` pillars are not proven. */
+  function expectedSummary(failing: number): string {
+    return failing === 0 ? '33 of 33 pillars proven or out' : `${failing} of 33 pillars not proven`
+  }
+
+  // The map changes state as pillars are proven or declared out, so these assert the invariant
+  // derived from the map itself rather than today's count: with no report every row that is not
+  // out fails, and with a passing report for every proven row only the pending rows fail.
+  it('the committed map fails exactly the rows that are not out when no report is given', () => {
+    const failing = committedRows().filter((row) => row.status !== 'out').length
     const out = run([])
     const lines = out.stdout.split('\n').filter((line) => line !== '' && !SUMMARY.test(line))
 
-    expect(out.status).toBe(1)
-    expect(out.stdout).toMatch(/^\d+ of 33 pillars not proven$/m)
-    expect(lines.length).toBeGreaterThan(0)
-    expect(
-      lines.filter(
-        (line) => !/: (pending|no recorded passing run|last recorded run is \w+)$/.test(line),
-      ),
-    ).toEqual([])
+    expect(out.status).toBe(failing === 0 ? 0 : 1)
+    expect(out.stdout.trimEnd().split('\n').at(-1)).toBe(expectedSummary(failing))
+    expect(lines).toHaveLength(failing)
+    expect(lines.filter((line) => !/: (pending|no recorded passing run)$/.test(line))).toEqual([])
+  })
+
+  it('the committed map fails only its pending rows once every proven row has a passing run', () => {
+    const rows = committedRows()
+    const proven = rows.filter((row) => row.status === 'proven')
+    const dir = mkdtempSync(join(tmpdir(), 'pillar-map-'))
+    dirs.push(dir)
+    const report = join(dir, 'report.json')
+    writeFileSync(
+      report,
+      JSON.stringify({
+        testResults: proven.map((row) => ({
+          name: `/ci/checkout/${String(row.file)}`,
+          startTime: 1,
+          assertionResults: [{ fullName: row.fullName, status: 'passed' }],
+        })),
+      }),
+    )
+    const failing = rows.filter((row) => row.status === 'pending').length
+    const out = run(['--results', report])
+
+    expect(out.status).toBe(failing === 0 ? 0 : 1)
+    expect(out.stdout.trimEnd().split('\n').at(-1)).toBe(expectedSummary(failing))
   })
 
   it('the root package exposes check:pillars', () => {
