@@ -9,7 +9,7 @@
 import { createRequire } from 'node:module'
 
 import type { ContextSettings, SkillsSettings, SystemPromptResolver } from '@theokit/sdk'
-import type { CostBreakdown, MemorySettings, TelemetrySettings } from '@theokit/sdk'
+import type { CostBreakdown, MemorySettings, TelemetrySettings, TokenUsage } from '@theokit/sdk'
 import { PermissionEngine, PermissionPlugin } from '@theokit/sdk'
 import { TheokitAgentError } from '@theokit/sdk/errors'
 
@@ -634,14 +634,18 @@ function stopReasonOf(result: {
   return undefined
 }
 
-/** The SDK `TokenUsage` fields the terminal frame reads; V4-O added the reasoning/cache buckets. */
-interface SdkRunUsage {
-  inputTokens?: number
-  outputTokens?: number
-  reasoningTokens?: number
-  cacheReadTokens?: number
-  cacheWriteTokens?: number
-}
+/**
+ * The SDK `TokenUsage` fields the terminal frame reads; V4-O added the reasoning/cache buckets.
+ * Derived from the SDK type, not hand-typed (ADR D2 of B-419: a hand-typed shape is how a renamed
+ * field kept compiling), and every field optional because a run result may omit any of them.
+ * Shared with the `wait()` result shape in `sdk-adapter.ts`; not part of the bridge barrel.
+ */
+export type SdkRunUsage = Partial<
+  Pick<
+    TokenUsage,
+    'inputTokens' | 'outputTokens' | 'reasoningTokens' | 'cacheReadTokens' | 'cacheWriteTokens'
+  >
+>
 
 /**
  * The terminal frame's `usage`: the total derived from input + output, and the SDK reasoning/cache
@@ -663,7 +667,7 @@ function doneUsage(sdkUsage: SdkRunUsage | undefined): DoneEvent['usage'] {
   }
 }
 
-/** A token count the SDK may omit (`undefined` or `null`), read as 0. */
+/** A token count the SDK may omit, read as 0. */
 function countOrZero(count: number | undefined): number {
   return count ?? 0
 }

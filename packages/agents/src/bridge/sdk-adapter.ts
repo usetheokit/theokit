@@ -27,6 +27,7 @@ import { type SdkMessage } from './event-translator.js'
 import { withGuardrails, withStepCeiling } from './handle-wrappers.js'
 import { buildModelSelection, contextWindowOf, modelIdOf } from './model-selection.js'
 import { assembleM8CreateOptions, realUsageDone } from './sdk-adapter-create-options.js'
+import type { SdkRunUsage } from './sdk-adapter-create-options.js'
 import { sdkErrorEvent } from './sdk-error.js'
 import {
   createToolSeen,
@@ -286,13 +287,7 @@ interface SdkAgentApi {
       // discipline `applyStepCeiling` uses for the ceiling travelling the other way.
       wait: () => Promise<{
         result?: string
-        usage?: {
-          inputTokens?: number
-          outputTokens?: number
-          reasoningTokens?: number
-          cacheReadTokens?: number
-          cacheWriteTokens?: number
-        }
+        usage?: SdkRunUsage
         cost?: CostBreakdown
         stoppedAtIterationLimit?: boolean
         stoppedByDoomLoop?: boolean
