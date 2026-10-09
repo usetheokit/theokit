@@ -223,11 +223,13 @@ describe('an ACP tool call against an agent that misbehaves on its channel', LIM
     const pidFile = join(scratch, 'agent.pid')
     const result = await outcome(
       Promise.resolve(
-        agentTool(['--split-writes', `--pid-file=${pidFile}`]).handler({ message: 'ação' }),
+        agentTool(['--split-writes', `--pid-file=${pidFile}`]).handler({
+          message: 'a\u00e7\u00e3o',
+        }),
       ),
     )
 
-    expect(result).toBe('echo:ação')
+    expect(result).toBe('echo:a\u00e7\u00e3o')
   })
 
   it('test_an_agent_that_ignores_sigterm_is_gone_when_the_call_returns', async () => {
