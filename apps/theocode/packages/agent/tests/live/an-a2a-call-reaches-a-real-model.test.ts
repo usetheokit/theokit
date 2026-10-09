@@ -9,8 +9,9 @@
  * The route handler is a Web `Request -> Response` function, so the tool's `fetchImpl` calls it in
  * process; only the model call leaves the machine.
  *
- * Skips, never fails, when no provider key is set: a machine without a credential is not a machine
- * with a defect. Prints the NAME of the key it used, never its value. When `A2A_LIVE_TRANSCRIPT`
+ * Skips, never fails, when no usable provider key is set: a machine without a credential is not a
+ * machine with a defect. Without `LIVE_MODEL` the default model is an OpenRouter id, so only
+ * `OPENROUTER_API_KEY` counts. Prints the NAME of the key it used, never its value. When `A2A_LIVE_TRANSCRIPT`
  * names a path, the transcript is written there with every occurrence of the key replaced, because
  * the JSON reporter keeps no console output and the reply has to be readable after the run.
  */
@@ -25,7 +26,12 @@ import {
 import { afterAll, describe, expect, it } from 'vitest'
 
 const MODEL = process.env.LIVE_MODEL ?? 'google/gemini-2.5-flash-lite'
-const KEYS = ['OPENROUTER_API_KEY', 'ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'THEOKIT_API_KEY']
+// The default model id is an OpenRouter id, so without LIVE_MODEL only an OpenRouter key can run
+// it. Another provider's key alone skips the test rather than failing it on a model it cannot serve.
+const KEYS =
+  process.env.LIVE_MODEL === undefined
+    ? ['OPENROUTER_API_KEY']
+    : ['OPENROUTER_API_KEY', 'ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'THEOKIT_API_KEY']
 
 function selectedKeyName(): string {
   const name = KEYS.find((n) => (process.env[n] ?? '').length > 0)
