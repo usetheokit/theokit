@@ -100,6 +100,9 @@ export function createA2ATool(config: A2AToolConfig): CustomTool {
         signal: ctx?.signal,
       })
       if (!res.ok) {
+        // Release the unread body so the connection returns to the pool. The status is the error
+        // to report; a failure to cancel must not replace it.
+        await res.body?.cancel().catch(() => undefined)
         throw new Error(`A2A call to "${config.name}" failed: ${res.status} ${res.statusText}`)
       }
       let last: WireMessage | undefined

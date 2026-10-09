@@ -87,6 +87,21 @@ describe('createA2ATool', () => {
     await expect(tool.handler({ message: 'hi' })).rejects.toThrow('A2A call to "ask" failed: 502')
   })
 
+  it('test_a_non_2xx_answer_releases_its_body', async () => {
+    const cancelled = vi.fn()
+    const body = new ReadableStream<Uint8Array>({ cancel: cancelled })
+    const fetchImpl = vi.fn(async () => new Response(body, { status: 403 }))
+    const tool = createA2ATool({
+      url: 'https://x/agents/a',
+      name: 'ask',
+      description: 'd',
+      fetchImpl,
+    })
+
+    await expect(tool.handler({ message: 'hi' })).rejects.toThrow('A2A call to "ask" failed: 403')
+    expect(cancelled).toHaveBeenCalledOnce()
+  })
+
   it('test_a_static_action_header_in_another_case_replaces_the_default', async () => {
     let action: string | null = null
     const fetchImpl = sseFetch('ok', (_url, init) => {
