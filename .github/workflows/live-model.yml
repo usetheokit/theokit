@@ -2,8 +2,9 @@
 # OpenRouter and prints why the job could not run; the live suite then runs with the key
 # required, so an absent key or an unreachable provider ends red with its reason, never green.
 #
-# No run group is declared: GitHub keeps one pending run per group and cancels it when another
-# push arrives, so any shared group drops pushes. Every push gets its own run (D7).
+# No run group is declared: by default GitHub keeps one pending run per group and cancels it when
+# another push arrives, and even a longer pending queue is a bound, so any shared group can drop
+# pushes. Every push gets its own run (D7).
 name: Live model
 
 on:
