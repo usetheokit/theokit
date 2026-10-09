@@ -25,7 +25,13 @@ import { spawn, type ChildProcessByStdio } from 'node:child_process'
 import { resolve } from 'node:path'
 import type { Readable, Writable } from 'node:stream'
 
-import { AcpClient, AcpMessageDecoder, type AcpTransport } from '@theokit/agents'
+import {
+  AcpClient,
+  AcpConnectionClosedError,
+  AcpMessageDecoder,
+  AcpProtocolError,
+  type AcpTransport,
+} from '@theokit/agents'
 import type { CustomTool, ToolContext } from '@theokit/sdk'
 
 /**
@@ -350,20 +356,32 @@ interface Turn {
   timeoutMs: number
   /** The run's signal; once it aborts, no further step is sent. */
   signal?: AbortSignal
-  /** Set when the transport closed on its own; every later step rejects with it. */
-  closed?: Error
-  /** Rejects the step in flight, so a transport that closes or a run that is cancelled ends it. */
+  /** Rejects the step in flight, so a run that is cancelled ends it. */
   abort?: (reason: unknown) => void
 }
 
 /**
- * Send one step of the turn. A refusal rejects with an error naming the method, keeping the
- * agent's error as `cause`, so the caller learns which step failed and nothing later is sent. A
- * closed transport or an elapsed timeout rejects with its own typed error, unwrapped.
+ * What a rejection of `AcpClient.request` means for the call. A channel that closed rejects with
+ * the error its transport reported, and a protocol break with the client's `AcpProtocolError`,
+ * whatever the transport: neither is the agent's answer. Only a JSON-RPC error answer is a refusal,
+ * which rejects with an error naming the method and keeping the agent's error as `cause`.
+ */
+function stepFailure(method: string, cause: unknown): Error {
+  if (cause instanceof AcpConnectionClosedError) {
+    return cause.cause instanceof Error ? cause.cause : cause
+  }
+  if (cause instanceof AcpProtocolError) return cause
+  const reason = cause instanceof Error ? cause.message : String(cause)
+  return new Error(`[theokit] createACPTool: the agent refused ${method}: ${reason}`, { cause })
+}
+
+/**
+ * Send one step of the turn. A refusal rejects with an error naming the method (see
+ * {@link stepFailure}), so the caller learns which step failed and nothing later is sent. A closed
+ * transport, a protocol break, an elapsed timeout or a cancelled run rejects with its own error.
  */
 async function step(turn: Turn, method: string, params: unknown): Promise<unknown> {
   turn.signal?.throwIfAborted()
-  if (turn.closed) throw turn.closed
   let timer: ReturnType<typeof setTimeout> | undefined
   try {
     return await new Promise<unknown>((resolve, reject) => {
@@ -375,12 +393,7 @@ async function step(turn: Turn, method: string, params: unknown): Promise<unknow
         .request(method, params)
         .then(resolve)
         .catch((cause: unknown) => {
-          const reason = cause instanceof Error ? cause.message : String(cause)
-          reject(
-            new Error(`[theokit] createACPTool: the agent refused ${method}: ${reason}`, {
-              cause,
-            }),
-          )
+          reject(stepFailure(method, cause))
         })
     })
   } finally {
@@ -458,10 +471,6 @@ export function createACPTool(config: AcpToolConfig): CustomTool {
         // closes the agent, so a cancellation does not wait for the request timeout.
         onAbort = () => turn.abort?.(signal?.reason)
         signal?.addEventListener('abort', onAbort, { once: true })
-        transport.onClose?.((error) => {
-          turn.closed = error
-          turn.abort?.(error)
-        })
         turn.client.onRequest('session/request_permission', async (params) =>
           toAcpPermissionResponse(params, await config.onPermissionRequest(params)),
         )

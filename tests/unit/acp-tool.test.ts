@@ -310,3 +310,75 @@ describe('createACPTool releases its transport', () => {
     }
   })
 })
+
+/** A transport whose agent answers the first request it receives with `chunk`, and nothing else. */
+function answersFirstRequestWith(chunk: string) {
+  let sink: ((data: string) => void) | undefined
+  return {
+    send: () => {
+      queueMicrotask(() => sink?.(chunk))
+    },
+    subscribe: (onData: (data: string) => void) => {
+      sink = onData
+    },
+  }
+}
+
+/** Settle `work` with its rejection, or with `undefined` when it resolved. */
+async function failureOf(work: Promise<unknown>): Promise<unknown> {
+  return work.then(
+    () => undefined,
+    (err: unknown) => err,
+  )
+}
+
+// Review findings F-arch-1 and F-xval-9: step() labelled every rejection of AcpClient.request a
+// refusal, so on a transport a caller injects, a protocol break read "the agent refused initialize".
+describe('createACPTool passes the client typed errors through', () => {
+  it('test_a_protocol_break_on_an_injected_transport_rejects_with_the_protocol_error', async () => {
+    const tool = createACPTool({
+      command: 'scripted-agent',
+      name: 'code_agent',
+      description: 'd',
+      onPermissionRequest: () => ({ granted: false }),
+      transportFactory: () => answersFirstRequestWith('Starting agent v1.2\n'),
+    })
+
+    const failure = await failureOf(Promise.resolve(tool.handler({ message: 'hi' })))
+
+    expect(failure).toMatchObject({ name: 'AcpProtocolError', line: 'Starting agent v1.2' })
+    expect((failure as Error).message).not.toMatch(/refused/)
+  })
+
+  // Review finding F-arch-3: which error a closed transport produced depended on the tool's onClose
+  // listener running after the client's and synchronously. A transport that tells only the first
+  // listener it was given (a single `onclose` slot) reached the client alone, and the close read
+  // "the agent refused session/prompt".
+  it('test_a_close_reported_to_the_client_alone_rejects_with_the_transport_error', async () => {
+    const closed = new AcpTransportClosedError('scripted-agent', 'exited with code 3')
+    const inner = scriptedTransport({ silentOn: 'session/prompt' })
+    let first: ((cause: Error) => void) | undefined
+    const tool = createACPTool({
+      command: 'scripted-agent',
+      name: 'code_agent',
+      description: 'd',
+      onPermissionRequest: () => ({ granted: false }),
+      transportFactory: () => ({
+        send: (line: string) => {
+          inner.send(line)
+          if (line.includes('"session/prompt"')) queueMicrotask(() => first?.(closed))
+        },
+        subscribe: (onData: (chunk: string) => void) => {
+          inner.subscribe(onData)
+        },
+        onClose: (listener: (cause: Error) => void) => {
+          first ??= listener
+        },
+      }),
+    })
+
+    const failure = await failureOf(Promise.resolve(tool.handler({ message: 'hi' })))
+
+    expect(failure).toBe(closed)
+  })
+})
