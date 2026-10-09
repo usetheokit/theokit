@@ -27,6 +27,7 @@ import { GuardrailError } from '../guardrails/index.js'
 
 import type { LoopFinishReason, LoopOutcome, LoopStrategy } from './loop-strategy.js'
 import type { ReflectionContext, ReflectionStrategy } from './reflection-strategy.js'
+import { accumulateUsage, applyDone, type RoundUsage } from './round-usage.js'
 import { throwIfNextRoundRefused } from './run-budget.js'
 
 /** One SDK stream turn: `createSdkAgentStream(...)` returns this shape. */
@@ -209,30 +210,6 @@ async function* consumeRoundOrThrow(
   }
 }
 
-/** The token buckets a round adds to the run, each optional on {@link DelegationResult}. */
-const TOKEN_BUCKETS = [
-  'tokensInput',
-  'tokensOutput',
-  'reasoningTokens',
-  'cacheReadTokens',
-  'cacheWriteTokens',
-] as const
-
-/**
- * V4-N/V4-O: fold one round's usage into the accumulator — cost + total/split tokens (V4-N) and
- * the reasoning/cache buckets (V4-O). Extracted from the loop body to keep its complexity within
- * budget (G6); the optional `acc` fields default to 0 before adding.
- *
- * B-409: an unpriced round adds 0 to `cost`, which stays the known spend the ceiling reads, and
- * marks the run `costUnknown` so the result does not report that spend as the run's price.
- */
-function accumulateUsage(acc: DelegationResult, r: RoundResult): void {
-  acc.cost += r.cost
-  if (!r.costKnown) acc.costUnknown = true
-  acc.tokens += r.tokens
-  for (const bucket of TOKEN_BUCKETS) acc[bucket] = (acc[bucket] ?? 0) + r[bucket]
-}
-
 /** Stamp the terminal state on the accumulator + emit the runtime metric (DRY for the 2 exit points). */
 function finalize(
   acc: DelegationResult,
@@ -247,19 +224,9 @@ function finalize(
 }
 
 /** One round's accumulated facts + the signals needed to derive `finishReason`. */
-interface RoundResult {
+interface RoundResult extends RoundUsage {
   responseText: string
   toolCalls: { id: string; name: string; input: unknown; output: string }[]
-  cost: number
-  /** B-409: false until a `done` reports a finite cost; an unpriced round folds as 0 into `cost`. */
-  costKnown: boolean
-  tokens: number
-  tokensInput: number
-  tokensOutput: number
-  // V4-O: reasoning/cache token buckets folded from the done event.
-  reasoningTokens: number
-  cacheReadTokens: number
-  cacheWriteTokens: number
   finishReason: LoopFinishReason
   errorMessage: string
 }
@@ -318,37 +285,6 @@ function pushToolResult(
     input: call?.input ?? event.input ?? {},
     output: asString(event.output, ''),
   })
-}
-
-/**
- * Each round field a `done` event's usage sets, beside the usage key it reads (V4-N; V4-O: the
- * reasoning/cache buckets). A key the provider/adapter omits sets the field to 0.
- */
-const DONE_USAGE_FIELDS = [
-  ['tokens', 'totalTokens'],
-  ['tokensInput', 'inputTokens'],
-  ['tokensOutput', 'outputTokens'],
-  ['reasoningTokens', 'reasoningTokens'],
-  ['cacheReadTokens', 'cacheReadTokens'],
-  ['cacheWriteTokens', 'cacheWriteTokens'],
-] as const
-
-/** The usage a `done` event carries; every key optional, and absent means 0. */
-interface DoneUsage {
-  totalTokens?: number
-  inputTokens?: number
-  outputTokens?: number
-  reasoningTokens?: number
-  cacheReadTokens?: number
-  cacheWriteTokens?: number
-}
-
-/** V4-N: fold a `done` event's cost + split/total token usage into the round (V4-O: + buckets). */
-function applyDone(event: StreamEvent, r: RoundResult): void {
-  r.costKnown = typeof event.cost === 'number' && Number.isFinite(event.cost)
-  r.cost = r.costKnown ? (event.cost as number) : 0 // EC-2: NaN/Infinity never reach the spend
-  const usage = (event.usage ?? {}) as DoneUsage
-  for (const [field, key] of DONE_USAGE_FIELDS) r[field] = usage[key] ?? 0
 }
 
 /**
