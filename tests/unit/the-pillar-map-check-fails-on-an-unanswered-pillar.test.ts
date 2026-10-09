@@ -93,6 +93,30 @@ describe('a pillar that is neither proven nor out fails the check', () => {
     expect(out.stdout).toContain('unknown pillar "telepathy"')
   })
 
+  it('counts a row naming no pillar in the summary line instead of reporting 0 failures', () => {
+    const out = run([
+      '--map',
+      mapWith((rows) => [...rows, { pillar: 'telepathy', status: 'out', reason: NINE_WORDS }]),
+    ])
+
+    expect(out.status).toBe(1)
+    expect(out.stdout).toMatch(/^0 of 33 pillars not proven, 1 row names no pillar$/m)
+  })
+
+  it('counts every row naming no pillar, string or not, in the summary line', () => {
+    const out = run([
+      '--map',
+      mapWith((rows) => [
+        ...replace(rows, 'memory', { pillar: 'memory', status: 'pending' }),
+        { pillar: 'telepathy', status: 'pending' },
+        { pillar: 7, status: 'out' },
+      ]),
+    ])
+
+    expect(out.status).toBe(1)
+    expect(out.stdout).toMatch(/^1 of 33 pillars not proven, 2 rows name no pillar$/m)
+  })
+
   it('fails a row whose pillar is not a string and names it by index', () => {
     const out = run(['--map', mapWith((rows) => [...rows, { pillar: 7, status: 'out' }])])
 

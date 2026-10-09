@@ -24,7 +24,8 @@
  * ## Exit codes
  *
  * 0 when all 33 pillars pass, 1 when at least one fails (one line per failing pillar, then
- * `<N> of 33 pillars not proven`), 2 when an input cannot be read or has the wrong shape. An
+ * `<N> of 33 pillars not proven`, followed by `, <K> rows name no pillar` when K rows are unknown or
+ * have no string `pillar`), 2 when an input cannot be read or has the wrong shape. An
  * unexpected error is 2 as well: Node's default of 1 would read as "pillars failing" when the truth
  * is that nothing was checked.
  */
@@ -200,7 +201,10 @@ function rowProblem(row, records) {
   return `unknown status ${JSON.stringify(row.status)}`
 }
 
-/** Returns `{ lines, failing }`: one line per failing pillar, and the count of failing pillars. */
+/**
+ * Returns `{ lines, failing, strays }`: one line per failing pillar or stray row, the count of failing
+ * pillars, and the count of rows that name no pillar.
+ */
 function checkRows(rows, records) {
   const byName = new Map()
   const unknown = []
@@ -220,7 +224,7 @@ function checkRows(rows, records) {
     else problem = rowProblem(list[0], records)
     if (problem) lines.push(`${name}: ${problem}`)
   }
-  return { lines: [...lines, ...unknown], failing: lines.length }
+  return { lines: [...lines, ...unknown], failing: lines.length, strays: unknown.length }
 }
 
 function main() {
@@ -236,13 +240,17 @@ function main() {
   }
   const records = loadReports(args.results)
 
-  const { lines, failing } = checkRows(map.pillars, records)
+  const { lines, failing, strays } = checkRows(map.pillars, records)
   for (const line of lines) console.log(line)
   if (lines.length === 0) {
     console.log(`${PILLARS.length} of ${PILLARS.length} pillars proven or out`)
     return 0
   }
-  console.log(`${failing} of ${PILLARS.length} pillars not proven`)
+  // A row naming no pillar fails the map without failing a pillar, so the count says so: a bare
+  // "0 of 33 pillars not proven" beside exit 1 would contradict itself.
+  const rowsName = strays === 1 ? 'row names' : 'rows name'
+  const stray = strays === 0 ? '' : `, ${strays} ${rowsName} no pillar`
+  console.log(`${failing} of ${PILLARS.length} pillars not proven${stray}`)
   return 1
 }
 
