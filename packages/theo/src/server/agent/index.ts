@@ -16,6 +16,7 @@ export {
   NodeAcpTransport,
   AcpTransportClosedError,
   AcpRequestTimeoutError,
+  AcpTurnStoppedError,
   DEFAULT_ACP_TIMEOUT_MS,
 } from './acp-tool.js'
 export type { AcpToolConfig, AcpToolTransport } from './acp-tool.js'

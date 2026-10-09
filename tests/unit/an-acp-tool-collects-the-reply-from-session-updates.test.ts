@@ -11,7 +11,10 @@ import type { AcpTransport } from '../../packages/agents/src/acp/client.js'
 import { AcpMessageDecoder, encodeAcpMessage } from '../../packages/agents/src/acp/protocol.js'
 import { describe, expect, it, vi } from 'vitest'
 
-import { createACPTool } from '../../packages/theo/src/server/agent/acp-tool.js'
+import {
+  AcpTurnStoppedError,
+  createACPTool,
+} from '../../packages/theo/src/server/agent/acp-tool.js'
 
 type Message = Record<string, unknown>
 
@@ -22,6 +25,8 @@ interface AgentScript {
   sessionNewResult?: unknown
   /** `session/request_permission` params to send, one at a time, before the updates. */
   permissionRequests?: unknown[]
+  /** Result of `session/prompt`; `{ stopReason: 'end_turn' }` when absent. */
+  promptResult?: unknown
 }
 
 function chunk(sessionId: string, text: string): unknown {
@@ -49,7 +54,8 @@ function scriptedAgent(script: AgentScript = {}) {
     const { id, sessionId, text } = promptTurn
     const updates = script.updates?.(sessionId, text) ?? [chunk(sessionId, `echo:${text}`)]
     for (const params of updates) emit({ method: 'session/update', params })
-    emit({ id, result: { stopReason: 'end_turn' } })
+    const result = 'promptResult' in script ? script.promptResult : { stopReason: 'end_turn' }
+    emit({ id, result })
   }
   const nextPermissionOrFinish = (): void => {
     const next = pendingPermissions.shift()
@@ -285,5 +291,61 @@ describe('createACPTool collects the reply from session updates', () => {
     expect(failure).toBeInstanceOf(Error)
     expect((failure as Error).message).toMatch(/session\/new/)
     expect((failure as Error).message).toMatch(/sessionId/)
+  })
+})
+
+/** The call's rejection, or a failure of the test when the call resolved. */
+async function rejectionOf(work: unknown): Promise<unknown> {
+  try {
+    const output: unknown = await Promise.resolve(work)
+    return new Error(`the call resolved with ${JSON.stringify(output)} instead of rejecting`)
+  } catch (err) {
+    return err
+  }
+}
+
+// loop-code-review LCR0103 (#84) and LCR0602 (#87): `session/prompt` answers with the reason the
+// turn ended. Only `end_turn` is a finished answer; a turn the agent stopped early came back as one.
+describe('createACPTool reads why the agent ended the turn', () => {
+  it.each(['max_tokens', 'max_turn_requests', 'refusal', 'cancelled', 'paused'])(
+    'test_a_turn_that_ends_with_%s_rejects_typed_and_keeps_the_partial_reply',
+    async (stopReason) => {
+      const agent = scriptedAgent({
+        updates: (s) => [chunk(s, 'I started refac'), chunk(s, 'toring the fi')],
+        promptResult: { stopReason },
+      })
+
+      const failure = await rejectionOf(toolFor(() => agent.transport).handler({ message: 'hi' }))
+
+      expect(agent.sent).toEqual(HANDSHAKE)
+      expect(failure).toBeInstanceOf(AcpTurnStoppedError)
+      expect(failure).toMatchObject({
+        name: 'AcpTurnStoppedError',
+        command: 'noop',
+        stopReason,
+        partialText: 'I started refactoring the fi',
+      })
+      expect((failure as Error).message).toContain(`stopReason "${stopReason}"`)
+    },
+  )
+
+  it.each([[{}], [{ stopReason: 7 }], [null], ['end_turn']])(
+    'test_a_prompt_result_%j_without_a_string_stop_reason_rejects_naming_session_prompt',
+    async (promptResult) => {
+      const agent = scriptedAgent({ promptResult })
+
+      const failure = await rejectionOf(toolFor(() => agent.transport).handler({ message: 'hi' }))
+
+      expect(failure).toBeInstanceOf(Error)
+      expect(failure).not.toBeInstanceOf(AcpTurnStoppedError)
+      expect((failure as Error).message).toMatch(/session\/prompt/)
+      expect((failure as Error).message).toMatch(/stopReason/)
+    },
+  )
+
+  it('test_a_turn_that_ends_with_end_turn_returns_the_reply', async () => {
+    const agent = scriptedAgent({ promptResult: { stopReason: 'end_turn' } })
+
+    expect(await toolFor(() => agent.transport).handler({ message: 'hi' })).toBe('echo:hi')
   })
 })

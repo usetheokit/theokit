@@ -18,7 +18,10 @@
  * process that cannot start or exits mid-turn rejects the call with {@link AcpTransportClosedError};
  * a stdout line that is not a JSON-RPC message rejects it with the client's `AcpProtocolError`,
  * naming the line; a request the agent does not answer within `timeoutMs` rejects it with
- * {@link AcpRequestTimeoutError}. A cancelled run (the `signal` the SDK
+ * {@link AcpRequestTimeoutError}. A turn the agent ends with a `stopReason` other than `end_turn`
+ * (`max_tokens`, `max_turn_requests`, `refusal`, `cancelled`, or one this client does not know)
+ * rejects it with {@link AcpTurnStoppedError}, keeping the partial reply; a `session/prompt` result
+ * with no string `stopReason` rejects it as a refusal of `session/prompt`. A cancelled run (the `signal` the SDK
  * passes as the handler's context) rejects the call with the signal's abort reason and closes the
  * agent the same way; a run already cancelled starts no agent.
  */
@@ -51,6 +54,36 @@ export class AcpRequestTimeoutError extends Error {
   ) {
     super(
       `[theokit] createACPTool: the agent "${command}" did not answer ${method} within ${String(timeoutMs)}ms`,
+    )
+  }
+}
+
+/** What each ACP v1 `stopReason` other than `end_turn` says about the turn. */
+const STOP_REASON_MEANING: Readonly<Record<string, string>> = {
+  max_tokens: 'it reached its token limit',
+  max_turn_requests: 'it reached its limit of model requests in one turn',
+  refusal: 'it refused to continue',
+  cancelled: 'it cancelled the turn',
+}
+
+/**
+ * The agent ended the turn with a `stopReason` other than `end_turn`: it stopped before finishing,
+ * so the text it streamed is not its answer. That text is kept as `partialText`.
+ */
+export class AcpTurnStoppedError extends Error {
+  override readonly name = 'AcpTurnStoppedError'
+
+  constructor(
+    /** The agent executable, as configured. */
+    readonly command: string,
+    /** The `stopReason` of the `session/prompt` result, e.g. `max_tokens`. */
+    readonly stopReason: string,
+    /** The text the agent streamed for the session before it stopped. */
+    readonly partialText: string,
+  ) {
+    const meaning = STOP_REASON_MEANING[stopReason] ?? 'a stop reason this client does not know'
+    super(
+      `[theokit] createACPTool: the agent "${command}" stopped the turn before finishing it, with stopReason "${stopReason}" (${meaning}); the ${String(partialText.length)} characters it streamed are on the error's partialText`,
     )
   }
 }
@@ -190,9 +223,19 @@ function sessionIdOf(created: unknown): string {
   )
 }
 
+/** The `stopReason` a `session/prompt` result carries; a result without one is a refusal. */
+function stopReasonOf(result: unknown): string {
+  if (isRecord(result) && typeof result.stopReason === 'string') return result.stopReason
+  throw new Error(
+    `[theokit] createACPTool: the agent refused session/prompt: returned no stopReason (got ${JSON.stringify(result)})`,
+  )
+}
+
 /**
  * Run one ACP turn: handshake, prompt, and the reply text streamed for the session. Updates are
  * buffered as they arrive (before `session/prompt` resolves) and filtered by the session after.
+ * Only a turn that ends with `end_turn` returns its text; any other `stopReason` rejects with
+ * {@link AcpTurnStoppedError}, which keeps the text.
  */
 async function runTurn(turn: Turn, cwd: string, message: string): Promise<string> {
   const updates: unknown[] = []
@@ -204,9 +247,15 @@ async function runTurn(turn: Turn, cwd: string, message: string): Promise<string
     clientCapabilities: {},
   })
   const sessionId = sessionIdOf(await step(turn, 'session/new', { cwd, mcpServers: [] }))
-  await step(turn, 'session/prompt', { sessionId, prompt: [{ type: 'text', text: message }] })
+  const result = await step(turn, 'session/prompt', {
+    sessionId,
+    prompt: [{ type: 'text', text: message }],
+  })
+  const stopReason = stopReasonOf(result)
   const texts = updates.map((params) => agentTextChunk(params, sessionId))
-  return texts.filter((text): text is string => text !== undefined).join('')
+  const reply = texts.filter((text): text is string => text !== undefined).join('')
+  if (stopReason !== 'end_turn') throw new AcpTurnStoppedError(turn.command, stopReason, reply)
+  return reply
 }
 
 /** Wrap a coding agent as a `CustomTool`. Fails fast if `onPermissionRequest` is missing. */

@@ -32,6 +32,8 @@ if (banner !== undefined) process.stdout.write(`${banner}\n`)
 // `--split-writes` writes every message in two writes split inside its first multibyte character,
 // so the reader receives the two halves of that character in separate chunks.
 const splitWrites = process.argv.includes('--split-writes')
+// `--stop-reason=<value>` ends every prompt turn with that `stopReason` instead of `end_turn`.
+const stopReason = flag('stop-reason') ?? 'end_turn'
 // `--ignore-sigterm` keeps running on SIGTERM, an agent that does not cooperate with its stop.
 if (process.argv.includes('--ignore-sigterm')) process.on('SIGTERM', () => undefined)
 
@@ -93,7 +95,7 @@ function prompt(id, params) {
       },
     },
   })
-  return send({ id, result: { stopReason: 'end_turn' } })
+  return send({ id, result: { stopReason } })
 }
 
 /** The methods this agent answers; anything else is `method not found`. */
