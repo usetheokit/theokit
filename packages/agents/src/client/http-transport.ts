@@ -3,6 +3,7 @@ import type {
   WireChunk as UIMessageChunk,
 } from '@theokit/presenter/wire'
 
+import { AGENT_ACTION_HEADERS, agentRequestHeaders } from '../wire/agent-request-headers.js'
 import { responseToChunkStream } from '../wire/consume-ui-message-stream.js'
 
 import type { AgentTransport, ApprovalDecision } from './transport.js'
@@ -134,13 +135,7 @@ export class HttpTransport implements AgentTransport {
     const extra = typeof body === 'object' ? body : undefined
     const response = await this.#fetch(this.#api, {
       method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        accept: 'text/event-stream',
-        'X-Theo-Action': '1',
-        ...this.#resolveHeaders(),
-        ...toRecord(headers),
-      },
+      headers: agentRequestHeaders(AGENT_ACTION_HEADERS, this.#resolveHeaders(), toRecord(headers)),
       // Send the stable `chatId` as the top-level `id` — the server reads it as the sessionId, so ONE
       // conversation (SDK history + session-scoped tools like `todolist`) persists across turns instead of
       // resetting on a fresh random session each request. Placed last so a session is never shadowed by an
@@ -164,7 +159,7 @@ export class HttpTransport implements AgentTransport {
     if (runId === undefined) return null
     const response = await this.#fetch(`${this.#api}/runs/${runId}/stream`, {
       method: 'GET',
-      headers: { ...this.#resolveHeaders(), ...toRecord(options.headers) },
+      headers: agentRequestHeaders(this.#resolveHeaders(), toRecord(options.headers)),
     })
     if (response.status === 404) return null
     if (!response.ok) {
@@ -178,11 +173,10 @@ export class HttpTransport implements AgentTransport {
   async approve(approvalId: string, decision: ApprovalDecision): Promise<void> {
     const response = await this.#fetch(`${this.#api}/approve/${approvalId}`, {
       method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'X-Theo-Action': '1',
-        ...this.#resolveHeaders(),
-      },
+      headers: agentRequestHeaders(
+        { 'content-type': 'application/json', 'X-Theo-Action': '1' },
+        this.#resolveHeaders(),
+      ),
       body: JSON.stringify(decision),
     })
     if (!response.ok) {

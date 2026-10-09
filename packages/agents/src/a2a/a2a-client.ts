@@ -9,6 +9,7 @@
 import type { WireMessage } from '@theokit/presenter/wire'
 import type { CustomTool, ToolContext } from '@theokit/sdk'
 
+import { AGENT_ACTION_HEADERS, agentRequestHeaders } from '../wire/agent-request-headers.js'
 import {
   consumeUIMessageStream,
   type ChunkStreamOutcome,
@@ -38,20 +39,18 @@ export interface A2AToolConfig {
 }
 
 /**
- * Build the request headers in the HTTP transport's order: the stream and action defaults, then the
- * static headers, then auth. `Headers.set` is case-insensitive, so a static `X-Theo-Action` replaces
- * the default instead of reaching the route as `1, 0`.
+ * The request headers, merged the way `HttpTransport` merges them (`agent-request-headers.ts`): the
+ * stream and action defaults, then the static headers, then auth. A later header replaces an earlier
+ * one that differs only in letter case, so a static `x-theo-action` never reaches the route as `1, 0`.
  */
-function buildHeaders(config: A2AToolConfig): Headers {
-  const headers = new Headers({
-    'content-type': 'application/json',
-    accept: 'text/event-stream',
-    'x-theo-action': '1',
-  })
-  for (const [name, value] of Object.entries(config.headers ?? {})) headers.set(name, value)
-  if (config.auth?.bearer) headers.set('authorization', `Bearer ${config.auth.bearer}`)
-  if (config.auth?.apiKey) headers.set(config.auth.apiKey.header, config.auth.apiKey.value)
-  return headers
+function buildHeaders(config: A2AToolConfig): Record<string, string> {
+  const auth = config.auth
+  return agentRequestHeaders(
+    AGENT_ACTION_HEADERS,
+    config.headers,
+    auth?.bearer ? { authorization: `Bearer ${auth.bearer}` } : undefined,
+    auth?.apiKey ? { [auth.apiKey.header]: auth.apiKey.value } : undefined,
+  )
 }
 
 /** The assistant message's text parts, joined in order; `''` when the turn produced no text. */
