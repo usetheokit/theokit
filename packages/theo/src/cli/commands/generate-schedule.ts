@@ -12,18 +12,15 @@
  * `defineCron`'s own rule and the scanner's own discovery: a name the build would reject, skip, or
  * find already used by another cron file is refused as `invalid_name` before anything is written.
  */
-import { existsSync } from 'node:fs'
 import { basename, dirname, extname, relative, resolve, sep } from 'node:path'
 
 import { loadConfig } from '../../config/load-config.js'
 import { isDiscoverableCronFile, listCronFiles } from '../../server/cron/cron-scan.js'
 import { CRON_NAME_RULE, isValidCronName } from '../../server/cron/define-cron.js'
+import { findAgentFile } from '../../server/scan/agent-scan.js'
 
 import { pathTraversalRefusal } from './generate-containment.js'
 import type { GenerateResult } from './generate-types.js'
-
-/** The files a `chat` agent may live in, in lookup order. */
-const CHAT_AGENT_FILES = ['chat.ts', 'chat.tsx', 'chat.js'] as const
 
 /** Where the schedule goes and what it says, or the refusal that explains why it cannot be written. */
 export async function resolveScheduleTarget(
@@ -48,15 +45,14 @@ export async function resolveScheduleTarget(
   // something to create, and the refusal must name the escape, not the missing file.
   const escaped = pathTraversalRefusal(cwd, filePath)
   if (escaped !== undefined) return escaped
-  const chatPath = CHAT_AGENT_FILES.map((file) => resolve(agentsRoot, file)).find((path) =>
-    existsSync(path),
-  )
+  // The agent scanner's own rule, so the file found is the one the build serves as `chat`.
+  const chatPath = findAgentFile(agentsRoot, 'chat')
   if (chatPath === undefined) {
     return {
       status: 'agent_not_found',
       message:
-        `No "chat" agent in ${agentsRoot} (looked for ${CHAT_AGENT_FILES.join(', ')}). ` +
-        'A schedule runs the chat agent; create it first.',
+        `No "chat" agent in ${agentsRoot} (the build serves it from chat.{ts,tsx,js,jsx} or ` +
+        'chat/index.{ts,tsx,js,jsx}). A schedule runs the chat agent; create it first.',
     }
   }
   // The build scans both homes with one duplicate-name guard (build.ts, emitCronArtifacts).
@@ -110,12 +106,16 @@ function cronNameTaken(
   }
 }
 
-/** The ESM specifier the schedule at `fromFile` uses to import `toFile` (`../chat.js`). */
+/**
+ * The ESM specifier the schedule at `fromFile` uses to import `toFile` (`../chat.js`). A TypeScript
+ * source is imported by its `.js` name, as TypeScript and tsx resolve it; a `.js` or `.jsx` file
+ * keeps its own extension.
+ */
 function importSpecifier(fromFile: string, toFile: string): string {
   const path = relative(dirname(fromFile), toFile)
     .split(sep)
     .join('/')
-    .replace(/\.(ts|tsx|js)$/, '.js')
+    .replace(/\.tsx?$/, '.js')
   return path.startsWith('.') ? path : `./${path}`
 }
 

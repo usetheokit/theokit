@@ -101,29 +101,55 @@ export function scanAgents(projectRoot: string, configured?: string): AgentNode[
 
   const results: AgentNode[] = []
   walkSourceFiles(agentsDir, { extensions: AGENT_EXTENSIONS }, (absPath) => {
-    let rel = relative(agentsDir, absPath)
-    rel = rel.replace(/\\/g, '/')
-    rel = rel.slice(0, -extname(rel).length)
-    if (TEST_FILE.test(rel)) return
-    // Eve-style: a file living under a composition sub-folder (tools/, skills/, prompts/, …) is that
-    // concern, not a routed agent. Check the intermediate DIRECTORIES only — the agent file itself may
-    // be named anything.
-    const dirs = rel.split('/').slice(0, -1)
-    if (dirs.some((segment) => AGENT_SUBFOLDERS.has(segment))) return
-    // Unlike routes/ws, an agent needs an explicit name — a bare `agents/index.ts`
-    // (name `''` → `/api/agents/`) is nonsensical for a typed `useAgent(name)` binding.
-    // `agents/foo/index.ts` still collapses to `foo` (a named nested agent).
-    if (rel.endsWith('/index')) rel = rel.slice(0, -6)
-    if (rel === 'index' || rel === '') return
-    const agentPath = `/api/agents/${rel}`
+    const name = agentNameOf(agentsDir, absPath)
+    if (name === undefined) return
+    const agentPath = `/api/agents/${name}`
     assertAgentDeclaresPolicy(absPath, agentPath)
     results.push({
       filePath: absPath,
       agentPath,
-      name: rel,
+      name,
     })
   })
   return results
+}
+
+/**
+ * The name the agent at `absPath` is served under, or `undefined` when the file is not an agent:
+ * a test file, a file under a composition sub-folder, or a bare `index`. The one definition of
+ * "which file is agent `<name>`", shared by `scanAgents` and `findAgentFile`.
+ */
+function agentNameOf(agentsDir: string, absPath: string): string | undefined {
+  let rel = relative(agentsDir, absPath)
+  rel = rel.replace(/\\/g, '/')
+  rel = rel.slice(0, -extname(rel).length)
+  if (TEST_FILE.test(rel)) return undefined
+  // Eve-style: a file living under a composition sub-folder (tools/, skills/, prompts/, …) is that
+  // concern, not a routed agent. Check the intermediate DIRECTORIES only — the agent file itself may
+  // be named anything.
+  const dirs = rel.split('/').slice(0, -1)
+  if (dirs.some((segment) => AGENT_SUBFOLDERS.has(segment))) return undefined
+  // Unlike routes/ws, an agent needs an explicit name — a bare `agents/index.ts`
+  // (name `''` → `/api/agents/`) is nonsensical for a typed `useAgent(name)` binding.
+  // `agents/foo/index.ts` still collapses to `foo` (a named nested agent).
+  if (rel.endsWith('/index')) rel = rel.slice(0, -6)
+  if (rel === 'index' || rel === '') return undefined
+  return rel
+}
+
+/**
+ * The file `scanAgents` would serve as agent `name` under the absolute directory `agentsDir`, or
+ * `undefined` when there is none. Unlike `scanAgents` it does not refuse an agent that declares no
+ * policy: a caller asking where one agent lives (the schedule generator) is not mounting it, and
+ * the build still refuses the undeclared one when it scans.
+ */
+export function findAgentFile(agentsDir: string, name: string): string | undefined {
+  if (!existsSync(agentsDir) || !statSync(agentsDir).isDirectory()) return undefined
+  let found: string | undefined
+  walkSourceFiles(agentsDir, { extensions: AGENT_EXTENSIONS }, (absPath) => {
+    if (found === undefined && agentNameOf(agentsDir, absPath) === name) found = absPath
+  })
+  return found
 }
 
 /**
