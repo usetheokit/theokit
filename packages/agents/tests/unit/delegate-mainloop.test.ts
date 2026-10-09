@@ -34,8 +34,12 @@ vi.mock('../../src/bridge/sdk-adapter.js', () => ({
     },
 }))
 
-const { delegate, DelegationBudgetCostUnknownError, DelegationBudgetExceededError } =
-  await import('../../src/bridge/agent-orchestrator.js')
+const {
+  delegate,
+  DelegationBudgetCostUnknownError,
+  DelegationBudgetExceededError,
+  DelegationError,
+} = await import('../../src/bridge/agent-orchestrator.js')
 const { createDelegateTool } = await import('../../src/tools/delegate-tool.js')
 const { applyCapabilities } = await import('../../src/capability/capability.js')
 const { ModelCapability } = await import('../../src/capability/capabilities.js')
@@ -147,4 +151,47 @@ describe('the delegate tool over a budgeted delegate() (B-409)', () => {
     expect(payload).toMatchObject({ ok: false, error: 'delegation_budget_exceeded' })
     expect(payload.message).toContain('is not known')
   })
+})
+
+/**
+ * Code review #67 / #81: `delegate()` clamped `budget` and `parentBudgetRemaining` with `Math.min`
+ * and validated neither, so `NaN` (from `Number(process.env.X)`, or a parent spend nobody priced)
+ * disabled both ceilings and `0` or a negative value was charged one round. Both are refused on
+ * the terms `AgentRunner` applies, before any round, naming the field.
+ */
+describe('delegate() refuses a ceiling it cannot enforce', () => {
+  const unenforceable = [0, -1, Number.NaN, Number.POSITIVE_INFINITY]
+
+  async function refusalOf(opts: { budget?: number; parentBudgetRemaining?: number }) {
+    script([[{ type: 'done', cost: 0.01 }]])
+    try {
+      await delegate(reflectAgent, 'task', { apiKey: 'test', ...opts })
+    } catch (err) {
+      return err
+    }
+    return undefined
+  }
+
+  it.each(unenforceable)('test_a_delegate_budget_of_%s_is_refused_before_any_round', async (v) => {
+    const threw = await refusalOf({ budget: v })
+
+    expect(h.calls).toBe(0)
+    expect(threw).toBeInstanceOf(DelegationError)
+    expect((threw as InstanceType<typeof DelegationError>).cause).toMatchObject({
+      message: `budget must be a finite number > 0, got ${String(v)}`,
+    })
+  })
+
+  it.each(unenforceable)(
+    'test_a_parent_budget_remaining_of_%s_is_refused_before_any_round',
+    async (v) => {
+      const threw = await refusalOf({ budget: 1, parentBudgetRemaining: v })
+
+      expect(h.calls).toBe(0)
+      expect(threw).toBeInstanceOf(DelegationError)
+      expect((threw as InstanceType<typeof DelegationError>).cause).toMatchObject({
+        message: `parentBudgetRemaining must be a finite number > 0, got ${String(v)}`,
+      })
+    },
+  )
 })

@@ -25,6 +25,7 @@ import {
   type ReflectionStrategy,
   resolveLoopStrategy,
 } from '../loop/index.js'
+import { resolveRunBudget } from '../loop/run-budget.js'
 import { type RoundStreamFactory, runReflectiveLoop } from '../loop/run-reflective-loop.js'
 import type { MainLoopMeta } from '../types.js'
 
@@ -56,9 +57,9 @@ export interface DelegateOptions {
    * unlike the budget errors — is marked retryable, because a hang is often transient.
    */
   readonly timeoutMs?: number
-  /** Max USD for this sub-agent call. */
+  /** Max USD for this sub-agent call: a finite number > 0, else `DelegationError`. */
   budget?: number
-  /** Parent's remaining budget (for clamping). */
+  /** Parent's remaining budget (for clamping), refused on the same terms as `budget`. */
   parentBudgetRemaining?: number
   /** Parent's tools (for sharing — sub-agent inherits these). */
   parentTools?: CompiledTool[]
@@ -230,6 +231,12 @@ export async function delegate(
   opts: DelegateOptions = {},
 ): Promise<DelegationResult> {
   const apiKey = requireApiKey(opts, spec.name)
+  // Both ceilings are checked on the terms `AgentRunner` applies (B-409, review #67), before any
+  // hook or round: `Math.min` with `NaN` is `NaN`, which every later budget check reads as unset.
+  const budget = Math.min(
+    resolveRunBudget(opts.budget, spec.name) ?? Infinity,
+    resolveRunBudget(opts.parentBudgetRemaining, spec.name, 'parentBudgetRemaining') ?? Infinity,
+  )
 
   // M12 — onDelegationStart: let the supervisor rewrite the input before the sub-agent runs.
   const rewritten = opts.onDelegationStart
@@ -257,7 +264,6 @@ export async function delegate(
   // always inherited — is what makes "the member runs under the parent's authority" true rather
   // than merely intended.
   const allTools = mergeTools(opts.parentTools ?? [], compiled.tools)
-  const budget = Math.min(opts.budget ?? Infinity, opts.parentBudgetRemaining ?? Infinity)
   // The parent's gate travels as a code plugin, because that is the seam the SDK dispatches hooks
   // through (`compileHooksAndPlugins` in define-agent.ts says so, and `kind: 'general'` is
   // load-bearing there). The member's OWN hooks are already inside its own plugin by the time

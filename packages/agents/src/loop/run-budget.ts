@@ -82,9 +82,11 @@ export function throwIfNextRoundRefused(
 export function resolveRunBudget(
   budget: number | BudgetOptions | null | undefined,
   agentName: string,
+  /** The option the error names: `delegate()` checks `parentBudgetRemaining` here too. */
+  name = 'budget',
 ): number | undefined {
   if (budget == null) return undefined
-  let field = 'budget'
+  let field = name
   let ceiling: unknown = budget
   if (typeof budget !== 'number') {
     if (budget.window !== undefined) {
