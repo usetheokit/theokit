@@ -18,17 +18,22 @@ const REPO = resolve(__dirname, '../..')
 const SCAFFOLD_CONFIG = resolve(REPO, 'packages/create-theokit/templates/default/theo.config.ts')
 
 /**
- * A project at `<tmp>/app` whose `agentsDir` points outside it, with a real `chat` agent waiting
- * there so the agent lookup succeeds and the containment check is what decides.
+ * A project at `<tmp>/app` whose `agentsDir` points outside it. By default a real `chat` agent waits
+ * there so the agent lookup succeeds and the containment check is what decides; `withChatAgent:
+ * false` leaves the directory empty, so the containment check must decide before the lookup does.
  */
-function projectWithExternalAgentsDir(tmp: string, agentsDir: string): string {
+function projectWithExternalAgentsDir(
+  tmp: string,
+  agentsDir: string,
+  { withChatAgent = true }: { withChatAgent?: boolean } = {},
+): string {
   const app = join(tmp, 'app')
   mkdirSync(app, { recursive: true })
   writeFileSync(join(app, 'theo.config.ts'), `export default { agentsDir: '${agentsDir}' }\n`)
   writeFileSync(join(app, 'package.json'), '{}')
   const external = join(app, agentsDir)
   mkdirSync(external, { recursive: true })
-  writeFileSync(join(external, 'chat.ts'), 'export default {}\n')
+  if (withChatAgent) writeFileSync(join(external, 'chat.ts'), 'export default {}\n')
   return app
 }
 
@@ -61,6 +66,29 @@ describe('a schedule is written only where it can run', () => {
 
       await expect(run).rejects.toThrow(/^Path traversal denied: ".*" is outside the project root /)
       expect(existsSync(join(tmp, 'outside/schedules/escaped.ts'))).toBe(false)
+    } finally {
+      cwd.mockRestore()
+      rmSync(tmp, { recursive: true, force: true })
+    }
+  })
+
+  it('test_an_agents_dir_outside_the_project_without_a_chat_agent_is_refused_as_traversal', async () => {
+    // Review finding 86: the chat agent was looked up before the containment check, so an
+    // agentsDir outside the project with no chat agent was reported as a missing agent, and the
+    // user was told to create a file outside their project.
+    const tmp = mkdtempSync(join(tmpdir(), 'theo-gen-schedule-outside-no-chat-'))
+    const cwd = vi.spyOn(process, 'cwd')
+    try {
+      const app = projectWithExternalAgentsDir(tmp, '../elsewhere/agents', { withChatAgent: false })
+      cwd.mockReturnValue(app)
+
+      const result = await generate({ cwd: app, type: 'schedule', name: 'daily-digest' })
+      const run = generateCommand('schedule', 'daily-digest')
+
+      expect(result.status).toBe('invalid_name')
+      expect(result.message).toMatch(/^Path traversal denied: ".*" is outside the project root /)
+      await expect(run).rejects.toThrow(/^Path traversal denied: ".*" is outside the project root /)
+      expect(existsSync(join(tmp, 'elsewhere/agents/schedules'))).toBe(false)
     } finally {
       cwd.mockRestore()
       rmSync(tmp, { recursive: true, force: true })

@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
-import { resolve, dirname, isAbsolute, relative, sep } from 'node:path'
+import { resolve, dirname } from 'node:path'
 
+import { pathTraversalRefusal } from './generate-containment.js'
 import {
   UNDECIDED_POLICY_IDENT,
   undecidedPolicyDeclaration,
@@ -42,21 +43,6 @@ const RESERVED_BASENAMES = new Set([
 function hasReservedSegment(name: string): boolean {
   const basename = name.includes('/') ? (name.split('/').pop() ?? name) : name
   return RESERVED_BASENAMES.has(basename)
-}
-
-/**
- * EC-4: validate that resolving `targetSubpath` under `cwd` stays inside `cwd`.
- * Returns `true` when path is safe (stays inside), `false` when it escapes via
- * `..`, absolute path, null byte, or similar traversal vector.
- */
-/**
- * Whether `filePath` lies strictly inside `cwd`. Decided by `path.relative`, never by a string
- * prefix: `/tmp/x/app-outside/...` starts with `/tmp/x/app` and is still outside it.
- */
-function isPathInside(cwd: string, filePath: string): boolean {
-  if (filePath.includes('\x00')) return false
-  const fromRoot = relative(resolve(cwd), filePath)
-  return fromRoot !== '' && !isAbsolute(fromRoot) && fromRoot.split(sep)[0] !== '..'
 }
 
 function toPascalCase(name: string): string {
@@ -413,12 +399,8 @@ function writeTarget(
 ): GenerateResult {
   // EC-4: confirm the resolved filePath stays inside cwd. `toKebabCase` rejects most traversal
   // vectors in the name, but a directory read from config (`agentsDir`) can still point outside.
-  if (!isPathInside(cwd, filePath)) {
-    return {
-      status: 'invalid_name',
-      message: `Path traversal denied: "${filePath}" is outside the project root ${resolve(cwd)}.`,
-    }
-  }
+  const escaped = pathTraversalRefusal(cwd, filePath)
+  if (escaped !== undefined) return escaped
 
   if (existsSync(filePath)) {
     return { status: 'already_exists', filePath, kind: type, name }

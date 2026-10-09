@@ -19,6 +19,7 @@ import { loadConfig } from '../../config/load-config.js'
 import { isDiscoverableCronFile, listCronFiles } from '../../server/cron/cron-scan.js'
 import { CRON_NAME_RULE, isValidCronName } from '../../server/cron/define-cron.js'
 
+import { pathTraversalRefusal } from './generate-containment.js'
 import type { GenerateResult } from './generate-types.js'
 
 /** The files a `chat` agent may live in, in lookup order. */
@@ -42,6 +43,11 @@ export async function resolveScheduleTarget(
   }
   const { agentsDir, serverDir } = config
   const agentsRoot = resolve(cwd, agentsDir)
+  const filePath = resolve(agentsRoot, 'schedules', `${name}.ts`)
+  // Before the agent lookup: a chat agent missing from a directory outside the project is not
+  // something to create, and the refusal must name the escape, not the missing file.
+  const escaped = pathTraversalRefusal(cwd, filePath)
+  if (escaped !== undefined) return escaped
   const chatPath = CHAT_AGENT_FILES.map((file) => resolve(agentsRoot, file)).find((path) =>
     existsSync(path),
   )
@@ -53,7 +59,6 @@ export async function resolveScheduleTarget(
         'A schedule runs the chat agent; create it first.',
     }
   }
-  const filePath = resolve(agentsRoot, 'schedules', `${name}.ts`)
   // The build scans both homes with one duplicate-name guard (build.ts, emitCronArtifacts).
   const cronDirs = [resolve(cwd, serverDir, 'crons'), resolve(agentsRoot, 'schedules')]
   const taken = cronNameTaken(name, filePath, cronDirs)
