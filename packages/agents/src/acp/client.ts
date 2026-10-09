@@ -7,7 +7,7 @@
  * requests (e.g. `session/request_permission`) to a registered handler, replying with its decision,
  * and delivers notifications (a `method` with no `id`, e.g. `session/update`) to their handler.
  */
-import { AcpMessageDecoder, encodeAcpMessage } from './protocol.js'
+import { encodeAcpMessage } from './protocol.js'
 
 /** The stdio channel to the coding-agent subprocess (abstracted for testability + G8). */
 export interface AcpTransport {
@@ -15,6 +15,21 @@ export interface AcpTransport {
   send(line: string): void
   /** Subscribe to raw lines/chunks from the agent's stdout. */
   subscribe(onData: (chunk: string) => void): void
+}
+
+/**
+ * The agent wrote a stdout line that does not decode to a JSON-RPC message: it is not JSON, or it
+ * is JSON but not an object (`null`, a number, a string, an array). `line` is the line, trimmed.
+ */
+export class AcpProtocolError extends Error {
+  override readonly name = 'AcpProtocolError'
+
+  constructor(
+    readonly line: string,
+    options?: { cause?: unknown },
+  ) {
+    super(`[@theokit/agents] ACP decode failed on line: ${line}`, options)
+  }
 }
 
 interface JsonRpcResponse {
@@ -34,8 +49,8 @@ interface Pending {
 }
 /** Return a value or a Promise — `unknown` already includes `Promise<unknown>`; `await` handles both. */
 type ServerRequestHandler = (params: unknown) => unknown
-/** Called synchronously with a notification's `params`; nothing is sent back. */
-type NotificationHandler = (params: unknown) => void
+/** Called with a notification's `params`; nothing is sent back. A returned promise is watched. */
+type NotificationHandler = (params: unknown) => void | Promise<void>
 
 function isResponse(m: Record<string, unknown>): m is JsonRpcResponse & Record<string, unknown> {
   return typeof m.id === 'number' && ('result' in m || 'error' in m) && !('method' in m)
@@ -56,23 +71,17 @@ export class AcpClient {
   private readonly pending = new Map<number, Pending>()
   private readonly handlers = new Map<string, ServerRequestHandler>()
   private readonly notificationHandlers = new Map<string, NotificationHandler>()
-  private readonly decoder = new AcpMessageDecoder()
+  private buffer = ''
 
   constructor(private readonly transport: AcpTransport) {
     // The agent's stdout is untrusted, and the Node transport calls this from a `data` listener,
-    // where a throw ends the host. A line that is not JSON fails the requests in flight instead.
-    // `dispatch` does not throw (a notification handler is isolated there), so what lands in the
-    // catch is the decode.
+    // where a throw ends the host. Each line is handled on its own: a bad one fails the requests in
+    // flight when it arrives, and the well-formed lines around it are still dispatched. `buffer`
+    // carries a partial trailing line to the next chunk.
     transport.subscribe((chunk) => {
-      try {
-        for (const message of this.decoder.push(chunk)) {
-          this.dispatch(message as Record<string, unknown>)
-        }
-      } catch (err) {
-        if (!this.pending.size) console.warn(err)
-        for (const entry of this.pending.values()) entry.reject(err as Error)
-        this.pending.clear()
-      }
+      const lines = (this.buffer + chunk).split('\n')
+      this.buffer = lines.pop() ?? ''
+      for (const line of lines) this.receive(line.trim())
     })
   }
 
@@ -90,9 +99,31 @@ export class AcpClient {
     this.handlers.set(method, handler)
   }
 
-  /** Register a notification handler; one that throws is reported. */
+  /** Register a notification handler; one that throws or rejects is reported. */
   onNotification(method: string, handler: NotificationHandler): void {
     this.notificationHandlers.set(method, handler)
+  }
+
+  private receive(line: string): void {
+    if (!line) return
+    let message: unknown, cause: unknown
+    try {
+      message = JSON.parse(line)
+    } catch (err) {
+      cause = err
+    }
+    if (message instanceof Object && !Array.isArray(message)) {
+      this.dispatch(message as Record<string, unknown>)
+    } else {
+      // Not JSON, or JSON that is not an object: both fail the requests in flight, or are reported.
+      this.fail(new AcpProtocolError(line, { cause }))
+    }
+  }
+
+  private fail(err: Error): void {
+    if (!this.pending.size) console.warn(err)
+    for (const entry of this.pending.values()) entry.reject(err)
+    this.pending.clear()
   }
 
   private dispatch(message: Record<string, unknown>): void {
@@ -108,38 +139,33 @@ export class AcpClient {
       void this.handleServerRequest(message)
       return
     }
-    if (isNotification(message)) {
-      try {
-        this.notificationHandlers.get(message.method)?.(message.params)
-      } catch (err) {
-        console.warn('[@theokit/agents] ACP notification handler threw', err)
-      }
+    if (isNotification(message)) void this.notify(message)
+  }
+
+  private async notify(m: { method: string; params?: unknown }): Promise<void> {
+    // Async so a handler that throws and one whose promise rejects are both caught here; the
+    // handler is still called synchronously, before the next line of the chunk is dispatched.
+    try {
+      await this.notificationHandlers.get(m.method)?.(m.params)
+    } catch (err) {
+      console.warn('[@theokit/agents] ACP notification handler threw', err)
     }
   }
 
   private async handleServerRequest(req: JsonRpcServerRequest): Promise<void> {
     const handler = this.handlers.get(req.method)
-    if (!handler) {
-      this.transport.send(
-        encodeAcpMessage({
-          jsonrpc: '2.0',
-          id: req.id,
-          error: { code: -32601, message: `No handler: ${req.method}` },
-        }),
-      )
-      return
+    let reply: { result: unknown } | { error: { code: number; message: string } } = {
+      error: { code: -32601, message: `No handler: ${req.method}` },
     }
-    try {
-      const result = await handler(req.params)
-      this.transport.send(encodeAcpMessage({ jsonrpc: '2.0', id: req.id, result }))
-    } catch (err) {
-      this.transport.send(
-        encodeAcpMessage({
-          jsonrpc: '2.0',
-          id: req.id,
+    if (handler) {
+      try {
+        reply = { result: await handler(req.params) }
+      } catch (err) {
+        reply = {
           error: { code: -32603, message: err instanceof Error ? err.message : 'handler failed' },
-        }),
-      )
+        }
+      }
     }
+    this.transport.send(encodeAcpMessage({ jsonrpc: '2.0', id: req.id, ...reply }))
   }
 }
