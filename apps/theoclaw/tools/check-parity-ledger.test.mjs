@@ -72,6 +72,12 @@ describe('check-parity-ledger: the id set', () => {
     expect(rulesOf(result, 'H-1')).toContain('duplicate')
   })
 
+  it('counts each row once when the ledger answers it twice', () => {
+    const ids = [...ALL_IDS.filter((id) => id !== 'H-2'), 'H-1']
+    const result = run(ids.map(validOut))
+    expect(result.counts).toEqual({ shipped: 0, out: 112, open: 0 })
+  })
+
   it('fails instead of passing when a source parses to fewer rows than its floor', () => {
     const result = run(ALL_IDS.map(validOut), { inventoryText: inventoryText(98) })
     expect(result.violations.length).toBeGreaterThan(0)

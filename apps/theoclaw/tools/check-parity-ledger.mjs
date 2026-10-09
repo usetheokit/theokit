@@ -258,10 +258,16 @@ function judgeCoverage(entries, inventory, hermes) {
   ]
 }
 
-/** How many entries carry each known status; an unknown status is counted nowhere. */
+/**
+ * How many distinct rows carry each known status, counting a duplicated id once by its first entry
+ * (the duplicate is already a violation); an unknown status is counted nowhere.
+ */
 function countStatuses(entries) {
   const counts = { shipped: 0, out: 0, open: 0 }
+  const seen = new Set()
   for (const entry of entries) {
+    if (seen.has(entry.id)) continue
+    seen.add(entry.id)
     if (Object.hasOwn(counts, entry.status)) counts[entry.status] += 1
   }
   return counts
