@@ -78,7 +78,13 @@ type ServerRequestHandler = (params: unknown) => unknown
 type NotificationHandler = (params: unknown) => void | Promise<void>
 
 function isResponse(m: Record<string, unknown>): m is JsonRpcResponse & Record<string, unknown> {
-  return typeof m.id === 'number' && ('result' in m || 'error' in m) && !('method' in m)
+  // An `error` member must be a JSON-RPC error object; any other one answers nothing (#92).
+  const e = m.error as { code?: unknown; message?: unknown } | null | undefined
+  return (
+    typeof m.id === 'number' &&
+    !('method' in m) &&
+    ('error' in m ? typeof e?.code === 'number' && typeof e.message === 'string' : 'result' in m)
+  )
 }
 function isServerRequest(
   m: Record<string, unknown>,
@@ -170,7 +176,8 @@ export class AcpClient {
       return
     }
     if (isServerRequest(message)) {
-      void this.handleServerRequest(message)
+      // A reply that cannot be sent at all is reported, not left an unhandled rejection (#91).
+      this.handleServerRequest(message).catch(console.warn)
       return
     }
     if (isNotification(message)) void this.notify(message)
@@ -190,18 +197,17 @@ export class AcpClient {
 
   private async handleServerRequest(req: JsonRpcServerRequest): Promise<void> {
     const handler = this.handlers.get(req.method)
-    let reply: { result: unknown } | { error: { code: number; message: string } } = {
-      error: { code: -32601, message: `No handler: ${req.method}` },
+    const reply = (body: object) => encodeAcpMessage({ jsonrpc: '2.0', id: req.id, ...body })
+    let line = reply({ error: { code: -32601, message: `No handler: ${req.method}` } })
+    try {
+      if (handler) line = reply({ result: await handler(req.params) })
+    } catch (err) {
+      // The handler threw, or its result cannot be encoded: the agent still gets an answer.
+      line = reply({
+        error: { code: -32603, message: err instanceof Error ? err.message : 'handler failed' },
+      })
     }
-    if (handler) {
-      try {
-        reply = { result: await handler(req.params) }
-      } catch (err) {
-        reply = {
-          error: { code: -32603, message: err instanceof Error ? err.message : 'handler failed' },
-        }
-      }
-    }
-    this.transport.send(encodeAcpMessage({ jsonrpc: '2.0', id: req.id, ...reply }))
+    // A send that throws rejects this promise, which dispatch() reports (#91).
+    this.transport.send(line)
   }
 }
