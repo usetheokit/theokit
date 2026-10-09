@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeEach, describe, it, expect, vi } from 'vitest'
 import {
   copyFileSync,
+  cpSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -8,7 +9,8 @@ import {
   symlinkSync,
   writeFileSync,
 } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { createRequire } from 'node:module'
+import { dirname, join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { generate } from '../../packages/theo/src/cli/commands/generate.js'
 import { importUserModule } from '../../packages/theo/src/config/import-user-module.js'
@@ -25,11 +27,23 @@ import type { CronDefinition } from '../../packages/theo/src/server/cron/cron-ty
  * real built `streamAgentTurnInProcess`: it records each run and swaps in a scripted model stream,
  * while the real gate check and the real `auto-reject` resolver still run.
  *
+ * The `chat` agent is the scaffold's own `src/server/agents` directory, copied from the template:
+ * an `AgentBuilder` definition whose `.approval('send_notification')` gate reaches the run through
+ * `compileAgentDefinition`, the path a scaffolded app takes. Its `zod` and `@theokit/sdk` imports
+ * resolve to the copies `@theokit/agents` itself uses.
+ *
  * Reads `packages/theo/dist` and `packages/agents/dist`: build both first.
  */
 const REPO = resolve(__dirname, '../..')
-const SCAFFOLD_CONFIG = resolve(REPO, 'packages/create-theokit/templates/default/theo.config.ts')
+const TEMPLATE = resolve(REPO, 'packages/create-theokit/templates/default')
+const SCAFFOLD_CONFIG = resolve(TEMPLATE, 'theo.config.ts')
+const SCAFFOLD_AGENTS = resolve(TEMPLATE, 'src/server/agents')
 const RECORDING_AGENTS = resolve(REPO, 'tests/fixtures/schedule-recording-agents')
+const agentsRequire = createRequire(resolve(REPO, 'packages/agents/package.json'))
+/** The package directory `@theokit/agents` resolves `name` to. */
+function agentsDependency(name: string): string {
+  return dirname(agentsRequire.resolve(`${name}/package.json`))
+}
 
 interface Approval {
   readonly approved: boolean
@@ -81,19 +95,9 @@ function scheduleProject(): string {
   mkdirSync(join(dir, 'node_modules/@theokit'), { recursive: true })
   symlinkSync(resolve(REPO, 'packages/theo'), join(dir, 'node_modules/theokit'), 'dir')
   symlinkSync(RECORDING_AGENTS, join(dir, 'node_modules/@theokit/agents'), 'dir')
-  mkdirSync(join(dir, 'src/server/agents'), { recursive: true })
-  writeFileSync(
-    join(dir, 'src/server/agents/chat.ts'),
-    [
-      'export default {',
-      "  model: 'openrouter/openai/gpt-4o-mini',",
-      '  tools: [],',
-      '  agents: {},',
-      "  hitl: new Map([['send_notification', { question: 'Send?' }]]),",
-      '}',
-      '',
-    ].join('\n'),
-  )
+  symlinkSync(agentsDependency('zod'), join(dir, 'node_modules/zod'), 'dir')
+  symlinkSync(agentsDependency('@theokit/sdk'), join(dir, 'node_modules/@theokit/sdk'), 'dir')
+  cpSync(SCAFFOLD_AGENTS, join(dir, 'src/server/agents'), { recursive: true })
   return dir
 }
 
@@ -132,12 +136,15 @@ describe('a generated schedule runs the agent at its time', () => {
   let dir: string
   let logLines: string[]
   const savedKey = process.env.OPENROUTER_API_KEY
+  // The scaffold's chat.ts reads LLM_MODEL; unset, it declares an openrouter model.
+  const savedModel = process.env.LLM_MODEL
 
   beforeEach(() => {
     dir = scheduleProject()
     logLines = []
     globalThis.__scheduleProbe = { runs: [], toolRuns: 0, chunksConsumed: 0, stream: askThenAnswer }
     process.env.OPENROUTER_API_KEY = 'test-key'
+    delete process.env.LLM_MODEL
     vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
       logLines.push(args.map(String).join(' '))
     })
@@ -153,6 +160,7 @@ describe('a generated schedule runs the agent at its time', () => {
     globalThis.__scheduleProbe = undefined
     if (savedKey === undefined) delete process.env.OPENROUTER_API_KEY
     else process.env.OPENROUTER_API_KEY = savedKey
+    if (savedModel !== undefined) process.env.LLM_MODEL = savedModel
     rmSync(dir, { recursive: true, force: true })
   })
 
@@ -283,6 +291,7 @@ describe('a generated schedule runs the agent at its time', () => {
       expect(handlerErrors()[1]).toContain('rate limited')
       expect(traced()).toHaveLength(3)
       expect(traced()[2]).toContain('fire failed:')
+      expect(traced()[2]).toContain('rate limited')
 
       // Day 4: the provider key is missing, so the run never reaches the stream.
       probe.stream = askThenAnswer
