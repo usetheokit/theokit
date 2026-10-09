@@ -188,8 +188,14 @@ describe('a generated schedule runs the agent at its time', () => {
       scheduler.stop()
     }
     expect(probe.runs[0]!.input.signal?.aborted).toBe(true)
+  })
 
-    // The handler settles only after the agent run ends: hold the stream open after one chunk.
+  it('test_the_handler_settles_only_after_the_agent_run_ends', async () => {
+    const def = await sharedSchedule()
+    const probe = globalThis.__scheduleProbe!
+    vi.useFakeTimers()
+
+    // Hold the stream open after one chunk.
     let release!: () => void
     const held = new Promise<void>((r) => {
       release = r
