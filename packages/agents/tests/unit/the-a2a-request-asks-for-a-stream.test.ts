@@ -4,7 +4,7 @@
  * The HTTP transport sends `accept: text/event-stream` and `X-Theo-Action: 1` before any caller
  * header (`http-transport.ts`). The A2A tool reads the same wire, so it asks for it the same way: a
  * `mountAgent` route under its default strict CSRF mode refuses a POST whose `X-Theo-Action` is not
- * `1`. The auth header is set after the static headers, so a configured bearer wins.
+ * `1`. The auth header is set after the static headers, so a configured bearer or API key wins.
  */
 import { describe, expect, it, vi } from 'vitest'
 
@@ -22,22 +22,44 @@ function capturingFetch(onHeaders: (headers: Headers) => void) {
   })
 }
 
-describe('the A2A request asks for a stream', () => {
-  it('test_the_request_asks_for_a_stream_and_carries_the_action_header', async () => {
-    let seen = new Headers()
-    const tool = createA2ATool({
-      url: 'https://remote.example/api/agents/remote/chat',
-      name: 'ask_remote',
-      description: 'Ask the remote agent',
-      fetchImpl: capturingFetch((h) => {
-        seen = h
-      }),
-    })
+/** Call a tool built with `extra` once and return the headers its request carried. */
+async function headersOfOneCall(
+  extra: Pick<Parameters<typeof createA2ATool>[0], 'headers' | 'auth'>,
+): Promise<Headers> {
+  let seen = new Headers()
+  const tool = createA2ATool({
+    url: 'https://remote.example/api/agents/remote/chat',
+    name: 'ask_remote',
+    description: 'Ask the remote agent',
+    ...extra,
+    fetchImpl: capturingFetch((h) => {
+      seen = h
+    }),
+  })
+  await tool.handler({ message: 'hi' })
+  return seen
+}
 
-    await tool.handler({ message: 'hi' })
+describe('the A2A request asks for a stream', () => {
+  it('test_the_request_asks_for_an_event_stream', async () => {
+    const seen = await headersOfOneCall({})
 
     expect(seen.get('accept')).toBe('text/event-stream')
+  })
+
+  it('test_the_request_carries_the_action_header', async () => {
+    const seen = await headersOfOneCall({})
+
     expect(seen.get('x-theo-action')).toBe('1')
+  })
+
+  it('test_the_api_key_header_follows_the_static_headers', async () => {
+    const seen = await headersOfOneCall({
+      headers: { 'X-Api-Key': 'old' },
+      auth: { apiKey: { header: 'x-api-key', value: 'new' } },
+    })
+
+    expect(seen.get('x-api-key')).toBe('new')
   })
 
   it('test_the_bearer_header_follows_the_static_headers', async () => {

@@ -2,8 +2,9 @@
  * M15 (theokit-ai-first) — A2A client: call a remote A2A agent as a tool.
  *
  * `createA2ATool({ url, name, description })` returns a `CustomTool` whose handler POSTs the input
- * to a remote agent's HTTP endpoint and returns its text response — so a supervisor can delegate to
- * an agent on another system. Uses `fetch` (Web Standards, G8); the URL is a remote AGENT, not an
+ * to a remote agent's HTTP endpoint, which answers with a UIMessage event stream, and returns the
+ * text of the streamed assistant message — so a supervisor can delegate to an agent on another
+ * system. Uses `fetch` (Web Standards, G8); the URL is a remote AGENT, not an
  * LLM provider (G2 unaffected). `fetch` is injectable for tests.
  *
  * TDD RED-first.
@@ -26,7 +27,7 @@ function sseFetch(text: string, capture?: (url: string, init: RequestInit) => vo
 }
 
 describe('createA2ATool', () => {
-  it('returns a CustomTool with the given name/description and a message input', () => {
+  it('test_the_tool_carries_its_name_description_and_a_message_input', () => {
     const tool = createA2ATool({
       url: 'https://x/agents/a',
       name: 'ask_remote',
@@ -37,7 +38,7 @@ describe('createA2ATool', () => {
     expect(tool.inputSchema).toMatchObject({ type: 'object' })
   })
 
-  it('POSTs the message to the remote agent and returns its response text', async () => {
+  it('test_a_call_returns_the_remote_reply_to_the_posted_message', async () => {
     let seenUrl = ''
     let seenBody: unknown
     const fetchImpl = sseFetch('remote says hi', (url, init) => {
@@ -58,7 +59,7 @@ describe('createA2ATool', () => {
     expect(out).toBe('remote says hi')
   })
 
-  it('sends a Bearer token when auth is configured', async () => {
+  it('test_a_configured_bearer_token_is_sent', async () => {
     let authHeader: string | null = null
     const fetchImpl = sseFetch('ok', (_url, init) => {
       authHeader = new Headers(init.headers).get('authorization')
@@ -75,7 +76,7 @@ describe('createA2ATool', () => {
     expect(authHeader).toBe('Bearer secret-token')
   })
 
-  it('throws a typed error when the remote returns a non-2xx status', async () => {
+  it('test_a_non_2xx_answer_rejects_naming_the_tool_and_the_status', async () => {
     const fetchImpl = vi.fn(async () => new Response('nope', { status: 502 }))
     const tool = createA2ATool({
       url: 'https://x/agents/a',
@@ -121,10 +122,37 @@ describe('createA2ATool', () => {
   })
 
   it('test_two_concurrent_calls_each_return_their_own_reply', async () => {
-    const replies: Record<string, string> = { a: 'alpha', b: 'beta' }
+    // The first call's stream stays open, its text already read, until the second call has
+    // finished. A snapshot shared between calls would then hand the first call the second's reply.
+    const frames = (text: string): string =>
+      [
+        { type: 'start' },
+        { type: 'text-start', id: 't' },
+        { type: 'text-delta', id: 't', delta: text },
+        { type: 'text-end', id: 't' },
+      ]
+        .map((f) => `data: ${JSON.stringify(f)}\n\n`)
+        .join('')
+    const finish = 'data: {"type":"finish"}\n\n'
+    const encoder = new TextEncoder()
+    let releaseAlpha: () => void = () => undefined
     const fetchImpl = vi.fn(async (_url: string, init: RequestInit) => {
       const { message } = JSON.parse(init.body as string) as { message: string }
-      return streamAgentResponse(textRun(replies[message] ?? ''))
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          if (message === 'b') {
+            controller.enqueue(encoder.encode(frames('beta') + finish))
+            controller.close()
+            return
+          }
+          controller.enqueue(encoder.encode(frames('alpha')))
+          releaseAlpha = () => {
+            controller.enqueue(encoder.encode(finish))
+            controller.close()
+          }
+        },
+      })
+      return new Response(body, { headers: { 'content-type': 'text/event-stream' } })
     })
     const tool = createA2ATool({
       url: 'https://x/agents/a',
@@ -133,12 +161,14 @@ describe('createA2ATool', () => {
       fetchImpl,
     })
 
-    const results = await Promise.all([
-      tool.handler({ message: 'a' }),
-      tool.handler({ message: 'b' }),
-    ])
+    const alpha = Promise.resolve(tool.handler({ message: 'a' }))
+    // Let the first call read its buffered text before the second starts. The wait only orders
+    // in-memory reads; if it were too short the test could miss the defect, never fail falsely.
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    const beta = await tool.handler({ message: 'b' })
+    releaseAlpha()
 
-    expect(results).toEqual(['alpha', 'beta'])
+    expect([await alpha, beta]).toEqual(['alpha', 'beta'])
   })
 
   it('test_a_finished_stream_with_no_text_returns_empty', async () => {
