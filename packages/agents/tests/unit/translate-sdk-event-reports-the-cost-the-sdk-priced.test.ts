@@ -6,6 +6,10 @@
  * skipping the fail-closed `DelegationBudgetCostUnknownError`. It now follows the adapter's
  * `knownCost` rule: a finite `amountUsd` on the message's `result.cost` is the cost, and anything
  * else leaves the key out.
+ *
+ * The priced cases build a status message whose `result` carries a `cost`. The SDK's status message
+ * carries no cost today, so those cases guard a shape the SDK may send rather than one it does; the
+ * case that matches today's SDK is `no_result`, which must leave the key out.
  */
 import { describe, expect, it } from 'vitest'
 
@@ -18,7 +22,7 @@ function doneOf(status: string, result?: unknown) {
     { type: 'status', agent_id: 'a', run_id: RUN, status, ...(result ? { result } : {}) },
     RUN,
   )
-  expect(events).toHaveLength(1)
+  if (events.length !== 1) throw new Error(`expected one event for ${status}, got ${events.length}`)
   return events[0] as Record<string, unknown>
 }
 
@@ -35,12 +39,12 @@ describe('translateSdkEvent cost on a terminal status', () => {
   })
 
   it.each([
-    ['no result', undefined],
-    ['no cost', { result: 'text' }],
-    ['an undefined amount', { cost: { amountUsd: undefined } }],
-    ['a NaN amount', { cost: { amountUsd: Number.NaN } }],
-    ['an infinite amount', { cost: { amountUsd: Number.POSITIVE_INFINITY } }],
-    ['a string amount', { cost: { amountUsd: '0.02' } }],
+    ['no_result', undefined],
+    ['no_cost', { result: 'text' }],
+    ['an_undefined_amount', { cost: { amountUsd: undefined } }],
+    ['a_nan_amount', { cost: { amountUsd: Number.NaN } }],
+    ['an_infinite_amount', { cost: { amountUsd: Number.POSITIVE_INFINITY } }],
+    ['a_string_amount', { cost: { amountUsd: '0.02' } }],
   ])('test_a_finished_run_with_%s_has_no_cost_key', (_label, result) => {
     const done = doneOf('FINISHED', result)
 

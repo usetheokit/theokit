@@ -39,13 +39,16 @@ vi.mock('@theokit/sdk', () => ({
 const { createSdkAgentStream } = await import('../../src/bridge/sdk-adapter.js')
 const { defineAgent, compileAgentDefinition } = await import('../../src/bridge/define-agent.js')
 
+/** A fixed per-call session id, so a run is reproducible. */
+let session = 0
+
 /** The last event `createSdkAgentStream` yields; a throw would surface as an `error` event. */
 async function lastEvent(): Promise<Record<string, unknown>> {
   const stream = createSdkAgentStream(
     compileAgentDefinition(defineAgent({ model: 'm' })),
     [],
     'test-key',
-  )('go', `sess-${Math.random()}`)
+  )('go', `sess-${++session}`)
   let last: Record<string, unknown> | undefined
   for await (const event of stream) last = event as Record<string, unknown>
   if (last === undefined) throw new Error('the stream yielded no event')
@@ -57,24 +60,23 @@ describe('a run with a malformed price reports no cost', () => {
     h.waitResult = {}
   })
 
-  it('test_a_run_with_a_non_finite_price_reports_no_cost', async () => {
-    for (const amountUsd of [Number.NaN, Number.POSITIVE_INFINITY]) {
-      const cost: CostBreakdown = {
-        amountUsd,
-        status: 'estimated',
-        currency: 'USD',
-        source: 'litellm_snapshot',
-        pricingVersion: 'v1',
-      }
-      h.waitResult = { result: 'ok', cost }
-
-      const done = await lastEvent()
-
-      expect(done.type).toBe('done')
-      expect(Object.hasOwn(done, 'cost'), `amountUsd ${String(amountUsd)} is not a price`).toBe(
-        false,
-      )
+  it.each([
+    ['nan', Number.NaN],
+    ['infinity', Number.POSITIVE_INFINITY],
+  ])('test_a_run_priced_at_%s_reports_no_cost', async (_label, amountUsd) => {
+    const cost: CostBreakdown = {
+      amountUsd,
+      status: 'estimated',
+      currency: 'USD',
+      source: 'litellm_snapshot',
+      pricingVersion: 'v1',
     }
+    h.waitResult = { result: 'ok', cost }
+
+    const done = await lastEvent()
+
+    expect(done.type).toBe('done')
+    expect(Object.hasOwn(done, 'cost'), `amountUsd ${String(amountUsd)} is not a price`).toBe(false)
   })
 
   it('test_a_run_with_a_null_cost_reports_no_cost', async () => {

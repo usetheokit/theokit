@@ -40,7 +40,11 @@ vi.mock('@theokit/sdk', () => ({
 }))
 
 const { createSdkAgentStream } = await import('../../src/bridge/sdk-adapter.js')
+const { streamAgentUIMessages } = await import('../../src/bridge/agent-endpoint.js')
 const { defineAgent, compileAgentDefinition } = await import('../../src/bridge/define-agent.js')
+
+/** A fixed per-call session id, so a run is reproducible. */
+let session = 0
 
 /** The terminal `done` event `createSdkAgentStream` ends on. */
 async function terminalDone(): Promise<Record<string, unknown>> {
@@ -48,11 +52,29 @@ async function terminalDone(): Promise<Record<string, unknown>> {
     compileAgentDefinition(defineAgent({ model: 'm' })),
     [],
     'test-key',
-  )('go', `sess-${Math.random()}`)
+  )('go', `sess-${++session}`)
   let last: Record<string, unknown> | undefined
   for await (const event of stream) last = event as Record<string, unknown>
   if (last?.type !== 'done') throw new Error(`expected a terminal done, got ${String(last?.type)}`)
   return last
+}
+
+/** The `messageMetadata` on the served `finish` chunk, what `mountAgent` sends a client. */
+async function finishMetadata(): Promise<Record<string, unknown>> {
+  let last: Record<string, unknown> | undefined
+  for await (const chunk of streamAgentUIMessages(
+    compileAgentDefinition(defineAgent({ model: 'm' })),
+    'test-key',
+    { message: 'go', sessionId: `sess-${++session}` },
+  )) {
+    last = chunk as unknown as Record<string, unknown>
+  }
+  if (last?.type !== 'finish') throw new Error(`expected a finish chunk, got ${String(last?.type)}`)
+  const metadata = last.messageMetadata
+  if (typeof metadata !== 'object' || metadata === null) {
+    throw new Error('the finish chunk carries no messageMetadata')
+  }
+  return metadata as Record<string, unknown>
 }
 
 describe('a run reports the cost the SDK priced', () => {
@@ -114,5 +136,41 @@ describe('a run reports the cost the SDK priced', () => {
 
     expect(Object.hasOwn(done, 'cost'), 'zero is a price, not an absence').toBe(true)
     expect(done.cost).toBe(0)
+  })
+})
+
+describe('the served finish metadata carries the cost the SDK priced, and none when it has no price', () => {
+  beforeEach(() => {
+    h.waitResult = {}
+  })
+
+  it('test_a_priced_run_sends_the_cost_on_the_finish_metadata', async () => {
+    const cost: CostBreakdown = {
+      amountUsd: 0.25,
+      status: 'estimated',
+      currency: 'USD',
+      source: 'litellm_snapshot',
+      pricingVersion: 'v1',
+    }
+    h.waitResult = { result: 'ok', cost }
+
+    expect((await finishMetadata()).cost).toBe(0.25)
+  })
+
+  it('test_an_unpriced_run_sends_no_cost_key_on_the_finish_metadata', async () => {
+    const cost: CostBreakdown = {
+      amountUsd: undefined,
+      status: 'unknown',
+      currency: 'USD',
+      source: 'unknown',
+      pricingVersion: undefined,
+    }
+    h.waitResult = { result: 'ok', cost }
+
+    const metadata = await finishMetadata()
+
+    expect(Object.hasOwn(metadata, 'cost'), 'a client must not read an unpriced run as free').toBe(
+      false,
+    )
   })
 })
