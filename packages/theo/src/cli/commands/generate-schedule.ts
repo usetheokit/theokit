@@ -63,7 +63,7 @@ export async function resolveScheduleTarget(
 }
 
 /** The cron name a schedule called `name` declares: its last `/` segment. */
-function cronNameOf(name: string): string {
+export function cronNameOf(name: string): string {
   return name.split('/').pop() ?? name
 }
 
@@ -118,7 +118,7 @@ function cronNameTaken(
  * source is imported by its `.js` name, as TypeScript and tsx resolve it; a `.js` or `.jsx` file
  * keeps its own extension.
  */
-function importSpecifier(fromFile: string, toFile: string): string {
+export function importSpecifier(fromFile: string, toFile: string): string {
   const path = relative(dirname(fromFile), toFile)
     .split(sep)
     .join('/')
