@@ -128,7 +128,7 @@ describe('check-parity-ledger: the id set', () => {
     const collect = (text) => [
       ...[...text.matchAll(/\bfrom\s+['"]([^'"]+)['"]/g)].map((m) => m[1]),
       ...[...text.matchAll(/\bimport\(\s*['"]([^'"]+)['"]\s*\)/g)].map((m) => m[1]),
-      ...[...text.matchAll(/^\s*import\s+['"]([^'"]+)['"]/gm)].map((m) => m[1]),
+      ...[...text.matchAll(/^import\s+['"]([^'"]+)['"]/gm)].map((m) => m[1]),
       ...[...text.matchAll(/\brequire\(\s*['"]([^'"]+)['"]\s*\)/g)].map((m) => m[1]),
     ]
     // The collector must see an import when one is there, or an empty result proves nothing.
@@ -187,21 +187,21 @@ describe('check-parity-ledger: each entry answer', () => {
 
   it('fails on a shipped entry whose check path does not exist', () => {
     const root = tempRepo()
-    const result = judge([shipped('OC-1', 'tests/e2e/absent.test.ts')], root)
+    const result = judge([shipped('OC-1', 'apps/theoclaw/tests/e2e/absent.test.ts')], root)
     expect(rulesOf(result, 'OC-1')).toContain('check-missing')
   })
 
   it('fails on a shipped entry whose check path is a directory', () => {
-    const root = tempRepo({ 'tests/e2e/proof.test.ts/inner.txt': "it('proves OC-1', () => {})\n" })
-    const result = judge([shipped('OC-1', 'tests/e2e/proof.test.ts')], root)
+    const root = tempRepo({ 'apps/theoclaw/tests/e2e/proof.test.ts/inner.txt': "it('proves OC-1', () => {})\n" })
+    const result = judge([shipped('OC-1', 'apps/theoclaw/tests/e2e/proof.test.ts')], root)
     expect(result.violations.filter((v) => v.id === 'OC-1')).toEqual([
-      { id: 'OC-1', rule: 'check-missing', detail: 'tests/e2e/proof.test.ts is not a file' },
+      { id: 'OC-1', rule: 'check-missing', detail: 'apps/theoclaw/tests/e2e/proof.test.ts is not a file' },
     ])
   })
 
   it('fails on a shipped entry whose check file does not contain the named test', () => {
-    const root = tempRepo({ 'tests/e2e/proof.test.ts': "it('proves something else', () => {})\n" })
-    const result = judge([shipped('OC-1', 'tests/e2e/proof.test.ts')], root)
+    const root = tempRepo({ 'apps/theoclaw/tests/e2e/proof.test.ts': "it('proves something else', () => {})\n" })
+    const result = judge([shipped('OC-1', 'apps/theoclaw/tests/e2e/proof.test.ts')], root)
     expect(rulesOf(result, 'OC-1')).toContain('check-test-absent')
   })
 
@@ -222,35 +222,82 @@ describe('check-parity-ledger: each entry answer', () => {
   it('fails on a shipped entry whose check path is a symlink leaving the repository', () => {
     const elsewhere = tempRepo({ 'proof.test.ts': "it('proves OC-1', () => {})\n" })
     const root = tempRepo()
-    mkdirSync(join(root, 'tests'), { recursive: true })
-    symlinkSync(join(elsewhere, 'proof.test.ts'), join(root, 'tests/link.test.ts'))
-    const result = judge([shipped('OC-1', 'tests/link.test.ts')], root)
+    mkdirSync(join(root, 'apps/theoclaw/tests'), { recursive: true })
+    symlinkSync(join(elsewhere, 'proof.test.ts'), join(root, 'apps/theoclaw/tests/link.test.ts'))
+    const result = judge([shipped('OC-1', 'apps/theoclaw/tests/link.test.ts')], root)
     expect(rulesOf(result, 'OC-1')).toContain('check-outside-repo')
   })
 
   it('fails on a shipped entry whose check path is a directory', () => {
-    const root = tempRepo({ 'tests/keep.txt': 'x' })
-    const result = judge([shipped('OC-1', 'tests')], root)
+    const root = tempRepo({ 'apps/theoclaw/tests/keep.txt': 'x' })
+    const result = judge([shipped('OC-1', 'apps/theoclaw/tests')], root)
     expect(rulesOf(result, 'OC-1')).toContain('check-missing')
   })
 
   it('matches the named test as a whole quoted title, not as a substring', () => {
-    const root = tempRepo({ 'tests/e2e/proof.test.ts': "it('proves OC-10', () => {})\ntest(\"proves OC-2\", () => {})\n" })
-    const path = 'tests/e2e/proof.test.ts'
+    const root = tempRepo({ 'apps/theoclaw/tests/e2e/proof.test.ts': "it('proves OC-10', () => {})\ntest(\"proves OC-2\", () => {})\n" })
+    const path = 'apps/theoclaw/tests/e2e/proof.test.ts'
     const result = judge([shipped('OC-1', path, 'proves OC-1'), shipped('OC-2', path, 'proves OC-2')], root)
     expect(rulesOf(result, 'OC-1')).toEqual(['check-test-absent'])
     expect(rulesOf(result, 'OC-2')).toEqual([])
   })
 
+  it('refuses a named title that only a skipped test, a todo, a comment or a constant carries', () => {
+    const carriers = {
+      'skip.test.ts': "it.skip('proves OC-1', () => {})\n",
+      'todo.test.ts': "it.todo('proves OC-1')\n",
+      'skipped-suite.test.ts': "describe.skip('suite', () => {\n  it('proves OC-1', () => {})\n})\n",
+      'line-comment.test.ts': "// it('proves OC-1', () => {})\nit('proves something else', () => {})\n",
+      'block-comment.test.ts': "/* it('proves OC-1', () => {}) */\nit('proves something else', () => {})\n",
+      'constant.test.ts': "const title = 'proves OC-1'\nit(title, () => {})\n",
+    }
+    const root = tempRepo(Object.fromEntries(Object.entries(carriers).map(([name, text]) => [`apps/theoclaw/tests/${name}`, text])))
+    for (const name of Object.keys(carriers)) {
+      expect(rulesOf(judge([shipped('OC-1', `apps/theoclaw/tests/${name}`, 'proves OC-1')], root), 'OC-1')).toEqual([
+        'check-test-absent',
+      ])
+    }
+  })
+
+  it('refuses a shipped check path that is not a test file theoclaw runs', () => {
+    const title = "it('proves OC-1', () => {})\n"
+    const root = tempRepo({
+      'apps/theoclaw/parity/ledger.json': '{"test": "proves OC-1"}\n',
+      'apps/theoclaw/CHANGELOG.md': title,
+      'packages/other/tests/proof.test.ts': title,
+      'apps/theoclaw/tests/proof.spec.ts': title,
+      'apps/theoclaw/tools/proof.test.mjs': title,
+    })
+    for (const path of [
+      'apps/theoclaw/parity/ledger.json',
+      'apps/theoclaw/CHANGELOG.md',
+      'packages/other/tests/proof.test.ts',
+      'apps/theoclaw/tests/proof.spec.ts',
+    ]) {
+      expect(rulesOf(judge([shipped('OC-1', path)], root), 'OC-1')).toEqual(['check-not-a-test'])
+    }
+    expect(rulesOf(judge([shipped('OC-1', 'apps/theoclaw/tools/proof.test.mjs')], root), 'OC-1')).toEqual([])
+  })
+
+  it('accepts a named title passed to it or test, nested in a suite or not', () => {
+    const root = tempRepo({
+      'apps/theoclaw/tests/nested.test.ts': "describe('suite', () => {\n  it('proves OC-1', () => {})\n})\n",
+      'apps/theoclaw/tests/plain.test.ts': 'test(`proves OC-1`, async () => {})\n',
+    })
+    for (const path of ['apps/theoclaw/tests/nested.test.ts', 'apps/theoclaw/tests/plain.test.ts']) {
+      expect(rulesOf(judge([shipped('OC-1', path, 'proves OC-1')], root), 'OC-1')).toEqual([])
+    }
+  })
+
   it('fails on a shipped entry with an empty test name', () => {
-    const root = tempRepo({ 'tests/e2e/proof.test.ts': "it('proves OC-1', () => {})\n" })
-    const result = judge([shipped('OC-1', 'tests/e2e/proof.test.ts', '  ')], root)
+    const root = tempRepo({ 'apps/theoclaw/tests/e2e/proof.test.ts': "it('proves OC-1', () => {})\n" })
+    const result = judge([shipped('OC-1', 'apps/theoclaw/tests/e2e/proof.test.ts', '  ')], root)
     expect(rulesOf(result, 'OC-1')).toContain('check-test-absent')
   })
 
   it('accepts verified_on today and refuses a later or impossible date', () => {
-    const root = tempRepo({ 'tests/e2e/proof.test.ts': "it('proves OC-1', () => {})\n" })
-    const path = 'tests/e2e/proof.test.ts'
+    const root = tempRepo({ 'apps/theoclaw/tests/e2e/proof.test.ts': "it('proves OC-1', () => {})\n" })
+    const path = 'apps/theoclaw/tests/e2e/proof.test.ts'
     expect(rulesOf(judge([shipped('OC-1', path, 'proves OC-1', TODAY)], root), 'OC-1')).toEqual([])
     for (const date of [dayAfter(TODAY), '2026-02-30', '2026-13-01', '2026-01-32']) {
       expect(rulesOf(judge([shipped('OC-1', path, 'proves OC-1', date)], root), 'OC-1')).toContain('verified-on')
@@ -273,7 +320,7 @@ describe('check-parity-ledger: each entry answer', () => {
 
   it('reports an unreadable cited test file as a violation and keeps going', () => {
     const root = tempRepo()
-    const result = judge([shipped('OC-1', 'tests/a\u0000b.test.ts'), { id: 'OC-2', status: 'open' }], root)
+    const result = judge([shipped('OC-1', 'apps/theoclaw/tests/a\u0000b.test.ts'), { id: 'OC-2', status: 'open' }], root)
     expect(rulesOf(result, 'OC-1')).toEqual(['check-unreadable'])
     expect(rulesOf(result, 'OC-2')).toEqual(['open'])
   })
@@ -284,7 +331,8 @@ describe('check-parity-ledger: each entry answer', () => {
       [shipped('OC-1', '..proof/valid.test.ts'), shipped('OC-2', '../proof/valid.test.ts')],
       root,
     )
-    expect(rulesOf(result, 'OC-1')).toEqual([])
+    // Inside the root, so the next rule judges it: not a theoclaw test file, not outside the repository.
+    expect(rulesOf(result, 'OC-1')).toEqual(['check-not-a-test'])
     expect(rulesOf(result, 'OC-2')).toContain('check-outside-repo')
   })
 
@@ -293,15 +341,15 @@ describe('check-parity-ledger: each entry answer', () => {
   // required, so this pins the acceptance on purpose (loop-code-review finding 114). Requiring one
   // is a change to FR-004, registered as a followup in the plan.
   it('accepts a shipped entry with no recorded passing run, as FR-004 decides', () => {
-    const root = tempRepo({ 'tests/e2e/proof.test.ts': "it('proves OC-1', () => {})\n" })
-    const entry = shipped('OC-1', 'tests/e2e/proof.test.ts', 'proves OC-1', TODAY)
+    const root = tempRepo({ 'apps/theoclaw/tests/e2e/proof.test.ts': "it('proves OC-1', () => {})\n" })
+    const entry = shipped('OC-1', 'apps/theoclaw/tests/e2e/proof.test.ts', 'proves OC-1', TODAY)
     expect(Object.keys(entry).sort()).toEqual(['check', 'id', 'status', 'verified_on'])
     expect(rulesOf(judge([entry], root), 'OC-1')).toEqual([])
   })
 
   it('fails on a shipped entry with an absent or malformed verified_on', () => {
-    const root = tempRepo({ 'tests/e2e/proof.test.ts': "it('proves OC-1', () => {})\n" })
-    const path = 'tests/e2e/proof.test.ts'
+    const root = tempRepo({ 'apps/theoclaw/tests/e2e/proof.test.ts': "it('proves OC-1', () => {})\n" })
+    const path = 'apps/theoclaw/tests/e2e/proof.test.ts'
     for (const date of [undefined, '2026-1-5', '2026/10/06', 20261006]) {
       const entry = { ...shipped('OC-1', path, 'proves OC-1'), verified_on: date }
       expect(rulesOf(judge([entry], root), 'OC-1')).toEqual(['verified-on'])
@@ -315,7 +363,8 @@ describe('check-parity-ledger: each entry answer', () => {
   })
 
   it('fails on an out entry with no reason', () => {
-    const { reason: _dropped, ...noReason } = validOut('OC-11')
+    const noReason = validOut('OC-11')
+    delete noReason.reason
     expect(rulesOf(judge([noReason]), 'OC-11')).toEqual(['reason-short'])
     expect(rulesOf(judge([{ ...validOut('OC-11'), reason: 42 }]), 'OC-11')).toEqual(['reason-short'])
   })
@@ -388,10 +437,10 @@ describe('check-parity-ledger: the real ledger', () => {
 })
 
 function cliRepo({ withInventory = true } = {}) {
-  const ledger = [...ALL_IDS.filter((id) => id !== 'OC-1').map(validOut), shipped('OC-1', 'tests/e2e/proof.test.ts')]
+  const ledger = [...ALL_IDS.filter((id) => id !== 'OC-1').map(validOut), shipped('OC-1', 'apps/theoclaw/tests/e2e/proof.test.ts')]
   const files = {
     [HERMES_PATH]: hermesText(7),
-    'tests/e2e/proof.test.ts': "it('proves OC-1', () => {})\n",
+    'apps/theoclaw/tests/e2e/proof.test.ts': "it('proves OC-1', () => {})\n",
     [LEDGER_PATH]: JSON.stringify(ledger),
   }
   if (withInventory) files[INVENTORY_PATH] = inventoryText(106)
@@ -468,14 +517,14 @@ describe('check-parity-ledger: the command run by node', () => {
     const today = localDate()
     const ledger = [
       ...ALL_IDS.filter((id) => id !== 'OC-1' && id !== 'OC-2').map(validOut),
-      shipped('OC-1', 'tests/e2e/proof.test.ts', 'proves OC-1', today),
+      shipped('OC-1', 'apps/theoclaw/tests/e2e/proof.test.ts', 'proves OC-1', today),
       { id: 'OC-2', status: 'open' },
     ]
     const root = tempRepo({
       [INVENTORY_PATH]: inventoryText(106),
       [HERMES_PATH]: hermesText(7),
       [LEDGER_PATH]: JSON.stringify(ledger),
-      'tests/e2e/proof.test.ts': "it('proves OC-1', () => {})\n",
+      'apps/theoclaw/tests/e2e/proof.test.ts': "it('proves OC-1', () => {})\n",
     })
     const copy = join(root, 'apps/theoclaw/tools/check-parity-ledger.mjs')
     mkdirSync(dirname(copy), { recursive: true })
@@ -489,13 +538,13 @@ describe('check-parity-ledger: the command run by node', () => {
   it('node on the module exits 0 and prints only the counts for a fully answered ledger', () => {
     const ledger = [
       ...ALL_IDS.filter((id) => id !== 'OC-1').map(validOut),
-      shipped('OC-1', 'tests/e2e/proof.test.ts', 'proves OC-1', localDate()),
+      shipped('OC-1', 'apps/theoclaw/tests/e2e/proof.test.ts', 'proves OC-1', localDate()),
     ]
     const root = tempRepo({
       [INVENTORY_PATH]: inventoryText(106),
       [HERMES_PATH]: hermesText(7),
       [LEDGER_PATH]: JSON.stringify(ledger),
-      'tests/e2e/proof.test.ts': "it('proves OC-1', () => {})\n",
+      'apps/theoclaw/tests/e2e/proof.test.ts': "it('proves OC-1', () => {})\n",
     })
     const copy = join(root, 'apps/theoclaw/tools/check-parity-ledger.mjs')
     mkdirSync(dirname(copy), { recursive: true })
