@@ -1,0 +1,5 @@
+---
+"theokit": patch
+---
+
+An ACP tool call survives an agent that misbehaves on its channel, and it no longer returns while its agent is still running. A line on the agent's stdout that is not JSON, such as a startup banner or a log line, used to throw out of the stream listener as an uncaught exception that ended the host process; it now rejects the call with `AcpTransportClosedError` (reason `broke the ACP protocol: ...`, naming the line) and the agent is stopped. Stdout is decoded with a streaming UTF-8 decoder, so a multibyte character split across two chunks reaches the reply intact instead of as two U+FFFD characters. `NodeAcpTransport.close()` now returns a promise: it sends SIGTERM, waits up to 2 seconds for the process to exit, then sends SIGKILL and waits for that exit, and the tool call awaits it, so an agent that ignores SIGTERM is gone when the call returns. `AcpToolTransport.close` may return `void` or a promise; a transport whose `close` returns `void` still works. (B-408)

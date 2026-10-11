@@ -20,10 +20,17 @@
  *      ESM cycle error on Node 22 because the calling stack contains
  *      both the loader's own evaluation context AND the importer.
  *
- * `tsImport()` from `tsx/esm/api` is the documented escape hatch for
+ * A namespaced `register()` from `tsx/esm/api` is the escape hatch for
  * exactly this scenario: it transforms the source file via tsx's
- * standalone pipeline and evaluates the result via a fresh namespace,
+ * standalone pipeline and evaluates the result inside its namespace,
  * bypassing both Vite SSR and any registered global hook.
+ *
+ * The namespace is registered ONCE per process and reused. `tsImport()`
+ * registers a new one on every call and never removes it, so the loader
+ * hooks pile up; on Node 22.12 the fourth or fifth load in a process
+ * stalled forever. Reusing one namespace means a file already loaded is
+ * served from the module cache, which is what the native `import()` above
+ * does too.
  *
  * Strategy:
  *   - Try native `await import()` first (zero overhead in production
@@ -72,20 +79,34 @@ export async function importUserModule(
     return (await import(fileURL)) as Record<string, unknown>
   } catch (err) {
     if (!isLoaderInteropError(err)) throw err
-    // Fallback: tsx programmatic API. Imports are inline, no global hook
-    // mutation, no Vite SSR interference. Slower per call (~10-50ms vs
-    // microseconds for registered loader) but only used as a last resort.
-    const { tsImport } = (await import('tsx/esm/api')) as {
-      tsImport: (
-        specifier: string,
-        options: string | { parentURL: string; tsconfig?: string; namespace?: string },
-      ) => Promise<Record<string, unknown>>
-    }
-    // Bypass tsconfig — tsx's default bundler-style resolver handles
+    // Fallback: tsx programmatic API. Imports are scoped to one namespace, no
+    // global hook mutation, no Vite SSR interference. Slower than a registered
+    // loader, but only used as a last resort.
+    //
+    // No tsconfig is passed — tsx's default bundler-style resolver handles
     // `.js → .ts` fallback for relative imports under the user's module.
     // Passing an explicit tsconfig sometimes shadows the default and
     // breaks the `.js → .ts` rewrite chain inside the namespaced loader
     // (verified empirically in cron-scan/job-scan vitest workers).
-    return await tsImport(fileURL, parentURL)
+    const scopedImport = await tsxNamespace()
+    return (await scopedImport(fileURL, parentURL)) as Record<string, unknown>
   }
+}
+
+type ScopedImport = (specifier: string, parentURL: string) => Promise<unknown>
+
+let namespacedImport: Promise<ScopedImport> | undefined
+
+/**
+ * The one tsx namespace this process loads user modules through. Registered on first use, with
+ * the CommonJS hook beside the ESM one, the same pair `tsImport()` registers per call.
+ */
+function tsxNamespace(): Promise<ScopedImport> {
+  namespacedImport ??= (async () => {
+    const namespace = `theokit-user-modules-${process.pid}`
+    const [esm, cjs] = await Promise.all([import('tsx/esm/api'), import('tsx/cjs/api')])
+    cjs.register({ namespace })
+    return esm.register({ namespace }).import
+  })()
+  return namespacedImport
 }

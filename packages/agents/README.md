@@ -29,7 +29,7 @@ you mount HTTP surfaces).
 
 ## Subpath map
 
-Twenty entry points. Import the one you need — the barrel is not the API.
+Twenty-one entry points. Import the one you need — the barrel is not the API.
 
 | Subpath | What lives there |
 |---|---|
@@ -49,6 +49,7 @@ Twenty entry points. Import the one you need — the barrel is not the API.
 | `./hooks` | The lifecycle-hook engine and its fingerprint gate |
 | `./ask` | The human-in-the-loop rendezvous — ask a question, settle it, abandon it safely |
 | `./tool-scope` | `bindToolScope` — bind `{projectRoot, writeRoot, sandbox}` once so an unconfined shell is unrepresentable |
+| `./a2a` | `createA2ATool` — call a remote agent over HTTP as a tool |
 | `./mcp-health` | MCP server health probing |
 | `./commands` | Command routing and the shutdown/cleanup contract |
 | `./doctor` | Environment diagnostics |

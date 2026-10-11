@@ -3,7 +3,7 @@
   "exports": {
     "./main": "./src/main.tsx"
   },
-  "version": "0.1.4",
+  "version": "0.1.5",
   "private": true,
   "type": "module",
   "description": "Surface 1 — the terminal UI.",

@@ -11,7 +11,7 @@
 // +11 lines, enough to blow the gate. The `prettier-ignore` must be the LAST comment before the node.
 // When `sdk-adapter.ts` is split, the directive goes with it.
 // prettier-ignore
-import type { AgentDefinition, BudgetTracker, CustomTool, InlineSkill, InteractionUpdate, ModelSelection, Plugin, PluginsSettings, ProviderRoutingSettings, RunEventSink, SendOptions } from '@theokit/sdk'
+import type { AgentDefinition, BudgetTracker, CostBreakdown, CustomTool, InlineSkill, InteractionUpdate, ModelSelection, Plugin, PluginsSettings, ProviderRoutingSettings, RunEventSink, SendOptions } from '@theokit/sdk'
 import type { RetryOptions } from '@theokit/sdk/retry'
 
 import { debugLog } from '../debug-log.js'
@@ -27,6 +27,7 @@ import { type SdkMessage } from './event-translator.js'
 import { withGuardrails, withStepCeiling } from './handle-wrappers.js'
 import { buildModelSelection, contextWindowOf, modelIdOf } from './model-selection.js'
 import { assembleM8CreateOptions, realUsageDone } from './sdk-adapter-create-options.js'
+import type { SdkRunUsage } from './sdk-adapter-create-options.js'
 import { sdkErrorEvent } from './sdk-error.js'
 import {
   createToolSeen,
@@ -286,14 +287,8 @@ interface SdkAgentApi {
       // discipline `applyStepCeiling` uses for the ceiling travelling the other way.
       wait: () => Promise<{
         result?: string
-        usage?: {
-          inputTokens?: number
-          outputTokens?: number
-          reasoningTokens?: number
-          cacheReadTokens?: number
-          cacheWriteTokens?: number
-        }
-        cost?: { amount?: number }
+        usage?: SdkRunUsage
+        cost?: CostBreakdown
         stoppedAtIterationLimit?: boolean
         stoppedByDoomLoop?: boolean
         /**

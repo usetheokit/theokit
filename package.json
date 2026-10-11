@@ -37,6 +37,7 @@
     "check:pack-no-workspace": "node scripts/check-pack-no-workspace.mjs",
     "check:pack-exports": "node scripts/check-pack-exports-resolve.mjs",
     "check:pack-loads": "node scripts/check-pack-entry-points-load.mjs",
+    "check:pillars": "node scripts/check-pillar-map.mjs",
     "verify:version-collision": "node scripts/verify-version-not-published.mjs",
     "check:licenses": "node scripts/check-licenses.mjs",
     "check:licenses:published": "node scripts/verify-published-license-matches.mjs",
@@ -127,6 +128,7 @@
       "smol-toml@<=1.7.0": "^1.7.1",
       "brace-expansion@>=3.0.0 <5.0.7": ">=5.0.7",
       "js-yaml@>=3.0.0 <3.15.0": "^3.15.0",
+      "source-map-js@<1.2.2": "^1.2.2",
       "@theokit/sdk": "5.9.2"
     },
     "patchedDependencies": {

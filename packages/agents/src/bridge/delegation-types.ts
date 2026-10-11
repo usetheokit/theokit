@@ -16,7 +16,17 @@ import type { LoopFinishReason } from '../loop/loop-strategy.js'
 export interface DelegationResult {
   response: string
   toolCalls: { id: string; name: string; input: unknown; output: string }[]
+  /**
+   * USD the run's priced rounds cost. A round the SDK could not price adds nothing here, so read it
+   * with {@link costUnknown}: when that is set, this is the known spend and not the run's cost.
+   */
   cost: number
+  /**
+   * Present, and `true`, when at least one round reported no finite cost (B-409): the run cost
+   * {@link cost} plus an amount nobody knows. Absent on a run whose every round was priced. A
+   * consumer summing runs must not read such a `cost` as the run's price (#969).
+   */
+  costUnknown?: true
   tokens: number
   /** V4-N: split token usage accumulated across rounds (`tokens` stays as the total). Absent for the single-shot path. */
   tokensInput?: number
@@ -32,6 +42,44 @@ export interface DelegationResult {
    * `'step_limit'` (hit maxIterations), `'no_progress'` (stuck). Absent for the single-shot path. (V4-D)
    */
   finishReason?: LoopFinishReason
+}
+
+/**
+ * Why a run stopped BEFORE a round rather than after one. Without it the error reports an
+ * overspend (`$actual > $limit`), which is only true once the spend passed the limit; a refusal
+ * stops while the spend is still under it, so it needs wording that does not claim otherwise.
+ */
+type BudgetRefusal =
+  /** The next round's projected cost (the last completed round's), which would pass the limit. */
+  | { readonly projectedRoundCost: number }
+  /** The last round's cost is not known, so the limit cannot be enforced for the next one. */
+  | { readonly costUnknown: true }
+  /** The limit is 0 or below, so no round fits: the run stops before its first one. */
+  | { readonly nothingToSpend: true }
+
+function budgetMessage(
+  agentName: string,
+  actualCost: number,
+  budgetLimit: number,
+  refusal: BudgetRefusal | undefined,
+): string {
+  const limit = `$${budgetLimit.toFixed(4)}`
+  if (refusal === undefined) {
+    return `Agent "${agentName}" exceeded budget: $${actualCost.toFixed(4)} > ${limit}`
+  }
+  if ('nothingToSpend' in refusal) {
+    return `Agent "${agentName}" stopped before its first round: its ${limit} limit leaves nothing to spend`
+  }
+  if ('costUnknown' in refusal) {
+    return (
+      `Agent "${agentName}" stopped before its next round: the cost of its last round is not known, ` +
+      `so the ${limit} limit cannot be enforced (known spend $${actualCost.toFixed(4)})`
+    )
+  }
+  return (
+    `Agent "${agentName}" stopped before its next round: spent $${actualCost.toFixed(4)}, ` +
+    `next round projected at $${refusal.projectedRoundCost.toFixed(4)}, which would pass the ${limit} limit`
+  )
 }
 
 /**
@@ -61,19 +109,39 @@ export interface DelegationResult {
  */
 export class DelegationBudgetExceededError extends TheokitAgentError {
   override readonly name = 'DelegationBudgetExceededError'
+  /** The cost the refused round was projected at; absent when the spend already passed the limit. */
+  public readonly projectedRoundCost: number | undefined
   constructor(
     public readonly agentName: string,
     public readonly actualCost: number,
     public readonly budgetLimit: number,
+    refusal?: BudgetRefusal,
   ) {
-    super(
-      `Agent "${agentName}" exceeded budget: $${actualCost.toFixed(4)} > $${budgetLimit.toFixed(4)}`,
-      {
-        code: 'DELEGATION_BUDGET_EXCEEDED',
-        // The budget does not refill on retry.
-        isRetryable: false,
-      },
-    )
+    super(budgetMessage(agentName, actualCost, budgetLimit, refusal), {
+      code: 'DELEGATION_BUDGET_EXCEEDED',
+      // The budget does not refill on retry.
+      isRetryable: false,
+    })
+    this.projectedRoundCost =
+      refusal !== undefined && 'projectedRoundCost' in refusal
+        ? refusal.projectedRoundCost
+        : undefined
+  }
+}
+
+/**
+ * A run with a USD ceiling stopped because the cost of its last round is not known (B-409).
+ *
+ * A model with no price reports no cost, and reading that as $0 would let the run keep spending
+ * against a limit it can no longer check, so the run stops instead (fail closed). `actualCost` is
+ * the spend that IS known. A subclass so it can be caught on its own while every existing
+ * `instanceof DelegationBudgetExceededError` and the `DELEGATION_BUDGET_EXCEEDED` code still match;
+ * `name` is inherited because the parent declares it as a string literal, which a subclass cannot
+ * override with another.
+ */
+export class DelegationBudgetCostUnknownError extends DelegationBudgetExceededError {
+  constructor(agentName: string, knownSpend: number, budgetLimit: number) {
+    super(agentName, knownSpend, budgetLimit, { costUnknown: true })
   }
 }
 

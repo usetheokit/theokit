@@ -1,6 +1,6 @@
 {
   "name": "@theokit/agents",
-  "version": "15.1.0",
+  "version": "15.1.1",
   "description": "AI agents as first-class citizens of the TheoKit pipeline. The AgentBuilder.create() authoring chain compiles to the @theokit/sdk runtime.",
   "repository": {
     "type": "git",
@@ -76,6 +76,10 @@
     "./tool-scope": {
       "types": "./dist/tool-scope.d.ts",
       "import": "./dist/tool-scope.js"
+    },
+    "./a2a": {
+      "types": "./dist/a2a.d.ts",
+      "import": "./dist/a2a.js"
     },
     "./mcp-health": {
       "types": "./dist/mcp-health.d.ts",

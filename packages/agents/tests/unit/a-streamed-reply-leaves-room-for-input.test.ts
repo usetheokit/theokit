@@ -1,7 +1,7 @@
 import type { WireChunk as UIMessageChunk } from '@theokit/presenter/wire'
 import { describe, expect, it } from 'vitest'
 
-import { consumeChunkStream } from '../../src/client/consume-ui-message-stream.js'
+import { consumeChunkStream } from '../../src/wire/consume-ui-message-stream.js'
 
 /**
  * #964: while a reply streamed, the TheoCode TUI stopped reading the keyboard, so Esc could not

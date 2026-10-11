@@ -3,36 +3,88 @@
  *
  * Spawns the agent as a subprocess (Node `child_process` — an adapter concern per G8), drives it
  * with the transport-agnostic {@link AcpClient} over newline-delimited JSON-RPC, and returns a
- * `CustomTool`. `onPermissionRequest` is REQUIRED — security by default (no default-allow for file/
- * shell operations). The transport is injectable for tests.
+ * `CustomTool`. Each call runs the ACP handshake: `initialize`, then `session/new`, then
+ * `session/prompt` naming the session it got back. The agent streams its reply as `session/update`
+ * notifications, so the call returns the text of the `agent_message_chunk` updates for its session.
+ * `onPermissionRequest` is REQUIRED — security by default (no default-allow for file/shell
+ * operations); its decision is answered as an ACP permission outcome. The transport is injectable
+ * for tests.
+ *
+ * Each call owns its transport: it is closed when the call ends, on a reply, a refusal or an
+ * error, and the call waits for the process to exit, so no agent process outlives the call that
+ * spawned it. Closing asks with SIGTERM and, past a grace period, ends the process with SIGKILL. On
+ * Linux and macOS the agent runs in its own process group and closing signals the whole group, so
+ * an agent started through a launcher (`npx`, a shell script) ends with the launcher. A
+ * process that cannot start or exits mid-turn rejects the call with {@link AcpTransportClosedError};
+ * a stdout line that is not a JSON-RPC message rejects it with the client's `AcpProtocolError`,
+ * naming the line; a request the agent does not answer within `timeoutMs` rejects it with
+ * {@link AcpRequestTimeoutError}. A turn the agent ends with a `stopReason` other than `end_turn`
+ * (`max_tokens`, `max_turn_requests`, `refusal`, `cancelled`, or one this client does not know)
+ * rejects it with {@link AcpTurnStoppedError}, keeping the partial reply; a `session/prompt` result
+ * with no string `stopReason` rejects it as a refusal of `session/prompt`. A cancelled run (the `signal` the SDK
+ * passes as the handler's context) rejects the call with the signal's abort reason and closes the
+ * agent the same way; a run already cancelled starts no agent.
  */
-import { spawn, type ChildProcessByStdio } from 'node:child_process'
-import type { Readable, Writable } from 'node:stream'
+import { resolve } from 'node:path'
 
-import { AcpClient, type AcpTransport } from '@theokit/agents'
-import type { CustomTool } from '@theokit/sdk'
+import { AcpClient, AcpConnectionClosedError, AcpProtocolError } from '@theokit/agents'
+import type { CustomTool, ToolContext } from '@theokit/sdk'
 
-/** Stdio transport backed by a spawned subprocess (the default for {@link createACPTool}). */
-export class NodeAcpTransport implements AcpTransport {
-  // stdin=pipe, stdout=pipe, stderr=inherit → the third stream is null.
-  private readonly proc: ChildProcessByStdio<Writable, Readable, null>
+import {
+  AcpTransportClosedError,
+  type AcpToolTransport,
+  NodeAcpTransport,
+} from './node-acp-transport.js'
 
-  constructor(command: string, args: string[] = [], cwd?: string) {
-    this.proc = spawn(command, args, { cwd, stdio: ['pipe', 'pipe', 'inherit'] })
+// The process transport lives in its own module; its public names stay reachable from here.
+export { AcpTransportClosedError, NodeAcpTransport }
+export type { AcpToolTransport }
+
+/** The agent did not answer one request of the turn within the configured timeout. */
+export class AcpRequestTimeoutError extends Error {
+  override readonly name = 'AcpRequestTimeoutError'
+
+  constructor(
+    /** The agent executable, as configured. */
+    readonly command: string,
+    /** The ACP method left unanswered, e.g. `session/prompt`. */
+    readonly method: string,
+    /** The timeout that elapsed, in milliseconds. */
+    readonly timeoutMs: number,
+  ) {
+    super(
+      `[theokit] createACPTool: the agent "${command}" did not answer ${method} within ${String(timeoutMs)}ms`,
+    )
   }
+}
 
-  send(line: string): void {
-    this.proc.stdin.write(line)
-  }
+/** What each ACP v1 `stopReason` other than `end_turn` says about the turn. */
+const STOP_REASON_MEANING: Readonly<Record<string, string>> = {
+  max_tokens: 'it reached its token limit',
+  max_turn_requests: 'it reached its limit of model requests in one turn',
+  refusal: 'it refused to continue',
+  cancelled: 'it cancelled the turn',
+}
 
-  subscribe(onData: (chunk: string) => void): void {
-    this.proc.stdout.on('data', (buf: Buffer) => {
-      onData(buf.toString('utf8'))
-    })
-  }
+/**
+ * The agent ended the turn with a `stopReason` other than `end_turn`: it stopped before finishing,
+ * so the text it streamed is not its answer. That text is kept as `partialText`.
+ */
+export class AcpTurnStoppedError extends Error {
+  override readonly name = 'AcpTurnStoppedError'
 
-  close(): void {
-    this.proc.kill()
+  constructor(
+    /** The agent executable, as configured. */
+    readonly command: string,
+    /** The `stopReason` of the `session/prompt` result, e.g. `max_tokens`. */
+    readonly stopReason: string,
+    /** The text the agent streamed for the session before it stopped. */
+    readonly partialText: string,
+  ) {
+    const meaning = STOP_REASON_MEANING[stopReason] ?? 'a stop reason this client does not know'
+    super(
+      `[theokit] createACPTool: the agent "${command}" stopped the turn before finishing it, with stopReason "${stopReason}" (${meaning}); the ${String(partialText.length)} characters it streamed are on the error's partialText`,
+    )
   }
 }
 
@@ -52,12 +104,158 @@ export interface AcpToolConfig {
    * there is NO default-allow. Return `{ granted: boolean }` (may be async).
    */
   onPermissionRequest: (params: unknown) => { granted: boolean } | Promise<{ granted: boolean }>
+  /**
+   * How long one request of the turn (`initialize`, `session/new`, `session/prompt`) may wait for
+   * the agent's answer, in milliseconds. Defaults to {@link DEFAULT_ACP_TIMEOUT_MS}. A request
+   * past it rejects the call with {@link AcpRequestTimeoutError} and the agent process is closed.
+   */
+  timeoutMs?: number
   /** Injected transport factory (defaults to spawning via {@link NodeAcpTransport}) — for tests. */
-  transportFactory?: (config: AcpToolConfig) => AcpTransport
+  transportFactory?: (config: AcpToolConfig) => AcpToolTransport
 }
 
-function defaultTransport(config: AcpToolConfig): AcpTransport {
+/** Default per-request timeout: ten minutes, room for a long coding turn without hanging forever. */
+export const DEFAULT_ACP_TIMEOUT_MS = 600_000
+
+function defaultTransport(config: AcpToolConfig): AcpToolTransport {
   return new NodeAcpTransport(config.command, config.args, config.cwd)
+}
+
+/** The ACP protocol version this client speaks. */
+const ACP_PROTOCOL_VERSION = 1
+
+type AcpPermissionResponse =
+  | { outcome: { outcome: 'selected'; optionId: string } }
+  | { outcome: { outcome: 'cancelled' } }
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+/**
+ * Translate the callback's decision into an ACP `RequestPermissionResponse`. The option is chosen
+ * by `kind`: a grant selects `allow_once` (never `allow_always`, which grants more than was
+ * approved); a denial selects `reject_once`, else `reject_always`. No option of the needed kind
+ * answers `cancelled`, which an agent treats as a veto.
+ */
+function toAcpPermissionResponse(
+  params: unknown,
+  decision: { granted: boolean },
+): AcpPermissionResponse {
+  const options = isRecord(params) && Array.isArray(params.options) ? params.options : []
+  const wanted = decision.granted ? ['allow_once'] : ['reject_once', 'reject_always']
+  for (const kind of wanted) {
+    const option: unknown = options.find((o) => isRecord(o) && o.kind === kind)
+    if (isRecord(option) && typeof option.optionId === 'string') {
+      return { outcome: { outcome: 'selected', optionId: option.optionId } }
+    }
+  }
+  return { outcome: { outcome: 'cancelled' } }
+}
+
+/** The text of an `agent_message_chunk` update for `sessionId`, or `undefined` for anything else. */
+function agentTextChunk(params: unknown, sessionId: string): string | undefined {
+  if (!isRecord(params) || params.sessionId !== sessionId || !isRecord(params.update))
+    return undefined
+  const { sessionUpdate, content } = params.update
+  if (sessionUpdate !== 'agent_message_chunk' || !isRecord(content)) return undefined
+  return content.type === 'text' && typeof content.text === 'string' ? content.text : undefined
+}
+
+/** What one turn needs besides the client: who to name in errors, and how long to wait. */
+interface Turn {
+  client: AcpClient
+  command: string
+  timeoutMs: number
+  /** The run's signal; once it aborts, no further step is sent. */
+  signal?: AbortSignal
+  /** Rejects the step in flight, so a run that is cancelled ends it. */
+  abort?: (reason: unknown) => void
+}
+
+/**
+ * What a rejection of `AcpClient.request` means for the call. A channel that closed rejects with
+ * the error its transport reported, and a protocol break with the client's `AcpProtocolError`,
+ * whatever the transport: neither is the agent's answer. Only a JSON-RPC error answer is a refusal,
+ * which rejects with an error naming the method and keeping the agent's error as `cause`.
+ */
+function stepFailure(method: string, cause: unknown): Error {
+  if (cause instanceof AcpConnectionClosedError) {
+    return cause.cause instanceof Error ? cause.cause : cause
+  }
+  if (cause instanceof AcpProtocolError) return cause
+  const reason = cause instanceof Error ? cause.message : String(cause)
+  return new Error(`[theokit] createACPTool: the agent refused ${method}: ${reason}`, { cause })
+}
+
+/**
+ * Send one step of the turn. A refusal rejects with an error naming the method (see
+ * {@link stepFailure}), so the caller learns which step failed and nothing later is sent. A closed
+ * transport, a protocol break, an elapsed timeout or a cancelled run rejects with its own error.
+ */
+async function step(turn: Turn, method: string, params: unknown): Promise<unknown> {
+  turn.signal?.throwIfAborted()
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await new Promise<unknown>((resolve, reject) => {
+      turn.abort = reject
+      timer = setTimeout(() => {
+        reject(new AcpRequestTimeoutError(turn.command, method, turn.timeoutMs))
+      }, turn.timeoutMs)
+      turn.client
+        .request(method, params)
+        .then(resolve)
+        .catch((cause: unknown) => {
+          reject(stepFailure(method, cause))
+        })
+    })
+  } finally {
+    clearTimeout(timer)
+    turn.abort = undefined
+  }
+}
+
+/** The `sessionId` a `session/new` result carries; a result without one is a refusal. */
+function sessionIdOf(created: unknown): string {
+  if (isRecord(created) && typeof created.sessionId === 'string') return created.sessionId
+  throw new Error(
+    `[theokit] createACPTool: the agent refused session/new: returned no sessionId (got ${JSON.stringify(created)})`,
+  )
+}
+
+/** The `stopReason` a `session/prompt` result carries; a result without one is a refusal. */
+function stopReasonOf(result: unknown): string {
+  if (isRecord(result) && typeof result.stopReason === 'string') return result.stopReason
+  throw new Error(
+    `[theokit] createACPTool: the agent refused session/prompt: returned no stopReason (got ${JSON.stringify(result)})`,
+  )
+}
+
+/**
+ * Run one ACP turn: handshake, prompt, and the reply text streamed for the session. Updates are
+ * buffered as they arrive (before `session/prompt` resolves) and filtered by the session after.
+ * Only a turn that ends with `end_turn` returns its text; any other `stopReason` rejects with
+ * {@link AcpTurnStoppedError}, which keeps the text.
+ */
+async function runTurn(turn: Turn, cwd: string, message: string): Promise<string> {
+  const updates: unknown[] = []
+  turn.client.onNotification('session/update', (params) => {
+    updates.push(params)
+  })
+  await step(turn, 'initialize', {
+    protocolVersion: ACP_PROTOCOL_VERSION,
+    clientCapabilities: {},
+  })
+  const sessionId = sessionIdOf(await step(turn, 'session/new', { cwd, mcpServers: [] }))
+  const result = await step(turn, 'session/prompt', {
+    sessionId,
+    prompt: [{ type: 'text', text: message }],
+  })
+  const stopReason = stopReasonOf(result)
+  const texts = updates.map((params) => agentTextChunk(params, sessionId))
+  const reply = texts.filter((text): text is string => text !== undefined).join('')
+  if (stopReason !== 'end_turn') throw new AcpTurnStoppedError(turn.command, stopReason, reply)
+  return reply
 }
 
 /** Wrap a coding agent as a `CustomTool`. Fails fast if `onPermissionRequest` is missing. */
@@ -65,6 +263,12 @@ export function createACPTool(config: AcpToolConfig): CustomTool {
   if (typeof config.onPermissionRequest !== 'function') {
     throw new Error(
       '[theokit] createACPTool requires onPermissionRequest (security by default — no default-allow)',
+    )
+  }
+  const timeoutMs = config.timeoutMs ?? DEFAULT_ACP_TIMEOUT_MS
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    throw new RangeError(
+      `[theokit] createACPTool: timeoutMs must be a positive finite number of milliseconds (got ${String(timeoutMs)})`,
     )
   }
   const makeTransport = config.transportFactory ?? defaultTransport
@@ -78,12 +282,34 @@ export function createACPTool(config: AcpToolConfig): CustomTool {
       },
       required: ['message'],
     },
-    handler: async (input: Record<string, unknown>): Promise<string> => {
+    handler: async (input: Record<string, unknown>, ctx?: ToolContext): Promise<string> => {
       const message = typeof input.message === 'string' ? input.message : ''
-      const client = new AcpClient(makeTransport(config))
-      client.onRequest('session/request_permission', (params) => config.onPermissionRequest(params))
-      const result = (await client.request('session/prompt', { message })) as { text?: string }
-      return result.text ?? ''
+      const signal = ctx?.signal
+      // A run cancelled before the call starts gets no agent at all.
+      signal?.throwIfAborted()
+      const transport = makeTransport(config)
+      let onAbort: (() => void) | undefined
+      try {
+        const turn: Turn = {
+          client: new AcpClient(transport),
+          command: config.command,
+          timeoutMs,
+          signal,
+        }
+        // A cancelled run rejects the step in flight with the abort reason; the finally below then
+        // closes the agent, so a cancellation does not wait for the request timeout.
+        onAbort = () => turn.abort?.(signal?.reason)
+        signal?.addEventListener('abort', onAbort, { once: true })
+        turn.client.onRequest('session/request_permission', async (params) =>
+          toAcpPermissionResponse(params, await config.onPermissionRequest(params)),
+        )
+        return await runTurn(turn, resolve(config.cwd ?? process.cwd()), message)
+      } finally {
+        if (onAbort !== undefined) signal?.removeEventListener('abort', onAbort)
+        // The agent is a long-lived stdio server: left open, every call would leave one running.
+        // Awaited, so the call does not return while its agent is still running.
+        await transport.close?.()
+      }
     },
   }
 }

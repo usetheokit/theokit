@@ -25,6 +25,7 @@ import {
   type ReflectionStrategy,
   resolveLoopStrategy,
 } from '../loop/index.js'
+import { resolveRunBudget } from '../loop/run-budget.js'
 import { type RoundStreamFactory, runReflectiveLoop } from '../loop/run-reflective-loop.js'
 import type { MainLoopMeta } from '../types.js'
 
@@ -37,6 +38,8 @@ import { createSdkAgentStream } from './sdk-adapter.js'
 // Re-export the delegation value types for backward compatibility — they moved
 // to delegation-types.js to break the orchestrator↔loop import cycle (G1).
 export {
+  // B-409: the unpriced-round refusal travels with its parent, so `./bridge` can name it too.
+  DelegationBudgetCostUnknownError,
   DelegationBudgetExceededError,
   /** @deprecated M91 — use `DelegationBudgetExceededError`; it is the SAME class, aliased for one major. */
   BudgetExceededError,
@@ -54,9 +57,15 @@ export interface DelegateOptions {
    * unlike the budget errors — is marked retryable, because a hang is often transient.
    */
   readonly timeoutMs?: number
-  /** Max USD for this sub-agent call. */
+  /**
+   * Max USD for this sub-agent call. `NaN` is refused with `DelegationError`; 0 or below stops the
+   * call before any round with `DelegationBudgetExceededError`; `Infinity` is no ceiling.
+   */
   budget?: number
-  /** Parent's remaining budget (for clamping). */
+  /**
+   * Parent's remaining budget (for clamping), read on the same terms as `budget`: a parent that
+   * has spent its ceiling (0 or below) ends the call as budget exceeded before any round.
+   */
   parentBudgetRemaining?: number
   /** Parent's tools (for sharing — sub-agent inherits these). */
   parentTools?: CompiledTool[]
@@ -228,6 +237,13 @@ export async function delegate(
   opts: DelegateOptions = {},
 ): Promise<DelegationResult> {
   const apiKey = requireApiKey(opts, spec.name)
+  // Both ceilings are checked on the terms `AgentRunner` applies (B-409, review #67), before any
+  // hook or round: `Math.min` with `NaN` is `NaN`, which every later budget check reads as unset.
+  // A spent parent (`parentBudgetRemaining <= 0`) ends as budget exceeded (docs/adr/0023).
+  const budget = Math.min(
+    resolveRunBudget(opts.budget, spec.name) ?? Infinity,
+    resolveRunBudget(opts.parentBudgetRemaining, spec.name, 'parentBudgetRemaining') ?? Infinity,
+  )
 
   // M12 — onDelegationStart: let the supervisor rewrite the input before the sub-agent runs.
   const rewritten = opts.onDelegationStart
@@ -255,7 +271,6 @@ export async function delegate(
   // always inherited — is what makes "the member runs under the parent's authority" true rather
   // than merely intended.
   const allTools = mergeTools(opts.parentTools ?? [], compiled.tools)
-  const budget = Math.min(opts.budget ?? Infinity, opts.parentBudgetRemaining ?? Infinity)
   // The parent's gate travels as a code plugin, because that is the seam the SDK dispatches hooks
   // through (`compileHooksAndPlugins` in define-agent.ts says so, and `kind: 'general'` is
   // load-bearing there). The member's OWN hooks are already inside its own plugin by the time

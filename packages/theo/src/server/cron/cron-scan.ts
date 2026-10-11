@@ -3,7 +3,7 @@
  * input ever reaches these fs calls.
  */
 import { existsSync } from 'node:fs'
-import { basename } from 'node:path'
+import { basename, resolve } from 'node:path'
 
 import { importUserModule } from '../../config/import-user-module.js'
 import { compareByCodeUnit } from '../_internal/compare-by-code-unit.js'
@@ -55,6 +55,45 @@ function isCronDefinition(value: unknown): value is CronDefinition {
 }
 
 /**
+ * The two homes `theokit build` scans for crons, absolute: `<serverDir>/crons` (a backend trigger)
+ * and `<agentsDir>/schedules` (a scheduled agent run). One definition, read by the build and by the
+ * schedule generator, so a generated schedule lands where the build looks.
+ */
+export function cronScanDirs(
+  cwd: string,
+  serverDir: string,
+  agentsDir: string,
+): { readonly crons: string; readonly schedules: string } {
+  return {
+    crons: resolve(cwd, serverDir, 'crons'),
+    schedules: resolve(cwd, agentsDir, 'schedules'),
+  }
+}
+
+/**
+ * Whether the scanner treats a file named `fileName` as a cron. Private helpers (`_helper.ts`) and
+ * dotfiles (`.DS_Store`, or `.ts` from an empty name) are skipped.
+ */
+export function isDiscoverableCronFile(fileName: string): boolean {
+  return !fileName.startsWith('_') && !fileName.startsWith('.')
+}
+
+/**
+ * The cron files {@link scanCronDirs} would import from `dirs`, without importing them. Missing
+ * dirs are skipped.
+ */
+export function listCronFiles(dirs: readonly string[]): string[] {
+  const filePaths: string[] = []
+  for (const dir of dirs) {
+    if (!existsSync(dir)) continue
+    walkSourceFiles(dir, { extensions: CRON_EXTENSIONS }, (p) => {
+      if (isDiscoverableCronFile(basename(p))) filePaths.push(p)
+    })
+  }
+  return filePaths
+}
+
+/**
  * Scan a directory for cron definition files and return the discovered
  * `CronNode[]` sorted by name. Throws `DuplicateCronNameError` on name
  * collision and `Error` on missing default export.
@@ -76,16 +115,7 @@ export async function scanCrons(cronsDir: string): Promise<CronNode[]> {
  * by name for a stable manifest.
  */
 export async function scanCronDirs(dirs: readonly string[]): Promise<CronNode[]> {
-  const filePaths: string[] = []
-  for (const dir of dirs) {
-    if (!existsSync(dir)) continue
-    walkSourceFiles(dir, { extensions: CRON_EXTENSIONS }, (p) => {
-      const base = basename(p)
-      // Skip private helpers (`_helper.ts`) and OS junk (`.DS_Store`).
-      if (base.startsWith('_') || base.startsWith('.')) return
-      filePaths.push(p)
-    })
-  }
+  const filePaths = listCronFiles(dirs)
 
   const nodes: CronNode[] = []
   for (const filePath of filePaths) {

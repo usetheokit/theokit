@@ -1,0 +1,140 @@
+{
+  "about": "One row per OBJ-8 pillar, checked by `pnpm check:pillars` (scripts/check-pillar-map.mjs). A row is proven, out or pending. A proven row names a test file under a tests/live directory of TheoClaw or TheoCode and the vitest fullName of the test, and counts only when, in the vitest JSON reports given with --results, the newest run of that file records the test as passed. An out row carries a reason of 8 words or more. A pending row always fails. Deciding which pillars are out is the call of the OBJ-8 owner.",
+  "pillars": [
+    {
+      "pillar": "agents",
+      "status": "pending"
+    },
+    {
+      "pillar": "file-based config",
+      "status": "pending"
+    },
+    {
+      "pillar": "providers and models",
+      "status": "pending"
+    },
+    {
+      "pillar": "prompts",
+      "status": "pending"
+    },
+    {
+      "pillar": "reasoning",
+      "status": "pending"
+    },
+    {
+      "pillar": "tools",
+      "status": "pending"
+    },
+    {
+      "pillar": "streaming",
+      "status": "pending"
+    },
+    {
+      "pillar": "workflows",
+      "status": "pending"
+    },
+    {
+      "pillar": "squad",
+      "status": "pending"
+    },
+    {
+      "pillar": "memory",
+      "status": "pending"
+    },
+    {
+      "pillar": "sessions",
+      "status": "pending"
+    },
+    {
+      "pillar": "context",
+      "status": "pending"
+    },
+    {
+      "pillar": "compaction",
+      "status": "proven",
+      "app": "theocode",
+      "file": "apps/theocode/packages/agent/tests/live/one-real-turn.test.ts",
+      "fullName": "a live turn, through the provider surface the product uses compacts a transcript past its budget, with a LIVE model writing the summary"
+    },
+    {
+      "pillar": "structured output",
+      "status": "pending"
+    },
+    {
+      "pillar": "goals",
+      "status": "pending"
+    },
+    {
+      "pillar": "tasks",
+      "status": "pending"
+    },
+    {
+      "pillar": "subagents",
+      "status": "pending"
+    },
+    {
+      "pillar": "A2A",
+      "status": "pending"
+    },
+    {
+      "pillar": "handoffs",
+      "status": "pending"
+    },
+    {
+      "pillar": "guardrails",
+      "status": "pending"
+    },
+    {
+      "pillar": "permissions",
+      "status": "pending"
+    },
+    {
+      "pillar": "resilience",
+      "status": "pending"
+    },
+    {
+      "pillar": "hooks",
+      "status": "pending"
+    },
+    {
+      "pillar": "schedules",
+      "status": "pending"
+    },
+    {
+      "pillar": "cache",
+      "status": "pending"
+    },
+    {
+      "pillar": "personalities",
+      "status": "pending"
+    },
+    {
+      "pillar": "evals",
+      "status": "pending"
+    },
+    {
+      "pillar": "cost",
+      "status": "pending"
+    },
+    {
+      "pillar": "observability",
+      "status": "pending"
+    },
+    {
+      "pillar": "MCP",
+      "status": "pending"
+    },
+    {
+      "pillar": "sandbox",
+      "status": "pending"
+    },
+    {
+      "pillar": "filesystem",
+      "status": "pending"
+    },
+    {
+      "pillar": "ACP server",
+      "status": "pending"
+    }
+  ]
+}

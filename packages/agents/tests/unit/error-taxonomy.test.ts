@@ -124,6 +124,20 @@ const CASES = [
     args: ['agents/x.ts'],
     retryable: false,
   },
+  {
+    mod: '../../src/acp/client.js',
+    load: () => import('../../src/acp/client.js'),
+    name: 'AcpProtocolError',
+    args: ['42'],
+    retryable: false,
+  },
+  {
+    mod: '../../src/acp/client.js',
+    load: () => import('../../src/acp/client.js'),
+    name: 'AcpConnectionClosedError',
+    args: [new Error('exited with code 3')],
+    retryable: false,
+  },
 ] as const
 
 /**

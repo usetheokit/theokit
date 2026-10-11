@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- A CI job calls a real model on every push to `develop`. `live-model.yml` sends one request to OpenRouter and then runs the `@theokit/agents` live suite and TheoCode's A2A real-model test (`pnpm --filter theocode test:live`, #B-407), which ran before only in a job with no key and so skipped green on every push; a run that cannot reach the provider, or has no key, ends red and prints why (`provider could not be reached: …`, `provider key absent: …`) instead of skipping green; a provider that answers with no content, or with JSON that is not a chat answer (`null`, an array, a `choices` that is not an array), prints `provider answered without content (HTTP …)`, so a misconfigured model does not read as an outage; a `LIVE_MODEL` that is empty or whitespace falls back to the default model in the preflight and in every live test alike (#B-415)
+
+- `pnpm check:pillars` counts the 33 OBJ-8 pillars in `docs/program/pillar-map.json` and fails every pillar that is neither declared out with a reason of 8 words or more nor proven by a recorded passing run of a live TheoClaw or TheoCode test, read from vitest JSON reports passed with `--results`; the test file must really sit inside the app, so a package test reached through the app's `node_modules` link does not count. It is red by design today (`33 of 33 pillars not proven`), counts a row naming no pillar on that same line (`, 1 row names no pillar`), and stays out of CI until each pillar is proven or declared out. TheoClaw's `boundaries` and TheoCode's `depcruise` now carry `proof-imports-only-published-entry-points`, which refuses an import, from source or test, that resolves into a theokit package's `src/`; TheoCode's cruise now includes its test files (#B-416)
+
+- `@theokit/agents`: `DelegationResult` gains `costUnknown?: true`, set when a round of the run reported no finite cost. `cost` stays the spend of the priced rounds, so a run on a model the SDK cannot price no longer returns a bare `{ cost: 0 }` that reads as a price; a run whose every round was priced has no `costUnknown` key (#B-409)
+
+### Changed
+
+- `@theokit/agents`: a run with a USD ceiling stops before the round that would exceed it, and the ceiling can be given as `budget: { maxCostUsd }`. `maxCostUsd` used to be exported and read by nothing, and a numeric `budget` was checked only after a round had been paid for, so the round that crossed it always ran. The loop now assumes the next round costs what the last one did and refuses it when that would pass the ceiling, so such a run stops one round earlier than before; with a ceiling set, a round whose cost is not known also stops the run, with the new `DelegationBudgetCostUnknownError`, exported from the root and from `@theokit/agents/bridge`. `budget: { window }` is refused before any round. The first round always runs, because no earlier round exists to project its cost from: a ceiling below that round's cost is spent once, and the run then stops with `DelegationBudgetExceededError`. The ceiling reads the cost each round's `done` event reports, which through the SDK adapter is the SDK's `amountUsd`; a round from a custom `streamFactory` that ends with no `done`, or with no finite numeric `cost`, counts as a round whose cost is not known (#970, #969)
+- `@theokit/agents`: the USD ceiling is checked before any round, in both spellings of the run option `budget` and in `delegate()`'s `budget` and `parentBudgetRemaining`. `NaN` used to read as a ceiling and enforce none; it now throws a `DelegationError` naming the field. A ceiling of 0 or below still ends in `DelegationBudgetExceededError`, but before the first round instead of after paying for it, so a parent that has spent its budget stops a delegation without charging it. `Infinity` still means no ceiling (docs/adr/0023, #B-433)
+
+## [@theokit/agents 15.1.1, create-theokit 3.0.17] - 2026-10-04
+
+Released with no entry under `[Unreleased]`. Per-package detail is in each package's
+own `CHANGELOG.md`.
+
 ## [@theokit/agents 15.1.0, create-theokit 3.0.16, theokit 0.74.5] - 2026-10-03
 
 ### Fixed
