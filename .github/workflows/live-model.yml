@@ -28,7 +28,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: usetheokit/shared-workflows/actions/setup@v1 # zizmor: ignore[unpinned-uses] first-party moving major, ADR-0021
+      # This job handles the provider key, so ADR-0021 pins the action by commit (loop-code-review #67).
+      - uses: usetheokit/shared-workflows/actions/setup@95ef5a1ea79f0c4065fa7ca0466b0b07b4c7799d # v1
       - name: Preflight (reach the provider)
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
