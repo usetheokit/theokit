@@ -37,7 +37,7 @@ describe('theokit generate schedule refuses what it cannot resolve', () => {
         join(dir, 'theo.config.ts'),
         "import { x } from 'missing-package'\nexport default x\n",
       )
-      writeFileSync(join(dir, 'package.json'), '{}')
+      writeFileSync(join(dir, 'package.json'), '{ "type": "module" }\n')
 
       const result = await generate({ cwd: dir, type: 'schedule', name: 'daily-digest' })
 
@@ -54,7 +54,7 @@ describe('theokit generate schedule refuses what it cannot resolve', () => {
     const dir = mkdtempSync(join(tmpdir(), 'theo-gen-schedule-agent-'))
     try {
       copyFileSync(SCAFFOLD_CONFIG, join(dir, 'theo.config.ts'))
-      writeFileSync(join(dir, 'package.json'), '{}')
+      writeFileSync(join(dir, 'package.json'), '{ "type": "module" }\n')
       linkFramework(dir)
 
       const result = await generate({ cwd: dir, type: 'schedule', name: 'daily-digest' })
@@ -75,7 +75,7 @@ describe('theokit generate schedule refuses what it cannot resolve', () => {
         join(dir, 'theo.config.ts'),
         "import { x } from 'missing-package'\nexport default x\n",
       )
-      writeFileSync(join(dir, 'package.json'), '{}')
+      writeFileSync(join(dir, 'package.json'), '{ "type": "module" }\n')
       cwd.mockReturnValue(dir)
       const computed = await generate({ cwd: dir, type: 'schedule', name: 'daily-digest' })
 
@@ -95,7 +95,7 @@ describe('theokit generate schedule refuses what it cannot resolve', () => {
     const cwd = vi.spyOn(process, 'cwd')
     try {
       copyFileSync(SCAFFOLD_CONFIG, join(dir, 'theo.config.ts'))
-      writeFileSync(join(dir, 'package.json'), '{}')
+      writeFileSync(join(dir, 'package.json'), '{ "type": "module" }\n')
       linkFramework(dir)
       cwd.mockReturnValue(dir)
       const computed = await generate({ cwd: dir, type: 'schedule', name: 'daily-digest' })
@@ -115,7 +115,7 @@ describe('theokit generate schedule refuses what it cannot resolve', () => {
     const dir = mkdtempSync(join(tmpdir(), 'theo-gen-schedule-twice-'))
     try {
       copyFileSync(SCAFFOLD_CONFIG, join(dir, 'theo.config.ts'))
-      writeFileSync(join(dir, 'package.json'), '{}')
+      writeFileSync(join(dir, 'package.json'), '{ "type": "module" }\n')
       linkFramework(dir)
       mkdirSync(join(dir, 'src/server/agents'), { recursive: true })
       writeFileSync(join(dir, 'src/server/agents/chat.ts'), 'export default {}\n')

@@ -30,7 +30,7 @@ function projectWithExternalAgentsDir(
   const app = join(tmp, 'app')
   mkdirSync(app, { recursive: true })
   writeFileSync(join(app, 'theo.config.ts'), `export default { agentsDir: '${agentsDir}' }\n`)
-  writeFileSync(join(app, 'package.json'), '{}')
+  writeFileSync(join(app, 'package.json'), '{ "type": "module" }\n')
   const external = join(app, agentsDir)
   mkdirSync(external, { recursive: true })
   if (withChatAgent) writeFileSync(join(external, 'chat.ts'), 'export default {}\n')

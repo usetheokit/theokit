@@ -29,7 +29,7 @@ let dir: string
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'theo-gen-schedule-name-'))
   copyFileSync(SCAFFOLD_CONFIG, join(dir, 'theo.config.ts'))
-  writeFileSync(join(dir, 'package.json'), '{}')
+  writeFileSync(join(dir, 'package.json'), '{ "type": "module" }\n')
   mkdirSync(join(dir, 'node_modules'), { recursive: true })
   symlinkSync(resolve(REPO, 'packages/theo'), join(dir, 'node_modules/theokit'), 'dir')
   mkdirSync(join(dir, 'src/server/agents'), { recursive: true })

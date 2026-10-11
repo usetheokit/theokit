@@ -42,7 +42,7 @@ describe('theokit generate schedule in a scaffolded app', () => {
     const dir = mkdtempSync(join(tmpdir(), 'theo-gen-schedule-'))
     try {
       copyFileSync(SCAFFOLD_CONFIG, join(dir, 'theo.config.ts'))
-      writeFileSync(join(dir, 'package.json'), '{}')
+      writeFileSync(join(dir, 'package.json'), '{ "type": "module" }\n')
       linkFramework(dir)
       // A schedule runs the app's `chat` agent, so the project declares one.
       mkdirSync(join(dir, 'src/server/agents'), { recursive: true })
