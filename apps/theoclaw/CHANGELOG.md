@@ -34,7 +34,8 @@ and versioning follows [Semantic Versioning](https://semver.org/).
   two open questions, recorded in `parity/decisions-2026-10-06.md`: OC-37, OC-40 and H-7 are out,
   and OC-41 stays open until the terminal UI ships. The command now prints
   `shipped 0 · out 12 · open 101` and exits 1: that red run is the count. The command is not a CI
-  step yet; the checker's tests run in the existing `test` step.
+  step yet; the checker's tests run in the existing `test` step, and a new `lint` script and CI
+  step run ESLint over `tools/`, which the root config's `apps/**` ignore left unread.
 
 ### Fixed
 
