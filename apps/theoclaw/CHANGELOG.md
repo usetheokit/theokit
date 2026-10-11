@@ -24,8 +24,10 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 - A parity ledger and the command that checks it. OBJ-6 counts 113 rows, the 106 capabilities of
   the OpenClaw inventory and the 7 Hermes rows, and until now they were counted by eye.
   `parity/ledger.json` answers each row as `open`, `out` (a reason of 8 words or more, a
-  `human/<name>` declarer and a date) or `shipped` (a test file inside this repository holding a
-  test whose quoted title is exactly the named one, and a `verified_on` date no later than today).
+  `human/<name>` declarer and a date) or `shipped` (one of this app's own test files, under
+  `tests/` or `tools/` as `vitest.config.ts` collects them, declaring an `it` or `test` call whose
+  title is exactly the named one, outside a comment and outside any `.skip` or `.todo`, and a
+  `verified_on` date no later than today).
   `pnpm --filter theoclaw run parity` reads both source tables where they live, prints
   `shipped N · out M · open K` and one line per violation, and exits 1 while any violation
   remains. On day one it printed `shipped 0 · out 9 · open 104`. Paulo then answered the plan's
