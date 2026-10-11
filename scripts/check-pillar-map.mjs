@@ -37,8 +37,8 @@
  * report written under `apps/theocode` is passed as `--results apps/theocode/<report>.json`. A
  * path that resolves to nothing is exit 2 and names the absolute path it tried.
  */
-import { existsSync, readFileSync } from 'node:fs'
-import { isAbsolute, posix, resolve } from 'node:path'
+import { existsSync, readFileSync, realpathSync } from 'node:fs'
+import { isAbsolute, posix, resolve, sep } from 'node:path'
 
 const ROOT = resolve(import.meta.dirname, '..')
 const DEFAULT_MAP = resolve(ROOT, 'docs/program/pillar-map.json')
@@ -189,6 +189,11 @@ function provenRowProblem(row, records) {
   }
   const absolute = resolve(ROOT, row.file)
   if (!existsSync(absolute)) return 'file does not exist'
+  // The path is checked as spelled, and a link can make it lie: apps/<app>/node_modules/@theokit/*
+  // links to packages/*, so a framework test would pass as an app proof. Its real location decides.
+  if (!realpathSync(absolute).startsWith(realpathSync(resolve(ROOT, 'apps', row.app)) + sep)) {
+    return `file resolves outside apps/${row.app}`
+  }
   const titles = extractTitles(readFileSync(absolute, 'utf8'))
   const fullName = typeof row.fullName === 'string' ? row.fullName : ''
   if (!titles.some((t) => fullName === t || fullName.endsWith(` ${t}`))) {

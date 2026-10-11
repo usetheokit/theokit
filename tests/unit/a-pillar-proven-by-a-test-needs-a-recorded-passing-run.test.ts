@@ -240,6 +240,18 @@ describe('a proven row names a live proof test that exists and declares the titl
     expect(out.stdout).toContain('file must sit under apps/theoclaw or apps/theocode')
   })
 
+  it('fails a path that reaches a package test through the app node_modules link', () => {
+    // apps/theocode/node_modules/@theokit/agents is the pnpm link to packages/agents, so this file
+    // is the framework's own live test spelled as if it sat inside the app.
+    const linked =
+      'apps/theocode/node_modules/@theokit/agents/tests/live/live-m52-capability.test.ts'
+    const fullName = 'file/registry authoring → same waist → real answer'
+    const out = check([[record(1, 'passed', linked)]], compactionRow({ file: linked, fullName }))
+
+    expect(out.status).toBe(1)
+    expect(out.stdout).toContain('compaction: file resolves outside apps/theocode')
+  })
+
   it('fails a fullName whose title the file does not declare', () => {
     const fullName = 'a live turn, through the provider surface the product uses flies to the moon'
     const out = check([], compactionRow({ fullName }))
