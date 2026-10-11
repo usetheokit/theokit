@@ -191,6 +191,14 @@ describe('check-parity-ledger: each entry answer', () => {
     expect(rulesOf(result, 'OC-1')).toContain('check-missing')
   })
 
+  it('fails on a shipped entry whose check path is a directory', () => {
+    const root = tempRepo({ 'tests/e2e/proof.test.ts/inner.txt': "it('proves OC-1', () => {})\n" })
+    const result = judge([shipped('OC-1', 'tests/e2e/proof.test.ts')], root)
+    expect(result.violations.filter((v) => v.id === 'OC-1')).toEqual([
+      { id: 'OC-1', rule: 'check-missing', detail: 'tests/e2e/proof.test.ts is not a file' },
+    ])
+  })
+
   it('fails on a shipped entry whose check file does not contain the named test', () => {
     const root = tempRepo({ 'tests/e2e/proof.test.ts': "it('proves something else', () => {})\n" })
     const result = judge([shipped('OC-1', 'tests/e2e/proof.test.ts')], root)

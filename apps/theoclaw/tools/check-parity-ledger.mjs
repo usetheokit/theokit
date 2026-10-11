@@ -10,7 +10,7 @@
  *
  * Every rule runs on every entry and nothing returns early: one run reports every violation.
  */
-import { readFileSync, realpathSync, statSync } from 'node:fs'
+import { closeSync, constants, fstatSync, openSync, readFileSync, realpathSync } from 'node:fs'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -155,8 +155,15 @@ function locateCheckFile(id, check, repoRoot, named) {
     if (leavesRoot(realpathSync(repoRoot), realpathSync(target))) {
       return [{ id, rule: 'check-outside-repo', detail: `${check.path} resolves outside the repository` }]
     }
-    if (!statSync(target).isFile()) return [{ id, rule: 'check-missing', detail: `${check.path} is not a file` }]
-    if (!named || holdsQuotedTitle(readFileSync(target, 'utf8'), check.test)) return []
+    // One descriptor for the type check and the read, so the file judged is the file read.
+    // O_NONBLOCK keeps a FIFO at the path from blocking the open; `fstat` then refuses it.
+    const fd = openSync(target, constants.O_RDONLY | constants.O_NONBLOCK)
+    try {
+      if (!fstatSync(fd).isFile()) return [{ id, rule: 'check-missing', detail: `${check.path} is not a file` }]
+      if (!named || holdsQuotedTitle(readFileSync(fd, 'utf8'), check.test)) return []
+    } finally {
+      closeSync(fd)
+    }
     return [{ id, rule: 'check-test-absent', detail: `${check.path} has no test titled "${check.test}"` }]
   } catch (error) {
     if (error.code === 'ENOENT' || error.code === 'ENOTDIR') {
