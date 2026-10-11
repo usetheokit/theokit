@@ -246,6 +246,13 @@ describe('redact', () => {
     expect(redact(`id ${run.slice(1)} end`, configured)).toBe(`id ${run.slice(1)} end`)
   })
 
+  // loop-code-review #77: a log line upper-cased by a tool kept a prefix-less run of the key whole.
+  it('redacts a run of the configured key whatever its letter case', () => {
+    const run = configured.slice(20, 50)
+    expect(redact(`x ${run.toUpperCase()} y`, configured)).toBe('x *** y')
+    expect(redact('a Q9Z2 b', 'q9z2')).toBe('a *** b')
+  })
+
   it('redacts a configured key shorter than MIN_KEY_FRAGMENT only when it appears whole', () => {
     expect(redact('a q9z2 b q9z', 'q9z2')).toBe('a *** b q9z')
   })

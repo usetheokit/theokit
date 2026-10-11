@@ -13,10 +13,29 @@ const KEY_SHAPE = /sk-or-v1-[0-9a-f]*/gi
 export const MIN_KEY_FRAGMENT = 8
 
 /**
+ * The `[start, end)` spans of every whole, case-insensitive occurrence of a key too short to be
+ * redacted by runs.
+ * @param {string} text
+ * @param {string} lowerKey the key, lower-cased
+ * @returns {Array<[number, number]>}
+ */
+function wholeKeySpans(text, lowerKey) {
+  const spans = []
+  for (let at = 0; at + lowerKey.length <= text.length; at += 1) {
+    if (text.slice(at, at + lowerKey.length).toLowerCase() === lowerKey) {
+      spans.push([at, at + lowerKey.length])
+      at += lowerKey.length - 1
+    }
+  }
+  return spans
+}
+
+/**
  * The `[start, end)` spans of every run of `MIN_KEY_FRAGMENT` or more characters of `key`, scanning
  * left to right and taking the longest run at each position, so a head, a tail or a middle of the
  * key cut by a truncation is found as well as the whole key. A key shorter than the minimum is
- * found only whole.
+ * found only whole. Letter case is ignored: a tool that upper-cases a log line leaves no prefix for
+ * the key shape to match, so the run itself must still be found (loop-code-review #77).
  * @param {string} text
  * @param {string} key
  * @returns {Array<[number, number]>}
@@ -24,18 +43,16 @@ export const MIN_KEY_FRAGMENT = 8
 function keyRunSpans(text, key) {
   const spans = []
   if (key === '') return spans
-  if (key.length < MIN_KEY_FRAGMENT) {
-    for (let at = text.indexOf(key); at !== -1; at = text.indexOf(key, at + key.length)) {
-      spans.push([at, at + key.length])
-    }
-    return spans
-  }
+  const lowerKey = key.toLowerCase()
+  if (key.length < MIN_KEY_FRAGMENT) return wholeKeySpans(text, lowerKey)
+  // Each slice is lowered on its own, so every span indexes the original text.
+  const inKey = (from, to) => lowerKey.includes(text.slice(from, to).toLowerCase())
   let i = 0
   while (i < text.length) {
     let run = 0
-    if (i + MIN_KEY_FRAGMENT <= text.length && key.includes(text.slice(i, i + MIN_KEY_FRAGMENT))) {
+    if (i + MIN_KEY_FRAGMENT <= text.length && inKey(i, i + MIN_KEY_FRAGMENT)) {
       run = MIN_KEY_FRAGMENT
-      while (i + run < text.length && key.includes(text.slice(i, i + run + 1))) run += 1
+      while (i + run < text.length && inKey(i, i + run + 1)) run += 1
     }
     if (run > 0) {
       spans.push([i, i + run])

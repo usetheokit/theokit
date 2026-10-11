@@ -72,6 +72,12 @@ describe('redactStream', () => {
     expect(await filter([line], KEY)).toBe(`[live] answer: ${'x'.repeat(281)}***\n`)
   })
 
+  // loop-code-review #77/#79: an upper-cased fragment carries no prefix for the key shape to match.
+  it('redacts an upper-cased run of the configured key that carries no prefix', async () => {
+    const run = KEY.slice(20, 50).toUpperCase()
+    expect(await filter([`x ${run} y\n`], KEY)).toBe('x *** y\n')
+  })
+
   it('redacts the sk-or-v1- prefix at any length with no configured key', async () => {
     expect(await filter(['cut sk-or-v1-0123 here\n'], '')).toBe('cut *** here\n')
   })
