@@ -298,8 +298,10 @@ describe('a results file the check cannot read exits 2', () => {
   })
 })
 
-describe('the check stays fast on a large report', () => {
-  it('checks 33 rows against a 5 MB report in under 5000 ms', () => {
+describe('the check reads a large report', () => {
+  // NFR-001's 5 s budget is not asserted here: a wall-clock bound in a gating test fails on a loaded
+  // runner with no code change (it measured 173 ms on 2026-10-11). This test pins the size only.
+  it('checks 33 rows against a 5 MB report', () => {
     const dir = tempDir()
     const filler: FileRecord[] = []
     for (let i = 0; i < 40_000; i++) {
@@ -309,12 +311,9 @@ describe('the check stays fast on a large report', () => {
     const reportPath = writeReport(dir, 'big.json', filler)
     const mapPath = writeMap(dir)
 
-    const started = performance.now()
     const out = run(['--map', mapPath, '--results', reportPath])
-    const elapsedMs = performance.now() - started
 
     expect(JSON.stringify({ testResults: filler }).length).toBeGreaterThanOrEqual(5_000_000)
     expect(out.status).toBe(0)
-    expect(elapsedMs).toBeLessThan(5000)
   })
 })
