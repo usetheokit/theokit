@@ -98,6 +98,16 @@ describe('live-model.yml', () => {
     for (const step of STEPS) expect(step.run ?? '').not.toMatch(/\|\|\s*(true|exit\s+0)\b/)
   })
 
+  // ADR-0021: a job that handles a credential pins every action by commit, never a moving tag
+  // (loop-code-review #67).
+  it('pins every action the key-bearing job uses to a 40-character commit', () => {
+    const unpinned = STEPS.flatMap((s) => (s.uses === undefined ? [] : [s.uses])).filter(
+      (uses) => !/@[0-9a-f]{40}$/.test(uses),
+    )
+    expect(unpinned).toEqual([])
+    expect(RAW).not.toMatch(/ignore\[unpinned-uses\]/)
+  })
+
   it('gives every push its own run, so no pending push is cancelled', () => {
     expect('concurrency' in WORKFLOW).toBe(false)
     expect('concurrency' in JOB).toBe(false)
