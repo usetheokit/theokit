@@ -15,6 +15,9 @@ function createTempProject(): string {
   mkdirSync(join(dir, 'server/actions'), { recursive: true })
   writeFileSync(join(dir, 'theo.config.ts'), 'export default {}')
   writeFileSync(join(dir, 'package.json'), '{}')
+  // A schedule runs the app's `chat` agent, and the generator refuses a project without one.
+  mkdirSync(join(dir, 'agents'))
+  writeFileSync(join(dir, 'agents/chat.ts'), 'export default {}')
   return dir
 }
 

@@ -26,5 +26,6 @@
 # names but disk does not have stays listed rather than deleted. Read the rule
 # for why each is so.
 
-theokit | theokit, apps/theocode, apps/theoclaw, packages/agents, packages/agents-pty, packages/create-theokit, packages/http, packages/presenter, packages/tauri, packages/theo | agents/theokit.md
+theokit | theokit-sdk, theokit, apps/theocode, apps/theoclaw, packages/agents, packages/agents-pty, packages/create-theokit, packages/http, packages/presenter, packages/tauri, packages/theo | agents/theokit.md
 theokit-ui | theokit-ui | agents/theokit-ui.md
+theokit-gateways | theokit-gateways | agents/theokit-gateways.md

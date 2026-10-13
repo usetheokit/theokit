@@ -83,7 +83,13 @@ vi.mock('@theokit/sdk', () => ({
             wait: async () => ({
               result: 'final',
               usage: { inputTokens: 5, outputTokens: 3 },
-              cost: { amount: 0.001 },
+              cost: {
+                amountUsd: 0.001,
+                status: 'estimated',
+                currency: 'USD',
+                source: 'litellm_snapshot',
+                pricingVersion: undefined,
+              },
             }),
           })
         },

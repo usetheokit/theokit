@@ -603,6 +603,10 @@ jobs:
         run: pnpm --filter theoclaw run typecheck
       - name: boundaries
         run: pnpm --filter theoclaw run boundaries
+      # ESLint over `tools/`. The root config ignores `apps/**`, so the parity checker and its test
+      # were read by no analyzer until this step (code review #67).
+      - name: lint
+        run: pnpm --filter theoclaw run lint
 
   dependency-audit:
     name: Dependency audit (production, high+)

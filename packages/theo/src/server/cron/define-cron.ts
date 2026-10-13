@@ -3,12 +3,18 @@ import { validateCronSchedule } from './cron-validate.js'
 
 const NAME_RE = /^[a-z0-9][a-z0-9-]{0,63}$/
 
+/** What {@link isValidCronName} requires, in words, for an error message. */
+export const CRON_NAME_RULE =
+  'Must be 1-64 chars, lowercase alphanumeric + hyphen, starting with [a-z0-9].'
+
+/** Whether `defineCron` accepts `name`. The generator asks this before writing a cron. */
+export function isValidCronName(name: string): boolean {
+  return typeof name === 'string' && NAME_RE.test(name)
+}
+
 function validateName(name: string): void {
-  if (typeof name !== 'string' || !NAME_RE.test(name)) {
-    throw new Error(
-      `defineCron: invalid name "${name}". ` +
-        'Must be 1-64 chars, lowercase alphanumeric + hyphen, starting with [a-z0-9].',
-    )
+  if (!isValidCronName(name)) {
+    throw new Error(`defineCron: invalid name "${name}". ${CRON_NAME_RULE}`)
   }
 }
 

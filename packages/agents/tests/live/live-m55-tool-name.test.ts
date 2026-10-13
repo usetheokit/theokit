@@ -21,7 +21,11 @@ import { applyCapabilities } from '../../src/capability/capability.js'
 import { ConfigurationError } from '../../src/errors.js'
 import { ToolboxCapability, type ToolDeclaration } from '../../src/capability/toolbox.js'
 
-const MODEL = process.env.LIVE_MODEL ?? 'google/gemini-2.5-flash-lite'
+import { resolveLiveModel } from '../../../../scripts/live-model.mjs'
+
+import { redactThenCut } from './provider-text.js'
+
+const MODEL = resolveLiveModel(process.env)
 const KEYS = ['OPENROUTER_API_KEY', 'ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'THEOKIT_API_KEY']
 
 function keyPresence(): string {
@@ -97,7 +101,7 @@ describe.skipIf(!HAS_KEY)('M55 LIVE — namespaced tool name against a real prov
     const result = await run.wait()
     console.log(`[live] run status: ${result.status}`)
     const answer = result.result ?? ''
-    console.log(`[live] answer: ${answer.slice(0, 300)}`)
+    console.log(`[live] answer: ${redactThenCut(answer, 300)}`)
     console.log(`[live] handler invocations: ${vault.calls}`)
 
     // The name survived the whole round-trip: authoring → Agent.create → provider → pre_tool_call.

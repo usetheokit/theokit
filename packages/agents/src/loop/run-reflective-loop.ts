@@ -27,6 +27,8 @@ import { GuardrailError } from '../guardrails/index.js'
 
 import type { LoopFinishReason, LoopOutcome, LoopStrategy } from './loop-strategy.js'
 import type { ReflectionContext, ReflectionStrategy } from './reflection-strategy.js'
+import { accumulateUsage, applyDone, type RoundUsage } from './round-usage.js'
+import { throwIfNextRoundRefused } from './run-budget.js'
 
 /** One SDK stream turn: `createSdkAgentStream(...)` returns this shape. */
 /**
@@ -72,10 +74,6 @@ interface RunReflectiveLoopConfig {
 
 function asString(value: unknown, fallback: string): string {
   return typeof value === 'string' ? value : fallback
-}
-
-function asNumber(value: unknown, fallback: number): number {
-  return typeof value === 'number' ? value : fallback
 }
 
 /** Consecutive no-progress rounds before terminating with `'no_progress'` (K=2 tolerates one retry — V4-D). */
@@ -212,21 +210,6 @@ async function* consumeRoundOrThrow(
   }
 }
 
-/**
- * V4-N/V4-O: fold one round's usage into the accumulator — cost + total/split tokens (V4-N) and
- * the reasoning/cache buckets (V4-O). Extracted from the loop body to keep its complexity within
- * budget (G6); the optional `acc` fields default to 0 before adding.
- */
-function accumulateUsage(acc: DelegationResult, r: RoundResult): void {
-  acc.cost += r.cost
-  acc.tokens += r.tokens
-  acc.tokensInput = (acc.tokensInput ?? 0) + r.tokensInput
-  acc.tokensOutput = (acc.tokensOutput ?? 0) + r.tokensOutput
-  acc.reasoningTokens = (acc.reasoningTokens ?? 0) + r.reasoningTokens
-  acc.cacheReadTokens = (acc.cacheReadTokens ?? 0) + r.cacheReadTokens
-  acc.cacheWriteTokens = (acc.cacheWriteTokens ?? 0) + r.cacheWriteTokens
-}
-
 /** Stamp the terminal state on the accumulator + emit the runtime metric (DRY for the 2 exit points). */
 function finalize(
   acc: DelegationResult,
@@ -241,17 +224,9 @@ function finalize(
 }
 
 /** One round's accumulated facts + the signals needed to derive `finishReason`. */
-interface RoundResult {
+interface RoundResult extends RoundUsage {
   responseText: string
   toolCalls: { id: string; name: string; input: unknown; output: string }[]
-  cost: number
-  tokens: number
-  tokensInput: number
-  tokensOutput: number
-  // V4-O: reasoning/cache token buckets folded from the done event.
-  reasoningTokens: number
-  cacheReadTokens: number
-  cacheWriteTokens: number
   finishReason: LoopFinishReason
   errorMessage: string
 }
@@ -310,28 +285,6 @@ function pushToolResult(
     input: call?.input ?? event.input ?? {},
     output: asString(event.output, ''),
   })
-}
-
-/** V4-N: fold a `done` event's cost + split/total token usage into the round (V4-O: + buckets). */
-function applyDone(event: StreamEvent, r: RoundResult): void {
-  r.cost = asNumber(event.cost, 0)
-  const usage = event.usage as
-    | {
-        totalTokens?: number
-        inputTokens?: number
-        outputTokens?: number
-        reasoningTokens?: number
-        cacheReadTokens?: number
-        cacheWriteTokens?: number
-      }
-    | undefined
-  r.tokens = usage?.totalTokens ?? 0
-  r.tokensInput = usage?.inputTokens ?? 0
-  r.tokensOutput = usage?.outputTokens ?? 0
-  // V4-O: fold the reasoning/cache buckets (0 when the provider/adapter omits them).
-  r.reasoningTokens = usage?.reasoningTokens ?? 0
-  r.cacheReadTokens = usage?.cacheReadTokens ?? 0
-  r.cacheWriteTokens = usage?.cacheWriteTokens ?? 0
 }
 
 /**
@@ -412,6 +365,7 @@ async function* consumeOneRound(
     responseText: '',
     toolCalls: [],
     cost: 0,
+    costKnown: false,
     tokens: 0,
     tokensInput: 0,
     tokensOutput: 0,
@@ -562,6 +516,8 @@ export async function* runReflectiveLoopStream(
       )
       return finalize(acc, round, reason, loop.name)
     }
+
+    throwIfNextRoundRefused(acc.cost, r, budget, agentName, signal) // B-409, before paying
 
     feedback = reflectionResult.feedback
     round += 1

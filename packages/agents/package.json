@@ -77,6 +77,10 @@
       "types": "./dist/tool-scope.d.ts",
       "import": "./dist/tool-scope.js"
     },
+    "./a2a": {
+      "types": "./dist/a2a.d.ts",
+      "import": "./dist/a2a.js"
+    },
     "./mcp-health": {
       "types": "./dist/mcp-health.d.ts",
       "import": "./dist/mcp-health.js"

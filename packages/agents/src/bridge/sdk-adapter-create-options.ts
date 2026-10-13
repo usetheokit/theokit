@@ -9,7 +9,7 @@
 import { createRequire } from 'node:module'
 
 import type { ContextSettings, SkillsSettings, SystemPromptResolver } from '@theokit/sdk'
-import type { MemorySettings, TelemetrySettings } from '@theokit/sdk'
+import type { CostBreakdown, MemorySettings, TelemetrySettings, TokenUsage } from '@theokit/sdk'
 import { PermissionEngine, PermissionPlugin } from '@theokit/sdk'
 import { TheokitAgentError } from '@theokit/sdk/errors'
 
@@ -20,6 +20,7 @@ import type { StreamEvent } from './agent-sse-handler.js'
 import type { AgentStopReason, DoneEvent } from './agent-stream-events.js'
 import { assertCodePlugins } from './code-plugins.js'
 import { compileProjectContext } from './compile-project-context.js'
+import { knownCost } from './event-translator.js'
 import type { ResolvedCompatSource } from './setting-sources-gate.js'
 
 /** Extra `Agent.create()` options compiled from the M8 declarative decorators. */
@@ -634,6 +635,44 @@ function stopReasonOf(result: {
 }
 
 /**
+ * The SDK `TokenUsage` fields the terminal frame reads; V4-O added the reasoning/cache buckets.
+ * Derived from the SDK type, not hand-typed (ADR D2 of B-419: a hand-typed shape is how a renamed
+ * field kept compiling), and every field optional because a run result may omit any of them.
+ * Shared with the `wait()` result shape in `sdk-adapter.ts`; not part of the bridge barrel.
+ */
+export type SdkRunUsage = Partial<
+  Pick<
+    TokenUsage,
+    'inputTokens' | 'outputTokens' | 'reasoningTokens' | 'cacheReadTokens' | 'cacheWriteTokens'
+  >
+>
+
+/**
+ * The terminal frame's `usage`: the total derived from input + output, and the SDK reasoning/cache
+ * buckets forwarded (0 when the provider omits them) so a consumer keeps full per-turn usage
+ * through the loop into DelegationResult (passthrough — ADR D1). Split out of
+ * {@link realUsageDone} to keep its complexity within budget (G6).
+ */
+function doneUsage(sdkUsage: SdkRunUsage | undefined): DoneEvent['usage'] {
+  const usage = sdkUsage ?? {}
+  const inputTokens = countOrZero(usage.inputTokens)
+  const outputTokens = countOrZero(usage.outputTokens)
+  return {
+    inputTokens,
+    outputTokens,
+    totalTokens: inputTokens + outputTokens,
+    reasoningTokens: countOrZero(usage.reasoningTokens),
+    cacheReadTokens: countOrZero(usage.cacheReadTokens),
+    cacheWriteTokens: countOrZero(usage.cacheWriteTokens),
+  }
+}
+
+/** A token count the SDK may omit, read as 0. */
+function countOrZero(count: number | undefined): number {
+  return count ?? 0
+}
+
+/**
  * V4-N.1: build the terminal `done` event from the SDK `RunResult` (real per-run token usage +
  * cost). Extracted from the stream generator to keep its complexity within budget (G6).
  *
@@ -645,15 +684,8 @@ function stopReasonOf(result: {
 export function realUsageDone(
   result: {
     result?: string
-    usage?: {
-      inputTokens?: number
-      outputTokens?: number
-      // V4-O: optional reasoning/cache buckets from the SDK TokenUsage.
-      reasoningTokens?: number
-      cacheReadTokens?: number
-      cacheWriteTokens?: number
-    }
-    cost?: { amount?: number }
+    usage?: SdkRunUsage
+    cost?: CostBreakdown
     // theokit#379: the SDK's truncation flags. Optional — absent on a clean finish and on an SDK
     // that predates them, which is the degradation this layer wants.
     stoppedAtIterationLimit?: boolean
@@ -671,25 +703,13 @@ export function realUsageDone(
    */
   model?: string,
 ): StreamEvent {
-  const u = result.usage
-  const inputTokens = u?.inputTokens ?? 0
-  const outputTokens = u?.outputTokens ?? 0
   const stopReason = stopReasonOf(result)
   return {
     type: 'done',
     result: result.result ?? '',
-    // V4-O: forward the SDK reasoning/cache buckets (0 when the provider omits them) so a
-    // consumer keeps full per-turn usage through the loop into DelegationResult (passthrough — ADR D1).
-    usage: {
-      inputTokens,
-      outputTokens,
-      totalTokens: inputTokens + outputTokens,
-      reasoningTokens: u?.reasoningTokens ?? 0,
-      cacheReadTokens: u?.cacheReadTokens ?? 0,
-      cacheWriteTokens: u?.cacheWriteTokens ?? 0,
-    },
+    usage: doneUsage(result.usage),
     durationMs: Date.now() - t0,
-    cost: result.cost?.amount ?? 0,
+    ...knownCost(result.cost),
     ...terminalExtras(stopReason, model),
   }
 }

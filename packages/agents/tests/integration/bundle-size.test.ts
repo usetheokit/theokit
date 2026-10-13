@@ -137,8 +137,71 @@ describe('Bundle size regression', () => {
    * So the ceiling comes down with it. The raise above was paid for by a capability; this is dead
    * surface leaving, and a budget that kept the slack would be holding room for the next addition
    * nobody asked about. Headroom is 118 bytes.
+   *
+   * ## Raised to 39 200 for B-408: a decision, made by a person
+   *
+   * The ACP tool never opened a session: it sent `session/prompt` alone, and an ACP agent streams
+   * its reply as `session/update` notifications that `AcpClient` dropped. The fix needs
+   * `AcpClient.onNotification`, and `AcpClient` is in the root barrel through
+   * `export * from './acp/client.js'`. Attributed by control, swapping only `src/acp/client.ts`:
+   * 38 417 bytes before, 39 121 with it, so about 700 bytes.
+   *
+   * Shrinking was measured first. With no comment and the guard inlined into `dispatch` the bundle
+   * is still 38 720, 120 over the old ceiling, because the method, its map and the dispatch branch
+   * are the behavior itself. Moving `AcpClient` to a subpath would break every importer of it from
+   * the barrel, `createACPTool` in `theokit` among them.
+   *
+   * Moving a threshold so a gate passes is not something an implementation run may decide, so the
+   * run stopped and asked. Paulo approved this raise on 2026-10-06. Headroom is 79 bytes.
+   *
+   * ## Raised to 40 500 for B-407: a decision, made by a person
+   *
+   * `createA2ATool` called `res.json()` on the reply, and every agent route the framework serves
+   * answers with a UIMessage event stream. The fix reads that stream with `consumeUIMessageStream`,
+   * rejects an error frame or a stream cut before `finish` naming the tool, and sends
+   * `accept: text/event-stream` and `X-Theo-Action: 1`. Measured 40 328 bytes after it, against
+   * 39 121 before, so about 1 200 bytes. The reader itself already lives in a shared chunk; what
+   * lands in `index.js` is the A2A module (2 497 bytes, `buildHeaders`, `textOf`,
+   * `cutStreamMessage`, the handler) and one import line. `createA2ATool` is in the root barrel
+   * through `export * from './a2a/a2a-client.js'`.
+   *
+   * The run stopped at the cap and did not move it. Paulo decided this raise on 2026-10-06, relayed
+   * to the run by the orchestrator. Headroom is 172 bytes.
+   *
+   * Review fixes #78 and #85 then spent 160 of those bytes without moving the cap: `AcpClient` turns
+   * an agent stdout line that is not JSON into a rejection of the requests in flight and isolates a
+   * throwing notification handler, and `createA2ATool` passes the run's signal to `fetch`. Measured
+   * 40 488 bytes after them, so headroom is 12 bytes.
+   *
+   * ## Raised to 41 500 for AcpClient robustness and B-434: a decision, made by a person
+   *
+   * The code review of the ci-live-model-job change found three more ways the agent's stdout
+   * reaches `AcpClient` badly (#69 a JSON line that is not an object, #70 a bad line discarding the
+   * good messages beside it, #71 an async notification handler whose rejection nobody catches), and
+   * B-434 asks `AcpClient` to reject its pending requests itself when its transport closes. B-434
+   * was left open on 2026-10-07 because a minimal version measured 40 517 bytes against this cap.
+   * With 12 bytes of headroom none of the four fits. Paulo decided this raise on 2026-10-09, before
+   * the fixes were written.
+   *
+   * ## Raised to 42 000 for the AcpClient error taxonomy and the unmatched JSON-RPC object
+   *
+   * The same review found two more defects in `AcpClient`: `AcpProtocolError` and
+   * `AcpConnectionClosedError` extended plain `Error` (#83), and an object matching no JSON-RPC shape
+   * was dropped while the request it answered stayed pending (#66). Measured on 41 496 bytes, so 4
+   * bytes of headroom: #66 alone came to 41 556, #83 alone to 41 741, both to 41 801. Most of #83 is
+   * the separate `@theokit/sdk/errors` import the bundler writes per module. Paulo decided this
+   * raise on 2026-10-09, after the two fixes were measured.
+   *
+   * ## NOT raised for F-arch-5 — `createA2ATool` moved to `./a2a` (B-407)
+   *
+   * The root bundle then stood at 41 992 bytes, 8 under this cap. B-024's answer applied this time:
+   * the A2A client is a lone module most agents never import, so the shape changed rather than the
+   * number. Paulo decided on 2026-10-09 to move `createA2ATool`, `A2AToolConfig` and `A2AAuth` to
+   * `@theokit/agents/a2a` (`src/a2a-entry.ts`) in the major B-407 already carries. Measured after
+   * the move: `dist/index.js` 39 332 bytes, `dist/a2a.js` 2 750. The cap stays at 42 000.
+   * `the-a2a-tool-ships-on-its-own-subpath.test.ts` keeps the module out of the root bundle.
    */
-  it('agents main bundle under 38.7KB', (ctx) => {
+  it('agents main bundle under 42KB', (ctx) => {
     const path = resolve(distDir, 'index.js')
     if (!existsSync(path)) {
       // `ctx.skip()`, not `return`. A bare return reports the test as PASSED, so a suite run with no
@@ -148,7 +211,7 @@ describe('Bundle size regression', () => {
       return
     }
     const size = statSync(path).size
-    expect(size).toBeLessThan(38_600)
+    expect(size).toBeLessThan(42_000)
     console.log(`  agents/dist/index.js: ${(size / 1024).toFixed(1)} KB`)
   })
 

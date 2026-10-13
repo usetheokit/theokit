@@ -1,0 +1,6 @@
+{
+  "name": "@theokit/agents",
+  "private": true,
+  "type": "module",
+  "exports": "./index.mjs"
+}

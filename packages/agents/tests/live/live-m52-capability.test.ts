@@ -20,7 +20,11 @@ import { ModelCapability, SkillsCapability } from '../../src/capability/capabili
 import { applyCapabilities } from '../../src/capability/capability.js'
 import { CapabilityRegistry } from '../../src/capability/registry.js'
 
-const MODEL = process.env.LIVE_MODEL ?? 'google/gemini-2.5-flash-lite'
+import { resolveLiveModel } from '../../../../scripts/live-model.mjs'
+
+import { redactThenCut } from './provider-text.js'
+
+const MODEL = resolveLiveModel(process.env)
 
 function keyPresence(): string {
   const names = ['OPENROUTER_API_KEY', 'ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'THEOKIT_API_KEY']
@@ -138,7 +142,7 @@ async function main(): Promise<void> {
   const result = await run.wait()
   console.error(`[live] run status: ${result.status}`)
   if (result.status !== 'finished') {
-    console.error(`[live] result: ${JSON.stringify(result).slice(0, 600)}`)
+    console.error(`[live] result: ${redactThenCut(JSON.stringify(result), 600)}`)
   }
   console.error(`[live] answer non-empty: ${answer.trim().length > 0 ? 'YES' : 'NO'}`)
   if (result.status !== 'finished' || answer.trim().length === 0) process.exitCode = 1
