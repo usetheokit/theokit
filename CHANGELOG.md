@@ -8,11 +8,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+## [1.2.0] - 2026-10-13
+
+### Added
+
 - A CI job calls a real model on every push to `develop`. `live-model.yml` sends one request to OpenRouter and then runs the `@theokit/agents` live suite and TheoCode's A2A real-model test (`pnpm --filter theocode test:live`, #B-407), which ran before only in a job with no key and so skipped green on every push; a run that cannot reach the provider, or has no key, ends red and prints why (`provider could not be reached: …`, `provider key absent: …`) instead of skipping green; a provider that answers with no content, or with JSON that is not a chat answer (`null`, an array, a `choices` that is not an array), prints `provider answered without content (HTTP …)`, so a misconfigured model does not read as an outage; a `LIVE_MODEL` that is empty or whitespace falls back to the default model in the preflight and in every live test alike (#B-415)
 
 - `pnpm check:pillars` counts the 33 OBJ-8 pillars in `docs/program/pillar-map.json` and fails every pillar that is neither declared out with a reason of 8 words or more nor proven by a recorded passing run of a live TheoClaw or TheoCode test, read from vitest JSON reports passed with `--results`; the test file must really sit inside the app, so a package test reached through the app's `node_modules` link does not count. It is red by design today (`33 of 33 pillars not proven`), counts a row naming no pillar on that same line (`, 1 row names no pillar`), and stays out of CI until each pillar is proven or declared out. TheoClaw's `boundaries` and TheoCode's `depcruise` now carry `proof-imports-only-published-entry-points`, which refuses an import, from source or test, that resolves into a theokit package's `src/`; TheoCode's cruise now includes its test files (#B-416)
 
 - `@theokit/agents`: `DelegationResult` gains `costUnknown?: true`, set when a round of the run reported no finite cost. `cost` stays the spend of the priced rounds, so a run on a model the SDK cannot price no longer returns a bare `{ cost: 0 }` that reads as a price; a run whose every round was priced has no `costUnknown` key (#B-409)
+
 
 ### Changed
 
