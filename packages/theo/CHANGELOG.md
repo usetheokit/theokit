@@ -1,5 +1,55 @@
 # theo
 
+## 0.75.0
+
+### Minor Changes
+
+- 98571e6: An ACP tool call rejects a turn the agent did not finish, and `AcpClient` answers a request with a string id. The tool returned by `createACPTool` dropped the `session/prompt` result, so a turn the agent ended with `stopReason` `max_tokens`, `max_turn_requests`, `refusal` or `cancelled` came back as a finished answer. Only `end_turn` resolves now. Any other stop reason rejects with the new `AcpTurnStoppedError` (exported from `theokit/server/agent`), which carries `stopReason` and the text streamed before the stop as `partialText`; a result with no string `stopReason` rejects naming `session/prompt` (ADR 0025). `AcpClient` failed every request in flight when the agent sent a JSON-RPC request whose id is a string, which JSON-RPC 2.0 allows; it now answers that request with the same id. (B-408)
+
+### Patch Changes
+
+- f20c4e1: `theokit generate schedule` now writes the schedule to `<agentsDir>/schedules/`, the directory `theokit build` scans, and the schedule it writes runs your `chat` agent. (B-411)
+
+  In an app scaffolded by `create-theokit` (`agentsDir('src/server/agents')`) the generator used to write `agents/schedules/<name>.ts`, which the build never discovered, and the handler it wrote only logged a line. The generated handler now runs `chat` in-process at each fire under the `auto-reject` approval posture, so a gated tool such as `send_notification` does not run unattended, and it logs one line per fire with the schedule name, the trace id and the outcome. A failed fire still rejects, and the next tick runs. Each fire is a model run, so it needs the provider key in the environment of `theokit start`.
+
+  The generator now refuses instead of guessing: `theo.config.ts` that cannot be loaded, a project with no `chat` agent (found by the rule the build serves agents by: `chat.{ts,tsx,js,jsx}` or `chat/index.{ts,tsx,js,jsx}` in `agentsDir`), and an `agentsDir` that resolves outside the project each return a named error, and nothing is written.
+
+  **Migration:** a schedule generated earlier into a stray `agents/schedules/` directory is not moved for you. Move it to `<agentsDir>/schedules/`, or regenerate it.
+
+- 0614614: An ACP agent started through a launcher no longer outlives the call. `NodeAcpTransport` signalled only the process it spawned, so when the configured command was a launcher (`npx`, `pnpm dlx`, a shell script), closing ended the launcher and left the real agent running, orphaned, after the call returned. On Linux and macOS the agent now runs in its own process group, and closing sends SIGTERM and then SIGKILL to the whole group and waits until every process in it has exited. On Windows the transport still signals only the spawned process. (B-408)
+- 03fb5f9: An ACP tool call survives an agent that misbehaves on its channel, and it no longer returns while its agent is still running. A line on the agent's stdout that is not JSON, such as a startup banner or a log line, used to throw out of the stream listener as an uncaught exception that ended the host process; it now rejects the call with `AcpProtocolError` from `@theokit/agents` (code `ACP_PROTOCOL_ERROR`, carrying the offending `line`) and the agent is stopped. Stdout is decoded with a streaming UTF-8 decoder, so a multibyte character split across two chunks reaches the reply intact instead of as two U+FFFD characters. `NodeAcpTransport.close()` now returns a promise: it sends SIGTERM, waits up to 2 seconds for the process to exit, then sends SIGKILL and waits for that exit, and the tool call awaits it, so an agent that ignores SIGTERM is gone when the call returns. `AcpToolTransport.close` may return `void` or a promise; a transport whose `close` returns `void` still works. (B-408)
+- aeb4aba: `AcpTransport` gains an optional `onClose(listener)`, through which a transport reports a channel that closed on its own (the agent process exited or failed). `AcpClient` registers on it: when it fires, every request in flight rejects with the new `AcpConnectionClosedError`, whose message names the cause and whose `cause` is the error the transport reported, and every later request rejects with the same error without being sent. A transport without `onClose` behaves as before. In `theokit`, `AcpToolTransport` now inherits that `onClose` instead of redeclaring it, so its listener receives an `Error`; `NodeAcpTransport` still reports an `AcpTransportClosedError`, and a plain `AcpTransport` still fits where an `AcpToolTransport` is expected. (B-434)
+- f285321: An ACP tool call whose agent writes a stdout line that is JSON but not a JSON-RPC message (a scalar such as `42`, or an object that is neither a response, a request nor a notification) now rejects with `AcpProtocolError` from `@theokit/agents` (code `ACP_PROTOCOL_ERROR`, carrying the offending `line`) and ends the agent, as a non-JSON line already did. A scalar used to reach the caller as a plain `Error` reading "the agent refused initialize", and a wrong-shaped object was dropped.
+- 166d8ea: An ACP tool call opens a session before prompting. The tool returned by `createACPTool` sent a single `session/prompt` and read `result.text`, so an ACP agent that enforces the protocol refused the call, and even a tolerant one gave back an empty string, because ACP streams the reply as `session/update` notifications. Each call now sends `initialize`, `session/new` and `session/prompt`, and returns the text of the `agent_message_chunk` updates for its session. A step the agent refuses rejects with an error that names the method, and nothing after it is sent. A `session/request_permission` request is still decided by `onPermissionRequest`, but the reply on the wire is now an ACP `outcome` (`selected` with the option chosen by kind, or `cancelled`) instead of `{ granted }`. `AcpClient` gains `onNotification(method, handler)`, which delivers JSON-RPC notifications to a registered handler.
+- 1ff0434: An ACP tool call releases the agent process it spawned, and a failing agent rejects the call instead of crashing the host or hanging it. The tool returned by `createACPTool` started a coding-agent process on every call and never ended it, so each call left one more process running. It now closes its transport when the call ends, on a reply, a refused step or an error. `NodeAcpTransport` listens for the process failing, its stdin breaking and the process exiting, so a command that does not exist rejects the call with `AcpTransportClosedError` naming the command, where it used to throw an uncaught `ENOENT` that took the host down, and an agent that exits mid-turn rejects with the same error and its exit code instead of leaving the call pending forever. Each request of the turn now has a timeout, `timeoutMs` in `AcpToolConfig` (default `DEFAULT_ACP_TIMEOUT_MS`, ten minutes); an agent that does not answer within it rejects the call with `AcpRequestTimeoutError`, naming the method. A `timeoutMs` that is not a positive finite number is refused when the tool is created. `AcpToolTransport` types a factory transport that can be closed and can report closing; a plain `AcpTransport` still works.
+- b2e3fc8: An ACP tool call stops when its run is cancelled. The handler of the tool `createACPTool` returns ignored the run's `AbortSignal` (`ctx.signal`), so a cancelled run left the call pending and the coding agent running until the request timeout, ten minutes by default. The call now rejects with the signal's abort reason as soon as the run is cancelled and closes the agent process the same way it does after a reply or an error, and a run already cancelled when the tool is called starts no agent. (B-408)
+- a5faa50: `theokit generate schedule` refuses a name whose schedule `theokit build` would reject or never register, instead of reporting it created. The generated file declares `defineCron('<last segment of the name>')`, and that segment is now checked with `defineCron`'s own rule (1 to 64 characters, lowercase letters, digits and hyphens, starting with a letter or digit) and with the cron scanner's own discovery. `nightly/` used to write `schedules/nightly/.ts`, a dotfile the build skips; `team/-x` and a last segment over 64 characters used to write a cron that fails the build on import; and `b/report` after `a/report`, or `report` beside `server/crons/report.ts`, used to write a second cron named `report` that fails the build with a duplicate-name error. Each now returns `invalid_name` with the reason, names the clashing file where there is one, and writes nothing. (B-411)
+- 4ddca47: `theokit generate schedule` refuses an `agentsDir` outside the project as path traversal even when that directory holds no `chat` agent. The generator looked for the chat agent before it checked containment, so such a project was told `No "chat" agent in <directory outside the project>` and asked to create the agent there. It now answers `Path traversal denied: ... is outside the project root ...` and writes nothing. (B-411)
+- 4ee9167: Loading several TypeScript files that Node cannot load directly (`theo.config.ts`, a cron, a job) in one process no longer stalls on Node 22.12. (#971)
+
+  When Node could not import such a file itself, theokit fell back to tsx's `tsImport()`, which registers another loader hook on every call and never removes it. On Node 22.12, the floor `engines.node` declares, the fourth or fifth load in the same process waited forever. theokit now registers one tsx namespace on first use and reuses it, so a file already loaded comes from the module cache, as it does on the native `import()` path.
+
+- d949a74: `theokit generate` now prints the reason it refused a name. A schedule whose `agentsDir` resolves outside the project prints `Path traversal denied: "<path>" is outside the project root <root>.`, and a reserved name such as `constructor` prints the `Reserved name` message; both used to print `Invalid name "<name>". Use kebab-case ...` for a name that was valid kebab-case. A name that is not kebab-case still prints that message. (B-411)
+- Updated dependencies [8e0e657]
+- Updated dependencies [0f1664b]
+- Updated dependencies [232e464]
+- Updated dependencies [223ef38]
+- Updated dependencies [ad383eb]
+- Updated dependencies [ddc8eb1]
+- Updated dependencies [f8e6c5b]
+- Updated dependencies [e15b79b]
+- Updated dependencies [19a9e25]
+- Updated dependencies [876af25]
+- Updated dependencies [accb29e]
+- Updated dependencies [51bd671]
+- Updated dependencies [aeb4aba]
+- Updated dependencies [166d8ea]
+- Updated dependencies [98571e6]
+- Updated dependencies [b8cb6c4]
+- Updated dependencies [c8e7f87]
+- Updated dependencies [cd10c2a]
+  - @theokit/agents@16.0.0
+
 ## 0.74.5
 
 ### Patch Changes
@@ -242,8 +292,8 @@
   A nested-layout project with no agents — the layout `create-theokit` scaffolds — was told, on every dev
   start and every build that reached this path:
 
-                [theokit] agentsDir "agents" resolves to "<root>/src/agents", which is not a directory, so NO agents
-                were found and every /api/agents/* route will 404.
+                  [theokit] agentsDir "agents" resolves to "<root>/src/agents", which is not a directory, so NO agents
+                  were found and every /api/agents/* route will 404.
 
   About routes it does not have, and a directory it never configured. Two defects in one line.
 

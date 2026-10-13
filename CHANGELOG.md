@@ -6,17 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-### Added
+## [@theokit/agents 16.0.0, create-theokit 3.0.18, theokit 0.75.0] - 2026-10-13
 
-### Changed
-
-### Deprecated
-
-### Removed
-
-### Fixed
-
-### Security
+Released with no entry under `[Unreleased]`. Per-package detail is in each package's
+own `CHANGELOG.md`.
 
 ## [1.2.0] - 2026-10-13
 
