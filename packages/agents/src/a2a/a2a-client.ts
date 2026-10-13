@@ -7,10 +7,19 @@
  * (`openrouter.ai|api.openai.com|api.anthropic.com`) is unaffected. `fetchImpl` is injectable for tests.
  */
 import type { WireMessage } from '@theokit/presenter/wire'
-import type { CustomTool, ToolContext } from '@theokit/sdk'
+import type { CustomTool } from '@theokit/sdk'
 
 import { AGENT_ACTION_HEADERS, agentRequestHeaders } from '../wire/agent-request-headers.js'
 import { consumeUIMessageStream } from '../wire/consume-ui-message-stream.js'
+
+/**
+ * The one field of the handler's second argument this tool reads. Declared here rather than
+ * imported: `@theokit/sdk` exports `ToolContext` from its root only from 5.8.0, and this package
+ * declares `^5.3.0`, where the same argument is an inline `{ signal?: AbortSignal; ... }` (#977).
+ */
+interface A2AToolContext {
+  signal?: AbortSignal
+}
 
 /** How to authenticate to the remote agent. */
 export interface A2AAuth {
@@ -110,7 +119,7 @@ export function createA2ATool(config: A2AToolConfig): CustomTool {
       },
       required: ['message'],
     },
-    async handler(input: Record<string, unknown>, ctx?: ToolContext): Promise<string> {
+    async handler(input: Record<string, unknown>, ctx?: A2AToolContext): Promise<string> {
       // The input schema requires `message: string`; narrow defensively (never base-to-string).
       const message = typeof input.message === 'string' ? input.message : ''
       // Headers merge the way `HttpTransport` merges them (`agent-request-headers.ts`): the stream
