@@ -36,7 +36,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
-- `@theokit/agents` declares `@theokit/sdk` `^5.8.0`, the first version whose root exports `ToolContext`, which the A2A client imports; with the `^5.3.0` it declared, an install resolving 5.3 to 5.7 failed to build or type-check it (#977)
+- `@theokit/agents` builds and type-checks against every `@theokit/sdk` its `^5.3.0` range admits: the A2A client imported `ToolContext`, exported from the SDK root only from 5.8.0, and now declares the one field it reads (#977)
 
 ## [@theokit/agents 15.1.1, create-theokit 3.0.17] - 2026-10-04
 
