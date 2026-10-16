@@ -10,6 +10,8 @@ export default defineConfig({
     'mcp-health': 'src/mcp-health-entry.ts',
     // B-407 (F-arch-5) — the A2A client: remote delegation most agents never import.
     a2a: 'src/a2a-entry.ts',
+    // B-413 — run cases against an agent and read a verdict per case; development-time tooling.
+    evals: 'src/evals-entry.ts',
     // A stub, not the backend: `./pty` resolves so an upgrading consumer gets a migration
     // sentence instead of ERR_MODULE_NOT_FOUND. It imports nothing (#460).
     pty: 'src/pty-entry.ts',
