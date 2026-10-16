@@ -10,7 +10,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1080 export(s) across 21 entry point(s).
+1091 export(s) across 22 entry point(s).
 
 Measured against `@theokit/sdk@5.9.2`.
 
@@ -1129,6 +1129,22 @@ Measured against `@theokit/sdk@5.9.2`.
 | `createA2ATool` | value |
 | `A2AAuth` | type |
 | `A2AToolConfig` | type |
+
+## `@theokit/agents/evals`
+
+| Symbol | Kind |
+|---|---|
+| `EvalAlreadyRunningError` | value |
+| `EvalConfigError` | value |
+| `runAgentEvals` | value |
+| `Scorers` | value |
+| `AgentEvalCase` | type |
+| `AgentEvalCaseResult` | type |
+| `AgentEvalResult` | type |
+| `AgentEvalVerdict` | type |
+| `NamedScorer` | type |
+| `RunAgentEvalsOptions` | type |
+| `Scorer` | type |
 
 ## `@theokit/agents/mcp-health`
 

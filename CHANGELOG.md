@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- `@theokit/agents`: `runAgentEvals` on the new `@theokit/agents/evals` subpath runs a list of cases against an agent definition, one fresh agent per case, and reports `pass`, `fail` or `error` for each case with its output, scores, mean score and duration, plus the count of each verdict. The approval posture is required. A case is `error`, never `fail`, when the run did not finish, a guard blocked the input or the output, the agent could not be built, a scorer threw, or a scorer returned something other than a finite score. A configuration it cannot run is refused with `EvalConfigError` before any agent is built. The subpath also re-exports the SDK's `Scorers` and `EvalAlreadyRunningError`. The result of `SdkTurnHandle.wait()` gains the optional fields `status` and `error`, which the SDK eval runner reads (#B-413)
+
 ### Changed
 
 ### Deprecated
