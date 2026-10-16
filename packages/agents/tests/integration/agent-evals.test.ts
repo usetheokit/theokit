@@ -14,7 +14,7 @@
  */
 import 'reflect-metadata'
 
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { ApprovalPosture } from '../../src/bridge/approval-posture.js'
 
@@ -37,6 +37,8 @@ const h = vi.hoisted(() => ({
   hold: undefined as Promise<void> | undefined,
   /** When set, replaces the default answer (`{ status: 'finished', result: <system prompt> }`). */
   answer: undefined as ((prompt: string) => ScriptedWait) | undefined,
+  /** Callers waiting for `ids` to reach a length; see {@link oneAtATime}. */
+  waiters: [] as { length: number; resolve: () => void }[],
 }))
 
 vi.mock('@theokit/sdk', () => ({
@@ -44,6 +46,7 @@ vi.mock('@theokit/sdk', () => ({
   Agent: {
     getOrCreate: vi.fn(async (id: string, opts: Record<string, unknown>) => {
       h.ids.push(id)
+      h.waiters = h.waiters.filter((w) => (w.length <= h.ids.length ? (w.resolve(), false) : true))
       const prompt = typeof opts.systemPrompt === 'string' ? opts.systemPrompt : ''
       return {
         agentId: id,
@@ -76,16 +79,41 @@ const NO_GATE: ApprovalPosture = {
 
 const KIWI = AgentBuilder.create().model('m').system('KIWI').build()
 
+/**
+ * The definition as a thunk that lets one case reach `Agent.getOrCreate` at a time.
+ *
+ * Needed because of the test runner, not the code under test. Measured on vitest 4.1 here: of
+ * several CONCURRENT `import('@theokit/sdk')` calls made from `src/`, only the first resolves the
+ * mock and the others resolve the REAL module, every time and not only on the first load
+ * (`[true, false, false]` for three, `[true, false]` again afterwards). The SDK runner builds up to
+ * 4 cases at once, so without this the second case of a run called a real provider
+ * (`openrouter API error: auth_failed`). The runner still calls the agent function concurrently;
+ * only the projection of each case waits for the previous case's agent to exist.
+ */
+function oneAtATime(definition: typeof KIWI) {
+  let calls = 0
+  return async () => {
+    const before = calls
+    calls += 1
+    if (h.ids.length < before) {
+      await new Promise<void>((resolve) => h.waiters.push({ length: before, resolve }))
+    }
+    return definition
+  }
+}
+
 /** The options every test shares; each test overrides what it is about. */
 function base() {
   return {
-    agent: KIWI,
+    agent: oneAtATime(KIWI),
     apiKey: 'test-key',
     approvals: NO_GATE,
     cases: [{ input: 'What is your word?', expected: 'KIWI' }],
     scorers: [Scorers.containsExpected()],
   }
 }
+
+const network = vi.fn(() => Promise.reject(new Error('a case reached the network')))
 
 beforeEach(() => {
   h.ids = []
@@ -94,6 +122,17 @@ beforeEach(() => {
   h.disposeError = undefined
   h.hold = undefined
   h.answer = undefined
+  h.waiters = []
+  // A case that missed the mock would reach a real provider and read as a plausible `error`
+  // verdict. Any network call fails the test instead (see `oneAtATime` for how a miss happens).
+  vi.stubGlobal('fetch', network)
+})
+
+afterEach(() => {
+  const calls = network.mock.calls.length
+  network.mockClear()
+  vi.unstubAllGlobals()
+  expect(calls, 'a case missed the @theokit/sdk mock and called the network').toBe(0)
 })
 
 describe('runAgentEvals verdicts', () => {
@@ -109,7 +148,7 @@ describe('runAgentEvals verdicts', () => {
     expect(result.cases.map((c) => c.verdict)).toEqual(['pass', 'fail'])
     expect(result.counts).toEqual({ pass: 1, fail: 1, error: 0 })
     expect(result.cases.map((c) => c.output)).toEqual(['KIWI', 'KIWI'])
-    expect(result.cases[0]?.scores.map((s) => s.name)).toEqual(['containsExpected'])
+    expect(result.cases[0]?.scores.map((s) => s.name)).toEqual(['contains-expected'])
     expect(result.cases.map((c) => c.meanScore)).toEqual([1, 0])
     expect(result.threshold).toBe(0.5)
   })
@@ -131,6 +170,8 @@ describe('runAgentEvals verdicts', () => {
     ['threshold -0.1', { threshold: -0.1 }, /threshold.*-0\.1/],
     ['threshold NaN', { threshold: Number.NaN }, /threshold.*NaN/],
     ['a case whose input is not a string', { cases: [{ input: 42 }] }, /input/],
+    ['a case that is null', { cases: [null] }, /cases\[0\]\.input/],
+    ['a case that is a bare string', { cases: ['hi'] }, /cases\[0\]\.input/],
   ])('refuses a configuration it cannot run: %s', async (_label, patch, message) => {
     const run = runAgentEvals({ ...base(), ...(patch as object) } as never)
 
@@ -295,9 +336,10 @@ describe('runAgentEvals sessions and disposal', () => {
     // rejection would hand the second run `dispose failed` instead of the SDK's error.
     h.disposeError = new Error('dispose failed')
 
+    const shared = { ...base(), name: 'overlap-dispose' }
     const [first, second] = await Promise.allSettled([
-      runAgentEvals({ ...base(), name: 'overlap-dispose' }),
-      runAgentEvals({ ...base(), name: 'overlap-dispose' }),
+      runAgentEvals(shared),
+      runAgentEvals({ ...shared }),
     ])
 
     expect((first as PromiseRejectedResult).reason).toEqual(new Error('dispose failed'))
@@ -342,9 +384,10 @@ describe('runAgentEvals sessions and disposal', () => {
 
 describe('runAgentEvals names', () => {
   it('lets the SDK reject a second overlapping run with the same name', async () => {
+    const shared = { ...base(), name: 'overlap' }
     const [first, second] = await Promise.allSettled([
-      runAgentEvals({ ...base(), name: 'overlap' }),
-      runAgentEvals({ ...base(), name: 'overlap' }),
+      runAgentEvals(shared),
+      runAgentEvals({ ...shared }),
     ])
 
     expect(first.status).toBe('fulfilled')
@@ -355,7 +398,12 @@ describe('runAgentEvals names', () => {
   })
 
   it('runs two overlapping unnamed runs side by side', async () => {
-    const [first, second] = await Promise.allSettled([runAgentEvals(base()), runAgentEvals(base())])
+    // One thunk for both runs, so their two cases reach the SDK mock one at a time.
+    const shared = base()
+    const [first, second] = await Promise.allSettled([
+      runAgentEvals(shared),
+      runAgentEvals({ ...shared }),
+    ])
 
     expect(first.status).toBe('fulfilled')
     expect(second.status).toBe('fulfilled')
