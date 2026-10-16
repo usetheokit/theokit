@@ -38,8 +38,7 @@ export function withStepCeiling(
       return handle.agentId
     },
     dispose: () => handle.dispose(),
-    // Forwarded — see {@link SdkAgentHandle.generate} for why, and why it is not guarded.
-    ...(handle.generate === undefined ? {} : { generate: handle.generate.bind(handle) }),
+    ...forwardedMembers(handle),
     send: (msg: string, sendOpts?: SdkSendOptions) =>
       handle.send(msg, { maxIterations, ...sendOpts }),
   }
@@ -57,19 +56,76 @@ export function withGuardrails(
       return handle.agentId
     },
     dispose: () => handle.dispose(),
-    // Forwarded — see {@link SdkAgentHandle.generate} for why, and why it is not guarded.
-    ...(handle.generate === undefined ? {} : { generate: handle.generate.bind(handle) }),
+    ...forwardedMembers(handle),
     send: async (msg: string, sendOpts?: SdkSendOptions): Promise<SdkTurnHandle> => {
       // BEFORE the SDK sees it: a guard that blocks must stop the prompt from reaching the model,
       // not merely annotate it afterwards.
       const guarded = await runInputGuards(msg, guardrails)
-      const turn = await handle.send(guarded, sendOpts)
-      return {
-        wait: async () => {
-          const out = await turn.wait()
-          if (out.result === undefined) return out
-          return { ...out, result: await runOutputGuards(out.result, guardrails) }
-        },
+      return guardTurn(await handle.send(guarded, sendOpts), guardrails)
+    },
+  }
+}
+
+/**
+ * The optional members both wrappers carry over unchanged, each bound to the wrapped handle.
+ *
+ * A wrapper that rebuilds the handle silently drops every member it does not name. `generate`: see
+ * {@link SdkAgentHandle.generate} for why it is forwarded and not guarded. `pluginManager` (B-414):
+ * the ACP server installs its permission plugin through it and fails closed without it, so a
+ * wrapped agent could not be served in the server's default `ask` mode. It is bound because the
+ * SDK's LocalAgent reads `this` in it.
+ */
+function forwardedMembers(
+  handle: SdkAgentHandle,
+): Pick<SdkAgentHandle, 'generate' | 'pluginManager'> {
+  return {
+    ...(handle.generate === undefined ? {} : { generate: handle.generate.bind(handle) }),
+    ...(handle.pluginManager === undefined
+      ? {}
+      : { pluginManager: handle.pluginManager.bind(handle) }),
+  }
+}
+
+/**
+ * B-414 — the guarded turn, readable through `wait()` and through `stream()`.
+ *
+ * The ACP server reads `run.stream()` after `send()`, then `run.wait()`. Output guards moderate
+ * whole text, so `stream()` cannot forward the inner turn's deltas without leaking what a guard
+ * exists to redact: it yields ONE assistant message with the guarded text, once the guards ran. An
+ * editor sees no token streaming and no tool activity for a guarded agent; that is the price.
+ *
+ * Both readers share one promise, so the guards run once per turn. It is created by whichever
+ * reader comes first, never here: a run that fails, or a guard that blocks, before anybody reads
+ * the turn would otherwise reject a promise nobody handles.
+ *
+ * `stream()` yields nothing when the run fails or a guard blocks; the error is `wait()`'s to report.
+ * A reader of `stream()` alone does not see it, so read `wait()` for the outcome, as the ACP server
+ * does. (`SdkTurnHandle` carries no doc comment for `stream`: `sdk-adapter.ts` is at its line
+ * budget, plan D3.)
+ */
+function guardTurn(turn: SdkTurnHandle, guardrails: readonly Guardrail[]): SdkTurnHandle {
+  let outcome: ReturnType<SdkTurnHandle['wait']> | undefined
+  const guardedOutcome = (): ReturnType<SdkTurnHandle['wait']> =>
+    (outcome ??= turn
+      .wait()
+      .then(async (out) =>
+        out.result === undefined
+          ? out
+          : { ...out, result: await runOutputGuards(out.result, guardrails) },
+      ))
+  return {
+    wait: guardedOutcome,
+    async *stream() {
+      let out: Awaited<ReturnType<SdkTurnHandle['wait']>>
+      try {
+        out = await guardedOutcome()
+      } catch {
+        // Not swallowed: `wait()` returns this same promise and rejects with the same error, and a
+        // reader of `stream()` reads `wait()` for the outcome, as the ACP server does.
+        return
+      }
+      if (out.result !== undefined) {
+        yield { type: 'assistant', message: { content: [{ type: 'text', text: out.result }] } }
       }
     },
   }
