@@ -16,6 +16,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- `@theokit/agents`: an agent from `toAgentFactory` with guardrails or a step ceiling can be served over ACP. The guarded turn had only `wait()`, so an editor received no text; it now has `stream()`, which `@theokit/acp` reads, yielding the text after the output guards in one message; and both wrappers forward `pluginManager`, so the server's default `ask` mode no longer refuses the prompt with `permission enforcement unavailable on this runtime (no plugin manager)`. A guarded agent served this way sends its text when the turn completes, with no token streaming and no tool activity (#B-414)
+
 ### Security
 
 ## [1.2.0] - 2026-10-13
