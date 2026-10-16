@@ -759,9 +759,17 @@ async function* streamSdkAgent(
  * what the boundary exists to do, and the same reason `SdkAgentHandle` was already an alias rather
  * than a
  * re-export.
+ *
+ * `status` and `error` are what the SDK eval runner reads: a row is scored only when
+ * `status === 'finished'`, and otherwise errors with `error?.message ?? 'run <status>'` (B-413).
  */
 export interface SdkTurnHandle {
-  wait: () => Promise<{ result?: string; usage?: { totalTokens?: number } }>
+  wait: () => Promise<{
+    result?: string
+    usage?: { totalTokens?: number }
+    status?: string
+    error?: { message: string }
+  }>
 }
 
 /** Per-turn options. Open for now — the SDK accepts more than the layer needs to declare. */
