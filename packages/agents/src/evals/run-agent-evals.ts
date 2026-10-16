@@ -10,7 +10,6 @@
  * factory threw, or a scorer broke or returned something that is not a finite score (ADR D2). Such a
  * case is never counted as `fail`, which would tell the caller the agent answered badly.
  */
-import { randomUUID } from 'node:crypto'
 
 import { TheokitAgentError } from '@theokit/sdk/errors'
 import {
@@ -89,7 +88,7 @@ const SCORER_THREW = 'scorer_threw:'
 
 export async function runAgentEvals(opts: RunAgentEvalsOptions): Promise<AgentEvalResult> {
   validate(opts)
-  const name = opts.name ?? `theokit-agent-evals-${randomUUID()}`
+  const name = opts.name ?? `theokit-agent-evals-${crypto.randomUUID()}`
   const threshold = opts.threshold ?? DEFAULT_THRESHOLD
   const factory = toAgentFactory(opts.agent, {
     apiKey: opts.apiKey,
@@ -98,7 +97,7 @@ export async function runAgentEvals(opts: RunAgentEvalsOptions): Promise<AgentEv
   })
   // One uuid per call: the SDK caches agents by session id, so a name reused across sequential runs
   // must still give every case a fresh agent (EC-1).
-  const runId = randomUUID()
+  const runId = crypto.randomUUID()
   const handles: SdkAgentHandle[] = []
   let caseNumber = 0
   const agentFor = async (): Promise<SdkAgentHandle> => {
