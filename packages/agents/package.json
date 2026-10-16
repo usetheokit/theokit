@@ -81,6 +81,10 @@
       "types": "./dist/a2a.d.ts",
       "import": "./dist/a2a.js"
     },
+    "./evals": {
+      "types": "./dist/evals.d.ts",
+      "import": "./dist/evals.js"
+    },
     "./mcp-health": {
       "types": "./dist/mcp-health.d.ts",
       "import": "./dist/mcp-health.js"
