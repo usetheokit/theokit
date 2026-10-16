@@ -1,7 +1,7 @@
 /**
  * The live suite's globalSetup: under `THEOKIT_LIVE_REQUIRED=1` an absent provider key fails the
  * run instead of letting every live file skip green (B-415). Without the flag it returns, so a
- * developer with no key keeps the local skip the three live files already apply.
+ * developer with no key keeps the local skip the live files already apply.
  *
  * The key names match the `KEYS` list each live file reads. The message names variables, never
  * values, so nothing here can print a credential.
