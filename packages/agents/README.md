@@ -54,6 +54,7 @@ Twenty-one entry points. Import the one you need — the barrel is not the API.
 | `./commands` | Command routing and the shutdown/cleanup contract |
 | `./doctor` | Environment diagnostics |
 | `./usage` | Token and cost accounting |
+| `./evals` | `runAgentEvals` — run cases against an agent and read pass, fail or error per case |
 
 ## The shapes worth knowing before you start
 
