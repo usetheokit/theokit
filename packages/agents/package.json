@@ -132,6 +132,8 @@
     }
   },
   "devDependencies": {
+    "@agentclientprotocol/sdk": "^0.22.1",
+    "@theokit/acp": "^4.0.1",
     "@theokit/http": "workspace:*",
     "ai": "7.0.14",
     "tsup": "^8.5.1",
