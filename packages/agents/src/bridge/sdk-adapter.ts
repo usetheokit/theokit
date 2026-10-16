@@ -770,6 +770,7 @@ export interface SdkTurnHandle {
     status?: string
     error?: { message: string }
   }>
+  stream?: () => AsyncIterable<unknown>
 }
 
 /** Per-turn options. Open for now — the SDK accepts more than the layer needs to declare. */
@@ -792,9 +793,9 @@ export interface SdkAgentHandle {
    * OPTIONAL, because a caller-injected handle (tests, a custom transport) need not implement it,
    * and requiring it would break every such double to add a method most of them never call.
    *
-   * BOTH wrappers below forward it. A wrapper that rebuilds the handle silently removes every method
-   * it does not name, and the consumer meets the loss at runtime as "the handle has no `generate`"
-   * after the types said it had one. Each forward is pinned by its own mutation.
+   * BOTH wrappers (`handle-wrappers.ts`) forward it, and `pluginManager`. A wrapper that rebuilds the
+   * handle silently removes every method it does not name, and the consumer meets the loss at runtime
+   * as "the handle has no `generate`" after the types said it had one. Each forward is pinned by test.
    *
    * It is NOT put through the output guards, stated rather than assumed: `generate` resolves to a
    * validated OBJECT and those guards moderate TEXT, so running them over a serialised object would
@@ -806,6 +807,7 @@ export interface SdkAgentHandle {
     message: string,
     options: { output: unknown; [key: string]: unknown },
   ) => Promise<unknown>
+  readonly pluginManager?: () => unknown
   /**
    * M91 — era `(msg: string, opts?: unknown) => unknown`.
    *
