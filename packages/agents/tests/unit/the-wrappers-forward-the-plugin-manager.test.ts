@@ -94,3 +94,47 @@ describe('the wrappers forward the plugin manager', () => {
     expect(pluginManagerOf(wrapped, 'withGuardrails over withStepCeiling')).toBe(manager)
   })
 })
+
+describe('the wrappers keep the members they rebuild', () => {
+  function recordingHandle(): { handle: SdkAgentHandle; sent: unknown[]; disposed: () => number } {
+    const sent: unknown[] = []
+    let disposed = 0
+    const handle: SdkAgentHandle = {
+      agentId: 'recording-agent',
+      send: (_msg, opts) => {
+        sent.push(opts)
+        return Promise.resolve({ wait: () => Promise.resolve({ result: 'ok' }) })
+      },
+      dispose: () => {
+        disposed += 1
+        return Promise.resolve()
+      },
+    }
+    return { handle, sent, disposed: () => disposed }
+  }
+
+  it('test_both_wrappers_report_the_agentId_of_the_wrapped_handle', () => {
+    const { handle } = recordingHandle()
+
+    expect(withStepCeiling(handle, 3).agentId).toBe('recording-agent')
+    expect(withGuardrails(handle, [allowAll]).agentId).toBe('recording-agent')
+  })
+
+  it('test_disposing_a_wrapped_handle_disposes_the_handle_it_wraps', async () => {
+    const recording = recordingHandle()
+
+    await withGuardrails(withStepCeiling(recording.handle, 3), [allowAll]).dispose()
+
+    expect(recording.disposed()).toBe(1)
+  })
+
+  it('test_the_step_ceiling_is_a_default_the_caller_can_override', async () => {
+    const recording = recordingHandle()
+    const capped = withStepCeiling(recording.handle, 3)
+
+    await capped.send('first')
+    await capped.send('second', { maxIterations: 7 })
+
+    expect(recording.sent).toEqual([{ maxIterations: 3 }, { maxIterations: 7 }])
+  })
+})
