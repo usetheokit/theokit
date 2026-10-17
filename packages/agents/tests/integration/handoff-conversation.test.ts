@@ -187,13 +187,43 @@ describe('createHandoffConversation', () => {
     expect(conv.responder).toBe('refunds')
   })
 
+  // Review round 2 (loop-code-review #65, #77): the documented recipe for resuming after a restart.
+  it('a conversation rebuilt from the last transfer gives the receiver its note', async () => {
+    const before = conversation()
+    h.scripts.push({ transfers: [{ agent: 'billing', note: 'order 123' }] })
+    const { handoff } = await before.send('I want a refund', OPTS)
+    if (handoff === undefined) throw new Error('expected the first turn to transfer')
+
+    const after = createHandoffConversation({
+      agents: ROSTER,
+      initial: handoff.from,
+      conversationId: before.conversationId,
+    })
+    after.handoffTo(handoff.to, handoff.note)
+    const turn = await after.send('how long will it take?', OPTS)
+
+    expect(turn.responder).toBe('billing')
+    expect(h.calls[1]?.sessionId).toBe('conv-1:billing')
+    expect(h.calls[1]?.message).toBe('[Handoff from triage] order 123\n\nhow long will it take?')
+  })
+
   it('a handoff to the current agent changes nothing', async () => {
     const conv = conversation()
 
-    conv.handoffTo('triage', 'ignored')
+    conv.handoffTo('triage')
     await conv.send('hello', OPTS)
 
     expect(conv.responder).toBe('triage')
+    expect(h.calls[0]?.message).toBe('hello')
+  })
+
+  it('a note for the agent that already answers is refused, not dropped', async () => {
+    const conv = conversation()
+
+    const code = codeOf(() => conv.handoffTo('triage', 'order 123'))
+    await conv.send('hello', OPTS)
+
+    expect(code).toBe('already_responder')
     expect(h.calls[0]?.message).toBe('hello')
   })
 
