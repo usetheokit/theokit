@@ -9,6 +9,12 @@
  * That promise is created by whichever of the two is consumed first, never by `send()`: a run that
  * fails, or an output guard that blocks, before anybody consumes the turn must not become an
  * `unhandledRejection`. The two delayed-consumption tests below pin that.
+ *
+ * A turn that fails does not end its stream empty (loop-code-review LCR0104, review round 2): a
+ * reader of `stream()` alone would see a finished turn with no text. A run resolved with
+ * `status: 'error'` and a guard that blocks both end the stream with the terminal message the SDK
+ * emits for a failed run, `{ type: 'status', status: 'ERROR', message }`. Any other rejection is a
+ * fault, not an outcome, and `stream()` rethrows it.
  */
 import { afterEach, describe, expect, it } from 'vitest'
 
@@ -20,6 +26,7 @@ import type { Guardrail } from '../../src/guardrails/index.js'
 interface TurnOutcome {
   result?: string
   status?: string
+  error?: { message: string }
 }
 
 /** A fake handle whose turn resolves `outcome`, or rejects with `failure`, when `wait` is called. */
@@ -73,6 +80,13 @@ function assistantMessage(text: string): unknown {
   return { type: 'assistant', message: { content: [{ type: 'text', text }] } }
 }
 
+/** The terminal message the SDK's own stream ends with when a run fails. */
+function errorStatus(message: string): unknown {
+  return { type: 'status', status: 'ERROR', message }
+}
+
+const BLOCKED_MESSAGE = 'Guardrail "block-everything-out" blocked output: nothing leaves'
+
 /** Two event-loop turns: Node reports an unhandled rejection when the microtask queue drains. */
 async function letTheEventLoopTurnTwice(): Promise<void> {
   await new Promise((resolve) => setImmediate(resolve))
@@ -124,13 +138,63 @@ describe('a guarded turn can be streamed', () => {
     expect(redactor.calls()).toBe(1)
   })
 
-  it('test_a_rejected_wait_makes_stream_yield_nothing_and_wait_rethrow_the_held_error', async () => {
+  it('test_a_rejected_wait_makes_stream_and_wait_rethrow_the_held_error', async () => {
     const failure = new Error('the run failed')
     const handle = withGuardrails(fakeHandle({ failure }), [countingRedactor().guard])
     const turn = await handle.send('say it')
 
-    expect(await collect(turn.stream)).toEqual([])
+    await expect(collect(turn.stream)).rejects.toBe(failure)
     await expect(turn.wait()).rejects.toBe(failure)
+  })
+
+  it('test_a_run_resolved_with_status_error_ends_the_stream_with_an_error_status', async () => {
+    const failed = { status: 'error', error: { message: 'provider unavailable' } }
+    const redactor = countingRedactor()
+    const handle = withGuardrails(fakeHandle({ outcome: failed }), [redactor.guard])
+    const turn = await handle.send('say it')
+
+    expect(await collect(turn.stream)).toEqual([errorStatus('provider unavailable')])
+    expect(await turn.wait()).toEqual(failed)
+    expect(redactor.calls()).toBe(0)
+  })
+
+  it('test_a_failed_run_with_a_partial_result_yields_the_guarded_text_then_the_error', async () => {
+    const partial = {
+      status: 'error',
+      result: 'the word is BANANA',
+      error: { message: 'cut off' },
+    }
+    const handle = withGuardrails(fakeHandle({ outcome: partial }), [countingRedactor().guard])
+    const turn = await handle.send('say it')
+
+    expect(await collect(turn.stream)).toEqual([
+      assistantMessage('the word is [REDACTED]'),
+      errorStatus('cut off'),
+    ])
+  })
+
+  it('test_a_run_resolved_with_status_error_and_no_message_still_reports_an_error', async () => {
+    const handle = withGuardrails(fakeHandle({ outcome: { status: 'error' } }), [
+      countingRedactor().guard,
+    ])
+    const turn = await handle.send('say it')
+
+    expect(await collect(turn.stream)).toEqual([errorStatus('run error')])
+  })
+
+  it('test_a_guard_that_throws_a_non_guardrail_error_makes_stream_rethrow_it', async () => {
+    const defect = new TypeError('the guard read a property of undefined')
+    const brokenGuard: Guardrail = {
+      name: 'broken',
+      checkOutput: () => {
+        throw defect
+      },
+    }
+    const handle = withGuardrails(fakeHandle({ outcome: FINISHED }), [brokenGuard])
+    const turn = await handle.send('say it')
+
+    await expect(collect(turn.stream)).rejects.toBe(defect)
+    await expect(turn.wait()).rejects.toBe(defect)
   })
 
   it('test_a_turn_with_no_result_yields_nothing_and_runs_no_guard', async () => {
@@ -143,11 +207,11 @@ describe('a guarded turn can be streamed', () => {
     expect(redactor.calls()).toBe(0)
   })
 
-  it('test_a_blocking_output_guard_makes_stream_yield_nothing_and_wait_reject', async () => {
+  it('test_a_blocking_output_guard_ends_the_stream_with_an_error_status_and_wait_rejects', async () => {
     const handle = withGuardrails(fakeHandle({ outcome: FINISHED }), [blockingGuard])
     const turn = await handle.send('say it')
 
-    expect(await collect(turn.stream)).toEqual([])
+    expect(await collect(turn.stream)).toEqual([errorStatus(BLOCKED_MESSAGE)])
     const violation = turn.wait()
     await expect(violation).rejects.toBeInstanceOf(GuardrailViolationError)
     await expect(violation).rejects.toMatchObject(BLOCKED_OUTPUT)
@@ -162,7 +226,7 @@ describe('a guarded turn can be streamed', () => {
     await letTheEventLoopTurnTwice()
 
     expect(unhandled).toEqual([])
-    expect(await collect(turn.stream)).toEqual([])
+    await expect(collect(turn.stream)).rejects.toBe(failure)
     await expect(turn.wait()).rejects.toBe(failure)
   })
 
@@ -174,7 +238,7 @@ describe('a guarded turn can be streamed', () => {
     await letTheEventLoopTurnTwice()
 
     expect(unhandled).toEqual([])
-    expect(await collect(turn.stream)).toEqual([])
+    expect(await collect(turn.stream)).toEqual([errorStatus(BLOCKED_MESSAGE)])
     const violation = turn.wait()
     await expect(violation).rejects.toBeInstanceOf(GuardrailViolationError)
     await expect(violation).rejects.toMatchObject(BLOCKED_OUTPUT)
