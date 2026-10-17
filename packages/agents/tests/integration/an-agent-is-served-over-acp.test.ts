@@ -10,11 +10,19 @@
  * The SDK runs in fixture mode (a `theo_test_` key, no base URL), so no provider key is needed and
  * the reply is deterministic: `Return only: BANANA` answers `BANANA`.
  *
- * Two defects stood between a served theokit agent and an editor, and each case below pins one:
+ * Two defects stood between a served theokit agent and an editor; the first three cases pin them:
  *   - a guarded turn had `wait` only, and the server reads `run.stream()`, so a guarded agent sent
  *     the editor nothing;
  *   - both wrappers rebuilt the handle without `pluginManager`, which the server's default `ask`
  *     mode needs to install its permission plugin, so a wrapped agent failed closed.
+ *
+ * The last two cases pin what an editor gets when a guard BLOCKS: a JSON-RPC internal error and no
+ * text, not the `refusal` stop reason (review round 1, loop-code-review LCR0122). The guarded turn
+ * rejects with `GuardrailViolationError` (theokit#139), and the server maps only a run that RESOLVES
+ * with `error.code: 'safety_blocked'` to `refusal` (`mapStopReason` in `@theokit/acp` 4.0.1). The
+ * redact case above is their control: it shows the fixture does reply BANANA. They run in `auto`
+ * mode only, and the input case does not show the prompt never reached the model; the unit test
+ * `factory-guardrails-139.test.ts` does.
  */
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -39,6 +47,21 @@ const redactBanana: Guardrail = {
   checkOutput: (text) => ({ action: 'redact', text: text.replaceAll('BANANA', '[REDACTED]') }),
 }
 
+const blockBananaOutput: Guardrail = {
+  name: 'block-banana-output',
+  checkOutput: (text) =>
+    text.includes('BANANA') ? { action: 'block', reason: 'no fruit' } : { action: 'allow' },
+}
+
+const blockBananaInput: Guardrail = {
+  name: 'block-banana-input',
+  checkInput: (text) =>
+    text.includes('BANANA') ? { action: 'block', reason: 'no fruit' } : { action: 'allow' },
+}
+
+/** JSON-RPC error codes the ACP spec takes from JSON-RPC 2.0. */
+const JSON_RPC_INTERNAL_ERROR = -32603
+
 interface SessionUpdate {
   update?: { sessionUpdate?: string; content?: { type?: string; text?: string } }
 }
@@ -48,6 +71,8 @@ interface ServedEditor {
   /** The text of every `agent_message_chunk` the server sent, in order. */
   agentText: () => string
   serverLog: string[]
+  /** Every `error` member of a reply the server sent, decoded. `AcpClient` keeps only the message. */
+  errorReplies: () => { code: number; message: string }[]
 }
 
 let workDir: string
@@ -100,6 +125,8 @@ function serveAgent(
     subscribe: (onData) => serverToClient.on('data', (chunk: Buffer) => onData(String(chunk))),
   }
   const client = new AcpClient(transport)
+  const rawLines: string[] = []
+  serverToClient.on('data', (chunk: Buffer) => rawLines.push(String(chunk)))
   const chunks: string[] = []
   client.onNotification('session/update', (params) => {
     const { update } = params as SessionUpdate
@@ -111,7 +138,18 @@ function serveAgent(
   client.onRequest('session/request_permission', () => ({
     outcome: { outcome: 'selected', optionId: 'allow_once' },
   }))
-  return { client, agentText: () => chunks.join(''), serverLog }
+  return {
+    client,
+    agentText: () => chunks.join(''),
+    serverLog,
+    errorReplies: () =>
+      rawLines
+        .join('')
+        .split('\n')
+        .filter((line) => line.trim() !== '')
+        .map((line) => JSON.parse(line) as { error?: { code: number; message: string } })
+        .flatMap((message) => (message.error === undefined ? [] : [message.error])),
+  }
 }
 
 /** `initialize`, `session/new` and one `session/prompt`, as an editor sends them. */
@@ -167,5 +205,35 @@ describe('a theokit agent served over ACP', () => {
     const turn = await promptOnce(editor)
 
     expect(turn.stopReason, editor.serverLog.join('\n')).toBe('end_turn')
+  })
+
+  it('test_an_output_guard_block_reaches_the_editor_as_an_internal_error_with_no_text', async () => {
+    const editor = serveAgent({ guardrails: [blockBananaOutput] }, 'auto')
+
+    await expect(promptOnce(editor)).rejects.toThrow(
+      'Guardrail "block-banana-output" blocked output: no fruit',
+    )
+    expect(editor.errorReplies()).toEqual([
+      {
+        code: JSON_RPC_INTERNAL_ERROR,
+        message: 'Guardrail "block-banana-output" blocked output: no fruit',
+      },
+    ])
+    expect(editor.agentText()).toBe('')
+  })
+
+  it('test_an_input_guard_block_reaches_the_editor_as_an_internal_error_with_no_text', async () => {
+    const editor = serveAgent({ guardrails: [blockBananaInput] }, 'auto')
+
+    await expect(promptOnce(editor)).rejects.toThrow(
+      'Guardrail "block-banana-input" blocked input: no fruit',
+    )
+    expect(editor.errorReplies()).toEqual([
+      {
+        code: JSON_RPC_INTERNAL_ERROR,
+        message: 'Guardrail "block-banana-input" blocked input: no fruit',
+      },
+    ])
+    expect(editor.agentText()).toBe('')
   })
 })
