@@ -182,7 +182,9 @@ function strictScorer(
         )
       }
       if (!isUnitScore(result)) {
-        return failed(`returned ${describeScore(result)}, not { score: number within [0, 1] }`)
+        return failed(
+          `returned ${describeScore(result)}, not { score: number within [0, 1], reason?: string }`,
+        )
       }
       return result
     },
@@ -191,8 +193,13 @@ function strictScorer(
 
 function isUnitScore(value: unknown): value is { score: number; reason?: string } {
   if (typeof value !== 'object' || value === null) return false
-  const score = (value as { score?: unknown }).score
-  return typeof score === 'number' && score >= 0 && score <= 1
+  const { score, reason } = value as { score?: unknown; reason?: unknown }
+  return (
+    typeof score === 'number' &&
+    score >= 0 &&
+    score <= 1 &&
+    (reason === undefined || typeof reason === 'string')
+  )
 }
 
 function describeScore(value: unknown): string {
