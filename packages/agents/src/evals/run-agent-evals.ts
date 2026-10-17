@@ -7,8 +7,8 @@
  * `error`.
  *
  * `error` means nobody measured the answer: the run did not finish, a guard stopped the turn, the
- * factory threw, or a scorer broke or returned something that is not a finite score (ADR D2). Such a
- * case is never counted as `fail`, which would tell the caller the agent answered badly.
+ * factory threw, or a scorer threw or returned something that is not a score within [0, 1] (ADR D2).
+ * Such a case is never counted as `fail`, which would tell the caller the agent answered badly.
  */
 
 import { TheokitAgentError } from '@theokit/sdk/errors'
@@ -84,7 +84,6 @@ export class EvalConfigError extends TheokitAgentError {
 }
 
 const DEFAULT_THRESHOLD = 0.5
-const SCORER_THREW = 'scorer_threw:'
 
 export async function runAgentEvals(opts: RunAgentEvalsOptions): Promise<AgentEvalResult> {
   validate(opts)
@@ -107,7 +106,10 @@ export async function runAgentEvals(opts: RunAgentEvalsOptions): Promise<AgentEv
     handles.push(handle)
     return handle
   }
-  const scorers = opts.scorers.map(strictScorer)
+  // Marks a scorer failure in the reason this layer writes. It carries the run's uuid, so no scorer
+  // can know it in advance and a caller's own reason can never be read as a failure.
+  const failureMark = `theokit-scorer-failed-${runId}: `
+  const scorers = opts.scorers.map((scorer, index) => strictScorer(scorer, index, failureMark))
   let rows: readonly EvalRowResult[]
   try {
     const run = await Eval.create({
@@ -124,7 +126,7 @@ export async function runAgentEvals(opts: RunAgentEvalsOptions): Promise<AgentEv
   }
   // The SDK never disposes an agent it got from a function, so the layer that built them does.
   await Promise.all(handles.map((h) => h.dispose()))
-  const cases = rows.map((row) => toCaseResult(row, threshold))
+  const cases = rows.map((row) => toCaseResult(row, threshold, failureMark))
   return { name, threshold, cases, counts: countVerdicts(cases) }
 }
 
@@ -152,43 +154,62 @@ function validate(opts: RunAgentEvalsOptions): void {
 }
 
 /**
- * Wrap a caller's scorer so anything that is not a finite score THROWS inside the SDK's try, where it
- * becomes `scorer_threw: …` and so an `error` (ADR D2). Unwrapped, the SDK's `clampScore` turns a
- * non-finite score into 0 and keeps the scorer's own reason, which no verdict can tell from a real
- * 0, and a scorer returning `undefined` makes it throw outside the try and reject the whole run.
- * The name is the one the SDK itself would give: a `NamedScorer` keeps its own, a plain function is
- * `scorer-<index>`.
+ * Wrap a caller's scorer so a throw, or anything that is not a score within [0, 1], becomes a 0
+ * whose reason starts with `failureMark`, and so an `error` (ADR D2). Unwrapped, the SDK's
+ * `clampScore` turns 1.5 into 1 and -0.1 or a non-finite score into 0, which no verdict can tell
+ * from a measured score, and a scorer returning `undefined` makes it throw outside its try and
+ * reject the whole run. The wrapper never throws, so no verdict depends on how the SDK words a
+ * scorer that did. The name is the one the SDK itself would give: a `NamedScorer` keeps its own, a
+ * plain function is `scorer-<index>`.
  */
-function strictScorer(scorer: Scorer | NamedScorer, index: number): NamedScorer {
+function strictScorer(
+  scorer: Scorer | NamedScorer,
+  index: number,
+  failureMark: string,
+): NamedScorer {
   const name = typeof scorer === 'function' ? `scorer-${String(index)}` : scorer.name
   const score = typeof scorer === 'function' ? scorer : scorer.score
+  const failed = (why: string) => ({ score: 0, reason: `${failureMark}scorer ${name} ${why}` })
   return {
     name,
     score: async (output: string, expected?: unknown) => {
-      const result: unknown = await score(output, expected)
-      if (!isFiniteScore(result)) {
-        throw new Error(
-          `scorer ${name} returned ${describeScore(result)}, not { score: finite number }`,
+      let result: unknown
+      try {
+        result = await score(output, expected)
+      } catch (scorerError) {
+        return failed(
+          `threw: ${scorerError instanceof Error ? scorerError.message : describe(scorerError)}`,
         )
+      }
+      if (!isUnitScore(result)) {
+        return failed(`returned ${describeScore(result)}, not { score: number within [0, 1] }`)
       }
       return result
     },
   }
 }
 
-function isFiniteScore(value: unknown): value is { score: number; reason?: string } {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    Number.isFinite((value as { score?: unknown }).score)
-  )
+function isUnitScore(value: unknown): value is { score: number; reason?: string } {
+  if (typeof value !== 'object' || value === null) return false
+  const score = (value as { score?: unknown }).score
+  return typeof score === 'number' && score >= 0 && score <= 1
 }
 
 function describeScore(value: unknown): string {
   if (typeof value === 'object' && value !== null && 'score' in value) {
-    return String(value.score)
+    return describe(value.score)
   }
-  return String(value)
+  return describe(value)
+}
+
+/** `String()` throws on an object with no prototype; this never does. */
+function describe(value: unknown): string {
+  try {
+    return String(value)
+  } catch {
+    // The value has no string form, and its type is all that can be said about it.
+    return `a value of type ${typeof value} with no string form`
+  }
 }
 
 /**
@@ -205,8 +226,18 @@ function asEvalAgentFactory(agentFor: () => Promise<SdkAgentHandle>): EvalAgentF
 /** The function shape of `EvalOptions.agent`, the one this module hands the runner. */
 type EvalAgentFactory = Extract<EvalOptions['agent'], (entry: DatasetEntry) => unknown>
 
-function toCaseResult(row: EvalRowResult, threshold: number): AgentEvalCaseResult {
-  const error = row.error ?? row.scores.find((s) => s.reason?.startsWith(SCORER_THREW))?.reason
+function toCaseResult(
+  row: EvalRowResult,
+  threshold: number,
+  failureMark: string,
+): AgentEvalCaseResult {
+  const scores = row.scores.map((s) =>
+    s.reason?.startsWith(failureMark) === true
+      ? { ...s, reason: s.reason.slice(failureMark.length) }
+      : s,
+  )
+  const failure = row.scores.find((s) => s.reason?.startsWith(failureMark) === true)
+  const error = row.error ?? failure?.reason?.slice(failureMark.length)
   return {
     index: row.index,
     input: row.input,
@@ -214,7 +245,7 @@ function toCaseResult(row: EvalRowResult, threshold: number): AgentEvalCaseResul
     output: row.output,
     verdict: verdictOf(error, row.meanScore, threshold),
     meanScore: row.meanScore,
-    scores: row.scores,
+    scores,
     ...(error === undefined ? {} : { error }),
     durationMs: row.durationMs,
   }
