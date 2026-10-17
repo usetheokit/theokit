@@ -333,6 +333,23 @@ describe('runAgentEvals reports an unmeasured case as an error, never as a fail'
     expect(result.cases[0]?.error).toBeUndefined()
   })
 
+  // A JSON-parsing judge can hand back a number as its reason. Unchecked, reading that reason
+  // throws after every case ran and the run loses all of its verdicts.
+  it('makes the case an error when a scorer returns a non-string reason, and the run still resolves', async () => {
+    const numericReason = {
+      name: 'numeric-reason',
+      score: () => ({ score: 1, reason: 42 }) as never,
+    }
+
+    const result = await runAgentEvals({ ...base(), scorers: [numericReason] })
+
+    const expected =
+      'scorer numeric-reason returned 1, not { score: number within [0, 1], reason?: string }'
+    expect(result.cases[0]?.verdict).toBe('error')
+    expect(result.cases[0]?.error).toBe(expected)
+    expect(result.cases[0]?.scores[0]?.reason).toBe(expected)
+  })
+
   // `String()` throws on an object with no prototype, so describing such a value must not escape
   // the wrapper into the SDK's own catch, which this layer no longer reads.
   it.each([
