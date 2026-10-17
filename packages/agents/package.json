@@ -85,6 +85,10 @@
       "types": "./dist/evals.d.ts",
       "import": "./dist/evals.js"
     },
+    "./handoff": {
+      "types": "./dist/handoff.d.ts",
+      "import": "./dist/handoff.js"
+    },
     "./mcp-health": {
       "types": "./dist/mcp-health.d.ts",
       "import": "./dist/mcp-health.js"
