@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { basename, join, resolve } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
@@ -21,6 +21,19 @@ const THEOCODE_A2A_TEST = join(
   THEOCODE_PACKAGES,
   'agent/tests/live/an-a2a-call-reaches-a-real-model.test.ts',
 )
+
+/**
+ * Agents live files whose claim holds for one model family only, beside the reason. They run on
+ * the model they name instead of the job's `LIVE_MODEL`, because the job's default would make the
+ * claim pass or fail for a reason unrelated to it.
+ */
+const PINNED_MODEL_FILES = new Map([
+  [
+    'live-prompt-caching.test.ts',
+    'B-412: explicit prompt caching is an Anthropic-family behaviour; the default live model ' +
+      'caches implicitly, so it would report a cache read on any SDK',
+  ],
+])
 
 function liveTests(dir: string): string[] {
   return existsSync(dir)
@@ -71,15 +84,28 @@ describe('the live files', () => {
     expect(code).not.toMatch(/\bLIVE_MODEL\b/)
   })
 
-  it.each([...agentsFiles, THEOCODE_A2A_TEST])(
+  const jobModelFiles = agentsFiles.filter((file) => !PINNED_MODEL_FILES.has(basename(file)))
+
+  it.each([...jobModelFiles, THEOCODE_A2A_TEST])(
     '%s resolves its model through resolveLiveModel',
     (file) => {
       expect(readFileSync(file, 'utf8')).toMatch(/const MODEL = resolveLiveModel\(process\.env\)/)
     },
   )
 
-  it('covers the five agents live files and the TheoCode A2A test', () => {
-    expect(agentsFiles).toHaveLength(5)
+  // A pinned file still never reads LIVE_MODEL (the check above); it names its model as a literal,
+  // so the one model it runs is visible in the file and not chosen by the job.
+  it.each([...PINNED_MODEL_FILES.keys()])(
+    '%s pins its model as a literal and does not resolve the job model',
+    (name) => {
+      const code = readFileSync(join(AGENTS_LIVE, name), 'utf8')
+      expect(code).toMatch(/const MODEL = '[^']+'/)
+      expect(code).not.toMatch(/resolveLiveModel/)
+    },
+  )
+
+  it('covers the six agents live files and the TheoCode A2A test', () => {
+    expect(agentsFiles).toHaveLength(6)
     expect(theocodeFiles).toContain(THEOCODE_A2A_TEST)
   })
 })
