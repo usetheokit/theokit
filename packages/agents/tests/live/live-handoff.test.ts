@@ -53,8 +53,10 @@ const TRIAGE = liveAgent(
 )
 const BILLING = liveAgent(
   'billing',
-  'You are the billing desk and you handle refunds. Start every answer with the exact tag ' +
-    '"BILLING:" followed by your reply.',
+  'You are the billing desk and you handle refunds. Every reply you write MUST begin with the ' +
+    'tag BILLING: (the word BILLING in capitals, then a colon, then a space), for example ' +
+    '"BILLING: I can help with that refund." Never omit the tag, even when the message starts ' +
+    'with a handoff note from another desk.\n\nOutput format, always: BILLING: <your reply>',
 )
 
 const workDirs: string[] = []
