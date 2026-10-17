@@ -762,7 +762,7 @@ async function* streamSdkAgent(
  * `status` and `error` are what the SDK eval runner reads: a row is scored only when
  * `status === 'finished'`, and otherwise errors with `error?.message ?? 'run <status>'` (B-413).
  * A guard block never resolves here: it rejects with `GuardrailViolationError` (`send` for input,
- * `wait` for output, theokit#139). `@theokit/acp` 4.0.1 answers that with JSON-RPC -32603 carrying
+ * `wait` for output, theokit#139). The ACP server (4.0.1) answers that with JSON-RPC -32603 carrying
  * the guard's name and reason, and no text; it keeps `refusal` for `error.code: 'safety_blocked'`.
  */
 export interface SdkTurnHandle {
