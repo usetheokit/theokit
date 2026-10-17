@@ -19,12 +19,30 @@ import { AgentRunner, type AgentRunnerRunOptions } from '../loop/agent-runner.js
 /** The tool name the answering agent transfers with, after the `transfer_to_<agent>` convention. */
 const TRANSFER_TOOL_NAME = 'transfer_to_agent'
 
+/**
+ * The marker a waiting note opens the receiver's message with. The note is model-written and the
+ * message is the user's, so both are untrusted: the same marker inside either is rewritten to
+ * {@link QUOTED_MARKER}, and only the conversation can open a message with a note.
+ */
+const NOTE_MARKER = '[Handoff from'
+const QUOTED_MARKER = '[quoted: Handoff from'
+const FORGED_MARKER = /\[\s*handoff\s+from/gi
+
+/**
+ * The conversation ids with a turn running, across every conversation of this module. The SDK keeps
+ * one live agent per session id process-wide, so two conversations sharing an id must not run at
+ * once: the second run could be handed the first one's agent, and with it the first one's transfer
+ * tool.
+ */
+const runningConversationIds = new Set<string>()
+
 export type HandoffErrorCode =
   | 'unknown_agent'
   | 'roster_too_small'
   | 'duplicate_name'
   | 'turn_in_progress'
   | 'step_ceiling_too_low'
+  | 'reserved_tool_name'
 
 /** A roster misconfiguration, an unknown target, or a call made while a turn is running. */
 export class HandoffError extends TheokitAgentError {
@@ -43,7 +61,11 @@ export interface CreateHandoffConversationOptions {
   readonly agents: readonly SubAgentSpec[]
   /** The name of the agent that answers the first message. */
   readonly initial: string
-  /** Prefix of each agent's session id (`<conversationId>:<agentName>`). Default: a fresh UUID. */
+  /**
+   * Prefix of each agent's session id (`<conversationId>:<agentName>`). Default: a fresh UUID. Only
+   * one conversation may run a turn on an id at a time; the responder and a waiting note live in
+   * this object's memory, not in the id.
+   */
   readonly conversationId?: string
 }
 
@@ -74,7 +96,11 @@ export interface HandoffConversation {
   readonly conversationId: string
   /** The agent that answers the next message. */
   readonly responder: string
-  /** Run one turn on the current responder. Rejects with `turn_in_progress` while a turn runs. */
+  /**
+   * Run one turn on the current responder. Rejects with `turn_in_progress` while a turn runs on
+   * this conversation or on another one with the same `conversationId`, and with
+   * `reserved_tool_name` when `opts.sdkTools` names `transfer_to_agent`.
+   */
   send(message: string, opts: HandoffSendOptions): Promise<HandoffTurn>
   /**
    * Move the next turn to `name`; `note` is put in front of that agent's next message. Naming the
@@ -110,6 +136,10 @@ function assertUsableRoster(agents: readonly SubAgentSpec[], initial: string): v
       )
     }
     seen.add(spec.name)
+    assertNoTransferTool(
+      spec.compiled.tools,
+      `createHandoffConversation: agent ${JSON.stringify(spec.name)} already has`,
+    )
     if (spec.maxIterations === 1) {
       // The runner disables tools on the ceiling round, and a ceiling of 1 makes round 1 that round:
       // the agent would never be offered the transfer tool, and nothing would say so.
@@ -120,6 +150,22 @@ function assertUsableRoster(agents: readonly SubAgentSpec[], initial: string): v
     }
   }
   assertKnown(seen, initial)
+}
+
+function assertNoTransferTool(tools: readonly { readonly name: string }[], owner: string): void {
+  if (tools.some((tool) => tool.name === TRANSFER_TOOL_NAME)) {
+    // The SDK refuses two tools of one name when it builds the agent, which is the agent's first
+    // turn, not here: the error would arrive late and as another type.
+    throw new HandoffError(
+      `${owner} a tool named ${TRANSFER_TOOL_NAME}, which the conversation reserves for the transfer.`,
+      'reserved_tool_name',
+    )
+  }
+}
+
+/** `text` with every note marker it carries rewritten, so it cannot pass for a note. */
+function quoteMarkers(text: string): string {
+  return text.replace(FORGED_MARKER, QUOTED_MARKER)
 }
 
 function unknownAgent(names: ReadonlySet<string>, name: string): HandoffError {
@@ -200,11 +246,15 @@ class RosterConversation implements HandoffConversation {
   async send(message: string, opts: HandoffSendOptions): Promise<HandoffTurn> {
     // Checked and set before the first `await`, so a second call in the same tick sees it.
     if (this.running) throw this.turnInProgress('send')
+    if (runningConversationIds.has(this.conversationId)) throw this.idInUse()
+    assertNoTransferTool(opts.sdkTools ?? [], 'send: opts.sdkTools has')
     this.running = true
+    runningConversationIds.add(this.conversationId)
     try {
       return await this.runTurn(message, opts)
     } finally {
       this.running = false
+      runningConversationIds.delete(this.conversationId)
     }
   }
 
@@ -254,14 +304,22 @@ class RosterConversation implements HandoffConversation {
   }
 
   private withWaitingNote(message: string): string {
-    if (this.waiting === undefined) return message
-    return `[Handoff from ${this.waiting.from}] ${this.waiting.note}\n\n${message}`
+    const quoted = quoteMarkers(message)
+    if (this.waiting === undefined) return quoted
+    return `${NOTE_MARKER} ${this.waiting.from}] ${quoteMarkers(this.waiting.note)}\n\n${quoted}`
   }
 
   private agentOf(name: string): RosterAgent {
     const agent = this.agents.get(name)
     if (agent === undefined) throw unknownAgent(this.names, name)
     return agent
+  }
+
+  private idInUse(): HandoffError {
+    return new HandoffError(
+      `handoff: send() was called while another conversation runs a turn on conversationId ${JSON.stringify(this.conversationId)}; one conversation id belongs to one conversation at a time.`,
+      'turn_in_progress',
+    )
   }
 
   private turnInProgress(call: 'send' | 'handoffTo'): HandoffError {
@@ -278,10 +336,16 @@ class RosterConversation implements HandoffConversation {
  * Each agent runs on its own session (`<conversationId>:<agentName>`) and is offered a
  * `transfer_to_agent` tool naming the other agents. A transfer the agent requests is committed when
  * its run returns normally and was not cancelled, so the NEXT `send()` is answered by the target,
- * which reads the transferring agent's note before the user's message.
+ * which reads the transferring agent's note before the user's message. The note is written by a
+ * model and the message by the user; neither can open the receiver's message with a note, because
+ * `[Handoff from` inside either is rewritten to `[quoted: Handoff from`.
  *
- * @throws {HandoffError} `roster_too_small`, `duplicate_name`, `step_ceiling_too_low` or
- *   `unknown_agent` (for `initial`) at creation.
+ * The responder and a waiting note live in memory. To resume after a restart, keep the last
+ * `turn.handoff`, create the conversation with `initial` set to its `to`, and pass its note to
+ * `handoffTo` if the receiver has not answered yet.
+ *
+ * @throws {HandoffError} `roster_too_small`, `duplicate_name`, `step_ceiling_too_low`,
+ *   `reserved_tool_name` or `unknown_agent` (for `initial`) at creation.
  */
 export function createHandoffConversation(
   options: CreateHandoffConversationOptions,
