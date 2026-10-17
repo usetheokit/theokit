@@ -26,7 +26,29 @@ const TRANSFER_TOOL_NAME = 'transfer_to_agent'
  */
 const NOTE_MARKER = '[Handoff from'
 const QUOTED_MARKER = '[quoted: Handoff from'
-const FORGED_MARKER = /\[\s*handoff\s+from/gi
+
+/**
+ * A model reads a lookalike of the marker as the marker, so it is matched on a folded copy of the
+ * text: format characters (zero-width, soft hyphen) dropped, compatibility forms (fullwidth) and
+ * accents taken apart by NFKD, and the Cyrillic, Greek and Armenian letters that pass for the
+ * Latin ones of "handoff from" mapped to them. Any opening bracket counts, and `_`, `-`, `.` or
+ * `:` may stand for a space. A spelling outside these classes still gets through: this narrows the
+ * forgery, it does not make the text channel a trusted one.
+ */
+const FORMAT_CHARACTER = /\p{Cf}/u
+const COMBINING_MARK = /\p{M}/gu
+const CONFUSABLE_LETTERS: Readonly<Record<string, string>> = {
+  '\u0430': 'a',
+  '\u03B1': 'a',
+  '\u0501': 'd',
+  '\u04BB': 'h',
+  '\u043C': 'm',
+  '\u0578': 'n',
+  '\u043E': 'o',
+  '\u03BF': 'o',
+}
+const FOLDED_MARKER =
+  /[[({<\u2329\u3008\u300A\u300C\u300E\u3010\u3014][\s_.:\-\u2010-\u2015]*hand[\s_.:\-\u2010-\u2015]*off[\s_.:\-\u2010-\u2015]*from/g
 
 /**
  * The conversation ids with a turn running, across every conversation of this module. The SDK keeps
@@ -43,6 +65,8 @@ export type HandoffErrorCode =
   | 'turn_in_progress'
   | 'step_ceiling_too_low'
   | 'reserved_tool_name'
+  | 'invalid_agent_name'
+  | 'already_responder'
 
 /** A roster misconfiguration, an unknown target, or a call made while a turn is running. */
 export class HandoffError extends TheokitAgentError {
@@ -104,7 +128,8 @@ export interface HandoffConversation {
   send(message: string, opts: HandoffSendOptions): Promise<HandoffTurn>
   /**
    * Move the next turn to `name`; `note` is put in front of that agent's next message. Naming the
-   * agent that already answers changes nothing, and its `note` is not kept.
+   * agent that already answers changes nothing; naming it with a `note` throws `already_responder`,
+   * because no transfer would carry the note.
    */
   handoffTo(name: string, note?: string): void
 }
@@ -136,6 +161,14 @@ function assertUsableRoster(agents: readonly SubAgentSpec[], initial: string): v
       )
     }
     seen.add(spec.name)
+    if (spec.name.includes(':')) {
+      // The session id is `<conversationId>:<agentName>`. With no ':' in an agent name the last ':'
+      // ends the conversation id, so two conversations can never share an agent's session.
+      throw new HandoffError(
+        `createHandoffConversation: agent name ${JSON.stringify(spec.name)} contains ':', which ends the conversation id in each session id (<conversationId>:<agentName>).`,
+        'invalid_agent_name',
+      )
+    }
     assertNoTransferTool(
       spec.compiled.tools,
       `createHandoffConversation: agent ${JSON.stringify(spec.name)} already has`,
@@ -163,9 +196,44 @@ function assertNoTransferTool(tools: readonly { readonly name: string }[], owner
   }
 }
 
-/** `text` with every note marker it carries rewritten, so it cannot pass for a note. */
+/** Where a code unit of the folded text came from: the span of the original code point. */
+interface FoldedSpan {
+  readonly start: number
+  readonly end: number
+}
+
+/** `text` folded for marker matching, with the original span of each folded code unit. */
+function foldForMatching(text: string): { readonly folded: string; readonly spans: FoldedSpan[] } {
+  let folded = ''
+  const spans: FoldedSpan[] = []
+  let start = 0
+  for (const char of text) {
+    const end = start + char.length
+    if (!FORMAT_CHARACTER.test(char)) {
+      for (const piece of char.normalize('NFKD').replace(COMBINING_MARK, '').toLowerCase()) {
+        const letter = CONFUSABLE_LETTERS[piece] ?? piece
+        folded += letter
+        spans.push(...Array.from({ length: letter.length }, () => ({ start, end })))
+      }
+    }
+    start = end
+  }
+  return { folded, spans }
+}
+
+/** `text` with every note marker it carries, lookalikes included, rewritten to the quoted form. */
 function quoteMarkers(text: string): string {
-  return text.replace(FORGED_MARKER, QUOTED_MARKER)
+  const { folded, spans } = foldForMatching(text)
+  let quoted = ''
+  let cursor = 0
+  for (const match of folded.matchAll(FOLDED_MARKER)) {
+    // One span per folded code unit, so both indexes are inside `spans`.
+    const first = spans[match.index]
+    const last = spans[match.index + match[0].length - 1]
+    quoted += text.slice(cursor, Math.max(cursor, first.start)) + QUOTED_MARKER
+    cursor = Math.max(cursor, last.end)
+  }
+  return quoted + text.slice(cursor)
 }
 
 function unknownAgent(names: ReadonlySet<string>, name: string): HandoffError {
@@ -261,7 +329,13 @@ class RosterConversation implements HandoffConversation {
   handoffTo(name: string, note?: string): void {
     if (this.running) throw this.turnInProgress('handoffTo')
     assertKnown(this.names, name)
-    if (name === this.current) return
+    if (name === this.current) {
+      if (note === undefined) return
+      throw new HandoffError(
+        `handoff: handoffTo(${JSON.stringify(name)}) was given a note, but ${JSON.stringify(name)} already answers the next message, so no transfer would carry it. To restore a waiting note after a restart, create the conversation with \`initial\` set to the transfer's \`from\` and call handoffTo(to, note).`,
+        'already_responder',
+      )
+    }
     this.waiting = note === undefined ? undefined : { from: this.current, note }
     this.current = name
   }
@@ -338,14 +412,17 @@ class RosterConversation implements HandoffConversation {
  * its run returns normally and was not cancelled, so the NEXT `send()` is answered by the target,
  * which reads the transferring agent's note before the user's message. The note is written by a
  * model and the message by the user; neither can open the receiver's message with a note, because
- * `[Handoff from` inside either is rewritten to `[quoted: Handoff from`.
+ * `[Handoff from` inside either, and its lookalikes (fullwidth or accented letters, zero-width
+ * characters, another bracket or separator), is rewritten to `[quoted: Handoff from`.
  *
  * The responder and a waiting note live in memory. To resume after a restart, keep the last
- * `turn.handoff`, create the conversation with `initial` set to its `to`, and pass its note to
- * `handoffTo` if the receiver has not answered yet.
+ * `turn.handoff`. If the receiver has not answered yet, create the conversation with `initial` set
+ * to its `from` and call `handoffTo(handoff.to, handoff.note)`, which rebuilds the note with its
+ * sender; once the receiver has answered, create it with `initial` set to its `to`.
  *
- * @throws {HandoffError} `roster_too_small`, `duplicate_name`, `step_ceiling_too_low`,
- *   `reserved_tool_name` or `unknown_agent` (for `initial`) at creation.
+ * @throws {HandoffError} `roster_too_small`, `duplicate_name`, `invalid_agent_name` (a ':' in a
+ *   name), `step_ceiling_too_low`, `reserved_tool_name` or `unknown_agent` (for `initial`) at
+ *   creation.
  */
 export function createHandoffConversation(
   options: CreateHandoffConversationOptions,
