@@ -95,18 +95,28 @@ The answering agent gets a `transfer_to_agent` tool for its run. The transfer ta
 run returns normally, so a run that throws, or whose `signal` was aborted, leaves the responder where
 it was. Each agent keeps its own session, and the receiver reads the transferring agent's note before
 the next message. `handoffTo(name, note?)` moves the next turn from your code; it replaces any note
-still waiting, and naming the agent that already answers changes nothing.
+still waiting. Naming the agent that already answers changes nothing, and naming it with a note
+throws `already_responder`, since no transfer would deliver the note.
 
 The note opens the receiver's message as `[Handoff from <agent>] <note>`. A model wrote the note
 and the user wrote the message, so neither is trusted: `[Handoff from` inside either one is rewritten
-to `[quoted: Handoff from`, and a user cannot make a message look like a note.
+to `[quoted: Handoff from`, and so are its lookalikes (fullwidth or accented letters, Cyrillic or
+Greek letters that look Latin, zero-width characters, another opening bracket, `_` or `-` for the
+space). This narrows the forgery but does not close it: a spelling outside those classes still
+arrives as written, so a receiver with tools that matter should not act on a note alone.
 
 The responder and a waiting note are kept in the conversation object's memory. One `conversationId`
 belongs to one conversation at a time: a second conversation on the same id cannot run a turn while
-the first one is running (`turn_in_progress`). To resume after a restart, store the last
-`turn.handoff`, create the conversation with `initial` set to its `to`, and pass its note to
-`handoffTo` if the receiver has not answered yet. A roster agent, or a per-run `sdkTools` entry, that
-brings its own `transfer_to_agent` tool is refused with `reserved_tool_name`.
+the first one is running (`turn_in_progress`). Each agent's session id is
+`<conversationId>:<agentName>`, so an agent name that contains `:` is refused with
+`invalid_agent_name`; a `conversationId` may contain one.
+
+To resume after a restart, store the last `turn.handoff`. If the receiver has not answered yet,
+create the conversation with `initial` set to its `from` and call
+`handoffTo(handoff.to, handoff.note)`: the receiver's next message opens with
+`[Handoff from <from>] <note>`, as it would have before the restart. Once the receiver has answered,
+create the conversation with `initial` set to its `to`. A roster agent, or a per-run `sdkTools`
+entry, that brings its own `transfer_to_agent` tool is refused with `reserved_tool_name`.
 
 `@theokit/sdk-handoff` and `createDelegateTool` work differently. They are call-and-return: the
 agent you call answers the caller, and the caller keeps the turn.
