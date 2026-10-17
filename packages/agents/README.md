@@ -97,6 +97,17 @@ it was. Each agent keeps its own session, and the receiver reads the transferrin
 the next message. `handoffTo(name, note?)` moves the next turn from your code; it replaces any note
 still waiting, and naming the agent that already answers changes nothing.
 
+The note opens the receiver's message as `[Handoff from <agent>] <note>`. A model wrote the note
+and the user wrote the message, so neither is trusted: `[Handoff from` inside either one is rewritten
+to `[quoted: Handoff from`, and a user cannot make a message look like a note.
+
+The responder and a waiting note are kept in the conversation object's memory. One `conversationId`
+belongs to one conversation at a time: a second conversation on the same id cannot run a turn while
+the first one is running (`turn_in_progress`). To resume after a restart, store the last
+`turn.handoff`, create the conversation with `initial` set to its `to`, and pass its note to
+`handoffTo` if the receiver has not answered yet. A roster agent, or a per-run `sdkTools` entry, that
+brings its own `transfer_to_agent` tool is refused with `reserved_tool_name`.
+
 `@theokit/sdk-handoff` and `createDelegateTool` work differently. They are call-and-return: the
 agent you call answers the caller, and the caller keeps the turn.
 
