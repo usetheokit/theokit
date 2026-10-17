@@ -757,11 +757,13 @@ async function* streamSdkAgent(
  *
  * Re-exporting the SDK's type would tie this layer's public signature to theirs — the opposite of
  * what the boundary exists to do, and the same reason `SdkAgentHandle` was already an alias rather
- * than a
- * re-export.
+ * than a re-export.
  *
  * `status` and `error` are what the SDK eval runner reads: a row is scored only when
  * `status === 'finished'`, and otherwise errors with `error?.message ?? 'run <status>'` (B-413).
+ * A guard block never resolves here: it rejects with `GuardrailViolationError` (`send` for input,
+ * `wait` for output, theokit#139). `@theokit/acp` 4.0.1 answers that with JSON-RPC -32603 carrying
+ * the guard's name and reason, and no text; it keeps `refusal` for `error.code: 'safety_blocked'`.
  */
 export interface SdkTurnHandle {
   wait: () => Promise<{
@@ -918,8 +920,6 @@ export function toAgentFactory(
  *
  * ## The residual gap, stated
  *
- * The runner moderates the STREAM as it flows (`moderateOutputStream`); this handle exposes no
- * stream, only `wait()`, so output guards land on the completed reply. A blocked output is still
- * blocked — it is simply not blocked mid-token. Closing that needs a streaming seam on the handle,
- * which is a change to the served contract and belongs to its own slice.
+ * The runner moderates the stream as it flows. The served turn's `stream()` (B-414) yields the
+ * guarded completed reply as one message, or nothing on a block, so a block is not mid-token.
  */
