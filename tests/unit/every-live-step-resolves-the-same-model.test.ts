@@ -78,8 +78,8 @@ describe('the live files', () => {
     },
   )
 
-  it('covers the three agents live files and the TheoCode A2A test', () => {
-    expect(agentsFiles).toHaveLength(3)
+  it('covers the five agents live files and the TheoCode A2A test', () => {
+    expect(agentsFiles).toHaveLength(5)
     expect(theocodeFiles).toContain(THEOCODE_A2A_TEST)
   })
 })

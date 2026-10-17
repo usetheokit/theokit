@@ -369,6 +369,12 @@ importers:
         specifier: '>=18'
         version: 19.2.7
     devDependencies:
+      '@agentclientprotocol/sdk':
+        specifier: ^0.22.1
+        version: 0.22.1(zod@4.4.3)
+      '@theokit/acp':
+        specifier: ^4.0.1
+        version: 4.0.1(@agentclientprotocol/sdk@0.22.1(zod@4.4.3))(@theokit/sdk@5.9.2(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.21.3))
       '@theokit/http':
         specifier: workspace:*
         version: link:../http
@@ -564,6 +570,11 @@ importers:
         version: 1.17.5(db0@0.3.4(better-sqlite3@12.11.1)(drizzle-orm@0.45.2(@types/better-sqlite3@7.6.13)(@types/pg@8.21.0)(better-sqlite3@12.11.1)(gel@2.2.0)(pg@8.23.0)(postgres@3.4.9)))
 
 packages:
+
+  '@agentclientprotocol/sdk@0.22.1':
+    resolution: {integrity: sha512-DfqXtl/8gO9NImq094MTaCXEU2vkhh6v7q/kT+9UjZxUqj8hYaya2OjLVIqn16MzNHcXEpShTR2RIauLSYeDQQ==}
+    peerDependencies:
+      zod: ^4.0.0
 
   '@ai-sdk/gateway@4.0.11':
     resolution: {integrity: sha512-ZdZzQnBxYfjJpWpSNkV+rRWycwTBhxyvwGvxcwx9g+WQoy3MK2xNahSySEgP9hD/X2xY9jkjd0xB67oDE3rLMA==}
@@ -2814,6 +2825,14 @@ packages:
 
   '@tauri-apps/api@2.11.1':
     resolution: {integrity: sha512-M2FPuYND2m+wh5hfW9ZpSdxMPdEJovPBWwoHJmwUpysTYNHaOkVFN419m/K0LIgjb/7KU2vBgsUepJWugQCvAA==}
+
+  '@theokit/acp@4.0.1':
+    resolution: {integrity: sha512-O3oFM89QRCTsaS60BxjOI6wd1ZSeFly2MTyrRUvCC6AkqEVOA5fiJaUJd5ewt51Kt1UwuW/bMcrpLBTFabWpog==}
+    engines: {node: '>=22.12.0'}
+    hasBin: true
+    peerDependencies:
+      '@agentclientprotocol/sdk': ^0.22.1
+      '@theokit/sdk': 5.9.2
 
   '@theokit/di-agent@0.5.0':
     resolution: {integrity: sha512-DqsggX3nO5KUatys1hlmy7baZPa/huLbegnaB7adQJxaUID3GpbEOrK6z6Ft8nm1SUK9tKUuskzxT5oMHpNahg==}
@@ -7755,6 +7774,10 @@ packages:
 
 snapshots:
 
+  '@agentclientprotocol/sdk@0.22.1(zod@4.4.3)':
+    dependencies:
+      zod: 4.4.3
+
   '@ai-sdk/gateway@4.0.11(zod@4.4.3)':
     dependencies:
       '@ai-sdk/provider': 4.0.2
@@ -9728,6 +9751,11 @@ snapshots:
   '@tanstack/virtual-core@3.17.4': {}
 
   '@tauri-apps/api@2.11.1': {}
+
+  '@theokit/acp@4.0.1(@agentclientprotocol/sdk@0.22.1(zod@4.4.3))(@theokit/sdk@5.9.2(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.21.3))':
+    dependencies:
+      '@agentclientprotocol/sdk': 0.22.1(zod@4.4.3)
+      '@theokit/sdk': 5.9.2(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.21.3)
 
   '@theokit/di-agent@0.5.0(@theokit/di@0.2.1(reflect-metadata@0.2.2))(@theokit/sdk@5.9.2(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.21.3))(reflect-metadata@0.2.2)':
     dependencies:

@@ -233,6 +233,13 @@ const DECISIONS: Record<string, Decision> = {
     coverage: 'total',
     symbols: [],
   },
+  // evaluation of a theokit agent is exposed through ./evals (B-413)
+  './eval': {
+    verdict: 'in',
+    via: '../../src/evals-entry.js',
+    coverage: 'sample',
+    symbols: ['Scorers', 'EvalAlreadyRunningError'],
+  },
 
   // --- OUT, with a reason. None of these is silent. ---
   './internal/memory-adapters': {
@@ -286,10 +293,6 @@ const DECISIONS: Record<string, Decision> = {
     verdict: 'out',
     reason:
       'Workflow orchestration is a domain the layer has not modelled yet. It enters when there is real demand.',
-  },
-  './eval': {
-    verdict: 'out',
-    reason: 'Evaluation tooling is development-time, not agent runtime.',
   },
   './server/auth': {
     verdict: 'out',

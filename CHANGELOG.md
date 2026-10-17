@@ -8,6 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- `@theokit/agents`: `runAgentEvals` on the new `@theokit/agents/evals` subpath runs a list of cases against an agent definition, one fresh agent per case, and reports `pass`, `fail` or `error` for each case with its output, scores, mean score and duration, plus the count of each verdict. The approval posture is required. A case is `error`, never `fail`, when the run did not finish, a guard blocked the input or the output, the agent could not be built, a scorer threw, or a scorer returned something other than a score within [0, 1] with an optional string reason. A scorer's own reason text never makes a case `error`. A configuration it cannot run is refused with `EvalConfigError` before any agent is built. The subpath also re-exports the SDK's `Scorers` and `EvalAlreadyRunningError`. The result of `SdkTurnHandle.wait()` gains the optional fields `status` and `error`, which the SDK eval runner reads (#B-413)
+- `@theokit/agents`: `createHandoffConversation` on the new `@theokit/agents/handoff` subpath lets one agent hand a conversation to another. The answering agent gets a `transfer_to_agent` tool naming the other agents in the roster; a transfer it makes is committed when its run returns normally, and the next `send()` is answered by the receiver, on its own session, with the transferring agent's note in front of the message. A run that throws, or whose `signal` was aborted, commits nothing. `send()` refuses to forward `sessionId`, `tools`, `streamFactory` and `maxIterations`, even through a wider object. A user message or a note that carries `[Handoff from`, or a lookalike of it (fullwidth or accented letters, Cyrillic or Greek letters that look Latin, zero-width characters, another opening bracket, `_` or `-` for the space), arrives with it rewritten to `[quoted: Handoff from`. To resume after a restart before the receiver answers, create the conversation with `initial` set to the last transfer's `from` and call `handoffTo(handoff.to, handoff.note)`. A roster below two agents, a duplicate name, an unknown agent, an agent whose `maxIterations` is 1, a roster agent or per-run `sdkTools` entry that brings its own `transfer_to_agent` tool (`reserved_tool_name`), an agent name that contains `:` (`invalid_agent_name`), a `handoffTo()` note for the agent that already answers (`already_responder`), and a call made while a turn is running on the same conversation or on another one with the same `conversationId` throw `HandoffError` with a `code` (#B-410)
+
 ### Changed
 
 ### Deprecated
@@ -16,9 +19,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- `@theokit/agents`: an agent from `toAgentFactory` with guardrails or a step ceiling can be served over ACP. The guarded turn had only `wait()`, so an editor received no text; it now has `stream()`, which `@theokit/acp` reads, yielding the text after the output guards in one message, or `{ type: 'status', status: 'ERROR', message }` when the run ends with status `error` or a guard blocks; and both wrappers forward `pluginManager`, so the server's default `ask` mode no longer refuses the prompt with `permission enforcement unavailable on this runtime (no plugin manager)`. A guarded agent served this way sends its text when the turn completes, with no token streaming and no tool activity (#B-414)
+
 ### Security
 
-## [1.2.0] - 2026-10-13
+## [1.2.0, @theokit/agents 16.0.0, create-theokit 3.0.18, theokit 0.75.0] - 2026-10-13
 
 ### Added
 

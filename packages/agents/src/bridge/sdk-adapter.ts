@@ -757,11 +757,22 @@ async function* streamSdkAgent(
  *
  * Re-exporting the SDK's type would tie this layer's public signature to theirs — the opposite of
  * what the boundary exists to do, and the same reason `SdkAgentHandle` was already an alias rather
- * than a
- * re-export.
+ * than a re-export.
+ *
+ * `status` and `error` are what the SDK eval runner reads: a row is scored only when
+ * `status === 'finished'`, and otherwise errors with `error?.message ?? 'run <status>'` (B-413).
+ * A guard block never resolves here: it rejects with `GuardrailViolationError` (`send` for input,
+ * `wait` for output, theokit#139). The ACP server (4.0.1) answers that with JSON-RPC -32603 carrying
+ * the guard's name and reason, and no text; it keeps `refusal` for `error.code: 'safety_blocked'`.
  */
 export interface SdkTurnHandle {
-  wait: () => Promise<{ result?: string; usage?: { totalTokens?: number } }>
+  wait: () => Promise<{
+    result?: string
+    usage?: { totalTokens?: number }
+    status?: string
+    error?: { message: string }
+  }>
+  stream?: () => AsyncIterable<unknown>
 }
 
 /** Per-turn options. Open for now — the SDK accepts more than the layer needs to declare. */
@@ -784,9 +795,9 @@ export interface SdkAgentHandle {
    * OPTIONAL, because a caller-injected handle (tests, a custom transport) need not implement it,
    * and requiring it would break every such double to add a method most of them never call.
    *
-   * BOTH wrappers below forward it. A wrapper that rebuilds the handle silently removes every method
-   * it does not name, and the consumer meets the loss at runtime as "the handle has no `generate`"
-   * after the types said it had one. Each forward is pinned by its own mutation.
+   * BOTH wrappers (`handle-wrappers.ts`) forward it, and `pluginManager`. A wrapper that rebuilds the
+   * handle silently removes every method it does not name, and the consumer meets the loss at runtime
+   * as "the handle has no `generate`" after the types said it had one. Each forward is pinned by test.
    *
    * It is NOT put through the output guards, stated rather than assumed: `generate` resolves to a
    * validated OBJECT and those guards moderate TEXT, so running them over a serialised object would
@@ -798,6 +809,7 @@ export interface SdkAgentHandle {
     message: string,
     options: { output: unknown; [key: string]: unknown },
   ) => Promise<unknown>
+  readonly pluginManager?: () => unknown
   /**
    * M91 — era `(msg: string, opts?: unknown) => unknown`.
    *
@@ -908,8 +920,6 @@ export function toAgentFactory(
  *
  * ## The residual gap, stated
  *
- * The runner moderates the STREAM as it flows (`moderateOutputStream`); this handle exposes no
- * stream, only `wait()`, so output guards land on the completed reply. A blocked output is still
- * blocked — it is simply not blocked mid-token. Closing that needs a streaming seam on the handle,
- * which is a change to the served contract and belongs to its own slice.
+ * The runner moderates the stream as it flows. The served turn's `stream()` (B-414) yields the
+ * guarded completed reply as one message, or nothing on a block, so a block is not mid-token.
  */

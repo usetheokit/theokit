@@ -29,7 +29,7 @@ you mount HTTP surfaces).
 
 ## Subpath map
 
-Twenty-one entry points. Import the one you need — the barrel is not the API.
+Twenty-three entry points. Import the one you need — the barrel is not the API.
 
 | Subpath | What lives there |
 |---|---|
@@ -54,6 +54,8 @@ Twenty-one entry points. Import the one you need — the barrel is not the API.
 | `./commands` | Command routing and the shutdown/cleanup contract |
 | `./doctor` | Environment diagnostics |
 | `./usage` | Token and cost accounting |
+| `./evals` | `runAgentEvals` — run cases against an agent and read pass, fail or error per case |
+| `./handoff` | `createHandoffConversation`: one agent hands the conversation to another, and the next turn is answered by the receiver |
 
 ## The shapes worth knowing before you start
 
@@ -74,6 +76,50 @@ never subtractive.
 **Credentials answer two questions.** Which credential to use, and where it came from. The second
 matters more than it looks: without provenance, "why is it calling Anthropic?" has no answer in the
 data, and a user cannot tell an explicit choice from a precedence fallback.
+
+## Handing a conversation to another agent
+
+`@theokit/agents/handoff` keeps a roster of compiled agents and the name of the one that answers.
+
+```ts
+import { createHandoffConversation } from '@theokit/agents/handoff'
+
+const conversation = createHandoffConversation({ agents: [triage, billing], initial: 'triage' })
+const first = await conversation.send('I want a refund', { apiKey })
+// triage called transfer_to_agent: first.handoff is { from: 'triage', to: 'billing', note }
+const second = await conversation.send('It was a gift', { apiKey })
+// second.responder is 'billing'
+```
+
+The answering agent gets a `transfer_to_agent` tool for its run. The transfer takes effect when that
+run returns normally, so a run that throws, or whose `signal` was aborted, leaves the responder where
+it was. Each agent keeps its own session, and the receiver reads the transferring agent's note before
+the next message. `handoffTo(name, note?)` moves the next turn from your code; it replaces any note
+still waiting. Naming the agent that already answers changes nothing, and naming it with a note
+throws `already_responder`, since no transfer would deliver the note.
+
+The note opens the receiver's message as `[Handoff from <agent>] <note>`. A model wrote the note
+and the user wrote the message, so neither is trusted: `[Handoff from` inside either one is rewritten
+to `[quoted: Handoff from`, and so are its lookalikes (fullwidth or accented letters, Cyrillic or
+Greek letters that look Latin, zero-width characters, another opening bracket, `_` or `-` for the
+space). This narrows the forgery but does not close it: a spelling outside those classes still
+arrives as written, so a receiver with tools that matter should not act on a note alone.
+
+The responder and a waiting note are kept in the conversation object's memory. One `conversationId`
+belongs to one conversation at a time: a second conversation on the same id cannot run a turn while
+the first one is running (`turn_in_progress`). Each agent's session id is
+`<conversationId>:<agentName>`, so an agent name that contains `:` is refused with
+`invalid_agent_name`; a `conversationId` may contain one.
+
+To resume after a restart, store the last `turn.handoff`. If the receiver has not answered yet,
+create the conversation with `initial` set to its `from` and call
+`handoffTo(handoff.to, handoff.note)`: the receiver's next message opens with
+`[Handoff from <from>] <note>`, as it would have before the restart. Once the receiver has answered,
+create the conversation with `initial` set to its `to`. A roster agent, or a per-run `sdkTools`
+entry, that brings its own `transfer_to_agent` tool is refused with `reserved_tool_name`.
+
+`@theokit/sdk-handoff` and `createDelegateTool` work differently. They are call-and-return: the
+agent you call answers the caller, and the caller keeps the turn.
 
 ## What changed recently
 
