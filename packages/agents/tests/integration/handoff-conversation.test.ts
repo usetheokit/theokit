@@ -2,10 +2,9 @@
  * `createHandoffConversation` hands a conversation from one agent to another (B-410).
  *
  * Every test drives the REAL `AgentRunner` and reflective loop; only `createSdkAgentStream` is
- * replaced, which is the seam the rest of the suite uses (`runtime-tools.test.ts`). A
- * `streamFactory` would not do: it replaces the adapter and with it the tools, so the transfer tool
- * would never reach the fake. The fake plays the model: per call it reads one script, and to
- * transfer it finds `transfer_to_agent` among the tools it was handed and awaits its handler.
+ * replaced (`handoff-sdk-fake.ts`), which is the seam the rest of the suite uses
+ * (`runtime-tools.test.ts`). A `streamFactory` would not do: it replaces the adapter and with it the
+ * tools, so the transfer tool would never reach the fake.
  *
  * Each roster agent carries a marker tool named after it, so a test can prove WHICH compiled agent
  * ran, not only which session id and label the conversation used.
@@ -14,139 +13,24 @@ import 'reflect-metadata'
 import { describe, expect, it, vi } from 'vitest'
 import type { ZodType } from 'zod'
 
-interface FakeTool {
-  readonly name: string
-  readonly inputSchema: unknown
-  readonly handler: (input: unknown) => string | Promise<string>
-}
+import {
+  DelegationBudgetExceededError,
+  DelegationError,
+} from '../../src/bridge/delegation-types.js'
+import { createHandoffConversation, HandoffError } from '../../src/handoff/handoff-conversation.js'
+import {
+  agent,
+  codeOf,
+  conversation,
+  deferred,
+  leadOf,
+  OPTS,
+  rejectionOf,
+  ROSTER,
+} from './handoff-roster.js'
+import { h } from './handoff-sdk-fake.js'
 
-interface FakeScript {
-  /** Transfer-tool calls the fake makes, in order, before it answers. */
-  readonly transfers?: readonly { agent: string; note: string }[]
-  /** Thrown after the transfers, in place of an answer. */
-  readonly throwAfter?: Error
-  /** Aborted after the transfers, before the first event. */
-  readonly abortAfter?: AbortController
-  /** Awaited before anything else, so a test can hold a turn open. */
-  readonly hold?: Promise<void>
-  /** USD cost reported on the round's `done` event. */
-  readonly cost?: number
-}
-
-interface FakeCall {
-  readonly sessionId: string
-  readonly message: string
-  readonly toolNames: readonly string[]
-  readonly tools: readonly FakeTool[]
-  readonly apiKey: unknown
-  readonly overrides: Record<string, unknown>
-  readonly factoryOpts: { disableTools?: boolean } | undefined
-}
-
-const h = vi.hoisted(() => ({ calls: [] as FakeCall[], scripts: [] as FakeScript[] }))
-
-vi.mock('../../src/bridge/sdk-adapter.js', () => ({
-  createSdkAgentStream:
-    (
-      _compiled: unknown,
-      tools: readonly FakeTool[],
-      apiKey: unknown,
-      overrides: Record<string, unknown> = {},
-    ) =>
-    (
-      message: string,
-      sessionId: string,
-      factoryOpts?: { disableTools?: boolean },
-    ): AsyncIterable<{ type: string; [k: string]: unknown }> => {
-      h.calls.push({
-        sessionId,
-        message,
-        toolNames: tools.map((t) => t.name),
-        tools,
-        apiKey,
-        overrides,
-        factoryOpts,
-      })
-      const script = h.scripts.shift() ?? {}
-      return (async function* () {
-        if (script.hold) await script.hold
-        for (const transfer of script.transfers ?? []) {
-          const tool = tools.find((t) => t.name === 'transfer_to_agent')
-          if (!tool) throw new Error('the fake model was not offered transfer_to_agent')
-          await tool.handler(transfer)
-        }
-        if (script.throwAfter) throw script.throwAfter
-        script.abortAfter?.abort()
-        yield { type: 'text_delta', content: 'ok' }
-        yield { type: 'done', ...(script.cost === undefined ? {} : { cost: script.cost }) }
-      })()
-    },
-}))
-
-const { createHandoffConversation, HandoffError } =
-  await import('../../src/handoff/handoff-conversation.js')
-const { applyCapabilities } = await import('../../src/capability/capability.js')
-const { ModelCapability } = await import('../../src/capability/capabilities.js')
-const { DelegationBudgetExceededError, DelegationError } =
-  await import('../../src/bridge/delegation-types.js')
-
-const base = applyCapabilities([new ModelCapability('test-model')])
-
-function agent(name: string, maxIterations?: number) {
-  const marker = {
-    name: `${name}_marker`,
-    description: `marks ${name}`,
-    inputSchema: {},
-    handler: () => name,
-  }
-  return {
-    name,
-    compiled: { ...base, tools: [marker] },
-    ...(maxIterations === undefined ? {} : { maxIterations }),
-  }
-}
-
-const ROSTER = [agent('triage'), agent('billing'), agent('refunds')]
-
-function conversation() {
-  h.calls.length = 0
-  h.scripts.length = 0
-  return createHandoffConversation({ agents: ROSTER, initial: 'triage', conversationId: 'conv-1' })
-}
-
-function deferred(): { promise: Promise<void>; resolve: () => void } {
-  let resolve: () => void = () => undefined
-  const promise = new Promise<void>((r) => {
-    resolve = r
-  })
-  return { promise, resolve }
-}
-
-function codeOf(fn: () => unknown): string | undefined {
-  try {
-    fn()
-  } catch (error) {
-    expect(error).toBeInstanceOf(HandoffError)
-    return (error as InstanceType<typeof HandoffError>).code
-  }
-  return undefined
-}
-
-async function rejectionOf(start: () => Promise<unknown>): Promise<unknown> {
-  try {
-    await start()
-  } catch (error) {
-    return error
-  }
-  throw new Error('expected the promise to reject')
-}
-
-/** The paragraph a message opens with, which is where the receiver reads the note. */
-function leadOf(message: string): string {
-  return message.split('\n\n')[0] ?? ''
-}
-
-const OPTS = { apiKey: 'k' }
+vi.mock('../../src/bridge/sdk-adapter.js', () => import('./handoff-sdk-fake.js'))
 
 describe('createHandoffConversation', () => {
   it('the next turn is answered by the receiver', async () => {
