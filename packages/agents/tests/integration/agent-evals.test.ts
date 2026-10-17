@@ -6,8 +6,8 @@
  * scripted agent, so the real `toAgentFactory`, guardrail wrapper and step-ceiling wrapper build
  * each case's handle. `@theokit/sdk/eval` is a different specifier and stays REAL, so these tests
  * also pin the SDK runner behaviour the verdict mapping relies on: a run that does not finish is a
- * row error, a throw from `send` or `wait` is a row error, a throwing scorer is recorded as
- * `scorer_threw:`, and the runner never disposes an agent it got from a function.
+ * row error, a throw from `send` or `wait` is a row error, a scorer's result reaches the row as
+ * scored, and the runner never disposes an agent it got from a function.
  *
  * The scripted answer is the definition's system prompt, so a case expecting it passes only when
  * the definition actually reached the agent the case ran (FR-004).
@@ -303,6 +303,57 @@ describe('runAgentEvals reports an unmeasured case as an error, never as a fail'
     expect(result.cases[0]?.scores.map((s) => s.name)).toEqual(['scorer-0'])
     expect(result.cases[0]?.verdict).toBe('pass')
   })
+
+  // Unchecked, the SDK clamps 1.5 to 1 and -0.1 to 0, so a scorer on the wrong scale reads as a
+  // real pass or fail.
+  it.each([1.5, -0.1])(
+    'makes the case an error when a scorer returns %s, outside [0, 1], naming the scorer',
+    async (score) => {
+      const offScale = { name: 'off-scale', score: () => ({ score }) }
+
+      const result = await runAgentEvals({ ...base(), scorers: [offScale] })
+
+      expect(result.cases[0]?.verdict).toBe('error')
+      expect(result.cases[0]?.error).toContain('off-scale')
+      expect(result.cases[0]?.error).toContain('[0, 1]')
+    },
+  )
+
+  // The error signal belongs to this layer: a scorer's own reason, whatever its text, cannot turn a
+  // measured score into an error.
+  it('keeps a measured score an answer when its reason starts with scorer_threw:', async () => {
+    const forged = {
+      name: 'forged',
+      score: () => ({ score: 1, reason: 'scorer_threw: not really' }),
+    }
+
+    const result = await runAgentEvals({ ...base(), scorers: [forged] })
+
+    expect(result.cases[0]?.verdict).toBe('pass')
+    expect(result.cases[0]?.error).toBeUndefined()
+  })
+
+  // `String()` throws on an object with no prototype, so describing such a value must not escape
+  // the wrapper into the SDK's own catch, which this layer no longer reads.
+  it.each([
+    [
+      'throws',
+      () => {
+        throw Object.create(null)
+      },
+    ],
+    ['returns as its score', () => ({ score: Object.create(null) })],
+  ])(
+    'makes the case an error when a scorer %s an object with no prototype',
+    async (_how, score) => {
+      const opaque = { name: 'opaque', score: score as never }
+
+      const result = await runAgentEvals({ ...base(), scorers: [opaque], threshold: 0 })
+
+      expect(result.cases[0]?.verdict).toBe('error')
+      expect(result.cases[0]?.error).toContain('opaque')
+    },
+  )
 })
 
 describe('runAgentEvals sessions and disposal', () => {
