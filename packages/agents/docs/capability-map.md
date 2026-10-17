@@ -10,7 +10,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1091 export(s) across 22 entry point(s).
+1100 export(s) across 23 entry point(s).
 
 Measured against `@theokit/sdk@5.9.2`.
 
@@ -1145,6 +1145,20 @@ Measured against `@theokit/sdk@5.9.2`.
 | `NamedScorer` | type |
 | `RunAgentEvalsOptions` | type |
 | `Scorer` | type |
+
+## `@theokit/agents/handoff`
+
+| Symbol | Kind |
+|---|---|
+| `createHandoffConversation` | value |
+| `HandoffError` | value |
+| `CreateHandoffConversationOptions` | type |
+| `HandoffConversation` | type |
+| `HandoffErrorCode` | type |
+| `HandoffSendOptions` | type |
+| `HandoffTransfer` | type |
+| `HandoffTurn` | type |
+| `SubAgentSpec` | type |
 
 ## `@theokit/agents/mcp-health`
 
