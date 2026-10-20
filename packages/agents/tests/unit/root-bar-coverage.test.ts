@@ -123,8 +123,9 @@ const ROOT_BAR_VERDICTS: Record<string, Verdict> = {
   //
   // Their `since` values are the reason this field stopped being a MAJOR. All seven were written as
   // `sinceMajor: 5`, which reads "present anywhere in the 5 line" and is false for every one of
-  // them: `@theokit/agents` declares `^5.3.0`, the floor run installs exactly that, and the orphan
-  // guard then reported all seven as decisions about symbols the SDK does not export. It was right.
+  // them: `@theokit/agents` declared a 5.3 floor then (it declares `^5.11.0` since 5.11.0), the
+  // floor run installed exactly that, and the orphan guard then reported all seven as decisions
+  // about symbols the SDK does not export. It was right.
   //
   // Probed at runtime with `Object.keys(await import('@theokit/sdk'))` across 5.3.0, 5.5.0, 5.6.0,
   // 5.7.0, 5.8.0 and 5.9.0 — the same thing `rootBarValues()` reads. The `.d.ts` disagrees and

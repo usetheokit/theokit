@@ -4,9 +4,10 @@
  * ## What the first version of this file got wrong
  *
  * It asserted that the installed SDK parses the key — and `dep-check`'s floor run, which installs
- * the DECLARED floor, failed it with the very error the docblock quotes. The range is `^5.3.0` and
- * always was; nothing was lowered. The test was demanding a guarantee the range does not give,
- * which is the same defect it exists to document, written one layer up.
+ * the DECLARED floor, failed it with the very error the docblock quotes. The range had a 5.3 floor
+ * then, as it always had; nothing was lowered. The test was demanding a guarantee the range did not
+ * give, which is the same defect it exists to document, written one layer up. The package declares
+ * `^5.11.0` since 5.11.0, so the floor run now lands on the >= 5.9.0 side of the boundary below.
  *
  * So it pins the BOUNDARY instead. Both branches are real measurements, taken 2026-09-16 by
  * loading a subagent out of `.theokit/agents/` against the published tarballs:
