@@ -104,8 +104,11 @@ describe.skipIf(!HAS_KEY && !REQUIRED)('LIVE — prompt caching on an Anthropic-
     console.log(usageLine('turn 2', turn2))
 
     // The prefix is long enough to cache, so a zero read below is the missing directive, not a
-    // prompt under the minimum.
-    expect(turn1.tokensInput).toBeGreaterThan(CACHE_MINIMUM_TOKENS)
+    // prompt under the minimum. Since @theokit/sdk 5.11.0 `tokensInput` is the uncached portion
+    // only, so the whole prompt is that plus what the turn read from and wrote to the cache.
+    const turn1Prompt =
+      (turn1.tokensInput ?? 0) + (turn1.cacheReadTokens ?? 0) + (turn1.cacheWriteTokens ?? 0)
+    expect(turn1Prompt).toBeGreaterThan(CACHE_MINIMUM_TOKENS)
     expect(turn2.cacheReadTokens).toBeGreaterThan(0)
   }, 120_000)
 })
