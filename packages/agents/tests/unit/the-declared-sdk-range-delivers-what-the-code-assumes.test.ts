@@ -40,6 +40,10 @@ import { describe, expect, it } from 'vitest'
  * - below 5.0.0 the surfaces are simply absent and nothing says so → closed by the RANGE
  * - between 5.0.0 and 5.4.0 `local.hooks` and the narrowed `import` are absent → guarded by
  *   `HookGateUnsupportedError` and `CompatImportUnsupportedError`, which name the version
+ * - below 5.11.0 the SDK sends no cache directive for an Anthropic-family model, so every turn pays
+ *   full price for the system prompt, and nothing says so → closed by the RANGE, which is why the
+ *   floor is now the caching release (B-412). The two guards above are unreachable from inside
+ *   that range unless an override pins the SDK lower; their removal is B-488.
  *
  * A test that only asserted the string would pass on a range someone widened back by hand with a
  * different spelling, so the floor is PARSED and compared numerically.
@@ -125,6 +129,14 @@ const PARITY_SINCE_MAJOR = 5
  */
 const SURFACE_SINCE_MINOR = 3
 
+/**
+ * The minor that first marks the system prompt cacheable for an Anthropic-family model.
+ *
+ * Below it the agent runs, compiles and pays full price on every turn, and no error or warning
+ * names the gap: the silent kind of gap the invariant above says the range must close.
+ */
+const CACHING_SINCE_MINOR = 11
+
 describe('the declared SDK range delivers the parity the package advertises', () => {
   it('has at least one declaration to check, so a silent zero cannot pass', () => {
     // The control. `everySdkDeclaration()` reads the filesystem, and a rename or a moved root would
@@ -173,20 +185,20 @@ describe('the declared SDK range delivers the parity the package advertises', ()
     ).toBeGreaterThanOrEqual(lowest(agents))
   })
 
-  it('leaves the guarded gaps guarded rather than folding them into the range', () => {
-    // The invariant's other half, and the reason the floor is 5.0.0 and not 5.4.0. `local.hooks` and
-    // the narrowed `import` landed in 5.4.0, which is INSIDE this range — and that is fine, because
-    // both throw a typed error naming the version. Raising the floor to 5.4.0 to cover them would
-    // strand every 5.0-5.3 consumer who uses neither, to remove a failure that already announces
-    // itself. A silent gap is closed by the range; a named one is not.
+  it('pins the agents floor at the caching release, below which the cache directive is silently absent', () => {
+    // The invariant's other half. A named gap (a typed error that states the version it needs) may
+    // stay inside the range; a silent one may not. On 5.3 to 5.10 an Anthropic-family agent sends
+    // no `cache_control` and reports nothing, so the floor is 5.11, the release that sends it. The
+    // floor used to stay below 5.4 so the hook and import guards kept 5.0-5.3 consumers installable;
+    // the caching gap outranks that, by decision of human/paulo on 2026-10-20 (B-412 option A).
     const floors = floorsOf(declaredSdkRange('packages/agents', 'dependencies'))
     expect(floors).toHaveLength(1)
     expect(floors[0]?.major).toBe(5)
     expect(
       floors[0]?.minor,
-      'the floor was raised past 5.4, where `local.hooks` and the narrowed `import` land — both ' +
-        'already throw a typed error naming the version, so raising there would strand consumers ' +
-        'to duplicate a refusal that already announces itself',
-    ).toBeLessThan(4)
+      `the agents floor admits @theokit/sdk@5.${floors[0]?.minor}.x, where an Anthropic-family ` +
+        'agent sends no cache directive and nothing tells the consumer; the floor must be the ' +
+        'caching release',
+    ).toBeGreaterThanOrEqual(CACHING_SINCE_MINOR)
   })
 })
