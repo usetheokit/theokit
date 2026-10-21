@@ -14,7 +14,7 @@ tone instruction in this file quietly makes `usePersonality` do nothing. Tone be
 
 ## Why this file is here and not at the root
 
-This project installs `@theokit/sdk@^5.9.2`, where **both** locations work: 5.x added a root
+This project installs `@theokit/sdk@^5.11.0`, where **both** locations work: 5.x added a root
 `THEO.md` (`usetheokit/theokit-sdk#531`) at priority 55, and `.theokit/THEO.md` at 60 still wins a
 conflict. The scaffold keeps the file here because it wins, not because the root is unreadable.
 
@@ -37,6 +37,10 @@ generates, substituting a literal for `import.meta.url`; that made a broken depe
 would have covered the next one with the same vice in silence. 5.9.2 fixes the cause, measured on the
 published tarball — 0 of 254 executable files resolve a path at module scope — so the compensation is gone
 and the requirement is declared here instead, where a reader can see it.
+
+It moved to 5.11.0 on 2026-10-21. That release marks the system prompt for the provider cache on an
+Anthropic-family model, `@theokit/agents` requires it, and `theokit` now asks for it in its peer range, so
+a scaffold pinning lower would admit an SDK the framework refuses.
 
 Two more things worth knowing if you do move it once 5.x is stable:
 
