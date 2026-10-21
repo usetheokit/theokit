@@ -24,6 +24,7 @@ import { composeTheoClaw, startTheoClaw } from '../src/composition.js'
 import type { RunningTheoClaw } from '../src/composition.js'
 import { startServer } from '../src/server.js'
 import { MAX_BODY_BYTES } from '../src/webhooks/router.js'
+import type { TeamsVerifier } from '../src/webhooks/teams.js'
 import { FakeAdapter, FakeAgent, deferred, waitFor } from './fakes.js'
 
 /**
@@ -329,6 +330,109 @@ describe('composeTheoClaw with WhatsApp', () => {
 
     expect(response.status).toBe(413)
     expect(whatsapp.conversions).toBe(0)
+    await loop.stopAll()
+  })
+})
+
+const TEAMS_ENV = {
+  THEOCLAW_TEAMS_CLIENT_ID: 'teams-client-id',
+  THEOCLAW_TEAMS_CLIENT_SECRET: 'teams-client-secret',
+  THEOCLAW_TEAMS_TENANT_ID: '00000000-0000-4000-8000-000000000000',
+}
+
+/** A verifier factory that counts how often it builds and how often its verifier runs. */
+function countingVerifierFactory() {
+  const counts = { built: 0, verified: 0 }
+  const factory = (): TeamsVerifier => {
+    counts.built += 1
+    return async () => {
+      counts.verified += 1
+      return {
+        ok: true,
+        activity: { type: 'conversationUpdate' },
+        token: { appId: 'teams-client-id', serviceUrl: 'https://smba.trafficmanager.net/teams/' },
+      }
+    }
+  }
+  return { factory, counts }
+}
+
+describe('composeTheoClaw with Teams', () => {
+  it('builds the teams verifier once for many requests', async () => {
+    const { factory, counts } = countingVerifierFactory()
+    const { builders } = fakeBuilders()
+    const { loop, router } = composeTheoClaw({
+      env: TEAMS_ENV,
+      agentFactory: noAgent,
+      builders,
+      write: () => undefined,
+      teamsVerifierFactory: factory,
+    })
+    await loop.ready
+
+    for (const _ of [1, 2]) {
+      const response = await router(new Request('http://localhost/webhooks/teams', { method: 'POST', body: '{}' }))
+      expect(response.status).toBe(200)
+    }
+
+    expect(counts).toEqual({ built: 1, verified: 2 })
+    await loop.stopAll()
+  })
+
+  it('a chunked oversized teams post never reaches the verifier', async () => {
+    const { factory, counts } = countingVerifierFactory()
+    const { builders } = fakeBuilders()
+    const { loop, router } = composeTheoClaw({
+      env: TEAMS_ENV,
+      agentFactory: noAgent,
+      builders,
+      write: () => undefined,
+      teamsVerifierFactory: factory,
+    })
+    await loop.ready
+
+    const response = await router(chunkedPost('/webhooks/teams', MAX_BODY_BYTES + 1))
+
+    expect(response.status).toBe(413)
+    expect(counts.verified).toBe(0)
+    await loop.stopAll()
+  })
+
+  it('a verifier that cannot be built leaves the teams route at 503 and the rest running', async () => {
+    const { builders } = fakeBuilders()
+    const lines: string[] = []
+    const { loop, router } = composeTheoClaw({
+      env: { ...TEAMS_ENV, ...TELEGRAM_AND_LINE },
+      agentFactory: noAgent,
+      builders,
+      write: (line) => lines.push(line),
+      teamsVerifierFactory: () => {
+        throw new TypeError('teamsActivityVerifier: tenantId must be a tenant GUID')
+      },
+    })
+    await loop.ready
+
+    const response = await router(new Request('http://localhost/webhooks/teams', { method: 'POST', body: '{}' }))
+
+    expect(response.status).toBe(503)
+    expect(lines).toContain('teams: the activity verifier could not be built: teamsActivityVerifier: tenantId must be a tenant GUID')
+    expect((await router(signedLinePost())).status).toBe(200)
+    await loop.stopAll()
+  })
+
+  it('writes a verifier failure without the configured value it quotes', async () => {
+    const { builders } = fakeBuilders()
+    const lines: string[] = []
+    const { loop } = composeTheoClaw({
+      env: { ...TEAMS_ENV, THEOCLAW_TEAMS_TENANT_ID: 'not-a-guid-tenant' },
+      agentFactory: noAgent,
+      builders,
+      write: (line) => lines.push(line),
+    })
+    await loop.ready
+
+    expect(lines.some((line) => line.startsWith('teams: the activity verifier could not be built'))).toBe(true)
+    expect(lines.join('\n')).not.toContain('not-a-guid-tenant')
     await loop.stopAll()
   })
 })

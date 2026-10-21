@@ -2,11 +2,14 @@ import 'reflect-metadata'
 
 import { Container } from '@theokit/di'
 import { createAgentProvider } from '@theokit/di-agent'
+import { redactSecrets } from '@theokit/gateway'
 import type { BasePlatformAdapter, PlatformName } from '@theokit/gateway'
+import { teamsActivityVerifier } from '@theokit/gateway-teams'
+import type { TeamsActivityVerifierOptions } from '@theokit/gateway-teams'
 import type { RuntimeAdapter, ServerHandle } from '@theokit/http/runtime/node'
 
 import { adapterBuilders, smsOptions } from './channels/adapter-factory.js'
-import { startChannelLoop } from './channels/channel-loop.js'
+import { maskSecrets, startChannelLoop } from './channels/channel-loop.js'
 import type { ChannelLoop, PlatformBuild } from './channels/channel-loop.js'
 import { TheoClawConfigError, installOutputMask } from './channels/output-mask.js'
 import type { MaskableStream } from './channels/output-mask.js'
@@ -21,6 +24,8 @@ import { createWebhookRouter } from './webhooks/router.js'
 import type { WebhookRoute } from './webhooks/router.js'
 import { createSmsRoute } from './webhooks/sms.js'
 import type { SmsRouteAdapter } from './webhooks/sms.js'
+import { createTeamsRoute } from './webhooks/teams.js'
+import type { TeamsVerifier } from './webhooks/teams.js'
 import { createWhatsAppRoute } from './webhooks/whatsapp.js'
 import type { DeliverableWhatsAppAdapter } from './webhooks/whatsapp.js'
 
@@ -82,6 +87,8 @@ export interface TheoClawOptions {
   readonly builders?: (configured: readonly ConfiguredPlatform[]) => PlatformBuild[]
   readonly write: (line: string) => void
   readonly startTimeoutMs?: number
+  /** Builds the Teams activity verifier, once (D4). Defaults to the package's `teamsActivityVerifier`. */
+  readonly teamsVerifierFactory?: (options: TeamsActivityVerifierOptions) => TeamsVerifier
 }
 
 export interface ComposedTheoClaw {
@@ -114,11 +121,30 @@ function convertsEnvelopes(
   return typeof (adapter as { toDeliverableEvents?: unknown }).toDeliverableEvents === 'function'
 }
 
+/**
+ * The Teams verifier, built once. It refuses some settings at construction (an empty client id, a
+ * tenant that is not a GUID); that fails the Teams route only, which then answers 503, and the
+ * line says why.
+ */
+function teamsVerifier(
+  settings: { readonly clientId: string; readonly tenantId: string },
+  factory: (options: TeamsActivityVerifierOptions) => TeamsVerifier,
+  write: (line: string) => void,
+): TeamsVerifier | undefined {
+  try {
+    return factory({ clientId: settings.clientId, tenantId: settings.tenantId })
+  } catch (error) {
+    write(`teams: the activity verifier could not be built: ${error instanceof Error ? error.message : String(error)}`)
+    return undefined
+  }
+}
+
 /** The webhook routes of the configured webhook platforms; every other platform answers 404. */
 function webhookRoutes(
   configured: readonly ConfiguredPlatform[],
   loop: ChannelLoop,
   write: (line: string) => void,
+  verifierFactory: (options: TeamsActivityVerifierOptions) => TeamsVerifier,
 ): Map<PlatformName, WebhookRoute> {
   const routes = new Map<PlatformName, WebhookRoute>()
   for (const entry of configured) {
@@ -139,6 +165,16 @@ function webhookRoutes(
           }
           return createWhatsAppRoute({ appSecret, verifyToken, adapter, write })
         }),
+      })
+    }
+    if (entry.platform === 'teams') {
+      const verify = teamsVerifier(entry.settings, verifierFactory, write)
+      routes.set('teams', {
+        methods: ['POST'],
+        handle:
+          verify === undefined
+            ? async () => new Response(null, { status: 503 })
+            : startedRoute(loop, 'teams', (adapter) => createTeamsRoute({ verify, adapter, write })),
       })
     }
     if (entry.platform === 'sms') {
@@ -173,7 +209,15 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
     write: options.write,
     ...(options.startTimeoutMs === undefined ? {} : { startTimeoutMs: options.startTimeoutMs }),
   })
-  const routes = webhookRoutes(configured, loop, options.write)
+  // What the routes write can carry a configured value (a verifier's message quotes a tenant id):
+  // masked here as the loop masks its own lines, whatever stream the caller writes to.
+  const routeWrite = (line: string): void => options.write(redactSecrets(maskSecrets(line, secrets)))
+  const routes = webhookRoutes(
+    configured,
+    loop,
+    routeWrite,
+    options.teamsVerifierFactory ?? teamsActivityVerifier,
+  )
   const router = createWebhookRouter({
     routes,
     isStarted: (platform) => loop.started.has(platform),
