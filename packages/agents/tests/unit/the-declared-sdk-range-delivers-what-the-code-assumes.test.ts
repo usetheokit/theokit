@@ -54,6 +54,50 @@ const ROOT = join(__dirname, '..', '..', '..', '..')
 const DEPENDENCY_FIELDS = ['dependencies', 'devDependencies', 'peerDependencies'] as const
 
 /**
+ * Every workspace member directory, expanded from the globs `pnpm-workspace.yaml` declares.
+ *
+ * The scan used to read `packages/*` alone, so the two `apps/theocode` manifests pinning 5.9.2 sat
+ * outside it while the root override moved the tree to 5.11.0, and theocode's own pin guard failed
+ * in CI with this file green (B-412 review round 2, LCR0202 and LCR0602). Reading the globs makes
+ * the scan cover what pnpm installs, including a member added later.
+ *
+ * Only the two glob shapes pnpm-workspace.yaml uses are expanded: a literal path and a `*` segment.
+ * Any other pattern throws, so a new shape cannot be skipped in silence.
+ */
+function workspaceMembers(): string[] {
+  const yaml = readFileSync(join(ROOT, 'pnpm-workspace.yaml'), 'utf8')
+  const globs: string[] = []
+  let inPackages = false
+  for (const line of yaml.split('\n')) {
+    if (/^\S/.test(line)) inPackages = line.startsWith('packages:')
+    const entry = inPackages ? /^\s+-\s+'?([^'\s#]+)'?/.exec(line) : null
+    if (entry?.[1] !== undefined) globs.push(entry[1])
+  }
+  return globs.flatMap((glob) => expandGlob(glob.split('/')))
+}
+
+/** Expand one workspace glob, segment by segment, against the directories on disk. */
+function expandGlob(segments: string[], base = ''): string[] {
+  const [head, ...rest] = segments
+  if (head === undefined) return [base]
+  if (/[?[\]{}!]|\*\*/.test(head) || (head.includes('*') && head !== '*')) {
+    throw new Error(`pnpm-workspace.yaml glob segment "${head}" is not a literal or a bare *`)
+  }
+  const names = head === '*' ? subdirectories(join(ROOT, base)) : [head]
+  return names
+    .filter((name) => existsSync(join(ROOT, base, name)))
+    .flatMap((name) => expandGlob(rest, base === '' ? name : join(base, name)))
+}
+
+/** The directory names directly under `dir`, or none when `dir` does not exist. */
+function subdirectories(dir: string): string[] {
+  if (!existsSync(dir)) return []
+  return readdirSync(dir, { withFileTypes: true })
+    .filter((e) => e.isDirectory())
+    .map((e) => e.name)
+}
+
+/**
  * EVERY declaration of `@theokit/sdk` anywhere in the workspace, enumerated from disk.
  *
  * Enumerated rather than listed, and that is this file's own scar. The first version took a
@@ -68,10 +112,7 @@ const DEPENDENCY_FIELDS = ['dependencies', 'devDependencies', 'peerDependencies'
  * list reproduces it one layer up.
  */
 function everySdkDeclaration(): Array<{ pkg: string; field: string; range: string }> {
-  const manifests = [
-    'package.json',
-    ...readdirSync(join(ROOT, 'packages')).map((d) => join('packages', d, 'package.json')),
-  ]
+  const manifests = ['package.json', ...workspaceMembers().map((d) => join(d, 'package.json'))]
   const out: Array<{ pkg: string; field: string; range: string }> = []
   for (const rel of manifests) {
     const path = join(ROOT, rel)
@@ -137,12 +178,64 @@ const SURFACE_SINCE_MINOR = 3
  */
 const CACHING_SINCE_MINOR = 11
 
+/** The version the root `pnpm.overrides` resolves for every importer in the workspace. */
+function overriddenSdkVersion(): string {
+  const root = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')) as {
+    pnpm?: { overrides?: Record<string, string> }
+  }
+  const pinned = root.pnpm?.overrides?.['@theokit/sdk']
+  if (pinned === undefined) throw new Error('the root package.json has no @theokit/sdk override')
+  return pinned
+}
+
+/**
+ * Whether `range` admits `version`, for the two shapes the workspace spells: `^x.y.z` and an exact
+ * `x.y.z`, joined by `||`. Any other shape throws rather than answering, so a declaration written
+ * another way is reported instead of read as agreement.
+ */
+function admits(range: string, version: string): boolean {
+  const [vMajor, vMinor, vPatch] = version.split('.').map(Number)
+  return range.split('||').some((part) => {
+    const m = /^(\^?)(\d+)\.(\d+)\.(\d+)$/.exec(part.trim())
+    if (m === null) throw new Error(`cannot read the range "${part.trim()}"`)
+    const [major, minor, patch] = [Number(m[2]), Number(m[3]), Number(m[4])]
+    if (m[1] === '') return major === vMajor && minor === vMinor && patch === vPatch
+    if (major !== vMajor) return false
+    return minor !== vMinor ? (vMinor ?? 0) > minor : (vPatch ?? 0) >= patch
+  })
+}
+
 describe('the declared SDK range delivers the parity the package advertises', () => {
   it('has at least one declaration to check, so a silent zero cannot pass', () => {
     // The control. `everySdkDeclaration()` reads the filesystem, and a rename or a moved root would
     // make it return nothing — at which point every loop below passes over an empty set and this
     // file reports agreement it never measured.
-    expect(everySdkDeclaration().length).toBeGreaterThanOrEqual(4)
+    // Ten declarations on 2026-10-21 (root, presenter twice, agents, theo twice, theoclaw, theocode
+    // twice); the floor of 8 leaves room to drop one or two without hiding a scan that lost apps/.
+    expect(everySdkDeclaration().length).toBeGreaterThanOrEqual(8)
+  })
+
+  it('reads the declarations under apps/ as well as packages/', () => {
+    // The control for the glob expansion: the two theocode manifests are the ones the packages/-only
+    // scan missed, so the scan must name them.
+    const pkgs = everySdkDeclaration().map((d) => d.pkg)
+    expect(pkgs).toContain(join('apps', 'theocode', 'package.json'))
+    expect(pkgs).toContain(join('apps', 'theocode', 'packages', 'agent', 'package.json'))
+  })
+
+  it('declares, in every manifest, a range that admits the version the root override installs', () => {
+    // pnpm.overrides resolves every importer to one version whatever its manifest says, so a
+    // declaration that refuses that version names an SDK the tree does not run. theocode's pin
+    // guard fails on exactly that (LCR0202), and a published package carrying it asks npm for a
+    // second copy.
+    const installed = overriddenSdkVersion()
+    for (const { pkg, field, range } of everySdkDeclaration()) {
+      expect(
+        admits(range, installed),
+        `${pkg} [${field}] declares @theokit/sdk "${range}", which does not admit ${installed}, ` +
+          'the version the root pnpm.overrides installs for every importer',
+      ).toBe(true)
+    }
   })
 
   it('admits no major below the one that introduced the compat root, in ANY declaration', () => {
