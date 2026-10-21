@@ -1,14 +1,26 @@
 import 'reflect-metadata'
 
-import { isIPv6 } from 'node:net'
-
 import { Container } from '@theokit/di'
 import { createAgentProvider } from '@theokit/di-agent'
+import type { BasePlatformAdapter, PlatformName } from '@theokit/gateway'
+import type { RuntimeAdapter, ServerHandle } from '@theokit/http/runtime/node'
 
-import { type ControlPlaneHandle, healthHandler, listenControlPlane } from './control-plane/listener.js'
-import { readControlPlaneSettings } from './control-plane/settings.js'
-import { installShutdown, type SignalSource } from './control-plane/shutdown.js'
-import { createTurnRunner, type TurnAgent } from './control-plane/turn.js'
+import { adapterBuilders, smsOptions } from './channels/adapter-factory.js'
+import { startChannelLoop } from './channels/channel-loop.js'
+import type { ChannelLoop, PlatformBuild } from './channels/channel-loop.js'
+import { TheoClawConfigError, installOutputMask } from './channels/output-mask.js'
+import type { MaskableStream } from './channels/output-mask.js'
+import { resolvePlatforms } from './channels/platforms.js'
+import type { ConfiguredPlatform } from './channels/platforms.js'
+import { createReplyHandler } from './channels/reply-handler.js'
+import type { TurnAgent } from './channels/reply-handler.js'
+import { installShutdown, parsePort, startServer } from './server.js'
+import type { SignalSource } from './server.js'
+import { createLineRoute } from './webhooks/line.js'
+import { createWebhookRouter } from './webhooks/router.js'
+import type { WebhookRoute } from './webhooks/router.js'
+import { createSmsRoute } from './webhooks/sms.js'
+import type { SmsRouteAdapter } from './webhooks/sms.js'
 
 /**
  * The composition root — where concretes are wired into the container, and the only place that
@@ -59,46 +71,158 @@ export function createContainer<TAgent>(
   }
 }
 
-/** Everything the running process is made of, injected so the tests drive it without a process. */
-export interface StartOptions {
+/** Everything the running app is made of, for the entry and for tests. */
+export interface TheoClawOptions {
   readonly env: Readonly<Record<string, string | undefined>>
-  /** Builds one agent per turn (one request boundary each). */
+  /** Builds one agent per inbound message (one request boundary each). */
   readonly agentFactory: () => TurnAgent | Promise<TurnAgent>
-  readonly stdout: (line: string) => void
-  readonly stderr: (line: string) => void
-  readonly signals: SignalSource
-  readonly exit: (code: number) => void
-  /** How the control plane listens. Default `listenControlPlane`; tests wrap it to count calls. */
-  readonly listen?: typeof listenControlPlane
+  /** Defaults to the ten real adapters; tests pass fakes. */
+  readonly builders?: (configured: readonly ConfiguredPlatform[]) => PlatformBuild[]
+  readonly write: (line: string) => void
+  readonly startTimeoutMs?: number
 }
 
-function formatAddress(address: { readonly host: string; readonly port: number }): string {
-  return isIPv6(address.host) ? `[${address.host}]:${address.port}` : `${address.host}:${address.port}`
+export interface ComposedTheoClaw {
+  readonly loop: ChannelLoop
+  readonly router: (request: Request) => Promise<Response>
+}
+
+type RouteFor = (adapter: BasePlatformAdapter) => (request: Request) => Promise<Response>
+
+/**
+ * A route bound to the adapter inside the platform's started runner, looked up per request: the
+ * router answers 503 before a platform starts, and a platform stopped since answers 503 here. A
+ * request already past this lookup when shutdown disconnects the adapter can still be refused by
+ * it (an SMS signature check answers false once disconnected); that only happens while stopping.
+ */
+function startedRoute(loop: ChannelLoop, platform: PlatformName, route: RouteFor): WebhookRoute['handle'] {
+  return async (request) => {
+    const adapter = loop.started.get(platform)?.adapter
+    return adapter === undefined ? new Response(null, { status: 503 }) : route(adapter)(request)
+  }
+}
+
+function hasSignatureCheck(adapter: BasePlatformAdapter): adapter is BasePlatformAdapter & SmsRouteAdapter {
+  return typeof (adapter as { verifySignature?: unknown }).verifySignature === 'function'
+}
+
+/** The webhook routes of the configured webhook platforms; every other platform answers 404. */
+function webhookRoutes(configured: readonly ConfiguredPlatform[], loop: ChannelLoop): Map<PlatformName, WebhookRoute> {
+  const routes = new Map<PlatformName, WebhookRoute>()
+  for (const entry of configured) {
+    if (entry.platform === 'line') {
+      const { channelSecret } = entry.settings
+      routes.set('line', {
+        methods: ['POST'],
+        handle: startedRoute(loop, 'line', (adapter) => createLineRoute({ channelSecret, adapter })),
+      })
+    }
+    if (entry.platform === 'sms') {
+      const options = smsOptions(entry.settings)
+      routes.set('sms', {
+        methods: ['POST'],
+        handle: startedRoute(loop, 'sms', (adapter) => {
+          if (!hasSignatureCheck(adapter)) throw new Error('sms: the started adapter cannot verify a signature')
+          return createSmsRoute({ adapter, options })
+        }),
+      })
+    }
+  }
+  return routes
 }
 
 /**
- * Start TheoClaw's control plane: read and check the settings (a bad one throws before any socket
- * opens or agent exists), listen on the bound address, serve `/health` and, with a control token,
- * the `/control` socket, and close on the first SIGINT or SIGTERM. B-369 later passes its webhook
- * router as the listener's handler. The listening line is read from the socket (FR-012).
+ * Wire the app: the configured platforms, one runner each, the reply handler, and the routes.
+ * Returns at once; the loop keeps starting slow platforms while the router already serves (EC-2).
  */
-export async function startTheoClaw(options: StartOptions): Promise<ControlPlaneHandle> {
-  const settings = readControlPlaneSettings(options.env)
-  const agents = createContainer<TurnAgent>({ factory: options.agentFactory })
-  const listen = options.listen ?? listenControlPlane
-  const handle = await listen({
-    handler: healthHandler,
-    port: settings.port,
-    host: settings.host,
-    stderr: options.stderr,
-    ...(settings.controlToken === undefined
-      ? {}
-      : { control: { token: settings.controlToken, runTurn: createTurnRunner(agents.withAgent) } }),
-  })
-  installShutdown({ signals: options.signals, close: handle.close, exit: options.exit, stderr: options.stderr })
-  options.stdout(`theoclaw: control plane listening on ${formatAddress(handle.address())}`)
-  if (settings.controlToken === undefined) {
-    options.stdout('theoclaw: control socket off (THEOCLAW_CONTROL_TOKEN unset)')
+export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
+  const { configured, skipped, secrets } = resolvePlatforms(options.env)
+  for (const { platform, missing } of skipped) {
+    options.write(`${platform}: not configured (missing ${missing.join(', ')})`)
   }
-  return handle
+  const agents = createContainer<TurnAgent>({ factory: options.agentFactory })
+  const handler = createReplyHandler({ withAgent: (work) => agents.withAgent(work) })
+  const loop = startChannelLoop({
+    platforms: (options.builders ?? adapterBuilders)(configured),
+    handler,
+    secrets,
+    write: options.write,
+    ...(options.startTimeoutMs === undefined ? {} : { startTimeoutMs: options.startTimeoutMs }),
+  })
+  const routes = webhookRoutes(configured, loop)
+  const router = createWebhookRouter({
+    routes,
+    isStarted: (platform) => loop.started.has(platform),
+    write: options.write,
+  })
+  return { loop, router }
+}
+
+export interface StartOptions extends Omit<TheoClawOptions, 'write'> {
+  readonly signals: SignalSource
+  readonly exit: (code: number) => void
+  readonly runtime?: RuntimeAdapter
+  /** The streams the output mask wraps; `process.stdout` and `process.stderr` by default. */
+  readonly streams?: readonly MaskableStream[]
+}
+
+export interface RunningTheoClaw extends ComposedTheoClaw {
+  readonly server: ServerHandle
+}
+
+function closeServer(server: ServerHandle | undefined): Promise<void> {
+  return new Promise((resolve) => (server === undefined ? resolve() : server.close(() => resolve())))
+}
+
+/**
+ * Start the app in the order EC-2 and EC-3 need: check the settings, mask the output before any
+ * adapter exists, install shutdown before the loop starts, compose, then serve.
+ */
+export async function startTheoClaw(options: StartOptions): Promise<RunningTheoClaw> {
+  const port = parsePort(options.env.THEOCLAW_PORT)
+  if ((options.env.THEOCLAW_MODEL ?? '').trim() === '') {
+    throw new TheoClawConfigError('THEOCLAW_MODEL must name the model the agent runs')
+  }
+  const streams = options.streams ?? [process.stdout, process.stderr]
+  // The SDK reads its key from THEOKIT_API_KEY itself; it is masked like every channel credential.
+  const apiKey = (options.env.THEOKIT_API_KEY ?? '').trim()
+  const secrets = [...resolvePlatforms(options.env).secrets, ...(apiKey === '' ? [] : [apiKey])]
+  const mask = installOutputMask(secrets, streams)
+  const errorStream = streams[streams.length - 1]
+  const write = (line: string): void => {
+    errorStream?.write(`${line}\n`)
+  }
+  const flushOnExit = (): void => mask.flush()
+  options.signals.on('exit', flushOnExit)
+  let loop: ChannelLoop | undefined
+  let serving: Promise<ServerHandle> | undefined
+  const removeShutdown = installShutdown({
+    signals: options.signals,
+    stopAll: () => loop?.stopAll() ?? Promise.resolve(),
+    closeServer: async () => closeServer(await serving),
+    exit: (code) => {
+      mask.flush()
+      options.exit(code)
+    },
+    write,
+  })
+  const composed = composeTheoClaw({ ...options, write })
+  loop = composed.loop
+  serving = startServer({
+    handler: composed.router,
+    port,
+    write,
+    ...(options.runtime ? { runtime: options.runtime } : {}),
+  })
+  try {
+    return { ...composed, server: await serving }
+  } catch (error) {
+    // The server never listened (an address in use): stop what started and let the entry exit 1.
+    removeShutdown()
+    options.signals.off('exit', flushOnExit)
+    await composed.loop.stopAll()
+    // The mask stays: the entry writes this error and exits, and that line is masked too.
+    mask.flush()
+    throw error
+  }
 }

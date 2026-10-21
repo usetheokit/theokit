@@ -19,7 +19,7 @@ export interface RouterOptions {
 export const MAX_BODY_BYTES = 1_048_576
 
 /** A body that grew past the cap while it was being read. */
-export class BodyTooLargeError extends Error {
+class BodyTooLargeError extends Error {
   constructor(readonly maxBytes: number) {
     super(`request body exceeds ${maxBytes} bytes`)
     this.name = 'BodyTooLargeError'
@@ -31,7 +31,7 @@ export class BodyTooLargeError extends Error {
  * declared a `content-length` (a chunked body declares none). The bytes are kept as they came, so
  * a signature over the raw body is computed over exactly what the provider sent.
  */
-export async function readCapped(
+async function readCapped(
   request: Request,
   maxBytes: number,
 ): Promise<Uint8Array<ArrayBuffer>> {
