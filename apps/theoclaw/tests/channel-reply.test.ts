@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 
 import { channelRendering } from '@theokit/gateway'
 import type { GatewayContext, MessageEvent, SendResult } from '@theokit/gateway'
+import type { SDKAgent } from '@theokit/sdk'
 
 import {
   AgentTurnError,
@@ -42,6 +43,14 @@ function fakeContext(
 function withOne(agent: TurnAgent) {
   return async <R>(work: (turnAgent: TurnAgent) => R | Promise<R>): Promise<R> => work(agent)
 }
+
+/**
+ * The real agent fits the port the reply handler takes, checked by `tsc -p tsconfig.test.json`
+ * (the app's `typecheck`). Typed with the presenter's `SdkMessage`, whose index signature the
+ * SDK's message interfaces do not declare, the port refused it with TS2322 (Codex finding
+ * `pj_turn_agent_port_rejects_sdk_agent`).
+ */
+export const realAgentFitsThePort = (agent: SDKAgent): TurnAgent => agent
 
 describe('createReplyHandler', () => {
   it('replies once per turn with no reasoning text', async () => {
