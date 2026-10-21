@@ -1,0 +1,111 @@
+import { BasePlatformAdapter } from '@theokit/gateway'
+import type { MessageEvent, OutboundMessage, PlatformName, SendResult } from '@theokit/gateway'
+
+/** A promise the test settles by hand, to hold a connect or a handler at a chosen point. */
+export interface Deferred<T> {
+  readonly promise: Promise<T>
+  resolve(value: T): void
+  reject(reason: unknown): void
+}
+
+export function deferred<T>(): Deferred<T> {
+  let resolve!: (value: T) => void
+  let reject!: (reason: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
+}
+
+export interface FakeAdapterOptions {
+  /** What `connect()` does. Default: resolves true at once. */
+  readonly connect?: () => Promise<boolean>
+  /** What `sendMessage()` resolves. Default: `{ ok: true, messageId: 'sent-<n>' }`. */
+  readonly send?: (message: OutboundMessage) => Promise<SendResult>
+}
+
+/**
+ * An adapter with no network: it counts connects and disconnects, records what it sent, and
+ * delivers through the base class's own `runHandler`, as every real adapter does.
+ */
+export class FakeAdapter extends BasePlatformAdapter {
+  connects = 0
+  disconnects = 0
+  readonly sent: OutboundMessage[] = []
+  #handler: ((event: MessageEvent) => Promise<void>) | undefined
+
+  constructor(
+    readonly platform: PlatformName,
+    private readonly options: FakeAdapterOptions = {},
+  ) {
+    super()
+  }
+
+  async connect(): Promise<boolean> {
+    this.connects += 1
+    return this.options.connect ? this.options.connect() : true
+  }
+
+  async disconnect(): Promise<void> {
+    this.disconnects += 1
+  }
+
+  async sendMessage(message: OutboundMessage): Promise<SendResult> {
+    this.sent.push(message)
+    return this.options.send ? this.options.send(message) : { ok: true, messageId: `sent-${this.sent.length}` }
+  }
+
+  onInbound(handler: (event: MessageEvent) => Promise<void>): () => void {
+    this.#handler = handler
+    return () => {
+      this.#handler = undefined
+    }
+  }
+
+  deliver(event: MessageEvent): Promise<'ok' | 'no_handler' | 'handler_threw'> {
+    return this.runHandler(this.#handler, event)
+  }
+}
+
+/**
+ * An inbound message as `platform` would produce it. The platform-specific block is a stub: the
+ * code under test reads only the base fields.
+ */
+export function messageEvent(platform: PlatformName, text: string, senderId = 'user-1'): MessageEvent {
+  return {
+    id: `${platform}-message-${senderId}`,
+    platform,
+    sender: { id: senderId },
+    channel: { id: `${platform}-channel-${senderId}`, type: 'dm' },
+    text,
+    receivedAt: 0,
+    [platform]: { raw: null },
+  } as unknown as MessageEvent
+}
+
+/** The ten platforms of FR-001, in the order the loop starts them. */
+export const TEN_PLATFORMS: readonly PlatformName[] = [
+  'telegram',
+  'discord',
+  'slack',
+  'matrix',
+  'mattermost',
+  'email',
+  'line',
+  'whatsapp',
+  'teams',
+  'sms',
+]
+
+/**
+ * Poll `condition` until it holds, failing with `what` once `timeoutMs` passes. Tests wait for a
+ * condition, never for a guessed duration (`rules/testing.md` § 3).
+ */
+export async function waitFor(condition: () => boolean, timeoutMs: number, what: string): Promise<void> {
+  const deadline = Date.now() + timeoutMs
+  while (!condition()) {
+    if (Date.now() > deadline) throw new Error(`timed out after ${timeoutMs} ms waiting for ${what}`)
+    await new Promise((resolve) => setImmediate(resolve))
+  }
+}

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
+import { startChannelLoop } from '../src/channels/channel-loop.js'
 import { PLATFORMS, resolvePlatforms } from '../src/channels/platforms.js'
+import { FakeAdapter } from './fakes.js'
 
 /**
  * FR-003: a platform runs only when every variable it needs is set; a platform with any variable
@@ -126,5 +128,43 @@ describe('resolvePlatforms', () => {
     })
 
     expect(resolved.secrets).toEqual(['line-secret', 'line-access-token'])
+  })
+})
+
+/**
+ * NFR-003 at the loop: a connect that fails with the credential in its message is written with the
+ * platform's name and no trace of the value. The secret has no recognisable shape, so only the
+ * loop's own mask can remove it; no four characters of it may survive, which
+ * catches a partial mask such as `redactSecrets` leaves on an `sk-ant-` shape.
+ */
+describe('the channel loop output', () => {
+  it('never writes a credential value when a connect fails', async () => {
+    const token = 's3cret-value-xyz-0123'
+    const lines: string[] = []
+    const loop = startChannelLoop({
+      platforms: [
+        {
+          platform: 'discord',
+          build: () =>
+            new FakeAdapter('discord', {
+              connect: async () => {
+                throw new Error(`login failed for token ${token} (sk-ant-api03-${token})`)
+              },
+            }),
+        },
+      ],
+      handler: async () => undefined,
+      secrets: [token],
+      write: (line) => lines.push(line),
+    })
+
+    await loop.ready
+    const output = lines.join('\n')
+
+    expect(output).toContain('discord')
+    expect(output).not.toContain(token)
+    for (let start = 0; start + 4 <= token.length; start += 1) {
+      expect(output).not.toContain(token.slice(start, start + 4))
+    }
   })
 })
