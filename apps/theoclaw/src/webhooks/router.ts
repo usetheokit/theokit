@@ -88,6 +88,37 @@ async function cappedRequest(request: Request): Promise<Request> {
   return new Request(request.url, { method: request.method, headers, body })
 }
 
+/** The route a request names, or the status that answers it before any route runs. */
+function resolveRoute(
+  request: Request,
+  options: RouterOptions,
+): { readonly platform: PlatformName; readonly route: WebhookRoute } | Response {
+  const path = new URL(request.url).pathname.replace(/(.)\/$/, '$1')
+  const platform = WEBHOOK_PATH.exec(path)?.[1] as PlatformName | undefined
+  const route = platform === undefined ? undefined : options.routes.get(platform)
+  if (platform === undefined || route === undefined) return answer(404)
+  if (!options.isStarted(platform)) return answer(503)
+  if (!route.methods.includes(request.method)) return answer(405)
+  return { platform, route }
+}
+
+/** The request with its body capped in memory, or the status that refuses the body. */
+async function readBody(
+  request: Request,
+  platform: PlatformName,
+  write: (line: string) => void,
+): Promise<Request | Response> {
+  if (request.body === null) return request
+  try {
+    return await cappedRequest(request)
+  } catch (error) {
+    if (error instanceof BodyTooLargeError) return tooLarge()
+    // The client went away or sent a broken body: its request, not a defect of ours.
+    write(`${platform}: request body could not be read: ${describeError(error)}`)
+    return answer(400)
+  }
+}
+
 /**
  * Route `/webhooks/<platform>` to its route: 404 for a platform with no route or an unknown path,
  * 503 while the platform's runner has not started (D7), 405 for a method the route does not take,
@@ -95,23 +126,11 @@ async function cappedRequest(request: Request): Promise<Request> {
  */
 export function createWebhookRouter(options: RouterOptions): (request: Request) => Promise<Response> {
   return async (request) => {
-    const path = new URL(request.url).pathname.replace(/(.)\/$/, '$1')
-    const platform = WEBHOOK_PATH.exec(path)?.[1] as PlatformName | undefined
-    const route = platform === undefined ? undefined : options.routes.get(platform)
-    if (platform === undefined || route === undefined) return answer(404)
-    if (!options.isStarted(platform)) return answer(503)
-    if (!route.methods.includes(request.method)) return answer(405)
-    let routed: Request = request
-    if (request.body !== null) {
-      try {
-        routed = await cappedRequest(request)
-      } catch (error) {
-        if (error instanceof BodyTooLargeError) return tooLarge()
-        // The client went away or sent a broken body: its request, not a defect of ours.
-        options.write(`${platform}: request body could not be read: ${describeError(error)}`)
-        return answer(400)
-      }
-    }
+    const resolved = resolveRoute(request, options)
+    if (resolved instanceof Response) return resolved
+    const { platform, route } = resolved
+    const routed = await readBody(request, platform, options.write)
+    if (routed instanceof Response) return routed
     try {
       return await route.handle(routed)
     } catch (error) {
