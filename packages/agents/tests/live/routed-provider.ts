@@ -4,8 +4,11 @@
  * prompt-caching test reads the field itself: a turn 2 served by another upstream than turn 1
  * cannot read turn 1's cache, and the failure has to say so.
  */
+import { redactThenCut } from './provider-text.js'
 
 const DATA_PREFIX = 'data:'
+/** The longest upstream name the live log prints, after redaction. */
+const LABEL_LIMIT = 64
 
 /** The first top-level `provider` a chunk of `streamText` carries, or `undefined`. */
 export function routedProviderOf(streamText: string): string | undefined {
@@ -84,6 +87,19 @@ export function upstreamOfTurn(
   to: number,
 ): string | undefined {
   return to > from ? providers[to - 1] : undefined
+}
+
+/** An upstream as the live log prints it: redacted, then cut, or `(not reported)`. */
+export function upstreamLabel(
+  provider: string | undefined,
+  env: Record<string, string | undefined> = process.env,
+): string {
+  return redactThenCut(provider ?? '(not reported)', LABEL_LIMIT, env)
+}
+
+/** The turn-2 failure message: which upstream served each turn. */
+export function describeUpstreams(turn1: string | undefined, turn2: string | undefined): string {
+  return `turn 1 upstream=${upstreamLabel(turn1)}, turn 2 upstream=${upstreamLabel(turn2)}`
 }
 
 function urlOf(input: RequestInfo | URL): string {
