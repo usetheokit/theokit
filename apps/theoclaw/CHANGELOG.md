@@ -28,6 +28,35 @@ and versioning follows [Semantic Versioning](https://semver.org/).
   checked against a real model by `tests/live/control-plane.live.test.ts` (`THEOCLAW_LIVE=1`).
   B-369's webhook routes mount on this listener's handler when they land.
 
+- TheoClaw now replies on the ten gateway platforms (B-369).
+  - `node dist/main.js` (`pnpm start`) serves on `THEOCLAW_PORT` and runs one gateway runner per
+    configured platform: Telegram, Discord, Slack, Matrix, Mattermost, e-mail, LINE, WhatsApp
+    Cloud, Teams and SMS (Twilio). A platform runs when every one of its `THEOCLAW_*` variables is
+    set; a platform missing any is skipped with one line naming the missing variables. A platform
+    that cannot connect, or takes longer than 30 seconds, stops only itself.
+  - Each message with text gets one agent turn and exactly one reply, in the platform's own
+    rendering (`channelRendering`, from `@theokit/gateway` 0.11.0 in `theokit-gateways`). A turn
+    with no visible answer replies "I could not come up with an answer to that.", and a failed
+    turn replies with the presenter's error sentence. The agent runs `THEOCLAW_MODEL` and reads its
+    key from `THEOKIT_API_KEY`. Every configured credential, and the API key when it is set, is
+    masked as `[redacted]` in everything the process writes to stdout and stderr, including what
+    the adapters write themselves.
+  - Webhook platforms post to `/webhooks/line`, `/webhooks/sms`, `/webhooks/whatsapp` (GET answers
+    Meta's subscription check) and `/webhooks/teams`, which answer without waiting for the agent
+    turn: 200 once delivered, 400 for a malformed body, 401 for a bad signature or a refused Teams
+    token, 503 while the platform has not connected or when nothing took the message (so the
+    provider can retry), 500 when the delivery itself failed, 404 for a platform that is not
+    configured, 405 for a wrong method, and 413 for a body over 1 MiB.
+    LINE replies use the push API; no reply token is kept.
+  - SIGINT or SIGTERM stops every runner, letting in-flight turns drain for up to 10 seconds each,
+    then closes the server.
+  - Three platforms were not verified with a live reply: WhatsApp Cloud send (Meta error 130497,
+    the business account is restricted in Brazil), SMS free text (Twilio trial error 572006) and
+    Teams (no Teams tenant). Teams requires `THEOCLAW_TEAMS_TENANT_ID` and the verifier is always
+    built with it; `@theokit/gateway-teams` 0.3.0 documents that this refuses every Bot Framework
+    activity whose connector token carries no tenant claim, so live Teams messages may all answer
+    401.
+
 - A CI job that runs this package's three gates — `test`, `typecheck`, `boundaries` — on every
   push to the trunk. `grep -rn theoclaw .github/workflows/` returned zero lines across 12 workflow
   files until now, so from B-004 onward the gates held exactly as long as somebody remembered to
