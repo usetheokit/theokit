@@ -202,7 +202,7 @@ importers:
         version: 2.1.1
       '@slack/bolt':
         specifier: ^5.1.0
-        version: 5.1.0(@types/express@5.0.6)(undici@6.29.1)
+        version: 5.1.0(@types/express@5.0.6)(undici@7.30.1)
       '@theokit/agents':
         specifier: workspace:^
         version: link:../../packages/agents
@@ -232,7 +232,7 @@ importers:
         version: 0.2.1(@mattermost/client@11.9.0(@mattermost/types@11.9.0(typescript@5.9.3))(typescript@5.9.3))(@theokit/gateway@0.11.0(@theokit/sdk@5.11.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)))(ws@8.22.0)
       '@theokit/gateway-slack':
         specifier: ^0.3.1
-        version: 0.3.1(@slack/bolt@5.1.0(@types/express@5.0.6)(undici@6.29.1))(@theokit/gateway@0.11.0(@theokit/sdk@5.11.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)))
+        version: 0.3.1(@slack/bolt@5.1.0(@types/express@5.0.6)(undici@7.30.1))(@theokit/gateway@0.11.0(@theokit/sdk@5.11.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)))
       '@theokit/gateway-sms':
         specifier: ^0.3.1
         version: 0.3.1(@theokit/gateway@0.11.0(@theokit/sdk@5.11.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)))(express@5.3.0)(libphonenumber-js@1.13.15)(twilio@6.2.0)
@@ -281,6 +281,9 @@ importers:
       twilio:
         specifier: ^6.1.2
         version: 6.2.0
+      undici:
+        specifier: ^7.30.1
+        version: 7.30.1
       ws:
         specifier: ^8.22.0
         version: 8.22.0
@@ -8223,6 +8226,10 @@ packages:
     resolution: {integrity: sha512-EvRlUt/QqAEvXdQeRMYUfwOQsfzpDztykrG2owGEE/rBOBoYv9uF39ZzsNDh4lTFHhTr2XOZjKkYgueD12ZmGA==}
     engines: {node: '>=18.17'}
 
+  undici@7.30.1:
+    resolution: {integrity: sha512-03KrMbjIFDWQR5RNPrSw3bd1r12JpyFQl9/yxjUbJtqkjmllqC5lFjZh6ujeuJCKr8EOQvRW872Oy/az+nLYxg==}
+    engines: {node: '>=20.18.1'}
+
   unhomoglyph@1.0.6:
     resolution: {integrity: sha512-7uvcWI3hWshSADBu4JpnyYbTVc7YlhF5GDW/oPD5AxIxl34k4wXR3WDkPnzLxkN32LiTCTKMQLtKVZiwki3zGg==}
 
@@ -10685,11 +10692,11 @@ snapshots:
 
   '@sindresorhus/is@4.6.0': {}
 
-  '@slack/bolt@5.1.0(@types/express@5.0.6)(undici@6.29.1)':
+  '@slack/bolt@5.1.0(@types/express@5.0.6)(undici@7.30.1)':
     dependencies:
       '@slack/logger': 5.0.0
       '@slack/oauth': 4.0.0
-      '@slack/socket-mode': 3.1.0(undici@6.29.1)
+      '@slack/socket-mode': 3.1.0(undici@7.30.1)
       '@slack/types': 3.2.0
       '@slack/web-api': 8.2.0
       '@types/express': 5.0.6
@@ -10713,13 +10720,13 @@ snapshots:
       '@types/node': 25.9.5
       jsonwebtoken: 9.0.3
 
-  '@slack/socket-mode@3.1.0(undici@6.29.1)':
+  '@slack/socket-mode@3.1.0(undici@7.30.1)':
     dependencies:
       '@slack/logger': 5.0.0
       '@slack/web-api': 8.2.0
       '@types/node': 25.9.5
       eventemitter3: 5.0.4
-      undici: 6.29.1
+      undici: 7.30.1
 
   '@slack/types@3.2.0': {}
 
@@ -10930,9 +10937,9 @@ snapshots:
       '@mattermost/client': 11.9.0(@mattermost/types@11.9.0(typescript@5.9.3))(typescript@5.9.3)
       ws: 8.22.0
 
-  '@theokit/gateway-slack@0.3.1(@slack/bolt@5.1.0(@types/express@5.0.6)(undici@6.29.1))(@theokit/gateway@0.11.0(@theokit/sdk@5.11.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)))':
+  '@theokit/gateway-slack@0.3.1(@slack/bolt@5.1.0(@types/express@5.0.6)(undici@7.30.1))(@theokit/gateway@0.11.0(@theokit/sdk@5.11.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)))':
     dependencies:
-      '@slack/bolt': 5.1.0(@types/express@5.0.6)(undici@6.29.1)
+      '@slack/bolt': 5.1.0(@types/express@5.0.6)(undici@7.30.1)
       '@theokit/gateway': 0.11.0(@theokit/sdk@5.11.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0))
 
   '@theokit/gateway-sms@0.3.1(@theokit/gateway@0.11.0(@theokit/sdk@5.11.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)))(express@5.3.0)(libphonenumber-js@1.13.15)(twilio@6.2.0)':
@@ -17142,6 +17149,8 @@ snapshots:
   undici-types@7.24.6: {}
 
   undici@6.29.1: {}
+
+  undici@7.30.1: {}
 
   unhomoglyph@1.0.6: {}
 
