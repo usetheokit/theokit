@@ -6,12 +6,21 @@ import { MatrixAdapter } from '@theokit/gateway-matrix'
 import { MattermostAdapter } from '@theokit/gateway-mattermost'
 import { SlackAdapter } from '@theokit/gateway-slack'
 import { SMSAdapter } from '@theokit/gateway-sms'
+import type { TwilioOptions } from '@theokit/gateway-sms'
 import { TeamsAdapter } from '@theokit/gateway-teams'
 import { TelegramAdapter } from '@theokit/gateway-telegram'
 import { WhatsAppAdapter } from '@theokit/gateway-whatsapp'
 
 import type { PlatformBuild } from './channel-loop.js'
 import type { ConfiguredPlatform, PlatformSettings } from './platforms.js'
+
+/**
+ * The SMS adapter's options: Twilio only (D6). The webhook route parses with the same options, so
+ * both are built here and cannot drift apart.
+ */
+export function smsOptions(settings: PlatformSettings<'sms'>): TwilioOptions {
+  return { backend: 'twilio', ...settings }
+}
 
 type AdapterConstructors = {
   readonly [P in PlatformName]: (settings: PlatformSettings<P>) => BasePlatformAdapter
@@ -35,7 +44,7 @@ const ADAPTERS: AdapterConstructors = {
   whatsapp: ({ accessToken, phoneNumberId, appSecret }) =>
     WhatsAppAdapter.from({ backend: 'cloud', cloud: { accessToken, phoneNumberId, appSecret } }),
   teams: (settings) => new TeamsAdapter(settings),
-  sms: (settings) => new SMSAdapter({ backend: 'twilio', ...settings }),
+  sms: (settings) => new SMSAdapter(smsOptions(settings)),
 }
 
 /**
