@@ -269,12 +269,15 @@ describe('the declared SDK range delivers the parity the package advertises', ()
     const agents = floorsOf(declaredSdkRange('packages/agents', 'dependencies'))
     const theo = floorsOf(declaredSdkRange('packages/theo', 'peerDependencies'))
 
+    // Compared as (major, minor), not by major alone: theo's peer read ^5.9.2 beside the agents
+    // floor ^5.11.0, a consumer on 5.9 or 5.10 satisfied the peer, and npm then installed a second
+    // SDK copy under @theokit/agents (B-412 review round 2, F-dom-3).
     const lowest = (fs: Array<{ major: number; minor: number }>) =>
-      Math.min(...fs.map((f) => f.major))
+      Math.min(...fs.map((f) => f.major * 1000 + f.minor))
 
     expect(
       lowest(theo),
-      'theo peer-advertises an SDK major that its own agents dependency will not resolve',
+      'theo peer-advertises an SDK floor that its own agents dependency will not resolve',
     ).toBeGreaterThanOrEqual(lowest(agents))
   })
 
