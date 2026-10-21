@@ -194,15 +194,21 @@ function overriddenSdkVersion(): string {
  * another way is reported instead of read as agreement.
  */
 function admits(range: string, version: string): boolean {
-  const [vMajor, vMinor, vPatch] = version.split('.').map(Number)
+  const wanted = asNumber(version)
   return range.split('||').some((part) => {
-    const m = /^(\^?)(\d+)\.(\d+)\.(\d+)$/.exec(part.trim())
+    const m = /^(\^?)(\d+\.\d+\.\d+)$/.exec(part.trim())
     if (m === null) throw new Error(`cannot read the range "${part.trim()}"`)
-    const [major, minor, patch] = [Number(m[2]), Number(m[3]), Number(m[4])]
-    if (m[1] === '') return major === vMajor && minor === vMinor && patch === vPatch
-    if (major !== vMajor) return false
-    return minor !== vMinor ? (vMinor ?? 0) > minor : (vPatch ?? 0) >= patch
+    const floor = asNumber(m[2] ?? '')
+    if (m[1] === '') return wanted === floor
+    // A caret on a major above 0 admits [floor, next major).
+    return wanted >= floor && Math.floor(wanted / 1e6) === Math.floor(floor / 1e6)
   })
+}
+
+/** `x.y.z` as one comparable number, x * 1e6 + y * 1e3 + z. */
+function asNumber(version: string): number {
+  const [major = 0, minor = 0, patch = 0] = version.split('.').map(Number)
+  return major * 1e6 + minor * 1e3 + patch
 }
 
 describe('the declared SDK range delivers the parity the package advertises', () => {
