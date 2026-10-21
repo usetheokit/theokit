@@ -37,6 +37,29 @@ describe('default template external dep pins (regression guard)', () => {
     expect(deps['@theokit/sdk']).toMatch(/^\^5\./)
   })
 
+  it('pins an SDK floor no lower than the one the theokit peer range asks for', () => {
+    // The scaffold installs `theokit`, which peers `@theokit/sdk`. A template floor below theokit's
+    // peer floor admits an SDK theokit refuses, and the app meets it as a peer warning or a second
+    // SDK copy. B-412 raised theokit's peer to the caching release, so this pin follows it.
+    const theo = JSON.parse(
+      readFileSync(
+        join(dirname(fileURLToPath(import.meta.url)), '../../../theo/package.json'),
+        'utf8',
+      ),
+    ) as { peerDependencies: Record<string, string> }
+    const floor = (range: string): number => {
+      const m = /(\d+)\.(\d+)\.(\d+)/.exec(range)
+      if (m === null) throw new Error(`cannot read a floor out of "${range}"`)
+      return Number(m[1]) * 1_000_000 + Number(m[2]) * 1000 + Number(m[3])
+    }
+    const peer = theo.peerDependencies['@theokit/sdk'] ?? ''
+    const pin = deps['@theokit/sdk'] ?? ''
+    expect(
+      floor(pin),
+      `the template pins @theokit/sdk "${pin}" below theokit's peer range "${peer}"`,
+    ).toBeGreaterThanOrEqual(floor(peer))
+  })
+
   it('test_usetheo_ui_satisfies_theokit_ui_peer (>=0.22.0)', () => {
     // @theokit/ui@1.x peers @usetheo/ui `>=0.22.0 <1`; a stale `^0.14.0` breaks the peer.
     const pin = deps['@usetheo/ui'] ?? ''
