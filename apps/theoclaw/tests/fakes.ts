@@ -109,3 +109,58 @@ export async function waitFor(condition: () => boolean, timeoutMs: number, what:
     await new Promise((resolve) => setImmediate(resolve))
   }
 }
+
+/** A stream frame as `@theokit/sdk` emits it, narrowed to what the presenter reads. */
+export type SdkFrame = { readonly type: string } & Readonly<Record<string, unknown>>
+
+/** The model's thinking: the presenter drops it from a chat reply. */
+export function thinking(text: string): SdkFrame {
+  return { type: 'thinking', text }
+}
+
+/** An assistant message carrying one text block. */
+export function assistant(text: string): SdkFrame {
+  return { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text }] } }
+}
+
+/** The turn's terminal status frame. */
+export function finished(): SdkFrame {
+  return { type: 'status', status: 'FINISHED' }
+}
+
+export interface FakeTurn {
+  /** What the stream yields, fixed or computed from the text sent. */
+  readonly frames: readonly SdkFrame[] | ((text: string) => readonly SdkFrame[])
+  /** Thrown by the stream after its frames. */
+  readonly streamError?: Error
+  /** What `wait()` resolves. Default `{ status: 'finished' }`. */
+  readonly result?: { readonly status: string; readonly error?: { readonly code?: string } }
+  /** The stream waits on this before its first frame. */
+  readonly before?: Promise<void>
+}
+
+/** An agent with no model: it records what it was sent and how often it was closed. */
+export class FakeAgent {
+  readonly sent: string[] = []
+  closed = 0
+
+  constructor(private readonly turn: FakeTurn) {}
+
+  async send(text: string) {
+    this.sent.push(text)
+    const turn = this.turn
+    const frames = typeof turn.frames === 'function' ? turn.frames(text) : turn.frames
+    return {
+      async *stream(): AsyncGenerator<SdkFrame> {
+        if (turn.before) await turn.before
+        yield* frames
+        if (turn.streamError) throw turn.streamError
+      },
+      wait: async () => turn.result ?? { status: 'finished' },
+    }
+  }
+
+  close(): void {
+    this.closed += 1
+  }
+}
