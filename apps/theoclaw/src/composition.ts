@@ -21,6 +21,8 @@ import { createWebhookRouter } from './webhooks/router.js'
 import type { WebhookRoute } from './webhooks/router.js'
 import { createSmsRoute } from './webhooks/sms.js'
 import type { SmsRouteAdapter } from './webhooks/sms.js'
+import { createWhatsAppRoute } from './webhooks/whatsapp.js'
+import type { DeliverableWhatsAppAdapter } from './webhooks/whatsapp.js'
 
 /**
  * The composition root — where concretes are wired into the container, and the only place that
@@ -106,8 +108,18 @@ function hasSignatureCheck(adapter: BasePlatformAdapter): adapter is BasePlatfor
   return typeof (adapter as { verifySignature?: unknown }).verifySignature === 'function'
 }
 
+function convertsEnvelopes(
+  adapter: BasePlatformAdapter,
+): adapter is BasePlatformAdapter & DeliverableWhatsAppAdapter {
+  return typeof (adapter as { toDeliverableEvents?: unknown }).toDeliverableEvents === 'function'
+}
+
 /** The webhook routes of the configured webhook platforms; every other platform answers 404. */
-function webhookRoutes(configured: readonly ConfiguredPlatform[], loop: ChannelLoop): Map<PlatformName, WebhookRoute> {
+function webhookRoutes(
+  configured: readonly ConfiguredPlatform[],
+  loop: ChannelLoop,
+  write: (line: string) => void,
+): Map<PlatformName, WebhookRoute> {
   const routes = new Map<PlatformName, WebhookRoute>()
   for (const entry of configured) {
     if (entry.platform === 'line') {
@@ -115,6 +127,18 @@ function webhookRoutes(configured: readonly ConfiguredPlatform[], loop: ChannelL
       routes.set('line', {
         methods: ['POST'],
         handle: startedRoute(loop, 'line', (adapter) => createLineRoute({ channelSecret, adapter })),
+      })
+    }
+    if (entry.platform === 'whatsapp') {
+      const { appSecret, verifyToken } = entry.settings
+      routes.set('whatsapp', {
+        methods: ['GET', 'POST'],
+        handle: startedRoute(loop, 'whatsapp', (adapter) => {
+          if (!convertsEnvelopes(adapter)) {
+            throw new Error('whatsapp: the started adapter cannot convert a webhook envelope')
+          }
+          return createWhatsAppRoute({ appSecret, verifyToken, adapter, write })
+        }),
       })
     }
     if (entry.platform === 'sms') {
@@ -149,7 +173,7 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
     write: options.write,
     ...(options.startTimeoutMs === undefined ? {} : { startTimeoutMs: options.startTimeoutMs }),
   })
-  const routes = webhookRoutes(configured, loop)
+  const routes = webhookRoutes(configured, loop, options.write)
   const router = createWebhookRouter({
     routes,
     isStarted: (platform) => loop.started.has(platform),
