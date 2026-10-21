@@ -6,11 +6,12 @@ import { createAgentProvider } from "@theokit/di-agent";
 
 import { createContainer } from "../src/composition.js";
 
+import { createHmac } from 'node:crypto'
 import { EventEmitter } from 'node:events'
 
 import { afterEach, vi } from 'vitest'
 
-import type { PlatformName } from '@theokit/gateway'
+import type { PlatformName, WhatsAppMessageEvent } from '@theokit/gateway'
 import { computeLineSignature } from '@theokit/gateway-line'
 import type { RuntimeAdapter } from '@theokit/http/runtime/node'
 
@@ -271,6 +272,63 @@ describe('composeTheoClaw', () => {
 
     expect(response.status).toBe(413)
     expect(sms.verifications).toBe(0)
+    await loop.stopAll()
+  })
+})
+
+const WHATSAPP_ENV = {
+  THEOCLAW_WHATSAPP_ACCESS_TOKEN: 'wa-access',
+  THEOCLAW_WHATSAPP_PHONE_NUMBER_ID: '1234',
+  THEOCLAW_WHATSAPP_APP_SECRET: 'wa-app-secret',
+  THEOCLAW_WHATSAPP_VERIFY_TOKEN: 'wa-verify',
+}
+
+/** A started WhatsApp stand-in: a FakeAdapter that also converts envelopes, counting each call. */
+class ConvertingWhatsApp extends FakeAdapter {
+  conversions = 0
+
+  constructor() {
+    super('whatsapp')
+  }
+
+  toDeliverableEvents(): WhatsAppMessageEvent[] {
+    this.conversions += 1
+    return []
+  }
+}
+
+describe('composeTheoClaw with WhatsApp', () => {
+  it('serves the WhatsApp route through the started adapter', async () => {
+    const whatsapp = new ConvertingWhatsApp()
+    const { builders } = fakeBuilders({ whatsapp })
+    const { loop, router } = composeTheoClaw({ env: WHATSAPP_ENV, agentFactory: noAgent, builders, write: () => undefined })
+    await loop.ready
+    const body = JSON.stringify({ object: 'whatsapp_business_account', entry: [] })
+    const signature = `sha256=${createHmac('sha256', 'wa-app-secret').update(body).digest('hex')}`
+
+    const response = await router(
+      new Request('http://localhost/webhooks/whatsapp', {
+        method: 'POST',
+        headers: { 'x-hub-signature-256': signature },
+        body,
+      }),
+    )
+
+    expect(response.status).toBe(200)
+    expect(whatsapp.conversions).toBe(1)
+    await loop.stopAll()
+  })
+
+  it('a chunked oversized whatsapp post never reaches the route', async () => {
+    const whatsapp = new ConvertingWhatsApp()
+    const { builders } = fakeBuilders({ whatsapp })
+    const { loop, router } = composeTheoClaw({ env: WHATSAPP_ENV, agentFactory: noAgent, builders, write: () => undefined })
+    await loop.ready
+
+    const response = await router(chunkedPost('/webhooks/whatsapp', MAX_BODY_BYTES + 1))
+
+    expect(response.status).toBe(413)
+    expect(whatsapp.conversions).toBe(0)
     await loop.stopAll()
   })
 })
