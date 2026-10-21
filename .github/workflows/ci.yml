@@ -584,9 +584,10 @@ jobs:
     # ceiling was hiding.
     timeout-minutes: 3
     # Waits on `typecheck-build` for the same reason the `theocode` job does: the app links
-    # `@theokit/http` and `@theokit/agents` from this workspace (`link:` in the lockfile), and
-    # their `exports` point at `dist/`, which only the `package-dist` artifact carries. They were
-    # not dependencies until the control plane (B-372), and the root gate
+    # `@theokit/http`, `@theokit/agents` and `@theokit/presenter` from this workspace (`link:` in the
+    # lockfile), and their `exports` point at `dist/`, which only the `package-dist` artifact
+    # carries. They were not linked until the control plane (B-372) and the channel loop (B-369),
+    # and the root gate
     # `own-package-duplicates` refuses a published copy of a package this repository builds. The
     # wait for `needs:` is not counted in `timeout-minutes` above, so the 180-second bound holds.
     needs: typecheck-build
