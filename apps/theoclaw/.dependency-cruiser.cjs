@@ -18,7 +18,8 @@
  * claimed the two older rules had both fired.
  *
  * `nothing-imports-the-entry` has a non-empty source set (every file under `src/` and `tests/`)
- * and its target, the process entry `src/main.ts`, exists since B-372's T4.2 added it.
+ * and its target, the process entry `src/main.ts`, exists since B-372's T4.2 added it;
+ * `tests/entry-boundary.test.ts` pins what both entry rules say independently of the tree.
  *
  * `boundaries` cruises `src` and `tests` only, so `tools/` and the root config files are outside
  * every rule here; they are repository tooling, not proofs.
