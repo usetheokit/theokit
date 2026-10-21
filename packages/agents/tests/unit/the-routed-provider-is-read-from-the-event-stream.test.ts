@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
-import { recordRoutedProviders, routedProviderOf, upstreamOfTurn } from '../live/routed-provider.js'
+import {
+  describeUpstreams,
+  recordRoutedProviders,
+  routedProviderOf,
+  upstreamLabel,
+  upstreamOfTurn,
+} from '../live/routed-provider.js'
 
 /**
  * The live prompt-caching test cannot tell an OpenRouter routing miss from a missing cache
@@ -252,5 +258,28 @@ describe('upstreamOfTurn', () => {
   it('returns the last request of the turn, and undefined for a turn with no request', () => {
     expect(upstreamOfTurn(['A', 'B', 'C'], 0, 2)).toBe('B')
     expect(upstreamOfTurn(['A', 'B', 'C'], 3, 3)).toBeUndefined()
+  })
+})
+
+describe('upstreamLabel and describeUpstreams', () => {
+  const KEY = 'sk-or-v1-' + '0123456789abcdef'.repeat(4)
+
+  it('names both turns in the turn-2 failure message', () => {
+    expect(describeUpstreams('Anthropic', 'Google')).toBe(
+      'turn 1 upstream=Anthropic, turn 2 upstream=Google',
+    )
+  })
+
+  it('labels an upstream the stream did not report as (not reported)', () => {
+    expect(upstreamLabel(undefined)).toBe('(not reported)')
+  })
+
+  it('cuts a label to its first 64 characters', () => {
+    const name = 'P'.repeat(100)
+    expect(upstreamLabel(name)).toBe('P'.repeat(64))
+  })
+
+  it('redacts a key held in the env argument before cutting the label', () => {
+    expect(upstreamLabel(`Anthropic ${KEY}`, { OPENROUTER_API_KEY: KEY })).toBe('Anthropic ***')
   })
 })
