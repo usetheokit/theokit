@@ -23,6 +23,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Security
 
+- `theokit`: requires vite `^7.3.7`, the first 7.x release with GHSA-587h-7wmj-h5pm fixed (vite 7.0.0 to 7.3.6 bundles a launch-editor with a high-severity advisory, and `pnpm audit --prod --audit-level=high` failed on it). The range read `^7.0.0`; an app on vite 7.0 to 7.3.6 now gets 7.3.7 on install (#B-560)
+
 ## [1.2.0, @theokit/agents 16.0.0, create-theokit 3.0.18, theokit 0.75.0] - 2026-10-13
 
 ### Added
