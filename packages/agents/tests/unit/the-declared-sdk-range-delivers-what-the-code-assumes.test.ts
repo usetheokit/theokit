@@ -40,6 +40,10 @@ import { describe, expect, it } from 'vitest'
  * - below 5.0.0 the surfaces are simply absent and nothing says so → closed by the RANGE
  * - between 5.0.0 and 5.4.0 `local.hooks` and the narrowed `import` are absent → guarded by
  *   `HookGateUnsupportedError` and `CompatImportUnsupportedError`, which name the version
+ * - below 5.11.0 the SDK sends no cache directive for an Anthropic-family model, so every turn pays
+ *   full price for the system prompt, and nothing says so → closed by the RANGE, which is why the
+ *   floor is now the caching release (B-412). The two guards above are unreachable from inside
+ *   that range unless an override pins the SDK lower; their removal is B-488.
  *
  * A test that only asserted the string would pass on a range someone widened back by hand with a
  * different spelling, so the floor is PARSED and compared numerically.
@@ -48,6 +52,50 @@ import { describe, expect, it } from 'vitest'
 const ROOT = join(__dirname, '..', '..', '..', '..')
 
 const DEPENDENCY_FIELDS = ['dependencies', 'devDependencies', 'peerDependencies'] as const
+
+/**
+ * Every workspace member directory, expanded from the globs `pnpm-workspace.yaml` declares.
+ *
+ * The scan used to read `packages/*` alone, so the two `apps/theocode` manifests pinning 5.9.2 sat
+ * outside it while the root override moved the tree to 5.11.0, and theocode's own pin guard failed
+ * in CI with this file green (B-412 review round 2, LCR0202 and LCR0602). Reading the globs makes
+ * the scan cover what pnpm installs, including a member added later.
+ *
+ * Only the two glob shapes pnpm-workspace.yaml uses are expanded: a literal path and a `*` segment.
+ * Any other pattern throws, so a new shape cannot be skipped in silence.
+ */
+function workspaceMembers(): string[] {
+  const yaml = readFileSync(join(ROOT, 'pnpm-workspace.yaml'), 'utf8')
+  const globs: string[] = []
+  let inPackages = false
+  for (const line of yaml.split('\n')) {
+    if (/^\S/.test(line)) inPackages = line.startsWith('packages:')
+    const entry = inPackages ? /^\s+-\s+'?([^'\s#]+)'?/.exec(line) : null
+    if (entry?.[1] !== undefined) globs.push(entry[1])
+  }
+  return globs.flatMap((glob) => expandGlob(glob.split('/')))
+}
+
+/** Expand one workspace glob, segment by segment, against the directories on disk. */
+function expandGlob(segments: string[], base = ''): string[] {
+  const [head, ...rest] = segments
+  if (head === undefined) return [base]
+  if (/[?[\]{}!]|\*\*/.test(head) || (head.includes('*') && head !== '*')) {
+    throw new Error(`pnpm-workspace.yaml glob segment "${head}" is not a literal or a bare *`)
+  }
+  const names = head === '*' ? subdirectories(join(ROOT, base)) : [head]
+  return names
+    .filter((name) => existsSync(join(ROOT, base, name)))
+    .flatMap((name) => expandGlob(rest, base === '' ? name : join(base, name)))
+}
+
+/** The directory names directly under `dir`, or none when `dir` does not exist. */
+function subdirectories(dir: string): string[] {
+  if (!existsSync(dir)) return []
+  return readdirSync(dir, { withFileTypes: true })
+    .filter((e) => e.isDirectory())
+    .map((e) => e.name)
+}
 
 /**
  * EVERY declaration of `@theokit/sdk` anywhere in the workspace, enumerated from disk.
@@ -64,10 +112,7 @@ const DEPENDENCY_FIELDS = ['dependencies', 'devDependencies', 'peerDependencies'
  * list reproduces it one layer up.
  */
 function everySdkDeclaration(): Array<{ pkg: string; field: string; range: string }> {
-  const manifests = [
-    'package.json',
-    ...readdirSync(join(ROOT, 'packages')).map((d) => join('packages', d, 'package.json')),
-  ]
+  const manifests = ['package.json', ...workspaceMembers().map((d) => join(d, 'package.json'))]
   const out: Array<{ pkg: string; field: string; range: string }> = []
   for (const rel of manifests) {
     const path = join(ROOT, rel)
@@ -125,12 +170,78 @@ const PARITY_SINCE_MAJOR = 5
  */
 const SURFACE_SINCE_MINOR = 3
 
+/**
+ * The minor that first marks the system prompt cacheable for an Anthropic-family model.
+ *
+ * Below it the agent runs, compiles and pays full price on every turn, and no error or warning
+ * names the gap: the silent kind of gap the invariant above says the range must close.
+ */
+const CACHING_SINCE_MINOR = 11
+
+/** The version the root `pnpm.overrides` resolves for every importer in the workspace. */
+function overriddenSdkVersion(): string {
+  const root = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')) as {
+    pnpm?: { overrides?: Record<string, string> }
+  }
+  const pinned = root.pnpm?.overrides?.['@theokit/sdk']
+  if (pinned === undefined) throw new Error('the root package.json has no @theokit/sdk override')
+  return pinned
+}
+
+/**
+ * Whether `range` admits `version`, for the two shapes the workspace spells: `^x.y.z` and an exact
+ * `x.y.z`, joined by `||`. Any other shape throws rather than answering, so a declaration written
+ * another way is reported instead of read as agreement.
+ */
+function admits(range: string, version: string): boolean {
+  const wanted = asNumber(version)
+  return range.split('||').some((part) => {
+    const m = /^(\^?)(\d+\.\d+\.\d+)$/.exec(part.trim())
+    if (m === null) throw new Error(`cannot read the range "${part.trim()}"`)
+    const floor = asNumber(m[2] ?? '')
+    if (m[1] === '') return wanted === floor
+    // A caret on a major above 0 admits [floor, next major).
+    return wanted >= floor && Math.floor(wanted / 1e6) === Math.floor(floor / 1e6)
+  })
+}
+
+/** `x.y.z` as one comparable number, x * 1e6 + y * 1e3 + z. */
+function asNumber(version: string): number {
+  const [major = 0, minor = 0, patch = 0] = version.split('.').map(Number)
+  return major * 1e6 + minor * 1e3 + patch
+}
+
 describe('the declared SDK range delivers the parity the package advertises', () => {
   it('has at least one declaration to check, so a silent zero cannot pass', () => {
     // The control. `everySdkDeclaration()` reads the filesystem, and a rename or a moved root would
     // make it return nothing — at which point every loop below passes over an empty set and this
     // file reports agreement it never measured.
-    expect(everySdkDeclaration().length).toBeGreaterThanOrEqual(4)
+    // Ten declarations on 2026-10-21 (root, presenter twice, agents, theo twice, theoclaw, theocode
+    // twice); the floor of 8 leaves room to drop one or two without hiding a scan that lost apps/.
+    expect(everySdkDeclaration().length).toBeGreaterThanOrEqual(8)
+  })
+
+  it('reads the declarations under apps/ as well as packages/', () => {
+    // The control for the glob expansion: the two theocode manifests are the ones the packages/-only
+    // scan missed, so the scan must name them.
+    const pkgs = everySdkDeclaration().map((d) => d.pkg)
+    expect(pkgs).toContain(join('apps', 'theocode', 'package.json'))
+    expect(pkgs).toContain(join('apps', 'theocode', 'packages', 'agent', 'package.json'))
+  })
+
+  it('declares, in every manifest, a range that admits the version the root override installs', () => {
+    // pnpm.overrides resolves every importer to one version whatever its manifest says, so a
+    // declaration that refuses that version names an SDK the tree does not run. theocode's pin
+    // guard fails on exactly that (LCR0202), and a published package carrying it asks npm for a
+    // second copy.
+    const installed = overriddenSdkVersion()
+    for (const { pkg, field, range } of everySdkDeclaration()) {
+      expect(
+        admits(range, installed),
+        `${pkg} [${field}] declares @theokit/sdk "${range}", which does not admit ${installed}, ` +
+          'the version the root pnpm.overrides installs for every importer',
+      ).toBe(true)
+    }
   })
 
   it('admits no major below the one that introduced the compat root, in ANY declaration', () => {
@@ -164,29 +275,32 @@ describe('the declared SDK range delivers the parity the package advertises', ()
     const agents = floorsOf(declaredSdkRange('packages/agents', 'dependencies'))
     const theo = floorsOf(declaredSdkRange('packages/theo', 'peerDependencies'))
 
+    // Compared as (major, minor), not by major alone: theo's peer read ^5.9.2 beside the agents
+    // floor ^5.11.0, a consumer on 5.9 or 5.10 satisfied the peer, and npm then installed a second
+    // SDK copy under @theokit/agents (B-412 review round 2, F-dom-3).
     const lowest = (fs: Array<{ major: number; minor: number }>) =>
-      Math.min(...fs.map((f) => f.major))
+      Math.min(...fs.map((f) => f.major * 1000 + f.minor))
 
     expect(
       lowest(theo),
-      'theo peer-advertises an SDK major that its own agents dependency will not resolve',
+      'theo peer-advertises an SDK floor that its own agents dependency will not resolve',
     ).toBeGreaterThanOrEqual(lowest(agents))
   })
 
-  it('leaves the guarded gaps guarded rather than folding them into the range', () => {
-    // The invariant's other half, and the reason the floor is 5.0.0 and not 5.4.0. `local.hooks` and
-    // the narrowed `import` landed in 5.4.0, which is INSIDE this range — and that is fine, because
-    // both throw a typed error naming the version. Raising the floor to 5.4.0 to cover them would
-    // strand every 5.0-5.3 consumer who uses neither, to remove a failure that already announces
-    // itself. A silent gap is closed by the range; a named one is not.
+  it('pins the agents floor at the caching release, below which the cache directive is silently absent', () => {
+    // The invariant's other half. A named gap (a typed error that states the version it needs) may
+    // stay inside the range; a silent one may not. On 5.3 to 5.10 an Anthropic-family agent sends
+    // no `cache_control` and reports nothing, so the floor is 5.11, the release that sends it. The
+    // floor used to stay below 5.4 so the hook and import guards kept 5.0-5.3 consumers installable;
+    // the caching gap outranks that, by decision of human/paulo on 2026-10-20 (B-412 option A).
     const floors = floorsOf(declaredSdkRange('packages/agents', 'dependencies'))
     expect(floors).toHaveLength(1)
     expect(floors[0]?.major).toBe(5)
     expect(
       floors[0]?.minor,
-      'the floor was raised past 5.4, where `local.hooks` and the narrowed `import` land — both ' +
-        'already throw a typed error naming the version, so raising there would strand consumers ' +
-        'to duplicate a refusal that already announces itself',
-    ).toBeLessThan(4)
+      `the agents floor admits @theokit/sdk@5.${floors[0]?.minor}.x, where an Anthropic-family ` +
+        'agent sends no cache directive and nothing tells the consumer; the floor must be the ' +
+        'caching release',
+    ).toBeGreaterThanOrEqual(CACHING_SINCE_MINOR)
   })
 })

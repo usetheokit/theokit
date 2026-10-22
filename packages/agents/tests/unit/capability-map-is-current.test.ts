@@ -60,7 +60,8 @@ describe('the committed capability map is what the package implies', () => {
   /**
    * The map re-exports the SDK, so its content is a function of which SDK is installed — and the
    * `dep-check / suite at the bottom of every declared range` leg installs this package's declared
-   * floor (`@theokit/sdk: ^5.3.0`) rather than the resolved one. Measured 2026-09-18: a straight
+   * floor (`@theokit/sdk: ^5.11.0` since 5.11.0; a 5.3 floor when the drift below was measured)
+   * rather than the resolved one. Measured 2026-09-18: a straight
    * comparison reported drift there on a tree nobody had touched, while the typecheck was clean and
    * 1070 test files passed beside it.
    *

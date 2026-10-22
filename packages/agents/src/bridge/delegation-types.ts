@@ -27,8 +27,14 @@ export interface DelegationResult {
    * consumer summing runs must not read such a `cost` as the run's price (#969).
    */
   costUnknown?: true
+  /**
+   * Input plus output tokens across rounds, the SDK's `TokenUsage.totalTokens`. Cache reads and
+   * writes are not in it: from `@theokit/sdk` 5.11.0 `tokensInput` is the uncached part of the
+   * prompt on the chat-completions and Anthropic clients, so the whole prompt there is `tokensInput + cacheReadTokens +
+   * cacheWriteTokens`, and a consumer pricing a run must add the cache buckets.
+   */
   tokens: number
-  /** V4-N: split token usage accumulated across rounds (`tokens` stays as the total). Absent for the single-shot path. */
+  /** V4-N: split token usage accumulated across rounds; `tokensInput` excludes cache reads and writes. Absent for the single-shot path. */
   tokensInput?: number
   tokensOutput?: number
   /** V4-O: reasoning/cache token buckets accumulated across rounds (0 on any loop-driven run; the loop seeds them). Optional for type compat. */

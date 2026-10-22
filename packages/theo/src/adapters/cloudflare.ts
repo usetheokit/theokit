@@ -632,7 +632,7 @@ export function renderWranglerToml(opts?: {
     `# internal/providers/catalog-loader.ts, fixed upstream and published in 5.9.2 — measured on the`,
     `# published tarball: 0 of 254 executable files resolve a path at module scope.`,
     `#`,
-    `# The floor this framework declares is now ^5.9.2, so the versions that needed the compensation`,
+    `# The floor this framework declares is at least 5.9.2, so the versions that needed the compensation`,
     `# cannot be installed. A declared dependency is the honest form of that requirement;`,
     `# substituting a literal for import.meta.url was the form that also covered the NEXT dependency`,
     `# with the same vice, in silence.`,
