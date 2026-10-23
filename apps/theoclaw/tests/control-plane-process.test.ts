@@ -1,0 +1,86 @@
+import { type ChildProcess, spawn } from "node:child_process";
+import { randomBytes } from "node:crypto";
+import { fileURLToPath } from "node:url";
+
+import { afterEach, describe, expect, it } from "vitest";
+
+const APP_DIR = fileURLToPath(new URL("..", import.meta.url));
+const MODEL_KEY = `model-key-${randomBytes(8).toString("hex")}`;
+const TOKEN = `control-token-${randomBytes(16).toString("hex")}`; // 46 characters
+
+interface Run {
+  readonly child: ChildProcess;
+  readonly output: () => string;
+  readonly exited: Promise<{ code: number | null; signal: NodeJS.Signals | null }>;
+}
+
+let running: ChildProcess | undefined;
+
+afterEach(async () => {
+  const child = running;
+  running = undefined;
+  if (child !== undefined && child.exitCode === null && child.signalCode === null) {
+    const gone = new Promise((resolve) => child.once("exit", resolve));
+    child.kill("SIGKILL");
+    await gone;
+  }
+});
+
+/** The process entry under tsx, from the app's directory, with only the variables it needs. */
+function spawnEntry(): Run {
+  const child = spawn(process.execPath, ["--import", "tsx", "src/main.ts"], {
+    cwd: APP_DIR,
+    env: {
+      PATH: process.env.PATH,
+      THEOCLAW_MODEL: "stub",
+      OPENROUTER_API_KEY: MODEL_KEY,
+      THEOCLAW_PORT: "0",
+      THEOCLAW_CONTROL_TOKEN: TOKEN,
+    },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  running = child;
+  let output = "";
+  child.stdout!.on("data", (chunk: Buffer) => (output += chunk.toString()));
+  child.stderr!.on("data", (chunk: Buffer) => (output += chunk.toString()));
+  const exited = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve) =>
+    child.once("exit", (code, signal) => resolve({ code, signal })),
+  );
+  return { child, output: () => output, exited };
+}
+
+/** Polls the collected output until `pattern` appears; fails naming what never did. */
+async function waitForLine(run: Run, pattern: RegExp): Promise<RegExpMatchArray> {
+  const deadline = Date.now() + 10_000;
+  for (;;) {
+    const match = run.output().match(pattern);
+    if (match !== null) return match;
+    if (run.child.exitCode !== null) throw new Error(`the entry exited ${run.child.exitCode}: ${run.output()}`);
+    if (Date.now() > deadline) throw new Error(`no line matching ${pattern} within 10 s: ${run.output()}`);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+}
+
+/** AC-008 (B-372): the process entry, observed from outside the process. */
+describe("the process entry", () => {
+  it("the process entry listens on 127.0.0.1 and exits 0 on SIGINT", { timeout: 20_000 }, async () => {
+    const run = spawnEntry();
+
+    const [, port] = await waitForLine(run, /theoclaw: control plane listening on 127\.0\.0\.1:(\d+)/);
+    expect((await fetch(`http://127.0.0.1:${port}/health`)).status).toBe(200);
+    run.child.kill("SIGINT");
+
+    expect(await run.exited).toEqual({ code: 0, signal: null });
+  });
+
+  it("the process entry prints neither the control token nor the model key", { timeout: 20_000 }, async () => {
+    const run = spawnEntry();
+
+    await waitForLine(run, /control plane listening on/);
+    run.child.kill("SIGINT");
+    await run.exited;
+
+    expect(run.output()).not.toContain(TOKEN);
+    expect(run.output()).not.toContain(MODEL_KEY);
+  });
+});
