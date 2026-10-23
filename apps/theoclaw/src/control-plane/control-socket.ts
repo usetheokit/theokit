@@ -2,7 +2,7 @@ import { createHash, timingSafeEqual } from 'node:crypto'
 import type { IncomingMessage, Server } from 'node:http'
 import type { Duplex } from 'node:stream'
 
-import { type RawData, WebSocket, WebSocketServer } from 'ws'
+import { WebSocket, WebSocketServer } from 'ws'
 
 import { describeError, TheoClawConfigError } from './errors.js'
 import type { TurnRunner } from './turn.js'
@@ -40,8 +40,12 @@ function pathOf(request: IncomingMessage): string {
   return (request.url ?? '/').split('?')[0] ?? '/'
 }
 
-/** The chat message of a text frame, or undefined for anything that is not a chat frame. */
-function chatMessage(raw: RawData, isBinary: boolean): string | undefined {
+/**
+ * The chat message of a text frame, or undefined for anything that is not a chat frame. The frame
+ * is typed by what is read of it rather than as `RawData`, a name the `ws` package itself does not
+ * export (only `@types/ws` declares it).
+ */
+function chatMessage(raw: { toString(): string }, isBinary: boolean): string | undefined {
   if (isBinary) return undefined
   try {
     const frame = JSON.parse(String(raw)) as { type?: unknown; message?: unknown } | null
