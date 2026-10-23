@@ -26,6 +26,27 @@ export function resolveModelKey(env: BindEnvironment): string | undefined {
   return nonBlank(env.THEOKIT_API_KEY) ?? nonBlank(env.OPENROUTER_API_KEY)
 }
 
+/**
+ * The model and its key, or the refusal naming what is missing. Shared by the start and the agent
+ * factory, so both refuse with the same words.
+ */
+export function requireModel(env: BindEnvironment): { readonly model: string; readonly modelKey: string } {
+  const model = nonBlank(env.THEOCLAW_MODEL)
+  if (model === undefined) {
+    throw new TheoClawConfigError('THEOCLAW_MODEL must name the model TheoClaw runs', {
+      variable: 'THEOCLAW_MODEL',
+    })
+  }
+  const modelKey = resolveModelKey(env)
+  if (modelKey === undefined) {
+    // `variable` names the preferred of the two; the message names both.
+    throw new TheoClawConfigError('set THEOKIT_API_KEY or OPENROUTER_API_KEY to the model key', {
+      variable: 'THEOKIT_API_KEY',
+    })
+  }
+  return { model, modelKey }
+}
+
 function readControlToken(env: BindEnvironment): string | undefined {
   const token = env.THEOCLAW_CONTROL_TOKEN
   if (token === undefined || token === '') return undefined
@@ -53,19 +74,7 @@ function readControlToken(env: BindEnvironment): string | undefined {
  * contains a value: the key and the token are secrets, and the others would teach a log to hold them.
  */
 export function readControlPlaneSettings(env: BindEnvironment): ControlPlaneSettings {
-  const model = nonBlank(env.THEOCLAW_MODEL)
-  if (model === undefined) {
-    throw new TheoClawConfigError('THEOCLAW_MODEL must name the model TheoClaw runs', {
-      variable: 'THEOCLAW_MODEL',
-    })
-  }
-  const modelKey = resolveModelKey(env)
-  if (modelKey === undefined) {
-    // `variable` names the preferred of the two; the message names both.
-    throw new TheoClawConfigError('set THEOKIT_API_KEY or OPENROUTER_API_KEY to the model key', {
-      variable: 'THEOKIT_API_KEY',
-    })
-  }
+  const { model, modelKey } = requireModel(env)
   const port = parsePort(env.THEOCLAW_PORT)
   const controlToken = readControlToken(env)
   return { host: resolveBindAddress(env), port, model, modelKey, controlToken }
