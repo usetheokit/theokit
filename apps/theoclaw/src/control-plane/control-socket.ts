@@ -5,6 +5,7 @@ import type { Duplex } from 'node:stream'
 import { WebSocket, WebSocketServer } from 'ws'
 
 import { describeError, TheoClawConfigError } from './errors.js'
+import { MIN_CONTROL_TOKEN_LENGTH } from './settings.js'
 import type { TurnRunner } from './turn.js'
 
 export interface ControlSocketOptions {
@@ -20,7 +21,6 @@ export interface ControlSocket {
 
 const CONTROL_PATH = '/control'
 const MAX_FRAME_BYTES = 65_536
-const MIN_TOKEN_LENGTH = 32
 const BEARER = /^bearer (.+)$/i
 
 type Refuse = (socket: Duplex, status: '401 Unauthorized' | '404 Not Found') => void
@@ -98,8 +98,8 @@ export function attachControlSocket(
   refuse: Refuse,
   stderr: (line: string) => void,
 ): ControlSocket {
-  if (options.token.length < MIN_TOKEN_LENGTH) {
-    throw new TheoClawConfigError(`THEOCLAW_CONTROL_TOKEN must be at least ${MIN_TOKEN_LENGTH} characters`, {
+  if (options.token.length < MIN_CONTROL_TOKEN_LENGTH) {
+    throw new TheoClawConfigError(`THEOCLAW_CONTROL_TOKEN must be at least ${MIN_CONTROL_TOKEN_LENGTH} characters`, {
       variable: 'THEOCLAW_CONTROL_TOKEN',
     })
   }

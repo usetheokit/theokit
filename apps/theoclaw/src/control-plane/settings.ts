@@ -11,7 +11,8 @@ export interface ControlPlaneSettings {
   readonly controlToken: string | undefined
 }
 
-const MIN_CONTROL_TOKEN_LENGTH = 32
+/** The shortest control token accepted; the control socket checks the same constant. */
+export const MIN_CONTROL_TOKEN_LENGTH = 32
 
 function nonBlank(value: string | undefined): string | undefined {
   const trimmed = value?.trim()
