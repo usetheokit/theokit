@@ -17,6 +17,10 @@
  * is that a rule which cannot fire is the hazard, and an earlier draft of this line claimed the
  * two older rules had both fired.
  *
+ * `nothing-imports-the-entry` has a non-empty source set (`src/composition.ts`, the tests) and its
+ * target is the process entry, `src/main.ts`. It can fire once B-372's T4.2 adds that file; until
+ * then it names a target that does not exist.
+ *
  * `boundaries` cruises `src` and `tests` only, so `tools/` and the root config files are outside
  * every rule here; they are repository tooling, not proofs.
  */
@@ -55,10 +59,22 @@ module.exports = {
       severity: 'error',
       comment:
         'rules/architecture.md § 1 — the composition root wires concretes and nothing ' +
-        'imports it back except an entry point. When a domain layer appears, this rule ' +
+        'imports it back except the entry point, src/main.ts. When a domain layer appears, this rule ' +
         'is what keeps the dependency pointing one way.',
-      from: { path: '^src/(?!composition\\.ts$)' },
+      from: { path: '^src/(?!(composition|main)\\.ts$)' },
       to: { path: '^src/composition\\.ts$' },
+    },
+    {
+      // The exemption above lets exactly one file, the process entry, import the composition
+      // root. This rule keeps that exemption from becoming a back door: a module importing
+      // `src/main.ts` would reach the composition indirectly.
+      name: 'nothing-imports-the-entry',
+      severity: 'error',
+      comment:
+        'src/main.ts is the process entry and a leaf: it wires the real process into the ' +
+        'composition root, and nothing in src or tests may import it.',
+      from: { path: '^(src|tests)/' },
+      to: { path: '^src/main\\.ts$' },
     },
   ],
   options: {
