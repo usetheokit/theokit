@@ -60,28 +60,38 @@ describe('routedProviderOf', () => {
 const CHAT_URL = 'https://openrouter.ai/api/v1/chat/completions'
 const encoder = new TextEncoder()
 
-/** A body that sends `chunks` in order and closes, as a finished stream does. */
-function bodyOf(chunks: readonly string[]): ReadableStream<Uint8Array> {
+/**
+ * A body that sends `chunks` in order and closes, as a finished stream does. A string chunk is
+ * encoded on its own; a byte chunk is sent as it is, so a case can cut inside a character.
+ */
+function bodyOf(chunks: readonly (string | Uint8Array)[]): ReadableStream<Uint8Array> {
   return new ReadableStream({
     start(controller) {
-      for (const chunk of chunks) controller.enqueue(encoder.encode(chunk))
+      for (const chunk of chunks)
+        controller.enqueue(typeof chunk === 'string' ? encoder.encode(chunk) : chunk)
       controller.close()
     },
   })
 }
 
-/** A `fetch` stand-in that answers each call with `respond` and counts the calls; no network. */
+/**
+ * A `fetch` stand-in that answers each call with `respond`, counts the calls and keeps the `init`
+ * each one received; no network.
+ */
 function stubTarget(respond: (input: RequestInfo | URL) => Promise<Response>): {
   target: { fetch: typeof fetch }
   stub: typeof fetch
   calls: () => number
+  inits: (RequestInit | undefined)[]
 } {
   let count = 0
-  const stub: typeof fetch = (input) => {
+  const inits: (RequestInit | undefined)[] = []
+  const stub: typeof fetch = (input, init) => {
     count += 1
+    inits.push(init)
     return respond(input)
   }
-  return { target: { fetch: stub }, stub, calls: () => count }
+  return { target: { fetch: stub }, stub, calls: () => count, inits }
 }
 
 /** Wait for `condition`, failing with `what` once `deadlineMs` passes (rules/testing.md § 3). */
@@ -134,6 +144,44 @@ describe('recordRoutedProviders', () => {
     const record = recordRoutedProviders(target)
     await (await target.fetch(CHAT_URL)).text()
     expect(record.providers).toEqual(['Amazon Bedrock'])
+  })
+
+  it('records a provider whose name has a multi-byte character split across two chunks', async () => {
+    const bytes = encoder.encode('data: {"provider":"Zürich"}\n\ndata: [DONE]\n\n')
+    // 'ü' is the two bytes C3 BC; cut between them so neither chunk holds the whole character.
+    const cut = bytes.indexOf(0xc3) + 1
+    const { target } = stubTarget(() =>
+      Promise.resolve(new Response(bodyOf([bytes.slice(0, cut), bytes.slice(cut)]))),
+    )
+    const record = recordRoutedProviders(target)
+    await (await target.fetch(CHAT_URL)).text()
+    expect(record.providers).toEqual(['Zürich'])
+  })
+
+  it('reads no provider from a last line the source cut inside a character', async () => {
+    // The stream ends on C3, the first byte of a two-byte character. Decoding what is left when
+    // the source closes turns that byte into U+FFFD, so the last line is not JSON any more.
+    const cutLine = new Uint8Array([...encoder.encode('data: {"provider":"Google"}'), 0xc3])
+    const { target } = stubTarget(() =>
+      Promise.resolve(new Response(bodyOf(['data: {"id":"g1"}\n\n', cutLine]))),
+    )
+    const record = recordRoutedProviders(target)
+    await (await target.fetch(CHAT_URL)).text()
+    expect(record.providers).toEqual([undefined])
+  })
+
+  it('hands the caller init to the original fetch, for a chat-completions URL and for another', async () => {
+    const { target, inits } = stubTarget(() =>
+      Promise.resolve(new Response(bodyOf(['data: {}\n']))),
+    )
+    recordRoutedProviders(target)
+    const chatInit: RequestInit = { method: 'POST', body: '{"stream":true}' }
+    const otherInit: RequestInit = { method: 'GET', headers: { authorization: 'Bearer test' } }
+    await (await target.fetch(CHAT_URL, chatInit)).text()
+    await (await target.fetch('https://openrouter.ai/api/v1/models', otherInit)).text()
+    expect(inits).toHaveLength(2)
+    expect(inits[0]).toBe(chatInit)
+    expect(inits[1]).toBe(otherInit)
   })
 
   it('records two calls whose responses finish in reverse order in call order', async () => {
