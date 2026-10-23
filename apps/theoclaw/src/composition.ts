@@ -1,24 +1,27 @@
 import 'reflect-metadata'
 
+import { isIPv6 } from 'node:net'
+
 import { Container } from '@theokit/di'
 import { createAgentProvider } from '@theokit/di-agent'
 import { redactSecrets } from '@theokit/gateway'
 import type { BasePlatformAdapter, PlatformName } from '@theokit/gateway'
 import { teamsActivityVerifier } from '@theokit/gateway-teams'
 import type { TeamsActivityVerifierOptions } from '@theokit/gateway-teams'
-import type { RuntimeAdapter, ServerHandle } from '@theokit/http/runtime/node'
 
 import { adapterBuilders, smsOptions } from './channels/adapter-factory.js'
 import { maskSecrets, startChannelLoop } from './channels/channel-loop.js'
 import type { ChannelLoop, PlatformBuild } from './channels/channel-loop.js'
-import { TheoClawConfigError, installOutputMask } from './channels/output-mask.js'
+import { installOutputMask } from './channels/output-mask.js'
 import type { MaskableStream } from './channels/output-mask.js'
 import { resolvePlatforms } from './channels/platforms.js'
 import type { ConfiguredPlatform } from './channels/platforms.js'
 import { createReplyHandler } from './channels/reply-handler.js'
 import type { TurnAgent } from './channels/reply-handler.js'
-import { installShutdown, parsePort, startServer } from './server.js'
-import type { SignalSource } from './server.js'
+import { type ControlPlaneHandle, healthHandler, listenControlPlane } from './control-plane/listener.js'
+import { readControlPlaneSettings } from './control-plane/settings.js'
+import { installShutdown, type SignalSource } from './control-plane/shutdown.js'
+import { createTurnRunner } from './control-plane/turn.js'
 import { createLineRoute } from './webhooks/line.js'
 import { createWebhookRouter } from './webhooks/router.js'
 import type { WebhookRoute } from './webhooks/router.js'
@@ -196,11 +199,15 @@ function webhookRoutes(
  * Returns at once; the loop keeps starting slow platforms while the router already serves (EC-2).
  */
 export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
+  return composeWith(options, createContainer<TurnAgent>({ factory: options.agentFactory }))
+}
+
+/** The wiring of `composeTheoClaw` over a given container, which `startTheoClaw` shares with `/control`. */
+function composeWith(options: TheoClawOptions, agents: AgentComposition<TurnAgent>): ComposedTheoClaw {
   const { configured, skipped, secrets } = resolvePlatforms(options.env)
   for (const { platform, missing } of skipped) {
     options.write(`${platform}: not configured (missing ${missing.join(', ')})`)
   }
-  const agents = createContainer<TurnAgent>({ factory: options.agentFactory })
   const handler = createReplyHandler({ withAgent: (work) => agents.withAgent(work) })
   const loop = startChannelLoop({
     platforms: (options.builders ?? adapterBuilders)(configured),
@@ -229,63 +236,87 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
 export interface StartOptions extends Omit<TheoClawOptions, 'write'> {
   readonly signals: SignalSource
   readonly exit: (code: number) => void
-  readonly runtime?: RuntimeAdapter
   /** The streams the output mask wraps; `process.stdout` and `process.stderr` by default. */
   readonly streams?: readonly MaskableStream[]
+  /** Where the listening lines go. Default: the first of `streams`. */
+  readonly stdout?: (line: string) => void
+  /** Where every other line goes. Default: the last of `streams`. */
+  readonly stderr?: (line: string) => void
+  /** How the listener starts. Default `listenControlPlane`; tests wrap it to count or hold calls. */
+  readonly listen?: typeof listenControlPlane
 }
 
-export interface RunningTheoClaw extends ComposedTheoClaw {
-  readonly server: ServerHandle
+/** The running process: the channel loop, its webhook router, and the one listener serving both. */
+export interface RunningTheoClaw extends ComposedTheoClaw, ControlPlaneHandle {}
+
+function formatAddress(address: { readonly host: string; readonly port: number }): string {
+  return isIPv6(address.host) ? `[${address.host}]:${address.port}` : `${address.host}:${address.port}`
 }
 
-function closeServer(server: ServerHandle | undefined): Promise<void> {
-  return new Promise((resolve) => (server === undefined ? resolve() : server.close(() => resolve())))
+function lineWriter(stream: MaskableStream | undefined): (line: string) => void {
+  return (line) => void stream?.write(`${line}\n`)
+}
+
+/** Every value the output mask hides: the channel credentials, both model keys and the control token. */
+function processSecrets(env: StartOptions['env'], controlToken: string | undefined): string[] {
+  const keys = [env.THEOKIT_API_KEY, env.OPENROUTER_API_KEY]
+    .map((value) => (value ?? '').trim())
+    .filter((value) => value !== '')
+  return [...resolvePlatforms(env).secrets, ...keys, ...(controlToken === undefined ? [] : [controlToken])]
+}
+
+/** `GET /health` is the control plane's; every other path goes to the webhook router. */
+function serveHealthAndWebhooks(router: ComposedTheoClaw['router']): (request: Request) => Promise<Response> {
+  return (request) => (new URL(request.url).pathname === '/health' ? healthHandler(request) : router(request))
 }
 
 /**
- * Start the app in the order EC-2 and EC-3 need: check the settings, mask the output before any
- * adapter exists, install shutdown before the loop starts, compose, then serve.
+ * Start TheoClaw in the order the settings, the mask and the shutdown need: read and check every
+ * setting (a bad one throws before any socket opens, adapter exists or agent is built), mask the
+ * output before any adapter writes, install shutdown before the loop starts, compose, then listen.
+ * One listener serves `/health`, the `/webhooks/<platform>` routes and, with a control token, the
+ * `/control` socket, on the bound address (`THEOCLAW_HOST`, loopback by default). The listening
+ * line is read from the socket.
  */
 export async function startTheoClaw(options: StartOptions): Promise<RunningTheoClaw> {
-  const port = parsePort(options.env.THEOCLAW_PORT)
-  if ((options.env.THEOCLAW_MODEL ?? '').trim() === '') {
-    throw new TheoClawConfigError('THEOCLAW_MODEL must name the model the agent runs')
-  }
+  const settings = readControlPlaneSettings(options.env)
   const streams = options.streams ?? [process.stdout, process.stderr]
-  // The SDK reads its key from THEOKIT_API_KEY itself; it is masked like every channel credential.
-  const apiKey = (options.env.THEOKIT_API_KEY ?? '').trim()
-  const secrets = [...resolvePlatforms(options.env).secrets, ...(apiKey === '' ? [] : [apiKey])]
-  const mask = installOutputMask(secrets, streams)
-  const errorStream = streams[streams.length - 1]
-  const write = (line: string): void => {
-    errorStream?.write(`${line}\n`)
-  }
+  const mask = installOutputMask(processSecrets(options.env, settings.controlToken), streams)
+  const stdout = options.stdout ?? lineWriter(streams[0])
+  const stderr = options.stderr ?? lineWriter(streams[streams.length - 1])
   const flushOnExit = (): void => mask.flush()
   options.signals.on('exit', flushOnExit)
   let loop: ChannelLoop | undefined
-  let serving: Promise<ServerHandle> | undefined
+  let serving: Promise<ControlPlaneHandle> | undefined
   const removeShutdown = installShutdown({
     signals: options.signals,
     stopAll: () => loop?.stopAll() ?? Promise.resolve(),
-    closeServer: async () => closeServer(await serving),
+    closeServer: async () => (await serving)?.close(),
     exit: (code) => {
       mask.flush()
       options.exit(code)
     },
-    write,
+    write: stderr,
   })
-  const composed = composeTheoClaw({ ...options, write })
+  const agents = createContainer<TurnAgent>({ factory: options.agentFactory })
+  const composed = composeWith({ ...options, write: stderr }, agents)
   loop = composed.loop
-  serving = startServer({
-    handler: composed.router,
-    port,
-    write,
-    ...(options.runtime ? { runtime: options.runtime } : {}),
+  const listen = options.listen ?? listenControlPlane
+  serving = listen({
+    handler: serveHealthAndWebhooks(composed.router),
+    port: settings.port,
+    host: settings.host,
+    stderr,
+    ...(settings.controlToken === undefined
+      ? {}
+      : { control: { token: settings.controlToken, runTurn: createTurnRunner(agents.withAgent) } }),
   })
+  let handle: ControlPlaneHandle
   try {
-    return { ...composed, server: await serving }
+    handle = await serving
   } catch (error) {
-    // The server never listened (an address in use): stop what started and let the entry exit 1.
+    // The listener never bound (a busy port, an address the host lacks): stop what started and let
+    // the entry exit 1.
     removeShutdown()
     options.signals.off('exit', flushOnExit)
     await composed.loop.stopAll()
@@ -293,4 +324,9 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
     mask.flush()
     throw error
   }
+  stdout(`theoclaw: control plane listening on ${formatAddress(handle.address())}`)
+  if (settings.controlToken === undefined) {
+    stdout('theoclaw: control socket off (THEOCLAW_CONTROL_TOKEN unset)')
+  }
+  return { ...handle, ...composed }
 }

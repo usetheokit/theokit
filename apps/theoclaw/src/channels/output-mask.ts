@@ -1,12 +1,5 @@
+import { TheoClawConfigError } from '../control-plane/errors.js'
 import { maskSecrets } from './channel-loop.js'
-
-/** A setting the process cannot start with, named by its variable; never echoes a value. */
-export class TheoClawConfigError extends Error {
-  constructor(message: string) {
-    super(message)
-    this.name = 'TheoClawConfigError'
-  }
-}
 
 /** The part of a writable stream the mask wraps: `process.stdout` and `process.stderr` both fit. */
 export interface MaskableStream {

@@ -36,6 +36,8 @@ function start(port: number): Promise<ControlPlaneHandle> {
     },
     stdout: () => undefined,
     stderr: () => undefined,
+    // No stream to mask: the real process streams would keep one mask per start in this worker.
+    streams: [],
     signals: new EventEmitter(),
     exit: () => undefined,
   }).then((handle) => {

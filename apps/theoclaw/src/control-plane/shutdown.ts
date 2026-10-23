@@ -4,36 +4,58 @@ export type ShutdownSignal = 'SIGINT' | 'SIGTERM'
 
 /** Something that emits the shutdown signals: `process` in production, an EventEmitter in tests. */
 export interface SignalSource {
-  on(event: ShutdownSignal, listener: () => void): unknown
+  on(event: ShutdownSignal | 'exit', listener: () => void): unknown
+  off(event: ShutdownSignal | 'exit', listener: () => void): unknown
 }
 
 export interface ShutdownOptions {
   readonly signals: SignalSource
-  readonly close: () => Promise<void>
+  /** Stop every gateway runner; each drains its in-flight turns. */
+  readonly stopAll: () => Promise<void>
+  /** Close the listener: the webhook routes, `/health` and the `/control` socket. */
+  readonly closeServer: () => Promise<void>
   readonly exit: (code: number) => void
-  readonly stderr: (line: string) => void
+  readonly write: (line: string) => void
 }
 
 /**
- * On the first SIGINT or SIGTERM: close the listener and exit 0, or write why the close failed and
- * exit 1. A second signal while closing is written and ignored.
+ * On the first SIGINT or SIGTERM: stop every runner, then close the listener, then exit 0. A
+ * runner that fails to stop, or a listener that fails to close, is written and the exit code is 1;
+ * the listener is closed even when a runner failed. A second signal while stopping is written and
+ * ignored. Returns what removes the listeners.
  */
-export function installShutdown(options: ShutdownOptions): void {
+export function installShutdown(options: ShutdownOptions): () => void {
   let stopping = false
+  const shutdown = async (): Promise<number> => {
+    let code = 0
+    try {
+      await options.stopAll()
+    } catch (error) {
+      code = 1
+      options.write(`theoclaw: stopping the runners failed: ${describeError(error)}`)
+    }
+    try {
+      await options.closeServer()
+    } catch (error) {
+      code = 1
+      options.write(`theoclaw: closing the control plane failed: ${describeError(error)}`)
+    }
+    return code
+  }
   const listenerFor = (signal: ShutdownSignal) => (): void => {
     if (stopping) {
-      options.stderr(`theoclaw: ${signal} ignored, already stopping`)
+      options.write(`theoclaw: ${signal} ignored, already stopping`)
       return
     }
     stopping = true
-    options.close().then(
-      () => options.exit(0),
-      (error: unknown) => {
-        options.stderr(`theoclaw: closing the control plane failed: ${describeError(error)}`)
-        options.exit(1)
-      },
-    )
+    void shutdown().then(options.exit)
   }
-  options.signals.on('SIGINT', listenerFor('SIGINT'))
-  options.signals.on('SIGTERM', listenerFor('SIGTERM'))
+  const onSigint = listenerFor('SIGINT')
+  const onSigterm = listenerFor('SIGTERM')
+  options.signals.on('SIGINT', onSigint)
+  options.signals.on('SIGTERM', onSigterm)
+  return () => {
+    options.signals.off('SIGINT', onSigint)
+    options.signals.off('SIGTERM', onSigterm)
+  }
 }

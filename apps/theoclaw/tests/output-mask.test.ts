@@ -5,8 +5,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { EmailAdapter } from '@theokit/gateway-email'
 import { LineAdapter } from '@theokit/gateway-line'
 
-import { TheoClawConfigError, installOutputMask } from '../src/channels/output-mask.js'
+import { installOutputMask } from '../src/channels/output-mask.js'
 import type { MaskableStream, OutputMask } from '../src/channels/output-mask.js'
+import { TheoClawConfigError } from '../src/control-plane/errors.js'
 
 /** A stream that keeps every byte written to it. */
 function capturingStream(): MaskableStream & { readonly bytes: () => Buffer; readonly text: () => string } {

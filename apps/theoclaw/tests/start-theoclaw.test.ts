@@ -2,35 +2,37 @@ import { EventEmitter } from 'node:events'
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import type { RuntimeAdapter } from '@theokit/http/runtime/node'
-
-import { TheoClawConfigError } from '../src/channels/output-mask.js'
 import { startTheoClaw } from '../src/composition.js'
 import type { RunningTheoClaw } from '../src/composition.js'
-import { startServer } from '../src/server.js'
+import { TheoClawBindError, TheoClawConfigError } from '../src/control-plane/errors.js'
+import { listenControlPlane } from '../src/control-plane/listener.js'
 import { capturingStream, fakeBuilders, noAgent, signedLinePost, TELEGRAM_AND_LINE } from './composition-fixtures.js'
 import { FakeAdapter, deferred, waitFor } from './fakes.js'
 
-/** A runtime whose `listen` completes only when the test says so. */
-function heldRuntime(listening: Promise<void>) {
+/** A `listen` that binds only when the test says so, and counts the closes of what it bound. */
+function heldListen(listening: Promise<void>) {
   const calls = { closes: 0 }
-  const runtime: RuntimeAdapter = {
-    createServer: () => ({
-      listen: (_port, callback) => void listening.then(() => callback?.()),
-      close: (callback) => {
+  const listen: typeof listenControlPlane = async (options) => {
+    await listening
+    const handle = await listenControlPlane(options)
+    return {
+      ...handle,
+      close: () => {
         calls.closes += 1
-        callback?.()
+        return handle.close()
       },
-      address: () => ({ port: 0 }),
-    }),
+    }
   }
-  return { runtime, calls }
+  return { listen, calls }
 }
 
 describe('startTheoClaw', () => {
   const running: RunningTheoClaw[] = []
   afterEach(async () => {
-    for (const app of running.splice(0)) await app.loop.stopAll()
+    for (const app of running.splice(0)) {
+      await app.loop.stopAll()
+      await app.close()
+    }
   })
 
   it('starts serving and stops on SIGTERM', async () => {
@@ -41,7 +43,7 @@ describe('startTheoClaw', () => {
     const app = await startTheoClaw({ env: TELEGRAM_AND_LINE, agentFactory: noAgent, builders, signals, exit, streams: [capture] })
     running.push(app)
     await app.loop.ready
-    const base = `http://127.0.0.1:${app.server.address()?.port}`
+    const base = `http://127.0.0.1:${app.address().port}`
 
     expect((await fetch(signedLinePost(base))).status).toBe(200)
     signals.emit('SIGTERM')
@@ -54,11 +56,11 @@ describe('startTheoClaw', () => {
 
   it('a signal during server initialization stops runners and closes the server', async () => {
     const listening = deferred<void>()
-    const { runtime, calls } = heldRuntime(listening.promise)
+    const { listen, calls } = heldListen(listening.promise)
     const { adapters, builders } = fakeBuilders()
     const signals = new EventEmitter()
     const exit = vi.fn()
-    const starting = startTheoClaw({ env: TELEGRAM_AND_LINE, agentFactory: noAgent, builders, signals, exit, runtime, streams: [capturingStream()] })
+    const starting = startTheoClaw({ env: TELEGRAM_AND_LINE, agentFactory: noAgent, builders, signals, exit, listen, streams: [capturingStream()] })
     await waitFor(() => adapters.size === 2 && [...adapters.values()].every((a) => a.connects === 1), 1000, 'both runners to connect')
     await new Promise((resolve) => setImmediate(resolve))
 
@@ -108,24 +110,24 @@ describe('startTheoClaw', () => {
   })
 
   it('a listen that fails stops the runners and rejects', async () => {
-    const occupied = await startServer({ handler: async () => new Response(null), port: 0 })
+    const occupied = await listenControlPlane({ handler: async () => new Response(null), port: 0, host: '127.0.0.1', stderr: () => undefined })
     const { adapters, builders } = fakeBuilders()
     const signals = new EventEmitter()
-    const env = { ...TELEGRAM_AND_LINE, THEOCLAW_PORT: String(occupied.address()?.port) }
+    const env = { ...TELEGRAM_AND_LINE, THEOCLAW_PORT: String(occupied.address().port) }
 
     const starting = startTheoClaw({ env, agentFactory: noAgent, builders, signals, exit: vi.fn(), streams: [capturingStream()] })
 
-    await expect(starting).rejects.toThrow(/EADDRINUSE/)
+    await expect(starting).rejects.toThrow(TheoClawBindError)
     await waitFor(
       () => [...adapters.values()].every((adapter) => adapter.disconnects === adapter.connects),
       1000,
       'every connected runner to be stopped',
     )
     expect(signals.listenerCount('SIGTERM')).toBe(0)
-    await new Promise<void>((done) => occupied.close(() => done()))
+    await occupied.close()
   })
 
-  it('masks the agent API key the SDK reads from the environment', async () => {
+  it('masks the THEOKIT_API_KEY model key', async () => {
     const { builders } = fakeBuilders()
     const capture = capturingStream()
     const app = await startTheoClaw({
@@ -142,6 +144,44 @@ describe('startTheoClaw', () => {
 
     expect(capture.text()).toContain('failed with [redacted]\n')
     expect(capture.text()).not.toContain('theokit-api-key-value')
+  })
+
+  it('masks the OpenRouter model key and the control token', async () => {
+    const { builders } = fakeBuilders()
+    const capture = capturingStream()
+    const token = 'control-token-value-0123456789abcdef'
+    const app = await startTheoClaw({
+      env: { ...TELEGRAM_AND_LINE, THEOCLAW_CONTROL_TOKEN: token },
+      agentFactory: noAgent,
+      builders,
+      signals: new EventEmitter(),
+      exit: vi.fn(),
+      streams: [capture],
+    })
+    running.push(app)
+
+    capture.write(`key openrouter-key-value token ${token}\n`)
+
+    expect(capture.text()).toContain('key [redacted] token [redacted]\n')
+    expect(capture.text()).not.toContain('openrouter-key-value')
+    expect(capture.text()).not.toContain(token)
+  })
+
+  it('serves /health and the webhook routes on the one listener', async () => {
+    const { builders } = fakeBuilders()
+    const capture = capturingStream()
+    const app = await startTheoClaw({ env: TELEGRAM_AND_LINE, agentFactory: noAgent, builders, signals: new EventEmitter(), exit: vi.fn(), streams: [capture] })
+    running.push(app)
+    await app.loop.ready
+    const base = `http://127.0.0.1:${app.address().port}`
+
+    const health = await fetch(`${base}/health`)
+
+    expect(health.status).toBe(200)
+    expect(await health.json()).toEqual({ status: 'ok' })
+    expect((await fetch(signedLinePost(base))).status).toBe(200)
+    expect((await fetch(`${base}/webhooks/sms`, { method: 'POST' })).status).toBe(404)
+    expect(capture.text()).toContain(`theoclaw: control plane listening on 127.0.0.1:${app.address().port}`)
   })
 
   it('refuses to start without a model', async () => {

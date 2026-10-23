@@ -34,6 +34,7 @@ export const LINE_BODY = JSON.stringify({
 export const TELEGRAM_AND_LINE = {
   THEOCLAW_PORT: '0',
   THEOCLAW_MODEL: 'test-model',
+  OPENROUTER_API_KEY: 'openrouter-key-value',
   THEOCLAW_TELEGRAM_TOKEN: 'telegram-token-value',
   THEOCLAW_LINE_CHANNEL_SECRET: LINE_SECRET,
   THEOCLAW_LINE_CHANNEL_ACCESS_TOKEN: 'line-access-token',
