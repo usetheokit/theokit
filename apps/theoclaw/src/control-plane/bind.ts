@@ -21,8 +21,8 @@ function isLoopback(host: string): boolean {
 /**
  * The address the control plane binds. `THEOCLAW_HOST` names it and defaults to the loopback; a
  * non-loopback address also needs `THEOCLAW_PUBLIC_BIND=yes`. The generic `HOST` is never read:
- * `theo start` binds every interface from it, so an export meant for another tool would otherwise
- * open this one's port (plan D2).
+ * `theo start` binds all interfaces when it is set, so an export meant for another tool would
+ * otherwise open this one's port (plan D2).
  */
 export function resolveBindAddress(env: BindEnvironment): string {
   const host = (env.THEOCLAW_HOST ?? '').trim()

@@ -8,7 +8,7 @@
 export class TheoClawConfigError extends Error {
   readonly variable: string | undefined
 
-  // The message-only call stays valid because B-369's branch declares a class of the same name in
+  // The message-only call stays valid because B-369's branch declares its own TheoClawConfigError in
   // `src/channels/output-mask.ts` and constructs it with a message alone. A rebase keeps both
   // declarations; whoever lands second deletes one by hand, or `instanceof` fails across them.
   constructor(message: string, options: { readonly variable?: string } = {}) {
