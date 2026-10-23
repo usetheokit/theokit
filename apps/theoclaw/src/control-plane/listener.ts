@@ -3,7 +3,8 @@ import type { Duplex } from 'node:stream'
 
 import { nodeIncomingToRequest, writeResponseToNode } from '@theokit/http/runtime/node'
 
-import { TheoClawBindError } from './errors.js'
+import { attachControlSocket, type ControlSocket, type ControlSocketOptions } from './control-socket.js'
+import { describeError, TheoClawBindError } from './errors.js'
 
 export type RequestHandler = (request: Request) => Promise<Response>
 
@@ -11,6 +12,8 @@ export interface ListenOptions {
   readonly handler: RequestHandler
   readonly port: number
   readonly host: string
+  /** The `/control` socket. Without it every upgrade is refused 404. */
+  readonly control?: ControlSocketOptions
   /** Where a failed request is written, one line per call. */
   readonly stderr: (line: string) => void
 }
@@ -21,10 +24,6 @@ export interface ControlPlaneHandle {
   /** Close every open connection, then the server; resolves once both are closed. */
   close(): Promise<void>
   readonly server: Server
-}
-
-function describeError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
 }
 
 /** `GET /health` answers 200 `{"status":"ok"}`; every other method or path answers 404. */
@@ -95,7 +94,7 @@ function listen(server: Server, options: ListenOptions): Promise<void> {
   })
 }
 
-function handleFor(server: Server): ControlPlaneHandle {
+function handleFor(server: Server, control: ControlSocket | undefined): ControlPlaneHandle {
   let closing: Promise<void> | undefined
   return {
     server,
@@ -108,10 +107,18 @@ function handleFor(server: Server): ControlPlaneHandle {
     },
     // Memoized: a second call waits for the first close instead of failing ERR_SERVER_NOT_RUNNING.
     close: () =>
-      (closing ??= new Promise((resolve, reject) => {
-        server.closeAllConnections()
-        server.close((error) => (error === undefined ? resolve() : reject(error)))
-      })),
+      (closing ??= (async () => {
+        // An upgraded socket leaves the HTTP parser's list, so `closeAllConnections` never reaches
+        // it and `server.close` would wait on it forever (EC-3): the control clients end first.
+        try {
+          await control?.close()
+        } finally {
+          await new Promise<void>((resolve, reject) => {
+            server.closeAllConnections()
+            server.close((error) => (error === undefined ? resolve() : reject(error)))
+          })
+        }
+      })()),
   }
 }
 
@@ -123,11 +130,17 @@ function handleFor(server: Server): ControlPlaneHandle {
  */
 export async function listenControlPlane(options: ListenOptions): Promise<ControlPlaneHandle> {
   const server = createServer(serve(options))
-  server.on('upgrade', (_request: IncomingMessage, socket: Duplex) =>
-    refuseUpgrade(socket, '404 Not Found', options.stderr),
-  )
+  const refuse = (socket: Duplex, status: '401 Unauthorized' | '404 Not Found'): void =>
+    refuseUpgrade(socket, status, options.stderr)
+  const control =
+    options.control === undefined
+      ? undefined
+      : attachControlSocket(server, options.control, refuse, options.stderr)
+  if (control === undefined) {
+    server.on('upgrade', (_request: IncomingMessage, socket: Duplex) => refuse(socket, '404 Not Found'))
+  }
   await listen(server, options)
   // After the bind, a server-level error (an accept failure such as EMFILE) is written, not thrown.
   server.on('error', (error) => options.stderr(`theoclaw: control plane server error: ${describeError(error)}`))
-  return handleFor(server)
+  return handleFor(server, control)
 }
