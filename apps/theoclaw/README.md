@@ -65,6 +65,44 @@ must be that exact URL, because Twilio signs the URL it called.
 - Matrix and Mattermost can run locally in Docker (Synapse and the Mattermost preview image), so
   they need no external account.
 
+## Start the control plane
+
+```bash
+pnpm --filter theoclaw run build
+THEOCLAW_MODEL=openrouter/google/gemini-2.5-flash-lite THEOCLAW_PORT=8787 \
+  THEOCLAW_CONTROL_TOKEN="$(openssl rand -hex 24)" pnpm --filter theoclaw start
+```
+
+It prints `theoclaw: control plane listening on 127.0.0.1:8787`, read from the bound socket, and
+stops cleanly on Ctrl-C. `GET /health` answers `{"status":"ok"}`.
+
+| Variable | Meaning |
+|---|---|
+| `THEOCLAW_MODEL` | Required. The model each turn runs. |
+| `THEOKIT_API_KEY` or `OPENROUTER_API_KEY` | Required. The model key, passed to the SDK; `THEOKIT_API_KEY` wins when both are set. |
+| `THEOCLAW_PORT` | Required. Digits only, 0 to 65535; 0 picks a free port. A port in use is refused by name. |
+| `THEOCLAW_HOST` | Optional. The address to bind; default `127.0.0.1`. `localhost`, `::1` and `127.x.y.z` are loopback. The generic `HOST` is ignored. |
+| `THEOCLAW_PUBLIC_BIND` | Must be exactly `yes` to bind a non-loopback `THEOCLAW_HOST`. The bearer token is then the whole gate. |
+| `THEOCLAW_CONTROL_TOKEN` | Optional, 32 characters or more. Without it the `/control` socket is off and every upgrade answers 404. |
+
+### The `/control` socket
+
+Connect to `ws://127.0.0.1:<port>/control` with `Authorization: Bearer <THEOCLAW_CONTROL_TOKEN>`;
+any other path answers 404 and a missing or wrong token 401, before any agent is built. Send
+`{"type":"chat","message":"..."}` as a text frame. Each event of the turn arrives as
+`{"type":"event","event":{...}}`, and the turn ends with exactly one `{"type":"done"}` or
+`{"type":"error","code":"turn_failed"}`. A chat frame during a turn gets
+`{"type":"error","code":"busy"}`, anything else `{"type":"error","code":"bad_frame"}`; neither ends
+the running turn. Frames are capped at 65536 bytes.
+
+The live check runs a real turn against the built entry:
+
+```bash
+set -a; . ~/.config/theoclaw/dev.env; set +a
+pnpm --filter theoclaw run build
+THEOCLAW_LIVE=1 pnpm --filter theoclaw exec vitest run tests/live/control-plane.live.test.ts
+```
+
 ## Keeping secrets out of the repository
 
 `.env` and `.env.*` are ignored at the repository root; only `.env.example` is tracked. Do not
