@@ -10,16 +10,15 @@
  * naming a directory that does not exist passes green forever and reads as protection.
  * `proof-imports-only-published-entry-points` is armed by deliberate violations that a test runs
  * on every suite run (B-416). `production-must-not-import-tests` was proven to arm by a deliberate
- * violation; `composition-root-is-the-top-layer` names a directory
- * that exists and has an EMPTY source set today, because `src/` holds one file and the rule's own
- * negative lookahead excludes it. It arms — proven under a second importer in a throwaway tree —
- * and it cannot fire here until `src/` has a second file. Stated because this file's whole premise
- * is that a rule which cannot fire is the hazard, and an earlier draft of this line claimed the
- * two older rules had both fired.
+ * violation; `composition-root-is-the-top-layer` names a directory that exists, and its source
+ * set is every file under `src/` except the ones its negative lookahead excludes, which since the
+ * control plane landed is the modules under `src/control-plane/`. It was proven to arm under a
+ * second importer in a throwaway tree, back when `src/` held one file. Stated because this file's
+ * whole premise is that a rule which cannot fire is the hazard, and an earlier draft of this line
+ * claimed the two older rules had both fired.
  *
- * `nothing-imports-the-entry` has a non-empty source set (`src/composition.ts`, the tests) and its
- * target is the process entry, `src/main.ts`. It can fire once B-372's T4.2 adds that file; until
- * then it names a target that does not exist.
+ * `nothing-imports-the-entry` has a non-empty source set (every file under `src/` and `tests/`)
+ * and its target, the process entry `src/main.ts`, exists since B-372's T4.2 added it.
  *
  * `boundaries` cruises `src` and `tests` only, so `tools/` and the root config files are outside
  * every rule here; they are repository tooling, not proofs.
