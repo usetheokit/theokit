@@ -4,6 +4,11 @@
  * that was refused.
  */
 
+/** The message of an error, or its string form for anything thrown that is not one. */
+export function describeError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
 /** A configuration value is missing or malformed. `variable` names the environment variable. */
 export class TheoClawConfigError extends Error {
   readonly variable: string | undefined
