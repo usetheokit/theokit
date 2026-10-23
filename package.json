@@ -115,7 +115,7 @@
     ],
     "overrides": {
       "theokit": "workspace:*",
-      "zod": "^4.0.0",
+      "zod": "^4.6.6",
       "eslint-plugin-sonarjs>minimatch": "^10.2.3",
       "react-router@>=7.12.0 <7.18.2": ">=7.18.2",
       "postcss@<8.5.18": ">=8.5.18",
