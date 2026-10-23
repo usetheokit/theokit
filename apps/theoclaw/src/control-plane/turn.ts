@@ -7,11 +7,15 @@ import { describeError } from './errors.js'
 /**
  * What a turn needs of an agent. The stream element is the narrow `{ type }`: the bridge's
  * `SdkMessage` declares an index signature the SDK's message interfaces do not, so the SDK agent
- * would not be assignable to a port typed with it. Same shape as B-369's `TurnAgent`.
+ * would not be assignable to a port typed with it.
+ *
+ * There is no `close` here on purpose. The request boundary (`createContainer().withAgent`) disposes
+ * the agent through `Symbol.asyncDispose` when the turn ends. In `@theokit/sdk` 5.11 `close()` only
+ * marks the agent disposed, so calling it first makes that disposal return without tearing the
+ * session down.
  */
 export interface TurnAgent {
   send(text: string): Promise<TurnRun>
-  close?(): void
 }
 
 export interface TurnRun {
@@ -57,16 +61,11 @@ async function streamRun(run: TurnRun, options: TurnOptions): Promise<string | u
 }
 
 async function runWith(agent: TurnAgent, options: TurnOptions): Promise<TurnOutcome> {
-  try {
-    const run = await agent.send(options.message)
-    const streamedError = await streamRun(run, options)
-    const result = await run.wait()
-    if (streamedError !== undefined) return failed(`the run streamed an error (${streamedError})`)
-    return result.status === 'error' ? failed('the run ended with status error') : { ok: true }
-  } finally {
-    // A close that throws fails the turn, finished or not: the agent's state is then unknown.
-    agent.close?.()
-  }
+  const run = await agent.send(options.message)
+  const streamedError = await streamRun(run, options)
+  const result = await run.wait()
+  if (streamedError !== undefined) return failed(`the run streamed an error (${streamedError})`)
+  return result.status === 'error' ? failed('the run ended with status error') : { ok: true }
 }
 
 /**
@@ -74,7 +73,8 @@ async function runWith(agent: TurnAgent, options: TurnOptions): Promise<TurnOutc
  * emitted. A translated `done` or `error` is data inside the turn, never its end: the outcome is
  * what the caller turns into the one final frame. A streamed error fails the turn even when `wait()`
  * reports it finished, as B-369's reply handler does. The turn never throws: a failure anywhere,
- * building the agent included, is a `turn_failed` outcome carrying its reason.
+ * building or disposing the agent included, is a `turn_failed` outcome carrying its reason. A
+ * disposal that throws fails the turn, finished or not: the agent's state is then unknown.
  */
 export async function runTheoClawTurn(options: TurnOptions): Promise<TurnOutcome> {
   try {
