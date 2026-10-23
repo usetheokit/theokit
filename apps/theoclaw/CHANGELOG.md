@@ -13,13 +13,27 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- A control plane: `pnpm --filter theoclaw run build && pnpm --filter theoclaw start` starts one
+  process that serves HTTP and an owner WebSocket on one port (B-372). It binds `127.0.0.1` unless
+  `THEOCLAW_HOST` names another address; a non-loopback address also needs
+  `THEOCLAW_PUBLIC_BIND=yes`, and the generic `HOST` is never read. A busy port or an address the
+  host does not have is refused by name, and the listening line is read from the socket. `GET
+  /health` answers `{"status":"ok"}`. With `THEOCLAW_CONTROL_TOKEN` set (32 characters or more),
+  `/control` accepts a WebSocket carrying `Authorization: Bearer <token>` and runs one agent turn
+  per `{"type":"chat","message":"..."}` frame, streaming each event as `{"type":"event"}` and
+  ending with exactly one `{"type":"done"}` or `{"type":"error","code":"turn_failed"}`. The start
+  refuses a missing `THEOCLAW_MODEL`, model key or `THEOCLAW_PORT` before anything opens, passes
+  `THEOKIT_API_KEY` or else `OPENROUTER_API_KEY` to the SDK, and exits 0 on SIGINT or SIGTERM. No
+  secret is ever written to its output. The parity ledger records OC-22 and OC-23 as shipped,
+  checked against a real model by `tests/live/control-plane.live.test.ts` (`THEOCLAW_LIVE=1`).
+  B-369's webhook routes mount on this listener's handler when they land.
+
 - A CI job that runs this package's three gates — `test`, `typecheck`, `boundaries` — on every
   push to the trunk. `grep -rn theoclaw .github/workflows/` returned zero lines across 12 workflow
   files until now, so from B-004 onward the gates held exactly as long as somebody remembered to
   run them. Each gate is its own step, so a red run names which one failed instead of reporting
-  that the job failed. The job carries no `needs:`, deliberately: this app's `@theokit/*`
-  dependencies resolve to registry versions rather than workspace links, so there is nothing built
-  in this repository for it to wait on.
+  that the job failed. It waits on `typecheck-build` and downloads the built packages, because the
+  app links `@theokit/http` and `@theokit/agents` from this workspace (B-372).
 
 - A parity ledger and the command that checks it. OBJ-6 counts 113 rows, the 106 capabilities of
   the OpenClaw inventory and the 7 Hermes rows, and until now they were counted by eye.
