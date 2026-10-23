@@ -198,12 +198,11 @@ function webhookRoutes(
  * Wire the app: the configured platforms, one runner each, the reply handler, and the routes.
  * Returns at once; the loop keeps starting slow platforms while the router already serves (EC-2).
  */
-export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
-  return composeWith(options, createContainer<TurnAgent>({ factory: options.agentFactory }))
-}
-
-/** The wiring of `composeTheoClaw` over a given container, which `startTheoClaw` shares with `/control`. */
-function composeWith(options: TheoClawOptions, agents: AgentComposition<TurnAgent>): ComposedTheoClaw {
+export function composeTheoClaw(
+  options: TheoClawOptions,
+  /** The request boundary the replies run in; `startTheoClaw` passes the one `/control` shares. */
+  agents: AgentComposition<TurnAgent> = createContainer<TurnAgent>({ factory: options.agentFactory }),
+): ComposedTheoClaw {
   const { configured, skipped, secrets } = resolvePlatforms(options.env)
   for (const { platform, missing } of skipped) {
     options.write(`${platform}: not configured (missing ${missing.join(', ')})`)
@@ -299,7 +298,7 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
     write: stderr,
   })
   const agents = createContainer<TurnAgent>({ factory: options.agentFactory })
-  const composed = composeWith({ ...options, write: stderr }, agents)
+  const composed = composeTheoClaw({ ...options, write: stderr }, agents)
   loop = composed.loop
   const listen = options.listen ?? listenControlPlane
   serving = listen({

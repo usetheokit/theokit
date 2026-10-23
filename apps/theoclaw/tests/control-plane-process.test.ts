@@ -58,19 +58,21 @@ function spawnEntry(overrides: Readonly<Record<string, string | undefined>> = {}
 
 /** Polls the collected output until `pattern` appears; fails naming what never did. */
 async function waitForLine(run: Run, pattern: RegExp): Promise<RegExpMatchArray> {
-  const deadline = Date.now() + 10_000;
+  // 30 s: the entry loads the ten gateway SDKs as well as the control plane (about 2.5 s under
+  // tsx on an idle machine), and the 10 s bound this had was exceeded under a load average of 20.
+  const deadline = Date.now() + 30_000;
   for (;;) {
     const match = run.output().match(pattern);
     if (match !== null) return match;
     if (run.child.exitCode !== null) throw new Error(`the entry exited ${run.child.exitCode}: ${run.output()}`);
-    if (Date.now() > deadline) throw new Error(`no line matching ${pattern} within 10 s: ${run.output()}`);
+    if (Date.now() > deadline) throw new Error(`no line matching ${pattern} within 30 s: ${run.output()}`);
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
 }
 
 /** AC-008 (B-372): the process entry, observed from outside the process. */
 describe("the process entry", () => {
-  it("the process entry listens on 127.0.0.1 and exits 0 on SIGINT", { timeout: 20_000 }, async () => {
+  it("the process entry listens on 127.0.0.1 and exits 0 on SIGINT", { timeout: 45_000 }, async () => {
     const run = spawnEntry();
 
     const [, port] = await waitForLine(run, /theoclaw: control plane listening on 127\.0\.0\.1:(\d+)/);
@@ -80,7 +82,7 @@ describe("the process entry", () => {
     expect(await run.exited).toEqual({ code: 0, signal: null });
   });
 
-  it("the process entry prints neither the control token nor the model key", { timeout: 20_000 }, async () => {
+  it("the process entry prints neither the control token nor the model key", { timeout: 45_000 }, async () => {
     const run = spawnEntry();
 
     await waitForLine(run, /control plane listening on/);
