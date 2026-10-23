@@ -26,17 +26,24 @@ afterEach(async () => {
   }
 });
 
-/** The process entry under tsx, from the app's directory, with only the variables it needs. */
-function spawnEntry(): Run {
+const COMPLETE_ENV: Readonly<Record<string, string | undefined>> = {
+  THEOCLAW_MODEL: "stub",
+  OPENROUTER_API_KEY: MODEL_KEY,
+  THEOCLAW_PORT: "0",
+  THEOCLAW_CONTROL_TOKEN: TOKEN,
+};
+
+/**
+ * The process entry under tsx, from the app's directory, with only the variables it needs.
+ * `overrides` replaces a variable; an `undefined` value leaves it unset.
+ */
+function spawnEntry(overrides: Readonly<Record<string, string | undefined>> = {}): Run {
+  const variables = Object.entries({ ...COMPLETE_ENV, ...overrides }).filter(
+    (entry): entry is [string, string] => entry[1] !== undefined,
+  );
   const child = spawn(process.execPath, ["--import", "tsx", "src/main.ts"], {
     cwd: APP_DIR,
-    env: {
-      PATH: process.env.PATH,
-      THEOCLAW_MODEL: "stub",
-      OPENROUTER_API_KEY: MODEL_KEY,
-      THEOCLAW_PORT: "0",
-      THEOCLAW_CONTROL_TOKEN: TOKEN,
-    },
+    env: { PATH: process.env.PATH, ...Object.fromEntries(variables) },
     stdio: ["ignore", "pipe", "pipe"],
   });
   running = child;
@@ -82,5 +89,23 @@ describe("the process entry", () => {
 
     expect(run.output()).not.toContain(TOKEN);
     expect(run.output()).not.toContain(MODEL_KEY);
+  });
+
+  it("the process entry refuses a missing THEOCLAW_MODEL with exit 1 and names the variable", { timeout: 20_000 }, async () => {
+    const run = spawnEntry({ THEOCLAW_MODEL: undefined });
+
+    expect(await run.exited).toEqual({ code: 1, signal: null });
+    expect(run.output()).toMatch(/^theoclaw: .*THEOCLAW_MODEL/m);
+    expect(run.output()).not.toContain(MODEL_KEY);
+    expect(run.output()).not.toContain(TOKEN);
+  });
+
+  it("the process entry refuses a public bind without THEOCLAW_PUBLIC_BIND with exit 1", { timeout: 20_000 }, async () => {
+    const run = spawnEntry({ THEOCLAW_HOST: "0.0.0.0" });
+
+    expect(await run.exited).toEqual({ code: 1, signal: null });
+    expect(run.output()).toMatch(/^theoclaw: refusing to bind 0\.0\.0\.0: .*THEOCLAW_PUBLIC_BIND=yes/m);
+    expect(run.output()).not.toContain(MODEL_KEY);
+    expect(run.output()).not.toContain(TOKEN);
   });
 });
