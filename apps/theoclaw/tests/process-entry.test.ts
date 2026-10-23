@@ -3,11 +3,11 @@ import { EventEmitter } from 'node:events'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { computeLineSignature } from '@theokit/gateway-line'
-import type { ServerHandle } from '@theokit/http/runtime/node'
-
-import { TheoClawConfigError } from '../src/channels/output-mask.js'
 import { startChannelLoop } from '../src/channels/channel-loop.js'
-import { installShutdown, parsePort, startServer } from '../src/server.js'
+import { parsePort } from '../src/control-plane/bind.js'
+import { TheoClawBindError, TheoClawConfigError } from '../src/control-plane/errors.js'
+import { type ControlPlaneHandle, listenControlPlane } from '../src/control-plane/listener.js'
+import { installShutdown } from '../src/control-plane/shutdown.js'
 import { createLineRoute } from '../src/webhooks/line.js'
 import { MAX_BODY_BYTES, createWebhookRouter } from '../src/webhooks/router.js'
 import type { WebhookRoute } from '../src/webhooks/router.js'
@@ -25,10 +25,15 @@ const LINE_BODY = JSON.stringify({
   ],
 })
 
-const servers: ServerHandle[] = []
+const servers: ControlPlaneHandle[] = []
 afterEach(async () => {
-  await Promise.all(servers.splice(0).map((server) => new Promise<void>((done) => server.close(() => done()))))
+  await Promise.all(servers.splice(0).map((server) => server.close()))
 })
+
+/** The process's listener on a free loopback port. */
+function listen(handler: (request: Request) => Promise<Response>, port = 0): Promise<ControlPlaneHandle> {
+  return listenControlPlane({ handler, port, host: '127.0.0.1', stderr: () => undefined })
+}
 
 /** A route that records how often it was reached and what bytes it read. */
 function spyRoute(methods: readonly string[] = ['POST']): WebhookRoute & { calls: Uint8Array[] } {
@@ -63,9 +68,9 @@ function post(path: string, init: RequestInit = {}): Request {
 }
 
 async function serve(handler: (request: Request) => Promise<Response>): Promise<string> {
-  const server = await startServer({ handler, port: 0 })
+  const server = await listen(handler)
   servers.push(server)
-  return `http://127.0.0.1:${server.address()?.port}`
+  return `http://127.0.0.1:${server.address().port}`
 }
 
 function shutdownHarness(
@@ -150,7 +155,7 @@ describe('the process entry', () => {
 
     await waitFor(() => harness.exit.mock.calls.length === 1, 1000, 'exit after SIGTERM')
     expect(harness.stopAll).toHaveBeenCalledTimes(1)
-    expect(harness.lines).toEqual(['shutdown: SIGTERM ignored, already stopping'])
+    expect(harness.lines).toEqual(['theoclaw: SIGTERM ignored, already stopping'])
   })
 
   it('a runner that fails to stop still closes the server and exits 1', async () => {
@@ -291,7 +296,7 @@ describe('the process entry', () => {
 
     await waitFor(() => harness.exit.mock.calls.length === 1, 1000, 'exit after SIGTERM')
     expect(harness.exit).toHaveBeenCalledWith(1)
-    expect(harness.lines).toEqual(['shutdown: closing the server failed: server not running'])
+    expect(harness.lines).toEqual(['theoclaw: closing the control plane failed: server not running'])
   })
 
   it('removing the shutdown listeners leaves the signal source as it was', () => {
@@ -350,12 +355,10 @@ describe('the process entry', () => {
   })
 
   it('a listen on a port in use fails instead of hanging', async () => {
-    const first = await startServer({ handler: async () => new Response(null), port: 0 })
+    const first = await listen(async () => new Response(null))
     servers.push(first)
 
-    await expect(
-      startServer({ handler: async () => new Response(null), port: first.address()?.port ?? 0 }),
-    ).rejects.toThrow(/EADDRINUSE/)
+    await expect(listen(async () => new Response(null), first.address().port)).rejects.toThrow(TheoClawBindError)
   })
 
   describe('concurrency', () => {

@@ -177,6 +177,8 @@ function harness(options: { wrapClose?: (close: () => Promise<void>) => Promise<
       },
       stdout: (line) => void stdout.push(line),
       stderr: (line) => void stderr.push(line),
+      // No stream to mask: the real process streams would keep one mask per start in this worker.
+      streams: [],
       signals,
       exit: (code) => {
         exits.push(code);

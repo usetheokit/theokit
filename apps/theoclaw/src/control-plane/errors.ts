@@ -13,9 +13,8 @@ export function describeError(error: unknown): string {
 export class TheoClawConfigError extends Error {
   readonly variable: string | undefined
 
-  // The message-only call stays valid because B-369's branch declares its own TheoClawConfigError in
-  // `src/channels/output-mask.ts` and constructs it with a message alone. A rebase keeps both
-  // declarations; whoever lands second deletes one by hand, or `instanceof` fails across them.
+  // The message-only call is for a refusal no single variable names (the output mask installed
+  // twice on one stream, `src/channels/output-mask.ts`).
   constructor(message: string, options: { readonly variable?: string } = {}) {
     super(message)
     this.name = 'TheoClawConfigError'

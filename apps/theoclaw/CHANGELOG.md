@@ -26,10 +26,11 @@ and versioning follows [Semantic Versioning](https://semver.org/).
   `THEOKIT_API_KEY` or else `OPENROUTER_API_KEY` to the SDK, and exits 0 on SIGINT or SIGTERM. No
   secret is ever written to its output. The parity ledger records OC-22 and OC-23 as shipped,
   checked against a real model by `tests/live/control-plane.live.test.ts` (`THEOCLAW_LIVE=1`).
-  B-369's webhook routes mount on this listener's handler when they land.
+  The channel loop's webhook routes (B-369) are served by this same listener.
 
 - TheoClaw now replies on the ten gateway platforms (B-369).
-  - `node dist/main.js` (`pnpm start`) serves on `THEOCLAW_PORT` and runs one gateway runner per
+  - `node dist/main.js` (`pnpm start`) serves the webhook routes on the control plane's listener
+    (`THEOCLAW_PORT`, `127.0.0.1` unless `THEOCLAW_HOST` says otherwise) and runs one gateway runner per
     configured platform: Telegram, Discord, Slack, Matrix, Mattermost, e-mail, LINE, WhatsApp
     Cloud, Teams and SMS (Twilio). A platform runs when every one of its `THEOCLAW_*` variables is
     set; a platform missing any is skipped with one line naming the missing variables. A platform
@@ -37,9 +38,9 @@ and versioning follows [Semantic Versioning](https://semver.org/).
   - Each message with text gets one agent turn and exactly one reply, in the platform's own
     rendering (`channelRendering`, from `@theokit/gateway` 0.11.0 in `theokit-gateways`). A turn
     with no visible answer replies "I could not come up with an answer to that.", and a failed
-    turn replies with the presenter's error sentence. The agent runs `THEOCLAW_MODEL` and reads its
-    key from `THEOKIT_API_KEY`. Every configured credential, and the API key when it is set, is
-    masked as `[redacted]` in everything the process writes to stdout and stderr, including what
+    turn replies with the presenter's error sentence. The agent runs `THEOCLAW_MODEL` with the
+    control plane's model key. Every configured credential, both model keys when they are set, and
+    the control token are masked as `[redacted]` in everything the process writes to stdout and stderr, including what
     the adapters write themselves.
   - Webhook platforms post to `/webhooks/line`, `/webhooks/sms`, `/webhooks/whatsapp` (GET answers
     Meta's subscription check) and `/webhooks/teams`, which answer without waiting for the agent

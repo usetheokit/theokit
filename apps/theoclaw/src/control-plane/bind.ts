@@ -36,8 +36,7 @@ export function resolveBindAddress(env: BindEnvironment): string {
 
 /**
  * `THEOCLAW_PORT`: digits only, 0 to 65535, untrimmed (` 8080` is refused, `080` reads as 80). The
- * message names the variable and never the value. B-369's `src/server.ts` holds the same function
- * with the same message; the second branch to land deletes one copy.
+ * message names the variable and never the value.
  */
 export function parsePort(value: string | undefined): number {
   const port = value !== undefined && /^\d+$/.test(value) ? Number(value) : Number.NaN

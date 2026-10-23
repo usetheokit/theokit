@@ -3,9 +3,6 @@
 A personal AI assistant that lives where its user already writes: one agent answering on Telegram,
 Discord, Slack, Matrix, Mattermost, e-mail, LINE, WhatsApp, Microsoft Teams and SMS.
 
-The channel loop that reads the configuration below is still being built (`src/` has the
-composition root only). The variables are the contract it is being written against.
-
 ## Configuration
 
 TheoClaw reads its configuration from environment variables, all prefixed `THEOCLAW_`. The full
@@ -24,8 +21,9 @@ so a file kept outside the repository and sourced from your shell profile is als
 
 | Variable | Meaning |
 |---|---|
-| `THEOCLAW_MODEL` | Model id the agent runs, e.g. `openrouter/google/gemini-2.5-flash-lite`. The first segment picks the provider and therefore the key it reads (`OPENROUTER_API_KEY` for `openrouter/...`). There is no default: startup fails and names the variable. |
-| `THEOCLAW_PORT` | Port for the webhook routes. Digits only, 0 to 65535. |
+| `THEOCLAW_MODEL` | Model id the agent runs, e.g. `openrouter/google/gemini-2.5-flash-lite`. There is no default: startup fails and names the variable. |
+| `THEOKIT_API_KEY` or `OPENROUTER_API_KEY` | The model key, passed to the SDK; `THEOKIT_API_KEY` wins when both are set. |
+| `THEOCLAW_PORT` | Port of the one listener that serves the webhook routes, `/health` and `/control`. Digits only, 0 to 65535. |
 
 ### Platforms
 
@@ -50,8 +48,10 @@ Names in the table omit the `THEOCLAW_` prefix.
 ### Webhooks need a public URL
 
 LINE, WhatsApp, Teams and SMS deliver messages by calling an HTTPS URL, so `THEOCLAW_PORT` has to
-be reachable from the internet. During development a tunnel does this, for example a Cloudflare
-named tunnel pointing a stable hostname at `http://localhost:$THEOCLAW_PORT`. Register
+be reachable from the internet. The listener binds `127.0.0.1` by default, so a tunnel is the
+simplest way, for example a Cloudflare named tunnel pointing a stable hostname at
+`http://localhost:$THEOCLAW_PORT`. Binding a public address instead takes `THEOCLAW_HOST` and
+`THEOCLAW_PUBLIC_BIND=yes` (see below), and exposes `/health` and `/control` on it too. Register
 `https://<host>/webhooks/<platform>` in each platform's console. For SMS, `THEOCLAW_SMS_PUBLIC_URL`
 must be that exact URL, because Twilio signs the URL it called.
 
@@ -65,7 +65,7 @@ must be that exact URL, because Twilio signs the URL it called.
 - Matrix and Mattermost can run locally in Docker (Synapse and the Mattermost preview image), so
   they need no external account.
 
-## Start the control plane
+## Start TheoClaw
 
 ```bash
 pnpm --filter theoclaw run build
@@ -73,8 +73,9 @@ THEOCLAW_MODEL=openrouter/google/gemini-2.5-flash-lite THEOCLAW_PORT=8787 \
   THEOCLAW_CONTROL_TOKEN="$(openssl rand -hex 24)" pnpm --filter theoclaw start
 ```
 
-It prints `theoclaw: control plane listening on 127.0.0.1:8787`, read from the bound socket, and
-stops cleanly on Ctrl-C. `GET /health` answers `{"status":"ok"}`.
+It prints `theoclaw: control plane listening on 127.0.0.1:8787`, read from the bound socket, starts
+one gateway runner per configured platform, and stops cleanly on Ctrl-C: the runners first, then
+the listener. `GET /health` answers `{"status":"ok"}`.
 
 | Variable | Meaning |
 |---|---|
