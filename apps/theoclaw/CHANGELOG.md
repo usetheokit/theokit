@@ -24,7 +24,8 @@ and versioning follows [Semantic Versioning](https://semver.org/).
   ending with exactly one `{"type":"done"}` or `{"type":"error","code":"turn_failed"}`. The start
   refuses a missing `THEOCLAW_MODEL`, model key or `THEOCLAW_PORT` before anything opens, passes
   `THEOKIT_API_KEY` or else `OPENROUTER_API_KEY` to the SDK, and exits 0 on SIGINT or SIGTERM. No
-  secret is ever written to its output. The parity ledger records OC-22 and OC-23 as shipped,
+  secret is ever written to its output. Each turn's agent runs without the SDK's `shell` tool and with
+  memory off, so a chat frame runs no host command and writes no transcript. The parity ledger records OC-22 and OC-23 as shipped,
   checked against a real model by `tests/live/control-plane.live.test.ts` (`THEOCLAW_LIVE=1`).
   The channel loop's webhook routes (B-369) are served by this same listener.
 

@@ -96,6 +96,10 @@ any other path answers 404 and a missing or wrong token 401, before any agent is
 `{"type":"error","code":"busy"}`, anything else `{"type":"error","code":"bad_frame"}`; neither ends
 the running turn. Frames are capped at 65536 bytes.
 
+Each turn's agent is built without the SDK's `shell` tool and with memory off, so a chat frame runs
+no command on the host and leaves no transcript on disk. The SDK still adds one entry per turn to
+`.theokit/agents/registry.json` under the process's working directory; no option turns that off.
+
 The live check runs a real turn against the built entry:
 
 ```bash
