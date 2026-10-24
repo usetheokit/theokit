@@ -92,6 +92,15 @@ describe('zodToOpenApiSchema — unions', () => {
     expect(r.oneOf).toEqual([{ type: 'string' }, { type: 'number' }])
   })
 
+  it('a nullable union of primitives → oneOf + nullable, never a type array', () => {
+    const r = zodToOpenApiSchema(z.union([z.string(), z.number(), z.boolean()]).nullable())
+
+    expect(r).toEqual({
+      oneOf: [{ type: 'string' }, { type: 'number' }, { type: 'boolean' }],
+      nullable: true,
+    })
+  })
+
   it('discriminated union → oneOf + discriminator + types tagged', () => {
     const schema = z.discriminatedUnion('kind', [
       z.object({ kind: z.literal('a'), a: z.string() }),
