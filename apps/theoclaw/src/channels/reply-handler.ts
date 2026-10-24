@@ -3,23 +3,12 @@ import type { GatewayContext, GatewayHandler, MessageEvent, SendResult } from '@
 import { ChatPresenter, fromSdkMessage } from '@theokit/presenter'
 import type { AgentOutputEvent, ChatMessage } from '@theokit/presenter'
 
+import type { TurnAgent } from '../agent-port.js'
+
 /** The reply to a turn that produced no visible answer (D8): reasoning only, tools only, nothing. */
 export const NO_ANSWER_REPLY = 'I could not come up with an answer to that.'
 
-/**
- * What the handler needs of an agent. The stream element is the narrow `{ type }`, not the
- * presenter's `SdkMessage`: that interface declares an index signature the SDK's message
- * interfaces do not, so `SDKAgent` would not be assignable to a port typed with it.
- */
-export interface TurnAgent {
-  send(text: string): Promise<TurnRun>
-  close?(): void
-}
-
-export interface TurnRun {
-  stream(): AsyncIterable<{ readonly type: string }>
-  wait(): Promise<{ readonly status: string; readonly error?: { readonly code?: string } }>
-}
+export type { TurnAgent, TurnRun } from '../agent-port.js'
 
 export interface ReplyHandlerOptions {
   /** One request boundary per message; the composition root's `withAgent`. */

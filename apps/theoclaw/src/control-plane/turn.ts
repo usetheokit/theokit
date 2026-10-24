@@ -2,26 +2,10 @@ import { randomUUID } from 'node:crypto'
 
 import { type SdkMessage, translateSdkEvent } from '@theokit/agents/bridge'
 
+import type { TurnAgent, TurnRun } from '../agent-port.js'
 import { describeError } from './errors.js'
 
-/**
- * What a turn needs of an agent. The stream element is the narrow `{ type }`: the bridge's
- * `SdkMessage` declares an index signature the SDK's message interfaces do not, so the SDK agent
- * would not be assignable to a port typed with it.
- *
- * There is no `close` here on purpose. The request boundary (`createContainer().withAgent`) disposes
- * the agent through `Symbol.asyncDispose` when the turn ends. In `@theokit/sdk` 5.11 `close()` only
- * marks the agent disposed, so calling it first makes that disposal return without tearing the
- * session down.
- */
-export interface TurnAgent {
-  send(text: string): Promise<TurnRun>
-}
-
-export interface TurnRun {
-  stream(): AsyncIterable<{ readonly type: string }>
-  wait(): Promise<{ readonly status: string }>
-}
+export type { TurnAgent, TurnRun } from '../agent-port.js'
 
 /** One event as `translateSdkEvent` returns it. */
 export type TurnEvent = ReturnType<typeof translateSdkEvent>[number]
