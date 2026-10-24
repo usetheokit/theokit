@@ -81,6 +81,22 @@ describe('createTeamsRoute', () => {
     expect(delivered).toEqual(['hello theo'])
   })
 
+  // A message that only mentions the bot normalizes to empty text; the route still delivers it and
+  // answers 200, and the reply handler skips empty text (tests/channel-reply.test.ts).
+  it('delivers a mention-only message activity with empty text and answers 200', async () => {
+    const { adapter, delivered } = subscribedTeams()
+
+    const response = await createTeamsRoute({
+      verify: accept({ ...MESSAGE_ACTIVITY, text: '<at>Theo</at>' }),
+      adapter,
+      botDisplayName: 'Theo',
+      write: () => undefined,
+    })(post())
+
+    expect(response.status).toBe(200)
+    expect(delivered).toEqual([''])
+  })
+
   it('maps each refusal reason to its status', async () => {
     const expected: Record<(typeof ELEVEN_REASONS)[number], number> = {
       missing_authorization: 401,
