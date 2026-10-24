@@ -168,9 +168,10 @@ describe('the root bar has a type half, and it is now visible', () => {
    *
    * A verdict naming a type that does not cross can mean the table rotted — somebody stopped
    * re-exporting the type and left the decision behind. It can also mean the INSTALLED SDK simply
-   * predates the type: this package declares `@theokit/sdk: ^5.3.0`, `HookApprovalGate` landed in
-   * `5.4.0`, and the `dep-check / suite at the bottom of every declared range` leg installs the
-   * floor. There the table is not stale; the environment is older than the table.
+   * predates the type: this package declared a 5.3 floor for `@theokit/sdk` when this was written
+   * (it declares `^5.11.0` since 5.11.0), `HookApprovalGate` landed in `5.4.0`, and the
+   * `dep-check / suite at the bottom of every declared range` leg installed that floor. There the
+   * table was not stale; the environment was older than the table.
    *
    * Collapsing the two made this gate fail on a floor where the package is correct — measured: the
    * typecheck was clean and 1070 test files passed beside it. `sdk-adapter-create-options.ts`

@@ -10,12 +10,17 @@
  * naming a directory that does not exist passes green forever and reads as protection.
  * `proof-imports-only-published-entry-points` is armed by deliberate violations that a test runs
  * on every suite run (B-416). `production-must-not-import-tests` was proven to arm by a deliberate
- * violation; `composition-root-is-the-top-layer` names a directory
- * that exists and has an EMPTY source set today, because `src/` holds one file and the rule's own
- * negative lookahead excludes it. It arms — proven under a second importer in a throwaway tree —
- * and it cannot fire here until `src/` has a second file. Stated because this file's whole premise
- * is that a rule which cannot fire is the hazard, and an earlier draft of this line claimed the
- * two older rules had both fired.
+ * violation; `composition-root-is-the-top-layer` names a directory that exists, and its source
+ * set is every file under `src/` except `composition.ts` and `main.ts`, which its negative lookahead
+ * excludes: today `src/agent-port.ts` and the modules under `src/channels/`, `src/webhooks/` and
+ * `src/control-plane/`. It was proven to arm under a
+ * second importer in a throwaway tree, back when `src/` held one file. Stated because this file's
+ * whole premise is that a rule which cannot fire is the hazard, and an earlier draft of this line
+ * claimed the two older rules had both fired.
+ *
+ * `nothing-imports-the-entry` has a non-empty source set (every file under `src/` and `tests/`)
+ * and its target, the process entry `src/main.ts`, exists since B-372's T4.2 added it;
+ * `tests/entry-boundary.test.ts` pins what both entry rules say independently of the tree.
  *
  * `boundaries` cruises `src` and `tests` only, so `tools/` and the root config files are outside
  * every rule here; they are repository tooling, not proofs.
@@ -55,10 +60,22 @@ module.exports = {
       severity: 'error',
       comment:
         'rules/architecture.md § 1 — the composition root wires concretes and nothing ' +
-        'imports it back except an entry point. When a domain layer appears, this rule ' +
+        'imports it back except the entry point, src/main.ts. When a domain layer appears, this rule ' +
         'is what keeps the dependency pointing one way.',
-      from: { path: '^src/(?!composition\\.ts$)' },
+      from: { path: '^src/(?!(composition|main)\\.ts$)' },
       to: { path: '^src/composition\\.ts$' },
+    },
+    {
+      // The exemption above lets exactly one file, the process entry, import the composition
+      // root. This rule keeps that exemption from becoming a back door: a module importing
+      // `src/main.ts` would reach the composition indirectly.
+      name: 'nothing-imports-the-entry',
+      severity: 'error',
+      comment:
+        'src/main.ts is the process entry and a leaf: it wires the real process into the ' +
+        'composition root, and nothing in src or tests may import it.',
+      from: { path: '^(src|tests)/' },
+      to: { path: '^src/main\\.ts$' },
     },
   ],
   options: {

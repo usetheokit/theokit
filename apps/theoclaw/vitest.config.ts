@@ -27,5 +27,12 @@ export default defineConfig({
     name: 'theoclaw',
     include: ['tests/**/*.test.ts', 'tools/**/*.test.mjs'],
     environment: 'node',
+    // Read only by a `--coverage` run, so the plain suite is unchanged. The control plane is the
+    // code B-372 adds, and its plan bounds it at 90% on all three counters.
+    coverage: {
+      provider: 'v8',
+      include: ['src/control-plane/**'],
+      thresholds: { lines: 90, branches: 90, functions: 90 },
+    },
   },
 })

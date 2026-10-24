@@ -33,11 +33,12 @@ function resolvedZodVersions(lockContent: string): Set<string> {
 describe('Zod single-version invariant (T0.1)', () => {
   // Repo migrated to Zod v4 (commit 264449e "monorepo infra upgrades — Zod v4").
   // The single-version invariant stands; only the pinned major flipped 3 → 4.
-  it('package.json contains pnpm.overrides.zod === ^4.0.0', () => {
+  // The floor is 4.6.6, the first release past GHSA-mrhx-c7xc-m3w5 (B-589).
+  it('package.json contains pnpm.overrides.zod === ^4.6.6', () => {
     const pkg = JSON.parse(readFileSync(resolve(REPO, 'package.json'), 'utf8')) as {
       pnpm?: { overrides?: Record<string, string> }
     }
-    expect(pkg.pnpm?.overrides?.zod).toBe('^4.0.0')
+    expect(pkg.pnpm?.overrides?.zod).toBe('^4.6.6')
   })
 
   /**

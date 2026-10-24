@@ -1,0 +1,36 @@
+/**
+ * The two refusals the control plane makes before it opens anything. Each carries the field a
+ * caller reads instead of parsing the message, and no message ever carries a secret or the value
+ * that was refused.
+ */
+
+/** The message of an error, or its string form for anything thrown that is not one. */
+export function describeError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+/** A configuration value is missing or malformed. `variable` names the environment variable. */
+export class TheoClawConfigError extends Error {
+  readonly variable: string | undefined
+
+  // The message-only call is for a refusal no single variable names (the output mask installed
+  // twice on one stream, `src/channels/output-mask.ts`).
+  constructor(message: string, options: { readonly variable?: string } = {}) {
+    super(message)
+    this.name = 'TheoClawConfigError'
+    this.variable = options.variable
+  }
+}
+
+/** The control plane cannot bind: a public address without the confirmation, or the socket refused. */
+export class TheoClawBindError extends Error {
+  readonly address: string | undefined
+  readonly port: number | undefined
+
+  constructor(message: string, options: { readonly address?: string; readonly port?: number } = {}) {
+    super(message)
+    this.name = 'TheoClawBindError'
+    this.address = options.address
+    this.port = options.port
+  }
+}
