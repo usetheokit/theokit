@@ -161,10 +161,28 @@ function convertAnyOf(branches: unknown[], rest: Record<string, unknown>): OpenA
 }
 
 /**
+ * Convert a JSON-Schema type array to OpenAPI 3.0, which has none. `null` becomes
+ * `nullable: true`. zod 4.6+ collapses a union of unconstrained primitives into one
+ * type array (`["string","number"]`), so more than one non-null type becomes `oneOf`,
+ * the shape an `anyOf` union already gets.
+ */
+function convertTypeArray(value: unknown[]): Record<string, unknown> {
+  const types = value.filter((t): t is string => typeof t === 'string')
+  const nonNull = types.filter((t) => t !== 'null')
+  const out: Record<string, unknown> =
+    nonNull.length > 1
+      ? { oneOf: nonNull.map((t) => ({ type: t })) }
+      : { type: nonNull.length === 1 ? nonNull[0] : nonNull }
+  if (types.includes('null')) out.nullable = true
+  return out
+}
+
+/**
  * Post-process JSON Schema (draft-2020-12) → OpenAPI 3.0:
  *   - strip `$schema`/`$defs`
  *   - `.nullable()`/union `anyOf` → `nullable: true` / `oneOf`
  *   - `type: ["string","null"]` → `{ type: "string", nullable: true }`
+ *   - `type: ["string","number"]` → `{ oneOf: [{ type: "string" }, { type: "number" }] }`
  *   - drop zod-v4 noise (redundant pattern, safe-integer bounds)
  *   - recurse into nested schemas
  */
@@ -185,10 +203,7 @@ function toOpenApi3(js: Record<string, unknown>): OpenApiSchema {
       continue
     }
     if (key === 'type' && Array.isArray(value)) {
-      const types = value.filter((t): t is string => typeof t === 'string')
-      const nonNull = types.filter((t) => t !== 'null')
-      out.type = nonNull.length === 1 ? nonNull[0] : nonNull
-      if (types.includes('null')) out.nullable = true
+      Object.assign(out, convertTypeArray(value))
     } else {
       out[key] = normalizeValue(key, value)
     }
