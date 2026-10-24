@@ -147,15 +147,15 @@ describe('recordRoutedProviders', () => {
   })
 
   it('records a provider whose name has a multi-byte character split across two chunks', async () => {
-    const bytes = encoder.encode('data: {"provider":"Zürich"}\n\ndata: [DONE]\n\n')
-    // 'ü' is the two bytes C3 BC; cut between them so neither chunk holds the whole character.
-    const cut = bytes.indexOf(0xc3) + 1
+    const bytes = encoder.encode('data: {"provider":"東京"}\n\ndata: [DONE]\n\n')
+    // '東' is the three bytes E6 9D B1; cut after the first so neither chunk holds the whole character.
+    const cut = bytes.indexOf(0xe6) + 1
     const { target } = stubTarget(() =>
       Promise.resolve(new Response(bodyOf([bytes.slice(0, cut), bytes.slice(cut)]))),
     )
     const record = recordRoutedProviders(target)
     await (await target.fetch(CHAT_URL)).text()
-    expect(record.providers).toEqual(['Zürich'])
+    expect(record.providers).toEqual(['東京'])
   })
 
   it('reads no provider from a last line the source cut inside a character', async () => {
