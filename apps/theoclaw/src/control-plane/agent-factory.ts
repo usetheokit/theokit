@@ -37,3 +37,17 @@ export function createAgentFactory(
     return create({ model, apiKey: modelKey, withheldBuiltinTools: ['shell'], memory: { enabled: false } })
   }
 }
+
+/**
+ * The agents of chat replies. Anyone who can message the bot writes their prompt (no sender
+ * allowlist yet, B-371), so a channel agent must hold no tool and write nothing to disk: built by
+ * `createAgentFactory`, it gets no `shell` (`effectiveToolNames` reads an empty catalog) and memory
+ * off. It is its own export so the reply path keeps that guarantee, pinned by its own test, even
+ * if the `/control` turn's options change.
+ */
+export function createChannelAgentFactory(
+  env: BindEnvironment,
+  create?: CreateAgent,
+): () => Promise<TurnAgent> {
+  return createAgentFactory(env, create)
+}

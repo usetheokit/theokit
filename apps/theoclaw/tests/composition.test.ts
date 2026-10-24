@@ -14,7 +14,7 @@ import { composeTheoClaw } from '../src/composition.js'
 import { MAX_BODY_BYTES } from '../src/webhooks/router.js'
 import type { TeamsVerifier } from '../src/webhooks/teams.js'
 import { chunkedPost, fakeBuilders, noAgent, signedLinePost, TELEGRAM_AND_LINE } from './composition-fixtures.js'
-import { FakeAdapter, deferred, waitFor } from './fakes.js'
+import { FakeAdapter, FakeAgent, assistant, deferred, finished, waitFor } from './fakes.js'
 
 /**
  * B-004, DoD bullet 1 — "an agent is request-scoped through `createAgentProvider`, proven by two
@@ -156,6 +156,30 @@ describe('composeTheoClaw', () => {
     expect(lines).toContain(
       'slack: not configured (missing THEOCLAW_SLACK_BOT_TOKEN, THEOCLAW_SLACK_APP_TOKEN)',
     )
+    await loop.stopAll()
+  })
+
+  // The join the item ships: a message entering a route reaches an agent of the channel factory,
+  // and its answer leaves through the same platform's adapter.
+  it('answers a LINE message with the reply of an agent from the channel factory', async () => {
+    const channelAgent = new FakeAgent({ frames: [assistant('hi from theo'), finished()] })
+    const { adapters, builders } = fakeBuilders()
+    const { loop, router } = composeTheoClaw({
+      env: TELEGRAM_AND_LINE,
+      agentFactory: () => {
+        throw new Error('the /control factory must not build a chat agent')
+      },
+      channelAgentFactory: () => channelAgent,
+      builders,
+      write: () => undefined,
+    })
+    await loop.ready
+
+    expect((await router(signedLinePost())).status).toBe(200)
+    await waitFor(() => (adapters.get('line')?.sent.length ?? 0) > 0, 1000, 'the LINE reply to be sent')
+
+    expect(channelAgent.sent).toEqual(['hi'])
+    expect(adapters.get('line')?.sent.map((message) => message.text)).toEqual(['hi from theo'])
     await loop.stopAll()
   })
 

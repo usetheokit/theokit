@@ -84,8 +84,13 @@ export function createContainer<TAgent>(
 /** Everything the running app is made of, for the entry and for tests. */
 export interface TheoClawOptions {
   readonly env: Readonly<Record<string, string | undefined>>
-  /** Builds one agent per inbound message (one request boundary each). */
+  /** Builds the agent of one `/control` turn (one request boundary each). */
   readonly agentFactory: () => TurnAgent | Promise<TurnAgent>
+  /**
+   * Builds the agent of one chat reply, one per inbound message. Default `agentFactory`; the entry
+   * passes `createChannelAgentFactory`, whose agents hold no tool, since anyone can message the bot.
+   */
+  readonly channelAgentFactory?: () => TurnAgent | Promise<TurnAgent>
   /** Defaults to the ten real adapters; tests pass fakes. */
   readonly builders?: (configured: readonly ConfiguredPlatform[]) => PlatformBuild[]
   readonly write: (line: string) => void
@@ -199,11 +204,8 @@ function webhookRoutes(
  * Wire the app: the configured platforms, one runner each, the reply handler, and the routes.
  * Returns at once; the loop keeps starting slow platforms while the router already serves (EC-2).
  */
-export function composeTheoClaw(
-  options: TheoClawOptions,
-  /** The request boundary the replies run in; `startTheoClaw` passes the one `/control` shares. */
-  agents: AgentComposition<TurnAgent> = createContainer<TurnAgent>({ factory: options.agentFactory }),
-): ComposedTheoClaw {
+export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
+  const agents = createContainer<TurnAgent>({ factory: options.channelAgentFactory ?? options.agentFactory })
   const { configured, skipped, secrets } = resolvePlatforms(options.env)
   for (const { platform, missing } of skipped) {
     options.write(`${platform}: not configured (missing ${missing.join(', ')})`)
@@ -298,8 +300,8 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
     },
     write: stderr,
   })
+  const composed = composeTheoClaw({ ...options, write: stderr })
   const agents = createContainer<TurnAgent>({ factory: options.agentFactory })
-  const composed = composeTheoClaw({ ...options, write: stderr }, agents)
   loop = composed.loop
   const listen = options.listen ?? listenControlPlane
   serving = listen({
