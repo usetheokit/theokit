@@ -23,6 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- `theokit`: the OpenAPI emitter writes a union of plain primitives (`z.union([z.string(), z.number()])`) as `oneOf` again, with `nullable: true` when the union is nullable. From zod 4.6, `z.toJSONSchema` returns such a union as a type array (`type: ['string', 'number']`), which OpenAPI 3.0 does not accept, and the emitter passed it through unchanged (#B-589)
 - `@theokit/agents`: an agent from `toAgentFactory` with guardrails or a step ceiling can be served over ACP. The guarded turn had only `wait()`, so an editor received no text; it now has `stream()`, which `@theokit/acp` reads, yielding the text after the output guards in one message, or `{ type: 'status', status: 'ERROR', message }` when the run ends with status `error` or a guard blocks; and both wrappers forward `pluginManager`, so the server's default `ask` mode no longer refuses the prompt with `permission enforcement unavailable on this runtime (no plugin manager)`. A guarded agent served this way sends its text when the turn completes, with no token streaming and no tool activity (#B-414)
 
 ### Security
