@@ -19,6 +19,7 @@ import type { ConfiguredPlatform, PlatformSettings } from './channels/platforms.
 import { createReplyHandler } from './channels/reply-handler.js'
 import type { TurnAgent } from './channels/reply-handler.js'
 import { type ControlPlaneHandle, healthHandler, listenControlPlane } from './control-plane/listener.js'
+import { describeError } from './control-plane/errors.js'
 import { readControlPlaneSettings } from './control-plane/settings.js'
 import { installShutdown, type SignalSource } from './control-plane/shutdown.js'
 import { createTurnRunner } from './control-plane/turn.js'
@@ -137,7 +138,7 @@ function teamsVerifier(
   try {
     return factory({ clientId: settings.clientId })
   } catch (error) {
-    write(`teams: the activity verifier could not be built: ${error instanceof Error ? error.message : String(error)}`)
+    write(`teams: the activity verifier could not be built: ${describeError(error)}`)
     return undefined
   }
 }
