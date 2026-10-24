@@ -139,10 +139,9 @@ export interface FakeTurn {
   readonly before?: Promise<void>
 }
 
-/** An agent with no model: it records what it was sent and how often it was closed. */
+/** An agent with no model: it records what it was sent. */
 export class FakeAgent {
   readonly sent: string[] = []
-  closed = 0
 
   constructor(private readonly turn: FakeTurn) {}
 
@@ -158,9 +157,5 @@ export class FakeAgent {
       },
       wait: async () => turn.result ?? { status: 'finished' },
     }
-  }
-
-  close(): void {
-    this.closed += 1
   }
 }

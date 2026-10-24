@@ -5,10 +5,14 @@
  * The stream element is the narrow `{ type }`, not the presenter's or the bridge's `SdkMessage`:
  * those declare an index signature the SDK's message interfaces do not, so the SDK agent would
  * not be assignable to a port typed with them.
+ *
+ * There is no `close` here on purpose. The request boundary (`createContainer().withAgent`) disposes
+ * the agent through `Symbol.asyncDispose` when the turn ends. In `@theokit/sdk` 5.11 `close()` only
+ * marks the agent disposed, so calling it first makes that disposal return without tearing the
+ * session down, and every turn would leak its agent session.
  */
 export interface TurnAgent {
   send(text: string): Promise<TurnRun>
-  close?(): void
 }
 
 export interface TurnRun {

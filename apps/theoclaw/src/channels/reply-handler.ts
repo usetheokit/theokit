@@ -111,26 +111,9 @@ async function streamTurn(
 }
 
 /**
- * Run one turn and close the agent once. A `close()` that throws becomes the turn's failure only
- * when the turn itself succeeded, so it never hides the error the person was answered for.
- */
-async function runTurn(
-  agent: TurnAgent,
-  event: MessageEvent,
-  presenter: ChatPresenter,
-): Promise<TurnOutcome> {
-  const outcome = await streamTurn(agent, event, presenter)
-  try {
-    agent.close?.()
-  } catch (error) {
-    if (!outcome.failed) return { failed: true, error }
-  }
-  return outcome
-}
-
-/**
  * The handler every runner uses: one agent turn per message with text, and exactly one reply per
  * turn (FR-004, D8). A failed turn still replies, then rethrows so the runner fires `on_error`.
+ * The agent is never closed here: `withAgent`'s request boundary disposes it (see `TurnAgent`).
  */
 export function createReplyHandler(options: ReplyHandlerOptions): GatewayHandler {
   return async (event, ctx) => {
@@ -140,7 +123,7 @@ export function createReplyHandler(options: ReplyHandlerOptions): GatewayHandler
     try {
       await options.withAgent(async (agent) => {
         started = true
-        const outcome = await runTurn(agent, event, presenter)
+        const outcome = await streamTurn(agent, event, presenter)
         await send(ctx, finishTurn(presenter), outcome)
         if (outcome.failed) throw outcome.error
       })
