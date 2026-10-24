@@ -15,7 +15,7 @@ import type { ChannelLoop, PlatformBuild } from './channels/channel-loop.js'
 import { installOutputMask } from './channels/output-mask.js'
 import type { MaskableStream } from './channels/output-mask.js'
 import { resolvePlatforms } from './channels/platforms.js'
-import type { ConfiguredPlatform } from './channels/platforms.js'
+import type { ConfiguredPlatform, PlatformSettings } from './channels/platforms.js'
 import { createReplyHandler } from './channels/reply-handler.js'
 import type { TurnAgent } from './channels/reply-handler.js'
 import { type ControlPlaneHandle, healthHandler, listenControlPlane } from './control-plane/listener.js'
@@ -142,61 +142,62 @@ function teamsVerifier(
   }
 }
 
-/** The route builder of one configured platform, or undefined for a platform with no webhook. */
-function webhookPlatform(
-  entry: ConfiguredPlatform,
-  write: (line: string) => void,
-  verifierFactory: (options: TeamsActivityVerifierOptions) => TeamsVerifier,
-): WebhookPlatform | undefined {
-  switch (entry.platform) {
-    case 'line': {
-      const { channelSecret } = entry.settings
-      return { methods: ['POST'], buildRoute: (adapter) => createLineRoute({ channelSecret, adapter }) }
-    }
-    case 'whatsapp': {
-      const { appSecret, verifyToken } = entry.settings
-      return {
-        methods: ['GET', 'POST'],
-        buildRoute: (adapter) => {
-          if (!convertsEnvelopes(adapter)) throw new Error('the built adapter cannot convert a webhook envelope')
-          return createWhatsAppRoute({ appSecret, verifyToken, adapter, write })
-        },
-      }
-    }
-    case 'teams': {
-      const verify = teamsVerifier(entry.settings, verifierFactory, write)
-      return {
-        methods: ['POST'],
-        buildRoute: (adapter) =>
-          verify === undefined
-            ? async () => new Response(null, { status: 503 })
-            : createTeamsRoute({ verify, adapter, write }),
-      }
-    }
-    case 'sms': {
-      const options = smsOptions(entry.settings)
-      return {
-        methods: ['POST'],
-        buildRoute: (adapter) => {
-          if (!hasSignatureCheck(adapter)) throw new Error('the built adapter cannot verify a webhook signature')
-          return createSmsRoute({ adapter, options })
-        },
-      }
-    }
-    case 'telegram':
-    case 'discord':
-    case 'slack':
-    case 'matrix':
-    case 'mattermost':
-    case 'email':
-      return undefined
-    default:
-      return unreachable(entry)
-  }
+interface WebhookDeps {
+  readonly write: (line: string) => void
+  readonly verifierFactory: (options: TeamsActivityVerifierOptions) => TeamsVerifier
 }
 
-function unreachable(entry: never): never {
-  throw new Error(`no webhook decision for platform ${String((entry as { platform?: unknown }).platform)}`)
+type WebhookPlatformFor<P extends PlatformName> = (settings: PlatformSettings<P>, deps: WebhookDeps) => WebhookPlatform
+
+/**
+ * Each platform's webhook, or `null` for one that has none. Keyed by every platform name, so a new
+ * platform does not compile until it has a decision here (an unlisted one would answer 404).
+ */
+const WEBHOOK_PLATFORMS: { readonly [P in PlatformName]: WebhookPlatformFor<P> | null } = {
+  telegram: null,
+  discord: null,
+  slack: null,
+  matrix: null,
+  mattermost: null,
+  email: null,
+  line: ({ channelSecret }) => ({
+    methods: ['POST'],
+    buildRoute: (adapter) => createLineRoute({ channelSecret, adapter }),
+  }),
+  whatsapp: ({ appSecret, verifyToken }, { write }) => ({
+    methods: ['GET', 'POST'],
+    buildRoute: (adapter) => {
+      if (!convertsEnvelopes(adapter)) throw new Error('the built adapter cannot convert a webhook envelope')
+      return createWhatsAppRoute({ appSecret, verifyToken, adapter, write })
+    },
+  }),
+  teams: (settings, { write, verifierFactory }) => {
+    const verify = teamsVerifier(settings, verifierFactory, write)
+    return {
+      methods: ['POST'],
+      buildRoute: (adapter) =>
+        verify === undefined ? async () => new Response(null, { status: 503 }) : createTeamsRoute({ verify, adapter, write }),
+    }
+  },
+  sms: (settings) => {
+    const options = smsOptions(settings)
+    return {
+      methods: ['POST'],
+      buildRoute: (adapter) => {
+        if (!hasSignatureCheck(adapter)) throw new Error('the built adapter cannot verify a webhook signature')
+        return createSmsRoute({ adapter, options })
+      },
+    }
+  },
+}
+
+/** The route builder of one configured platform, or undefined for a platform with no webhook. */
+function webhookPlatform<P extends PlatformName>(
+  entry: { readonly platform: P; readonly settings: PlatformSettings<P> },
+  deps: WebhookDeps,
+): WebhookPlatform | undefined {
+  const forPlatform: WebhookPlatformFor<P> | null = WEBHOOK_PLATFORMS[entry.platform]
+  return forPlatform === null ? undefined : forPlatform(entry.settings, deps)
 }
 
 /**
@@ -243,10 +244,10 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
   // What the routes and the router write can carry a configured value (a verifier's message, an
   // SDK error): masked here as the loop masks its own lines, whatever stream the caller writes to.
   const maskedWrite = (line: string): void => options.write(redactSecrets(maskSecrets(line, secrets)))
-  const verifierFactory = options.teamsVerifierFactory ?? teamsActivityVerifier
+  const deps: WebhookDeps = { write: maskedWrite, verifierFactory: options.teamsVerifierFactory ?? teamsActivityVerifier }
   const webhooks = new Map<PlatformName, WebhookPlatform>()
   for (const entry of configured) {
-    const webhook = webhookPlatform(entry, maskedWrite, verifierFactory)
+    const webhook = webhookPlatform(entry, deps)
     if (webhook !== undefined) webhooks.set(entry.platform, webhook)
   }
   const handles = new WeakMap<BasePlatformAdapter, Handle>()
