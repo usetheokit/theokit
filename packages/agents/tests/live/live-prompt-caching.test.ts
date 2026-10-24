@@ -13,8 +13,10 @@
  * The model is fixed rather than read from `LIVE_MODEL`: the claim is about the Anthropic family
  * through OpenRouter, and the default live model caches implicitly, so it would pass on any SDK.
  *
- * Prints which key variable is present (never its value), the model id, and both turns'
- * `tokensInput` and `cacheReadTokens`.
+ * Prints which key variable is present (never its value), the model id, both turns'
+ * `tokensInput` and `cacheReadTokens`, and the upstream OpenRouter routed each turn to. A turn 2
+ * served by another upstream than turn 1 cannot read turn 1's cache whatever the request carries,
+ * so the turn-2 failure message names both (B-523).
  */
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -27,6 +29,13 @@ import { AgentConfigCapability } from '../../src/capability/agent-capabilities.j
 import { ModelCapability } from '../../src/capability/capabilities.js'
 import type { DelegationResult } from '../../src/bridge/delegation-types.js'
 import { AgentRunner } from '../../src/loop/agent-runner.js'
+
+import {
+  describeUpstreams,
+  recordRoutedProviders,
+  upstreamLabel,
+  upstreamOfTurn,
+} from './routed-provider.js'
 
 const MODEL = 'openrouter/anthropic/claude-haiku-4.5'
 /**
@@ -72,8 +81,14 @@ function longSystemPrompt(): string {
 }
 
 const workDirs: string[] = []
+/**
+ * Installed before the runner is built: the SDK binds the global `fetch` when each `run()` builds
+ * its client (`src/loop/agent-runner.ts:358`), so both turns go through the recorder.
+ */
+const record = recordRoutedProviders(globalThis)
 
 afterAll(() => {
+  record.restore()
   for (const dir of workDirs) rmSync(dir, { recursive: true, force: true })
 })
 
@@ -98,10 +113,16 @@ describe.skipIf(!HAS_KEY && !REQUIRED)('LIVE — prompt caching on an Anthropic-
       baseDir: dir,
     }
 
+    const turn1Start = record.providers.length
     const turn1 = await runner.run('What is the catalogue code of item 7?', opts)
+    const turn1Upstream = upstreamOfTurn(record.providers, turn1Start, record.providers.length)
     console.log(usageLine('turn 1', turn1))
+    console.log(`[live] turn 1: upstream=${upstreamLabel(turn1Upstream)}`)
+    const turn2Start = record.providers.length
     const turn2 = await runner.run('And the catalogue code of item 12?', opts)
+    const turn2Upstream = upstreamOfTurn(record.providers, turn2Start, record.providers.length)
     console.log(usageLine('turn 2', turn2))
+    console.log(`[live] turn 2: upstream=${upstreamLabel(turn2Upstream)}`)
 
     // The prefix is long enough to cache, so a zero read below is the missing directive, not a
     // prompt under the minimum. Since @theokit/sdk 5.11.0 `tokensInput` is the uncached portion
@@ -109,6 +130,9 @@ describe.skipIf(!HAS_KEY && !REQUIRED)('LIVE — prompt caching on an Anthropic-
     const turn1Prompt =
       (turn1.tokensInput ?? 0) + (turn1.cacheReadTokens ?? 0) + (turn1.cacheWriteTokens ?? 0)
     expect(turn1Prompt).toBeGreaterThan(CACHE_MINIMUM_TOKENS)
-    expect(turn2.cacheReadTokens).toBeGreaterThan(0)
+    // A different upstream on each turn is a routing miss, not a missing cache directive.
+    expect(turn2.cacheReadTokens, describeUpstreams(turn1Upstream, turn2Upstream)).toBeGreaterThan(
+      0,
+    )
   }, 120_000)
 })
