@@ -2,8 +2,8 @@ import 'reflect-metadata'
 
 import { describe, expect, it } from 'vitest'
 
-import { channelRendering } from '@theokit/gateway'
-import type { GatewayContext, MessageEvent, SendResult } from '@theokit/gateway'
+import { GatewayRunner, channelRendering } from '@theokit/gateway'
+import type { GatewayContext, GatewayHandler, MessageEvent, SendResult } from '@theokit/gateway'
 import type { SDKAgent } from '@theokit/sdk'
 
 import {
@@ -14,7 +14,7 @@ import {
 } from '../src/channels/reply-handler.js'
 import type { TurnAgent } from '../src/channels/reply-handler.js'
 import { createContainer } from '../src/composition.js'
-import { FakeAgent, assistant, deferred, finished, messageEvent, thinking, waitFor } from './fakes.js'
+import { FakeAdapter, FakeAgent, assistant, deferred, finished, messageEvent, thinking, waitFor } from './fakes.js'
 
 /** The presenter's fixed sentence for a turn that failed before any text (`@theokit/presenter`). */
 const ERROR_SENTENCE = 'Something went wrong on my side and I could not finish that.'
@@ -338,5 +338,55 @@ describe('createReplyHandler', () => {
       expect(one.replies.map((reply) => reply.text)).toEqual(['answer to one'])
       expect(two.replies.map((reply) => reply.text)).toEqual(['answer to two'])
     })
+  })
+})
+
+/**
+ * The handler inside a real `GatewayRunner`, over a FakeAdapter: what the plan's failure scenarios
+ * name at the platform's edge (the adapter's `sendMessage`, the runner's `on_error` hook) rather than
+ * at the `ctx.reply` seam the tests above use.
+ */
+describe('createReplyHandler in a GatewayRunner', () => {
+  async function runOne(
+    adapter: FakeAdapter,
+    handler: GatewayHandler,
+    text: string,
+  ): Promise<readonly Error[]> {
+    const errors: Error[] = []
+    const runner = new GatewayRunner({
+      adapters: [adapter],
+      handler,
+      hooks: [{ name: 'record', on_error: ({ error }) => void errors.push(error) }],
+    })
+    await runner.start()
+    await adapter.deliver(messageEvent(adapter.platform, text))
+    await waitFor(() => errors.length > 0, 1000, 'the runner to fire on_error')
+    await runner.stop()
+    return errors
+  }
+
+  it('a sendMessage refused by the platform reaches on_error as ReplyDeliveryError', async () => {
+    const adapter = new FakeAdapter('telegram', {
+      send: async () => ({ ok: false, error: { code: 'rate_limited', message: 'slow down' } }),
+    })
+    const agent = new FakeAgent({ frames: [assistant('hi'), finished()] })
+
+    const errors = await runOne(adapter, createReplyHandler({ withAgent: withOne(agent) }), 'hello')
+
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toBeInstanceOf(ReplyDeliveryError)
+    expect(errors[0]?.message).toBe('telegram: reply was not delivered (rate_limited)')
+    expect(adapter.sent.map((message) => message.text)).toEqual(['hi'])
+  })
+
+  it('a turn that rejects mid-stream sends its partial text and reaches on_error', async () => {
+    const failure = new Error('model provider dropped the stream')
+    const adapter = new FakeAdapter('telegram')
+    const agent = new FakeAgent({ frames: [assistant('Half an ans')], streamError: failure })
+
+    const errors = await runOne(adapter, createReplyHandler({ withAgent: withOne(agent) }), 'hello')
+
+    expect(errors).toEqual([failure])
+    expect(adapter.sent.map((message) => message.text)).toEqual(['Half an ans'])
   })
 })
