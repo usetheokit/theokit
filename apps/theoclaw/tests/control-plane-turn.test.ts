@@ -1,7 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 
+import type { TurnAgent as ReplyTurnAgent, TurnRun as ReplyTurnRun } from "../src/channels/reply-handler.js";
 import { createContainer } from "../src/composition.js";
-import { createTurnRunner, type TurnAgent } from "../src/control-plane/turn.js";
+import { createTurnRunner, type TurnAgent, type TurnRun } from "../src/control-plane/turn.js";
 
 interface DisposableAgent {
   readonly agent: TurnAgent;
@@ -70,5 +71,17 @@ describe("the turn's request boundary tears its agent down", () => {
     const outcome = await runnerFor(stub)("hello", () => undefined);
 
     expect(outcome).toMatchObject({ ok: false, code: "turn_failed" });
+  });
+});
+
+/**
+ * One agent container feeds both the `/control` turns and the chat replies, so both must read the
+ * same agent port: two copies drift (the reply handler's `wait()` already carried `error.code`), and
+ * a field one starts to need would compile against one and not the other. Checked by `typecheck`.
+ */
+describe("the agent port", () => {
+  it("is one declaration for the control turns and the chat replies", () => {
+    expectTypeOf<TurnRun>().toEqualTypeOf<ReplyTurnRun>();
+    expectTypeOf<TurnAgent>().toEqualTypeOf<ReplyTurnAgent>();
   });
 });
