@@ -40,7 +40,8 @@ and versioning follows [Semantic Versioning](https://semver.org/).
     rendering (`channelRendering`, from `@theokit/gateway` 0.11.0 in `theokit-gateways`). A turn
     with no visible answer replies "I could not come up with an answer to that.", and a failed
     turn replies with the presenter's error sentence. The agent runs `THEOCLAW_MODEL` with the
-    control plane's model key. Every configured credential, both model keys when they are set, and
+    control plane's model key, has no tool and keeps no memory: the SDK's `shell` tool is withheld and memory is off, because anyone
+    who can message the bot writes the prompt (no sender allowlist yet, B-371). Every configured credential, both model keys when they are set, and
     the control token are masked as `[redacted]` in everything the process writes to stdout and stderr, including what
     the adapters write themselves.
   - Webhook platforms post to `/webhooks/line`, `/webhooks/sms`, `/webhooks/whatsapp` (GET answers
