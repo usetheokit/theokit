@@ -15,6 +15,7 @@ import {
 import type { TurnAgent } from '../src/channels/reply-handler.js'
 import { createContainer } from '../src/composition.js'
 import { FakeAdapter, FakeAgent, assistant, deferred, finished, messageEvent, thinking, waitFor } from './fakes.js'
+import type { FakeTurn } from './fakes.js'
 
 /** The presenter's fixed sentence for a turn that failed before any text (`@theokit/presenter`). */
 const ERROR_SENTENCE = 'Something went wrong on my side and I could not finish that.'
@@ -175,42 +176,6 @@ describe('createReplyHandler', () => {
     expect(replies).toEqual([
       { text: channelRendering('line').translate('**Hi**'), format: channelRendering('line').format },
     ])
-  })
-
-  it('closes the agent once per turn', async () => {
-    const agent = new FakeAgent({ frames: [assistant('Hi!'), finished()] })
-    const event = messageEvent('telegram', 'hello')
-    const { ctx } = fakeContext(event)
-
-    await createReplyHandler({ withAgent: withOne(agent) })(event, ctx)
-
-    expect(agent.closed).toBe(1)
-  })
-
-  it('a close that throws after a good turn fails the turn once the reply is sent', async () => {
-    const agent = new FakeAgent({ frames: [assistant('Hi!'), finished()] })
-    const closing = new Error('session store unavailable')
-    agent.close = () => {
-      throw closing
-    }
-    const event = messageEvent('telegram', 'hello')
-    const { ctx, replies } = fakeContext(event)
-
-    await expect(createReplyHandler({ withAgent: withOne(agent) })(event, ctx)).rejects.toBe(closing)
-
-    expect(replies.map((reply) => reply.text)).toEqual(['Hi!'])
-  })
-
-  it('a close that throws after a failed turn keeps the turn failure', async () => {
-    const failure = new Error('provider unreachable')
-    const agent = new FakeAgent({ frames: [], streamError: failure })
-    agent.close = () => {
-      throw new Error('session store unavailable')
-    }
-    const event = messageEvent('telegram', 'hello')
-    const { ctx } = fakeContext(event)
-
-    await expect(createReplyHandler({ withAgent: withOne(agent) })(event, ctx)).rejects.toBe(failure)
   })
 
   it('a reply that throws is attempted once and rethrown', async () => {
@@ -388,5 +353,75 @@ describe('createReplyHandler in a GatewayRunner', () => {
 
     expect(errors).toEqual([failure])
     expect(adapter.sent.map((message) => message.text)).toEqual(['Half an ans'])
+  })
+})
+
+/**
+ * An agent shaped like `@theokit/sdk` 5.11's local `Agent`: `close()` only marks it disposed, and
+ * `[Symbol.asyncDispose]()` runs the session teardown unless that mark is already set. A reply that
+ * calls `close()` inside the request boundary therefore skips the teardown and leaks the session.
+ */
+class SdkShapedAgent extends FakeAgent {
+  teardowns = 0
+  private disposed = false
+
+  constructor(
+    turn: FakeTurn,
+    private readonly disposeError?: Error,
+  ) {
+    super(turn)
+  }
+
+  close(): void {
+    this.disposed = true
+  }
+
+  async [Symbol.asyncDispose](): Promise<void> {
+    if (this.disposed) return
+    this.disposed = true
+    this.teardowns += 1
+    if (this.disposeError !== undefined) throw this.disposeError
+  }
+}
+
+/** The reply handler over the composition root's request boundary, as `composeTheoClaw` wires it. */
+function handlerOver(agent: SdkShapedAgent): GatewayHandler {
+  const agents = createContainer<TurnAgent>({ factory: () => agent })
+  return createReplyHandler({ withAgent: (work) => agents.withAgent(work) })
+}
+
+describe("a chat reply's request boundary tears its agent down", () => {
+  it("runs the agent's teardown once after a finished turn", async () => {
+    const agent = new SdkShapedAgent({ frames: [assistant('Hi!'), finished()] })
+    const event = messageEvent('telegram', 'hello')
+    const { ctx, replies } = fakeContext(event)
+
+    await handlerOver(agent)(event, ctx)
+
+    expect(replies.map((reply) => reply.text)).toEqual(['Hi!'])
+    expect(agent.teardowns).toBe(1)
+  })
+
+  it("runs the agent's teardown once after a turn whose stream rejects", async () => {
+    const failure = new Error('provider unreachable')
+    const agent = new SdkShapedAgent({ frames: [], streamError: failure })
+    const event = messageEvent('telegram', 'hello')
+    const { ctx } = fakeContext(event)
+
+    await expect(handlerOver(agent)(event, ctx)).rejects.toBe(failure)
+
+    expect(agent.teardowns).toBe(1)
+  })
+
+  it('a teardown that throws after a good turn fails the turn once the reply is sent', async () => {
+    const teardown = new Error('session store unavailable')
+    const agent = new SdkShapedAgent({ frames: [assistant('Hi!'), finished()] }, teardown)
+    const event = messageEvent('telegram', 'hello')
+    const { ctx, replies } = fakeContext(event)
+
+    // `@theokit/di` reports a failed request-scope disposal as an AggregateError of each failure.
+    await expect(handlerOver(agent)(event, ctx)).rejects.toHaveProperty('errors', [teardown])
+
+    expect(replies.map((reply) => reply.text)).toEqual(['Hi!'])
   })
 })
