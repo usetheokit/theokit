@@ -44,7 +44,7 @@ const FINISH: AgentOutputEvent = { type: 'finish', reason: 'end_turn' }
 /**
  * A presenter in the platform's own rendering: `channelRendering` pairs the dialect rewrite with
  * the format the adapter is told, where `toDialect` alone would leave the presenter's default
- * `markdown` on platforms that show it raw.
+ * `markdown` on platforms that show it raw. Decided in ADR 0031, which amends the plan's D12.
  */
 function presenterFor(event: MessageEvent): ChatPresenter {
   return new ChatPresenter({ channel: event.channel, ...channelRendering(event.platform) })
