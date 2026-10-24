@@ -20,9 +20,13 @@ export interface ShutdownOptions {
 
 /**
  * On the first SIGINT or SIGTERM: stop every runner, then close the listener, then exit 0. A
- * runner that fails to stop, or a listener that fails to close, is written and the exit code is 1;
- * the listener is closed even when a runner failed. A second signal while stopping is written and
- * ignored. Returns what removes the listeners.
+ * `stopAll` that rejects, or a listener that fails to close, is written and the exit code is 1;
+ * the listener is closed even when `stopAll` rejected. A second signal while stopping is written
+ * and ignored. Returns what removes the listeners.
+ *
+ * The channel loop's `stopAll` does not reject: it writes a runner whose `stop()` rejects and goes
+ * on with the others. A failing `disconnect()` is not seen at all, because `GatewayRunner.stop()`
+ * in `@theokit/gateway` 0.11 discards it, so a platform that failed to disconnect still exits 0.
  */
 export function installShutdown(options: ShutdownOptions): () => void {
   let stopping = false
