@@ -125,17 +125,18 @@ function convertsEnvelopes(
 }
 
 /**
- * The Teams verifier, built once. It refuses some settings at construction (an empty client id, a
- * tenant that is not a GUID); that fails the Teams route only, which then answers 503, and the
- * line says why.
+ * The Teams verifier, built once, from the client id alone (ADR 0032): with a `tenantId` it refuses
+ * every Bot Framework activity whose token carries no `tid` claim, and connector tokens carry none
+ * (`@theokit/gateway-teams` README). A factory that throws fails the Teams route only, which then
+ * answers 503, and the line says why.
  */
 function teamsVerifier(
-  settings: { readonly clientId: string; readonly tenantId: string },
+  settings: { readonly clientId: string },
   factory: (options: TeamsActivityVerifierOptions) => TeamsVerifier,
   write: (line: string) => void,
 ): TeamsVerifier | undefined {
   try {
-    return factory({ clientId: settings.clientId, tenantId: settings.tenantId })
+    return factory({ clientId: settings.clientId })
   } catch (error) {
     write(`teams: the activity verifier could not be built: ${error instanceof Error ? error.message : String(error)}`)
     return undefined
