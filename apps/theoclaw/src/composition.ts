@@ -104,19 +104,13 @@ export interface ComposedTheoClaw {
   readonly router: (request: Request) => Promise<Response>
 }
 
-type RouteFor = (adapter: BasePlatformAdapter) => (request: Request) => Promise<Response>
+type Handle = WebhookRoute['handle']
 
-/**
- * A route bound to the adapter inside the platform's started runner, looked up per request: the
- * router answers 503 before a platform starts, and a platform stopped since answers 503 here. A
- * request already past this lookup when shutdown disconnects the adapter can still be refused by
- * it (an SMS signature check answers false once disconnected); that only happens while stopping.
- */
-function startedRoute(loop: ChannelLoop, platform: PlatformName, route: RouteFor): WebhookRoute['handle'] {
-  return async (request) => {
-    const adapter = loop.started.get(platform)?.adapter
-    return adapter === undefined ? new Response(null, { status: 503 }) : route(adapter)(request)
-  }
+/** How one webhook platform's route is built from the adapter its runner holds. */
+interface WebhookPlatform {
+  readonly methods: WebhookRoute['methods']
+  /** Throws when the adapter lacks what the route needs, which fails that platform's start. */
+  readonly buildRoute: (adapter: BasePlatformAdapter) => Handle
 }
 
 function hasSignatureCheck(adapter: BasePlatformAdapter): adapter is BasePlatformAdapter & SmsRouteAdapter {
@@ -148,56 +142,92 @@ function teamsVerifier(
   }
 }
 
-/** The webhook routes of the configured webhook platforms; every other platform answers 404. */
-function webhookRoutes(
-  configured: readonly ConfiguredPlatform[],
-  loop: ChannelLoop,
+/** The route builder of one configured platform, or undefined for a platform with no webhook. */
+function webhookPlatform(
+  entry: ConfiguredPlatform,
   write: (line: string) => void,
   verifierFactory: (options: TeamsActivityVerifierOptions) => TeamsVerifier,
-): Map<PlatformName, WebhookRoute> {
-  const routes = new Map<PlatformName, WebhookRoute>()
-  for (const entry of configured) {
-    if (entry.platform === 'line') {
+): WebhookPlatform | undefined {
+  switch (entry.platform) {
+    case 'line': {
       const { channelSecret } = entry.settings
-      routes.set('line', {
-        methods: ['POST'],
-        handle: startedRoute(loop, 'line', (adapter) => createLineRoute({ channelSecret, adapter })),
-      })
+      return { methods: ['POST'], buildRoute: (adapter) => createLineRoute({ channelSecret, adapter }) }
     }
-    if (entry.platform === 'whatsapp') {
+    case 'whatsapp': {
       const { appSecret, verifyToken } = entry.settings
-      routes.set('whatsapp', {
+      return {
         methods: ['GET', 'POST'],
-        handle: startedRoute(loop, 'whatsapp', (adapter) => {
-          if (!convertsEnvelopes(adapter)) {
-            throw new Error('whatsapp: the started adapter cannot convert a webhook envelope')
-          }
+        buildRoute: (adapter) => {
+          if (!convertsEnvelopes(adapter)) throw new Error('the built adapter cannot convert a webhook envelope')
           return createWhatsAppRoute({ appSecret, verifyToken, adapter, write })
-        }),
-      })
+        },
+      }
     }
-    if (entry.platform === 'teams') {
+    case 'teams': {
       const verify = teamsVerifier(entry.settings, verifierFactory, write)
-      routes.set('teams', {
+      return {
         methods: ['POST'],
-        handle:
+        buildRoute: (adapter) =>
           verify === undefined
             ? async () => new Response(null, { status: 503 })
-            : startedRoute(loop, 'teams', (adapter) => createTeamsRoute({ verify, adapter, write })),
-      })
+            : createTeamsRoute({ verify, adapter, write }),
+      }
     }
-    if (entry.platform === 'sms') {
+    case 'sms': {
       const options = smsOptions(entry.settings)
-      routes.set('sms', {
+      return {
         methods: ['POST'],
-        handle: startedRoute(loop, 'sms', (adapter) => {
-          if (!hasSignatureCheck(adapter)) throw new Error('sms: the started adapter cannot verify a signature')
+        buildRoute: (adapter) => {
+          if (!hasSignatureCheck(adapter)) throw new Error('the built adapter cannot verify a webhook signature')
           return createSmsRoute({ adapter, options })
-        }),
-      })
+        },
+      }
     }
+    case 'telegram':
+    case 'discord':
+    case 'slack':
+    case 'matrix':
+    case 'mattermost':
+    case 'email':
+      return undefined
+    default:
+      return unreachable(entry)
   }
-  return routes
+}
+
+function unreachable(entry: never): never {
+  throw new Error(`no webhook decision for platform ${String((entry as { platform?: unknown }).platform)}`)
+}
+
+/**
+ * A webhook platform's build also builds its route, once, over the adapter it just built: a route
+ * that cannot use the adapter fails that platform's start (the loop writes why), rather than every
+ * request later.
+ */
+function withRoute(build: PlatformBuild, webhook: WebhookPlatform | undefined, handles: WeakMap<BasePlatformAdapter, Handle>): PlatformBuild {
+  if (webhook === undefined) return build
+  return {
+    platform: build.platform,
+    build: () => {
+      const adapter = build.build()
+      handles.set(adapter, webhook.buildRoute(adapter))
+      return adapter
+    },
+  }
+}
+
+/**
+ * The route of the adapter inside the platform's started runner, looked up per request: the router
+ * answers 503 before a platform starts, and a platform stopped since answers 503 here. A request
+ * already past this lookup when shutdown disconnects the adapter can still be refused by it (an SMS
+ * signature check answers false once disconnected); that only happens while stopping.
+ */
+function startedRoute(loop: ChannelLoop, platform: PlatformName, handles: WeakMap<BasePlatformAdapter, Handle>): Handle {
+  return async (request) => {
+    const adapter = loop.started.get(platform)?.adapter
+    const handle = adapter === undefined ? undefined : handles.get(adapter)
+    return handle === undefined ? new Response(null, { status: 503 }) : handle(request)
+  }
 }
 
 /**
@@ -210,27 +240,32 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
   for (const { platform, missing } of skipped) {
     options.write(`${platform}: not configured (missing ${missing.join(', ')})`)
   }
-  const handler = createReplyHandler({ withAgent: (work) => agents.withAgent(work) })
+  // What the routes and the router write can carry a configured value (a verifier's message, an
+  // SDK error): masked here as the loop masks its own lines, whatever stream the caller writes to.
+  const maskedWrite = (line: string): void => options.write(redactSecrets(maskSecrets(line, secrets)))
+  const verifierFactory = options.teamsVerifierFactory ?? teamsActivityVerifier
+  const webhooks = new Map<PlatformName, WebhookPlatform>()
+  for (const entry of configured) {
+    const webhook = webhookPlatform(entry, maskedWrite, verifierFactory)
+    if (webhook !== undefined) webhooks.set(entry.platform, webhook)
+  }
+  const handles = new WeakMap<BasePlatformAdapter, Handle>()
   const loop = startChannelLoop({
-    platforms: (options.builders ?? adapterBuilders)(configured),
-    handler,
+    platforms: (options.builders ?? adapterBuilders)(configured).map((build) =>
+      withRoute(build, webhooks.get(build.platform), handles),
+    ),
+    handler: createReplyHandler({ withAgent: (work) => agents.withAgent(work) }),
     secrets,
     write: options.write,
     ...(options.startTimeoutMs === undefined ? {} : { startTimeoutMs: options.startTimeoutMs }),
   })
-  // What the routes write can carry a configured value (a verifier's message quotes a tenant id):
-  // masked here as the loop masks its own lines, whatever stream the caller writes to.
-  const routeWrite = (line: string): void => options.write(redactSecrets(maskSecrets(line, secrets)))
-  const routes = webhookRoutes(
-    configured,
-    loop,
-    routeWrite,
-    options.teamsVerifierFactory ?? teamsActivityVerifier,
+  const routes = new Map<PlatformName, WebhookRoute>(
+    [...webhooks].map(([platform, { methods }]) => [platform, { methods, handle: startedRoute(loop, platform, handles) }]),
   )
   const router = createWebhookRouter({
     routes,
     isStarted: (platform) => loop.started.has(platform),
-    write: options.write,
+    write: maskedWrite,
   })
   return { loop, router }
 }
