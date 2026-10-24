@@ -302,6 +302,27 @@ describe('composeTheoClaw with Teams', () => {
     await loop.stopAll()
   })
 
+  // gateway-teams 0.3.0 README: a verifier built with `tenantId` refuses every Bot Framework
+  // activity as `tenant_unverified`, because connector tokens carry no `tid` claim.
+  it('builds the teams verifier without the tenant id, so Bot Framework tokens are not refused', async () => {
+    const received: unknown[] = []
+    const { builders } = fakeBuilders()
+    const { loop } = composeTheoClaw({
+      env: TEAMS_ENV,
+      agentFactory: noAgent,
+      builders,
+      write: () => undefined,
+      teamsVerifierFactory: (options) => {
+        received.push(options)
+        return countingVerifierFactory().factory()
+      },
+    })
+    await loop.ready
+
+    expect(received).toEqual([{ clientId: 'teams-client-id' }])
+    await loop.stopAll()
+  })
+
   it('a chunked oversized teams post never reaches the verifier', async () => {
     const { factory, counts } = countingVerifierFactory()
     const { builders } = fakeBuilders()
@@ -351,6 +372,9 @@ describe('composeTheoClaw with Teams', () => {
       agentFactory: noAgent,
       builders,
       write: (line) => lines.push(line),
+      teamsVerifierFactory: () => {
+        throw new TypeError('teamsActivityVerifier: refused the settings of tenant not-a-guid-tenant')
+      },
     })
     await loop.ready
 

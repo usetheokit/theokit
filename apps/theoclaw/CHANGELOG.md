@@ -52,12 +52,14 @@ and versioning follows [Semantic Versioning](https://semver.org/).
     LINE replies use the push API; no reply token is kept.
   - SIGINT or SIGTERM stops every runner, letting in-flight turns drain for up to 10 seconds each,
     then closes the server.
-  - Three platforms were not verified with a live reply: WhatsApp Cloud send (Meta error 130497,
-    the business account is restricted in Brazil), SMS free text (Twilio trial error 572006) and
-    Teams (no Teams tenant). Teams requires `THEOCLAW_TEAMS_TENANT_ID` and the verifier is always
-    built with it; `@theokit/gateway-teams` 0.3.0 documents that this refuses every Bot Framework
-    activity whose connector token carries no tenant claim, so live Teams messages may all answer
-    401.
+  - The Teams route checks each activity's token against `THEOCLAW_TEAMS_CLIENT_ID` and does not
+    pin the tenant: `@theokit/gateway-teams` 0.3.0 documents that a verifier built with a tenant
+    refuses every Bot Framework activity, because connector tokens carry no tenant claim.
+    `THEOCLAW_TEAMS_TENANT_ID` is still required, by the Teams adapter that sends the replies.
+  - No platform was verified with a live reply in this change: acceptance rests on unit and
+    integration tests over fakes and local servers. Three live limitations are known: WhatsApp
+    Cloud send (Meta error 130497, the business account is restricted in Brazil), SMS free text
+    (Twilio trial error 572006) and Teams (no Teams tenant to test with).
 
 - A CI job that runs this package's three gates — `test`, `typecheck`, `boundaries` — on every
   push to the trunk. `grep -rn theoclaw .github/workflows/` returned zero lines across 12 workflow
