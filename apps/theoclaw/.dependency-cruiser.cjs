@@ -11,8 +11,9 @@
  * `proof-imports-only-published-entry-points` is armed by deliberate violations that a test runs
  * on every suite run (B-416). `production-must-not-import-tests` was proven to arm by a deliberate
  * violation; `composition-root-is-the-top-layer` names a directory that exists, and its source
- * set is every file under `src/` except the ones its negative lookahead excludes, which since the
- * control plane landed is the modules under `src/control-plane/`. It was proven to arm under a
+ * set is every file under `src/` except `composition.ts` and `main.ts`, which its negative lookahead
+ * excludes: today `src/agent-port.ts` and the modules under `src/channels/`, `src/webhooks/` and
+ * `src/control-plane/`. It was proven to arm under a
  * second importer in a throwaway tree, back when `src/` held one file. Stated because this file's
  * whole premise is that a rule which cannot fire is the hazard, and an earlier draft of this line
  * claimed the two older rules had both fired.
