@@ -351,3 +351,69 @@ describe("a turn cancelled through its signal", () => {
     expect(stub.calls.cancels).toBe(0);
   });
 });
+
+/** A run that streams `messages` once and reports `finished` from `wait()`; it counts its cancels. */
+function scriptedAgent(messages: readonly unknown[]) {
+  const calls = { cancels: 0 };
+  const agent: TurnAgent = {
+    async send() {
+      return {
+        async *stream() {
+          yield* messages as { readonly type: string }[];
+        },
+        wait: async () => ({ status: "finished" }),
+        cancel: async () => {
+          calls.cancels += 1;
+        },
+      };
+    },
+  };
+  return { calls, withAgent: <R>(work: (built: TurnAgent) => Promise<R>) => work(agent) };
+}
+
+/** One SDK message's translated events (emitMessage): the abort inside a message, and the streamed error. */
+describe("the events of one streamed message", () => {
+  it("an abort raised by the first event of a message emits none of that message's later events", async () => {
+    const twoBlocks = {
+      type: "assistant",
+      message: { content: [{ type: "text", text: "one" }, { type: "text", text: "two" }] },
+    };
+    const stub = scriptedAgent([twoBlocks]);
+    const controller = new AbortController();
+    const events: TurnEvent[] = [];
+
+    const outcome = await runTheoClawTurn({
+      withAgent: stub.withAgent,
+      message: "hello",
+      runId: "run-1",
+      emit: (event) => {
+        events.push(event);
+        controller.abort();
+      },
+      signal: controller.signal,
+    });
+
+    expect(events).toEqual([{ type: "text_delta", content: "one" }]);
+    expect(outcome).toMatchObject({ ok: false, code: "turn_cancelled" });
+    expect(stub.calls.cancels).toBe(1);
+  });
+
+  it("a streamed error is emitted and fails the turn even though wait() reports it finished", async () => {
+    const stub = scriptedAgent([text("partial"), { type: "status", status: "ERROR", message: "the model failed" }]);
+    const events: TurnEvent[] = [];
+
+    const outcome = await runTheoClawTurn({
+      withAgent: stub.withAgent,
+      message: "hello",
+      runId: "run-1",
+      emit: (event) => events.push(event),
+    });
+
+    expect(events.map((event) => event.type)).toEqual(["text_delta", "error"]);
+    expect(outcome).toEqual({
+      ok: false,
+      code: "turn_failed",
+      reason: "the run streamed an error (AGENT_ERROR)",
+    });
+  });
+});
