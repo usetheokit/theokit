@@ -1,6 +1,9 @@
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { EventEmitter } from 'node:events'
 
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, describe, expect, it, vi } from 'vitest'
 
 import { startTheoClaw } from '../src/composition.js'
 import type { RunningTheoClaw } from '../src/composition.js'
@@ -8,6 +11,11 @@ import { TheoClawBindError, TheoClawConfigError } from '../src/control-plane/err
 import { listenControlPlane } from '../src/control-plane/listener.js'
 import { capturingStream, fakeBuilders, noAgent, signedLinePost, TELEGRAM_AND_LINE } from './composition-fixtures.js'
 import { FakeAdapter, deferred, waitFor } from './fakes.js'
+
+// Each start makes its tool root `files/` in its working directory (B-382): a scratch one, never the checkout.
+const TOOL_CWD = mkdtempSync(join(tmpdir(), 'theoclaw-start-'))
+afterAll(() => rmSync(TOOL_CWD, { recursive: true, force: true }))
+
 
 /** A `listen` that binds only when the test says so, and counts the closes of what it bound. */
 function heldListen(listening: Promise<void>) {
@@ -40,7 +48,7 @@ describe('startTheoClaw', () => {
     const signals = new EventEmitter()
     const exit = vi.fn()
     const capture = capturingStream()
-    const app = await startTheoClaw({ env: TELEGRAM_AND_LINE, agentFactory: noAgent, builders, signals, exit, streams: [capture] })
+    const app = await startTheoClaw({ cwd: TOOL_CWD, env: TELEGRAM_AND_LINE, agentFactory: noAgent, builders, signals, exit, streams: [capture] })
     running.push(app)
     await app.loop.ready
     const base = `http://127.0.0.1:${app.address().port}`
@@ -60,7 +68,7 @@ describe('startTheoClaw', () => {
     const { adapters, builders } = fakeBuilders()
     const signals = new EventEmitter()
     const exit = vi.fn()
-    const starting = startTheoClaw({ env: TELEGRAM_AND_LINE, agentFactory: noAgent, builders, signals, exit, listen, streams: [capturingStream()] })
+    const starting = startTheoClaw({ cwd: TOOL_CWD, env: TELEGRAM_AND_LINE, agentFactory: noAgent, builders, signals, exit, listen, streams: [capturingStream()] })
     await waitFor(() => adapters.size === 2 && [...adapters.values()].every((a) => a.connects === 1), 1000, 'both runners to connect')
     await new Promise((resolve) => setImmediate(resolve))
 
@@ -79,7 +87,7 @@ describe('startTheoClaw', () => {
     const { builders } = fakeBuilders({ telegram: new FakeAdapter('telegram', { connect: () => new Promise<boolean>(() => {}) }) })
     const signals = new EventEmitter()
     const exit = vi.fn()
-    const app = await startTheoClaw({ env: TELEGRAM_AND_LINE, agentFactory: noAgent, builders, signals, exit, streams: [capturingStream()], startTimeoutMs: 5000 })
+    const app = await startTheoClaw({ cwd: TOOL_CWD, env: TELEGRAM_AND_LINE, agentFactory: noAgent, builders, signals, exit, streams: [capturingStream()], startTimeoutMs: 5000 })
 
     signals.emit('SIGTERM')
 
@@ -96,7 +104,7 @@ describe('startTheoClaw', () => {
     const exit = vi.fn(() => {
       atExit = capture.text()
     })
-    const app = await startTheoClaw({ env: TELEGRAM_AND_LINE, agentFactory: noAgent, builders, signals, exit, streams: [capture] })
+    const app = await startTheoClaw({ cwd: TOOL_CWD, env: TELEGRAM_AND_LINE, agentFactory: noAgent, builders, signals, exit, streams: [capture] })
     running.push(app)
 
     capture.write('token telegram-token-value\n')
@@ -115,7 +123,7 @@ describe('startTheoClaw', () => {
     const signals = new EventEmitter()
     const env = { ...TELEGRAM_AND_LINE, THEOCLAW_PORT: String(occupied.address().port) }
 
-    const starting = startTheoClaw({ env, agentFactory: noAgent, builders, signals, exit: vi.fn(), streams: [capturingStream()] })
+    const starting = startTheoClaw({ cwd: TOOL_CWD, env, agentFactory: noAgent, builders, signals, exit: vi.fn(), streams: [capturingStream()] })
 
     await expect(starting).rejects.toThrow(TheoClawBindError)
     await waitFor(
@@ -130,7 +138,7 @@ describe('startTheoClaw', () => {
   it('masks the THEOKIT_API_KEY model key', async () => {
     const { builders } = fakeBuilders()
     const capture = capturingStream()
-    const app = await startTheoClaw({
+    const app = await startTheoClaw({ cwd: TOOL_CWD,
       env: { ...TELEGRAM_AND_LINE, THEOKIT_API_KEY: 'theokit-api-key-value' },
       agentFactory: noAgent,
       builders,
@@ -150,7 +158,7 @@ describe('startTheoClaw', () => {
     const { builders } = fakeBuilders()
     const capture = capturingStream()
     const token = 'control-token-value-0123456789abcdef'
-    const app = await startTheoClaw({
+    const app = await startTheoClaw({ cwd: TOOL_CWD,
       env: { ...TELEGRAM_AND_LINE, THEOCLAW_CONTROL_TOKEN: token },
       agentFactory: noAgent,
       builders,
@@ -170,7 +178,7 @@ describe('startTheoClaw', () => {
   it('serves /health and the webhook routes on the one listener', async () => {
     const { builders } = fakeBuilders()
     const capture = capturingStream()
-    const app = await startTheoClaw({ env: TELEGRAM_AND_LINE, agentFactory: noAgent, builders, signals: new EventEmitter(), exit: vi.fn(), streams: [capture] })
+    const app = await startTheoClaw({ cwd: TOOL_CWD, env: TELEGRAM_AND_LINE, agentFactory: noAgent, builders, signals: new EventEmitter(), exit: vi.fn(), streams: [capture] })
     running.push(app)
     await app.loop.ready
     const base = `http://127.0.0.1:${app.address().port}`
@@ -188,7 +196,7 @@ describe('startTheoClaw', () => {
     const { adapters, builders } = fakeBuilders()
     const { THEOCLAW_MODEL: _omitted, ...env } = TELEGRAM_AND_LINE
 
-    const starting = startTheoClaw({ env, agentFactory: noAgent, builders, signals: new EventEmitter(), exit: vi.fn(), streams: [capturingStream()] })
+    const starting = startTheoClaw({ cwd: TOOL_CWD, env, agentFactory: noAgent, builders, signals: new EventEmitter(), exit: vi.fn(), streams: [capturingStream()] })
 
     await expect(starting).rejects.toBeInstanceOf(TheoClawConfigError)
     await expect(starting).rejects.toThrow(/THEOCLAW_MODEL/)

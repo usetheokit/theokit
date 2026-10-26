@@ -1,12 +1,20 @@
+import { mkdtempSync, rmSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import { EventEmitter } from "node:events";
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 
 import { startTheoClaw } from "../src/composition.js";
 import { TheoClawBindError, TheoClawConfigError } from "../src/control-plane/errors.js";
 import { type ControlPlaneHandle, listenControlPlane } from "../src/control-plane/listener.js";
 import { readControlPlaneSettings, resolveModelKey } from "../src/control-plane/settings.js";
+
+// Each start makes its tool root `files/` in its working directory (B-382): a scratch one, never the checkout.
+const TOOL_CWD = mkdtempSync(join(tmpdir(), "theoclaw-start-"));
+afterAll(() => rmSync(TOOL_CWD, { recursive: true, force: true }));
+
 
 const MODEL_KEY = "model-key-value-5d1e8c";
 const TOKEN = "control-token-value-0123456789abcdef"; // 36 characters
@@ -171,7 +179,7 @@ function harness(options: { wrapClose?: (close: () => Promise<void>) => Promise<
     },
   };
   const start = (env: Record<string, string | undefined>) =>
-    startTheoClaw({
+    startTheoClaw({ cwd: TOOL_CWD,
       env,
       agentFactory: () => {
         agentsBuilt += 1;

@@ -9,7 +9,7 @@ import { resolveSandboxPosture } from '@theokit/agents/sandbox'
 import type { CustomTool } from '@theokit/sdk'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { createTheoClawAgent } from '../src/agent/create-agent.js'
+import { createTheoClawAgent, theoClawAgentOptions } from '../src/agent/create-agent.js'
 import { TheoClawConfigError } from '../src/control-plane/errors.js'
 import { agentToolOptions, buildTools } from '../src/tools/tool-registry.js'
 import { resolveToolSettings } from '../src/tools/tool-settings.js'
@@ -70,7 +70,7 @@ function makeRepository(dir: string): void {
 async function advertisedBy(toolOptions: ReturnType<typeof agentToolOptions>): Promise<string[]> {
   const stub = await startModelStub()
   cleanups.push(() => void stub.close())
-  const agent = await createTheoClawAgent({ model: { id: 'lmstudio/stub', url: stub.url }, apiKey: 'stub-key', toolOptions })
+  const agent = await createTheoClawAgent(theoClawAgentOptions({ model: { id: 'lmstudio/stub', url: stub.url }, apiKey: 'stub-key', toolOptions }))
   const run = await agent.send('hello')
   await run.wait()
   await agent[Symbol.asyncDispose]()

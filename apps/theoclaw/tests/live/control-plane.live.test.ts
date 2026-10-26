@@ -43,11 +43,11 @@ describe.skipIf(!LIVE)("the control plane against a real model", () => {
     }
     const entry = join(APP_DIR, "dist", "main.js");
     if (!existsSync(entry)) throw new Error(`${entry} is missing: run pnpm --filter theoclaw run build`);
-    // A scratch HOME keeps the run off the operator's. The SDK writes the turn's transcript and its
-    // agent registry under the child's cwd (`.theokit/` in the app directory, gitignored), not HOME.
+    // A scratch HOME keeps the run off the operator's, and the child runs there too: the SDK writes
+    // its agent registry under the cwd (`.theokit/`) and the start makes the tool root `files/` there.
     home = mkdtempSync(join(tmpdir(), "theoclaw-live-"));
     child = spawn(process.execPath, [entry], {
-      cwd: APP_DIR,
+      cwd: home,
       env: {
         PATH: process.env.PATH,
         HOME: home,

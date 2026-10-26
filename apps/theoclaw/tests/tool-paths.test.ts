@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import type { PluginContext } from '@theokit/sdk'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { createTheoClawAgent } from '../src/agent/create-agent.js'
+import { createTheoClawAgent, theoClawAgentOptions } from '../src/agent/create-agent.js'
 import { pathVetoPlugin } from '../src/tools/path-veto.js'
 import { agentToolOptions } from '../src/tools/tool-registry.js'
 import { resolveToolSettings } from '../src/tools/tool-settings.js'
@@ -56,7 +56,7 @@ async function vetoOf(settings: ToolSettings): Promise<(name: string, args: Reco
 async function toolResultsOf(settings: ToolSettings, calls: StubReply): Promise<string> {
   const stub = await startModelStub([calls, { text: 'done' }])
   cleanups.push(() => void stub.close())
-  const agent = await createTheoClawAgent({ model: { id: 'lmstudio/stub', url: stub.url }, apiKey: 'stub-key', toolOptions: agentToolOptions(settings) })
+  const agent = await createTheoClawAgent(theoClawAgentOptions({ model: { id: 'lmstudio/stub', url: stub.url }, apiKey: 'stub-key', toolOptions: agentToolOptions(settings) }))
   const run = await agent.send('go')
   await run.wait()
   await agent[Symbol.asyncDispose]()

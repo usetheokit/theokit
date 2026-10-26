@@ -6,7 +6,8 @@ import { describeError } from './control-plane/errors.js'
 
 /**
  * The process entry: the real environment, signals, exit and output streams, and agents built by
- * the SDK with the model key passed explicitly (a chat reply's with no tool). Everything else is
+ * the SDK with the model key passed explicitly (a chat reply's with no tool, a `/control` turn's
+ * with the published tools the start resolved). Everything else is
  * `startTheoClaw`'s, which the tests drive with stand-ins; `tests/control-plane-process.test.ts`
  * drives this file from outside the process.
  */

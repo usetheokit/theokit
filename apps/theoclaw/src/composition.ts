@@ -41,6 +41,10 @@ import type { SmsRouteAdapter } from './webhooks/sms.js'
 import { createTeamsRoute } from './webhooks/teams.js'
 import type { TeamsVerifier } from './webhooks/teams.js'
 import { createWhatsAppRoute } from './webhooks/whatsapp.js'
+import { agentToolOptions, NO_TOOL_OPTIONS } from './tools/tool-registry.js'
+import type { AgentToolOptions } from './tools/tool-registry.js'
+import { checkHostToolsPosture, resolveToolSettings } from './tools/tool-settings.js'
+import type { ToolDeps, ToolSettings } from './tools/tool-settings.js'
 import type { DeliverableWhatsAppAdapter } from './webhooks/whatsapp.js'
 
 /**
@@ -95,11 +99,15 @@ export function createContainer<TAgent>(
 /** Everything the running app is made of, for the entry and for tests. */
 export interface TheoClawOptions {
   readonly env: Readonly<Record<string, string | undefined>>
-  /** Builds the agent of one `/control` turn (one request boundary each). */
-  readonly agentFactory: () => TurnAgent | Promise<TurnAgent>
   /**
-   * Builds the agent of one chat reply, one per inbound message. Default `agentFactory`; the entry
-   * passes `createChannelAgentFactory`, whose agents hold no tool, since anyone can message the bot.
+   * Builds the agent of one `/control` turn (one request boundary each), with the tool options the
+   * start resolved: a fresh tool list per agent (plan D3).
+   */
+  readonly agentFactory: (toolOptions: AgentToolOptions) => TurnAgent | Promise<TurnAgent>
+  /**
+   * Builds the agent of one chat reply, one per inbound message. Default: `agentFactory` with
+   * `NO_TOOL_OPTIONS`; the entry passes `createChannelAgentFactory`. Either way a chat agent holds
+   * no tool, since anyone can message the bot (no sender allowlist yet, B-371).
    */
   readonly channelAgentFactory?: () => TurnAgent | Promise<TurnAgent>
   /** Defaults to the ten real adapters; tests pass fakes. */
@@ -251,7 +259,8 @@ function startedRoute(loop: ChannelLoop, platform: PlatformName, handles: WeakMa
 export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
   // First: a bad authorization value stops the start before any adapter is built.
   const policy = options.policy ?? parseAuthorizationPolicy(options.env)
-  const agents = createContainer<TurnAgent>({ factory: options.channelAgentFactory ?? options.agentFactory })
+  const channelFactory = options.channelAgentFactory ?? (() => options.agentFactory(NO_TOOL_OPTIONS))
+  const agents = createContainer<TurnAgent>({ factory: channelFactory })
   const { configured, skipped, secrets } = resolvePlatforms(options.env)
   for (const { platform, missing } of skipped) {
     options.write(`${platform}: not configured (missing ${missing.join(', ')})`)
@@ -314,6 +323,10 @@ export interface StartOptions extends Omit<TheoClawOptions, 'write'> {
   readonly listen?: typeof listenControlPlane
   /** Builds the LAN publisher. Default `createBonjourPublisher`; tests pass a fake (plan D2). */
   readonly createPublisher?: PublisherFactory
+  /** The workspace: where the tool root `files/` is made. Default `process.cwd()`, where the SDK keeps `.theokit`. */
+  readonly cwd?: string
+  /** What the tool tests inject (bubblewrap detection, fetch); the process passes nothing. */
+  readonly toolDeps?: ToolDeps
 }
 
 /** The running process: the channel loop, its webhook router, and the one listener serving both. */
@@ -332,12 +345,24 @@ function lineWriter(stream: MaskableStream | undefined): (line: string) => void 
   return (line) => void stream?.write(`${line}\n`)
 }
 
-/** Every value the output mask hides: the channel credentials, both model keys and the control token. */
-function processSecrets(env: StartOptions['env'], controlToken: string | undefined): string[] {
+/**
+ * Every value the output mask hides: the channel credentials, both model keys, the control token
+ * and the web search keys.
+ */
+function processSecrets(env: StartOptions['env'], controlToken: string | undefined, tools: ToolSettings): string[] {
   const keys = [env.THEOKIT_API_KEY, env.OPENROUTER_API_KEY]
     .map((value) => (value ?? '').trim())
     .filter((value) => value !== '')
-  return [...resolvePlatforms(env).secrets, ...keys, ...(controlToken === undefined ? [] : [controlToken])]
+  return [...resolvePlatforms(env).secrets, ...keys, ...(controlToken === undefined ? [] : [controlToken]), ...tools.secrets]
+}
+
+const SHELL_READ_LINE = 'tools: host tools are on; the shell can read every file the process user can read'
+
+/** The tool settings, every refusal included, before anything opens (FR-008). */
+function startToolSettings(options: StartOptions): ToolSettings {
+  const tools = resolveToolSettings(options.env, options.cwd ?? process.cwd(), options.toolDeps)
+  checkHostToolsPosture(tools, options.toolDeps)
+  return tools
 }
 
 /** `GET /health` is the control plane's; every other path goes to the webhook router. */
@@ -347,7 +372,8 @@ function serveHealthAndWebhooks(router: ComposedTheoClaw['router']): (request: R
 
 /**
  * Start TheoClaw in the order the settings, the mask and the shutdown need: read and check every
- * setting (a bad one throws before any socket opens, adapter exists or agent is built), mask the
+ * setting, the tool settings included (a bad one throws before any socket opens, adapter exists,
+ * tool root changes beyond its creation, or agent is built), mask the
  * output before any adapter writes, install shutdown before the loop starts, compose, then listen.
  * One listener serves `/health`, the `/webhooks/<platform>` routes and, with a control token, the
  * `/control` socket, on the bound address (`THEOCLAW_HOST`, loopback by default). The listening
@@ -359,8 +385,9 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
   const discovery = parseDiscoveryMode(options.env)
   // Read before the mask and the shutdown are installed, so a missing owner leaves nothing behind.
   const policy = parseAuthorizationPolicy(options.env)
+  const tools = startToolSettings(options)
   const streams = options.streams ?? [process.stdout, process.stderr]
-  const mask = installOutputMask(processSecrets(options.env, settings.controlToken), streams)
+  const mask = installOutputMask(processSecrets(options.env, settings.controlToken, tools), streams)
   const stdout = options.stdout ?? lineWriter(streams[0])
   const stderr = options.stderr ?? lineWriter(streams[streams.length - 1])
   const flushOnExit = (): void => mask.flush()
@@ -382,8 +409,12 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
     },
     write: stderr,
   })
+  for (const line of tools.offLines) stderr(line)
+  if (tools.hostTools) stderr(SHELL_READ_LINE)
+  // The raw factory goes to the composition, which hands chat agents no tool; only the `/control`
+  // turn's agents get the tool options.
   const composed = composeTheoClaw({ ...options, policy, write: stderr })
-  const agents = createContainer<TurnAgent>({ factory: options.agentFactory })
+  const agents = createContainer<TurnAgent>({ factory: () => options.agentFactory(agentToolOptions(tools)) })
   loop = composed.loop
   const listen = options.listen ?? listenControlPlane
   serving = listen({

@@ -1,11 +1,19 @@
+import { mkdtempSync, rmSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import { EventEmitter } from "node:events";
 import { createServer, type Server } from "node:net";
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, describe, expect, it } from "vitest";
 
 import { startTheoClaw } from "../src/composition.js";
 import { TheoClawBindError } from "../src/control-plane/errors.js";
 import type { ControlPlaneHandle } from "../src/control-plane/listener.js";
+
+// Each start makes its tool root `files/` in its working directory (B-382): a scratch one, never the checkout.
+const TOOL_CWD = mkdtempSync(join(tmpdir(), "theoclaw-start-"));
+afterAll(() => rmSync(TOOL_CWD, { recursive: true, force: true }));
+
 
 const handles: ControlPlaneHandle[] = [];
 const holders: Server[] = [];
@@ -29,6 +37,7 @@ async function freePort(): Promise<number> {
 
 function start(port: number): Promise<ControlPlaneHandle> {
   return startTheoClaw({
+    cwd: TOOL_CWD,
     env: {
       THEOCLAW_MODEL: "m",
       OPENROUTER_API_KEY: "k",

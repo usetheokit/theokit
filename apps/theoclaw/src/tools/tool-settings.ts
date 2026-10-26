@@ -1,8 +1,8 @@
 import { chmodSync, lstatSync, mkdirSync, realpathSync } from 'node:fs'
 import type { Stats } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { dirname, isAbsolute, join, relative, sep } from 'node:path'
 
-import { createSandboxBackend, LinuxSandbox, resolveSandboxPosture } from '@theokit/agents/sandbox'
+import { createSandboxBackend, LinuxSandbox, resolveSandboxPosture, writableRootsFor } from '@theokit/agents/sandbox'
 import type { BwrapDetection, SandboxBackend, SandboxMode } from '@theokit/agents/sandbox'
 
 import { TheoClawConfigError } from '../control-plane/errors.js'
@@ -111,6 +111,32 @@ function isRepository(toolRoot: string): boolean {
   )
 }
 
+function nonBlank(value: string | undefined): string | undefined {
+  const trimmed = value?.trim()
+  return trimmed === undefined || trimmed === '' ? undefined : trimmed
+}
+
+const SEARCH_OFF_LINE = 'tools: web search is off (no BRAVE_API_KEY or THEOKIT_SEARCH_API_URL)'
+
+/**
+ * Brave when `BRAVE_API_KEY` is set (it wins over the generic adapter); the generic adapter when
+ * both `THEOKIT_SEARCH_API_URL` and `THEOKIT_SEARCH_API_KEY` are; one of those two alone is refused
+ * naming the other; neither is off. A blank value counts as unset.
+ */
+function readSearch(env: Env): SearchSettings {
+  const brave = nonBlank(env.BRAVE_API_KEY)
+  if (brave !== undefined) return { kind: 'brave', key: brave }
+  const url = nonBlank(env.THEOKIT_SEARCH_API_URL)
+  const key = nonBlank(env.THEOKIT_SEARCH_API_KEY)
+  if (url !== undefined && key !== undefined) return { kind: 'generic', url, key }
+  if (url !== undefined || key !== undefined) {
+    const missing = url === undefined ? 'THEOKIT_SEARCH_API_URL' : 'THEOKIT_SEARCH_API_KEY'
+    const present = url === undefined ? 'THEOKIT_SEARCH_API_KEY' : 'THEOKIT_SEARCH_API_URL'
+    throw new TheoClawConfigError(`${present} is set without ${missing}; set both or neither`, { variable: missing })
+  }
+  return { kind: 'off' }
+}
+
 /**
  * Read the tool settings from the environment and the working directory, before any runner
  * starts. Throws `TheoClawConfigError` for a bad `THEOCLAW_HOST_TOOLS` or a bad tool root. Builds
@@ -118,6 +144,7 @@ function isRepository(toolRoot: string): boolean {
  */
 export function resolveToolSettings(env: Env, cwd: string, deps: ToolDeps = {}): ToolSettings {
   const hostTools = readHostTools(env)
+  const search = readSearch(env)
   const workspace = realpathSync(cwd)
   const { toolRoot, lines } = prepareToolRoot(workspace)
   const mode: SandboxMode = hostTools ? 'workspace-write' : 'read-only'
@@ -134,6 +161,7 @@ export function resolveToolSettings(env: Env, cwd: string, deps: ToolDeps = {}):
     const { detail } = resolveSandboxPosture({ mode, ...(deps.detect === undefined ? {} : { detect: deps.detect }) })
     offLines.push(`tools: git_diff is off (sandbox not enforced: ${detail})`)
   }
+  if (search.kind === 'off') offLines.push(SEARCH_OFF_LINE)
   return {
     workspace,
     toolRoot,
@@ -143,8 +171,48 @@ export function resolveToolSettings(env: Env, cwd: string, deps: ToolDeps = {}):
     sandbox,
     mode,
     fetchImpl: deps.fetchImpl ?? globalThis.fetch,
-    search: { kind: 'off' },
-    secrets: [],
+    search,
+    // Every search key set, the unused one too: a key is a secret whether or not it is chosen.
+    secrets: [env.BRAVE_API_KEY, env.THEOKIT_SEARCH_API_KEY].flatMap((value) => nonBlank(value) ?? []),
     offLines,
+  }
+}
+
+function realPathOrSelf(path: string): string {
+  try {
+    return realpathSync(path)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return path
+    throw error
+  }
+}
+
+function contains(root: string, path: string): boolean {
+  const offset = relative(root, path)
+  return offset === '' || (offset !== '..' && !offset.startsWith(`..${sep}`) && !isAbsolute(offset))
+}
+
+/**
+ * With host tools on, refuse a start the sandbox cannot make safe: a backend that is not a
+ * `LinuxSandbox` (the shell would run unconfined), or a workspace inside a root the
+ * `workspace-write` sandbox also leaves writable (`/tmp`), where the shell could rewrite
+ * `.theokit/settings.json`, whose hooks the SDK runs outside the sandbox on the next agent.
+ */
+export function checkHostToolsPosture(settings: ToolSettings, deps: ToolDeps = {}): void {
+  if (!settings.hostTools) return
+  if (!settings.sandboxEnforced) {
+    const { detail } = resolveSandboxPosture({ mode: 'workspace-write', ...(deps.detect === undefined ? {} : { detect: deps.detect }) })
+    throw new TheoClawConfigError(`THEOCLAW_HOST_TOOLS=on needs an enforced sandbox: ${detail}`, {
+      variable: 'THEOCLAW_HOST_TOOLS',
+    })
+  }
+  for (const root of writableRootsFor('workspace-write', settings.toolRoot) ?? []) {
+    // The workspace is a real path, so the root is compared as one too: bwrap binds what a
+    // symlinked `/tmp` points at.
+    if (root === settings.toolRoot || !contains(realPathOrSelf(root), settings.workspace)) continue
+    throw new TheoClawConfigError(
+      `THEOCLAW_HOST_TOOLS=on refuses the workspace ${settings.workspace}: it lies under ${root}, which the sandboxed shell can write`,
+      { variable: 'THEOCLAW_HOST_TOOLS' },
+    )
   }
 }

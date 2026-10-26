@@ -1,10 +1,18 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { afterEach, describe, expect, it } from "vitest";
 
 const APP_DIR = fileURLToPath(new URL("..", import.meta.url));
+// The entry makes its tool root `files/` in its working directory (B-382), so it runs in a scratch
+// directory rather than the checkout; the entry and the tsx loader are named by absolute path.
+const ENTRY = join(APP_DIR, "src", "main.ts");
+const TSX_LOADER = import.meta.resolve("tsx");
+let workspace: string | undefined;
 const MODEL_KEY = `model-key-${randomBytes(8).toString("hex")}`;
 const TOKEN = `control-token-${randomBytes(16).toString("hex")}`; // 46 characters
 
@@ -24,6 +32,8 @@ afterEach(async () => {
     child.kill("SIGKILL");
     await gone;
   }
+  if (workspace !== undefined) rmSync(workspace, { recursive: true, force: true });
+  workspace = undefined;
 });
 
 const COMPLETE_ENV: Readonly<Record<string, string | undefined>> = {
@@ -43,8 +53,9 @@ function spawnEntry(overrides: Readonly<Record<string, string | undefined>> = {}
   const variables = Object.entries({ ...COMPLETE_ENV, ...overrides }).filter(
     (entry): entry is [string, string] => entry[1] !== undefined,
   );
-  const child = spawn(process.execPath, ["--import", "tsx", "src/main.ts"], {
-    cwd: APP_DIR,
+  workspace = mkdtempSync(join(tmpdir(), "theoclaw-entry-"));
+  const child = spawn(process.execPath, ["--import", TSX_LOADER, ENTRY], {
+    cwd: workspace,
     env: { PATH: process.env.PATH, ...Object.fromEntries(variables) },
     stdio: ["ignore", "pipe", "pipe"],
   });
