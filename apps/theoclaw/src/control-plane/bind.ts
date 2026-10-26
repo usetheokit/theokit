@@ -13,7 +13,7 @@ const LOOPBACK_DEFAULT = '127.0.0.1'
  * spelling of a loopback address (`LOCALHOST`, `[::1]`, `::ffff:127.0.0.1`) is refused like a
  * public one: a false refusal costs the operator one edit, a false acceptance opens the port.
  */
-function isLoopback(host: string): boolean {
+export function isLoopback(host: string): boolean {
   if (host === 'localhost' || host === '::1') return true
   return isIPv4(host) && host.startsWith('127.')
 }
