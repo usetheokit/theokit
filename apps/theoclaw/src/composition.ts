@@ -23,6 +23,9 @@ import { describeError } from './control-plane/errors.js'
 import { readControlPlaneSettings } from './control-plane/settings.js'
 import { installShutdown, type SignalSource } from './control-plane/shutdown.js'
 import { createTurnRunner } from './control-plane/turn.js'
+import { createBonjourPublisher } from './discovery/bonjour-publisher.js'
+import { announceOnLan, type LanAnnouncement, stopThenClose } from './discovery/lan-announcer.js'
+import { parseDiscoveryMode, type PublisherFactory } from './discovery/publisher.js'
 import { createLineRoute } from './webhooks/line.js'
 import { createWebhookRouter } from './webhooks/router.js'
 import type { WebhookRoute } from './webhooks/router.js'
@@ -283,10 +286,17 @@ export interface StartOptions extends Omit<TheoClawOptions, 'write'> {
   readonly stderr?: (line: string) => void
   /** How the listener starts. Default `listenControlPlane`; tests wrap it to count or hold calls. */
   readonly listen?: typeof listenControlPlane
+  /** Builds the LAN publisher. Default `createBonjourPublisher`; tests pass a fake (plan D2). */
+  readonly createPublisher?: PublisherFactory
 }
 
 /** The running process: the channel loop, its webhook router, and the one listener serving both. */
-export interface RunningTheoClaw extends ComposedTheoClaw, ControlPlaneHandle {}
+export interface RunningTheoClaw extends ComposedTheoClaw, ControlPlaneHandle {
+  /** The `_theoclaw._tcp` service, or nothing on a loopback bind or with `THEOCLAW_MDNS=off`. */
+  readonly announcement: LanAnnouncement
+}
+
+const NOTHING_TO_WITHDRAW: LanAnnouncement = { stop: () => Promise.resolve() }
 
 function formatAddress(address: { readonly host: string; readonly port: number }): string {
   return isIPv6(address.host) ? `[${address.host}]:${address.port}` : `${address.host}:${address.port}`
@@ -315,10 +325,12 @@ function serveHealthAndWebhooks(router: ComposedTheoClaw['router']): (request: R
  * output before any adapter writes, install shutdown before the loop starts, compose, then listen.
  * One listener serves `/health`, the `/webhooks/<platform>` routes and, with a control token, the
  * `/control` socket, on the bound address (`THEOCLAW_HOST`, loopback by default). The listening
- * line is read from the socket.
+ * line is read from the socket. Once it is, the instance is announced on the LAN (`THEOCLAW_MDNS`),
+ * and the shutdown withdraws that announcement before it closes the listener.
  */
 export async function startTheoClaw(options: StartOptions): Promise<RunningTheoClaw> {
   const settings = readControlPlaneSettings(options.env)
+  const discovery = parseDiscoveryMode(options.env)
   const streams = options.streams ?? [process.stdout, process.stderr]
   const mask = installOutputMask(processSecrets(options.env, settings.controlToken), streams)
   const stdout = options.stdout ?? lineWriter(streams[0])
@@ -327,10 +339,15 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
   options.signals.on('exit', flushOnExit)
   let loop: ChannelLoop | undefined
   let serving: Promise<ControlPlaneHandle> | undefined
+  // Bound once the listener resolves; the shutdown hook reads it late, as it reads `serving`.
+  let announcement: LanAnnouncement | undefined
   const removeShutdown = installShutdown({
     signals: options.signals,
     stopAll: () => loop?.stopAll() ?? Promise.resolve(),
-    closeServer: async () => (await serving)?.close(),
+    closeServer: async () => {
+      const handle = await serving
+      if (handle !== undefined) await stopThenClose(announcement ?? NOTHING_TO_WITHDRAW, handle)
+    },
     exit: (code) => {
       mask.flush()
       options.exit(code)
@@ -364,8 +381,13 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
     throw error
   }
   stdout(`theoclaw: control plane listening on ${formatAddress(handle.address())}`)
+  announcement = announceOnLan(handle, {
+    mode: discovery,
+    log: stderr,
+    createPublisher: options.createPublisher ?? createBonjourPublisher,
+  })
   if (settings.controlToken === undefined) {
     stdout('theoclaw: control socket off (THEOCLAW_CONTROL_TOKEN unset)')
   }
-  return { ...handle, ...composed }
+  return { ...handle, ...composed, announcement }
 }
