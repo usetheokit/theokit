@@ -95,7 +95,8 @@ interface CruiseReport {
 }
 
 describe('the channels-to-authorization boundary', () => {
-  it('a channels module importing authorization fails the boundary check', () => {
+  // Two depcruise runs over a fresh tree; 60 s, as B-416's arming test allows.
+  it('a channels module importing authorization fails the boundary check', { timeout: 60_000 }, () => {
     // A throwaway tree shaped like the app, so the rule's relative paths match (src/channels/...).
     mkdirSync(join(dir, 'src/channels'), { recursive: true })
     mkdirSync(join(dir, 'src/authorization'), { recursive: true })

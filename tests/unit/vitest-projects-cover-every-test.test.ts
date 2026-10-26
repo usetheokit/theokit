@@ -302,6 +302,8 @@ describe('the vitest project split reaches every test file', () => {
     const misplaced = [...claimed.entries()]
       .filter(([file]) => /(^|\/)tests\/(integration|smoke)\//.test(file))
       .filter(([file]) => !file.includes('packages/'))
+      // The apps own their projects too (`apps/theoclaw/vitest.config.ts`): only the root tree is governed.
+      .filter(([file]) => !file.startsWith('apps/'))
       .filter(([, projects]) => !projects.has('root-serial'))
       .map(([file]) => file)
     expect(misplaced, `must run in root-serial: ${misplaced.join(', ')}`).toEqual([])

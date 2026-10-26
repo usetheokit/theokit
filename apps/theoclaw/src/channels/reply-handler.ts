@@ -95,6 +95,26 @@ type TurnOutcome =
   | { readonly failed: false; readonly answer: string }
   | { readonly failed: true; readonly error: unknown }
 
+/** What a turn's stream left behind: its plain answer and the error code it streamed, if any. */
+interface StreamedTurn {
+  answer: string
+  error: string | undefined
+}
+
+/**
+ * Present one frame's events. The spread gives the frame an anonymous type, which the presenter's
+ * index signature accepts. A streamed `finish` is dropped: it would emit and reset the presenter
+ * before the one synthetic finish the reply is taken from (D8).
+ */
+function presentFrame(frame: { readonly type: string }, presenter: ChatPresenter, streamed: StreamedTurn): void {
+  for (const output of fromSdkMessage({ ...frame })) {
+    if (output.type === 'error') streamed.error = output.code
+    // The answer before any platform rendering, for a broadcast group's thread and its other members.
+    if (output.type === 'text') streamed.answer += output.text
+    if (output.type !== 'finish') presenter.present(output)
+  }
+}
+
 /** Stream the agent's answer into the presenter; a failure is returned, not thrown. */
 async function streamTurn(
   agent: TurnAgent,
@@ -103,25 +123,16 @@ async function streamTurn(
   presenter: ChatPresenter,
 ): Promise<TurnOutcome> {
   // An ERROR or EXPIRED status in the stream fails the turn even when `wait()` reports it finished.
-  let streamedError: string | undefined
-  // The answer before any platform rendering, for a broadcast group's thread and its other members.
-  let answer = ''
+  const streamed: StreamedTurn = { answer: '', error: undefined }
   try {
     const run = await agent.send(prompt)
-    for await (const frame of run.stream()) {
-      // The spread gives the frame an anonymous type, which the presenter's index signature
-      // accepts. A streamed `finish` is dropped: it would emit and reset the presenter before the
-      // one synthetic finish the reply is taken from (D8).
-      for (const output of fromSdkMessage({ ...frame })) {
-        if (output.type === 'error') streamedError = output.code
-        if (output.type === 'text') answer += output.text
-        if (output.type !== 'finish') presenter.present(output)
-      }
-    }
+    for await (const frame of run.stream()) presentFrame(frame, presenter, streamed)
     const result = await run.wait()
-    if (result.status !== 'error' && streamedError === undefined) return { failed: false, answer: answer === '' ? NO_ANSWER_REPLY : answer }
+    if (result.status !== 'error' && streamed.error === undefined) {
+      return { failed: false, answer: streamed.answer === '' ? NO_ANSWER_REPLY : streamed.answer }
+    }
     presenter.present(AGENT_ERROR)
-    return { failed: true, error: new AgentTurnError(event.platform, result.error?.code ?? streamedError) }
+    return { failed: true, error: new AgentTurnError(event.platform, result.error?.code ?? streamed.error) }
   } catch (error) {
     presenter.present(AGENT_ERROR)
     return { failed: true, error }
