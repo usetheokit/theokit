@@ -23,7 +23,7 @@
   {"id":"OC-22","status":"shipped","check":{"path":"apps/theoclaw/tests/live/control-plane.live.test.ts","test":"a real-model turn over the control WebSocket of the started process"},"verified_on":"2026-10-23"},
   {"id":"OC-23","status":"shipped","check":{"path":"apps/theoclaw/tests/live/control-plane.live.test.ts","test":"the started process answers GET /health on its port and is unreachable on the host's non-loopback address"},"verified_on":"2026-10-23"},
   {"id":"OC-24","status":"open"},
-  {"id":"OC-25","status":"shipped","check":{"path":"apps/theoclaw/tests/live/lan-discovery.live.test.ts","test":"a real-model turn on a LAN-bound instance that answers an mDNS query with its port"},"verified_on":"2026-10-26"},
+  {"id":"OC-25","status":"open"},
   {"id":"OC-26","status":"open"},
   {"id":"OC-27","status":"open"},
   {"id":"OC-28","status":"open"},

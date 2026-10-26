@@ -34,8 +34,9 @@ and versioning follows [Semantic Versioning](https://semver.org/).
   finds it without knowing its address. A loopback bind announces nothing, `THEOCLAW_MDNS=off` turns
   it off, and any other value stops the start. The service is withdrawn before the listener closes.
   A discovery failure writes one `TheoClawDiscoveryError` line and TheoClaw keeps serving. Finding an
-  instance does not give access to it: `/control` still needs the owner's token. The parity ledger
-  records OC-25 as shipped, checked by `tests/live/lan-discovery.live.test.ts` (`THEOCLAW_LIVE=1`).
+  instance does not give access to it: `/control` still needs the owner's token. OC-25 stays open
+  in the parity ledger until `tests/live/lan-discovery.live.test.ts` (`THEOCLAW_LIVE=1`) has a
+  recorded passing run.
 
 - TheoClaw now replies on the ten gateway platforms (B-369).
   - `node dist/main.js` (`pnpm start`) serves the webhook routes on the control plane's listener
