@@ -65,6 +65,31 @@ must be that exact URL, because Twilio signs the URL it called.
 - Matrix and Mattermost can run locally in Docker (Synapse and the Mattermost preview image), so
   they need no external account.
 
+### LAN discovery
+
+A TheoClaw bound to a LAN address (`THEOCLAW_HOST` with `THEOCLAW_PUBLIC_BIND=yes`) announces itself
+over mDNS as one DNS-SD service of type `_theoclaw._tcp`, named `TheoClaw on <host> port <port>`. Its
+SRV record carries the port the listener holds, and its TXT record holds only `path=/control`. A
+TheoClaw bound to a loopback address announces nothing, and a stopped one withdraws its service
+before the listener closes.
+
+| Variable | Meaning |
+|---|---|
+| `THEOCLAW_MDNS` | `off` turns discovery off; unset, empty or `on` leaves it on. Any other value stops the start and names the variable. |
+
+Browse for it from another machine on the same network:
+
+```bash
+avahi-browse -rt _theoclaw._tcp   # Linux
+dns-sd -B _theoclaw._tcp          # macOS
+```
+
+Finding an instance does not give access to it: `/control` still needs the owner's token
+(`THEOCLAW_CONTROL_TOKEN`). The A records list the host's addresses, which can include an interface
+the listener is not bound to; connect to the address the instance was started on. A discovery
+failure (for example, a host that cannot send multicast) writes one `TheoClawDiscoveryError` line,
+and TheoClaw keeps serving on its address.
+
 ## Start TheoClaw
 
 ```bash
