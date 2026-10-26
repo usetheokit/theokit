@@ -1,11 +1,10 @@
-import { createHash, timingSafeEqual } from 'node:crypto'
 import type { IncomingMessage, Server } from 'node:http'
 import type { Duplex } from 'node:stream'
 
 import { WebSocket, WebSocketServer } from 'ws'
 
+import { bearerCheck, MIN_BEARER_TOKEN_LENGTH } from './bearer.js'
 import { describeError, TheoClawConfigError } from './errors.js'
-import { MIN_CONTROL_TOKEN_LENGTH } from './settings.js'
 import type { TurnRunner } from './turn.js'
 
 export interface ControlSocketOptions {
@@ -21,19 +20,8 @@ export interface ControlSocket {
 
 const CONTROL_PATH = '/control'
 const MAX_FRAME_BYTES = 65_536
-const BEARER = /^bearer (.+)$/i
 
 type Refuse = (socket: Duplex, status: '401 Unauthorized' | '404 Not Found') => void
-
-function digest(value: string): Buffer {
-  return createHash('sha256').update(value).digest()
-}
-
-/** Compared as SHA-256 digests, so the comparison takes the same time whatever the length. */
-function tokenMatches(authorization: string | undefined, expected: Buffer): boolean {
-  const presented = BEARER.exec(authorization ?? '')?.[1]
-  return presented !== undefined && timingSafeEqual(digest(presented), expected)
-}
 
 /** The path without its query. Read by splitting, not `new URL`, which can throw in a listener. */
 function pathOf(request: IncomingMessage): string {
@@ -98,16 +86,16 @@ export function attachControlSocket(
   refuse: Refuse,
   stderr: (line: string) => void,
 ): ControlSocket {
-  if (options.token.length < MIN_CONTROL_TOKEN_LENGTH) {
-    throw new TheoClawConfigError(`THEOCLAW_CONTROL_TOKEN must be at least ${MIN_CONTROL_TOKEN_LENGTH} characters`, {
+  if (options.token.length < MIN_BEARER_TOKEN_LENGTH) {
+    throw new TheoClawConfigError(`THEOCLAW_CONTROL_TOKEN must be at least ${MIN_BEARER_TOKEN_LENGTH} characters`, {
       variable: 'THEOCLAW_CONTROL_TOKEN',
     })
   }
-  const expected = digest(options.token)
+  const tokenMatches = bearerCheck(options.token)
   const wss = new WebSocketServer({ noServer: true, maxPayload: MAX_FRAME_BYTES })
   server.on('upgrade', (request: IncomingMessage, socket: Duplex, head: Buffer) => {
     if (pathOf(request) !== CONTROL_PATH) return refuse(socket, '404 Not Found')
-    if (!tokenMatches(request.headers.authorization, expected)) return refuse(socket, '401 Unauthorized')
+    if (!tokenMatches(request.headers.authorization)) return refuse(socket, '401 Unauthorized')
     wss.handleUpgrade(request, socket, head, (ws) => serve(ws, options, stderr))
   })
   return {
