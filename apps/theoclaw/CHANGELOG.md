@@ -102,6 +102,15 @@ and versioning follows [Semantic Versioning](https://semver.org/).
   unchanged: one agent per turn. The parity ledger records OC-50 to OC-52 as shipped, checked
   against a real model by `tests/live/sessions.live.test.ts`; OC-51 names B-596 (a SQLite session
   store) and OC-52 names B-599 (idle reset) and B-601 (steer and collect) as their gaps.
+- WebChat: with `THEOCLAW_WEBCHAT_TOKEN` set (32 characters or more), the control-plane port serves
+  a browser chat at `/webchat` (B-368). Build the page with `pnpm --filter theoclaw run build:web`;
+  without the bundle `GET /webchat` answers 503 and names the script. The page asks for the token,
+  keeps it in the tab's `sessionStorage` and sends it only as `Authorization: Bearer`; a missing or
+  wrong token answers 401 before any agent is built. Each message runs one agent turn streamed
+  through `POST /webchat/chat` by the framework's route generator, and closing the tab mid-answer
+  cancels the turn. Without the token every `/webchat` path answers 404 and the start says
+  `theoclaw: webchat off (THEOCLAW_WEBCHAT_TOKEN unset)`. The token is masked in the output like
+  the control token.
 - A control plane: `pnpm --filter theoclaw run build && pnpm --filter theoclaw start` starts one
   process that serves HTTP and an owner WebSocket on one port (B-372). It binds `127.0.0.1` unless
   `THEOCLAW_HOST` names another address; a non-loopback address also needs

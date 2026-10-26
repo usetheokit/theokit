@@ -167,6 +167,7 @@ the listener. `GET /health` answers `{"status":"ok"}`.
 | `THEOCLAW_HOST` | Optional. The address to bind; default `127.0.0.1`. `localhost`, `::1` and `127.x.y.z` are loopback. The generic `HOST` is ignored. |
 | `THEOCLAW_PUBLIC_BIND` | Must be exactly `yes` to bind a non-loopback `THEOCLAW_HOST`. The bearer token is then the whole gate. |
 | `THEOCLAW_CONTROL_TOKEN` | Optional, 32 characters or more. Without it the `/control` socket is off and every upgrade answers 404. |
+| `THEOCLAW_WEBCHAT_TOKEN` | Optional, 32 characters or more. Without it `/webchat` is off and every `/webchat` path answers 404. |
 
 ### The `/control` socket
 
@@ -221,6 +222,34 @@ The live check runs a real turn against the built entry:
 set -a; . ~/.config/theoclaw/dev.env; set +a
 pnpm --filter theoclaw run build
 THEOCLAW_LIVE=1 pnpm --filter theoclaw exec vitest run tests/live/control-plane.live.test.ts
+```
+
+### WebChat
+
+WebChat is a browser chat with the agent, served on the same port. Build the page once, then start
+TheoClaw with `THEOCLAW_WEBCHAT_TOKEN` set:
+
+```bash
+pnpm --filter theoclaw run build
+pnpm --filter theoclaw run build:web
+pnpm --filter theoclaw start
+```
+
+Open `http://127.0.0.1:<port>/webchat` and enter the token. The page keeps it in the tab's
+`sessionStorage` and sends it only in the `Authorization: Bearer` header, never in a URL. Each
+message runs one agent turn, streamed through `POST /webchat/chat`; a missing or wrong token answers
+401 before any agent is built. The page and its two assets carry no secret and are served without the
+token. Closing the tab mid-answer cancels the turn. Without `build:web`,
+`GET /webchat` answers 503 and names the script. `build:web` writes `dist/web/assets/app.js` and
+`app.css`, and fails when the two exceed 3 MiB.
+
+The live check runs a real WebChat turn against the built entry, through the page's own transport
+configuration:
+
+```bash
+set -a; . ~/.config/theoclaw/dev.env; set +a
+pnpm --filter theoclaw run build && pnpm --filter theoclaw run build:web
+THEOCLAW_LIVE=1 pnpm --filter theoclaw exec vitest run tests/live/webchat.live.test.ts
 ```
 
 ## Remote access over SSH
