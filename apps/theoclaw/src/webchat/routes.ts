@@ -1,8 +1,13 @@
+import { access, readFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
 import { type AgentRouteContext, generateAgentRoutes } from '@theokit/agents/bridge'
 
 import { bearerCheck } from '../control-plane/bearer.js'
 import type { TurnRunner } from '../control-plane/turn.js'
 import { createWebchatRun } from './create-run.js'
+import { renderPage, WEBCHAT_ASSETS } from './page.js'
 
 export interface WebchatRoutesOptions {
   /** The WebChat token every chat post must carry; at least 32 characters. */
@@ -14,6 +19,11 @@ export interface WebchatRoutesOptions {
 
 const ROUTE = '/webchat'
 const CHAT_PATH = `${ROUTE}/chat`
+const ASSETS_PREFIX = `${ROUTE}/assets/`
+const NO_STORE = { 'cache-control': 'no-store' }
+/** The components set inline styles, so the page allows them and nothing else from elsewhere. */
+const PAGE_CSP = "default-src 'self'; style-src 'self' 'unsafe-inline'"
+const MISSING_BUNDLE = 'run the build:web script of the theoclaw package\n'
 
 /** Required by the generator's context and never read by it: TheoClaw has one agent, built elsewhere. */
 const COMPILED_OPTIONS: AgentRouteContext['compiledOptions'] = { tools: [], agents: {}, stream: true }
@@ -21,11 +31,54 @@ const COMPILED_OPTIONS: AgentRouteContext['compiledOptions'] = { tools: [], agen
 function ignore(): void {}
 
 function notFound(): Response {
-  return new Response(null, { status: 404, headers: { 'cache-control': 'no-store' } })
+  return new Response(null, { status: 404, headers: NO_STORE })
 }
 
 function unauthorized(): Response {
-  return new Response(null, { status: 401, headers: { 'www-authenticate': 'Bearer', 'cache-control': 'no-store' } })
+  return new Response(null, { status: 401, headers: { 'www-authenticate': 'Bearer', ...NO_STORE } })
+}
+
+/** Where an asset is on disk; `name` is one of the two the build writes, never a URL path. */
+function assetPath(assetsDir: string | URL, name: keyof typeof WEBCHAT_ASSETS): string {
+  return join(typeof assetsDir === 'string' ? assetsDir : fileURLToPath(assetsDir), name)
+}
+
+/** The asset's bytes, or `undefined` when the file is not there (the bundle was never built). */
+async function readAsset(assetsDir: string | URL, name: keyof typeof WEBCHAT_ASSETS): Promise<Buffer | undefined> {
+  try {
+    return await readFile(assetPath(assetsDir, name))
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
+    throw error
+  }
+}
+
+function isAssetName(name: string): name is keyof typeof WEBCHAT_ASSETS {
+  return Object.hasOwn(WEBCHAT_ASSETS, name)
+}
+
+/** `GET /webchat`: the shell, or 503 naming the build step when the bundle is missing. */
+async function page(assetsDir: string | URL): Promise<Response> {
+  const built = await access(assetPath(assetsDir, 'app.js')).then(
+    () => true,
+    () => false,
+  )
+  if (!built) {
+    return new Response(MISSING_BUNDLE, { status: 503, headers: { 'content-type': 'text/plain; charset=utf-8', ...NO_STORE } })
+  }
+  return new Response(renderPage(), {
+    headers: { 'content-type': 'text/html; charset=utf-8', 'content-security-policy': PAGE_CSP, ...NO_STORE },
+  })
+}
+
+/** `GET /webchat/assets/<name>`: only the two names the build writes; anything else is 404. */
+async function asset(assetsDir: string | URL, name: string): Promise<Response> {
+  if (!isAssetName(name)) return notFound()
+  const bytes = await readAsset(assetsDir, name)
+  if (bytes === undefined) return notFound()
+  return new Response(new Uint8Array(bytes), {
+    headers: { 'content-type': WEBCHAT_ASSETS[name], 'x-content-type-options': 'nosniff', ...NO_STORE },
+  })
 }
 
 /**
@@ -73,19 +126,26 @@ async function chat(request: Request, runTurn: TurnRunner): Promise<Response> {
   const post = routes.find((route) => route.method === 'POST' && route.path === CHAT_PATH)
   if (post === undefined) throw new Error(`generateAgentRoutes returned no POST ${CHAT_PATH}`)
   const response = await post.handler(request)
-  if (response.body === null) return response
-  return new Response(relay(response.body, stopTurn), { status: response.status, headers: response.headers })
+  const headers = new Headers(response.headers)
+  headers.set('cache-control', 'no-store')
+  const body = response.body === null ? null : relay(response.body, stopTurn)
+  return new Response(body, { status: response.status, headers })
 }
 
 /**
- * The `/webchat` routes. A chat post is refused 401 before anything is parsed and before any agent
- * exists unless it carries the WebChat token; the generator then answers 400 for a body with no
- * `message`, also before any agent exists.
+ * The `/webchat` routes: the page, its two assets and the chat post. A chat post is refused 401
+ * before anything is parsed and before any agent exists unless it carries the WebChat token; the
+ * generator then answers 400 for a body with no `message`, also before any agent exists. Every other
+ * method or path under `/webchat` is 404, and every answer carries `cache-control: no-store`.
  */
 export function createWebchatRoutes(options: WebchatRoutesOptions): (request: Request) => Promise<Response> {
   const accepts = bearerCheck(options.token)
   return async (request) => {
     const { pathname } = new URL(request.url)
+    if (request.method === 'GET' && pathname === ROUTE) return page(options.assetsDir)
+    if (request.method === 'GET' && pathname.startsWith(ASSETS_PREFIX)) {
+      return asset(options.assetsDir, pathname.slice(ASSETS_PREFIX.length))
+    }
     if (pathname !== CHAT_PATH || request.method !== 'POST') return notFound()
     if (!accepts(request.headers.get('authorization') ?? undefined)) return unauthorized()
     return chat(request, options.runTurn)

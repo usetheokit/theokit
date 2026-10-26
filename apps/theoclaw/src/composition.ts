@@ -32,7 +32,7 @@ import { type ConfiguredPlatform, resolvePlatforms } from './channels/platforms.
 import { createReplyHandler, type TurnAgent } from './channels/reply-handler.js'
 import { createChannelAgentFactory, sessionAgentOptions } from './control-plane/agent-factory.js'
 import { type ControlPlaneHandle, healthHandler, listenControlPlane } from './control-plane/listener.js'
-import { readControlPlaneSettings } from './control-plane/settings.js'
+import { type ControlPlaneSettings, readControlPlaneSettings } from './control-plane/settings.js'
 import { installShutdown, type SignalSource } from './control-plane/shutdown.js'
 import { createTurnRunner } from './control-plane/turn.js'
 import { createBonjourPublisher } from './discovery/bonjour-publisher.js'
@@ -53,11 +53,13 @@ import {
 } from './webhooks/platform-routes.js'
 import { createWebhookRouter, type WebhookRoute } from './webhooks/router.js'
 import type { TeamsVerifier } from './webhooks/teams.js'
-import { agentToolOptions } from './tools/tool-registry.js'
+import { agentToolOptions, NO_TOOL_OPTIONS } from './tools/tool-registry.js'
 import type { AgentToolOptions } from './tools/tool-registry.js'
 import { checkHostToolsPosture, resolveToolSettings } from './tools/tool-settings.js'
 import type { ToolDeps, ToolSettings } from './tools/tool-settings.js'
 import { createWorkflowTools } from './workflows/workflow-tools.js'
+import { WEBCHAT_ASSETS_DIR } from './webchat/page.js'
+import { createWebchatRoutes } from './webchat/routes.js'
 
 /**
  * The composition root — where concretes are wired into the container, and the only place that
@@ -300,6 +302,8 @@ export interface StartOptions extends Omit<TheoClawOptions, 'write'> {
   readonly draftAgentFactory?: () => Promise<SDKAgent>
   /** The SDK's live agent cache, turned off at start (D2). Default `Agent.registry`. */
   readonly agentRegistry?: { configure(options: { readonly maxAgents: number; readonly idleTimeoutMs: number }): void }
+  /** Where the WebChat bundle is read from. Default `WEBCHAT_ASSETS_DIR`, where `build:web` writes it. */
+  readonly webchatAssetsDir?: string | URL
 }
 
 /** The running process: the channel loop, its webhook router, and the one listener serving both. */
@@ -328,14 +332,15 @@ function lineWriter(stream: MaskableStream | undefined): (line: string) => void 
 }
 
 /**
- * Every value the output mask hides: the channel credentials, both model keys, the control token
+ * Every value the output mask hides: the channel credentials, both model keys, both bearer tokens
  * and the web search keys.
  */
-function processSecrets(env: StartOptions['env'], controlToken: string | undefined, tools: ToolSettings): string[] {
+function processSecrets(env: StartOptions['env'], settings: ControlPlaneSettings, tools: ToolSettings): string[] {
   const keys = [env.THEOKIT_API_KEY, env.OPENROUTER_API_KEY]
     .map((value) => (value ?? '').trim())
     .filter((value) => value !== '')
-  return [...resolvePlatforms(env).secrets, ...keys, ...(controlToken === undefined ? [] : [controlToken]), ...tools.secrets]
+  const tokens = [settings.controlToken, settings.webchatToken].filter((token) => token !== undefined)
+  return [...resolvePlatforms(env).secrets, ...keys, ...tokens, ...tools.secrets]
 }
 
 const SHELL_READ_LINE = 'tools: host tools are on; the shell can read every file the process user can read'
@@ -378,9 +383,53 @@ function workflowTools(factory: StartOptions['draftAgentFactory'], write: (line:
   return createWorkflowTools({ write, ...(factory === undefined ? {} : { withDraftAgent: createContainer({ factory }).withAgent }) })
 }
 
-/** `GET /health` is the control plane's; every other path goes to the webhook router. */
-function serveHealthAndWebhooks(router: ComposedTheoClaw['router']): (request: Request) => Promise<Response> {
-  return (request) => (new URL(request.url).pathname === '/health' ? healthHandler(request) : router(request))
+/** `/webchat` itself or anything under `/webchat/`, and not `/webchatx` (EC-4). */
+function isWebchatPath(pathname: string): boolean {
+  return pathname === '/webchat' || pathname.startsWith('/webchat/')
+}
+
+/**
+ * `GET /health` is the control plane's; `/webchat` paths go to WebChat when it is on and answer 404
+ * when it is off; every other path goes to the webhook router.
+ */
+function serveHandler(
+  router: ComposedTheoClaw['router'],
+  webchat: ((request: Request) => Promise<Response>) | undefined,
+): (request: Request) => Promise<Response> {
+  return async (request) => {
+    const { pathname } = new URL(request.url)
+    if (pathname === '/health') return healthHandler(request)
+    if (!isWebchatPath(pathname)) return router(request)
+    return webchat === undefined ? new Response(null, { status: 404 }) : webchat(request)
+  }
+}
+
+/**
+ * The WebChat routes, or `undefined` while `THEOCLAW_WEBCHAT_TOKEN` is unset. WebChat is a chat
+ * surface, so its agents hold no tool, as every chat agent (B-382): the tool options reach only the
+ * `/control` turn's agents.
+ */
+function startWebchat(
+  options: StartOptions,
+  token: string | undefined,
+): ((request: Request) => Promise<Response>) | undefined {
+  if (token === undefined) return undefined
+  const agents = createContainer<TurnAgent>({ factory: () => options.agentFactory(NO_TOOL_OPTIONS) })
+  return createWebchatRoutes({
+    token,
+    runTurn: createTurnRunner(agents.withAgent),
+    assetsDir: options.webchatAssetsDir ?? WEBCHAT_ASSETS_DIR,
+  })
+}
+
+/** One line for each owner surface left off because its token is unset. */
+function reportSurfacesOff(settings: ControlPlaneSettings, stdout: (line: string) => void): void {
+  if (settings.controlToken === undefined) {
+    stdout('theoclaw: control socket off (THEOCLAW_CONTROL_TOKEN unset)')
+  }
+  if (settings.webchatToken === undefined) {
+    stdout('theoclaw: webchat off (THEOCLAW_WEBCHAT_TOKEN unset)')
+  }
 }
 
 /**
@@ -416,7 +465,7 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
   const pairing = pairingStoreFor(policy, (line) => stderr(redactSecrets(maskSecrets(line, secrets))))
   // First, once every setting is checked: the line holds a label and a directory, never a secret.
   const instance = announceInstance(options.instance, stderr)
-  const mask = installOutputMask(processSecrets(options.env, settings.controlToken, tools), streams)
+  const mask = installOutputMask(processSecrets(options.env, settings, tools), streams)
   const stdout = options.stdout ?? lineWriter(streams[0])
   const flushOnExit = (): void => mask.flush()
   options.signals.on('exit', flushOnExit)
@@ -457,7 +506,7 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
   composedApp = composed
   const listen = options.listen ?? listenControlPlane
   serving = listen({
-    handler: serveHealthAndWebhooks(composed.router),
+    handler: serveHandler(composed.router, startWebchat(options, settings.webchatToken)),
     port: settings.port,
     host: settings.host,
     stderr,
@@ -485,9 +534,7 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
     log: stderr,
     createPublisher: options.createPublisher ?? createBonjourPublisher,
   })
-  if (settings.controlToken === undefined) {
-    stdout('theoclaw: control socket off (THEOCLAW_CONTROL_TOKEN unset)')
-  }
+  reportSurfacesOff(settings, stdout)
   // `close` withdraws the announcement first, as the shutdown does: a caller that closes the
   // running instance directly must not leave the service advertised.
   return { ...handle, ...composed, announcement, instance, close: () => stopThenClose(announcement, handle) }
