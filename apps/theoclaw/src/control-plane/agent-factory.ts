@@ -56,3 +56,18 @@ export function createAgentFactory(
     return create(theoClawAgentOptions({ model, apiKey: modelKey, ...(toolOptions === undefined ? {} : { toolOptions }) }))
   }
 }
+
+/**
+ * The agent of a chat reply. Anyone who can message the bot writes their prompt (no sender
+ * allowlist yet, B-371), so a channel agent holds no tool and writes no memory: it is built from
+ * `agentOptionsFor`, with no `shell` (`effectiveToolNames` reads an empty catalog) and memory off.
+ * It is its own export, and every session agent is opened through it (`composition.ts`), so the
+ * reply path keeps that guarantee, pinned by its own test, even if the `/control` turn's options
+ * change (sprint decision B-377 option A).
+ */
+export function createChannelAgentFactory<A>(
+  env: BindEnvironment,
+  create: (options: TheoClawAgentOptions) => Promise<A>,
+): () => Promise<A> {
+  return async () => create(agentOptionsFor(env))
+}

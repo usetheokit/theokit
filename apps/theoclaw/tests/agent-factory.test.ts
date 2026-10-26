@@ -7,6 +7,7 @@ import { composeTheoClaw } from "../src/composition.js";
 
 import {
   createAgentFactory,
+  createChannelAgentFactory,
   sessionAgentOptions,
   type CreateAgent,
 } from "../src/control-plane/agent-factory.js";
@@ -118,15 +119,36 @@ describe("createAgentFactory", () => {
 
 /**
  * A chat reply runs on whatever anyone sent the bot. The SDK's local agent declares a `shell` tool
- * by default (`sh -c` in the process's directory, with no permission gate), so a session agent must
+ * by default (`sh -c` in the process's directory, with no permission gate), so a channel agent must
  * be built without it. `effectiveToolNames` is the SDK's own reading of what an agent built from
  * those options offers the model.
  */
+describe("createChannelAgentFactory", () => {
+  it("builds the agent of a chat reply with no tool at all, the shell included", async () => {
+    const { create, options } = optionsRecordingCreate();
+
+    await createChannelAgentFactory({ THEOCLAW_MODEL: "openrouter/m", OPENROUTER_API_KEY: "router-key" }, create)();
+
+    expect(options).toHaveLength(1);
+    const catalog = effectiveToolNames({ ...options[0] });
+    expect(catalog.names).toEqual([]);
+    expect(catalog.unresolved).toEqual([]);
+    expect(options[0]).toMatchObject({ model: "openrouter/m", apiKey: "router-key" });
+  });
+
+  it("turns memory off so a chat reply writes no transcript under the cwd", async () => {
+    const { create, options } = optionsRecordingCreate();
+
+    await createChannelAgentFactory({ THEOCLAW_MODEL: "m", OPENROUTER_API_KEY: "k" }, create)();
+
+    expect(options[0]?.memory).toEqual({ enabled: false });
+  });
+});
+
 /**
  * The options the chat path passes for one chat reply's agent, read where it passes them: one
- * message through `composeTheoClaw`, whose session agents `getOrCreate` opens. Named
- * `createChannelAgentFactory`'s create until B-378 replaced that factory (plan D5); the two cases
- * below are B-377's, kept with their assertions until the B-371 owner check lands.
+ * message through `composeTheoClaw`, whose session agents `getOrCreate` opens through
+ * `createChannelAgentFactory` (plan T5.1). The same two guarantees as above, end to end.
  */
 function chatPathRecording(): {
   create: (env: Readonly<Record<string, string | undefined>>) => () => Promise<void>;
@@ -155,12 +177,7 @@ function chatPathRecording(): {
   return { create, options };
 }
 
-/**
- * A chat reply runs on whatever anyone sent the bot. The SDK's local agent declares a `shell` tool
- * by default (`sh -c` in the process's directory, with no permission gate), so a channel agent must
- * be built without it. `effectiveToolNames` is the SDK's own reading of what an agent built from
- * those options offers the model.
- */
+/** B-377's two guarantees, read on the options `composeTheoClaw` passes to `getOrCreate`. */
 describe("the chat path's agent options", () => {
   it("builds the agent of a chat reply with no tool at all, the shell included", async () => {
     const { create, options } = chatPathRecording();
