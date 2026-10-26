@@ -14,7 +14,9 @@ import { createPairingStore } from './authorization/pairing-store.js'
 import { parseAuthorizationPolicy } from './authorization/policy.js'
 import type { AuthorizationPolicy } from './authorization/policy.js'
 import { adapterBuilders, smsOptions } from './channels/adapter-factory.js'
+import type { AdapterBuildOptions } from './channels/adapter-factory.js'
 import { maskSecrets, startChannelLoop } from './channels/channel-loop.js'
+import { createGroupActivationHook } from './channels/group-activation-hook.js'
 import type { ChannelLoop, PlatformBuild } from './channels/channel-loop.js'
 import { installOutputMask } from './channels/output-mask.js'
 import type { MaskableStream } from './channels/output-mask.js'
@@ -100,7 +102,7 @@ export interface TheoClawOptions {
    */
   readonly channelAgentFactory?: () => TurnAgent | Promise<TurnAgent>
   /** Defaults to the ten real adapters; tests pass fakes. */
-  readonly builders?: (configured: readonly ConfiguredPlatform[]) => PlatformBuild[]
+  readonly builders?: (configured: readonly ConfiguredPlatform[], options: AdapterBuildOptions) => PlatformBuild[]
   readonly write: (line: string) => void
   readonly startTimeoutMs?: number
   /** Who the instance serves, parsed from this same `env`; parsed here when absent (`startTheoClaw` parses it first). */
@@ -259,6 +261,8 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
   // The store exists only with a state directory; the hook runs without one under the other policies.
   const pairing = policy.stateDir === undefined ? undefined : createPairingStore({ dir: policy.stateDir, write: maskedWrite })
   const ownerPolicy = createOwnerPolicyHook({ policy, ...(pairing === undefined ? {} : { pairing }), write: maskedWrite })
+  // Runs after the owner policy, so only owners and paired senders reach it (FR-007).
+  const groupActivation = createGroupActivationHook({ owners: policy.owners, mode: policy.groupActivation, write: maskedWrite })
   const deps: WebhookDeps = { write: maskedWrite, verifierFactory: options.teamsVerifierFactory ?? teamsActivityVerifier }
   const webhooks = new Map<PlatformName, WebhookPlatform>()
   for (const entry of configured) {
@@ -267,11 +271,11 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
   }
   const handles = new WeakMap<BasePlatformAdapter, Handle>()
   const loop = startChannelLoop({
-    platforms: (options.builders ?? adapterBuilders)(configured).map((build) =>
+    platforms: (options.builders ?? adapterBuilders)(configured, { requireMention: policy.groupActivation === 'mention' }).map((build) =>
       withRoute(build, webhooks.get(build.platform), handles),
     ),
     handler: createReplyHandler({ withAgent: (work) => agents.withAgent(work) }),
-    hooks: [ownerPolicy],
+    hooks: [ownerPolicy, groupActivation],
     secrets,
     write: options.write,
     ...(options.startTimeoutMs === undefined ? {} : { startTimeoutMs: options.startTimeoutMs }),

@@ -96,4 +96,19 @@ describe('composeTheoClaw with parseAuthorizationPolicy, createPairingStore and 
     await app.loop.stopAll()
     expect(parseAuthorizationPolicy(env).owners.has(senderKey('email', 'paulo@EXAMPLE.com'))).toBe(true)
   })
+
+  it('createGroupActivationHook in the composed app answers a mentioned telegram group message and ignores an unmentioned one', async () => {
+    const app = composedApp({ THEOCLAW_OWNERS: 'telegram:owner', THEOCLAW_DM_POLICY: 'allowlist' }, ['telegram'])
+    await app.loop.ready
+    const inGroup = (text: string): MessageEvent =>
+      ({
+        ...messageEvent('telegram', text, 'owner'),
+        channel: { id: '-100', type: 'group' },
+        telegram: { chatId: -100, messageId: 1, raw: { chat: { id: -100, type: 'group' }, message: { text }, me: { username: 'theo_bot', id: 99 } } },
+      }) as unknown as MessageEvent
+    await app.deliver(inGroup('nobody asked the bot'), 0)
+    await app.deliver(inGroup('@theo_bot what time is it'), 1)
+    expect(app.asked).toEqual(['@theo_bot what time is it'])
+    await app.loop.stopAll()
+  })
 })
