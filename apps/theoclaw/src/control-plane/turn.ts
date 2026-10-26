@@ -90,6 +90,20 @@ function nextOrAbort(
   return Promise.race([next, aborted])
 }
 
+/**
+ * Emit one SDK message's translated events, stopping at the first one after the signal aborted;
+ * the code of the first error among them, if any.
+ */
+function emitMessage(message: { readonly type: string }, options: TurnOptions): string | undefined {
+  let streamedError: string | undefined
+  for (const event of translateSdkEvent(message as SdkMessage, options.runId)) {
+    if (options.signal?.aborted === true) break
+    if (event.type === 'error') streamedError ??= String(event.code)
+    options.emit(event)
+  }
+  return streamedError
+}
+
 type Streamed = { readonly cancelled: TurnOutcome } | { readonly streamedError: string | undefined }
 
 /**
@@ -107,11 +121,9 @@ async function streamRun(run: TurnRun, options: TurnOptions, aborted?: Promise<t
       closed = step === ABORTED || step.done === true
       if (step === ABORTED) return { cancelled: await cancelRun(run, iterator) }
       if (step.done === true) return { streamedError }
-      for (const event of translateSdkEvent(step.value as SdkMessage, options.runId)) {
-        if (options.signal?.aborted === true) break
-        if (event.type === 'error') streamedError ??= String(event.code)
-        options.emit(event)
-      }
+      // Emitted first, always: the first streamed error is kept, and every event still reaches the caller.
+      const error = emitMessage(step.value, options)
+      streamedError ??= error
     }
   } finally {
     // A read, a translation or an emit that throws leaves the stream open; close it, as `for await` did.

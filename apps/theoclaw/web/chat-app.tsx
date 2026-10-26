@@ -1,7 +1,7 @@
 import { useAgent, type UseAgentReturn } from '@theokit/agents/client/react'
 import { ChatComposer } from '@theokit/ui/chat-composer'
 import { ChatThread } from '@theokit/ui/chat-thread'
-import { type FormEvent, useState } from 'react'
+import { useState } from 'react'
 
 import { WEBCHAT_API, webchatAgentOptions } from './agent-options.js'
 import { readToken, writeToken } from './token-store.js'
@@ -19,7 +19,7 @@ function textOf(message: ThreadMessage): string {
 /** The token form: shown until the owner gives the WebChat token. */
 function TokenForm({ onToken }: { readonly onToken: (token: string) => void }) {
   const [value, setValue] = useState('')
-  const submit = (event: FormEvent<HTMLFormElement>): void => {
+  const submit = (event: { preventDefault(): void }): void => {
     event.preventDefault()
     // A pasted token often carries a trailing newline; the server compares the exact value.
     const token = value.trim()
