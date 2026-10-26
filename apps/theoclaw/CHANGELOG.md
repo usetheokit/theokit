@@ -32,7 +32,8 @@ and versioning follows [Semantic Versioning](https://semver.org/).
   `_theoclaw._tcp` service whose SRV record carries the port the listener holds and whose TXT record
   holds only `path=/control`, so `avahi-browse -rt _theoclaw._tcp` or `dns-sd -B _theoclaw._tcp`
   finds it without knowing its address. A loopback bind announces nothing, `THEOCLAW_MDNS=off` turns
-  it off, and any other value stops the start. The service is withdrawn before the listener closes.
+  it off, and any other value stops the start. The service is withdrawn before the listener closes,
+  on a signal and when a caller closes the running instance itself.
   A discovery failure writes one `TheoClawDiscoveryError` line and TheoClaw keeps serving. Finding an
   instance does not give access to it: `/control` still needs the owner's token. OC-25 stays open
   in the parity ledger until `tests/live/lan-discovery.live.test.ts` (`THEOCLAW_LIVE=1`) has a

@@ -389,5 +389,7 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
   if (settings.controlToken === undefined) {
     stdout('theoclaw: control socket off (THEOCLAW_CONTROL_TOKEN unset)')
   }
-  return { ...handle, ...composed, announcement }
+  // `close` withdraws the announcement first, as the shutdown does: a caller that closes the
+  // running instance directly must not leave the service advertised.
+  return { ...handle, ...composed, announcement, close: () => stopThenClose(announcement, handle) }
 }
