@@ -278,3 +278,51 @@ describe('the chat request boundary and the session agent', () => {
     await loop.stopAll()
   })
 })
+
+/**
+ * An agent shaped like `@theokit/sdk` 5.11's: the request boundary would tear it down through
+ * `Symbol.asyncDispose`, and `SessionAgents` disposes it through `dispose()`.
+ */
+class SdkShapedAgent extends FakeAgent {
+  teardowns = 0
+  disposes = 0
+
+  async [Symbol.asyncDispose](): Promise<void> {
+    this.teardowns += 1
+  }
+
+  async dispose(): Promise<void> {
+    this.disposes += 1
+  }
+}
+
+describe("a chat reply's request boundary leaves its session's agent open", () => {
+  it('does not dispose the leased agent after a turn', async () => {
+    const agent = new SdkShapedAgent({ frames: [assistant('Hi!'), finished()] })
+    let resolved = 0
+    const { adapters, builders } = fakeBuilders()
+    const { loop } = composeTheoClaw({
+      env: TELEGRAM_AND_LINE,
+      agentFactory: () => {
+        throw new Error('the /control factory must not build a chat agent')
+      },
+      getOrCreate: async () => {
+        resolved += 1
+        return agent
+      },
+      builders,
+      write: () => undefined,
+    })
+    await loop.ready
+
+    const telegram = adapters.get('telegram')!
+    await telegram.deliver(messageEvent('telegram', 'hello'))
+    await waitFor(() => telegram.sent.length === 1, 1000, 'the reply to be sent')
+
+    expect(telegram.sent.map((message) => message.text)).toEqual(['Hi!'])
+    expect(agent.teardowns).toBe(0)
+    expect(agent.disposes).toBe(0)
+    expect(resolved).toBe(1)
+    await loop.stopAll()
+  })
+})
