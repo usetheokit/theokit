@@ -191,6 +191,62 @@ describe('SessionAgents lifetime', () => {
   })
 })
 
+describe('SessionAgents stopping', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('a resolve that fails while stopping does not hold the stop for 30 s', async () => {
+    const resolving = deferred<SessionAgent>()
+    const sessions = new SessionAgents({
+      router: createSessionRouter(settings()),
+      getOrCreate: () => resolving.promise,
+      optionsFor: () => ({ model: 'stub' }),
+      generations: new Generations(),
+      settings: settings(),
+      write: () => undefined,
+    })
+    const lease = sessions.lease(dm('u1')).catch((error: unknown) => error)
+    let stopped = false
+    const stopping = sessions.disposeAll().then(() => {
+      stopped = true
+    })
+
+    resolving.reject(new Error('provider down'))
+    await lease
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(stopped).toBe(true)
+    await stopping
+  })
+
+  it('two stops at once both end when the last turn is released', async () => {
+    const { sessions } = harness()
+    const lease = await sessions.lease(dm('u1'))
+    let stopped = 0
+    const first = sessions.disposeAll().then(() => (stopped += 1))
+    const second = sessions.disposeAll().then(() => (stopped += 1))
+
+    await vi.advanceTimersByTimeAsync(1000)
+    lease.release()
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(stopped).toBe(2)
+    await Promise.all([first, second])
+  })
+
+  it('refuses a lease once stopping has begun', async () => {
+    const { sessions, getOrCreate } = harness()
+    await sessions.disposeAll()
+
+    await expect(sessions.lease(dm('u1'))).rejects.toThrow('stopping')
+    expect(getOrCreate).toHaveBeenCalledTimes(0)
+  })
+})
+
 describe('the chat request boundary and the session agent', () => {
   it('the request container does not dispose a session agent across 3 messages', async () => {
     const agent = Object.assign(new FakeAgent({ frames: [assistant('ok'), finished()] }), {

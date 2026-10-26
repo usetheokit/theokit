@@ -1,4 +1,7 @@
 import { EventEmitter } from 'node:events'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 import { describe, expect, it, vi } from 'vitest'
 
@@ -135,5 +138,28 @@ describe('startTheoClaw and the session settings', () => {
     const { start, spy } = await refusedStart({ ...TELEGRAM_AND_LINE, THEOCLAW_WORKSPACE: undefined })
     await expect(start).rejects.toMatchObject({ name: 'TheoClawConfigError', variable: 'THEOCLAW_WORKSPACE' })
     expect(spy).toHaveBeenCalledTimes(0)
+  })
+})
+
+describe('startTheoClaw and the transcript directory', () => {
+  it('leaves no signal listener behind when the transcript directory cannot be created', async () => {
+    const workspace = mkdtempSync(join(tmpdir(), 'theoclaw-blocked-'))
+    writeFileSync(join(workspace, '.theoclaw'), 'a file where the directory goes')
+    const signals = new EventEmitter()
+    try {
+      await expect(
+        startTheoClaw({
+          env: { ...TELEGRAM_AND_LINE, THEOCLAW_WORKSPACE: workspace },
+          agentFactory: noAgent,
+          builders: fakeBuilders().builders,
+          signals,
+          exit: vi.fn(),
+          streams: [capturingStream()],
+        }),
+      ).rejects.toThrow()
+      expect(['SIGINT', 'SIGTERM', 'exit'].map((name) => signals.listenerCount(name))).toEqual([0, 0, 0])
+    } finally {
+      rmSync(workspace, { recursive: true, force: true })
+    }
   })
 })

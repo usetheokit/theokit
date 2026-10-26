@@ -66,7 +66,9 @@ export class SessionAgents {
   readonly #sweep: ReturnType<typeof setInterval>
   #order = 0
   #warnedAboveBound = false
-  #allReleased: (() => void) | undefined
+  #stopping = false
+  /** Each stop in progress, woken when the last turn in flight ends. */
+  readonly #releaseWaiters: (() => void)[] = []
 
   constructor(private readonly deps: SessionAgentsDeps) {
     this.#sweep = setInterval(() => this.#disposeIdle(), SWEEP_INTERVAL_MS)
@@ -76,6 +78,7 @@ export class SessionAgents {
 
   /** The agent of the event's session, held for one turn until `release()`. */
   async lease(event: MessageEvent): Promise<SessionLease> {
+    if (this.#stopping) throw new Error('theoclaw is stopping: no new chat turn starts')
     const key = this.deps.router.resolveAgentId(event)
     const id = agentIdFor(key, this.deps.generations.current(key))
     let found = this.#entries.get(id)
@@ -91,6 +94,7 @@ export class SessionAgents {
       agent = await entry.resolving
     } catch (error) {
       entry.leases -= 1
+      this.#wakeIfAllReleased()
       throw error
     }
     let released = false
@@ -103,7 +107,7 @@ export class SessionAgents {
         entry.lastUsedAt = Date.now()
         entry.lastUsedOrder = ++this.#order
         this.#trimToBound()
-        if (this.#leasesHeld() === 0) this.#allReleased?.()
+        this.#wakeIfAllReleased()
       },
     }
   }
@@ -140,6 +144,7 @@ export class SessionAgents {
    * is named in one line.
    */
   async disposeAll(): Promise<void> {
+    this.#stopping = true
     clearInterval(this.#sweep)
     await this.#waitForReleases()
     for (const entry of this.#entries.values()) {
@@ -162,16 +167,20 @@ export class SessionAgents {
     return held
   }
 
+  #wakeIfAllReleased(): void {
+    if (this.#leasesHeld() > 0) return
+    for (const wake of this.#releaseWaiters.splice(0)) wake()
+  }
+
   async #waitForReleases(): Promise<void> {
     if (this.#leasesHeld() === 0) return
     let timer: ReturnType<typeof setTimeout> | undefined
     await new Promise<void>((resolve) => {
-      this.#allReleased = resolve
+      this.#releaseWaiters.push(resolve)
       timer = setTimeout(resolve, STOP_WAIT_MS)
       timer.unref()
     })
     clearTimeout(timer)
-    this.#allReleased = undefined
   }
 
   /** Open agents a sweep or the bound may dispose: resolved, not disposing, no turn in flight. */
