@@ -26,6 +26,17 @@ and versioning follows [Semantic Versioning](https://semver.org/).
   replies still get no tool. The parity ledger records OC-58, OC-59 and OC-69 as shipped, checked
   by `tests/live/tools.live.test.ts`, with their missing parts filed as items; OC-63 waits on a
   search key.
+- The owner reaches the control plane from another machine over an SSH local forward (B-512,
+  OC-24). The README's "Remote access over SSH" section gives the command,
+  `ssh -N -L 18789:127.0.0.1:<THEOCLAW_PORT> <user>@<host>`, and needs no public bind: the forward
+  delivers every request from `127.0.0.1`, so `THEOCLAW_CONTROL_TOKEN` stays the whole gate, and
+  `tests/remote-access-source.test.ts` fails in CI if TheoClaw's source starts reading a peer address
+  or the manifest gains an SSH library. SSH is the one remote path shipped: OC-24 also names
+  Tailscale serve/funnel and trusted-proxy identity, and neither is built, so the ledger's `shipped`
+  row covers SSH alone. The live check (`THEOCLAW_LIVE=1`) runs a real `sshd` of its own from a temp
+  directory and proves 401 without or with a wrong token, 404 with the token unset, a real-model
+  turn, a reconnect with no restart, that the turn crossed that `sshd`, that no process printed the
+  token, and that `~/.ssh` is untouched.
 - Exact dependency versions and an audit of what TheoClaw installs (B-406). Every entry of
   `apps/theoclaw/package.json` is now an exact version or `workspace:*`, and `pnpm --filter theoclaw
   run check:versions` refuses any other form (`^`, `~`, `>=`, `*`, a tag, `workspace:^`, `file:`,
