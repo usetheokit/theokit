@@ -69,6 +69,7 @@ async function liveApp({ env, platforms }: LiveOptions) {
           const run = await agent.send(text)
           return {
             stream: () => run.stream(),
+            cancel: () => run.cancel(),
             wait: async () => {
               const result = await run.wait()
               if (result.status === 'finished') completedTurns += 1
