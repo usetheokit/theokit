@@ -194,6 +194,42 @@ describe('the chat path through startTheoClaw', () => {
     }
   })
 
+  // Failure scenario "model provider: turn fails": the person gets the fallback reply, the lease is
+  // released, and the session's next message runs on the same agent.
+  it('a turn the model fails gets the fallback reply and the next message of the session runs', { timeout: 30_000 }, async () => {
+    const stub = await startModelStub({
+      fail: (request) => stub.userTexts(request).at(-1) === 'first',
+      reply: () => 'answer',
+    })
+    const ids: string[] = []
+    const { adapters, builders } = fakeBuilders()
+    const app = await startTheoClaw({
+      env: { ...TELEGRAM_AND_LINE, OPENROUTER_API_KEY: STUB_KEY, THEOCLAW_WORKSPACE: workspace },
+      agentFactory: throwingAgentFactory().factory,
+      getOrCreate: (id, options) => {
+        ids.push(id)
+        return Agent.getOrCreate(id, { ...options, model: { id: 'openai/stub', url: stub.url } })
+      },
+      builders,
+      signals: new EventEmitter(),
+      exit: vi.fn(),
+      streams: [capturingStream()],
+    })
+    running.push(app)
+    await app.loop.ready
+    const telegram = adapters.get('telegram')!
+
+    void telegram.deliver(messageEvent('telegram', 'first', 'provider-failure'))
+    await waitFor(() => telegram.sent.length === 1, 15_000, 'the fallback reply')
+    void telegram.deliver(messageEvent('telegram', 'second', 'provider-failure'))
+    await waitFor(() => telegram.sent.length === 2, 15_000, 'the reply to the next message')
+    await stub.close()
+
+    expect(telegram.sent[0]!.text).toBe('Something went wrong on my side and I could not finish that.')
+    expect(telegram.sent[1]!.text).toBe('answer')
+    expect(ids).toEqual(['theoclaw-telegram-dm-provider_failure-g0'])
+  })
+
   it('startTheoClaw creates the transcript directory with mode 0700', async () => {
     const app = await startTheoClaw({
       env: { ...TELEGRAM_AND_LINE, THEOCLAW_WORKSPACE: fresh },
