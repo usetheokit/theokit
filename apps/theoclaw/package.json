@@ -62,6 +62,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json",
     "boundaries": "depcruise --config .dependency-cruiser.cjs src tests",
     "lint": "eslint .",
-    "parity": "node tools/check-parity-ledger.mjs"
+    "parity": "node tools/check-parity-ledger.mjs",
+    "check:versions": "node tools/check-exact-versions.mjs package.json"
   }
 }
