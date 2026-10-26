@@ -2,7 +2,12 @@
  * Fixtures shared by the composed-app tests: `composition.test.ts` (composeTheoClaw and its routes)
  * and `start-theoclaw.test.ts` (the process lifecycle of startTheoClaw).
  */
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
 import type { PlatformName } from '@theokit/gateway'
+import { afterAll } from 'vitest'
 import { computeLineSignature } from '@theokit/gateway-line'
 
 import type { PlatformBuild } from '../src/channels/channel-loop.js'
@@ -25,6 +30,18 @@ export function capturingStream(): MaskableStream & { readonly text: () => strin
   }
 }
 
+/**
+ * A scratch directory for `THEOCLAW_WORKSPACE`, which every start requires: created when the test
+ * file loads and removed after its last test.
+ */
+export function scratchWorkspace(): string {
+  const directory = mkdtempSync(join(tmpdir(), 'theoclaw-workspace-'))
+  afterAll(() => rmSync(directory, { recursive: true, force: true }))
+  return directory
+}
+
+export const WORKSPACE = scratchWorkspace()
+
 export const LINE_SECRET = 'line-channel-secret'
 export const LINE_BODY = JSON.stringify({
   events: [
@@ -41,6 +58,7 @@ export const TELEGRAM_AND_LINE = {
   THEOCLAW_TELEGRAM_TOKEN: 'telegram-token-value',
   THEOCLAW_LINE_CHANNEL_SECRET: LINE_SECRET,
   THEOCLAW_LINE_CHANNEL_ACCESS_TOKEN: 'line-access-token',
+  THEOCLAW_WORKSPACE: WORKSPACE,
 }
 
 export function signedLinePost(base = 'http://localhost'): Request {
