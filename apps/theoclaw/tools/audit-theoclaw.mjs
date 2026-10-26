@@ -7,16 +7,29 @@
  * keeps an advisory only when one of its paths starts at the `apps/theoclaw` importer, dev tree
  * included. pnpm's own exit code is never read: it is non-zero whenever any importer has an advisory.
  *
+ * pnpm reports a dependency of a `workspace:*` package under that package's own importer
+ * (`packages__agents>...`), never through the app that links it. So the importers TheoClaw links,
+ * read from pnpm-lock.yaml and followed through their own production links, are in scope too, for
+ * the production dependencies TheoClaw installs from them (their devDependencies are not installed).
+ * A peer a linked package declares only as its own devDependency is out of that scope; it is in
+ * scope when TheoClaw declares the package itself.
+ * The app's importer is derived from where this file lives, and a lockfile without it exits 2, so a
+ * moved app fails closed instead of matching no path.
+ *
  * Exit 0 with no TheoClaw advisory, 1 with one line per advisory, 2 when the report cannot be read.
  * A malformed advisory exits 2 even when it reaches only another importer: without its paths the
  * tool cannot tell whether it reaches TheoClaw, so it fails closed rather than guessing.
  */
 import { spawnSync } from 'node:child_process'
-import { realpathSync } from 'node:fs'
+import { readFileSync, realpathSync } from 'node:fs'
+import { posix, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const REPO_ROOT = fileURLToPath(new URL('../../../', import.meta.url))
-const IMPORTER = 'apps__theoclaw'
+const LOCKFILE = 'pnpm-lock.yaml'
+/** The lockfile importer key of the app this tool belongs to, e.g. `apps/theoclaw`. */
+export const APP_IMPORTER = relative(REPO_ROOT, fileURLToPath(new URL('../', import.meta.url))).split(sep).join('/')
+const PRODUCTION_SECTIONS = new Set(['dependencies', 'optionalDependencies'])
 const MAX_BUFFER = 64 * 1024 * 1024
 const HEAD_CHARS = 400
 
@@ -28,7 +41,76 @@ class AuditReportError extends Error {
   }
 }
 
-const reachesTheoclaw = (path) => path === IMPORTER || path.startsWith(`${IMPORTER}>`)
+/** pnpm audit's id for an importer key: `apps/theoclaw` -> `apps__theoclaw`. */
+const importerId = (key) => key.split('/').join('__')
+
+/** One `key:` or `key: value` line of the importers block, with its indentation. */
+const LOCK_ENTRY = /^( {2,8})(\S.*?):(?: (.+))?$/
+
+const unquote = (text) => text.replace(/^'(.*)'$/, '$1')
+
+/**
+ * The `importers:` block of a pnpm lockfile as `Map<key, [{ section, name, version }]>`.
+ * Line-based: pnpm writes this block with fixed two-space indentation.
+ */
+function readImporters(lockText) {
+  const importers = new Map()
+  let inBlock = false
+  let deps = null
+  let section = null
+  let name = null
+  for (const line of lockText.split('\n')) {
+    if (/^\S/.test(line)) inBlock = line === 'importers:'
+    const entry = inBlock ? LOCK_ENTRY.exec(line) : null
+    if (!entry) continue
+    const [, indent, key, value] = entry
+    if (indent.length === 2) {
+      deps = []
+      importers.set(unquote(key), deps)
+    } else if (indent.length === 4) {
+      section = key
+    } else if (indent.length === 6) {
+      name = unquote(key)
+    } else if (indent.length === 8 && key === 'version' && deps) {
+      deps.push({ section, name, version: unquote(value ?? '') })
+    }
+  }
+  return importers
+}
+
+/**
+ * Which audit paths reach TheoClaw: `Map<importer id, Set<direct dependency name> | null>`, where
+ * `null` (the app itself) admits every path and a set admits only paths through those dependencies.
+ * Throws `AuditReportError` when the lockfile has no importer for the app.
+ */
+export function auditScope(lockText) {
+  const importers = readImporters(lockText)
+  if (!importers.has(APP_IMPORTER)) throw new AuditReportError(`no ${APP_IMPORTER} importer in ${LOCKFILE}`)
+  const scope = new Map([[importerId(APP_IMPORTER), null]])
+  const pending = [APP_IMPORTER]
+  while (pending.length > 0) {
+    const key = pending.pop()
+    const isApp = key === APP_IMPORTER
+    for (const dep of importers.get(key) ?? []) {
+      if (!dep.version.startsWith('link:') || !(isApp || PRODUCTION_SECTIONS.has(dep.section))) continue
+      const linked = posix.normalize(posix.join(key, dep.version.slice('link:'.length)))
+      if (scope.has(importerId(linked))) continue
+      if (!importers.has(linked)) throw new AuditReportError(`${key} links ${linked}, which is no importer in ${LOCKFILE}`)
+      const production = importers.get(linked).filter((d) => PRODUCTION_SECTIONS.has(d.section))
+      scope.set(importerId(linked), new Set(production.map((d) => d.name)))
+      pending.push(linked)
+    }
+  }
+  return scope
+}
+
+/** True when an audit path (`importer>dep>...`) starts at an importer of `scope`, through a dependency it admits. */
+function reaches(scope, path) {
+  const [importer, direct] = path.split('>')
+  if (!scope.has(importer)) return false
+  const admitted = scope.get(importer)
+  return admitted === null || direct === undefined || admitted.has(direct)
+}
 
 const isFinding = (f) =>
   f !== null && typeof f.version === 'string' && Array.isArray(f.paths) && f.paths.every((p) => typeof p === 'string')
@@ -45,26 +127,27 @@ function assertShape(id, advisory) {
 }
 
 /** The first path of `advisory` that reaches TheoClaw, with the finding's version, or `null`. */
-function firstTheoclawFinding(advisory) {
+function firstTheoclawFinding(advisory, scope) {
   for (const finding of advisory.findings) {
-    const path = finding.paths.find(reachesTheoclaw)
+    const path = finding.paths.find((p) => reaches(scope, p))
     if (path) return { version: finding.version, path }
   }
   return null
 }
 
 /**
- * `{ severity, ghsa, module, version, path }` for each advisory with a path through TheoClaw.
+ * `{ severity, ghsa, module, version, path }` for each advisory with a path through TheoClaw, as
+ * `scope` (from `auditScope`) defines it.
  * Throws `AuditReportError` when the report, or one advisory in it, cannot be judged.
  */
-export function theoclawAdvisories(report) {
+export function theoclawAdvisories(report, scope) {
   if (report === null || typeof report !== 'object' || report.advisories === null || typeof report.advisories !== 'object') {
     throw new AuditReportError('the report has no advisories object')
   }
   const kept = []
   for (const [id, advisory] of Object.entries(report.advisories)) {
     assertShape(id, advisory)
-    const hit = firstTheoclawFinding(advisory)
+    const hit = firstTheoclawFinding(advisory, scope)
     if (hit) {
       kept.push({
         severity: advisory.severity,
@@ -101,13 +184,26 @@ function parseRun(result) {
   }
 }
 
-/** Runs the audit through `spawn`, writes one line per TheoClaw advisory, and returns the exit code. */
-export function runAudit({ spawn, write, writeError }) {
-  // The repository's own pnpm, resolved from PATH as every CI step and script here does.
-  const result = spawn('pnpm', ['audit', '--json'], { cwd: REPO_ROOT, encoding: 'utf8', maxBuffer: MAX_BUFFER })
+/** The lockfile text through `readFile`, or an `AuditReportError` naming why it cannot be read. */
+function readLockfile(readFile) {
+  try {
+    return readFile(`${REPO_ROOT}${LOCKFILE}`)
+  } catch (error) {
+    throw new AuditReportError(`cannot read ${LOCKFILE}: ${error.message}`)
+  }
+}
+
+/**
+ * Runs the audit through `spawn`, scoped by the lockfile `readFile` returns, writes one line per
+ * TheoClaw advisory, and returns the exit code.
+ */
+export function runAudit({ spawn, readFile, write, writeError }) {
   let kept
   try {
-    kept = theoclawAdvisories(parseRun(result))
+    const scope = auditScope(readLockfile(readFile))
+    // The repository's own pnpm, resolved from PATH as every CI step and script here does.
+    const result = spawn('pnpm', ['audit', '--json'], { cwd: REPO_ROOT, encoding: 'utf8', maxBuffer: MAX_BUFFER })
+    kept = theoclawAdvisories(parseRun(result), scope)
   } catch (error) {
     if (!(error instanceof AuditReportError)) throw error
     writeError(error.message)
@@ -128,5 +224,10 @@ function isDirectRun() {
 }
 
 if (isDirectRun()) {
-  process.exitCode = runAudit({ spawn: spawnSync, write: console.log, writeError: console.error })
+  process.exitCode = runAudit({
+    spawn: spawnSync,
+    readFile: (path) => readFileSync(path, 'utf8'),
+    write: console.log,
+    writeError: console.error,
+  })
 }
