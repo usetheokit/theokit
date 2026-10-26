@@ -42,8 +42,11 @@ and versioning follows [Semantic Versioning](https://semver.org/).
   run check:versions` refuses any other form (`^`, `~`, `>=`, `*`, a tag, `workspace:^`, `file:`,
   `link:`, `npm:`, git), printing one `<section> <name> <specifier>` line per non-exact entry and
   exiting 1. `pnpm --filter theoclaw run audit` runs one workspace `pnpm audit --json` and exits 1
-  on any advisory whose path starts at TheoClaw, dev tree included, ignoring the other importers; it
-  exits 2 when pnpm's report cannot be read or an advisory in it is malformed. `vitest` and
+  on any advisory whose path starts at TheoClaw, dev tree included, or at a production dependency
+  of a `workspace:*` package TheoClaw links (pnpm reports those under the linked package, never
+  through the app), ignoring the other importers; it exits 2 when pnpm's report or the lockfile
+  cannot be read, when the lockfile has no `apps/theoclaw` importer, or when an advisory is
+  malformed. `vitest` and
   `@vitest/coverage-v8` move to 4.1.12, past two `@vitest/mocker` advisories, and `vite` 7.3.7 is a
   direct devDependency. The `theoclaw` CI job runs both commands.
 - Only the owner talks to the instance (B-371). `THEOCLAW_OWNERS` (required) names who the

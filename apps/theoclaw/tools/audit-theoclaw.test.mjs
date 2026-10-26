@@ -2,11 +2,12 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
-import { auditExitCode, runAudit, theoclawAdvisories } from './audit-theoclaw.mjs'
+import { APP_IMPORTER, auditExitCode, auditScope, runAudit, theoclawAdvisories } from './audit-theoclaw.mjs'
 
-const FIXTURE = JSON.parse(
-  readFileSync(fileURLToPath(new URL('./fixtures/audit-two-importers.json', import.meta.url)), 'utf8'),
-)
+const fixture = (name) => readFileSync(fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url)), 'utf8')
+const FIXTURE = JSON.parse(fixture('audit-two-importers.json'))
+const LOCKFILE = fixture('lockfile-linked.yaml')
+const SCOPE = auditScope(LOCKFILE)
 const MIB = 1024 * 1024
 const REPO_ROOT = fileURLToPath(new URL('../../../', import.meta.url))
 
@@ -28,17 +29,32 @@ function fakeSpawn(result) {
   return { spawn, calls }
 }
 
-function audit(result) {
+function audit(result, readLockfile = () => LOCKFILE) {
   const out = []
   const err = []
+  const reads = []
   const { spawn, calls } = fakeSpawn(result)
-  const code = runAudit({ spawn, write: (line) => out.push(line), writeError: (line) => err.push(line) })
-  return { code, out, err, calls }
+  const readFile = (path) => {
+    reads.push(path)
+    return readLockfile(path)
+  }
+  const write = (line) => out.push(line)
+  const code = runAudit({ spawn, readFile, write, writeError: (line) => err.push(line) })
+  return { code, out, err, calls, reads }
 }
+
+const finding = (paths, version = '1.0.0') => ({ version, paths })
+const wellFormed = (overrides) => ({
+  module_name: 'x',
+  severity: 'low',
+  github_advisory_id: 'GHSA-x',
+  findings: [finding(['apps__theoclaw>x'])],
+  ...overrides,
+})
 
 describe('theoclawAdvisories', () => {
   it('keeps an advisory reached through apps__theoclaw in the dev tree', () => {
-    expect(theoclawAdvisories(FIXTURE)).toEqual([
+    expect(theoclawAdvisories(FIXTURE, SCOPE)).toEqual([
       {
         severity: 'moderate',
         ghsa: 'GHSA-0000-vite-0001',
@@ -50,22 +66,74 @@ describe('theoclawAdvisories', () => {
   })
 
   it('drops an advisory reached only through packages__theo', () => {
-    const kept = theoclawAdvisories(FIXTURE)
+    const kept = theoclawAdvisories(FIXTURE, SCOPE)
     expect(kept).toHaveLength(1)
     expect(kept.map((a) => a.module)).not.toContain('mermaid')
   })
 
   it('keeps an advisory on the importer itself', () => {
-    expect(theoclawAdvisories(report([advisory('x', 'low', ['apps__theoclaw'])]))).toHaveLength(1)
+    expect(theoclawAdvisories(report([advisory('x', 'low', ['apps__theoclaw'])]), SCOPE)).toHaveLength(1)
   })
 
   it('drops a path whose importer only starts with the same letters', () => {
-    expect(theoclawAdvisories(report([advisory('x', 'low', ['apps__theoclaw-web>x'])]))).toEqual([])
+    expect(theoclawAdvisories(report([advisory('x', 'low', ['apps__theoclaw-web>x'])]), SCOPE)).toEqual([])
   })
 
-  it('refuses an advisory whose findings are not an array', () => {
-    expect(() => theoclawAdvisories({ advisories: { 1: { module_name: 'x', findings: null } } })).toThrow(
+  it('keeps an advisory reported under a workspace package TheoClaw links', () => {
+    const kept = theoclawAdvisories(report([advisory('x', 'low', ['packages__agents>@theokit/sdk-tools>x'])]), SCOPE)
+    expect(kept.map((a) => a.path)).toEqual(['packages__agents>@theokit/sdk-tools>x'])
+  })
+
+  it('keeps an advisory under a package linked through a linked package', () => {
+    const kept = theoclawAdvisories(report([advisory('marked', 'low', ['packages__presenter>marked'])]), SCOPE)
+    expect(kept).toHaveLength(1)
+  })
+
+  it('drops an advisory reached only through a linked package devDependency', () => {
+    expect(theoclawAdvisories(report([advisory('vite', 'low', ['packages__agents>vitest>vite'])]), SCOPE)).toEqual([])
+  })
+
+  it('drops a package linked only from a linked package devDependencies', () => {
+    expect(theoclawAdvisories(report([advisory('undici', 'low', ['packages__http>undici'])]), SCOPE)).toEqual([])
+  })
+
+  it('refuses an advisory whose findings are null when every other field is present', () => {
+    expect(() => theoclawAdvisories(report([wellFormed({ findings: null })]), SCOPE)).toThrow('advisory 1 is malformed')
+  })
+
+  it('refuses an advisory with no advisory id when every other field is present', () => {
+    expect(() => theoclawAdvisories(report([wellFormed({ github_advisory_id: undefined })]), SCOPE)).toThrow(
       'advisory 1 is malformed',
+    )
+  })
+
+  it('refuses a finding whose version is not a string', () => {
+    expect(() => theoclawAdvisories(report([wellFormed({ findings: [finding(['apps__theoclaw>x'], 1)] })]), SCOPE)).toThrow(
+      'advisory 1 is malformed',
+    )
+  })
+
+  it('refuses a finding whose path is not a string', () => {
+    expect(() => theoclawAdvisories(report([wellFormed({ findings: [finding([1])] })]), SCOPE)).toThrow(
+      'advisory 1 is malformed',
+    )
+  })
+})
+
+describe('auditScope', () => {
+  it('derives the importer from the tool location', () => {
+    expect(APP_IMPORTER).toBe('apps/theoclaw')
+  })
+
+  it('refuses a link to a directory the lockfile has no importer for', () => {
+    expect(() => auditScope(LOCKFILE.replace('  packages/presenter:', '  packages/gone:'))).toThrow(
+      'packages/agents links packages/presenter, which is no importer in pnpm-lock.yaml',
+    )
+  })
+
+  it('refuses a lockfile with no importer for the app', () => {
+    expect(() => auditScope(LOCKFILE.replace('  apps/theoclaw:', '  apps/other:'))).toThrow(
+      'no apps/theoclaw importer in pnpm-lock.yaml',
     )
   })
 })
@@ -81,6 +149,34 @@ describe('auditExitCode', () => {
 })
 
 describe('runAudit', () => {
+  it('reads the lockfile at the repository root', () => {
+    const { reads } = audit({ stdout: JSON.stringify(report([])) })
+    expect(reads).toEqual([`${REPO_ROOT}pnpm-lock.yaml`])
+  })
+
+  it('exits 2 when the lockfile cannot be read', () => {
+    const missing = () => {
+      throw Object.assign(new Error('ENOENT: no such file'), { code: 'ENOENT' })
+    }
+    const { code, err } = audit({ stdout: JSON.stringify(report([])) }, missing)
+    expect(code).toBe(2)
+    expect(err.join('\n')).toContain('cannot read pnpm-lock.yaml: ENOENT: no such file')
+  })
+
+  it('exits 2 when the lockfile has no importer for the app', () => {
+    const { code, err } = audit({ stdout: JSON.stringify(report([])) }, () => 'lockfileVersion: 9.0\n')
+    expect(code).toBe(2)
+    expect(err.join('\n')).toContain('no apps/theoclaw importer')
+  })
+
+  it('prints an advisory reported under a linked workspace package and exits 1', () => {
+    const { code, out } = audit({
+      stdout: JSON.stringify(report([advisory('x', 'moderate', ['packages__agents>@theokit/sdk-tools>x'])])),
+    })
+    expect(code).toBe(1)
+    expect(out).toEqual(['moderate GHSA-x x@1.0.0 packages__agents>@theokit/sdk-tools>x'])
+  })
+
   it('runs pnpm audit --json from the repository root with a 64 MiB buffer', () => {
     const { calls } = audit({ stdout: JSON.stringify(report([])) })
     expect(calls).toHaveLength(1)
