@@ -13,8 +13,9 @@ export interface ModelStubOptions {
   readonly delayMs?: number
   /** The reply text for a request; default `reply <n>`, counting from 1. */
   readonly reply?: (request: StubRequest, index: number) => string
-  /** Answer HTTP 500 to the requests whose 0-based index this returns true for. */
-  readonly fail?: (index: number) => boolean
+  /** Answer HTTP 500 to the requests this returns true for (the SDK retries a 500, so a request
+   *  that must fail for good is chosen by what it carries, not by its index). */
+  readonly fail?: (request: StubRequest, index: number) => boolean
 }
 
 export interface ModelStub {
@@ -70,7 +71,7 @@ export async function startModelStub(options: ModelStubOptions = {}): Promise<Mo
       const recorded: StubRequest = { body: JSON.parse(raw) as StubRequest['body'], receivedAt: Date.now(), respondedAt: undefined }
       const index = requests.push(recorded) - 1
       if ((options.delayMs ?? 0) > 0) await new Promise((resolve) => setTimeout(resolve, options.delayMs))
-      if (options.fail?.(index) === true) {
+      if (options.fail?.(recorded, index) === true) {
         response.writeHead(500, { 'content-type': 'application/json' }).end('{"error":{"message":"stub failure"}}')
       } else {
         stream(response, options.reply?.(recorded, index) ?? `reply ${index + 1}`)
