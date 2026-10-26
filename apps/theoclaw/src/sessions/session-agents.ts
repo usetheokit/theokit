@@ -44,6 +44,8 @@ interface Entry {
   lastUsedOrder: number
   /** Set while the agent is being disposed; a lease of its id waits for it (EC-1). */
   disposing: Promise<void> | undefined
+  /** A reset moved its session to the next generation: disposed once no turn holds it. */
+  retired: boolean
 }
 
 /** How often the idle sweep runs: the "within 60 s after the limit" of NFR-004. */
@@ -106,6 +108,7 @@ export class SessionAgents {
         entry.leases -= 1
         entry.lastUsedAt = Date.now()
         entry.lastUsedOrder = ++this.#order
+        this.#disposeIfRetired(id, entry)
         this.#trimToBound()
         this.#wakeIfAllReleased()
       },
@@ -122,11 +125,13 @@ export class SessionAgents {
       lastUsedAt: Date.now(),
       lastUsedOrder: ++this.#order,
       disposing: undefined,
+      retired: false,
     }
     this.#entries.set(id, entry)
     resolving.then(
       (agent) => {
         entry.agent = agent
+        this.#disposeIfRetired(id, entry)
         this.#trimToBound()
       },
       // A failed resolve leaves no entry, so the session's next message retries it.
@@ -135,6 +140,27 @@ export class SessionAgents {
       },
     )
     return entry
+  }
+
+  /**
+   * Start the event's session afresh (`/new`, `/reset`): its key moves to the next generation, so
+   * its next message opens a new agent id with an empty history (D3). The old agent is disposed
+   * once no turn holds it; a turn running on it finishes there. Its transcript stays on disk.
+   */
+  async reset(event: MessageEvent): Promise<void> {
+    const key = this.deps.router.resolveAgentId(event)
+    const id = agentIdFor(key, this.deps.generations.current(key))
+    await this.deps.generations.next(key)
+    const entry = this.#entries.get(id)
+    if (entry === undefined) return
+    entry.retired = true
+    this.#disposeIfRetired(id, entry)
+  }
+
+  #disposeIfRetired(id: string, entry: Entry): void {
+    if (entry.retired && entry.leases === 0 && entry.agent !== undefined && entry.disposing === undefined) {
+      void this.#dispose(id, entry, entry.agent)
+    }
   }
 
   /**

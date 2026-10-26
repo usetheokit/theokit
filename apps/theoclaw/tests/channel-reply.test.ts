@@ -8,6 +8,7 @@ import type { SDKAgent } from '@theokit/sdk'
 
 import {
   AgentTurnError,
+  NEW_CONVERSATION_REPLY,
   NO_ANSWER_REPLY,
   ReplyDeliveryError,
   createReplyHandler,
@@ -42,6 +43,9 @@ function fakeContext(
   return { ctx, replies }
 }
 
+/** A reset that does nothing: these cases send no command. */
+const noReset = async (): Promise<void> => undefined
+
 /** One lease of `agent` per call, as the composition root's chat boundary hands out. */
 function withOne(agent: TurnAgent) {
   return async <R>(_event: MessageEvent, work: (lease: SessionLease) => R | Promise<R>): Promise<R> =>
@@ -62,12 +66,28 @@ describe('createReplyHandler', () => {
     const event = messageEvent('telegram', 'hello')
     const { ctx, replies } = fakeContext(event)
 
-    await createReplyHandler({ withAgent: withOne(agent) })(event, ctx)
+    await createReplyHandler({ reset: noReset, withAgent: withOne(agent) })(event, ctx)
 
     expect(replies).toHaveLength(1)
     expect(replies[0]?.text).toBe('Hi!')
     expect(replies[0]?.text).not.toContain('The')
     expect(agent.sent).toEqual(['hello'])
+  })
+
+  it('answers /new and /reset with one confirmation line and takes no lease', async () => {
+    const resets: string[] = []
+    for (const text of ['/new', ' /reset ']) {
+      const event = messageEvent('telegram', text)
+      const { ctx, replies } = fakeContext(event)
+      await createReplyHandler({
+        reset: async (resetEvent) => void resets.push(resetEvent.text),
+        withAgent: async () => {
+          throw new Error('a command must not take a lease')
+        },
+      })(event, ctx)
+      expect(replies).toEqual([{ text: NEW_CONVERSATION_REPLY, format: 'plain' }])
+    }
+    expect(resets).toEqual(['/new', ' /reset '])
   })
 
   it('skips a message with empty text', async () => {
@@ -76,6 +96,7 @@ describe('createReplyHandler', () => {
     const { ctx, replies } = fakeContext(event)
 
     await createReplyHandler({
+      reset: noReset,
       withAgent: async () => {
         boundaries += 1
         throw new Error('no boundary should open')
@@ -92,7 +113,7 @@ describe('createReplyHandler', () => {
     const event = messageEvent('discord', 'hello')
     const { ctx, replies } = fakeContext(event)
 
-    await expect(createReplyHandler({ withAgent: withOne(agent) })(event, ctx)).rejects.toBe(failure)
+    await expect(createReplyHandler({ reset: noReset, withAgent: withOne(agent) })(event, ctx)).rejects.toBe(failure)
 
     expect(replies.map((reply) => reply.text)).toEqual([ERROR_SENTENCE])
   })
@@ -103,7 +124,7 @@ describe('createReplyHandler', () => {
     const event = messageEvent('slack', 'hello')
     const { ctx, replies } = fakeContext(event)
 
-    await expect(createReplyHandler({ withAgent: withOne(agent) })(event, ctx)).rejects.toBe(failure)
+    await expect(createReplyHandler({ reset: noReset, withAgent: withOne(agent) })(event, ctx)).rejects.toBe(failure)
 
     expect(replies.map((reply) => reply.text)).toEqual(['Half an ans'])
   })
@@ -113,7 +134,7 @@ describe('createReplyHandler', () => {
     const event = messageEvent('matrix', 'hello')
     const { ctx, replies } = fakeContext(event)
 
-    await createReplyHandler({ withAgent: withOne(agent) })(event, ctx)
+    await createReplyHandler({ reset: noReset, withAgent: withOne(agent) })(event, ctx)
 
     expect(replies.map((reply) => reply.text)).toEqual([NO_ANSWER_REPLY])
   })
@@ -126,7 +147,7 @@ describe('createReplyHandler', () => {
     const event = messageEvent('mattermost', 'hello')
     const { ctx, replies } = fakeContext(event)
 
-    const turn = createReplyHandler({ withAgent: withOne(agent) })(event, ctx)
+    const turn = createReplyHandler({ reset: noReset, withAgent: withOne(agent) })(event, ctx)
 
     await expect(turn).rejects.toBeInstanceOf(AgentTurnError)
     await expect(turn).rejects.toThrow(/mattermost.*provider_error/)
@@ -138,7 +159,7 @@ describe('createReplyHandler', () => {
     const event = messageEvent('email', 'hello')
     const { ctx, replies } = fakeContext(event)
 
-    await createReplyHandler({ withAgent: withOne(agent) })(event, ctx)
+    await createReplyHandler({ reset: noReset, withAgent: withOne(agent) })(event, ctx)
 
     expect(replies.map((reply) => reply.text)).toEqual([NO_ANSWER_REPLY])
   })
@@ -149,7 +170,7 @@ describe('createReplyHandler', () => {
     const { ctx, replies } = fakeContext(event)
 
     await expect(
-      createReplyHandler({ withAgent: () => Promise.reject(failure) })(event, ctx),
+      createReplyHandler({ reset: noReset, withAgent: () => Promise.reject(failure) })(event, ctx),
     ).rejects.toBe(failure)
 
     expect(replies.map((reply) => reply.text)).toEqual([ERROR_SENTENCE])
@@ -163,7 +184,7 @@ describe('createReplyHandler', () => {
       error: { code: 'rate_limited', message: 'slow down' },
     })
 
-    const turn = createReplyHandler({ withAgent: withOne(agent) })(event, ctx)
+    const turn = createReplyHandler({ reset: noReset, withAgent: withOne(agent) })(event, ctx)
 
     await expect(turn).rejects.toBeInstanceOf(ReplyDeliveryError)
     await expect(turn).rejects.toThrow(/telegram.*rate_limited/)
@@ -174,7 +195,7 @@ describe('createReplyHandler', () => {
     const event = messageEvent('line', 'hello')
     const { ctx, replies } = fakeContext(event)
 
-    await createReplyHandler({ withAgent: withOne(agent) })(event, ctx)
+    await createReplyHandler({ reset: noReset, withAgent: withOne(agent) })(event, ctx)
 
     expect(replies).toEqual([
       { text: channelRendering('line').translate('**Hi**'), format: channelRendering('line').format },
@@ -194,7 +215,7 @@ describe('createReplyHandler', () => {
       },
     }
 
-    await expect(createReplyHandler({ withAgent: withOne(agent) })(event, ctx)).rejects.toBe(unreachable)
+    await expect(createReplyHandler({ reset: noReset, withAgent: withOne(agent) })(event, ctx)).rejects.toBe(unreachable)
 
     expect(attempts).toBe(1)
   })
@@ -206,6 +227,7 @@ describe('createReplyHandler', () => {
     const disposal = new Error('request scope disposal failed')
 
     const turn = createReplyHandler({
+      reset: noReset,
       withAgent: async (_event, work) => {
         await work({ agent, release: () => undefined })
         throw disposal
@@ -222,7 +244,7 @@ describe('createReplyHandler', () => {
     const event = messageEvent('telegram', 'hello')
     const { ctx } = fakeContext(event, { ok: false, error: { code: 'rate_limited', message: 'slow' } })
 
-    const turn = createReplyHandler({ withAgent: withOne(agent) })(event, ctx)
+    const turn = createReplyHandler({ reset: noReset, withAgent: withOne(agent) })(event, ctx)
 
     await expect(turn).rejects.toBeInstanceOf(ReplyDeliveryError)
     await expect(turn).rejects.toHaveProperty('cause', failure)
@@ -240,7 +262,7 @@ describe('createReplyHandler', () => {
       },
     }
 
-    const turn = createReplyHandler({ withAgent: withOne(agent) })(event, ctx)
+    const turn = createReplyHandler({ reset: noReset, withAgent: withOne(agent) })(event, ctx)
 
     await expect(turn).rejects.toBeInstanceOf(AggregateError)
     await expect(turn).rejects.toHaveProperty('errors', [failure, unreachable])
@@ -251,7 +273,7 @@ describe('createReplyHandler', () => {
     const event = messageEvent('telegram', 'hello')
     const { ctx } = fakeContext(event, { ok: false, error: { code: 'rate_limited', message: 'slow' } })
 
-    const turn = createReplyHandler({ withAgent: () => Promise.reject(failure) })(event, ctx)
+    const turn = createReplyHandler({ reset: noReset, withAgent: () => Promise.reject(failure) })(event, ctx)
 
     await expect(turn).rejects.toBeInstanceOf(ReplyDeliveryError)
     await expect(turn).rejects.toHaveProperty('cause', failure)
@@ -265,7 +287,7 @@ describe('createReplyHandler', () => {
     const event = messageEvent('telegram', 'hello')
     const { ctx, replies } = fakeContext(event)
 
-    const turn = createReplyHandler({ withAgent: withOne(agent) })(event, ctx)
+    const turn = createReplyHandler({ reset: noReset, withAgent: withOne(agent) })(event, ctx)
 
     await expect(turn).rejects.toBeInstanceOf(AgentTurnError)
     expect(replies.map((reply) => reply.text)).toEqual([ERROR_SENTENCE])
@@ -286,6 +308,7 @@ describe('createReplyHandler', () => {
         },
       })
       const handler = createReplyHandler({
+        reset: noReset,
         withAgent: (_event, work) => composition.withAgent((agent) => work({ agent, release: () => undefined })),
       })
       const first = messageEvent('telegram', 'one', 'user-1')
@@ -341,7 +364,7 @@ describe('createReplyHandler in a GatewayRunner', () => {
     })
     const agent = new FakeAgent({ frames: [assistant('hi'), finished()] })
 
-    const errors = await runOne(adapter, createReplyHandler({ withAgent: withOne(agent) }), 'hello')
+    const errors = await runOne(adapter, createReplyHandler({ reset: noReset, withAgent: withOne(agent) }), 'hello')
 
     expect(errors).toHaveLength(1)
     expect(errors[0]).toBeInstanceOf(ReplyDeliveryError)
@@ -354,7 +377,7 @@ describe('createReplyHandler in a GatewayRunner', () => {
     const adapter = new FakeAdapter('telegram')
     const agent = new FakeAgent({ frames: [assistant('Half an ans')], streamError: failure })
 
-    const errors = await runOne(adapter, createReplyHandler({ withAgent: withOne(agent) }), 'hello')
+    const errors = await runOne(adapter, createReplyHandler({ reset: noReset, withAgent: withOne(agent) }), 'hello')
 
     expect(errors).toEqual([failure])
     expect(adapter.sent.map((message) => message.text)).toEqual(['Half an ans'])
@@ -404,6 +427,7 @@ class SdkShapedAgent extends FakeAgent {
 function handlerOver(agent: SdkShapedAgent): GatewayHandler {
   const agents = createContainer<TurnAgent>({ factory: () => agent })
   return createReplyHandler({
+    reset: noReset,
     withAgent: (_event, work) => agents.withAgent((turnAgent) => work({ agent: turnAgent, release: () => undefined })),
   })
 }

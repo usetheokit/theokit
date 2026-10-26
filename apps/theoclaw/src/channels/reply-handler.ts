@@ -10,6 +10,16 @@ import type { SessionLease } from '../sessions/session-agents.js'
 /** The reply to a turn that produced no visible answer (D8): reasoning only, tools only, nothing. */
 export const NO_ANSWER_REPLY = 'I could not come up with an answer to that.'
 
+/** The one line `/new` and `/reset` answer with. */
+export const NEW_CONVERSATION_REPLY = 'Started a new conversation.'
+
+/**
+ * Matched on the whole trimmed text, here rather than through the runner's command registry, whose
+ * word-boundary match would also reset on `/new chat` (FR-008); and the reset needs the session,
+ * which this handler already holds.
+ */
+const RESET_COMMANDS: ReadonlySet<string> = new Set(['/new', '/reset'])
+
 export type { TurnAgent, TurnRun } from '../agent-port.js'
 
 /** Broadcast groups and how their other members are reached (OC-21). */
@@ -27,6 +37,8 @@ export interface ReplyHandlerOptions {
    * composition root's chat `withAgent`.
    */
   readonly withAgent: <R>(event: MessageEvent, work: (lease: SessionLease) => R | Promise<R>) => Promise<R>
+  /** Start the event's session afresh; `SessionAgents.reset`. */
+  readonly reset: (event: MessageEvent) => Promise<void>
   /** Without it, every channel is its own conversation. */
   readonly broadcast?: BroadcastOptions
 }
@@ -213,7 +225,14 @@ async function fanOut(broadcast: BroadcastOptions, group: BroadcastGroup, event:
  */
 export function createReplyHandler(options: ReplyHandlerOptions): GatewayHandler {
   return async (event, ctx) => {
-    if (event.text.trim() === '') return
+    const text = event.text.trim()
+    if (text === '') return
+    if (RESET_COMMANDS.has(text)) {
+      // No lease and no model turn: a session whose agent cannot be resolved can still be reset.
+      await options.reset(event)
+      await send(ctx, { text: NEW_CONVERSATION_REPLY, format: 'plain' }, { failed: false, answer: NEW_CONVERSATION_REPLY })
+      return
+    }
     const broadcast = options.broadcast
     const group = broadcast?.groups.groupOf(event.platform, event.channel.id)
     if (broadcast === undefined || group === undefined) {

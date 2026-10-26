@@ -119,6 +119,12 @@ export interface TheoClawOptions {
    */
   readonly agentFactory: (toolOptions: AgentToolOptions) => TurnAgent | Promise<TurnAgent>
   /**
+   * The session generations, loaded from `<workspace>/.theoclaw/sessions.json`. `startTheoClaw`
+   * loads them before anything starts, so a malformed file refuses the start; `composeTheoClaw`
+   * loads them itself when it is called alone.
+   */
+  readonly generations?: Generations
+  /**
    * Resolves a chat session's agent by id; default `Agent.getOrCreate`. `SessionAgents` calls it
    * once per agent id it opens, with `sessionAgentOptions` (plan D5).
    */
@@ -147,6 +153,11 @@ export interface ComposedTheoClaw {
   readonly sessions: SessionAgents
 }
 
+/** Where the session generations are kept. */
+function sessionsFile(workspace: string): string {
+  return join(workspace, '.theoclaw', 'sessions.json')
+}
+
 /** The chat path's request boundary: it holds the request's event and leases that session's agent. */
 type ChatBoundary = <R>(event: MessageEvent, work: (lease: SessionLease) => R | Promise<R>) => Promise<R>
 
@@ -164,7 +175,7 @@ function chatSessions(options: TheoClawOptions): { readonly sessions: SessionAge
     router: createSessionRouter(settings),
     getOrCreate,
     optionsFor: () => sessionAgentOptions(options.env, settings.workspace),
-    generations: new Generations(),
+    generations: options.generations ?? Generations.load(sessionsFile(settings.workspace)),
     settings,
     write: options.write,
   })
@@ -233,6 +244,7 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
     ),
     handler: createReplyHandler({
       withAgent: chat.withAgent,
+      reset: (event) => chat.sessions.reset(event),
       // `loop` is read per message, after it exists: a member whose platform has not started is
       // reported as not delivered.
       broadcast: {
@@ -372,6 +384,7 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
   const policy = parseAuthorizationPolicy(options.env)
   const tools = startToolSettings(options, policy)
   const sessionSettings = readSessionSettings(options.env, statSync)
+  const generations = Generations.load(sessionsFile(sessionSettings.workspace))
   // `SessionAgents` alone decides when a session's agent is disposed: the SDK's cache and its idle
   // sweep know nothing of a turn in flight. `Agent.create` never reads the cache, so `/control`
   // turns are unaffected.
@@ -420,12 +433,11 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
     ...options,
     policy,
     sessionSettings,
+    generations,
     ...(pairing === undefined ? {} : { pairing }),
     write: stderr,
   })
-  const agents = createContainer<TurnAgent>({
-    factory: () => options.agentFactory(agentToolOptions(tools)),
-  })
+  const agents = createContainer<TurnAgent>({ factory: () => options.agentFactory(agentToolOptions(tools)) })
   composedApp = composed
   const listen = options.listen ?? listenControlPlane
   serving = listen({
