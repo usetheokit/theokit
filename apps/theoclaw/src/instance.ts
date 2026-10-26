@@ -1,3 +1,4 @@
+import { chmodSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { TheoClawConfigError } from './control-plane/errors.js'
@@ -56,4 +57,25 @@ export function resolveInstance(env: Env, options: { readonly homeDir: string })
     stateDirectory,
     overrides: { THEOKIT_HOME: directory, THEOKIT_AUTH_HOME: directory, THEOCLAW_STATE_DIR: stateDirectory },
   }
+}
+
+/**
+ * Put `instance` into effect: its three directories exist at mode 0700 (one that already existed
+ * at another mode is tightened; what it holds is never read or removed), then its overrides are
+ * written into `env`. The no-profile instance changes nothing. A directory that cannot be created
+ * stops the start with `TheoClawConfigError` naming the path and the code, before `env` changes.
+ */
+export function applyInstance(instance: TheoClawInstance, env: NodeJS.ProcessEnv): void {
+  const { directory, workspace, stateDirectory } = instance
+  if (directory === undefined || workspace === undefined || stateDirectory === undefined) return
+  for (const path of [directory, workspace, stateDirectory]) {
+    try {
+      mkdirSync(path, { recursive: true, mode: 0o700 })
+      chmodSync(path, 0o700)
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code ?? 'unknown error'
+      throw new TheoClawConfigError(`THEOCLAW_PROFILE: cannot create ${path}: ${code}`, { variable: 'THEOCLAW_PROFILE' })
+    }
+  }
+  Object.assign(env, instance.overrides)
 }
