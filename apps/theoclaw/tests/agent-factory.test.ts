@@ -4,7 +4,7 @@ import { effectiveToolNames } from "@theokit/sdk";
 
 import {
   createAgentFactory,
-  createChannelAgentFactory,
+  sessionAgentOptions,
   type CreateAgent,
 } from "../src/control-plane/agent-factory.js";
 import type { TurnAgent } from "../src/control-plane/turn.js";
@@ -113,28 +113,32 @@ describe("createAgentFactory", () => {
 
 /**
  * A chat reply runs on whatever anyone sent the bot. The SDK's local agent declares a `shell` tool
- * by default (`sh -c` in the process's directory, with no permission gate), so a channel agent must
+ * by default (`sh -c` in the process's directory, with no permission gate), so a session agent must
  * be built without it. `effectiveToolNames` is the SDK's own reading of what an agent built from
  * those options offers the model.
  */
-describe("createChannelAgentFactory", () => {
-  it("builds the agent of a chat reply with no tool at all, the shell included", async () => {
-    const { create, options } = optionsRecordingCreate();
+describe("sessionAgentOptions", () => {
+  it("builds the agent of a chat session with no tool at all, the shell included", () => {
+    const options = sessionAgentOptions({ THEOCLAW_MODEL: "openrouter/m", OPENROUTER_API_KEY: "router-key" }, "/ws");
 
-    await createChannelAgentFactory({ THEOCLAW_MODEL: "openrouter/m", OPENROUTER_API_KEY: "router-key" }, create)();
-
-    expect(options).toHaveLength(1);
-    const catalog = effectiveToolNames({ ...options[0] });
+    const catalog = effectiveToolNames({ ...options });
     expect(catalog.names).toEqual([]);
     expect(catalog.unresolved).toEqual([]);
-    expect(options[0]).toMatchObject({ model: "openrouter/m", apiKey: "router-key" });
+    expect(options).toMatchObject({ model: "openrouter/m", apiKey: "router-key" });
   });
 
-  it("turns memory off so a chat reply writes no transcript under the cwd", async () => {
-    const { create, options } = optionsRecordingCreate();
+  it("turns memory off so a chat session writes no memory under the cwd", () => {
+    expect(sessionAgentOptions({ THEOCLAW_MODEL: "m", OPENROUTER_API_KEY: "k" }, "/ws").memory).toEqual({ enabled: false });
+  });
 
-    await createChannelAgentFactory({ THEOCLAW_MODEL: "m", OPENROUTER_API_KEY: "k" }, create)();
+  it("keeps the transcripts under the workspace", () => {
+    expect(sessionAgentOptions({ THEOCLAW_MODEL: "m", OPENROUTER_API_KEY: "k" }, "/ws").local).toEqual({
+      cwd: "/ws",
+      sessionDir: "/ws/.theoclaw",
+    });
+  });
 
-    expect(options[0]?.memory).toEqual({ enabled: false });
+  it("refuses a missing model with the start's own words", () => {
+    expect(() => sessionAgentOptions({ OPENROUTER_API_KEY: "k" }, "/ws")).toThrow("THEOCLAW_MODEL");
   });
 });

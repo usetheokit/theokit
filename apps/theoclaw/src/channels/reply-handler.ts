@@ -5,6 +5,7 @@ import type { AgentOutputEvent, ChatMessage } from '@theokit/presenter'
 
 import type { TurnAgent } from '../agent-port.js'
 import type { BroadcastGroup, BroadcastGroups } from './broadcast-groups.js'
+import type { SessionLease } from '../sessions/session-agents.js'
 
 /** The reply to a turn that produced no visible answer (D8): reasoning only, tools only, nothing. */
 export const NO_ANSWER_REPLY = 'I could not come up with an answer to that.'
@@ -21,8 +22,11 @@ export interface BroadcastOptions {
 }
 
 export interface ReplyHandlerOptions {
-  /** One request boundary per message; the composition root's `withAgent`. */
-  readonly withAgent: <R>(work: (agent: TurnAgent) => R | Promise<R>) => Promise<R>
+  /**
+   * One request boundary per message, holding a lease on the agent of the message's session; the
+   * composition root's chat `withAgent`.
+   */
+  readonly withAgent: <R>(event: MessageEvent, work: (lease: SessionLease) => R | Promise<R>) => Promise<R>
   /** Without it, every channel is its own conversation. */
   readonly broadcast?: BroadcastOptions
 }
@@ -142,22 +146,28 @@ async function streamTurn(
 /**
  * One agent turn on `prompt`, and exactly one reply to the origin (FR-004, D8). A failed turn still
  * replies, then rethrows so the runner fires `on_error`. Resolves the answer of a turn that succeeded.
+ * The agent is the session's, owned by `SessionAgents`; the lease is released once the turn has
+ * replied, failed or not.
  */
 async function answerTurn(options: ReplyHandlerOptions, event: MessageEvent, ctx: GatewayContext, prompt: string): Promise<string> {
   const presenter = presenterFor(event)
   let started = false
   try {
-    return await options.withAgent(async (agent) => {
+    return await options.withAgent(event, async (lease) => {
       started = true
-      const outcome = await streamTurn(agent, event, prompt, presenter)
-      await send(ctx, finishTurn(presenter), outcome)
-      if (outcome.failed) throw outcome.error
-      return outcome.answer
+      try {
+        const outcome = await streamTurn(lease.agent, event, prompt, presenter)
+        await send(ctx, finishTurn(presenter), outcome)
+        if (outcome.failed) throw outcome.error
+        return outcome.answer
+      } finally {
+        lease.release()
+      }
     })
   } catch (error) {
     // After the callback ran, the turn already replied; this is the boundary's own failure.
     if (started) throw error
-    // The agent factory rejected before the turn began: the person still gets one reply.
+    // The session's agent could not be resolved before the turn began: the person still gets one reply.
     presenter.present(AGENT_ERROR)
     await send(ctx, finishTurn(presenter), { failed: true, error })
     throw error
@@ -195,10 +205,11 @@ async function fanOut(broadcast: BroadcastOptions, group: BroadcastGroup, event:
 }
 
 /**
- * The handler every runner uses: one agent turn per message with text. In a broadcast group's member
- * channel the turn carries the group's thread, runs after the group's earlier turns, and its answer
- * also reaches every other member; the exchange joins the thread only once the origin was answered.
- * The agent is never closed here: `withAgent`'s request boundary disposes it (see `TurnAgent`).
+ * The handler every runner uses: one agent turn per message with text, on the agent of the
+ * message's session. In a broadcast group's member channel the turn carries the group's thread,
+ * runs after the group's earlier turns, and its answer also reaches every other member; the
+ * exchange joins the thread only once the origin was answered. The agent is never closed or
+ * disposed here: it is the session's, owned by `SessionAgents`.
  */
 export function createReplyHandler(options: ReplyHandlerOptions): GatewayHandler {
   return async (event, ctx) => {
