@@ -24,6 +24,37 @@ so a file kept outside the repository and sourced from your shell profile is als
 | `THEOCLAW_MODEL` | Model id the agent runs, e.g. `openrouter/google/gemini-2.5-flash-lite`. There is no default: startup fails and names the variable. |
 | `THEOKIT_API_KEY` or `OPENROUTER_API_KEY` | The model key, passed to the SDK; `THEOKIT_API_KEY` wins when both are set. |
 | `THEOCLAW_PORT` | Port of the one listener that serves the webhook routes, `/health` and `/control`. Digits only, 0 to 65535. |
+| `THEOCLAW_STATE_DIR` | Where pairings are kept. Required under the default `THEOCLAW_DM_POLICY=pairing`; see below. |
+| `THEOCLAW_OWNERS` | Who the instance serves: comma-separated `platform:senderId`, e.g. `telegram:42,matrix:@me:matrix.org`. Required even with no platform configured; see [Who may talk to the instance](#who-may-talk-to-the-instance). |
+
+### Who may talk to the instance
+
+Only the owners in `THEOCLAW_OWNERS`, and the senders an owner pairs, reach the agent. Everyone else
+is refused before the agent runs. In a group a refused sender never gets a reply, under every
+policy below; owners and paired senders are answered there as in a direct message.
+
+| Variable | Meaning |
+|---|---|
+| `THEOCLAW_OWNERS` | Required. `platform:senderId` entries, comma-separated; the platform is one of the ten below, and an id may contain colons (Matrix). E-mail addresses are compared without case. |
+| `THEOCLAW_DM_POLICY` | What a direct message from anyone else gets: `pairing` (default) a pairing code, `allowlist` the refusal text, `disabled` nothing, `open` the agent. A refused sender is answered at most once an hour; after that, silence. |
+| `THEOCLAW_STATE_DIR` | Directory holding `pairing.json` (mode 0600, the directory created 0700). Required under `pairing`, optional otherwise; pairings made earlier still apply when it is set. A `pairing.json` that does not parse stops the start. |
+| `THEOCLAW_REFUSAL_TEXT` | The refusal under `allowlist`. Default `This assistant answers its owner only.` |
+| `THEOCLAW_GROUP_ACTIVATION` | Slack, Mattermost, WhatsApp and Telegram only: `mention` (default) answers a group message only when it mentions the bot; `always` answers every message from an owner or a paired sender. The other six platforms answer an owner or a paired sender in a group either way. |
+| `THEOCLAW_BROADCAST_GROUPS` | Channels that share one agent thread: `name=platform:channelId,platform:channelId;name2=...`. Each group needs two channels or more, and a channel belongs to one group. The thread keeps the last 20 turns, at most 16384 characters, and every answer reaches every member channel. |
+
+**Pairing.** Under `pairing` a stranger's first direct message is answered with a 6-digit code,
+valid for one hour. The owner approves it by sending `/approve <code>` to the bot in a direct
+message; the sender is then paired, across restarts.
+
+**Group activation.** Slack, Mattermost and WhatsApp read the mode at start. On Telegram an owner
+can send `/activation mention` or `/activation always` in a group to change that group's mode until
+the instance restarts.
+
+**`open` lets two instances talk to each other.** Under `pairing`, `allowlist` and `disabled`, two
+TheoClaw instances in one channel stop after at most two direct messages and never reply in a
+group, because neither is the other's owner. Under `open` both answer every direct message, so two
+instances can keep answering each other's DMs on the seven platforms whose adapters do not drop a
+message written by another bot. Choose `open` only for an instance no other bot writes to.
 
 ### Platforms
 

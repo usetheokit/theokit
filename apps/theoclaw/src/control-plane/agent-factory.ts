@@ -39,8 +39,8 @@ export function createAgentFactory(
 }
 
 /**
- * The agents of chat replies. Anyone who can message the bot writes their prompt (no sender
- * allowlist yet, B-371), so a channel agent must hold no tool and write nothing to disk: built by
+ * The agents of chat replies. Whoever reaches the agent writes their prompt (everyone under
+ * `THEOCLAW_DM_POLICY=open`, B-371), so a channel agent must hold no tool and write nothing to disk: built by
  * `createAgentFactory`, it gets no `shell` (`effectiveToolNames` reads an empty catalog) and memory
  * off. It is its own export so the reply path keeps that guarantee, pinned by its own test, even
  * if the `/control` turn's options change.

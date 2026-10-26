@@ -22,6 +22,20 @@ and versioning follows [Semantic Versioning](https://semver.org/).
   exits 2 when pnpm's report cannot be read or an advisory in it is malformed. `vitest` and
   `@vitest/coverage-v8` move to 4.1.12, past two `@vitest/mocker` advisories, and `vite` 7.3.7 is a
   direct devDependency. The `theoclaw` CI job runs both commands.
+- Only the owner talks to the instance (B-371). `THEOCLAW_OWNERS` (required) names who the
+  instance serves; anyone else is refused before the agent runs, as `THEOCLAW_DM_POLICY` says:
+  `pairing` (default) answers a stranger's DM with a 6-digit code the owner approves by sending
+  `/approve <code>` in a DM, kept in `THEOCLAW_STATE_DIR/pairing.json`; `allowlist` answers
+  `THEOCLAW_REFUSAL_TEXT`; `disabled` answers nothing; `open` lets every direct message through. A
+  refused sender is answered at most once an hour and never in a group, where only owners and paired
+  senders are answered under every policy, so two instances in one channel stop answering each other
+  (under `open`, their direct messages still can). `THEOCLAW_GROUP_ACTIVATION` (`mention` by default) makes Slack, Mattermost,
+  WhatsApp and Telegram groups answer only a mention, and an owner's `/activation` changes a Telegram
+  group's mode. `THEOCLAW_BROADCAST_GROUPS` shares one bounded agent thread across channels on
+  several platforms. The parity ledger records OC-18, OC-19 and OC-21 as shipped, checked against a
+  real model by `tests/live/authorization.live.test.ts` (`THEOCLAW_LIVE=1`). An existing setup must
+  now set `THEOCLAW_OWNERS`, and `THEOCLAW_STATE_DIR` under the default policy, or the start stops
+  naming the variable.
 - A control plane: `pnpm --filter theoclaw run build && pnpm --filter theoclaw start` starts one
   process that serves HTTP and an owner WebSocket on one port (B-372). It binds `127.0.0.1` unless
   `THEOCLAW_HOST` names another address; a non-loopback address also needs
@@ -58,8 +72,8 @@ and versioning follows [Semantic Versioning](https://semver.org/).
     rendering (`channelRendering`, from `@theokit/gateway` 0.11.0 in `theokit-gateways`). A turn
     with no visible answer replies "I could not come up with an answer to that.", and a failed
     turn replies with the presenter's error sentence. The agent runs `THEOCLAW_MODEL` with the
-    control plane's model key, has no tool and keeps no memory: the SDK's `shell` tool is withheld and memory is off, because anyone
-    who can message the bot writes the prompt (no sender allowlist yet, B-371). Every configured credential, both model keys when they are set, and
+    control plane's model key, has no tool and keeps no memory: the SDK's `shell` tool is withheld and memory is off, because whoever
+    reaches the agent writes the prompt (everyone under `THEOCLAW_DM_POLICY=open`, B-371). Every configured credential, both model keys when they are set, and
     the control token are masked as `[redacted]` in everything the process writes to stdout and stderr, including what
     the adapters write themselves.
   - Webhook platforms post to `/webhooks/line`, `/webhooks/sms`, `/webhooks/whatsapp` (GET answers
