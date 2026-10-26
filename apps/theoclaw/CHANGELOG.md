@@ -80,6 +80,21 @@ and versioning follows [Semantic Versioning](https://semver.org/).
   anyone (CWE-290). Under every policy but `open` such a sender gets no reply at all, since the
   reply would go to the address the forger wrote, and the start says so for each configured e-mail
   or SMS channel. A platform the policy does not know is never trusted.
+- Chat sessions (B-378): each chat is now one continuing conversation instead of a fresh agent per
+  message. A group or forum topic is one conversation for all its members; direct messages follow
+  `THEOCLAW_DM_SCOPE` (`main`, `per-peer` with `THEOCLAW_PEER_LINKS`, `per-channel-peer`, the
+  default, or `per-account-channel-peer` with `THEOCLAW_ACCOUNT_LABEL`). A message sent while the
+  chat's turn runs is answered after it, with that turn in its history, and a conversation survives
+  a restart. Sending exactly `/new` or `/reset` starts the chat afresh without a model turn.
+  **`THEOCLAW_WORKSPACE` is now required**: an absolute, existing directory, under whose `.theoclaw/`
+  (mode 0700) every chat's transcript and `sessions.json` are kept. Every sender who reaches the agent
+  (an owner, a paired sender, and anyone under `THEOCLAW_DM_POLICY=open`, B-371) has their messages
+  stored there; delete the directory while
+  TheoClaw is stopped to forget every conversation. `THEOCLAW_SESSION_IDLE_MINUTES` (default 30)
+  and `THEOCLAW_MAX_OPEN_SESSIONS` (default 200) bound the agents kept open. `/control` turns are
+  unchanged: one agent per turn. The parity ledger records OC-50 to OC-52 as shipped, checked
+  against a real model by `tests/live/sessions.live.test.ts`; OC-51 names B-596 (a SQLite session
+  store) and OC-52 names B-599 (idle reset) and B-601 (steer and collect) as their gaps.
 - A control plane: `pnpm --filter theoclaw run build && pnpm --filter theoclaw start` starts one
   process that serves HTTP and an owner WebSocket on one port (B-372). It binds `127.0.0.1` unless
   `THEOCLAW_HOST` names another address; a non-loopback address also needs
