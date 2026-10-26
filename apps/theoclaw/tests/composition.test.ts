@@ -13,7 +13,7 @@ import type { WhatsAppMessageEvent } from '@theokit/gateway'
 import { composeTheoClaw } from '../src/composition.js'
 import { MAX_BODY_BYTES } from '../src/webhooks/router.js'
 import type { TeamsVerifier } from '../src/webhooks/teams.js'
-import { chunkedPost, fakeBuilders, noAgent, signedLinePost, TELEGRAM_AND_LINE } from './composition-fixtures.js'
+import { chunkedPost, fakeBuilders, noAgent, signedLinePost, TELEGRAM_AND_LINE, WORKSPACE } from './composition-fixtures.js'
 import { FakeAdapter, FakeAgent, assistant, deferred, finished, waitFor } from './fakes.js'
 
 /**
@@ -235,6 +235,7 @@ const WHATSAPP_ENV = {
   THEOCLAW_WHATSAPP_PHONE_NUMBER_ID: '1234',
   THEOCLAW_WHATSAPP_APP_SECRET: 'wa-app-secret',
   THEOCLAW_WHATSAPP_VERIFY_TOKEN: 'wa-verify',
+  THEOCLAW_WORKSPACE: WORKSPACE,
 }
 
 /** A started WhatsApp stand-in: a FakeAdapter that also converts envelopes, counting each call. */
@@ -294,6 +295,7 @@ const TEAMS_ENV = {
   THEOCLAW_TEAMS_CLIENT_ID: 'teams-client-id',
   THEOCLAW_TEAMS_CLIENT_SECRET: 'teams-client-secret',
   THEOCLAW_TEAMS_TENANT_ID: '00000000-0000-4000-8000-000000000000',
+  THEOCLAW_WORKSPACE: WORKSPACE,
 }
 
 /** A verifier factory that counts how often it builds and how often its verifier runs. */

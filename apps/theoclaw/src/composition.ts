@@ -1,5 +1,6 @@
 import 'reflect-metadata'
 
+import { statSync } from 'node:fs'
 import { isIPv6 } from 'node:net'
 
 import { Container } from '@theokit/di'
@@ -43,6 +44,7 @@ import { createBonjourPublisher } from './discovery/bonjour-publisher.js'
 import { announceOnLan, type LanAnnouncement, stopThenClose } from './discovery/lan-announcer.js'
 import { parseDiscoveryMode, type PublisherFactory } from './discovery/publisher.js'
 import { NO_PROFILE, type TheoClawInstance } from './instance.js'
+import { readSessionSettings } from './sessions/session-settings.js'
 import { startedRoute, webhookPlatform, withRoute } from './webhooks/platform-routes.js'
 import type { Handle, WebhookDeps, WebhookPlatform } from './webhooks/platform-routes.js'
 import { createWebhookRouter } from './webhooks/router.js'
@@ -356,6 +358,7 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
   // Read before the mask and the shutdown are installed, so a missing owner leaves nothing behind.
   const policy = parseAuthorizationPolicy(options.env)
   const tools = startToolSettings(options, policy)
+  readSessionSettings(options.env, statSync)
   const streams = options.streams ?? [process.stdout, process.stderr]
   const stderr = options.stderr ?? lineWriter(streams[streams.length - 1])
   // Loaded before the start line, the mask and the shutdown: an unreadable pairing file leaves nothing behind.
