@@ -174,8 +174,9 @@ function chatSessions(options: TheoClawOptions): { readonly sessions: SessionAge
   const open = options.getOrCreate ?? ((id: string, agentOptions: AgentOptions) => Agent.getOrCreate(id, agentOptions))
   const sessions = new SessionAgents({
     router: createSessionRouter(settings),
-    // Opened by the chat path's own factory, whose protected options are applied last: no change
-    // to `optionsFor` can hand a chat agent a tool or memory (B-377 option A).
+    // Opened by the chat path's own factory, whose protected options are applied last, so the
+    // `shell` withholding and memory off hold whatever `optionsFor` returns (B-377 option A). Only
+    // those two keys are re-pinned: a tool-bearing key added to `optionsFor` would pass through.
     getOrCreate: (id, sessionOptions) =>
       createChannelAgentFactory(options.env, (channel) => open(id, { ...sessionOptions, ...channel }))(),
     optionsFor: () => sessionAgentOptions(options.env, settings.workspace),
