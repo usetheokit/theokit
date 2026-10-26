@@ -216,3 +216,72 @@ describe('sessions.json', () => {
     expect(readFileSync(file, 'utf8')).toBe('{ not json')
   })
 })
+
+/**
+ * FR-007 in one test process. What "restart" covers here: the first TheoClaw stops through its
+ * shutdown path (which disposes every agent, flushing its transcript), the app's modules are
+ * re-imported after `vi.resetModules()`, and a second TheoClaw starts over the same workspace. The
+ * SDK is an external dependency vitest does not re-import, so its in-process caches survive; that is
+ * why the transcript is also read on disk (NFR-007), and why the stub is reached through
+ * `OPENAI_API_BASE_URL` as well as `model.url`: a resumed agent takes its model from the registry,
+ * which keeps only the model id. Hydrating `registry.json` in a fresh process is not exercised; the
+ * live check of T4.1 restarts the same way.
+ */
+describe('a restart', () => {
+  const workspace = freshWorkspace()
+  const sender = 'restart-1'
+  let stub: ModelStub
+
+  it('the first turn is on disk under the workspace before the restart', { timeout: 30_000 }, async () => {
+    stub = await startModelStub()
+    vi.stubEnv('OPENAI_API_BASE_URL', stub.url)
+    const signals = new EventEmitter()
+    const exit = vi.fn()
+    const { adapters, builders } = fakeBuilders()
+    const app = await startTheoClaw({
+      env: { ...TELEGRAM_AND_LINE, OPENROUTER_API_KEY: STUB_KEY, THEOCLAW_WORKSPACE: workspace },
+      agentFactory: () => {
+        throw new Error('the /control factory must not build a chat agent')
+      },
+      getOrCreate: (id, options) => Agent.getOrCreate(id, { ...options, model: { id: 'openai/stub', url: stub.url } }),
+      builders,
+      signals,
+      exit,
+      streams: [capturingStream()],
+    })
+    await app.loop.ready
+
+    await say(adapters.get('telegram')!, 'the word is heron', sender)
+    signals.emit('SIGTERM')
+    await waitFor(() => exit.mock.calls.length === 1, 35_000, 'the first TheoClaw to stop')
+
+    expect(exit).toHaveBeenCalledWith(0)
+    const files = transcripts(join(workspace, '.theoclaw', 'projects'))
+    expect(files.some((file) => readFileSync(file, 'utf8').includes('the word is heron'))).toBe(true)
+  })
+
+  it('a turn written before a restart is in the request the stub receives after it', { timeout: 30_000 }, async () => {
+    vi.resetModules()
+    const reloaded = await import('../src/composition.js')
+    const { adapters, builders } = fakeBuilders()
+    const app = await reloaded.startTheoClaw({
+      env: { ...TELEGRAM_AND_LINE, OPENROUTER_API_KEY: STUB_KEY, THEOCLAW_WORKSPACE: workspace },
+      agentFactory: () => {
+        throw new Error('the /control factory must not build a chat agent')
+      },
+      getOrCreate: (id, options) => Agent.getOrCreate(id, { ...options, model: { id: 'openai/stub', url: stub.url } }),
+      builders,
+      signals: new EventEmitter(),
+      exit: vi.fn(),
+      streams: [capturingStream()],
+    })
+    running.push(app)
+    await app.loop.ready
+
+    await say(adapters.get('telegram')!, 'what was the word', sender)
+
+    expect(stub.userTexts(stub.requests.at(-1)!)).toEqual(['the word is heron', 'what was the word'])
+    vi.unstubAllEnvs()
+    await stub.close()
+  })
+})
