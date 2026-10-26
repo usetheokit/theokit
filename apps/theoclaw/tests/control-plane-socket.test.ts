@@ -54,6 +54,7 @@ function stubAgent(script: StubScript): TurnAgent {
           }
         },
         wait: async () => ({ status: script.status ?? "finished" }),
+        cancel: async () => undefined,
       };
     },
   };

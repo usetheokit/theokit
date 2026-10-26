@@ -156,6 +156,7 @@ export class FakeAgent {
         if (turn.streamError) throw turn.streamError
       },
       wait: async () => turn.result ?? { status: 'finished' },
+      cancel: async () => undefined,
     }
   }
 }
