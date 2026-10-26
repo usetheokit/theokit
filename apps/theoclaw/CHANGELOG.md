@@ -37,6 +37,13 @@ and versioning follows [Semantic Versioning](https://semver.org/).
   directory and proves 401 without or with a wrong token, 404 with the token unset, a real-model
   turn, a reconnect with no restart, that the turn crossed that `sshd`, that no process printed the
   token, and that `~/.ssh` is untouched.
+- Several instances on one host (B-514). `THEOCLAW_PROFILE=<name>` (`^[a-z0-9][a-z0-9-]{0,15}$`)
+  keeps an instance's SDK state, `auth.json`, pairing store and agent working directory under
+  `~/.theokit/profiles/<name>` (mode 0700), and names it `theoclaw-<name>` in its first stderr line,
+  `theoclaw-<name>: instance started, profile directory <dir>`, and in its process title. A bad
+  name, or a profile beside `THEOKIT_HOME`, `THEOKIT_AUTH_HOME` or `THEOCLAW_STATE_DIR`, stops the
+  start with exit 1 and creates nothing. Without a profile the start is unchanged apart from its new
+  first line, `theoclaw: instance started, no profile`.
 - Exact dependency versions and an audit of what TheoClaw installs (B-406). Every entry of
   `apps/theoclaw/package.json` is now an exact version or `workspace:*`, and `pnpm --filter theoclaw
   run check:versions` refuses any other form (`^`, `~`, `>=`, `*`, a tag, `workspace:^`, `file:`,

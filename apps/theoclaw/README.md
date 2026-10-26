@@ -224,6 +224,46 @@ set -a; . ~/.config/theoclaw/dev.env; set +a
 THEOCLAW_LIVE=1 pnpm --filter theoclaw exec vitest run tests/live/remote-access.live.test.ts
 ```
 
+## Several instances on one host
+
+Set `THEOCLAW_PROFILE` to run more than one TheoClaw on one machine, each with its own state and its
+own name. The value is a name matching `^[a-z0-9][a-z0-9-]{0,15}$` (for example `work` or `home-2`);
+anything else stops the start with exit 1 and creates nothing. Give each instance its own
+`THEOCLAW_PORT` and its own bot credentials.
+
+With `THEOCLAW_PROFILE=work` the instance:
+
+- keeps everything under `~/.theokit/profiles/work` (directory mode 0700): it sets `THEOKIT_HOME`
+  and `THEOKIT_AUTH_HOME` to that directory, so the SDK's turn records, settings and `auth.json` go
+  there, and `THEOCLAW_STATE_DIR` to `~/.theokit/profiles/work/state`, so `pairing.json` does too
+  (a profiled instance always has a pairing store, empty until its owner approves someone);
+- builds its agents in `~/.theokit/profiles/work/workspace`, so the agent registry and any memory
+  under the working directory stay in the profile. That directory is also the agent's working
+  directory: tools and project configuration resolve against it, not against the directory you
+  started TheoClaw in;
+- calls itself `theoclaw-work`. Its first line on stderr is
+  `theoclaw-work: instance started, profile directory /home/<you>/.theokit/profiles/work`, which is
+  the authoritative label. The process title (`ps`) is set to the same name, but the kernel
+  truncates it to the length of the original command line, so it can be cut short.
+
+A profile cannot be combined with an explicit `THEOKIT_HOME`, `THEOKIT_AUTH_HOME` or
+`THEOCLAW_STATE_DIR`: the start stops and names each one set. Unset them before moving to profiles.
+Restarting an instance with the same profile keeps everything it wrote before. With no
+`THEOCLAW_PROFILE`, nothing moves and the first line is `theoclaw: instance started, no profile`.
+
+```bash
+THEOCLAW_PROFILE=work THEOCLAW_PORT=8787 ... pnpm --filter theoclaw start
+THEOCLAW_PROFILE=home THEOCLAW_PORT=8788 ... pnpm --filter theoclaw start
+```
+
+The live check starts two built instances under one scratch `HOME` and runs a real-model turn on
+each:
+
+```bash
+pnpm --filter theoclaw run build
+THEOCLAW_LIVE=1 pnpm --filter theoclaw exec vitest run tests/live/instance-profiles.live.test.ts
+```
+
 ## Keeping secrets out of the repository
 
 `.env` and `.env.*` are ignored at the repository root; only `.env.example` is tracked. Do not
