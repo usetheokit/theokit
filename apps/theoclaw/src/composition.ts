@@ -35,7 +35,7 @@ import { resolvePlatforms } from './channels/platforms.js'
 import type { ConfiguredPlatform } from './channels/platforms.js'
 import { createReplyHandler } from './channels/reply-handler.js'
 import type { TurnAgent } from './channels/reply-handler.js'
-import { sessionAgentOptions } from './control-plane/agent-factory.js'
+import { createChannelAgentFactory, sessionAgentOptions } from './control-plane/agent-factory.js'
 import { type ControlPlaneHandle, healthHandler, listenControlPlane } from './control-plane/listener.js'
 import { describeError } from './control-plane/errors.js'
 import { readControlPlaneSettings } from './control-plane/settings.js'
@@ -126,7 +126,8 @@ export interface TheoClawOptions {
   readonly generations?: Generations
   /**
    * Resolves a chat session's agent by id; default `Agent.getOrCreate`. `SessionAgents` calls it
-   * once per agent id it opens, with `sessionAgentOptions` (plan D5).
+   * once per agent id it opens, through `createChannelAgentFactory`, with `sessionAgentOptions`
+   * (plan D5, T5.1).
    */
   readonly getOrCreate?: (id: string, options: AgentOptions) => Promise<SessionAgent>
   /** The session settings `startTheoClaw` already read; `composeTheoClaw` reads them itself when absent. */
@@ -170,10 +171,13 @@ type ChatBoundary = <R>(event: MessageEvent, work: (lease: SessionLease) => R | 
  */
 function chatSessions(options: TheoClawOptions): { readonly sessions: SessionAgents; readonly withAgent: ChatBoundary } {
   const settings = options.sessionSettings ?? readSessionSettings(options.env, statSync)
-  const getOrCreate = options.getOrCreate ?? ((id: string, agentOptions: AgentOptions) => Agent.getOrCreate(id, agentOptions))
+  const open = options.getOrCreate ?? ((id: string, agentOptions: AgentOptions) => Agent.getOrCreate(id, agentOptions))
   const sessions = new SessionAgents({
     router: createSessionRouter(settings),
-    getOrCreate,
+    // Opened by the chat path's own factory, whose protected options are applied last: no change
+    // to `optionsFor` can hand a chat agent a tool or memory (B-377 option A).
+    getOrCreate: (id, sessionOptions) =>
+      createChannelAgentFactory(options.env, (channel) => open(id, { ...sessionOptions, ...channel }))(),
     optionsFor: () => sessionAgentOptions(options.env, settings.workspace),
     generations: options.generations ?? Generations.load(sessionsFile(settings.workspace)),
     settings,
