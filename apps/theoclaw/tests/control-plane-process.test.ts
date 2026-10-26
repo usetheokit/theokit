@@ -31,6 +31,8 @@ const COMPLETE_ENV: Readonly<Record<string, string | undefined>> = {
   OPENROUTER_API_KEY: MODEL_KEY,
   THEOCLAW_PORT: "0",
   THEOCLAW_CONTROL_TOKEN: TOKEN,
+  THEOCLAW_OWNERS: "telegram:owner",
+  THEOCLAW_DM_POLICY: "allowlist",
 };
 
 /**

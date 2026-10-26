@@ -14,6 +14,9 @@ import { FakeAdapter } from './fakes.js'
  */
 
 const SMS_ENV = {
+  // A placeholder owner the app requires (B-371); these tests stay at the route level.
+  THEOCLAW_OWNERS: 'telegram:owner',
+  THEOCLAW_DM_POLICY: 'allowlist',
   THEOCLAW_SMS_TWILIO_ACCOUNT_SID: 'AC-composed',
   THEOCLAW_SMS_TWILIO_AUTH_TOKEN: 'sms-auth-token',
   THEOCLAW_SMS_TWILIO_FROM_NUMBER: '+12025550123',
@@ -21,6 +24,9 @@ const SMS_ENV = {
 }
 
 const WHATSAPP_ENV = {
+  // A placeholder owner the app requires (B-371); these tests stay at the route level.
+  THEOCLAW_OWNERS: 'telegram:owner',
+  THEOCLAW_DM_POLICY: 'allowlist',
   THEOCLAW_WHATSAPP_ACCESS_TOKEN: 'wa-access-token-value',
   THEOCLAW_WHATSAPP_PHONE_NUMBER_ID: '1234',
   THEOCLAW_WHATSAPP_APP_SECRET: 'wa-app-secret',

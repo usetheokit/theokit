@@ -18,6 +18,8 @@ function validEnv(): Record<string, string | undefined> {
     OPENROUTER_API_KEY: MODEL_KEY,
     THEOCLAW_PORT: "0",
     THEOCLAW_CONTROL_TOKEN: TOKEN,
+    THEOCLAW_OWNERS: "telegram:owner",
+    THEOCLAW_DM_POLICY: "allowlist",
   };
 }
 
@@ -204,6 +206,18 @@ describe("startTheoClaw", () => {
 
     expect(state.listenCalls).toBe(0);
     expect(state.agentsBuilt).toBe(0);
+  });
+
+  it("refuses a start without THEOCLAW_OWNERS before the shutdown or the output mask is installed", async () => {
+    const { state, start } = harness();
+    const { THEOCLAW_OWNERS: _omitted, ...env } = validEnv();
+
+    const error = await start(env).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(TheoClawConfigError);
+    expect((error as TheoClawConfigError).variable).toBe("THEOCLAW_OWNERS");
+    expect(state.signals.eventNames()).toEqual([]);
+    expect(state.listenCalls).toBe(0);
   });
 
   it("refuses a start without a model or a key before any socket opens", async () => {

@@ -9,6 +9,10 @@ import type { BasePlatformAdapter, PlatformName } from '@theokit/gateway'
 import { teamsActivityVerifier } from '@theokit/gateway-teams'
 import type { TeamsActivityVerifierOptions } from '@theokit/gateway-teams'
 
+import { createOwnerPolicyHook } from './authorization/owner-policy-hook.js'
+import { createPairingStore } from './authorization/pairing-store.js'
+import { parseAuthorizationPolicy } from './authorization/policy.js'
+import type { AuthorizationPolicy } from './authorization/policy.js'
 import { adapterBuilders, smsOptions } from './channels/adapter-factory.js'
 import { maskSecrets, startChannelLoop } from './channels/channel-loop.js'
 import type { ChannelLoop, PlatformBuild } from './channels/channel-loop.js'
@@ -99,6 +103,8 @@ export interface TheoClawOptions {
   readonly builders?: (configured: readonly ConfiguredPlatform[]) => PlatformBuild[]
   readonly write: (line: string) => void
   readonly startTimeoutMs?: number
+  /** Who the instance serves, parsed from this same `env`; parsed here when absent (`startTheoClaw` parses it first). */
+  readonly policy?: AuthorizationPolicy
   /** Builds the Teams activity verifier, once (D4). Defaults to the package's `teamsActivityVerifier`. */
   readonly teamsVerifierFactory?: (options: TeamsActivityVerifierOptions) => TeamsVerifier
 }
@@ -240,6 +246,8 @@ function startedRoute(loop: ChannelLoop, platform: PlatformName, handles: WeakMa
  * Returns at once; the loop keeps starting slow platforms while the router already serves (EC-2).
  */
 export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
+  // First: a bad authorization value stops the start before any adapter is built.
+  const policy = options.policy ?? parseAuthorizationPolicy(options.env)
   const agents = createContainer<TurnAgent>({ factory: options.channelAgentFactory ?? options.agentFactory })
   const { configured, skipped, secrets } = resolvePlatforms(options.env)
   for (const { platform, missing } of skipped) {
@@ -248,6 +256,9 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
   // What the routes and the router write can carry a configured value (a verifier's message, an
   // SDK error): masked here as the loop masks its own lines, whatever stream the caller writes to.
   const maskedWrite = (line: string): void => options.write(redactSecrets(maskSecrets(line, secrets)))
+  // The store exists only with a state directory; the hook runs without one under the other policies.
+  const pairing = policy.stateDir === undefined ? undefined : createPairingStore({ dir: policy.stateDir, write: maskedWrite })
+  const ownerPolicy = createOwnerPolicyHook({ policy, ...(pairing === undefined ? {} : { pairing }), write: maskedWrite })
   const deps: WebhookDeps = { write: maskedWrite, verifierFactory: options.teamsVerifierFactory ?? teamsActivityVerifier }
   const webhooks = new Map<PlatformName, WebhookPlatform>()
   for (const entry of configured) {
@@ -260,6 +271,7 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
       withRoute(build, webhooks.get(build.platform), handles),
     ),
     handler: createReplyHandler({ withAgent: (work) => agents.withAgent(work) }),
+    hooks: [ownerPolicy],
     secrets,
     write: options.write,
     ...(options.startTimeoutMs === undefined ? {} : { startTimeoutMs: options.startTimeoutMs }),
@@ -331,6 +343,8 @@ function serveHealthAndWebhooks(router: ComposedTheoClaw['router']): (request: R
 export async function startTheoClaw(options: StartOptions): Promise<RunningTheoClaw> {
   const settings = readControlPlaneSettings(options.env)
   const discovery = parseDiscoveryMode(options.env)
+  // Read before the mask and the shutdown are installed, so a missing owner leaves nothing behind.
+  const policy = parseAuthorizationPolicy(options.env)
   const streams = options.streams ?? [process.stdout, process.stderr]
   const mask = installOutputMask(processSecrets(options.env, settings.controlToken), streams)
   const stdout = options.stdout ?? lineWriter(streams[0])
@@ -354,7 +368,7 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
     },
     write: stderr,
   })
-  const composed = composeTheoClaw({ ...options, write: stderr })
+  const composed = composeTheoClaw({ ...options, policy, write: stderr })
   const agents = createContainer<TurnAgent>({ factory: options.agentFactory })
   loop = composed.loop
   const listen = options.listen ?? listenControlPlane

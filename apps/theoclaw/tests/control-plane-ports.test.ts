@@ -29,7 +29,13 @@ async function freePort(): Promise<number> {
 
 function start(port: number): Promise<ControlPlaneHandle> {
   return startTheoClaw({
-    env: { THEOCLAW_MODEL: "m", OPENROUTER_API_KEY: "k", THEOCLAW_PORT: String(port) },
+    env: {
+      THEOCLAW_MODEL: "m",
+      OPENROUTER_API_KEY: "k",
+      THEOCLAW_PORT: String(port),
+      THEOCLAW_OWNERS: "telegram:owner",
+      THEOCLAW_DM_POLICY: "allowlist",
+    },
     agentFactory: () => {
       agentsBuilt += 1;
       return { send: () => Promise.reject(new Error("no turn in these tests")) };

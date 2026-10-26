@@ -56,6 +56,8 @@ describe.skipIf(!LIVE)("the control plane against a real model", () => {
         ...(process.env.OPENROUTER_API_KEY ? { OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY } : {}),
         THEOCLAW_PORT: "0",
         THEOCLAW_CONTROL_TOKEN: TOKEN,
+        THEOCLAW_OWNERS: "telegram:owner",
+        THEOCLAW_DM_POLICY: "allowlist",
       },
       stdio: ["ignore", "pipe", "pipe"],
     });

@@ -208,6 +208,9 @@ describe('composeTheoClaw', () => {
     })('sms')
     const { builders } = fakeBuilders({ sms })
     const env = {
+      // A placeholder owner the app requires (B-371); this test stays at the route level.
+      THEOCLAW_OWNERS: 'telegram:owner',
+      THEOCLAW_DM_POLICY: 'allowlist',
       THEOCLAW_SMS_TWILIO_ACCOUNT_SID: 'AC-x',
       THEOCLAW_SMS_TWILIO_AUTH_TOKEN: 'auth-token',
       THEOCLAW_SMS_TWILIO_FROM_NUMBER: '+15550000000',
@@ -225,6 +228,9 @@ describe('composeTheoClaw', () => {
 })
 
 const WHATSAPP_ENV = {
+  // A placeholder owner the app requires (B-371); these tests stay at the route level.
+  THEOCLAW_OWNERS: 'telegram:owner',
+  THEOCLAW_DM_POLICY: 'allowlist',
   THEOCLAW_WHATSAPP_ACCESS_TOKEN: 'wa-access',
   THEOCLAW_WHATSAPP_PHONE_NUMBER_ID: '1234',
   THEOCLAW_WHATSAPP_APP_SECRET: 'wa-app-secret',
@@ -282,6 +288,9 @@ describe('composeTheoClaw with WhatsApp', () => {
 })
 
 const TEAMS_ENV = {
+  // A placeholder owner the app requires (B-371); these tests stay at the route level.
+  THEOCLAW_OWNERS: 'telegram:owner',
+  THEOCLAW_DM_POLICY: 'allowlist',
   THEOCLAW_TEAMS_CLIENT_ID: 'teams-client-id',
   THEOCLAW_TEAMS_CLIENT_SECRET: 'teams-client-secret',
   THEOCLAW_TEAMS_TENANT_ID: '00000000-0000-4000-8000-000000000000',
