@@ -7,6 +7,9 @@ import { createAgentProvider } from "@theokit/di-agent";
 import { createContainer } from "../src/composition.js";
 
 import { createHmac } from 'node:crypto'
+import { readdirSync, readFileSync } from 'node:fs'
+import { join, relative } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 import type { WhatsAppMessageEvent } from '@theokit/gateway'
 
@@ -159,17 +162,20 @@ describe('composeTheoClaw', () => {
     await loop.stopAll()
   })
 
-  // The join the item ships: a message entering a route reaches an agent of the channel factory,
-  // and its answer leaves through the same platform's adapter.
+  // The join the item ships: a message entering a route reaches its session's agent, resolved
+  // through `getOrCreate` and never through the `/control` factory, and its answer leaves through
+  // the same platform's adapter.
   it('answers a LINE message with the reply of an agent from the channel factory', async () => {
-    const channelAgent = new FakeAgent({ frames: [assistant('hi from theo'), finished()] })
+    const channelAgent = Object.assign(new FakeAgent({ frames: [assistant('hi from theo'), finished()] }), {
+      dispose: async () => undefined,
+    })
     const { adapters, builders } = fakeBuilders()
     const { loop, router } = composeTheoClaw({
       env: TELEGRAM_AND_LINE,
       agentFactory: () => {
         throw new Error('the /control factory must not build a chat agent')
       },
-      channelAgentFactory: () => channelAgent,
+      getOrCreate: async () => channelAgent,
       builders,
       write: () => undefined,
     })
@@ -215,6 +221,7 @@ describe('composeTheoClaw', () => {
       THEOCLAW_SMS_TWILIO_AUTH_TOKEN: 'auth-token',
       THEOCLAW_SMS_TWILIO_FROM_NUMBER: '+15550000000',
       THEOCLAW_SMS_PUBLIC_URL: 'https://example.org/webhooks/sms',
+      THEOCLAW_WORKSPACE: WORKSPACE,
     }
     const { loop, router } = composeTheoClaw({ env, agentFactory: noAgent, builders, write: () => undefined })
     await loop.ready
@@ -416,5 +423,22 @@ describe('composeTheoClaw with Teams', () => {
     expect(lines.some((line) => line.startsWith('teams: the activity verifier could not be built'))).toBe(true)
     expect(lines.join('\n')).not.toContain('not-a-guid-tenant')
     await loop.stopAll()
+  })
+})
+
+// AC-008 as amended by D5: the chat path builds no per-message agent, and `Agent.create(` is called
+// only by the `/control` factory.
+describe('the chat path names no per-message factory', () => {
+  const SRC = fileURLToPath(new URL('../src/', import.meta.url))
+  const sources = (directory: string): string[] =>
+    readdirSync(directory, { withFileTypes: true }).flatMap((entry) =>
+      entry.isDirectory() ? sources(join(directory, entry.name)) : entry.name.endsWith('.ts') ? [join(directory, entry.name)] : [],
+    )
+
+  it('names channelAgentFactory nowhere and calls Agent.create only in the /control factory', () => {
+    const files = sources(SRC).map((path) => ({ path: relative(SRC, path), text: readFileSync(path, 'utf8') }))
+    expect(files.filter(({ text }) => /channelAgentFactory|createChannelAgentFactory/.test(text)).map(({ path }) => path)).toEqual([])
+    expect(files.filter(({ text }) => /Agent\.create\(/.test(text)).map(({ path }) => path)).toEqual([join('control-plane', 'agent-factory.ts')])
+    expect(readFileSync(join(SRC, 'main.ts'), 'utf8')).toContain('agentFactory: createAgentFactory(process.env)')
   })
 })

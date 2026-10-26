@@ -1,13 +1,23 @@
+import { EventEmitter } from 'node:events'
+import { statSync } from 'node:fs'
+import { join } from 'node:path'
+
 import type { MessageEvent } from '@theokit/gateway'
+import { Agent } from '@theokit/sdk'
 import type { AgentOptions } from '@theokit/sdk'
-import { describe, expect, it, vi } from 'vitest'
+import { afterAll, describe, expect, it, vi } from 'vitest'
+
+import { composeTheoClaw, startTheoClaw } from '../src/composition.js'
+import type { RunningTheoClaw } from '../src/composition.js'
 
 import { Generations } from '../src/sessions/generations.js'
 import { SessionAgents } from '../src/sessions/session-agents.js'
 import type { SessionAgent } from '../src/sessions/session-agents.js'
 import { createSessionRouter } from '../src/sessions/session-key.js'
 import type { SessionSettings } from '../src/sessions/session-settings.js'
-import { deferred } from './fakes.js'
+import { capturingStream, fakeBuilders, scratchWorkspace, TELEGRAM_AND_LINE } from './composition-fixtures.js'
+import { FakeAgent, assistant, deferred, finished, messageEvent, waitFor } from './fakes.js'
+import { startModelStub } from './session-model-stub.js'
 
 const SETTINGS: SessionSettings = {
   dmScope: 'per-channel-peer',
@@ -103,5 +113,133 @@ describe('SessionAgents.lease', () => {
     const lease = await agents.lease(dm('u1'))
     expect('dispose' in lease).toBe(false)
     expect(Symbol.asyncDispose in lease).toBe(false)
+  })
+})
+
+/** The `/control` factory: a chat message must never reach it. */
+function throwingAgentFactory() {
+  const calls = { count: 0 }
+  const factory = (): never => {
+    calls.count += 1
+    throw new Error('the /control factory must not build a chat agent')
+  }
+  return { calls, factory }
+}
+
+const SESSIONS = 20
+/** The SDK's openai profile refuses a key that does not look like one, so the stub runs get this. */
+const STUB_KEY = 'sk-stub-key-0123456789'
+
+describe('the chat path through startTheoClaw', () => {
+  const workspace = scratchWorkspace()
+  const fresh = scratchWorkspace()
+  const running: RunningTheoClaw[] = []
+  afterAll(async () => {
+    for (const app of running.splice(0)) {
+      await app.loop.stopAll()
+      await app.close()
+    }
+  })
+
+  // NFR-002, 20 of 20: each repetition is its own session (its own sender), all run at once.
+  it('two messages during one running turn get two replies in order', { timeout: 60_000 }, async () => {
+    const stub = await startModelStub({
+      delayMs: 2000,
+      reply: (request) => `answer to ${stub.userTexts(request).at(-1) ?? ''}`,
+    })
+    const received: AgentOptions[] = []
+    const control = throwingAgentFactory()
+    const { adapters, builders } = fakeBuilders()
+    const app = await startTheoClaw({
+      env: { ...TELEGRAM_AND_LINE, OPENROUTER_API_KEY: STUB_KEY, THEOCLAW_WORKSPACE: workspace },
+      agentFactory: control.factory,
+      getOrCreate: (id, options) => {
+        received.push(options)
+        return Agent.getOrCreate(id, { ...options, model: { id: 'openai/stub', url: stub.url } })
+      },
+      builders,
+      signals: new EventEmitter(),
+      exit: vi.fn(),
+      streams: [capturingStream()],
+    })
+    running.push(app)
+    await app.loop.ready
+    const telegram = adapters.get('telegram')!
+
+    for (let n = 0; n < SESSIONS; n += 1) void telegram.deliver(messageEvent('telegram', `s${n} first`, `user-${n}`))
+    await waitFor(() => stub.requests.length === SESSIONS, 20_000, 'every first message to reach the model')
+    for (let n = 0; n < SESSIONS; n += 1) void telegram.deliver(messageEvent('telegram', `s${n} second`, `user-${n}`))
+    await waitFor(() => telegram.sent.length === 2 * SESSIONS, 40_000, 'two replies per session')
+    await stub.close()
+
+    const lastUserText = (index: number): string | undefined => stub.userTexts(stub.requests[index]!).at(-1)
+    for (let n = 0; n < SESSIONS; n += 1) {
+      const replies = telegram.sent.filter((message) => message.channel.id === `telegram-channel-user-${n}`)
+      expect(replies.map((message) => message.text)).toEqual([`answer to s${n} first`, `answer to s${n} second`])
+      const first = stub.requests.find((_, index) => lastUserText(index) === `s${n} first`)!
+      const second = stub.requests.find((_, index) => lastUserText(index) === `s${n} second`)!
+      expect(second.receivedAt).toBeGreaterThanOrEqual(first.respondedAt!)
+      expect(stub.userTexts(second)).toContain(`s${n} first`)
+    }
+    expect(control.calls.count).toBe(0)
+    expect(received).toHaveLength(SESSIONS)
+    for (const options of received) {
+      expect(options).toMatchObject({
+        apiKey: STUB_KEY,
+        withheldBuiltinTools: ['shell'],
+        memory: { enabled: false },
+        local: { cwd: workspace, sessionDir: join(workspace, '.theoclaw') },
+      })
+    }
+  })
+
+  it('startTheoClaw creates the transcript directory with mode 0700', async () => {
+    const app = await startTheoClaw({
+      env: { ...TELEGRAM_AND_LINE, THEOCLAW_WORKSPACE: fresh },
+      agentFactory: throwingAgentFactory().factory,
+      builders: fakeBuilders().builders,
+      signals: new EventEmitter(),
+      exit: vi.fn(),
+      streams: [capturingStream()],
+    })
+    running.push(app)
+
+    expect(statSync(join(fresh, '.theoclaw')).mode & 0o777).toBe(0o700)
+  })
+})
+
+describe('the chat path through composeTheoClaw', () => {
+  it('two events from two different sessions sent at once each resolve their own agent id', async () => {
+    for (let repetition = 0; repetition < 20; repetition += 1) {
+      const gate = deferred<void>()
+      const ids: string[] = []
+      const { adapters, builders } = fakeBuilders()
+      const { loop } = composeTheoClaw({
+        env: TELEGRAM_AND_LINE,
+        agentFactory: throwingAgentFactory().factory,
+        getOrCreate: async (id) => {
+          ids.push(id)
+          const agent = new FakeAgent({ frames: (text) => [assistant(`answer to ${text}`), finished()], before: gate.promise })
+          return Object.assign(agent, { dispose: async () => undefined })
+        },
+        builders,
+        write: () => undefined,
+      })
+      await loop.ready
+      const telegram = adapters.get('telegram')!
+
+      void telegram.deliver(messageEvent('telegram', 'from alice', 'alice'))
+      void telegram.deliver(messageEvent('telegram', 'from bob', 'bob'))
+      await waitFor(() => ids.length === 2, 1000, 'both sessions to resolve an agent')
+      gate.resolve()
+      await waitFor(() => telegram.sent.length === 2, 1000, 'both replies')
+
+      expect([...ids].sort()).toEqual(['theoclaw-telegram-dm-alice-g0', 'theoclaw-telegram-dm-bob-g0'])
+      expect(telegram.sent.map((message) => [message.channel.id, message.text]).sort()).toEqual([
+        ['telegram-channel-alice', 'answer to from alice'],
+        ['telegram-channel-bob', 'answer to from bob'],
+      ])
+      await loop.stopAll()
+    }
   })
 })
