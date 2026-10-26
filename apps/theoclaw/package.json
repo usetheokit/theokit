@@ -27,6 +27,7 @@
     "@theokit/http": "workspace:^",
     "@theokit/presenter": "workspace:^",
     "@theokit/sdk": "^5.9.0",
+    "bonjour-service": "1.4.4",
     "discord.js": "^14.27.0",
     "grammy": "^1.46.0",
     "imapflow": "^1.7.8",
