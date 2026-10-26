@@ -172,6 +172,15 @@ describe('startTheoClaw and LAN discovery', () => {
     expect(run.log).toEqual(['publish', 'unpublishAll', 'destroy', 'close', 'exit'])
   })
 
+  it('closing the running instance withdraws the service before the listener closes', async () => {
+    const run = harness()
+    const running = await run.start(lanEnv())
+
+    await running.close()
+
+    expect(run.log).toEqual(['publish', 'unpublishAll', 'destroy', 'close'])
+  })
+
   it('a start whose listener fails creates no publisher', async () => {
     const run = harness({ failListen: Object.assign(new Error('listen EADDRINUSE'), { code: 'EADDRINUSE' }) })
 
