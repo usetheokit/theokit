@@ -50,6 +50,7 @@ import { SessionAgents } from './sessions/session-agents.js'
 import type { SessionAgent, SessionLease } from './sessions/session-agents.js'
 import { createSessionRouter } from './sessions/session-key.js'
 import { readSessionSettings } from './sessions/session-settings.js'
+import type { SessionSettings } from './sessions/session-settings.js'
 import { startedRoute, webhookPlatform, withRoute } from './webhooks/platform-routes.js'
 import type { Handle, WebhookDeps, WebhookPlatform } from './webhooks/platform-routes.js'
 import { createWebhookRouter } from './webhooks/router.js'
@@ -122,6 +123,8 @@ export interface TheoClawOptions {
    * once per agent id it opens, with `sessionAgentOptions` (plan D5).
    */
   readonly getOrCreate?: (id: string, options: AgentOptions) => Promise<SessionAgent>
+  /** The session settings `startTheoClaw` already read; `composeTheoClaw` reads them itself when absent. */
+  readonly sessionSettings?: SessionSettings
   /** Defaults to the ten real adapters; tests pass fakes. */
   readonly builders?: (configured: readonly ConfiguredPlatform[], options: AdapterBuildOptions) => PlatformBuild[]
   readonly write: (line: string) => void
@@ -155,7 +158,7 @@ type ChatBoundary = <R>(event: MessageEvent, work: (lease: SessionLease) => R | 
  * the end of the request leaves the agent open (D2).
  */
 function chatSessions(options: TheoClawOptions): { readonly sessions: SessionAgents; readonly withAgent: ChatBoundary } {
-  const settings = readSessionSettings(options.env, statSync)
+  const settings = options.sessionSettings ?? readSessionSettings(options.env, statSync)
   const getOrCreate = options.getOrCreate ?? ((id: string, agentOptions: AgentOptions) => Agent.getOrCreate(id, agentOptions))
   const sessions = new SessionAgents({
     router: createSessionRouter(settings),
@@ -369,6 +372,14 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
   const policy = parseAuthorizationPolicy(options.env)
   const tools = startToolSettings(options, policy)
   const sessionSettings = readSessionSettings(options.env, statSync)
+  // `SessionAgents` alone decides when a session's agent is disposed: the SDK's cache and its idle
+  // sweep know nothing of a turn in flight. `Agent.create` never reads the cache, so `/control`
+  // turns are unaffected.
+  ;(options.agentRegistry ?? Agent.registry).configure({ maxAgents: 0, idleTimeoutMs: 0 })
+  // Created here with 0700, before anything is installed that a failure would have to undo, so the
+  // SDK never creates the transcript directory with the umask's mode (D6); one that exists is left
+  // as the operator set it.
+  mkdirSync(join(sessionSettings.workspace, '.theoclaw'), { recursive: true, mode: 0o700 })
   const streams = options.streams ?? [process.stdout, process.stderr]
   const stderr = options.stderr ?? lineWriter(streams[streams.length - 1])
   // Loaded before the start line, the mask and the shutdown: an unreadable pairing file leaves nothing behind.
@@ -405,16 +416,10 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
   if (tools.hostTools) stderr(SHELL_READ_LINE)
   // The raw factory goes to the composition, which hands chat agents no tool; only the `/control`
   // turn's agents get the tool options.
-  // `SessionAgents` alone decides when a session's agent is disposed: the SDK's cache and its idle
-  // sweep know nothing of a turn in flight. `Agent.create` never reads the cache, so `/control`
-  // turns are unaffected.
-  ;(options.agentRegistry ?? Agent.registry).configure({ maxAgents: 0, idleTimeoutMs: 0 })
-  // Created here with 0700 so the SDK never creates the transcript directory with the umask's mode
-  // (D6); one that exists is left as the operator set it.
-  mkdirSync(join(sessionSettings.workspace, '.theoclaw'), { recursive: true, mode: 0o700 })
   const composed = composeTheoClaw({
     ...options,
     policy,
+    sessionSettings,
     ...(pairing === undefined ? {} : { pairing }),
     write: stderr,
   })
