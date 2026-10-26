@@ -26,7 +26,7 @@
   {"id":"OC-25","status":"shipped","check":{"path":"apps/theoclaw/tests/live/lan-discovery.live.test.ts","test":"a real-model turn on a LAN-bound instance that answers an mDNS query with its port"},"verified_on":"2026-10-26"},
   {"id":"OC-26","status":"open"},
   {"id":"OC-27","status":"open"},
-  {"id":"OC-28","status":"open"},
+  {"id":"OC-28","status":"shipped","check":{"path":"apps/theoclaw/tests/live/instance-profiles.live.test.ts","test":"two profiled instances keep separate state and report distinct labels on a real-model turn"},"verified_on":"2026-10-26"},
   {"id":"OC-29","status":"out","reason":"One instance serves one person, the first non-goal of the product vision, so a team server is out.","declared_by":"human/paulo","declared_on":"2026-10-04","declared_at":".squad/wiki/product/objectives.md:224"},
   {"id":"OC-30","status":"open"},
   {"id":"OC-31","status":"open"},
