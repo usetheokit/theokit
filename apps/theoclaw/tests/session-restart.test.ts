@@ -6,7 +6,7 @@ import { join } from 'node:path'
 
 import { Agent } from '@theokit/sdk'
 import type { AgentOptions } from '@theokit/sdk'
-import { afterAll, describe, expect, it, vi } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
 import { composeTheoClaw, startTheoClaw } from '../src/composition.js'
 import type { RunningTheoClaw } from '../src/composition.js'
@@ -180,6 +180,23 @@ describe('sessions.json', () => {
     expect(Generations.load(file).current('key-0')).toBe(29)
   })
 
+  it('a generation whose write fails is not moved', async () => {
+    const workspace = freshWorkspace()
+    writeFileSync(join(workspace, '.theoclaw'), 'a file where the directory goes')
+    const generations = new Generations(join(workspace, '.theoclaw', 'sessions.json'))
+
+    await expect(generations.next('k')).rejects.toThrow()
+
+    expect(generations.current('k')).toBe(0)
+  })
+
+  it('refuses a sessions.json of another version', () => {
+    const workspace = freshWorkspace()
+    const file = join(workspace, 'sessions.json')
+    writeFileSync(file, JSON.stringify({ generations: {} }))
+    expect(() => Generations.load(file)).toThrow(file)
+  })
+
   it('two resets of one session at once move its generation by exactly 2', async () => {
     const workspace = freshWorkspace()
     const file = join(workspace, '.theoclaw', 'sessions.json')
@@ -228,60 +245,87 @@ describe('sessions.json', () => {
  * live check of T4.1 restarts the same way.
  */
 describe('a restart', () => {
-  const workspace = freshWorkspace()
-  const sender = 'restart-1'
   let stub: ModelStub
-
-  it('the first turn is on disk under the workspace before the restart', { timeout: 30_000 }, async () => {
+  beforeAll(async () => {
     stub = await startModelStub()
     vi.stubEnv('OPENAI_API_BASE_URL', stub.url)
+  })
+  afterAll(async () => {
+    vi.unstubAllEnvs()
+    await stub.close()
+  })
+
+  /** A TheoClaw from `module` over the stub, recording the agent ids it opens. */
+  async function start(module: { startTheoClaw: typeof startTheoClaw }, workspace: string, ids: string[] = []) {
     const signals = new EventEmitter()
     const exit = vi.fn()
     const { adapters, builders } = fakeBuilders()
-    const app = await startTheoClaw({
+    const app = await module.startTheoClaw({
       env: { ...TELEGRAM_AND_LINE, OPENROUTER_API_KEY: STUB_KEY, THEOCLAW_WORKSPACE: workspace },
       agentFactory: () => {
         throw new Error('the /control factory must not build a chat agent')
       },
-      getOrCreate: (id, options) => Agent.getOrCreate(id, { ...options, model: { id: 'openai/stub', url: stub.url } }),
+      getOrCreate: (id, options) => {
+        ids.push(id)
+        return Agent.getOrCreate(id, { ...options, model: { id: 'openai/stub', url: stub.url } })
+      },
       builders,
       signals,
       exit,
       streams: [capturingStream()],
     })
+    running.push(app)
     await app.loop.ready
+    return { telegram: adapters.get('telegram')!, signals, exit }
+  }
 
-    await say(adapters.get('telegram')!, 'the word is heron', sender)
-    signals.emit('SIGTERM')
-    await waitFor(() => exit.mock.calls.length === 1, 35_000, 'the first TheoClaw to stop')
+  /** Stop through the shutdown path, as SIGTERM does, and wait for its exit. */
+  async function stop(first: { readonly signals: EventEmitter; readonly exit: ReturnType<typeof vi.fn> }): Promise<void> {
+    first.signals.emit('SIGTERM')
+    await waitFor(() => first.exit.mock.calls.length === 1, 35_000, 'the first TheoClaw to stop')
+    expect(first.exit).toHaveBeenCalledWith(0)
+  }
 
-    expect(exit).toHaveBeenCalledWith(0)
+  /** The app re-imported, as a new process would load it; the SDK is not (see above). */
+  async function reloaded(): Promise<{ startTheoClaw: typeof startTheoClaw }> {
+    vi.resetModules()
+    return import('../src/composition.js')
+  }
+
+  it('the first turn is on disk under the workspace before the restart', { timeout: 30_000 }, async () => {
+    const workspace = freshWorkspace()
+    const first = await start({ startTheoClaw }, workspace)
+    await say(first.telegram, 'the word is heron', 'restart-disk')
+    await stop(first)
+
     const files = transcripts(join(workspace, '.theoclaw', 'projects'))
     expect(files.some((file) => readFileSync(file, 'utf8').includes('the word is heron'))).toBe(true)
   })
 
   it('a turn written before a restart is in the request the stub receives after it', { timeout: 30_000 }, async () => {
-    vi.resetModules()
-    const reloaded = await import('../src/composition.js')
-    const { adapters, builders } = fakeBuilders()
-    const app = await reloaded.startTheoClaw({
-      env: { ...TELEGRAM_AND_LINE, OPENROUTER_API_KEY: STUB_KEY, THEOCLAW_WORKSPACE: workspace },
-      agentFactory: () => {
-        throw new Error('the /control factory must not build a chat agent')
-      },
-      getOrCreate: (id, options) => Agent.getOrCreate(id, { ...options, model: { id: 'openai/stub', url: stub.url } }),
-      builders,
-      signals: new EventEmitter(),
-      exit: vi.fn(),
-      streams: [capturingStream()],
-    })
-    running.push(app)
-    await app.loop.ready
+    const workspace = freshWorkspace()
+    const first = await start({ startTheoClaw }, workspace)
+    await say(first.telegram, 'the word is egret', 'restart-history')
+    await stop(first)
 
-    await say(adapters.get('telegram')!, 'what was the word', sender)
+    const second = await start(await reloaded(), workspace)
+    await say(second.telegram, 'what was the word', 'restart-history')
 
-    expect(stub.userTexts(stub.requests.at(-1)!)).toEqual(['the word is heron', 'what was the word'])
-    vi.unstubAllEnvs()
-    await stub.close()
+    expect(stub.userTexts(stub.requests.at(-1)!)).toEqual(['the word is egret', 'what was the word'])
+  })
+
+  it('a reset before a restart still holds after it', { timeout: 30_000 }, async () => {
+    const workspace = freshWorkspace()
+    const first = await start({ startTheoClaw }, workspace)
+    await say(first.telegram, 'the word is ibis', 'restart-reset')
+    expect(await say(first.telegram, '/reset', 'restart-reset')).toBe(CONFIRMATION)
+    await stop(first)
+
+    const ids: string[] = []
+    const second = await start(await reloaded(), workspace, ids)
+    await say(second.telegram, 'what was the word', 'restart-reset')
+
+    expect(ids).toEqual(['theoclaw-telegram-dm-restart_reset-g1'])
+    expect(stub.userTexts(stub.requests.at(-1)!)).toEqual(['what was the word'])
   })
 })

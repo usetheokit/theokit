@@ -20,8 +20,9 @@ function readSessionsFile(file: string): Map<string, number> {
   try {
     raw = readFileSync(file, 'utf8')
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return new Map()
-    throw new TheoClawConfigError(`${file} cannot be read`, { variable: 'THEOCLAW_WORKSPACE' })
+    const code = (error as NodeJS.ErrnoException).code
+    if (code === 'ENOENT') return new Map()
+    throw new TheoClawConfigError(`${file} cannot be read (${code ?? 'unknown error'})`, { variable: 'THEOCLAW_WORKSPACE' })
   }
   let parsed: unknown
   try {
@@ -29,8 +30,9 @@ function readSessionsFile(file: string): Map<string, number> {
   } catch {
     parsed = undefined
   }
-  const generations = (parsed as Partial<SessionsFile> | undefined)?.generations
-  if (!isGenerationMap(generations)) {
+  const stored = parsed as Partial<SessionsFile> | undefined
+  const generations = stored?.generations
+  if (stored?.version !== 1 || !isGenerationMap(generations)) {
     throw new TheoClawConfigError(`${file} is not a sessions file TheoClaw wrote; move it aside to start every conversation afresh`, {
       variable: 'THEOCLAW_WORKSPACE',
     })
@@ -67,15 +69,19 @@ export class Generations {
     return this.#counts.get(key) ?? 0
   }
 
-  /** Move `key` to its next generation, persist it, and return it. */
+  /**
+   * Move `key` to its next generation, persist it, and return it. The move counts only once the
+   * file holds it: a write that fails leaves the generation where it was, in memory and on disk.
+   */
   next(key: string): Promise<number> {
     const moved = this.#writing.then(async () => {
       const generation = this.current(key) + 1
-      this.#counts.set(key, generation)
       if (this.file !== undefined) {
-        const data: SessionsFile = { version: 1, generations: Object.fromEntries(this.#counts) }
+        const counts = { ...Object.fromEntries(this.#counts), [key]: generation }
+        const data: SessionsFile = { version: 1, generations: counts }
         await atomicWriteJson(this.file, data, { mode: 0o600 })
       }
+      this.#counts.set(key, generation)
       return generation
     })
     this.#writing = moved.catch(() => undefined)

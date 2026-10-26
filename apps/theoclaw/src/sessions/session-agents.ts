@@ -82,11 +82,13 @@ export class SessionAgents {
   async lease(event: MessageEvent): Promise<SessionLease> {
     if (this.#stopping) throw new Error('theoclaw is stopping: no new chat turn starts')
     const key = this.deps.router.resolveAgentId(event)
-    const id = agentIdFor(key, this.deps.generations.current(key))
+    let id = agentIdFor(key, this.deps.generations.current(key))
     let found = this.#entries.get(id)
-    // A session whose agent is being disposed resumes only once the dispose has settled (EC-1).
+    // A session whose agent is being disposed resumes only once the dispose has settled (EC-1);
+    // the id is read again after it, since a reset may have moved the session meanwhile.
     while (found?.disposing !== undefined) {
       await found.disposing
+      id = agentIdFor(key, this.deps.generations.current(key))
       found = this.#entries.get(id)
     }
     const entry = found ?? this.#resolve(id, key, event)
@@ -149,8 +151,10 @@ export class SessionAgents {
    */
   async reset(event: MessageEvent): Promise<void> {
     const key = this.deps.router.resolveAgentId(event)
-    const id = agentIdFor(key, this.deps.generations.current(key))
-    await this.deps.generations.next(key)
+    // The generation this reset left, read from the move itself, so two overlapping resets retire
+    // the two generations they each left.
+    const generation = await this.deps.generations.next(key)
+    const id = agentIdFor(key, generation - 1)
     const entry = this.#entries.get(id)
     if (entry === undefined) return
     entry.retired = true

@@ -9,6 +9,7 @@ import type { SDKAgent } from '@theokit/sdk'
 import {
   AgentTurnError,
   NEW_CONVERSATION_REPLY,
+  RESET_FAILED_REPLY,
   NO_ANSWER_REPLY,
   ReplyDeliveryError,
   createReplyHandler,
@@ -88,6 +89,23 @@ describe('createReplyHandler', () => {
       expect(replies).toEqual([{ text: NEW_CONVERSATION_REPLY, format: 'plain' }])
     }
     expect(resets).toEqual(['/new', ' /reset '])
+  })
+
+  it('answers a reset that could not be saved with one failure line and rethrows', async () => {
+    const failure = new Error('sessions.json is not writable')
+    const event = messageEvent('telegram', '/reset')
+    const { ctx, replies } = fakeContext(event)
+
+    await expect(
+      createReplyHandler({
+        reset: () => Promise.reject(failure),
+        withAgent: async () => {
+          throw new Error('a command must not take a lease')
+        },
+      })(event, ctx),
+    ).rejects.toBe(failure)
+
+    expect(replies).toEqual([{ text: RESET_FAILED_REPLY, format: 'plain' }])
   })
 
   it('skips a message with empty text', async () => {
