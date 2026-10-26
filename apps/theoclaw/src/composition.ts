@@ -25,7 +25,11 @@ import { resolvePlatforms } from './channels/platforms.js'
 import type { ConfiguredPlatform, PlatformSettings } from './channels/platforms.js'
 import { createReplyHandler } from './channels/reply-handler.js'
 import type { TurnAgent } from './channels/reply-handler.js'
-import { type ControlPlaneHandle, healthHandler, listenControlPlane } from './control-plane/listener.js'
+import {
+  type ControlPlaneHandle,
+  healthHandler,
+  listenControlPlane,
+} from './control-plane/listener.js'
 import { describeError } from './control-plane/errors.js'
 import { readControlPlaneSettings } from './control-plane/settings.js'
 import { installShutdown, type SignalSource } from './control-plane/shutdown.js'
@@ -33,6 +37,7 @@ import { createTurnRunner } from './control-plane/turn.js'
 import { createBonjourPublisher } from './discovery/bonjour-publisher.js'
 import { announceOnLan, type LanAnnouncement, stopThenClose } from './discovery/lan-announcer.js'
 import { parseDiscoveryMode, type PublisherFactory } from './discovery/publisher.js'
+import { NO_PROFILE, type TheoClawInstance } from './instance.js'
 import { createLineRoute } from './webhooks/line.js'
 import { createWebhookRouter } from './webhooks/router.js'
 import type { WebhookRoute } from './webhooks/router.js'
@@ -92,7 +97,9 @@ export function createContainer<TAgent>(
 
   return {
     withAgent: (work) =>
-      container.runInRequest(async () => work(await container.resolveAsync<TAgent>(provider.provide))),
+      container.runInRequest(async () =>
+        work(await container.resolveAsync<TAgent>(provider.provide)),
+      ),
   }
 }
 
@@ -111,7 +118,10 @@ export interface TheoClawOptions {
    */
   readonly channelAgentFactory?: () => TurnAgent | Promise<TurnAgent>
   /** Defaults to the ten real adapters; tests pass fakes. */
-  readonly builders?: (configured: readonly ConfiguredPlatform[], options: AdapterBuildOptions) => PlatformBuild[]
+  readonly builders?: (
+    configured: readonly ConfiguredPlatform[],
+    options: AdapterBuildOptions,
+  ) => PlatformBuild[]
   readonly write: (line: string) => void
   readonly startTimeoutMs?: number
   /** Who the instance serves, parsed from this same `env`; parsed here when absent (`startTheoClaw` parses it first). */
@@ -134,7 +144,9 @@ interface WebhookPlatform {
   readonly buildRoute: (adapter: BasePlatformAdapter) => Handle
 }
 
-function hasSignatureCheck(adapter: BasePlatformAdapter): adapter is BasePlatformAdapter & SmsRouteAdapter {
+function hasSignatureCheck(
+  adapter: BasePlatformAdapter,
+): adapter is BasePlatformAdapter & SmsRouteAdapter {
   return typeof (adapter as { verifySignature?: unknown }).verifySignature === 'function'
 }
 
@@ -168,7 +180,10 @@ interface WebhookDeps {
   readonly verifierFactory: (options: TeamsActivityVerifierOptions) => TeamsVerifier
 }
 
-type WebhookPlatformFor<P extends PlatformName> = (settings: PlatformSettings<P>, deps: WebhookDeps) => WebhookPlatform
+type WebhookPlatformFor<P extends PlatformName> = (
+  settings: PlatformSettings<P>,
+  deps: WebhookDeps,
+) => WebhookPlatform
 
 /**
  * Each platform's webhook, or `null` for one that has none. Keyed by every platform name, so a new
@@ -188,7 +203,8 @@ const WEBHOOK_PLATFORMS: { readonly [P in PlatformName]: WebhookPlatformFor<P> |
   whatsapp: ({ appSecret, verifyToken }, { write }) => ({
     methods: ['GET', 'POST'],
     buildRoute: (adapter) => {
-      if (!convertsEnvelopes(adapter)) throw new Error('the built adapter cannot convert a webhook envelope')
+      if (!convertsEnvelopes(adapter))
+        throw new Error('the built adapter cannot convert a webhook envelope')
       return createWhatsAppRoute({ appSecret, verifyToken, adapter, write })
     },
   }),
@@ -197,7 +213,9 @@ const WEBHOOK_PLATFORMS: { readonly [P in PlatformName]: WebhookPlatformFor<P> |
     return {
       methods: ['POST'],
       buildRoute: (adapter) =>
-        verify === undefined ? async () => new Response(null, { status: 503 }) : createTeamsRoute({ verify, adapter, write }),
+        verify === undefined
+          ? async () => new Response(null, { status: 503 })
+          : createTeamsRoute({ verify, adapter, write }),
     }
   },
   sms: (settings) => {
@@ -205,7 +223,8 @@ const WEBHOOK_PLATFORMS: { readonly [P in PlatformName]: WebhookPlatformFor<P> |
     return {
       methods: ['POST'],
       buildRoute: (adapter) => {
-        if (!hasSignatureCheck(adapter)) throw new Error('the built adapter cannot verify a webhook signature')
+        if (!hasSignatureCheck(adapter))
+          throw new Error('the built adapter cannot verify a webhook signature')
         return createSmsRoute({ adapter, options })
       },
     }
@@ -226,7 +245,11 @@ function webhookPlatform<P extends PlatformName>(
  * that cannot use the adapter fails that platform's start (the loop writes why), rather than every
  * request later.
  */
-function withRoute(build: PlatformBuild, webhook: WebhookPlatform | undefined, handles: WeakMap<BasePlatformAdapter, Handle>): PlatformBuild {
+function withRoute(
+  build: PlatformBuild,
+  webhook: WebhookPlatform | undefined,
+  handles: WeakMap<BasePlatformAdapter, Handle>,
+): PlatformBuild {
   if (webhook === undefined) return build
   return {
     platform: build.platform,
@@ -244,7 +267,11 @@ function withRoute(build: PlatformBuild, webhook: WebhookPlatform | undefined, h
  * already past this lookup when shutdown disconnects the adapter can still be refused by it (an SMS
  * signature check answers false once disconnected); that only happens while stopping.
  */
-function startedRoute(loop: ChannelLoop, platform: PlatformName, handles: WeakMap<BasePlatformAdapter, Handle>): Handle {
+function startedRoute(
+  loop: ChannelLoop,
+  platform: PlatformName,
+  handles: WeakMap<BasePlatformAdapter, Handle>,
+): Handle {
   return async (request) => {
     const adapter = loop.started.get(platform)?.adapter
     const handle = adapter === undefined ? undefined : handles.get(adapter)
@@ -259,7 +286,8 @@ function startedRoute(loop: ChannelLoop, platform: PlatformName, handles: WeakMa
 export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
   // First: a bad authorization value stops the start before any adapter is built.
   const policy = options.policy ?? parseAuthorizationPolicy(options.env)
-  const channelFactory = options.channelAgentFactory ?? (() => options.agentFactory(NO_TOOL_OPTIONS))
+  const channelFactory =
+    options.channelAgentFactory ?? (() => options.agentFactory(NO_TOOL_OPTIONS))
   const agents = createContainer<TurnAgent>({ factory: channelFactory })
   const { configured, skipped, secrets } = resolvePlatforms(options.env)
   for (const { platform, missing } of skipped) {
@@ -267,13 +295,28 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
   }
   // What the routes and the router write can carry a configured value (a verifier's message, an
   // SDK error): masked here as the loop masks its own lines, whatever stream the caller writes to.
-  const maskedWrite = (line: string): void => options.write(redactSecrets(maskSecrets(line, secrets)))
+  const maskedWrite = (line: string): void =>
+    options.write(redactSecrets(maskSecrets(line, secrets)))
   // The store exists only with a state directory; the hook runs without one under the other policies.
-  const pairing = policy.stateDir === undefined ? undefined : createPairingStore({ dir: policy.stateDir, write: maskedWrite })
-  const ownerPolicy = createOwnerPolicyHook({ policy, ...(pairing === undefined ? {} : { pairing }), write: maskedWrite })
+  const pairing =
+    policy.stateDir === undefined
+      ? undefined
+      : createPairingStore({ dir: policy.stateDir, write: maskedWrite })
+  const ownerPolicy = createOwnerPolicyHook({
+    policy,
+    ...(pairing === undefined ? {} : { pairing }),
+    write: maskedWrite,
+  })
   // Runs after the owner policy, so only owners and paired senders reach it (FR-007).
-  const groupActivation = createGroupActivationHook({ owners: policy.owners, mode: policy.groupActivation, write: maskedWrite })
-  const deps: WebhookDeps = { write: maskedWrite, verifierFactory: options.teamsVerifierFactory ?? teamsActivityVerifier }
+  const groupActivation = createGroupActivationHook({
+    owners: policy.owners,
+    mode: policy.groupActivation,
+    write: maskedWrite,
+  })
+  const deps: WebhookDeps = {
+    write: maskedWrite,
+    verifierFactory: options.teamsVerifierFactory ?? teamsActivityVerifier,
+  }
   const webhooks = new Map<PlatformName, WebhookPlatform>()
   for (const entry of configured) {
     const webhook = webhookPlatform(entry, deps)
@@ -281,9 +324,9 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
   }
   const handles = new WeakMap<BasePlatformAdapter, Handle>()
   const loop = startChannelLoop({
-    platforms: (options.builders ?? adapterBuilders)(configured, { requireMention: policy.groupActivation === 'mention' }).map((build) =>
-      withRoute(build, webhooks.get(build.platform), handles),
-    ),
+    platforms: (options.builders ?? adapterBuilders)(configured, {
+      requireMention: policy.groupActivation === 'mention',
+    }).map((build) => withRoute(build, webhooks.get(build.platform), handles)),
     handler: createReplyHandler({
       withAgent: (work) => agents.withAgent(work),
       // `loop` is read per message, after it exists: a member whose platform has not started is
@@ -300,7 +343,10 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
     ...(options.startTimeoutMs === undefined ? {} : { startTimeoutMs: options.startTimeoutMs }),
   })
   const routes = new Map<PlatformName, WebhookRoute>(
-    [...webhooks].map(([platform, { methods }]) => [platform, { methods, handle: startedRoute(loop, platform, handles) }]),
+    [...webhooks].map(([platform, { methods }]) => [
+      platform,
+      { methods, handle: startedRoute(loop, platform, handles) },
+    ]),
   )
   const router = createWebhookRouter({
     routes,
@@ -327,18 +373,31 @@ export interface StartOptions extends Omit<TheoClawOptions, 'write'> {
   readonly cwd?: string
   /** What the tool tests inject (bubblewrap detection, fetch); the process passes nothing. */
   readonly toolDeps?: ToolDeps
+  /** Which instance this process is (B-514); the process entry resolved and applied it. Default: no profile. */
+  readonly instance?: TheoClawInstance
 }
 
 /** The running process: the channel loop, its webhook router, and the one listener serving both. */
 export interface RunningTheoClaw extends ComposedTheoClaw, ControlPlaneHandle {
   /** The `_theoclaw._tcp` service, or nothing on a loopback bind or with `THEOCLAW_MDNS=off`. */
   readonly announcement: LanAnnouncement
+  /** The instance the start line named: its label is the authoritative one (`process.title` may be truncated). */
+  readonly instance: TheoClawInstance
 }
 
 const NOTHING_TO_WITHDRAW: LanAnnouncement = { stop: () => Promise.resolve() }
 
 function formatAddress(address: { readonly host: string; readonly port: number }): string {
-  return isIPv6(address.host) ? `[${address.host}]:${address.port}` : `${address.host}:${address.port}`
+  return isIPv6(address.host)
+    ? `[${address.host}]:${address.port}`
+    : `${address.host}:${address.port}`
+}
+
+/** The first line a start writes, naming the instance and where its state lives. */
+function startLine(instance: TheoClawInstance): string {
+  return instance.directory === undefined
+    ? 'theoclaw: instance started, no profile'
+    : `${instance.label}: instance started, profile directory ${instance.directory}`
 }
 
 function lineWriter(stream: MaskableStream | undefined): (line: string) => void {
@@ -349,14 +408,24 @@ function lineWriter(stream: MaskableStream | undefined): (line: string) => void 
  * Every value the output mask hides: the channel credentials, both model keys, the control token
  * and the web search keys.
  */
-function processSecrets(env: StartOptions['env'], controlToken: string | undefined, tools: ToolSettings): string[] {
+function processSecrets(
+  env: StartOptions['env'],
+  controlToken: string | undefined,
+  tools: ToolSettings,
+): string[] {
   const keys = [env.THEOKIT_API_KEY, env.OPENROUTER_API_KEY]
     .map((value) => (value ?? '').trim())
     .filter((value) => value !== '')
-  return [...resolvePlatforms(env).secrets, ...keys, ...(controlToken === undefined ? [] : [controlToken]), ...tools.secrets]
+  return [
+    ...resolvePlatforms(env).secrets,
+    ...keys,
+    ...(controlToken === undefined ? [] : [controlToken]),
+    ...tools.secrets,
+  ]
 }
 
-const SHELL_READ_LINE = 'tools: host tools are on; the shell can read every file the process user can read'
+const SHELL_READ_LINE =
+  'tools: host tools are on; the shell can read every file the process user can read'
 
 /** The tool settings, every refusal included, before anything opens (FR-008). */
 function startToolSettings(options: StartOptions): ToolSettings {
@@ -366,8 +435,11 @@ function startToolSettings(options: StartOptions): ToolSettings {
 }
 
 /** `GET /health` is the control plane's; every other path goes to the webhook router. */
-function serveHealthAndWebhooks(router: ComposedTheoClaw['router']): (request: Request) => Promise<Response> {
-  return (request) => (new URL(request.url).pathname === '/health' ? healthHandler(request) : router(request))
+function serveHealthAndWebhooks(
+  router: ComposedTheoClaw['router'],
+): (request: Request) => Promise<Response> {
+  return (request) =>
+    new URL(request.url).pathname === '/health' ? healthHandler(request) : router(request)
 }
 
 /**
@@ -387,9 +459,12 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
   const policy = parseAuthorizationPolicy(options.env)
   const tools = startToolSettings(options)
   const streams = options.streams ?? [process.stdout, process.stderr]
+  const stderr = options.stderr ?? lineWriter(streams[streams.length - 1])
+  // First, once every setting is checked: the line holds a label and a directory, never a secret.
+  const instance = options.instance ?? NO_PROFILE
+  stderr(startLine(instance))
   const mask = installOutputMask(processSecrets(options.env, settings.controlToken, tools), streams)
   const stdout = options.stdout ?? lineWriter(streams[0])
-  const stderr = options.stderr ?? lineWriter(streams[streams.length - 1])
   const flushOnExit = (): void => mask.flush()
   options.signals.on('exit', flushOnExit)
   let loop: ChannelLoop | undefined
@@ -414,7 +489,9 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
   // The raw factory goes to the composition, which hands chat agents no tool; only the `/control`
   // turn's agents get the tool options.
   const composed = composeTheoClaw({ ...options, policy, write: stderr })
-  const agents = createContainer<TurnAgent>({ factory: () => options.agentFactory(agentToolOptions(tools)) })
+  const agents = createContainer<TurnAgent>({
+    factory: () => options.agentFactory(agentToolOptions(tools)),
+  })
   loop = composed.loop
   const listen = options.listen ?? listenControlPlane
   serving = listen({
@@ -450,5 +527,11 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
   }
   // `close` withdraws the announcement first, as the shutdown does: a caller that closes the
   // running instance directly must not leave the service advertised.
-  return { ...handle, ...composed, announcement, close: () => stopThenClose(announcement, handle) }
+  return {
+    ...handle,
+    ...composed,
+    announcement,
+    instance,
+    close: () => stopThenClose(announcement, handle),
+  }
 }
