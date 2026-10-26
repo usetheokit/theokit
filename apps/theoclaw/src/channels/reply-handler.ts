@@ -13,6 +13,9 @@ export const NO_ANSWER_REPLY = 'I could not come up with an answer to that.'
 /** The one line `/new` and `/reset` answer with. */
 export const NEW_CONVERSATION_REPLY = 'Started a new conversation.'
 
+/** The one line a `/new` or `/reset` that could not be saved answers with. */
+export const RESET_FAILED_REPLY = 'I could not start a new conversation; this one goes on.'
+
 /**
  * Matched on the whole trimmed text, here rather than through the runner's command registry, whose
  * word-boundary match would also reset on `/new chat` (FR-008); and the reset needs the session,
@@ -229,7 +232,13 @@ export function createReplyHandler(options: ReplyHandlerOptions): GatewayHandler
     if (text === '') return
     if (RESET_COMMANDS.has(text)) {
       // No lease and no model turn: a session whose agent cannot be resolved can still be reset.
-      await options.reset(event)
+      // A reset that could not be saved moved nothing; the person is told, and the runner too.
+      try {
+        await options.reset(event)
+      } catch (error) {
+        await send(ctx, { text: RESET_FAILED_REPLY, format: 'plain' }, { failed: true, error })
+        throw error
+      }
       await send(ctx, { text: NEW_CONVERSATION_REPLY, format: 'plain' }, { failed: false, answer: NEW_CONVERSATION_REPLY })
       return
     }
