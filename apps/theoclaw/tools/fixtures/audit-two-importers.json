@@ -1,0 +1,27 @@
+{
+  "advisories": {
+    "1001": {
+      "module_name": "vite",
+      "severity": "moderate",
+      "github_advisory_id": "GHSA-0000-vite-0001",
+      "findings": [
+        {
+          "version": "7.3.5",
+          "paths": ["packages__theo>vite", "apps__theoclaw>vitest>vite"]
+        }
+      ]
+    },
+    "1002": {
+      "module_name": "mermaid",
+      "severity": "high",
+      "github_advisory_id": "GHSA-0000-mermaid-01",
+      "findings": [
+        {
+          "version": "11.0.0",
+          "paths": ["packages__theo>@theokit/ui>mermaid"]
+        }
+      ]
+    }
+  },
+  "metadata": { "vulnerabilities": { "moderate": 1, "high": 1 } }
+}

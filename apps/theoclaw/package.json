@@ -63,6 +63,7 @@
     "boundaries": "depcruise --config .dependency-cruiser.cjs src tests",
     "lint": "eslint .",
     "parity": "node tools/check-parity-ledger.mjs",
-    "check:versions": "node tools/check-exact-versions.mjs package.json"
+    "check:versions": "node tools/check-exact-versions.mjs package.json",
+    "audit": "node tools/audit-theoclaw.mjs"
   }
 }
