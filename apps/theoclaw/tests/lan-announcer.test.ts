@@ -7,6 +7,7 @@ import type { DiscoveryMode, ServicePublisher } from '../src/discovery/publisher
 
 /** What the fake publisher does on each call; every call is recorded in one shared log. */
 interface FakeBehaviour {
+  publish?: () => void
   unpublishAll?: () => Promise<void>
   destroy?: () => Promise<void>
 }
@@ -22,6 +23,7 @@ function fakeFactory(behaviour: FakeBehaviour = {}) {
     const publisher: ServicePublisher = {
       publish: (service) => {
         calls.push('publish')
+        behaviour.publish?.()
         published.push(service)
       },
       unpublishAll: () => {
@@ -197,6 +199,23 @@ describe('announceOnLan', () => {
       'TheoClawDiscoveryError: LAN discovery stopped (EPERM); TheoClaw keeps serving on 192.168.2.111:41001',
     ])
     expect(calls).not.toContain('close')
+  })
+
+  it('a publish that throws is logged once and the publisher is destroyed', async () => {
+    const fake = fakeFactory({
+      publish: () => {
+        throw Object.assign(new Error('bad record'), { code: 'EINVAL' })
+      },
+    })
+    const { announcement, lines } = announce(fake)
+    // Released by the failure itself, before anyone calls stop(): no socket is left open.
+    await vi.waitFor(() => expect(fake.calls).toEqual(['publish', 'unpublishAll', 'destroy']))
+    await announcement.stop()
+
+    expect(lines).toEqual([
+      'TheoClawDiscoveryError: LAN discovery stopped (EINVAL); TheoClaw keeps serving on 192.168.2.111:41001',
+    ])
+    expect(fake.calls).toEqual(['publish', 'unpublishAll', 'destroy'])
   })
 
   it('stop resolves when destroy throws or never calls back', async () => {
