@@ -13,6 +13,7 @@ import {
   createWriteFileTool,
 } from '@theokit/agents/tools'
 
+import { pathVetoPlugin } from './path-veto.js'
 import type { ToolSettings } from './tool-settings.js'
 
 /** What the process spreads into `Agent.create` for one agent. */
@@ -62,9 +63,9 @@ export function buildTools(settings: ToolSettings): CustomTool[] {
 }
 
 /**
- * The options of one agent: a fresh tool list (a todolist is never shared between two agents),
- * and the SDK's unsandboxed builtin `shell` withheld from the catalog.
+ * The options of one agent: a fresh tool list (a todolist is never shared between two agents), the
+ * state-directory veto, and the SDK's unsandboxed builtin `shell` withheld from the catalog.
  */
 export function agentToolOptions(settings: ToolSettings): AgentToolOptions {
-  return { tools: buildTools(settings), plugins: [], withheldBuiltinTools: ['shell'] }
+  return { tools: buildTools(settings), plugins: [pathVetoPlugin(settings)], withheldBuiltinTools: ['shell'] }
 }
