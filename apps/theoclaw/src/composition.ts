@@ -15,6 +15,7 @@ import { parseAuthorizationPolicy } from './authorization/policy.js'
 import type { AuthorizationPolicy } from './authorization/policy.js'
 import { adapterBuilders, smsOptions } from './channels/adapter-factory.js'
 import type { AdapterBuildOptions } from './channels/adapter-factory.js'
+import { createBroadcastGroups } from './channels/broadcast-groups.js'
 import { maskSecrets, startChannelLoop } from './channels/channel-loop.js'
 import { createGroupActivationHook } from './channels/group-activation-hook.js'
 import type { ChannelLoop, PlatformBuild } from './channels/channel-loop.js'
@@ -274,7 +275,16 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
     platforms: (options.builders ?? adapterBuilders)(configured, { requireMention: policy.groupActivation === 'mention' }).map((build) =>
       withRoute(build, webhooks.get(build.platform), handles),
     ),
-    handler: createReplyHandler({ withAgent: (work) => agents.withAgent(work) }),
+    handler: createReplyHandler({
+      withAgent: (work) => agents.withAgent(work),
+      // `loop` is read per message, after it exists: a member whose platform has not started is
+      // reported as not delivered.
+      broadcast: {
+        groups: createBroadcastGroups(policy.broadcastGroups),
+        adapterFor: (platform) => loop.started.get(platform as PlatformName)?.adapter,
+        write: maskedWrite,
+      },
+    }),
     hooks: [ownerPolicy, groupActivation],
     secrets,
     write: options.write,

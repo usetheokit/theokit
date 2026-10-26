@@ -111,4 +111,22 @@ describe('composeTheoClaw with parseAuthorizationPolicy, createPairingStore and 
     expect(app.asked).toEqual(['@theo_bot what time is it'])
     await app.loop.stopAll()
   })
+
+  it('createBroadcastGroups in the composed app carries one thread across a telegram and a discord channel', async () => {
+    const app = composedApp({
+      THEOCLAW_OWNERS: 'telegram:owner,discord:owner',
+      THEOCLAW_DM_POLICY: 'allowlist',
+      THEOCLAW_BROADCAST_GROUPS: 'home=telegram:-100,discord:dc-1',
+    })
+    await app.loop.ready
+    const inChannel = (platform: PlatformName, channelId: string, text: string): MessageEvent =>
+      ({ ...messageEvent(platform, text, 'owner'), channel: { id: channelId, type: 'dm' } }) as MessageEvent
+    await app.deliver(inChannel('telegram', '-100', 'first question'), 1)
+    await waitFor(() => app.sent('discord').length === 1, 2000, 'the broadcast to reach discord')
+    await app.deliver(inChannel('discord', 'dc-1', 'second question'), 2)
+    expect(app.asked[1]).toContain('first question')
+    expect(app.sent('telegram')).toHaveLength(2)
+    expect(app.sent('telegram')[1]).toBe(app.sent('discord')[1])
+    await app.loop.stopAll()
+  })
 })
