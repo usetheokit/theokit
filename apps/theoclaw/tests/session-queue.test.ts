@@ -137,6 +137,7 @@ describe('the chat path through startTheoClaw', () => {
   afterAll(async () => {
     for (const app of running.splice(0)) {
       await app.loop.stopAll()
+      await app.sessions.disposeAll()
       await app.close()
     }
   })
