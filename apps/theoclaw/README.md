@@ -156,6 +156,36 @@ Each turn's agent is built without the SDK's `shell` tool and with memory off, s
 no command on the host and leaves no transcript on disk. The SDK still adds one entry per turn to
 `.theokit/agents/registry.json` under the process's working directory; no option turns that off.
 
+### The `/control` agent's tools
+
+The `/control` turn's agent gets tools built only from `@theokit/agents/tools`, bound to the tool
+root `files/` under the process's working directory (created at start with mode 0700; a symlinked
+or non-directory `files` is refused). Chat replies get no tool: anyone who can message the bot
+writes their prompt.
+
+| Tool | When |
+|---|---|
+| `read_file`, `list_dir`, `view_image`, `web_fetch`, `todolist` | always |
+| `web_search` | with `BRAVE_API_KEY`, or with both `THEOKIT_SEARCH_API_URL` and `THEOKIT_SEARCH_API_KEY` |
+| `git_diff` | when `files/` is itself a git repository and the sandbox is enforced |
+| `write_file`, `edit_file`, `apply_patch`, `shell_exec` | with `THEOCLAW_HOST_TOOLS=on` |
+
+`THEOCLAW_HOST_TOOLS` is `on` or unset; any other value is refused. With it on, the shell runs in a
+bubblewrap sandbox that can write only `files/` and `/tmp`, and the start refuses when bubblewrap
+is not available or when the working directory lies under `/tmp`. **The sandboxed shell can still
+read every file the process user can read**; the start prints a line saying so. A tool path that
+resolves into `.theokit` or `.theoclaw` beside `files/` is refused before the tool runs, and so is
+a `git_diff` with no path. The SDK's own unsandboxed `shell` is never offered. Search keys are
+masked in the output like every other credential. A start line says when web search is off, and
+when `git_diff` is off because the sandbox is not enforced.
+
+The live check of the tools:
+
+```bash
+set -a; . ~/.config/theoclaw/dev.env; set +a
+THEOCLAW_LIVE=1 THEOCLAW_HOST_TOOLS=on pnpm --filter theoclaw exec vitest run tests/live/tools.live.test.ts
+```
+
 The live check runs a real turn against the built entry:
 
 ```bash

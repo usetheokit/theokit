@@ -13,6 +13,19 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- The `/control` agent's tools (B-382): `read_file`, `list_dir`, `view_image`, `web_fetch` and
+  `todolist` always, all from `@theokit/agents/tools` and bound to `files/` under the working
+  directory; `web_search` with `BRAVE_API_KEY` (or `THEOKIT_SEARCH_API_URL` with
+  `THEOKIT_SEARCH_API_KEY`); `git_diff` when `files/` is a repository and the sandbox is enforced;
+  and `write_file`, `edit_file`, `apply_patch` and a bubblewrap-sandboxed `shell_exec` with
+  `THEOCLAW_HOST_TOOLS=on`. The start refuses any other `THEOCLAW_HOST_TOOLS` value, host tools
+  without bubblewrap or in a working directory under `/tmp`, a symlinked tool root, and half a
+  search configuration, before any runner starts; with host tools on it prints that the shell can
+  read every file the process user can read. A path into `.theokit` or `.theoclaw` and an unscoped
+  `git_diff` are refused before the tool runs, the SDK's own `shell` is never offered, and chat
+  replies still get no tool. The parity ledger records OC-58, OC-59 and OC-69 as shipped, checked
+  by `tests/live/tools.live.test.ts`, with their missing parts filed as items; OC-63 waits on a
+  search key.
 - Exact dependency versions and an audit of what TheoClaw installs (B-406). Every entry of
   `apps/theoclaw/package.json` is now an exact version or `workspace:*`, and `pnpm --filter theoclaw
   run check:versions` refuses any other form (`^`, `~`, `>=`, `*`, a tag, `workspace:^`, `file:`,
