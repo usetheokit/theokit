@@ -194,6 +194,36 @@ pnpm --filter theoclaw run build
 THEOCLAW_LIVE=1 pnpm --filter theoclaw exec vitest run tests/live/control-plane.live.test.ts
 ```
 
+## Remote access over SSH
+
+TheoClaw binds `127.0.0.1` by default, and TheoClaw needs no public bind for this: to reach the
+control plane from another machine, forward a local port to it over SSH. On the machine you type
+on, with `THEOCLAW_PORT` the port the instance prints on its listening line:
+
+```bash
+ssh -N -L 18789:127.0.0.1:<THEOCLAW_PORT> <user>@<host>
+```
+
+Then connect to `ws://127.0.0.1:18789/control` with `Authorization: Bearer <THEOCLAW_CONTROL_TOKEN>`,
+as in [The `/control` socket](#the-control-socket). `THEOCLAW_CONTROL_TOKEN` must be set on the
+instance: without it every upgrade answers 404, through the forward or not. The command assumes
+the default `127.0.0.1`; with another loopback `THEOCLAW_HOST` (`::1`, `127.x.y.z`), forward to that
+address instead.
+
+Every request a forward delivers arrives from `127.0.0.1`, so the bearer token is the whole gate,
+and no TheoClaw route grants anything to a loopback peer (`tests/remote-access-source.test.ts`
+fails if TheoClaw's source starts reading `remoteAddress` or a forwarding header). Closing the forward and opening a new one needs no
+restart. SSH is the one supported remote path: Tailscale serve or funnel and a trusted proxy that
+passes the user's identity in a header are not supported.
+
+The live check runs a real `sshd` of its own from a temp directory, never the host's and never
+`~/.ssh`, and needs `ssh`, `sshd` and `ssh-keygen` on `PATH`:
+
+```bash
+set -a; . ~/.config/theoclaw/dev.env; set +a
+THEOCLAW_LIVE=1 pnpm --filter theoclaw exec vitest run tests/live/remote-access.live.test.ts
+```
+
 ## Keeping secrets out of the repository
 
 `.env` and `.env.*` are ignored at the repository root; only `.env.example` is tracked. Do not
