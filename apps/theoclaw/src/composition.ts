@@ -140,6 +140,8 @@ export interface TheoClawOptions {
 export interface ComposedTheoClaw {
   readonly loop: ChannelLoop
   readonly router: (request: Request) => Promise<Response>
+  /** The chat sessions' agents; `disposeAll()` at stop is the only end of their lifetime (D2). */
+  readonly sessions: SessionAgents
 }
 
 /** The chat path's request boundary: it holds the request's event and leases that session's agent. */
@@ -249,7 +251,7 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
     isStarted: (platform) => loop.started.has(platform),
     write: maskedWrite,
   })
-  return { loop, router }
+  return { loop, router, sessions: chat.sessions }
 }
 
 export interface StartOptions extends Omit<TheoClawOptions, 'write'> {
@@ -378,13 +380,17 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
   const stdout = options.stdout ?? lineWriter(streams[0])
   const flushOnExit = (): void => mask.flush()
   options.signals.on('exit', flushOnExit)
-  let loop: ChannelLoop | undefined
+  let composedApp: ComposedTheoClaw | undefined
   let serving: Promise<ControlPlaneHandle> | undefined
   // Bound once the listener resolves; the shutdown hook reads it late, as it reads `serving`.
   let announcement: LanAnnouncement | undefined
   const removeShutdown = installShutdown({
     signals: options.signals,
-    stopAll: () => loop?.stopAll() ?? Promise.resolve(),
+    // The loop first, so no turn starts once the agents are being disposed.
+    stopAll: async () => {
+      await composedApp?.loop.stopAll()
+      await composedApp?.sessions.disposeAll()
+    },
     closeServer: async () => {
       const handle = await serving
       if (handle !== undefined) await stopThenClose(announcement ?? NOTHING_TO_WITHDRAW, handle)
@@ -415,7 +421,7 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
   const agents = createContainer<TurnAgent>({
     factory: () => options.agentFactory(agentToolOptions(tools)),
   })
-  loop = composed.loop
+  composedApp = composed
   const listen = options.listen ?? listenControlPlane
   serving = listen({
     handler: serveHealthAndWebhooks(composed.router),
@@ -435,6 +441,7 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
     removeShutdown()
     options.signals.off('exit', flushOnExit)
     await composed.loop.stopAll()
+    await composed.sessions.disposeAll()
     // The mask stays: the entry writes this error and exits, and that line is masked too.
     mask.flush()
     throw error
