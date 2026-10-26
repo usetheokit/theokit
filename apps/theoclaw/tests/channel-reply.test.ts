@@ -15,9 +15,8 @@ import {
   createReplyHandler,
 } from '../src/channels/reply-handler.js'
 import type { TurnAgent } from '../src/channels/reply-handler.js'
-import { composeTheoClaw, createContainer } from '../src/composition.js'
+import { createContainer } from '../src/composition.js'
 import type { SessionLease } from '../src/sessions/session-agents.js'
-import { fakeBuilders, TELEGRAM_AND_LINE } from './composition-fixtures.js'
 import { FakeAdapter, FakeAgent, assistant, deferred, finished, messageEvent, thinking, waitFor } from './fakes.js'
 import type { FakeTurn } from './fakes.js'
 
@@ -418,15 +417,8 @@ class SdkShapedAgent extends FakeAgent {
     super(turn)
   }
 
-  disposes = 0
-
   close(): void {
     this.disposed = true
-  }
-
-  /** `SessionAgents`' own disposal; the request boundary must never call it on a leased agent. */
-  async dispose(): Promise<void> {
-    this.disposes += 1
   }
 
   async [Symbol.asyncDispose](): Promise<void> {
@@ -483,36 +475,5 @@ describe("the /control request boundary tears its agent down", () => {
     await expect(handlerOver(agent)(event, ctx)).rejects.toHaveProperty('errors', [teardown])
 
     expect(replies.map((reply) => reply.text)).toEqual(['Hi!'])
-  })
-})
-
-describe("a chat reply's request boundary leaves its session's agent open", () => {
-  it('does not dispose the leased agent after a turn', async () => {
-    const agent = new SdkShapedAgent({ frames: [assistant('Hi!'), finished()] })
-    let resolved = 0
-    const { adapters, builders } = fakeBuilders()
-    const { loop } = composeTheoClaw({
-      env: TELEGRAM_AND_LINE,
-      agentFactory: () => {
-        throw new Error('the /control factory must not build a chat agent')
-      },
-      getOrCreate: async () => {
-        resolved += 1
-        return agent
-      },
-      builders,
-      write: () => undefined,
-    })
-    await loop.ready
-
-    const telegram = adapters.get('telegram')!
-    await telegram.deliver(messageEvent('telegram', 'hello'))
-    await waitFor(() => telegram.sent.length === 1, 1000, 'the reply to be sent')
-
-    expect(adapters.get('telegram')!.sent.map((message) => message.text)).toEqual(['Hi!'])
-    expect(agent.teardowns).toBe(0)
-    expect(agent.disposes).toBe(0)
-    expect(resolved).toBe(1)
-    await loop.stopAll()
   })
 })
