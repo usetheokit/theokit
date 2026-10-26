@@ -15,6 +15,8 @@ function lanEnv(extra: Record<string, string> = {}): Record<string, string | und
   return {
     THEOCLAW_MODEL: 'openrouter/some/model',
     OPENROUTER_API_KEY: 'model-key-value-5d1e8c',
+    THEOCLAW_OWNERS: 'telegram:owner',
+    THEOCLAW_DM_POLICY: 'allowlist',
     THEOCLAW_PORT: '0',
     THEOCLAW_HOST: '0.0.0.0',
     THEOCLAW_PUBLIC_BIND: 'yes',

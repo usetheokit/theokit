@@ -98,6 +98,8 @@ async function start(lan: boolean): Promise<Started> {
     THEOCLAW_MODEL: model,
     ...(process.env.THEOKIT_API_KEY ? { THEOKIT_API_KEY: process.env.THEOKIT_API_KEY } : {}),
     ...(process.env.OPENROUTER_API_KEY ? { OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY } : {}),
+    THEOCLAW_OWNERS: 'telegram:owner',
+    THEOCLAW_DM_POLICY: 'allowlist',
     THEOCLAW_PORT: '0',
     THEOCLAW_CONTROL_TOKEN: token,
     ...(lan ? { THEOCLAW_HOST: lanAddress(), THEOCLAW_PUBLIC_BIND: 'yes' } : {}),
