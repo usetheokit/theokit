@@ -13,6 +13,15 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Exact dependency versions and an audit of what TheoClaw installs (B-406). Every entry of
+  `apps/theoclaw/package.json` is now an exact version or `workspace:*`, and `pnpm --filter theoclaw
+  run check:versions` refuses any other form (`^`, `~`, `>=`, `*`, a tag, `workspace:^`, `file:`,
+  `link:`, `npm:`, git), printing one `<section> <name> <specifier>` line per non-exact entry and
+  exiting 1. `pnpm --filter theoclaw run audit` runs one workspace `pnpm audit --json` and exits 1
+  on any advisory whose path starts at TheoClaw, dev tree included, ignoring the other importers; it
+  exits 2 when pnpm's report cannot be read or an advisory in it is malformed. `vitest` and
+  `@vitest/coverage-v8` move to 4.1.12, past two `@vitest/mocker` advisories, and `vite` 7.3.7 is a
+  direct devDependency. The `theoclaw` CI job runs both commands.
 - A control plane: `pnpm --filter theoclaw run build && pnpm --filter theoclaw start` starts one
   process that serves HTTP and an owner WebSocket on one port (B-372). It binds `127.0.0.1` unless
   `THEOCLAW_HOST` names another address; a non-loopback address also needs

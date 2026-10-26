@@ -614,6 +614,22 @@ jobs:
       # were read by no analyzer until this step (code review #67).
       - name: lint
         run: pnpm --filter theoclaw run lint
+      # REQ-8 (B-406): the app pins exact versions and audits what it installs. The first step refuses
+      # any range in apps/theoclaw/package.json (`^`, `~`, `>=`, `workspace:^`, ...). The second runs
+      # one workspace `pnpm audit --json` and fails on any advisory whose path starts at the
+      # TheoClaw importer, dev tree included; the `dependency-audit` job below is production-only
+      # and red for other importers, so it answers a different question. `run` is required: a bare
+      # `pnpm audit` is pnpm's own command, not this script. The audit reads the live advisory
+      # database, so a new advisory on a pinned version turns this step red on a PR that changed
+      # nothing; the recovery is a bump commit. Exit 2 means the report could not be read (a
+      # registry outage, or an advisory in it is malformed), not a finding. Its own 1-minute bound
+      # makes a hung registry time out this named step rather than the whole job, and leaves the
+      # job the rest of its 3 minutes.
+      - name: exact versions
+        run: pnpm --filter theoclaw run check:versions
+      - name: audit (TheoClaw's paths)
+        timeout-minutes: 1
+        run: pnpm --filter theoclaw run audit
 
   dependency-audit:
     name: Dependency audit (production, high+)
