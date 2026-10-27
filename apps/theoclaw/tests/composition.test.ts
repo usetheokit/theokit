@@ -427,8 +427,8 @@ describe('composeTheoClaw with Teams', () => {
 })
 
 // AC-008 as amended by D5 (v1.4: `createChannelAgentFactory` stays, B-377 option A): the chat path
-// builds no per-message agent, and `Agent.create(` is called
-// only by the `/control` factory.
+// builds no per-message agent, and `Agent.create(` is called only by the `/control` factory: since
+// B-382 that call sits in `createTheoClawAgent`, which only the `/control` factory uses.
 describe('the chat path names no per-message factory', () => {
   const SRC = fileURLToPath(new URL('../src/', import.meta.url))
   const sources = (directory: string): string[] =>
@@ -439,7 +439,10 @@ describe('the chat path names no per-message factory', () => {
   it('names channelAgentFactory nowhere and calls Agent.create only in the /control factory', () => {
     const files = sources(SRC).map((path) => ({ path: relative(SRC, path), text: readFileSync(path, 'utf8') }))
     expect(files.filter(({ text }) => /channelAgentFactory/.test(text)).map(({ path }) => path)).toEqual([])
-    expect(files.filter(({ text }) => /Agent\.create\(/.test(text)).map(({ path }) => path)).toEqual([join('control-plane', 'agent-factory.ts')])
+    expect(files.filter(({ text }) => /Agent\.create\(/.test(text)).map(({ path }) => path)).toEqual([join('agent', 'create-agent.ts')])
+    expect(files.filter(({ text }) => /createTheoClawAgent\b/.test(text)).map(({ path }) => path).sort()).toEqual(
+      [join('agent', 'create-agent.ts'), join('control-plane', 'agent-factory.ts')].sort(),
+    )
     expect(readFileSync(join(SRC, 'main.ts'), 'utf8')).toContain('agentFactory: createAgentFactory(process.env)')
   })
 })
