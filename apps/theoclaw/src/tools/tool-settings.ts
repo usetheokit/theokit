@@ -1,6 +1,6 @@
 import { chmodSync, lstatSync, mkdirSync, realpathSync } from 'node:fs'
 import type { Stats } from 'node:fs'
-import { dirname, isAbsolute, join, relative, sep } from 'node:path'
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 
 import { createSandboxBackend, LinuxSandbox, resolveSandboxPosture, writableRootsFor } from '@theokit/agents/sandbox'
 import type { BwrapDetection, SandboxBackend, SandboxMode } from '@theokit/agents/sandbox'
@@ -193,12 +193,28 @@ function contains(root: string, path: string): boolean {
 }
 
 /**
- * With host tools on, refuse a start the sandbox cannot make safe: a backend that is not a
- * `LinuxSandbox` (the shell would run unconfined), or a workspace inside a root the
- * `workspace-write` sandbox also leaves writable (`/tmp`), where the shell could rewrite
- * `.theokit/settings.json`, whose hooks the SDK runs outside the sandbox on the next agent.
+ * The real path of `path` through its nearest existing ancestor, so a directory that does not
+ * exist yet is still placed where a symlinked parent points.
  */
-export function checkHostToolsPosture(settings: ToolSettings, deps: ToolDeps = {}): void {
+function realPathThroughAncestor(path: string): string {
+  const rest: string[] = []
+  let existing = resolve(path)
+  while (lstatOrUndefined(existing) === undefined && dirname(existing) !== existing) {
+    rest.unshift(basename(existing))
+    existing = dirname(existing)
+  }
+  return join(realPathOrSelf(existing), ...rest)
+}
+
+/**
+ * With host tools on, refuse a start the sandbox cannot make safe: a backend that is not a
+ * `LinuxSandbox` (the shell would run unconfined); a workspace inside a root the
+ * `workspace-write` sandbox also leaves writable (`/tmp`), where the shell could rewrite
+ * `.theokit/settings.json`, whose hooks the SDK runs outside the sandbox on the next agent; or a
+ * `stateDir` (`THEOCLAW_STATE_DIR`) inside any root the shell can write, the tool root included,
+ * where the shell could rewrite `pairing.json` and grant chat access to any sender.
+ */
+export function checkHostToolsPosture(settings: ToolSettings, deps: ToolDeps = {}, stateDir?: string): void {
   if (!settings.hostTools) return
   if (!settings.sandboxEnforced) {
     const { detail } = resolveSandboxPosture({ mode: 'workspace-write', ...(deps.detect === undefined ? {} : { detect: deps.detect }) })
@@ -206,13 +222,23 @@ export function checkHostToolsPosture(settings: ToolSettings, deps: ToolDeps = {
       variable: 'THEOCLAW_HOST_TOOLS',
     })
   }
-  for (const root of writableRootsFor('workspace-write', settings.toolRoot) ?? []) {
+  const roots = writableRootsFor('workspace-write', settings.toolRoot) ?? []
+  for (const root of roots) {
     // The workspace is a real path, so the root is compared as one too: bwrap binds what a
     // symlinked `/tmp` points at.
     if (root === settings.toolRoot || !contains(realPathOrSelf(root), settings.workspace)) continue
     throw new TheoClawConfigError(
       `THEOCLAW_HOST_TOOLS=on refuses the workspace ${settings.workspace}: it lies under ${root}, which the sandboxed shell can write`,
       { variable: 'THEOCLAW_HOST_TOOLS' },
+    )
+  }
+  if (stateDir === undefined) return
+  const realStateDir = realPathThroughAncestor(stateDir)
+  for (const root of roots) {
+    if (!contains(realPathOrSelf(root), realStateDir)) continue
+    throw new TheoClawConfigError(
+      `THEOCLAW_HOST_TOOLS=on refuses THEOCLAW_STATE_DIR ${stateDir}: it lies under ${root}, which the sandboxed shell can write`,
+      { variable: 'THEOCLAW_STATE_DIR' },
     )
   }
 }

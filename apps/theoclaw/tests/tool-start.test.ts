@@ -75,6 +75,33 @@ describe('the tool settings at start', () => {
     expect(result.builds()).toBe(0)
   })
 
+  it('refuses THEOCLAW_HOST_TOOLS=on when THEOCLAW_STATE_DIR is inside the tool root', async () => {
+    const workspace = hostWorkspace()
+    const stateDir = join(workspace, 'files', 'state')
+    const result = await start({ THEOCLAW_HOST_TOOLS: 'on', THEOCLAW_STATE_DIR: stateDir }, workspace, { detect: enforced })
+    expect(result.error).toBeInstanceOf(TheoClawConfigError)
+    expect(result.error?.message).toContain('THEOCLAW_STATE_DIR')
+    expect(result.error?.message).toContain(stateDir)
+    expect((result.error as TheoClawConfigError).variable).toBe('THEOCLAW_STATE_DIR')
+    expect(result.builds()).toBe(0)
+  })
+
+  it('refuses THEOCLAW_HOST_TOOLS=on when THEOCLAW_STATE_DIR is under /tmp', async () => {
+    const stateDir = realpathSync(mkdtempSync('/tmp/theoclaw-state-'))
+    cleanups.push(() => rmSync(stateDir, { recursive: true, force: true }))
+    const result = await start({ THEOCLAW_HOST_TOOLS: 'on', THEOCLAW_STATE_DIR: stateDir }, hostWorkspace(), { detect: enforced })
+    expect(result.error).toBeInstanceOf(TheoClawConfigError)
+    expect(result.error?.message).toContain('THEOCLAW_STATE_DIR')
+    expect(result.error?.message).toContain('/tmp')
+    expect(result.builds()).toBe(0)
+  })
+
+  it('accepts THEOCLAW_HOST_TOOLS=on with THEOCLAW_STATE_DIR outside every root the shell can write', async () => {
+    const workspace = hostWorkspace()
+    const result = await start({ THEOCLAW_HOST_TOOLS: 'on', THEOCLAW_STATE_DIR: join(workspace, 'state') }, workspace, { detect: enforced })
+    expect(result.error).toBeUndefined()
+  })
+
   it('refuses THEOCLAW_HOST_TOOLS=yes before any runner starts', async () => {
     const result = await start({ THEOCLAW_HOST_TOOLS: 'yes' }, tempCwd(cleanups), {
       detect: notEnforced,

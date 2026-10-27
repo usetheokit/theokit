@@ -428,11 +428,11 @@ const SHELL_READ_LINE =
   'tools: host tools are on; the shell can read every file the process user can read'
 
 /** The tool settings, every refusal included, before anything opens (FR-008). */
-function startToolSettings(options: StartOptions): ToolSettings {
+function startToolSettings(options: StartOptions, stateDir: string | undefined): ToolSettings {
   // A profiled instance's agents work in its workspace (B-514), so their tool root is made there.
   const cwd = options.cwd ?? options.instance?.workspace ?? process.cwd()
   const tools = resolveToolSettings(options.env, cwd, options.toolDeps)
-  checkHostToolsPosture(tools, options.toolDeps)
+  checkHostToolsPosture(tools, options.toolDeps, stateDir)
   return tools
 }
 
@@ -469,7 +469,7 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
   const discovery = parseDiscoveryMode(options.env)
   // Read before the mask and the shutdown are installed, so a missing owner leaves nothing behind.
   const policy = parseAuthorizationPolicy(options.env)
-  const tools = startToolSettings(options)
+  const tools = startToolSettings(options, policy.stateDir)
   const streams = options.streams ?? [process.stdout, process.stderr]
   const stderr = options.stderr ?? lineWriter(streams[streams.length - 1])
   // First, once every setting is checked: the line holds a label and a directory, never a secret.
