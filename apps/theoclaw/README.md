@@ -159,7 +159,7 @@ no command on the host and leaves no transcript on disk. The SDK still adds one 
 ### The `/control` agent's tools
 
 The `/control` turn's agent gets tools built only from `@theokit/agents/tools`, bound to the tool
-root `files/` under the process's working directory (created at start with mode 0700; a symlinked
+root `files/` under the process's working directory, or a profiled instance's workspace (created at start with mode 0700; a symlinked
 or non-directory `files` is refused). Chat replies get no tool: anyone who can message the bot
 writes their prompt.
 

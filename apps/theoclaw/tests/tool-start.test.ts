@@ -5,15 +5,24 @@ import { effectiveToolNames } from '@theokit/sdk'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { composeTheoClaw } from '../src/composition.js'
+import { applyInstance, resolveInstance } from '../src/instance.js'
 import { TheoClawConfigError } from '../src/control-plane/errors.js'
 import type { AgentToolOptions } from '../src/tools/tool-registry.js'
 import { fakeBuilders, signedLinePost, TELEGRAM_AND_LINE } from './composition-fixtures.js'
 import { FakeAgent, waitFor } from './fakes.js'
 import { makeHostToolsWorkspace } from './host-tools-workspace.js'
-import { enforced, notEnforced, runControlTurn, startForTools, stop, tempCwd } from './tool-start-fixtures.js'
+import {
+  enforced,
+  notEnforced,
+  runControlTurn,
+  startForTools,
+  stop,
+  tempCwd,
+} from './tool-start-fixtures.js'
 import type { ToolStart } from './tool-start-fixtures.js'
 
-const SHELL_READ_LINE = 'tools: host tools are on; the shell can read every file the process user can read'
+const SHELL_READ_LINE =
+  'tools: host tools are on; the shell can read every file the process user can read'
 
 const cleanups: (() => void)[] = []
 const started: ToolStart[] = []
@@ -46,7 +55,9 @@ describe('the tool settings at start', () => {
   })
 
   it('refuses THEOCLAW_HOST_TOOLS=on when the sandbox is not enforced', async () => {
-    const result = await start({ THEOCLAW_HOST_TOOLS: 'on' }, hostWorkspace(), { detect: notEnforced })
+    const result = await start({ THEOCLAW_HOST_TOOLS: 'on' }, hostWorkspace(), {
+      detect: notEnforced,
+    })
     expect(result.error).toBeInstanceOf(TheoClawConfigError)
     expect(result.error?.message).toContain('THEOCLAW_HOST_TOOLS=on needs an enforced sandbox')
     expect(result.error?.message).toContain('bwrap not found on PATH')
@@ -65,7 +76,9 @@ describe('the tool settings at start', () => {
   })
 
   it('refuses THEOCLAW_HOST_TOOLS=yes before any runner starts', async () => {
-    const result = await start({ THEOCLAW_HOST_TOOLS: 'yes' }, tempCwd(cleanups), { detect: notEnforced })
+    const result = await start({ THEOCLAW_HOST_TOOLS: 'yes' }, tempCwd(cleanups), {
+      detect: notEnforced,
+    })
     expect(result.error?.message).toContain('THEOCLAW_HOST_TOOLS must be "on" or unset')
     expect(result.builds()).toBe(0)
   })
@@ -87,6 +100,17 @@ describe('the tool settings at start', () => {
     expect(existsSync(join(cwd, 'files'))).toBe(true)
     expect(existsSync(join(process.cwd(), 'files'))).toBe(before)
   })
+
+  it('a profiled start with no injected cwd makes files/ in the profile workspace, where its agents work', async () => {
+    const home = tempCwd(cleanups)
+    const instance = resolveInstance({ THEOCLAW_PROFILE: 'tools' }, { homeDir: home })
+    applyInstance(instance, {})
+    const before = existsSync(join(process.cwd(), 'files'))
+    const result = await start({}, undefined, { detect: notEnforced }, { instance })
+    expect(result.error).toBeUndefined()
+    expect(existsSync(join(home, '.theokit', 'profiles', 'tools', 'workspace', 'files'))).toBe(true)
+    expect(existsSync(join(process.cwd(), 'files'))).toBe(before)
+  })
 })
 
 describe('the tool options each agent receives', () => {
@@ -94,7 +118,13 @@ describe('the tool options each agent receives', () => {
     const result = await start({}, tempCwd(cleanups), { detect: notEnforced })
     const options = await runControlTurn(result)
     expect(options.withheldBuiltinTools).toEqual(['shell'])
-    expect(options.tools.map((tool) => tool.name).sort()).toEqual(['list_dir', 'read_file', 'todolist', 'view_image', 'web_fetch'])
+    expect(options.tools.map((tool) => tool.name).sort()).toEqual([
+      'list_dir',
+      'read_file',
+      'todolist',
+      'view_image',
+      'web_fetch',
+    ])
     expect(options.plugins.map((plugin) => plugin.name)).toEqual(['theoclaw-path-veto'])
   })
 

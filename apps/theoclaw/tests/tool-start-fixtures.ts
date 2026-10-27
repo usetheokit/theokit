@@ -36,10 +36,10 @@ export function tempCwd(cleanups: (() => void)[]): string {
   return path
 }
 
-/** Start the app on fake platforms in `cwd`, with a control token, and keep what it did. */
+/** Start the app on fake platforms in `cwd` (none: the start's own default), with a control token, and keep what it did. */
 export async function startForTools(
   env: Record<string, string | undefined>,
-  cwd: string,
+  cwd: string | undefined,
   toolDeps: ToolDeps,
   extra: Partial<StartOptions> = {},
 ): Promise<ToolStart> {
@@ -50,7 +50,12 @@ export async function startForTools(
     toolOptions.push(options)
     return new FakeAgent({ frames: [] })
   }
-  const base = { builds: () => adapters.size, output: () => capture.text(), writeThrough: (text: string) => void capture.write(text), toolOptions }
+  const base = {
+    builds: () => adapters.size,
+    output: () => capture.text(),
+    writeThrough: (text: string) => void capture.write(text),
+    toolOptions,
+  }
   try {
     const app = await startTheoClaw({
       env: { ...TELEGRAM_AND_LINE, THEOCLAW_CONTROL_TOKEN: CONTROL_TOKEN, ...env },
@@ -59,7 +64,7 @@ export async function startForTools(
       signals: new EventEmitter(),
       exit: () => undefined,
       streams: [capture],
-      cwd,
+      ...(cwd === undefined ? {} : { cwd }),
       toolDeps: { warn: () => undefined, ...toolDeps },
       ...extra,
     })
@@ -75,7 +80,9 @@ export async function runControlTurn(start: ToolStart): Promise<AgentToolOptions
   if (app === undefined) throw new Error(`the start refused: ${start.error?.message ?? 'unknown'}`)
   const { host, port } = app.address()
   const before = start.toolOptions.length
-  const socket = new WebSocket(`ws://${host}:${port}/control`, { headers: { Authorization: `Bearer ${CONTROL_TOKEN}` } })
+  const socket = new WebSocket(`ws://${host}:${port}/control`, {
+    headers: { Authorization: `Bearer ${CONTROL_TOKEN}` },
+  })
   await new Promise<void>((resolve, reject) => {
     socket.once('open', () => resolve())
     socket.once('error', reject)

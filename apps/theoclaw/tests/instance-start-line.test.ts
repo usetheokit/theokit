@@ -1,10 +1,13 @@
 import { EventEmitter } from 'node:events'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { startTheoClaw } from '../src/composition.js'
 import type { RunningTheoClaw } from '../src/composition.js'
-import { resolveInstance } from '../src/instance.js'
+import { applyInstance, resolveInstance } from '../src/instance.js'
 import { capturingStream, fakeBuilders, noAgent } from './composition-fixtures.js'
 
 const ENV = {
@@ -19,11 +22,13 @@ const ENV = {
 /** FR-007 (B-514): the start names the instance in its first stderr line and on its handle. */
 describe('the instance start line', () => {
   const running: RunningTheoClaw[] = []
+  const homes: string[] = []
   afterEach(async () => {
     for (const app of running.splice(0)) {
       await app.loop.stopAll()
       await app.close()
     }
+    for (const home of homes.splice(0)) rmSync(home, { recursive: true, force: true })
   })
 
   async function start(instance?: ReturnType<typeof resolveInstance>) {
@@ -44,9 +49,15 @@ describe('the instance start line', () => {
 
   it('the first start line names the instance and the handle carries it', async () => {
     const name = 'abcdefghij-12345'
-    const instance = resolveInstance({ THEOCLAW_PROFILE: name }, { homeDir: '/h' })
+    // A real home: the start makes the agents' tool root in the profile's workspace (B-382).
+    const home = mkdtempSync(join(tmpdir(), 'theoclaw-start-line-'))
+    homes.push(home)
+    const instance = resolveInstance({ THEOCLAW_PROFILE: name }, { homeDir: home })
+    applyInstance(instance, {})
     const profiled = await start(instance)
-    expect(profiled.firstLine).toBe(`theoclaw-${name}: instance started, profile directory /h/.theokit/profiles/${name}`)
+    expect(profiled.firstLine).toBe(
+      `theoclaw-${name}: instance started, profile directory ${home}/.theokit/profiles/${name}`,
+    )
     expect(profiled.app.instance.label).toBe(`theoclaw-${name}`)
 
     const plain = await start()

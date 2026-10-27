@@ -38,8 +38,8 @@ and versioning follows [Semantic Versioning](https://semver.org/).
   turn, a reconnect with no restart, that the turn crossed that `sshd`, that no process printed the
   token, and that `~/.ssh` is untouched.
 - Several instances on one host (B-514). `THEOCLAW_PROFILE=<name>` (`^[a-z0-9][a-z0-9-]{0,15}$`)
-  keeps an instance's SDK state, `auth.json`, pairing store and agent working directory under
-  `~/.theokit/profiles/<name>` (mode 0700), and names it `theoclaw-<name>` in its first stderr line,
+  keeps an instance's SDK state, `auth.json`, pairing store and agent working directory, with the tools' `files/` root,
+  under `~/.theokit/profiles/<name>` (mode 0700), and names it `theoclaw-<name>` in its first stderr line,
   `theoclaw-<name>: instance started, profile directory <dir>`, and in its process title. A bad
   name, or a profile beside `THEOKIT_HOME`, `THEOKIT_AUTH_HOME` or `THEOCLAW_STATE_DIR`, stops the
   start with exit 1 and creates nothing. Without a profile the start is unchanged apart from its new

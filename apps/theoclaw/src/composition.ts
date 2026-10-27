@@ -369,7 +369,7 @@ export interface StartOptions extends Omit<TheoClawOptions, 'write'> {
   readonly listen?: typeof listenControlPlane
   /** Builds the LAN publisher. Default `createBonjourPublisher`; tests pass a fake (plan D2). */
   readonly createPublisher?: PublisherFactory
-  /** The workspace: where the tool root `files/` is made. Default `process.cwd()`, where the SDK keeps `.theokit`. */
+  /** The workspace: where the tool root `files/` is made. Default the instance's workspace, else `process.cwd()`, where the agents work. */
   readonly cwd?: string
   /** What the tool tests inject (bubblewrap detection, fetch); the process passes nothing. */
   readonly toolDeps?: ToolDeps
@@ -429,7 +429,9 @@ const SHELL_READ_LINE =
 
 /** The tool settings, every refusal included, before anything opens (FR-008). */
 function startToolSettings(options: StartOptions): ToolSettings {
-  const tools = resolveToolSettings(options.env, options.cwd ?? process.cwd(), options.toolDeps)
+  // A profiled instance's agents work in its workspace (B-514), so their tool root is made there.
+  const cwd = options.cwd ?? options.instance?.workspace ?? process.cwd()
+  const tools = resolveToolSettings(options.env, cwd, options.toolDeps)
   checkHostToolsPosture(tools, options.toolDeps)
   return tools
 }
