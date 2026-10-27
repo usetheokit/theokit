@@ -8,6 +8,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { RunningTheoClaw } from '../src/composition.js'
 import { startTheoClaw } from '../src/composition.js'
+import type { AgentToolOptions } from '../src/tools/tool-registry.js'
+import { NO_TOOL_OPTIONS } from '../src/tools/tool-registry.js'
 import { WEBCHAT_ASSETS_DIR } from '../src/webchat/page.js'
 import { capturingStream, fakeBuilders, TELEGRAM_AND_LINE } from './composition-fixtures.js'
 import { assistant, FakeAgent, finished } from './fakes.js'
@@ -33,14 +35,15 @@ afterEach(async () => {
 
 /** A started TheoClaw whose agent factory counts the agents it builds. */
 async function start(options: { readonly token?: string; readonly assetsDir?: string } = {}) {
-  const calls = { built: 0 }
+  const calls = { built: 0, toolOptions: [] as AgentToolOptions[] }
   const capture = capturingStream()
   const { builders } = fakeBuilders()
   const env = { ...TELEGRAM_AND_LINE, ...(options.token === undefined ? {} : { THEOCLAW_WEBCHAT_TOKEN: options.token }) }
   const app = await startTheoClaw({
     env,
-    agentFactory: () => {
+    agentFactory: (toolOptions) => {
       calls.built += 1
+      calls.toolOptions.push(toolOptions)
       return new FakeAgent({ frames: [assistant('hello from the agent'), finished()] })
     },
     builders,
@@ -152,5 +155,14 @@ describe('the /webchat routes on the started listener', () => {
 
     expect(capture.text()).toContain('the token is [redacted]\n')
     expect(capture.text()).not.toContain(TOKEN)
+  })
+
+  it('builds the agent of a served turn with no tool, as every chat agent (B-382)', async () => {
+    const { base, calls } = await start({ token: TOKEN })
+
+    const served = await post(base, '/webchat/chat', `Bearer ${TOKEN}`)
+    expect(await served.text()).toContain('hello from the agent')
+
+    expect(calls.toolOptions).toEqual([NO_TOOL_OPTIONS])
   })
 })
