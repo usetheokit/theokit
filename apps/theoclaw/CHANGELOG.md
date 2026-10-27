@@ -52,8 +52,12 @@ and versioning follows [Semantic Versioning](https://semver.org/).
   on any advisory whose path starts at TheoClaw, dev tree included, or at a production dependency
   of a `workspace:*` package TheoClaw links (pnpm reports those under the linked package, never
   through the app), ignoring the other importers; it exits 2 when pnpm's report or the lockfile
-  cannot be read, when the lockfile has no `apps/theoclaw` importer, or when an advisory is
-  malformed. `vitest` and
+  cannot be read, when the lockfile has no `apps/theoclaw` importer, is not `lockfileVersion`
+  9.0 or lists an importer dependency with no `version:` line (a layout the reader does not know
+  fails closed instead of dropping the linked packages), or when an advisory is malformed.
+  `check:versions` reads only the app's manifest: the root `pnpm.overrides` still decide what
+  `zod` (`^4.6.6`) and `@theokit/sdk` resolve to, and `--frozen-lockfile` keeps that resolution
+  to what the lockfile records. `vitest` and
   `@vitest/coverage-v8` move to 4.1.12, past two `@vitest/mocker` advisories, and `vite` 7.3.7 is a
   direct devDependency. The `theoclaw` CI job runs both commands.
 - Only the owner talks to the instance (B-371). `THEOCLAW_OWNERS` (required) names who the

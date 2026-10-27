@@ -113,6 +113,20 @@ describe('theoclawAdvisories', () => {
     )
   })
 
+  it('refuses an advisory with no severity when every other field is present', () => {
+    expect(() => theoclawAdvisories(report([wellFormed({ severity: undefined })]), SCOPE)).toThrow('advisory 1 is malformed')
+  })
+
+  it('refuses an advisory with no module name when every other field is present', () => {
+    expect(() => theoclawAdvisories(report([wellFormed({ module_name: undefined })]), SCOPE)).toThrow(
+      'advisory 1 is malformed',
+    )
+  })
+
+  it('refuses an advisory whose finding is null', () => {
+    expect(() => theoclawAdvisories(report([wellFormed({ findings: [null] })]), SCOPE)).toThrow('advisory 1 is malformed')
+  })
+
   it('refuses a finding whose path is not a string', () => {
     expect(() => theoclawAdvisories(report([wellFormed({ findings: [finding([1])] })]), SCOPE)).toThrow(
       'advisory 1 is malformed',
@@ -135,6 +149,43 @@ describe('auditScope', () => {
     expect(() => auditScope(LOCKFILE.replace('  apps/theoclaw:', '  apps/other:'))).toThrow(
       'no apps/theoclaw importer in pnpm-lock.yaml',
     )
+  })
+
+  it('refuses a lockfile version the reader was not written for', () => {
+    expect(() => auditScope(LOCKFILE.replace("lockfileVersion: '9.0'", "lockfileVersion: '6.0'"))).toThrow(
+      'pnpm-lock.yaml has lockfileVersion 6.0; this reader reads 9.0',
+    )
+  })
+
+  it('refuses a lockfile with no lockfileVersion', () => {
+    expect(() => auditScope(LOCKFILE.replace("lockfileVersion: '9.0'\n", ''))).toThrow(
+      'pnpm-lock.yaml has lockfileVersion (none); this reader reads 9.0',
+    )
+  })
+
+  it('refuses an importer dependency written inline, with no version line', () => {
+    const inline = LOCKFILE.replace(
+      "      '@theokit/agents':\n        specifier: workspace:*\n        version: link:../../packages/agents\n",
+      "      '@theokit/agents': link:../../packages/agents\n",
+    )
+    expect(() => auditScope(inline)).toThrow('apps/theoclaw dependencies @theokit/agents has no version line in pnpm-lock.yaml')
+  })
+
+  it('refuses an importer section written as a flow mapping', () => {
+    const flow = LOCKFILE.replace('  packages/http:\n    dependencies:\n', '  packages/http:\n    dependencies: {}\n    devDependencies:\n')
+    expect(() => auditScope(flow)).toThrow('packages/http dependencies is not a block mapping in pnpm-lock.yaml')
+  })
+
+  it("admits every workspace package the app's manifest links in the repository lockfile", () => {
+    const manifest = JSON.parse(readFileSync(`${REPO_ROOT}apps/theoclaw/package.json`, 'utf8'))
+    const linked = Object.values({ ...manifest.dependencies, ...manifest.devDependencies }).filter((spec) =>
+      spec.startsWith('workspace:'),
+    )
+    const scope = auditScope(readFileSync(`${REPO_ROOT}pnpm-lock.yaml`, 'utf8'))
+    expect([...scope.keys()]).toEqual(
+      expect.arrayContaining(['apps__theoclaw', 'packages__agents', 'packages__http', 'packages__presenter']),
+    )
+    expect(scope.size - 1).toBeGreaterThanOrEqual(linked.length)
   })
 })
 
