@@ -37,6 +37,8 @@ interface InstanceOptions {
   readonly platform?: PlatformName
   readonly pairing?: PairingStore | null
   readonly clock?: () => number
+  /** Replaces the parsed owners, to build a policy the parser refuses (an email owner). */
+  readonly owners?: readonly string[]
 }
 
 /**
@@ -46,7 +48,8 @@ interface InstanceOptions {
 async function instance(options: InstanceOptions = {}) {
   const platform = options.platform ?? 'telegram'
   const env = { THEOCLAW_OWNERS: `${platform}:${OWNER_ID}`, THEOCLAW_STATE_DIR: dir, ...options.env }
-  const policy = parseAuthorizationPolicy(env)
+  const parsed = parseAuthorizationPolicy(env)
+  const policy = options.owners === undefined ? parsed : { ...parsed, owners: new Set(options.owners) }
   const pairing = options.pairing === null ? undefined : (options.pairing ?? createPairingStore({ dir }))
   const lines: string[] = []
   const hook = createOwnerPolicyHook({
@@ -195,10 +198,28 @@ describe('createOwnerPolicyHook', () => {
     expect(app.handled).toHaveLength(0)
   })
 
-  it('an email owner reaches the handler whatever the case of the sender address', async () => {
-    const app = await instance({ platform: 'email', env: { THEOCLAW_OWNERS: 'email:Paulo@Example.com' } })
-    await app.send(messageEvent('email', 'hello', 'paulo@example.com'))
-    await app.send(messageEvent('email', 'hello', 'PAULO@EXAMPLE.COM'))
-    expect(app.handled).toHaveLength(2)
+  it('an email sender named as an owner never reaches the handler, since its From header is not authenticated', async () => {
+    const app = await instance({ platform: 'email', owners: ['email:owner@example.com'], env: { THEOCLAW_OWNERS: 'telegram:owner-1', THEOCLAW_DM_POLICY: 'allowlist' } })
+    await app.send(messageEvent('email', 'hello', 'owner@example.com'))
+    await app.send(messageEvent('email', '/approve 123456', 'owner@example.com'))
+    expect(app.handled).toHaveLength(0)
+    expect(app.replies()).toEqual([app.policy.refusalText])
+  })
+
+  it('an email stranger under pairing gets the refusal text and no pairing code', async () => {
+    const app = await instance({ platform: 'email', env: { THEOCLAW_OWNERS: 'telegram:owner-1' } })
+    await app.send(messageEvent('email', 'hello', 'stranger@example.com'))
+    expect(app.replies()).toEqual([app.policy.refusalText])
+    expect(app.handled).toHaveLength(0)
+  })
+
+  it('an email sender paired in the store is still refused', async () => {
+    const pairing = createPairingStore({ dir })
+    const approved = await pairing.approve(pairing.issue('email', 'friend@example.com'))
+    expect(approved.ok).toBe(true)
+    const app = await instance({ platform: 'email', env: { THEOCLAW_OWNERS: 'telegram:owner-1' }, pairing })
+    await app.send(messageEvent('email', 'hello', 'friend@example.com'))
+    expect(app.handled).toHaveLength(0)
+    expect(app.replies()).toEqual([app.policy.refusalText])
   })
 })

@@ -119,8 +119,12 @@ describe('parseAuthorizationPolicy', () => {
     expect(error.variable).toBe('THEOCLAW_BROADCAST_GROUPS')
   })
 
-  it('lowercases an email owner id', () => {
-    const policy = parseAuthorizationPolicy({ ...OWNER, THEOCLAW_OWNERS: 'email:Paulo@Example.com,slack:U0ABC' })
-    expect([...policy.owners]).toEqual(['email:paulo@example.com', 'slack:U0ABC'])
+  it('refuses an email owner, whose From header nothing authenticates', () => {
+    const error = refusal({ ...OWNER, THEOCLAW_OWNERS: 'slack:U0ABC,email:paulo@example.com' })
+    expect(error.variable).toBe('THEOCLAW_OWNERS')
+    expect(error.message).toBe(
+      'THEOCLAW_OWNERS cannot name an email owner: the From header of an e-mail is not authenticated, so anyone could write as the owner',
+    )
+    expect(error.message).not.toContain('paulo@example.com')
   })
 })

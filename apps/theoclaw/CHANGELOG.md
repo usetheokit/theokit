@@ -62,7 +62,9 @@ and versioning follows [Semantic Versioning](https://semver.org/).
   several platforms. The parity ledger records OC-18, OC-19 and OC-21 as shipped, checked against a
   real model by `tests/live/authorization.live.test.ts` (`THEOCLAW_LIVE=1`). An existing setup must
   now set `THEOCLAW_OWNERS`, and `THEOCLAW_STATE_DIR` under the default policy, or the start stops
-  naming the variable.
+  naming the variable. `THEOCLAW_OWNERS` refuses an `email:` owner and an e-mail sender is never
+  paired: the e-mail adapter does not authenticate the From header, so a forged one could act as the
+  owner and `/approve` anyone (CWE-290).
 - A control plane: `pnpm --filter theoclaw run build && pnpm --filter theoclaw start` starts one
   process that serves HTTP and an owner WebSocket on one port (B-372). It binds `127.0.0.1` unless
   `THEOCLAW_HOST` names another address; a non-loopback address also needs

@@ -12,9 +12,10 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { createOwnerPolicyHook } from '../../src/authorization/owner-policy-hook.js'
 import { createPairingStore } from '../../src/authorization/pairing-store.js'
-import { parseAuthorizationPolicy, senderKey } from '../../src/authorization/policy.js'
+import { parseAuthorizationPolicy } from '../../src/authorization/policy.js'
 import type { PlatformBuild } from '../../src/channels/channel-loop.js'
 import { composeTheoClaw } from '../../src/composition.js'
+import { TheoClawConfigError } from '../../src/control-plane/errors.js'
 import { FakeAdapter, FakeAgent, assistant, finished, messageEvent, waitFor } from '../fakes.js'
 
 let dir: string
@@ -87,14 +88,16 @@ describe('composeTheoClaw with parseAuthorizationPolicy, createPairingStore and 
     expect(createOwnerPolicyHook({ policy, pairing: reloaded }).name).toBe('theoclaw-owner-policy')
   })
 
-  it('an email owner is recognised through senderKey whatever the case of the address', async () => {
-    const env = { THEOCLAW_OWNERS: 'email:Paulo@Example.com', THEOCLAW_DM_POLICY: 'allowlist' }
-    const app = composedApp(env, ['email'])
+  it('the composed app refuses to start with an email owner and offers an email stranger no pairing code', async () => {
+    expect(() => composedApp({ THEOCLAW_OWNERS: 'email:owner@example.com', THEOCLAW_DM_POLICY: 'allowlist' }, ['email'])).toThrow(
+      TheoClawConfigError,
+    )
+    const app = composedApp({ THEOCLAW_OWNERS: 'telegram:owner', THEOCLAW_STATE_DIR: dir }, ['email'])
     await app.loop.ready
-    await app.deliver(messageEvent('email', 'hello', 'PAULO@example.COM'), 1)
-    expect(app.sent('email')).toEqual(['answer to hello'])
+    await app.deliver(messageEvent('email', 'hello', 'stranger@example.com'), 1)
+    expect(app.sent('email')).toEqual(['This assistant answers its owner only.'])
+    expect(app.asked).toEqual([])
     await app.loop.stopAll()
-    expect(parseAuthorizationPolicy(env).owners.has(senderKey('email', 'paulo@EXAMPLE.com'))).toBe(true)
   })
 
   it('createGroupActivationHook in the composed app answers a mentioned telegram group message and ignores an unmentioned one', async () => {

@@ -35,7 +35,7 @@ policy below; owners and paired senders are answered there as in a direct messag
 
 | Variable | Meaning |
 |---|---|
-| `THEOCLAW_OWNERS` | Required. `platform:senderId` entries, comma-separated; the platform is one of the ten below, and an id may contain colons (Matrix). E-mail addresses are compared without case. |
+| `THEOCLAW_OWNERS` | Required. `platform:senderId` entries, comma-separated; the platform is one of the ten below, and an id may contain colons (Matrix). An `email:` entry is refused: the From header of an e-mail is not authenticated, so anyone could write as the owner. For the same reason an e-mail sender is never an owner or paired, and under `pairing` gets the refusal text instead of a code. |
 | `THEOCLAW_DM_POLICY` | What a direct message from anyone else gets: `pairing` (default) a pairing code, `allowlist` the refusal text, `disabled` nothing, `open` the agent. A refused sender is answered at most once an hour; after that, silence. |
 | `THEOCLAW_STATE_DIR` | Directory holding `pairing.json` (mode 0600, the directory created 0700). Required under `pairing`, optional otherwise; pairings made earlier still apply when it is set. A `pairing.json` that does not parse stops the start. |
 | `THEOCLAW_REFUSAL_TEXT` | The refusal under `allowlist`. Default `This assistant answers its owner only.` |

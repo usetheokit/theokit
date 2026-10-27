@@ -2,7 +2,7 @@ import { redactSecrets } from '@theokit/gateway'
 import type { GatewayHook, HookDecision, MessageEvent } from '@theokit/gateway'
 
 import type { PairingStore } from './pairing-store.js'
-import { senderKey } from './policy.js'
+import { isAuthenticatedSender, senderKey } from './policy.js'
 import type { AuthorizationPolicy } from './policy.js'
 
 const HOOK_NAME = 'theoclaw-owner-policy'
@@ -56,8 +56,9 @@ export function createOwnerPolicyHook(options: OwnerPolicyHookOptions): GatewayH
   const forgetOld = (now: number): void => {
     for (const [key, at] of refusals) if (now - at >= REFUSAL_MEMORY_MS) refusals.delete(key)
   }
+  // A sender no platform authenticates could never be paired, so it is offered no code.
   const refusalFor = (event: MessageEvent): string =>
-    policy.dmPolicy === 'pairing' && pairing !== undefined
+    policy.dmPolicy === 'pairing' && pairing !== undefined && isAuthenticatedSender(event.platform)
       ? pairingMessage(pairing.issue(event.platform, event.sender.id))
       : policy.refusalText
 
@@ -75,11 +76,12 @@ export function createOwnerPolicyHook(options: OwnerPolicyHookOptions): GatewayH
     const now = clock()
     forgetOld(now)
     const key = senderKey(event.platform, event.sender.id)
-    const isOwner = policy.owners.has(key)
+    const authenticated = isAuthenticatedSender(event.platform)
+    const isOwner = authenticated && policy.owners.has(key)
     const isDm = event.channel.type === 'dm'
     const text = event.text.trim()
     if (isOwner && isDm && APPROVE_COMMAND.test(text)) return approval(text, pairing)
-    if (isOwner || (pairing?.isPaired(event.platform, event.sender.id) ?? false)) return undefined
+    if (isOwner || (authenticated && (pairing?.isPaired(event.platform, event.sender.id) ?? false))) return undefined
     return isDm ? refuseDm(event, key, now) : SILENT
   }
 

@@ -20,7 +20,7 @@ export interface BroadcastGroup {
 
 /** Who the instance serves and how it treats everyone else, read once at start (FR-001). */
 export interface AuthorizationPolicy {
-  /** `platform:senderId` keys; an `email` id is lowercased. */
+  /** `platform:senderId` keys; never an `email` one (see `isAuthenticatedSender`). */
   readonly owners: ReadonlySet<string>
   readonly dmPolicy: DmPolicy
   readonly groupActivation: GroupActivation
@@ -85,6 +85,18 @@ function splitAddress(entry: string, variable: string): { platform: PlatformName
   return { platform, id }
 }
 
+/**
+ * Platforms whose sender id nothing authenticates: an e-mail's From header is written by whoever
+ * sends it, and the e-mail adapter checks no DKIM or SPF result (CWE-290). A sender there is never
+ * an owner and never paired.
+ */
+const UNAUTHENTICATED_SENDER_PLATFORMS: ReadonlySet<string> = new Set<PlatformName>(['email'])
+
+/** Whether the platform's sender id can identify an owner or a paired sender. */
+export function isAuthenticatedSender(platform: string): boolean {
+  return !UNAUTHENTICATED_SENDER_PLATFORMS.has(platform)
+}
+
 /** The key an owner or a sender is compared by. E-mail addresses compare case-insensitively (EC-4). */
 export function senderKey(platform: string, senderId: string): string {
   return `${platform}:${platform === 'email' ? senderId.toLowerCase() : senderId}`
@@ -105,6 +117,12 @@ function parseOwners(env: Env): ReadonlySet<string> {
   }
   return new Set(entries.map((entry) => {
     const { platform, id } = splitAddress(entry, variable)
+    if (!isAuthenticatedSender(platform)) {
+      throw new TheoClawConfigError(
+        `${variable} cannot name an ${platform} owner: the From header of an e-mail is not authenticated, so anyone could write as the owner`,
+        { variable },
+      )
+    }
     return senderKey(platform, id)
   }))
 }
