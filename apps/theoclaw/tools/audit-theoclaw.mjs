@@ -49,33 +49,36 @@ const LOCK_ENTRY = /^( {2,8})(\S.*?):(?: (.+))?$/
 
 const unquote = (text) => text.replace(/^'(.*)'$/, '$1')
 
+/** What each indentation of the importers block opens: an importer, a section, a dependency, its version. */
+const ENTRY_BY_INDENT = {
+  2: (state, key) => {
+    state.deps = []
+    state.importers.set(unquote(key), state.deps)
+  },
+  4: (state, key) => {
+    state.section = key
+  },
+  6: (state, key) => {
+    state.name = unquote(key)
+  },
+  8: (state, key, value) => {
+    if (key === 'version' && state.deps) state.deps.push({ section: state.section, name: state.name, version: unquote(value ?? '') })
+  },
+}
+
 /**
  * The `importers:` block of a pnpm lockfile as `Map<key, [{ section, name, version }]>`.
  * Line-based: pnpm writes this block with fixed two-space indentation.
  */
 function readImporters(lockText) {
-  const importers = new Map()
+  const state = { importers: new Map(), deps: null, section: null, name: null }
   let inBlock = false
-  let deps = null
-  let section = null
-  let name = null
   for (const line of lockText.split('\n')) {
     if (/^\S/.test(line)) inBlock = line === 'importers:'
     const entry = inBlock ? LOCK_ENTRY.exec(line) : null
-    if (!entry) continue
-    const [, indent, key, value] = entry
-    if (indent.length === 2) {
-      deps = []
-      importers.set(unquote(key), deps)
-    } else if (indent.length === 4) {
-      section = key
-    } else if (indent.length === 6) {
-      name = unquote(key)
-    } else if (indent.length === 8 && key === 'version' && deps) {
-      deps.push({ section, name, version: unquote(value ?? '') })
-    }
+    if (entry) ENTRY_BY_INDENT[entry[1].length]?.(state, entry[2], entry[3])
   }
-  return importers
+  return state.importers
 }
 
 /**
