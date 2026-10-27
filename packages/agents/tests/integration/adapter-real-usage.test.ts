@@ -146,6 +146,25 @@ describe('V4-N.1 adapter emits real SDK usage', () => {
     expect(result.tokens).toBe(19)
   })
 
+  it('counts only input and output in tokens on a cached turn, beside the cache counters', async () => {
+    // B-412: from @theokit/sdk 5.11.0 the chat-completions inputTokens is the uncached slice, so a
+    // cached turn reports its prompt across inputTokens and the two cache buckets. `tokens` keeps
+    // the SDK's TokenUsage.totalTokens meaning (inputTokens + outputTokens) and leaves the cache
+    // out; the whole prompt is tokensInput + cacheReadTokens + cacheWriteTokens.
+    h.usage = { inputTokens: 360, outputTokens: 7, cacheReadTokens: 12_261, cacheWriteTokens: 0 }
+    const result = await AgentRunner.fromSpec({
+      compiled: usageAgent,
+      name: 'usageAgent',
+      strategy: 'simple-chat',
+    })
+      .build()
+      .run('hi', { apiKey: 'k' })
+    expect(result.tokens).toBe(367)
+    expect(result.tokensInput).toBe(360)
+    expect(result.cacheReadTokens).toBe(12_261)
+    expect(result.cacheWriteTokens).toBe(0)
+  })
+
   it('test_error_round_skips_wait_and_done', async () => {
     // EC-1: a stream error is the terminal — the adapter must NOT call run.wait() or emit a done.
     h.streamMsgs = [{ type: 'status', status: 'ERROR', message: 'boom' }]

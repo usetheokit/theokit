@@ -81,6 +81,14 @@
       "types": "./dist/a2a.d.ts",
       "import": "./dist/a2a.js"
     },
+    "./evals": {
+      "types": "./dist/evals.d.ts",
+      "import": "./dist/evals.js"
+    },
+    "./handoff": {
+      "types": "./dist/handoff.d.ts",
+      "import": "./dist/handoff.js"
+    },
     "./mcp-health": {
       "types": "./dist/mcp-health.d.ts",
       "import": "./dist/mcp-health.js"
@@ -128,6 +136,8 @@
     }
   },
   "devDependencies": {
+    "@agentclientprotocol/sdk": "^0.22.1",
+    "@theokit/acp": "^4.0.1",
     "@theokit/http": "workspace:*",
     "ai": "7.0.14",
     "tsup": "^8.5.1",
@@ -140,7 +150,7 @@
   },
   "dependencies": {
     "@theokit/presenter": "workspace:*",
-    "@theokit/sdk": "^5.3.0",
+    "@theokit/sdk": "^5.11.0",
     "@theokit/sdk-tools": "^0.27.1"
   },
   "publishConfig": {

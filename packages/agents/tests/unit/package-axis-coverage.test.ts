@@ -124,7 +124,7 @@ const DECISIONS: Record<string, Decision> = {
   '@theokit/sdk-handoff': {
     verdict: 'out',
     reason:
-      'Agent-to-agent handoff. This layer exposes delegation through its own subagent surface; carrying a second handoff vocabulary would put two ways to do one thing in front of a consumer.',
+      'Call-and-return between agents: the agent called answers the caller, which keeps the turn. This layer owns a transfer instead (`@theokit/agents/handoff`, where the next turn is answered by the receiver), and re-exporting the SDK package would put a second, different meaning of handoff in front of a consumer.',
   },
   '@theokit/sdk-memory': {
     verdict: 'out',

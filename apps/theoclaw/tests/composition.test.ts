@@ -6,6 +6,16 @@ import { createAgentProvider } from "@theokit/di-agent";
 
 import { createContainer } from "../src/composition.js";
 
+import { createHmac } from 'node:crypto'
+
+import type { WhatsAppMessageEvent } from '@theokit/gateway'
+
+import { composeTheoClaw } from '../src/composition.js'
+import { MAX_BODY_BYTES } from '../src/webhooks/router.js'
+import type { TeamsVerifier } from '../src/webhooks/teams.js'
+import { chunkedPost, fakeBuilders, noAgent, signedLinePost, TELEGRAM_AND_LINE } from './composition-fixtures.js'
+import { FakeAdapter, FakeAgent, assistant, deferred, finished, waitFor } from './fakes.js'
+
 /**
  * B-004, DoD bullet 1 — "an agent is request-scoped through `createAgentProvider`, proven by two
  * concurrent requests not sharing state".
@@ -131,3 +141,269 @@ describe("what the first round of tests could not see", () => {
     expect(first).toBe(second);
   });
 });
+
+describe('composeTheoClaw', () => {
+  it('composes one runner per configured platform and serves its route', async () => {
+    const { builders } = fakeBuilders()
+    const lines: string[] = []
+    const { loop, router } = composeTheoClaw({ env: TELEGRAM_AND_LINE, agentFactory: noAgent, builders, write: (line) => lines.push(line) })
+
+    await loop.ready
+
+    expect(loop.started.size).toBe(2)
+    expect((await router(signedLinePost())).status).toBe(200)
+    expect((await router(new Request('http://localhost/webhooks/sms', { method: 'POST', body: 'x' }))).status).toBe(404)
+    expect(lines).toContain(
+      'slack: not configured (missing THEOCLAW_SLACK_BOT_TOKEN, THEOCLAW_SLACK_APP_TOKEN)',
+    )
+    await loop.stopAll()
+  })
+
+  // The join the item ships: a message entering a route reaches an agent of the channel factory,
+  // and its answer leaves through the same platform's adapter.
+  it('answers a LINE message with the reply of an agent from the channel factory', async () => {
+    const channelAgent = new FakeAgent({ frames: [assistant('hi from theo'), finished()] })
+    const { adapters, builders } = fakeBuilders()
+    const { loop, router } = composeTheoClaw({
+      env: TELEGRAM_AND_LINE,
+      agentFactory: () => {
+        throw new Error('the /control factory must not build a chat agent')
+      },
+      channelAgentFactory: () => channelAgent,
+      builders,
+      write: () => undefined,
+    })
+    await loop.ready
+
+    expect((await router(signedLinePost())).status).toBe(200)
+    await waitFor(() => (adapters.get('line')?.sent.length ?? 0) > 0, 1000, 'the LINE reply to be sent')
+
+    expect(channelAgent.sent).toEqual(['hi'])
+    expect(adapters.get('line')?.sent.map((message) => message.text)).toEqual(['hi from theo'])
+    await loop.stopAll()
+  })
+
+  it('serves a route before a slow platform has connected', async () => {
+    const held = deferred<boolean>()
+    const { builders } = fakeBuilders({ telegram: new FakeAdapter('telegram', { connect: () => held.promise }) })
+    const { loop, router } = composeTheoClaw({ env: TELEGRAM_AND_LINE, agentFactory: noAgent, builders, write: () => undefined })
+    await waitFor(() => loop.started.has('line'), 1000, 'the LINE runner to start')
+
+    const response = await router(signedLinePost())
+
+    expect(response.status).toBe(200)
+    expect(loop.started.has('telegram')).toBe(false)
+    held.resolve(true)
+    await loop.ready
+    await loop.stopAll()
+  })
+
+  it('a chunked oversized sms post never reaches the verifier', async () => {
+    const sms = new (class extends FakeAdapter {
+      verifications = 0
+      verifySignature(): boolean {
+        this.verifications += 1
+        return true
+      }
+    })('sms')
+    const { builders } = fakeBuilders({ sms })
+    const env = {
+      THEOCLAW_SMS_TWILIO_ACCOUNT_SID: 'AC-x',
+      THEOCLAW_SMS_TWILIO_AUTH_TOKEN: 'auth-token',
+      THEOCLAW_SMS_TWILIO_FROM_NUMBER: '+15550000000',
+      THEOCLAW_SMS_PUBLIC_URL: 'https://example.org/webhooks/sms',
+    }
+    const { loop, router } = composeTheoClaw({ env, agentFactory: noAgent, builders, write: () => undefined })
+    await loop.ready
+
+    const response = await router(chunkedPost('/webhooks/sms', MAX_BODY_BYTES + 1))
+
+    expect(response.status).toBe(413)
+    expect(sms.verifications).toBe(0)
+    await loop.stopAll()
+  })
+})
+
+const WHATSAPP_ENV = {
+  THEOCLAW_WHATSAPP_ACCESS_TOKEN: 'wa-access',
+  THEOCLAW_WHATSAPP_PHONE_NUMBER_ID: '1234',
+  THEOCLAW_WHATSAPP_APP_SECRET: 'wa-app-secret',
+  THEOCLAW_WHATSAPP_VERIFY_TOKEN: 'wa-verify',
+}
+
+/** A started WhatsApp stand-in: a FakeAdapter that also converts envelopes, counting each call. */
+class ConvertingWhatsApp extends FakeAdapter {
+  conversions = 0
+
+  constructor() {
+    super('whatsapp')
+  }
+
+  toDeliverableEvents(): WhatsAppMessageEvent[] {
+    this.conversions += 1
+    return []
+  }
+}
+
+describe('composeTheoClaw with WhatsApp', () => {
+  it('serves the WhatsApp route through the started adapter', async () => {
+    const whatsapp = new ConvertingWhatsApp()
+    const { builders } = fakeBuilders({ whatsapp })
+    const { loop, router } = composeTheoClaw({ env: WHATSAPP_ENV, agentFactory: noAgent, builders, write: () => undefined })
+    await loop.ready
+    const body = JSON.stringify({ object: 'whatsapp_business_account', entry: [] })
+    const signature = `sha256=${createHmac('sha256', 'wa-app-secret').update(body).digest('hex')}`
+
+    const response = await router(
+      new Request('http://localhost/webhooks/whatsapp', {
+        method: 'POST',
+        headers: { 'x-hub-signature-256': signature },
+        body,
+      }),
+    )
+
+    expect(response.status).toBe(200)
+    expect(whatsapp.conversions).toBe(1)
+    await loop.stopAll()
+  })
+
+  it('a chunked oversized whatsapp post never reaches the route', async () => {
+    const whatsapp = new ConvertingWhatsApp()
+    const { builders } = fakeBuilders({ whatsapp })
+    const { loop, router } = composeTheoClaw({ env: WHATSAPP_ENV, agentFactory: noAgent, builders, write: () => undefined })
+    await loop.ready
+
+    const response = await router(chunkedPost('/webhooks/whatsapp', MAX_BODY_BYTES + 1))
+
+    expect(response.status).toBe(413)
+    expect(whatsapp.conversions).toBe(0)
+    await loop.stopAll()
+  })
+})
+
+const TEAMS_ENV = {
+  THEOCLAW_TEAMS_CLIENT_ID: 'teams-client-id',
+  THEOCLAW_TEAMS_CLIENT_SECRET: 'teams-client-secret',
+  THEOCLAW_TEAMS_TENANT_ID: '00000000-0000-4000-8000-000000000000',
+}
+
+/** A verifier factory that counts how often it builds and how often its verifier runs. */
+function countingVerifierFactory() {
+  const counts = { built: 0, verified: 0 }
+  const factory = (): TeamsVerifier => {
+    counts.built += 1
+    return async () => {
+      counts.verified += 1
+      return {
+        ok: true,
+        activity: { type: 'conversationUpdate' },
+        token: { appId: 'teams-client-id', serviceUrl: 'https://smba.trafficmanager.net/teams/' },
+      }
+    }
+  }
+  return { factory, counts }
+}
+
+describe('composeTheoClaw with Teams', () => {
+  it('builds the teams verifier once for many requests', async () => {
+    const { factory, counts } = countingVerifierFactory()
+    const { builders } = fakeBuilders()
+    const { loop, router } = composeTheoClaw({
+      env: TEAMS_ENV,
+      agentFactory: noAgent,
+      builders,
+      write: () => undefined,
+      teamsVerifierFactory: factory,
+    })
+    await loop.ready
+
+    for (const _ of [1, 2]) {
+      const response = await router(new Request('http://localhost/webhooks/teams', { method: 'POST', body: '{}' }))
+      expect(response.status).toBe(200)
+    }
+
+    expect(counts).toEqual({ built: 1, verified: 2 })
+    await loop.stopAll()
+  })
+
+  // gateway-teams 0.3.0 README: a verifier built with `tenantId` refuses every Bot Framework
+  // activity as `tenant_unverified`, because connector tokens carry no `tid` claim.
+  it('builds the teams verifier without the tenant id, so Bot Framework tokens are not refused', async () => {
+    const received: unknown[] = []
+    const { builders } = fakeBuilders()
+    const { loop } = composeTheoClaw({
+      env: TEAMS_ENV,
+      agentFactory: noAgent,
+      builders,
+      write: () => undefined,
+      teamsVerifierFactory: (options) => {
+        received.push(options)
+        return countingVerifierFactory().factory()
+      },
+    })
+    await loop.ready
+
+    expect(received).toEqual([{ clientId: 'teams-client-id' }])
+    await loop.stopAll()
+  })
+
+  it('a chunked oversized teams post never reaches the verifier', async () => {
+    const { factory, counts } = countingVerifierFactory()
+    const { builders } = fakeBuilders()
+    const { loop, router } = composeTheoClaw({
+      env: TEAMS_ENV,
+      agentFactory: noAgent,
+      builders,
+      write: () => undefined,
+      teamsVerifierFactory: factory,
+    })
+    await loop.ready
+
+    const response = await router(chunkedPost('/webhooks/teams', MAX_BODY_BYTES + 1))
+
+    expect(response.status).toBe(413)
+    expect(counts.verified).toBe(0)
+    await loop.stopAll()
+  })
+
+  it('a verifier that cannot be built leaves the teams route at 503 and the rest running', async () => {
+    const { builders } = fakeBuilders()
+    const lines: string[] = []
+    const { loop, router } = composeTheoClaw({
+      env: { ...TEAMS_ENV, ...TELEGRAM_AND_LINE },
+      agentFactory: noAgent,
+      builders,
+      write: (line) => lines.push(line),
+      teamsVerifierFactory: () => {
+        throw new TypeError('teamsActivityVerifier: tenantId must be a tenant GUID')
+      },
+    })
+    await loop.ready
+
+    const response = await router(new Request('http://localhost/webhooks/teams', { method: 'POST', body: '{}' }))
+
+    expect(response.status).toBe(503)
+    expect(lines).toContain('teams: the activity verifier could not be built: teamsActivityVerifier: tenantId must be a tenant GUID')
+    expect((await router(signedLinePost())).status).toBe(200)
+    await loop.stopAll()
+  })
+
+  it('writes a verifier failure without the configured value it quotes', async () => {
+    const { builders } = fakeBuilders()
+    const lines: string[] = []
+    const { loop } = composeTheoClaw({
+      env: { ...TEAMS_ENV, THEOCLAW_TEAMS_TENANT_ID: 'not-a-guid-tenant' },
+      agentFactory: noAgent,
+      builders,
+      write: (line) => lines.push(line),
+      teamsVerifierFactory: () => {
+        throw new TypeError('teamsActivityVerifier: refused the settings of tenant not-a-guid-tenant')
+      },
+    })
+    await loop.ready
+
+    expect(lines.some((line) => line.startsWith('teams: the activity verifier could not be built'))).toBe(true)
+    expect(lines.join('\n')).not.toContain('not-a-guid-tenant')
+    await loop.stopAll()
+  })
+})
