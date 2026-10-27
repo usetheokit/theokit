@@ -357,6 +357,12 @@ function pairingStoreFor(
   return policy.stateDir === undefined ? undefined : createPairingStore({ dir: policy.stateDir, write })
 }
 
+/** What the start says about the tools: each one left off and why, and the shell's reach when host tools are on. */
+function writeToolLines(tools: ToolSettings, write: (line: string) => void): void {
+  for (const line of tools.offLines) write(line)
+  if (tools.hostTools) write(SHELL_READ_LINE)
+}
+
 /** Write the instance's start line, the first line of the start, and return the instance in effect. */
 function announceInstance(given: TheoClawInstance | undefined, stderr: (line: string) => void): TheoClawInstance {
   const instance = given ?? NO_PROFILE
@@ -427,8 +433,7 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
     },
     write: stderr,
   })
-  for (const line of tools.offLines) stderr(line)
-  if (tools.hostTools) stderr(SHELL_READ_LINE)
+  writeToolLines(tools, stderr)
   // The raw factory goes to the composition, which hands chat agents no tool; only the `/control`
   // turn's agents get the tool options.
   const composed = composeTheoClaw({
