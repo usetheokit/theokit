@@ -32,7 +32,6 @@ import { type ConfiguredPlatform, resolvePlatforms } from './channels/platforms.
 import { createReplyHandler, type TurnAgent } from './channels/reply-handler.js'
 import { createChannelAgentFactory, sessionAgentOptions } from './control-plane/agent-factory.js'
 import { type ControlPlaneHandle, healthHandler, listenControlPlane } from './control-plane/listener.js'
-import { describeError } from './control-plane/errors.js'
 import { readControlPlaneSettings } from './control-plane/settings.js'
 import { installShutdown, type SignalSource } from './control-plane/shutdown.js'
 import { createTurnRunner } from './control-plane/turn.js'
