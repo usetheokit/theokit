@@ -1,5 +1,18 @@
 # theo
 
+## 0.75.1
+
+### Patch Changes
+
+- 003baec: The OpenAPI emitter writes a union of plain primitives (`z.union([z.string(), z.number()])`) as `oneOf: [{ type: 'string' }, { type: 'number' }]` again, with `nullable: true` when the union is nullable. From zod 4.6, `z.toJSONSchema` returns such a union as a type array (`type: ['string', 'number']`), which OpenAPI 3.0 does not accept, and the emitter passed it through unchanged.
+- edd5673: `theokit` declares `@theokit/sdk` `^5.11.0` as its optional peer, the floor its dependency `@theokit/agents` already requires. The peer read `^5.9.2`, so an app on SDK 5.9 or 5.10 satisfied it and npm installed a second SDK copy under `@theokit/agents`. An app on SDK 5.9 or 5.10 now gets a peer warning and must upgrade to 5.11.0. (B-412)
+- a2d97e3: `theokit` requires vite `^7.3.7`, the first 7.x release with GHSA-587h-7wmj-h5pm fixed (vite 7.0.0 to 7.3.6 bundles a launch-editor with a high-severity advisory). The range read `^7.0.0`, so an app could install a vulnerable vite; an app on vite 7.0 to 7.3.6 now gets 7.3.7 on install. (B-560)
+- Updated dependencies [159d559]
+- Updated dependencies [8617aa5]
+- Updated dependencies [72cff7f]
+- Updated dependencies [0e692a2]
+  - @theokit/agents@16.1.0
+
 ## 0.75.0
 
 ### Minor Changes
@@ -292,8 +305,8 @@
   A nested-layout project with no agents — the layout `create-theokit` scaffolds — was told, on every dev
   start and every build that reached this path:
 
-                  [theokit] agentsDir "agents" resolves to "<root>/src/agents", which is not a directory, so NO agents
-                  were found and every /api/agents/* route will 404.
+                    [theokit] agentsDir "agents" resolves to "<root>/src/agents", which is not a directory, so NO agents
+                    were found and every /api/agents/* route will 404.
 
   About routes it does not have, and a directory it never configured. Two defects in one line.
 
