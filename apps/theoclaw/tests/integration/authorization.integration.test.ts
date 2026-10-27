@@ -41,14 +41,20 @@ function composedApp(env: Readonly<Record<string, string>>, platforms: readonly 
     }))
   const asked: string[] = []
   const composed = composeTheoClaw({
-    env,
-    agentFactory: () =>
-      new FakeAgent({
-        frames: (text) => {
-          asked.push(text)
-          return [assistant(`answer to ${text}`), finished()]
-        },
-      }),
+    // A session's agent is opened with the model settings and under the workspace (B-378).
+    env: { THEOCLAW_WORKSPACE: dir, THEOCLAW_MODEL: 'test-model', OPENROUTER_API_KEY: 'test-key', ...env },
+    agentFactory: () => new FakeAgent({ frames: [] }),
+    // Each chat session's agent; it answers every prompt it is sent and records it.
+    getOrCreate: async () =>
+      Object.assign(
+        new FakeAgent({
+          frames: (text) => {
+            asked.push(text)
+            return [assistant(`answer to ${text}`), finished()]
+          },
+        }),
+        { dispose: async () => undefined },
+      ),
     builders,
     write: () => undefined,
   })

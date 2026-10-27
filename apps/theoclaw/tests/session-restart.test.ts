@@ -13,7 +13,7 @@ import type { RunningTheoClaw } from '../src/composition.js'
 import { TheoClawConfigError } from '../src/control-plane/errors.js'
 import { Generations } from '../src/sessions/generations.js'
 import type { SessionAgent } from '../src/sessions/session-agents.js'
-import { capturingStream, fakeBuilders, TELEGRAM_AND_LINE } from './composition-fixtures.js'
+import { capturingStream, fakeBuilders, OPEN_DMS } from './composition-fixtures.js'
 import { FakeAgent, assistant, finished, messageEvent, waitFor } from './fakes.js'
 import type { FakeAdapter } from './fakes.js'
 import { startModelStub } from './session-model-stub.js'
@@ -60,7 +60,7 @@ function transcripts(directory: string): string[] {
 async function startOverStub(workspace: string, stub: ModelStub) {
   const { adapters, builders } = fakeBuilders()
   const app = await startTheoClaw({
-    env: { ...TELEGRAM_AND_LINE, OPENROUTER_API_KEY: STUB_KEY, THEOCLAW_WORKSPACE: workspace },
+    env: { ...OPEN_DMS, OPENROUTER_API_KEY: STUB_KEY, THEOCLAW_WORKSPACE: workspace },
     agentFactory: () => {
       throw new Error('the /control factory must not build a chat agent')
     },
@@ -130,7 +130,7 @@ describe('/new and /reset', () => {
     const ids: string[] = []
     const { adapters, builders } = fakeBuilders()
     const { loop, sessions } = composeTheoClaw({
-      env: { ...TELEGRAM_AND_LINE, THEOCLAW_WORKSPACE: freshWorkspace() },
+      env: { ...OPEN_DMS, THEOCLAW_WORKSPACE: freshWorkspace() },
       agentFactory: () => {
         throw new Error('the /control factory must not build a chat agent')
       },
@@ -217,7 +217,7 @@ describe('sessions.json', () => {
     const spy = vi.fn(builders)
 
     const start = startTheoClaw({
-      env: { ...TELEGRAM_AND_LINE, THEOCLAW_WORKSPACE: workspace },
+      env: { ...OPEN_DMS, THEOCLAW_WORKSPACE: workspace },
       agentFactory: () => {
         throw new Error('unused')
       },
@@ -261,7 +261,7 @@ describe('a restart', () => {
     const exit = vi.fn()
     const { adapters, builders } = fakeBuilders()
     const app = await module.startTheoClaw({
-      env: { ...TELEGRAM_AND_LINE, OPENROUTER_API_KEY: STUB_KEY, THEOCLAW_WORKSPACE: workspace },
+      env: { ...OPEN_DMS, OPENROUTER_API_KEY: STUB_KEY, THEOCLAW_WORKSPACE: workspace },
       agentFactory: () => {
         throw new Error('the /control factory must not build a chat agent')
       },

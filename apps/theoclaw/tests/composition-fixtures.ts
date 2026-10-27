@@ -61,6 +61,13 @@ export const TELEGRAM_AND_LINE = {
   THEOCLAW_WORKSPACE: WORKSPACE,
 }
 
+/**
+ * `TELEGRAM_AND_LINE` with every direct message let through (`THEOCLAW_DM_POLICY=open`, B-371), for
+ * the chat session tests: their senders are many and none is an owner, and what they check is the
+ * session a message joins, not who may reach the agent.
+ */
+export const OPEN_DMS = { ...TELEGRAM_AND_LINE, THEOCLAW_DM_POLICY: 'open' }
+
 export function signedLinePost(base = 'http://localhost'): Request {
   return new Request(`${base}/webhooks/line`, {
     method: 'POST',

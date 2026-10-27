@@ -7,7 +7,7 @@ import { SessionAgents } from '../src/sessions/session-agents.js'
 import type { SessionAgent } from '../src/sessions/session-agents.js'
 import { createSessionRouter } from '../src/sessions/session-key.js'
 import type { SessionSettings } from '../src/sessions/session-settings.js'
-import { fakeBuilders, TELEGRAM_AND_LINE } from './composition-fixtures.js'
+import { fakeBuilders, OPEN_DMS } from './composition-fixtures.js'
 import { FakeAgent, assistant, deferred, finished, messageEvent, waitFor } from './fakes.js'
 
 const MINUTE = 60_000
@@ -257,7 +257,7 @@ describe('the chat request boundary and the session agent', () => {
     })
     const { adapters, builders } = fakeBuilders()
     const { loop } = composeTheoClaw({
-      env: TELEGRAM_AND_LINE,
+      env: OPEN_DMS,
       agentFactory: () => {
         throw new Error('the /control factory must not build a chat agent')
       },
@@ -302,7 +302,7 @@ describe("a chat reply's request boundary leaves its session's agent open", () =
     let resolved = 0
     const { adapters, builders } = fakeBuilders()
     const { loop } = composeTheoClaw({
-      env: TELEGRAM_AND_LINE,
+      env: OPEN_DMS,
       agentFactory: () => {
         throw new Error('the /control factory must not build a chat agent')
       },

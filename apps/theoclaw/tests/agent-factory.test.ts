@@ -158,7 +158,14 @@ function chatPathRecording(): {
   const create = (env: Readonly<Record<string, string | undefined>>) => async (): Promise<void> => {
     const { adapters, builders } = fakeBuilders();
     const { loop, sessions } = composeTheoClaw({
-      env: { THEOCLAW_TELEGRAM_TOKEN: TELEGRAM_AND_LINE.THEOCLAW_TELEGRAM_TOKEN, THEOCLAW_WORKSPACE: TELEGRAM_AND_LINE.THEOCLAW_WORKSPACE, ...env },
+      env: {
+        // Every DM reaches the agent, so the options the session agent is opened with are read.
+        THEOCLAW_OWNERS: TELEGRAM_AND_LINE.THEOCLAW_OWNERS,
+        THEOCLAW_DM_POLICY: "open",
+        THEOCLAW_TELEGRAM_TOKEN: TELEGRAM_AND_LINE.THEOCLAW_TELEGRAM_TOKEN,
+        THEOCLAW_WORKSPACE: TELEGRAM_AND_LINE.THEOCLAW_WORKSPACE,
+        ...env,
+      },
       agentFactory: () => unusedAgent,
       getOrCreate: async (_id, passed) => {
         options.push(passed);

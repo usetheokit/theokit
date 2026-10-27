@@ -15,26 +15,21 @@ import { Agent } from '@theokit/sdk'
 import type { AgentOptions } from '@theokit/sdk'
 
 import { createOwnerPolicyHook } from './authorization/owner-policy-hook.js'
-import { createPairingStore } from './authorization/pairing-store.js'
-import type { PairingStore } from './authorization/pairing-store.js'
+import { createPairingStore, type PairingStore } from './authorization/pairing-store.js'
 import {
+  type AuthorizationPolicy,
   isAuthenticatedSender,
   isPolicyOwner,
   parseAuthorizationPolicy,
 } from './authorization/policy.js'
-import type { AuthorizationPolicy } from './authorization/policy.js'
-import { adapterBuilders } from './channels/adapter-factory.js'
-import type { AdapterBuildOptions } from './channels/adapter-factory.js'
+import { type AdapterBuildOptions, adapterBuilders } from './channels/adapter-factory.js'
 import { createBroadcastGroups } from './channels/broadcast-groups.js'
 import { maskSecrets, startChannelLoop } from './channels/channel-loop.js'
 import { createGroupActivationHook } from './channels/group-activation-hook.js'
 import type { ChannelLoop, PlatformBuild } from './channels/channel-loop.js'
-import { installOutputMask } from './channels/output-mask.js'
-import type { MaskableStream } from './channels/output-mask.js'
-import { resolvePlatforms } from './channels/platforms.js'
-import type { ConfiguredPlatform } from './channels/platforms.js'
-import { createReplyHandler } from './channels/reply-handler.js'
-import type { TurnAgent } from './channels/reply-handler.js'
+import { installOutputMask, type MaskableStream } from './channels/output-mask.js'
+import { type ConfiguredPlatform, resolvePlatforms } from './channels/platforms.js'
+import { createReplyHandler, type TurnAgent } from './channels/reply-handler.js'
 import { createChannelAgentFactory, sessionAgentOptions } from './control-plane/agent-factory.js'
 import { type ControlPlaneHandle, healthHandler, listenControlPlane } from './control-plane/listener.js'
 import { describeError } from './control-plane/errors.js'
@@ -46,15 +41,18 @@ import { announceOnLan, type LanAnnouncement, stopThenClose } from './discovery/
 import { parseDiscoveryMode, type PublisherFactory } from './discovery/publisher.js'
 import { NO_PROFILE, type TheoClawInstance } from './instance.js'
 import { Generations } from './sessions/generations.js'
-import { SessionAgents } from './sessions/session-agents.js'
-import type { SessionAgent, SessionLease } from './sessions/session-agents.js'
+import { type SessionAgent, SessionAgents, type SessionLease } from './sessions/session-agents.js'
 import { createSessionRouter } from './sessions/session-key.js'
-import { readSessionSettings } from './sessions/session-settings.js'
-import type { SessionSettings } from './sessions/session-settings.js'
-import { startedRoute, webhookPlatform, withRoute } from './webhooks/platform-routes.js'
-import type { Handle, WebhookDeps, WebhookPlatform } from './webhooks/platform-routes.js'
-import { createWebhookRouter } from './webhooks/router.js'
-import type { WebhookRoute } from './webhooks/router.js'
+import { readSessionSettings, type SessionSettings } from './sessions/session-settings.js'
+import {
+  type Handle,
+  startedRoute,
+  type WebhookDeps,
+  type WebhookPlatform,
+  webhookPlatform,
+  withRoute,
+} from './webhooks/platform-routes.js'
+import { createWebhookRouter, type WebhookRoute } from './webhooks/router.js'
 import type { TeamsVerifier } from './webhooks/teams.js'
 import { agentToolOptions } from './tools/tool-registry.js'
 import type { AgentToolOptions } from './tools/tool-registry.js'
