@@ -436,6 +436,16 @@ function startToolSettings(options: StartOptions): ToolSettings {
   return tools
 }
 
+/** Write the instance's start line, the first line of the start, and return the instance in effect. */
+function announceInstance(
+  given: TheoClawInstance | undefined,
+  stderr: (line: string) => void,
+): TheoClawInstance {
+  const instance = given ?? NO_PROFILE
+  stderr(startLine(instance))
+  return instance
+}
+
 /** `GET /health` is the control plane's; every other path goes to the webhook router. */
 function serveHealthAndWebhooks(
   router: ComposedTheoClaw['router'],
@@ -463,8 +473,7 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
   const streams = options.streams ?? [process.stdout, process.stderr]
   const stderr = options.stderr ?? lineWriter(streams[streams.length - 1])
   // First, once every setting is checked: the line holds a label and a directory, never a secret.
-  const instance = options.instance ?? NO_PROFILE
-  stderr(startLine(instance))
+  const instance = announceInstance(options.instance, stderr)
   const mask = installOutputMask(processSecrets(options.env, settings.controlToken, tools), streams)
   const stdout = options.stdout ?? lineWriter(streams[0])
   const flushOnExit = (): void => mask.flush()
