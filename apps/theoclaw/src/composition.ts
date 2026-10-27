@@ -383,6 +383,8 @@ function workflowTools(factory: StartOptions['draftAgentFactory'], write: (line:
   return createWorkflowTools({ write, ...(factory === undefined ? {} : { withDraftAgent: createContainer({ factory }).withAgent }) })
 }
 
+type HttpHandler = (request: Request) => Promise<Response>
+
 /** `/webchat` itself or anything under `/webchat/`, and not `/webchatx` (EC-4). */
 function isWebchatPath(pathname: string): boolean {
   return pathname === '/webchat' || pathname.startsWith('/webchat/')
@@ -392,10 +394,7 @@ function isWebchatPath(pathname: string): boolean {
  * `GET /health` is the control plane's; `/webchat` paths go to WebChat when it is on and answer 404
  * when it is off; every other path goes to the webhook router.
  */
-function serveHandler(
-  router: ComposedTheoClaw['router'],
-  webchat: ((request: Request) => Promise<Response>) | undefined,
-): (request: Request) => Promise<Response> {
+function serveHandler(router: HttpHandler, webchat: HttpHandler | undefined): HttpHandler {
   return async (request) => {
     const { pathname } = new URL(request.url)
     if (pathname === '/health') return healthHandler(request)
@@ -409,10 +408,7 @@ function serveHandler(
  * surface, so its agents hold no tool, as every chat agent (B-382): the tool options reach only the
  * `/control` turn's agents.
  */
-function startWebchat(
-  options: StartOptions,
-  token: string | undefined,
-): ((request: Request) => Promise<Response>) | undefined {
+function startWebchat(options: StartOptions, token: string | undefined): HttpHandler | undefined {
   if (token === undefined) return undefined
   const agents = createContainer<TurnAgent>({ factory: () => options.agentFactory(NO_TOOL_OPTIONS) })
   return createWebchatRoutes({
