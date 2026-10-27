@@ -232,13 +232,16 @@ export function checkHostToolsPosture(settings: ToolSettings, deps: ToolDeps = {
       { variable: 'THEOCLAW_HOST_TOOLS' },
     )
   }
-  if (stateDir === undefined) return
+  if (stateDir !== undefined) refuseWritableStateDir(stateDir, roots)
+}
+
+/** Refuse a state directory whose real path lies inside any of `roots`, the tool root included. */
+function refuseWritableStateDir(stateDir: string, roots: readonly string[]): void {
   const realStateDir = realPathThroughAncestor(stateDir)
-  for (const root of roots) {
-    if (!contains(realPathOrSelf(root), realStateDir)) continue
-    throw new TheoClawConfigError(
-      `THEOCLAW_HOST_TOOLS=on refuses THEOCLAW_STATE_DIR ${stateDir}: it lies under ${root}, which the sandboxed shell can write`,
-      { variable: 'THEOCLAW_STATE_DIR' },
-    )
-  }
+  const root = roots.find((candidate) => contains(realPathOrSelf(candidate), realStateDir))
+  if (root === undefined) return
+  throw new TheoClawConfigError(
+    `THEOCLAW_HOST_TOOLS=on refuses THEOCLAW_STATE_DIR ${stateDir}: it lies under ${root}, which the sandboxed shell can write`,
+    { variable: 'THEOCLAW_STATE_DIR' },
+  )
 }
