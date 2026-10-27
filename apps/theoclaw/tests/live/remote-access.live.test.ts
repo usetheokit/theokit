@@ -10,7 +10,8 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import WebSocket from 'ws'
 
 import { type RunningTheoClaw, startTheoClaw } from '../../src/composition.js'
-import { createAgentFactory } from '../../src/control-plane/agent-factory.js'
+import { createTheoClawAgent } from '../../src/agent/create-agent.js'
+import { createAgentFactory, type TheoClawAgentOptions } from '../../src/control-plane/agent-factory.js'
 import { useForwardCleanup } from './support/forward-cleanup.js'
 import { findBinary, openSshForward, type SshForward, waitForForward } from './support/ssh-forward.js'
 
@@ -64,6 +65,8 @@ interface Claw {
   readonly running: RunningTheoClaw
   readonly token: string | undefined
   agentBuilds(): number
+  /** The options each agent was created with, so a turn can show it got the entry's tools. */
+  agentOptions(): readonly TheoClawAgentOptions[]
 }
 
 /** TheoClaw on 127.0.0.1:0 through B-372's `startTheoClaw`, its output in `outputLog`, its agents counted. */
@@ -84,14 +87,15 @@ async function startClaw(withToken: boolean): Promise<Claw> {
     ...(token === undefined ? {} : { THEOCLAW_CONTROL_TOKEN: token }),
   }
   const index = starts++
-  const agent = createAgentFactory(env)
+  const created: TheoClawAgentOptions[] = []
+  const agent = createAgentFactory(env, (options) => (created.push(options), createTheoClawAgent(options)))
   let builds = 0
   const signals = new EventEmitter()
   let onExit: (code: number) => void = () => undefined
   const exited = new Promise<number>((resolve) => (onExit = resolve))
   const starting = startTheoClaw({
       env,
-      agentFactory: () => ((builds += 1), agent()),
+      agentFactory: (toolOptions) => ((builds += 1), agent(toolOptions)),
       builders: () => [],
       stdout: (line) => append(`theoclaw:${index}:stdout`, `${line}\n`),
       stderr: (line) => append(`theoclaw:${index}:stderr`, `${line}\n`),
@@ -112,7 +116,7 @@ async function startClaw(withToken: boolean): Promise<Claw> {
     signals.emit('SIGTERM')
     expect(await within(exited, STOP_MS, 'the TheoClaw stop')).toBe(0)
   })
-  return { running, token, agentBuilds: () => builds }
+  return { running, token, agentBuilds: () => builds, agentOptions: () => created }
 }
 
 function forwardTo(claw: Claw): Promise<SshForward> {
@@ -370,6 +374,8 @@ describe.skipIf(!LIVE)('remote access over an SSH local forward', () => {
     expect(texts.length, `frames: ${JSON.stringify(frames)}`).toBeGreaterThan(0)
     // The counter the refusal tests read does count: an accepted turn built its agent.
     expect(claw.agentBuilds()).toBeGreaterThanOrEqual(1)
+    // The turn's agent is the one the process entry builds: the start's tools, not a tool-less one.
+    expect(claw.agentOptions().map((options) => options.tools?.length ?? 0)).not.toContain(0)
   })
 
   it('accepts the owner again after the forward is closed and reopened', async () => {
