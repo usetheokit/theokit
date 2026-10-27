@@ -47,10 +47,12 @@ describe('the owner policy hook in the composed app', () => {
     const platforms = fakePlatforms(['telegram', 'discord', 'slack'])
     let agentsBuilt = 0
     const { loop } = composeTheoClaw({
-      env: { THEOCLAW_OWNERS: 'telegram:owner', THEOCLAW_STATE_DIR: dir },
-      agentFactory: () => {
+      env: { THEOCLAW_OWNERS: 'telegram:owner', THEOCLAW_STATE_DIR: dir, THEOCLAW_WORKSPACE: dir },
+      agentFactory: () => new FakeAgent({ frames: [] }),
+      // A refused sender opens no chat session's agent.
+      getOrCreate: async () => {
         agentsBuilt += 1
-        return new FakeAgent({ frames: [assistant('an answer'), finished()] })
+        return Object.assign(new FakeAgent({ frames: [assistant('an answer'), finished()] }), { dispose: async () => undefined })
       },
       builders: platforms.builders,
       write: () => undefined,

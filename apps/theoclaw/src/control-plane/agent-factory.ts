@@ -20,12 +20,13 @@ export interface SessionAgentOptions extends TheoClawAgentOptions {
  * SDK refuses `OPENROUTER_API_KEY` from the environment, so the key is resolved here by the same
  * `requireModel` the start checks.
  *
- * Whoever holds the control token, and anyone who can message the bot (no sender allowlist yet,
- * B-371), writes the prompt, and a prompt can be steered, so the agent is built without the SDK's
- * `shell` builtin (no unsandboxed command runs on the host from a chat) and with memory off (no
- * memory transcript of the conversation lands under the cwd). These options carry no tool: only a
- * `/control` turn's agent gets the start's `agentToolOptions` (B-382), through `createAgentFactory`.
- * The SDK still records each agent in `<cwd>/.theokit/agents/registry.json`; no option turns that off.
+ * Whoever holds the control token, and every sender who reaches a chat agent (everyone under
+ * `THEOCLAW_DM_POLICY=open`, B-371), writes the prompt, and a prompt can be steered, so the agent
+ * is built without the SDK's `shell` builtin (no unsandboxed command runs on the host from a chat)
+ * and with memory off (no memory transcript of the conversation lands under the cwd). These options
+ * carry no tool: only a `/control` turn's agent gets the start's `agentToolOptions` (B-382),
+ * through `createAgentFactory`. The SDK still records each agent in
+ * `<cwd>/.theokit/agents/registry.json`; no option turns that off.
  */
 export function agentOptionsFor(env: BindEnvironment): TheoClawAgentOptions {
   const { model, modelKey } = requireModel(env)
@@ -58,8 +59,8 @@ export function createAgentFactory(
 }
 
 /**
- * The agent of a chat reply. Anyone who can message the bot writes their prompt (no sender
- * allowlist yet, B-371), so a channel agent holds no tool and writes no memory: it is built from
+ * The agent of a chat reply. Whoever reaches the agent writes their prompt (everyone under
+ * `THEOCLAW_DM_POLICY=open`, B-371), so a channel agent holds no tool and writes no memory: it is built from
  * `agentOptionsFor`, with no `shell` (`effectiveToolNames` reads an empty catalog) and memory off.
  * It is its own export, and every session agent is opened through it (`composition.ts`), so the
  * reply path keeps the withheld `shell` and memory off, pinned by its own test, even if the

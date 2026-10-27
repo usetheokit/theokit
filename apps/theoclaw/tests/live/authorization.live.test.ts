@@ -4,6 +4,7 @@ import { join } from 'node:path'
 
 import { GatewayRunner } from '@theokit/gateway'
 import type { GatewayHook, MessageEvent, PlatformName } from '@theokit/gateway'
+import { Agent } from '@theokit/sdk'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import type { TurnAgent } from '../../src/agent-port.js'
@@ -53,7 +54,7 @@ async function liveApp({ env, platforms }: LiveOptions) {
   requireModelSettings()
   const policy = parseAuthorizationPolicy(env)
   const pairing = policy.stateDir === undefined ? undefined : createPairingStore({ dir: policy.stateDir })
-  const real = createChannelAgentFactory(process.env)
+  const real = createChannelAgentFactory(process.env, (options) => Agent.create(options))
   const prompts: string[] = []
   let completedTurns = 0
   let onErrorCalls = 0
@@ -85,7 +86,9 @@ async function liveApp({ env, platforms }: LiveOptions) {
   const adapters = new Map(platforms.map((platform) => [platform, new FakeAdapter(platform)] as const))
   const onError: GatewayHook = { name: 'live-on-error-spy', pre_inbound: () => undefined, on_error: () => void (onErrorCalls += 1) }
   const reply = createReplyHandler({
-    withAgent: (work) => agents.withAgent(work),
+    reset: async () => undefined,
+    // One agent per message, as before sessions: these checks are about who reaches the agent.
+    withAgent: (_event, work) => agents.withAgent((agent) => work({ agent, release: () => undefined })),
     broadcast: {
       groups: createBroadcastGroups(policy.broadcastGroups),
       adapterFor: (platform) => adapters.get(platform as PlatformName),

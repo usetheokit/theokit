@@ -15,7 +15,7 @@ import { SessionAgents } from '../src/sessions/session-agents.js'
 import type { SessionAgent } from '../src/sessions/session-agents.js'
 import { createSessionRouter } from '../src/sessions/session-key.js'
 import type { SessionSettings } from '../src/sessions/session-settings.js'
-import { capturingStream, fakeBuilders, scratchWorkspace, TELEGRAM_AND_LINE } from './composition-fixtures.js'
+import { capturingStream, fakeBuilders, scratchWorkspace, OPEN_DMS } from './composition-fixtures.js'
 import { FakeAgent, assistant, deferred, finished, messageEvent, waitFor } from './fakes.js'
 import { startModelStub } from './session-model-stub.js'
 
@@ -152,7 +152,7 @@ describe('the chat path through startTheoClaw', () => {
     const control = throwingAgentFactory()
     const { adapters, builders } = fakeBuilders()
     const app = await startTheoClaw({
-      env: { ...TELEGRAM_AND_LINE, OPENROUTER_API_KEY: STUB_KEY, THEOCLAW_WORKSPACE: workspace },
+      env: { ...OPEN_DMS, OPENROUTER_API_KEY: STUB_KEY, THEOCLAW_WORKSPACE: workspace },
       agentFactory: control.factory,
       getOrCreate: (id, options) => {
         received.push(options)
@@ -204,7 +204,7 @@ describe('the chat path through startTheoClaw', () => {
     const ids: string[] = []
     const { adapters, builders } = fakeBuilders()
     const app = await startTheoClaw({
-      env: { ...TELEGRAM_AND_LINE, OPENROUTER_API_KEY: STUB_KEY, THEOCLAW_WORKSPACE: workspace },
+      env: { ...OPEN_DMS, OPENROUTER_API_KEY: STUB_KEY, THEOCLAW_WORKSPACE: workspace },
       agentFactory: throwingAgentFactory().factory,
       getOrCreate: (id, options) => {
         ids.push(id)
@@ -232,7 +232,7 @@ describe('the chat path through startTheoClaw', () => {
 
   it('startTheoClaw creates the transcript directory with mode 0700', async () => {
     const app = await startTheoClaw({
-      env: { ...TELEGRAM_AND_LINE, THEOCLAW_WORKSPACE: fresh },
+      env: { ...OPEN_DMS, THEOCLAW_WORKSPACE: fresh },
       agentFactory: throwingAgentFactory().factory,
       builders: fakeBuilders().builders,
       signals: new EventEmitter(),
@@ -252,7 +252,7 @@ describe('the chat path through composeTheoClaw', () => {
       const ids: string[] = []
       const { adapters, builders } = fakeBuilders()
       const { loop } = composeTheoClaw({
-        env: TELEGRAM_AND_LINE,
+        env: OPEN_DMS,
         agentFactory: throwingAgentFactory().factory,
         getOrCreate: async (id) => {
           ids.push(id)
