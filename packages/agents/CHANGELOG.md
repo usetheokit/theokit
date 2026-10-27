@@ -1,5 +1,31 @@
 # @theokit/agents
 
+## 16.1.0
+
+### Minor Changes
+
+- 159d559: New subpath `@theokit/agents/evals`. `runAgentEvals({ agent, apiKey, approvals, cases, scorers })` runs each case against your agent definition, on a fresh agent per case, and returns a verdict per case: `pass` or `fail` against `threshold` (default 0.5), or `error`. Each case result carries the output, the scores, the mean score and the duration, and the result counts each verdict. (B-413)
+
+  `approvals` is required, as it is on `toAgentFactory`: an eval runs with nobody watching, so you say what a gated tool's approval request gets. A case is `error`, never `fail`, when its run did not finish, a guard blocked the input or the output, the agent could not be built, a scorer threw, or a scorer returned a malformed score, a score outside [0, 1] or a reason that is not a string; `error` carries the reason. A scorer's own `reason` text never makes a case an `error`. Options it cannot run (no cases, a case without a string `input`, no scorers, a threshold outside [0, 1]) throw `EvalConfigError` before any agent is built. Unnamed runs get a fresh name, so two runs never collide. The subpath re-exports `Scorers` and `EvalAlreadyRunningError` from `@theokit/sdk/eval`.
+
+  The result type of `SdkTurnHandle.wait()` gains two optional fields, `status` and `error`, which the SDK eval runner reads.
+
+- 8617aa5: New subpath `@theokit/agents/handoff`. `createHandoffConversation({ agents, initial, conversationId? })` holds a roster of compiled agents and the name of the one that answers. The answering agent gets a `transfer_to_agent` tool that names only the other agents. When it calls the tool, it still answers the current message, and your next `send()` is answered by the receiver, which reads the transferring agent's note before your message. (B-410)
+
+  Each agent runs on its own session, `<conversationId>:<agentName>`. A transfer counts only when the run returns normally: a run that throws, or whose `signal` was aborted, leaves the responder where it was. `send()` takes the `AgentRunner.run` options except `sessionId`, `tools`, `streamFactory` and `maxIterations`, which the conversation owns, and drops them at run time if they arrive through a wider object. `handoffTo(name, note?)` moves the next turn from your code. A roster below two agents, a duplicate name, an unknown agent, an agent whose `maxIterations` is 1 and an agent that already has a tool named `transfer_to_agent` (`reserved_tool_name`) and an agent name that contains `:` (`invalid_agent_name`, since each session id is `<conversationId>:<agentName>`) throw `HandoffError` with a `code`. So do `send()` and `handoffTo()` while a turn is running (`turn_in_progress`), `send()` while another conversation runs a turn on the same `conversationId`, a per-run `sdkTools` entry named `transfer_to_agent`, and `handoffTo()` with a note for the agent that already answers (`already_responder`), which would otherwise drop the note.
+
+  The note is written by a model and the message by the user, so `[Handoff from` inside either one, and its lookalikes (fullwidth or accented letters, Cyrillic or Greek letters that look Latin, zero-width characters, another opening bracket, `_` or `-` for the space), is rewritten to `[quoted: Handoff from`. A spelling outside those classes still arrives as written. The responder and a waiting note live in memory. To resume after a restart while the receiver has not answered, create the conversation with `initial` set to the last transfer's `from` and call `handoffTo(handoff.to, handoff.note)`; once the receiver has answered, set `initial` to its `to`.
+
+  `@theokit/sdk-handoff` stays call-and-return: there the caller keeps the turn.
+
+### Patch Changes
+
+- 72cff7f: An agent on an Anthropic model now reads its system prompt from the provider cache on later turns. `@theokit/agents` requires `@theokit/sdk` `^5.11.0`, the release that marks the configured prompt with `cache_control` for model ids starting with `anthropic/` or `claude` (also behind `openrouter/` or `vertex/`; Bedrock ids such as `bedrock/us.anthropic.claude-…` are not matched and their requests do not change) and reports the cache counters Anthropic returns. A consumer on @theokit/sdk 5.3 to 5.10 must upgrade to 5.11.0. Measured through OpenRouter on `anthropic/claude-haiku-4.5` with a 12 261-token cached prefix: the second turn reported `cacheReadTokens` 12 261. (B-412)
+
+  Two things a caller sees change with that SDK. On the chat-completions client (OpenRouter included) `tokensInput` is now the uncached part of the prompt, so the whole prompt is `tokensInput + cacheReadTokens + cacheWriteTokens`. `tokens` and the `done` event's `usage.totalTokens` stay input plus output, so they leave the cached prompt out too. And the first turn of an Anthropic run pays the cache-write premium (1.25 times the input price); a run with one turn never reads it back.
+
+- 0e692a2: An agent from `toAgentFactory` can be served over ACP by `@theokit/acp` when it declares guardrails or a step ceiling. Its turn now has `stream()`, which the server reads: it yields one assistant message with the text after the output guards, and shares one guard run with `wait()`. When the run ends with status `error` or a guard blocks, the stream ends with `{ type: 'status', status: 'ERROR', message }`, as the SDK's own stream does, and any other error is rethrown from `stream()`. Both wrappers now forward `pluginManager`, so the server's default `ask` mode can install its permission plugin instead of refusing the prompt with `permission enforcement unavailable on this runtime (no plugin manager)`. A guarded agent served this way sends its text once the turn completes, with no token streaming and no tool activity, because streaming the raw text would pass it before the output guards ran. `SdkTurnHandle.stream` and `SdkAgentHandle.pluginManager` are new optional members.
+
 ## 16.0.0
 
 ### Major Changes
