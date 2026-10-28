@@ -137,8 +137,14 @@ export function createPairingStore(options: PairingStoreOptions): PairingStore {
         pending.delete(code)
         return Promise.resolve({ ok: false, reason: 'unknown_or_expired' })
       }
+      // Taken out while it saves, so a second approval of the same code meanwhile saves nothing twice.
       pending.delete(code)
-      const result = writes.then(() => save(entry))
+      const result = writes.then(async () => {
+        const saved = await save(entry)
+        // The sender is silenced for an hour and cannot ask again: a failed save keeps the code for a retry.
+        if (!saved.ok && !pending.has(code)) pending.set(code, entry)
+        return saved
+      })
       // A rejection (a throwing log sink) must not stop every later approval from running.
       writes = result.catch(() => undefined)
       return result

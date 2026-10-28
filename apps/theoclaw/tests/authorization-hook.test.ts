@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -212,6 +212,24 @@ describe('createOwnerPolicyHook', () => {
     await app.send(messageEvent('telegram', 'hello', 'stranger'))
     expect(app.replies()).toEqual(['The pairing could not be saved.', 'Pairing code: 123456. Ask the owner to send /approve 123456 in a direct message.'])
     expect(app.handled).toHaveLength(0)
+  })
+
+  it('an owner whose /approve could not be saved pairs the sender by sending the same code again', async () => {
+    const stateDir = join(dir, 'state')
+    const app = await instance({ pairing: createPairingStore({ dir: stateDir, write: () => undefined }) })
+    await app.send(messageEvent('telegram', 'hello', 'stranger'))
+    const code = /\d{6}/.exec(app.replies()[0] ?? '')?.[0] ?? ''
+    // A file where the state directory was: the save fails with ENOTDIR whoever runs the test.
+    rmSync(stateDir, { recursive: true })
+    writeFileSync(stateDir, '')
+    await app.send(messageEvent('telegram', `/approve ${code}`, OWNER_ID))
+    rmSync(stateDir)
+    mkdirSync(stateDir)
+    await app.send(messageEvent('telegram', `/approve ${code}`, OWNER_ID))
+    // The stranger is silenced for the hour, so the code it already holds is the only way in.
+    await app.send(messageEvent('telegram', 'hello again', 'stranger'))
+    expect(app.replies().slice(1)).toEqual(['The pairing could not be saved.', 'Paired.'])
+    expect(app.handled.map((event) => event.text)).toEqual(['hello again'])
   })
 
   it("an owner's bare /approve is answered and never reaches the handler", async () => {

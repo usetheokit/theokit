@@ -172,6 +172,18 @@ describe('createPairingStore', () => {
     expect(await store.approve(store.issue('telegram', '10'))).toMatchObject({ ok: true })
   })
 
+  it('keeps a code whose save failed, so the owner can approve the same code again', async () => {
+    const store = createPairingStore({ dir, write: () => undefined })
+    const code = store.issue('telegram', '9')
+    rmSync(dir, { recursive: true })
+    writeFileSync(dir, '')
+    expect(await store.approve(code)).toEqual({ ok: false, reason: 'write_failed' })
+    rmSync(dir)
+    mkdirSync(dir)
+    expect(await store.approve(code)).toEqual({ ok: true, platform: 'telegram', senderId: '9' })
+    expect(store.isPaired('telegram', '9')).toBe(true)
+  })
+
   it('drops pending codes older than 3600 seconds on the next issue', async () => {
     const time = manualClock()
     const store = createPairingStore({ dir, clock: time.clock, random: scriptedRandom([5, 5, 6]) })

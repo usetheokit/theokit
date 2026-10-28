@@ -164,6 +164,9 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- An owner's `/approve` whose `pairing.json` write failed lost the code: the store dropped it
+  before the save, and the stranger, refused for the hour, could not ask for another. A failed save
+  now keeps the code until it expires, so the owner can send the same `/approve` again (B-371).
 - This app's vitest config was the only one of ten in the monorepo without a `maxWorkers` cap —
   verified independently by a reviewer, who counted the ten files and confirmed the nine. It now
   carries the same expression the other nine compute, which makes a config mismatch unreachable by
