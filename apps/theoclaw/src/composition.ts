@@ -9,16 +9,32 @@ import type { BasePlatformAdapter, PlatformName } from '@theokit/gateway'
 import { teamsActivityVerifier } from '@theokit/gateway-teams'
 import type { TeamsActivityVerifierOptions } from '@theokit/gateway-teams'
 
-import { adapterBuilders, smsOptions } from './channels/adapter-factory.js'
+import { createOwnerPolicyHook } from './authorization/owner-policy-hook.js'
+import { createPairingStore } from './authorization/pairing-store.js'
+import type { PairingStore } from './authorization/pairing-store.js'
+import {
+  isAuthenticatedSender,
+  isPolicyOwner,
+  parseAuthorizationPolicy,
+} from './authorization/policy.js'
+import type { AuthorizationPolicy } from './authorization/policy.js'
+import { adapterBuilders } from './channels/adapter-factory.js'
+import type { AdapterBuildOptions } from './channels/adapter-factory.js'
+import { createBroadcastGroups } from './channels/broadcast-groups.js'
 import { maskSecrets, startChannelLoop } from './channels/channel-loop.js'
+import { createGroupActivationHook } from './channels/group-activation-hook.js'
 import type { ChannelLoop, PlatformBuild } from './channels/channel-loop.js'
 import { installOutputMask } from './channels/output-mask.js'
 import type { MaskableStream } from './channels/output-mask.js'
 import { resolvePlatforms } from './channels/platforms.js'
-import type { ConfiguredPlatform, PlatformSettings } from './channels/platforms.js'
+import type { ConfiguredPlatform } from './channels/platforms.js'
 import { createReplyHandler } from './channels/reply-handler.js'
 import type { TurnAgent } from './channels/reply-handler.js'
-import { type ControlPlaneHandle, healthHandler, listenControlPlane } from './control-plane/listener.js'
+import {
+  type ControlPlaneHandle,
+  healthHandler,
+  listenControlPlane,
+} from './control-plane/listener.js'
 import { describeError } from './control-plane/errors.js'
 import { readControlPlaneSettings } from './control-plane/settings.js'
 import { installShutdown, type SignalSource } from './control-plane/shutdown.js'
@@ -26,15 +42,16 @@ import { createTurnRunner } from './control-plane/turn.js'
 import { createBonjourPublisher } from './discovery/bonjour-publisher.js'
 import { announceOnLan, type LanAnnouncement, stopThenClose } from './discovery/lan-announcer.js'
 import { parseDiscoveryMode, type PublisherFactory } from './discovery/publisher.js'
-import { createLineRoute } from './webhooks/line.js'
+import { NO_PROFILE, type TheoClawInstance } from './instance.js'
+import { startedRoute, webhookPlatform, withRoute } from './webhooks/platform-routes.js'
+import type { Handle, WebhookDeps, WebhookPlatform } from './webhooks/platform-routes.js'
 import { createWebhookRouter } from './webhooks/router.js'
 import type { WebhookRoute } from './webhooks/router.js'
-import { createSmsRoute } from './webhooks/sms.js'
-import type { SmsRouteAdapter } from './webhooks/sms.js'
-import { createTeamsRoute } from './webhooks/teams.js'
 import type { TeamsVerifier } from './webhooks/teams.js'
-import { createWhatsAppRoute } from './webhooks/whatsapp.js'
-import type { DeliverableWhatsAppAdapter } from './webhooks/whatsapp.js'
+import { agentToolOptions, NO_TOOL_OPTIONS } from './tools/tool-registry.js'
+import type { AgentToolOptions } from './tools/tool-registry.js'
+import { checkHostToolsPosture, resolveToolSettings } from './tools/tool-settings.js'
+import type { ToolDeps, ToolSettings } from './tools/tool-settings.js'
 
 /**
  * The composition root — where concretes are wired into the container, and the only place that
@@ -81,24 +98,41 @@ export function createContainer<TAgent>(
 
   return {
     withAgent: (work) =>
-      container.runInRequest(async () => work(await container.resolveAsync<TAgent>(provider.provide))),
+      container.runInRequest(async () =>
+        work(await container.resolveAsync<TAgent>(provider.provide)),
+      ),
   }
 }
 
 /** Everything the running app is made of, for the entry and for tests. */
 export interface TheoClawOptions {
   readonly env: Readonly<Record<string, string | undefined>>
-  /** Builds the agent of one `/control` turn (one request boundary each). */
-  readonly agentFactory: () => TurnAgent | Promise<TurnAgent>
   /**
-   * Builds the agent of one chat reply, one per inbound message. Default `agentFactory`; the entry
-   * passes `createChannelAgentFactory`, whose agents hold no tool, since anyone can message the bot.
+   * Builds the agent of one `/control` turn (one request boundary each), with the tool options the
+   * start resolved: a fresh tool list per agent (plan D3).
+   */
+  readonly agentFactory: (toolOptions: AgentToolOptions) => TurnAgent | Promise<TurnAgent>
+  /**
+   * Builds the agent of one chat reply, one per inbound message. Default: `agentFactory` with
+   * `NO_TOOL_OPTIONS`; the entry passes `createChannelAgentFactory`. Either way a chat agent holds
+   * no tool, since whoever reaches the agent writes its prompt (everyone under
+   * `THEOCLAW_DM_POLICY=open`); tools on an authorized chat agent are a later item.
    */
   readonly channelAgentFactory?: () => TurnAgent | Promise<TurnAgent>
   /** Defaults to the ten real adapters; tests pass fakes. */
-  readonly builders?: (configured: readonly ConfiguredPlatform[]) => PlatformBuild[]
+  readonly builders?: (
+    configured: readonly ConfiguredPlatform[],
+    options: AdapterBuildOptions,
+  ) => PlatformBuild[]
   readonly write: (line: string) => void
   readonly startTimeoutMs?: number
+  /** Who the instance serves, parsed from this same `env`; parsed here when absent (`startTheoClaw` parses it first). */
+  readonly policy?: AuthorizationPolicy
+  /**
+   * The pairing store of `policy.stateDir`; built here when absent. `startTheoClaw` builds it before
+   * anything is written or installed, since loading it can throw.
+   */
+  readonly pairing?: PairingStore
   /** Builds the Teams activity verifier, once (D4). Defaults to the package's `teamsActivityVerifier`. */
   readonly teamsVerifierFactory?: (options: TeamsActivityVerifierOptions) => TeamsVerifier
 }
@@ -108,147 +142,51 @@ export interface ComposedTheoClaw {
   readonly router: (request: Request) => Promise<Response>
 }
 
-type Handle = WebhookRoute['handle']
-
-/** How one webhook platform's route is built from the adapter its runner holds. */
-interface WebhookPlatform {
-  readonly methods: WebhookRoute['methods']
-  /** Throws when the adapter lacks what the route needs, which fails that platform's start. */
-  readonly buildRoute: (adapter: BasePlatformAdapter) => Handle
-}
-
-function hasSignatureCheck(adapter: BasePlatformAdapter): adapter is BasePlatformAdapter & SmsRouteAdapter {
-  return typeof (adapter as { verifySignature?: unknown }).verifySignature === 'function'
-}
-
-function convertsEnvelopes(
-  adapter: BasePlatformAdapter,
-): adapter is BasePlatformAdapter & DeliverableWhatsAppAdapter {
-  return typeof (adapter as { toDeliverableEvents?: unknown }).toDeliverableEvents === 'function'
-}
-
-/**
- * The Teams verifier, built once, from the client id alone (ADR 0032): with a `tenantId` it refuses
- * every Bot Framework activity whose token carries no `tid` claim, and connector tokens carry none
- * (`@theokit/gateway-teams` README). A factory that throws fails the Teams route only, which then
- * answers 503, and the line says why.
- */
-function teamsVerifier(
-  settings: { readonly clientId: string },
-  factory: (options: TeamsActivityVerifierOptions) => TeamsVerifier,
-  write: (line: string) => void,
-): TeamsVerifier | undefined {
-  try {
-    return factory({ clientId: settings.clientId })
-  } catch (error) {
-    write(`teams: the activity verifier could not be built: ${describeError(error)}`)
-    return undefined
-  }
-}
-
-interface WebhookDeps {
-  readonly write: (line: string) => void
-  readonly verifierFactory: (options: TeamsActivityVerifierOptions) => TeamsVerifier
-}
-
-type WebhookPlatformFor<P extends PlatformName> = (settings: PlatformSettings<P>, deps: WebhookDeps) => WebhookPlatform
-
-/**
- * Each platform's webhook, or `null` for one that has none. Keyed by every platform name, so a new
- * platform does not compile until it has a decision here (an unlisted one would answer 404).
- */
-const WEBHOOK_PLATFORMS: { readonly [P in PlatformName]: WebhookPlatformFor<P> | null } = {
-  telegram: null,
-  discord: null,
-  slack: null,
-  matrix: null,
-  mattermost: null,
-  email: null,
-  line: ({ channelSecret }) => ({
-    methods: ['POST'],
-    buildRoute: (adapter) => createLineRoute({ channelSecret, adapter }),
-  }),
-  whatsapp: ({ appSecret, verifyToken }, { write }) => ({
-    methods: ['GET', 'POST'],
-    buildRoute: (adapter) => {
-      if (!convertsEnvelopes(adapter)) throw new Error('the built adapter cannot convert a webhook envelope')
-      return createWhatsAppRoute({ appSecret, verifyToken, adapter, write })
-    },
-  }),
-  teams: (settings, { write, verifierFactory }) => {
-    const verify = teamsVerifier(settings, verifierFactory, write)
-    return {
-      methods: ['POST'],
-      buildRoute: (adapter) =>
-        verify === undefined ? async () => new Response(null, { status: 503 }) : createTeamsRoute({ verify, adapter, write }),
-    }
-  },
-  sms: (settings) => {
-    const options = smsOptions(settings)
-    return {
-      methods: ['POST'],
-      buildRoute: (adapter) => {
-        if (!hasSignatureCheck(adapter)) throw new Error('the built adapter cannot verify a webhook signature')
-        return createSmsRoute({ adapter, options })
-      },
-    }
-  },
-}
-
-/** The route builder of one configured platform, or undefined for a platform with no webhook. */
-function webhookPlatform<P extends PlatformName>(
-  entry: { readonly platform: P; readonly settings: PlatformSettings<P> },
-  deps: WebhookDeps,
-): WebhookPlatform | undefined {
-  const forPlatform: WebhookPlatformFor<P> | null = WEBHOOK_PLATFORMS[entry.platform]
-  return forPlatform === null ? undefined : forPlatform(entry.settings, deps)
-}
-
-/**
- * A webhook platform's build also builds its route, once, over the adapter it just built: a route
- * that cannot use the adapter fails that platform's start (the loop writes why), rather than every
- * request later.
- */
-function withRoute(build: PlatformBuild, webhook: WebhookPlatform | undefined, handles: WeakMap<BasePlatformAdapter, Handle>): PlatformBuild {
-  if (webhook === undefined) return build
-  return {
-    platform: build.platform,
-    build: () => {
-      const adapter = build.build()
-      handles.set(adapter, webhook.buildRoute(adapter))
-      return adapter
-    },
-  }
-}
-
-/**
- * The route of the adapter inside the platform's started runner, looked up per request: the router
- * answers 503 before a platform starts, and a platform stopped since answers 503 here. A request
- * already past this lookup when shutdown disconnects the adapter can still be refused by it (an SMS
- * signature check answers false once disconnected); that only happens while stopping.
- */
-function startedRoute(loop: ChannelLoop, platform: PlatformName, handles: WeakMap<BasePlatformAdapter, Handle>): Handle {
-  return async (request) => {
-    const adapter = loop.started.get(platform)?.adapter
-    const handle = adapter === undefined ? undefined : handles.get(adapter)
-    return handle === undefined ? new Response(null, { status: 503 }) : handle(request)
-  }
-}
-
 /**
  * Wire the app: the configured platforms, one runner each, the reply handler, and the routes.
  * Returns at once; the loop keeps starting slow platforms while the router already serves (EC-2).
  */
 export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
-  const agents = createContainer<TurnAgent>({ factory: options.channelAgentFactory ?? options.agentFactory })
+  // First: a bad authorization value stops the start before any adapter is built.
+  const policy = options.policy ?? parseAuthorizationPolicy(options.env)
+  const channelFactory =
+    options.channelAgentFactory ?? (() => options.agentFactory(NO_TOOL_OPTIONS))
+  const agents = createContainer<TurnAgent>({ factory: channelFactory })
   const { configured, skipped, secrets } = resolvePlatforms(options.env)
   for (const { platform, missing } of skipped) {
     options.write(`${platform}: not configured (missing ${missing.join(', ')})`)
   }
+  // Only `open` admits a sender no platform authenticates; under the rest such a channel serves nobody.
+  if (policy.dmPolicy !== 'open') {
+    for (const { platform } of configured.filter(
+      (entry) => !isAuthenticatedSender(entry.platform),
+    )) {
+      options.write(
+        `${platform}: no sender can be admitted under THEOCLAW_DM_POLICY=${policy.dmPolicy}: its sender id is not authenticated, so its messages are dropped without a reply`,
+      )
+    }
+  }
   // What the routes and the router write can carry a configured value (a verifier's message, an
   // SDK error): masked here as the loop masks its own lines, whatever stream the caller writes to.
-  const maskedWrite = (line: string): void => options.write(redactSecrets(maskSecrets(line, secrets)))
-  const deps: WebhookDeps = { write: maskedWrite, verifierFactory: options.teamsVerifierFactory ?? teamsActivityVerifier }
+  const maskedWrite = (line: string): void =>
+    options.write(redactSecrets(maskSecrets(line, secrets)))
+  // The store exists only with a state directory; the hook runs without one under the other policies.
+  const pairing = options.pairing ?? pairingStoreFor(policy, maskedWrite)
+  const ownerPolicy = createOwnerPolicyHook({
+    policy,
+    ...(pairing === undefined ? {} : { pairing }),
+    write: maskedWrite,
+  })
+  // Runs after the owner policy, so only owners and paired senders reach it (FR-007).
+  const groupActivation = createGroupActivationHook({
+    isOwner: (platform, senderId) => isPolicyOwner(policy, platform, senderId),
+    mode: policy.groupActivation,
+    write: maskedWrite,
+  })
+  const deps: WebhookDeps = {
+    write: maskedWrite,
+    verifierFactory: options.teamsVerifierFactory ?? teamsActivityVerifier,
+  }
   const webhooks = new Map<PlatformName, WebhookPlatform>()
   for (const entry of configured) {
     const webhook = webhookPlatform(entry, deps)
@@ -256,16 +194,29 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
   }
   const handles = new WeakMap<BasePlatformAdapter, Handle>()
   const loop = startChannelLoop({
-    platforms: (options.builders ?? adapterBuilders)(configured).map((build) =>
-      withRoute(build, webhooks.get(build.platform), handles),
-    ),
-    handler: createReplyHandler({ withAgent: (work) => agents.withAgent(work) }),
+    platforms: (options.builders ?? adapterBuilders)(configured, {
+      requireMention: policy.groupActivation === 'mention',
+    }).map((build) => withRoute(build, webhooks.get(build.platform), handles)),
+    handler: createReplyHandler({
+      withAgent: (work) => agents.withAgent(work),
+      // `loop` is read per message, after it exists: a member whose platform has not started is
+      // reported as not delivered.
+      broadcast: {
+        groups: createBroadcastGroups(policy.broadcastGroups),
+        adapterFor: (platform) => loop.started.get(platform as PlatformName)?.adapter,
+        write: maskedWrite,
+      },
+    }),
+    hooks: [ownerPolicy, groupActivation],
     secrets,
     write: options.write,
     ...(options.startTimeoutMs === undefined ? {} : { startTimeoutMs: options.startTimeoutMs }),
   })
   const routes = new Map<PlatformName, WebhookRoute>(
-    [...webhooks].map(([platform, { methods }]) => [platform, { methods, handle: startedRoute(loop, platform, handles) }]),
+    [...webhooks].map(([platform, { methods }]) => [
+      platform,
+      { methods, handle: startedRoute(loop, platform, handles) },
+    ]),
   )
   const router = createWebhookRouter({
     routes,
@@ -288,40 +239,111 @@ export interface StartOptions extends Omit<TheoClawOptions, 'write'> {
   readonly listen?: typeof listenControlPlane
   /** Builds the LAN publisher. Default `createBonjourPublisher`; tests pass a fake (plan D2). */
   readonly createPublisher?: PublisherFactory
+  /**
+   * The workspace: where the tool root `files/` is made and whose `.theokit` and `.theoclaw` the
+   * path veto guards. Default the instance's workspace, else `process.cwd()`, where the agents work.
+   * Outside tests it must be the directory the agent factory gives the SDK (`local.cwd` in the
+   * entry), or the veto would guard a `.theokit` the SDK does not use; the entry passes none.
+   */
+  readonly cwd?: string
+  /** What the tool tests inject (bubblewrap detection, fetch); the process passes nothing. */
+  readonly toolDeps?: ToolDeps
+  /** Which instance this process is (B-514); the process entry resolved and applied it. Default: no profile. */
+  readonly instance?: TheoClawInstance
 }
 
 /** The running process: the channel loop, its webhook router, and the one listener serving both. */
 export interface RunningTheoClaw extends ComposedTheoClaw, ControlPlaneHandle {
   /** The `_theoclaw._tcp` service, or nothing on a loopback bind or with `THEOCLAW_MDNS=off`. */
   readonly announcement: LanAnnouncement
+  /** The instance the start line named: its label is the authoritative one (`process.title` may be truncated). */
+  readonly instance: TheoClawInstance
 }
 
 const NOTHING_TO_WITHDRAW: LanAnnouncement = { stop: () => Promise.resolve() }
 
 function formatAddress(address: { readonly host: string; readonly port: number }): string {
-  return isIPv6(address.host) ? `[${address.host}]:${address.port}` : `${address.host}:${address.port}`
+  return isIPv6(address.host)
+    ? `[${address.host}]:${address.port}`
+    : `${address.host}:${address.port}`
+}
+
+/** The first line a start writes, naming the instance and where its state lives. */
+function startLine(instance: TheoClawInstance): string {
+  return instance.directory === undefined
+    ? 'theoclaw: instance started, no profile'
+    : `${instance.label}: instance started, profile directory ${instance.directory}`
 }
 
 function lineWriter(stream: MaskableStream | undefined): (line: string) => void {
   return (line) => void stream?.write(`${line}\n`)
 }
 
-/** Every value the output mask hides: the channel credentials, both model keys and the control token. */
-function processSecrets(env: StartOptions['env'], controlToken: string | undefined): string[] {
+/**
+ * Every value the output mask hides: the channel credentials, both model keys, the control token
+ * and the web search keys.
+ */
+function processSecrets(
+  env: StartOptions['env'],
+  controlToken: string | undefined,
+  tools: ToolSettings,
+): string[] {
   const keys = [env.THEOKIT_API_KEY, env.OPENROUTER_API_KEY]
     .map((value) => (value ?? '').trim())
     .filter((value) => value !== '')
-  return [...resolvePlatforms(env).secrets, ...keys, ...(controlToken === undefined ? [] : [controlToken])]
+  return [
+    ...resolvePlatforms(env).secrets,
+    ...keys,
+    ...(controlToken === undefined ? [] : [controlToken]),
+    ...tools.secrets,
+  ]
+}
+
+const SHELL_READ_LINE =
+  'tools: host tools are on; the shell can read every file the process user can read'
+
+/** The tool settings, every refusal included, before anything opens (FR-008). */
+function startToolSettings(options: StartOptions, policy: AuthorizationPolicy): ToolSettings {
+  // A profiled instance's agents work in its workspace (B-514), so their tool root is made there.
+  const cwd = options.cwd ?? options.instance?.workspace ?? process.cwd()
+  const tools = resolveToolSettings(options.env, cwd, options.toolDeps)
+  // The pairing list lives in the state directory: a shell that could write it could pair anyone.
+  const protectedPaths =
+    policy.stateDir === undefined ? [] : [{ path: policy.stateDir, variable: 'THEOCLAW_STATE_DIR' }]
+  checkHostToolsPosture(tools, protectedPaths, options.toolDeps)
+  return tools
+}
+
+/** The store of `policy.stateDir`, or none without one. Throws on a state file it cannot read. */
+function pairingStoreFor(
+  policy: AuthorizationPolicy,
+  write: (line: string) => void,
+): PairingStore | undefined {
+  return policy.stateDir === undefined ? undefined : createPairingStore({ dir: policy.stateDir, write })
+}
+
+/** Write the instance's start line, the first line of the start, and return the instance in effect. */
+function announceInstance(
+  given: TheoClawInstance | undefined,
+  stderr: (line: string) => void,
+): TheoClawInstance {
+  const instance = given ?? NO_PROFILE
+  stderr(startLine(instance))
+  return instance
 }
 
 /** `GET /health` is the control plane's; every other path goes to the webhook router. */
-function serveHealthAndWebhooks(router: ComposedTheoClaw['router']): (request: Request) => Promise<Response> {
-  return (request) => (new URL(request.url).pathname === '/health' ? healthHandler(request) : router(request))
+function serveHealthAndWebhooks(
+  router: ComposedTheoClaw['router'],
+): (request: Request) => Promise<Response> {
+  return (request) =>
+    new URL(request.url).pathname === '/health' ? healthHandler(request) : router(request)
 }
 
 /**
  * Start TheoClaw in the order the settings, the mask and the shutdown need: read and check every
- * setting (a bad one throws before any socket opens, adapter exists or agent is built), mask the
+ * setting, the tool settings included (a bad one throws before any socket opens, adapter exists,
+ * tool root changes beyond its creation, or agent is built), mask the
  * output before any adapter writes, install shutdown before the loop starts, compose, then listen.
  * One listener serves `/health`, the `/webhooks/<platform>` routes and, with a control token, the
  * `/control` socket, on the bound address (`THEOCLAW_HOST`, loopback by default). The listening
@@ -331,10 +353,18 @@ function serveHealthAndWebhooks(router: ComposedTheoClaw['router']): (request: R
 export async function startTheoClaw(options: StartOptions): Promise<RunningTheoClaw> {
   const settings = readControlPlaneSettings(options.env)
   const discovery = parseDiscoveryMode(options.env)
+  // Read before the mask and the shutdown are installed, so a missing owner leaves nothing behind.
+  const policy = parseAuthorizationPolicy(options.env)
+  const tools = startToolSettings(options, policy)
   const streams = options.streams ?? [process.stdout, process.stderr]
-  const mask = installOutputMask(processSecrets(options.env, settings.controlToken), streams)
-  const stdout = options.stdout ?? lineWriter(streams[0])
   const stderr = options.stderr ?? lineWriter(streams[streams.length - 1])
+  // Loaded before the start line, the mask and the shutdown: an unreadable pairing file leaves nothing behind.
+  const secrets = resolvePlatforms(options.env).secrets
+  const pairing = pairingStoreFor(policy, (line) => stderr(redactSecrets(maskSecrets(line, secrets))))
+  // First, once every setting is checked: the line holds a label and a directory, never a secret.
+  const instance = announceInstance(options.instance, stderr)
+  const mask = installOutputMask(processSecrets(options.env, settings.controlToken, tools), streams)
+  const stdout = options.stdout ?? lineWriter(streams[0])
   const flushOnExit = (): void => mask.flush()
   options.signals.on('exit', flushOnExit)
   let loop: ChannelLoop | undefined
@@ -354,8 +384,19 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
     },
     write: stderr,
   })
-  const composed = composeTheoClaw({ ...options, write: stderr })
-  const agents = createContainer<TurnAgent>({ factory: options.agentFactory })
+  for (const line of tools.offLines) stderr(line)
+  if (tools.hostTools) stderr(SHELL_READ_LINE)
+  // The raw factory goes to the composition, which hands chat agents no tool; only the `/control`
+  // turn's agents get the tool options.
+  const composed = composeTheoClaw({
+    ...options,
+    policy,
+    ...(pairing === undefined ? {} : { pairing }),
+    write: stderr,
+  })
+  const agents = createContainer<TurnAgent>({
+    factory: () => options.agentFactory(agentToolOptions(tools)),
+  })
   loop = composed.loop
   const listen = options.listen ?? listenControlPlane
   serving = listen({
@@ -391,5 +432,11 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
   }
   // `close` withdraws the announcement first, as the shutdown does: a caller that closes the
   // running instance directly must not leave the service advertised.
-  return { ...handle, ...composed, announcement, close: () => stopThenClose(announcement, handle) }
+  return {
+    ...handle,
+    ...composed,
+    announcement,
+    instance,
+    close: () => stopThenClose(announcement, handle),
+  }
 }

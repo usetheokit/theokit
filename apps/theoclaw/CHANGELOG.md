@@ -13,6 +13,38 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- The `/control` agent's tools (B-382): `read_file`, `list_dir`, `view_image`, `web_fetch` and
+  `todolist` always, all from `@theokit/agents/tools` and bound to `files/` under the working
+  directory; `web_search` with `BRAVE_API_KEY` (or `THEOKIT_SEARCH_API_URL` with
+  `THEOKIT_SEARCH_API_KEY`); `git_diff` when `files/` is a repository and the sandbox is enforced;
+  and `write_file`, `edit_file`, `apply_patch` and a bubblewrap-sandboxed `shell_exec` with
+  `THEOCLAW_HOST_TOOLS=on`. The start refuses any other `THEOCLAW_HOST_TOOLS` value, host tools
+  without bubblewrap, in a working directory under `/tmp` or with `THEOCLAW_STATE_DIR` under
+  `files/` or `/tmp` (where the shell could rewrite `pairing.json`), a symlinked tool root, and half
+  a search configuration, before any runner starts; with host tools on it prints that the shell can
+  read every file the process user can read. A path into `.theokit` or `.theoclaw` and an unscoped
+  `git_diff` are refused before the tool runs, the SDK's own `shell` is never offered, and chat
+  replies still get no tool. The parity ledger records OC-58, OC-59 and OC-69 as shipped, checked
+  by `tests/live/tools.live.test.ts`, with their missing parts filed as items; OC-63 waits on a
+  search key.
+- The owner reaches the control plane from another machine over an SSH local forward (B-512,
+  OC-24). The README's "Remote access over SSH" section gives the command,
+  `ssh -N -L 18789:127.0.0.1:<THEOCLAW_PORT> <user>@<host>`, and needs no public bind: the forward
+  delivers every request from `127.0.0.1`, so `THEOCLAW_CONTROL_TOKEN` stays the whole gate, and
+  `tests/remote-access-source.test.ts` fails in CI if TheoClaw's source starts reading a peer address
+  or the manifest gains an SSH library. SSH is the one remote path shipped: OC-24 also names
+  Tailscale serve/funnel and trusted-proxy identity, and neither is built, so the ledger's `shipped`
+  row covers SSH alone. The live check (`THEOCLAW_LIVE=1`) runs a real `sshd` of its own from a temp
+  directory and proves 401 without or with a wrong token, 404 with the token unset, a real-model
+  turn, a reconnect with no restart, that the turn crossed that `sshd`, that no process printed the
+  token, and that `~/.ssh` is untouched.
+- Several instances on one host (B-514). `THEOCLAW_PROFILE=<name>` (`^[a-z0-9][a-z0-9-]{0,15}$`)
+  keeps an instance's SDK state, `auth.json`, pairing store and agent working directory, with the tools' `files/` root,
+  under `~/.theokit/profiles/<name>` (mode 0700), and names it `theoclaw-<name>` in its first stderr line,
+  `theoclaw-<name>: instance started, profile directory <dir>`, and in its process title. A bad
+  name, or a profile beside `THEOKIT_HOME`, `THEOKIT_AUTH_HOME` or `THEOCLAW_STATE_DIR`, stops the
+  start with exit 1 and creates nothing. Without a profile the start is unchanged apart from its new
+  first line, `theoclaw: instance started, no profile`.
 - Exact dependency versions and an audit of what TheoClaw installs (B-406). Every entry of
   `apps/theoclaw/package.json` is now an exact version or `workspace:*`, and `pnpm --filter theoclaw
   run check:versions` refuses any other form (`^`, `~`, `>=`, `*`, a tag, `workspace:^`, `file:`,
@@ -29,6 +61,25 @@ and versioning follows [Semantic Versioning](https://semver.org/).
   to what the lockfile records. `vitest` and
   `@vitest/coverage-v8` move to 4.1.12, past two `@vitest/mocker` advisories, and `vite` 7.3.7 is a
   direct devDependency. The `theoclaw` CI job runs both commands.
+- Only the owner talks to the instance (B-371). `THEOCLAW_OWNERS` (required) names who the
+  instance serves; anyone else is refused before the agent runs, as `THEOCLAW_DM_POLICY` says:
+  `pairing` (default) answers a stranger's DM with a 6-digit code the owner approves by sending
+  `/approve <code>` in a DM, kept in `THEOCLAW_STATE_DIR/pairing.json`; `allowlist` answers
+  `THEOCLAW_REFUSAL_TEXT`; `disabled` answers nothing; `open` lets every direct message through. A
+  refused sender is answered at most once an hour and never in a group, where only owners and paired
+  senders are answered under every policy, so two instances in one channel stop answering each other
+  (under `open`, their direct messages still can). `THEOCLAW_GROUP_ACTIVATION` (`mention` by default) makes Slack, Mattermost,
+  WhatsApp and Telegram groups answer only a mention, and an owner's `/activation` changes a Telegram
+  group's mode. `THEOCLAW_BROADCAST_GROUPS` shares one bounded agent thread across channels on
+  several platforms. The parity ledger records OC-18, OC-19 and OC-21 as shipped, checked against a
+  real model by `tests/live/authorization.live.test.ts` (`THEOCLAW_LIVE=1`). An existing setup must
+  now set `THEOCLAW_OWNERS`, and `THEOCLAW_STATE_DIR` under the default policy, or the start stops
+  naming the variable. `THEOCLAW_OWNERS` and `THEOCLAW_BROADCAST_GROUPS` refuse an `email:` or
+  `sms:` entry, and an e-mail or SMS sender is never an owner or paired: nothing authenticates an
+  e-mail's From header or a text's caller id, so a forged one could act as the owner and `/approve`
+  anyone (CWE-290). Under every policy but `open` such a sender gets no reply at all, since the
+  reply would go to the address the forger wrote, and the start says so for each configured e-mail
+  or SMS channel. A platform the policy does not know is never trusted.
 - A control plane: `pnpm --filter theoclaw run build && pnpm --filter theoclaw start` starts one
   process that serves HTTP and an owner WebSocket on one port (B-372). It binds `127.0.0.1` unless
   `THEOCLAW_HOST` names another address; a non-loopback address also needs
@@ -66,8 +117,8 @@ and versioning follows [Semantic Versioning](https://semver.org/).
     rendering (`channelRendering`, from `@theokit/gateway` 0.11.0 in `theokit-gateways`). A turn
     with no visible answer replies "I could not come up with an answer to that.", and a failed
     turn replies with the presenter's error sentence. The agent runs `THEOCLAW_MODEL` with the
-    control plane's model key, has no tool and keeps no memory: the SDK's `shell` tool is withheld and memory is off, because anyone
-    who can message the bot writes the prompt (no sender allowlist yet, B-371). Every configured credential, both model keys when they are set, and
+    control plane's model key, has no tool and keeps no memory: the SDK's `shell` tool is withheld and memory is off, because whoever
+    reaches the agent writes the prompt (everyone under `THEOCLAW_DM_POLICY=open`, B-371). Every configured credential, both model keys when they are set, and
     the control token are masked as `[redacted]` in everything the process writes to stdout and stderr, including what
     the adapters write themselves.
   - Webhook platforms post to `/webhooks/line`, `/webhooks/sms`, `/webhooks/whatsapp` (GET answers
@@ -113,6 +164,13 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- An owner's `/approve` whose `pairing.json` write failed lost the code: the store dropped it
+  before the save, and the stranger, refused for the hour, could not ask for another. A failed save
+  now keeps the code until it expires, so the owner can send the same `/approve` again (B-371).
+- An unreadable `pairing.json` or state directory stopped the start only after the start line was
+  written and the output mask and signal handlers were installed, and nothing removed them. The
+  pairing store is now loaded before any of that, so such a start fails leaving nothing behind
+  (B-371).
 - This app's vitest config was the only one of ten in the monorepo without a `maxWorkers` cap —
   verified independently by a reviewer, who counted the ten files and confirmed the nine. It now
   carries the same expression the other nine compute, which makes a config mismatch unreachable by

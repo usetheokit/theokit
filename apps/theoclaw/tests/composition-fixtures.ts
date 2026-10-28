@@ -32,6 +32,9 @@ export const LINE_BODY = JSON.stringify({
   ],
 })
 export const TELEGRAM_AND_LINE = {
+  // LINE_BODY's sender owns the instance, so its message reaches the agent (B-371).
+  THEOCLAW_OWNERS: 'line:U-1',
+  THEOCLAW_DM_POLICY: 'allowlist',
   THEOCLAW_PORT: '0',
   THEOCLAW_MODEL: 'test-model',
   OPENROUTER_API_KEY: 'openrouter-key-value',

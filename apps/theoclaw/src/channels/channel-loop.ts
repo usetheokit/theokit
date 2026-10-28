@@ -1,5 +1,5 @@
 import { GatewayRunner, redactSecrets } from '@theokit/gateway'
-import type { BasePlatformAdapter, GatewayHandler, PlatformName } from '@theokit/gateway'
+import type { BasePlatformAdapter, GatewayHandler, GatewayHook, PlatformName } from '@theokit/gateway'
 
 /** One platform the loop may start: building the adapter can throw, and only fails that platform. */
 export interface PlatformBuild {
@@ -10,6 +10,8 @@ export interface PlatformBuild {
 export interface ChannelLoopOptions {
   readonly platforms: readonly PlatformBuild[]
   readonly handler: GatewayHandler
+  /** Registered on every runner, in order, before the handler sees a message (the owner policy, FR-009). */
+  readonly hooks?: readonly GatewayHook[]
   /** Every configured credential value; none of them is ever written (D9). */
   readonly secrets: readonly string[]
   readonly write: (line: string) => void
@@ -90,7 +92,7 @@ export function startChannelLoop(options: ChannelLoopOptions): ChannelLoop {
     let runner: GatewayRunner
     try {
       adapter = build()
-      runner = new GatewayRunner({ adapters: [adapter], handler: options.handler })
+      runner = new GatewayRunner({ adapters: [adapter], handler: options.handler, hooks: options.hooks ?? [] })
     } catch (error) {
       fail(platform, `${platform}: start failed: ${describeError(error)}`)
       return

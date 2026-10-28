@@ -24,6 +24,37 @@ so a file kept outside the repository and sourced from your shell profile is als
 | `THEOCLAW_MODEL` | Model id the agent runs, e.g. `openrouter/google/gemini-2.5-flash-lite`. There is no default: startup fails and names the variable. |
 | `THEOKIT_API_KEY` or `OPENROUTER_API_KEY` | The model key, passed to the SDK; `THEOKIT_API_KEY` wins when both are set. |
 | `THEOCLAW_PORT` | Port of the one listener that serves the webhook routes, `/health` and `/control`. Digits only, 0 to 65535. |
+| `THEOCLAW_STATE_DIR` | Where pairings are kept. Required under the default `THEOCLAW_DM_POLICY=pairing`; see below. |
+| `THEOCLAW_OWNERS` | Who the instance serves: comma-separated `platform:senderId`, e.g. `telegram:42,matrix:@me:matrix.org`. Required even with no platform configured; see [Who may talk to the instance](#who-may-talk-to-the-instance). |
+
+### Who may talk to the instance
+
+Only the owners in `THEOCLAW_OWNERS`, and the senders an owner pairs, reach the agent. Everyone else
+is refused before the agent runs. In a group a refused sender never gets a reply, under every
+policy below; owners and paired senders are answered there as in a direct message.
+
+| Variable | Meaning |
+|---|---|
+| `THEOCLAW_OWNERS` | Required. `platform:senderId` entries, comma-separated; the platform is one of the ten below, and an id may contain colons (Matrix). An `email:` or `sms:` entry is refused: nothing authenticates the From header of an e-mail or the caller id of a text, so anyone could write as the owner. For the same reason an e-mail or SMS sender is never an owner or paired, and under every policy but `open` gets no reply at all, since the reply would go to whatever address the sender wrote; the start says so for each such channel configured. |
+| `THEOCLAW_DM_POLICY` | What a direct message from anyone else gets: `pairing` (default) a pairing code, `allowlist` the refusal text, `disabled` nothing, `open` the agent. A refused sender is answered at most once an hour; after that, silence. |
+| `THEOCLAW_STATE_DIR` | Directory holding `pairing.json` (mode 0600, the directory created 0700). Required under `pairing`, optional otherwise; pairings made earlier still apply when it is set. A `pairing.json` that does not parse stops the start. With `THEOCLAW_HOST_TOOLS=on` it may not lie under `files/` or `/tmp`, which the sandboxed shell can write. |
+| `THEOCLAW_REFUSAL_TEXT` | The refusal under `allowlist`. Default `This assistant answers its owner only.` |
+| `THEOCLAW_GROUP_ACTIVATION` | Slack, Mattermost, WhatsApp and Telegram only: `mention` (default) answers a group message only when it mentions the bot; `always` answers every message from an owner or a paired sender. The other six platforms answer an owner or a paired sender in a group either way. |
+| `THEOCLAW_BROADCAST_GROUPS` | Channels that share one agent thread: `name=platform:channelId,platform:channelId;name2=...`. Each group needs two channels or more, a channel belongs to one group, and an `email:` or `sms:` channel is refused for the reason above. The thread keeps the last 20 turns, at most 16384 characters, and every answer reaches every member channel. |
+
+**Pairing.** Under `pairing` a stranger's first direct message is answered with a 6-digit code,
+valid for one hour. The owner approves it by sending `/approve <code>` to the bot in a direct
+message; the sender is then paired, across restarts.
+
+**Group activation.** Slack, Mattermost and WhatsApp read the mode at start. On Telegram an owner
+can send `/activation mention` or `/activation always` in a group to change that group's mode until
+the instance restarts.
+
+**`open` lets two instances talk to each other.** Under `pairing`, `allowlist` and `disabled`, two
+TheoClaw instances in one channel stop after at most two direct messages and never reply in a
+group, because neither is the other's owner. Under `open` both answer every direct message, so two
+instances can keep answering each other's DMs on the seven platforms whose adapters do not drop a
+message written by another bot. Choose `open` only for an instance no other bot writes to.
 
 ### Platforms
 
@@ -125,12 +156,114 @@ Each turn's agent is built without the SDK's `shell` tool and with memory off, s
 no command on the host and leaves no transcript on disk. The SDK still adds one entry per turn to
 `.theokit/agents/registry.json` under the process's working directory; no option turns that off.
 
+### The `/control` agent's tools
+
+The `/control` turn's agent gets tools built only from `@theokit/agents/tools`, bound to the tool
+root `files/` under the process's working directory, or a profiled instance's workspace (created at start with mode 0700; a symlinked
+or non-directory `files` is refused). Chat replies get no tool: anyone who can message the bot
+writes their prompt.
+
+| Tool | When |
+|---|---|
+| `read_file`, `list_dir`, `view_image`, `web_fetch`, `todolist` | always |
+| `web_search` | with `BRAVE_API_KEY`, or with both `THEOKIT_SEARCH_API_URL` and `THEOKIT_SEARCH_API_KEY` |
+| `git_diff` | when `files/` is itself a git repository and the sandbox is enforced |
+| `write_file`, `edit_file`, `apply_patch`, `shell_exec` | with `THEOCLAW_HOST_TOOLS=on` |
+
+`THEOCLAW_HOST_TOOLS` is `on` or unset; any other value is refused. With it on, the shell runs in a
+bubblewrap sandbox that can write only `files/` and `/tmp`, and the start refuses when bubblewrap
+is not available, when the working directory lies under `/tmp`, or when `THEOCLAW_STATE_DIR` lies
+under `files/` or `/tmp` (symlinks followed), where the shell could rewrite `pairing.json` and pair
+any sender. **The sandboxed shell can still
+read every file the process user can read**; the start prints a line saying so. A tool path that
+resolves into `.theokit` or `.theoclaw` beside `files/` is refused before the tool runs, and so is
+a `git_diff` with no path. The SDK's own unsandboxed `shell` is never offered. Search keys are
+masked in the output like every other credential. A start line says when web search is off, and
+when `git_diff` is off because the sandbox is not enforced.
+
+The live check of the tools:
+
+```bash
+set -a; . ~/.config/theoclaw/dev.env; set +a
+THEOCLAW_LIVE=1 THEOCLAW_HOST_TOOLS=on pnpm --filter theoclaw exec vitest run tests/live/tools.live.test.ts
+```
+
 The live check runs a real turn against the built entry:
 
 ```bash
 set -a; . ~/.config/theoclaw/dev.env; set +a
 pnpm --filter theoclaw run build
 THEOCLAW_LIVE=1 pnpm --filter theoclaw exec vitest run tests/live/control-plane.live.test.ts
+```
+
+## Remote access over SSH
+
+TheoClaw binds `127.0.0.1` by default, and TheoClaw needs no public bind for this: to reach the
+control plane from another machine, forward a local port to it over SSH. On the machine you type
+on, with `THEOCLAW_PORT` the port the instance prints on its listening line:
+
+```bash
+ssh -N -L 18789:127.0.0.1:<THEOCLAW_PORT> <user>@<host>
+```
+
+Then connect to `ws://127.0.0.1:18789/control` with `Authorization: Bearer <THEOCLAW_CONTROL_TOKEN>`,
+as in [The `/control` socket](#the-control-socket). `THEOCLAW_CONTROL_TOKEN` must be set on the
+instance: without it every upgrade answers 404, through the forward or not. The command assumes
+the default `127.0.0.1`; with another loopback `THEOCLAW_HOST` (`::1`, `127.x.y.z`), forward to that
+address instead.
+
+Every request a forward delivers arrives from `127.0.0.1`, so the bearer token is the whole gate,
+and no TheoClaw route grants anything to a loopback peer (`tests/remote-access-source.test.ts`
+fails if TheoClaw's source starts reading `remoteAddress` or a forwarding header). Closing the forward and opening a new one needs no
+restart. SSH is the one supported remote path: Tailscale serve or funnel and a trusted proxy that
+passes the user's identity in a header are not supported.
+
+The live check runs a real `sshd` of its own from a temp directory, never the host's and never
+`~/.ssh`, and needs `ssh`, `sshd` and `ssh-keygen` on `PATH`:
+
+```bash
+set -a; . ~/.config/theoclaw/dev.env; set +a
+THEOCLAW_LIVE=1 pnpm --filter theoclaw exec vitest run tests/live/remote-access.live.test.ts
+```
+
+## Several instances on one host
+
+Set `THEOCLAW_PROFILE` to run more than one TheoClaw on one machine, each with its own state and its
+own name. The value is a name matching `^[a-z0-9][a-z0-9-]{0,15}$` (for example `work` or `home-2`);
+anything else stops the start with exit 1 and creates nothing. Give each instance its own
+`THEOCLAW_PORT` and its own bot credentials.
+
+With `THEOCLAW_PROFILE=work` the instance:
+
+- keeps everything under `~/.theokit/profiles/work` (directory mode 0700): it sets `THEOKIT_HOME`
+  and `THEOKIT_AUTH_HOME` to that directory, so the SDK's turn records, settings and `auth.json` go
+  there, and `THEOCLAW_STATE_DIR` to `~/.theokit/profiles/work/state`, so `pairing.json` does too
+  (a profiled instance always has a pairing store, empty until its owner approves someone);
+- builds its agents in `~/.theokit/profiles/work/workspace`, so the agent registry and any memory
+  under the working directory stay in the profile. That directory is also the agent's working
+  directory: tools and project configuration resolve against it, not against the directory you
+  started TheoClaw in;
+- calls itself `theoclaw-work`. Its first line on stderr is
+  `theoclaw-work: instance started, profile directory /home/<you>/.theokit/profiles/work`, which is
+  the authoritative label. The process title (`ps`) is set to the same name, but the kernel
+  truncates it to the length of the original command line, so it can be cut short.
+
+A profile cannot be combined with an explicit `THEOKIT_HOME`, `THEOKIT_AUTH_HOME` or
+`THEOCLAW_STATE_DIR`: the start stops and names each one set. Unset them before moving to profiles.
+Restarting an instance with the same profile keeps everything it wrote before. With no
+`THEOCLAW_PROFILE`, nothing moves and the first line is `theoclaw: instance started, no profile`.
+
+```bash
+THEOCLAW_PROFILE=work THEOCLAW_PORT=8787 ... pnpm --filter theoclaw start
+THEOCLAW_PROFILE=home THEOCLAW_PORT=8788 ... pnpm --filter theoclaw start
+```
+
+The live check starts two built instances under one scratch `HOME` and runs a real-model turn on
+each:
+
+```bash
+pnpm --filter theoclaw run build
+THEOCLAW_LIVE=1 pnpm --filter theoclaw exec vitest run tests/live/instance-profiles.live.test.ts
 ```
 
 ## Keeping secrets out of the repository

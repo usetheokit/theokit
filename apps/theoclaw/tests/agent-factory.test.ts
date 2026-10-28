@@ -8,6 +8,10 @@ import {
   type CreateAgent,
 } from "../src/control-plane/agent-factory.js";
 import type { TurnAgent } from "../src/control-plane/turn.js";
+import { agentToolOptions } from "../src/tools/tool-registry.js";
+import { resolveToolSettings } from "../src/tools/tool-settings.js";
+import { makeHostToolsWorkspace } from "./host-tools-workspace.js";
+import { notEnforced } from "./tool-start-fixtures.js";
 
 const unusedAgent: TurnAgent = { send: () => Promise.reject(new Error("not used")) };
 
@@ -73,6 +77,21 @@ describe("createAgentFactory", () => {
     await createAgentFactory({ THEOCLAW_MODEL: "m", OPENROUTER_API_KEY: "k" }, create)();
 
     expect(options[0]?.withheldBuiltinTools).toEqual(["shell"]);
+  });
+
+  it("hands the tool options it is called with to the agent it creates", async () => {
+    const workspace = makeHostToolsWorkspace();
+    try {
+      const settings = resolveToolSettings({}, workspace.path, { detect: notEnforced, warn: () => undefined });
+      const { create, options } = optionsRecordingCreate();
+
+      await createAgentFactory({ THEOCLAW_MODEL: "m", OPENROUTER_API_KEY: "k" }, create)(agentToolOptions(settings));
+
+      expect(options[0]?.tools?.map((tool) => tool.name)).toContain("read_file");
+      expect(options[0]?.plugins?.map((plugin) => plugin.name)).toEqual(["theoclaw-path-veto"]);
+    } finally {
+      workspace.remove();
+    }
   });
 
   it("turns memory off so a turn writes no transcript under the cwd", async () => {
