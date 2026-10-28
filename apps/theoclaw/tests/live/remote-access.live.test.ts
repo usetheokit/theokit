@@ -1,6 +1,18 @@
 import { createHash, randomBytes } from 'node:crypto'
 import { EventEmitter } from 'node:events'
-import { existsSync, lstatSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync } from 'node:fs'
+import {
+  closeSync,
+  constants,
+  existsSync,
+  fstatSync,
+  lstatSync,
+  mkdtempSync,
+  openSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+} from 'node:fs'
 import { request } from 'node:http'
 import { connect, createServer, type Server } from 'node:net'
 import { homedir, tmpdir } from 'node:os'
@@ -233,9 +245,18 @@ function snapshotSshDir(): Record<string, string> | 'absent' {
   for (const path of readdirSync(dir, { recursive: true, encoding: 'utf8' }).sort()) {
     const full = join(dir, path)
     const stat = lstatSync(full)
-    snapshot[path] = stat.isFile()
-      ? `${stat.mtimeMs} ${createHash('sha256').update(readFileSync(full)).digest('hex')}`
-      : stat.isDirectory() ? 'dir' : 'other'
+    if (!stat.isFile()) {
+      snapshot[path] = stat.isDirectory() ? 'dir' : 'other'
+      continue
+    }
+    // One descriptor for both the mtime and the bytes, so the file cannot change between them.
+    const fd = openSync(full, constants.O_RDONLY | constants.O_NOFOLLOW)
+    try {
+      const opened = fstatSync(fd)
+      snapshot[path] = `${opened.mtimeMs} ${createHash('sha256').update(readFileSync(fd)).digest('hex')}`
+    } finally {
+      closeSync(fd)
+    }
   }
   return snapshot
 }
