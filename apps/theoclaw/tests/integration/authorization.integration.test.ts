@@ -12,7 +12,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { createOwnerPolicyHook } from '../../src/authorization/owner-policy-hook.js'
 import { createPairingStore } from '../../src/authorization/pairing-store.js'
-import { parseAuthorizationPolicy } from '../../src/authorization/policy.js'
+import { isPolicyOwner, parseAuthorizationPolicy } from '../../src/authorization/policy.js'
 import type { PlatformBuild } from '../../src/channels/channel-loop.js'
 import { composeTheoClaw } from '../../src/composition.js'
 import { TheoClawConfigError } from '../../src/control-plane/errors.js'
@@ -85,6 +85,8 @@ describe('composeTheoClaw with parseAuthorizationPolicy, createPairingStore and 
     const policy = parseAuthorizationPolicy(env)
     const reloaded = createPairingStore({ dir: policy.stateDir ?? dir })
     expect(reloaded.isPaired('discord', 'stranger')).toBe(true)
+    // Paired is not owner: the owner rule the hooks share still names only the configured owner.
+    expect([isPolicyOwner(policy, 'telegram', 'owner'), isPolicyOwner(policy, 'discord', 'stranger')]).toEqual([true, false])
     expect(createOwnerPolicyHook({ policy, pairing: reloaded }).name).toBe('theoclaw-owner-policy')
   })
 
