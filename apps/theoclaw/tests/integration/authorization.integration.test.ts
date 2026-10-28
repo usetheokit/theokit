@@ -92,11 +92,13 @@ describe('composeTheoClaw with parseAuthorizationPolicy, createPairingStore and 
     expect(() => composedApp({ THEOCLAW_OWNERS: 'email:owner@example.com', THEOCLAW_DM_POLICY: 'allowlist' }, ['email'])).toThrow(
       TheoClawConfigError,
     )
-    const app = composedApp({ THEOCLAW_OWNERS: 'telegram:owner', THEOCLAW_STATE_DIR: dir }, ['email'])
+    const app = composedApp({ THEOCLAW_OWNERS: 'telegram:owner', THEOCLAW_STATE_DIR: dir }, ['email', 'telegram'])
     await app.loop.ready
-    await app.deliver(messageEvent('email', 'hello', 'stranger@example.com'), 1)
-    expect(app.sent('email')).toEqual(['This assistant answers its owner only.'])
-    expect(app.asked).toEqual([])
+    await app.deliver(messageEvent('email', 'hello', 'stranger@example.com'), 0)
+    // The owner's answer settles the runners; the e-mail stranger was answered with nothing.
+    await app.deliver(messageEvent('telegram', 'hello', 'owner'), 1)
+    expect(app.sent('email')).toEqual([])
+    expect(app.asked).toEqual(['hello'])
     await app.loop.stopAll()
   })
 
@@ -129,6 +131,33 @@ describe('composeTheoClaw with parseAuthorizationPolicy, createPairingStore and 
     await app.deliver(inChannel('discord', 'dc-1', 'second question'), 2)
     expect(app.asked[1]).toContain('first question')
     expect(app.sent('telegram')).toHaveLength(2)
+    expect(app.sent('telegram')[1]).toBe(app.sent('discord')[1])
+    await app.loop.stopAll()
+  })
+
+  it('createBroadcastGroups in the composed app fans out only the group messages the activation hook admits', async () => {
+    const app = composedApp({
+      THEOCLAW_OWNERS: 'telegram:owner,discord:owner',
+      THEOCLAW_DM_POLICY: 'allowlist',
+      THEOCLAW_BROADCAST_GROUPS: 'home=telegram:-100,discord:dc-1',
+    })
+    await app.loop.ready
+    const telegramGroup = (text: string): MessageEvent =>
+      ({
+        ...messageEvent('telegram', text, 'owner'),
+        channel: { id: '-100', type: 'group' },
+        telegram: { chatId: -100, messageId: 1, raw: { chat: { id: -100, type: 'group' }, message: { text }, me: { username: 'theo_bot', id: 99 } } },
+      }) as unknown as MessageEvent
+    const discordGroup = (text: string): MessageEvent =>
+      ({ ...messageEvent('discord', text, 'owner'), channel: { id: 'dc-1', type: 'group' } }) as MessageEvent
+    await app.deliver(telegramGroup('nobody asked the bot'), 0)
+    await app.deliver(telegramGroup('@theo_bot first question'), 1)
+    await waitFor(() => app.sent('discord').length === 1, 2000, 'the broadcast to reach the discord group')
+    expect(app.asked).toEqual(['@theo_bot first question'])
+    await app.deliver(discordGroup('second question'), 2)
+    await waitFor(() => app.sent('telegram').length === 2, 2000, 'the broadcast to reach the telegram group')
+    expect(app.asked).toHaveLength(2)
+    expect(app.asked[1]).toContain('first question')
     expect(app.sent('telegram')[1]).toBe(app.sent('discord')[1])
     await app.loop.stopAll()
   })

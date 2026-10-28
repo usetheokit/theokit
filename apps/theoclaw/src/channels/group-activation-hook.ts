@@ -5,8 +5,8 @@ import type { Context } from 'grammy'
 export type GroupActivationMode = 'mention' | 'always'
 
 export interface GroupActivationOptions {
-  /** `platform:senderId` keys of the owners: only they may change a group's mode. */
-  readonly owners: ReadonlySet<string>
+  /** The policy's owner rule, built in composition: only an owner may change a group's mode. */
+  readonly isOwner: (platform: string, senderId: string) => boolean
   /** `THEOCLAW_GROUP_ACTIVATION`, the mode of every group until an owner changes it. */
   readonly mode: GroupActivationMode
   /** Where a context the hook cannot read is reported. Default: standard error. */
@@ -73,7 +73,7 @@ export function createGroupActivationHook(options: GroupActivationOptions): Gate
       const command = ACTIVATION.exec(event.text.trim())
       if (command !== null) {
         // Only an owner changes a mode; anyone else's command never becomes a prompt either.
-        return options.owners.has(`${event.platform}:${event.sender.id}`) ? activation(event, command[1]) : { block: true }
+        return options.isOwner(event.platform, event.sender.id) ? activation(event, command[1]) : { block: true }
       }
       if (event.platform !== 'telegram') return undefined
       const mode = modes.get(event.channel.id) ?? options.mode

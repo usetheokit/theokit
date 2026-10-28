@@ -20,7 +20,7 @@ export interface BroadcastGroup {
 
 /** Who the instance serves and how it treats everyone else, read once at start (FR-001). */
 export interface AuthorizationPolicy {
-  /** `platform:senderId` keys; never an `email` one (see `isAuthenticatedSender`). */
+  /** `platform:senderId` keys; never one on an unauthenticated platform (see `isAuthenticatedSender`). */
   readonly owners: ReadonlySet<string>
   readonly dmPolicy: DmPolicy
   readonly groupActivation: GroupActivation
@@ -30,20 +30,26 @@ export interface AuthorizationPolicy {
   readonly broadcastGroups: readonly BroadcastGroup[]
 }
 
-// Keyed by every platform name, so a platform the gateway adds does not compile until it is listed.
-const KNOWN_PLATFORMS = {
-  telegram: true,
-  discord: true,
-  slack: true,
-  matrix: true,
-  mattermost: true,
-  email: true,
-  line: true,
-  whatsapp: true,
-  teams: true,
-  sms: true,
-} as const satisfies Record<PlatformName, true>
-const PLATFORMS = Object.keys(KNOWN_PLATFORMS) as PlatformName[]
+/**
+ * For each platform, why its sender id is NOT authenticated, or `null` when the platform
+ * authenticates it. Keyed by every platform name, so a platform the gateway adds does not compile
+ * until someone decides whether its sender can be an owner (CWE-290).
+ */
+const UNAUTHENTICATED_BECAUSE = {
+  telegram: null,
+  discord: null,
+  slack: null,
+  matrix: null,
+  mattermost: null,
+  // The From header is written by whoever sends the mail; the adapter checks no DKIM or SPF result.
+  email: 'the From header of an e-mail',
+  line: null,
+  whatsapp: null,
+  teams: null,
+  // The Twilio signature proves the request came from Twilio, not who sent the text.
+  sms: 'the caller id of a text message',
+} as const satisfies Record<PlatformName, string | null>
+const PLATFORMS = Object.keys(UNAUTHENTICATED_BECAUSE) as PlatformName[]
 const DM_POLICIES: readonly DmPolicy[] = ['pairing', 'allowlist', 'open', 'disabled']
 const GROUP_ACTIVATIONS: readonly GroupActivation[] = ['mention', 'always']
 const DEFAULT_REFUSAL_TEXT = 'This assistant answers its owner only.'
@@ -86,15 +92,25 @@ function splitAddress(entry: string, variable: string): { platform: PlatformName
 }
 
 /**
- * Platforms whose sender id nothing authenticates: an e-mail's From header is written by whoever
- * sends it, and the e-mail adapter checks no DKIM or SPF result (CWE-290). A sender there is never
- * an owner and never paired.
+ * Whether the platform's sender id can identify an owner or a paired sender. A platform this
+ * module does not know is not trusted.
  */
-const UNAUTHENTICATED_SENDER_PLATFORMS: ReadonlySet<string> = new Set<PlatformName>(['email'])
-
-/** Whether the platform's sender id can identify an owner or a paired sender. */
 export function isAuthenticatedSender(platform: string): boolean {
-  return !UNAUTHENTICATED_SENDER_PLATFORMS.has(platform)
+  return isPlatform(platform) && UNAUTHENTICATED_BECAUSE[platform] === null
+}
+
+/** The policy's rule for who is an owner: a listed key on a platform that authenticates its sender. */
+export function isPolicyOwner(policy: Pick<AuthorizationPolicy, 'owners'>, platform: string, senderId: string): boolean {
+  return isAuthenticatedSender(platform) && policy.owners.has(senderKey(platform, senderId))
+}
+
+/**
+ * Refuse an entry on a platform whose sender id nothing authenticates. `refusal` says what the
+ * entry may not do and `risk` what a forger could; the message never quotes the id.
+ */
+function requireAuthenticated(platform: PlatformName, variable: string, refusal: string, risk: string): void {
+  const doubt = UNAUTHENTICATED_BECAUSE[platform]
+  if (doubt !== null) throw new TheoClawConfigError(`${variable} ${refusal}: ${doubt} is not authenticated, so ${risk}`, { variable })
 }
 
 /** The key an owner or a sender is compared by. E-mail addresses compare case-insensitively (EC-4). */
@@ -117,12 +133,7 @@ function parseOwners(env: Env): ReadonlySet<string> {
   }
   return new Set(entries.map((entry) => {
     const { platform, id } = splitAddress(entry, variable)
-    if (!isAuthenticatedSender(platform)) {
-      throw new TheoClawConfigError(
-        `${variable} cannot name an ${platform} owner: the From header of an e-mail is not authenticated, so anyone could write as the owner`,
-        { variable },
-      )
-    }
+    requireAuthenticated(platform, variable, `cannot name an ${platform} owner`, 'anyone could write as the owner')
     return senderKey(platform, id)
   }))
 }
@@ -133,6 +144,8 @@ function parseGroup(spec: string, variable: string): BroadcastGroup {
   if (name === '') throw new TheoClawConfigError(`${variable} has a group with no name=`, { variable })
   const members = list(spec.slice(equals + 1), ',').map((entry) => {
     const { platform, id } = splitAddress(entry, variable)
+    // Every member's messages enter the shared thread, so a forgeable sender could write into it.
+    requireAuthenticated(platform, variable, `cannot list an ${platform} channel`, 'anyone could write into the group')
     return { platform, channelId: id }
   })
   if (members.length < 2) {

@@ -70,6 +70,52 @@ describe('the owner policy hook in the composed app', () => {
     await loop.stopAll()
   })
 
+  it('passes requireMention from THEOCLAW_GROUP_ACTIVATION to the adapter builders', async () => {
+    const seen: unknown[] = []
+    for (const activation of [undefined, 'mention', 'always']) {
+      const { loop } = composeTheoClaw({
+        env: {
+          THEOCLAW_OWNERS: 'telegram:owner',
+          THEOCLAW_STATE_DIR: dir,
+          ...(activation === undefined ? {} : { THEOCLAW_GROUP_ACTIVATION: activation }),
+        },
+        agentFactory: () => new FakeAgent({ frames: [] }),
+        builders: (_configured, options) => {
+          seen.push(options.requireMention)
+          return []
+        },
+        write: () => undefined,
+      })
+      await loop.stopAll()
+    }
+    expect(seen).toEqual([true, true, false])
+  })
+
+  it('says at start that an email channel admits nobody under a policy other than open', async () => {
+    const email = {
+      THEOCLAW_EMAIL_ADDRESS: 'bot@example.com',
+      THEOCLAW_EMAIL_PASSWORD: 'x',
+      THEOCLAW_EMAIL_IMAP_HOST: 'imap.example.com',
+      THEOCLAW_EMAIL_SMTP_HOST: 'smtp.example.com',
+    }
+    const lines = (dmPolicy: string): string[] => {
+      const written: string[] = []
+      const { loop } = composeTheoClaw({
+        env: { THEOCLAW_OWNERS: 'telegram:owner', THEOCLAW_STATE_DIR: dir, THEOCLAW_DM_POLICY: dmPolicy, ...email },
+        agentFactory: () => new FakeAgent({ frames: [] }),
+        builders: () => [],
+        write: (line) => void written.push(line),
+      })
+      void loop.stopAll()
+      return written
+    }
+    const notice =
+      'email: no sender can be admitted under THEOCLAW_DM_POLICY=pairing: its sender id is not authenticated, so its messages are dropped without a reply'
+    expect(lines('pairing')).toContain(notice)
+    expect(lines('allowlist')).toContain(notice.replace('pairing', 'allowlist'))
+    expect(lines('open').filter((line) => line.startsWith('email:'))).toEqual([])
+  })
+
   it('a start without THEOCLAW_OWNERS stops before any runner is built', () => {
     const platforms = fakePlatforms(['telegram'])
     let error: unknown

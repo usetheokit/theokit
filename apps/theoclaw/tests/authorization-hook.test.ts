@@ -96,6 +96,16 @@ describe('createOwnerPolicyHook', () => {
     expect(app.handled).toHaveLength(0)
   })
 
+  it.each(['pairing', 'allowlist', 'open', 'disabled'])(
+    'an unlisted sender in a group gets no reply under the %s policy',
+    async (dmPolicy) => {
+      const app = await instance({ env: { THEOCLAW_DM_POLICY: dmPolicy } })
+      await app.send(inGroup(messageEvent('telegram', 'hello', 'stranger')))
+      expect(app.replies()).toEqual([])
+      expect(app.handled).toHaveLength(0)
+    },
+  )
+
   it('disabled policy replies nothing', async () => {
     const app = await instance({ env: { THEOCLAW_DM_POLICY: 'disabled' } })
     await app.send(messageEvent('telegram', 'hello', 'stranger'))
@@ -191,6 +201,19 @@ describe('createOwnerPolicyHook', () => {
     expect(app.handled).toHaveLength(0)
   })
 
+  it('an owner /approve whose save fails replies that the pairing could not be saved', async () => {
+    const failing: PairingStore = {
+      issue: () => '123456',
+      approve: () => Promise.resolve({ ok: false, reason: 'write_failed' }),
+      isPaired: () => false,
+    }
+    const app = await instance({ pairing: failing })
+    await app.send(messageEvent('telegram', '/approve 123456', OWNER_ID))
+    await app.send(messageEvent('telegram', 'hello', 'stranger'))
+    expect(app.replies()).toEqual(['The pairing could not be saved.', 'Pairing code: 123456. Ask the owner to send /approve 123456 in a direct message.'])
+    expect(app.handled).toHaveLength(0)
+  })
+
   it("an owner's bare /approve is answered and never reaches the handler", async () => {
     const app = await instance()
     await app.send(messageEvent('telegram', '/approve', OWNER_ID))
@@ -203,14 +226,29 @@ describe('createOwnerPolicyHook', () => {
     await app.send(messageEvent('email', 'hello', 'owner@example.com'))
     await app.send(messageEvent('email', '/approve 123456', 'owner@example.com'))
     expect(app.handled).toHaveLength(0)
-    expect(app.replies()).toEqual([app.policy.refusalText])
+    expect(app.replies()).toEqual([])
   })
 
-  it('an email stranger under pairing gets the refusal text and no pairing code', async () => {
-    const app = await instance({ platform: 'email', env: { THEOCLAW_OWNERS: 'telegram:owner-1' } })
-    await app.send(messageEvent('email', 'hello', 'stranger@example.com'))
-    expect(app.replies()).toEqual([app.policy.refusalText])
+  // A reply goes to the address the sender wrote, so answering would mail whoever a forger names.
+  it.each([
+    ['email', 'pairing', 'stranger@example.com'],
+    ['email', 'allowlist', 'stranger@example.com'],
+    ['email', 'disabled', 'stranger@example.com'],
+    ['sms', 'pairing', '+15550001111'],
+    ['sms', 'allowlist', '+15550001111'],
+  ] as const)('an unauthenticated %s stranger gets no reply under the %s policy', async (platform, dmPolicy, sender) => {
+    const app = await instance({ platform, env: { THEOCLAW_OWNERS: 'telegram:owner-1', THEOCLAW_DM_POLICY: dmPolicy } })
+    await app.send(messageEvent(platform, 'hello', sender))
+    await app.send(messageEvent(platform, 'hello', `other-${sender}`))
+    expect(app.replies()).toEqual([])
     expect(app.handled).toHaveLength(0)
+  })
+
+  it('open policy still lets an email stranger through', async () => {
+    const app = await instance({ platform: 'email', env: { THEOCLAW_OWNERS: 'telegram:owner-1', THEOCLAW_DM_POLICY: 'open' } })
+    await app.send(messageEvent('email', 'hello', 'stranger@example.com'))
+    expect(app.handled).toHaveLength(1)
+    expect(app.replies()).toEqual([])
   })
 
   it('an email sender paired in the store is still refused', async () => {
@@ -220,6 +258,6 @@ describe('createOwnerPolicyHook', () => {
     const app = await instance({ platform: 'email', env: { THEOCLAW_OWNERS: 'telegram:owner-1' }, pairing })
     await app.send(messageEvent('email', 'hello', 'friend@example.com'))
     expect(app.handled).toHaveLength(0)
-    expect(app.replies()).toEqual([app.policy.refusalText])
+    expect(app.replies()).toEqual([])
   })
 })

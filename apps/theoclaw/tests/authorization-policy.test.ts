@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { parseAuthorizationPolicy } from '../src/authorization/policy.js'
+import { isAuthenticatedSender, isPolicyOwner, parseAuthorizationPolicy } from '../src/authorization/policy.js'
 import { TheoClawConfigError } from '../src/control-plane/errors.js'
 
 /** The parse error of `env`, so a test asserts its type, its message and the variable it names. */
@@ -114,9 +114,22 @@ describe('parseAuthorizationPolicy', () => {
     expect(error.variable).toBe('THEOCLAW_BROADCAST_GROUPS')
   })
 
-  it('compares email broadcast channels case-insensitively', () => {
-    const error = refusal({ ...OWNER, THEOCLAW_BROADCAST_GROUPS: 'a=email:A@x.org,telegram:1;b=email:a@x.org,slack:3' })
-    expect(error.variable).toBe('THEOCLAW_BROADCAST_GROUPS')
+  it('refuses an email or sms broadcast member, whose sender id nothing authenticates', () => {
+    for (const member of ['email:a@x.org', 'sms:+15550001111']) {
+      const error = refusal({ ...OWNER, THEOCLAW_BROADCAST_GROUPS: `a=${member},telegram:1` })
+      expect(error.variable).toBe('THEOCLAW_BROADCAST_GROUPS')
+      expect(error.message).toMatch(/^THEOCLAW_BROADCAST_GROUPS cannot list an (email|sms) channel: the .+ is not authenticated, so anyone could write into the group$/)
+      expect(error.message).not.toContain(member.slice(member.indexOf(':') + 1))
+    }
+  })
+
+  it('refuses an sms owner, whose caller id nothing authenticates', () => {
+    const error = refusal({ ...OWNER, THEOCLAW_OWNERS: 'slack:U0ABC,sms:+15550001111' })
+    expect(error.variable).toBe('THEOCLAW_OWNERS')
+    expect(error.message).toBe(
+      'THEOCLAW_OWNERS cannot name an sms owner: the caller id of a text message is not authenticated, so anyone could write as the owner',
+    )
+    expect(error.message).not.toContain('+15550001111')
   })
 
   it('refuses an email owner, whose From header nothing authenticates', () => {
@@ -126,5 +139,35 @@ describe('parseAuthorizationPolicy', () => {
       'THEOCLAW_OWNERS cannot name an email owner: the From header of an e-mail is not authenticated, so anyone could write as the owner',
     )
     expect(error.message).not.toContain('paulo@example.com')
+  })
+})
+
+describe('isAuthenticatedSender', () => {
+  it('trusts the eight platforms that authenticate their sender and no other', () => {
+    const trusted = ['telegram', 'discord', 'slack', 'matrix', 'mattermost', 'line', 'whatsapp', 'teams']
+    for (const platform of trusted) expect(isAuthenticatedSender(platform), platform).toBe(true)
+    expect(isAuthenticatedSender('email')).toBe(false)
+    expect(isAuthenticatedSender('sms')).toBe(false)
+  })
+
+  it('refuses a platform it does not know, rather than trusting it', () => {
+    expect(isAuthenticatedSender('carrier-pigeon')).toBe(false)
+    expect(isAuthenticatedSender('')).toBe(false)
+  })
+})
+
+describe('isPolicyOwner', () => {
+  it('names an owner by platform and sender id', () => {
+    const policy = parseAuthorizationPolicy({ ...OWNER, THEOCLAW_OWNERS: 'telegram:42,discord:7' })
+    expect(isPolicyOwner(policy, 'telegram', '42')).toBe(true)
+    expect(isPolicyOwner(policy, 'discord', '7')).toBe(true)
+    expect(isPolicyOwner(policy, 'discord', '42')).toBe(false)
+  })
+
+  it('never names an unauthenticated sender an owner, even one a policy lists', () => {
+    const parsed = parseAuthorizationPolicy(OWNER)
+    const policy = { ...parsed, owners: new Set(['email:owner@example.com', 'sms:+15550001111']) }
+    expect(isPolicyOwner(policy, 'email', 'OWNER@example.com')).toBe(false)
+    expect(isPolicyOwner(policy, 'sms', '+15550001111')).toBe(false)
   })
 })

@@ -11,7 +11,7 @@ import type { TeamsActivityVerifierOptions } from '@theokit/gateway-teams'
 
 import { createOwnerPolicyHook } from './authorization/owner-policy-hook.js'
 import { createPairingStore } from './authorization/pairing-store.js'
-import { parseAuthorizationPolicy } from './authorization/policy.js'
+import { isAuthenticatedSender, isPolicyOwner, parseAuthorizationPolicy } from './authorization/policy.js'
 import type { AuthorizationPolicy } from './authorization/policy.js'
 import { adapterBuilders, smsOptions } from './channels/adapter-factory.js'
 import type { AdapterBuildOptions } from './channels/adapter-factory.js'
@@ -293,6 +293,14 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
   for (const { platform, missing } of skipped) {
     options.write(`${platform}: not configured (missing ${missing.join(', ')})`)
   }
+  // Only `open` admits a sender no platform authenticates; under the rest such a channel serves nobody.
+  if (policy.dmPolicy !== 'open') {
+    for (const { platform } of configured.filter((entry) => !isAuthenticatedSender(entry.platform))) {
+      options.write(
+        `${platform}: no sender can be admitted under THEOCLAW_DM_POLICY=${policy.dmPolicy}: its sender id is not authenticated, so its messages are dropped without a reply`,
+      )
+    }
+  }
   // What the routes and the router write can carry a configured value (a verifier's message, an
   // SDK error): masked here as the loop masks its own lines, whatever stream the caller writes to.
   const maskedWrite = (line: string): void =>
@@ -309,7 +317,7 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
   })
   // Runs after the owner policy, so only owners and paired senders reach it (FR-007).
   const groupActivation = createGroupActivationHook({
-    owners: policy.owners,
+    isOwner: (platform, senderId) => isPolicyOwner(policy, platform, senderId),
     mode: policy.groupActivation,
     write: maskedWrite,
   })

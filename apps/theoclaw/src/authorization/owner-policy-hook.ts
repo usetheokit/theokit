@@ -2,7 +2,7 @@ import { redactSecrets } from '@theokit/gateway'
 import type { GatewayHook, HookDecision, MessageEvent } from '@theokit/gateway'
 
 import type { PairingStore } from './pairing-store.js'
-import { isAuthenticatedSender, senderKey } from './policy.js'
+import { isAuthenticatedSender, isPolicyOwner, senderKey } from './policy.js'
 import type { AuthorizationPolicy } from './policy.js'
 
 const HOOK_NAME = 'theoclaw-owner-policy'
@@ -56,16 +56,17 @@ export function createOwnerPolicyHook(options: OwnerPolicyHookOptions): GatewayH
   const forgetOld = (now: number): void => {
     for (const [key, at] of refusals) if (now - at >= REFUSAL_MEMORY_MS) refusals.delete(key)
   }
-  // A sender no platform authenticates could never be paired, so it is offered no code.
   const refusalFor = (event: MessageEvent): string =>
-    policy.dmPolicy === 'pairing' && pairing !== undefined && isAuthenticatedSender(event.platform)
+    policy.dmPolicy === 'pairing' && pairing !== undefined
       ? pairingMessage(pairing.issue(event.platform, event.sender.id))
       : policy.refusalText
 
   /** A DM from someone neither an owner nor paired. */
   const refuseDm = (event: MessageEvent, key: string, now: number): HookDecision | undefined => {
     if (policy.dmPolicy === 'open') return undefined
-    if (policy.dmPolicy === 'disabled' || refusals.has(key)) return SILENT
+    // An unauthenticated sender can never be admitted, and a reply would go to the address it
+    // wrote, so answering would send mail or texts to whoever a forger names (backscatter).
+    if (policy.dmPolicy === 'disabled' || !isAuthenticatedSender(event.platform) || refusals.has(key)) return SILENT
     // The reply is built first: a sender whose code could not be issued is not silenced for an hour.
     const message = refusalFor(event)
     refusals.set(key, now)
@@ -75,14 +76,13 @@ export function createOwnerPolicyHook(options: OwnerPolicyHookOptions): GatewayH
   const decide = async (event: MessageEvent): Promise<HookDecision | undefined> => {
     const now = clock()
     forgetOld(now)
-    const key = senderKey(event.platform, event.sender.id)
-    const authenticated = isAuthenticatedSender(event.platform)
-    const isOwner = authenticated && policy.owners.has(key)
+    const isOwner = isPolicyOwner(policy, event.platform, event.sender.id)
     const isDm = event.channel.type === 'dm'
     const text = event.text.trim()
     if (isOwner && isDm && APPROVE_COMMAND.test(text)) return approval(text, pairing)
-    if (isOwner || (authenticated && (pairing?.isPaired(event.platform, event.sender.id) ?? false))) return undefined
-    return isDm ? refuseDm(event, key, now) : SILENT
+    const paired = isAuthenticatedSender(event.platform) && (pairing?.isPaired(event.platform, event.sender.id) ?? false)
+    if (isOwner || paired) return undefined
+    return isDm ? refuseDm(event, senderKey(event.platform, event.sender.id), now) : SILENT
   }
 
   return {

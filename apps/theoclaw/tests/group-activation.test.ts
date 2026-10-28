@@ -67,6 +67,11 @@ function group(platform: PlatformName, text: string, senderId = OWNER): MessageE
   return { ...messageEvent(platform, text, senderId), channel: { id: 'group-1', type: 'group' } } as MessageEvent
 }
 
+/** The owner check composition builds from the policy, here for one owner on one platform. */
+function ownerOn(platform: PlatformName): (eventPlatform: string, senderId: string) => boolean {
+  return (eventPlatform, senderId) => eventPlatform === platform && senderId === OWNER
+}
+
 function inflight(runner: GatewayRunner): number {
   return (runner as unknown as { readonly _inflightSize: number })._inflightSize
 }
@@ -97,7 +102,7 @@ describe('group activation', () => {
   })
 
   it('a telegram group message without a mention never reaches the handler under mention', async () => {
-    const telegram = await app('telegram', createGroupActivationHook({ owners: new Set([`telegram:${OWNER}`]), mode: 'mention' }))
+    const telegram = await app('telegram', createGroupActivationHook({ isOwner: ownerOn('telegram'), mode: 'mention' }))
     await telegram.send(telegramGroup('hello everyone'))
     expect(telegram.handled()).toBe(0)
     await telegram.send(telegramGroup('hello @theo_bot'))
@@ -105,7 +110,7 @@ describe('group activation', () => {
   })
 
   it("an owner /activation always lets the group's unmentioned telegram messages through", async () => {
-    const telegram = await app('telegram', createGroupActivationHook({ owners: new Set([`telegram:${OWNER}`]), mode: 'mention' }))
+    const telegram = await app('telegram', createGroupActivationHook({ isOwner: ownerOn('telegram'), mode: 'mention' }))
     await telegram.send(telegramGroup('/activation always'))
     expect(telegram.adapter.sent.map((message) => message.text)).toEqual(['Group activation is now always.'])
     await telegram.send(telegramGroup('hello everyone'))
@@ -116,7 +121,7 @@ describe('group activation', () => {
   })
 
   it('an owner /activation in a slack group replies that the mode is set at start and changes nothing', async () => {
-    const slack = await app('slack', createGroupActivationHook({ owners: new Set([`slack:${OWNER}`]), mode: 'mention' }))
+    const slack = await app('slack', createGroupActivationHook({ isOwner: ownerOn('slack'), mode: 'mention' }))
     await slack.send(group('slack', '/activation always'))
     expect(slack.adapter.sent.map((message) => message.text)).toEqual([
       'Group activation on slack is set at start by THEOCLAW_GROUP_ACTIVATION.',
@@ -127,9 +132,9 @@ describe('group activation', () => {
   })
 
   it('reads an owner /activation that the platform delivers behind a mention of the bot', async () => {
-    const slack = await app('slack', createGroupActivationHook({ owners: new Set([`slack:${OWNER}`]), mode: 'mention' }))
+    const slack = await app('slack', createGroupActivationHook({ isOwner: ownerOn('slack'), mode: 'mention' }))
     await slack.send(group('slack', '<@U123BOT> /activation always'))
-    const telegram = await app('telegram', createGroupActivationHook({ owners: new Set([`telegram:${OWNER}`]), mode: 'mention' }))
+    const telegram = await app('telegram', createGroupActivationHook({ isOwner: ownerOn('telegram'), mode: 'mention' }))
     await telegram.send(telegramGroup('/activation@theo_bot always'))
     expect(slack.adapter.sent.map((message) => message.text)).toEqual([
       'Group activation on slack is set at start by THEOCLAW_GROUP_ACTIVATION.',
@@ -139,7 +144,7 @@ describe('group activation', () => {
   })
 
   it('answers a malformed owner /activation with its usage and never reaches the handler', async () => {
-    const telegram = await app('telegram', createGroupActivationHook({ owners: new Set([`telegram:${OWNER}`]), mode: 'mention' }))
+    const telegram = await app('telegram', createGroupActivationHook({ isOwner: ownerOn('telegram'), mode: 'mention' }))
     await telegram.send(telegramGroup('/activation always now'))
     await telegram.send(telegramGroup('/activation'))
     expect(telegram.adapter.sent.map((message) => message.text)).toEqual([
@@ -150,10 +155,35 @@ describe('group activation', () => {
   })
 
   it("blocks a paired sender's /activation in silence", async () => {
-    const telegram = await app('telegram', createGroupActivationHook({ owners: new Set([`telegram:${OWNER}`]), mode: 'mention' }))
+    const telegram = await app('telegram', createGroupActivationHook({ isOwner: ownerOn('telegram'), mode: 'mention' }))
     await telegram.send(telegramGroup('/activation always', 'paired-friend'))
     await telegram.send(telegramGroup('hello everyone', 'paired-friend'))
     expect(telegram.adapter.sent).toEqual([])
+    expect(telegram.handled()).toBe(0)
+  })
+
+  it('a telegram group message whose context carries no bot identity is treated as unmentioned and logged once', async () => {
+    const lines: string[] = []
+    const telegram = await app('telegram', createGroupActivationHook({ isOwner: ownerOn('telegram'), mode: 'mention', write: (line) => void lines.push(line) }))
+    const unreadable = (text: string): MessageEvent =>
+      ({ ...telegramGroup(text), telegram: { chatId: -100, messageId: 1, raw: { chat: { id: -100, type: 'group' }, message: { text } } } }) as unknown as MessageEvent
+    await telegram.send(unreadable('hello @theo_bot'))
+    await telegram.send(unreadable('hello again @theo_bot'))
+    expect(telegram.handled()).toBe(0)
+    expect(lines).toEqual(['theoclaw-group-activation: a telegram group message carried no bot identity; treated as unmentioned'])
+  })
+
+  it('asks the owner check it is given, so a sender that check refuses cannot change a mode', async () => {
+    const asked: string[] = []
+    const isOwner = (platform: string, senderId: string): boolean => {
+      asked.push(`${platform}:${senderId}`)
+      return false
+    }
+    const telegram = await app('telegram', createGroupActivationHook({ isOwner, mode: 'mention' }))
+    await telegram.send(telegramGroup('/activation always'))
+    expect(asked).toEqual([`telegram:${OWNER}`])
+    expect(telegram.adapter.sent).toEqual([])
+    await telegram.send(telegramGroup('hello everyone'))
     expect(telegram.handled()).toBe(0)
   })
 })

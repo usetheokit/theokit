@@ -114,4 +114,8 @@ describe('two instances with different owners', () => {
   it('two instances in one group send 0 replies to each other', async () => {
     expect(await exchange('pairing', 'group')).toBe(0)
   })
+
+  it('two instances in one group send 0 replies to each other under the open policy', async () => {
+    expect(await exchange('open', 'group')).toBe(0)
+  })
 })
