@@ -5,7 +5,6 @@ import {
   constants,
   existsSync,
   fstatSync,
-  lstatSync,
   mkdtempSync,
   openSync,
   readdirSync,
@@ -16,7 +15,7 @@ import {
 import { request } from 'node:http'
 import { connect, createServer, type Server } from 'node:net'
 import { homedir, tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, relative } from 'node:path'
 
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import WebSocket from 'ws'
@@ -242,15 +241,15 @@ function snapshotSshDir(): Record<string, string> | 'absent' {
   const dir = join(homedir(), '.ssh')
   if (!existsSync(dir)) return 'absent'
   const snapshot: Record<string, string> = {}
-  for (const path of readdirSync(dir, { recursive: true, encoding: 'utf8' }).sort()) {
-    const full = join(dir, path)
-    const stat = lstatSync(full)
-    if (!stat.isFile()) {
-      snapshot[path] = stat.isDirectory() ? 'dir' : 'other'
+  const entries = readdirSync(dir, { recursive: true, withFileTypes: true })
+  for (const entry of entries) {
+    const path = relative(dir, join(entry.parentPath, entry.name))
+    if (!entry.isFile()) {
+      snapshot[path] = entry.isDirectory() ? 'dir' : 'other'
       continue
     }
-    // One descriptor for both the mtime and the bytes, so the file cannot change between them.
-    const fd = openSync(full, constants.O_RDONLY | constants.O_NOFOLLOW)
+    // Opened once, without following a link; the mtime and the bytes come from that one descriptor.
+    const fd = openSync(join(dir, path), constants.O_RDONLY | constants.O_NOFOLLOW)
     try {
       const opened = fstatSync(fd)
       snapshot[path] = `${opened.mtimeMs} ${createHash('sha256').update(readFileSync(fd)).digest('hex')}`
@@ -258,7 +257,7 @@ function snapshotSshDir(): Record<string, string> | 'absent' {
       closeSync(fd)
     }
   }
-  return snapshot
+  return Object.fromEntries(Object.entries(snapshot).sort(([a], [b]) => a.localeCompare(b)))
 }
 
 /** A directory holding links to the named binaries only, so the harness searches nothing else. */
