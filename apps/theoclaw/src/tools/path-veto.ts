@@ -1,9 +1,9 @@
-import { lstatSync, readlinkSync, realpathSync } from 'node:fs'
-import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { join, resolve } from 'node:path'
 
 import type { Plugin, PreToolCallContext } from '@theokit/sdk'
 
 import { describeError } from '../control-plane/errors.js'
+import { isWithin, realPathOf } from './real-path.js'
 import type { ToolSettings } from './tool-settings.js'
 
 /** The workspace directories the SDK and TheoClaw keep their state in. */
@@ -13,9 +13,6 @@ const STATE_DIRECTORIES = ['.theokit', '.theoclaw'] as const
 // `[^\n]*`, not `.*`: the patch parser splits lines on `\n` only, and `.` stops at U+2028.
 const PATCH_DESTINATION = /^\*\*\* (?:Add File|Update File|Delete File|Move to): ([^\n]*)/gm
 
-/** Symlinks followed before a path is refused as unresolvable, as the kernel's own limit. */
-const MAX_SYMLINK_HOPS = 40
-
 type Verdict = { readonly block: true; readonly message: string } | undefined
 
 class MalformedArgument extends Error {}
@@ -24,51 +21,14 @@ function refuse(message: string): Verdict {
   return { block: true, message: `theoclaw: ${message}` }
 }
 
-function lexists(path: string): boolean {
-  try {
-    lstatSync(path)
-    return true
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false
-    throw error
-  }
-}
-
-/**
- * `path` with its nearest existing ancestor replaced by that ancestor's real path, so a symlink is
- * followed. A dangling symlink counts as existing (`lstat`), and its target is followed the same
- * way, so a link the shell planted towards a state file that does not exist yet is still seen.
- */
-function realPathOf(path: string, hops = 0): string {
-  if (hops > MAX_SYMLINK_HOPS) throw new MalformedArgument(`${path} goes through more than ${MAX_SYMLINK_HOPS} symlinks`)
-  let existing = path
-  const rest: string[] = []
-  while (!lexists(existing) && dirname(existing) !== existing) {
-    rest.unshift(basename(existing))
-    existing = dirname(existing)
-  }
-  try {
-    return join(realpathSync(existing), ...rest)
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
-    // `existing` is a dangling symlink: follow its target.
-    return realPathOf(join(resolve(dirname(existing), readlinkSync(existing)), ...rest), hops + 1)
-  }
-}
-
-/** Case-folded, so `.THEOCLAW` is refused on a case-insensitive filesystem (APFS) too. */
-function within(path: string, directory: string): boolean {
-  const offset = relative(directory.toLowerCase(), path.toLowerCase())
-  return offset === '' || (offset !== '..' && !offset.startsWith(`..${sep}`) && !isAbsolute(offset))
-}
-
 function checkPath(value: unknown, settings: ToolSettings): Verdict {
   if (typeof value !== 'string' || value === '' || value.includes('\u0000')) {
     throw new MalformedArgument(`a path argument must be a non-empty string without a NUL byte`)
   }
   const real = realPathOf(resolve(settings.toolRoot, value))
   for (const state of STATE_DIRECTORIES) {
-    if (within(real, join(settings.workspace, state))) return refuse(`${value} enters the workspace's ${state} directory`)
+    // Case-folded, so `.THEOCLAW` is refused on a case-insensitive filesystem (APFS) too.
+    if (isWithin(real, join(settings.workspace, state), { caseFold: true })) return refuse(`${value} enters the workspace's ${state} directory`)
   }
   return undefined
 }

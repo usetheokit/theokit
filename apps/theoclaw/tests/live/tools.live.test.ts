@@ -54,7 +54,8 @@ function liveSettings(prepare?: (toolRoot: string) => void): ToolSettings {
     THEOKIT_SEARCH_API_KEY: process.env.THEOKIT_SEARCH_API_KEY,
   }
   const settings = resolveToolSettings(env, workspace.path)
-  checkHostToolsPosture(settings)
+  // The state directory the start would protect, outside every root the shell can write.
+  checkHostToolsPosture(settings, [{ path: join(workspace.path, 'state'), variable: 'THEOCLAW_STATE_DIR' }])
   return settings
 }
 

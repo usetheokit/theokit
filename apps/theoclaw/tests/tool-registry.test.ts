@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 
 import type { BwrapDetection } from '@theokit/agents/sandbox'
 import { resolveSandboxPosture } from '@theokit/agents/sandbox'
+import { effectiveToolNames } from '@theokit/sdk'
 import type { CustomTool } from '@theokit/sdk'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -139,8 +140,9 @@ describe('the tool catalogue', () => {
   })
 
   it('the agent the process builds withholds the builtin shell', () => {
-    const options = agentToolOptions(resolveToolSettings({}, tempWorkspace(), { detect: notEnforced, ...quiet }))
-    expect(options.withheldBuiltinTools).toEqual(['shell'])
+    const toolOptions = agentToolOptions(resolveToolSettings({}, tempWorkspace(), { detect: notEnforced, ...quiet }))
+    const options = theoClawAgentOptions({ model: 'm', apiKey: 'k', toolOptions })
+    expect(effectiveToolNames(options).names).not.toContain('shell')
   })
 
   it('every tool comes from @theokit/agents/tools', () => {

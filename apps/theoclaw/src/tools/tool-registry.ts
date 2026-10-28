@@ -1,4 +1,4 @@
-import type { BuiltinToolName, CustomTool, Plugin } from '@theokit/sdk'
+import type { CustomTool, Plugin } from '@theokit/sdk'
 import { bindToolScope } from '@theokit/agents/tool-scope'
 import {
   createApplyPatchTool,
@@ -19,11 +19,13 @@ import {
 import { pathVetoPlugin } from './path-veto.js'
 import type { ToolSettings } from './tool-settings.js'
 
-/** What the process spreads into `Agent.create` for one agent. */
+/**
+ * The tools and plugins of one agent. Which builtins every agent is denied (the `shell`) is not
+ * here: `theoClawAgentOptions` owns that policy, for an agent with tools and one without alike.
+ */
 export interface AgentToolOptions {
-  readonly tools: CustomTool[]
-  readonly plugins: Plugin[]
-  readonly withheldBuiltinTools: BuiltinToolName[]
+  readonly tools: readonly CustomTool[]
+  readonly plugins: readonly Plugin[]
 }
 
 /** `web_search` over the adapter the settings chose, or none when search is off. */
@@ -78,15 +80,19 @@ export function buildTools(settings: ToolSettings): CustomTool[] {
 }
 
 /**
- * The options of one agent: a fresh tool list (a todolist is never shared between two agents), the
- * state-directory veto, and the SDK's unsandboxed builtin `shell` withheld from the catalog.
+ * The options of one agent: a fresh tool list (a todolist is never shared between two agents) and
+ * the state-directory veto.
  */
 export function agentToolOptions(settings: ToolSettings): AgentToolOptions {
-  return { tools: buildTools(settings), plugins: [pathVetoPlugin(settings)], withheldBuiltinTools: ['shell'] }
+  return { tools: buildTools(settings), plugins: [pathVetoPlugin(settings)] }
 }
 
 /**
- * The options of an agent that holds no tool at all: a chat reply's, since anyone who can message
- * the bot writes its prompt (no sender allowlist yet, B-371). The builtin `shell` is withheld too.
+ * The options of an agent that holds no tool at all: a chat reply's, since whoever reaches the agent
+ * writes its prompt (everyone under `THEOCLAW_DM_POLICY=open`). Frozen to the arrays, so no caller
+ * can add a tool to the one instance every chat agent shares.
  */
-export const NO_TOOL_OPTIONS: AgentToolOptions = Object.freeze({ tools: [], plugins: [], withheldBuiltinTools: ['shell' as const] })
+export const NO_TOOL_OPTIONS: AgentToolOptions = Object.freeze({
+  tools: Object.freeze([]),
+  plugins: Object.freeze([]),
+})

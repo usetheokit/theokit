@@ -1,9 +1,10 @@
 import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 
 import { effectiveToolNames } from '@theokit/sdk'
 import { afterEach, describe, expect, it } from 'vitest'
 
+import { theoClawAgentOptions } from '../src/agent/create-agent.js'
 import { composeTheoClaw } from '../src/composition.js'
 import { applyInstance, resolveInstance } from '../src/instance.js'
 import { TheoClawConfigError } from '../src/control-plane/errors.js'
@@ -91,8 +92,33 @@ describe('the tool settings at start', () => {
     cleanups.push(() => rmSync(stateDir, { recursive: true, force: true }))
     const result = await start({ THEOCLAW_HOST_TOOLS: 'on', THEOCLAW_STATE_DIR: stateDir }, hostWorkspace(), { detect: enforced })
     expect(result.error).toBeInstanceOf(TheoClawConfigError)
-    expect(result.error?.message).toContain('THEOCLAW_STATE_DIR')
-    expect(result.error?.message).toContain('/tmp')
+    expect(result.error?.message).toContain('lies under /tmp')
+    expect((result.error as TheoClawConfigError).variable).toBe('THEOCLAW_STATE_DIR')
+    expect(result.builds()).toBe(0)
+  })
+
+  it('refuses THEOCLAW_HOST_TOOLS=on when THEOCLAW_STATE_DIR goes through a symlink into the tool root', async () => {
+    const workspace = hostWorkspace()
+    mkdirSync(join(workspace, 'files'), { mode: 0o700 })
+    symlinkSync(join(workspace, 'files'), join(workspace, 'link'))
+    // The leaf does not exist yet: only its symlinked parent places it inside the tool root.
+    const stateDir = join(workspace, 'link', 'state')
+    const result = await start({ THEOCLAW_HOST_TOOLS: 'on', THEOCLAW_STATE_DIR: stateDir }, workspace, { detect: enforced })
+    expect(result.error).toBeInstanceOf(TheoClawConfigError)
+    expect((result.error as TheoClawConfigError).variable).toBe('THEOCLAW_STATE_DIR')
+    expect(result.builds()).toBe(0)
+  })
+
+  it('refuses THEOCLAW_HOST_TOOLS=on when THEOCLAW_STATE_DIR is a dangling symlink into /tmp', async () => {
+    const workspace = hostWorkspace()
+    const target = join(realpathSync(mkdtempSync('/tmp/theoclaw-state-')), 'absent')
+    cleanups.push(() => rmSync(dirname(target), { recursive: true, force: true }))
+    const stateDir = join(workspace, 'state-link')
+    symlinkSync(target, stateDir)
+    const result = await start({ THEOCLAW_HOST_TOOLS: 'on', THEOCLAW_STATE_DIR: stateDir }, workspace, { detect: enforced })
+    expect(result.error).toBeInstanceOf(TheoClawConfigError)
+    expect(result.error?.message).toContain('lies under /tmp')
+    expect((result.error as TheoClawConfigError).variable).toBe('THEOCLAW_STATE_DIR')
     expect(result.builds()).toBe(0)
   })
 
@@ -144,7 +170,7 @@ describe('the tool options each agent receives', () => {
   it('the factory startTheoClaw calls receives the tool options with shell withheld', async () => {
     const result = await start({}, tempCwd(cleanups), { detect: notEnforced })
     const options = await runControlTurn(result)
-    expect(options.withheldBuiltinTools).toEqual(['shell'])
+    expect(effectiveToolNames(theoClawAgentOptions({ model: 'm', apiKey: 'k', toolOptions: options })).names).not.toContain('shell')
     expect(options.tools.map((tool) => tool.name).sort()).toEqual([
       'list_dir',
       'read_file',
@@ -171,7 +197,7 @@ describe('the tool options each agent receives', () => {
     expect((await router(signedLinePost())).status).toBe(200)
     await waitFor(() => received.length === 1, 1000, 'the chat agent to be built')
     await loop.stopAll()
-    expect(received[0]?.withheldBuiltinTools).toEqual(['shell'])
-    expect(effectiveToolNames({ ...received[0] }).names).toEqual([])
+    expect(received[0]).toEqual({ tools: [], plugins: [] })
+    expect(effectiveToolNames(theoClawAgentOptions({ model: 'm', apiKey: 'k', toolOptions: received[0] })).names).toEqual([])
   })
 })

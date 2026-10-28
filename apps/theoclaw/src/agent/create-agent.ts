@@ -37,7 +37,8 @@ export function theoClawAgentOptions<Model extends string | ModelSelection>(
     memory: { enabled: false } as const,
   }
   if (input.toolOptions === undefined) return base
-  return { ...base, tools: input.toolOptions.tools, plugins: input.toolOptions.plugins }
+  // Copied: the SDK takes mutable arrays, and each agent gets its own.
+  return { ...base, tools: [...input.toolOptions.tools], plugins: [...input.toolOptions.plugins] }
 }
 
 /** Create the agent those options describe, through the SDK. */

@@ -114,7 +114,8 @@ export interface TheoClawOptions {
   /**
    * Builds the agent of one chat reply, one per inbound message. Default: `agentFactory` with
    * `NO_TOOL_OPTIONS`; the entry passes `createChannelAgentFactory`. Either way a chat agent holds
-   * no tool, since anyone can message the bot (no sender allowlist yet, B-371).
+   * no tool, since whoever reaches the agent writes its prompt (everyone under
+   * `THEOCLAW_DM_POLICY=open`); tools on an authorized chat agent are a later item.
    */
   readonly channelAgentFactory?: () => TurnAgent | Promise<TurnAgent>
   /** Defaults to the ten real adapters; tests pass fakes. */
@@ -235,7 +236,12 @@ export interface StartOptions extends Omit<TheoClawOptions, 'write'> {
   readonly listen?: typeof listenControlPlane
   /** Builds the LAN publisher. Default `createBonjourPublisher`; tests pass a fake (plan D2). */
   readonly createPublisher?: PublisherFactory
-  /** The workspace: where the tool root `files/` is made. Default the instance's workspace, else `process.cwd()`, where the agents work. */
+  /**
+   * The workspace: where the tool root `files/` is made and whose `.theokit` and `.theoclaw` the
+   * path veto guards. Default the instance's workspace, else `process.cwd()`, where the agents work.
+   * Outside tests it must be the directory the agent factory gives the SDK (`local.cwd` in the
+   * entry), or the veto would guard a `.theokit` the SDK does not use; the entry passes none.
+   */
   readonly cwd?: string
   /** What the tool tests inject (bubblewrap detection, fetch); the process passes nothing. */
   readonly toolDeps?: ToolDeps
@@ -294,11 +300,14 @@ const SHELL_READ_LINE =
   'tools: host tools are on; the shell can read every file the process user can read'
 
 /** The tool settings, every refusal included, before anything opens (FR-008). */
-function startToolSettings(options: StartOptions, stateDir: string | undefined): ToolSettings {
+function startToolSettings(options: StartOptions, policy: AuthorizationPolicy): ToolSettings {
   // A profiled instance's agents work in its workspace (B-514), so their tool root is made there.
   const cwd = options.cwd ?? options.instance?.workspace ?? process.cwd()
   const tools = resolveToolSettings(options.env, cwd, options.toolDeps)
-  checkHostToolsPosture(tools, options.toolDeps, stateDir)
+  // The pairing list lives in the state directory: a shell that could write it could pair anyone.
+  const protectedPaths =
+    policy.stateDir === undefined ? [] : [{ path: policy.stateDir, variable: 'THEOCLAW_STATE_DIR' }]
+  checkHostToolsPosture(tools, protectedPaths, options.toolDeps)
   return tools
 }
 
@@ -335,7 +344,7 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
   const discovery = parseDiscoveryMode(options.env)
   // Read before the mask and the shutdown are installed, so a missing owner leaves nothing behind.
   const policy = parseAuthorizationPolicy(options.env)
-  const tools = startToolSettings(options, policy.stateDir)
+  const tools = startToolSettings(options, policy)
   const streams = options.streams ?? [process.stdout, process.stderr]
   const stderr = options.stderr ?? lineWriter(streams[streams.length - 1])
   // First, once every setting is checked: the line holds a label and a directory, never a secret.

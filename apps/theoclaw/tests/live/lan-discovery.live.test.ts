@@ -1,6 +1,8 @@
 import { randomBytes } from 'node:crypto'
 import { EventEmitter } from 'node:events'
-import { hostname, networkInterfaces } from 'node:os'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { hostname, networkInterfaces, tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
 
 import { afterEach, describe, expect, it } from 'vitest'
@@ -108,8 +110,12 @@ async function start(lan: boolean): Promise<Started> {
   let onExit: (code: number) => void = () => undefined
   const exited = new Promise<number>((resolve) => (onExit = resolve))
   const called = performance.now()
+  // A scratch working directory, so the start makes its tool root `files/` there, not in the checkout.
+  const cwd = mkdtempSync(join(tmpdir(), 'theoclaw-lan-live-'))
+  cleanups.push(async () => rmSync(cwd, { recursive: true, force: true }))
   const running = await startTheoClaw({
     env,
+    cwd,
     agentFactory: createAgentFactory(env),
     builders: () => [],
     stdout: () => undefined,

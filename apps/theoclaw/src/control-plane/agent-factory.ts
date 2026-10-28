@@ -5,8 +5,6 @@ import type { BindEnvironment } from './bind.js'
 import { requireModel } from './settings.js'
 import type { TurnAgent } from './turn.js'
 
-export type { TheoClawAgentOptions } from '../agent/create-agent.js'
-
 /** The slice of `Agent.create` the factory calls; tests pass a fake. */
 export type CreateAgent = (options: TheoClawAgentOptions) => Promise<TurnAgent>
 

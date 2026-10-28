@@ -1,11 +1,12 @@
 import { chmodSync, lstatSync, mkdirSync, realpathSync } from 'node:fs'
 import type { Stats } from 'node:fs'
-import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { dirname, join } from 'node:path'
 
 import { createSandboxBackend, LinuxSandbox, resolveSandboxPosture, writableRootsFor } from '@theokit/agents/sandbox'
 import type { BwrapDetection, SandboxBackend, SandboxMode } from '@theokit/agents/sandbox'
 
 import { TheoClawConfigError } from '../control-plane/errors.js'
+import { isWithin, realPathOf, SymlinkLoopError } from './real-path.js'
 
 /** Where web search goes, chosen from the keys present at start. */
 export interface SearchSettings {
@@ -187,34 +188,25 @@ function realPathOrSelf(path: string): string {
   }
 }
 
-function contains(root: string, path: string): boolean {
-  const offset = relative(root, path)
-  return offset === '' || (offset !== '..' && !offset.startsWith(`..${sep}`) && !isAbsolute(offset))
-}
-
-/**
- * The real path of `path` through its nearest existing ancestor, so a directory that does not
- * exist yet is still placed where a symlinked parent points.
- */
-function realPathThroughAncestor(path: string): string {
-  const rest: string[] = []
-  let existing = resolve(path)
-  while (lstatOrUndefined(existing) === undefined && dirname(existing) !== existing) {
-    rest.unshift(basename(existing))
-    existing = dirname(existing)
-  }
-  return join(realPathOrSelf(existing), ...rest)
+/** A directory whose contents the shell must not rewrite, named by the variable that set it. */
+export interface ProtectedPath {
+  readonly path: string
+  readonly variable: string
 }
 
 /**
  * With host tools on, refuse a start the sandbox cannot make safe: a backend that is not a
  * `LinuxSandbox` (the shell would run unconfined); a workspace inside a root the
  * `workspace-write` sandbox also leaves writable (`/tmp`), where the shell could rewrite
- * `.theokit/settings.json`, whose hooks the SDK runs outside the sandbox on the next agent; or a
- * `stateDir` (`THEOCLAW_STATE_DIR`) inside any root the shell can write, the tool root included,
- * where the shell could rewrite `pairing.json` and grant chat access to any sender.
+ * `.theokit/settings.json`, whose hooks the SDK runs outside the sandbox on the next agent; or any
+ * of `protectedPaths` inside any root the shell can write, the tool root included. The caller names
+ * every protected path, an empty list included, so none can be left out by omission.
  */
-export function checkHostToolsPosture(settings: ToolSettings, deps: ToolDeps = {}, stateDir?: string): void {
+export function checkHostToolsPosture(
+  settings: ToolSettings,
+  protectedPaths: readonly ProtectedPath[],
+  deps: ToolDeps = {},
+): void {
   if (!settings.hostTools) return
   if (!settings.sandboxEnforced) {
     const { detail } = resolveSandboxPosture({ mode: 'workspace-write', ...(deps.detect === undefined ? {} : { detect: deps.detect }) })
@@ -226,22 +218,28 @@ export function checkHostToolsPosture(settings: ToolSettings, deps: ToolDeps = {
   for (const root of roots) {
     // The workspace is a real path, so the root is compared as one too: bwrap binds what a
     // symlinked `/tmp` points at.
-    if (root === settings.toolRoot || !contains(realPathOrSelf(root), settings.workspace)) continue
+    if (root === settings.toolRoot || !isWithin(settings.workspace, realPathOrSelf(root))) continue
     throw new TheoClawConfigError(
       `THEOCLAW_HOST_TOOLS=on refuses the workspace ${settings.workspace}: it lies under ${root}, which the sandboxed shell can write`,
       { variable: 'THEOCLAW_HOST_TOOLS' },
     )
   }
-  if (stateDir !== undefined) refuseWritableStateDir(stateDir, roots)
+  for (const target of protectedPaths) refuseWritableProtectedPath(target, roots)
 }
 
-/** Refuse a state directory whose real path lies inside any of `roots`, the tool root included. */
-function refuseWritableStateDir(stateDir: string, roots: readonly string[]): void {
-  const realStateDir = realPathThroughAncestor(stateDir)
-  const root = roots.find((candidate) => contains(realPathOrSelf(candidate), realStateDir))
+/** Refuse a protected path whose real path (symlinks followed) lies inside any of `roots`. */
+function refuseWritableProtectedPath({ path, variable }: ProtectedPath, roots: readonly string[]): void {
+  let real: string
+  try {
+    real = realPathOf(path)
+  } catch (error) {
+    if (!(error instanceof SymlinkLoopError)) throw error
+    throw new TheoClawConfigError(`THEOCLAW_HOST_TOOLS=on refuses ${variable} ${path}: ${error.message}`, { variable })
+  }
+  const root = roots.find((candidate) => isWithin(real, realPathOrSelf(candidate)))
   if (root === undefined) return
   throw new TheoClawConfigError(
-    `THEOCLAW_HOST_TOOLS=on refuses THEOCLAW_STATE_DIR ${stateDir}: it lies under ${root}, which the sandboxed shell can write`,
-    { variable: 'THEOCLAW_STATE_DIR' },
+    `THEOCLAW_HOST_TOOLS=on refuses ${variable} ${path}: it lies under ${root}, which the sandboxed shell can write`,
+    { variable },
   )
 }

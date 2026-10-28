@@ -1,5 +1,8 @@
 import { EventEmitter } from 'node:events'
+import { mkdtempSync, rmSync } from 'node:fs'
 import net from 'node:net'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -25,10 +28,19 @@ function lanEnv(extra: Record<string, string> = {}): Record<string, string | und
 }
 
 const opened: ControlPlaneHandle[] = []
+const scratch: string[] = []
+
+/** A scratch working directory, so a start makes its tool root `files/` there and not in the checkout. */
+function scratchCwd(): string {
+  const path = mkdtempSync(join(tmpdir(), 'theoclaw-lan-'))
+  scratch.push(path)
+  return path
+}
 
 afterEach(async () => {
   vi.restoreAllMocks()
   for (const handle of opened.splice(0)) if (handle.server.listening) await handle.close()
+  for (const path of scratch.splice(0)) rmSync(path, { recursive: true, force: true })
 })
 
 /**
@@ -59,6 +71,7 @@ function harness(options: { holdListen?: Promise<void>; failListen?: Error } = {
   const start = (env: Record<string, string | undefined>): Promise<RunningTheoClaw> =>
     startTheoClaw({
       env,
+      cwd: scratchCwd(),
       agentFactory: () => ({ send: () => Promise.reject(new Error('no turn in these tests')) }),
       builders: () => {
         builderCalls += 1
