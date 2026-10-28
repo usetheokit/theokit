@@ -167,6 +167,10 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 - An owner's `/approve` whose `pairing.json` write failed lost the code: the store dropped it
   before the save, and the stranger, refused for the hour, could not ask for another. A failed save
   now keeps the code until it expires, so the owner can send the same `/approve` again (B-371).
+- An unreadable `pairing.json` or state directory stopped the start only after the start line was
+  written and the output mask and signal handlers were installed, and nothing removed them. The
+  pairing store is now loaded before any of that, so such a start fails leaving nothing behind
+  (B-371).
 - This app's vitest config was the only one of ten in the monorepo without a `maxWorkers` cap —
   verified independently by a reviewer, who counted the ten files and confirmed the nine. It now
   carries the same expression the other nine compute, which makes a config mismatch unreachable by

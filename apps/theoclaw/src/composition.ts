@@ -11,6 +11,7 @@ import type { TeamsActivityVerifierOptions } from '@theokit/gateway-teams'
 
 import { createOwnerPolicyHook } from './authorization/owner-policy-hook.js'
 import { createPairingStore } from './authorization/pairing-store.js'
+import type { PairingStore } from './authorization/pairing-store.js'
 import {
   isAuthenticatedSender,
   isPolicyOwner,
@@ -127,6 +128,11 @@ export interface TheoClawOptions {
   readonly startTimeoutMs?: number
   /** Who the instance serves, parsed from this same `env`; parsed here when absent (`startTheoClaw` parses it first). */
   readonly policy?: AuthorizationPolicy
+  /**
+   * The pairing store of `policy.stateDir`; built here when absent. `startTheoClaw` builds it before
+   * anything is written or installed, since loading it can throw.
+   */
+  readonly pairing?: PairingStore
   /** Builds the Teams activity verifier, once (D4). Defaults to the package's `teamsActivityVerifier`. */
   readonly teamsVerifierFactory?: (options: TeamsActivityVerifierOptions) => TeamsVerifier
 }
@@ -165,10 +171,7 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
   const maskedWrite = (line: string): void =>
     options.write(redactSecrets(maskSecrets(line, secrets)))
   // The store exists only with a state directory; the hook runs without one under the other policies.
-  const pairing =
-    policy.stateDir === undefined
-      ? undefined
-      : createPairingStore({ dir: policy.stateDir, write: maskedWrite })
+  const pairing = options.pairing ?? pairingStoreFor(policy, maskedWrite)
   const ownerPolicy = createOwnerPolicyHook({
     policy,
     ...(pairing === undefined ? {} : { pairing }),
@@ -311,6 +314,14 @@ function startToolSettings(options: StartOptions, policy: AuthorizationPolicy): 
   return tools
 }
 
+/** The store of `policy.stateDir`, or none without one. Throws on a state file it cannot read. */
+function pairingStoreFor(
+  policy: AuthorizationPolicy,
+  write: (line: string) => void,
+): PairingStore | undefined {
+  return policy.stateDir === undefined ? undefined : createPairingStore({ dir: policy.stateDir, write })
+}
+
 /** Write the instance's start line, the first line of the start, and return the instance in effect. */
 function announceInstance(
   given: TheoClawInstance | undefined,
@@ -347,6 +358,9 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
   const tools = startToolSettings(options, policy)
   const streams = options.streams ?? [process.stdout, process.stderr]
   const stderr = options.stderr ?? lineWriter(streams[streams.length - 1])
+  // Loaded before the start line, the mask and the shutdown: an unreadable pairing file leaves nothing behind.
+  const secrets = resolvePlatforms(options.env).secrets
+  const pairing = pairingStoreFor(policy, (line) => stderr(redactSecrets(maskSecrets(line, secrets))))
   // First, once every setting is checked: the line holds a label and a directory, never a secret.
   const instance = announceInstance(options.instance, stderr)
   const mask = installOutputMask(processSecrets(options.env, settings.controlToken, tools), streams)
@@ -374,7 +388,12 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
   if (tools.hostTools) stderr(SHELL_READ_LINE)
   // The raw factory goes to the composition, which hands chat agents no tool; only the `/control`
   // turn's agents get the tool options.
-  const composed = composeTheoClaw({ ...options, policy, write: stderr })
+  const composed = composeTheoClaw({
+    ...options,
+    policy,
+    ...(pairing === undefined ? {} : { pairing }),
+    write: stderr,
+  })
   const agents = createContainer<TurnAgent>({
     factory: () => options.agentFactory(agentToolOptions(tools)),
   })

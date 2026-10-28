@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { EventEmitter } from 'node:events'
@@ -190,6 +190,28 @@ describe('startTheoClaw', () => {
     expect((await fetch(signedLinePost(base))).status).toBe(200)
     expect((await fetch(`${base}/webhooks/sms`, { method: 'POST' })).status).toBe(404)
     expect(capture.text()).toContain(`theoclaw: control plane listening on 127.0.0.1:${app.address().port}`)
+  })
+
+  it('an unreadable pairing file stops the start before anything is written or installed', async () => {
+    const stateDir = mkdtempSync(join(tmpdir(), 'theoclaw-start-state-'))
+    writeFileSync(join(stateDir, 'pairing.json'), 'not json')
+    const { adapters, builders } = fakeBuilders()
+    const signals = new EventEmitter()
+    const capture = capturingStream()
+    const write = capture.write
+    const env = { ...TELEGRAM_AND_LINE, THEOCLAW_DM_POLICY: 'pairing', THEOCLAW_STATE_DIR: stateDir }
+    try {
+      const starting = startTheoClaw({ cwd: TOOL_CWD, env, agentFactory: noAgent, builders, signals, exit: vi.fn(), streams: [capture] })
+
+      await expect(starting).rejects.toThrow(TheoClawConfigError)
+      expect(capture.text()).toBe('')
+      expect(capture.write).toBe(write)
+      expect(signals.listenerCount('SIGTERM')).toBe(0)
+      expect(signals.listenerCount('exit')).toBe(0)
+      expect(adapters.size).toBe(0)
+    } finally {
+      rmSync(stateDir, { recursive: true, force: true })
+    }
   })
 
   it('refuses to start without a model', async () => {
