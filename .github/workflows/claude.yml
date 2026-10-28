@@ -1,6 +1,9 @@
 name: Claude Code
 
 on:
+  # zizmor: ignore[dangerous-triggers] -- the trigger is used the safe way: the job below runs only
+  # for an author_association of OWNER, MEMBER or COLLABORATOR, checks out the default branch (never
+  # a pull request head), holds read-only scopes, and drops the git credential.
   issue_comment:
     types: [created]
   pull_request_review_comment:
@@ -30,11 +33,17 @@ permissions:
 jobs:
   claude:
     name: Claude Code
+    # Only someone with a role on the repository may start it: anyone can comment on a public issue,
+    # and the job runs with the Claude token and an OIDC identity.
     if: |
-      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
-      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
-      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')) ||
-      (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude') &&
+        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)) ||
+      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude') &&
+        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)) ||
+      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude') &&
+        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.review.author_association)) ||
+      (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')) &&
+        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association))
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
