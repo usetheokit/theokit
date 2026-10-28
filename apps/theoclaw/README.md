@@ -37,7 +37,7 @@ policy below; owners and paired senders are answered there as in a direct messag
 |---|---|
 | `THEOCLAW_OWNERS` | Required. `platform:senderId` entries, comma-separated; the platform is one of the ten below, and an id may contain colons (Matrix). An `email:` or `sms:` entry is refused: nothing authenticates the From header of an e-mail or the caller id of a text, so anyone could write as the owner. For the same reason an e-mail or SMS sender is never an owner or paired, and under every policy but `open` gets no reply at all, since the reply would go to whatever address the sender wrote; the start says so for each such channel configured. |
 | `THEOCLAW_DM_POLICY` | What a direct message from anyone else gets: `pairing` (default) a pairing code, `allowlist` the refusal text, `disabled` nothing, `open` the agent. A refused sender is answered at most once an hour; after that, silence. |
-| `THEOCLAW_STATE_DIR` | Directory holding `pairing.json` (mode 0600, the directory created 0700). Required under `pairing`, optional otherwise; pairings made earlier still apply when it is set. A `pairing.json` that does not parse stops the start. |
+| `THEOCLAW_STATE_DIR` | Directory holding `pairing.json` (mode 0600, the directory created 0700). Required under `pairing`, optional otherwise; pairings made earlier still apply when it is set. A `pairing.json` that does not parse stops the start. With `THEOCLAW_HOST_TOOLS=on` it may not lie under `files/` or `/tmp`, which the sandboxed shell can write. |
 | `THEOCLAW_REFUSAL_TEXT` | The refusal under `allowlist`. Default `This assistant answers its owner only.` |
 | `THEOCLAW_GROUP_ACTIVATION` | Slack, Mattermost, WhatsApp and Telegram only: `mention` (default) answers a group message only when it mentions the bot; `always` answers every message from an owner or a paired sender. The other six platforms answer an owner or a paired sender in a group either way. |
 | `THEOCLAW_BROADCAST_GROUPS` | Channels that share one agent thread: `name=platform:channelId,platform:channelId;name2=...`. Each group needs two channels or more, a channel belongs to one group, and an `email:` or `sms:` channel is refused for the reason above. The thread keeps the last 20 turns, at most 16384 characters, and every answer reaches every member channel. |
@@ -172,7 +172,9 @@ writes their prompt.
 
 `THEOCLAW_HOST_TOOLS` is `on` or unset; any other value is refused. With it on, the shell runs in a
 bubblewrap sandbox that can write only `files/` and `/tmp`, and the start refuses when bubblewrap
-is not available or when the working directory lies under `/tmp`. **The sandboxed shell can still
+is not available, when the working directory lies under `/tmp`, or when `THEOCLAW_STATE_DIR` lies
+under `files/` or `/tmp` (symlinks followed), where the shell could rewrite `pairing.json` and pair
+any sender. **The sandboxed shell can still
 read every file the process user can read**; the start prints a line saying so. A tool path that
 resolves into `.theokit` or `.theoclaw` beside `files/` is refused before the tool runs, and so is
 a `git_diff` with no path. The SDK's own unsandboxed `shell` is never offered. Search keys are

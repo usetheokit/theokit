@@ -19,8 +19,9 @@ and versioning follows [Semantic Versioning](https://semver.org/).
   `THEOKIT_SEARCH_API_KEY`); `git_diff` when `files/` is a repository and the sandbox is enforced;
   and `write_file`, `edit_file`, `apply_patch` and a bubblewrap-sandboxed `shell_exec` with
   `THEOCLAW_HOST_TOOLS=on`. The start refuses any other `THEOCLAW_HOST_TOOLS` value, host tools
-  without bubblewrap or in a working directory under `/tmp`, a symlinked tool root, and half a
-  search configuration, before any runner starts; with host tools on it prints that the shell can
+  without bubblewrap, in a working directory under `/tmp` or with `THEOCLAW_STATE_DIR` under
+  `files/` or `/tmp` (where the shell could rewrite `pairing.json`), a symlinked tool root, and half
+  a search configuration, before any runner starts; with host tools on it prints that the shell can
   read every file the process user can read. A path into `.theokit` or `.theoclaw` and an unscoped
   `git_diff` are refused before the tool runs, the SDK's own `shell` is never offered, and chat
   replies still get no tool. The parity ledger records OC-58, OC-59 and OC-69 as shipped, checked
