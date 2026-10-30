@@ -16,7 +16,7 @@ function validateName(name: string): void {
  * effect; the build-time scanner (T2.3) discovers definitions by walking
  * `server/jobs/` and emits `.theokit/jobs.json`.
  *
- * Per ADR-0003, handler returns `void` (or `Promise<void>`); no workflow
+ * The handler returns `void` (or `Promise<void>`); no workflow
  * API. To run another job after this one, call `ctx.queue.enqueue` from
  * the handler.
  *

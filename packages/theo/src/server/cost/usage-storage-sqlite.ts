@@ -179,7 +179,7 @@ export class SqliteUsageStorage implements UsageStorageAdapter, StorageAdapter {
   }
 
   /**
-   * `StorageAdapter` lifecycle (ADR-0007 D6). Unlike the in-memory adapter's noop, this one has a
+   * `StorageAdapter` lifecycle. Unlike the in-memory adapter's noop, this one has a
    * file handle to release — a graceful shutdown that left it open would leave the WAL unmerged.
    */
   dispose(): Promise<void> {

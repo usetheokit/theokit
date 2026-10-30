@@ -4,7 +4,7 @@
  * The defect this exists to close: `line({ channelSecret: '' })` reached WebCrypto's `importKey`
  * and raised `DataError: Zero-length key is not supported`. `node:crypto`'s legacy `createHmac`
  * tolerates a zero-length key; WebCrypto does not, and WebCrypto is the path all of these take
- * (ADR-0028, so the same code runs on Workers, Bun and Deno). The throw escapes
+ * (so the same code runs on Workers, Bun and Deno). The throw escapes
  * `handleChannelWebhook` as a 500, past the 401 branch that exists to say why a delivery was
  * refused.
  *

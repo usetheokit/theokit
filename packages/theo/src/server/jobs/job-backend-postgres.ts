@@ -11,7 +11,7 @@ import {
 } from './job-backend.js'
 
 /**
- * Postgres-backed `JobBackend` per ADR-0002 (T3.1).
+ * Postgres-backed `JobBackend` (T3.1).
  *
  * Uses the Graphile Worker pattern:
  *   - Single `theokit_jobs` table.
@@ -43,7 +43,7 @@ import {
  */
 
 /**
- * `PoolLike` moved to `../storage/storage-types.ts` (T0.2 / ADR-0007 D7) to
+ * `PoolLike` moved to `../storage/storage-types.ts` (T0.2) to
  * deduplicate the shape across multiple adapters. Re-exported here so existing
  * `import { PoolLike } from 'theokit/server'` (which routes through the jobs
  * barrel today) continues to compile unchanged.
@@ -104,7 +104,6 @@ export class PostgresJobBackend implements JobBackend {
    * Errors thrown by the manager (unknown dbName, dangling server reference,
    * manager already disposed) propagate to the caller with actionable text.
    *
-   * @see ADR-0007
    */
   static fromStorageManager(
     manager: StorageManager,

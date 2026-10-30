@@ -14,7 +14,7 @@
  * that every candidate secret is tried without an early return, and that the body is read once,
  * raw, from the request this function is handed.
  *
- * Web Crypto rather than `node:crypto`, per ADR-0028: the same code has to run on Workers, Bun and
+ * Web Crypto rather than `node:crypto`: the same code has to run on Workers, Bun and
  * Deno.
  *
  * There is no timestamp in any of these schemes and therefore no replay window. Replay protection
