@@ -140,6 +140,28 @@ In `theokit dev`, route modules load through Vite, so a route that imports the b
 `theo.config.ts` gets a second instance of it. Use `ctx.queue` to enqueue. Deploy targets other
 than `node` do not wire `ctx.queue`; `theokit build` says so when `jobs` is set.
 
+## Crons
+
+A cron is a file under `<serverDir>/crons/` (or `<agentsDir>/schedules/`) exporting
+`defineCron(name, { schedule, handler })`. On the `node` target, `theokit start` schedules them in
+the same process; serverless targets translate them to the platform's scheduler.
+
+Every process running `theokit start` runs the scheduler, so with two replicas each tick fires
+twice unless they share a lock. When `jobs.backend` is a `PostgresJobBackend`, `start` takes a lock
+on its pool: one row per tick in `theokit_cron_runs`, and only the replica that inserts it runs the
+handler. To pick the lock yourself, or to opt out:
+
+```typescript
+import { createPostgresCronLock } from 'theokit/server/cron'
+
+export default config()
+  .set({ cron: { lock: createPostgresCronLock(pool) } }) // or { lock: false }
+  .build()
+```
+
+If the lock cannot be reached, that tick is skipped and logged rather than run on every replica.
+With no lock, a single process behaves as before, and the boot line says the crons are not guarded.
+
 ## CLI
 
 ```bash

@@ -1,3 +1,8 @@
+import {
+  type CronLock,
+  createPostgresCronLock,
+  type PostgresCronLockOptions,
+} from '../cron/cron-lock.js'
 import type { PostgresFactory, StorageManager } from '../storage/storage-manager.js'
 import type { PoolLike } from '../storage/storage-types.js'
 
@@ -113,6 +118,15 @@ export class PostgresJobBackend implements JobBackend {
   ): PostgresJobBackend {
     const pool = manager.usePostgres(dbName, factory)
     return new PostgresJobBackend({ pool, ...options })
+  }
+
+  /**
+   * A cron lock on this backend's pool, so replicas sharing the job database fire each cron tick
+   * once between them. `theokit start` uses it automatically when this is the configured
+   * `jobs.backend` and `cron.lock` is not set (usetheokit/theokit#1016).
+   */
+  cronLock(options?: PostgresCronLockOptions): CronLock {
+    return createPostgresCronLock(this.#pool, options)
   }
 
   /**

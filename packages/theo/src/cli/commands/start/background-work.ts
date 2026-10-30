@@ -1,6 +1,7 @@
 import { resolve } from 'node:path'
 
 import type { TheoConfig } from '../../../config/schema.js'
+import { cronLockFromConfig } from '../../../server/cron/cron-lock-from-config.js'
 import { createCronScheduler } from '../../../server/cron/cron-runtime-node.js'
 
 import { loadCronDefinitions } from './cron-bootstrap.js'
@@ -21,7 +22,7 @@ export interface BackgroundWork {
  * announces as "run by `theokit start`", and until #1010 only the crons were.
  */
 export async function startBackgroundWork(
-  config: Pick<TheoConfig, 'jobs'>,
+  config: Pick<TheoConfig, 'jobs' | 'cron'>,
   distDir: string,
   projectRoot: string,
   loadModule: (filePath: string) => unknown,
@@ -32,10 +33,13 @@ export async function startBackgroundWork(
     projectRoot,
     loadModule,
   )
-  const scheduler = cronDefinitions.length > 0 ? createCronScheduler(cronDefinitions) : undefined
-  scheduler?.start()
-  if (scheduler !== undefined) {
-    summaries.push(`Crons: ${String(cronDefinitions.length)} scheduled in-process`)
+  let scheduler: ReturnType<typeof createCronScheduler> | undefined
+  if (cronDefinitions.length > 0) {
+    // #1016 — each replica runs this scheduler; the lock decides which one runs a tick.
+    const { lock, description } = cronLockFromConfig(config)
+    scheduler = createCronScheduler(cronDefinitions, { lock })
+    scheduler.start()
+    summaries.push(`Crons: ${String(cronDefinitions.length)} scheduled in-process, ${description}`)
   }
 
   const jobDefinitions = await loadJobDefinitions(

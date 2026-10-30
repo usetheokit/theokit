@@ -35,6 +35,14 @@ function isJobBackendShaped(value: unknown): value is object {
   return JOB_BACKEND_METHODS.every((m) => typeof candidate[m] === 'function')
 }
 
+function isCronLockShaped(value: unknown): value is object {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as { acquire?: unknown }).acquire === 'function'
+  )
+}
+
 /**
  * Root `theo.config.ts` schema — composer assembled from the per-concern
  * primitives re-exported above.
@@ -328,6 +336,28 @@ export const theoConfigSchema = z
      * throw with an actionable error on first use.
      */
     storage: storageSchema.optional(),
+    /**
+     * The in-process cron scheduler (`<serverDir>/crons`, `<agentsDir>/schedules`).
+     *
+     * `lock` decides which process runs each tick when several run `theokit start`
+     * (usetheokit/theokit#1016). Unset, a `PostgresJobBackend` in `jobs.backend` provides one on
+     * its pool; any other setup fires every cron in every process. Pass a `CronLock` (for example
+     * `createPostgresCronLock(pool)` from `theokit/server/cron`) to choose, or `false` to opt out.
+     */
+    cron: z
+      .object({
+        lock: z
+          .union([
+            z.literal(false),
+            z.custom<object>(isCronLockShaped, {
+              message:
+                'cron.lock must be a CronLock (an object with an acquire(name, scheduledAt) ' +
+                "method, such as createPostgresCronLock(pool) from 'theokit/server/cron') or false",
+            }),
+          ])
+          .optional(),
+      })
+      .optional(),
     /**
      * Wave 2 — Polyglot services orchestration (T1.1 / ADR-0012/0013/0014/0015).
      *
