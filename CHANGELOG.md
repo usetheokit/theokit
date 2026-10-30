@@ -25,6 +25,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `theokit`: doc comments in the storage, jobs, cron, webhook, cost and security modules no longer cite ADR numbers whose documents are about something else. The numbers came from an older ADR series that `docs/adr/` reused for unrelated decisions, and the comments ship in the published `.d.ts` (#1025)
 - `theokit`: `theokit generate resource` writes under the configured `serverDir`, prints the real reason when it refuses (it said "Not a Theo project" beside an existing `theo.config.ts`), imports the table builders it appends, and follows the project's dialect: PostgreSQL gets `pgTable` columns and awaited queries instead of SQLite-only `.all()`/`.get()`/`.run()`, and a dialect it cannot write for is refused by name (#1022)
 - `create-theokit`: the scaffolded `theokit-config` skill shows the `storage` format the schema accepts (`servers`, `databases`, `redis` records) instead of `postgres: [{ url }]` and `DATABASE_URL`, which theokit never read; the `theokit-database` skill states that its examples are SQLite and adds the PostgreSQL path through `getStorageManager().usePostgres(...)` (#1023)
+- `create-theokit`: a `--bare` app passes its own `typecheck` and `test`. The transform left `src/server/agents/{hooks,skills}` importing packages it had removed and kept the chat page test; it now removes the agent tree and ships a test of the Hello page (#1008)
 
 ## [@theokit/agents 16.1.0, create-theokit 3.0.19, theokit 0.75.1] - 2026-10-27
 
