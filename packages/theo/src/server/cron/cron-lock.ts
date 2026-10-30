@@ -57,10 +57,10 @@ export function createPostgresCronLock(
       )
       .catch((err: unknown) => {
         // Replicas booting together race on `CREATE TABLE IF NOT EXISTS`, and the loser gets a
-        // unique violation on the catalog (23505) or "relation exists" (42P07) although the table
-        // now exists. Measured: 1 in 30 rounds of 8 concurrent pools.
+        // unique violation on the catalog (23505), "relation exists" (42P07) or "type exists"
+        // (42710) although the table now exists. Measured with 8 concurrent pools.
         const code = (err as { code?: unknown }).code
-        if (code === '23505' || code === '42P07') return
+        if (code === '23505' || code === '42P07' || code === '42710') return
         // Any other failure is retried on the next tick instead of being cached forever.
         ready = undefined
         throw err

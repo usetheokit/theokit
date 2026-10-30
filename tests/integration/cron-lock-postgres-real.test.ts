@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { createPostgresCronLock } from '../../packages/theo/src/server/cron/cron-lock.js'
 import { PostgresJobBackend } from '../../packages/theo/src/server/jobs/job-backend-postgres.js'
+import type { PoolLike } from '../../packages/theo/src/server/storage/storage-types.js'
 
 /**
  * The Postgres cron lock against a real database: N replicas, each with its own pool, race for the
@@ -14,10 +15,7 @@ const POSTGRES_URL = process.env.POSTGRES_URL
 const pgModule = (await import(/* @vite-ignore */ 'pg' as string).catch(() => undefined)) as
   | { default?: { Pool: new (cfg: unknown) => PgPool }; Pool?: new (cfg: unknown) => PgPool }
   | undefined
-interface PgPool {
-  query(sql: string, params?: unknown[]): Promise<{ rows: Record<string, unknown>[] }>
-  end(): Promise<void>
-}
+type PgPool = PoolLike & { end(): Promise<void> }
 
 const TABLE = 'theokit_cron_runs_ci'
 const REPLICAS = 8
