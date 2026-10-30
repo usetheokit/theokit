@@ -3,14 +3,26 @@
 // runtime per ADR-0028 (Node 22+, CF Workers, Bun, Deno, browsers).
 // No node:crypto import needed.
 
-import type { JobBackend, JobEnqueueInput, JobLease } from './job-backend.js'
+import {
+  type JobBackend,
+  type JobEnqueueInput,
+  type JobLease,
+  type JobLeaseFence,
+  type JobNackOptions,
+  JobLeaseLostError,
+} from './job-backend.js'
 
 /**
  * In-memory job backend for dev + tests + single-instance prototypes.
  *
  * Zero external dependencies. Storage is two Maps:
  *   - `pending: Map<jobId, PendingEntry>` — all enqueued jobs (locked or not)
- *   - `idempotencyMap: Map<key, { jobId; expiresAt }>` — dedup window
+ *   - `idempotencyMap: Map<name + key, { key; jobId; expiresAt }>` — dedup
+ *     window, scoped to the job name like PostgresJobBackend's unique index
+ *
+ * A job that fails for good is dropped with a `console.warn` naming it and its
+ * last error; this backend keeps no failed jobs and retries immediately, with
+ * no backoff. `PostgresJobBackend` keeps failed jobs and backs off.
  *
  * Per ADR-0002: this is one of two first-party backends shipped in core.
  * Production deploys plug in PostgresJobBackend (T3.1).
@@ -35,15 +47,20 @@ interface PendingEntry {
   traceparent?: string
   availableAt: number
   lockExpiresAt: number | null
+  leaseToken: string | null
   dispatchTimer: NodeJS.Timeout | null
 }
 
 interface IdempotencyEntry {
+  key: string
   jobId: string
   expiresAt: number
 }
 
 const DEFAULT_MAX_PENDING = 10_000
+
+/** A job name cannot contain NUL (`defineJob` allows `[a-z0-9-]`), so the pair cannot collide. */
+const scopedKey = (name: string, key: string): string => `${name}\u0000${key}`
 
 export class InMemoryJobBackend implements JobBackend {
   readonly name = 'memory'
@@ -82,7 +99,7 @@ export class InMemoryJobBackend implements JobBackend {
 
     // Idempotency dedup
     if (input.idempotencyKey) {
-      const existing = this.#idempotency.get(input.idempotencyKey)
+      const existing = this.#idempotency.get(scopedKey(input.name, input.idempotencyKey))
       const now = Date.now()
       if (existing && existing.expiresAt > now) {
         return { jobId: existing.jobId }
@@ -101,6 +118,7 @@ export class InMemoryJobBackend implements JobBackend {
       traceparent: input.traceparent,
       availableAt,
       lockExpiresAt: null,
+      leaseToken: null,
       dispatchTimer: null,
     }
     this.#pending.set(jobId, entry)
@@ -108,7 +126,8 @@ export class InMemoryJobBackend implements JobBackend {
     if (input.idempotencyKey) {
       // Default TTL window matches typical idempotency expectations;
       // explicit idempotency(key, ttl) check overrides per caller.
-      this.#idempotency.set(input.idempotencyKey, {
+      this.#idempotency.set(scopedKey(input.name, input.idempotencyKey), {
+        key: input.idempotencyKey,
         jobId,
         expiresAt: now + 60_000,
       })
@@ -131,6 +150,7 @@ export class InMemoryJobBackend implements JobBackend {
       if (entry.availableAt > now) continue
 
       entry.lockExpiresAt = now + lockSeconds * 1000
+      entry.leaseToken = globalThis.crypto.randomUUID()
       entry.attempts += 1
       leases.push({
         jobId: entry.jobId,
@@ -140,34 +160,51 @@ export class InMemoryJobBackend implements JobBackend {
         maxAttempts: entry.maxAttempts,
         traceparent: entry.traceparent,
         lockExpiresAt: new Date(entry.lockExpiresAt),
+        leaseToken: entry.leaseToken,
       })
     }
     return Promise.resolve(leases)
   }
 
-  async ack(jobId: string): Promise<void> {
+  async ack(jobId: string, fence?: JobLeaseFence): Promise<void> {
     const entry = this.#pending.get(jobId)
+    this.#assertHeld(jobId, entry, fence, 'ack')
     if (entry?.dispatchTimer) clearTimeout(entry.dispatchTimer)
     this.#pending.delete(jobId)
     return Promise.resolve()
   }
 
-  async nack(jobId: string, opts: { error: string; nonRetryable?: boolean }): Promise<void> {
+  async nack(jobId: string, opts: JobNackOptions): Promise<void> {
     const entry = this.#pending.get(jobId)
+    this.#assertHeld(jobId, entry, opts, 'nack')
     if (!entry) return Promise.resolve()
-    if (opts.nonRetryable || entry.attempts >= entry.maxAttempts) {
+    if (opts.nonRetryable || entry.attempts >= (opts.maxAttempts ?? entry.maxAttempts)) {
       if (entry.dispatchTimer) clearTimeout(entry.dispatchTimer)
       this.#pending.delete(jobId)
+      // This backend keeps no failed jobs; say so instead of dropping one silently
+      // (usetheokit/theokit#1014). PostgresJobBackend keeps them with `last_error`.
+      console.warn(
+        `[theokit:jobs:memory] job "${entry.name}" (${jobId}) failed after ${String(entry.attempts)} ` +
+          `attempt(s) and was dropped: ${opts.error}`,
+      )
     } else {
       // Release lock — becomes available again
       entry.lockExpiresAt = null
+      entry.leaseToken = null
     }
     return Promise.resolve()
   }
 
-  idempotency(key: string, ttlSeconds: number): Promise<{ jobId: string } | null> {
+  /**
+   * The job holding `key` within its window, or null. With `name`, only that job type's key
+   * matches, as `enqueue` deduplicates on (name, key); without it, the first job holding the key.
+   */
+  idempotency(key: string, ttlSeconds: number, name?: string): Promise<{ jobId: string } | null> {
     const now = Date.now()
-    const existing = this.#idempotency.get(key)
+    const existing =
+      name === undefined
+        ? [...this.#idempotency.values()].find((e) => e.key === key && e.expiresAt > now)
+        : this.#idempotency.get(scopedKey(name, key))
     if (!existing || existing.expiresAt <= now) {
       return Promise.resolve(null)
     }
@@ -191,6 +228,17 @@ export class InMemoryJobBackend implements JobBackend {
     for (const entry of this.#pending.values()) {
       if (entry.dispatchTimer) clearTimeout(entry.dispatchTimer)
     }
+  }
+
+  /** A fenced call whose lease no longer holds the job is refused (usetheokit/theokit#1012). */
+  #assertHeld(
+    jobId: string,
+    entry: PendingEntry | undefined,
+    fence: JobLeaseFence | undefined,
+    operation: 'ack' | 'nack',
+  ): void {
+    if (fence?.leaseToken === undefined) return
+    if (entry?.leaseToken !== fence.leaseToken) throw new JobLeaseLostError(jobId, operation)
   }
 
   /** EC-104 test hook — invokes the shutdown handler synchronously. */

@@ -10,6 +10,8 @@ import { orchestrateDev } from '../../services/index.js'
 import { theoPluginAsync } from '../../vite-plugin/index.js'
 import { preflightNodeAndBindings } from '../preflight-node-version.js'
 
+import { configureStorageManagerFromConfig } from './start/bootstrap-stages.js'
+
 interface DevOptions {
   port?: number
 }
@@ -59,6 +61,10 @@ export async function startDevServer(cwd: string, options?: DevOptions): Promise
   // under `theo dev` and `theo start`. A cache that only exists in production is
   // a cache nobody develops against.
   await initCacheEngineFromConfig(config.cache)
+
+  // #1020 — the storage counterpart. `start` applied `config.storage` and `dev` did not, so every
+  // `usePostgres(...)` threw "Database not configured" in development.
+  await configureStorageManagerFromConfig(config.storage)
 
   // Wave 2 (T1.1) — spawn polyglot services BEFORE Vite. Healthcheck gates
   // readiness. Empty `services: {}` → early return (Wave 1 BC preserved).

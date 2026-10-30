@@ -15,7 +15,7 @@
 // rather than re-declaring the union, so the two can never drift.
 import type { TimeoutAction } from '@theokit/agents'
 
-import { processSingleton } from '../_internal/process-singleton.js'
+import { processSingleton } from '../../core/process-singleton.js'
 
 export interface RegisterOptions {
   /** Milliseconds before the approval auto-settles per `onTimeout`. */
