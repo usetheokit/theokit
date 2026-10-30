@@ -19,6 +19,10 @@ import {
  *   - `pending: Map<jobId, PendingEntry>` — all enqueued jobs (locked or not)
  *   - `idempotencyMap: Map<key, { jobId; expiresAt }>` — dedup window
  *
+ * A job that fails for good is dropped with a `console.warn` naming it and its
+ * last error; this backend keeps no failed jobs and retries immediately, with
+ * no backoff. `PostgresJobBackend` keeps failed jobs and backs off.
+ *
  * Per ADR-0002: this is one of two first-party backends shipped in core.
  * Production deploys plug in PostgresJobBackend (T3.1).
  *
@@ -171,6 +175,12 @@ export class InMemoryJobBackend implements JobBackend {
     if (opts.nonRetryable || entry.attempts >= (opts.maxAttempts ?? entry.maxAttempts)) {
       if (entry.dispatchTimer) clearTimeout(entry.dispatchTimer)
       this.#pending.delete(jobId)
+      // This backend keeps no failed jobs; say so instead of dropping one silently
+      // (usetheokit/theokit#1014). PostgresJobBackend keeps them with `last_error`.
+      console.warn(
+        `[theokit:jobs:memory] job "${entry.name}" (${jobId}) failed after ${String(entry.attempts)} ` +
+          `attempt(s) and was dropped: ${opts.error}`,
+      )
     } else {
       // Release lock — becomes available again
       entry.lockExpiresAt = null

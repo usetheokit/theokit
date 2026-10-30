@@ -54,3 +54,17 @@ describe('a job enqueued through the queue client gets its definition’s maxAtt
     expect(calls).toBe(3)
   })
 })
+
+describe('the memory backend names a job it drops after its last failure (#1014)', () => {
+  it('test_a_dropped_job_is_reported_with_its_last_error', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { jobId } = await backend.enqueue({ name: 'once', input: {} })
+    const [lease] = await backend.dequeue({ lockSeconds: 30 })
+
+    await backend.nack(jobId, { error: 'boom', leaseToken: lease.leaseToken })
+
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining(`"once" (${jobId})`))
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('boom'))
+    warn.mockRestore()
+  })
+})

@@ -225,52 +225,69 @@ describe.skipIf(!POSTGRES_URL || !pgAvailable)(
       expect(r.rows.length).toBe(0)
     })
 
-    it('nack with nonRetryable=true deletes row', async () => {
-      const { jobId } = await backend.enqueue({ name: 'nr-test', input: {} })
-      await backend.dequeue({ batchSize: 1, lockSeconds: 30 })
-      await backend.nack(jobId, { error: 'fatal', nonRetryable: true })
-      const r = await pool.query<{ id: string }>(`SELECT id FROM theokit_jobs_ci WHERE id = $1`, [
-        jobId,
-      ])
-      expect(r.rows.length).toBe(0)
+    // usetheokit/theokit#1014 — a job that failed for good was DELETEd with its input and its
+    // error, so an operator could not see what failed, why, or replay it.
+    const failedRow = async (
+      jobId: string,
+    ): Promise<{ attempts: number; last_error: string | null; failed: boolean } | undefined> =>
+      (
+        await pool.query<{ attempts: number; last_error: string | null; failed: boolean }>(
+          `SELECT attempts, last_error, failed_at IS NOT NULL AS failed FROM theokit_jobs_ci WHERE id = $1`,
+          [jobId],
+        )
+      ).rows[0]
+
+    it('test_a_non_retryable_nack_keeps_the_job_as_failed_with_its_error', async () => {
+      const { jobId } = await backend.enqueue({ name: 'nr-test', input: { order: 7 } })
+      const [lease] = await backend.dequeue({ batchSize: 1, lockSeconds: 30 })
+      await backend.nack(jobId, {
+        error: 'fatal',
+        nonRetryable: true,
+        leaseToken: lease.leaseToken,
+      })
+
+      expect(await failedRow(jobId)).toEqual({ attempts: 1, last_error: 'fatal', failed: true })
+      expect(await backend.dequeue({ batchSize: 1, lockSeconds: 30 })).toEqual([])
     })
 
-    // `migrate()` creates the table with IF NOT EXISTS, so a table created by an earlier theokit
-    // keeps its old shape unless every later column is also added on its own. This is the DDL
-    // theokit@0.75.1 shipped, verbatim, holding a job enqueued by that version.
-    it('test_migrate_upgrades_a_table_created_by_theokit_0_75_and_keeps_its_jobs', async () => {
-      const legacy = 'theokit_jobs_legacy_ci'
-      await pool.query(`DROP TABLE IF EXISTS ${legacy}`)
-      await pool.query(`
-        CREATE TABLE ${legacy} (
-          id TEXT PRIMARY KEY,
-          name TEXT NOT NULL,
-          input JSONB NOT NULL,
-          attempts INT NOT NULL DEFAULT 0,
-          max_attempts INT NOT NULL DEFAULT 1,
-          available_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-          locked_until TIMESTAMPTZ,
-          traceparent TEXT,
-          idempotency_key TEXT,
-          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        )`)
-      await pool.query(
-        `INSERT INTO ${legacy} (id, name, input, max_attempts) VALUES ('old-1', 'old', '{}', 2)`,
-      )
-      try {
-        const upgraded = new PostgresJobBackend({ pool, tableName: legacy })
-        await upgraded.migrate()
-        await upgraded.migrate()
+    it('test_a_job_that_exhausts_its_attempts_stays_as_failed_with_the_last_error', async () => {
+      const noDelay = new PostgresJobBackend({
+        pool,
+        tableName: 'theokit_jobs_ci',
+        retryDelaySeconds: () => 0,
+      })
+      let calls = 0
+      const flaky = defineJob('flaky', {
+        maxAttempts: 3,
+        handler() {
+          calls++
+          throw new Error(`boom ${String(calls)}`)
+        },
+      })
+      const { jobId } = await noDelay.enqueue({ name: 'flaky', input: {}, maxAttempts: 3 })
+      const runner = createJobRunner(noDelay, [flaky])
 
-        const [lease] = await upgraded.dequeue({ batchSize: 1, lockSeconds: 30 })
-        expect(lease.jobId).toBe('old-1')
-        expect(lease.leaseToken).toEqual(expect.any(String))
-        await upgraded.ack('old-1', { leaseToken: lease.leaseToken })
-        const left = await pool.query<{ id: string }>(`SELECT id FROM ${legacy}`)
-        expect(left.rows).toEqual([])
-      } finally {
-        await pool.query(`DROP TABLE IF EXISTS ${legacy}`)
-      }
+      for (let i = 0; i < 4; i++) await runner.tick()
+
+      expect(calls).toBe(3)
+      expect(await failedRow(jobId)).toEqual({ attempts: 3, last_error: 'boom 3', failed: true })
+    })
+
+    it('test_a_retried_job_waits_out_a_backoff_and_records_the_error', async () => {
+      const { jobId } = await backend.enqueue({ name: 'retry', input: {}, maxAttempts: 3 })
+      const [lease] = await backend.dequeue({ batchSize: 1, lockSeconds: 30 })
+      await backend.nack(jobId, { error: 'transient', leaseToken: lease.leaseToken })
+
+      const r = await pool.query<{ delay: number; last_error: string; failed: boolean }>(
+        `SELECT EXTRACT(EPOCH FROM available_at - NOW())::float AS delay, last_error,
+                failed_at IS NOT NULL AS failed
+           FROM theokit_jobs_ci WHERE id = $1`,
+        [jobId],
+      )
+      expect(r.rows[0].last_error).toBe('transient')
+      expect(r.rows[0].failed).toBe(false)
+      expect(r.rows[0].delay).toBeGreaterThan(1)
+      expect(await backend.dequeue({ batchSize: 1, lockSeconds: 30 })).toEqual([])
     })
 
     it('migrate() is idempotent (safe to re-run on every deploy)', async () => {

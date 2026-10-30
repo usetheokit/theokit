@@ -19,6 +19,17 @@ import {
  *     LOCKED) RETURNING` statement, so the claim and the lease are atomic and
  *     concurrent workers never lease the same job.
  *   - Idempotency via UNIQUE INDEX on (name, idempotency_key).
+ *   - A successful job is deleted on `ack`. A job that fails for good (its
+ *     attempts are exhausted, or the handler threw `NonRetryableError`) is
+ *     KEPT as failed: `failed_at` is set, `last_error` holds the message, and
+ *     `dequeue` never returns it again. Query them with
+ *     `SELECT * FROM theokit_jobs WHERE failed_at IS NOT NULL`, replay one with
+ *     `UPDATE ... SET failed_at = NULL, attempts = 0, available_at = NOW()`,
+ *     and purge old ones yourself: nothing deletes them. A failed job keeps its
+ *     idempotency key, so enqueueing that key again returns the failed job's id.
+ *   - A retried job waits `retryDelaySeconds(attempts)` before it is
+ *     available again (default `min(2^attempts, 3600)` seconds), and its
+ *     `last_error` is recorded on every failure.
  *
  * `pg` is an OPTIONAL peer dependency — the caller provides their own
  * `pg.Pool` (or compatible). This avoids forcing every TheoKit user to
@@ -43,14 +54,24 @@ export interface PostgresJobBackendOptions {
   pool: PoolLike
   /** Table name override (default `theokit_jobs`). */
   tableName?: string
+  /**
+   * Seconds a failed job waits before its next attempt, given the attempts made so far (1 after
+   * the first failure). Default: exponential, `min(2^attempts, 3600)`.
+   */
+  retryDelaySeconds?: (attempts: number) => number
 }
 
 const DEFAULT_TABLE = 'theokit_jobs'
+const MAX_DEFAULT_RETRY_DELAY_SECONDS = 3600
+
+const defaultRetryDelaySeconds = (attempts: number): number =>
+  Math.min(2 ** attempts, MAX_DEFAULT_RETRY_DELAY_SECONDS)
 
 export class PostgresJobBackend implements JobBackend {
   readonly name = 'postgres'
   readonly #pool: PoolLike
   readonly #table: string
+  readonly #retryDelaySeconds: (attempts: number) => number
 
   constructor(opts: PostgresJobBackendOptions) {
     // Runtime guard for users who pass `pool: undefined` despite the type;
@@ -65,6 +86,7 @@ export class PostgresJobBackend implements JobBackend {
     }
     this.#pool = opts.pool
     this.#table = opts.tableName ?? DEFAULT_TABLE
+    this.#retryDelaySeconds = opts.retryDelaySeconds ?? defaultRetryDelaySeconds
   }
 
   /**
@@ -111,12 +133,16 @@ export class PostgresJobBackend implements JobBackend {
         traceparent TEXT,
         idempotency_key TEXT,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        lease_token TEXT
+        lease_token TEXT,
+        last_error TEXT,
+        failed_at TIMESTAMPTZ
       )
     `)
     // Columns added after the first release. `CREATE TABLE IF NOT EXISTS` leaves a table created by
     // an earlier version untouched, so each later column is added here as well.
     await this.#pool.query(`ALTER TABLE ${t} ADD COLUMN IF NOT EXISTS lease_token TEXT`)
+    await this.#pool.query(`ALTER TABLE ${t} ADD COLUMN IF NOT EXISTS last_error TEXT`)
+    await this.#pool.query(`ALTER TABLE ${t} ADD COLUMN IF NOT EXISTS failed_at TIMESTAMPTZ`)
     await this.#pool.query(`
       CREATE UNIQUE INDEX IF NOT EXISTS ${t}_idempotency_key_idx
       ON ${t} (name, idempotency_key)
@@ -193,6 +219,7 @@ export class PostgresJobBackend implements JobBackend {
          SELECT id FROM ${t}
          WHERE (locked_until IS NULL OR locked_until < NOW())
            AND available_at <= NOW()
+           AND failed_at IS NULL
          ORDER BY available_at ASC
          LIMIT $1
          FOR UPDATE SKIP LOCKED
@@ -225,35 +252,51 @@ export class PostgresJobBackend implements JobBackend {
     }
   }
 
+  /**
+   * Record a failure. The job is retried after `retryDelaySeconds(attempts)` while attempts remain,
+   * and kept as failed (`failed_at`, `last_error`) once they are exhausted or the failure is
+   * non-retryable. It was DELETEd in that case, with its input and its error, so a job that failed
+   * for good left no record (usetheokit/theokit#1014).
+   */
   async nack(jobId: string, opts: JobNackOptions): Promise<void> {
     const t = this.#table
     const { clause, params } = this.#held(jobId, opts)
-    const lost = (): never => {
-      throw new JobLeaseLostError(jobId, 'nack')
-    }
     const fenced = opts.leaseToken !== undefined
-    if (opts.nonRetryable) {
-      const r = await this.#pool.query(`DELETE FROM ${t} WHERE ${clause} RETURNING id`, params)
-      if (fenced && r.rows.length === 0) lost()
-      return
-    }
-    // Check attempts >= maxAttempts → permanent removal.
     const r = await this.#pool.query<{
       attempts: number
       max_attempts: number
     }>(`SELECT attempts, max_attempts FROM ${t} WHERE ${clause}`, params)
     if (r.rows.length === 0) {
-      if (fenced) lost()
+      if (fenced) throw new JobLeaseLostError(jobId, 'nack')
       return
     }
     const { attempts, max_attempts } = r.rows[0]
-    const write =
-      attempts >= (opts.maxAttempts ?? max_attempts)
-        ? `DELETE FROM ${t} WHERE ${clause} RETURNING id`
-        : // Release lock — next dequeue picks it up again.
-          `UPDATE ${t} SET locked_until = NULL, lease_token = NULL WHERE ${clause} RETURNING id`
-    const w = await this.#pool.query(write, params)
-    if (fenced && w.rows.length === 0) lost()
+    const final = opts.nonRetryable === true || attempts >= (opts.maxAttempts ?? max_attempts)
+    const next = params.length + 1
+    const write = final
+      ? `UPDATE ${t}
+         SET failed_at = NOW(), last_error = $${next}, locked_until = NULL, lease_token = NULL
+         WHERE ${clause} RETURNING id`
+      : `UPDATE ${t}
+         SET last_error = $${next}, locked_until = NULL, lease_token = NULL,
+             available_at = NOW() + ($${next + 1} || ' seconds')::interval
+         WHERE ${clause} RETURNING id`
+    const values = final
+      ? [...params, opts.error]
+      : [...params, opts.error, this.#retryDelay(attempts).toString()]
+    const w = await this.#pool.query(write, values)
+    if (fenced && w.rows.length === 0) throw new JobLeaseLostError(jobId, 'nack')
+  }
+
+  #retryDelay(attempts: number): number {
+    const seconds = this.#retryDelaySeconds(attempts)
+    if (!Number.isFinite(seconds) || seconds < 0) {
+      throw new RangeError(
+        `PostgresJobBackend retryDelaySeconds(${String(attempts)}) returned ${String(seconds)}; ` +
+          'expected a finite number of seconds >= 0.',
+      )
+    }
+    return seconds
   }
 
   /**

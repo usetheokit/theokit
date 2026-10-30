@@ -91,8 +91,9 @@ export interface JobBackend {
 }
 
 /**
- * Thrown from a job handler to opt out of retry policy. The backend MUST
- * nack with `nonRetryable: true` and permanently remove the job.
+ * Thrown from a job handler to opt out of retry policy. The runner nacks with
+ * `nonRetryable: true` and the backend never retries the job: `PostgresJobBackend`
+ * keeps it as failed with the error, `InMemoryJobBackend` drops it with a warning.
  */
 export class NonRetryableError extends Error {
   readonly code = 'NON_RETRYABLE'
