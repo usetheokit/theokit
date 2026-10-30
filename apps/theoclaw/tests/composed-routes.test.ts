@@ -83,7 +83,7 @@ describe('the composed SMS route', () => {
     await loop.stopAll()
   })
 
-  it('answers 401 and delivers nothing when the signature does not check', async () => {
+  it('answers 401 when the signature does not check', async () => {
     const sms = new VerifyingSms(false)
     const delivered: MessageEvent[] = []
     const { builders } = fakeBuilders({ sms })
