@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 
 import {
@@ -137,9 +137,9 @@ const SCHEMA_IMPORT_DIALECTS: [RegExp, string][] = [
  * @returns the dialect, or the raw name of one the generator cannot write code for.
  */
 function detectDialect(cwd: string, schemaSource: string): string {
-  const configPath = resolve(cwd, 'drizzle.config.ts')
-  if (existsSync(configPath)) {
-    const declared = /dialect\s*:\s*['"]([a-z0-9-]+)['"]/.exec(readFileSync(configPath, 'utf-8'))
+  const config = readIfPresent(resolve(cwd, 'drizzle.config.ts'))
+  if (config !== undefined) {
+    const declared = /dialect\s*:\s*['"]([a-z0-9-]+)['"]/.exec(config)
     if (declared) return declared[1]
   }
   for (const [pattern, dialect] of SCHEMA_IMPORT_DIALECTS) {
@@ -371,6 +371,26 @@ function generateTestTemplate(resourceName: string, serverDir: string): string {
  * @param serverDir - the project-relative `serverDir` from `theo.config.ts`. The generator used to
  *   assume `server/`, so in the scaffold (`src/server`) it refused every time.
  */
+function readIfPresent(path: string): string | undefined {
+  try {
+    return readFileSync(path, 'utf-8')
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return undefined
+    throw err
+  }
+}
+
+/** Create `path` only if it does not exist; `false` when it already did. */
+function createExclusive(path: string, content: string): boolean {
+  try {
+    writeFileSync(path, content, { flag: 'wx' })
+    return true
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'EEXIST') return false
+    throw err
+  }
+}
+
 export function generateResource(
   cwd: string,
   name: string,
@@ -391,7 +411,10 @@ export function generateResource(
   const routeIdPath = resolve(cwd, routeDirRel, '[id].ts')
   const testPath = resolve(cwd, `tests/${name}.test.ts`)
 
-  if (!existsSync(schemaPath)) {
+  // Read rather than check-then-read, and create the new files with `wx` rather than
+  // check-then-write: the answer can change between a check and the write that trusts it.
+  const existingSchema = readIfPresent(schemaPath)
+  if (existingSchema === undefined) {
     return {
       status: 'not_a_project',
       message:
@@ -399,12 +422,6 @@ export function generateResource(
         `schema under the configured serverDir ("${serverDir}"); create it first.`,
     }
   }
-
-  if (existsSync(routeIndexPath)) {
-    return { status: 'already_exists', filePath: routeIndexPath, kind: 'resource', name }
-  }
-
-  const existingSchema = readFileSync(schemaPath, 'utf-8')
   if (existingSchema.includes(`export const ${name} =`)) {
     return {
       status: 'already_exists',
@@ -428,29 +445,31 @@ export function generateResource(
   const dialect = DIALECTS[dialectName]
   const queries = QUERIES[dialectName]
 
-  // 1. Append the table, with the builders it uses imported.
-  writeFileSync(
-    schemaPath,
-    withDialectImports(existingSchema, dialect) + generateSchemaEntry(name, fields, dialect),
-  )
-
-  // 2. Create route files
+  // 1. Create the route files first: an existing route refuses before the schema is touched.
   mkdirSync(dirname(routeIndexPath), { recursive: true })
   const template = { resourceName: name, fields, queries }
-  writeFileSync(
-    routeIndexPath,
-    generateRouteIndex({ ...template, displayPath: join(routeDirRel, 'index.ts') }),
-  )
+  if (
+    !createExclusive(
+      routeIndexPath,
+      generateRouteIndex({ ...template, displayPath: join(routeDirRel, 'index.ts') }),
+    )
+  ) {
+    return { status: 'already_exists', filePath: routeIndexPath, kind: 'resource', name }
+  }
   writeFileSync(
     routeIdPath,
     generateRouteId({ ...template, displayPath: join(routeDirRel, '[id].ts') }),
   )
 
-  // 3. Create test file
+  // 2. Append the table, with the builders it uses imported.
+  writeFileSync(
+    schemaPath,
+    withDialectImports(existingSchema, dialect) + generateSchemaEntry(name, fields, dialect),
+  )
+
+  // 3. Create the test file, keeping one the user already has.
   mkdirSync(dirname(testPath), { recursive: true })
-  if (!existsSync(testPath)) {
-    writeFileSync(testPath, generateTestTemplate(name, serverDir))
-  }
+  createExclusive(testPath, generateTestTemplate(name, serverDir))
 
   return { status: 'created', filePath: routeIndexPath, kind: 'resource', name }
 }

@@ -42,6 +42,21 @@ afterEach(() => {
 })
 
 describe('generate resource follows the project layout and dialect', () => {
+  it('an existing route refuses before the schema is touched, and keeps the route as it was', async () => {
+    const dir = project({ schema: '// schema\n' })
+    mkdirSync(join(dir, 'server/routes/posts'), { recursive: true })
+    writeFileSync(join(dir, 'server/routes/posts/index.ts'), '// mine\n')
+    const result = await generate({
+      cwd: dir,
+      type: 'resource',
+      name: 'posts',
+      fields: ['title:string'],
+    })
+    expect(result.status).toBe('already_exists')
+    expect(readFileSync(join(dir, 'server/routes/posts/index.ts'), 'utf-8')).toBe('// mine\n')
+    expect(readFileSync(join(dir, 'server/db/schema.ts'), 'utf-8')).toBe('// schema\n')
+  })
+
   it('writes under the configured serverDir', async () => {
     const dir = project({ serverDir: 'src/server', schema: '' })
     const result = await generate({
