@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - `theokit`: `theokit start` and `theokit dev` run the jobs declared under `<serverDir>/jobs/` with an in-process worker when `jobs.backend` is set. It polls, backs off while the backend is unreachable, and on `SIGTERM` waits up to 20 seconds for the job in progress. `jobs.worker` tunes it and `enabled: false` turns it off; `createJobWorker` is exported from `theokit/server/jobs`. Nothing read `.theokit/jobs.json` before, so enqueued jobs never ran (#1010)
 - `theokit`: crons fire once per tick across replicas that share a lock. `cron.lock` takes a `CronLock`; `createPostgresCronLock(pool)` from `theokit/server/cron` provides one, and a `PostgresJobBackend` in `jobs.backend` supplies it automatically. A tick whose lock fails is skipped and logged. A single process without a shared backend is unchanged (#1016)
+- `theokit`: `theokit dev --crons` schedules the declared crons in the dev server. Without the flag, `dev` prints that the crons are declared but not scheduled, where it used to say nothing (#1017)
 
 ### Changed
 

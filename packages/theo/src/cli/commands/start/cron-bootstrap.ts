@@ -26,24 +26,33 @@ export async function loadCronDefinitions(
   if (!existsSync(manifestPath)) return []
 
   const manifest = JSON.parse(readFileSync(manifestPath, 'utf-8')) as CronManifest
-  const definitions: CronDefinition[] = []
+  return loadCronModules(
+    manifest.crons.map((entry) => resolve(projectRoot, entry.filePath)),
+    loadModule,
+  )
+}
 
-  for (const entry of manifest.crons) {
-    const filePath = resolve(projectRoot, entry.filePath)
+/**
+ * Import each file and take its `defineCron` default export, refusing a file without one. Shared
+ * with `theokit dev --crons`, which lists the files itself and loads them through Vite.
+ */
+export async function loadCronModules(
+  filePaths: readonly string[],
+  loadModule: (filePath: string) => unknown,
+): Promise<CronDefinition[]> {
+  const definitions: CronDefinition[] = []
+  for (const filePath of filePaths) {
     const mod = (await loadModule(filePath)) as { default?: unknown }
     const exported = mod.default
-
     if (!isCronDefinition(exported)) {
       throw new Error(
-        `Cron "${entry.name}" declared in "${entry.filePath}" is missing a valid default export. ` +
+        `"${filePath}" is listed as a cron but has no valid default export. ` +
           'Expected `export default defineCron(name, { schedule, handler })`. ' +
           'Re-run `theokit build` if the file changed since the last build.',
       )
     }
-
     definitions.push(exported)
   }
-
   return definitions
 }
 

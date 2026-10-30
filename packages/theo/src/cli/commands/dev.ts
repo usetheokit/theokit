@@ -8,16 +8,21 @@ import { loadEnv } from '../../config/load-env.js'
 import type { TheoConfig } from '../../config/schema.js'
 import { validateProjectStructure } from '../../config/validate-structure.js'
 import { initCacheEngineFromConfig } from '../../server/cache-bootstrap.js'
+import { createCronScheduler } from '../../server/cron/cron-runtime-node.js'
+import { cronScanDirs, listCronFiles } from '../../server/cron/cron-scan.js'
 import { listJobFiles } from '../../server/jobs/job-scan.js'
 import { orchestrateDev } from '../../services/index.js'
 import { theoPluginAsync } from '../../vite-plugin/index.js'
 import { preflightNodeAndBindings } from '../preflight-node-version.js'
 
 import { configureStorageManagerFromConfig } from './start/bootstrap-stages.js'
+import { loadCronModules } from './start/cron-bootstrap.js'
 import { loadJobModules, startJobWorker } from './start/job-bootstrap.js'
 
 interface DevOptions {
   port?: number
+  /** Schedule the crons in dev (`theokit dev --crons`). Off by default (usetheokit/theokit#1017). */
+  crons?: boolean
 }
 
 /**
@@ -142,7 +147,8 @@ export async function startDevServer(cwd: string, options?: DevOptions): Promise
     void orchestration.stop()
   })
 
-  await startDevBackgroundWork(server, cwd, config)
+  await startDevJobWorker(server, cwd, config)
+  await startDevCrons(server, cwd, config, options?.crons === true)
 
   return server
 }
@@ -152,7 +158,7 @@ export async function startDevServer(cwd: string, options?: DevOptions): Promise
  * works in dev since #1009, and a queue nothing drains would make every job untestable without a
  * production build. Job files load through Vite, like routes, and the worker stops with the server.
  */
-async function startDevBackgroundWork(
+async function startDevJobWorker(
   server: ViteDevServer,
   cwd: string,
   config: TheoConfig,
@@ -163,6 +169,40 @@ async function startDevBackgroundWork(
   if (jobs.summary !== undefined) console.log(`\n  ${jobs.summary}`)
   server.httpServer?.on('close', () => {
     void jobs.worker?.stop()
+  })
+}
+
+/**
+ * Crons in development (usetheokit/theokit#1017). `dev` had no cron code path and said nothing, so
+ * a new cron neither fired nor got explained until `build` plus `start`. Scheduling is opt-in
+ * (`--crons`): a cron that sends an email or charges a card should not do it on every dev boot
+ * unasked. Either way the boot log says what happens to the declared crons. Files load through
+ * Vite once at boot, so an edit to a cron applies after a restart. Single process, so no lock.
+ */
+async function startDevCrons(
+  server: ViteDevServer,
+  cwd: string,
+  config: TheoConfig,
+  schedule: boolean,
+): Promise<void> {
+  const dirs = cronScanDirs(cwd, config.serverDir, config.agentsDir)
+  const files = listCronFiles([dirs.crons, dirs.schedules])
+  if (files.length === 0) return
+  if (!schedule) {
+    console.log(
+      `\n  Crons: ${String(files.length)} declared, not scheduled in dev. ` +
+        'Run `theokit dev --crons` to schedule them (edits apply after a restart).',
+    )
+    return
+  }
+  const definitions = await loadCronModules(files, (filePath) => server.ssrLoadModule(filePath))
+  const scheduler = createCronScheduler(definitions)
+  scheduler.start()
+  console.log(
+    `\n  Crons: ${String(definitions.length)} scheduled in dev (--crons); edits apply after a restart.`,
+  )
+  server.httpServer?.on('close', () => {
+    scheduler.stop()
   })
 }
 

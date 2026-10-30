@@ -162,10 +162,14 @@ export default config()
 If the lock cannot be reached, that tick is skipped and logged rather than run on every replica.
 With no lock, a single process behaves as before, and the boot line says the crons are not guarded.
 
+`theokit dev` does not schedule crons unless asked, so a cron that sends mail does not do it on
+every dev boot. It prints how many are declared; `theokit dev --crons` schedules them. Cron files
+are loaded once at boot, so an edit takes effect after restarting `dev`.
+
 ## CLI
 
 ```bash
-theokit dev | build | start          # build takes --target <adapter>
+theokit dev | build | start          # build takes --target <adapter>, dev takes --crons
 theokit generate <type> <name>       # page, route, action, ws, controller, agent, toolbox, …
 theokit agent <name> [message]       # run an agent in the terminal, approvals included
 theokit routes | check | doctor | info

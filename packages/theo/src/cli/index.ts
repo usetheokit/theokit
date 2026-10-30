@@ -10,6 +10,7 @@ interface CliOptions {
   allowWarnings?: boolean
   force?: boolean
   dryRun?: boolean
+  crons?: boolean
 }
 
 const cli = cac('theokit')
@@ -17,9 +18,13 @@ const cli = cac('theokit')
 cli
   .command('dev', 'Start development server')
   .option('--port <port>', 'Port number')
+  .option('--crons', 'Schedule the crons in dev too (off by default)')
   .action(async (options: CliOptions) => {
     const { devCommand } = await import('./commands/dev.js')
-    await devCommand({ port: options.port ? Number(options.port) : undefined })
+    await devCommand({
+      port: options.port ? Number(options.port) : undefined,
+      crons: options.crons === true,
+    })
   })
 
 cli

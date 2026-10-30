@@ -493,7 +493,7 @@ export default websocket()
 ## CLI
 
 ```bash
-theokit dev                              # Dev server with HMR
+theokit dev                              # Dev server with HMR (--crons also schedules crons)
 theokit build                            # Production build (--target <adapter>)
 theokit start                            # Production server (serves the last build)
 theokit preview                          # Build, then serve it — one step
