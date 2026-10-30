@@ -1,5 +1,13 @@
 # create-theo
 
+## 3.0.20
+
+### Patch Changes
+
+- 6892aed: A `--bare` app passes its own `typecheck` and `test`. The transform removed `@theokit/agents`, `@theokit/sdk` and `@theokit/ui` from `package.json` but left `src/server/agents/hooks` and `skills` importing them and kept the chat page test, so a fresh bare app failed `typecheck` with exit 2 and `test` with exit 1. `--bare` now removes the whole `src/server/agents/` tree and `src/shared/agent.ts`, replaces `src/app/page.test.tsx` with a test of the Hello page, and drops the unused `@usetheo/ui` dependency. (#1008)
+- 6dfaef2: The scaffold's `types/jobs.d.ts` tells you to create jobs under `src/server/jobs/`, where the scaffold's `serverDir` points, instead of `server/jobs/`, where `theokit build` never looks. (#1010)
+- d131621: The scaffolded `theokit-config` skill shows the `storage` format the schema accepts (`servers`, `databases` and `redis` records with `host`, `user` and `password` fields) and how route code gets a pool with `getStorageManager().usePostgres(...)`. It taught `storage: { postgres: [{ url }], redis: [{ url }] }` and the `DATABASE_URL`/`REDIS_URL` variables, none of which theokit reads. The `theokit-database` skill says up front that its examples are SQLite, adds a PostgreSQL section (schema, connection through the storage manager, awaited queries), follows `serverDir`, and lists `theokit db generate`, `migrate`, `push` and `seed`. (#1023)
+
 ## 3.0.19
 
 ### Patch Changes
