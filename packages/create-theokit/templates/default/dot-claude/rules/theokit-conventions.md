@@ -32,7 +32,7 @@
 
 ## Database
 
-- Schema lives in `server/db/schema.ts` (Drizzle ORM)
-- Connection in `server/db/index.ts`
-- Seeds in `server/db/seed.ts`
-- Use `npx drizzle-kit push` for dev, `npx drizzle-kit generate` for prod migrations
+- Schema lives in `src/server/db/schema.ts` (Drizzle ORM; paths follow `serverDir` in `theo.config.ts`)
+- Connection in `src/server/db/index.ts`
+- Seeds in `src/server/db/seed.ts` (`npx theokit db seed`)
+- `npx theokit db push` for dev; `npx theokit db generate` + `npx theokit db migrate` for prod migrations
