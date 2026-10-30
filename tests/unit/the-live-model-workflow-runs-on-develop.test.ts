@@ -250,9 +250,9 @@ function runBuildScript(
 /**
  * A copy of the script in an empty directory, so its repository root has no `apps/theoclaw/dist`,
  * and a fake `pnpm` first on PATH that logs its arguments and runs `onAgents` (a shell command) for the agents
- * selector, 0 otherwise.
+ * selector and `onTheoclaw` for the TheoClaw selector, 0 otherwise.
  */
-function scratchCopy(onAgents = 'exit 0') {
+function scratchCopy(onAgents = 'exit 0', onTheoclaw = 'true') {
   const dir = mkdtempSync(join(tmpdir(), 'live-model-build-'))
   SCRATCH_DIRS.push(dir)
   mkdirSync(join(dir, 'scripts'))
@@ -263,7 +263,7 @@ function scratchCopy(onAgents = 'exit 0') {
   const fakePnpm = join(dir, 'bin', 'pnpm')
   writeFileSync(
     fakePnpm,
-    `#!/bin/sh\necho "$*" >> '${calls}'\ncase "$*" in *@theokit/agents...*) ${onAgents};; esac\nexit 0\n`,
+    `#!/bin/sh\necho "$*" >> '${calls}'\ncase "$*" in *@theokit/agents...*) ${onAgents};; *theoclaw...*) ${onTheoclaw};; esac\nexit 0\n`,
   )
   chmodSync(fakePnpm, 0o755)
   const env = { ...process.env, PATH: `${join(dir, 'bin')}:${process.env.PATH ?? ''}` }
@@ -330,6 +330,19 @@ describe('scripts/live-model-build.mjs', () => {
     expect(result.stderr).toContain('status 3')
     expect(existsSync(calls), 'the fake pnpm was called').toBe(true)
     expect(readFileSync(calls, 'utf8')).not.toContain('theoclaw...')
+  })
+
+  it('with no target the build script builds agents then TheoClaw and exits 0 when the entry exists', () => {
+    const { script, calls, env } = scratchCopy(
+      'exit 0',
+      'mkdir -p apps/theoclaw/dist && touch apps/theoclaw/dist/main.js',
+    )
+    const result = runBuildScript([], { script, env })
+    expect(result.status, result.stderr).toBe(0)
+    expect(readFileSync(calls, 'utf8').trim().split('\n')).toEqual([
+      '--filter @theokit/agents... build',
+      '--filter theoclaw... build',
+    ])
   })
 
   it('a build killed by a signal fails naming the selector and the signal', () => {
