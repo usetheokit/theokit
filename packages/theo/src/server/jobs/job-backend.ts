@@ -15,7 +15,12 @@ export interface JobEnqueueInput {
   name: string
   /** Validated input (already passed through Zod or equivalent at the queue-client layer). */
   input: unknown
-  /** Optional idempotency key for at-most-once dispatch within TTL. */
+  /**
+   * Optional idempotency key, scoped to `name`: a second enqueue of the same (name, key) returns the
+   * first job's id instead of creating a job, including when the two calls race. The window is
+   * backend-specific: `PostgresJobBackend` holds the key while the row exists (until `ack`, or for
+   * good once the job has failed); `InMemoryJobBackend` holds it for 60 seconds.
+   */
   idempotencyKey?: string
   /** Optional delay before the job becomes available for dispatch. */
   delaySeconds?: number
@@ -86,8 +91,12 @@ export interface JobBackend {
    */
   nack(jobId: string, opts: JobNackOptions): Promise<void>
 
-  /** Optional: return existing jobId if `key` was enqueued within `ttlSeconds`. */
-  idempotency?(key: string, ttlSeconds: number): Promise<{ jobId: string } | null>
+  /**
+   * Optional: return the existing jobId if `key` was enqueued within `ttlSeconds`. Pass `name` to
+   * scope the lookup to one job type, as `enqueue` deduplicates on (name, key); without it, a key
+   * shared by two job types may return either job.
+   */
+  idempotency?(key: string, ttlSeconds: number, name?: string): Promise<{ jobId: string } | null>
 }
 
 /**

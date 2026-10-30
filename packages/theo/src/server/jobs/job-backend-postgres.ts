@@ -63,6 +63,7 @@ export interface PostgresJobBackendOptions {
 
 const DEFAULT_TABLE = 'theokit_jobs'
 const MAX_DEFAULT_RETRY_DELAY_SECONDS = 3600
+const MAX_ENQUEUE_ROUNDS = 3
 
 const defaultRetryDelaySeconds = (attempts: number): number =>
   Math.min(2 ** attempts, MAX_DEFAULT_RETRY_DELAY_SECONDS)
@@ -156,38 +157,46 @@ export class PostgresJobBackend implements JobBackend {
   }
 
   async enqueue(input: JobEnqueueInput): Promise<{ jobId: string }> {
-    const id = randomId()
-    const delaySeconds = input.delaySeconds ?? 0
     const t = this.#table
-
-    // Idempotency: explicit SELECT-then-INSERT. The UNIQUE INDEX is the
-    // safety net under race conditions (we surface the conflict by
-    // re-selecting on insert-error). This 2-step path is pg-mem compatible
-    // AND works on real Postgres.
-    if (input.idempotencyKey) {
+    const values = [
+      input.name,
+      JSON.stringify(input.input),
+      input.maxAttempts ?? 1,
+      (input.delaySeconds ?? 0).toString(),
+      input.traceparent ?? null,
+      input.idempotencyKey ?? null,
+    ]
+    // Idempotency is decided by the UNIQUE INDEX on (name, idempotency_key), in the INSERT itself.
+    // A SELECT followed by a plain INSERT let racing callers on one key both pass the SELECT, and
+    // the loser got a raw 23505 unique violation: about 9.5 of every 20 callers per key on a warm
+    // pool (usetheokit/theokit#1015). `ON CONFLICT DO NOTHING` returns no row for the loser, which
+    // then reads the winner's id. The conflict target is left out on purpose: apart from the
+    // primary key, which a fresh UUID does not collide with, the only unique index is
+    // (name, idempotency_key), and pg-mem cannot parse a target carrying its WHERE clause.
+    //
+    // The read can come back empty if the winning job was acked between the two statements, which
+    // frees the key; the loop then inserts again. Three rounds is far beyond what that window
+    // allows, and running out is reported rather than returned as a fake id.
+    for (let round = 0; round < MAX_ENQUEUE_ROUNDS; round++) {
+      const inserted = await this.#pool.query<{ id: string }>(
+        `INSERT INTO ${t} (id, name, input, max_attempts, available_at, traceparent, idempotency_key)
+         VALUES ($1, $2, $3::jsonb, $4, NOW() + ($5 || ' seconds')::interval, $6, $7)
+         ON CONFLICT DO NOTHING
+         RETURNING id`,
+        [randomId(), ...values],
+      )
+      if (inserted.rows.length > 0) return { jobId: inserted.rows[0].id }
       const existing = await this.#pool.query<{ id: string }>(
         `SELECT id FROM ${t} WHERE name = $1 AND idempotency_key = $2 LIMIT 1`,
         [input.name, input.idempotencyKey],
       )
-      if (existing.rows.length > 0) {
-        return { jobId: existing.rows[0].id }
-      }
+      if (existing.rows.length > 0) return { jobId: existing.rows[0].id }
     }
-
-    await this.#pool.query(
-      `INSERT INTO ${t} (id, name, input, max_attempts, available_at, traceparent, idempotency_key)
-       VALUES ($1, $2, $3::jsonb, $4, NOW() + ($5 || ' seconds')::interval, $6, $7)`,
-      [
-        id,
-        input.name,
-        JSON.stringify(input.input),
-        input.maxAttempts ?? 1,
-        delaySeconds.toString(),
-        input.traceparent ?? null,
-        input.idempotencyKey ?? null,
-      ],
+    throw new Error(
+      `PostgresJobBackend.enqueue: job "${input.name}" with idempotency key ` +
+        `"${String(input.idempotencyKey)}" conflicted ${String(MAX_ENQUEUE_ROUNDS)} times and the ` +
+        'conflicting row was gone each time it was read; the key is being enqueued and acked in a tight loop.',
     )
-    return { jobId: id }
   }
 
   async dequeue(opts: { batchSize?: number; lockSeconds?: number }): Promise<JobLease[]> {
@@ -310,13 +319,27 @@ export class PostgresJobBackend implements JobBackend {
       : { clause: 'id = $1 AND lease_token = $2', params: [jobId, fence.leaseToken] }
   }
 
-  async idempotency(key: string, _ttlSeconds: number): Promise<{ jobId: string } | null> {
-    // The UNIQUE INDEX is the source of truth. Look for any non-deleted
-    // row with this idempotency_key.
-    const r = await this.#pool.query<{ id: string }>(
-      `SELECT id FROM ${this.#table} WHERE idempotency_key = $1 LIMIT 1`,
-      [key],
-    )
+  /**
+   * The job holding `key`, or null. Pass `name` to scope the lookup the way the UNIQUE INDEX and
+   * `enqueue` do, on (name, idempotency_key): without it, two job types sharing a key can return
+   * each other's id (usetheokit/theokit#1015). A failed job still holds its key; an acked one does
+   * not, because `ack` deletes the row. `ttlSeconds` is not used: the window is the row's life.
+   */
+  async idempotency(
+    key: string,
+    _ttlSeconds: number,
+    name?: string,
+  ): Promise<{ jobId: string } | null> {
+    const r =
+      name === undefined
+        ? await this.#pool.query<{ id: string }>(
+            `SELECT id FROM ${this.#table} WHERE idempotency_key = $1 LIMIT 1`,
+            [key],
+          )
+        : await this.#pool.query<{ id: string }>(
+            `SELECT id FROM ${this.#table} WHERE name = $1 AND idempotency_key = $2 LIMIT 1`,
+            [name, key],
+          )
     return r.rows.length > 0 ? { jobId: r.rows[0].id } : null
   }
 }

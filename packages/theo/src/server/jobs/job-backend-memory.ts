@@ -17,7 +17,8 @@ import {
  *
  * Zero external dependencies. Storage is two Maps:
  *   - `pending: Map<jobId, PendingEntry>` — all enqueued jobs (locked or not)
- *   - `idempotencyMap: Map<key, { jobId; expiresAt }>` — dedup window
+ *   - `idempotencyMap: Map<name + key, { key; jobId; expiresAt }>` — dedup
+ *     window, scoped to the job name like PostgresJobBackend's unique index
  *
  * A job that fails for good is dropped with a `console.warn` naming it and its
  * last error; this backend keeps no failed jobs and retries immediately, with
@@ -51,11 +52,15 @@ interface PendingEntry {
 }
 
 interface IdempotencyEntry {
+  key: string
   jobId: string
   expiresAt: number
 }
 
 const DEFAULT_MAX_PENDING = 10_000
+
+/** A job name cannot contain NUL (`defineJob` allows `[a-z0-9-]`), so the pair cannot collide. */
+const scopedKey = (name: string, key: string): string => `${name}\u0000${key}`
 
 export class InMemoryJobBackend implements JobBackend {
   readonly name = 'memory'
@@ -94,7 +99,7 @@ export class InMemoryJobBackend implements JobBackend {
 
     // Idempotency dedup
     if (input.idempotencyKey) {
-      const existing = this.#idempotency.get(input.idempotencyKey)
+      const existing = this.#idempotency.get(scopedKey(input.name, input.idempotencyKey))
       const now = Date.now()
       if (existing && existing.expiresAt > now) {
         return { jobId: existing.jobId }
@@ -121,7 +126,8 @@ export class InMemoryJobBackend implements JobBackend {
     if (input.idempotencyKey) {
       // Default TTL window matches typical idempotency expectations;
       // explicit idempotency(key, ttl) check overrides per caller.
-      this.#idempotency.set(input.idempotencyKey, {
+      this.#idempotency.set(scopedKey(input.name, input.idempotencyKey), {
+        key: input.idempotencyKey,
         jobId,
         expiresAt: now + 60_000,
       })
@@ -189,9 +195,16 @@ export class InMemoryJobBackend implements JobBackend {
     return Promise.resolve()
   }
 
-  idempotency(key: string, ttlSeconds: number): Promise<{ jobId: string } | null> {
+  /**
+   * The job holding `key` within its window, or null. With `name`, only that job type's key
+   * matches, as `enqueue` deduplicates on (name, key); without it, the first job holding the key.
+   */
+  idempotency(key: string, ttlSeconds: number, name?: string): Promise<{ jobId: string } | null> {
     const now = Date.now()
-    const existing = this.#idempotency.get(key)
+    const existing =
+      name === undefined
+        ? [...this.#idempotency.values()].find((e) => e.key === key && e.expiresAt > now)
+        : this.#idempotency.get(scopedKey(name, key))
     if (!existing || existing.expiresAt <= now) {
       return Promise.resolve(null)
     }

@@ -215,6 +215,49 @@ describe.skipIf(!POSTGRES_URL || !pgAvailable)(
       expect(b.jobId).toBe(a.jobId)
     })
 
+    // usetheokit/theokit#1015 — enqueue checked the key with a SELECT and then ran a plain INSERT,
+    // so racing callers on one key got a raw 23505 unique violation: about 9.5 of every 20 per key
+    // once the pool was warm.
+    it('test_twenty_concurrent_enqueues_with_one_idempotency_key_all_resolve_to_one_job', async () => {
+      const PoolCtor = ((await pgModulePromise)!.Pool ??
+        (await pgModulePromise)!.default?.Pool) as new (config: unknown) => PgPoolLike
+      const wide = new PoolCtor({ connectionString: POSTGRES_URL, max: 20 })
+      try {
+        const racing = new PostgresJobBackend({ pool: wide, tableName: 'theokit_jobs_ci' })
+        await Promise.all(Array.from({ length: 20 }, () => wide.query('SELECT 1')))
+        const rejected: unknown[] = []
+        for (let k = 0; k < 30; k++) {
+          const results = await Promise.allSettled(
+            Array.from({ length: 20 }, () =>
+              racing.enqueue({ name: 'charge', input: {}, idempotencyKey: `order-${String(k)}` }),
+            ),
+          )
+          for (const r of results) if (r.status === 'rejected') rejected.push(r.reason)
+          const ids = new Set(
+            results.flatMap((r) => (r.status === 'fulfilled' ? [r.value.jobId] : [])),
+          )
+          expect(ids.size).toBeLessThanOrEqual(1)
+        }
+        expect(rejected).toEqual([])
+        const rows = await pool.query<{ n: number }>(
+          `SELECT count(*)::int AS n FROM theokit_jobs_ci WHERE name = 'charge'`,
+        )
+        expect(rows.rows[0].n).toBe(30)
+      } finally {
+        await wide.end()
+      }
+    })
+
+    it('test_idempotency_lookup_is_scoped_to_the_job_name_like_the_unique_index', async () => {
+      const charge = await backend.enqueue({ name: 'charge', input: {}, idempotencyKey: 'k-1' })
+      const email = await backend.enqueue({ name: 'email', input: {}, idempotencyKey: 'k-1' })
+      expect(email.jobId).not.toBe(charge.jobId)
+
+      expect(await backend.idempotency('k-1', 60, 'email')).toEqual({ jobId: email.jobId })
+      expect(await backend.idempotency('k-1', 60, 'charge')).toEqual({ jobId: charge.jobId })
+      expect(await backend.idempotency('k-1', 60, 'other')).toBeNull()
+    })
+
     it('ack removes the row permanently', async () => {
       const { jobId } = await backend.enqueue({ name: 'ack-test', input: {} })
       await backend.dequeue({ batchSize: 1, lockSeconds: 30 })
