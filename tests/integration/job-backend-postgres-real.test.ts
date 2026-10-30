@@ -100,6 +100,39 @@ describe.skipIf(!POSTGRES_URL || !pgAvailable)(
       expect(totalLeases).toBe(1)
     })
 
+    // usetheokit/theokit#1011 — the one-job test above passed while 20 workers over 200 jobs leased
+    // 162 to 178 of them more than once: the SELECT ... FOR UPDATE SKIP LOCKED and the UPDATE that
+    // marked the lease ran as two autocommit statements, so the row lock ended before the lease was
+    // written. A lock of 60 s outlives the run, so every extra lease is a double claim, not a retry.
+    it('test_twenty_concurrent_workers_over_two_hundred_jobs_lease_each_job_exactly_once', async () => {
+      const PoolCtor = ((await pgModulePromise)!.Pool ??
+        (await pgModulePromise)!.default?.Pool) as new (config: unknown) => PgPoolLike
+      const WORKERS = 20
+      const JOBS = 200
+      const wide = new PoolCtor({ connectionString: POSTGRES_URL, max: WORKERS })
+      try {
+        const racing = new PostgresJobBackend({ pool: wide, tableName: 'theokit_jobs_ci' })
+        await Promise.all(Array.from({ length: WORKERS }, () => wide.query('SELECT 1')))
+        for (let i = 0; i < JOBS; i++) await racing.enqueue({ name: 'race', input: { i } })
+
+        const leasesPerJob = new Map<string, number>()
+        const worker = async (): Promise<void> => {
+          for (;;) {
+            const leases = await racing.dequeue({ batchSize: 1, lockSeconds: 60 })
+            if (leases.length === 0) return
+            for (const l of leases) leasesPerJob.set(l.jobId, (leasesPerJob.get(l.jobId) ?? 0) + 1)
+          }
+        }
+        await Promise.all(Array.from({ length: WORKERS }, worker))
+
+        const leasedMoreThanOnce = [...leasesPerJob.values()].filter((n) => n > 1).length
+        expect(leasedMoreThanOnce).toBe(0)
+        expect(leasesPerJob.size).toBe(JOBS)
+      } finally {
+        await wide.end()
+      }
+    })
+
     it('idempotency UNIQUE index — same (name, key) returns existing jobId', async () => {
       const a = await backend.enqueue({
         name: 'idem',

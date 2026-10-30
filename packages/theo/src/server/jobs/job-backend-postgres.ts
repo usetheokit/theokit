@@ -8,8 +8,9 @@ import type { JobBackend, JobEnqueueInput, JobLease } from './job-backend.js'
  *
  * Uses the Graphile Worker pattern:
  *   - Single `theokit_jobs` table.
- *   - Dequeue via `SELECT ... FOR UPDATE SKIP LOCKED` (concurrent workers
- *     never race for the same job).
+ *   - Dequeue via one `UPDATE ... WHERE id IN (SELECT ... FOR UPDATE SKIP
+ *     LOCKED) RETURNING` statement, so the claim and the lease are atomic and
+ *     concurrent workers never lease the same job.
  *   - Idempotency via UNIQUE INDEX on (name, idempotency_key).
  *
  * `pg` is an OPTIONAL peer dependency — the caller provides their own
@@ -157,31 +158,12 @@ export class PostgresJobBackend implements JobBackend {
     const batchSize = opts.batchSize ?? 1
     const lockSeconds = opts.lockSeconds ?? 30
 
-    // Two-step pattern (pg-mem compatible AND real-Postgres compatible):
-    // 1. SELECT FOR UPDATE SKIP LOCKED to claim candidate IDs.
-    // 2. UPDATE in-place to mark lock_until + bump attempts.
-    // On real Postgres, the FOR UPDATE SKIP LOCKED prevents concurrent
-    // workers from seeing the same rows. On pg-mem the lock is silently
-    // ignored, but pg-mem serializes all queries through one in-memory
-    // db so the test still verifies single-claim semantics.
-    const candidates = await this.#pool.query<{ id: string }>(
-      `SELECT id FROM ${t}
-       WHERE (locked_until IS NULL OR locked_until < NOW())
-         AND available_at <= NOW()
-       ORDER BY available_at ASC
-       LIMIT $1
-       FOR UPDATE SKIP LOCKED`,
-      [batchSize],
-    )
-
-    if (candidates.rows.length === 0) return []
-
-    const ids = candidates.rows.map((r) => r.id)
-    // Build a parameterized IN clause: ($2, $3, ...). pg-mem's UPDATE
-    // does not support `ANY($1::text[])`, so we materialize the list.
-    // For batch sizes we expect (typically ≤100), this is fine.
-    const placeholders = ids.map((_, i) => `$${i + 2}`).join(', ')
-
+    // Claim and mark in ONE statement. The row lock taken by `FOR UPDATE SKIP LOCKED` lasts only
+    // as long as the statement's transaction. As two autocommit `pool.query()` calls (a SELECT, then
+    // an UPDATE), the lock ended when the SELECT returned, and another worker could select the same
+    // id before the UPDATE landed: 20 workers over 200 jobs leased 162 to 178 of them more than once
+    // (usetheokit/theokit#1011). Inside one UPDATE the subquery's lock is held until the lease is
+    // written, so a concurrent worker skips the row instead of claiming it again.
     const r = await this.#pool.query<{
       id: string
       name: string
@@ -192,11 +174,18 @@ export class PostgresJobBackend implements JobBackend {
       locked_until: Date | string
     }>(
       `UPDATE ${t}
-       SET locked_until = NOW() + ($1 || ' seconds')::interval,
+       SET locked_until = NOW() + ($2 || ' seconds')::interval,
            attempts = attempts + 1
-       WHERE id IN (${placeholders})
+       WHERE id IN (
+         SELECT id FROM ${t}
+         WHERE (locked_until IS NULL OR locked_until < NOW())
+           AND available_at <= NOW()
+         ORDER BY available_at ASC
+         LIMIT $1
+         FOR UPDATE SKIP LOCKED
+       )
        RETURNING id, name, input, attempts, max_attempts, traceparent, locked_until`,
-      [lockSeconds.toString(), ...ids],
+      [batchSize, lockSeconds.toString()],
     )
 
     return r.rows.map((row) => ({
