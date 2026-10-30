@@ -1,5 +1,5 @@
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { resolve, dirname } from 'node:path'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { dirname, join, resolve } from 'node:path'
 
 import {
   UNDECIDED_POLICY_IDENT,
@@ -15,7 +15,6 @@ const RESERVED_FIELDS = new Set(['id', 'createdAt', 'created_at'])
 interface ResourceField {
   name: string
   type: 'string' | 'text' | 'number' | 'boolean'
-  drizzleColumn: string
   zodType: string
 }
 
@@ -43,24 +42,110 @@ function parseResourceFields(args: string[]): ResourceField[] {
     return {
       name,
       type: fieldType,
-      drizzleColumn: mapDrizzleColumn(name, fieldType),
       zodType: mapZodType(fieldType),
     }
   })
 }
 
-// --- Column / type mapping ---
+// --- Dialects ---
 
-function mapDrizzleColumn(name: string, type: ResourceField['type']): string {
-  switch (type) {
-    case 'string':
-    case 'text':
-      return `text('${name}').notNull()`
-    case 'number':
-      return `integer('${name}').notNull()`
-    case 'boolean':
-      return `integer('${name}', { mode: 'boolean' }).notNull().default(false)`
+/**
+ * The SQL dialects the generator writes code for. Drizzle's synchronous SQLite drivers expose
+ * `.all()`/`.get()`/`.run()` on a query; the Postgres drivers do not, so the two need different
+ * table builders AND different handler bodies (usetheokit/theokit#1022).
+ */
+type ResourceDialect = 'sqlite' | 'postgresql'
+
+interface DialectSpec {
+  /** The Drizzle module the table builders come from. */
+  readonly module: string
+  /** Matches an existing named import from `module`; group 1 is the list of names. */
+  readonly importPattern: RegExp
+  /** The table builder function. */
+  readonly table: string
+  /** Every column builder the generated table may use, imported up front. */
+  readonly columns: readonly string[]
+  readonly idColumn: string
+  readonly createdAtColumn: readonly string[]
+  readonly column: (name: string, type: ResourceField['type']) => string
+}
+
+const DIALECTS: Record<ResourceDialect, DialectSpec> = {
+  sqlite: {
+    module: 'drizzle-orm/sqlite-core',
+    importPattern: /import\s*\{([^}]*)\}\s*from\s*['"]drizzle-orm\/sqlite-core['"]/,
+    table: 'sqliteTable',
+    columns: ['integer', 'text'],
+    idColumn: `integer('id').primaryKey({ autoIncrement: true })`,
+    createdAtColumn: [
+      `text('created_at')`,
+      `    .notNull()`,
+      `    .$defaultFn(() => new Date().toISOString().split('T')[0])`,
+    ],
+    column: (name, type) => {
+      switch (type) {
+        case 'string':
+        case 'text':
+          return `text('${name}').notNull()`
+        case 'number':
+          return `integer('${name}').notNull()`
+        case 'boolean':
+          return `integer('${name}', { mode: 'boolean' }).notNull().default(false)`
+      }
+    },
+  },
+  postgresql: {
+    module: 'drizzle-orm/pg-core',
+    importPattern: /import\s*\{([^}]*)\}\s*from\s*['"]drizzle-orm\/pg-core['"]/,
+    table: 'pgTable',
+    columns: ['boolean', 'integer', 'serial', 'text', 'timestamp'],
+    idColumn: `serial('id').primaryKey()`,
+    createdAtColumn: [`timestamp('created_at').notNull().defaultNow()`],
+    column: (name, type) => {
+      switch (type) {
+        case 'string':
+        case 'text':
+          return `text('${name}').notNull()`
+        case 'number':
+          return `integer('${name}').notNull()`
+        case 'boolean':
+          return `boolean('${name}').notNull().default(false)`
+      }
+    },
+  },
+}
+
+/** A `dialect:` value in `drizzle.config.ts`, mapped to what the generator does with it. */
+const DIALECT_ALIASES: Record<string, ResourceDialect | undefined> = {
+  sqlite: 'sqlite',
+  turso: 'sqlite',
+  postgresql: 'postgresql',
+}
+
+const SCHEMA_IMPORT_DIALECTS: [RegExp, string][] = [
+  [/from ['"]drizzle-orm\/sqlite-core['"]/, 'sqlite'],
+  [/from ['"]drizzle-orm\/pg-core['"]/, 'postgresql'],
+  [/from ['"]drizzle-orm\/mysql-core['"]/, 'mysql'],
+  [/from ['"]drizzle-orm\/singlestore-core['"]/, 'singlestore'],
+]
+
+/**
+ * The project's dialect: `drizzle.config.ts` says it outright; failing that, the core module the
+ * schema already imports from does. A schema that imports from nothing (a fresh file) and no config
+ * leaves the historical default, SQLite.
+ *
+ * @returns the dialect, or the raw name of one the generator cannot write code for.
+ */
+function detectDialect(cwd: string, schemaSource: string): string {
+  const configPath = resolve(cwd, 'drizzle.config.ts')
+  if (existsSync(configPath)) {
+    const declared = /dialect\s*:\s*['"]([a-z0-9-]+)['"]/.exec(readFileSync(configPath, 'utf-8'))
+    if (declared) return declared[1]
   }
+  for (const [pattern, dialect] of SCHEMA_IMPORT_DIALECTS) {
+    if (pattern.test(schemaSource)) return dialect
+  }
+  return 'sqlite'
 }
 
 function mapZodType(type: ResourceField['type']): string {
@@ -77,39 +162,110 @@ function mapZodType(type: ResourceField['type']): string {
 
 // --- Template generators ---
 
-function generateSchemaEntry(resourceName: string, fields: ResourceField[]): string {
+function generateSchemaEntry(
+  resourceName: string,
+  fields: ResourceField[],
+  dialect: DialectSpec,
+): string {
+  const [createdAtFirst, ...createdAtRest] = dialect.createdAtColumn
   const cols = [
-    `  id: integer('id').primaryKey({ autoIncrement: true }),`,
-    ...fields.map((f) => `  ${f.name}: ${f.drizzleColumn},`),
-    `  createdAt: text('created_at')`,
-    `    .notNull()`,
-    `    .$defaultFn(() => new Date().toISOString().split('T')[0]),`,
+    `  id: ${dialect.idColumn},`,
+    ...fields.map((f) => `  ${f.name}: ${dialect.column(f.name, f.type)},`),
+    `  createdAt: ${createdAtFirst}`,
+    ...createdAtRest,
   ]
+  cols[cols.length - 1] += ','
   return [
     ``,
-    `export const ${resourceName} = sqliteTable('${resourceName}', {`,
+    `export const ${resourceName} = ${dialect.table}('${resourceName}', {`,
     ...cols,
     `})`,
     ``,
   ].join('\n')
 }
 
-function generateRouteIndex(resourceName: string, fields: ResourceField[]): string {
+/**
+ * The schema source with the table builders the appended table uses imported. The generator used to
+ * append `sqliteTable(...)` with no import at all, so the schema file stopped compiling.
+ *
+ * An existing named import from the dialect module gains the missing names; without one, an import
+ * line goes on top. Names already imported are not repeated.
+ */
+function withDialectImports(source: string, dialect: DialectSpec): string {
+  const needed = [dialect.table, ...dialect.columns]
+  const existing = dialect.importPattern.exec(source)
+  if (existing) {
+    const have = existing[1]
+      .split(',')
+      .map((n) => n.trim())
+      .filter(Boolean)
+    const merged = [...new Set([...have, ...needed])].sort((a, b) => a.localeCompare(b))
+    return source.replace(existing[0], `import { ${merged.join(', ')} } from '${dialect.module}'`)
+  }
+  return `import { ${[...needed].sort((a, b) => a.localeCompare(b)).join(', ')} } from '${dialect.module}'\n${source}`
+}
+
+/**
+ * Query expressions per dialect. SQLite's synchronous drivers finish a query with `.all()`, `.get()`
+ * or `.run()`; the Postgres drivers return a promise and have none of the three, so the Postgres
+ * handlers await the builder and take the first row of `returning()`.
+ */
+interface QueryShapes {
+  readonly async: boolean
+  list(table: string): string
+  insert(table: string): string
+  findById(table: string): string
+  updateById(table: string): string
+  deleteById(table: string): string
+}
+
+const QUERIES: Record<ResourceDialect, QueryShapes> = {
+  sqlite: {
+    async: false,
+    list: (t) => `db.select().from(${t}).all()`,
+    insert: (t) => `db.insert(${t}).values(body).returning().get()`,
+    findById: (t) => `db.select().from(${t}).where(eq(${t}.id, params.id)).get()`,
+    updateById: (t) => `db.update(${t}).set(body).where(eq(${t}.id, params.id)).returning().get()`,
+    deleteById: (t) => `db.delete(${t}).where(eq(${t}.id, params.id)).run()`,
+  },
+  postgresql: {
+    async: true,
+    list: (t) => `await db.select().from(${t})`,
+    insert: (t) => `(await db.insert(${t}).values(body).returning())[0]`,
+    findById: (t) => `(await db.select().from(${t}).where(eq(${t}.id, params.id)))[0]`,
+    updateById: (t) =>
+      `(await db.update(${t}).set(body).where(eq(${t}.id, params.id)).returning())[0]`,
+    deleteById: (t) => `await db.delete(${t}).where(eq(${t}.id, params.id))`,
+  },
+}
+
+interface RouteTemplateInput {
+  resourceName: string
+  fields: ResourceField[]
+  queries: QueryShapes
+  /** Project-relative path of the file being written, named by the placeholder policy. */
+  displayPath: string
+}
+
+function generateRouteIndex({
+  resourceName,
+  fields,
+  queries,
+  displayPath,
+}: RouteTemplateInput): string {
   const bodyFields = fields.map((f) => `    ${f.name}: ${f.zodType},`).join('\n')
+  const asyncKw = queries.async ? 'async ' : ''
   return [
     `import { route, type AccessDecision } from 'theokit/server/define'`,
     `import { z } from 'zod'`,
     `import { db } from '../../db/index.js'`,
     `import { ${resourceName} } from '../../db/schema.js'`,
     ``,
-    ...undecidedPolicyDeclaration(
-      `server/routes/${resourceName}/index.ts`,
-      'these methods read and write a table',
-    ),
+    ...undecidedPolicyDeclaration(displayPath, 'these methods read and write a table'),
     ``,
     `export const GET = route()`,
     `  .policy(${UNDECIDED_POLICY_IDENT})`,
-    `  .handler(() => db.select().from(${resourceName}).all())`,
+    `  .handler(${asyncKw}() => ${queries.list(resourceName)})`,
     `  .build()`,
     ``,
     `export const POST = route()`,
@@ -120,8 +276,8 @@ function generateRouteIndex(resourceName: string, fields: ResourceField[]): stri
     `    }),`,
     `  )`,
     `  .status(201)`,
-    `  .handler(({ body }) => {`,
-    `    const result = db.insert(${resourceName}).values(body).returning().get()`,
+    `  .handler(${asyncKw}({ body }) => {`,
+    `    const result = ${queries.insert(resourceName)}`,
     `    return result`,
     `  })`,
     `  .build()`,
@@ -129,8 +285,14 @@ function generateRouteIndex(resourceName: string, fields: ResourceField[]): stri
   ].join('\n')
 }
 
-function generateRouteId(resourceName: string, fields: ResourceField[]): string {
+function generateRouteId({
+  resourceName,
+  fields,
+  queries,
+  displayPath,
+}: RouteTemplateInput): string {
   const updateFields = fields.map((f) => `    ${f.name}: ${f.zodType}.optional(),`).join('\n')
+  const asyncKw = queries.async ? 'async ' : ''
   return [
     `import { route, type AccessDecision } from 'theokit/server/define'`,
     `import { z } from 'zod'`,
@@ -139,15 +301,15 @@ function generateRouteId(resourceName: string, fields: ResourceField[]): string 
     `import { eq } from 'drizzle-orm'`,
     ``,
     ...undecidedPolicyDeclaration(
-      `server/routes/${resourceName}/[id].ts`,
+      displayPath,
       'these methods read, update and delete rows of a table',
     ),
     ``,
     `export const GET = route()`,
     `  .policy(${UNDECIDED_POLICY_IDENT})`,
     `  .params(z.object({ id: z.coerce.number() }))`,
-    `  .handler(({ params }) => {`,
-    `    const item = db.select().from(${resourceName}).where(eq(${resourceName}.id, params.id)).get()`,
+    `  .handler(${asyncKw}({ params }) => {`,
+    `    const item = ${queries.findById(resourceName)}`,
     `    if (!item) return new Response(JSON.stringify({ error: 'Not found' }), { status: 404 })`,
     `    return item`,
     `  })`,
@@ -161,8 +323,8 @@ function generateRouteId(resourceName: string, fields: ResourceField[]): string 
     updateFields,
     `    }),`,
     `  )`,
-    `  .handler(({ params, body }) => {`,
-    `    const result = db.update(${resourceName}).set(body).where(eq(${resourceName}.id, params.id)).returning().get()`,
+    `  .handler(${asyncKw}({ params, body }) => {`,
+    `    const result = ${queries.updateById(resourceName)}`,
     `    if (!result) return new Response(JSON.stringify({ error: 'Not found' }), { status: 404 })`,
     `    return result`,
     `  })`,
@@ -172,26 +334,26 @@ function generateRouteId(resourceName: string, fields: ResourceField[]): string 
     `  .policy(${UNDECIDED_POLICY_IDENT})`,
     `  .params(z.object({ id: z.coerce.number() }))`,
     `  .status(204)`,
-    `  .handler(({ params }) => {`,
-    `    db.delete(${resourceName}).where(eq(${resourceName}.id, params.id)).run()`,
+    `  .handler(${asyncKw}({ params }) => {`,
+    `    ${queries.deleteById(resourceName)}`,
     `  })`,
     `  .build()`,
     ``,
   ].join('\n')
 }
 
-function generateTestTemplate(resourceName: string): string {
+function generateTestTemplate(resourceName: string, serverDir: string): string {
   return [
     `import { describe, it, expect } from 'vitest'`,
     ``,
     `describe('${resourceName} API', () => {`,
     `  it('should have a schema defined', async () => {`,
-    `    const schema = await import('../server/db/schema.js')`,
+    `    const schema = await import('../${serverDir}/db/schema.js')`,
     `    expect(schema.${resourceName}).toBeDefined()`,
     `  })`,
     ``,
     `  it('should have route handlers', async () => {`,
-    `    const index = await import('../server/routes/${resourceName}/index.js')`,
+    `    const index = await import('../${serverDir}/routes/${resourceName}/index.js')`,
     `    expect(index.GET).toBeDefined()`,
     `    expect(index.POST).toBeDefined()`,
     `  })`,
@@ -202,7 +364,19 @@ function generateTestTemplate(resourceName: string): string {
 
 // --- Orchestrator ---
 
-export function generateResource(cwd: string, name: string, fieldArgs: string[]): GenerateResult {
+/**
+ * Generate a CRUD resource: a table appended to `<serverDir>/db/schema.ts`, two route files under
+ * `<serverDir>/routes/<name>/` and a test.
+ *
+ * @param serverDir - the project-relative `serverDir` from `theo.config.ts`. The generator used to
+ *   assume `server/`, so in the scaffold (`src/server`) it refused every time.
+ */
+export function generateResource(
+  cwd: string,
+  name: string,
+  fieldArgs: string[],
+  serverDir = 'server',
+): GenerateResult {
   let fields: ResourceField[]
   try {
     fields = parseResourceFields(fieldArgs)
@@ -210,16 +384,19 @@ export function generateResource(cwd: string, name: string, fieldArgs: string[])
     return { status: 'invalid_name', message: err instanceof Error ? err.message : String(err) }
   }
 
-  const schemaPath = resolve(cwd, 'server/db/schema.ts')
-  const routeIndexPath = resolve(cwd, `server/routes/${name}/index.ts`)
-  const routeIdPath = resolve(cwd, `server/routes/${name}/[id].ts`)
+  const schemaRel = join(serverDir, 'db', 'schema.ts')
+  const routeDirRel = join(serverDir, 'routes', name)
+  const schemaPath = resolve(cwd, schemaRel)
+  const routeIndexPath = resolve(cwd, routeDirRel, 'index.ts')
+  const routeIdPath = resolve(cwd, routeDirRel, '[id].ts')
   const testPath = resolve(cwd, `tests/${name}.test.ts`)
 
   if (!existsSync(schemaPath)) {
     return {
       status: 'not_a_project',
       message:
-        'server/db/schema.ts not found. Run this from a TheoKit project with database setup.',
+        `${schemaRel} not found. \`theokit generate resource\` appends the table to the Drizzle ` +
+        `schema under the configured serverDir ("${serverDir}"); create it first.`,
     }
   }
 
@@ -234,22 +411,45 @@ export function generateResource(cwd: string, name: string, fieldArgs: string[])
       filePath: schemaPath,
       kind: 'resource',
       name,
-      message: `Table "${name}" already exists in schema.ts`,
+      message: `Table "${name}" already exists in ${schemaRel}`,
     }
   }
 
-  // 1. Append schema entry
-  appendFileSync(schemaPath, generateSchemaEntry(name, fields))
+  const detected = detectDialect(cwd, existingSchema)
+  const dialectName = DIALECT_ALIASES[detected]
+  if (dialectName === undefined) {
+    return {
+      status: 'invalid_config',
+      message:
+        `\`theokit generate resource\` writes code for SQLite and PostgreSQL; this project uses ` +
+        `"${detected}" (from drizzle.config.ts or the imports in ${schemaRel}). Nothing was written.`,
+    }
+  }
+  const dialect = DIALECTS[dialectName]
+  const queries = QUERIES[dialectName]
+
+  // 1. Append the table, with the builders it uses imported.
+  writeFileSync(
+    schemaPath,
+    withDialectImports(existingSchema, dialect) + generateSchemaEntry(name, fields, dialect),
+  )
 
   // 2. Create route files
   mkdirSync(dirname(routeIndexPath), { recursive: true })
-  writeFileSync(routeIndexPath, generateRouteIndex(name, fields))
-  writeFileSync(routeIdPath, generateRouteId(name, fields))
+  const template = { resourceName: name, fields, queries }
+  writeFileSync(
+    routeIndexPath,
+    generateRouteIndex({ ...template, displayPath: join(routeDirRel, 'index.ts') }),
+  )
+  writeFileSync(
+    routeIdPath,
+    generateRouteId({ ...template, displayPath: join(routeDirRel, '[id].ts') }),
+  )
 
   // 3. Create test file
   mkdirSync(dirname(testPath), { recursive: true })
   if (!existsSync(testPath)) {
-    writeFileSync(testPath, generateTestTemplate(name))
+    writeFileSync(testPath, generateTestTemplate(name, serverDir))
   }
 
   return { status: 'created', filePath: routeIndexPath, kind: 'resource', name }
