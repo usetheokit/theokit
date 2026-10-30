@@ -237,3 +237,17 @@ describe('what the check cannot read is never a pass', () => {
     expect(out.stderr).toMatch(/apps\/broken\/package\.json/)
   })
 })
+
+describe('this repository passes its own check', () => {
+  it('test_this_repository_carries_no_changeset_that_only_a_private_or_ignored_package_names', () => {
+    // Base `HEAD` empties the diff, so only the changeset refusal can fail this. It is the guard
+    // that the trunk carries nothing the Release workflow would refuse on (B-658).
+    const out = spawnSync(process.execPath, [SCRIPT, 'HEAD'], {
+      cwd: REPO,
+      encoding: 'utf8',
+      env: ENV,
+    })
+
+    expect(out.status, out.stderr).toBe(0)
+  })
+})
