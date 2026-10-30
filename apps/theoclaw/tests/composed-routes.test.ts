@@ -83,13 +83,21 @@ describe('the composed SMS route', () => {
     await loop.stopAll()
   })
 
-  it('answers 401 when the signature does not check', async () => {
+  it('answers 401 and delivers nothing when the signature does not check', async () => {
     const sms = new VerifyingSms(false)
+    const delivered: MessageEvent[] = []
     const { builders } = fakeBuilders({ sms })
     const { loop, router } = composeTheoClaw({ env: SMS_ENV, agentFactory: noAgent, builders, write: () => undefined })
     await loop.ready
+    sms.onInbound(async (event) => {
+      delivered.push(event)
+    })
 
-    expect((await router(twilioPost())).status).toBe(401)
+    const response = await router(twilioPost())
+
+    expect(response.status).toBe(401)
+    expect(sms.checkedUrls).toEqual(['https://theoclaw.example.org/webhooks/sms'])
+    expect(delivered).toEqual([])
     await loop.stopAll()
   })
 
