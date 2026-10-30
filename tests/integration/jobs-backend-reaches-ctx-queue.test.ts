@@ -1,11 +1,11 @@
-import { type ChildProcess, spawn } from 'node:child_process'
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
-import { createServer } from 'node:net'
 import { join, resolve } from 'node:path'
 
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
 import { startDevServer } from '../../packages/theo/src/cli/commands/dev.js'
+
+import { spawnTheokitStart } from './helpers/spawn-theokit-start.js'
 
 /**
  * `jobs: { backend }` in `theo.config.ts` was parsed and then read by nothing: `executeRoute` wires
@@ -20,8 +20,6 @@ import { startDevServer } from '../../packages/theo/src/cli/commands/dev.js'
  */
 const REPO = resolve(__dirname, '../..')
 const APP = resolve(__dirname, '..', '.tmp-jobs-backend-reaches-ctx-queue')
-const TSX = resolve(REPO, 'node_modules/.bin/tsx')
-const CLI = resolve(REPO, 'packages/theo/src/cli/index.ts')
 const JOBS_BARREL = resolve(REPO, 'packages/theo/src/server/jobs/index.ts')
 
 function writeApp(): void {
@@ -69,35 +67,6 @@ export const GET = {
   )
 }
 
-function freePort(): Promise<number> {
-  return new Promise((ok, fail) => {
-    const srv = createServer()
-    srv.once('error', fail)
-    srv.listen(0, () => {
-      const { port } = srv.address() as { port: number }
-      srv.close(() => ok(port))
-    })
-  })
-}
-
-async function waitForServer(
-  origin: string,
-  child: ChildProcess,
-  log: () => string,
-): Promise<void> {
-  const deadline = Date.now() + 60_000
-  while (Date.now() < deadline) {
-    if (child.exitCode !== null) throw new Error(`theokit start exited early:\n${log()}`)
-    try {
-      await fetch(`${origin}/health`, { signal: AbortSignal.timeout(1000) })
-      return
-    } catch {
-      await new Promise((r) => setTimeout(r, 250))
-    }
-  }
-  throw new Error(`theokit start did not answer within 60s:\n${log()}`)
-}
-
 async function enqueueThenReadBackend(origin: string): Promise<{
   enqueue: unknown
   pending: unknown
@@ -128,23 +97,13 @@ describe('jobs.backend reaches ctx.queue', () => {
   })
 
   it('under theokit start, a route enqueues into the configured backend', async () => {
-    const port = await freePort()
-    let output = ''
-    const child = spawn(TSX, [CLI, 'start', '--port', String(port)], {
-      cwd: APP,
-      env: { ...process.env, NODE_ENV: 'production', PORT: String(port) },
-      stdio: ['ignore', 'pipe', 'pipe'],
-    })
-    child.stdout.on('data', (d: Buffer) => (output += d.toString()))
-    child.stderr.on('data', (d: Buffer) => (output += d.toString()))
+    const app = await spawnTheokitStart(APP)
     try {
-      const origin = `http://localhost:${String(port)}`
-      await waitForServer(origin, child, () => output)
-      const { enqueue, pending } = await enqueueThenReadBackend(origin)
-      expect(enqueue, output).toEqual({ hasQueue: true })
+      const { enqueue, pending } = await enqueueThenReadBackend(app.origin)
+      expect(enqueue, app.output()).toEqual({ hasQueue: true })
       expect(pending).toEqual({ names: ['hello'], inputs: [{ who: 'probe' }] })
     } finally {
-      child.kill('SIGTERM')
+      await app.stop()
     }
   }, 90_000)
 

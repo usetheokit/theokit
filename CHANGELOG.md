@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- `theokit`: `theokit start` and `theokit dev` run the jobs declared under `<serverDir>/jobs/` with an in-process worker when `jobs.backend` is set. It polls, backs off while the backend is unreachable, and on `SIGTERM` waits up to 20 seconds for the job in progress. `jobs.worker` tunes it and `enabled: false` turns it off; `createJobWorker` is exported from `theokit/server/jobs`. Nothing read `.theokit/jobs.json` before, so enqueued jobs never ran (#1010)
+
 ### Changed
 
 - `theokit`: **behavior change.** `theokit db migrate` runs `drizzle-kit migrate`, which applies the files `theokit db generate` writes and records them in `drizzle.__drizzle_migrations`. It ran `drizzle-kit push`, which ignores those files and keeps no journal. The push behavior is now `theokit db push`. `theokit db seed` runs `<serverDir>/db/seed.ts` instead of a hardcoded `server/db/seed.ts` (#1021)

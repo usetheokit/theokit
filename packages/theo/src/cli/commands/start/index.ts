@@ -19,7 +19,6 @@ import { loadConfig } from '../../../config/load-config.js'
 import { loadEnv } from '../../../config/load-env.js'
 import { resolvePluginSpecifiers } from '../../../config/resolve-plugin-specifiers.js'
 import { initCacheEngineFromConfig } from '../../../server/cache-bootstrap.js'
-import { createCronScheduler } from '../../../server/cron/cron-runtime-node.js'
 import { defineHealthRoute } from '../../../server/define/health-route.js'
 import { createCorsHandler } from '../../../server/http/cors.js'
 import { jobBackendFromConfig } from '../../../server/jobs/job-backend-from-config.js'
@@ -32,11 +31,11 @@ import { preflightNodeAndBindings } from '../../preflight-node-version.js'
 import { CONTROLLER_MANIFEST_FILE } from '../build/emit-controllers.js'
 
 import { assertSdkCompatible } from './assert-sdk-compatible.js'
+import { startBackgroundWork } from './background-work.js'
 import {
   configureAgentRegistryFromConfig,
   configureStorageManagerFromConfig,
 } from './bootstrap-stages.js'
-import { loadCronDefinitions } from './cron-bootstrap.js'
 import { installGracefulShutdown } from './graceful-shutdown.js'
 import type { RequestHandlerCtx } from './handlers.js'
 import { loadRoutesAndActions } from './manifest-loader.js'
@@ -192,13 +191,6 @@ export async function startCommand(options: StartOptions): Promise<void> {
 
   await attachWebSocketHandler(server, cachedWsRoutes, loadModule)
 
-  // theokit#324: `theokit build --target node` announces an in-process
-  // scheduler here. Drive it, or the announcement is false.
-  const cronDefinitions = await loadCronDefinitions(resolve(distDir, 'crons.json'), cwd, loadModule)
-  if (cronDefinitions.length > 0) {
-    createCronScheduler(cronDefinitions).start()
-  }
-
   // `config.host` was never passed here, and `listen(port)` with no address binds
   // every interface — so the server listened wider than its own configuration,
   // whose default says `localhost`. Passing it broke containers, where `localhost`
@@ -229,6 +221,10 @@ export async function startCommand(options: StartOptions): Promise<void> {
     console.warn(`\n  ${exposure.message}\n`)
   }
 
+  // Crons (theokit#324) and jobs (#1010), started only once the server is cleared to listen: a
+  // refused boot must not leave timers holding the process open.
+  const background = await startBackgroundWork(config, distDir, cwd, loadModule)
+
   server.listen(port, listenTarget.host, () => {
     console.log(`\n  Theo production server`)
     // The line states the bound address, because it used to print `localhost`
@@ -245,10 +241,8 @@ export async function startCommand(options: StartOptions): Promise<void> {
       for (const e of exposure.exposures) console.warn(`    ${e.method} ${e.routePath}`)
       console.warn('')
     }
-    if (cronDefinitions.length > 0) {
-      console.log(`  Crons: ${String(cronDefinitions.length)} scheduled in-process\n`)
-    }
+    for (const line of background.summaries) console.log(`  ${line}\n`)
   })
 
-  installGracefulShutdown(server)
+  installGracefulShutdown(server, () => background.stop())
 }

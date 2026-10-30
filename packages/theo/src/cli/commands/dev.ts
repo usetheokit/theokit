@@ -1,3 +1,5 @@
+import { resolve } from 'node:path'
+
 import react from '@vitejs/plugin-react'
 import { createServer, type Plugin, type ServerOptions, type ViteDevServer } from 'vite'
 
@@ -6,11 +8,13 @@ import { loadEnv } from '../../config/load-env.js'
 import type { TheoConfig } from '../../config/schema.js'
 import { validateProjectStructure } from '../../config/validate-structure.js'
 import { initCacheEngineFromConfig } from '../../server/cache-bootstrap.js'
+import { listJobFiles } from '../../server/jobs/job-scan.js'
 import { orchestrateDev } from '../../services/index.js'
 import { theoPluginAsync } from '../../vite-plugin/index.js'
 import { preflightNodeAndBindings } from '../preflight-node-version.js'
 
 import { configureStorageManagerFromConfig } from './start/bootstrap-stages.js'
+import { loadJobModules, startJobWorker } from './start/job-bootstrap.js'
 
 interface DevOptions {
   port?: number
@@ -138,7 +142,28 @@ export async function startDevServer(cwd: string, options?: DevOptions): Promise
     void orchestration.stop()
   })
 
+  await startDevBackgroundWork(server, cwd, config)
+
   return server
+}
+
+/**
+ * The job worker `theokit start` runs, in development too (usetheokit/theokit#1010): `ctx.queue`
+ * works in dev since #1009, and a queue nothing drains would make every job untestable without a
+ * production build. Job files load through Vite, like routes, and the worker stops with the server.
+ */
+async function startDevBackgroundWork(
+  server: ViteDevServer,
+  cwd: string,
+  config: TheoConfig,
+): Promise<void> {
+  const files = listJobFiles(resolve(cwd, config.serverDir, 'jobs'))
+  const definitions = await loadJobModules(files, (filePath) => server.ssrLoadModule(filePath))
+  const jobs = startJobWorker(config, definitions)
+  if (jobs.summary !== undefined) console.log(`\n  ${jobs.summary}`)
+  server.httpServer?.on('close', () => {
+    void jobs.worker?.stop()
+  })
 }
 
 export async function devCommand(options: DevOptions): Promise<void> {

@@ -110,6 +110,36 @@ A `pg.Pool` emits `error` when Postgres drops an idle connection (restart, failo
 the factory attaches none, `usePostgres` attaches one that logs a structured warning, so the process
 stays up and the next query reconnects. Attach your own, as above, to handle it differently.
 
+## Jobs
+
+Declare a backend in `theo.config.ts` and every file route gets `ctx.queue`:
+
+```typescript
+import { config } from 'theokit'
+import { PostgresJobBackend } from 'theokit/server/jobs'
+
+export default config()
+  .set({ jobs: { backend: new PostgresJobBackend({ pool }) } })
+  .build()
+```
+
+`ctx.queue.enqueue('send-email', input)` hands the job to the backend when the response succeeds
+(a 4xx, a 5xx or an aborted request discards it). A job is a file under `<serverDir>/jobs/`
+exporting `defineJob(name, { handler })`.
+
+`theokit start` and `theokit dev` run a job worker in the same process whenever jobs are declared
+and a backend is set: it polls the backend, runs each job and backs off while the backend is
+unreachable. On `SIGTERM`, `start` stops polling and waits up to 20 seconds for the job in progress
+before closing storage. `jobs.worker` tunes it (`pollIntervalMs`, `batchSize`, `lockSeconds`), and
+`enabled: false` turns it off in a process that should only serve requests, for example
+`enabled: process.env.ROLE !== 'web'`. Several workers can share one Postgres backend; each job is
+leased to one of them. To run a worker on its own, call `createJobWorker(createJobRunner(backend,
+definitions)).start()` from `theokit/server/jobs`.
+
+In `theokit dev`, route modules load through Vite, so a route that imports the backend from
+`theo.config.ts` gets a second instance of it. Use `ctx.queue` to enqueue. Deploy targets other
+than `node` do not wire `ctx.queue`; `theokit build` says so when `jobs` is set.
+
 ## CLI
 
 ```bash

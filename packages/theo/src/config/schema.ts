@@ -299,6 +299,22 @@ export const theoConfigSchema = z
             'methods, such as new InMemoryJobBackend() or new PostgresJobBackend({ pool }) ' +
             "from 'theokit/server/jobs'",
         }),
+        /**
+         * The in-process job worker `theokit start` and `theokit dev` run when jobs are declared
+         * under `server/jobs/` (usetheokit/theokit#1010). Set `enabled: false` in a process that
+         * should only serve requests, for example from an env var, and run the worker elsewhere.
+         */
+        worker: z
+          .object({
+            enabled: z.boolean().default(true),
+            /** Wait after a poll that found no job. */
+            pollIntervalMs: z.number().int().positive().default(1000),
+            /** Jobs leased per poll. */
+            batchSize: z.number().int().positive().default(10),
+            /** Lease duration per job; a job still running after it can be leased again. */
+            lockSeconds: z.number().int().positive().default(30),
+          })
+          .prefault({}),
       })
       .optional(),
     /**
