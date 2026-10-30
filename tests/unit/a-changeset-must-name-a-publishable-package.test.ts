@@ -64,12 +64,13 @@ function setup(root: string, args: readonly string[]): void {
   expect(out.status, `fixture setup \`git ${args.join(' ')}\` failed: ${out.stderr}`).toBe(0)
 }
 
-/** A committed repository carrying the script, the workspace and the given changesets. */
-function fixture(spec: Fixture): string {
-  const root = mkdtempSync(join(tmpdir(), 'theo-changeset-publishable-'))
-  roots.push(root)
-  mkdirSync(join(root, 'scripts'))
-  copyFileSync(SCRIPT, join(root, 'scripts', 'check-changeset-coverage.mjs'))
+/** Writes every `path -> text` entry of `files` under `root`. */
+function writeAll(root: string, files: Readonly<Record<string, string>> = {}): void {
+  for (const [path, text] of Object.entries(files)) write(root, path, text)
+}
+
+/** The workspace, its manifests and the changesets config every fixture starts from. */
+function writeWorkspace(root: string, spec: Fixture): void {
   write(root, 'pnpm-workspace.yaml', spec.workspace ?? WORKSPACE)
   for (const [path, manifest] of Object.entries(MANIFESTS)) {
     write(root, path, JSON.stringify(manifest))
@@ -80,14 +81,23 @@ function fixture(spec: Fixture): string {
     spec.config ?? JSON.stringify({ baseBranch: 'main', ignore: spec.ignore ?? [] }),
   )
   write(root, '.changeset/README.md', '# Changesets\n')
+}
+
+/** A committed repository carrying the script, the workspace and the given changesets. */
+function fixture(spec: Fixture): string {
+  const root = mkdtempSync(join(tmpdir(), 'theo-changeset-publishable-'))
+  roots.push(root)
+  mkdirSync(join(root, 'scripts'))
+  copyFileSync(SCRIPT, join(root, 'scripts', 'check-changeset-coverage.mjs'))
+  writeWorkspace(root, spec)
   for (const [name, text] of Object.entries(spec.changesets ?? {})) {
     write(root, join('.changeset', name), text)
   }
-  for (const [path, text] of Object.entries(spec.files ?? {})) write(root, path, text)
+  writeAll(root, spec.files)
   setup(root, ['init', '-q'])
   commit(root, 'fixture')
   if (spec.changed !== undefined) {
-    for (const [path, text] of Object.entries(spec.changed)) write(root, path, text)
+    writeAll(root, spec.changed)
     commit(root, 'change')
   }
   return root
