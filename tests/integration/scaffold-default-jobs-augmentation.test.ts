@@ -22,7 +22,8 @@ describe('default template — JobRegistry augmentation example (T2.2)', () => {
     // The three onboarding steps ARE the documentation: the template used to point at a concepts
     // page for the rest, and a scaffold that ships a link to a page the reader cannot open is worse
     // than one that carries the whole instruction inline.
-    expect(content).toMatch(/1\. Create `server\/jobs/)
+    // The scaffold keeps the server half under `src/server`, so the step names that path.
+    expect(content).toMatch(/1\. Create `src\/server\/jobs/)
   })
 
   it('jobs.d.ts has commented-out examples (not active by default)', () => {

@@ -19,6 +19,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- `create-theokit`: the scaffold's `types/jobs.d.ts` names `src/server/jobs/`, the directory the scaffold's `serverDir` points at, instead of `server/jobs/` (#1010)
 - `theokit`: the `storage` and `cache` blocks of `theo.config.ts` reach route code under `theokit start`. The CLI build and the library build each carried their own copy of the storage manager and the cache engine, so `start` configured one copy and routes read the other: `usePostgres` threw `Database "main" not configured` and `revalidateTag` threw `Cache engine not initialized`. Both are now held once per process (#1018)
 - `theokit`: a Postgres pool from `getStorageManager().usePostgres(...)` no longer exits the process when Postgres drops an idle connection. `pg.Pool` emits `error` for the disconnected idle client and Node exits on an `error` event with no listener. When the pool has no `error` listener, `usePostgres` attaches one that logs a structured warning with the database name and the Postgres error code, and the next query reconnects. A listener the factory attached is left as the only one (#1019)
 - `theokit`: a Redis client from `getStorageManager().useRedis(...)` no longer exits the process on a socket error. node-redis re-emits a dropped connection as an `error` event; when the client has no `error` listener, `useRedis` attaches one that logs a structured warning with the server name and the error code (#1029)
