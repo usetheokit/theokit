@@ -27,7 +27,17 @@
  * help: the changeset is then never consumed and every later run refuses the same way. So a
  * changeset whose every named package is private, or that names any ignored package (the changesets
  * CLI refuses a mixed one inside the release), is refused here, at the PR, where the fix is deleting
- * one file. A change to a private app is recorded in that app's CHANGELOG by hand.
+ * one file. A change to a private app is recorded in that app's CHANGELOG by hand. A changeset
+ * that names an ignored package beside a publishable one keeps its publishable lines: only the
+ * ignored package's line is removed.
+ *
+ * An ignored package is never versioned, so a change to its source needs no changeset either.
+ *
+ * ## Why the readers are hand-written
+ *
+ * The CI job that runs this is install-free (`.github/workflows/ci.yml`: node's stdlib plus
+ * `git diff`), so the YAML subset of `pnpm-workspace.yaml` and of a changeset's frontmatter is read
+ * here rather than through the `yaml` devDependency. Any shape the readers do not model exits 2.
  */
 import { execFileSync } from 'node:child_process'
 import { readdirSync, readFileSync, existsSync } from 'node:fs'
@@ -63,21 +73,6 @@ const touched = new Set()
 for (const file of changed) {
   const m = /^packages\/([^/]+)\/src\//.exec(file)
   if (m) touched.add(m[1])
-}
-
-const needing = new Map()
-for (const dir of touched) {
-  const manifest = join(ROOT, 'packages', dir, 'package.json')
-  if (!existsSync(manifest)) {
-    console.error(
-      `check-changeset-coverage: packages/${dir}/src changed and ${manifest} is absent.`,
-    )
-    process.exit(2)
-  }
-  const pkg = JSON.parse(readFileSync(manifest, 'utf8'))
-  // A private package publishes nothing, so a changeset would name something npm never sees.
-  if (pkg.private === true) continue
-  needing.set(pkg.name, dir)
 }
 
 /** A file the check must read and cannot is the check failing to run, never the check passing. */
@@ -161,7 +156,11 @@ function workspacePackages() {
   return packages
 }
 
-/** changesets accepts globs in `ignore`; `*` matches within one segment of the name. */
+/**
+ * changesets reads `ignore` with micromatch. This matches literal names and a `*` within one
+ * segment of the name; any other glob shape exits 2, as `expand` does for the workspace, because a
+ * pattern matching nothing here would let a changeset naming that package pass silently.
+ */
 function ignoredMatcher() {
   const config = existsSync(join(ROOT, '.changeset', 'config.json'))
     ? readJson('.changeset/config.json')
@@ -170,8 +169,14 @@ function ignoredMatcher() {
   if (!Array.isArray(ignore) || !ignore.every((p) => typeof p === 'string')) {
     unreadable('.changeset/config.json `ignore` is not a list of package names.')
   }
+  const unsupported = ignore.find((p) => /[?![\]{}()]|\*\*/.test(p))
+  if (unsupported !== undefined) {
+    unreadable(
+      `.changeset/config.json ignore entry '${unsupported}' uses a glob shape this check does not match.`,
+    )
+  }
   const patterns = ignore.map(
-    (p) => new RegExp(`^${p.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replaceAll('*', '[^/]*')}$`),
+    (p) => new RegExp(`^${p.replace(/[.+^${}()|[\]\\]/g, '\\$&').replaceAll('*', '[^/]*')}$`),
   )
   return (name) => patterns.some((p) => p.test(name))
 }
@@ -219,15 +224,21 @@ function namedPackages(entry, frontmatter) {
   return named
 }
 
-/** Why no release publishes this changeset, or `undefined` when one does. */
+/**
+ * Why a release cannot consume this changeset, or `undefined` when it can. `mixed` is a changeset
+ * that also names a package a release publishes: only the listed lines are wrong, not the file.
+ */
 function unpublishable(named, packages, isIgnored) {
-  const ignored = named.filter(isIgnored)
-  if (ignored.length > 0) return ignored.map((n) => `${n} (ignored)`)
   // Every name was checked against the workspace before this is called, so `get` finds each one.
-  if (named.length > 0 && named.every((n) => packages.get(n)?.private === true)) {
-    return named.map((n) => `${n} (private)`)
+  const label = (n) => {
+    if (isIgnored(n)) return `${n} (ignored)`
+    return packages.get(n)?.private === true ? `${n} (private)` : undefined
   }
-  return undefined
+  const labels = named.map(label)
+  const mixed = labels.includes(undefined)
+  // A private package beside a publishable one is harmless; an ignored one is not (EC-1).
+  const reasons = mixed ? labels.filter((l) => l?.endsWith('(ignored)')) : labels
+  return reasons.length > 0 ? { reasons, mixed } : undefined
 }
 
 /**
@@ -256,8 +267,22 @@ for (const entry of existsSync(dir) ? readdirSync(dir) : []) {
     }
     declared.add(name)
   }
-  const reasons = unpublishable(named, packages, isIgnored)
-  if (reasons !== undefined) refused.push([entry, reasons])
+  const verdict = unpublishable(named, packages, isIgnored)
+  if (verdict !== undefined) refused.push([entry, verdict])
+}
+
+/** Every publishable package whose source moved, read through the same readers as the rest. */
+const needing = new Map()
+for (const d of touched) {
+  const manifest = join('packages', d, 'package.json')
+  if (!existsSync(join(ROOT, manifest))) {
+    unreadable(`packages/${d}/src changed and ${manifest} is absent.`)
+  }
+  const pkg = readJson(manifest)
+  // A private or ignored package is never versioned, so a changeset would name something no
+  // release consumes.
+  if (pkg.private === true || isIgnored(pkg.name)) continue
+  needing.set(pkg.name, d)
 }
 
 const uncovered = [...needing].filter(([name]) => !declared.has(name))
@@ -269,23 +294,38 @@ if (uncovered.length === 0 && refused.length === 0) {
   process.exit(0)
 }
 
-if (refused.length > 0) {
+if (refused.length > 0) reportRefused(refused)
+
+/** What a refused changeset names; "only" just when nothing else in it is publishable. */
+function refusalLine(reasons, mixed) {
+  const listed = reasons.join(', ')
+  if (mixed) return `names ${listed} beside a package a release publishes`
+  const only = reasons.length === 1 ? 'only ' : ''
+  return `names ${only}${listed}, which no release publishes`
+}
+
+/** One line per refused changeset, then the remedy for each kind present. */
+function reportRefused(list) {
   console.error(
-    `check-changeset-coverage: ${String(refused.length)} changeset(s) no release publishes:\n`,
+    `check-changeset-coverage: ${String(list.length)} changeset(s) no release consumes:\n`,
   )
-  for (const [entry, reasons] of refused) {
-    const only = reasons.length === 1 ? 'only ' : ''
-    console.error(
-      `  .changeset/${entry}: names ${only}${reasons.join(', ')}, which no release publishes`,
-    )
+  for (const [entry, { reasons, mixed }] of list) {
+    console.error(`  .changeset/${entry}: ${refusalLine(reasons, mixed)}`)
   }
   console.error(
     '\nA private or ignored package is never versioned, so the changeset stays pending and the',
   )
-  console.error(
-    "Release workflow refuses on every run. Record the change in that package's CHANGELOG and",
-  )
-  console.error('delete the changeset.\n')
+  console.error('Release workflow refuses on every run.')
+  if (list.some(([, v]) => !v.mixed)) {
+    console.error("Record the change in that package's CHANGELOG and delete the changeset.")
+  }
+  if (list.some(([, v]) => v.mixed)) {
+    console.error(
+      "Where it sits beside a publishable package, remove the ignored package's line, keep the",
+    )
+    console.error("changeset, and record that package's change in its CHANGELOG.")
+  }
+  console.error('')
 }
 
 if (uncovered.length > 0) {
