@@ -33,6 +33,7 @@ interface Step {
 
 interface Job {
   'timeout-minutes'?: number
+  needs?: string[]
   env?: Record<string, string>
   steps: Step[]
 }
@@ -95,7 +96,7 @@ describe('live-model.yml', () => {
 
   it('runs the preflight before the build and the build before the suite', () => {
     const preflight = stepIndex('live-model-preflight.mjs')
-    const build = stepIndex('pnpm --filter "@theokit/agents..." build')
+    const build = stepIndex('live-model-build.mjs agents')
     const suite = stepIndex('test:live')
     expect(preflight).toBeLessThan(build)
     expect(build).toBeLessThan(suite)
@@ -133,7 +134,7 @@ describe('live-model.yml', () => {
   // ci.yml, which holds no provider key, so it skipped green on every push.
   it('runs the A2A real-model test after the build, with the key required and redacted', () => {
     const a2a = stepIndex('--filter theocode test:live')
-    expect(a2a).toBeGreaterThan(stepIndex('pnpm --filter "@theokit/agents..." build'))
+    expect(a2a).toBeGreaterThan(stepIndex('live-model-build.mjs agents'))
     const A2A_SUITE = STEPS[a2a] as Step
     expect(A2A_SUITE.env?.OPENROUTER_API_KEY).toContain('secrets.OPENROUTER_API_KEY')
     expect(A2A_SUITE.env?.THEOKIT_LIVE_REQUIRED).toBe('1')
@@ -146,12 +147,11 @@ describe('live-model.yml', () => {
   // with the model and the key, so a missing one fails by name instead of skipping.
   // F-dom-1 / F-wire-4 (B-651): `theoclaw^...` selects only TheoClaw's dependencies, so
   // apps/theoclaw/dist/main.js, which control-plane and instance-profiles spawn, was never built.
-  // `theoclaw...` selects TheoClaw and its dependencies.
+  // `theoclaw...` selects TheoClaw and its dependencies; the build script's case below checks that
+  // by what pnpm selects (B-659).
   it('runs the TheoClaw live tests with THEOCLAW_LIVE=1, after TheoClaw itself is built', () => {
     const theoclaw = stepIndex('--filter theoclaw test:live')
-    const build = stepIndex('pnpm --filter "theoclaw..." build')
-    expect(theoclaw).toBeGreaterThan(build)
-    expect(STEPS[build]?.run).not.toContain('theoclaw^...')
+    expect(theoclaw).toBeGreaterThan(stepIndex('live-model-build.mjs theoclaw'))
     const LIVE_STEP = STEPS[theoclaw] as Step
     expect(LIVE_STEP.env?.THEOCLAW_LIVE).toBe('1')
     expect(LIVE_STEP.env?.THEOCLAW_HOST_TOOLS).toBe('on')
@@ -159,6 +159,11 @@ describe('live-model.yml', () => {
     expect(LIVE_STEP.env?.OPENROUTER_API_KEY).toContain('secrets.OPENROUTER_API_KEY')
     expect(LIVE_STEP.shell).toBe('bash')
     expect(LIVE_STEP.run?.trim()).toMatch(/2>&1 \| node scripts\/redact-key-shapes\.mjs$/)
+  })
+
+  it('builds through the script in both live-model build steps, and no pnpm build line remains', () => {
+    expect(STEPS.filter((step) => step.run?.includes('live-model-build.mjs'))).toHaveLength(2)
+    expect(RAW).not.toMatch(/pnpm --filter .* build/)
   })
 
   it('points theoclaw test:live at its live tests, one file at a time', () => {
@@ -192,6 +197,33 @@ describe('live-model.yml', () => {
     expect(JOB.env?.LIVE_MODEL).toBe(`\${{ vars.LIVE_MODEL || '${DEFAULT_LIVE_MODEL}' }}`)
     for (const step of STEPS) expect(step.env?.LIVE_MODEL).toBeUndefined()
     expect(RAW.split(DEFAULT_LIVE_MODEL)).toHaveLength(2)
+  })
+})
+
+// B-659: the live-model build steps ran only after a merge to develop, so no pull request built
+// what the live job builds. ci.yml's `live-model-build` job runs the same script on every pull
+// request with no secret, and `ci-ok` waits on it.
+const CI = parse(
+  readFileSync(resolve(__dirname, '../../.github/workflows/ci.yml'), 'utf8'),
+) as Workflow
+const BUILD_JOB = CI.jobs['live-model-build']
+
+describe('ci.yml live-model-build', () => {
+  it('builds the live-model selectors on every pull request, with no secret and no live test', () => {
+    expect(BUILD_JOB).toBeDefined()
+    const node = JSON.stringify(BUILD_JOB)
+    expect(node).not.toContain('secrets.')
+    expect(node).not.toContain('test:live')
+    expect(
+      BUILD_JOB?.steps.some((step) => step.run?.trim() === 'node scripts/live-model-build.mjs'),
+    ).toBe(true)
+    expect(BUILD_JOB?.['timeout-minutes']).toBeLessThanOrEqual(10)
+    const checkout = BUILD_JOB?.steps.find((step) => step.uses?.startsWith('actions/checkout@'))
+    expect(checkout?.with?.['persist-credentials']).toBe(false)
+  })
+
+  it('holds a merge through the CI aggregator', () => {
+    expect(CI.jobs['ci-ok']?.needs).toContain('live-model-build')
   })
 })
 
