@@ -3,12 +3,11 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
 import { defineJob } from '../../packages/theo/src/server/jobs/define-job.js'
 import { JobLeaseLostError } from '../../packages/theo/src/server/jobs/job-backend.js'
 import { createJobRunner } from '../../packages/theo/src/server/jobs/job-runner.js'
-import { createOutbox } from '../../packages/theo/src/server/jobs/outbox.js'
-import {
-  createOutboxDispatcher,
-  createQueueClient,
-} from '../../packages/theo/src/server/jobs/queue-client.js'
 import { PostgresJobBackend } from '../../packages/theo/src/server/jobs/job-backend-postgres.js'
+import {
+  RETRY_IMMEDIATELY,
+  assertQueuedJobIsRetriedToItsDefinitionMaxAttempts,
+} from './helpers/queued-job-retry-oracle.js'
 
 const POSTGRES_URL = process.env.POSTGRES_URL
 
@@ -177,28 +176,20 @@ describe.skipIf(!POSTGRES_URL || !pgAvailable)(
 
     // usetheokit/theokit#1013 — the issue's repro: enqueued through the queue client, the job was
     // stored with max_attempts 1 and its first failure deleted it.
+    // B-666 — since #1014 a final failure keeps its row, so `attempts = 1` after one tick no longer
+    // tells a retry from a final failure; the shared oracle asserts pending after attempt 1 and
+    // failed only after attempt 3, and job-backend-postgres-retry-oracle.test.ts proves it can fail.
     it('test_a_job_enqueued_through_the_queue_client_is_retried_up_to_its_definition_max_attempts', async () => {
-      let calls = 0
-      const flaky = defineJob('flaky', {
-        maxAttempts: 3,
-        handler() {
-          calls++
-          throw new Error(`boom ${String(calls)}`)
-        },
+      const noDelay = new PostgresJobBackend({
+        pool,
+        tableName: 'theokit_jobs_ci',
+        ...RETRY_IMMEDIATELY,
       })
-      const outbox = createOutbox()
-      const idP = createQueueClient(backend, outbox).enqueueWithId('flaky' as never, {} as never)
-      await outbox.flush(createOutboxDispatcher(backend))
-      const { jobId } = await idP
-      const runner = createJobRunner(backend, [flaky])
-
-      await runner.tick()
-      expect(calls).toBe(1)
-      const row = await pool.query<{ attempts: number }>(
-        `SELECT attempts FROM theokit_jobs_ci WHERE id = $1`,
-        [jobId],
-      )
-      expect(row.rows).toEqual([{ attempts: 1 }])
+      await assertQueuedJobIsRetriedToItsDefinitionMaxAttempts({
+        backend: noDelay,
+        pool,
+        table: 'theokit_jobs_ci',
+      })
     })
 
     it('idempotency UNIQUE index — same (name, key) returns existing jobId', async () => {
