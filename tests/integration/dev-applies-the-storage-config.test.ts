@@ -7,6 +7,7 @@ import { startDevServer } from '../../packages/theo/src/cli/commands/dev.js'
 import {
   __resetSingletonForTests,
   getStorageManager,
+  type PostgresFactory,
 } from '../../packages/theo/src/server/storage/storage-manager.js'
 
 /**
@@ -50,8 +51,8 @@ describe('theokit dev applies the storage block of theo.config.ts (#1020)', () =
   it('test_use_postgres_finds_the_configured_database_after_dev_boots', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => {})
     server = await startDevServer(APP, { port: 0 })
-    const factory = vi.fn((srv: { host: string }, db: { database: string }) => ({
-      query: () => Promise.resolve({ rows: [{ host: srv.host, db: db.database }] }),
+    const factory = vi.fn<PostgresFactory>(() => ({
+      query: () => Promise.resolve({ rows: [] }),
     }))
 
     expect(() => getStorageManager().usePostgres('main', factory)).not.toThrow()
