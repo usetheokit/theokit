@@ -48,15 +48,23 @@ function isJobDefinition(value: unknown): value is JobDefinition {
   )
 }
 
-export async function scanJobs(jobsDir: string): Promise<JobNode[]> {
+/**
+ * The job files under `jobsDir`, without importing them: private helpers (`_x.ts`) and dotfiles are
+ * skipped. Shared by the build scan and by `theokit dev`, which loads the same files through Vite.
+ */
+export function listJobFiles(jobsDir: string): string[] {
   if (!existsSync(jobsDir)) return []
-
   const filePaths: string[] = []
   walkSourceFiles(jobsDir, { extensions: JOB_EXTENSIONS }, (p) => {
     const base = basename(p)
     if (base.startsWith('_') || base.startsWith('.')) return
     filePaths.push(p)
   })
+  return filePaths
+}
+
+export async function scanJobs(jobsDir: string): Promise<JobNode[]> {
+  const filePaths = listJobFiles(jobsDir)
 
   const nodes: JobNode[] = []
   for (const filePath of filePaths) {

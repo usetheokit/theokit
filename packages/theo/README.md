@@ -87,10 +87,89 @@ export const GET = route()
 | `./vite-plugin` | The plugin that makes all of the above work |
 | `./boot`, `./adapters/web-shim`, `./adapters/ws-shim` | Runtime shims |
 
+## Storage
+
+`theo.config.ts > storage` declares servers and databases; route code gets a cached client from
+`getStorageManager()` in `theokit/server/storage`, built by a factory you write so the driver stays
+optional:
+
+```typescript
+import pg from 'pg'
+import { getStorageManager } from 'theokit/server/storage'
+
+const pool = getStorageManager().usePostgres('main', (server, db) => {
+  const { host, port, user, password } = server
+  const p = new pg.Pool({ host, port, user, password, database: db.database })
+  p.on('error', (err) => console.warn('[pg] idle client error:', err.message))
+  return p
+}) as pg.Pool
+```
+
+A `pg.Pool` emits `error` when Postgres drops an idle connection (restart, failover,
+`pg_terminate_backend`, a proxy timeout), and Node exits on an `error` event with no listener. If
+the factory attaches none, `usePostgres` attaches one that logs a structured warning, so the process
+stays up and the next query reconnects. Attach your own, as above, to handle it differently.
+
+## Jobs
+
+Declare a backend in `theo.config.ts` and every file route gets `ctx.queue`:
+
+```typescript
+import { config } from 'theokit'
+import { PostgresJobBackend } from 'theokit/server/jobs'
+
+export default config()
+  .set({ jobs: { backend: new PostgresJobBackend({ pool }) } })
+  .build()
+```
+
+`ctx.queue.enqueue('send-email', input)` hands the job to the backend when the response succeeds
+(a 4xx, a 5xx or an aborted request discards it). A job is a file under `<serverDir>/jobs/`
+exporting `defineJob(name, { handler })`.
+
+`theokit start` and `theokit dev` run a job worker in the same process whenever jobs are declared
+and a backend is set: it polls the backend, runs each job and backs off while the backend is
+unreachable. On `SIGTERM`, `start` stops polling and waits up to 20 seconds for the job in progress
+before closing storage. `jobs.worker` tunes it (`pollIntervalMs`, `batchSize`, `lockSeconds`), and
+`enabled: false` turns it off in a process that should only serve requests, for example
+`enabled: process.env.ROLE !== 'web'`. Several workers can share one Postgres backend; each job is
+leased to one of them. To run a worker on its own, call `createJobWorker(createJobRunner(backend,
+definitions)).start()` from `theokit/server/jobs`.
+
+In `theokit dev`, route modules load through Vite, so a route that imports the backend from
+`theo.config.ts` gets a second instance of it. Use `ctx.queue` to enqueue. Deploy targets other
+than `node` do not wire `ctx.queue`; `theokit build` says so when `jobs` is set.
+
+## Crons
+
+A cron is a file under `<serverDir>/crons/` (or `<agentsDir>/schedules/`) exporting
+`defineCron(name, { schedule, handler })`. On the `node` target, `theokit start` schedules them in
+the same process; serverless targets translate them to the platform's scheduler.
+
+Every process running `theokit start` runs the scheduler, so with two replicas each tick fires
+twice unless they share a lock. When `jobs.backend` is a `PostgresJobBackend`, `start` takes a lock
+on its pool: one row per tick in `theokit_cron_runs`, and only the replica that inserts it runs the
+handler. To pick the lock yourself, or to opt out:
+
+```typescript
+import { createPostgresCronLock } from 'theokit/server/cron'
+
+export default config()
+  .set({ cron: { lock: createPostgresCronLock(pool) } }) // or { lock: false }
+  .build()
+```
+
+If the lock cannot be reached, that tick is skipped and logged rather than run on every replica.
+With no lock, a single process behaves as before, and the boot line says the crons are not guarded.
+
+`theokit dev` does not schedule crons unless asked, so a cron that sends mail does not do it on
+every dev boot. It prints how many are declared; `theokit dev --crons` schedules them. Cron files
+are loaded once at boot, so an edit takes effect after restarting `dev`.
+
 ## CLI
 
 ```bash
-theokit dev | build | start          # build takes --target <adapter>
+theokit dev | build | start          # build takes --target <adapter>, dev takes --crons
 theokit generate <type> <name>       # page, route, action, ws, controller, agent, toolbox, …
 theokit agent <name> [message]       # run an agent in the terminal, approvals included
 theokit routes | check | doctor | info

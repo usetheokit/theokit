@@ -1,16 +1,40 @@
+import {
+  type CronLock,
+  createPostgresCronLock,
+  type PostgresCronLockOptions,
+} from '../cron/cron-lock.js'
 import type { PostgresFactory, StorageManager } from '../storage/storage-manager.js'
 import type { PoolLike } from '../storage/storage-types.js'
 
-import type { JobBackend, JobEnqueueInput, JobLease } from './job-backend.js'
+import {
+  type JobBackend,
+  type JobEnqueueInput,
+  type JobLease,
+  type JobLeaseFence,
+  type JobNackOptions,
+  JobLeaseLostError,
+} from './job-backend.js'
 
 /**
- * Postgres-backed `JobBackend` per ADR-0002 (T3.1).
+ * Postgres-backed `JobBackend` (T3.1).
  *
  * Uses the Graphile Worker pattern:
  *   - Single `theokit_jobs` table.
- *   - Dequeue via `SELECT ... FOR UPDATE SKIP LOCKED` (concurrent workers
- *     never race for the same job).
+ *   - Dequeue via one `UPDATE ... WHERE id IN (SELECT ... FOR UPDATE SKIP
+ *     LOCKED) RETURNING` statement, so the claim and the lease are atomic and
+ *     concurrent workers never lease the same job.
  *   - Idempotency via UNIQUE INDEX on (name, idempotency_key).
+ *   - A successful job is deleted on `ack`. A job that fails for good (its
+ *     attempts are exhausted, or the handler threw `NonRetryableError`) is
+ *     KEPT as failed: `failed_at` is set, `last_error` holds the message, and
+ *     `dequeue` never returns it again. Query them with
+ *     `SELECT * FROM theokit_jobs WHERE failed_at IS NOT NULL`, replay one with
+ *     `UPDATE ... SET failed_at = NULL, attempts = 0, available_at = NOW()`,
+ *     and purge old ones yourself: nothing deletes them. A failed job keeps its
+ *     idempotency key, so enqueueing that key again returns the failed job's id.
+ *   - A retried job waits `retryDelaySeconds(attempts)` before it is
+ *     available again (default `min(2^attempts, 3600)` seconds), and its
+ *     `last_error` is recorded on every failure.
  *
  * `pg` is an OPTIONAL peer dependency — the caller provides their own
  * `pg.Pool` (or compatible). This avoids forcing every TheoKit user to
@@ -24,7 +48,7 @@ import type { JobBackend, JobEnqueueInput, JobLease } from './job-backend.js'
  */
 
 /**
- * `PoolLike` moved to `../storage/storage-types.ts` (T0.2 / ADR-0007 D7) to
+ * `PoolLike` moved to `../storage/storage-types.ts` (T0.2) to
  * deduplicate the shape across multiple adapters. Re-exported here so existing
  * `import { PoolLike } from 'theokit/server'` (which routes through the jobs
  * barrel today) continues to compile unchanged.
@@ -35,14 +59,25 @@ export interface PostgresJobBackendOptions {
   pool: PoolLike
   /** Table name override (default `theokit_jobs`). */
   tableName?: string
+  /**
+   * Seconds a failed job waits before its next attempt, given the attempts made so far (1 after
+   * the first failure). Default: exponential, `min(2^attempts, 3600)`.
+   */
+  retryDelaySeconds?: (attempts: number) => number
 }
 
 const DEFAULT_TABLE = 'theokit_jobs'
+const MAX_DEFAULT_RETRY_DELAY_SECONDS = 3600
+const MAX_ENQUEUE_ROUNDS = 3
+
+const defaultRetryDelaySeconds = (attempts: number): number =>
+  Math.min(2 ** attempts, MAX_DEFAULT_RETRY_DELAY_SECONDS)
 
 export class PostgresJobBackend implements JobBackend {
   readonly name = 'postgres'
   readonly #pool: PoolLike
   readonly #table: string
+  readonly #retryDelaySeconds: (attempts: number) => number
 
   constructor(opts: PostgresJobBackendOptions) {
     // Runtime guard for users who pass `pool: undefined` despite the type;
@@ -57,6 +92,7 @@ export class PostgresJobBackend implements JobBackend {
     }
     this.#pool = opts.pool
     this.#table = opts.tableName ?? DEFAULT_TABLE
+    this.#retryDelaySeconds = opts.retryDelaySeconds ?? defaultRetryDelaySeconds
   }
 
   /**
@@ -73,7 +109,6 @@ export class PostgresJobBackend implements JobBackend {
    * Errors thrown by the manager (unknown dbName, dangling server reference,
    * manager already disposed) propagate to the caller with actionable text.
    *
-   * @see ADR-0007
    */
   static fromStorageManager(
     manager: StorageManager,
@@ -83,6 +118,15 @@ export class PostgresJobBackend implements JobBackend {
   ): PostgresJobBackend {
     const pool = manager.usePostgres(dbName, factory)
     return new PostgresJobBackend({ pool, ...options })
+  }
+
+  /**
+   * A cron lock on this backend's pool, so replicas sharing the job database fire each cron tick
+   * once between them. `theokit start` uses it automatically when this is the configured
+   * `jobs.backend` and `cron.lock` is not set (usetheokit/theokit#1016).
+   */
+  cronLock(options?: PostgresCronLockOptions): CronLock {
+    return createPostgresCronLock(this.#pool, options)
   }
 
   /**
@@ -102,9 +146,17 @@ export class PostgresJobBackend implements JobBackend {
         locked_until TIMESTAMPTZ,
         traceparent TEXT,
         idempotency_key TEXT,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        lease_token TEXT,
+        last_error TEXT,
+        failed_at TIMESTAMPTZ
       )
     `)
+    // Columns added after the first release. `CREATE TABLE IF NOT EXISTS` leaves a table created by
+    // an earlier version untouched, so each later column is added here as well.
+    await this.#pool.query(`ALTER TABLE ${t} ADD COLUMN IF NOT EXISTS lease_token TEXT`)
+    await this.#pool.query(`ALTER TABLE ${t} ADD COLUMN IF NOT EXISTS last_error TEXT`)
+    await this.#pool.query(`ALTER TABLE ${t} ADD COLUMN IF NOT EXISTS failed_at TIMESTAMPTZ`)
     await this.#pool.query(`
       CREATE UNIQUE INDEX IF NOT EXISTS ${t}_idempotency_key_idx
       ON ${t} (name, idempotency_key)
@@ -118,38 +170,46 @@ export class PostgresJobBackend implements JobBackend {
   }
 
   async enqueue(input: JobEnqueueInput): Promise<{ jobId: string }> {
-    const id = randomId()
-    const delaySeconds = input.delaySeconds ?? 0
     const t = this.#table
-
-    // Idempotency: explicit SELECT-then-INSERT. The UNIQUE INDEX is the
-    // safety net under race conditions (we surface the conflict by
-    // re-selecting on insert-error). This 2-step path is pg-mem compatible
-    // AND works on real Postgres.
-    if (input.idempotencyKey) {
+    const values = [
+      input.name,
+      JSON.stringify(input.input),
+      input.maxAttempts ?? 1,
+      (input.delaySeconds ?? 0).toString(),
+      input.traceparent ?? null,
+      input.idempotencyKey ?? null,
+    ]
+    // Idempotency is decided by the UNIQUE INDEX on (name, idempotency_key), in the INSERT itself.
+    // A SELECT followed by a plain INSERT let racing callers on one key both pass the SELECT, and
+    // the loser got a raw 23505 unique violation: about 9.5 of every 20 callers per key on a warm
+    // pool (usetheokit/theokit#1015). `ON CONFLICT DO NOTHING` returns no row for the loser, which
+    // then reads the winner's id. The conflict target is left out on purpose: apart from the
+    // primary key, which a fresh UUID does not collide with, the only unique index is
+    // (name, idempotency_key), and pg-mem cannot parse a target carrying its WHERE clause.
+    //
+    // The read can come back empty if the winning job was acked between the two statements, which
+    // frees the key; the loop then inserts again. Three rounds is far beyond what that window
+    // allows, and running out is reported rather than returned as a fake id.
+    for (let round = 0; round < MAX_ENQUEUE_ROUNDS; round++) {
+      const inserted = await this.#pool.query<{ id: string }>(
+        `INSERT INTO ${t} (id, name, input, max_attempts, available_at, traceparent, idempotency_key)
+         VALUES ($1, $2, $3::jsonb, $4, NOW() + ($5 || ' seconds')::interval, $6, $7)
+         ON CONFLICT DO NOTHING
+         RETURNING id`,
+        [randomId(), ...values],
+      )
+      if (inserted.rows.length > 0) return { jobId: inserted.rows[0].id }
       const existing = await this.#pool.query<{ id: string }>(
         `SELECT id FROM ${t} WHERE name = $1 AND idempotency_key = $2 LIMIT 1`,
         [input.name, input.idempotencyKey],
       )
-      if (existing.rows.length > 0) {
-        return { jobId: existing.rows[0].id }
-      }
+      if (existing.rows.length > 0) return { jobId: existing.rows[0].id }
     }
-
-    await this.#pool.query(
-      `INSERT INTO ${t} (id, name, input, max_attempts, available_at, traceparent, idempotency_key)
-       VALUES ($1, $2, $3::jsonb, $4, NOW() + ($5 || ' seconds')::interval, $6, $7)`,
-      [
-        id,
-        input.name,
-        JSON.stringify(input.input),
-        input.maxAttempts ?? 1,
-        delaySeconds.toString(),
-        input.traceparent ?? null,
-        input.idempotencyKey ?? null,
-      ],
+    throw new Error(
+      `PostgresJobBackend.enqueue: job "${input.name}" with idempotency key ` +
+        `"${String(input.idempotencyKey)}" conflicted ${String(MAX_ENQUEUE_ROUNDS)} times and the ` +
+        'conflicting row was gone each time it was read; the key is being enqueued and acked in a tight loop.',
     )
-    return { jobId: id }
   }
 
   async dequeue(opts: { batchSize?: number; lockSeconds?: number }): Promise<JobLease[]> {
@@ -157,31 +217,12 @@ export class PostgresJobBackend implements JobBackend {
     const batchSize = opts.batchSize ?? 1
     const lockSeconds = opts.lockSeconds ?? 30
 
-    // Two-step pattern (pg-mem compatible AND real-Postgres compatible):
-    // 1. SELECT FOR UPDATE SKIP LOCKED to claim candidate IDs.
-    // 2. UPDATE in-place to mark lock_until + bump attempts.
-    // On real Postgres, the FOR UPDATE SKIP LOCKED prevents concurrent
-    // workers from seeing the same rows. On pg-mem the lock is silently
-    // ignored, but pg-mem serializes all queries through one in-memory
-    // db so the test still verifies single-claim semantics.
-    const candidates = await this.#pool.query<{ id: string }>(
-      `SELECT id FROM ${t}
-       WHERE (locked_until IS NULL OR locked_until < NOW())
-         AND available_at <= NOW()
-       ORDER BY available_at ASC
-       LIMIT $1
-       FOR UPDATE SKIP LOCKED`,
-      [batchSize],
-    )
-
-    if (candidates.rows.length === 0) return []
-
-    const ids = candidates.rows.map((r) => r.id)
-    // Build a parameterized IN clause: ($2, $3, ...). pg-mem's UPDATE
-    // does not support `ANY($1::text[])`, so we materialize the list.
-    // For batch sizes we expect (typically ≤100), this is fine.
-    const placeholders = ids.map((_, i) => `$${i + 2}`).join(', ')
-
+    // Claim and mark in ONE statement. The row lock taken by `FOR UPDATE SKIP LOCKED` lasts only
+    // as long as the statement's transaction. As two autocommit `pool.query()` calls (a SELECT, then
+    // an UPDATE), the lock ended when the SELECT returned, and another worker could select the same
+    // id before the UPDATE landed: 20 workers over 200 jobs leased 162 to 178 of them more than once
+    // (usetheokit/theokit#1011). Inside one UPDATE the subquery's lock is held until the lease is
+    // written, so a concurrent worker skips the row instead of claiming it again.
     const r = await this.#pool.query<{
       id: string
       name: string
@@ -190,13 +231,23 @@ export class PostgresJobBackend implements JobBackend {
       max_attempts: number
       traceparent: string | null
       locked_until: Date | string
+      lease_token: string
     }>(
       `UPDATE ${t}
-       SET locked_until = NOW() + ($1 || ' seconds')::interval,
-           attempts = attempts + 1
-       WHERE id IN (${placeholders})
-       RETURNING id, name, input, attempts, max_attempts, traceparent, locked_until`,
-      [lockSeconds.toString(), ...ids],
+       SET locked_until = NOW() + ($2 || ' seconds')::interval,
+           attempts = attempts + 1,
+           lease_token = $3
+       WHERE id IN (
+         SELECT id FROM ${t}
+         WHERE (locked_until IS NULL OR locked_until < NOW())
+           AND available_at <= NOW()
+           AND failed_at IS NULL
+         ORDER BY available_at ASC
+         LIMIT $1
+         FOR UPDATE SKIP LOCKED
+       )
+       RETURNING id, name, input, attempts, max_attempts, traceparent, locked_until, lease_token`,
+      [batchSize, lockSeconds.toString(), randomId()],
     )
 
     return r.rows.map((row) => ({
@@ -208,41 +259,100 @@ export class PostgresJobBackend implements JobBackend {
       traceparent: row.traceparent ?? undefined,
       lockExpiresAt:
         row.locked_until instanceof Date ? row.locked_until : new Date(row.locked_until),
+      leaseToken: row.lease_token,
     }))
   }
 
-  async ack(jobId: string): Promise<void> {
-    await this.#pool.query(`DELETE FROM ${this.#table} WHERE id = $1`, [jobId])
+  async ack(jobId: string, fence?: JobLeaseFence): Promise<void> {
+    const { clause, params } = this.#held(jobId, fence)
+    const r = await this.#pool.query(
+      `DELETE FROM ${this.#table} WHERE ${clause} RETURNING id`,
+      params,
+    )
+    if (fence?.leaseToken !== undefined && r.rows.length === 0) {
+      throw new JobLeaseLostError(jobId, 'ack')
+    }
   }
 
-  async nack(jobId: string, opts: { error: string; nonRetryable?: boolean }): Promise<void> {
+  /**
+   * Record a failure. The job is retried after `retryDelaySeconds(attempts)` while attempts remain,
+   * and kept as failed (`failed_at`, `last_error`) once they are exhausted or the failure is
+   * non-retryable. It was DELETEd in that case, with its input and its error, so a job that failed
+   * for good left no record (usetheokit/theokit#1014).
+   */
+  async nack(jobId: string, opts: JobNackOptions): Promise<void> {
     const t = this.#table
-    if (opts.nonRetryable) {
-      await this.#pool.query(`DELETE FROM ${t} WHERE id = $1`, [jobId])
-      return
-    }
-    // Check attempts >= maxAttempts → permanent removal.
+    const { clause, params } = this.#held(jobId, opts)
+    const fenced = opts.leaseToken !== undefined
     const r = await this.#pool.query<{
       attempts: number
       max_attempts: number
-    }>(`SELECT attempts, max_attempts FROM ${t} WHERE id = $1`, [jobId])
-    if (r.rows.length === 0) return
-    const { attempts, max_attempts } = r.rows[0]
-    if (attempts >= max_attempts) {
-      await this.#pool.query(`DELETE FROM ${t} WHERE id = $1`, [jobId])
-    } else {
-      // Release lock — next dequeue picks it up again.
-      await this.#pool.query(`UPDATE ${t} SET locked_until = NULL WHERE id = $1`, [jobId])
+    }>(`SELECT attempts, max_attempts FROM ${t} WHERE ${clause}`, params)
+    if (r.rows.length === 0) {
+      if (fenced) throw new JobLeaseLostError(jobId, 'nack')
+      return
     }
+    const { attempts, max_attempts } = r.rows[0]
+    const final = opts.nonRetryable === true || attempts >= (opts.maxAttempts ?? max_attempts)
+    const next = params.length + 1
+    const write = final
+      ? `UPDATE ${t}
+         SET failed_at = NOW(), last_error = $${next}, locked_until = NULL, lease_token = NULL
+         WHERE ${clause} RETURNING id`
+      : `UPDATE ${t}
+         SET last_error = $${next}, locked_until = NULL, lease_token = NULL,
+             available_at = NOW() + ($${next + 1} || ' seconds')::interval
+         WHERE ${clause} RETURNING id`
+    const values = final
+      ? [...params, opts.error]
+      : [...params, opts.error, this.#retryDelay(attempts).toString()]
+    const w = await this.#pool.query(write, values)
+    if (fenced && w.rows.length === 0) throw new JobLeaseLostError(jobId, 'nack')
   }
 
-  async idempotency(key: string, _ttlSeconds: number): Promise<{ jobId: string } | null> {
-    // The UNIQUE INDEX is the source of truth. Look for any non-deleted
-    // row with this idempotency_key.
-    const r = await this.#pool.query<{ id: string }>(
-      `SELECT id FROM ${this.#table} WHERE idempotency_key = $1 LIMIT 1`,
-      [key],
-    )
+  #retryDelay(attempts: number): number {
+    const seconds = this.#retryDelaySeconds(attempts)
+    if (!Number.isFinite(seconds) || seconds < 0) {
+      throw new RangeError(
+        `PostgresJobBackend retryDelaySeconds(${String(attempts)}) returned ${String(seconds)}; ` +
+          'expected a finite number of seconds >= 0.',
+      )
+    }
+    return seconds
+  }
+
+  /**
+   * The row predicate for a call that finishes a job. Fenced by the lease token when the caller
+   * passed one: a worker whose lease expired and was re-leased no longer matches, so its late
+   * ack or nack cannot touch the new holder's job (usetheokit/theokit#1012).
+   */
+  #held(jobId: string, fence?: JobLeaseFence): { clause: string; params: unknown[] } {
+    return fence?.leaseToken === undefined
+      ? { clause: 'id = $1', params: [jobId] }
+      : { clause: 'id = $1 AND lease_token = $2', params: [jobId, fence.leaseToken] }
+  }
+
+  /**
+   * The job holding `key`, or null. Pass `name` to scope the lookup the way the UNIQUE INDEX and
+   * `enqueue` do, on (name, idempotency_key): without it, two job types sharing a key can return
+   * each other's id (usetheokit/theokit#1015). A failed job still holds its key; an acked one does
+   * not, because `ack` deletes the row. `ttlSeconds` is not used: the window is the row's life.
+   */
+  async idempotency(
+    key: string,
+    _ttlSeconds: number,
+    name?: string,
+  ): Promise<{ jobId: string } | null> {
+    const r =
+      name === undefined
+        ? await this.#pool.query<{ id: string }>(
+            `SELECT id FROM ${this.#table} WHERE idempotency_key = $1 LIMIT 1`,
+            [key],
+          )
+        : await this.#pool.query<{ id: string }>(
+            `SELECT id FROM ${this.#table} WHERE name = $1 AND idempotency_key = $2 LIMIT 1`,
+            [name, key],
+          )
     return r.rows.length > 0 ? { jobId: r.rows[0].id } : null
   }
 }

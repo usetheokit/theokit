@@ -21,6 +21,8 @@ import {
   type PluginRunner,
   type SecurityHeadersConfig,
 } from '../server/internal-api.js'
+import { jobBackendFromConfig } from '../server/jobs/job-backend-from-config.js'
+import type { JobBackend } from '../server/jobs/job-backend.js'
 import { createObservabilityPluginFromConfig } from '../server/observability-bootstrap.js'
 import { resolveTransformer, type TheoTransformer } from '../server/transformer.js'
 
@@ -48,6 +50,8 @@ interface ResolvedPluginConfig {
   openapi: ResolvedOpenApi | undefined
   // P#3 T1.1 — distDir resolved relative to projectRoot for openapi-emit output
   distDir: string
+  /** `jobs.backend`, so dev routes get `ctx.queue` as they do under `theokit start` (#1009). */
+  jobBackend: JobBackend | undefined
 }
 
 /**
@@ -66,6 +70,7 @@ const DEFAULT_RESOLVED: ResolvedPluginConfig = {
   devtoolsEnabled: true,
   openapi: undefined,
   distDir: '.theokit',
+  jobBackend: undefined,
 }
 
 export async function resolvePluginConfig(projectRoot: string): Promise<ResolvedPluginConfig> {
@@ -120,6 +125,7 @@ export async function resolvePluginConfig(projectRoot: string): Promise<Resolved
       devtoolsEnabled: userConfig.devtools !== false,
       openapi: userConfig.openapi,
       distDir: userConfig.distDir,
+      jobBackend: jobBackendFromConfig(userConfig),
     }
   } catch {
     // Config load errors are surfaced elsewhere (validate-structure).

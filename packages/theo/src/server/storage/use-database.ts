@@ -2,8 +2,6 @@
  * `useDatabase(name, connector)` — wraps `db0.createDatabase(connector)` via
  * `StorageManager.useStorage<T>` for caching.
  *
- * Architectural decision: see ADR-0010 (db0 adoption for SQL non-Postgres).
- *
  * `db0` is an OPTIONAL peer dependency. Apps that don't use db0 pay zero bundle
  * cost; calling `useDatabase` without `db0` installed throws an actionable error.
  *

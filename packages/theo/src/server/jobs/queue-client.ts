@@ -13,7 +13,7 @@ export interface EnqueueOptions {
 }
 
 /**
- * Typed queue client. Per ADR-0003, `enqueue` returns `void` and buffers
+ * Typed queue client. `enqueue` returns `void` and buffers
  * to the per-request outbox. `enqueueWithId` is the log-correlation
  * variant that resolves to `{ jobId }` AFTER the outbox flushes.
  *
@@ -52,7 +52,7 @@ interface CreateQueueClientOptions {
  *
  * The backend is referenced only to resolve `enqueueWithId` jobIds at
  * flush time — `enqueue` itself does NOT call backend on the hot path
- * (transactional outbox guarantee per ADR-0003).
+ * (the transactional outbox guarantee).
  */
 export function createQueueClient(
   backend: JobBackend,

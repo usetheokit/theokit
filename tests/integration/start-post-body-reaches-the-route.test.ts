@@ -177,6 +177,7 @@ async function startProductionServer(): Promise<void> {
         csrfMode: 'strict',
         disallowed: undefined,
         rateLimiter: null,
+        jobBackend: undefined,
       }),
       securityHeadersConfig: {},
       // #409 made this required rather than optional: the defect was that nobody wired

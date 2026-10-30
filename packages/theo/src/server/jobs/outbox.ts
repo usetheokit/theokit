@@ -14,7 +14,7 @@ import type { JobEnqueueInput } from './job-backend.js'
  * Invariants:
  *   - Outbox NEVER dispatches before commit. Backend.enqueue is NEVER
  *     called on the request hot path.
- *   - Handler throws → ZERO jobs dispatched. KEY guarantee from ADR-0003.
+ *   - Handler throws → ZERO jobs dispatched. This is the outbox's key guarantee.
  *
  * EC-107: when `backend.enqueue` throws DURING flush (after response
  * committed), we log + continue. The response is already gone; partial

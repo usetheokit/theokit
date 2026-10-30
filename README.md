@@ -493,7 +493,7 @@ export default websocket()
 ## CLI
 
 ```bash
-theokit dev                              # Dev server with HMR
+theokit dev                              # Dev server with HMR (--crons also schedules crons)
 theokit build                            # Production build (--target <adapter>)
 theokit start                            # Production server (serves the last build)
 theokit preview                          # Build, then serve it — one step
@@ -509,7 +509,8 @@ theokit check                            # Typecheck + scan (+ eslint)
 theokit doctor                           # Report the resolved state of the installation
 theokit info                             # Print environment info
 theokit openapi                          # Emit openapi.json from route schemas
-theokit db migrate                       # Database: migrate | generate | seed
+theokit db generate                      # Write SQL migration files from the Drizzle schema
+theokit db migrate                       # Apply them (drizzle-kit migrate); `db push` diffs without files
 theokit migrate router                   # One-shot convention migrations
 theokit add <package>                    # Install a known adapter or plugin (whitelist-only)
 theokit docker                           # Generate a production Dockerfile

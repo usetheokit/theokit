@@ -1,7 +1,7 @@
 import { CronExpressionParser } from 'cron-parser'
 
 /**
- * Validate a cron schedule string per ADR-0004 — 5-field UTC strict.
+ * Validate a cron schedule string: 5 fields, evaluated in UTC, nothing else accepted.
  *
  * Accepts:
  *   - Standard 5-field expressions: `minute hour dayOfMonth month dayOfWeek`

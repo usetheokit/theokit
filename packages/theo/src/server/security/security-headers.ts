@@ -13,7 +13,7 @@ import {
  * The policy itself — what a configuration means, what the defaults are, how a
  * nonce enters the CSP — moved to `core/contracts/security-headers.ts` when the
  * deploy adapters started needing it too. `adapters → server` is not an edge in
- * the module DAG (ADR-0001 v3), and the honest reading of the violation was that
+ * the module DAG (`.dependency-cruiser.cjs`), and the honest reading of the violation was that
  * a pure `config → Record<string, string>` function had never been server code.
  *
  * What stays here is the one part that genuinely is: writing that map onto a

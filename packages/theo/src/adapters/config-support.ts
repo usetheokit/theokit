@@ -39,6 +39,7 @@ export const CONFIG_CONCERNS = [
   'serialization',
   'plugins',
   'securityHeaders',
+  'jobs',
 ] as const satisfies readonly ConfigConcern[]
 
 /**
@@ -68,35 +69,35 @@ const CONFIG_KEY: Record<ConfigConcern, string> = {
   serialization: 'serialization',
   plugins: 'plugins',
   securityHeaders: 'security.headers',
+  jobs: 'jobs.backend',
+}
+
+/** Whether the config declares each concern, one predicate per concern. */
+const IS_DECLARED: Record<ConfigConcern, (config: TheoConfig) => boolean> = {
+  rateLimit: (config) => config.rateLimit !== undefined,
+  cors: (config) => config.security?.cors !== undefined,
+  // `csrf` carries `.default('strict')` (config/schemas/security.ts:100) and
+  // the deployed fallback is also `'strict'` (server/http/execute.ts:144).
+  // A config that says `'strict'` therefore gets what it asked for, by
+  // coincidence rather than by wiring -- reporting it dropped would be noise
+  // over an identical outcome. Only a weaker setting is silently ignored.
+  csrf: (config) => config.security?.csrf !== undefined && config.security.csrf !== 'strict',
+  disallowed: (config) =>
+    config.security?.disallowed !== undefined && config.security.disallowed.routes.length > 0,
+  securityHeaders: (config) => config.security?.headers !== undefined,
+  // Same shape: `.default('json')` (config/schema.ts:147), and a target with
+  // no transformer serializes as JSON. `'json'` is honoured by coincidence;
+  // `'superjson'` is the case where the deployed app quietly disagrees with
+  // the file.
+  serialization: (config) => config.serialization !== 'json',
+  plugins: (config) => config.plugins !== undefined && config.plugins.length > 0,
+  // A constructed backend (a pool, a map) has no literal a deployed entry could hold, so only
+  // `theokit start` wires `ctx.queue` from it (usetheokit/theokit#1009).
+  jobs: (config) => config.jobs !== undefined,
 }
 
 function isDeclared(config: TheoConfig, concern: ConfigConcern): boolean {
-  const security = config.security
-  switch (concern) {
-    case 'rateLimit':
-      return config.rateLimit !== undefined
-    case 'cors':
-      return security?.cors !== undefined
-    case 'csrf':
-      // `csrf` carries `.default('strict')` (config/schemas/security.ts:100) and
-      // the deployed fallback is also `'strict'` (server/http/execute.ts:144).
-      // A config that says `'strict'` therefore gets what it asked for, by
-      // coincidence rather than by wiring -- reporting it dropped would be noise
-      // over an identical outcome. Only a weaker setting is silently ignored.
-      return security?.csrf !== undefined && security.csrf !== 'strict'
-    case 'disallowed':
-      return security?.disallowed !== undefined && security.disallowed.routes.length > 0
-    case 'securityHeaders':
-      return security?.headers !== undefined
-    case 'serialization':
-      // Same shape: `.default('json')` (config/schema.ts:147), and a target with
-      // no transformer serializes as JSON. `'json'` is honoured by coincidence;
-      // `'superjson'` is the case where the deployed app quietly disagrees with
-      // the file.
-      return config.serialization !== 'json'
-    case 'plugins':
-      return config.plugins !== undefined && config.plugins.length > 0
-  }
+  return IS_DECLARED[concern](config)
 }
 
 /**

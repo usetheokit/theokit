@@ -8,7 +8,7 @@ export type VerifyResult = { ok: true } | { ok: false; reason: string }
  * A verify function — pure, async-or-sync. Takes the cloned request
  * (raw body NOT yet consumed by handler), returns ok/notOk + reason.
  *
- * Per ADR-0005, helper factories (`stripe`, `github`, `slack`) return
+ * Helper factories (`stripe`, `github`, `slack`) return
  * this shape. Users can also write inline `verify: async (req) => ...`
  * for custom providers.
  */

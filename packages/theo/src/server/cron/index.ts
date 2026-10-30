@@ -35,8 +35,10 @@ export {
   translateCronToDeno,
 } from './adapter-translators.js'
 
-export type { CronScheduler } from './cron-runtime-node.js'
+export type { CronScheduler, CronSchedulerOptions } from './cron-runtime-node.js'
 export { createCronScheduler } from './cron-runtime-node.js'
+export { createPostgresCronLock } from './cron-lock.js'
+export type { CronLock, PostgresCronLockOptions } from './cron-lock.js'
 
 export { scanCrons, scanCronDirs, DuplicateCronNameError } from './cron-scan.js'
 export type { CronNode } from './cron-scan.js'

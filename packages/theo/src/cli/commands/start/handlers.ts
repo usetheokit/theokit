@@ -22,6 +22,7 @@ import { serveThroughPluginLifecycle } from '../../../server/http/plugin-lifecyc
 import { createAgentSubjectResolver } from '../../../server/http/resolve-agent-subject.js'
 import { sendError } from '../../../server/http/send-response.js'
 import { serveStaticFile } from '../../../server/http/static.js'
+import type { JobBackend } from '../../../server/jobs/job-backend.js'
 import { logRequest } from '../../../server/observability/logger.js'
 import { findSuggestion } from '../../../server/observability/suggest.js'
 import type { PluginRunner } from '../../../server/plugins/plugin-runner.js'
@@ -84,6 +85,11 @@ export interface RequestHandlerCtx {
   transformer: TheoTransformer | undefined
   csrfMode: CsrfMode
   disallowed: DisallowedConfig | undefined
+  /**
+   * `theo.config.ts > jobs.backend`. Present, every file route gets `ctx.queue`; it used to be
+   * read by nothing, so `ctx.queue` was undefined under `theokit start` (usetheokit/theokit#1009).
+   */
+  jobBackend: JobBackend | undefined
   /**
    * Async because the per-route limiter hashes the session cookie with Web Crypto when
    * `keyBy: 'session'`, and `subtle.digest` is promise-based.
@@ -490,6 +496,7 @@ export async function tryServeApiRoute(c: RequestHandlerCtx): Promise<boolean> {
     transformer: c.transformer,
     csrfMode: c.csrfMode,
     disallowed: c.disallowed,
+    jobBackend: c.jobBackend,
   })
   logRequest({
     method,

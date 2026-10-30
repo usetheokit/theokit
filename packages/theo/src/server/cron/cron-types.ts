@@ -14,7 +14,7 @@ export interface CronContext {
 }
 
 export interface CronOptions {
-  /** 5-field UTC cron expression (ADR-0004). */
+  /** 5-field cron expression, evaluated in UTC. */
   schedule: string
   /** Handler invoked on each fire. May return Promise. */
   handler: (ctx: CronContext) => unknown

@@ -7,7 +7,7 @@
  * This is the canonical TheoKit jobs onboarding bug (EC-110). To add a
  * job:
  *
- * 1. Create `server/jobs/<name>.ts` exporting `defineJob('<name>', ...)`
+ * 1. Create `src/server/jobs/<name>.ts` exporting `defineJob('<name>', ...)`
  * 2. Add `'<name>': { ...inputShape }` below
  * 3. Use `ctx.queue.enqueue('<name>', { ...input })` from any route handler
  *

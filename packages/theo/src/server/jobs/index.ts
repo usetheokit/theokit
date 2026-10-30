@@ -13,11 +13,17 @@ export { defineJob } from './define-job.js'
 export type { JobOptions, JobContext, JobDefinition, JobRegistry } from './job-types.js'
 
 // Errors
-export { NonRetryableError } from './job-backend.js'
+export { JobLeaseLostError, NonRetryableError } from './job-backend.js'
 export { DuplicateContextKeyError } from './duplicate-context-key-error.js'
 
 // Backend contract
-export type { JobBackend, JobEnqueueInput, JobLease } from './job-backend.js'
+export type {
+  JobBackend,
+  JobEnqueueInput,
+  JobLease,
+  JobLeaseFence,
+  JobNackOptions,
+} from './job-backend.js'
 
 // Backends
 export { InMemoryJobBackend } from './job-backend-memory.js'
@@ -34,6 +40,8 @@ export type { QueueClient, EnqueueOptions } from './queue-client.js'
 // Runner
 export { createJobRunner } from './job-runner.js'
 export type { JobRunner } from './job-runner.js'
+export { createJobWorker } from './job-worker.js'
+export type { JobWorker, JobWorkerOptions } from './job-worker.js'
 
 // Manifest
 export { JOB_MANIFEST_SCHEMA_VERSION, buildJobManifest, writeJobManifest } from './job-manifest.js'

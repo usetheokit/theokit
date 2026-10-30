@@ -2,8 +2,6 @@
  * StorageManager — per-process singleton coordinating pluggable storage
  * adapters (Postgres pools, Redis clients, in-memory adapters).
  *
- * Architectural decisions: see ADR-0007.
- *
  * Lifecycle:
  *   1. `getStorageManager()` returns the singleton (D1).
  *   2. `configure(storageConfig)` honored once per process (D3). Second call
@@ -18,6 +16,9 @@
  * `beforeEach` to avoid pollution across `it` blocks (EC-3).
  */
 
+import { processSingleton } from '../../core/process-singleton.js'
+import { createLogger } from '../observability/logger.js'
+
 import type {
   PoolLike,
   PostgresDatabaseConfig,
@@ -28,6 +29,16 @@ import type {
   StorageConfig,
 } from './storage-types.js'
 
+/**
+ * Builds the Postgres pool for one database. The pool is user code, so the driver stays optional.
+ *
+ * A `pg.Pool` emits `error` when Postgres drops an idle pooled connection (a restart, a failover,
+ * `pg_terminate_backend`, a proxy's idle timeout), and Node exits the process on an `error` event
+ * that has no listener. `usePostgres` therefore attaches a listener that logs the error as a
+ * structured warning when the returned pool has none; the pool discards the dead client and the
+ * next query opens a new connection. Attach your own `pool.on('error', ...)` in the factory to
+ * handle it differently; the manager then leaves the pool alone.
+ */
 export type PostgresFactory = (server: ServerConfig, db: PostgresDatabaseConfig) => PoolLike
 export type RedisFactory = (config: RedisServerConfig) => RedisLike
 
@@ -83,6 +94,10 @@ export class StorageManager {
    * Return a Postgres pool for the named database. Lazy + cached. Factory
    * invoked exactly once per `dbName` (D2).
    *
+   * When the pool exposes an event API (`pg.Pool` does) and has no `error` listener, one is
+   * attached that logs a structured warning instead of letting the error exit the process. See
+   * {@link PostgresFactory}.
+   *
    * Throws if:
    *   - manager is disposed
    *   - `dbName` is not in `config.databases`
@@ -106,6 +121,7 @@ export class StorageManager {
       )
     }
     const pool = factory(server, dbConfig)
+    keepPoolErrorsFromExitingTheProcess(pool, dbName)
     this.#dbPools.set(dbName, pool)
     return pool
   }
@@ -125,6 +141,7 @@ export class StorageManager {
       )
     }
     const client = factory(serverConfig)
+    keepRedisErrorsFromExitingTheProcess(client, serverName)
     this.#redisClients.set(serverName, client)
     return client
   }
@@ -213,15 +230,69 @@ export class StorageManager {
   }
 }
 
-// Singleton — one StorageManager per process (D1).
-let __singleton: StorageManager | undefined
+const storageLogger = createLogger({ context: { component: 'theokit:storage' } })
 
-export function getStorageManager(): StorageManager {
-  __singleton ??= new StorageManager()
-  return __singleton
+interface PoolEvents {
+  on: (event: 'error', listener: (err: Error & { code?: string }) => void) => unknown
+  listenerCount?: (event: 'error') => number
 }
 
-/** @internal Drops the module-level singleton — used by tests that need a fresh manager. */
+function hasEventApi<T extends object>(pool: T): pool is T & PoolEvents {
+  return typeof (pool as Partial<PoolEvents>).on === 'function'
+}
+
+/**
+ * Node throws an `error` event nobody listens to, and `pg.Pool` emits one for every idle client the
+ * server disconnects. Measured on theokit@0.75.1: one `pg_terminate_backend` exited `theokit start`
+ * with `Unhandled 'error' event` (usetheokit/theokit#1019). A listener the factory attached is the
+ * user's decision and is left as the only one.
+ */
+function keepPoolErrorsFromExitingTheProcess(pool: PoolLike, dbName: string): void {
+  if (!hasEventApi(pool)) return
+  if (typeof pool.listenerCount === 'function' && pool.listenerCount('error') > 0) return
+  pool.on('error', (err) => {
+    storageLogger.warn('postgres pool error; the client was discarded and the pool reconnects', {
+      database: dbName,
+      code: err.code,
+      error: err.message,
+    })
+  })
+}
+
+/**
+ * The Redis counterpart. node-redis re-emits a socket error with a plain `emit('error')`, so a
+ * client from a `useRedis` factory with no listener exited the process on the first ECONNRESET
+ * (usetheokit/theokit#1029). ioredis already survives (it only logs when nobody listens), and a
+ * listener the factory attached is left as the only one.
+ */
+function keepRedisErrorsFromExitingTheProcess(client: RedisLike, serverName: string): void {
+  if (!hasEventApi(client)) return
+  if (typeof client.listenerCount === 'function' && client.listenerCount('error') > 0) return
+  client.on('error', (err) => {
+    storageLogger.warn('redis client error; the client reconnects per its own retry strategy', {
+      server: serverName,
+      code: err.code,
+      error: err.message,
+    })
+  })
+}
+
+// Singleton — one StorageManager per PROCESS (D1), not per module instance.
+//
+// A module-level `let` was one per bundle: `theokit start` comes from the CLI build, route code from
+// the library build, and tsup gives each build its own copy of this file. `start` configured one
+// manager and every route read the other (usetheokit/theokit#1018). The holder lives on
+// `globalThis` so every copy of this module shares it.
+const holder = processSingleton('storage-manager', () => ({
+  manager: undefined as StorageManager | undefined,
+}))
+
+export function getStorageManager(): StorageManager {
+  holder.manager ??= new StorageManager()
+  return holder.manager
+}
+
+/** @internal Drops the process-wide singleton — used by tests that need a fresh manager. */
 export function __resetSingletonForTests(): void {
-  __singleton = undefined
+  holder.manager = undefined
 }

@@ -1,5 +1,5 @@
 /**
- * StorageManager public surface (ADR-0007).
+ * StorageManager public surface.
  *
  * Imported into the top-level `theokit/server` barrel (T1.3).
  */

@@ -10,7 +10,8 @@
  *   - `@theokit/sdk` from `package.json` dependencies (agent SDK — see below)
  *   - `@theokit/agents` from `package.json` dependencies (only agents/chat.ts used it)
  *   - `app/page.tsx` agent-surface content (replaces with Hello Theo)
- *   - `agents/chat.ts` (the demo agent — depends on the SDK + TheoUI page)
+ *   - `src/server/agents/` (the demo agent, its hooks, skills, tools and prompts)
+ *   - `src/app/page.test.tsx` (tests the chat page; replaced with a test of the Hello page)
  *   - tailwind* + postcss* from devDependencies, `@tailwindcss/vite` included
  *     (toolchain cleanup — only the @theokit/ui-driven surface needs it)
  *   - `tailwind.config.ts` + `postcss.config.js` when a template ships them.
@@ -36,6 +37,21 @@ import { writeScaffoldFile } from './write-file.js'
 const HELLO_PAGE = `export default function Page() {
   return <h1>Hello Theo</h1>
 }
+`
+
+// The default `page.test.tsx` renders the chat page through `@theokit/ui`, which --bare removes, so
+// the bare app replaces it with a test of its own page. Server rendering keeps it in the default
+// `node` environment: no DOM library is needed to read one heading.
+const HELLO_PAGE_TEST = `import { renderToStaticMarkup } from 'react-dom/server'
+import { describe, expect, it } from 'vitest'
+
+import Page from './page'
+
+describe('home page', () => {
+  it('greets the visitor', () => {
+    expect(renderToStaticMarkup(<Page />)).toContain('Hello Theo')
+  })
+})
 `
 
 // --bare ships an unstyled shell: no @theokit/ui Header, no styles.css import. Replaces the default
@@ -77,6 +93,8 @@ export function applyBareTransform(targetDir: string, options: BareTransformOpti
       // lucide-react ships with the TheoUI surface; --bare doesn't render
       // any icons so it's safe to drop.
       delete pkg.dependencies['lucide-react']
+      // The app-chrome kit, imported only by the chat components removed below.
+      delete pkg.dependencies['@usetheo/ui']
     }
     if (pkg.devDependencies) {
       // Tailwind toolchain is only needed by the @theokit/ui-driven default
@@ -104,11 +122,18 @@ export function applyBareTransform(targetDir: string, options: BareTransformOpti
     writeScaffoldFile(layoutPath, BARE_LAYOUT)
   }
 
-  // 3. Remove the demo chat agent (the `agents/chat.ts` file + its TheoUI page)
-  const chatPath = join(targetDir, 'src/server/agents/chat.ts')
-  if (existsSync(chatPath)) {
-    unlinkSync(chatPath)
+  const pageTestPath = join(targetDir, 'src/app/page.test.tsx')
+  if (existsSync(pageTestPath)) {
+    writeScaffoldFile(pageTestPath, HELLO_PAGE_TEST)
   }
+
+  // 3. Remove the agent: the whole `src/server/agents/` tree, not only `chat.ts`. Its hooks import
+  //    `@theokit/agents` and its skills `@theokit/sdk`, both removed from package.json above, so
+  //    leaving them failed the bare app's own `typecheck` (usetheokit/theokit#1008). The tools and
+  //    prompts typecheck, but they are agent code in an app that has no agent. `src/shared/agent.ts`
+  //    is the agent's display metadata and goes with it.
+  rmSync(join(targetDir, 'src/server/agents'), { recursive: true, force: true })
+  rmSync(join(targetDir, 'src/shared/agent.ts'), { force: true })
 
   // 3b. Remove the chat frontend surface — `app/{components,hooks,lib}/` (import @theokit/ui) + the
   //     `app/about/` example route (part of the chat demo). The Hello-Theo page references none of them.

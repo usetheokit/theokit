@@ -28,7 +28,7 @@ export class InMemoryUsageStorage implements UsageStorageAdapter, StorageAdapter
   readonly #records: (UsageRecord | ToolUsageRecord)[] = []
 
   /**
-   * T2.3 — `StorageAdapter` lifecycle hook (ADR-0007 D6). In-memory storage
+   * T2.3 — `StorageAdapter` lifecycle hook. In-memory storage
    * has no real cleanup to perform — this is intentionally a noop so the
    * adapter can be registered with `StorageManager.register()` and
    * participate in graceful shutdown without changing behavior.
