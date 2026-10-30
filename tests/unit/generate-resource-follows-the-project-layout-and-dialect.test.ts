@@ -18,6 +18,9 @@ function project(opts: { serverDir?: string; schema?: string; drizzleDialect?: s
   const dir = mkdtempSync(join(tmpdir(), 'theo-gen-resource-'))
   dirs.push(dir)
   const serverDir = opts.serverDir ?? 'server'
+  // ESM, as a scaffold is: without it, Node versions that do not strip types natively (22.12 in
+  // CI) load the config through tsx as CommonJS and the default export arrives nested.
+  writeFileSync(join(dir, 'package.json'), '{ "type": "module" }\n')
   writeFileSync(
     join(dir, 'theo.config.ts'),
     opts.serverDir === undefined

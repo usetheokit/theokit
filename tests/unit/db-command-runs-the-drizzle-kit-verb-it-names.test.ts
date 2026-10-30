@@ -48,6 +48,9 @@ describe('theokit db runs the drizzle-kit command its verb names', () => {
   })
 
   it('seed runs the seed file under the configured serverDir', async () => {
+    // ESM, as a scaffold is: without it, Node versions that do not strip types natively load the
+    // config through tsx as CommonJS and the default export arrives nested.
+    writeFileSync(join(dir, 'package.json'), '{ "type": "module" }\n')
     writeFileSync(join(dir, 'theo.config.ts'), "export default { serverDir: 'src/server' }\n")
     mkdirSync(join(dir, 'src', 'server', 'db'), { recursive: true })
     writeFileSync(join(dir, 'src', 'server', 'db', 'seed.ts'), '')
