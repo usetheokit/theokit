@@ -8,6 +8,7 @@ import {
   type JobEnqueueInput,
   type JobLease,
   type JobLeaseFence,
+  type JobNackOptions,
   JobLeaseLostError,
 } from './job-backend.js'
 
@@ -163,14 +164,11 @@ export class InMemoryJobBackend implements JobBackend {
     return Promise.resolve()
   }
 
-  async nack(
-    jobId: string,
-    opts: { error: string; nonRetryable?: boolean } & JobLeaseFence,
-  ): Promise<void> {
+  async nack(jobId: string, opts: JobNackOptions): Promise<void> {
     const entry = this.#pending.get(jobId)
     this.#assertHeld(jobId, entry, opts, 'nack')
     if (!entry) return Promise.resolve()
-    if (opts.nonRetryable || entry.attempts >= entry.maxAttempts) {
+    if (opts.nonRetryable || entry.attempts >= (opts.maxAttempts ?? entry.maxAttempts)) {
       if (entry.dispatchTimer) clearTimeout(entry.dispatchTimer)
       this.#pending.delete(jobId)
     } else {

@@ -6,6 +6,7 @@ import {
   type JobEnqueueInput,
   type JobLease,
   type JobLeaseFence,
+  type JobNackOptions,
   JobLeaseLostError,
 } from './job-backend.js'
 
@@ -224,10 +225,7 @@ export class PostgresJobBackend implements JobBackend {
     }
   }
 
-  async nack(
-    jobId: string,
-    opts: { error: string; nonRetryable?: boolean } & JobLeaseFence,
-  ): Promise<void> {
+  async nack(jobId: string, opts: JobNackOptions): Promise<void> {
     const t = this.#table
     const { clause, params } = this.#held(jobId, opts)
     const lost = (): never => {
@@ -250,7 +248,7 @@ export class PostgresJobBackend implements JobBackend {
     }
     const { attempts, max_attempts } = r.rows[0]
     const write =
-      attempts >= max_attempts
+      attempts >= (opts.maxAttempts ?? max_attempts)
         ? `DELETE FROM ${t} WHERE ${clause} RETURNING id`
         : // Release lock — next dequeue picks it up again.
           `UPDATE ${t} SET locked_until = NULL, lease_token = NULL WHERE ${clause} RETURNING id`

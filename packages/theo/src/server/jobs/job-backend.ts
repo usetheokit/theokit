@@ -21,7 +21,11 @@ export interface JobEnqueueInput {
   delaySeconds?: number
   /** W3C Trace Context propagation per ADR/R0.5.9. */
   traceparent?: string
-  /** Maximum dispatch attempts (read from JobDefinition by the queue client). */
+  /**
+   * Maximum dispatch attempts stored with the job (default 1). The queue client has no access to
+   * the job definitions and leaves it unset; `createJobRunner` passes the definition's
+   * `maxAttempts` to `nack`, which takes precedence over this stored value.
+   */
   maxAttempts?: number
 }
 
@@ -39,6 +43,19 @@ export interface JobLease {
    * backends set it; optional so a backend written against the earlier contract still compiles.
    */
   readonly leaseToken?: string
+}
+
+/** What `nack` is told about the failure. */
+export interface JobNackOptions extends JobLeaseFence {
+  /** The failure message. */
+  error: string
+  /** The handler threw `NonRetryableError`: no retry, whatever the attempts left. */
+  nonRetryable?: boolean
+  /**
+   * The retry ceiling from the job's definition. Takes precedence over the value stored at
+   * enqueue, which is 1 for every job enqueued through the queue client.
+   */
+  maxAttempts?: number
 }
 
 /** Fences `ack`/`nack` to the lease that is finishing the job. */
@@ -67,10 +84,7 @@ export interface JobBackend {
    * Mark a job failed; backend decides retry vs DLQ via attempts. With `leaseToken`, rejects with
    * `JobLeaseLostError` and leaves the job alone when that lease no longer holds it.
    */
-  nack(
-    jobId: string,
-    opts: { error: string; nonRetryable?: boolean } & JobLeaseFence,
-  ): Promise<void>
+  nack(jobId: string, opts: JobNackOptions): Promise<void>
 
   /** Optional: return existing jobId if `key` was enqueued within `ttlSeconds`. */
   idempotency?(key: string, ttlSeconds: number): Promise<{ jobId: string } | null>

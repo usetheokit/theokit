@@ -17,7 +17,13 @@ export { JobLeaseLostError, NonRetryableError } from './job-backend.js'
 export { DuplicateContextKeyError } from './duplicate-context-key-error.js'
 
 // Backend contract
-export type { JobBackend, JobEnqueueInput, JobLease, JobLeaseFence } from './job-backend.js'
+export type {
+  JobBackend,
+  JobEnqueueInput,
+  JobLease,
+  JobLeaseFence,
+  JobNackOptions,
+} from './job-backend.js'
 
 // Backends
 export { InMemoryJobBackend } from './job-backend-memory.js'

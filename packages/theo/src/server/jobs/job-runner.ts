@@ -150,6 +150,9 @@ export function createJobRunner(
         error: failure instanceof Error ? failure.message : String(failure),
         nonRetryable: failure instanceof NonRetryableError,
         leaseToken: lease.leaseToken,
+        // The definition is the source of truth: a job enqueued through the queue client was stored
+        // with the backend default of 1 (usetheokit/theokit#1013).
+        maxAttempts: def.maxAttempts,
       }),
     )
   }
