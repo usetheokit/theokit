@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 
 import { createBroadcastGroups } from '../src/channels/broadcast-groups.js'
 import type { BroadcastGroupConfig } from '../src/channels/broadcast-groups.js'
-import { createReplyHandler } from '../src/channels/reply-handler.js'
+import { AgentTurnError, createReplyHandler } from '../src/channels/reply-handler.js'
 import type { TurnAgent } from '../src/channels/reply-handler.js'
 import { FakeAdapter, FakeAgent, assistant, finished, messageEvent } from './fakes.js'
 
@@ -128,7 +128,10 @@ describe('broadcast groups', () => {
 
   it('a failed turn leaves the transcript unchanged', async () => {
     const app = setup([HOME], { failTurns: true })
-    await app.deliver(inChannel('telegram', 'tg-chat', 'first question')).catch(() => undefined)
+    await expect(app.deliver(inChannel('telegram', 'tg-chat', 'first question'))).rejects.toThrow(AgentTurnError)
+    expect(app.prompts).toEqual(['first question'])
+    // The failed turn still sends its one reply, what it streamed before failing, to its origin.
+    expect(app.sent('telegram')).toEqual([['tg-chat', 'answer to first question']])
     expect(app.groups.groupOf('telegram', 'tg-chat')?.transcript()).toEqual([])
     // The failed turn's own reply goes to its origin only, never to the other members.
     expect(app.sent('discord')).toEqual([])
