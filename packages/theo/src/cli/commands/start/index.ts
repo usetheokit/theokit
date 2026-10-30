@@ -22,6 +22,7 @@ import { initCacheEngineFromConfig } from '../../../server/cache-bootstrap.js'
 import { createCronScheduler } from '../../../server/cron/cron-runtime-node.js'
 import { defineHealthRoute } from '../../../server/define/health-route.js'
 import { createCorsHandler } from '../../../server/http/cors.js'
+import { jobBackendFromConfig } from '../../../server/jobs/job-backend-from-config.js'
 import { createObservabilityPluginFromConfig } from '../../../server/observability-bootstrap.js'
 import { createPluginRunnerFromConfig } from '../../../server/plugins/load-plugins.js'
 import { createRouteRateLimiter } from '../../../server/rate-limit/rate-limit-per-route.js'
@@ -166,6 +167,7 @@ export async function startCommand(options: StartOptions): Promise<void> {
         transformer,
         csrfMode: config.security?.csrf ?? 'strict',
         disallowed: config.security?.disallowed,
+        jobBackend: jobBackendFromConfig(config),
         rateLimiter,
       }),
       securityHeadersConfig: config.security?.headers ?? {},

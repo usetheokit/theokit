@@ -14,6 +14,7 @@ import {
   type RateLimitConfig,
   type SecurityHeadersConfig,
 } from '../server/internal-api.js'
+import type { JobBackend } from '../server/jobs/job-backend.js'
 import type { TheoTransformer } from '../server/transformer.js'
 import type { ServicesConfig } from '../services/index.js'
 
@@ -50,9 +51,17 @@ interface ConfigureServerCtx {
   resolvedOpenApi: ResolvedOpenApi | undefined
   services: ServicesConfig | undefined
   rateLimit: RateLimitConfig | undefined
+  jobBackend: JobBackend | undefined
   csrfReadinessStoreOverride: CsrfReadinessStore | undefined
   virtualEntryServerId: string
   resolvedManifestId: string
+}
+
+/** The path prefixes the services proxy forwards, so the api-middleware steps aside for them. */
+function servicesProxyPrefixesOf(services: ServicesConfig | undefined): string[] {
+  return services && Object.keys(services).length > 0
+    ? Object.values(services).map((s) => s.proxy)
+    : []
 }
 
 /**
@@ -108,10 +117,7 @@ export async function runConfigureServer(
   // Wave 2 completion — services-proxy prefixes flow through to the
   // api-middleware so it can call `next()` for paths that should be
   // forwarded to a sidecar by Vite's proxyMiddleware.
-  const servicesProxyPrefixes =
-    ctx.services && Object.keys(ctx.services).length > 0
-      ? Object.values(ctx.services).map((s) => s.proxy)
-      : []
+  const servicesProxyPrefixes = servicesProxyPrefixesOf(ctx.services)
   // Auto-instantiate a dev-only CsrfReadinessStore so the devtools
   // CSRF Readiness tab works out-of-the-box.
   const csrfReadinessStore = ctx.csrfReadinessStoreOverride ?? new CsrfReadinessStore()
@@ -128,6 +134,7 @@ export async function runConfigureServer(
       auditLogger: ctx.auditLogger,
       servicesProxyPrefixes,
       csrfReadinessStore,
+      jobBackend: ctx.jobBackend,
     }),
   )
 

@@ -117,6 +117,7 @@ export type ConfigConcern =
   | 'serialization'
   | 'plugins'
   | 'securityHeaders'
+  | 'jobs'
 
 export interface DeployAdapter {
   name: string

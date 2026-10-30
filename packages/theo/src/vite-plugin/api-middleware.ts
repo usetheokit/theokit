@@ -35,6 +35,7 @@ import {
   type RateLimitConfig,
   type SecurityHeadersConfig,
 } from '../server/internal-api.js'
+import type { JobBackend } from '../server/jobs/job-backend.js'
 import type { TheoTransformer } from '../server/transformer.js'
 
 interface ApiMiddlewareOptions {
@@ -70,6 +71,8 @@ interface ApiMiddlewareOptions {
    * them to the polyglot sidecar. Empty / undefined preserves Wave 1 BC.
    */
   servicesProxyPrefixes?: readonly string[]
+  /** `theo.config.ts > jobs.backend`; present, every file route gets `ctx.queue` (#1009). */
+  jobBackend?: JobBackend
 }
 
 /**
@@ -316,6 +319,12 @@ async function tryControllerFallthrough(ctx: {
   return true
 }
 
+function normalizeApiMiddlewareOptions(
+  value: RateLimitConfig | ApiMiddlewareOptions | undefined,
+): ApiMiddlewareOptions {
+  return value && 'windowMs' in value ? { rateLimitConfig: value } : (value ?? {})
+}
+
 export function createApiMiddleware(
   vite: ViteDevServer,
   serverDir: string,
@@ -323,10 +332,7 @@ export function createApiMiddleware(
 ): Connect.NextHandleFunction {
   // Backward-compat: accept either RateLimitConfig directly (old signature)
   // or an ApiMiddlewareOptions object (new signature with pluginRunner).
-  const opts: ApiMiddlewareOptions =
-    rateLimitConfigOrOptions && 'windowMs' in rateLimitConfigOrOptions
-      ? { rateLimitConfig: rateLimitConfigOrOptions }
-      : (rateLimitConfigOrOptions ?? {})
+  const opts = normalizeApiMiddlewareOptions(rateLimitConfigOrOptions)
 
   const loadModule = createViteLoader(vite)
   const rateLimiter = opts.rateLimitConfig ? createRateLimiter(opts.rateLimitConfig) : null
@@ -484,6 +490,7 @@ export function createApiMiddleware(
         transformer,
         csrfMode,
         disallowed,
+        jobBackend: opts.jobBackend,
       })
       logRequest(
         { method, url, status: res.statusCode, duration: Date.now() - start, requestId },

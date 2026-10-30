@@ -26,6 +26,15 @@ export { cacheSchema, corsSchema, securityHeadersSchema, storageSchema } from '.
 
 export type { StorageConfig } from './schemas/index.js'
 
+/** The methods `executeRoute` and the job worker call on `jobs.backend`. */
+const JOB_BACKEND_METHODS = ['enqueue', 'dequeue', 'ack', 'nack'] as const
+
+function isJobBackendShaped(value: unknown): value is object {
+  if (typeof value !== 'object' || value === null) return false
+  const candidate = value as Record<string, unknown>
+  return JOB_BACKEND_METHODS.every((m) => typeof candidate[m] === 'function')
+}
+
 /**
  * Root `theo.config.ts` schema — composer assembled from the per-concern
  * primitives re-exported above.
@@ -275,13 +284,21 @@ export const theoConfigSchema = z
      */
     viteOptimizeDeps: z.array(z.string()).optional(),
     /**
-     * Jobs backend (ADR D3 + T2.1). When configured, every request gets
-     * `ctx.queue.enqueue` auto-wired via the outbox lifecycle. Pass a
-     * `JobBackend` instance (InMemoryJobBackend, PostgresJobBackend, etc.).
+     * Jobs backend (T2.1). When configured, every route handler gets `ctx.queue.enqueue`, wired
+     * through the per-request outbox, under both `theokit start` and `theokit dev`. Pass a
+     * `JobBackend` instance (`InMemoryJobBackend`, `PostgresJobBackend`, or your own).
+     *
+     * The value is checked for the four methods the framework calls, because a wrong value used to
+     * be accepted here and then ignored (usetheokit/theokit#1009).
      */
     jobs: z
       .object({
-        backend: z.custom<unknown>((v) => typeof v === 'object' && v !== null),
+        backend: z.custom<object>(isJobBackendShaped, {
+          message:
+            'jobs.backend must be a JobBackend: an object with enqueue, dequeue, ack and nack ' +
+            'methods, such as new InMemoryJobBackend() or new PostgresJobBackend({ pool }) ' +
+            "from 'theokit/server/jobs'",
+        }),
       })
       .optional(),
     /**
