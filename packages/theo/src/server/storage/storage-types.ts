@@ -1,5 +1,5 @@
 /**
- * Canonical structural types for the StorageManager (ADR-0007).
+ * Canonical structural types for the StorageManager.
  *
  * `PoolLike` is the minimal pg.Pool subset TheoKit consumes — defined here as
  * single source of truth (D7). Adapters that need a Postgres pool import this

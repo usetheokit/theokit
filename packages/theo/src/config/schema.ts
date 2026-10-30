@@ -26,6 +26,23 @@ export { cacheSchema, corsSchema, securityHeadersSchema, storageSchema } from '.
 
 export type { StorageConfig } from './schemas/index.js'
 
+/** The methods `executeRoute` and the job worker call on `jobs.backend`. */
+const JOB_BACKEND_METHODS = ['enqueue', 'dequeue', 'ack', 'nack'] as const
+
+function isJobBackendShaped(value: unknown): value is object {
+  if (typeof value !== 'object' || value === null) return false
+  const candidate = value as Record<string, unknown>
+  return JOB_BACKEND_METHODS.every((m) => typeof candidate[m] === 'function')
+}
+
+function isCronLockShaped(value: unknown): value is object {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as { acquire?: unknown }).acquire === 'function'
+  )
+}
+
 /**
  * Root `theo.config.ts` schema — composer assembled from the per-concern
  * primitives re-exported above.
@@ -275,13 +292,37 @@ export const theoConfigSchema = z
      */
     viteOptimizeDeps: z.array(z.string()).optional(),
     /**
-     * Jobs backend (ADR D3 + T2.1). When configured, every request gets
-     * `ctx.queue.enqueue` auto-wired via the outbox lifecycle. Pass a
-     * `JobBackend` instance (InMemoryJobBackend, PostgresJobBackend, etc.).
+     * Jobs backend (T2.1). When configured, every route handler gets `ctx.queue.enqueue`, wired
+     * through the per-request outbox, under both `theokit start` and `theokit dev`. Pass a
+     * `JobBackend` instance (`InMemoryJobBackend`, `PostgresJobBackend`, or your own).
+     *
+     * The value is checked for the four methods the framework calls, because a wrong value used to
+     * be accepted here and then ignored (usetheokit/theokit#1009).
      */
     jobs: z
       .object({
-        backend: z.custom<unknown>((v) => typeof v === 'object' && v !== null),
+        backend: z.custom<object>(isJobBackendShaped, {
+          message:
+            'jobs.backend must be a JobBackend: an object with enqueue, dequeue, ack and nack ' +
+            'methods, such as new InMemoryJobBackend() or new PostgresJobBackend({ pool }) ' +
+            "from 'theokit/server/jobs'",
+        }),
+        /**
+         * The in-process job worker `theokit start` and `theokit dev` run when jobs are declared
+         * under `server/jobs/` (usetheokit/theokit#1010). Set `enabled: false` in a process that
+         * should only serve requests, for example from an env var, and run the worker elsewhere.
+         */
+        worker: z
+          .object({
+            enabled: z.boolean().default(true),
+            /** Wait after a poll that found no job. */
+            pollIntervalMs: z.number().int().positive().default(1000),
+            /** Jobs leased per poll. */
+            batchSize: z.number().int().positive().default(10),
+            /** Lease duration per job; a job still running after it can be leased again. */
+            lockSeconds: z.number().int().positive().default(30),
+          })
+          .prefault({}),
       })
       .optional(),
     /**
@@ -295,6 +336,28 @@ export const theoConfigSchema = z
      * throw with an actionable error on first use.
      */
     storage: storageSchema.optional(),
+    /**
+     * The in-process cron scheduler (`<serverDir>/crons`, `<agentsDir>/schedules`).
+     *
+     * `lock` decides which process runs each tick when several run `theokit start`
+     * (usetheokit/theokit#1016). Unset, a `PostgresJobBackend` in `jobs.backend` provides one on
+     * its pool; any other setup fires every cron in every process. Pass a `CronLock` (for example
+     * `createPostgresCronLock(pool)` from `theokit/server/cron`) to choose, or `false` to opt out.
+     */
+    cron: z
+      .object({
+        lock: z
+          .union([
+            z.literal(false),
+            z.custom<object>(isCronLockShaped, {
+              message:
+                'cron.lock must be a CronLock (an object with an acquire(name, scheduledAt) ' +
+                "method, such as createPostgresCronLock(pool) from 'theokit/server/cron') or false",
+            }),
+          ])
+          .optional(),
+      })
+      .optional(),
     /**
      * Wave 2 — Polyglot services orchestration (T1.1 / ADR-0012/0013/0014/0015).
      *

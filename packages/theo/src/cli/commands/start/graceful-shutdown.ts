@@ -14,13 +14,37 @@ import type { Server as HttpServer } from 'node:http'
 
 import { warnOnce } from '../../../server/observability/logger.js'
 
-export function installGracefulShutdown(server: HttpServer): void {
+/** How long shutdown waits for the job in progress before moving on. */
+const BACKGROUND_STOP_BUDGET_MS = 20_000
+
+/**
+ * @param stopBackgroundWork - stops the cron scheduler and the job worker. Runs FIRST and is
+ *   awaited, so a job in progress finishes (and is acked) before the storage pools it uses are
+ *   closed below.
+ */
+export function installGracefulShutdown(
+  server: HttpServer,
+  stopBackgroundWork: () => Promise<void> = () => Promise.resolve(),
+): void {
   let shuttingDown = false
   const shutdown = (signal: NodeJS.Signals): void => {
     if (shuttingDown) return
     shuttingDown = true
     console.log(`\n  [theokit] ${signal} received — evicting agents`)
     void (async () => {
+      try {
+        // Bounded: a job handler that never returns must not hold the process past the platform's
+        // grace period. Its lease expires and another worker takes the job.
+        await Promise.race([
+          stopBackgroundWork(),
+          new Promise<void>((resolve) => setTimeout(resolve, BACKGROUND_STOP_BUDGET_MS).unref()),
+        ])
+      } catch (err) {
+        warnOnce('shutdown.background_error', {
+          event: 'shutdown.background_error',
+          message: err instanceof Error ? err.message : String(err),
+        })
+      }
       // Lazy-import SDK only at shutdown time to avoid forcing the dep on
       // apps that don't use agents at all.
       try {

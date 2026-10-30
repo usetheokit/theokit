@@ -40,6 +40,8 @@ export type { QueueClient, EnqueueOptions } from './queue-client.js'
 // Runner
 export { createJobRunner } from './job-runner.js'
 export type { JobRunner } from './job-runner.js'
+export { createJobWorker } from './job-worker.js'
+export type { JobWorker, JobWorkerOptions } from './job-worker.js'
 
 // Manifest
 export { JOB_MANIFEST_SCHEMA_VERSION, buildJobManifest, writeJobManifest } from './job-manifest.js'

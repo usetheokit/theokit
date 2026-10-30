@@ -13,14 +13,13 @@ import type {
 
 /**
  * Declare a webhook handler with first-class signature verification
- * (R0.5.10, ADR-0005). Pure identity helper — returns the definition
+ * (R0.5.10). Pure identity helper — returns the definition
  * unchanged for downstream dispatch.
  *
  * @example
  * ```ts
  * // server/webhooks/stripe.ts
- * import { defineWebhook } from 'theokit/server'
- * import { stripe } from 'theokit/server/webhook/providers'
+ * import { defineWebhook, stripe } from 'theokit/server/webhook'
  *
  * export default defineWebhook({
  *   verify: stripe({ secret: process.env.STRIPE_WEBHOOK_SECRET! }),

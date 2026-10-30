@@ -1,6 +1,6 @@
 // T5a.1a — Web Standards migration (leaf-first slice). Web Crypto's
 // `crypto.randomUUID()` is available on globalThis in every supported
-// runtime per ADR-0028 (Node 22+, CF Workers, Bun, Deno, browsers).
+// runtime (Node 22+, CF Workers, Bun, Deno, browsers).
 // No node:crypto import needed.
 
 import {
@@ -24,7 +24,7 @@ import {
  * last error; this backend keeps no failed jobs and retries immediately, with
  * no backoff. `PostgresJobBackend` keeps failed jobs and backs off.
  *
- * Per ADR-0002: this is one of two first-party backends shipped in core.
+ * This is one of two first-party backends shipped in core.
  * Production deploys plug in PostgresJobBackend (T3.1).
  *
  * EC-104 (jobs-crons-webhooks-cost-tracking-plan): registers a

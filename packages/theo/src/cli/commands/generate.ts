@@ -1,6 +1,8 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 
+import { loadConfig } from '../../config/load-config.js'
+
 import { pathTraversalRefusal } from './generate-containment.js'
 import {
   UNDECIDED_POLICY_IDENT,
@@ -436,7 +438,16 @@ export async function generate(opts: GenerateOptions): Promise<GenerateResult> {
 
   // Resource generates multiple files — handle separately
   if (kind === 'resource') {
-    return generateResource(cwd, name, opts.fields ?? [])
+    let serverDir: string
+    try {
+      serverDir = (await loadConfig(cwd)).serverDir
+    } catch (err) {
+      return {
+        status: 'invalid_config',
+        message: `Cannot read ${resolve(cwd, 'theo.config.ts')}: ${(err as Error).message}`,
+      }
+    }
+    return generateResource(cwd, name, opts.fields ?? [], serverDir)
   }
 
   const resolved = await resolveTarget(cwd, kind, name)
@@ -449,7 +460,10 @@ const CLI_REFUSALS: Record<
   Exclude<GenerateStatus, 'created' | 'already_exists'>,
   (result: GenerateResult, name: string) => string
 > = {
-  not_a_project: () => 'Not a Theo project. Run this from a project root with theo.config.ts',
+  // The generator's own reason when it gave one: `generate resource` refuses a project that HAS a
+  // theo.config.ts when the schema file is missing, and the generic text blamed the config (#1022).
+  not_a_project: (result) =>
+    result.message ?? 'Not a Theo project. Run this from a project root with theo.config.ts',
   invalid_kind: (result) => result.message ?? 'Invalid kind',
   // `generate` returns invalid_name for a malformed name, a reserved name and a path that
   // resolves outside the project; each message says which, so the CLI must not replace it.

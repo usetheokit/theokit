@@ -2,8 +2,6 @@
  * StorageManager — per-process singleton coordinating pluggable storage
  * adapters (Postgres pools, Redis clients, in-memory adapters).
  *
- * Architectural decisions: see ADR-0007.
- *
  * Lifecycle:
  *   1. `getStorageManager()` returns the singleton (D1).
  *   2. `configure(storageConfig)` honored once per process (D3). Second call
@@ -143,6 +141,7 @@ export class StorageManager {
       )
     }
     const client = factory(serverConfig)
+    keepRedisErrorsFromExitingTheProcess(client, serverName)
     this.#redisClients.set(serverName, client)
     return client
   }
@@ -238,7 +237,7 @@ interface PoolEvents {
   listenerCount?: (event: 'error') => number
 }
 
-function hasEventApi(pool: PoolLike): pool is PoolLike & PoolEvents {
+function hasEventApi<T extends object>(pool: T): pool is T & PoolEvents {
   return typeof (pool as Partial<PoolEvents>).on === 'function'
 }
 
@@ -254,6 +253,24 @@ function keepPoolErrorsFromExitingTheProcess(pool: PoolLike, dbName: string): vo
   pool.on('error', (err) => {
     storageLogger.warn('postgres pool error; the client was discarded and the pool reconnects', {
       database: dbName,
+      code: err.code,
+      error: err.message,
+    })
+  })
+}
+
+/**
+ * The Redis counterpart. node-redis re-emits a socket error with a plain `emit('error')`, so a
+ * client from a `useRedis` factory with no listener exited the process on the first ECONNRESET
+ * (usetheokit/theokit#1029). ioredis already survives (it only logs when nobody listens), and a
+ * listener the factory attached is left as the only one.
+ */
+function keepRedisErrorsFromExitingTheProcess(client: RedisLike, serverName: string): void {
+  if (!hasEventApi(client)) return
+  if (typeof client.listenerCount === 'function' && client.listenerCount('error') > 0) return
+  client.on('error', (err) => {
+    storageLogger.warn('redis client error; the client reconnects per its own retry strategy', {
+      server: serverName,
       code: err.code,
       error: err.message,
     })

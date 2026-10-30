@@ -34,9 +34,9 @@ export interface JobContext<TInput = unknown> {
 export interface JobOptions<TInput = unknown> {
   /** Optional Zod schema (or any `.parse(value)`-shaped object) for input validation. */
   input?: { parse: (value: unknown) => TInput }
-  /** Maximum dispatch attempts (default 1 — no retry surprise per ADR-0003). */
+  /** Maximum dispatch attempts (default 1, so nothing retries unless the job asks for it). */
   maxAttempts?: number
-  /** Handler. Returns `void` per ADR-0003 — no workflow API. */
+  /** Handler. Returns `void`: there is no workflow API. */
   handler: (ctx: JobContext<TInput>) => Promise<void> | void
 }
 

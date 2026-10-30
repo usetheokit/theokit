@@ -87,7 +87,18 @@ function parseConfig(input: Record<string, unknown>): TheoConfig {
 // function directory and never see the app's source, so for them the named report
 // `findUnappliedConfig` already prints stays the honest answer.
 const EXPECTED: Record<BuildTarget, readonly ConfigConcern[] | 'runtime-not-emitted-here'> = {
-  node: ['rateLimit', 'csrf', 'disallowed', 'serialization', 'plugins', 'securityHeaders', 'cors'],
+  // `jobs` (#1009): only `theokit start` reads `jobs.backend` and wires `ctx.queue`. A backend is a
+  // constructed object holding a pool or a map, so no deployed entry can carry it as a literal.
+  node: [
+    'rateLimit',
+    'csrf',
+    'disallowed',
+    'serialization',
+    'plugins',
+    'securityHeaders',
+    'cors',
+    'jobs',
+  ],
   vercel: ['securityHeaders', 'csrf', 'disallowed', 'cors', 'serialization'],
   cloudflare: ['securityHeaders', 'csrf', 'disallowed', 'cors', 'serialization', 'plugins'],
   netlify: ['securityHeaders', 'csrf', 'disallowed', 'cors', 'serialization'],
@@ -106,6 +117,33 @@ describe('every deploy target declares which configuration its handler applies',
       expect(adapter.appliesConfig ?? []).toEqual(EXPECTED[target])
     })
   }
+})
+
+describe('jobs.backend is reported where ctx.queue is not wired (#1009)', () => {
+  const backend = {
+    enqueue: () => Promise.resolve({ jobId: 'x' }),
+    dequeue: () => Promise.resolve([]),
+    ack: () => Promise.resolve(),
+    nack: () => Promise.resolve(),
+  }
+  const withJobs = parseConfig({ jobs: { backend } })
+
+  it('a Web target names jobs.backend as dropped', async () => {
+    const adapter = await resolveAdapter('vercel')
+    expect(findUnappliedConfig(withJobs, adapter)).toEqual(['jobs'])
+    expect(describeUnappliedConfig('vercel', ['jobs'])).toContain('jobs.backend')
+  })
+
+  it('node applies it', async () => {
+    const adapter = await resolveAdapter('node')
+    expect(findUnappliedConfig(withJobs, adapter)).toEqual([])
+  })
+
+  it('the schema refuses a backend without the four methods', () => {
+    expect(() => parseConfig({ jobs: { backend: { enqueue: () => undefined } } })).toThrow(
+      /jobs\.backend must be a JobBackend/,
+    )
+  })
 })
 
 describe('a declared concern the target drops is named, not swallowed', () => {

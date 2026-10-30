@@ -1,5 +1,5 @@
 /**
- * Neutral `JobBackend` interface per ADR-0002.
+ * Neutral `JobBackend` interface.
  *
  * Implementations ship in core:
  *   - `InMemoryJobBackend` (T2.2) — dev + tests; no external deps
