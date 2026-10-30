@@ -3,7 +3,13 @@
 // runtime per ADR-0028 (Node 22+, CF Workers, Bun, Deno, browsers).
 // No node:crypto import needed.
 
-import type { JobBackend, JobEnqueueInput, JobLease } from './job-backend.js'
+import {
+  type JobBackend,
+  type JobEnqueueInput,
+  type JobLease,
+  type JobLeaseFence,
+  JobLeaseLostError,
+} from './job-backend.js'
 
 /**
  * In-memory job backend for dev + tests + single-instance prototypes.
@@ -35,6 +41,7 @@ interface PendingEntry {
   traceparent?: string
   availableAt: number
   lockExpiresAt: number | null
+  leaseToken: string | null
   dispatchTimer: NodeJS.Timeout | null
 }
 
@@ -101,6 +108,7 @@ export class InMemoryJobBackend implements JobBackend {
       traceparent: input.traceparent,
       availableAt,
       lockExpiresAt: null,
+      leaseToken: null,
       dispatchTimer: null,
     }
     this.#pending.set(jobId, entry)
@@ -131,6 +139,7 @@ export class InMemoryJobBackend implements JobBackend {
       if (entry.availableAt > now) continue
 
       entry.lockExpiresAt = now + lockSeconds * 1000
+      entry.leaseToken = globalThis.crypto.randomUUID()
       entry.attempts += 1
       leases.push({
         jobId: entry.jobId,
@@ -140,20 +149,26 @@ export class InMemoryJobBackend implements JobBackend {
         maxAttempts: entry.maxAttempts,
         traceparent: entry.traceparent,
         lockExpiresAt: new Date(entry.lockExpiresAt),
+        leaseToken: entry.leaseToken,
       })
     }
     return Promise.resolve(leases)
   }
 
-  async ack(jobId: string): Promise<void> {
+  async ack(jobId: string, fence?: JobLeaseFence): Promise<void> {
     const entry = this.#pending.get(jobId)
+    this.#assertHeld(jobId, entry, fence, 'ack')
     if (entry?.dispatchTimer) clearTimeout(entry.dispatchTimer)
     this.#pending.delete(jobId)
     return Promise.resolve()
   }
 
-  async nack(jobId: string, opts: { error: string; nonRetryable?: boolean }): Promise<void> {
+  async nack(
+    jobId: string,
+    opts: { error: string; nonRetryable?: boolean } & JobLeaseFence,
+  ): Promise<void> {
     const entry = this.#pending.get(jobId)
+    this.#assertHeld(jobId, entry, opts, 'nack')
     if (!entry) return Promise.resolve()
     if (opts.nonRetryable || entry.attempts >= entry.maxAttempts) {
       if (entry.dispatchTimer) clearTimeout(entry.dispatchTimer)
@@ -161,6 +176,7 @@ export class InMemoryJobBackend implements JobBackend {
     } else {
       // Release lock — becomes available again
       entry.lockExpiresAt = null
+      entry.leaseToken = null
     }
     return Promise.resolve()
   }
@@ -191,6 +207,17 @@ export class InMemoryJobBackend implements JobBackend {
     for (const entry of this.#pending.values()) {
       if (entry.dispatchTimer) clearTimeout(entry.dispatchTimer)
     }
+  }
+
+  /** A fenced call whose lease no longer holds the job is refused (usetheokit/theokit#1012). */
+  #assertHeld(
+    jobId: string,
+    entry: PendingEntry | undefined,
+    fence: JobLeaseFence | undefined,
+    operation: 'ack' | 'nack',
+  ): void {
+    if (fence?.leaseToken === undefined) return
+    if (entry?.leaseToken !== fence.leaseToken) throw new JobLeaseLostError(jobId, operation)
   }
 
   /** EC-104 test hook — invokes the shutdown handler synchronously. */

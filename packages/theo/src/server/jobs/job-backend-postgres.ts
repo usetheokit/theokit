@@ -1,7 +1,13 @@
 import type { PostgresFactory, StorageManager } from '../storage/storage-manager.js'
 import type { PoolLike } from '../storage/storage-types.js'
 
-import type { JobBackend, JobEnqueueInput, JobLease } from './job-backend.js'
+import {
+  type JobBackend,
+  type JobEnqueueInput,
+  type JobLease,
+  type JobLeaseFence,
+  JobLeaseLostError,
+} from './job-backend.js'
 
 /**
  * Postgres-backed `JobBackend` per ADR-0002 (T3.1).
@@ -103,9 +109,13 @@ export class PostgresJobBackend implements JobBackend {
         locked_until TIMESTAMPTZ,
         traceparent TEXT,
         idempotency_key TEXT,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        lease_token TEXT
       )
     `)
+    // Columns added after the first release. `CREATE TABLE IF NOT EXISTS` leaves a table created by
+    // an earlier version untouched, so each later column is added here as well.
+    await this.#pool.query(`ALTER TABLE ${t} ADD COLUMN IF NOT EXISTS lease_token TEXT`)
     await this.#pool.query(`
       CREATE UNIQUE INDEX IF NOT EXISTS ${t}_idempotency_key_idx
       ON ${t} (name, idempotency_key)
@@ -172,10 +182,12 @@ export class PostgresJobBackend implements JobBackend {
       max_attempts: number
       traceparent: string | null
       locked_until: Date | string
+      lease_token: string
     }>(
       `UPDATE ${t}
        SET locked_until = NOW() + ($2 || ' seconds')::interval,
-           attempts = attempts + 1
+           attempts = attempts + 1,
+           lease_token = $3
        WHERE id IN (
          SELECT id FROM ${t}
          WHERE (locked_until IS NULL OR locked_until < NOW())
@@ -184,8 +196,8 @@ export class PostgresJobBackend implements JobBackend {
          LIMIT $1
          FOR UPDATE SKIP LOCKED
        )
-       RETURNING id, name, input, attempts, max_attempts, traceparent, locked_until`,
-      [batchSize, lockSeconds.toString()],
+       RETURNING id, name, input, attempts, max_attempts, traceparent, locked_until, lease_token`,
+      [batchSize, lockSeconds.toString(), randomId()],
     )
 
     return r.rows.map((row) => ({
@@ -197,32 +209,64 @@ export class PostgresJobBackend implements JobBackend {
       traceparent: row.traceparent ?? undefined,
       lockExpiresAt:
         row.locked_until instanceof Date ? row.locked_until : new Date(row.locked_until),
+      leaseToken: row.lease_token,
     }))
   }
 
-  async ack(jobId: string): Promise<void> {
-    await this.#pool.query(`DELETE FROM ${this.#table} WHERE id = $1`, [jobId])
+  async ack(jobId: string, fence?: JobLeaseFence): Promise<void> {
+    const { clause, params } = this.#held(jobId, fence)
+    const r = await this.#pool.query(
+      `DELETE FROM ${this.#table} WHERE ${clause} RETURNING id`,
+      params,
+    )
+    if (fence?.leaseToken !== undefined && r.rows.length === 0) {
+      throw new JobLeaseLostError(jobId, 'ack')
+    }
   }
 
-  async nack(jobId: string, opts: { error: string; nonRetryable?: boolean }): Promise<void> {
+  async nack(
+    jobId: string,
+    opts: { error: string; nonRetryable?: boolean } & JobLeaseFence,
+  ): Promise<void> {
     const t = this.#table
+    const { clause, params } = this.#held(jobId, opts)
+    const lost = (): never => {
+      throw new JobLeaseLostError(jobId, 'nack')
+    }
+    const fenced = opts.leaseToken !== undefined
     if (opts.nonRetryable) {
-      await this.#pool.query(`DELETE FROM ${t} WHERE id = $1`, [jobId])
+      const r = await this.#pool.query(`DELETE FROM ${t} WHERE ${clause} RETURNING id`, params)
+      if (fenced && r.rows.length === 0) lost()
       return
     }
     // Check attempts >= maxAttempts → permanent removal.
     const r = await this.#pool.query<{
       attempts: number
       max_attempts: number
-    }>(`SELECT attempts, max_attempts FROM ${t} WHERE id = $1`, [jobId])
-    if (r.rows.length === 0) return
-    const { attempts, max_attempts } = r.rows[0]
-    if (attempts >= max_attempts) {
-      await this.#pool.query(`DELETE FROM ${t} WHERE id = $1`, [jobId])
-    } else {
-      // Release lock — next dequeue picks it up again.
-      await this.#pool.query(`UPDATE ${t} SET locked_until = NULL WHERE id = $1`, [jobId])
+    }>(`SELECT attempts, max_attempts FROM ${t} WHERE ${clause}`, params)
+    if (r.rows.length === 0) {
+      if (fenced) lost()
+      return
     }
+    const { attempts, max_attempts } = r.rows[0]
+    const write =
+      attempts >= max_attempts
+        ? `DELETE FROM ${t} WHERE ${clause} RETURNING id`
+        : // Release lock — next dequeue picks it up again.
+          `UPDATE ${t} SET locked_until = NULL, lease_token = NULL WHERE ${clause} RETURNING id`
+    const w = await this.#pool.query(write, params)
+    if (fenced && w.rows.length === 0) lost()
+  }
+
+  /**
+   * The row predicate for a call that finishes a job. Fenced by the lease token when the caller
+   * passed one: a worker whose lease expired and was re-leased no longer matches, so its late
+   * ack or nack cannot touch the new holder's job (usetheokit/theokit#1012).
+   */
+  #held(jobId: string, fence?: JobLeaseFence): { clause: string; params: unknown[] } {
+    return fence?.leaseToken === undefined
+      ? { clause: 'id = $1', params: [jobId] }
+      : { clause: 'id = $1 AND lease_token = $2', params: [jobId, fence.leaseToken] }
   }
 
   async idempotency(key: string, _ttlSeconds: number): Promise<{ jobId: string } | null> {

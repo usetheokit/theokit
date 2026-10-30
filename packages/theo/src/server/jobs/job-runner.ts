@@ -1,9 +1,15 @@
+import { createLogger } from '../observability/logger.js'
 import {
   extractTraceContext,
   generateNewTraceContext,
 } from '../observability/trace-context-propagation.js'
 
-import { type JobBackend, type JobLease, NonRetryableError } from './job-backend.js'
+import {
+  type JobBackend,
+  type JobLease,
+  JobLeaseLostError,
+  NonRetryableError,
+} from './job-backend.js'
 import type { JobContext, JobDefinition } from './job-types.js'
 
 /**
@@ -25,6 +31,31 @@ import type { JobContext, JobDefinition } from './job-types.js'
  * continue the new trace_id.
  */
 
+const runnerLogger = createLogger({ context: { component: 'theokit:jobs:runner' } })
+
+/**
+ * Run an ack or nack, fenced by the lease. A lost lease means another worker owns the job now, so
+ * its outcome is not ours to write: log it and move on. Any other failure propagates.
+ */
+async function finish(
+  lease: JobLease,
+  outcome: 'ack' | 'nack',
+  write: () => Promise<void>,
+): Promise<void> {
+  try {
+    await write()
+  } catch (err) {
+    if (!(err instanceof JobLeaseLostError)) throw err
+    runnerLogger.warn('job lease lost before the outcome was written; the new holder decides it', {
+      jobId: lease.jobId,
+      job: lease.name,
+      attempt: lease.attempts,
+      outcome,
+      code: err.code,
+    })
+  }
+}
+
 export interface JobRunner {
   /** Run one dequeue+dispatch cycle. */
   tick(opts?: { batchSize?: number; lockSeconds?: number }): Promise<number>
@@ -44,10 +75,13 @@ export function createJobRunner(
     if (!def) {
       // Job name not registered in this runner's definition set. Nack
       // permanently — the lease can't be processed by this runner.
-      await backend.nack(lease.jobId, {
-        error: `No job definition for "${lease.name}"`,
-        nonRetryable: true,
-      })
+      await finish(lease, 'nack', () =>
+        backend.nack(lease.jobId, {
+          error: `No job definition for "${lease.name}"`,
+          nonRetryable: true,
+          leaseToken: lease.leaseToken,
+        }),
+      )
       return
     }
 
@@ -67,10 +101,13 @@ export function createJobRunner(
       try {
         parsedInput = def.inputSchema.parse(lease.input)
       } catch (err) {
-        await backend.nack(lease.jobId, {
-          error: `Input validation failed: ${err instanceof Error ? err.message : String(err)}`,
-          nonRetryable: true,
-        })
+        await finish(lease, 'nack', () =>
+          backend.nack(lease.jobId, {
+            error: `Input validation failed: ${err instanceof Error ? err.message : String(err)}`,
+            nonRetryable: true,
+            leaseToken: lease.leaseToken,
+          }),
+        )
         return
       }
     }
@@ -92,18 +129,29 @@ export function createJobRunner(
       attempt: lease.attempts,
     }
 
+    let failure: unknown
+    let failed = false
     try {
       await def.handler(jobCtx)
-      await backend.ack(lease.jobId)
     } catch (err) {
-      const isNonRetryable = err instanceof NonRetryableError
-      await backend.nack(lease.jobId, {
-        error: err instanceof Error ? err.message : String(err),
-        nonRetryable: isNonRetryable,
-      })
+      failed = true
+      failure = err
     } finally {
       clearTimeout(lockTimer)
     }
+    // The outcome is written outside the handler's try, so a failed ack is never mistaken for a
+    // failed handler and nacked.
+    if (!failed) {
+      await finish(lease, 'ack', () => backend.ack(lease.jobId, { leaseToken: lease.leaseToken }))
+      return
+    }
+    await finish(lease, 'nack', () =>
+      backend.nack(lease.jobId, {
+        error: failure instanceof Error ? failure.message : String(failure),
+        nonRetryable: failure instanceof NonRetryableError,
+        leaseToken: lease.leaseToken,
+      }),
+    )
   }
 
   return {

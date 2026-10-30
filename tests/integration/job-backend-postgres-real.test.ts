@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
 
+import { JobLeaseLostError } from '../../packages/theo/src/server/jobs/job-backend.js'
 import { PostgresJobBackend } from '../../packages/theo/src/server/jobs/job-backend-postgres.js'
 
 const POSTGRES_URL = process.env.POSTGRES_URL
@@ -133,6 +134,40 @@ describe.skipIf(!POSTGRES_URL || !pgAvailable)(
       }
     })
 
+    // usetheokit/theokit#1012 — ack and nack filtered on `id` alone, so a worker whose lease had
+    // expired deleted the job while the worker that re-leased it was still running it.
+    const reLeasedAfterExpiry = async (): Promise<{ jobId: string; a: string; b: string }> => {
+      const { jobId } = await backend.enqueue({ name: 'slow', input: {}, maxAttempts: 5 })
+      const [a] = await backend.dequeue({ batchSize: 1, lockSeconds: 1 })
+      await new Promise((r) => setTimeout(r, 1500))
+      const [b] = await backend.dequeue({ batchSize: 1, lockSeconds: 60 })
+      expect(b.jobId).toBe(jobId)
+      return { jobId, a: a.leaseToken!, b: b.leaseToken! }
+    }
+    const rowsFor = async (jobId: string): Promise<number> =>
+      (await pool.query<{ id: string }>(`SELECT id FROM theokit_jobs_ci WHERE id = $1`, [jobId]))
+        .rows.length
+
+    it('test_an_ack_with_an_expired_lease_token_is_refused_and_the_job_stays', async () => {
+      const { jobId, a, b } = await reLeasedAfterExpiry()
+
+      await expect(backend.ack(jobId, { leaseToken: a })).rejects.toBeInstanceOf(JobLeaseLostError)
+      expect(await rowsFor(jobId)).toBe(1)
+
+      await backend.ack(jobId, { leaseToken: b })
+      expect(await rowsFor(jobId)).toBe(0)
+    })
+
+    it('test_a_nack_with_an_expired_lease_token_is_refused_and_the_current_lease_is_kept', async () => {
+      const { jobId, a } = await reLeasedAfterExpiry()
+
+      await expect(
+        backend.nack(jobId, { error: 'late', nonRetryable: true, leaseToken: a }),
+      ).rejects.toBeInstanceOf(JobLeaseLostError)
+      expect(await rowsFor(jobId)).toBe(1)
+      expect(await backend.dequeue({ batchSize: 1, lockSeconds: 60 })).toEqual([])
+    })
+
     it('idempotency UNIQUE index — same (name, key) returns existing jobId', async () => {
       const a = await backend.enqueue({
         name: 'idem',
@@ -165,6 +200,44 @@ describe.skipIf(!POSTGRES_URL || !pgAvailable)(
         jobId,
       ])
       expect(r.rows.length).toBe(0)
+    })
+
+    // `migrate()` creates the table with IF NOT EXISTS, so a table created by an earlier theokit
+    // keeps its old shape unless every later column is also added on its own. This is the DDL
+    // theokit@0.75.1 shipped, verbatim, holding a job enqueued by that version.
+    it('test_migrate_upgrades_a_table_created_by_theokit_0_75_and_keeps_its_jobs', async () => {
+      const legacy = 'theokit_jobs_legacy_ci'
+      await pool.query(`DROP TABLE IF EXISTS ${legacy}`)
+      await pool.query(`
+        CREATE TABLE ${legacy} (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          input JSONB NOT NULL,
+          attempts INT NOT NULL DEFAULT 0,
+          max_attempts INT NOT NULL DEFAULT 1,
+          available_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          locked_until TIMESTAMPTZ,
+          traceparent TEXT,
+          idempotency_key TEXT,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )`)
+      await pool.query(
+        `INSERT INTO ${legacy} (id, name, input, max_attempts) VALUES ('old-1', 'old', '{}', 2)`,
+      )
+      try {
+        const upgraded = new PostgresJobBackend({ pool, tableName: legacy })
+        await upgraded.migrate()
+        await upgraded.migrate()
+
+        const [lease] = await upgraded.dequeue({ batchSize: 1, lockSeconds: 30 })
+        expect(lease.jobId).toBe('old-1')
+        expect(lease.leaseToken).toEqual(expect.any(String))
+        await upgraded.ack('old-1', { leaseToken: lease.leaseToken })
+        const left = await pool.query<{ id: string }>(`SELECT id FROM ${legacy}`)
+        expect(left.rows).toEqual([])
+      } finally {
+        await pool.query(`DROP TABLE IF EXISTS ${legacy}`)
+      }
     })
 
     it('migrate() is idempotent (safe to re-run on every deploy)', async () => {
