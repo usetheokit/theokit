@@ -14,6 +14,9 @@ import { FakeAdapter } from './fakes.js'
  */
 
 const SMS_ENV = {
+  // A placeholder owner the app requires (B-371); these tests stay at the route level.
+  THEOCLAW_OWNERS: 'telegram:owner',
+  THEOCLAW_DM_POLICY: 'allowlist',
   THEOCLAW_SMS_TWILIO_ACCOUNT_SID: 'AC-composed',
   THEOCLAW_SMS_TWILIO_AUTH_TOKEN: 'sms-auth-token',
   THEOCLAW_SMS_TWILIO_FROM_NUMBER: '+12025550123',
@@ -21,6 +24,9 @@ const SMS_ENV = {
 }
 
 const WHATSAPP_ENV = {
+  // A placeholder owner the app requires (B-371); these tests stay at the route level.
+  THEOCLAW_OWNERS: 'telegram:owner',
+  THEOCLAW_DM_POLICY: 'allowlist',
   THEOCLAW_WHATSAPP_ACCESS_TOKEN: 'wa-access-token-value',
   THEOCLAW_WHATSAPP_PHONE_NUMBER_ID: '1234',
   THEOCLAW_WHATSAPP_APP_SECRET: 'wa-app-secret',
@@ -79,11 +85,19 @@ describe('the composed SMS route', () => {
 
   it('answers 401 when the signature does not check', async () => {
     const sms = new VerifyingSms(false)
+    const delivered: MessageEvent[] = []
     const { builders } = fakeBuilders({ sms })
     const { loop, router } = composeTheoClaw({ env: SMS_ENV, agentFactory: noAgent, builders, write: () => undefined })
     await loop.ready
+    sms.onInbound(async (event) => {
+      delivered.push(event)
+    })
 
-    expect((await router(twilioPost())).status).toBe(401)
+    const response = await router(twilioPost())
+
+    expect(response.status).toBe(401)
+    expect(sms.checkedUrls).toEqual(['https://theoclaw.example.org/webhooks/sms'])
+    expect(delivered).toEqual([])
     await loop.stopAll()
   })
 

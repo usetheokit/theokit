@@ -22,8 +22,21 @@ export function smsOptions(settings: PlatformSettings<'sms'>): TwilioOptions {
   return { backend: 'twilio', ...settings }
 }
 
+/** Options that apply to every build, from the authorization policy. */
+export interface AdapterBuildOptions {
+  /**
+   * Whether Slack, Mattermost and WhatsApp answer a group message only when mentioned
+   * (`THEOCLAW_GROUP_ACTIVATION`). Unset leaves each adapter's own default, which is `true`.
+   */
+  readonly requireMention?: boolean
+}
+
 type AdapterConstructors = {
-  readonly [P in PlatformName]: (settings: PlatformSettings<P>) => BasePlatformAdapter
+  readonly [P in PlatformName]: (settings: PlatformSettings<P>, options: AdapterBuildOptions) => BasePlatformAdapter
+}
+
+function mention(options: AdapterBuildOptions): { readonly requireMention?: boolean } {
+  return options.requireMention === undefined ? {} : { requireMention: options.requireMention }
 }
 
 /**
@@ -34,15 +47,15 @@ type AdapterConstructors = {
 const ADAPTERS: AdapterConstructors = {
   telegram: (settings) => new TelegramAdapter(settings),
   discord: (settings) => new DiscordAdapter(settings),
-  slack: (settings) => new SlackAdapter(settings),
+  slack: (settings, options) => new SlackAdapter({ ...settings, ...mention(options) }),
   matrix: (settings) => new MatrixAdapter(settings),
-  mattermost: (settings) => new MattermostAdapter(settings),
+  mattermost: (settings, options) => new MattermostAdapter({ ...settings, ...mention(options) }),
   email: (settings) => new EmailAdapter(settings),
   line: (settings) => new LineAdapter(settings),
   // The verify token answers Meta's subscription check in the route; it is not an adapter option,
   // so the three Cloud fields are picked by name rather than spread.
-  whatsapp: ({ accessToken, phoneNumberId, appSecret }) =>
-    WhatsAppAdapter.from({ backend: 'cloud', cloud: { accessToken, phoneNumberId, appSecret } }),
+  whatsapp: ({ accessToken, phoneNumberId, appSecret }, options) =>
+    WhatsAppAdapter.from({ backend: 'cloud', cloud: { accessToken, phoneNumberId, appSecret } }, mention(options)),
   teams: (settings) => new TeamsAdapter(settings),
   sms: (settings) => new SMSAdapter(smsOptions(settings)),
 }
@@ -56,11 +69,11 @@ type SettingsFor<P extends PlatformName = PlatformName> = {
   [K in P]: { readonly platform: K; readonly settings: PlatformSettings<K> }
 }[P]
 
-function buildAdapter<P extends PlatformName>(entry: SettingsFor<P>): BasePlatformAdapter {
-  return ADAPTERS[entry.platform](entry.settings)
+function buildAdapter<P extends PlatformName>(entry: SettingsFor<P>, options: AdapterBuildOptions): BasePlatformAdapter {
+  return ADAPTERS[entry.platform](entry.settings, options)
 }
 
 /** One builder per configured platform; the adapter is constructed only when the loop calls it. */
-export function adapterBuilders(configured: readonly ConfiguredPlatform[]): PlatformBuild[] {
-  return configured.map((entry) => ({ platform: entry.platform, build: () => buildAdapter(entry) }))
+export function adapterBuilders(configured: readonly ConfiguredPlatform[], options: AdapterBuildOptions = {}): PlatformBuild[] {
+  return configured.map((entry) => ({ platform: entry.platform, build: () => buildAdapter(entry, options) }))
 }
