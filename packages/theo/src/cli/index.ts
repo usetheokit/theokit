@@ -273,11 +273,14 @@ cli
   })
 
 cli
-  .command('db <action>', 'Database commands: migrate (push schema), generate (SQL files), seed')
+  .command(
+    'db <action>',
+    'Database commands: generate (write SQL migration files), migrate (apply them), push (diff the schema into the database, no files), seed',
+  )
   .action(async (action: string) => {
     try {
       const { dbCommandCli } = await import('./commands/db.js')
-      dbCommandCli(action)
+      await dbCommandCli(action)
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       console.error(`\n  ✗ ${msg}\n`)

@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- `theokit`: **behavior change.** `theokit db migrate` runs `drizzle-kit migrate`, which applies the files `theokit db generate` writes and records them in `drizzle.__drizzle_migrations`. It ran `drizzle-kit push`, which ignores those files and keeps no journal. The push behavior is now `theokit db push`. `theokit db seed` runs `<serverDir>/db/seed.ts` instead of a hardcoded `server/db/seed.ts` (#1021)
+
 ### Fixed
 
 - `theokit`: the `storage` and `cache` blocks of `theo.config.ts` reach route code under `theokit start`. The CLI build and the library build each carried their own copy of the storage manager and the cache engine, so `start` configured one copy and routes read the other: `usePostgres` threw `Database "main" not configured` and `revalidateTag` threw `Cache engine not initialized`. Both are now held once per process (#1018)
