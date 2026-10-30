@@ -56,8 +56,10 @@ jobs:
       # it, so they skipped green on every push (S-004 loop-test-audit, TP-D2-skipped). Here they run
       # with the flag, the model and the key, so a missing one fails by name. One file at a time:
       # several of them start an sshd or an instance process and share the host's ports.
-      - name: Build TheoClaw's workspace dependencies
-        run: TURBO_CONCURRENCY=1 pnpm --filter "theoclaw^..." build
+      # `theoclaw...` is TheoClaw and its workspace dependencies: control-plane and
+      # instance-profiles spawn apps/theoclaw/dist/main.js, which `theoclaw^...` never built (B-651).
+      - name: Build TheoClaw and its workspace dependencies
+        run: TURBO_CONCURRENCY=1 pnpm --filter "theoclaw..." build
       - name: TheoClaw live tests (THEOCLAW_LIVE)
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}

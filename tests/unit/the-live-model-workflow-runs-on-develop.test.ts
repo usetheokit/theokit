@@ -133,9 +133,14 @@ describe('live-model.yml', () => {
   // S-004 loop-test-audit (TP-D2-skipped): apps/theoclaw/tests/live/*.live.test.ts skip unless
   // THEOCLAW_LIVE=1, and no job set it, so they skipped green on every push. This step sets it,
   // with the model and the key, so a missing one fails by name instead of skipping.
-  it('runs the TheoClaw live tests with THEOCLAW_LIVE=1, after its dependencies are built', () => {
+  // F-dom-1 / F-wire-4 (B-651): `theoclaw^...` selects only TheoClaw's dependencies, so
+  // apps/theoclaw/dist/main.js, which control-plane and instance-profiles spawn, was never built.
+  // `theoclaw...` selects TheoClaw and its dependencies.
+  it('runs the TheoClaw live tests with THEOCLAW_LIVE=1, after TheoClaw itself is built', () => {
     const theoclaw = stepIndex('--filter theoclaw test:live')
-    expect(theoclaw).toBeGreaterThan(stepIndex('pnpm --filter "theoclaw^..." build'))
+    const build = stepIndex('pnpm --filter "theoclaw..." build')
+    expect(theoclaw).toBeGreaterThan(build)
+    expect(STEPS[build]?.run).not.toContain('theoclaw^...')
     const LIVE_STEP = STEPS[theoclaw] as Step
     expect(LIVE_STEP.env?.THEOCLAW_LIVE).toBe('1')
     expect(LIVE_STEP.env?.THEOCLAW_HOST_TOOLS).toBe('on')
