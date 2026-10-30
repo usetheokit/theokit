@@ -1,4 +1,4 @@
-import { processSingleton } from '../_internal/process-singleton.js'
+import { processSingleton } from '../../core/process-singleton.js'
 
 /**
  * Provider Resolver — Strategy + Registry pattern (FAANG-grade).

@@ -92,12 +92,16 @@ describe('PostgresJobBackend (T3.1)', () => {
     expect(r.rows.length).toBe(0)
   })
 
-  it('nack with nonRetryable deletes the row', async () => {
+  it('nack with nonRetryable keeps the row as failed with its error (#1014)', async () => {
     const { jobId } = await backend.enqueue({ name: 'test', input: {} })
     await backend.dequeue({ batchSize: 1, lockSeconds: 30 })
     await backend.nack(jobId, { error: 'fatal', nonRetryable: true })
-    const r = await pool.query('SELECT * FROM theokit_jobs WHERE id = $1', [jobId])
-    expect(r.rows.length).toBe(0)
+    const r = await pool.query<{ last_error: string; failed_at: unknown }>(
+      'SELECT last_error, failed_at FROM theokit_jobs WHERE id = $1',
+      [jobId],
+    )
+    expect(r.rows[0].last_error).toBe('fatal')
+    expect(r.rows[0].failed_at).not.toBeNull()
   })
 
   it('nack without nonRetryable releases lock (re-dequeueable)', async () => {

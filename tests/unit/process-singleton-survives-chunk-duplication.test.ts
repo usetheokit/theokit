@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 
-import { processSingleton } from '../../packages/theo/src/server/_internal/process-singleton.js'
+import { processSingleton } from '../../packages/theo/src/core/process-singleton.js'
 
 /**
  * usetheokit/theokit#401 — `registerProvider` mutated a registry the server never
@@ -70,7 +70,7 @@ describe('a process-wide singleton is one object however the bundle is split (#4
     // Built at runtime so `tsc` does not try to resolve the query string, which is
     // a Vite mechanism rather than a module path. Suppressing the resulting error
     // with a directive would hide a genuine broken import here later.
-    const secondInstance = '../../packages/theo/src/server/_internal/process-singleton.js?chunk=2'
+    const secondInstance = '../../packages/theo/src/core/process-singleton.js?chunk=2'
     const again = (await import(/* @vite-ignore */ secondInstance)) as {
       processSingleton: typeof processSingleton
     }
