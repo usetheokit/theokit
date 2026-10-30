@@ -19,8 +19,7 @@ import type {
  * @example
  * ```ts
  * // server/webhooks/stripe.ts
- * import { defineWebhook } from 'theokit/server'
- * import { stripe } from 'theokit/server/webhook/providers'
+ * import { defineWebhook, stripe } from 'theokit/server/webhook'
  *
  * export default defineWebhook({
  *   verify: stripe({ secret: process.env.STRIPE_WEBHOOK_SECRET! }),
