@@ -35,7 +35,7 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: node scripts/live-model-preflight.mjs
       - name: Build the live suite's workspace dependencies
-        run: TURBO_CONCURRENCY=1 pnpm --filter "@theokit/agents..." build
+        run: node scripts/live-model-build.mjs agents
       - name: Live suite (THEOKIT_LIVE_REQUIRED)
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
@@ -56,10 +56,12 @@ jobs:
       # it, so they skipped green on every push (S-004 loop-test-audit, TP-D2-skipped). Here they run
       # with the flag, the model and the key, so a missing one fails by name. One file at a time:
       # several of them start an sshd or an instance process and share the host's ports.
-      # `theoclaw...` is TheoClaw and its workspace dependencies: control-plane and
-      # instance-profiles spawn apps/theoclaw/dist/main.js, which `theoclaw^...` never built (B-651).
+      # The script builds `theoclaw...`, TheoClaw and its workspace dependencies: control-plane and
+      # instance-profiles spawn apps/theoclaw/dist/main.js, which `theoclaw^...` never built (B-651),
+      # and the script fails naming that file when it is missing. ci.yml's `live-model-build` job runs
+      # the same script on every pull request (B-659).
       - name: Build TheoClaw and its workspace dependencies
-        run: TURBO_CONCURRENCY=1 pnpm --filter "theoclaw..." build
+        run: node scripts/live-model-build.mjs theoclaw
       - name: TheoClaw live tests (THEOCLAW_LIVE)
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}

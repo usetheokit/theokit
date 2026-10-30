@@ -633,6 +633,23 @@ jobs:
         timeout-minutes: 1
         run: pnpm --filter theoclaw run audit
 
+  # B-659: live-model.yml builds what its live tests need only on push to develop, so a selector
+  # that left TheoClaw out (`theoclaw^...`, B-651) merged green. This job runs the same script on
+  # every pull request. It names no secret and runs no live test, so it reaches no provider; it
+  # builds from source rather than from the `package-dist` artifact, because a prebuilt dependency
+  # would hide a selector that omits it. No path filter: `ci-ok` requires it.
+  live-model-build:
+    name: Live model build (no provider)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: usetheokit/shared-workflows/actions/setup@v1 # zizmor: ignore[unpinned-uses] first-party moving major, ADR-0021
+      - name: Build what the live-model job builds
+        run: node scripts/live-model-build.mjs
+
   dependency-audit:
     name: Dependency audit (production, high+)
     runs-on: ubuntu-latest
@@ -928,6 +945,7 @@ jobs:
       - dead-code
       - package-validation
       - theoclaw
+      - live-model-build
       - changeset-coverage
       # `theocode` and `env-verdicts` were outside this list until 2026-09-18 (B-183). A job
       # absent from it still runs and still shows a red X on the pull request, and the required
