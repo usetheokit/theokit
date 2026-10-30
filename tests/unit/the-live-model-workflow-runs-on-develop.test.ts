@@ -151,7 +151,9 @@ describe('live-model.yml', () => {
   // by what pnpm selects (B-659).
   it('runs the TheoClaw live tests with THEOCLAW_LIVE=1, after TheoClaw itself is built', () => {
     const theoclaw = stepIndex('--filter theoclaw test:live')
-    expect(theoclaw).toBeGreaterThan(stepIndex('live-model-build.mjs theoclaw'))
+    const build = stepIndex('live-model-build.mjs theoclaw')
+    expect(theoclaw).toBeGreaterThan(build)
+    expect(STEPS[build]?.run?.trim()).toBe('node scripts/live-model-build.mjs theoclaw')
     const LIVE_STEP = STEPS[theoclaw] as Step
     expect(LIVE_STEP.env?.THEOCLAW_LIVE).toBe('1')
     expect(LIVE_STEP.env?.THEOCLAW_HOST_TOOLS).toBe('on')
