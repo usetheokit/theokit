@@ -1,7 +1,18 @@
-import { existsSync, readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { spawnSync } from 'node:child_process'
+import {
+  chmodSync,
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
 
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 
 import { DEFAULT_LIVE_MODEL } from '../../scripts/live-model-preflight.mjs'
@@ -181,5 +192,116 @@ describe('live-model.yml', () => {
     expect(JOB.env?.LIVE_MODEL).toBe(`\${{ vars.LIVE_MODEL || '${DEFAULT_LIVE_MODEL}' }}`)
     for (const step of STEPS) expect(step.env?.LIVE_MODEL).toBeUndefined()
     expect(RAW.split(DEFAULT_LIVE_MODEL)).toHaveLength(2)
+  })
+})
+
+// B-659: the live-model build ran only after a merge to develop, so a selector that omitted
+// TheoClaw (B-651, `theoclaw^...`) merged green. One script holds both selectors; these cases run
+// it, so the TheoClaw selector is checked by what pnpm selects, not by how it is spelled.
+const REPO_ROOT = resolve(__dirname, '../..')
+const BUILD_SCRIPT = join(REPO_ROOT, 'scripts/live-model-build.mjs')
+const SCRATCH_DIRS: string[] = []
+
+function runBuildScript(
+  args: string[],
+  options: { script?: string; env?: NodeJS.ProcessEnv } = {},
+) {
+  return spawnSync(process.execPath, [options.script ?? BUILD_SCRIPT, ...args], {
+    cwd: REPO_ROOT,
+    encoding: 'utf8',
+    env: options.env ?? process.env,
+  })
+}
+
+/**
+ * A copy of the script in an empty directory, so its repository root has no `apps/theoclaw/dist`,
+ * and a fake `pnpm` first on PATH that logs its arguments and runs `onAgents` (a shell command) for the agents
+ * selector, 0 otherwise.
+ */
+function scratchCopy(onAgents = 'exit 0') {
+  const dir = mkdtempSync(join(tmpdir(), 'live-model-build-'))
+  SCRATCH_DIRS.push(dir)
+  mkdirSync(join(dir, 'scripts'))
+  mkdirSync(join(dir, 'bin'))
+  const script = join(dir, 'scripts', 'live-model-build.mjs')
+  copyFileSync(BUILD_SCRIPT, script)
+  const calls = join(dir, 'calls.log')
+  const fakePnpm = join(dir, 'bin', 'pnpm')
+  writeFileSync(
+    fakePnpm,
+    `#!/bin/sh\necho "$*" >> '${calls}'\ncase "$*" in *@theokit/agents...*) ${onAgents};; esac\nexit 0\n`,
+  )
+  chmodSync(fakePnpm, 0o755)
+  const env = { ...process.env, PATH: `${join(dir, 'bin')}:${process.env.PATH ?? ''}` }
+  return { script, calls, env }
+}
+
+describe('scripts/live-model-build.mjs', () => {
+  afterEach(() => {
+    for (const dir of SCRATCH_DIRS.splice(0)) rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('the TheoClaw selector the build script uses selects the theoclaw project', () => {
+    const printed = runBuildScript(['--print-selector', 'theoclaw'])
+    expect(printed.status, printed.stderr).toBe(0)
+    const selector = printed.stdout.trim()
+    // eslint-disable-next-line sonarjs/no-os-command-from-path -- toolchain binary, fixed argv
+    const listed = spawnSync('pnpm', ['--filter', selector, 'ls', '--depth', '-1', '--json'], {
+      cwd: REPO_ROOT,
+      encoding: 'utf8',
+      env: { ...process.env, NO_UPDATE_NOTIFIER: '1', CI: '1' },
+    })
+    expect(listed.status, `pnpm ls for ${selector}: ${listed.stderr}`).toBe(0)
+    const names = (JSON.parse(listed.stdout) as { name: string }[]).map((pkg) => pkg.name)
+    expect(names, `the TheoClaw build selector ${selector}`).toContain('theoclaw')
+  }, 30_000)
+
+  it('the build script refuses an unknown target, naming it', () => {
+    const result = runBuildScript(['nope'])
+    expect(result.status).toBe(2)
+    expect(result.stderr).toContain('unknown argument nope')
+  })
+
+  it('the build script refuses --print-selector with no target', () => {
+    const result = runBuildScript(['--print-selector'])
+    expect(result.status).toBe(2)
+    expect(result.stderr).toContain('unknown argument --print-selector')
+  })
+
+  it('the build script refuses more than one target', () => {
+    const result = runBuildScript(['agents', 'theoclaw'])
+    expect(result.status).toBe(2)
+    expect(result.stderr).toContain('unknown argument theoclaw')
+  })
+
+  it('the build script fails naming the selector when its build tool is missing', () => {
+    const result = runBuildScript(['agents'], { env: { ...process.env, PATH: '/nonexistent' } })
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain('@theokit/agents...')
+  })
+
+  it('the build script fails naming the entry when the TheoClaw build leaves no main.js', () => {
+    const { script, calls, env } = scratchCopy()
+    const result = runBuildScript(['theoclaw'], { script, env })
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain('apps/theoclaw/dist/main.js is missing')
+    expect(readFileSync(calls, 'utf8')).toContain('--filter theoclaw... build')
+  })
+
+  it('a failed agents build stops the script before the TheoClaw build', () => {
+    const { script, calls, env } = scratchCopy('exit 3')
+    const result = runBuildScript([], { script, env })
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain('@theokit/agents...')
+    expect(result.stderr).toContain('status 3')
+    expect(existsSync(calls), 'the fake pnpm was called').toBe(true)
+    expect(readFileSync(calls, 'utf8')).not.toContain('theoclaw...')
+  })
+
+  it('a build killed by a signal fails naming the selector and the signal', () => {
+    const { script, env } = scratchCopy('kill -TERM $$')
+    const result = runBuildScript(['agents'], { script, env })
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain('building @theokit/agents... failed with signal SIGTERM')
   })
 })
