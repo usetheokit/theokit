@@ -18,6 +18,8 @@
  * `beforeEach` to avoid pollution across `it` blocks (EC-3).
  */
 
+import { processSingleton } from '../../core/process-singleton.js'
+
 import type {
   PoolLike,
   PostgresDatabaseConfig,
@@ -213,15 +215,22 @@ export class StorageManager {
   }
 }
 
-// Singleton — one StorageManager per process (D1).
-let __singleton: StorageManager | undefined
+// Singleton — one StorageManager per PROCESS (D1), not per module instance.
+//
+// A module-level `let` was one per bundle: `theokit start` comes from the CLI build, route code from
+// the library build, and tsup gives each build its own copy of this file. `start` configured one
+// manager and every route read the other (usetheokit/theokit#1018). The holder lives on
+// `globalThis` so every copy of this module shares it.
+const holder = processSingleton('storage-manager', () => ({
+  manager: undefined as StorageManager | undefined,
+}))
 
 export function getStorageManager(): StorageManager {
-  __singleton ??= new StorageManager()
-  return __singleton
+  holder.manager ??= new StorageManager()
+  return holder.manager
 }
 
-/** @internal Drops the module-level singleton — used by tests that need a fresh manager. */
+/** @internal Drops the process-wide singleton — used by tests that need a fresh manager. */
 export function __resetSingletonForTests(): void {
-  __singleton = undefined
+  holder.manager = undefined
 }

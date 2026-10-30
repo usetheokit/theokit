@@ -1,3 +1,5 @@
+import { processSingleton } from '../core/process-singleton.js'
+
 import type { CacheEngine, CacheEngineOptions } from './cache-engine.js'
 import { createCacheEngine } from './cache-engine.js'
 import { InMemoryCacheAdapter } from './in-memory-adapter.js'
@@ -14,7 +16,12 @@ export interface NormalizedCacheConfig {
   }
 }
 
-let _engine: CacheEngine | undefined
+// One engine per PROCESS, not per module instance. `theokit start` initializes the engine from the
+// CLI build and `revalidateTag` reads it from the library build; a module-level `let` gave each
+// build its own copy, so the route side always saw "not initialized" (usetheokit/theokit#1018).
+const holder = processSingleton('cache-engine', () => ({
+  engine: undefined as CacheEngine | undefined,
+}))
 
 /**
  * Initialize the singleton cache engine for this process.
@@ -24,7 +31,7 @@ export function initCacheEngine(
   config: NormalizedCacheConfig,
   hooks: Pick<CacheEngineOptions, 'onError'> = {},
 ): CacheEngine {
-  if (_engine) {
+  if (holder.engine) {
     throw new Error(
       'Cache engine already initialized — call _resetCacheEngine() in tests, or check init order in production.',
     )
@@ -38,12 +45,12 @@ export function initCacheEngine(
     config.storage === 'memory'
       ? new InMemoryCacheAdapter({ maxEntries: config.maxEntries })
       : config.storage
-  _engine = createCacheEngine({
+  holder.engine = createCacheEngine({
     storage: adapter,
     defaults: config.defaults,
     onError: hooks.onError,
   })
-  return _engine
+  return holder.engine
 }
 
 /**
@@ -52,12 +59,13 @@ export function initCacheEngine(
  * bootstrap missed calling initCacheEngine, or cache.enabled is false.
  */
 export function getCacheEngine(): CacheEngine {
-  if (!_engine) {
+  const engine = holder.engine
+  if (!engine) {
     throw new Error(
       'Cache engine not initialized. Ensure theo.config.ts has `cache.enabled: true` and the framework bootstrap called initCacheEngine.',
     )
   }
-  return _engine
+  return engine
 }
 
 /**
@@ -70,7 +78,7 @@ export function getCacheEngine(): CacheEngine {
  * double-initialisation bug the throw exists to report.
  */
 export function isCacheEngineInitialized(): boolean {
-  return _engine !== undefined
+  return holder.engine !== undefined
 }
 
 /**
@@ -78,5 +86,5 @@ export function isCacheEngineInitialized(): boolean {
  * Production code MUST NOT call this.
  */
 export function _resetCacheEngine(): void {
-  _engine = undefined
+  holder.engine = undefined
 }

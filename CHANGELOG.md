@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- `theokit`: the `storage` and `cache` blocks of `theo.config.ts` reach route code under `theokit start`. The CLI build and the library build each carried their own copy of the storage manager and the cache engine, so `start` configured one copy and routes read the other: `usePostgres` threw `Database "main" not configured` and `revalidateTag` threw `Cache engine not initialized`. Both are now held once per process (#1018)
+
 ## [@theokit/agents 16.1.0, create-theokit 3.0.19, theokit 0.75.1] - 2026-10-27
 
 ### Added
