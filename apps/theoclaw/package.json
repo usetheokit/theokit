@@ -60,6 +60,7 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/main.js",
     "test": "vitest run",
+    "test:live": "vitest run tests/live --no-file-parallelism",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json",
     "boundaries": "depcruise --config .dependency-cruiser.cjs src tests",
     "lint": "eslint .",

@@ -52,3 +52,18 @@ jobs:
         # bash -eo pipefail: the test's exit code survives the pipe (D8)
         shell: bash
         run: pnpm --filter theocode test:live 2>&1 | node scripts/redact-key-shapes.mjs
+      # TheoClaw's live tests (apps/theoclaw/tests/live) skip unless THEOCLAW_LIVE=1, and no job set
+      # it, so they skipped green on every push (S-004 loop-test-audit, TP-D2-skipped). Here they run
+      # with the flag, the model and the key, so a missing one fails by name. One file at a time:
+      # several of them start an sshd or an instance process and share the host's ports.
+      - name: Build TheoClaw's workspace dependencies
+        run: TURBO_CONCURRENCY=1 pnpm --filter "theoclaw^..." build
+      - name: TheoClaw live tests (THEOCLAW_LIVE)
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          THEOCLAW_LIVE: '1'
+          THEOCLAW_HOST_TOOLS: 'on'
+          THEOCLAW_MODEL: ${{ env.LIVE_MODEL }}
+        # bash -eo pipefail: the suite's exit code survives the pipe (D8)
+        shell: bash
+        run: pnpm --filter theoclaw test:live 2>&1 | node scripts/redact-key-shapes.mjs

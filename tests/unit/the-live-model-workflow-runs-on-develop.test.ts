@@ -69,11 +69,11 @@ describe('live-model.yml', () => {
   })
 
   it('hands the key only through step env and never names it in a run line', () => {
-    expect(RAW.match(/secrets\.OPENROUTER_API_KEY/g)).toHaveLength(3)
+    expect(RAW.match(/secrets\.OPENROUTER_API_KEY/g)).toHaveLength(4)
     const fromEnv = STEPS.filter((step) =>
       (step.env?.OPENROUTER_API_KEY ?? '').includes('secrets.OPENROUTER_API_KEY'),
     )
-    expect(fromEnv).toHaveLength(3)
+    expect(fromEnv).toHaveLength(4)
     for (const step of STEPS) expect(step.run ?? '').not.toContain('OPENROUTER_API_KEY')
   })
 
@@ -128,6 +128,30 @@ describe('live-model.yml', () => {
     expect(A2A_SUITE.env?.THEOKIT_LIVE_REQUIRED).toBe('1')
     expect(A2A_SUITE.shell).toBe('bash')
     expect(A2A_SUITE.run?.trim()).toMatch(/2>&1 \| node scripts\/redact-key-shapes\.mjs$/)
+  })
+
+  // S-004 loop-test-audit (TP-D2-skipped): apps/theoclaw/tests/live/*.live.test.ts skip unless
+  // THEOCLAW_LIVE=1, and no job set it, so they skipped green on every push. This step sets it,
+  // with the model and the key, so a missing one fails by name instead of skipping.
+  it('runs the TheoClaw live tests with THEOCLAW_LIVE=1, after its dependencies are built', () => {
+    const theoclaw = stepIndex('--filter theoclaw test:live')
+    expect(theoclaw).toBeGreaterThan(stepIndex('pnpm --filter "theoclaw^..." build'))
+    const LIVE_STEP = STEPS[theoclaw] as Step
+    expect(LIVE_STEP.env?.THEOCLAW_LIVE).toBe('1')
+    expect(LIVE_STEP.env?.THEOCLAW_HOST_TOOLS).toBe('on')
+    expect(LIVE_STEP.env?.THEOCLAW_MODEL).toBe('${{ env.LIVE_MODEL }}')
+    expect(LIVE_STEP.env?.OPENROUTER_API_KEY).toContain('secrets.OPENROUTER_API_KEY')
+    expect(LIVE_STEP.shell).toBe('bash')
+    expect(LIVE_STEP.run?.trim()).toMatch(/2>&1 \| node scripts\/redact-key-shapes\.mjs$/)
+  })
+
+  it('points theoclaw test:live at its live tests, one file at a time', () => {
+    const pkg = JSON.parse(
+      readFileSync(resolve(__dirname, '../../apps/theoclaw/package.json'), 'utf8'),
+    ) as {
+      scripts: Record<string, string>
+    }
+    expect(pkg.scripts['test:live']).toBe('vitest run tests/live --no-file-parallelism')
   })
 
   it('points theocode test:live at the A2A live test behind the provider-key guard', async () => {
