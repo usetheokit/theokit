@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 /**
- * StorageManager schemas (T1.1 / ADR-0007 D4).
+ * StorageManager schemas (T1.1).
  *
  * `theo.config.ts > storage` declares Postgres servers (credentials), the
  * databases on each server (TheoCloud / managed PG / self-host), and Redis
@@ -9,10 +9,11 @@ import { z } from 'zod'
  * (PostgresJobBackend, PostgresConversationStorage, etc.) request pools by
  * database name and never see raw credentials at the call site.
  *
- * EC-1 (DOCUMENT in concept doc T4.1): Zod default strip-unknown mode
- * silently drops typo keys (`databasees` instead of `databases`). The
- * concept doc warns users to use exact names; runtime errors are still
- * actionable (`Database "X" not configured`).
+ * EC-1: the top level is `.strict()`, so an unknown key fails `loadConfig`.
+ * It used to strip them: a typo (`databasees`) or the `postgres: [{ url }]`
+ * shape the scaffolded skill once taught parsed as `{}`, the app booted with
+ * no storage, and the first `usePostgres` said `Database "main" not
+ * configured` with nothing pointing at the config (usetheokit/theokit#1023).
  *
  * EC-2 (DEFERRED to use-time): `databases.X.server` references a key in
  * `servers`. Cross-field validation is intentionally NOT enforced at parse
@@ -54,10 +55,12 @@ const redisServerConfigSchema = serverConfigSchema.extend({
   maxRetriesPerRequest: z.number().int().nonnegative().optional(),
 })
 
-export const storageSchema = z.object({
-  servers: z.record(z.string(), serverConfigSchema).optional(),
-  databases: z.record(z.string(), postgresDatabaseConfigSchema).optional(),
-  redis: z.record(z.string(), redisServerConfigSchema).optional(),
-})
+export const storageSchema = z
+  .object({
+    servers: z.record(z.string(), serverConfigSchema).optional(),
+    databases: z.record(z.string(), postgresDatabaseConfigSchema).optional(),
+    redis: z.record(z.string(), redisServerConfigSchema).optional(),
+  })
+  .strict()
 
 export type StorageConfig = z.infer<typeof storageSchema>

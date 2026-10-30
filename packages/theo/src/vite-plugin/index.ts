@@ -17,6 +17,7 @@ import {
   type RateLimitConfig,
   type SecurityHeadersConfig,
 } from '../server/internal-api.js'
+import type { JobBackend } from '../server/jobs/job-backend.js'
 import type { TheoTransformer } from '../server/transformer.js'
 import { type ServicesConfig } from '../services/index.js'
 
@@ -358,6 +359,7 @@ export function theoPlugin(rootOrOptions?: string | TheoPluginOptions): Plugin {
   // P#3 T1.1 — OpenAPI dev-emit config. undefined = opt-out (no behavior).
   let resolvedOpenApi: ResolvedOpenApi | undefined
   let resolvedDistDir = '.theokit'
+  let jobBackend: JobBackend | undefined
   // Dev mode flag set in configureServer. transformIndexHtml runs in both
   // dev and build; we only want to inject during dev. Wrapped in a ref
   // struct so sub-hooks (configure-server-hook, transform-html-hook) can
@@ -387,6 +389,7 @@ export function theoPlugin(rootOrOptions?: string | TheoPluginOptions): Plugin {
       devtoolsEnabled = resolved.devtoolsEnabled
       resolvedOpenApi = resolved.openapi
       resolvedDistDir = resolved.distDir
+      jobBackend = resolved.jobBackend
     },
 
     // T2.6 (M6) — config() body extracted to config-hook.ts. The hook
@@ -463,6 +466,7 @@ export function theoPlugin(rootOrOptions?: string | TheoPluginOptions): Plugin {
         resolvedOpenApi,
         services: options.services,
         rateLimit: options.rateLimit,
+        jobBackend,
         csrfReadinessStoreOverride: options.csrfReadinessStore,
         virtualEntryServerId: VIRTUAL_ENTRY_SERVER_ID,
         resolvedManifestId: RESOLVED_MANIFEST_ID,

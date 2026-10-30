@@ -66,6 +66,7 @@ beforeAll(async () => {
         csrfMode: 'strict',
         disallowed: undefined,
         rateLimiter: null,
+        jobBackend: undefined,
       }),
       securityHeadersConfig: {},
       corsHandler: createCorsHandler({ origins: ALLOWED, credentials: false, maxAge: 600 }),

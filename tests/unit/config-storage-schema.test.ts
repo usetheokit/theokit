@@ -61,17 +61,16 @@ describe('T1.1 — storageSchema (ADR-0007 D4)', () => {
     expect(sample.servers).toBeDefined()
   })
 
-  it('[EC-1] silently drops unknown keys (default Zod strip-unknown)', () => {
-    // Documents the default-mode behavior — user typo `databasees` is
-    // silently dropped; concept doc T4.1 warns to use exact keys.
+  it('[EC-1] rejects unknown keys, so a typo or a foreign format fails at startup', () => {
+    // It used to strip them: `databasees` (typo) and the `postgres: [{ url }]` shape the scaffolded
+    // skill taught both parsed as `{}`, and `theokit start` booted with no storage (#1023).
     const result = storageSchema.safeParse({
       databasees: { conv: { server: 'p', database: 'd' } }, // typo
       redys: { cache: { host: 'h', user: 'u', password: '' } }, // typo
     })
-    expect(result.success).toBe(true)
-    if (result.success) {
-      expect(result.data.databases).toBeUndefined()
-      expect(result.data.redis).toBeUndefined()
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.issues[0]?.code).toBe('unrecognized_keys')
     }
   })
 

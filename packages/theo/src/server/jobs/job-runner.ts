@@ -22,8 +22,9 @@ import type { JobContext, JobDefinition } from './job-types.js'
  *   - `signal` that aborts when the lease times out.
  *
  * `tick()` runs one dequeue+dispatch cycle and returns when all leases
- * have been ack'd or nack'd. Production deploys call `tick()` in a loop
- * with backoff (the loop is outside this module's scope).
+ * have been ack'd or nack'd. `createJobWorker` (`job-worker.ts`) is the loop
+ * around it, with idle polling and error backoff; `theokit start` and
+ * `theokit dev` run one.
  *
  * EC-6 (trace continuity edge): when a lease has no traceparent OR a
  * malformed one, the handler still gets a valid traceId (generated) —

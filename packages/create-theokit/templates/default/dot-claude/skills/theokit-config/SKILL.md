@@ -69,15 +69,45 @@ export default config()
 
 ### Storage (Postgres + Redis)
 
+`storage` declares named servers, the Postgres databases on them and Redis servers. Credentials
+are fields, not a connection string: there is no `url` key and theokit reads no `DATABASE_URL` or
+`REDIS_URL`. An unknown key under `storage` fails at startup.
+
 ```typescript
 export default config()
   .set({
     storage: {
-      postgres: [{ url: process.env.DATABASE_URL }],
-      redis: [{ url: process.env.REDIS_URL }],
+      servers: {
+        primary: {
+          host: process.env.PGHOST ?? 'localhost',
+          port: Number(process.env.PGPORT ?? 5432),
+          user: process.env.PGUSER ?? 'postgres',
+          password: process.env.PGPASSWORD ?? '',
+        },
+      },
+      // `server` names a key in `servers`.
+      databases: { main: { server: 'primary', database: 'app', pool: { max: 10 } } },
+      // Optional. Each entry is a server record, keyed by name.
+      redis: {
+        cache: { host: 'localhost', port: 6379, user: 'default', password: '' },
+      },
     },
   })
   .build()
+```
+
+Route code gets a cached client by name with a factory you write, so the driver stays optional:
+
+```typescript
+import pg from 'pg'
+import { getStorageManager } from 'theokit/server/storage'
+
+const pool = getStorageManager().usePostgres('main', (server, db) => {
+  const { host, port, user, password } = server
+  const p = new pg.Pool({ host, port, user, password, database: db.database, ...db.pool })
+  p.on('error', (err) => console.warn('[pg] idle client error:', err.message))
+  return p
+}) as pg.Pool
 ```
 
 ### Rate Limiting
@@ -116,8 +146,10 @@ npx theokit start                  # Run production build
 npx theokit routes                 # List all discovered endpoints
 npx theokit generate route tasks   # Scaffold a new route
 npx theokit generate resource posts title:string  # Scaffold CRUD resource
-npx theokit db migrate             # Run database migrations
-npx theokit db seed                # Seed database
+npx theokit db generate            # Write SQL migration files from the Drizzle schema
+npx theokit db migrate             # Apply them (drizzle-kit migrate)
+npx theokit db push                # Diff the schema into the database, no migration files
+npx theokit db seed                # Run <serverDir>/db/seed.ts
 ```
 
 ## Environment Variables
@@ -125,8 +157,8 @@ npx theokit db seed                # Seed database
 - `PORT` — Server port (overrides config)
 - `HOST` — Server host
 - `NODE_ENV` — `development` | `production`
-- `DATABASE_URL` — Postgres connection string (when using postgres storage)
-- `REDIS_URL` — Redis connection string (when using redis storage)
+- theokit reads no database URL from the environment. Read whatever variables you choose
+  (`PGHOST`, `PGPASSWORD`, ...) inside `storage.servers` in `theo.config.ts`.
 
 Env vars are loaded from `.env` (dev) and `.env.production` (build). NEVER commit `.env` files.
 
