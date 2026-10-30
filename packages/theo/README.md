@@ -87,6 +87,29 @@ export const GET = route()
 | `./vite-plugin` | The plugin that makes all of the above work |
 | `./boot`, `./adapters/web-shim`, `./adapters/ws-shim` | Runtime shims |
 
+## Storage
+
+`theo.config.ts > storage` declares servers and databases; route code gets a cached client from
+`getStorageManager()` in `theokit/server/storage`, built by a factory you write so the driver stays
+optional:
+
+```typescript
+import pg from 'pg'
+import { getStorageManager } from 'theokit/server/storage'
+
+const pool = getStorageManager().usePostgres('main', (server, db) => {
+  const { host, port, user, password } = server
+  const p = new pg.Pool({ host, port, user, password, database: db.database })
+  p.on('error', (err) => console.warn('[pg] idle client error:', err.message))
+  return p
+}) as pg.Pool
+```
+
+A `pg.Pool` emits `error` when Postgres drops an idle connection (restart, failover,
+`pg_terminate_backend`, a proxy timeout), and Node exits on an `error` event with no listener. If
+the factory attaches none, `usePostgres` attaches one that logs a structured warning, so the process
+stays up and the next query reconnects. Attach your own, as above, to handle it differently.
+
 ## CLI
 
 ```bash

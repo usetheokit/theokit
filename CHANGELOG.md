@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Fixed
 
 - `theokit`: the `storage` and `cache` blocks of `theo.config.ts` reach route code under `theokit start`. The CLI build and the library build each carried their own copy of the storage manager and the cache engine, so `start` configured one copy and routes read the other: `usePostgres` threw `Database "main" not configured` and `revalidateTag` threw `Cache engine not initialized`. Both are now held once per process (#1018)
+- `theokit`: a Postgres pool from `getStorageManager().usePostgres(...)` no longer exits the process when Postgres drops an idle connection. `pg.Pool` emits `error` for the disconnected idle client and Node exits on an `error` event with no listener. When the pool has no `error` listener, `usePostgres` attaches one that logs a structured warning with the database name and the Postgres error code, and the next query reconnects. A listener the factory attached is left as the only one (#1019)
 
 ## [@theokit/agents 16.1.0, create-theokit 3.0.19, theokit 0.75.1] - 2026-10-27
 

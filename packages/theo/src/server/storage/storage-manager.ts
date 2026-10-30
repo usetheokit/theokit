@@ -19,6 +19,7 @@
  */
 
 import { processSingleton } from '../../core/process-singleton.js'
+import { createLogger } from '../observability/logger.js'
 
 import type {
   PoolLike,
@@ -30,6 +31,16 @@ import type {
   StorageConfig,
 } from './storage-types.js'
 
+/**
+ * Builds the Postgres pool for one database. The pool is user code, so the driver stays optional.
+ *
+ * A `pg.Pool` emits `error` when Postgres drops an idle pooled connection (a restart, a failover,
+ * `pg_terminate_backend`, a proxy's idle timeout), and Node exits the process on an `error` event
+ * that has no listener. `usePostgres` therefore attaches a listener that logs the error as a
+ * structured warning when the returned pool has none; the pool discards the dead client and the
+ * next query opens a new connection. Attach your own `pool.on('error', ...)` in the factory to
+ * handle it differently; the manager then leaves the pool alone.
+ */
 export type PostgresFactory = (server: ServerConfig, db: PostgresDatabaseConfig) => PoolLike
 export type RedisFactory = (config: RedisServerConfig) => RedisLike
 
@@ -85,6 +96,10 @@ export class StorageManager {
    * Return a Postgres pool for the named database. Lazy + cached. Factory
    * invoked exactly once per `dbName` (D2).
    *
+   * When the pool exposes an event API (`pg.Pool` does) and has no `error` listener, one is
+   * attached that logs a structured warning instead of letting the error exit the process. See
+   * {@link PostgresFactory}.
+   *
    * Throws if:
    *   - manager is disposed
    *   - `dbName` is not in `config.databases`
@@ -108,6 +123,7 @@ export class StorageManager {
       )
     }
     const pool = factory(server, dbConfig)
+    keepPoolErrorsFromExitingTheProcess(pool, dbName)
     this.#dbPools.set(dbName, pool)
     return pool
   }
@@ -213,6 +229,35 @@ export class StorageManager {
   __isDisposedForTests(): boolean {
     return this.#disposed
   }
+}
+
+const storageLogger = createLogger({ context: { component: 'theokit:storage' } })
+
+interface PoolEvents {
+  on: (event: 'error', listener: (err: Error & { code?: string }) => void) => unknown
+  listenerCount?: (event: 'error') => number
+}
+
+function hasEventApi(pool: PoolLike): pool is PoolLike & PoolEvents {
+  return typeof (pool as Partial<PoolEvents>).on === 'function'
+}
+
+/**
+ * Node throws an `error` event nobody listens to, and `pg.Pool` emits one for every idle client the
+ * server disconnects. Measured on theokit@0.75.1: one `pg_terminate_backend` exited `theokit start`
+ * with `Unhandled 'error' event` (usetheokit/theokit#1019). A listener the factory attached is the
+ * user's decision and is left as the only one.
+ */
+function keepPoolErrorsFromExitingTheProcess(pool: PoolLike, dbName: string): void {
+  if (!hasEventApi(pool)) return
+  if (typeof pool.listenerCount === 'function' && pool.listenerCount('error') > 0) return
+  pool.on('error', (err) => {
+    storageLogger.warn('postgres pool error; the client was discarded and the pool reconnects', {
+      database: dbName,
+      code: err.code,
+      error: err.message,
+    })
+  })
 }
 
 // Singleton — one StorageManager per PROCESS (D1), not per module instance.
