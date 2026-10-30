@@ -261,6 +261,16 @@ describe("owner policy hook: the owner's /approve", () => {
     })
   })
 
+  it("refuses a stranger's /approve of its own code without asking the store to approve it", async () => {
+    const store = fakeStore({ issue: '123456', approve: { ok: true, platform: 'telegram', senderId: 'stranger' } })
+    const { hook } = harness({ pairing: store })
+    expect(await decide(hook, messageEvent('telegram', '/approve 123456', 'stranger'))).toEqual({
+      block: true,
+      message: pairingMessage('123456'),
+    })
+    expect(store.calls.filter((call) => call.startsWith('approve:'))).toEqual([])
+  })
+
   it('blocks /approve the store refuses as unknown_or_expired with the invalid-code message', async () => {
     const { hook } = harness({ pairing: fakeStore({ approve: { ok: false, reason: 'unknown_or_expired' } }) })
     expect(await decide(hook, messageEvent('telegram', '/approve 123456', OWNER_ID))).toEqual({
