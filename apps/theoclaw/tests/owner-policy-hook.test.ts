@@ -21,7 +21,8 @@ interface FakeStoreOptions {
   readonly paired?: readonly string[]
   readonly approve?: ApprovalResult
   readonly issue?: string | Error
-  readonly isPairedThrows?: boolean
+  readonly isPairedThrows?: boolean | Error
+  readonly approveThrows?: Error
 }
 
 interface FakeStore extends PairingStore {
@@ -40,10 +41,12 @@ function fakeStore(options: FakeStoreOptions = {}): FakeStore {
     },
     approve(code) {
       calls.push(`approve:${code}`)
+      if (options.approveThrows !== undefined) return Promise.reject(options.approveThrows)
       return Promise.resolve(options.approve ?? { ok: false, reason: 'unknown_or_expired' })
     },
     isPaired(platform, senderId) {
       calls.push(`isPaired:${platform}:${senderId}`)
+      if (options.isPairedThrows instanceof Error) throw options.isPairedThrows
       if (options.isPairedThrows === true) throw new Error('the store broke')
       return (options.paired ?? []).includes(`${platform}:${senderId}`)
     },
@@ -116,6 +119,11 @@ describe('owner policy hook: who is let through', () => {
   it("allows a stranger's DM under open", async () => {
     const { hook } = harness({ policy: policy({ dmPolicy: 'open' }) })
     expect(await decide(hook, messageEvent('telegram', 'hi', 'stranger'))).toBeUndefined()
+  })
+
+  it("allows a stranger's DM from an unauthenticated platform under open", async () => {
+    const { hook } = harness({ policy: policy({ dmPolicy: 'open' }) })
+    expect(await decide(hook, messageEvent('email', 'hi', 'someone@example.com'))).toBeUndefined()
   })
 })
 
@@ -224,6 +232,26 @@ describe("owner policy hook: the owner's /approve", () => {
     expect(store.calls.filter((call) => call.startsWith('approve:'))).toEqual([])
   })
 
+  it.each(['12345', '1234567'])('blocks /approve %s, a code of the wrong length, with the invalid-code message', async (code) => {
+    const store = fakeStore({ approve: { ok: true, platform: 'telegram', senderId: 'friend' } })
+    const { hook } = harness({ pairing: store })
+    expect(await decide(hook, messageEvent('telegram', `/approve ${code}`, OWNER_ID))).toEqual({
+      block: true,
+      message: INVALID_CODE,
+    })
+    expect(store.calls.filter((call) => call.startsWith('approve:'))).toEqual([])
+  })
+
+  it('blocks a bare /approve with the invalid-code message', async () => {
+    const store = fakeStore()
+    const { hook } = harness({ pairing: store })
+    expect(await decide(hook, messageEvent('telegram', '/approve', OWNER_ID))).toEqual({
+      block: true,
+      message: INVALID_CODE,
+    })
+    expect(store.calls.filter((call) => call.startsWith('approve:'))).toEqual([])
+  })
+
   it('blocks /approve the store accepts with Paired.', async () => {
     const store = fakeStore({ approve: { ok: true, platform: 'telegram', senderId: 'friend' } })
     const { hook } = harness({ pairing: store })
@@ -275,23 +303,50 @@ describe("owner policy hook: the owner's /approve", () => {
 })
 
 describe('owner policy hook: a failure is a silent block', () => {
-  it('blocks silently when issue() throws, writes one line, and does not silence the sender', async () => {
-    const failing = harness({ pairing: fakeStore({ issue: new Error('no code space left') }) })
-    expect(await decide(failing.hook, messageEvent('telegram', 'hi', 'stranger'))).toEqual({ block: true })
-    expect(failing.lines).toHaveLength(1)
-    expect(failing.lines[0]).toContain('no code space left')
-    // The same hook answers the sender's next DM: a failed issue did not record a refusal.
-    expect(await decide(failing.hook, messageEvent('telegram', 'again', 'stranger'))).toEqual({ block: true })
-    expect(failing.lines).toHaveLength(2)
+  it('blocks silently with one log line when issue() throws', async () => {
+    const { hook, lines } = harness({ pairing: fakeStore({ issue: new Error('no code space left') }) })
+    expect(await decide(hook, messageEvent('telegram', 'hi', 'stranger'))).toEqual({ block: true })
+    expect(lines).toHaveLength(1)
+    expect(lines[0]).toContain('no code space left')
   })
 
-  it('blocks silently when isPaired throws and writes one line naming the platform', async () => {
+  it('does not silence a sender whose code issue() failed to issue', async () => {
+    const store = fakeStore({ issue: new Error('no code space left') })
+    const { hook } = harness({ pairing: store })
+    await decide(hook, messageEvent('telegram', 'hi', 'stranger'))
+    await decide(hook, messageEvent('telegram', 'again', 'stranger'))
+    // A recorded refusal would have answered the second DM without asking the store for a code.
+    expect(store.calls.filter((call) => call.startsWith('issue:'))).toHaveLength(2)
+  })
+
+  it('blocks silently with one log line naming the platform when isPaired throws', async () => {
     const { hook, lines } = harness({ pairing: fakeStore({ isPairedThrows: true }) })
     expect(await decide(hook, messageEvent('telegram', 'hi', 'stranger'))).toEqual({ block: true })
     expect(lines).toHaveLength(1)
     expect(lines[0]).toContain('telegram')
     expect(lines[0]).toContain('the store broke')
     expect(lines[0]).not.toContain('stranger')
+  })
+
+  it("blocks an owner's DM silently when isPaired throws, as the store is read before the owner is let through", async () => {
+    const { hook, lines } = harness({ pairing: fakeStore({ isPairedThrows: true }) })
+    expect(await decide(hook, messageEvent('telegram', 'hi', OWNER_ID))).toEqual({ block: true })
+    expect(lines).toHaveLength(1)
+  })
+
+  it("blocks an owner's /approve silently when the store's approve() rejects", async () => {
+    const { hook, lines } = harness({ pairing: fakeStore({ approveThrows: new Error('the disk is gone') }) })
+    expect(await decide(hook, messageEvent('telegram', '/approve 123456', OWNER_ID))).toEqual({ block: true })
+    expect(lines).toHaveLength(1)
+    expect(lines[0]).toContain('the disk is gone')
+  })
+
+  it('redacts a secret carried by the error message from the log line', async () => {
+    const token = 'abcdefghijklmnopqrstuvwxyz0123456789'
+    const { hook, lines } = harness({ pairing: fakeStore({ isPairedThrows: new Error(`Bearer ${token} refused`) }) })
+    expect(await decide(hook, messageEvent('telegram', 'hi', 'stranger'))).toEqual({ block: true })
+    expect(lines).toHaveLength(1)
+    expect(lines[0]).not.toContain(token)
   })
 
   it('blocks silently and writes the stderr fallback line when write throws', async () => {
