@@ -26,7 +26,7 @@ so a file kept outside the repository and sourced from your shell profile is als
 | `THEOCLAW_PORT` | Port of the one listener that serves the webhook routes, `/health` and `/control`. Digits only, 0 to 65535. |
 | `THEOCLAW_STATE_DIR` | Where pairings are kept. Required under the default `THEOCLAW_DM_POLICY=pairing`; see below. |
 | `THEOCLAW_OWNERS` | Who the instance serves: comma-separated `platform:senderId`, e.g. `telegram:42,matrix:@me:matrix.org`. Required even with no platform configured; see [Who may talk to the instance](#who-may-talk-to-the-instance). |
-| `THEOCLAW_WORKSPACE` | Absolute path of an existing directory. Each chat's transcript and the session generations are kept under `<THEOCLAW_WORKSPACE>/.theoclaw/` (created with mode 0700). Startup fails and names the variable when it is unset, relative or not a directory. |
+| `THEOCLAW_WORKSPACE` | Absolute path of an existing directory. Each chat's transcript and the session generations are kept under `<THEOCLAW_WORKSPACE>/.theoclaw/` (created with mode 0700). Startup fails and names the variable when it is unset, relative or not a directory. Under `THEOCLAW_PROFILE` the profile sets it to its own `workspace` and an explicit value is refused (see [Several instances on one host](#several-instances-on-one-host)). |
 
 ### Who may talk to the instance
 
@@ -267,7 +267,9 @@ With `THEOCLAW_PROFILE=work` the instance:
   there, and `THEOCLAW_STATE_DIR` to `~/.theokit/profiles/work/state`, so `pairing.json` does too
   (a profiled instance always has a pairing store, empty until its owner approves someone);
 - builds its agents in `~/.theokit/profiles/work/workspace`, so the agent registry and any memory
-  under the working directory stay in the profile. That directory is also the agent's working
+  under the working directory stay in the profile. It sets `THEOCLAW_WORKSPACE` to that directory,
+  so every chat's transcript and `sessions.json` are kept in its `.theoclaw/` too, and two profiles
+  never share a conversation. That directory is also the agent's working
   directory: tools and project configuration resolve against it, not against the directory you
   started TheoClaw in;
 - calls itself `theoclaw-work`. Its first line on stderr is
@@ -275,8 +277,8 @@ With `THEOCLAW_PROFILE=work` the instance:
   the authoritative label. The process title (`ps`) is set to the same name, but the kernel
   truncates it to the length of the original command line, so it can be cut short.
 
-A profile cannot be combined with an explicit `THEOKIT_HOME`, `THEOKIT_AUTH_HOME` or
-`THEOCLAW_STATE_DIR`: the start stops and names each one set. Unset them before moving to profiles.
+A profile cannot be combined with an explicit `THEOKIT_HOME`, `THEOKIT_AUTH_HOME`,
+`THEOCLAW_STATE_DIR` or `THEOCLAW_WORKSPACE`: the start stops and names each one set. Unset them before moving to profiles.
 Restarting an instance with the same profile keeps everything it wrote before. With no
 `THEOCLAW_PROFILE`, nothing moves and the first line is `theoclaw: instance started, no profile`.
 

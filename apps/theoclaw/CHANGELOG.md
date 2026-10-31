@@ -87,7 +87,9 @@ and versioning follows [Semantic Versioning](https://semver.org/).
   chat's turn runs is answered after it, with that turn in its history, and a conversation survives
   a restart. Sending exactly `/new` or `/reset` starts the chat afresh without a model turn.
   **`THEOCLAW_WORKSPACE` is now required**: an absolute, existing directory, under whose `.theoclaw/`
-  (mode 0700) every chat's transcript and `sessions.json` are kept. Every sender who reaches the agent
+  (mode 0700) every chat's transcript and `sessions.json` are kept; under `THEOCLAW_PROFILE` the
+  profile sets it to its own `workspace` and refuses an explicit one, so two profiles never share a
+  conversation. Two sender ids that differ only in `-` or `_` get two conversations. Every sender who reaches the agent
   (an owner, a paired sender, and anyone under `THEOCLAW_DM_POLICY=open`, B-371) has their messages
   stored there; delete the directory while
   TheoClaw is stopped to forget every conversation. `THEOCLAW_SESSION_IDLE_MINUTES` (default 30)

@@ -46,7 +46,12 @@ describe('resolveInstance', () => {
       directory,
       workspace: `${directory}/workspace`,
       stateDirectory: `${directory}/state`,
-      overrides: { THEOKIT_HOME: directory, THEOKIT_AUTH_HOME: directory, THEOCLAW_STATE_DIR: `${directory}/state` },
+      overrides: {
+        THEOKIT_HOME: directory,
+        THEOKIT_AUTH_HOME: directory,
+        THEOCLAW_STATE_DIR: `${directory}/state`,
+        THEOCLAW_WORKSPACE: `${directory}/workspace`,
+      },
     })
   })
 
@@ -66,8 +71,8 @@ describe('resolveInstance', () => {
     expect(resolveInstance({ THEOCLAW_PROFILE: 'a'.repeat(16) }, { homeDir: HOME }).label).toBe(`theoclaw-${'a'.repeat(16)}`)
   })
 
-  it('refuses a profile combined with THEOKIT_HOME, THEOKIT_AUTH_HOME or THEOCLAW_STATE_DIR', () => {
-    for (const variable of ['THEOKIT_HOME', 'THEOKIT_AUTH_HOME', 'THEOCLAW_STATE_DIR']) {
+  it('refuses a profile combined with THEOKIT_HOME, THEOKIT_AUTH_HOME, THEOCLAW_STATE_DIR or THEOCLAW_WORKSPACE', () => {
+    for (const variable of ['THEOKIT_HOME', 'THEOKIT_AUTH_HOME', 'THEOCLAW_STATE_DIR', 'THEOCLAW_WORKSPACE']) {
       const error = refusal({ THEOCLAW_PROFILE: 'a', [variable]: '/secret-path' })
       expect(error.message).toBe(`THEOCLAW_PROFILE cannot be combined with ${variable}: unset them or the profile`)
       expect(error.message).not.toContain('/secret-path')
