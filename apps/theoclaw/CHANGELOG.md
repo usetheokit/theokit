@@ -92,7 +92,8 @@ and versioning follows [Semantic Versioning](https://semver.org/).
   `THEOCLAW_EXTERNAL_TOOLS`. MCP servers reach the SDK's `mcpServers` option; each ACP agent is one
   `createACPTool` from `theokit/server/agent`, run in `files/`, with every permission request
   refused. The start validates the file before any runner starts and refuses an HTTP server's
-  `auth` (the SDK ignores it, B-680), `envPolicy: "all"`, a relative command, a server name the SDK
+  `auth` (the SDK ignores it, B-680), `envPolicy: "all"`, a relative command or stdio `cwd`, a
+  timeout that is not whole milliseconds up to 2147483647 (Node fires a longer timer after 1 ms), a server name the SDK
   would rewrite or the `browser` server already uses, an ACP name that collides with another tool
   (`run_code`, `delegate_all` and `digest` included), and, with host tools on, any ACP agent
   (it would run unsandboxed in `files/`, which the shell writes) and a file or stdio command under

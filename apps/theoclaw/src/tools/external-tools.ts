@@ -61,14 +61,18 @@ const command = z
     message: 'must be an absolute path or a bare name looked up on PATH',
   })
 const stringMap = z.record(z.string(), z.string())
-const timeout = z.number().int().positive()
+// Node clamps a delay above 2^31 - 1 ms to 1 ms, so a longer timeout would fail every call at once.
+const MAX_TIMER_MS = 2_147_483_647
+const timeout = z.number().int().positive().max(MAX_TIMER_MS)
+// A relative cwd resolves against the start directory, whose `files/` is the tool root.
+const directory = z.string().min(1).refine(isAbsolute, { message: 'must be an absolute path' })
 
 const stdioServer = z.strictObject({
   type: z.literal('stdio').optional(),
   command,
   args: z.array(z.string()).optional(),
   env: stringMap.optional(),
-  cwd: z.string().min(1).optional(),
+  cwd: directory.optional(),
   requestTimeoutMs: timeout.optional(),
   // `all` would hand a third-party binary every host secret, the model key included.
   envPolicy: z.enum(['inherit-scrubbed', 'core']).optional(),
@@ -86,7 +90,7 @@ const acpAgent = z.strictObject({
   description: z.string().min(1),
   command,
   args: z.array(z.string()).optional(),
-  timeoutMs: z.number().positive().optional(),
+  timeoutMs: timeout.optional(),
 })
 
 const file = z.strictObject({

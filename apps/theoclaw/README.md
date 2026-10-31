@@ -407,7 +407,9 @@ before any runner starts, and refuses it naming the file and the key:
   there and in `env`: every header and env value of 8 characters or more is masked in the output.
 - `envPolicy: "all"` is refused, so a stdio server never inherits the model key; the SDK's default
   drops secret-like variables and `env` adds what the server needs.
-- A `command` with a `/` must be absolute; a bare name is looked up on `PATH`.
+- A `command` with a `/` must be absolute; a bare name is looked up on `PATH`. A stdio `cwd` must
+  be absolute. `timeoutMs` and `requestTimeoutMs` are whole milliseconds up to 2147483647, the
+  longest delay a Node timer holds.
 - Each ACP agent is one tool named `name`, a `createACPTool` from `theokit/server/agent` run in
   `files/`, one process per call. Its name may not be a TheoClaw tool's (`run_code`, `delegate_all` and `digest` included), a name the SDK reserves
   (`shell`, `memory_search`, `memory_get`), or start with `mcp_`. Every permission it asks for is

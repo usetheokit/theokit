@@ -123,6 +123,36 @@ describe('the external tools file at start', () => {
     expect(error.message).toContain('acpAgents.0.timeoutMs')
   })
 
+  it('refuses an ACP timeoutMs past the 32-bit timer limit, which Node would fire after 1 ms', () => {
+    const error = refusalOf({ acpAgents: [{ ...AGENT, timeoutMs: 2_147_483_648 }] })
+    expect(error.message).toContain('acpAgents.0.timeoutMs')
+  })
+
+  it('refuses a fractional ACP timeoutMs', () => {
+    const error = refusalOf({ acpAgents: [{ ...AGENT, timeoutMs: 0.5 }] })
+    expect(error.message).toContain('acpAgents.0.timeoutMs')
+  })
+
+  it('refuses an MCP requestTimeoutMs past the 32-bit timer limit', () => {
+    const error = refusalOf({ mcpServers: { docs: { ...STDIO, requestTimeoutMs: 2_147_483_648 } } })
+    expect(error.message).toContain('mcpServers.docs.requestTimeoutMs')
+  })
+
+  it('accepts a timeoutMs of exactly 2147483647, the largest delay a timer holds', () => {
+    const external = resolveExternalTools({ [VARIABLE]: toolsFile({ acpAgents: [{ ...AGENT, timeoutMs: 2_147_483_647 }] }) })
+    expect(external.acpAgents[0]?.timeoutMs).toBe(2_147_483_647)
+  })
+
+  it('refuses a relative MCP working directory, which would resolve against the start directory', () => {
+    const error = refusalOf({ mcpServers: { docs: { ...STDIO, cwd: 'files' } } })
+    expect(error.message).toContain('mcpServers.docs.cwd')
+  })
+
+  it('refuses an MCP server URL that is not http or https', () => {
+    const error = refusalOf({ mcpServers: { docs: { url: 'file:///etc/passwd' } } })
+    expect(error.message).toContain('mcpServers.docs.url')
+  })
+
   it('refuses a relative ACP command', () => {
     const error = refusalOf({ acpAgents: [{ ...AGENT, command: './agent.sh' }] })
     expect(error.message).toContain('acpAgents.0.command')
@@ -180,6 +210,19 @@ describe('the external tools file at start', () => {
     expect(result.error).toBeInstanceOf(TheoClawConfigError)
     expect((result.error as TheoClawConfigError).variable).toBe(VARIABLE)
     expect(result.error?.message).toContain(command)
+    expect(result.builds()).toBe(0)
+  })
+
+  it('refuses an MCP working directory inside the tool root when host tools are on', async () => {
+    const workspace = makeHostToolsWorkspace()
+    cleanups.push(() => workspace.remove())
+    const cwd = join(workspace.path, 'files')
+    const path = join(workspace.path, 'external-tools.json')
+    writeFileSync(path, JSON.stringify({ mcpServers: { files: { command: '/usr/bin/env', cwd } } }))
+    const result = await start({ THEOCLAW_HOST_TOOLS: 'on', [VARIABLE]: path }, workspace.path, { detect: enforced })
+    expect(result.error).toBeInstanceOf(TheoClawConfigError)
+    expect((result.error as TheoClawConfigError).variable).toBe(VARIABLE)
+    expect(result.error?.message).toContain(cwd)
     expect(result.builds()).toBe(0)
   })
 
