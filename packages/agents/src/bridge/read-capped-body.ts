@@ -1,11 +1,17 @@
+import { TheokitAgentError } from '@theokit/sdk/errors'
+
 /** The largest request body the bridge's HTTP surfaces read: 1 MiB, far above any chat or tool request. */
 export const MAX_REQUEST_BODY_BYTES = 1_048_576
 
-/** A request body that grew past the cap while it was being read. */
-export class BodyTooLargeError extends Error {
+/**
+ * A request body that grew past the cap while it was being read. The same body is refused the same
+ * way on every attempt, so it is not retryable.
+ */
+export class BodyTooLargeError extends TheokitAgentError {
+  override readonly name = 'BodyTooLargeError'
+
   constructor(readonly maxBytes: number) {
-    super(`request body exceeds ${maxBytes} bytes`)
-    this.name = 'BodyTooLargeError'
+    super(`request body exceeds ${maxBytes} bytes`, { code: 'BODY_TOO_LARGE', isRetryable: false })
   }
 }
 
