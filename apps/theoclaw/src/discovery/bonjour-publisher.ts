@@ -1,4 +1,4 @@
-import { Bonjour, type ServiceConfig } from 'bonjour-service'
+import { Bonjour, type Service, type ServiceConfig } from 'bonjour-service'
 
 import {
   type DiscoveryErrorRoute,
@@ -55,6 +55,45 @@ function observeSends(emitter: MdnsEmitter, report: (error: unknown, route: Disc
   }
 }
 
+/** The cause of a conflict: `codeOf` reads its `code`, and the message names the contested name (plan D2). */
+function nameInUse(name: string): Error & { readonly code: 'NAME_IN_USE' } {
+  return Object.assign(new Error(`mDNS name "${name}" is already in use on the network`), {
+    code: 'NAME_IN_USE' as const,
+  })
+}
+
+/**
+ * The library answers a probe that finds the name taken only by calling the service's own `stop` and
+ * writing `console.log`; TheoClaw's withdrawals go through `unpublishAll`, never `stop`. So a `stop`
+ * outside a withdrawal is the conflict, reported before the library tears the service down (plan D1).
+ * The probe answers asynchronously, so the wrap is in place before any answer can arrive. `withdrawing`
+ * is never cleared: a probe answer can still arrive after `unpublishAll` resolved, and that late `stop`
+ * is TheoClaw's withdrawal, not a conflict. `onConflict` never throws: it goes through `deliver`.
+ */
+function observeConflict(published: Service, withdrawing: () => boolean, onConflict: () => void): void {
+  const stop = published.stop?.bind(published)
+  published.stop = (callback?: CallableFunction) => {
+    if (!withdrawing()) onConflict()
+    stop?.(callback)
+  }
+}
+
+/**
+ * Every report runs on the library's socket callbacks, where a throw is an uncaught exception that
+ * exits the process (FR-006). So a throw from `onError` stays here, and is written as a process
+ * warning naming both the report and what `onError` threw.
+ */
+function deliver(onError: (error: TheoClawDiscoveryError) => void, error: TheoClawDiscoveryError): void {
+  try {
+    onError(error)
+  } catch (thrown) {
+    const reason = thrown instanceof Error ? thrown.message : String(thrown)
+    process.emitWarning(`onError threw while reporting ${error.code} on route ${error.route}: ${reason}`, {
+      type: 'TheoClawDiscoveryWarning',
+    })
+  }
+}
+
 /**
  * The one adapter over the DNS-SD library. Both of its error routes, the socket's `error` event and
  * the answer path's `errorCallback`, are wired in the constructing tick; the library's default for
@@ -63,7 +102,7 @@ function observeSends(emitter: MdnsEmitter, report: (error: unknown, route: Disc
 export function createBonjourPublisher(options: BonjourPublisherOptions): ServicePublisher {
   const { onError, interface: iface, ip } = options
   const report = (error: unknown, route: DiscoveryErrorRoute): void => {
-    onError(new TheoClawDiscoveryError(error, route))
+    deliver(onError, new TheoClawDiscoveryError(error, route))
   }
   const config = { ...(iface === undefined ? {} : { interface: iface }), ...(ip === undefined ? {} : { ip }) }
   const bonjour = new Bonjour(config as Partial<ServiceConfig>, (error: unknown) => report(error, 'answer'))
@@ -77,12 +116,20 @@ export function createBonjourPublisher(options: BonjourPublisherOptions): Servic
     throw error
   }
 
+  let withdrawing = false
   return {
     publish: (service: PublishedService) => {
-      bonjour.publish({ name: service.name, type: service.type, port: service.port, txt: { ...service.txt } })
+      const published = bonjour.publish({
+        name: service.name,
+        type: service.type,
+        port: service.port,
+        txt: { ...service.txt },
+      })
+      observeConflict(published, () => withdrawing, () => report(nameInUse(service.name), 'publish'))
     },
     unpublishAll: () =>
       new Promise<void>((resolve, reject) => {
+        withdrawing = true
         bonjour.unpublishAll((error?: unknown) => {
           if (error) reject(new TheoClawDiscoveryError(error, 'send-respond'))
           else resolve()
@@ -90,6 +137,7 @@ export function createBonjourPublisher(options: BonjourPublisherOptions): Servic
       }),
     destroy: () =>
       new Promise<void>((resolve, reject) => {
+        withdrawing = true
         try {
           bonjour.destroy(() => resolve())
         } catch (error) {
