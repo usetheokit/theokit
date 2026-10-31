@@ -41,6 +41,10 @@ function tooLarge(): Response {
   return new Response(null, { status: 413, headers: NO_STORE })
 }
 
+function clientLeft(): Response {
+  return new Response(null, { status: 400, headers: NO_STORE })
+}
+
 function unauthorized(): Response {
   return new Response(null, { status: 401, headers: { 'www-authenticate': 'Bearer', ...NO_STORE } })
 }
@@ -118,6 +122,7 @@ function relay(body: ReadableStream<Uint8Array>, stopTurn: () => void): Readable
 /**
  * The post's body, read up to `MAX_CHAT_BODY_BYTES` and no further, or `undefined` past it. Read
  * from the stream rather than trusted from `content-length`, which a chunked post does not send.
+ * A read that fails while the client is still connected rejects with the stream's error.
  */
 async function boundedBody(request: Request): Promise<Uint8Array<ArrayBuffer> | undefined> {
   if (request.body === null) return new Uint8Array()
@@ -182,7 +187,13 @@ export function createWebchatRoutes(options: WebchatRoutesOptions): (request: Re
     }
     if (pathname !== CHAT_PATH || request.method !== 'POST') return notFound()
     if (!accepts(request.headers.get('authorization') ?? undefined)) return unauthorized()
-    const body = await boundedBody(request)
+    const body = await boundedBody(request).catch((error: unknown) => {
+      // A client that leaves mid-upload errors the body stream: answer, since the listener would
+      // otherwise log "request failed" and write a 500 to a socket that is already gone.
+      if (request.signal.aborted) return null
+      throw error
+    })
+    if (body === null) return clientLeft()
     if (body === undefined) return tooLarge()
     const bounded = new Request(request.url, { method: 'POST', headers: request.headers, body, signal: request.signal })
     return chat(bounded, options.runTurn)

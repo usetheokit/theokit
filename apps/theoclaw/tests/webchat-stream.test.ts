@@ -180,6 +180,55 @@ describe("POST /webchat/chat", () => {
     expect(stub.calls.built).toBe(0);
   });
 
+  // A client that leaves mid-upload errors the body stream; the route answers instead of
+  // throwing to the listener, which would log "request failed" for a socket already gone.
+  it("answers 400 and builds 0 agents when the client leaves while the body is read", async () => {
+    const stub = stubRunner({ messages: () => [text("never")] });
+    const handle = createWebchatRoutes({ token: TOKEN, runTurn: stub.runTurn, assetsDir: ASSETS });
+    const left = new AbortController();
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('{"message":"he'));
+      },
+      pull(controller) {
+        left.abort();
+        controller.error(new Error("aborted"));
+      },
+    });
+    const request = new Request("http://127.0.0.1/webchat/chat", {
+      method: "POST",
+      headers: { authorization: `Bearer ${TOKEN}`, "content-type": "application/json" },
+      body,
+      duplex: "half",
+      signal: left.signal,
+    } as RequestInit);
+
+    const response = await handle(request);
+
+    expect(response.status).toBe(400);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(stub.calls.built).toBe(0);
+  });
+
+  it("rejects with the stream's error when the body fails while the client is still there", async () => {
+    const stub = stubRunner({ messages: () => [text("never")] });
+    const handle = createWebchatRoutes({ token: TOKEN, runTurn: stub.runTurn, assetsDir: ASSETS });
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        controller.error(new Error("the body broke"));
+      },
+    });
+    const request = new Request("http://127.0.0.1/webchat/chat", {
+      method: "POST",
+      headers: { authorization: `Bearer ${TOKEN}`, "content-type": "application/json" },
+      body,
+      duplex: "half",
+    } as RequestInit);
+
+    await expect(handle(request)).rejects.toThrow("the body broke");
+    expect(stub.calls.built).toBe(0);
+  });
+
   it("streams a body of exactly the chat bound", async () => {
     const stub = stubRunner({ messages: () => [text("at the bound")] });
     const handle = createWebchatRoutes({ token: TOKEN, runTurn: stub.runTurn, assetsDir: ASSETS });
