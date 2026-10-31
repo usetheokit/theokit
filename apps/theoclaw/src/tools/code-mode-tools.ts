@@ -5,7 +5,7 @@ import { createQuickJsSandbox } from '@theokit/agents/code-mode-quickjs'
 import { createDelegateAllTool } from '@theokit/agents/tools'
 import type { CustomTool } from '@theokit/sdk'
 
-import type { TurnAgent } from '../agent-port.js'
+import type { TurnAgent, TurnRun } from '../agent-port.js'
 import { describeError } from '../control-plane/errors.js'
 import { vetoToolCall } from './path-veto.js'
 import type { ToolSettings } from './tool-settings.js'
@@ -62,8 +62,9 @@ export function codeModeTool(tools: readonly CustomTool[], settings: ToolSetting
   return {
     ...tool,
     description: `${SCRIPT_LANGUAGE}\n\n${instructions}`,
-    handler: async (input) => {
-      const result = await tool.handler(input)
+    // The run's signal reaches the sandbox, which ends the script and its host calls on abort.
+    handler: async (input, ctx) => {
+      const result = await tool.handler(input, ctx?.signal === undefined ? undefined : { signal: ctx.signal })
       if (result.length > MAX_RESULT_CHARACTERS) throw new CodeModeResultTooLongError(result.length)
       return result
     },
@@ -71,12 +72,36 @@ export function codeModeTool(tools: readonly CustomTool[], settings: ToolSetting
 }
 
 /** Drain the run's stream and return the code of the first error event, if any. */
-async function streamedErrorOf(run: Awaited<ReturnType<TurnAgent['send']>>): Promise<string | undefined> {
+async function streamedErrorOf(run: TurnRun): Promise<string | undefined> {
   let streamed: string | undefined
   for await (const message of run.stream()) {
     if (message.type === 'error') streamed ??= String((message as { code?: unknown }).code ?? 'error')
   }
   return streamed
+}
+
+/**
+ * The run's outcome, its stream drained first. While it runs, an abort of `signal` cancels it; the
+ * cancellation's own failure, if any, rejects here rather than being lost.
+ */
+async function untilSettled(
+  run: TurnRun,
+  signal: AbortSignal | undefined,
+): Promise<Awaited<ReturnType<TurnRun['wait']>> & { readonly streamed: string | undefined }> {
+  let cancelling: Promise<void> | undefined
+  const cancel = (): void => {
+    cancelling ??= run.cancel()
+  }
+  if (signal?.aborted === true) cancel()
+  else signal?.addEventListener('abort', cancel, { once: true })
+  try {
+    const streamed = await streamedErrorOf(run)
+    const result = await run.wait()
+    await cancelling
+    return { ...result, streamed }
+  } finally {
+    signal?.removeEventListener('abort', cancel)
+  }
 }
 
 async function disposeWorker(agent: TurnAgent): Promise<void> {
@@ -88,13 +113,13 @@ async function disposeWorker(agent: TurnAgent): Promise<void> {
  * The one roster entry of `delegate_all`: each task gets a fresh worker, runs one turn, and is
  * disposed. Every way a worker can fail, its build and its disposal included, is a
  * `DelegationError`, so `delegate_all` reports it beside the other tasks instead of ending the
- * parent's turn (EC-3).
+ * parent's turn (EC-3). The parent turn's signal cancels each worker's run when it aborts.
  */
 function workerPort(createWorker: CreateWorker): DelegationPort {
   return {
-    run: async (task): Promise<DelegationResult> => {
+    run: async (task, options): Promise<DelegationResult> => {
       try {
-        return await runWorker(createWorker, task)
+        return await runWorker(createWorker, task, options?.signal)
       } catch (error) {
         throw error instanceof DelegationError ? error : new DelegationError('worker', error)
       }
@@ -107,13 +132,13 @@ function workerPort(createWorker: CreateWorker): DelegationPort {
  * disposal that throws all reject: a worker whose disposal failed is in a state nobody knows, as a
  * `/control` turn's is (`runTheoClawTurn`).
  */
-async function runWorker(createWorker: CreateWorker, task: string): Promise<DelegationResult> {
+async function runWorker(createWorker: CreateWorker, task: string, signal: AbortSignal | undefined): Promise<DelegationResult> {
+  if (signal?.aborted === true) throw new Error('the turn that delegated was cancelled before the worker started')
   const agent = await createWorker()
   let outcome: DelegationResult
   try {
     const run = await agent.send(task)
-    const streamed = await streamedErrorOf(run)
-    const result = await run.wait()
+    const { streamed, ...result } = await untilSettled(run, signal)
     if (streamed !== undefined) throw new Error(`the worker's run streamed an error (${streamed})`)
     if (result.status !== 'finished') throw new Error(`the worker's run ended with status ${result.status}`)
     // The SDK accounts the worker's cost; this port reports none it measured (plan D4).

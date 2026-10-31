@@ -21,6 +21,8 @@ and versioning follows [Semantic Versioning](https://semver.org/).
   result over 16384 characters is refused with its length. With `delegate_all` the agent runs 1 to 4
   tasks at once on fresh `worker` agents that hold only the read-only tools, so a worker can neither
   run a script nor delegate. A worker that fails is reported as `delegation_failed` beside the others.
+  Cancelling the `/control` turn stops both: the script and the tool call it awaits end, and each
+  worker's run is cancelled and disposed, so no worker keeps spending tokens after the turn is gone.
   Chat replies still get no tool. The app pins `quickjs-emscripten-core` and
   `@jitl/quickjs-wasmfile-release-sync` at 0.32.0. The parity ledger records OC-65 and H-5 as
   shipped, checked by `tests/live/code-mode.live.test.ts`.

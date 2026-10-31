@@ -244,6 +244,96 @@ describe('run_code and delegate_all on a /control agent', () => {
     expect(answer.results[1]?.message).toContain('dispose failed')
   })
 
+  it('cancels every worker run and disposes it when the parent turn aborts', async () => {
+    const { settings } = readOnlyWorkspace()
+    const controller = new AbortController()
+    const cancelled: boolean[] = []
+    const disposed: boolean[] = []
+    let sent = 0
+    const tool = controlTool(settings, 'delegate_all', async () => {
+      const index = cancelled.push(false) - 1
+      disposed.push(false)
+      let stop = (): void => undefined
+      const stopped = new Promise<void>((resolve) => {
+        stop = resolve
+      })
+      const run = {
+        stream: async function* () {
+          await stopped
+        },
+        wait: async () => {
+          await stopped
+          return { status: 'cancelled' }
+        },
+        cancel: async () => {
+          cancelled[index] = true
+          stop()
+        },
+      }
+      return {
+        send: async () => {
+          sent += 1
+          if (sent === 2) controller.abort()
+          return run
+        },
+        [Symbol.asyncDispose]: async () => {
+          disposed[index] = true
+        },
+      }
+    })
+    const tasks = [{ agent: 'worker', task: 'one' }, { agent: 'worker', task: 'two' }]
+
+    const answer = JSON.parse(String(await tool.handler({ tasks }, { signal: controller.signal }))) as {
+      results: { ok: boolean; error?: string }[]
+    }
+
+    expect(cancelled).toEqual([true, true])
+    expect(disposed).toEqual([true, true])
+    expect(answer.results.map((entry) => entry.error)).toEqual(['delegation_failed', 'delegation_failed'])
+  })
+
+  it('builds no worker for a task whose turn already aborted', async () => {
+    const { settings } = readOnlyWorkspace()
+    let built = 0
+    const tool = controlTool(settings, 'delegate_all', async () => {
+      built += 1
+      return fakeWorker('fine').agent
+    })
+
+    const handled = tool.handler({ tasks: [{ agent: 'worker', task: 'one' }] }, { signal: AbortSignal.abort() })
+    const answer = JSON.parse(String(await handled)) as { results: { ok: boolean; error?: string }[] }
+
+    expect(built).toBe(0)
+    expect(answer.results[0]).toMatchObject({ ok: false, error: 'delegation_failed' })
+  })
+
+  it('stops a script and its host call when the parent turn aborts', async () => {
+    const { settings } = readOnlyWorkspace()
+    const controller = new AbortController()
+    let toolSignal: AbortSignal | undefined
+    const webFetch: CustomTool = {
+      name: 'web_fetch',
+      description: 'fetches a url',
+      inputSchema: { type: 'object', properties: { url: { type: 'string' } } },
+      handler: (_input, ctx) => {
+        toolSignal = ctx?.signal
+        setImmediate(() => {
+          controller.abort()
+        })
+        return new Promise<never>(() => undefined)
+      },
+    }
+    const tool = codeModeTool([webFetch], settings)
+    const started = Date.now()
+
+    const code = 'return await api.web_fetch({ url: "https://example.com" })'
+    const handled = Promise.resolve(tool.handler({ code }, { signal: controller.signal }))
+
+    await expect(handled).rejects.toThrow(/cancelled/)
+    expect(Date.now() - started).toBeLessThan(2000)
+    expect(toolSignal?.aborted).toBe(true)
+  })
+
   it('gives chat agents no tool', async () => {
     const seen: Parameters<CreateAgent>[0][] = []
     const factory = createChannelAgentFactory({ THEOCLAW_MODEL: 'openrouter/m', THEOKIT_API_KEY: 'k' }, async (options) => {
