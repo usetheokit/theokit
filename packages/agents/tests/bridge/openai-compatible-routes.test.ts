@@ -4,7 +4,7 @@ import {
   createOpenAICompatibleRoutes,
   type OpenAIChatRequest,
   renderTranscript,
-} from '../../src/bridge/openai-compatible-routes.js'
+} from '../../src/bridge/index.js'
 
 const BASE = 'http://127.0.0.1:8080'
 const ONE_MIB = 1_048_576
@@ -270,5 +270,26 @@ describe('renderTranscript', () => {
         { role: 'user', content: 'again' },
       ]),
     ).toBe('system: be brief\n\nuser: hi\n\nassistant: hello\n\nuser: again')
+  })
+})
+
+/**
+ * TheoClaw imports these handlers by package name, which resolves `dist/bridge.js` through
+ * `package.json#exports`; the tests above read the source. Build first
+ * (`pnpm --filter @theokit/agents build`).
+ */
+describe('the built ./bridge subpath', () => {
+  it('exports the OpenAI-compatible routes, the tool route and the capped reader', async () => {
+    const built = (await import('@theokit/agents/bridge')) as Record<string, unknown>
+
+    for (const name of [
+      'createOpenAICompatibleRoutes',
+      'renderTranscript',
+      'createToolInvokeRoute',
+      'readCappedBody',
+      'BodyTooLargeError',
+    ]) {
+      expect(typeof built[name], name).toBe('function')
+    }
   })
 })
