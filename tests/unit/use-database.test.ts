@@ -1,3 +1,5 @@
+import { EventEmitter } from 'node:events'
+
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import sqlite from 'db0/connectors/better-sqlite3'
 import {
@@ -83,5 +85,53 @@ describe('T4.1 — useDatabase(name, connector) (ADR-0010)', () => {
     }
     expect(result.rows).toHaveLength(1)
     expect(result.rows[0]?.name).toBe('alice')
+  })
+})
+
+/** A db0 connector whose driver client is an EventEmitter, as `pg.Client` is. */
+function fakeConnector(dialect: string, client: EventEmitter) {
+  return {
+    name: `fake-${dialect}`,
+    dialect,
+    getInstance: vi.fn(() => client),
+    exec: () => Promise.resolve({}),
+    prepare: () => ({}),
+  }
+}
+
+describe('useDatabase keeps a Postgres client error from exiting the process (#1051)', () => {
+  it('a postgresql client error is logged as a structured warning instead of thrown', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const client = new EventEmitter()
+    await useDatabase('pg-fake', fakeConnector('postgresql', client))
+
+    const err = Object.assign(new Error('terminating connection'), { code: '57P01' })
+    expect(() => client.emit('error', err)).not.toThrow()
+    const entries = log.mock.calls.map((c) => JSON.parse(String(c[0])) as Record<string, unknown>)
+    expect(entries).toContainEqual(
+      expect.objectContaining({ level: 'warn', database: 'pg-fake', code: '57P01' }),
+    )
+  })
+
+  it('a listener the connector already attached stays the only one', async () => {
+    const client = new EventEmitter()
+    const mine = (): void => {}
+    client.on('error', mine)
+    await useDatabase('pg-own', fakeConnector('postgresql', client))
+    expect(client.listeners('error')).toEqual([mine])
+  })
+
+  it('a second call for the same name adds no second listener', async () => {
+    const client = new EventEmitter()
+    const connector = fakeConnector('postgresql', client)
+    await useDatabase('pg-twice', connector)
+    await useDatabase('pg-twice', connector)
+    expect(client.listenerCount('error')).toBe(1)
+  })
+
+  it('another dialect is not opened early', async () => {
+    const connector = fakeConnector('sqlite', new EventEmitter())
+    await useDatabase('sqlite-fake', connector)
+    expect(connector.getInstance).not.toHaveBeenCalled()
   })
 })

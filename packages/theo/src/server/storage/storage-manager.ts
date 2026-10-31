@@ -19,6 +19,10 @@
 import { processSingleton } from '../../core/process-singleton.js'
 import { createLogger } from '../observability/logger.js'
 
+import {
+  keepPoolErrorsFromExitingTheProcess,
+  listenForErrorsUnlessHandled,
+} from './error-listener.js'
 import type {
   PoolLike,
   PostgresDatabaseConfig,
@@ -121,7 +125,7 @@ export class StorageManager {
       )
     }
     const pool = factory(server, dbConfig)
-    keepPoolErrorsFromExitingTheProcess(pool, dbName)
+    keepPoolErrorsFromExitingTheProcess(pool, storageLogger, { database: dbName })
     this.#dbPools.set(dbName, pool)
     return pool
   }
@@ -232,33 +236,6 @@ export class StorageManager {
 
 const storageLogger = createLogger({ context: { component: 'theokit:storage' } })
 
-interface PoolEvents {
-  on: (event: 'error', listener: (err: Error & { code?: string }) => void) => unknown
-  listenerCount?: (event: 'error') => number
-}
-
-function hasEventApi<T extends object>(pool: T): pool is T & PoolEvents {
-  return typeof (pool as Partial<PoolEvents>).on === 'function'
-}
-
-/**
- * Node throws an `error` event nobody listens to, and `pg.Pool` emits one for every idle client the
- * server disconnects. Measured on theokit@0.75.1: one `pg_terminate_backend` exited `theokit start`
- * with `Unhandled 'error' event` (usetheokit/theokit#1019). A listener the factory attached is the
- * user's decision and is left as the only one.
- */
-function keepPoolErrorsFromExitingTheProcess(pool: PoolLike, dbName: string): void {
-  if (!hasEventApi(pool)) return
-  if (typeof pool.listenerCount === 'function' && pool.listenerCount('error') > 0) return
-  pool.on('error', (err) => {
-    storageLogger.warn('postgres pool error; the client was discarded and the pool reconnects', {
-      database: dbName,
-      code: err.code,
-      error: err.message,
-    })
-  })
-}
-
 /**
  * The Redis counterpart. node-redis re-emits a socket error with a plain `emit('error')`, so a
  * client from a `useRedis` factory with no listener exited the process on the first ECONNRESET
@@ -266,9 +243,7 @@ function keepPoolErrorsFromExitingTheProcess(pool: PoolLike, dbName: string): vo
  * listener the factory attached is left as the only one.
  */
 function keepRedisErrorsFromExitingTheProcess(client: RedisLike, serverName: string): void {
-  if (!hasEventApi(client)) return
-  if (typeof client.listenerCount === 'function' && client.listenerCount('error') > 0) return
-  client.on('error', (err) => {
+  listenForErrorsUnlessHandled(client, (err) => {
     storageLogger.warn('redis client error; the client reconnects per its own retry strategy', {
       server: serverName,
       code: err.code,

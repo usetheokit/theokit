@@ -10,6 +10,7 @@ import { type RunningTheoClaw, startTheoClaw } from '../src/composition.js'
 import { TheoClawConfigError } from '../src/control-plane/errors.js'
 import { type ControlPlaneHandle, listenControlPlane } from '../src/control-plane/listener.js'
 import type { PublishedService, PublisherFactory } from '../src/discovery/publisher.js'
+import { WORKSPACE } from './composition-fixtures.js'
 
 const EXIT_DEADLINE_MS = 5000
 
@@ -23,6 +24,7 @@ function lanEnv(extra: Record<string, string> = {}): Record<string, string | und
     THEOCLAW_PORT: '0',
     THEOCLAW_HOST: '0.0.0.0',
     THEOCLAW_PUBLIC_BIND: 'yes',
+    THEOCLAW_WORKSPACE: WORKSPACE,
     ...extra,
   }
 }

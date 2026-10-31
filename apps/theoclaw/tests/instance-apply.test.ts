@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { TheoClawConfigError } from '../src/control-plane/errors.js'
 import { applyInstance, resolveInstance } from '../src/instance.js'
+import { readSessionSettings } from '../src/sessions/session-settings.js'
 
 const OWNED = ['THEOKIT_HOME', 'THEOKIT_AUTH_HOME', 'THEOCLAW_STATE_DIR', 'HOME'] as const
 
@@ -88,6 +89,23 @@ describe('applyInstance', () => {
     expect(getTheokitHome(tmpdir())).toBe(dir)
     expect(process.env.THEOKIT_AUTH_HOME).toBe(dir)
     expect(process.env.THEOCLAW_STATE_DIR).toBe(join(dir, 'state'))
+  })
+
+  // F-arch-1: chat transcripts and sessions.json follow the profile, as its other stores do.
+  it('two profiles keep their chat sessions in two workspaces, each inside its own profile', () => {
+    const workspaceOf = (profile: string): string => {
+      const env: NodeJS.ProcessEnv = { THEOCLAW_PROFILE: profile }
+      const instance = resolveInstance(env, { homeDir: home })
+      applyInstance(instance, env)
+      const { workspace } = readSessionSettings(env, statSync)
+      expect(workspace).toBe(join(instance.directory!, 'workspace'))
+      return workspace
+    }
+    const work = workspaceOf('work')
+    const personal = workspaceOf('home')
+
+    expect(work).not.toBe(personal)
+    expect(mode(work)).toBe(0o700)
   })
 
   it('applying the no-profile instance changes nothing', () => {

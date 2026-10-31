@@ -96,8 +96,13 @@ async function start(lan: boolean): Promise<Started> {
     throw new Error('THEOCLAW_LIVE=1 needs THEOCLAW_MODEL and THEOKIT_API_KEY or OPENROUTER_API_KEY')
   }
   const token = randomBytes(24).toString('base64url')
+  // A scratch working directory, so the start makes its tool root `files/` there, not in the checkout;
+  // it is also the workspace the chat sessions keep their transcripts in.
+  const cwd = mkdtempSync(join(tmpdir(), 'theoclaw-lan-live-'))
+  cleanups.push(async () => rmSync(cwd, { recursive: true, force: true }))
   const env: Record<string, string | undefined> = {
     THEOCLAW_MODEL: model,
+    THEOCLAW_WORKSPACE: cwd,
     ...(process.env.THEOKIT_API_KEY ? { THEOKIT_API_KEY: process.env.THEOKIT_API_KEY } : {}),
     ...(process.env.OPENROUTER_API_KEY ? { OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY } : {}),
     THEOCLAW_OWNERS: 'telegram:owner',
@@ -110,9 +115,6 @@ async function start(lan: boolean): Promise<Started> {
   let onExit: (code: number) => void = () => undefined
   const exited = new Promise<number>((resolve) => (onExit = resolve))
   const called = performance.now()
-  // A scratch working directory, so the start makes its tool root `files/` there, not in the checkout.
-  const cwd = mkdtempSync(join(tmpdir(), 'theoclaw-lan-live-'))
-  cleanups.push(async () => rmSync(cwd, { recursive: true, force: true }))
   const running = await startTheoClaw({
     env,
     cwd,

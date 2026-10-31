@@ -32,16 +32,18 @@ function setup(config: readonly BroadcastGroupConfig[], options: { failTurns?: b
   const lines: string[] = []
   const groups = createBroadcastGroups(config)
   const handler = createReplyHandler({
-    withAgent: async (work) =>
-      work(
-        new FakeAgent({
+    reset: async () => undefined,
+    withAgent: async (_event, work) =>
+      work({
+        agent: new FakeAgent({
           frames: (text) => {
             prompts.push(text)
             return [assistant(`answer to ${text.split('\n').at(-1)?.replace(/^Now: /, '') ?? ''}`), finished()]
           },
           ...(options.failTurns ? { result: { status: 'error', error: { code: 'MODEL_DOWN' } } } : {}),
         }) as unknown as TurnAgent,
-      ),
+        release: () => undefined,
+      }),
     broadcast: {
       groups,
       adapterFor: (platform) => adapters.get(platform as PlatformName) as BasePlatformAdapter | undefined,
@@ -143,18 +145,20 @@ describe('broadcast groups', () => {
     const prompts: string[] = []
     const discord = new FakeAdapter('discord')
     const handler = createReplyHandler({
-      withAgent: async (work) => {
+      reset: async () => undefined,
+      withAgent: async (_event, work) => {
         const fail = failNext
         failNext = false
-        return work(
-          new FakeAgent({
+        return work({
+          agent: new FakeAgent({
             frames: (text) => {
               prompts.push(text)
               return [assistant('an answer'), finished()]
             },
             ...(fail ? { result: { status: 'error', error: { code: 'MODEL_DOWN' } } } : {}),
           }) as unknown as TurnAgent,
-        )
+          release: () => undefined,
+        })
       },
       broadcast: { groups, adapterFor: (platform) => (platform === 'discord' ? discord : undefined), write: () => undefined },
     })

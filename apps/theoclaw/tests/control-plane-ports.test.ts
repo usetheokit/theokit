@@ -9,6 +9,7 @@ import { afterAll, afterEach, describe, expect, it } from "vitest";
 import { startTheoClaw } from "../src/composition.js";
 import { TheoClawBindError } from "../src/control-plane/errors.js";
 import type { ControlPlaneHandle } from "../src/control-plane/listener.js";
+import { WORKSPACE } from "./composition-fixtures.js";
 
 // Each start makes its tool root `files/` in its working directory (B-382): a scratch one, never the checkout.
 const TOOL_CWD = mkdtempSync(join(tmpdir(), "theoclaw-start-"));
@@ -44,6 +45,7 @@ function start(port: number): Promise<ControlPlaneHandle> {
       THEOCLAW_PORT: String(port),
       THEOCLAW_OWNERS: "telegram:owner",
       THEOCLAW_DM_POLICY: "allowlist",
+      THEOCLAW_WORKSPACE: WORKSPACE,
     },
     agentFactory: () => {
       agentsBuilt += 1;

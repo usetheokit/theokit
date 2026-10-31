@@ -7,8 +7,9 @@ import { TheoClawConfigError } from './control-plane/errors.js'
  * Which TheoClaw this process is (B-514). With no `THEOCLAW_PROFILE` it is the instance `theoclaw`
  * and nothing moves. With a profile it is `theoclaw-<name>`, and every store the SDK and the app
  * write goes under the SDK's own profiles root, `<home>/.theokit/profiles/<name>` (plan D1): the
- * overrides point `THEOKIT_HOME`, `THEOKIT_AUTH_HOME` and `THEOCLAW_STATE_DIR` at it, and the agent
- * works in its `workspace`, where memory, transcripts and the agent registry follow the cwd.
+ * overrides point `THEOKIT_HOME`, `THEOKIT_AUTH_HOME` and `THEOCLAW_STATE_DIR` at it, and
+ * `THEOCLAW_WORKSPACE` at its `workspace`, where every agent works and the chat sessions keep their
+ * transcripts and `sessions.json`: memory, transcripts and the agent registry follow the cwd.
  */
 export interface TheoClawInstance {
   /** `theoclaw-<name>`, or `theoclaw` with no profile. */
@@ -23,8 +24,12 @@ export interface TheoClawInstance {
 
 const PROFILE_PATTERN = /^[a-z0-9][a-z0-9-]{0,15}$/
 
-/** The settings a profile sets itself, so an explicit one beside it is refused (plan D3). */
-const PROFILE_OWNED = ['THEOKIT_HOME', 'THEOKIT_AUTH_HOME', 'THEOCLAW_STATE_DIR'] as const
+/**
+ * The settings a profile sets itself, so an explicit one beside it is refused (plan D3).
+ * `THEOCLAW_WORKSPACE` is one (B-378): it holds the chat transcripts and `sessions.json`, so two
+ * profiles given one workspace would share and overwrite each other's conversations.
+ */
+const PROFILE_OWNED = ['THEOKIT_HOME', 'THEOKIT_AUTH_HOME', 'THEOCLAW_STATE_DIR', 'THEOCLAW_WORKSPACE'] as const
 
 export const NO_PROFILE: TheoClawInstance = { label: 'theoclaw', overrides: {} }
 
@@ -49,13 +54,14 @@ export function resolveInstance(env: Env, options: { readonly homeDir: string })
   }
   const directory = join(options.homeDir, '.theokit', 'profiles', name)
   const stateDirectory = join(directory, 'state')
+  const workspace = join(directory, 'workspace')
   return {
     label: `theoclaw-${name}`,
     profile: name,
     directory,
-    workspace: join(directory, 'workspace'),
+    workspace,
     stateDirectory,
-    overrides: { THEOKIT_HOME: directory, THEOKIT_AUTH_HOME: directory, THEOCLAW_STATE_DIR: stateDirectory },
+    overrides: { THEOKIT_HOME: directory, THEOKIT_AUTH_HOME: directory, THEOCLAW_STATE_DIR: stateDirectory, THEOCLAW_WORKSPACE: workspace },
   }
 }
 

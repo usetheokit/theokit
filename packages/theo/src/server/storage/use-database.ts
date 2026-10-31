@@ -26,6 +26,9 @@
  *   import sqlite from 'db0/connectors/better-sqlite3'
  *   const db = await useDatabase('main', sqlite({ name: 'app.db' }))
  */
+import { createLogger } from '../observability/logger.js'
+
+import { listenForErrorsUnlessHandled } from './error-listener.js'
 import { getStorageManager } from './storage-manager.js'
 
 interface Db0Module {
@@ -36,6 +39,35 @@ export interface Db0Database {
   exec: (sql: string) => Promise<unknown>
   prepare: (sql: string) => unknown
   sql: (strings: TemplateStringsArray, ...args: unknown[]) => Promise<unknown>
+  /** The connector's dialect (`'postgresql'`, `'sqlite'`, ...). */
+  readonly dialect?: string
+  /** The driver client underneath (db0's `getInstance`). */
+  getInstance?: () => Promise<unknown>
+}
+
+const databaseLogger = createLogger({ context: { component: 'theokit:storage' } })
+
+/**
+ * db0's Postgres connector opens one `pg.Client` and attaches no `error` listener. When Postgres
+ * drops that connection (a restart, a failover, `pg_terminate_backend`), the client emits `error`
+ * and Node exits the process on an `error` event with no listener. So for a Postgres database the
+ * client is opened here and given a listener that logs a structured warning. db0 keeps the closed
+ * client, so later queries on this database fail until the process restarts; `usePostgres` gives a
+ * pool that reconnects.
+ */
+async function keepDb0ClientErrorsFromExitingTheProcess(
+  db: Db0Database,
+  name: string,
+): Promise<void> {
+  if (db.dialect !== 'postgresql' || typeof db.getInstance !== 'function') return
+  const client = await db.getInstance()
+  if (typeof client !== 'object' || client === null) return
+  listenForErrorsUnlessHandled(client, (err) => {
+    databaseLogger.warn(
+      'postgres connection error; db0 does not reconnect, so queries on this database fail until restart (usePostgres reconnects)',
+      { database: name, code: err.code, error: err.message },
+    )
+  })
 }
 
 /**
@@ -73,5 +105,7 @@ export async function useDatabase(name: string, connector: unknown): Promise<Db0
     throw new Error("useDatabase requires the 'db0' package. Install via: pnpm add db0")
   }
   const manager = getStorageManager()
-  return manager.useStorage<Db0Database>(`__db0:${name}`, () => mod.createDatabase(connector))
+  const db = manager.useStorage<Db0Database>(`__db0:${name}`, () => mod.createDatabase(connector))
+  await keepDb0ClientErrorsFromExitingTheProcess(db, name)
+  return db
 }

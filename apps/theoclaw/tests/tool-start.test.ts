@@ -2,13 +2,13 @@ import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync }
 import { dirname, join } from 'node:path'
 
 import { effectiveToolNames } from '@theokit/sdk'
+import type { AgentOptions } from '@theokit/sdk'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { theoClawAgentOptions } from '../src/agent/create-agent.js'
 import { composeTheoClaw } from '../src/composition.js'
 import { applyInstance, resolveInstance } from '../src/instance.js'
 import { TheoClawConfigError } from '../src/control-plane/errors.js'
-import type { AgentToolOptions } from '../src/tools/tool-registry.js'
 import { fakeBuilders, signedLinePost, TELEGRAM_AND_LINE } from './composition-fixtures.js'
 import { FakeAgent, waitFor } from './fakes.js'
 import { makeHostToolsWorkspace } from './host-tools-workspace.js'
@@ -181,23 +181,31 @@ describe('the tool options each agent receives', () => {
     expect(options.plugins.map((plugin) => plugin.name)).toEqual(['theoclaw-path-veto'])
   })
 
-  it('composeTheoClaw with no toolSettings still hands the factory shell withheld and no host tool', async () => {
-    const received: AgentToolOptions[] = []
+  it('composeTheoClaw opens every chat session agent with shell withheld and no tool', async () => {
+    // The chat path no longer calls `agentFactory`: each session's agent is opened through
+    // `getOrCreate`, with the options `createChannelAgentFactory` pins (theoclaw-sessions D5).
+    // It replaces B-382's "with no toolSettings still hands the factory shell withheld", whose
+    // subject, the chat path calling `agentFactory`, no longer exists.
+    const received: AgentOptions[] = []
     const { builders } = fakeBuilders()
-    const { loop, router } = composeTheoClaw({
+    const { loop, router, sessions } = composeTheoClaw({
       env: TELEGRAM_AND_LINE,
-      agentFactory: (options: AgentToolOptions) => {
+      agentFactory: () => new FakeAgent({ frames: [] }),
+      getOrCreate: async (_id, options) => {
         received.push(options)
-        return new FakeAgent({ frames: [] })
+        return Object.assign(new FakeAgent({ frames: [] }), { dispose: async () => undefined })
       },
       builders,
       write: () => undefined,
     })
     await loop.ready
     expect((await router(signedLinePost())).status).toBe(200)
-    await waitFor(() => received.length === 1, 1000, 'the chat agent to be built')
+    await waitFor(() => received.length === 1, 1000, 'the chat agent to be opened')
     await loop.stopAll()
-    expect(received[0]).toEqual({ tools: [], plugins: [] })
-    expect(effectiveToolNames(theoClawAgentOptions({ model: 'm', apiKey: 'k', toolOptions: received[0] })).names).toEqual([])
+    await sessions.disposeAll()
+    expect(received[0]?.withheldBuiltinTools).toEqual(['shell'])
+    expect(received[0]?.tools).toBeUndefined()
+    expect(received[0]?.plugins).toBeUndefined()
+    expect(effectiveToolNames({ ...received[0] }).names).toEqual([])
   })
 })

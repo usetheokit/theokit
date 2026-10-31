@@ -5,9 +5,23 @@ import type { AgentOutputEvent, ChatMessage } from '@theokit/presenter'
 
 import type { TurnAgent } from '../agent-port.js'
 import type { BroadcastGroup, BroadcastGroups } from './broadcast-groups.js'
+import type { SessionLease } from '../sessions/session-agents.js'
 
 /** The reply to a turn that produced no visible answer (D8): reasoning only, tools only, nothing. */
 export const NO_ANSWER_REPLY = 'I could not come up with an answer to that.'
+
+/** The one line `/new` and `/reset` answer with. */
+export const NEW_CONVERSATION_REPLY = 'Started a new conversation.'
+
+/** The one line a `/new` or `/reset` that could not be saved answers with. */
+export const RESET_FAILED_REPLY = 'I could not start a new conversation; this one goes on.'
+
+/**
+ * Matched on the whole trimmed text, here rather than through the runner's command registry, whose
+ * word-boundary match would also reset on `/new chat` (FR-008); and the reset needs the session,
+ * which this handler already holds.
+ */
+const RESET_COMMANDS: ReadonlySet<string> = new Set(['/new', '/reset'])
 
 export type { TurnAgent, TurnRun } from '../agent-port.js'
 
@@ -21,8 +35,13 @@ export interface BroadcastOptions {
 }
 
 export interface ReplyHandlerOptions {
-  /** One request boundary per message; the composition root's `withAgent`. */
-  readonly withAgent: <R>(work: (agent: TurnAgent) => R | Promise<R>) => Promise<R>
+  /**
+   * One request boundary per message, holding a lease on the agent of the message's session; the
+   * composition root's chat `withAgent`.
+   */
+  readonly withAgent: <R>(event: MessageEvent, work: (lease: SessionLease) => R | Promise<R>) => Promise<R>
+  /** Start the event's session afresh; `SessionAgents.reset`. */
+  readonly reset: (event: MessageEvent) => Promise<void>
   /** Without it, every channel is its own conversation. */
   readonly broadcast?: BroadcastOptions
 }
@@ -142,22 +161,28 @@ async function streamTurn(
 /**
  * One agent turn on `prompt`, and exactly one reply to the origin (FR-004, D8). A failed turn still
  * replies, then rethrows so the runner fires `on_error`. Resolves the answer of a turn that succeeded.
+ * The agent is the session's, owned by `SessionAgents`; the lease is released once the turn has
+ * replied, failed or not.
  */
 async function answerTurn(options: ReplyHandlerOptions, event: MessageEvent, ctx: GatewayContext, prompt: string): Promise<string> {
   const presenter = presenterFor(event)
   let started = false
   try {
-    return await options.withAgent(async (agent) => {
+    return await options.withAgent(event, async (lease) => {
       started = true
-      const outcome = await streamTurn(agent, event, prompt, presenter)
-      await send(ctx, finishTurn(presenter), outcome)
-      if (outcome.failed) throw outcome.error
-      return outcome.answer
+      try {
+        const outcome = await streamTurn(lease.agent, event, prompt, presenter)
+        await send(ctx, finishTurn(presenter), outcome)
+        if (outcome.failed) throw outcome.error
+        return outcome.answer
+      } finally {
+        lease.release()
+      }
     })
   } catch (error) {
     // After the callback ran, the turn already replied; this is the boundary's own failure.
     if (started) throw error
-    // The agent factory rejected before the turn began: the person still gets one reply.
+    // The session's agent could not be resolved before the turn began: the person still gets one reply.
     presenter.present(AGENT_ERROR)
     await send(ctx, finishTurn(presenter), { failed: true, error })
     throw error
@@ -195,14 +220,28 @@ async function fanOut(broadcast: BroadcastOptions, group: BroadcastGroup, event:
 }
 
 /**
- * The handler every runner uses: one agent turn per message with text. In a broadcast group's member
- * channel the turn carries the group's thread, runs after the group's earlier turns, and its answer
- * also reaches every other member; the exchange joins the thread only once the origin was answered.
- * The agent is never closed here: `withAgent`'s request boundary disposes it (see `TurnAgent`).
+ * The handler every runner uses: one agent turn per message with text, on the agent of the
+ * message's session. In a broadcast group's member channel the turn carries the group's thread,
+ * runs after the group's earlier turns, and its answer also reaches every other member; the
+ * exchange joins the thread only once the origin was answered. The agent is never closed or
+ * disposed here: it is the session's, owned by `SessionAgents`.
  */
 export function createReplyHandler(options: ReplyHandlerOptions): GatewayHandler {
   return async (event, ctx) => {
-    if (event.text.trim() === '') return
+    const text = event.text.trim()
+    if (text === '') return
+    if (RESET_COMMANDS.has(text)) {
+      // No lease and no model turn: a session whose agent cannot be resolved can still be reset.
+      // A reset that could not be saved moved nothing; the person is told, and the runner too.
+      try {
+        await options.reset(event)
+      } catch (error) {
+        await send(ctx, { text: RESET_FAILED_REPLY, format: 'plain' }, { failed: true, error })
+        throw error
+      }
+      await send(ctx, { text: NEW_CONVERSATION_REPLY, format: 'plain' }, { failed: false, answer: NEW_CONVERSATION_REPLY })
+      return
+    }
     const broadcast = options.broadcast
     const group = broadcast?.groups.groupOf(event.platform, event.channel.id)
     if (broadcast === undefined || group === undefined) {
