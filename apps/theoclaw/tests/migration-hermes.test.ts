@@ -5,7 +5,9 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { type DroppedEntry, readSkillsDir } from '../src/migration/foreign-setup.js'
+import { readHermesSetup } from '../src/migration/hermes-source.js'
 import { normaliseMcpEntry } from '../src/migration/mcp-entry.js'
+import { copyFixture, FIXTURE_SECRETS } from './migration-fixtures.js'
 
 /** FR-003: the normalisation both readers share (plan T1.1). */
 describe('normaliseMcpEntry', () => {
@@ -194,5 +196,196 @@ describe('readSkillsDir', () => {
 
   it('reads nothing from a missing directory', () => {
     expect(readSkillsDir(join(dir, 'absent'), 'skills', [])).toEqual([])
+  })
+})
+
+/** FR-002, FR-003 (AC-003, AC-004, AC-005): reading a Hermes home. */
+describe('readHermesSetup', () => {
+  let root = ''
+
+  beforeEach(() => {
+    root = copyFixture('hermes', mkdtempSync(join(tmpdir(), 'theoclaw-migration-')))
+  })
+
+  afterEach(() => {
+    rmSync(root, { recursive: true, force: true })
+  })
+
+  it('reads instructions, mcp_servers, skills and memories of a Hermes home', () => {
+    const setup = readHermesSetup({ root })
+
+    expect(setup.kind).toBe('hermes')
+    expect(setup.source).toBe(root)
+    expect(setup.instructions.map((file) => file.path)).toEqual(['SOUL.md', 'AGENTS.md'])
+    expect(setup.instructions[1]?.text).toContain('team is called Orbit')
+    expect(setup.mcpServers).toEqual({
+      files: { command: 'npx', args: ['-y', 'fixture-files-server'], env: { PORT: '8080', FILES_TOKEN: 'fixture-secret-hermes-token' } },
+      web: { type: 'http', url: 'https://web.example.test/mcp', headers: { Authorization: 'Bearer fixture-secret-hermes-header' } },
+    })
+    expect(setup.skills.map((skill) => [skill.name, skill.path])).toEqual([['hermes-skill', 'skills/hermes-skill/SKILL.md']])
+    expect(setup.memories.map((file) => file.path)).toEqual(['memories/MEMORY.md', 'memories/USER.md'])
+    expect(setup.memories[1]?.text).toContain('metric units')
+  })
+
+  it('falls back from mcp_servers to mcp.servers and then mcp and stringifies numeric env values', () => {
+    const configs = [
+      'mcp_servers:\n  one:\n    command: a\n    env:\n      PORT: 8080\n',
+      'mcp:\n  servers:\n    one:\n      command: a\n      env:\n        PORT: 8080\n',
+      'mcp:\n  one:\n    command: a\n    env:\n      PORT: 8080\n',
+      // A `mcp_servers` that is not a map falls through to the next location.
+      'mcp_servers: none\nmcp:\n  servers:\n    one:\n      command: a\n      env:\n        PORT: 8080\n',
+    ]
+    for (const config of configs) {
+      writeFileSync(join(root, 'config.yaml'), config)
+
+      const setup = readHermesSetup({ root })
+
+      expect(setup.mcpServers, config).toEqual({ one: { command: 'a', env: { PORT: '8080' } } })
+      expect(setup.dropped.filter((entry) => entry.path.startsWith('config.yaml')), config).toEqual([])
+    }
+  })
+
+  it('lists every entry it does not carry with its reason', () => {
+    writeFileSync(join(root, 'SOUL.md'), 'x'.repeat(300_000))
+    writeFileSync(
+      join(root, 'config.yaml'),
+      [
+        'mcp_servers:',
+        '  neither: { args: [x] }',
+        '  both: { command: a, url: "https://h" }',
+        '  bad-args: { command: a, args: [1, 2] }',
+        '  ftp: { url: "ftp://h/x" }',
+        '  slow: { command: a, timeout: 5 }',
+      ].join('\n'),
+    )
+
+    const setup = readHermesSetup({ root })
+
+    expect(setup.dropped).toEqual([
+      { path: 'SOUL.md', reason: 'file over 262144 bytes' },
+      { path: 'config.yaml#neither', reason: 'neither command nor url' },
+      { path: 'config.yaml#both', reason: 'both command and url' },
+      { path: 'config.yaml#bad-args', reason: 'args is not an array of strings' },
+      { path: 'config.yaml#ftp', reason: 'url is not http: or https:' },
+      { path: 'config.yaml#slow.timeout', reason: 'field not carried' },
+      { path: 'skills/no-description/SKILL.md', reason: 'frontmatter lacks name or description' },
+      { path: 'platforms', reason: 'channels are not imported' },
+      { path: 'channel_directory.json', reason: 'channels are not imported' },
+    ])
+    expect(setup.instructions.map((file) => file.path)).toEqual(['AGENTS.md'])
+    expect(Object.keys(setup.mcpServers)).toEqual(['slow'])
+  })
+
+  it('stages a numeric env or header value as it was written, not as YAML reads the number', () => {
+    writeFileSync(
+      join(root, 'config.yaml'),
+      'mcp_servers:\n  one:\n    command: a\n    args: [x]\n    env:\n      HEX: 0x1F\n      VERSION: 1.10\n      BIG: 12345678901234567890\n      ON: true\n',
+    )
+
+    expect(readHermesSetup({ root }).mcpServers.one).toEqual({
+      command: 'a',
+      args: ['x'],
+      env: { HEX: '0x1F', VERSION: '1.10', BIG: '12345678901234567890', ON: 'true' },
+    })
+  })
+
+  it('keeps the text of a numeric header, of an aliased env map and of a merged one', () => {
+    writeFileSync(
+      join(root, 'config.yaml'),
+      [
+        'defaults: &defaults { PORT: 0x1F }',
+        'mcp_servers:',
+        '  aliased: { command: a, env: *defaults }',
+        '  merged: { command: a, env: { <<: *defaults, EXTRA: 1.10 } }',
+        '  web: { url: "https://h/mcp", headers: { X-Version: 1.10 } }',
+      ].join('\n'),
+    )
+
+    const { mcpServers, dropped } = readHermesSetup({ root })
+
+    expect(mcpServers).toEqual({
+      aliased: { command: 'a', env: { PORT: '0x1F' } },
+      merged: { command: 'a', env: { PORT: '0x1F', EXTRA: '1.10' } },
+      web: { type: 'http', url: 'https://h/mcp', headers: { 'X-Version': '1.10' } },
+    })
+    expect(dropped.filter((entry) => entry.path.startsWith('config.yaml'))).toEqual([])
+  })
+
+  it('falls through a mcp.servers that is not a map to mcp itself', () => {
+    writeFileSync(join(root, 'config.yaml'), 'mcp:\n  servers: none\n  one: { command: a }\n')
+
+    const setup = readHermesSetup({ root })
+
+    expect(setup.mcpServers).toEqual({ one: { command: 'a' } })
+    expect(setup.dropped).toContainEqual({ path: 'config.yaml#servers', reason: 'not an object' })
+  })
+
+  it('reads an empty config.yaml or one with no MCP map as no server and no drop', () => {
+    for (const config of ['', 'model: x\n', '- a list\n']) {
+      writeFileSync(join(root, 'config.yaml'), config)
+      const setup = readHermesSetup({ root })
+
+      expect(setup.mcpServers, config).toEqual({})
+      expect(setup.dropped.filter((entry) => entry.path.startsWith('config.yaml')), config).toEqual([])
+    }
+  })
+
+  it('lists a config.yaml over 262144 bytes as dropped', () => {
+    writeFileSync(join(root, 'config.yaml'), `# ${'x'.repeat(262_144)}\n`)
+
+    expect(readHermesSetup({ root }).dropped).toContainEqual({ path: 'config.yaml', reason: 'file over 262144 bytes' })
+  })
+
+  it('never puts a fixture secret in a dropped entry', () => {
+    writeFileSync(
+      join(root, 'config.yaml'),
+      'mcp_servers:\n  one: { command: a, env: { T: { v: fixture-secret-hermes-token } }, extra: fixture-secret-hermes-token }\n',
+    )
+
+    const dropped = JSON.stringify(readHermesSetup({ root }).dropped)
+
+    for (const secret of FIXTURE_SECRETS) expect(dropped).not.toContain(secret)
+  })
+
+  it('drops an entry whose env value is empty', () => {
+    writeFileSync(join(root, 'config.yaml'), 'mcp_servers:\n  one:\n    command: a\n    env:\n      KEY:\n')
+
+    expect(readHermesSetup({ root }).dropped).toContainEqual({ path: 'config.yaml#one', reason: 'env value is not a string, number or boolean' })
+  })
+
+  it('takes the last value of a repeated key, as Hermes does', () => {
+    writeFileSync(join(root, 'config.yaml'), 'mcp_servers:\n  one: { command: a }\n  one: { command: b }\n')
+
+    const setup = readHermesSetup({ root })
+
+    expect(setup.mcpServers).toEqual({ one: { command: 'b' } })
+    expect(setup.dropped.filter((entry) => entry.path.startsWith('config.yaml'))).toEqual([])
+  })
+
+  it('lists a config.yaml that does not parse as dropped and reads the rest', () => {
+    writeFileSync(join(root, 'config.yaml'), 'mcp_servers: [unclosed\n')
+
+    const setup = readHermesSetup({ root })
+
+    expect(setup.dropped).toContainEqual({ path: 'config.yaml', reason: 'not valid YAML' })
+    expect(setup.mcpServers).toEqual({})
+    expect(setup.skills.map((skill) => skill.name)).toEqual(['hermes-skill'])
+  })
+
+  it('reads an empty Hermes home as nothing', () => {
+    const empty = mkdtempSync(join(tmpdir(), 'theoclaw-migration-'))
+    try {
+      expect(readHermesSetup({ root: empty })).toEqual({
+        kind: 'hermes',
+        source: empty,
+        instructions: [],
+        mcpServers: {},
+        skills: [],
+        memories: [],
+        dropped: [],
+      })
+    } finally {
+      rmSync(empty, { recursive: true, force: true })
+    }
   })
 })
