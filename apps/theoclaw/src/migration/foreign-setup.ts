@@ -44,7 +44,7 @@ export interface DroppedEntry {
 export const FILE_CAP = 262_144
 
 /** A skill name staged as a directory name: no separator, no dot-led name (EC-1). */
-const SAFE_SKILL_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/
+export const SAFE_SKILL_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/
 
 /**
  * The text of `path`, or `undefined` when it does not exist or is over {@link FILE_CAP}, in which
