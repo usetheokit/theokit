@@ -71,8 +71,8 @@ const revalidateFailureWarnedRoutes = new WeakSet()
  * 5. Cacheable → write entry + return Response with X-Theo-Cache: MISS
  * 6. Not cacheable → return original Response unchanged
  *
- * Requests are single-flight per cache key (B-667): concurrent misses of one key
- * share one handler run. The leader's `Response` is never shared (single-use body):
+ * Requests are single-flight per cache key (B-667), per process and per
+ * `defineCachedRoute` call: concurrent misses of one key share one handler run. The leader's `Response` is never shared (single-use body):
  * each follower builds its own `Response` from the cached value, with
  * X-Theo-Cache: MISS. When the leader's response is not cacheable (Set-Cookie,
  * stream, error status, `cacheable` refusing it), it stays the leader's own and
@@ -80,7 +80,8 @@ const revalidateFailureWarnedRoutes = new WeakSet()
  * with the same error, unless the leader's own request signal was aborted; a
  * Node IncomingMessage arrives here without a signal, so that exception does not
  * apply to it. A stale key starts one background revalidation at a time; a failed
- * one keeps the stale entry and is reported once per route with `console.warn`.
+ * one keeps the stale entry and is reported once per route with `console.warn`,
+ * naming the method and path (never the key, which carries request data).
  */
 export function defineCachedRoute<
   TQuery extends z.ZodType = z.ZodUndefined,
@@ -322,17 +323,17 @@ function scheduleRouteRevalidate<THandlerCtx>(
   ctx.revalidating.add(ctx.key)
   void (async () => {
     try {
-      const response = await invokeHandlerAsResponse(handler, handlerCtx)
-      const result = await tryCacheResponse(response, ctx)
-      if (!result) return
-      await ctx.engine.set(ctx.key, buildRouteCacheEntry(result, ctx))
+      await persistOutcome(ctx, await invokeHandlerAsResponse(handler, handlerCtx))
     } catch (err) {
       // The stale entry stays and the next stale hit retries. Reported once per route, so
       // a handler that keeps failing in the background is visible without flooding the log.
+      // The message names the method and path, never the key: the key carries the query
+      // string and every varied header value, an Authorization header among them (CWE-532).
       if (!revalidateFailureWarnedRoutes.has(ctx.routeConfig)) {
         revalidateFailureWarnedRoutes.add(ctx.routeConfig)
+        const { pathname } = new URL(ctx.webRequest.url)
         console.warn(
-          `[theokit:cache] background revalidation failed for key "${ctx.key}"; serving stale until it succeeds`,
+          `[theokit:cache] background revalidation failed for ${ctx.webRequest.method} ${pathname}; serving stale until it succeeds`,
           err,
         )
       }
