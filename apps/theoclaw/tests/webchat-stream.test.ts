@@ -7,7 +7,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createContainer } from "../src/composition.js";
 import { createTurnRunner, type TurnAgent, type TurnRun } from "../src/control-plane/turn.js";
 import { createWebchatRun } from "../src/webchat/create-run.js";
-import { createWebchatRoutes } from "../src/webchat/routes.js";
+import { TheoClawConfigError } from "../src/control-plane/errors.js";
+import { createWebchatRoutes, MAX_CHAT_BODY_BYTES } from "../src/webchat/routes.js";
 
 const TOKEN = "w".repeat(40);
 const ASSETS = mkdtempSync(join(tmpdir(), "theoclaw-webchat-stream-"));
@@ -155,6 +156,65 @@ describe("POST /webchat/chat", () => {
     const deltas = chunksOfType(frames, "text-delta").map((chunk) => chunk.delta);
     expect(deltas.join("")).toBe("hello from the agent");
     expect(frames.at(-1)).toBe("[DONE]");
+  });
+
+  // LCR0121: the routes own the gate, so they refuse a token below the bearer minimum themselves.
+  it("refuses a token shorter than 32 characters with a config error naming THEOCLAW_WEBCHAT_TOKEN", () => {
+    const stub = stubRunner({ messages: () => [text("never")] });
+    const build = () => createWebchatRoutes({ token: "short", runTurn: stub.runTurn, assetsDir: ASSETS });
+
+    expect(build).toThrow(TheoClawConfigError);
+    expect(build).toThrow(/THEOCLAW_WEBCHAT_TOKEN must be at least 32 characters/);
+  });
+
+  // F-dom-4: /control caps a frame at 64 KiB; the chat post is bounded the same way.
+  it("answers 413 to a body over the chat bound and builds 0 agents", async () => {
+    const stub = stubRunner({ messages: () => [text("never")] });
+    const handle = createWebchatRoutes({ token: TOKEN, runTurn: stub.runTurn, assetsDir: ASSETS });
+
+    const response = await handle(chatRequest({ message: "x".repeat(MAX_CHAT_BODY_BYTES) }));
+
+    expect(response.status).toBe(413);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(stub.calls.built).toBe(0);
+  });
+
+  it("streams a body of exactly the chat bound", async () => {
+    const stub = stubRunner({ messages: () => [text("at the bound")] });
+    const handle = createWebchatRoutes({ token: TOKEN, runTurn: stub.runTurn, assetsDir: ASSETS });
+    const padding = MAX_CHAT_BODY_BYTES - JSON.stringify({ message: "" }).length;
+
+    const response = await handle(chatRequest({ message: "y".repeat(padding) }));
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain("at the bound");
+  });
+
+  it("ends a turn whose runner rejects with one turn_failed error chunk, then the terminal frame", async () => {
+    const runTurn = async (): Promise<never> => {
+      throw new Error("the runner broke");
+    };
+    const handle = createWebchatRoutes({ token: TOKEN, runTurn, assetsDir: ASSETS });
+
+    const body = await (await handle(chatRequest({ message: "hi" }))).text();
+
+    const frames = dataFrames(body);
+    expect(chunksOfType(frames, "error")).toHaveLength(1);
+    expect(body).toContain("turn_failed");
+    expect(frames.at(-1)).toBe("[DONE]");
+  });
+
+  it("streams no reply text for a request whose signal was already aborted", async () => {
+    const stub = stubRunner({ messages: () => [text("should not stream")] });
+    const handle = createWebchatRoutes({ token: TOKEN, runTurn: stub.runTurn, assetsDir: ASSETS });
+    const left = new AbortController();
+    left.abort();
+    const request = new Request(chatRequest({ message: "hi" }), { signal: left.signal });
+
+    const body = await (await handle(request)).text();
+
+    expect(chunksOfType(dataFrames(body), "text-delta")).toHaveLength(0);
+    expect(body).not.toContain("should not stream");
   });
 
   it("answers 400 to a body without message and builds 0 agents", async () => {
