@@ -71,6 +71,8 @@ export class SessionAgents {
   #stopping = false
   /** Each stop in progress, woken when the last turn in flight ends. */
   readonly #releaseWaiters: (() => void)[] = []
+  /** Per session key, the reset still moving its generation; a lease of the key waits for it. */
+  readonly #resetting = new Map<string, Promise<unknown>>()
 
   constructor(private readonly deps: SessionAgentsDeps) {
     this.#sweep = setInterval(() => this.#disposeIdle(), SWEEP_INTERVAL_MS)
@@ -80,14 +82,22 @@ export class SessionAgents {
 
   /** The agent of the event's session, held for one turn until `release()`. */
   async lease(event: MessageEvent): Promise<SessionLease> {
-    if (this.#stopping) throw new Error('theoclaw is stopping: no new chat turn starts')
+    this.#refuseIfStopping()
     const key = this.deps.router.resolveAgentId(event)
+    // A message sent right after `/new` runs on the generation the reset moves to, not the old one.
+    const resetting = this.#resetting.get(key)
+    if (resetting !== undefined) {
+      await resetting
+      this.#refuseIfStopping()
+    }
     let id = agentIdFor(key, this.deps.generations.current(key))
     let found = this.#entries.get(id)
     // A session whose agent is being disposed resumes only once the dispose has settled (EC-1);
     // the id is read again after it, since a reset may have moved the session meanwhile.
     while (found?.disposing !== undefined) {
       await found.disposing
+      // A stop that began meanwhile has already listed the agents it disposes: open none after it.
+      this.#refuseIfStopping()
       id = agentIdFor(key, this.deps.generations.current(key))
       found = this.#entries.get(id)
     }
@@ -115,6 +125,10 @@ export class SessionAgents {
         this.#wakeIfAllReleased()
       },
     }
+  }
+
+  #refuseIfStopping(): void {
+    if (this.#stopping) throw new Error('theoclaw is stopping: no new chat turn starts')
   }
 
   #resolve(id: string, key: string, event: MessageEvent): Entry {
@@ -152,8 +166,15 @@ export class SessionAgents {
   async reset(event: MessageEvent): Promise<void> {
     const key = this.deps.router.resolveAgentId(event)
     // The generation this reset left, read from the move itself, so two overlapping resets retire
-    // the two generations they each left.
-    const generation = await this.deps.generations.next(key)
+    // the two generations they each left. The move is marked before its first await, so a lease of
+    // the key that starts meanwhile waits for it (a failed move leaves the generation as it was).
+    const moving = this.deps.generations.next(key)
+    const settled = moving.catch(() => undefined)
+    this.#resetting.set(key, settled)
+    void settled.then(() => {
+      if (this.#resetting.get(key) === settled) this.#resetting.delete(key)
+    })
+    const generation = await moving
     const id = agentIdFor(key, generation - 1)
     const entry = this.#entries.get(id)
     if (entry === undefined) return
