@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
 import { createServer } from 'node:http'
 import type { Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
@@ -85,6 +85,22 @@ async function waitForGone(path: string, pids: ReadonlySet<number>): Promise<voi
   }
 }
 
+/** The wrapper's working directories (browser-proxy.mjs) present under the system temp directory now. */
+function wrapperDirs(): Set<string> {
+  return new Set(readdirSync(tmpdir()).filter((name) => name.startsWith('theoclaw-browser-') && !name.startsWith('theoclaw-browser-live-')))
+}
+
+/** Wait until none of `dirs` exists under the temp directory, or fail naming the ones left. */
+async function waitForRemoved(dirs: ReadonlySet<string>): Promise<void> {
+  const deadline = Date.now() + DISPOSE_DEADLINE_MS
+  for (;;) {
+    const left = [...dirs].filter((name) => existsSync(join(tmpdir(), name)))
+    if (left.length === 0) return
+    if (Date.now() > deadline) throw new Error(`browser server directory still present ${DISPOSE_DEADLINE_MS} ms after dispose: ${left.join(' ')}`)
+    await new Promise((resolve) => setTimeout(resolve, 100))
+  }
+}
+
 describe.skipIf(!LIVE)('the browser against a real model', () => {
   it('a real model reads a value a page renders with JavaScript for OC-60', { timeout: 180_000 }, async () => {
     const value = `tok-${randomBytes(6).toString('hex')}`
@@ -121,7 +137,7 @@ describe.skipIf(!LIVE)('the browser against a real model', () => {
     expect(answer).toContain(value)
   })
 
-  it('leaves no browser server running after the agent is disposed', { timeout: 180_000 }, async () => {
+  it('leaves no browser server or its directory behind after the agent is disposed', { timeout: 180_000 }, async () => {
     const page = await renderedPage(`tok-${randomBytes(6).toString('hex')}`)
     const workspace = mkdtempSync(join(tmpdir(), 'theoclaw-browser-live-'))
     cleanups.push(() => rmSync(workspace, { recursive: true, force: true }))
@@ -131,18 +147,24 @@ describe.skipIf(!LIVE)('the browser against a real model', () => {
 
     const { model, apiKey } = liveModel()
     const before = serverPids(cliPath as string)
+    const dirsBefore = wrapperDirs()
     const agent = await createTheoClawAgent(theoClawAgentOptions({ model, apiKey, toolOptions: agentToolOptions(settings) }))
     let own = new Set<number>()
+    let ownDirs = new Set<string>()
     try {
       // The server is spawned by the first browser call, not by `create`, so the case runs a turn.
       const run = await agent.send(`Open ${page.url} in the browser and tell me the text of the element with id v.`)
       await run.wait()
       own = new Set([...serverPids(cliPath as string)].filter((pid) => !before.has(pid)))
       expect(own.size, 'this agent started a browser server before dispose').toBeGreaterThan(0)
+      ownDirs = new Set([...wrapperDirs()].filter((name) => !dirsBefore.has(name)))
+      expect(ownDirs.size, 'the wrapper made its working directory before dispose').toBeGreaterThan(0)
     } finally {
       await agent[Symbol.asyncDispose]()
     }
-    // EC-1: a disposed agent leaves no browser server of its own running.
+    // EC-1: a disposed agent leaves no browser server of its own running, and the wrapper removed the
+    // directory the server wrote its output in (the README's claim on the dispose path; review round 2).
     await waitForGone(cliPath as string, own)
+    await waitForRemoved(ownDirs)
   })
 })
