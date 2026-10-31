@@ -21,7 +21,10 @@ export interface RouterOptions {
   readonly triggers?: ReadonlyMap<string, WebhookRoute>
 }
 
-/** The largest webhook body the router reads: 1 MiB, far above any provider's message (EC-1). */
+/**
+ * The largest webhook body the router reads: 1 MiB, far above any provider's message (EC-1). A
+ * webhook policy of its own, equal today to the bridge's `MAX_REQUEST_BODY_BYTES` for the API.
+ */
 export const MAX_BODY_BYTES = 1_048_576
 
 function describeError(error: unknown): string {

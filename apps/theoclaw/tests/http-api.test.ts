@@ -15,7 +15,7 @@ import type { ToolSettings } from '../src/tools/tool-settings.js'
 import { assistant, FakeAgent, finished } from './fakes.js'
 import { makeHostToolsWorkspace } from './host-tools-workspace.js'
 import { startModelStub } from './model-stub.js'
-import { CONTROL_TOKEN, startForTools, stop, type ToolStart } from './tool-start-fixtures.js'
+import { CONTROL_TOKEN, runControlTurn, startForTools, stop, type ToolStart } from './tool-start-fixtures.js'
 
 const enforced = () => ({ ok: true as const, bin: '/usr/bin/bwrap' })
 const quiet = { warn: () => undefined }
@@ -50,6 +50,7 @@ async function startApi(options: {
   readonly hostTools?: boolean
   readonly token?: string | undefined
   readonly agentFactory?: (toolOptions: AgentToolOptions) => unknown
+  readonly draftAgentFactory?: () => unknown
 }): Promise<ToolStart & { readonly workspace: string; readonly base: string }> {
   const handle = makeHostToolsWorkspace()
   cleanups.push(() => handle.remove())
@@ -58,7 +59,10 @@ async function startApi(options: {
     THEOCLAW_CONTROL_TOKEN: 'token' in options ? options.token : CONTROL_TOKEN,
     ...(options.hostTools === true ? { THEOCLAW_HOST_TOOLS: 'on' } : {}),
   }
-  const extra = options.agentFactory === undefined ? {} : { agentFactory: options.agentFactory as never }
+  const extra = {
+    ...(options.agentFactory === undefined ? {} : { agentFactory: options.agentFactory as never }),
+    ...(options.draftAgentFactory === undefined ? {} : { draftAgentFactory: options.draftAgentFactory as never }),
+  }
   const start = await startForTools(env, handle.path, { detect: enforced }, extra)
   const app = start.app as RunningTheoClaw | undefined
   if (app === undefined) throw new Error(`the start refused: ${start.error?.message ?? 'unknown'}`)
@@ -112,11 +116,19 @@ describe('createTheoClawApi, the token gate', () => {
   })
 
   it('answers 401 with a wrong bearer token', async () => {
-    const response = await gate({ count: 0 })(
-      new Request('http://127.0.0.1/v1/models', { headers: { authorization: `Bearer ${'x'.repeat(40)}` } }),
-    )
+    const api = gate({ count: 0 })
+    const authorization = `Bearer ${'x'.repeat(40)}`
 
-    expect(response?.status).toBe(401)
+    for (const path of API_PATHS) {
+      const response = await api(new Request(`http://127.0.0.1${path}`, { method: 'POST', headers: { authorization }, body: '{}' }))
+      expect(response?.status, path).toBe(401)
+    }
+  })
+
+  it('answers the 401 of the tool route with ok false, as every other tool route answer', async () => {
+    const response = await gate({ count: 0 })(new Request('http://127.0.0.1/tools/invoke', { method: 'POST', body: '{}' }))
+
+    expect(((await response?.json()) as Record<string, unknown>).ok).toBe(false)
   })
 
   it('answers 401 without reading the request body', async () => {
@@ -218,22 +230,45 @@ describe('the API in the started process', () => {
   })
 
   it.each([false, true])('exposes exactly the control tool set over HTTP (host tools %s)', async (hostTools) => {
-    const start = await startApi({ hostTools })
-    const names = agentToolOptions(toolSettings(hostTools)).tools.map((tool) => tool.name)
+    const draftAgentFactory = () => new FakeAgent({ frames: [finished()] })
+    const start = await startApi({ hostTools, draftAgentFactory })
+    // The tools a `/control` turn's agent was actually built with, workflow tools included.
+    const names = (await runControlTurn(start)).tools.map((tool) => tool.name)
+    expect(names).toContain('digest')
+    expect(names).toEqual(expect.arrayContaining(agentToolOptions(toolSettings(hostTools)).tools.map((tool) => tool.name)))
 
     for (const name of names) expect((await invoke(start.base, name, {})).status, name).not.toBe(404)
-    if (!hostTools) for (const name of HOST_TOOLS) expect((await invoke(start.base, name, {})).status, name).toBe(404)
+    for (const name of [...HOST_TOOLS, 'shell', 'git_diff', 'memory_search'].filter((other) => !names.includes(other))) {
+      expect((await invoke(start.base, name, {})).status, name).toBe(404)
+    }
+  })
+
+  it('serves chat completions from an agent that holds no tool (B-382)', async () => {
+    const built: AgentToolOptions[] = []
+    const { base } = await startApi({
+      hostTools: true,
+      agentFactory: (toolOptions) => {
+        built.push(toolOptions)
+        return new FakeAgent({ frames: [assistant('hi'), finished()] })
+      },
+    })
+    const client = new OpenAI({ baseURL: `${base}/v1`, apiKey: CONTROL_TOKEN })
+
+    await client.chat.completions.create({ model: 'test-model', messages: [{ role: 'user', content: 'x' }] })
+
+    expect(built).toHaveLength(1)
+    expect(built[0]?.tools).toHaveLength(0)
   })
 
   it('refuses a path into the state directory with 403', async () => {
     const { base, workspace } = await startApi({})
-    writeFileSync(join(workspace, '.theoclaw', 'x'), 'state')
+    writeFileSync(join(workspace, '.theoclaw', 'x'), 'state-file-marker')
 
     const { status, body } = await invoke(base, 'read_file', { path: '../.theoclaw/x' })
 
     expect(status).toBe(403)
     expect(errorType(body)).toBe('refused')
-    expect(JSON.stringify(body)).not.toContain('state')
+    expect(JSON.stringify(body)).not.toContain('state-file-marker')
   })
 
   it('refuses a symlink into the state directory with 403', async () => {

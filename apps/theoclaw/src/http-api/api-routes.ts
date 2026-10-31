@@ -10,6 +10,7 @@ import {
 import { z } from 'zod'
 
 import { bearerCheck } from '../control-plane/bearer.js'
+import type { PartialHandler } from '../control-plane/serve.js'
 import { runTheoClawTurn, type TurnEvent, type WithAgent } from '../control-plane/turn.js'
 import { vetoToolCall } from '../tools/path-veto.js'
 import { agentToolOptions } from '../tools/tool-registry.js'
@@ -20,7 +21,7 @@ export interface TheoClawApiOptions {
   readonly token: string
   /** `THEOCLAW_MODEL`, the one model `/v1/models` lists and a chat request may name. */
   readonly model: string
-  /** Builds the agent of one chat completion, as the `/control` container does. */
+  /** Builds the agent of one chat completion: a chat surface, so one that holds no tool (B-382). */
   readonly withAgent: WithAgent
   /** The one setting both the tool list and the path veto are derived from, so they cannot disagree. */
   readonly toolSettings: ToolSettings
@@ -33,7 +34,8 @@ const API_PATHS: ReadonlySet<string> = new Set(['/v1/models', '/v1/chat/completi
 
 function unauthorized(): Response {
   return Response.json(
-    { error: { type: 'unauthorized', message: 'a bearer token is required' } },
+    // `ok: false` too, so the tool route's 401 has the shape of its every other answer.
+    { ok: false, error: { type: 'unauthorized', message: 'a bearer token is required' } },
     { status: 401, headers: { 'www-authenticate': 'Bearer' } },
   )
 }
@@ -78,7 +80,7 @@ function completeWith(options: TheoClawApiOptions): (request: OpenAIChatRequest)
  * todolist is never shared between two callers; the path veto the plugin applies (D2); the schema
  * check (D4).
  */
-function toolRouteFor(options: TheoClawApiOptions): (request: Request) => Promise<Response | undefined> {
+function toolRouteFor(options: TheoClawApiOptions): PartialHandler {
   const settings = options.toolSettings
   return createToolInvokeRoute({
     tools: agentToolOptions(settings, options.extraTools).tools,
@@ -93,7 +95,7 @@ function toolRouteFor(options: TheoClawApiOptions): (request: Request) => Promis
  * token, checked before the body is read and before any agent exists (401 otherwise); any other
  * path answers `undefined`, so the listener tries its next handler.
  */
-export function createTheoClawApi(options: TheoClawApiOptions): (request: Request) => Promise<Response | undefined> {
+export function createTheoClawApi(options: TheoClawApiOptions): PartialHandler {
   const accepts = bearerCheck(options.token)
   const openai = createOpenAICompatibleRoutes({ models: [options.model], complete: completeWith(options) })
   return async (request) => {
@@ -105,6 +107,6 @@ export function createTheoClawApi(options: TheoClawApiOptions): (request: Reques
 }
 
 /** The API while `THEOCLAW_CONTROL_TOKEN` is set, or `undefined` (its paths then answer 404). */
-export function theoClawApiFor(token: string | undefined, options: Omit<TheoClawApiOptions, 'token'>) {
+export function theoClawApiFor(token: string | undefined, options: Omit<TheoClawApiOptions, 'token'>): PartialHandler | undefined {
   return token === undefined ? undefined : createTheoClawApi({ ...options, token })
 }
