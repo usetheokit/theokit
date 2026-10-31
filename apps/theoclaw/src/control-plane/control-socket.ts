@@ -6,6 +6,7 @@ import { WebSocket, WebSocketServer } from 'ws'
 import { bearerCheck, MIN_BEARER_TOKEN_LENGTH } from './bearer.js'
 import type { ControlSessions, SessionOutcome } from './control-sessions.js'
 import { describeError, TheoClawConfigError } from './errors.js'
+import { MAX_MESSAGE_BYTES } from './limits.js'
 import type { TurnRunner } from './turn.js'
 
 export interface ControlSocketOptions {
@@ -25,7 +26,6 @@ export interface ControlSocket {
 }
 
 const CONTROL_PATH = '/control'
-const MAX_FRAME_BYTES = 65_536
 
 type Refuse = (socket: Duplex, status: '401 Unauthorized' | '404 Not Found') => void
 
@@ -166,7 +166,7 @@ export function attachControlSocket(
     })
   }
   const tokenMatches = bearerCheck(options.token)
-  const wss = new WebSocketServer({ noServer: true, maxPayload: MAX_FRAME_BYTES })
+  const wss = new WebSocketServer({ noServer: true, maxPayload: MAX_MESSAGE_BYTES })
   server.on('upgrade', (request: IncomingMessage, socket: Duplex, head: Buffer) => {
     if (pathOf(request) !== CONTROL_PATH) return refuse(socket, '404 Not Found')
     if (!tokenMatches(request.headers.authorization)) return refuse(socket, '401 Unauthorized')

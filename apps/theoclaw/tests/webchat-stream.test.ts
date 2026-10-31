@@ -8,7 +8,8 @@ import { createContainer } from "../src/composition.js";
 import { createTurnRunner, type TurnAgent, type TurnRun } from "../src/control-plane/turn.js";
 import { createWebchatRun } from "../src/webchat/create-run.js";
 import { TheoClawConfigError } from "../src/control-plane/errors.js";
-import { createWebchatRoutes, MAX_CHAT_BODY_BYTES } from "../src/webchat/routes.js";
+import { MAX_MESSAGE_BYTES } from "../src/control-plane/limits.js";
+import { createWebchatRoutes } from "../src/webchat/routes.js";
 
 const TOKEN = "w".repeat(40);
 const ASSETS = mkdtempSync(join(tmpdir(), "theoclaw-webchat-stream-"));
@@ -168,12 +169,60 @@ describe("POST /webchat/chat", () => {
     expect(build).toThrow(/THEOCLAW_WEBCHAT_TOKEN must be at least 32 characters/);
   });
 
+  // F-tests-11: the edge and the first negative case at the same boundary.
+  it("refuses a token of 31 characters", () => {
+    const stub = stubRunner({ messages: () => [text("never")] });
+
+    expect(() => createWebchatRoutes({ token: "a".repeat(31), runTurn: stub.runTurn, assetsDir: ASSETS })).toThrow(
+      TheoClawConfigError,
+    );
+  });
+
+  it("accepts a token of exactly 32 characters", async () => {
+    const stub = stubRunner({ messages: () => [text("at the minimum")] });
+    const token = "a".repeat(32);
+    const handle = createWebchatRoutes({ token, runTurn: stub.runTurn, assetsDir: ASSETS });
+
+    const response = await handle(chatRequest({ message: "hi" }, token));
+
+    expect(response.status).toBe(200);
+  });
+
+  // F-tests-12: the bound is read from the stream, so a chunked post whose content-length
+  // claims fewer bytes than it sends is still refused.
+  it("answers 413 to a streamed body past the bound whose content-length claims less", async () => {
+    const stub = stubRunner({ messages: () => [text("never")] });
+    const handle = createWebchatRoutes({ token: TOKEN, runTurn: stub.runTurn, assetsDir: ASSETS });
+    const chunk = new Uint8Array(16_384).fill(0x78);
+    let sent = 0;
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (sent > MAX_MESSAGE_BYTES) controller.close();
+        else {
+          controller.enqueue(chunk);
+          sent += chunk.byteLength;
+        }
+      },
+    });
+    const request = new Request("http://127.0.0.1/webchat/chat", {
+      method: "POST",
+      headers: { authorization: `Bearer ${TOKEN}`, "content-type": "application/json", "content-length": "20" },
+      body,
+      duplex: "half",
+    } as RequestInit);
+
+    const response = await handle(request);
+
+    expect(response.status).toBe(413);
+    expect(stub.calls.built).toBe(0);
+  });
+
   // F-dom-4: /control caps a frame at 64 KiB; the chat post is bounded the same way.
   it("answers 413 to a body over the chat bound and builds 0 agents", async () => {
     const stub = stubRunner({ messages: () => [text("never")] });
     const handle = createWebchatRoutes({ token: TOKEN, runTurn: stub.runTurn, assetsDir: ASSETS });
 
-    const response = await handle(chatRequest({ message: "x".repeat(MAX_CHAT_BODY_BYTES) }));
+    const response = await handle(chatRequest({ message: "x".repeat(MAX_MESSAGE_BYTES) }));
 
     expect(response.status).toBe(413);
     expect(response.headers.get("cache-control")).toBe("no-store");
@@ -232,7 +281,7 @@ describe("POST /webchat/chat", () => {
   it("streams a body of exactly the chat bound", async () => {
     const stub = stubRunner({ messages: () => [text("at the bound")] });
     const handle = createWebchatRoutes({ token: TOKEN, runTurn: stub.runTurn, assetsDir: ASSETS });
-    const padding = MAX_CHAT_BODY_BYTES - JSON.stringify({ message: "" }).length;
+    const padding = MAX_MESSAGE_BYTES - JSON.stringify({ message: "" }).length;
 
     const response = await handle(chatRequest({ message: "y".repeat(padding) }));
 
