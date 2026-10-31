@@ -459,7 +459,7 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
   const { withAgent } = createContainer<TurnAgent>({ factory: buildControlAgent })
   composedApp = composed
   // A chat completion is a chat surface: its agent holds no tool (B-382); `/tools/invoke` gets the `/control` set.
-  const api = theoClawApiFor(settings.controlToken, { model: settings.model, withAgent: createContainer<TurnAgent>({ factory: () => options.agentFactory(NO_TOOL_OPTIONS) }).withAgent, toolSettings: tools, extraTools, stderr })
+  const api = theoClawApiFor(settings.controlToken, { model: settings.model, withAgent: createContainer<TurnAgent>({ factory: () => options.agentFactory(NO_TOOL_OPTIONS) }).withAgent, toolSettings: tools, controlTools: () => controlAgentToolOptions(tools, options.agentFactory, extraTools).tools, stderr })
   const listen = options.listen ?? listenControlPlane
   serving = listen({
     handler: serveHandler(composed.router, startWebchat(options, settings.webchatToken), api),

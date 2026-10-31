@@ -99,6 +99,7 @@ describe('createTheoClawApi, the token gate', () => {
         throw new Error('no agent in the gate tests')
       },
       toolSettings: toolSettings(false),
+      controlTools: () => agentToolOptions(toolSettings(false)).tools,
       stderr: () => undefined,
     })
   }

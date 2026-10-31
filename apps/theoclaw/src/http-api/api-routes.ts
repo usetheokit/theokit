@@ -13,7 +13,6 @@ import { bearerCheck } from '../control-plane/bearer.js'
 import type { PartialHandler } from '../control-plane/serve.js'
 import { runTheoClawTurn, type TurnEvent, type WithAgent } from '../control-plane/turn.js'
 import { vetoToolCall } from '../tools/path-veto.js'
-import { agentToolOptions } from '../tools/tool-registry.js'
 import type { ToolSettings } from '../tools/tool-settings.js'
 
 export interface TheoClawApiOptions {
@@ -25,8 +24,11 @@ export interface TheoClawApiOptions {
   readonly withAgent: WithAgent
   /** The one setting both the tool list and the path veto are derived from, so they cannot disagree. */
   readonly toolSettings: ToolSettings
-  /** The tools the `/control` agents get beside the builtins (the workflow tools), so the HTTP set is theirs. */
-  readonly extraTools?: readonly CustomTool[]
+  /**
+   * A fresh copy of the tools a `/control` agent holds (`controlAgentToolOptions(...).tools`, so
+   * `run_code` and `delegate_all` too), built per request so the HTTP set is theirs by construction.
+   */
+  readonly controlTools: () => readonly CustomTool[]
   readonly stderr: (line: string) => void
 }
 
@@ -76,14 +78,14 @@ function completeWith(options: TheoClawApiOptions): (request: OpenAIChatRequest)
 }
 
 /**
- * The tool route of one request (plan D5): a fresh tool list, as each `/control` agent gets, so a
+ * The tool route of one request (plan D5): a fresh `/control` tool list, as each `/control` agent gets, so a
  * todolist is never shared between two callers; the path veto the plugin applies (D2); the schema
  * check (D4).
  */
 function toolRouteFor(options: TheoClawApiOptions): PartialHandler {
   const settings = options.toolSettings
   return createToolInvokeRoute({
-    tools: agentToolOptions(settings, options.extraTools).tools,
+    tools: options.controlTools(),
     veto: (name, args) => vetoToolCall(name, args, settings),
     validate: validateToolArgs,
   })
