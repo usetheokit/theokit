@@ -51,4 +51,12 @@ describe('the CHANGELOG', () => {
     expect(section).toContain('BRAVE_API_KEY')
     expect(section).toContain('read every file')
   })
+
+  it('announces the digest workflow tool (B-387)', () => {
+    const section = unreleased()
+
+    expect(section).toContain('B-387')
+    expect(section).toContain('`digest`')
+    expect(section).toContain('/control')
+  })
 })

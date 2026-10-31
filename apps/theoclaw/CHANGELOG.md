@@ -13,6 +13,13 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- The `digest` tool of the `/control` agent (B-387, OC-66): a typed two-step workflow from
+  `@theokit/sdk/workflow`, where a draft step on a fresh agent with no tool, no `shell` and memory off
+  lists the key points of a text, and a second step checks them as `{ points }` (1 to 10). Each call
+  writes one line, `theoclaw-workflow: digest <run id> <status> <completed>/2 steps`, without the
+  text; a run that does not complete reaches the model as a tool error. Chat-reply agents hold no
+  tool. The JSON-only `llm-task` step and resumable approvals are not in this release (B-677, B-678,
+  B-679).
 - The `/control` agent's tools (B-382): `read_file`, `list_dir`, `view_image`, `web_fetch` and
   `todolist` always, all from `@theokit/agents/tools` and bound to `files/` under the working
   directory; `web_search` with `BRAVE_API_KEY` (or `THEOKIT_SEARCH_API_URL` with

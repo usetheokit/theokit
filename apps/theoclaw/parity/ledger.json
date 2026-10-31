@@ -64,7 +64,7 @@
   {"id":"OC-63","status":"open"},
   {"id":"OC-64","status":"open"},
   {"id":"OC-65","status":"open"},
-  {"id":"OC-66","status":"open"},
+  {"id":"OC-66","status":"shipped","gaps":["B-677","B-678","B-679"],"check":{"path":"apps/theoclaw/tests/live/workflows.live.test.ts","test":"a real model runs the two-step digest workflow for OC-66"},"verified_on":"2026-10-31","note":"the check covers the typed pipeline: the committed two-step digest workflow (an agent step that drafts, then a step whose output schema types the points), run from a /control turn through the digest tool on a fresh tool-less draft agent per call; the JSON-only llm-task step waits on B-678 (generateObject cannot withhold the shell or turn memory off) and resumable approvals on B-677 (a suspended run cannot reach the model with its run id), both adopted by B-679; only the /control agent holds the tool, and chat-reply agents hold none"},
   {"id":"OC-67","status":"open"},
   {"id":"OC-68","status":"open"},
   {"id":"OC-69","status":"shipped","gaps":["B-593","B-594","B-595"],"check":{"path":"apps/theoclaw/tests/live/tools.live.test.ts","test":"a real model shows the diff of a file changed in a tool root that is a repository"},"verified_on":"2026-10-26","note":"the diff viewer is git_diff; output compaction is the published tools' truncateOutput and the nearest workboard is the todolist (a session todo list, not a board); document extraction B-593, GitHub link preview B-594, screenshot logbook B-595; the tools reach only the /control agent, and chat-reply agents hold none"},
