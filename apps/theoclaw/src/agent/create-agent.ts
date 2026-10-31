@@ -1,5 +1,5 @@
 import { Agent } from '@theokit/sdk'
-import type { CustomTool, ModelSelection, Plugin, SDKAgent } from '@theokit/sdk'
+import type { CustomTool, McpServerConfig, ModelSelection, Plugin, SDKAgent } from '@theokit/sdk'
 
 import type { AgentToolOptions } from '../tools/tool-registry.js'
 
@@ -14,6 +14,8 @@ export interface TheoClawAgentOptions<Model extends string | ModelSelection = st
   readonly memory: { readonly enabled: false }
   readonly tools?: CustomTool[]
   readonly plugins?: Plugin[]
+  /** The browser server of a `/control` agent with `THEOCLAW_BROWSER=on`; never on a chat agent. */
+  readonly mcpServers?: Record<string, McpServerConfig>
 }
 
 export interface TheoClawAgentInput<Model extends string | ModelSelection> {
@@ -38,7 +40,13 @@ export function theoClawAgentOptions<Model extends string | ModelSelection>(
   }
   if (input.toolOptions === undefined) return base
   // Copied: the SDK takes mutable arrays, and each agent gets its own.
-  return { ...base, tools: [...input.toolOptions.tools], plugins: [...input.toolOptions.plugins] }
+  const { tools, plugins, mcpServers } = input.toolOptions
+  return {
+    ...base,
+    tools: [...tools],
+    plugins: [...plugins],
+    ...(mcpServers === undefined ? {} : { mcpServers: { ...mcpServers } }),
+  }
 }
 
 /** Create the agent those options describe, through the SDK. */
@@ -52,5 +60,6 @@ export function createTheoClawAgent<Model extends string | ModelSelection>(
     memory: options.memory,
     ...(options.tools === undefined ? {} : { tools: options.tools }),
     ...(options.plugins === undefined ? {} : { plugins: options.plugins }),
+    ...(options.mcpServers === undefined ? {} : { mcpServers: options.mcpServers }),
   })
 }

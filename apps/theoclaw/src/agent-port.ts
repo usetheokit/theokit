@@ -12,7 +12,20 @@
  * session down, and every turn would leak its agent session.
  */
 export interface TurnAgent {
-  send(text: string): Promise<TurnRun>
+  /**
+   * Start one run. `signal` stops the model work of that run: the SDK composes it into its dispatch
+   * signal, where `run.cancel()` alone only moves the local run's status (B-376, plan D2).
+   */
+  send(text: string, options?: { readonly signal?: AbortSignal }): Promise<TurnRun>
+}
+
+/**
+ * One event of the run's timeline (`run.events()`), narrowed to its kind. Typed narrowly for the
+ * same reason as the stream element: the bridge's `SdkTimelineEvent` carries `SdkMessage`, whose
+ * index signature the SDK's own event type does not declare.
+ */
+export interface TurnTimelineEvent {
+  readonly kind: 'message' | 'delta'
 }
 
 export interface TurnRun {
@@ -24,4 +37,6 @@ export interface TurnRun {
   wait(): Promise<{ readonly status: string; readonly result?: string; readonly error?: { readonly code?: string } }>
   /** Move the run to cancelled and stop its in-flight tool calls; the SDK `Run` always has it (plan D2). */
   cancel(): Promise<void>
+  /** Messages and live deltas in the order the loop produced them; what a session turn streams. */
+  events?(): AsyncIterable<TurnTimelineEvent>
 }

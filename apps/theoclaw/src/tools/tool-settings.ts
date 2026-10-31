@@ -6,6 +6,9 @@ import { createSandboxBackend, LinuxSandbox, resolveSandboxPosture, writableRoot
 import type { BwrapDetection, SandboxBackend, SandboxMode } from '@theokit/agents/sandbox'
 
 import { TheoClawConfigError } from '../control-plane/errors.js'
+import { readSandboxMode } from '../sandbox/sandbox-mode.js'
+import { browserLine, readBrowser } from './browser-server.js'
+import type { BrowserDeps, BrowserSettings } from './browser-server.js'
 import { isWithin, realPathOf, SymlinkLoopError } from './real-path.js'
 
 /** Where web search goes, chosen from the keys present at start. */
@@ -27,9 +30,14 @@ export interface ToolSettings {
   readonly sandboxEnforced: boolean
   /** Built once at start; every agent's tools share it (plan D3, revision 1.2). */
   readonly sandbox: SandboxBackend
+  /** The backend's mode, which the tools are bound with: `sandboxMode` with host tools on, else `read-only`. */
   readonly mode: SandboxMode
+  /** The mode the operator chose with `THEOCLAW_SANDBOX` (default `workspace-write`). */
+  readonly sandboxMode: SandboxMode
   readonly fetchImpl: typeof fetch
   readonly search: SearchSettings
+  /** The browser server's CLI with `THEOCLAW_BROWSER=on`; absent when the browser is off. */
+  readonly browser?: BrowserSettings
   /** Values the output mask must hide (the search keys). */
   readonly secrets: readonly string[]
   /** One line each for what is off, or what the start changed, written at start. */
@@ -42,6 +50,8 @@ export interface ToolDeps {
   readonly fetchImpl?: typeof fetch
   /** Where the sandbox fallback warning goes. Default: the SDK's (`console.warn`). */
   readonly warn?: (message: string) => void
+  /** The browser CLI resolver and browsers directory. Default: the installed package and Playwright's own. */
+  readonly browser?: BrowserDeps
 }
 
 type Env = Readonly<Record<string, string | undefined>>
@@ -118,6 +128,7 @@ function nonBlank(value: string | undefined): string | undefined {
 }
 
 const SEARCH_OFF_LINE = 'tools: web search is off (no BRAVE_API_KEY or THEOKIT_SEARCH_API_URL)'
+const SANDBOX_OFF_LINE = 'sandbox: off (danger-full-access), shell_exec runs unconfined'
 
 /**
  * Brave when `BRAVE_API_KEY` is set (it wins over the generic adapter); the generic adapter when
@@ -140,15 +151,19 @@ function readSearch(env: Env): SearchSettings {
 
 /**
  * Read the tool settings from the environment and the working directory, before any runner
- * starts. Throws `TheoClawConfigError` for a bad `THEOCLAW_HOST_TOOLS` or a bad tool root. Builds
- * the process's one sandbox backend: `read-only` with host tools off, `workspace-write` with them on.
+ * starts. Throws `TheoClawConfigError` for a bad `THEOCLAW_HOST_TOOLS`, a bad `THEOCLAW_SANDBOX` (with
+ * host tools off too), a bad tool root, or a `THEOCLAW_BROWSER=on` the host cannot run. Builds the
+ * process's one sandbox backend: `read-only` with host tools off, the mode `THEOCLAW_SANDBOX` chose
+ * with them on.
  */
 export function resolveToolSettings(env: Env, cwd: string, deps: ToolDeps = {}): ToolSettings {
   const hostTools = readHostTools(env)
+  const sandboxMode = readSandboxMode(env)
   const search = readSearch(env)
+  const browser = readBrowser(env, deps.browser)
   const workspace = realpathSync(cwd)
   const { toolRoot, lines } = prepareToolRoot(workspace)
-  const mode: SandboxMode = hostTools ? 'workspace-write' : 'read-only'
+  const mode: SandboxMode = hostTools ? sandboxMode : 'read-only'
   const sandbox = createSandboxBackend({
     mode,
     workDir: toolRoot,
@@ -163,6 +178,8 @@ export function resolveToolSettings(env: Env, cwd: string, deps: ToolDeps = {}):
     offLines.push(`tools: git_diff is off (sandbox not enforced: ${detail})`)
   }
   if (search.kind === 'off') offLines.push(SEARCH_OFF_LINE)
+  if (mode === 'danger-full-access') offLines.push(SANDBOX_OFF_LINE)
+  offLines.push(browserLine(browser))
   return {
     workspace,
     toolRoot,
@@ -171,8 +188,10 @@ export function resolveToolSettings(env: Env, cwd: string, deps: ToolDeps = {}):
     sandboxEnforced,
     sandbox,
     mode,
+    sandboxMode,
     fetchImpl: deps.fetchImpl ?? globalThis.fetch,
     search,
+    browser,
     // Every search key set, the unused one too: a key is a secret whether or not it is chosen.
     secrets: [env.BRAVE_API_KEY, env.THEOKIT_SEARCH_API_KEY].flatMap((value) => nonBlank(value) ?? []),
     offLines,
@@ -195,8 +214,9 @@ export interface ProtectedPath {
 }
 
 /**
- * With host tools on, refuse a start the sandbox cannot make safe: a backend that is not a
- * `LinuxSandbox` (the shell would run unconfined); a workspace inside a root the
+ * With host tools on, refuse a start the sandbox cannot make safe, unless the operator chose
+ * `danger-full-access`, where the shell is unconfined by choice and nothing below holds: a backend
+ * that is not a `LinuxSandbox` (the shell would run unconfined); a workspace inside a root the
  * `workspace-write` sandbox also leaves writable (`/tmp`), where the shell could rewrite
  * `.theokit/settings.json`, whose hooks the SDK runs outside the sandbox on the next agent; or any
  * of `protectedPaths` inside any root the shell can write, the tool root included. The caller names
@@ -207,13 +227,17 @@ export function checkHostToolsPosture(
   protectedPaths: readonly ProtectedPath[],
   deps: ToolDeps = {},
 ): void {
-  if (!settings.hostTools) return
+  if (!settings.hostTools || settings.sandboxMode === 'danger-full-access') return
   if (!settings.sandboxEnforced) {
-    const { detail } = resolveSandboxPosture({ mode: 'workspace-write', ...(deps.detect === undefined ? {} : { detect: deps.detect }) })
-    throw new TheoClawConfigError(`THEOCLAW_HOST_TOOLS=on needs an enforced sandbox: ${detail}`, {
-      variable: 'THEOCLAW_HOST_TOOLS',
-    })
+    const { sandboxMode } = settings
+    const { detail } = resolveSandboxPosture({ mode: sandboxMode, ...(deps.detect === undefined ? {} : { detect: deps.detect }) })
+    throw new TheoClawConfigError(
+      `THEOCLAW_HOST_TOOLS=on needs an enforced sandbox (THEOCLAW_SANDBOX=${sandboxMode}): ${detail}; set THEOCLAW_SANDBOX=danger-full-access to run the shell unconfined`,
+      { variable: 'THEOCLAW_SANDBOX' },
+    )
   }
+  // The `workspace-write` roots under `read-only` too: `read-only`'s are none, which would make the
+  // refusals below vacuous; `danger-full-access` returned above, its roots being every path.
   const roots = writableRootsFor('workspace-write', settings.toolRoot) ?? []
   for (const root of roots) {
     // The workspace is a real path, so the root is compared as one too: bwrap binds what a

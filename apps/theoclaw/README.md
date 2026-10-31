@@ -196,10 +196,12 @@ writes their prompt.
 | `read_file`, `list_dir`, `view_image`, `web_fetch`, `todolist` | always |
 | `web_search` | with `BRAVE_API_KEY`, or with both `THEOKIT_SEARCH_API_URL` and `THEOKIT_SEARCH_API_KEY` |
 | `git_diff` | when `files/` is itself a git repository and the sandbox is enforced |
-| `write_file`, `edit_file`, `apply_patch`, `shell_exec` | with `THEOCLAW_HOST_TOOLS=on` |
+| `shell_exec` | with `THEOCLAW_HOST_TOOLS=on` |
+| `write_file`, `edit_file`, `apply_patch` | with `THEOCLAW_HOST_TOOLS=on`, unless `THEOCLAW_SANDBOX=read-only` |
 
-`THEOCLAW_HOST_TOOLS` is `on` or unset; any other value is refused. With it on, the shell runs in a
-bubblewrap sandbox that can write only `files/` and `/tmp`, and the start refuses when bubblewrap
+`THEOCLAW_HOST_TOOLS` is `on` or unset; any other value is refused. With it on, under the default
+`THEOCLAW_SANDBOX=workspace-write` (the modes are below), the shell runs in a bubblewrap sandbox
+that can write only `files/` and `/tmp`, and the start refuses when bubblewrap
 is not available, when the working directory lies under `/tmp`, or when `THEOCLAW_STATE_DIR` lies
 under `files/` or `/tmp` (symlinks followed), where the shell could rewrite `pairing.json` and pair
 any sender. **The sandboxed shell can still
@@ -209,11 +211,85 @@ a `git_diff` with no path. The SDK's own unsandboxed `shell` is never offered. S
 masked in the output like every other credential. A start line says when web search is off, and
 when `git_diff` is off because the sandbox is not enforced.
 
+`THEOCLAW_SANDBOX` chooses the shell's sandbox when host tools are on (B-392). Any other value
+stops the start before any runner, with host tools off too.
+
+| Mode | The shell can write | The file-writing tools |
+|---|---|---|
+| `read-only` | nothing | not registered: they take no sandbox, so only leaving them out keeps the mode true |
+| `workspace-write` (default) | `files/` and `/tmp`, which the SDK keeps writable | registered |
+| `danger-full-access` | every path the process user can write: no sandbox | registered |
+
+Under `read-only` and `workspace-write` the start refuses when the sandbox is not enforced, naming
+`THEOCLAW_SANDBOX` and the reason, and keeps the `/tmp` and `THEOCLAW_STATE_DIR` refusals above.
+Under `danger-full-access` it starts without bubblewrap, under `/tmp` too, and prints
+`sandbox: off (danger-full-access), shell_exec runs unconfined`; `git_diff` stays off. With host
+tools off the shell is not registered and every mode keeps a read-only sandbox.
+
+The live check of the sandbox (`THEOCLAW_MODEL` set in the environment):
+
+```bash
+THEOCLAW_LIVE=1 pnpm --filter theoclaw exec vitest run tests/live/sandbox.live.test.ts
+```
+
 The live check of the tools:
 
 ```bash
 set -a; . ~/.config/theoclaw/dev.env; set +a
 THEOCLAW_LIVE=1 THEOCLAW_HOST_TOOLS=on pnpm --filter theoclaw exec vitest run tests/live/tools.live.test.ts
+```
+
+### The `/control` agent's browser
+
+With `THEOCLAW_BROWSER=on`, `/control` agents also get a headless Chromium through the pinned
+`@playwright/mcp` server, spawned over stdio with an isolated profile per session. Its tools reach
+the model as `mcp_browser_<tool>` (`mcp_browser_browser_navigate`, `mcp_browser_browser_snapshot`
+and the others the server lists), so the agent can read what a page renders with JavaScript, which
+`web_fetch` cannot. Chat agents never get it. The browser can open any URL the process can reach,
+loopback services included, which is why it is off unless set.
+
+| Variable | Meaning |
+|---|---|
+| `THEOCLAW_BROWSER` | `on` or unset; any other value is refused. With `on` the start refuses, naming the fix, when `@playwright/mcp` does not resolve or no Chromium build is in the browsers directory. |
+| `PLAYWRIGHT_BROWSERS_PATH` | Optional. Where Playwright keeps its browsers; default `~/.cache/ms-playwright`. `0` (browsers inside the package) is refused. |
+
+Install the Chromium build the server's own Playwright expects, once per host:
+
+```bash
+pnpm --filter theoclaw run browser:install
+```
+
+**Chromium also needs system libraries.** On a host without them the start still succeeds (it
+checks that the build is installed, not that it can run), and the first browser call returns a
+tool error naming the missing library, e.g. `libatk-1.0.so.0: cannot open shared object file`.
+With root, `sudo npx playwright install-deps chromium` installs them. Without root, unpack the
+distribution's packages into a directory of your own and point the loader at it; on Ubuntu 24.04
+the browser needed these:
+
+```bash
+mkdir -p ~/.cache/chromium-user-libs/debs && cd ~/.cache/chromium-user-libs/debs
+apt-get download libatk1.0-0t64 libatk-bridge2.0-0t64 libatspi2.0-0t64 libxcomposite1 libxdamage1 \
+  libxfixes3 libxrandr2 libxrender1 libxi6 libgbm1 libasound2t64 libcups2t64 libcairo2 \
+  libpango-1.0-0 libavahi-common3 libavahi-client3 libxcb-render0 libxcb-shm0 libpixman-1-0 \
+  libthai0 libdatrie1 libharfbuzz0b libgraphite2-3
+for deb in *.deb; do dpkg-deb -x "$deb" x; done
+cp -a x/usr/lib/x86_64-linux-gnu/. ~/.cache/chromium-user-libs/
+LD_LIBRARY_PATH=~/.cache/chromium-user-libs ldd ~/.cache/ms-playwright/chromium-*/chrome-linux64/chrome | grep 'not found'
+```
+
+The last line prints nothing when every library is found. Start TheoClaw, or run the live check,
+with `LD_LIBRARY_PATH=~/.cache/chromium-user-libs` set: the server inherits it and Chromium loads
+from it. The libraries are host state; the repository carries none of them.
+
+The live check of the browser needs a model that calls the server's tools by their advertised
+names: `openrouter/google/gemini-2.5-flash` does, while `gemini-2.5-flash-lite` drops the
+`mcp_browser_` prefix and gets `Unknown tool`.
+
+```bash
+set -a; . ~/.config/theoclaw/dev.env; set +a
+LD_LIBRARY_PATH=~/.cache/chromium-user-libs PLAYWRIGHT_BROWSERS_PATH=~/.cache/ms-playwright \
+  THEOCLAW_LIVE=1 THEOCLAW_MODEL=openrouter/google/gemini-2.5-flash \
+  pnpm --filter theoclaw exec vitest run tests/live/browser.live.test.ts
 ```
 
 The live check runs a real turn against the built entry:
@@ -238,7 +314,9 @@ pnpm --filter theoclaw start
 Open `http://127.0.0.1:<port>/webchat` and enter the token. The page keeps it in the tab's
 `sessionStorage` and sends it only in the `Authorization: Bearer` header, never in a URL. Each
 message runs one agent turn, streamed through `POST /webchat/chat`; a missing or wrong token answers
-401 before any agent is built. The page and its two assets carry no secret and are served without the
+401 before any agent is built, and a post over 64 KiB answers 413. WebChat keeps no conversation:
+each message reaches a fresh agent that has not seen the earlier ones, although the page shows them
+as one thread (channel chats keep theirs, B-378). The page and its two assets carry no secret and are served without the
 token. Closing the tab mid-answer cancels the turn. Without `build:web`,
 `GET /webchat` answers 503 and names the script. `build:web` writes `dist/web/assets/app.js` and
 `app.css`, and fails when the two exceed 3 MiB.

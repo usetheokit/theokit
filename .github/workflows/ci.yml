@@ -601,6 +601,17 @@ jobs:
           name: package-dist
           path: packages
 
+      # B-392: the sandbox-confinement tests run TheoClaw's shell through a real bubblewrap and fail,
+      # never skip, without one. The same step as the `test` job's (see its comment there for the
+      # Ubuntu 24.04 AppArmor sysctl); the smoke check fails the step while user namespaces stay blocked.
+      # Its own 1-minute bound, like the audit step's, so a slow mirror times out this named step and
+      # the job's 3 minutes are not spent waiting on apt.
+      - name: Install bubblewrap + enable unprivileged userns (sandbox-confinement tests)
+        timeout-minutes: 1
+        run: |
+          sudo apt-get update && sudo apt-get install -y bubblewrap
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+          bwrap --unshare-user --unshare-net --ro-bind / / /bin/true && echo "bwrap OK: user namespaces enabled"
       # The three gates this package declares, each as its own step so a red run names which one
       # failed rather than reporting "the job failed". They were verified by hand in the session
       # that wrote them (B-004) and by nothing since — which is the item this job closes.
@@ -610,6 +621,15 @@ jobs:
         run: pnpm --filter theoclaw run typecheck
       - name: boundaries
         run: pnpm --filter theoclaw run boundaries
+      # AC-005 (B-368): the WebChat page bundle builds within its byte budget (build-web.mjs fails
+      # past it) and loads in a DOM. The bundle test runs only with THEOCLAW_BUNDLE=1, after
+      # build:web, so until this step no job ran it (gateway-webchat review F-tests-2).
+      - name: WebChat page bundle
+        run: pnpm --filter theoclaw run build:web
+      - name: WebChat bundle loads
+        env:
+          THEOCLAW_BUNDLE: '1'
+        run: pnpm --filter theoclaw exec vitest run tests/webchat-bundle.test.ts
       # ESLint over `tools/`. The root config ignores `apps/**`, so the parity checker and its test
       # were read by no analyzer until this step (code review #67).
       - name: lint

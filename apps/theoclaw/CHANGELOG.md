@@ -26,6 +26,21 @@ and versioning follows [Semantic Versioning](https://semver.org/).
   Chat replies still get no tool. The app pins `quickjs-emscripten-core` and
   `@jitl/quickjs-wasmfile-release-sync` at 0.32.0. The parity ledger records OC-65 and H-5 as
   shipped, checked by `tests/live/code-mode.live.test.ts`.
+- A terminal UI and a desktop client of the one running instance (B-376, OC-36 desktop part, H-1).
+  `/control` chat frames may name a `session`: one agent is kept per session id
+  (`^[A-Za-z0-9_-]{1,64}$`), at most 16, the least recently used idle one disposed first and `busy`
+  when all 16 run, all disposed when the control plane closes. `{"type":"interrupt","session"}`
+  stops that session's turn (the owner gets `interrupted`, another socket `interrupt_ok`, an idle
+  session `no_turn`) by aborting the signal the turn was sent with, and a socket that closes cancels
+  the session turns it owns; the next chat frame on the session redirects on the same agent, and one
+  sent while the cancelled turn unwinds waits up to 5 s for it. Session turns stream text as it is
+  generated. Sessionless frames are unchanged. `pnpm --filter theoclaw run tui` opens an Ink TUI on
+  `@theokit/tui` (multiline input, `/interrupt`, `/new`, `/quit`, tool cards, Esc to interrupt), and
+  `desktop:sidecar` is the process the desktop template's shell spawns per turn; both read
+  `THEOCLAW_CONTROL_TOKEN`, `THEOCLAW_PORT`, `THEOCLAW_CONNECT_HOST` (default `127.0.0.1`) and
+  `THEOCLAW_SESSION` (default `owner`), build no agent, and print neither the token nor the model key.
+  Upstream in this repository: `@theokit/tauri`'s `cancelCommand`, the desktop template's
+  `cancel_turn`, and the timeline translator exported from `@theokit/agents/bridge`.
 - The `digest` tool of the `/control` agent (B-387, OC-66): a typed two-step workflow from
   `@theokit/sdk/workflow`, where a draft step on a fresh agent with no tool, no `shell` and memory off
   lists the key points of a text, and a second step checks them as `{ points }` (1 to 10). Each call
@@ -33,6 +48,23 @@ and versioning follows [Semantic Versioning](https://semver.org/).
   text; a run that does not complete reaches the model as a tool error. Chat-reply agents hold no
   tool. The JSON-only `llm-task` step and resumable approvals are not in this release (B-677, B-678,
   B-679).
+- A headless browser for `/control` agents (B-383): with `THEOCLAW_BROWSER=on` each `/control`
+  agent gets the pinned `@playwright/mcp` server (0.0.83) over stdio, headless Chromium on an
+  isolated profile, so it reads what a page renders with JavaScript; chat agents never get it. The
+  start refuses any other value, a missing `@playwright/mcp`, `PLAYWRIGHT_BROWSERS_PATH=0`, and a
+  browsers directory with no Chromium build, naming `pnpm --filter theoclaw run browser:install`,
+  the new script that installs the build the server's Playwright expects. The README says how to
+  give Chromium its system libraries without root (`LD_LIBRARY_PATH`). The parity ledger records
+  OC-60 as shipped, checked by `tests/live/browser.live.test.ts`; OC-62 (computer use) stays open.
+- The shell's sandbox mode is the operator's choice (B-392): `THEOCLAW_SANDBOX` takes `read-only`,
+  `workspace-write` (the default, as before) or `danger-full-access`, and any other value stops the
+  start, with host tools off too. Under `read-only` the shell can write nothing and `write_file`,
+  `edit_file` and `apply_patch` are not registered; under `workspace-write` it can write only
+  `files/` and `/tmp`; under `danger-full-access` it runs unconfined, the start needs no
+  bubblewrap and prints one line saying so. An unenforced sandbox under the other two modes refuses
+  the start naming `THEOCLAW_SANDBOX`. The parity ledger records OC-76 as shipped, checked by
+  `tests/live/sandbox.live.test.ts` against a real model; `non-main` and per-session scope wait on
+  B-683. The `theoclaw` CI job installs bubblewrap for the confinement tests.
 - The `/control` agent's tools (B-382): `read_file`, `list_dir`, `view_image`, `web_fetch` and
   `todolist` always, all from `@theokit/agents/tools` and bound to `files/` under the working
   directory; `web_search` with `BRAVE_API_KEY` (or `THEOKIT_SEARCH_API_URL` with
@@ -121,9 +153,11 @@ and versioning follows [Semantic Versioning](https://semver.org/).
   a browser chat at `/webchat` (B-368). Build the page with `pnpm --filter theoclaw run build:web`;
   without the bundle `GET /webchat` answers 503 and names the script. The page asks for the token,
   keeps it in the tab's `sessionStorage` and sends it only as `Authorization: Bearer`; a missing or
-  wrong token answers 401 before any agent is built. Each message runs one agent turn streamed
-  through `POST /webchat/chat` by the framework's route generator, and closing the tab mid-answer
-  cancels the turn. Without the token every `/webchat` path answers 404 and the start says
+  wrong token answers 401 before any agent is built, a post over 64 KiB answers 413, and a client
+  that leaves while its post is still being read gets a 400 rather than an error in the log. Each
+  message runs one agent turn streamed through `POST /webchat/chat` by the framework's route
+  generator, and closing the tab mid-answer cancels the turn. WebChat keeps no conversation: each
+  message reaches a fresh agent that has not seen the earlier ones, unlike a channel chat (B-378). Without the token every `/webchat` path answers 404 and the start says
   `theoclaw: webchat off (THEOCLAW_WEBCHAT_TOKEN unset)`. The token is masked in the output like
   the control token.
 - A control plane: `pnpm --filter theoclaw run build && pnpm --filter theoclaw start` starts one

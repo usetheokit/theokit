@@ -135,28 +135,95 @@ export interface FakeTurn {
   readonly streamError?: Error
   /** What `wait()` resolves. Default `{ status: 'finished' }`. */
   readonly result?: { readonly status: string; readonly error?: { readonly code?: string } }
-  /** The stream waits on this before its first frame. */
+  /** The stream waits on this before its first frame; an aborted signal releases it. */
   readonly before?: Promise<void>
+  /** `send` waits on this before it returns the run (the pending window of EC-1). */
+  readonly sendGate?: Promise<void>
+  /** Text deltas `events()` yields before the frames, which then arrive marked `textAlreadyStreamed`. */
+  readonly deltas?: readonly string[]
+  /** `events()` waits on this after the deltas, before the completed messages. */
+  readonly afterDeltas?: Promise<void>
+  /** `events()` opens one tool call and holds inside it until the signal aborts. */
+  readonly toolHeld?: boolean
+  /** A cancelled run's `wait()` resolves only once this settles (a run still unwinding). */
+  readonly teardown?: Promise<void>
 }
 
-/** An agent with no model: it records what it was sent. */
+/** Resolves when `gate` settles or `signal` aborts, whichever is first. */
+function until(gate: Promise<void> | undefined, signal: AbortSignal | undefined): Promise<void> {
+  if (gate === undefined) return Promise.resolve()
+  if (signal === undefined) return gate
+  if (signal.aborted) return Promise.resolve()
+  return new Promise<void>((resolve) => {
+    signal.addEventListener('abort', () => resolve(), { once: true })
+    void gate.then(resolve)
+  })
+}
+
+const never = new Promise<void>(() => undefined)
+
+/** A timeline event as `run.events()` yields it. */
+export type FakeTimelineEvent =
+  | { readonly kind: 'delta'; readonly update: Readonly<Record<string, unknown>> }
+  | { readonly kind: 'message'; readonly message: SdkFrame; readonly textAlreadyStreamed: boolean }
+
+/**
+ * An agent with no model: it records what it was sent and the signal each send carried. A run
+ * honours its signal as the SDK's does: an abort ends `stream()` and `events()` at the next frame,
+ * releases a held `before`, and makes `wait()` resolve `cancelled`.
+ */
 export class FakeAgent {
   readonly sent: string[] = []
+  readonly signals: (AbortSignal | undefined)[] = []
+  cancels = 0
 
   constructor(private readonly turn: FakeTurn) {}
 
-  async send(text: string) {
+  async send(text: string, options?: { readonly signal?: AbortSignal }) {
     this.sent.push(text)
+    const signal = options?.signal
+    this.signals.push(signal)
     const turn = this.turn
+    if (turn.sendGate) await turn.sendGate
     const frames = typeof turn.frames === 'function' ? turn.frames(text) : turn.frames
+    const aborted = (): boolean => signal?.aborted === true
+    const deltas = turn.deltas ?? []
     return {
       async *stream(): AsyncGenerator<SdkFrame> {
-        if (turn.before) await turn.before
-        yield* frames
+        await until(turn.before, signal)
+        for (const frame of frames) {
+          if (aborted()) return
+          yield frame
+        }
         if (turn.streamError) throw turn.streamError
       },
-      wait: async () => turn.result ?? { status: 'finished' },
-      cancel: async () => undefined,
+      async *events(): AsyncGenerator<FakeTimelineEvent> {
+        await until(turn.before, signal)
+        if (turn.toolHeld === true) {
+          if (aborted()) return
+          yield { kind: 'delta', update: { type: 'tool-call-started', callId: 'call-1', toolCall: { name: 'read', args: {} } } }
+          await until(never, signal)
+          return
+        }
+        for (const delta of deltas) {
+          if (aborted()) return
+          yield { kind: 'delta', update: { type: 'text-delta', text: delta } }
+        }
+        await until(turn.afterDeltas, signal)
+        for (const frame of frames) {
+          if (aborted()) return
+          yield { kind: 'message', message: frame, textAlreadyStreamed: deltas.length > 0 }
+        }
+        if (turn.streamError) throw turn.streamError
+      },
+      cancel: async () => {
+        this.cancels += 1
+      },
+      wait: async () => {
+        if (!aborted()) return turn.result ?? { status: 'finished' }
+        if (turn.teardown) await turn.teardown
+        return { status: 'cancelled' }
+      },
     }
   }
 }

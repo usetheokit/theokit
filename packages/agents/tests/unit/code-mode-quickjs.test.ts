@@ -184,6 +184,38 @@ describe('createQuickJsSandbox', () => {
     expect(Date.now() - started).toBeLessThan(1200)
   })
 
+  it('aborts the host call in flight when the run ends by its deadline', async () => {
+    const sandbox = createQuickJsSandbox({ timeoutMs: 200 })
+    let hostSignal: AbortSignal | undefined
+    const api: CodeModeApi = {
+      web_fetch: (_args, options) => {
+        hostSignal = options?.signal
+        return new Promise<never>(() => undefined)
+      },
+    }
+
+    await expect(
+      codeOf(sandbox.run('return await api.web_fetch({ url: "x" })', api)),
+    ).resolves.toBe('timeout')
+    expect(hostSignal?.aborted).toBe(true)
+  })
+
+  it('aborts the host call in flight when the script fails while it is pending', async () => {
+    const sandbox = createQuickJsSandbox({ timeoutMs: 5000 })
+    let hostSignal: AbortSignal | undefined
+    const api: CodeModeApi = {
+      web_fetch: (_args, options) => {
+        hostSignal = options?.signal
+        return new Promise<never>(() => undefined)
+      },
+    }
+
+    await expect(
+      codeOf(sandbox.run('api.web_fetch({ url: "x" }); throw new Error("boom")', api)),
+    ).resolves.toBe('script_error')
+    expect(hostSignal?.aborted).toBe(true)
+  })
+
   it('keeps the typed code when a run fails with live handles', async () => {
     const pending: CodeModeApi = { web_fetch: () => new Promise<never>(() => undefined) }
 

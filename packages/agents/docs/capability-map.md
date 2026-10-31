@@ -10,7 +10,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1114 export(s) across 25 entry point(s).
+1122 export(s) across 25 entry point(s).
 
 Measured against `@theokit/sdk@5.11.0`.
 
@@ -76,6 +76,7 @@ Measured against `@theokit/sdk@5.11.0`.
 | `createSdkAgentStream` | value |
 | `createThinkTagExtractor` | value |
 | `createToolHooksPlugin` | value |
+| `createToolSeen` | value |
 | `CredentialPoolExhaustedError` | value |
 | `declareAgentShape` | value |
 | `DEFAULT_HANDLER_TIMEOUT_MS` | value |
@@ -95,6 +96,7 @@ Measured against `@theokit/sdk@5.11.0`.
 | `extractThinkTagStream` | value |
 | `extractToolUses` | value |
 | `FieldCapability` | value |
+| `flushPendingToolResults` | value |
 | `foldLayers` | value |
 | `foldTurnLifecycle` | value |
 | `formatGoalEvent` | value |
@@ -212,6 +214,7 @@ Measured against `@theokit/sdk@5.11.0`.
 | `Toolset` | value |
 | `ToolsetError` | value |
 | `translateSdkEvent` | value |
+| `translateTimelineEvent` | value |
 | `UngatedCapabilityError` | value |
 | `unicodeNormalizer` | value |
 | `UnknownAgentError` | value |
@@ -389,6 +392,7 @@ Measured against `@theokit/sdk@5.11.0`.
 | `SdkAgentHandle` | type |
 | `SdkMessage` | type |
 | `SdkSendOptions` | type |
+| `SdkTimelineEvent` | type |
 | `SdkTurnHandle` | type |
 | `Segment` | type |
 | `SessionRecord` | type |
@@ -461,6 +465,7 @@ Measured against `@theokit/sdk@5.11.0`.
 | `createSdkAgentStream` | value |
 | `createThinkTagExtractor` | value |
 | `createToolHooksPlugin` | value |
+| `createToolSeen` | value |
 | `delegate` | value |
 | `delegateBackground` | value |
 | `delegateWithScoring` | value |
@@ -469,6 +474,7 @@ Measured against `@theokit/sdk@5.11.0`.
 | `DelegationError` | value |
 | `DelegationTimeoutError` | value |
 | `extractThinkTagStream` | value |
+| `flushPendingToolResults` | value |
 | `generateAgentManifest` | value |
 | `generateAgentRoutes` | value |
 | `HookGateUnsupportedError` | value |
@@ -498,6 +504,7 @@ Measured against `@theokit/sdk@5.11.0`.
 | `streamAgentUIMessages` | value |
 | `toAgentFactory` | value |
 | `translateSdkEvent` | value |
+| `translateTimelineEvent` | value |
 | `UntrustedSettingSourceError` | value |
 | `withClockCap` | value |
 | `withEphemeralAgent` | value |
@@ -567,6 +574,7 @@ Measured against `@theokit/sdk@5.11.0`.
 | `SdkAgentHandle` | type |
 | `SdkMessage` | type |
 | `SdkSendOptions` | type |
+| `SdkTimelineEvent` | type |
 | `SdkTurnHandle` | type |
 | `Segment` | type |
 | `SettingSourceCapability` | type |

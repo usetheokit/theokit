@@ -212,6 +212,18 @@ describe('applySurface (M45)', () => {
     expect(tsconfig.include.some((g) => g.startsWith('src/app/'))).toBe(false)
   })
 
+  it('the desktop template registers cancel_turn and the webview passes it', () => {
+    scaffold(targetDir, 'my-desk')
+    applySurface({ targetDir, projectName: 'my-desk', surface: 'desktop' })
+
+    // A desktop stop button aborts through `@theokit/tauri`'s cancelCommand (B-376): the shell must
+    // expose the command, and the webview must name it, or the abort stays a no-op.
+    const lib = read('src-tauri/src/lib.rs')
+    expect(lib).toContain('fn cancel_turn(')
+    expect(lib).toContain('generate_handler![run_turn, approve, cancel_turn]')
+    expect(read('frontend/src/App.tsx')).toContain("cancelCommand: 'cancel_turn'")
+  })
+
   it('desktop scaffolds a Tauri app: sidecar + src-tauri + React webview on @theokit/ui + @theokit/tauri', () => {
     scaffold(targetDir, 'my-desk')
     applySurface({ targetDir, projectName: 'my-desk', surface: 'desktop' })

@@ -336,6 +336,29 @@ describe('SessionAgents stopping', () => {
     expect(getOrCreate).toHaveBeenCalledTimes(1)
   })
 
+  it('refuses a lease that waited on a reset while stopping began, and opens no agent', async () => {
+    const write = deferred<void>()
+    const getOrCreate = vi.fn(async (id: string) => new CountingAgent(id))
+    const sessions = new SessionAgents({
+      router: createSessionRouter(settings()),
+      getOrCreate,
+      optionsFor: () => ({ model: 'stub' }),
+      generations: heldGenerations(write.promise),
+      settings: settings(),
+      write: () => undefined,
+    })
+
+    const reset = sessions.reset(dm('u1'))
+    const waiting = sessions.lease(dm('u1')).catch((error: unknown) => error)
+    const stopping = sessions.disposeAll()
+    write.resolve()
+    await reset
+    await stopping
+
+    expect(await waiting).toEqual(new Error('theoclaw is stopping: no new chat turn starts'))
+    expect(getOrCreate).not.toHaveBeenCalled()
+  })
+
   it('a dispose that fails is logged naming the session, and the session reopens on its next message', async () => {
     const failing = Promise.reject(new Error('socket closed'))
     failing.catch(() => undefined)

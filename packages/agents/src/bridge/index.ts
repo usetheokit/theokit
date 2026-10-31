@@ -106,6 +106,14 @@ export {
 } from './think-tag-extractor.js'
 export { translateSdkEvent, type SdkMessage } from './event-translator.js'
 export { presentUIMessageStream } from './present-ui-message-stream.js'
+// B-376 — the `run.events()` timeline translator, so a consumer that streams live text deltas
+// translates them with the code `sdk-adapter.ts` uses rather than a copy (REQ-7).
+export {
+  createToolSeen,
+  flushPendingToolResults,
+  translateTimelineEvent,
+  type SdkTimelineEvent,
+} from './sdk-timeline.js'
 // M31 builder-only: `AgentBuilder.create()` (below) is the public authoring surface; `defineAgent` is now
 // internal (the AgentBuilder.create() builder's `.build()` delegates to it via source path), removed from the
 // public API. `compileAgentDefinition` + the branded types stay public (the framework adapter

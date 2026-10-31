@@ -131,6 +131,16 @@ async function streamRun(run: TurnRun, options: TurnOptions, aborted?: Promise<t
   }
 }
 
+/**
+ * How a run ended, from its final status and the code of the first error it streamed: a streamed
+ * error fails the turn even when `wait()` reports it finished. Shared by the sessionless turn and
+ * the session turn (`session-turn.ts`).
+ */
+export function outcomeOf(result: { readonly status: string }, streamedError: string | undefined): TurnOutcome {
+  if (streamedError !== undefined) return failed(`the run streamed an error (${streamedError})`)
+  return result.status === 'error' ? failed('the run ended with status error') : { ok: true }
+}
+
 async function runWith(agent: TurnAgent, options: TurnOptions): Promise<TurnOutcome> {
   const run = await agent.send(options.message)
   // Checked before any listener is added: a listener on a signal that already aborted never fires (EC-1).
@@ -139,9 +149,7 @@ async function runWith(agent: TurnAgent, options: TurnOptions): Promise<TurnOutc
   const streamed = await streamRun(run, options, watch.aborted).finally(() => watch.release())
   if ('cancelled' in streamed) return streamed.cancelled
   const { streamedError } = streamed
-  const result = await run.wait()
-  if (streamedError !== undefined) return failed(`the run streamed an error (${streamedError})`)
-  return result.status === 'error' ? failed('the run ended with status error') : { ok: true }
+  return outcomeOf(await run.wait(), streamedError)
 }
 
 /**

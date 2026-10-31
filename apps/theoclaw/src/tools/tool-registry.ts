@@ -1,4 +1,4 @@
-import type { CustomTool, Plugin } from '@theokit/sdk'
+import type { CustomTool, McpServerConfig, Plugin } from '@theokit/sdk'
 import { bindToolScope } from '@theokit/agents/tool-scope'
 import {
   createApplyPatchTool,
@@ -17,6 +17,7 @@ import {
 } from '@theokit/agents/tools'
 
 import type { TurnAgent } from '../agent-port.js'
+import { browserServer } from './browser-server.js'
 import { codeModeTool, delegateAllTool, type CreateWorker } from './code-mode-tools.js'
 import { pathVetoPlugin } from './path-veto.js'
 import type { ToolSettings } from './tool-settings.js'
@@ -28,6 +29,8 @@ import type { ToolSettings } from './tool-settings.js'
 export interface AgentToolOptions {
   readonly tools: readonly CustomTool[]
   readonly plugins: readonly Plugin[]
+  /** The stdio browser server, only with `THEOCLAW_BROWSER=on` (B-383); absent otherwise. */
+  readonly mcpServers?: Readonly<Record<string, McpServerConfig>>
 }
 
 /** `web_search` over the adapter the settings chose, or none when search is off. */
@@ -68,7 +71,8 @@ export function readOnlyTools(settings: ToolSettings): CustomTool[] {
  * - always the five read-only tools, and web search when a search key is set;
  * - `git_diff` only when the tool root is a repository AND the sandbox is enforced, since git runs
  *   repository-configured helpers (`diff.external`) that only the kernel sandbox keeps in the root;
- * - write, edit, apply_patch and the sandboxed shell only with `THEOCLAW_HOST_TOOLS=on`.
+ * - the sandboxed shell only with `THEOCLAW_HOST_TOOLS=on`, and write, edit and apply_patch with it
+ *   unless `THEOCLAW_SANDBOX=read-only`.
  *
  * The interactive shell and its stdin tool are never registered: they take a PTY, not this backend.
  */
@@ -87,21 +91,22 @@ export function buildTools(settings: ToolSettings): CustomTool[] {
   if (search !== undefined) tools.push(search)
   if (settings.gitRepository && settings.sandboxEnforced) tools.push(scope.bind(createGitDiffTool)())
   if (settings.hostTools) {
-    tools.push(
-      scope.bind(createWriteFileTool)(),
-      scope.bind(createEditFileTool)(),
-      scope.bind(createApplyPatchTool)(),
-      scope.bind(createShellTool)(),
-    )
+    // The file writers take a project root and no sandbox, so `read-only` can only leave them out
+    // (plan D3); the shell stays, confined by the read-only backend.
+    if (settings.sandboxMode !== 'read-only') {
+      tools.push(scope.bind(createWriteFileTool)(), scope.bind(createEditFileTool)(), scope.bind(createApplyPatchTool)())
+    }
+    tools.push(scope.bind(createShellTool)())
   }
   return tools
 }
 
 /**
  * The options of one agent: a fresh tool list (a todolist is never shared between two agents), then
- * the `extra` tools the composition root passes in (the workflow tools, B-387), and the
- * state-directory veto. Given a worker factory (a `/control` agent's, B-386), the list also holds
- * `run_code` over the read-only tools and `delegate_all` over that factory's workers.
+ * the `extra` tools the composition root passes in (the workflow tools, B-387), the state-directory
+ * veto, and the browser server when `THEOCLAW_BROWSER=on` (B-383). Given a worker factory (a
+ * `/control` agent's, B-386), the list also holds `run_code` over the read-only tools and
+ * `delegate_all` over that factory's workers. A chat agent holds no tool and no server.
  */
 export function agentToolOptions(
   settings: ToolSettings,
@@ -112,7 +117,8 @@ export function agentToolOptions(
   if (createWorker !== undefined) {
     tools.push(codeModeTool(readOnlyTools(settings), settings), delegateAllTool(createWorker))
   }
-  return { tools, plugins: [pathVetoPlugin(settings)] }
+  const base = { tools, plugins: [pathVetoPlugin(settings)] }
+  return settings.browser === undefined ? base : { ...base, mcpServers: { browser: browserServer(settings.browser) } }
 }
 
 /** A worker's options: the read-only tools and the veto, never `run_code` or `delegate_all` (FR-010). */

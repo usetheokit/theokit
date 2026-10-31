@@ -25,13 +25,13 @@ export default defineConfig({
     // config carries the same note and the reason it gives is measured: copying one without the
     // name produced a project that was in the list and matched no filter.
     name: 'theoclaw',
-    include: ['tests/**/*.test.ts', 'tools/**/*.test.mjs'],
+    include: ['tests/**/*.test.ts', 'tests/**/*.test.tsx', 'tools/**/*.test.mjs'],
     environment: 'node',
     // Read only by a `--coverage` run, so the plain suite is unchanged. The control plane is the
     // code B-372 adds, and its plan bounds it at 90% on all three counters.
     coverage: {
       provider: 'v8',
-      include: ['src/control-plane/**'],
+      include: ['src/control-plane/**', 'src/webchat/**', 'src/control-client/**'],
       thresholds: { lines: 90, branches: 90, functions: 90 },
     },
   },

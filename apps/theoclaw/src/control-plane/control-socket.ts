@@ -4,6 +4,7 @@ import type { Duplex } from 'node:stream'
 import { WebSocket, WebSocketServer } from 'ws'
 
 import { bearerCheck, MIN_BEARER_TOKEN_LENGTH } from './bearer.js'
+import type { ControlSessions, SessionOutcome } from './control-sessions.js'
 import { describeError, TheoClawConfigError } from './errors.js'
 import type { TurnRunner } from './turn.js'
 
@@ -11,6 +12,11 @@ export interface ControlSocketOptions {
   /** The bearer token an upgrade must carry; at least 32 characters. */
   readonly token: string
   readonly runTurn: TurnRunner
+  /**
+   * The named sessions (B-376). Without it a frame naming a session, and every interrupt frame, is
+   * `bad_frame`, so a caller that never passes it keeps the sessionless protocol unchanged.
+   */
+  readonly sessions?: ControlSessions
 }
 
 /** What the listener holds of the socket server: the clients it must end before closing. */
@@ -28,50 +34,118 @@ function pathOf(request: IncomingMessage): string {
   return (request.url ?? '/').split('?')[0] ?? '/'
 }
 
+/** A frame the socket acts on: a chat turn, optionally on a session, or an interrupt of one. */
+type Frame =
+  | { readonly kind: 'chat'; readonly message: string; readonly session?: string }
+  | { readonly kind: 'interrupt'; readonly session: string }
+
 /**
- * The chat message of a text frame, or undefined for anything that is not a chat frame. The frame
- * is typed by what is read of it rather than as `RawData`, a name the `ws` package itself does not
- * export (only `@types/ws` declares it).
+ * The frame's `session`, when it is a string. `null` reads as absent, as the field was ignored
+ * before sessions existed. Validated by the session store, not here.
  */
-function chatMessage(raw: { toString(): string }, isBinary: boolean): string | undefined {
+function sessionOf(frame: { session?: unknown }): string | undefined {
+  return typeof frame.session === 'string' ? frame.session : undefined
+}
+
+type RawFrame = { type?: unknown; message?: unknown; session?: unknown }
+
+/** A text message's JSON object, or undefined for binary, not-JSON, or a JSON value that is not an object. */
+function readObject(raw: { toString(): string }, isBinary: boolean): RawFrame | undefined {
   if (isBinary) return undefined
+  let parsed: unknown
   try {
-    const frame = JSON.parse(String(raw)) as { type?: unknown; message?: unknown } | null
-    const message = frame?.type === 'chat' ? frame.message : undefined
-    return typeof message === 'string' && message !== '' ? message : undefined
+    parsed = JSON.parse(String(raw))
   } catch {
     // Not JSON is a malformed frame, answered `bad_frame` by the caller: the parse error has no
     // more to say than that.
     return undefined
   }
+  return typeof parsed === 'object' && parsed !== null ? (parsed as RawFrame) : undefined
+}
+
+/** A chat frame's message, or undefined when the frame is not a chat frame with a non-empty one. */
+function chatMessage(frame: RawFrame): string | undefined {
+  if (frame.type !== 'chat' || typeof frame.message !== 'string') return undefined
+  return frame.message === '' ? undefined : frame.message
 }
 
 /**
- * One accepted socket: one turn at a time, frames sent only while the socket is open (a turn whose
- * socket closed runs to its end and its frames are dropped, EC-1), and one final frame per turn.
+ * The frame a text message carries, or undefined for anything else. The frame is typed by what is
+ * read of it rather than as `RawData`, a name the `ws` package itself does not export (only
+ * `@types/ws` declares it).
+ */
+function parseFrame(raw: { toString(): string }, isBinary: boolean): Frame | undefined {
+  const frame = readObject(raw, isBinary)
+  if (frame === undefined) return undefined
+  const session = sessionOf(frame)
+  if (frame.type === 'interrupt') return session === undefined ? undefined : { kind: 'interrupt', session }
+  const message = chatMessage(frame)
+  if (message === undefined) return undefined
+  // A session that is present but not a string is refused; an absent or null one runs sessionless.
+  if (frame.session !== undefined && frame.session !== null && session === undefined) return undefined
+  return session === undefined ? { kind: 'chat', message } : { kind: 'chat', message, session }
+}
+
+/** The final frame of a session turn, and the stderr line an interrupted or failed one writes. */
+function sessionEnd(session: string, outcome: SessionOutcome, stderr: (line: string) => void): Record<string, unknown> {
+  if (outcome.ok) return { type: 'done', session }
+  if (outcome.code === 'interrupted') {
+    stderr(`theoclaw: control session ${session} turn interrupted`)
+    return { type: 'interrupted', session }
+  }
+  if (outcome.code === 'turn_failed') stderr(`theoclaw: turn failed: ${outcome.reason}`)
+  return { type: 'error', code: outcome.code, session }
+}
+
+/**
+ * One accepted socket: one turn at a time whatever its sessions (FR-004), frames sent only while the
+ * socket is open, and one final frame per turn. A sessionless turn whose socket closed runs to its
+ * end and its frames are dropped (EC-1); a session turn whose socket closed is cancelled (FR-005).
  */
 function serve(ws: WebSocket, options: ControlSocketOptions, stderr: (line: string) => void): void {
   let busy = false
+  let current: string | undefined
   const send = (frame: unknown): void => {
     if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(frame))
   }
+  const { sessions } = options
   ws.on('error', (error) => stderr(`theoclaw: control socket error: ${describeError(error)}`))
-  ws.on('message', (raw, isBinary) => {
-    const message = chatMessage(raw, isBinary)
-    if (message === undefined) return send({ type: 'error', code: 'bad_frame' })
-    if (busy) return send({ type: 'error', code: 'busy' })
-    busy = true
-    // `runTurn` is a port: a runner that throws or rejects still ends the turn with turn_failed and
-    // frees the socket, rather than leaving it busy forever or rejecting unheard.
-    void Promise.resolve()
+  ws.on('close', () => sessions?.cancelOwnedBy(ws))
+  const sessionTurn = (store: ControlSessions, message: string, session: string): Promise<void> =>
+    store
+      .run(session, message, (event) => send({ type: 'event', event, session }), ws)
+      .then((outcome) => send(sessionEnd(session, outcome, stderr)))
+  // `runTurn` is a port: a runner that throws or rejects still ends the turn with turn_failed and
+  // frees the socket, rather than leaving it busy forever or rejecting unheard.
+  const sessionlessTurn = (message: string): Promise<void> =>
+    Promise.resolve()
       .then(() => options.runTurn(message, (event) => send({ type: 'event', event })))
       .catch((error: unknown) => ({ ok: false, code: 'turn_failed', reason: describeError(error) }) as const)
       .then((outcome) => {
-        busy = false
         if (outcome.ok) return send({ type: 'done' })
         stderr(`theoclaw: turn failed: ${outcome.reason}`)
         send({ type: 'error', code: outcome.code })
       })
+  ws.on('message', (raw, isBinary) => {
+    const frame = parseFrame(raw, isBinary)
+    if (frame === undefined) return send({ type: 'error', code: 'bad_frame' })
+    const session = frame.session
+    if (session !== undefined && sessions === undefined) return send({ type: 'error', code: 'bad_frame' })
+    if (frame.kind === 'interrupt') {
+      const answer = sessions!.interrupt(frame.session)
+      if (answer === 'no_turn') return send({ type: 'no_turn', session })
+      // The socket that owns the turn learns from the turn's own final frame, `interrupted`.
+      if (current !== session) send({ type: 'interrupt_ok', session })
+      return
+    }
+    if (busy) return send(session === undefined ? { type: 'error', code: 'busy' } : { type: 'error', code: 'busy', session })
+    busy = true
+    current = session
+    const turn = session === undefined ? sessionlessTurn(frame.message) : sessionTurn(sessions!, frame.message, session)
+    void turn.finally(() => {
+      busy = false
+      current = undefined
+    })
   })
 }
 
