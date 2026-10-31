@@ -8,6 +8,7 @@ import type { SDKAgent } from '@theokit/sdk'
 import { startTheoClaw } from './composition.js'
 import type { TheoClawAgentOptions } from './agent/create-agent.js'
 import { type CreateAgent, createAgentFactory, createChannelAgentFactory } from './control-plane/agent-factory.js'
+import { loadConfiguration } from './config-file.js'
 import { describeError } from './control-plane/errors.js'
 import { applyInstance, resolveInstance, type TheoClawInstance } from './instance.js'
 
@@ -32,6 +33,8 @@ function fail(error: unknown): never {
 
 let instance: TheoClawInstance
 try {
+  // The configuration file first (B-374): it fills only what the environment leaves unset.
+  loadConfiguration(process.env, homedir())
   instance = resolveInstance(process.env, { homeDir: homedir() })
   applyInstance(instance, process.env)
 } catch (error) {
