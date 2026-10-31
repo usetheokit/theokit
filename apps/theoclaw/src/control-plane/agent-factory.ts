@@ -36,7 +36,8 @@ export function agentOptionsFor(env: BindEnvironment): TheoClawAgentOptions {
 /**
  * A chat session's agent: the same protected options as a `/control` turn's, so the reply path
  * keeps the key, the withheld `shell` and memory off, plus its transcripts under
- * `<workspace>/.theoclaw` (plan D6), which is what lets a conversation survive a restart.
+ * `<workspace>/.theoclaw` (plan D6), which is what lets a conversation survive a restart. Under a
+ * profile, `workspace` is the profile's own, the directory its `/control` agents work in too.
  */
 export function sessionAgentOptions(env: BindEnvironment, workspace: string): SessionAgentOptions {
   return { ...agentOptionsFor(env), local: { cwd: workspace, sessionDir: join(workspace, '.theoclaw') } }
