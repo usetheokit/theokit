@@ -79,6 +79,7 @@ describe('the owner policy hook in the composed app', () => {
         env: {
           THEOCLAW_OWNERS: 'telegram:owner',
           THEOCLAW_STATE_DIR: dir,
+          THEOCLAW_WORKSPACE: dir,
           ...(activation === undefined ? {} : { THEOCLAW_GROUP_ACTIVATION: activation }),
         },
         agentFactory: () => new FakeAgent({ frames: [] }),
@@ -103,7 +104,13 @@ describe('the owner policy hook in the composed app', () => {
     const lines = (dmPolicy: string): string[] => {
       const written: string[] = []
       const { loop } = composeTheoClaw({
-        env: { THEOCLAW_OWNERS: 'telegram:owner', THEOCLAW_STATE_DIR: dir, THEOCLAW_DM_POLICY: dmPolicy, ...email },
+        env: {
+          THEOCLAW_OWNERS: 'telegram:owner',
+          THEOCLAW_STATE_DIR: dir,
+          THEOCLAW_WORKSPACE: dir,
+          THEOCLAW_DM_POLICY: dmPolicy,
+          ...email,
+        },
         agentFactory: () => new FakeAgent({ frames: [] }),
         builders: () => [],
         write: (line) => void written.push(line),

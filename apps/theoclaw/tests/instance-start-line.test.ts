@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { startTheoClaw } from '../src/composition.js'
 import type { RunningTheoClaw } from '../src/composition.js'
 import { applyInstance, resolveInstance } from '../src/instance.js'
-import { capturingStream, fakeBuilders, noAgent } from './composition-fixtures.js'
+import { capturingStream, fakeBuilders, noAgent, WORKSPACE } from './composition-fixtures.js'
 
 const ENV = {
   THEOCLAW_OWNERS: 'telegram:owner',
@@ -17,6 +17,7 @@ const ENV = {
   THEOCLAW_MODEL: 'test-model',
   OPENROUTER_API_KEY: 'openrouter-key-value',
   THEOCLAW_MDNS: 'off',
+  THEOCLAW_WORKSPACE: WORKSPACE,
 }
 
 /** FR-007 (B-514): the start names the instance in its first stderr line and on its handle. */
