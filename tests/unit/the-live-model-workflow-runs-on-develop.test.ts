@@ -35,6 +35,9 @@ interface Job {
   'timeout-minutes'?: number
   needs?: string[]
   env?: Record<string, string>
+  if?: string
+  uses?: string
+  secrets?: unknown
   steps: Step[]
 }
 
@@ -48,7 +51,9 @@ const PATH = resolve(__dirname, '../../.github/workflows/live-model.yml')
 const RAW = readFileSync(PATH, 'utf8')
 const WORKFLOW = parse(RAW) as Workflow
 const JOBS = Object.values(WORKFLOW.jobs)
-const JOB = JOBS[0] as Job
+// B-374: a second job, dispatch-only, calls the TheoClaw container workflow; every property below
+// is pinned on the live-model job by name.
+const JOB = WORKFLOW.jobs['live-model'] as Job
 const STEPS = JOB.steps
 
 function stepIndex(fragment: string): number {
@@ -76,8 +81,30 @@ describe('live-model.yml', () => {
   })
 
   it('stops the job after 10 minutes', () => {
-    expect(JOBS).toHaveLength(1)
+    expect(Object.keys(WORKFLOW.jobs).sort((a, b) => a.localeCompare(b))).toEqual([
+      'live-model',
+      'theoclaw-container',
+    ])
+    expect(JOBS).toHaveLength(2)
     expect(JOB['timeout-minutes']).toBe(10)
+  })
+
+  // B-374 (T5.2): GitHub dispatches only a workflow on the default branch, so the container checks
+  // are reached through this file's dispatch, with a suite input that push leaves empty.
+  it('the live-model workflow calls the container workflow only on a container dispatch', () => {
+    const container = WORKFLOW.jobs['theoclaw-container'] as Job
+    expect(container.uses).toBe('./.github/workflows/theoclaw-container.yml')
+    expect(container.secrets).toBe('inherit')
+    expect(container.if).toBe(
+      "github.event_name == 'workflow_dispatch' && inputs.suite == 'theoclaw-container'",
+    )
+    expect(JOB.if).toBe("inputs.suite != 'theoclaw-container'")
+    const dispatch = WORKFLOW.on.workflow_dispatch as {
+      inputs: { suite: { type: string; default: string; options: string[] } }
+    }
+    expect(dispatch.inputs.suite.type).toBe('choice')
+    expect(dispatch.inputs.suite.default).toBe('live-model')
+    expect(dispatch.inputs.suite.options).toEqual(['live-model', 'theoclaw-container'])
   })
 
   it('hands the key only through step env and never names it in a run line', () => {

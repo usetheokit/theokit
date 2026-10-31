@@ -1,0 +1,48 @@
+# TheoClaw's container checks against a real model (B-374, OC-30/31/33/34). A clean node:22
+# container runs the documented source install, onboarding, a turn and an update, and the
+# apps/theoclaw/Dockerfile image answers a turn. Docker exists on ubuntu-latest and not on the
+# development host, which is why these run here (plan D3).
+#
+# GitHub dispatches only a workflow present on the default branch, so a pre-merge run goes through
+# live-model.yml's dispatch with `-f suite=theoclaw-container`, which calls this file at the
+# dispatched ref (workflow_call). It also runs on push to develop and on its own dispatch.
+name: TheoClaw container
+
+on:
+  workflow_call:
+    secrets:
+      OPENROUTER_API_KEY:
+        required: true
+  workflow_dispatch:
+  push:
+    branches: [develop]
+
+permissions:
+  contents: read
+
+jobs:
+  theoclaw-container:
+    name: TheoClaw container checks (real provider)
+    runs-on: ubuntu-latest
+    # Two 900 s tests, plus the checkout, the install and the image pulls.
+    timeout-minutes: 45
+    env:
+      THEOCLAW_MODEL: ${{ vars.LIVE_MODEL || 'google/gemini-2.5-flash-lite' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # The container clones this checkout and fast-forwards it: a depth-1 checkout has no
+          # history for either (EC-3).
+          fetch-depth: 0
+      # This job handles the provider key, so ADR-0021 pins the action by commit.
+      - uses: usetheokit/shared-workflows/actions/setup@95ef5a1ea79f0c4065fa7ca0466b0b07b4c7799d # v1
+      - name: Install TheoClaw's workspace
+        run: pnpm install --frozen-lockfile --filter 'theoclaw...'
+      - name: Container checks (THEOCLAW_CONTAINER)
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          THEOCLAW_CONTAINER: '1'
+        # bash -eo pipefail: the suite's exit code survives the pipe
+        shell: bash
+        run: THEOCLAW_CONTAINER=1 pnpm --filter theoclaw exec vitest run tests/container --reporter=verbose 2>&1 | node scripts/redact-key-shapes.mjs

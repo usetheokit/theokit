@@ -10,7 +10,14 @@ name: Live model
 on:
   push:
     branches: [develop]
+  # `suite` picks what a dispatch runs (B-374). Push leaves it empty, so push runs only live-model.
   workflow_dispatch:
+    inputs:
+      suite:
+        description: Which checks to run
+        type: choice
+        default: live-model
+        options: [live-model, theoclaw-container]
 
 permissions:
   contents: read
@@ -18,6 +25,7 @@ permissions:
 jobs:
   live-model:
     name: Live model (real provider)
+    if: inputs.suite != 'theoclaw-container'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     # One model for the preflight and both live steps. The default must equal DEFAULT_LIVE_MODEL in
@@ -63,6 +71,13 @@ jobs:
       # `live-model-build` job runs the same script on every pull request (B-659).
       - name: Build TheoClaw and its workspace dependencies
         run: node scripts/live-model-build.mjs theoclaw
+      # daemon.live.test.ts (B-374) installs a real systemd user unit, and a runner has no user
+      # manager until lingering starts one; this waits for the manager's bus, with a deadline.
+      - name: Start the runner's systemd user manager
+        run: |
+          sudo loginctl enable-linger "$USER"
+          timeout 20 bash -c "until [ -S /run/user/$(id -u)/bus ]; do sleep 0.2; done" \
+            || { echo "the systemd user manager did not start within 20 s" >&2; exit 1; }
       - name: TheoClaw live tests (THEOCLAW_LIVE)
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
@@ -71,4 +86,11 @@ jobs:
           THEOCLAW_MODEL: ${{ env.LIVE_MODEL }}
         # bash -eo pipefail: the suite's exit code survives the pipe (D8)
         shell: bash
-        run: pnpm --filter theoclaw test:live 2>&1 | node scripts/redact-key-shapes.mjs
+        run: XDG_RUNTIME_DIR="/run/user/$(id -u)" pnpm --filter theoclaw test:live 2>&1 | node scripts/redact-key-shapes.mjs
+
+  # B-374 (T5.2): TheoClaw's container checks, reached by `gh workflow run live-model.yml --ref <ref>
+  # -f suite=theoclaw-container`. A dispatch reads the called workflow at the dispatched ref.
+  theoclaw-container:
+    if: github.event_name == 'workflow_dispatch' && inputs.suite == 'theoclaw-container'
+    uses: ./.github/workflows/theoclaw-container.yml
+    secrets: inherit
