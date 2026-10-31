@@ -165,7 +165,7 @@ export async function onboard(opts: OnboardOptions, io: OnboardIo): Promise<stri
   assertWritable(entries)
   validate(entries, io)
   mkdirSync(entries.THEOCLAW_WORKSPACE!, { recursive: true, mode: 0o700 })
-  writeConfiguration(path, entries, { force: opts.force })
+  writeConfiguration(path, entries, { force: opts.force, ownsDirectory: !io.env.THEOCLAW_CONFIG?.trim() })
   io.stdout.write(`theoclaw: configuration written to ${path}\n`)
   return path
 }

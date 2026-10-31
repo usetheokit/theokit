@@ -1,10 +1,10 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { configurationPath, loadConfiguration } from '../src/config-file.js'
+import { configurationPath, loadConfiguration, writeConfiguration } from '../src/config-file.js'
 import { TheoClawConfigError } from '../src/control-plane/errors.js'
 
 const scratch: string[] = []
@@ -60,5 +60,19 @@ describe('the configuration file', () => {
 
     expect(loadConfiguration(env, home)).toBe(path)
     expect(env).toEqual({ THEOCLAW_MODEL: 'file-model', THEOCLAW_PORT: '8787' })
+  })
+
+  // Audit finding (post-GREEN): THEOCLAW_CONFIG=~/x.env, or /data/theoclaw.env in the image, must
+  // not narrow a directory the code did not create.
+  it('writing the file leaves an existing directory mode alone and makes a new one 0700', () => {
+    const existing = scratchDir()
+    chmodSync(existing, 0o755)
+    writeConfiguration(join(existing, 'theoclaw.env'), { THEOCLAW_MODEL: 'm' }, { force: false })
+    expect(statSync(existing).mode & 0o777).toBe(0o755)
+    expect(statSync(join(existing, 'theoclaw.env')).mode & 0o777).toBe(0o600)
+
+    const fresh = join(scratchDir(), 'nested', 'theoclaw')
+    writeConfiguration(join(fresh, 'theoclaw.env'), { THEOCLAW_MODEL: 'm' }, { force: false })
+    expect(statSync(fresh).mode & 0o777).toBe(0o700)
   })
 })

@@ -83,6 +83,18 @@ describe('the theoclaw command line', () => {
     expect(readFileSync(log, 'utf8')).toMatch(/^SIGTERM$/m)
   })
 
+  // Audit finding (post-GREEN): the entry runs in its own session, so a closed terminal reaches only
+  // this command; it must pass the hangup on rather than orphan an entry that holds the port.
+  it('a terminal hangup is forwarded to the entry', { timeout: 20_000 }, async () => {
+    const { h, log } = stubEntry()
+    const done = runCli(['start', log], h.io)
+    await waitForLog(log, /^ready /m)
+    h.signals.emit('SIGHUP', 'SIGHUP')
+
+    expect(await done).toBe(0)
+    expect(readFileSync(log, 'utf8')).toMatch(/^SIGHUP$/m)
+  })
+
   it('a terminal interrupt stops the entry once', { timeout: 20_000 }, async () => {
     const { h, log } = stubEntry()
     const done = runCli(['start', log], h.io)
@@ -167,6 +179,7 @@ function stubEntry(): { h: Harness; log: string } {
       "import { execFileSync } from 'node:child_process'",
       'const log = process.argv[2]',
       "process.on('SIGTERM', () => { appendFileSync(log, 'SIGTERM\\n'); process.exit(0) })",
+      "process.on('SIGHUP', () => { appendFileSync(log, 'SIGHUP\\n'); process.exit(0) })",
       // A second SIGINT within 300 ms would log a second line, which is what the test counts.
       "process.on('SIGINT', () => { appendFileSync(log, 'shutdown SIGINT\\n'); setTimeout(() => process.exit(0), 300) })",
       "const group = execFileSync('ps', ['-o', 'pgid=', '-p', String(process.pid)]).toString().trim()",

@@ -53,9 +53,12 @@ export function unitPath(label: string, home: string): string {
   return join(home, '.config', 'systemd', 'user', `${label}.service`)
 }
 
-/** systemd.syntax(7): a value with a space, a quote or a backslash is double-quoted; `%` is doubled. */
+/**
+ * systemd.syntax(7): a value with a space, a quote or a backslash is double-quoted; `%` and `$`
+ * are doubled, since systemd expands specifiers and variables in ExecStart and Environment.
+ */
 function quoted(value: string): string {
-  const escaped = value.replaceAll('%', '%%')
+  const escaped = value.replaceAll('%', '%%').replaceAll('$', '$$$$')
   return /[\s"\\]/.test(escaped) ? `"${escaped.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"` : escaped
 }
 
@@ -130,7 +133,8 @@ export async function daemonInstall(io: DaemonIo, runner: Runner): Promise<numbe
   const temporary = `${unit}.${process.pid}.tmp`
   writeFileSync(temporary, unitFor({ label, nodePath: io.nodePath, entryPath: io.entry, configPath, profile, workingDirectory }))
   renameSync(temporary, unit)
-  for (const args of [['daemon-reload'], ['enable', '--now', `${label}.service`]]) {
+  // `enable --now` leaves a running unit as it is, so a reinstall restarts it onto the new unit file.
+  for (const args of [['daemon-reload'], ['enable', '--now', `${label}.service`], ['restart', `${label}.service`]]) {
     const result = await systemctl(runner, ...args)
     if (result.code !== 0) {
       io.stderr.write(`theoclaw daemon: systemctl --user ${args.join(' ')} failed: ${result.stderr.trim()}\n`)

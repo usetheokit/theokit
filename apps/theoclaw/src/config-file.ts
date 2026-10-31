@@ -82,14 +82,24 @@ export function assertWritable(entries: Readonly<Record<string, string>>): void 
  * file in the same directory, synced, then renamed over `path`, so a reader never sees half a
  * file. An existing file is refused without `force`, before the temporary file exists.
  */
-export function writeConfiguration(path: string, entries: Readonly<Record<string, string>>, options: { readonly force: boolean }): void {
+/**
+ * `ownsDirectory`: the directory is TheoClaw's own (the default `<config>/theoclaw`), so it is
+ * narrowed to 0700 even when it already exists. Otherwise only a directory this call creates is.
+ */
+export function writeConfiguration(
+  path: string,
+  entries: Readonly<Record<string, string>>,
+  options: { readonly force: boolean; readonly ownsDirectory?: boolean },
+): void {
   assertWritable(entries)
   if (existsSync(path) && !options.force) {
     throw new TheoClawConfigError(`${path} exists; pass --force to replace it`, { variable: 'THEOCLAW_CONFIG' })
   }
   const directory = dirname(path)
-  mkdirSync(directory, { recursive: true, mode: 0o700 })
-  chmodSync(directory, 0o700)
+  // THEOCLAW_CONFIG may name a file in the home directory or in a mounted /data, whose mode is the
+  // owner's and not ours to change: only TheoClaw's own directory, or one created here, is narrowed.
+  const created = mkdirSync(directory, { recursive: true, mode: 0o700 }) !== undefined
+  if (created || options.ownsDirectory === true) chmodSync(directory, 0o700)
   const text = Object.entries(entries).map(([key, value]) => `${key}="${value}"\n`).join('')
   const temporary = `${path}.${process.pid}.tmp`
   const fd = openSync(temporary, 'wx', 0o600)

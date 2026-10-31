@@ -76,7 +76,7 @@ function systemctl(h: Harness): string[] {
 }
 
 describe('theoclaw daemon', () => {
-  it('the unit runs the built cli with the configuration file', async () => {
+  it('the unit runs the built entry with the configuration file', async () => {
     const h = harness()
     expect(await daemonInstall(h.io, h.runner)).toBe(0)
 
@@ -90,7 +90,7 @@ describe('theoclaw daemon', () => {
     expect(unit).toMatch(/^WantedBy=default\.target$/m)
     expect(unit).toMatch(/^Restart=on-failure$/m)
     expect(unit).toContain(`WorkingDirectory=${join(h.home, 'work')}`)
-    expect(systemctl(h)).toEqual(['--user daemon-reload', '--user enable --now theoclaw.service'])
+    expect(systemctl(h)).toEqual(['--user daemon-reload', '--user enable --now theoclaw.service', '--user restart theoclaw.service'])
   })
 
   it('daemon refuses a missing configuration and an unsupported platform', async () => {
@@ -164,5 +164,8 @@ describe('theoclaw daemon', () => {
     expect(unit).toContain('Environment="THEOCLAW_CONFIG=/c/a b.env"')
     expect(unit).toContain('Environment=THEOCLAW_PROFILE=a')
     expect(unit).toContain('Description=TheoClaw (theoclaw-a)')
+    // systemd expands $VAR and %specifiers in both lines, so a literal one is doubled.
+    const dollar = unitFor({ label: 'theoclaw', nodePath: '/n/$HOME/node', entryPath: '/e/100%/main.js', configPath: '/c.env', workingDirectory: '/w' })
+    expect(dollar).toContain('ExecStart=/n/$$HOME/node /e/100%%/main.js')
   })
 })

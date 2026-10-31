@@ -18,10 +18,14 @@ import { update } from './update.js'
  * which loads the configuration file itself.
  */
 
+/** SIGHUP too: the entry has its own session, so a closed terminal would otherwise orphan it. */
+const FORWARDED = ['SIGINT', 'SIGTERM', 'SIGHUP'] as const
+type ForwardedSignal = (typeof FORWARDED)[number]
+
 /** Where signals arrive: the real process, or a stand-in in the tests. */
 export interface SignalSource {
-  on(signal: 'SIGINT' | 'SIGTERM', listener: (signal: NodeJS.Signals) => void): unknown
-  removeListener(signal: 'SIGINT' | 'SIGTERM', listener: (signal: NodeJS.Signals) => void): unknown
+  on(signal: ForwardedSignal, listener: (signal: NodeJS.Signals) => void): unknown
+  removeListener(signal: ForwardedSignal, listener: (signal: NodeJS.Signals) => void): unknown
 }
 
 export interface CliIo extends DaemonIo {
@@ -100,12 +104,10 @@ function startChild(args: readonly string[], io: CliIo): Promise<number> {
   const forward = (signal: NodeJS.Signals): void => {
     child.kill(signal)
   }
-  io.signals.on('SIGINT', forward)
-  io.signals.on('SIGTERM', forward)
+  for (const signal of FORWARDED) io.signals.on(signal, forward)
   return new Promise<number>((resolve) => {
     const settle = (code: number): void => {
-      io.signals.removeListener('SIGINT', forward)
-      io.signals.removeListener('SIGTERM', forward)
+      for (const signal of FORWARDED) io.signals.removeListener(signal, forward)
       resolve(code)
     }
     child.once('error', (error) => {
