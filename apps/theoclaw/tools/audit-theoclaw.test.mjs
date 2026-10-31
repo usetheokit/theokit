@@ -189,6 +189,66 @@ describe('auditScope', () => {
   })
 })
 
+describe('auditScope over a quoted lockfile entry', () => {
+  const PRESENTER_ENTRY = "      '@theokit/presenter':\n        specifier: workspace:*\n        version: link:../presenter"
+  /** The fixture with the `@theokit/presenter` key of `packages/agents` rewritten as `key`. */
+  const withPresenterKey = (key) => LOCKFILE.replace(PRESENTER_ENTRY, PRESENTER_ENTRY.replace("'@theokit/presenter'", key))
+  /** The 1-based line of `text` that reads exactly `line`. */
+  const lineOf = (text, line) => text.split('\n').indexOf(line) + 1
+
+  it('reads a double-quoted dependency key with the quotes removed', () => {
+    const quoted = withPresenterKey('"@theokit/presenter"')
+    expect(quoted).not.toBe(LOCKFILE)
+    const kept = theoclawAdvisories(report([advisory('marked', 'high', ['packages__agents>@theokit/presenter>marked'])]), auditScope(quoted))
+    expect(kept.map((a) => a.module)).toEqual(['marked'])
+  })
+
+  it('reads a double-quoted link version with the quotes removed', () => {
+    const quoted = LOCKFILE.replace('        version: link:../../packages/agents', '        version: "link:../../packages/agents"')
+    expect(quoted).not.toBe(LOCKFILE)
+    expect([...auditScope(quoted).keys()]).toContain('packages__agents')
+  })
+
+  it('reads a double-quoted section key with the quotes removed', () => {
+    const quoted = LOCKFILE.replace('  apps/theoclaw:\n    dependencies:\n', '  apps/theoclaw:\n    "dependencies":\n')
+    expect(quoted).not.toBe(LOCKFILE)
+    expect([...auditScope(quoted).keys()]).toContain('packages__agents')
+  })
+
+  it('reads a double-quoted lockfileVersion with the quotes removed', () => {
+    const quoted = LOCKFILE.replace("lockfileVersion: '9.0'", 'lockfileVersion: "9.0"')
+    expect(quoted).not.toBe(LOCKFILE)
+    expect([...auditScope(quoted).keys()]).toEqual([...SCOPE.keys()])
+  })
+
+  it('refuses an unbalanced quote naming the line', () => {
+    const broken = withPresenterKey('"@theokit/presenter')
+    const line = lineOf(broken, '      "@theokit/presenter:')
+    expect(line).toBe(29)
+    expect(() => auditScope(broken)).toThrow(`pnpm-lock.yaml line ${line}: unbalanced quote`)
+  })
+
+  it('refuses a backslash inside a double-quoted entry', () => {
+    const broken = withPresenterKey('"@theokit\\u002fpresenter"')
+    const line = lineOf(broken, '      "@theokit\\u002fpresenter":')
+    expect(() => auditScope(broken)).toThrow(`pnpm-lock.yaml line ${line}: escape in "@theokit\\u002fpresenter" is not read`)
+  })
+
+  it('refuses a doubled single quote inside a single-quoted entry', () => {
+    for (const key of ["'it''s'", "'''"]) {
+      const broken = withPresenterKey(key)
+      const line = lineOf(broken, `      ${key}:`)
+      expect(() => auditScope(broken)).toThrow(`pnpm-lock.yaml line ${line}: escape in ${key} is not read`)
+    }
+  })
+
+  it('ignores an odd quote under a section the reader skips', () => {
+    const meta = LOCKFILE.replace('  packages/http:\n', '  packages/http:\n    dependenciesMeta:\n      "x:\n        injected: true\n')
+    expect(meta).not.toBe(LOCKFILE)
+    expect([...auditScope(meta).keys()]).toEqual([...SCOPE.keys()])
+  })
+})
+
 describe('auditExitCode', () => {
   it('exits 1 when any advisory is kept', () => {
     expect(auditExitCode([{}])).toBe(1)
