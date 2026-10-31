@@ -1,3 +1,6 @@
+/** The largest request body the bridge's HTTP surfaces read: 1 MiB, far above any chat or tool request. */
+export const MAX_REQUEST_BODY_BYTES = 1_048_576
+
 /** A request body that grew past the cap while it was being read. */
 export class BodyTooLargeError extends Error {
   constructor(readonly maxBytes: number) {
