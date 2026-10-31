@@ -1,7 +1,7 @@
 import { join } from 'node:path'
 
 import { createTheoClawAgent, theoClawAgentOptions } from '../agent/create-agent.js'
-import type { TheoClawAgentOptions } from '../agent/create-agent.js'
+import type { AgentImport, TheoClawAgentOptions } from '../agent/create-agent.js'
 import type { AgentToolOptions } from '../tools/tool-registry.js'
 import type { BindEnvironment } from './bind.js'
 import { requireModel } from './settings.js'
@@ -46,16 +46,25 @@ export function sessionAgentOptions(env: BindEnvironment, workspace: string): Se
 /**
  * One agent per call, for the `/control` socket's turns (one request boundary each), with the
  * start's `agentToolOptions` (B-382): the published theokit tools bound to the tool root and the
- * sandbox, and the state-directory veto. The process entry and the live test both build their
- * agents through this function, so the live check proves the entry's own.
+ * sandbox, and the state-directory veto, plus a migration import when the start read one (FR-008).
+ * The process entry and the live test both build their agents through this function, so the live
+ * check proves the entry's own.
  */
 export function createAgentFactory(
   env: BindEnvironment,
   create: CreateAgent = createTheoClawAgent,
+  imported?: AgentImport,
 ): (toolOptions?: AgentToolOptions) => Promise<TurnAgent> {
   return async (toolOptions) => {
     const { model, modelKey } = requireModel(env)
-    return create(theoClawAgentOptions({ model, apiKey: modelKey, ...(toolOptions === undefined ? {} : { toolOptions }) }))
+    return create(
+      theoClawAgentOptions({
+        model,
+        apiKey: modelKey,
+        ...(toolOptions === undefined ? {} : { toolOptions }),
+        ...(imported === undefined ? {} : { imported }),
+      }),
+    )
   }
 }
 
