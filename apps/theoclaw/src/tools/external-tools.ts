@@ -5,7 +5,7 @@ import type { McpHttpServerConfig, McpServerConfig, McpStdioServerConfig } from 
 import { z } from 'zod'
 
 import { TheoClawConfigError } from '../control-plane/errors.js'
-import { BUILT_TOOL_NAMES } from './tool-names.js'
+import { BUILT_SERVER_NAMES, BUILT_TOOL_NAMES, CONTROL_TOOL_NAMES } from './tool-names.js'
 import type { ProtectedPath } from './tool-settings.js'
 
 const VARIABLE = 'THEOCLAW_EXTERNAL_TOOLS'
@@ -128,6 +128,9 @@ function parseServer(name: string, raw: Readonly<Record<string, unknown>>, path:
   if (!SERVER_NAME.test(name)) {
     refuse(path, `mcpServers.${name}: a server name must match ${SERVER_NAME.source}, so the SDK names its tools mcp_${name}_<tool> unchanged`)
   }
+  if (BUILT_SERVER_NAMES.includes(name)) {
+    refuse(path, `mcpServers.${name}: ${name} is the name of a TheoClaw server (THEOCLAW_BROWSER), which this one would replace`)
+  }
   if ('url' in raw) {
     if ('auth' in raw) {
       refuse(
@@ -144,7 +147,7 @@ function checkAcpNames(agents: readonly AcpAgentConfig[], path: string): void {
   const seen = new Set<string>()
   for (const { name } of agents) {
     if (name.startsWith(MCP_TOOL_PREFIX)) refuse(path, `acpAgents: ${name} starts with ${MCP_TOOL_PREFIX}, the prefix the SDK gives MCP tools`)
-    if (BUILT_TOOL_NAMES.includes(name)) refuse(path, `acpAgents: ${name} is the name of a TheoClaw tool`)
+    if (BUILT_TOOL_NAMES.includes(name) || CONTROL_TOOL_NAMES.includes(name)) refuse(path, `acpAgents: ${name} is the name of a TheoClaw tool`)
     if (SDK_RESERVED_TOOL_NAMES.includes(name)) refuse(path, `acpAgents: ${name} is a name the SDK reserves`)
     if (seen.has(name)) refuse(path, `acpAgents: ${name} is named twice`)
     seen.add(name)

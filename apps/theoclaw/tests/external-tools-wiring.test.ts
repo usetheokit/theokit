@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import type { AcpToolConfig } from 'theokit/server/agent'
@@ -46,11 +46,19 @@ afterEach(async () => {
   for (const cleanup of cleanups.splice(0)) cleanup()
 })
 
-function settingsWith(content: unknown): ToolSettings {
+function settingsWith(content: unknown, browser = false): ToolSettings {
   const cwd = tempCwd(cleanups)
   const path = join(cwd, 'external-tools.json')
   writeFileSync(path, JSON.stringify(content))
-  return resolveToolSettings({ [VARIABLE]: path }, cwd, { detect: notEnforced, warn: () => undefined })
+  if (!browser) return resolveToolSettings({ [VARIABLE]: path }, cwd, { detect: notEnforced, warn: () => undefined })
+  // A stand-in browser install: a CLI path and a browsers directory holding one Chromium build.
+  const browsersDir = join(cwd, 'browsers')
+  mkdirSync(join(browsersDir, 'chromium-1200'), { recursive: true })
+  return resolveToolSettings({ [VARIABLE]: path, THEOCLAW_BROWSER: 'on' }, cwd, {
+    detect: notEnforced,
+    warn: () => undefined,
+    browser: { resolveCli: () => '/opt/playwright-mcp/cli.js', browsersDir },
+  })
 }
 
 function recordingCreate(): { create: (options: TheoClawAgentOptions) => Promise<TurnAgent>; options: TheoClawAgentOptions[] } {
@@ -77,6 +85,17 @@ describe('the external tools reach the /control agent only', () => {
     await createAgentFactory(MODEL_ENV, create)(agentToolOptions(settings))
     expect(options[0]?.mcpServers).toEqual(SERVERS)
     expect(options[0]?.mcpServers).not.toBe(settings.external.mcpServers)
+  })
+
+  it('with THEOCLAW_BROWSER=on the control agent gets the browser server beside the external ones', async () => {
+    const settings = settingsWith({ mcpServers: SERVERS }, true)
+    const { create, options } = recordingCreate()
+    await createAgentFactory(MODEL_ENV, create)(agentToolOptions(settings))
+    const servers = options[0]?.mcpServers ?? {}
+    expect(Object.keys(servers).sort()).toEqual(['browser', 'docs', 'files'])
+    expect(servers.docs).toEqual(SERVERS.docs)
+    expect(servers.files).toEqual(SERVERS.files)
+    expect(JSON.stringify(servers.browser)).toContain('/opt/playwright-mcp/cli.js')
   })
 
   it('the control agent gets one ACP tool per configured agent, with its cwd in the tool root', () => {

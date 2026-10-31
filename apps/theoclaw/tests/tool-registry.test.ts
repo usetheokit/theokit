@@ -12,8 +12,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { createTheoClawAgent, theoClawAgentOptions } from '../src/agent/create-agent.js'
 import { TheoClawConfigError } from '../src/control-plane/errors.js'
-import { agentToolOptions, buildTools } from '../src/tools/tool-registry.js'
-import { BUILT_TOOL_NAMES } from '../src/tools/tool-names.js'
+import { agentToolOptions, buildTools, controlAgentToolOptions } from '../src/tools/tool-registry.js'
+import { BUILT_TOOL_NAMES, CONTROL_TOOL_NAMES } from '../src/tools/tool-names.js'
+import { createWorkflowTools } from '../src/workflows/workflow-tools.js'
 import { resolveToolSettings } from '../src/tools/tool-settings.js'
 import { makeHostToolsWorkspace } from './host-tools-workspace.js'
 import { advertisedTools, startModelStub } from './model-stub.js'
@@ -50,6 +51,17 @@ describe('BUILT_TOOL_NAMES', () => {
     expect([...BUILT_TOOL_NAMES].sort()).toEqual([...READ_ONLY, 'git_diff', 'web_search', ...HOST].sort())
   })
 })
+describe('CONTROL_TOOL_NAMES', () => {
+  it('names every tool a /control agent holds beyond buildTools, and only those', () => {
+    const settings = resolveToolSettings({}, tempWorkspace(), { detect: notEnforced, ...quiet })
+    const workflows = createWorkflowTools({ withDraftAgent: () => Promise.reject(new Error('not used')), write: () => undefined })
+    const options = controlAgentToolOptions(settings, () => ({ send: () => Promise.reject(new Error('not used')) }), workflows)
+    const built = new Set(buildTools(settings).map((tool) => tool.name))
+    const extra = options.tools.map((tool) => tool.name).filter((name) => !built.has(name))
+    expect(extra.sort()).toEqual([...CONTROL_TOOL_NAMES].sort())
+  })
+})
+
 const enforced = (): BwrapDetection => ({ ok: true, bin: '/usr/bin/bwrap' })
 const notEnforced = (): BwrapDetection => ({ ok: false, reason: 'bwrap not found on PATH' })
 const quiet = { warn: () => undefined }

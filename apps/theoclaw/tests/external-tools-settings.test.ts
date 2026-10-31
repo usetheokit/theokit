@@ -104,6 +104,16 @@ describe('the external tools file at start', () => {
     expect(refusalOf({ acpAgents: [{ ...AGENT, name: 'memory_search' }] }).message).toContain('memory_search')
   })
 
+  it('refuses an ACP tool named after a tool only the /control agent holds', () => {
+    for (const name of ['run_code', 'delegate_all', 'digest']) {
+      expect(refusalOf({ acpAgents: [{ ...AGENT, name }] }).message).toContain(`acpAgents: ${name}`)
+    }
+  })
+
+  it('refuses a server named browser, the name of the THEOCLAW_BROWSER server', () => {
+    expect(refusalOf({ mcpServers: { browser: STDIO } }).message).toContain('mcpServers.browser')
+  })
+
   it('refuses two ACP tools with one name', () => {
     expect(refusalOf({ acpAgents: [AGENT, AGENT] }).message).toContain('coder')
   })
