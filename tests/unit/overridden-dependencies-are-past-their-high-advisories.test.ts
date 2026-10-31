@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 /**
- * Keeps this repository's lockfile off two release lines that keep CI's production audit
+ * Keeps this repository's lockfile off release lines that keep CI's production audit
  * (`pnpm audit --prod --audit-level=high`) red:
  *
  * - happy-dom `>=17.0.0 <=21.0.3`, GHSA-834v-8h66-3h79 (high, host code execution through an
@@ -14,6 +14,10 @@ import { describe, expect, it } from 'vitest'
  * - @azure/msal-node `>=5.0.0-beta.0 <7.1.0`, GHSA-xcx6-jx8p-x3h5 (high, the authorization code
  *   flow may disclose parameters to an attacker-controlled endpoint). First patched release:
  *   7.1.0. It reaches the production tree through `theoclaw > @microsoft/teams.apps`.
+ * - follow-redirects `>=1.16.0 <=1.16.1`, GHSA-mrwp-f3q8-3g9p (high, cross-realm
+ *   `sensitiveHeaders` arrays are discarded and custom credentials can follow redirects). First
+ *   patched release: 1.16.2. It reaches the production tree through
+ *   `theoclaw > @microsoft/teams.apps > axios`.
  *
  * No workspace manifest declares either, so a root `pnpm.overrides` entry is what moves each one.
  * The audit catches a regression too, but it needs the registry; this test reads two local files
@@ -44,6 +48,12 @@ const FLOORS: readonly AdvisoryFloor[] = [
     advisory: 'GHSA-xcx6-jx8p-x3h5',
     overrideKey: '@azure/msal-node@<7.1.0',
     patched: [7, 1, 0],
+  },
+  {
+    packageName: 'follow-redirects',
+    advisory: 'GHSA-mrwp-f3q8-3g9p',
+    overrideKey: 'follow-redirects@<1.16.2',
+    patched: [1, 16, 2],
   },
 ]
 

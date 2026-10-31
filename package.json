@@ -133,6 +133,7 @@
       "dompurify@<3.4.17": "^3.4.17",
       "happy-dom@<21.0.4": "^21.0.4",
       "@azure/msal-node@<7.1.0": "^7.1.0",
+      "follow-redirects@<1.16.2": "^1.16.2",
       "@theokit/sdk": "5.11.0"
     },
     "patchedDependencies": {
