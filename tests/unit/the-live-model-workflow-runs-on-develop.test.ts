@@ -250,9 +250,9 @@ function runBuildScript(
 /**
  * A copy of the script in an empty directory, so its repository root has no `apps/theoclaw/dist`,
  * and a fake `pnpm` first on PATH that logs its arguments and runs `onAgents` (a shell command) for the agents
- * selector and `onTheoclaw` for the TheoClaw selector, 0 otherwise.
+ * selector, `onTheoclaw` for the TheoClaw selector and `onWeb` for TheoClaw's build:web, 0 otherwise.
  */
-function scratchCopy(onAgents = 'exit 0', onTheoclaw = 'true') {
+function scratchCopy(onAgents = 'exit 0', onTheoclaw = 'true', onWeb = 'true') {
   const dir = mkdtempSync(join(tmpdir(), 'live-model-build-'))
   SCRATCH_DIRS.push(dir)
   mkdirSync(join(dir, 'scripts'))
@@ -263,7 +263,7 @@ function scratchCopy(onAgents = 'exit 0', onTheoclaw = 'true') {
   const fakePnpm = join(dir, 'bin', 'pnpm')
   writeFileSync(
     fakePnpm,
-    `#!/bin/sh\necho "$*" >> '${calls}'\ncase "$*" in *@theokit/agents...*) ${onAgents};; *theoclaw...*) ${onTheoclaw};; esac\nexit 0\n`,
+    `#!/bin/sh\necho "$*" >> '${calls}'\ncase "$*" in *@theokit/agents...*) ${onAgents};; *theoclaw...*) ${onTheoclaw};; *build:web*) ${onWeb};; esac\nexit 0\n`,
   )
   chmodSync(fakePnpm, 0o755)
   const env = { ...process.env, PATH: `${join(dir, 'bin')}:${process.env.PATH ?? ''}` }
@@ -332,17 +332,43 @@ describe('scripts/live-model-build.mjs', () => {
     expect(readFileSync(calls, 'utf8')).not.toContain('theoclaw...')
   })
 
-  it('with no target the build script builds agents then TheoClaw and exits 0 when the entry exists', () => {
+  it('with no target the build script builds agents, TheoClaw, then the WebChat page, and exits 0 when both outputs exist', () => {
     const { script, calls, env } = scratchCopy(
       'exit 0',
       'mkdir -p apps/theoclaw/dist && touch apps/theoclaw/dist/main.js',
+      'mkdir -p apps/theoclaw/dist/web/assets && touch apps/theoclaw/dist/web/assets/app.js',
     )
     const result = runBuildScript([], { script, env })
     expect(result.status, result.stderr).toBe(0)
     expect(readFileSync(calls, 'utf8').trim().split('\n')).toEqual([
       '--filter @theokit/agents... build',
       '--filter theoclaw... build',
+      '--filter theoclaw run build:web',
     ])
+  })
+
+  // gateway-webchat review F-tests-1 / F-wire-1: tests/live/webchat.live.test.ts asserts GET /webchat
+  // is 200, which needs the page bundle; without build:web the live job answered 503 on every run.
+  it('the build script fails naming the WebChat bundle when build:web leaves no app.js', () => {
+    const { script, calls, env } = scratchCopy(
+      'exit 0',
+      'mkdir -p apps/theoclaw/dist && touch apps/theoclaw/dist/main.js',
+    )
+    const result = runBuildScript(['theoclaw'], { script, env })
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain('apps/theoclaw/dist/web/assets/app.js is missing')
+    expect(readFileSync(calls, 'utf8')).toContain('--filter theoclaw run build:web')
+  })
+
+  it('a failed build:web fails naming the WebChat build', () => {
+    const { script, env } = scratchCopy(
+      'exit 0',
+      'mkdir -p apps/theoclaw/dist && touch apps/theoclaw/dist/main.js',
+      'exit 4',
+    )
+    const result = runBuildScript(['theoclaw'], { script, env })
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain('building the WebChat page (build:web) failed with status 4')
   })
 
   it('a build killed by a signal fails naming the selector and the signal', () => {

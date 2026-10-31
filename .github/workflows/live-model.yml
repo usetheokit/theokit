@@ -58,8 +58,9 @@ jobs:
       # several of them start an sshd or an instance process and share the host's ports.
       # The script builds `theoclaw...`, TheoClaw and its workspace dependencies: control-plane and
       # instance-profiles spawn apps/theoclaw/dist/main.js, which `theoclaw^...` never built (B-651),
-      # and the script fails naming that file when it is missing. ci.yml's `live-model-build` job runs
-      # the same script on every pull request (B-659).
+      # and the script fails naming that file when it is missing. It also runs TheoClaw's build:web,
+      # because webchat.live.test.ts needs the page bundle (GET /webchat is 503 without it). ci.yml's
+      # `live-model-build` job runs the same script on every pull request (B-659).
       - name: Build TheoClaw and its workspace dependencies
         run: node scripts/live-model-build.mjs theoclaw
       - name: TheoClaw live tests (THEOCLAW_LIVE)
