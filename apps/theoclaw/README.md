@@ -291,7 +291,9 @@ pnpm --filter theoclaw start
 Open `http://127.0.0.1:<port>/webchat` and enter the token. The page keeps it in the tab's
 `sessionStorage` and sends it only in the `Authorization: Bearer` header, never in a URL. Each
 message runs one agent turn, streamed through `POST /webchat/chat`; a missing or wrong token answers
-401 before any agent is built. The page and its two assets carry no secret and are served without the
+401 before any agent is built, and a post over 64 KiB answers 413. WebChat keeps no conversation:
+each message reaches a fresh agent that has not seen the earlier ones, although the page shows them
+as one thread (channel chats keep theirs, B-378). The page and its two assets carry no secret and are served without the
 token. Closing the tab mid-answer cancels the turn. Without `build:web`,
 `GET /webchat` answers 503 and names the script. `build:web` writes `dist/web/assets/app.js` and
 `app.css`, and fails when the two exceed 3 MiB.

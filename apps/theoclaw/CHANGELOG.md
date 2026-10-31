@@ -129,9 +129,10 @@ and versioning follows [Semantic Versioning](https://semver.org/).
   a browser chat at `/webchat` (B-368). Build the page with `pnpm --filter theoclaw run build:web`;
   without the bundle `GET /webchat` answers 503 and names the script. The page asks for the token,
   keeps it in the tab's `sessionStorage` and sends it only as `Authorization: Bearer`; a missing or
-  wrong token answers 401 before any agent is built. Each message runs one agent turn streamed
-  through `POST /webchat/chat` by the framework's route generator, and closing the tab mid-answer
-  cancels the turn. Without the token every `/webchat` path answers 404 and the start says
+  wrong token answers 401 before any agent is built, and a post over 64 KiB answers 413. Each
+  message runs one agent turn streamed through `POST /webchat/chat` by the framework's route
+  generator, and closing the tab mid-answer cancels the turn. WebChat keeps no conversation: each
+  message reaches a fresh agent that has not seen the earlier ones, unlike a channel chat (B-378). Without the token every `/webchat` path answers 404 and the start says
   `theoclaw: webchat off (THEOCLAW_WEBCHAT_TOKEN unset)`. The token is masked in the output like
   the control token.
 - A control plane: `pnpm --filter theoclaw run build && pnpm --filter theoclaw start` starts one
