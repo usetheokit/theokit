@@ -53,6 +53,7 @@ interface RouteCacheValue {
 const setCookieWarnedRoutes = new WeakSet()
 const variesCookieWarnedRoutes = new WeakSet()
 const oversizedWarnedRoutes = new WeakSet()
+const revalidateFailureWarnedRoutes = new WeakSet()
 
 /**
  * Wrap a `RouteConfig` with cache-aware handler logic.
@@ -78,7 +79,8 @@ const oversizedWarnedRoutes = new WeakSet()
  * each follower runs the handler itself. A thrown leader rejects its followers
  * with the same error, unless the leader's own request signal was aborted; a
  * Node IncomingMessage arrives here without a signal, so that exception does not
- * apply to it. A stale key starts one background revalidation at a time.
+ * apply to it. A stale key starts one background revalidation at a time; a failed
+ * one keeps the stale entry and is reported once per route with `console.warn`.
  */
 export function defineCachedRoute<
   TQuery extends z.ZodType = z.ZodUndefined,
@@ -324,8 +326,16 @@ function scheduleRouteRevalidate<THandlerCtx>(
       const result = await tryCacheResponse(response, ctx)
       if (!result) return
       await ctx.engine.set(ctx.key, buildRouteCacheEntry(result, ctx))
-    } catch {
-      // Stale entry remains; future request retries on its own stale-check
+    } catch (err) {
+      // The stale entry stays and the next stale hit retries. Reported once per route, so
+      // a handler that keeps failing in the background is visible without flooding the log.
+      if (!revalidateFailureWarnedRoutes.has(ctx.routeConfig)) {
+        revalidateFailureWarnedRoutes.add(ctx.routeConfig)
+        console.warn(
+          `[theokit:cache] background revalidation failed for key "${ctx.key}"; serving stale until it succeeds`,
+          err,
+        )
+      }
     } finally {
       ctx.revalidating.delete(ctx.key)
     }
