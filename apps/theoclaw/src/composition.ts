@@ -53,7 +53,7 @@ import {
 } from './webhooks/platform-routes.js'
 import { createWebhookRouter, type WebhookRoute } from './webhooks/router.js'
 import type { TeamsVerifier } from './webhooks/teams.js'
-import { agentToolOptions, NO_TOOL_OPTIONS } from './tools/tool-registry.js'
+import { controlAgentToolOptions, NO_TOOL_OPTIONS } from './tools/tool-registry.js'
 import type { AgentToolOptions } from './tools/tool-registry.js'
 import { checkHostToolsPosture, resolveToolSettings } from './tools/tool-settings.js'
 import type { ToolDeps, ToolSettings } from './tools/tool-settings.js'
@@ -457,7 +457,10 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
     write: stderr,
   })
   const extraTools = workflowTools(options.draftAgentFactory, stderr)
-  const agents = createContainer<TurnAgent>({ factory: () => options.agentFactory(agentToolOptions(tools, extraTools)) })
+  // `/control` agents also hold `run_code` and `delegate_all`; their workers come from the same factory.
+  const agents = createContainer<TurnAgent>({
+    factory: () => options.agentFactory(controlAgentToolOptions(tools, options.agentFactory, extraTools)),
+  })
   composedApp = composed
   const listen = options.listen ?? listenControlPlane
   serving = listen({

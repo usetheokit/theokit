@@ -17,8 +17,11 @@ export interface TurnAgent {
 
 export interface TurnRun {
   stream(): AsyncIterable<{ readonly type: string }>
-  /** How the run ended; a failed one may carry the SDK's error code. */
-  wait(): Promise<{ readonly status: string; readonly error?: { readonly code?: string } }>
+  /**
+   * How the run ended; a failed one may carry the SDK's error code. `result` is the final answer,
+   * which a `delegate_all` worker hands back to its parent (B-386).
+   */
+  wait(): Promise<{ readonly status: string; readonly result?: string; readonly error?: { readonly code?: string } }>
   /** Move the run to cancelled and stop its in-flight tool calls; the SDK `Run` always has it (plan D2). */
   cancel(): Promise<void>
 }
