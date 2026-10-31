@@ -13,6 +13,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createTheoClawAgent, theoClawAgentOptions } from '../src/agent/create-agent.js'
 import { TheoClawConfigError } from '../src/control-plane/errors.js'
 import { agentToolOptions, buildTools } from '../src/tools/tool-registry.js'
+import { BUILT_TOOL_NAMES } from '../src/tools/tool-names.js'
 import { resolveToolSettings } from '../src/tools/tool-settings.js'
 import { makeHostToolsWorkspace } from './host-tools-workspace.js'
 import { advertisedTools, startModelStub } from './model-stub.js'
@@ -43,6 +44,12 @@ vi.mock('@theokit/agents/tool-scope', async (importOriginal) => {
 
 const READ_ONLY = ['list_dir', 'read_file', 'todolist', 'view_image', 'web_fetch']
 const HOST = ['apply_patch', 'edit_file', 'shell_exec', 'write_file']
+
+describe('BUILT_TOOL_NAMES', () => {
+  it('names every tool buildTools can register, and only those', () => {
+    expect([...BUILT_TOOL_NAMES].sort()).toEqual([...READ_ONLY, 'git_diff', 'web_search', ...HOST].sort())
+  })
+})
 const enforced = (): BwrapDetection => ({ ok: true, bin: '/usr/bin/bwrap' })
 const notEnforced = (): BwrapDetection => ({ ok: false, reason: 'bwrap not found on PATH' })
 const quiet = { warn: () => undefined }

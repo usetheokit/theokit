@@ -166,6 +166,15 @@ export function resolveToolSettings(env: Env, cwd: string, deps: ToolDeps = {}):
   const search = readSearch(env)
   const browser = readBrowser(env, deps.browser)
   const external = resolveExternalTools(env)
+  if (hostTools && external.acpAgents.length > 0) {
+    // An ACP agent runs unsandboxed in the tool root, one new process per call: with the shell able
+    // to write there, a steered turn plants what the next call loads (a project settings file, a
+    // relative argument, `node_modules/.bin`) outside the sandbox.
+    throw new TheoClawConfigError(
+      'THEOCLAW_EXTERNAL_TOOLS names ACP agents, which THEOCLAW_HOST_TOOLS=on refuses: the sandboxed shell can write files/, where each agent runs unsandboxed',
+      { variable: 'THEOCLAW_EXTERNAL_TOOLS' },
+    )
+  }
   const workspace = realpathSync(cwd)
   const { toolRoot, lines } = prepareToolRoot(workspace)
   const mode: SandboxMode = hostTools ? sandboxMode : 'read-only'

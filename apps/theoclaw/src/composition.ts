@@ -56,6 +56,7 @@ import { createWebhookRouter, type WebhookRoute } from './webhooks/router.js'
 import type { TeamsVerifier } from './webhooks/teams.js'
 import { controlAgentToolOptions, NO_TOOL_OPTIONS } from './tools/tool-registry.js'
 import type { AgentToolOptions } from './tools/tool-registry.js'
+import { externalToolPaths } from './tools/external-tools.js'
 import { checkHostToolsPosture, resolveToolSettings } from './tools/tool-settings.js'
 import type { ToolDeps, ToolSettings } from './tools/tool-settings.js'
 import { createWorkflowTools } from './workflows/workflow-tools.js'
@@ -346,6 +347,7 @@ function startToolSettings(options: StartOptions, policy: AuthorizationPolicy): 
   const protectedPaths = [
     ...(policy.stateDir === undefined ? [] : [{ path: policy.stateDir, variable: 'THEOCLAW_STATE_DIR' }]),
     ...(external === undefined || external === '' ? [] : [{ path: external, variable: 'THEOCLAW_EXTERNAL_TOOLS' }]),
+    ...externalToolPaths(tools.external),
   ]
   checkHostToolsPosture(tools, protectedPaths, options.toolDeps)
   return tools

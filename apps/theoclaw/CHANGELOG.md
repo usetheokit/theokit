@@ -70,7 +70,8 @@ and versioning follows [Semantic Versioning](https://semver.org/).
   `createACPTool` from `theokit/server/agent`, run in `files/`, with every permission request
   refused. The start validates the file before any runner starts and refuses an HTTP server's
   `auth` (the SDK ignores it, B-680), `envPolicy: "all"`, a relative command, a server name the SDK
-  would rewrite, an ACP name that collides with another tool, and, with host tools on, a file under
+  would rewrite, an ACP name that collides with another tool, and, with host tools on, any ACP agent
+  (it would run unsandboxed in `files/`, which the shell writes) and a file or stdio command under
   `files/` or `/tmp`. Header and env values are masked and the start prints one line naming the
   servers and agents; chat replies still get no tool. An ACP agent inherits TheoClaw's environment
   and its stderr is not masked (B-681). The parity ledger records OC-67 and OC-68 as shipped,

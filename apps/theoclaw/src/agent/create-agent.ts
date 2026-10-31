@@ -39,8 +39,9 @@ export function theoClawAgentOptions<Model extends string | ModelSelection>(
     memory: { enabled: false } as const,
   }
   if (input.toolOptions === undefined) return base
-  // Copied: the SDK takes mutable arrays and maps, and each agent gets its own.
   const { tools, plugins, mcpServers } = input.toolOptions
+  // Copied one level: the SDK takes mutable arrays and maps, so each agent gets its own list and
+  // its own server map; a server's own `headers`, `env` and `args` are shared, and the SDK reads them only.
   return {
     ...base,
     tools: [...tools],

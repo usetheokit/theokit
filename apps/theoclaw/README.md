@@ -321,13 +321,16 @@ before any runner starts, and refuses it naming the file and the key:
 - Each ACP agent is one tool named `name`, a `createACPTool` from `theokit/server/agent` run in
   `files/`, one process per call. Its name may not be a TheoClaw tool's, a name the SDK reserves
   (`shell`, `memory_search`, `memory_get`), or start with `mcp_`. Every permission it asks for is
-  refused, so it answers in text but changes nothing (asking the owner is B-684).
+  refused (asking the owner is B-684). That stops only what the agent asks about: it runs as the
+  TheoClaw user, outside the tool sandbox, and an agent that writes without asking (its own
+  auto-accept mode or project settings) is not stopped by it.
 - **An ACP agent inherits the environment of the TheoClaw process**, channel tokens included, and
   its stderr is not masked: an `env` option and a piped stderr are B-681. Run only agents you would
   trust with those values.
-- With `THEOCLAW_HOST_TOOLS=on` the file may not lie under `files/` or `/tmp`, where the shell could
-  rewrite which processes the next start spawns. A stdio server is a host process outside the tool
-  sandbox.
+- With `THEOCLAW_HOST_TOOLS=on` the file, every absolute stdio `command` and every stdio `cwd` may
+  not lie under `files/` or `/tmp`, where the shell could rewrite what the next start spawns, and
+  ACP agents are refused: each runs unsandboxed in `files/`, which the shell can write. A stdio
+  server is a host process outside the tool sandbox.
 
 The start prints one line naming them, e.g. `tools: external: 2 MCP servers (docs, files), 1 ACP
 agent (coder)`. The live check runs a stdio MCP fixture and a fixture ACP agent on a real model:

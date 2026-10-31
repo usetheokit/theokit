@@ -5,7 +5,8 @@ import type { McpHttpServerConfig, McpServerConfig, McpStdioServerConfig } from 
 import { z } from 'zod'
 
 import { TheoClawConfigError } from '../control-plane/errors.js'
-import { BUILT_TOOL_NAMES } from './tool-registry.js'
+import { BUILT_TOOL_NAMES } from './tool-names.js'
+import type { ProtectedPath } from './tool-settings.js'
 
 const VARIABLE = 'THEOCLAW_EXTERNAL_TOOLS'
 
@@ -115,8 +116,10 @@ function readJson(path: string, readFile: ReadFile): unknown {
   }
   try {
     return JSON.parse(text) as unknown
-  } catch (error) {
-    return refuse(path, `is not JSON: ${(error as Error).message}`)
+  } catch {
+    // Not V8's message: it quotes the text around the error, which may be a header value, and the
+    // output mask is built from the parsed file, so nothing would hide it.
+    return refuse(path, 'is not JSON')
   }
 }
 
@@ -187,4 +190,18 @@ export function resolveExternalTools(env: Env, readFile: ReadFile = readFileSync
     secrets: secretsOf(mcpServers),
     startLine: startLineOf(Object.keys(mcpServers), acpAgents),
   }
+}
+
+/**
+ * The paths the next start would execute from: every absolute stdio command and working directory.
+ * With host tools on, the start refuses any of them inside a root the sandboxed shell can write.
+ */
+export function externalToolPaths(external: ExternalTools): ProtectedPath[] {
+  return Object.values(external.mcpServers).flatMap((server) =>
+    'url' in server
+      ? []
+      : [server.command, ...(server.cwd === undefined ? [] : [server.cwd])]
+          .filter((path) => isAbsolute(path))
+          .map((path) => ({ path, variable: VARIABLE })),
+  )
 }

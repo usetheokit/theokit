@@ -74,6 +74,11 @@ describe('the external tools file at start', () => {
     expect(refusalOf('{').message).toContain('is not JSON')
   })
 
+  it('refuses a file that is not JSON without quoting its text, which may hold a header value', () => {
+    const error = refusalOf('{"mcpServers":{"a":{"url":"https://x.example","headers":{"Authorization":Bearer sk-leak-0123456789}}}}')
+    expect(error.message).not.toContain('sk-leak')
+  })
+
   it('refuses an HTTP server that carries auth, naming the server and the gap item', () => {
     const error = refusalOf({ mcpServers: { docs: { url: 'https://x.example/mcp', auth: { CLIENT_ID: 'c' } } } })
     expect(error.message).toContain('mcpServers.docs.auth')
@@ -140,6 +145,31 @@ describe('the external tools file at start', () => {
     expect(result.error).toBeInstanceOf(TheoClawConfigError)
     expect((result.error as TheoClawConfigError).variable).toBe(VARIABLE)
     expect(result.error?.message).toContain(path)
+    expect(result.builds()).toBe(0)
+  })
+
+  it('refuses ACP agents when host tools are on, since the shell can write the directory they run in', async () => {
+    const workspace = makeHostToolsWorkspace()
+    cleanups.push(() => workspace.remove())
+    const path = toolsFile({ acpAgents: [AGENT] })
+    const result = await start({ THEOCLAW_HOST_TOOLS: 'on', [VARIABLE]: path }, workspace.path, { detect: enforced })
+    expect(result.error).toBeInstanceOf(TheoClawConfigError)
+    expect((result.error as TheoClawConfigError).variable).toBe(VARIABLE)
+    expect(result.error?.message).toContain('ACP agents')
+    expect(result.builds()).toBe(0)
+  })
+
+  it('refuses an MCP command inside the tool root when host tools are on', async () => {
+    const workspace = makeHostToolsWorkspace()
+    cleanups.push(() => workspace.remove())
+    const command = join(workspace.path, 'files', 'server')
+    // Beside the workspace, not under /tmp, so only the command can be what is refused.
+    const path = join(workspace.path, 'external-tools.json')
+    writeFileSync(path, JSON.stringify({ mcpServers: { files: { command } } }))
+    const result = await start({ THEOCLAW_HOST_TOOLS: 'on', [VARIABLE]: path }, workspace.path, { detect: enforced })
+    expect(result.error).toBeInstanceOf(TheoClawConfigError)
+    expect((result.error as TheoClawConfigError).variable).toBe(VARIABLE)
+    expect(result.error?.message).toContain(command)
     expect(result.builds()).toBe(0)
   })
 
