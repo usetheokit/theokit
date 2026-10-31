@@ -165,7 +165,9 @@ describe('defineCachedRoute single-flight (B-667)', () => {
       `${CONCURRENT_REQUESTS} stale lookups`,
     )
     const revalidations = gated.entries() - before.entries
+    const settledBefore = gated.settled()
     gated.release()
+    await waitFor(() => gated.settled() > settledBefore, 'the held revalidation to settle')
 
     expect(responses.every((r) => r.headers.get('X-Theo-Cache') === 'STALE')).toBe(true)
     expect(revalidations, `background revalidations for ${CONCURRENT_REQUESTS} stale hits`).toBe(1)
@@ -192,6 +194,47 @@ describe('defineCachedRoute single-flight (B-667)', () => {
     const cookies = responses.map((r) => r.headers.get('set-cookie'))
     expect(new Set(cookies).size).toBe(CONCURRENT_REQUESTS)
   })
+
+  it.each([
+    {
+      flavour: 'an error status',
+      cache: {},
+      outcome: (run: number) => new Response(`run ${run}`, { status: 500 }),
+    },
+    {
+      flavour: 'a cacheable predicate refusing it',
+      cache: { cacheable: () => false },
+      outcome: (run: number) => new Response(`run ${run}`),
+    },
+    {
+      flavour: 'an oversized body',
+      cache: { maxEntrySize: 1 },
+      outcome: (run: number) => new Response(`run ${run}`),
+    },
+  ])(
+    'test_followers_of_a_leader_whose_response_is_uncacheable_by_$flavour_run_the_handler_themselves',
+    async ({ cache, outcome }) => {
+      vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+      const { engine, lookups } = countingEngine()
+      const gated = gatedHandler(outcome)
+      const route = defineCachedRoute(engine, {
+        cache: { maxAge: 60, ...cache },
+        handler: gated.handler,
+      })
+
+      const pending = Array.from({ length: CONCURRENT_REQUESTS }, () => call(route, makeCtx(get())))
+      await waitFor(() => lookups() >= CONCURRENT_REQUESTS, `${CONCURRENT_REQUESTS} cache lookups`)
+      const runsWhileLeaderHeld = gated.entries()
+      gated.release()
+      const responses = await Promise.all(pending)
+
+      expect(runsWhileLeaderHeld, 'handler runs while the leader is still running').toBe(1)
+      expect(gated.entries()).toBe(CONCURRENT_REQUESTS)
+      // No request received another request's response.
+      const bodies = await Promise.all(responses.map((r) => r.text()))
+      expect(new Set(bodies).size).toBe(CONCURRENT_REQUESTS)
+    },
+  )
 
   it('test_a_throwing_leader_rejects_its_followers_and_frees_the_key', async () => {
     const { engine, lookups } = countingEngine()
@@ -237,6 +280,7 @@ describe('defineCachedRoute single-flight (B-667)', () => {
     gated.rearm(() => {
       throw new Error('revalidation failed')
     })
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
 
     // A burst while the first revalidation is held starts no second one.
     const before = { entries: gated.entries(), lookups: lookups() }
@@ -299,14 +343,19 @@ describe('defineCachedRoute single-flight (B-667)', () => {
   it('test_concurrent_stale_hits_on_two_keys_start_one_revalidation_per_key', async () => {
     const { engine, lookups } = countingEngine()
     let entered = 0
+    let finished = 0
     let open: () => void = () => undefined
     let gate: Promise<void> = Promise.resolve()
     const route = defineCachedRoute(engine, {
       cache: { maxAge: 1, swr: 600 },
       handler: async (c: { request: Request }) => {
         entered++
-        await gate
-        return Response.json({ path: new URL(c.request.url).pathname })
+        try {
+          await gate
+          return Response.json({ path: new URL(c.request.url).pathname })
+        } finally {
+          finished++
+        }
       },
     })
     const urls = ['https://x/api/a', 'https://x/api/b']
@@ -329,6 +378,7 @@ describe('defineCachedRoute single-flight (B-667)', () => {
     )
     const revalidations = entered - before.entries
     open()
+    await waitFor(() => finished >= entered, 'both held revalidations to settle')
 
     expect(responses.every((r) => r.headers.get('X-Theo-Cache') === 'STALE')).toBe(true)
     expect(revalidations, 'background revalidations for stale hits on 2 keys').toBe(2)
@@ -498,7 +548,65 @@ describe('defineCachedRoute single-flight (B-667)', () => {
     expect(warn).toHaveBeenCalledTimes(1)
     const [message, reported] = warn.mock.calls[0] ?? []
     expect(String(message)).toContain('background revalidation failed')
-    expect(String(message)).toContain('route:GET')
+    expect(String(message)).toContain('GET /api/single-flight')
     expect(reported).toBe(failure)
+  })
+
+  it('test_a_failed_revalidation_warning_omits_query_and_varied_header_values', async () => {
+    const { engine } = countingEngine()
+    const gated = gatedHandler()
+    const route = defineCachedRoute(engine, {
+      cache: { maxAge: 1, swr: 600, varies: ['authorization'] },
+      handler: gated.handler,
+    })
+    const secretRequest = (): Request =>
+      new Request(`${URL_UNDER_TEST}?token=query-secret`, {
+        headers: { authorization: 'Bearer header-secret' },
+      })
+    const first = call(route, makeCtx(secretRequest()))
+    gated.release()
+    expect((await first).headers.get('X-Theo-Cache')).toBe('MISS')
+    vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 5_000)
+    gated.rearm(() => {
+      throw new Error('revalidation failed')
+    })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    const stale = await call(route, makeCtx(secretRequest()))
+    gated.release()
+    await waitFor(() => warn.mock.calls.length > 0, 'the failed revalidation to be reported')
+
+    expect(stale.headers.get('X-Theo-Cache')).toBe('STALE')
+    const message = String(warn.mock.calls[0]?.[0])
+    expect(message).toContain('GET /api/single-flight')
+    expect(message).not.toContain('query-secret')
+    expect(message).not.toContain('header-secret')
+  })
+
+  it('test_a_route_whose_revalidation_keeps_failing_warns_once', async () => {
+    const { engine } = countingEngine()
+    const gated = gatedHandler()
+    const route = defineCachedRoute(engine, {
+      cache: { maxAge: 1, swr: 600 },
+      handler: gated.handler,
+    })
+    await populateThenStale(route, gated)
+    gated.rearm(() => {
+      throw new Error('revalidation failed')
+    })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    for (let failure = 1; failure <= 2; failure++) {
+      const entriesBefore = gated.entries()
+      const settledBefore = gated.settled()
+      expect((await call(route, makeCtx(get()))).headers.get('X-Theo-Cache')).toBe('STALE')
+      await waitFor(() => gated.entries() > entriesBefore, `revalidation ${failure} to start`)
+      gated.release()
+      await waitFor(() => gated.settled() > settledBefore, `revalidation ${failure} to settle`)
+      gated.rearm()
+    }
+
+    expect(gated.settled(), 'failed background revalidations').toBeGreaterThanOrEqual(3)
+    expect(warn, 'warnings for one route whose revalidation failed twice').toHaveBeenCalledTimes(1)
   })
 })
