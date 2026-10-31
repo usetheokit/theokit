@@ -70,9 +70,15 @@ const oversizedWarnedRoutes = new WeakSet()
  * 5. Cacheable → write entry + return Response with X-Theo-Cache: MISS
  * 6. Not cacheable → return original Response unchanged
  *
- * Concurrent dedupe is INTENTIONALLY NOT used for routes — Response objects
- * cannot be safely shared across concurrent callers (body is single-use stream).
- * Each request that misses runs the handler independently.
+ * Requests are single-flight per cache key (B-667): concurrent misses of one key
+ * share one handler run. The leader's `Response` is never shared (single-use body):
+ * each follower builds its own `Response` from the cached value, with
+ * X-Theo-Cache: MISS. When the leader's response is not cacheable (Set-Cookie,
+ * stream, error status, `cacheable` refusing it), it stays the leader's own and
+ * each follower runs the handler itself. A thrown leader rejects its followers
+ * with the same error, unless the leader's own request signal was aborted; a
+ * Node IncomingMessage arrives here without a signal, so that exception does not
+ * apply to it. A stale key starts one background revalidation at a time.
  */
 export function defineCachedRoute<
   TQuery extends z.ZodType = z.ZodUndefined,
