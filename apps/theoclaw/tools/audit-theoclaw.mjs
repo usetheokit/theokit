@@ -49,7 +49,24 @@ const importerId = (key) => key.split('/').join('__')
 /** One `key:` or `key: value` line of the importers block, with its indentation. */
 const LOCK_ENTRY = /^( {2,8})(\S.*?):(?: (.+))?$/
 
-const unquote = (text) => text.replace(/^'(.*)'$/, '$1')
+/** One `'…'` or `"…"` pair around a scalar, the quote in group 1 and the text inside in group 2. */
+const QUOTE_PAIR = /^(['"])(.*)\1$/
+
+/**
+ * `text` without its quote pair, either style. Throws for a quote with no matching close, and for an
+ * escape (`''` single-quoted, a backslash double-quoted): left undecoded, the name would match no
+ * audit path and narrow the scope silently.
+ */
+function unquote(text, line) {
+  if (text[0] !== "'" && text[0] !== '"') return text
+  const pair = QUOTE_PAIR.exec(text)
+  if (!pair) throw new AuditReportError(`${LOCKFILE} line ${line}: unbalanced quote in ${text}`)
+  const [, quote, inner] = pair
+  if (inner.includes(quote) || (quote === '"' && inner.includes('\\'))) {
+    throw new AuditReportError(`${LOCKFILE} line ${line}: escape in ${text} is not read`)
+  }
+  return inner
+}
 
 /** The lockfile format whose importers layout `readImporters` was written for. */
 const LOCKFILE_VERSION = '9.0'
@@ -60,7 +77,8 @@ const DEPENDENCY_SECTIONS = new Set([...PRODUCTION_SECTIONS, 'devDependencies'])
 /** Throws unless the lockfile declares the version whose layout this reader parses. */
 function assertLockfileVersion(lockText) {
   const found = LOCKFILE_VERSION_LINE.exec(lockText)
-  const version = found ? unquote(found[1].trim()) : '(none)'
+  const line = found ? lockText.slice(0, found.index).split('\n').length : 0
+  const version = found ? unquote(found[1].trim(), line) : '(none)'
   if (version !== LOCKFILE_VERSION) {
     throw new AuditReportError(`${LOCKFILE} has lockfileVersion ${version}; this reader reads ${LOCKFILE_VERSION}`)
   }
@@ -79,25 +97,25 @@ function closeDependency(state) {
 const ENTRY_BY_INDENT = {
   2: (state, key) => {
     closeDependency(state)
-    state.importer = unquote(key)
+    state.importer = unquote(key, state.line)
     state.deps = []
     state.importers.set(state.importer, state.deps)
   },
   4: (state, key, value) => {
     closeDependency(state)
-    state.section = key
-    if (value !== undefined && DEPENDENCY_SECTIONS.has(key)) {
-      throw new AuditReportError(`${state.importer} ${key} is not a block mapping in ${LOCKFILE}`)
+    state.section = unquote(key, state.line)
+    if (value !== undefined && DEPENDENCY_SECTIONS.has(state.section)) {
+      throw new AuditReportError(`${state.importer} ${state.section} is not a block mapping in ${LOCKFILE}`)
     }
   },
   6: (state, key) => {
     closeDependency(state)
     if (!DEPENDENCY_SECTIONS.has(state.section)) return
-    state.open = { section: state.section, name: unquote(key), version: null }
+    state.open = { section: state.section, name: unquote(key, state.line), version: null }
     state.deps.push(state.open)
   },
   8: (state, key, value) => {
-    if (key === 'version' && state.open) state.open.version = unquote(value ?? '')
+    if (state.open && unquote(key, state.line) === 'version') state.open.version = unquote(value ?? '', state.line)
   },
 }
 
@@ -109,9 +127,10 @@ const ENTRY_BY_INDENT = {
  */
 function readImporters(lockText) {
   assertLockfileVersion(lockText)
-  const state = { importers: new Map(), importer: null, deps: null, section: null, open: null }
+  const state = { importers: new Map(), importer: null, deps: null, section: null, open: null, line: 0 }
   let inBlock = false
-  for (const line of lockText.split('\n')) {
+  for (const [index, line] of lockText.split('\n').entries()) {
+    state.line = index + 1
     if (/^\S/.test(line)) {
       if (inBlock) closeDependency(state)
       inBlock = line === 'importers:'
