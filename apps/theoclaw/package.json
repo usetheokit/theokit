@@ -78,6 +78,7 @@
     "lint": "eslint .",
     "parity": "node tools/check-parity-ledger.mjs",
     "check:versions": "node tools/check-exact-versions.mjs package.json",
-    "audit": "node tools/audit-theoclaw.mjs"
+    "audit": "node tools/audit-theoclaw.mjs",
+    "browser:install": "node tools/install-browser.mjs"
   }
 }
