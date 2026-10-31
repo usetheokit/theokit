@@ -3,7 +3,7 @@ import { join } from 'node:path'
 
 import type { CustomTool } from '@theokit/sdk'
 import { AcpRequestTimeoutError, AcpTransportClosedError } from 'theokit/server/agent'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { buildTools } from '../src/tools/tool-registry.js'
 import { resolveToolSettings } from '../src/tools/tool-settings.js'
@@ -14,6 +14,7 @@ const PROCESS_GONE_MS = 5_000
 
 const cleanups: (() => void)[] = []
 afterEach(() => {
+  vi.unstubAllEnvs()
   for (const cleanup of cleanups.splice(0)) cleanup()
 })
 
@@ -80,6 +81,21 @@ describe('the ACP tools of the external tools file', () => {
     const { tool, pidFile } = acpTool({})
     await call(tool)
     await expectProcessGone(pidFile)
+  })
+
+  it('starts the agent without the host secrets in its environment (B-681)', async () => {
+    vi.stubEnv('THEOCLAW_CONTROL_TOKEN', 'control-token-0123456789')
+    vi.stubEnv('OPENROUTER_API_KEY', 'sk-or-0123456789')
+    vi.stubEnv('THEOCLAW_TELEGRAM_TOKEN', 'telegram-0123456789')
+    const dir = tempCwd(cleanups)
+    const envFile = join(dir, 'env.json')
+    const { tool } = acpTool({ args: [FIXTURE, `--record=${join(dir, 'permissions.log')}`, `--env-names=${envFile}`] })
+    await expect(call(tool)).resolves.toBe('done')
+    const names = JSON.parse(readFileSync(envFile, 'utf8')) as string[]
+    expect(names).toContain('PATH')
+    expect(names).not.toContain('THEOCLAW_CONTROL_TOKEN')
+    expect(names).not.toContain('OPENROUTER_API_KEY')
+    expect(names).not.toContain('THEOCLAW_TELEGRAM_TOKEN')
   })
 
   it('rejects with a typed error when the command is missing', async () => {

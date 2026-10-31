@@ -9,7 +9,8 @@
  *
  * `--pid-file=<path>` writes this process's pid there, `--token=<text>` is the text it streams
  * (default `done`), `--exit-on=<method>` exits with code 3 on that method and `--silent-on=<method>`
- * never answers it. It writes nothing to stderr: the transport inherits the parent's stderr.
+ * never answers it, and `--env-names=<path>` writes the names of its environment variables there as
+ * a JSON array. It writes nothing to stderr: the transport inherits the parent's stderr.
  */
 import { appendFileSync, writeFileSync } from 'node:fs'
 import { createInterface } from 'node:readline'
@@ -21,6 +22,8 @@ const token = flag('token') ?? 'done'
 const exitOn = flag('exit-on')
 const silentOn = flag('silent-on')
 if (pidFile !== undefined) writeFileSync(pidFile, String(process.pid))
+const envFile = flag('env-names')
+if (envFile !== undefined) writeFileSync(envFile, JSON.stringify(Object.keys(process.env)))
 
 let nextId = 1000
 /** Answers the client owes this agent, by the id of the request the agent sent. */

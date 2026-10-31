@@ -153,6 +153,11 @@ describe('the external tools file at start', () => {
     expect(error.message).toContain('mcpServers.docs.url')
   })
 
+  it('refuses an ACP command holding "=", which env would read as a variable', () => {
+    const error = refusalOf({ acpAgents: [{ ...AGENT, command: 'A=1' }] })
+    expect(error.message).toContain('acpAgents.0.command')
+  })
+
   it('refuses a relative ACP command', () => {
     const error = refusalOf({ acpAgents: [{ ...AGENT, command: './agent.sh' }] })
     expect(error.message).toContain('acpAgents.0.command')

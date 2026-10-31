@@ -18,6 +18,7 @@ import {
 } from '@theokit/agents/tools'
 
 import type { TurnAgent } from '../agent-port.js'
+import { scrubbedAgentTransport } from './acp-transport.js'
 import { browserServer } from './browser-server.js'
 import { codeModeTool, delegateAllTool, type CreateWorker } from './code-mode-tools.js'
 import { pathVetoPlugin } from './path-veto.js'
@@ -43,7 +44,7 @@ function refuseEveryPermission(): { granted: false } {
   return { granted: false }
 }
 
-/** One `createACPTool` per agent of the external tools file, each run in the tool root. */
+/** One `createACPTool` per agent of the external tools file, each run in the tool root without the host secrets. */
 function acpTools(settings: ToolSettings): CustomTool[] {
   return settings.external.acpAgents.map((agent) =>
     createACPTool({
@@ -54,6 +55,7 @@ function acpTools(settings: ToolSettings): CustomTool[] {
       ...(agent.timeoutMs === undefined ? {} : { timeoutMs: agent.timeoutMs }),
       cwd: settings.toolRoot,
       onPermissionRequest: refuseEveryPermission,
+      transportFactory: scrubbedAgentTransport,
     }),
   )
 }

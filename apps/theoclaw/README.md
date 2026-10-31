@@ -416,9 +416,11 @@ before any runner starts, and refuses it naming the file and the key:
   refused (asking the owner is B-684). That stops only what the agent asks about: it runs as the
   TheoClaw user, outside the tool sandbox, and an agent that writes without asking (its own
   auto-accept mode or project settings) is not stopped by it.
-- **An ACP agent inherits the environment of the TheoClaw process**, channel tokens included, and
-  its stderr is not masked: an `env` option and a piped stderr are B-681. Run only agents you would
-  trust with those values.
+- An ACP agent starts through `env -i` with only `PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`,
+  `TMPDIR`, `TZ`, the locale, terminal and XDG directory variables, so the model key and the channel
+  and bearer tokens do not reach it; an agent that logs in through its home directory still finds
+  its login. A `command` may not contain `=`. Its stderr is TheoClaw's and is not masked, and there
+  is no `env` option to give it a variable: both are B-681.
 - With `THEOCLAW_HOST_TOOLS=on` the file, every absolute stdio `command` and every stdio `cwd` may
   not lie under `files/` or `/tmp`, where the shell could rewrite what the next start spawns, and
   ACP agents are refused: each runs unsandboxed in `files/`, which the shell can write. A stdio

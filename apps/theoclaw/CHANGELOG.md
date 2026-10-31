@@ -98,8 +98,9 @@ and versioning follows [Semantic Versioning](https://semver.org/).
   (`run_code`, `delegate_all` and `digest` included), and, with host tools on, any ACP agent
   (it would run unsandboxed in `files/`, which the shell writes) and a file or stdio command under
   `files/` or `/tmp`. Header and env values are masked and the start prints one line naming the
-  servers and agents; chat replies still get no tool. An ACP agent inherits TheoClaw's environment
-  and its stderr is not masked (B-681). The parity ledger records OC-67 and OC-68 as shipped,
+  servers and agents; chat replies still get no tool. An ACP agent starts through `env -i` with only
+  `PATH`, `HOME` and the locale, terminal and XDG variables, so no TheoClaw secret reaches it; its
+  stderr is not masked and it has no `env` option (B-681). The parity ledger records OC-67 and OC-68 as shipped,
   checked by `tests/live/external-tools.live.test.ts`, with their missing parts filed as B-680,
   B-681, B-682, B-684 and B-685.
 - The `/control` agent's tools (B-382): `read_file`, `list_dir`, `view_image`, `web_fetch` and
