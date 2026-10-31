@@ -9,7 +9,7 @@ import { TheoClawConfigError } from '../control-plane/errors.js'
 import { readSandboxMode } from '../sandbox/sandbox-mode.js'
 import { browserLine, readBrowser } from './browser-server.js'
 import type { BrowserDeps, BrowserSettings } from './browser-server.js'
-import { resolveExternalTools } from './external-tools.js'
+import { externalToolPaths, resolveExternalTools } from './external-tools.js'
 import type { ExternalTools } from './external-tools.js'
 import { isWithin, realPathOf, SymlinkLoopError } from './real-path.js'
 
@@ -229,6 +229,16 @@ function realPathOrSelf(path: string): string {
 export interface ProtectedPath {
   readonly path: string
   readonly variable: string
+}
+
+/**
+ * Every path `checkHostToolsPosture` must keep out of the shell's reach at start: the state
+ * directory, where the pairing list lives (a shell that could write it could pair anyone), and the
+ * external tools file with every process it names (`externalToolPaths`).
+ */
+export function hostToolsProtectedPaths(env: Env, stateDir: string | undefined, settings: ToolSettings): ProtectedPath[] {
+  const state = stateDir === undefined ? [] : [{ path: stateDir, variable: 'THEOCLAW_STATE_DIR' }]
+  return [...state, ...externalToolPaths(env, settings.external)]
 }
 
 /**

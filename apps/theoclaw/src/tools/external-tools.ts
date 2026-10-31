@@ -196,15 +196,15 @@ export function resolveExternalTools(env: Env, readFile: ReadFile = readFileSync
 }
 
 /**
- * The paths the next start would execute from: every absolute stdio command and working directory.
+ * The paths the next start would execute from: the external tools file itself, which names the
+ * processes it spawns outside the sandbox, and every absolute stdio command and working directory.
  * With host tools on, the start refuses any of them inside a root the sandboxed shell can write.
  */
-export function externalToolPaths(external: ExternalTools): ProtectedPath[] {
-  return Object.values(external.mcpServers).flatMap((server) =>
-    'url' in server
-      ? []
-      : [server.command, ...(server.cwd === undefined ? [] : [server.cwd])]
-          .filter((path) => isAbsolute(path))
-          .map((path) => ({ path, variable: VARIABLE })),
+export function externalToolPaths(env: Env, external: ExternalTools): ProtectedPath[] {
+  const file = env[VARIABLE]?.trim()
+  const executed = Object.values(external.mcpServers).flatMap((server) =>
+    'url' in server ? [] : [server.command, ...(server.cwd === undefined ? [] : [server.cwd])],
   )
+  const paths = [...(file === undefined || file === '' ? [] : [file]), ...executed.filter((path) => isAbsolute(path))]
+  return paths.map((path) => ({ path, variable: VARIABLE }))
 }

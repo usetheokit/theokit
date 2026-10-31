@@ -56,8 +56,7 @@ import { createWebhookRouter, type WebhookRoute } from './webhooks/router.js'
 import type { TeamsVerifier } from './webhooks/teams.js'
 import { controlAgentToolOptions, NO_TOOL_OPTIONS } from './tools/tool-registry.js'
 import type { AgentToolOptions } from './tools/tool-registry.js'
-import { externalToolPaths } from './tools/external-tools.js'
-import { checkHostToolsPosture, resolveToolSettings } from './tools/tool-settings.js'
+import { checkHostToolsPosture, hostToolsProtectedPaths, resolveToolSettings } from './tools/tool-settings.js'
 import type { ToolDeps, ToolSettings } from './tools/tool-settings.js'
 import { createWorkflowTools } from './workflows/workflow-tools.js'
 import { WEBCHAT_ASSETS_DIR } from './webchat/page.js'
@@ -341,15 +340,7 @@ function startToolSettings(options: StartOptions, policy: AuthorizationPolicy): 
   // A profiled instance's agents work in its workspace (B-514), so their tool root is made there.
   const cwd = options.cwd ?? options.instance?.workspace ?? process.cwd()
   const tools = resolveToolSettings(options.env, cwd, options.toolDeps)
-  // The pairing list lives in the state directory: a shell that could write it could pair anyone;
-  // the external tools file names the processes the next start spawns, outside the sandbox.
-  const external = options.env.THEOCLAW_EXTERNAL_TOOLS?.trim()
-  const protectedPaths = [
-    ...(policy.stateDir === undefined ? [] : [{ path: policy.stateDir, variable: 'THEOCLAW_STATE_DIR' }]),
-    ...(external === undefined || external === '' ? [] : [{ path: external, variable: 'THEOCLAW_EXTERNAL_TOOLS' }]),
-    ...externalToolPaths(tools.external),
-  ]
-  checkHostToolsPosture(tools, protectedPaths, options.toolDeps)
+  checkHostToolsPosture(tools, hostToolsProtectedPaths(options.env, policy.stateDir, tools), options.toolDeps)
   return tools
 }
 
@@ -361,10 +352,7 @@ function pairingStoreFor(
   return policy.stateDir === undefined ? undefined : createPairingStore({ dir: policy.stateDir, write })
 }
 
-/**
- * What the start says about the tools: each one left off and why, the shell's reach when host tools
- * are on, and the external MCP servers and ACP agents by name (never a header or env value).
- */
+/** What the start says about the tools: what is off and why, the shell's reach, the external tools by name. */
 function writeToolLines(tools: ToolSettings, write: (line: string) => void): void {
   for (const line of tools.offLines) write(line)
   if (tools.hostTools) write(SHELL_READ_LINE)

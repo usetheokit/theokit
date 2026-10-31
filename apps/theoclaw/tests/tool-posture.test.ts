@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { TheoClawConfigError } from '../src/control-plane/errors.js'
-import { checkHostToolsPosture, resolveToolSettings } from '../src/tools/tool-settings.js'
+import { checkHostToolsPosture, hostToolsProtectedPaths, resolveToolSettings } from '../src/tools/tool-settings.js'
 import type { ToolSettings } from '../src/tools/tool-settings.js'
 import { makeHostToolsWorkspace } from './host-tools-workspace.js'
 import { enforced } from './tool-start-fixtures.js'
@@ -42,5 +42,20 @@ describe('checkHostToolsPosture with protected paths', () => {
     const settings = hostToolSettings()
     const path = join(settings.workspace, 'state')
     expect(() => checkHostToolsPosture(settings, [{ path, variable: 'THEOCLAW_STATE_DIR' }])).not.toThrow()
+  })
+})
+
+describe('hostToolsProtectedPaths', () => {
+  it('names the state directory and the external tools file, each by its variable', () => {
+    const settings = hostToolSettings()
+    const paths = hostToolsProtectedPaths({ THEOCLAW_EXTERNAL_TOOLS: ' /srv/tools.json ' }, '/srv/state', settings)
+    expect(paths).toEqual([
+      { path: '/srv/state', variable: 'THEOCLAW_STATE_DIR' },
+      { path: '/srv/tools.json', variable: 'THEOCLAW_EXTERNAL_TOOLS' },
+    ])
+  })
+
+  it('names nothing without a state directory or an external tools file', () => {
+    expect(hostToolsProtectedPaths({ THEOCLAW_EXTERNAL_TOOLS: '  ' }, undefined, hostToolSettings())).toEqual([])
   })
 })
