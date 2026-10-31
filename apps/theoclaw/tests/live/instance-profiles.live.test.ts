@@ -138,6 +138,13 @@ describe.skipIf(!LIVE)('several TheoClaw instances on one host', () => {
       expect(filesHolding(join(profiles, other), marker, ''), `${own}'s marker under ${other}`).toEqual([])
     }
 
+    // B-378: each profile keeps its chat sessions in its own workspace, never in the shared cwd.
+    for (const own of ['a', 'b'] as const) {
+      const sessions = join(profiles, own, 'workspace', '.theoclaw')
+      expect(statSync(sessions).mode & 0o777, `${own}'s chat session directory`).toBe(0o700)
+    }
+    expect(existsSync(join(cwd, '.theoclaw')), 'a .theoclaw in the shared working directory').toBe(false)
+
     const strays = filesUnder(join(home, '.theokit')).filter((path) => !/^profiles[/\\][ab][/\\]/.test(path.split(sep).join('/')))
     expect(strays, 'files under HOME/.theokit outside the two profiles').toEqual([])
     expect(existsSync(join(cwd, '.theokit')), 'a .theokit in the shared working directory').toBe(false)

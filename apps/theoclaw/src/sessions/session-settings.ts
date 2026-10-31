@@ -65,6 +65,11 @@ function readPeerLinks(env: BindEnvironment): ReadonlyMap<string, string> {
   return links
 }
 
+/**
+ * `THEOCLAW_WORKSPACE`, checked. Under `THEOCLAW_PROFILE` the process entry has already set it to the
+ * profile's own `workspace` and refused an explicit one (`instance.ts`), so a profiled instance's
+ * chat sessions stay in its profile and two profiles never read one `sessions.json`.
+ */
 function readWorkspace(env: BindEnvironment, stat: StatDirectory): string {
   const workspace = nonBlank(env.THEOCLAW_WORKSPACE)
   const refuse = (why: string): TheoClawConfigError =>

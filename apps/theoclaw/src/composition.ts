@@ -399,7 +399,7 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
   ;(options.agentRegistry ?? Agent.registry).configure({ maxAgents: 0, idleTimeoutMs: 0 })
   // Created here with 0700, before anything is installed that a failure would have to undo, so the
   // SDK never creates the transcript directory with the umask's mode (D6); one that exists is left
-  // as the operator set it.
+  // as the operator set it. Under a profile the workspace is the profile's own (`instance.ts`).
   mkdirSync(join(sessionSettings.workspace, '.theoclaw'), { recursive: true, mode: 0o700 })
   const streams = options.streams ?? [process.stdout, process.stderr]
   const stderr = options.stderr ?? lineWriter(streams[streams.length - 1])
