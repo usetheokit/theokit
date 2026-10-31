@@ -10,6 +10,7 @@ import { render } from "ink-testing-library";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { type ControlClient, createControlClient } from "../src/control-client/control-client.js";
+import { composerReady } from "./composer-ready.js";
 import { createContainer } from "../src/composition.js";
 import { controlOptions } from "../src/control-plane/control-wiring.js";
 import { type ControlPlaneHandle, healthHandler, listenControlPlane } from "../src/control-plane/listener.js";
@@ -77,9 +78,7 @@ async function renderTui(instance: Instance, session = "owner") {
       await new Promise((resolve) => setTimeout(resolve, 20));
     }
   };
-  // Keys typed before the composer mounted its input handler are lost: wait for it to be drawn.
-  await until((f) => f.includes("session"), "the composer");
-  await new Promise((resolve) => setTimeout(resolve, 50));
+  await composerReady((key) => view.stdin.write(key), screen, "Message TheoClaw");
   return { view, screen, until, type };
 }
 

@@ -12,6 +12,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { type ControlClient, createControlClient } from "../../src/control-client/control-client.js";
 import { TheoClawTui } from "../../src/tui/app.js";
+import { composerReady } from "../composer-ready.js";
 import { waitFor } from "../fakes.js";
 import { type HostToolsWorkspace, makeHostToolsWorkspace } from "../host-tools-workspace.js";
 
@@ -69,9 +70,7 @@ async function renderTui() {
   clients.push(client);
   const view = render(createElement(TheoClawTui, { client, session: SESSION, onExit: () => undefined }));
   const screen = (): string => view.lastFrame() ?? "";
-  await waitFor(() => screen().includes("session"), 5000, "the TUI to draw its composer");
-  // Keys typed before the composer mounted its input handler are lost.
-  await new Promise((resolve) => setTimeout(resolve, 100));
+  await composerReady((key) => view.stdin.write(key), screen, "Message TheoClaw");
   const type = async (...keys: string[]): Promise<void> => {
     for (const key of keys) {
       view.stdin.write(key);
