@@ -8,7 +8,7 @@ import { parseAuthorizationPolicy } from '../src/authorization/policy.js'
 import { readControlPlaneSettings } from '../src/control-plane/settings.js'
 import { type OnboardIo, type OnboardOptions, onboard } from '../src/onboard.js'
 import { readSessionSettings } from '../src/sessions/session-settings.js'
-import { FLAGS, KEY, cleanScratch, configFile, harness, listing, mode, readBack, refusal } from './support/onboard-harness.js'
+import { FLAGS, KEY, cleanScratch, configFile, harness, listing, mode, readBack, refusal, startEnvironment } from './support/onboard-harness.js'
 
 afterEach(cleanScratch)
 
@@ -43,8 +43,7 @@ describe('theoclaw onboard', () => {
     for (const profile of [undefined, 'a']) {
       const h = harness(profile === undefined ? {} : { THEOCLAW_PROFILE: profile })
       const path = await onboard(FLAGS, h.io)
-      const env = readBack(path)
-      if (profile !== undefined) env.THEOCLAW_STATE_DIR = join(h.home, '.theokit', 'profiles', profile, 'state')
+      const env = startEnvironment(h, path)
       expect(() => readControlPlaneSettings(env)).not.toThrow()
       expect(() => parseAuthorizationPolicy(env)).not.toThrow()
       expect(readSessionSettings(env, statSync).workspace).toBe(env.THEOCLAW_WORKSPACE)
@@ -111,7 +110,9 @@ describe('theoclaw onboard', () => {
     expect(path).toBe(configFile(h, 'theoclaw-a.env'))
     const written = readBack(path)
     expect(written.THEOCLAW_STATE_DIR).toBe(undefined)
-    expect(written.THEOCLAW_WORKSPACE).toBe(join(h.home, '.theokit', 'profiles', 'a', 'workspace'))
+    expect(written.THEOCLAW_WORKSPACE).toBe(undefined)
+    expect(startEnvironment(h, path).THEOCLAW_WORKSPACE).toBe(join(h.home, '.theokit', 'profiles', 'a', 'workspace'))
+    expect(mode(join(h.home, '.theokit', 'profiles', 'a', 'workspace'))).toBe(0o700)
   })
 
   it('onboarding values survive loadConfiguration unchanged', async () => {

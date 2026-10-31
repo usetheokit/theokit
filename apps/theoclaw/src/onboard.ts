@@ -8,7 +8,7 @@ import { parseAuthorizationPolicy } from './authorization/policy.js'
 import { assertWritable, configurationPath, writeConfiguration } from './config-file.js'
 import { TheoClawConfigError } from './control-plane/errors.js'
 import { readControlPlaneSettings, requireModel } from './control-plane/settings.js'
-import { resolveInstance } from './instance.js'
+import { resolveInstance, type TheoClawInstance } from './instance.js'
 import { readSessionSettings } from './sessions/session-settings.js'
 
 /**
@@ -50,9 +50,8 @@ interface Answers {
   readonly workspace: string
 }
 
-function defaultWorkspace(io: OnboardIo): string {
-  const profile = resolveInstance(io.env, { homeDir: io.homeDir })
-  if (profile.workspace !== undefined) return profile.workspace
+function defaultWorkspace(io: OnboardIo, instance: TheoClawInstance): string {
+  if (instance.workspace !== undefined) return instance.workspace
   const data = io.env.XDG_DATA_HOME?.trim() || join(io.homeDir, '.local', 'share')
   return join(data, 'theoclaw', 'workspace')
 }
@@ -62,7 +61,7 @@ function required(value: string | undefined, flag: string): string {
   return value
 }
 
-function fromFlags(opts: OnboardOptions, io: OnboardIo): Answers {
+function fromFlags(opts: OnboardOptions, io: OnboardIo, instance: TheoClawInstance): Answers {
   const variable = required(opts.apiKeyEnv, '--api-key-env <NAME>')
   const key = io.env[variable]
   if (key === undefined || key === '') {
@@ -73,7 +72,7 @@ function fromFlags(opts: OnboardOptions, io: OnboardIo): Answers {
     key,
     port: required(opts.port, '--port'),
     owners: required(opts.owners, '--owners'),
-    workspace: opts.workspace ?? defaultWorkspace(io),
+    workspace: opts.workspace ?? defaultWorkspace(io, instance),
   }
 }
 
@@ -120,39 +119,51 @@ async function secret(io: OnboardIo, prompt: string): Promise<string> {
   }
 }
 
-async function ask(io: OnboardIo): Promise<Answers> {
+async function ask(io: OnboardIo, instance: TheoClawInstance): Promise<Answers> {
   const model = await question(io, 'Model', DEFAULT_MODEL)
   const key = await secret(io, 'OpenRouter API key (not shown)')
   const port = await question(io, 'Port', DEFAULT_PORT)
   const owners = await question(io, 'Owners, as platform:senderId separated by commas')
-  const workspace = await question(io, 'Workspace directory', defaultWorkspace(io))
+  // A profile owns its workspace, so there is nothing to ask.
+  const workspace = instance.workspace ?? (await question(io, 'Workspace directory', defaultWorkspace(io, instance)))
   return { model, key, port, owners, workspace }
 }
 
-function entriesFor(answers: Answers, io: OnboardIo): Record<string, string> {
-  const profiled = resolveInstance(io.env, { homeDir: io.homeDir }).profile !== undefined
+function entriesFor(answers: Answers, io: OnboardIo, instance: TheoClawInstance): Record<string, string> {
+  if (instance.workspace !== undefined && answers.workspace !== instance.workspace) {
+    throw new TheoClawConfigError(`THEOCLAW_PROFILE sets the workspace to ${instance.workspace}; unset the profile to choose another`, {
+      variable: 'THEOCLAW_WORKSPACE',
+    })
+  }
   const state = io.env.XDG_STATE_HOME?.trim() || join(io.homeDir, '.local', 'state')
-  return {
+  const entries: Record<string, string> = {
     THEOCLAW_MODEL: answers.model,
     OPENROUTER_API_KEY: answers.key,
     THEOCLAW_PORT: answers.port,
     THEOCLAW_OWNERS: answers.owners,
     THEOCLAW_WORKSPACE: answers.workspace,
-    // A profile sets its own state directory, and refuses an explicit one beside it.
-    ...(profiled ? {} : { THEOCLAW_STATE_DIR: join(state, 'theoclaw') }),
+    THEOCLAW_STATE_DIR: join(state, 'theoclaw'),
     THEOCLAW_CONTROL_TOKEN: randomBytes(24).toString('hex'),
   }
+  // A profile sets what it owns itself and refuses an explicit value beside it (src/instance.ts).
+  for (const name of Object.keys(instance.overrides)) delete entries[name]
+  return entries
 }
 
-/** The start's parsers over what the start will see; the first refusal is rethrown unchanged. */
-function validate(entries: Readonly<Record<string, string>>, io: OnboardIo): void {
-  const env = { ...entries, ...resolveInstance(io.env, { homeDir: io.homeDir }).overrides }
+/**
+ * What the start does with the file (src/main.ts): load it under the caller's profile, resolve the
+ * instance, which refuses a setting the profile owns, then run the start's parsers. The first
+ * refusal is rethrown unchanged.
+ */
+function validate(entries: Readonly<Record<string, string>>, io: OnboardIo, workspace: string): void {
+  const env: Record<string, string> = { ...entries }
+  if (io.env.THEOCLAW_PROFILE !== undefined) env.THEOCLAW_PROFILE = io.env.THEOCLAW_PROFILE
+  Object.assign(env, resolveInstance(env, { homeDir: io.homeDir }).overrides)
   requireModel(env)
   readControlPlaneSettings(env)
   parseAuthorizationPolicy(env)
-  const planned = entries.THEOCLAW_WORKSPACE
   // The workspace is created only once everything passed, so its absence is not a refusal here.
-  readSessionSettings(env, (path) => (path === planned && !existsSync(path) ? { isDirectory: () => true } : statSync(path)))
+  readSessionSettings(env, (path) => (path === workspace && !existsSync(path) ? { isDirectory: () => true } : statSync(path)))
 }
 
 export async function onboard(opts: OnboardOptions, io: OnboardIo): Promise<string> {
@@ -161,10 +172,12 @@ export async function onboard(opts: OnboardOptions, io: OnboardIo): Promise<stri
     throw new TheoClawConfigError(`${path} exists; pass --force to replace it`, { variable: 'THEOCLAW_CONFIG' })
   }
   if (!opts.yes && !io.isTTY) throw new TheoClawConfigError('theoclaw onboard needs a terminal; pass --yes and flags instead')
-  const entries = entriesFor(opts.yes ? fromFlags(opts, io) : await ask(io), io)
+  const instance = resolveInstance(io.env, { homeDir: io.homeDir })
+  const answers = opts.yes ? fromFlags(opts, io, instance) : await ask(io, instance)
+  const entries = entriesFor(answers, io, instance)
   assertWritable(entries)
-  validate(entries, io)
-  mkdirSync(entries.THEOCLAW_WORKSPACE!, { recursive: true, mode: 0o700 })
+  validate(entries, io, answers.workspace)
+  mkdirSync(answers.workspace, { recursive: true, mode: 0o700 })
   writeConfiguration(path, entries, { force: opts.force, ownsDirectory: !io.env.THEOCLAW_CONFIG?.trim() })
   io.stdout.write(`theoclaw: configuration written to ${path}\n`)
   return path

@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
 import { loadConfiguration } from '../../src/config-file.js'
 import { TheoClawConfigError } from '../../src/control-plane/errors.js'
+import { resolveInstance } from '../../src/instance.js'
 import { type OnboardIo, type OnboardOptions } from '../../src/onboard.js'
 
 export const KEY = 'sk-onboard-test-key-0123456789'
@@ -49,6 +50,15 @@ export function readBack(path: string): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { THEOCLAW_CONFIG: path }
   loadConfiguration(env, '/nonexistent')
   delete env.THEOCLAW_CONFIG
+  return env
+}
+
+/** The environment the entry starts with (`src/main.ts`): the file, then the instance's overrides. */
+export function startEnvironment(h: Harness, path: string): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { THEOCLAW_CONFIG: path }
+  if (h.io.env.THEOCLAW_PROFILE !== undefined) env.THEOCLAW_PROFILE = h.io.env.THEOCLAW_PROFILE
+  loadConfiguration(env, h.home)
+  Object.assign(env, resolveInstance(env, { homeDir: h.home }).overrides)
   return env
 }
 
