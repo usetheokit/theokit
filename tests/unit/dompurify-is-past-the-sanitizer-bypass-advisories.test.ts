@@ -9,8 +9,9 @@ import { describe, expect, it } from 'vitest'
  * SAFE_FOR_TEMPLATES bypass) and GHSA-mrv2-3pqr-j5jr (high, IN_PLACE) cover. Both are patched in
  * 3.4.17.
  *
- * dompurify reaches the production tree only through `@theokit/ui > mermaid`, and no workspace
- * manifest declares it, so the root `pnpm.overrides` entry `dompurify@<3.4.17` is what moves it.
+ * dompurify reaches the production tree only through `@theokit/ui > mermaid` (an optional peer the
+ * lockfile may no longer resolve), and no workspace manifest declares it, so the root
+ * `pnpm.overrides` entry `dompurify@<3.4.17` is what moves it.
  * CI's `pnpm audit --prod --audit-level=high` catches a regression too, but it needs the registry;
  * this test reads two local files and runs offline. The tuple compare follows `caretAccepts` in
  * `ui-peer-range.test.ts`, with no `semver` dependency. `OVERRIDE_KEY` and `PATCHED` move together
@@ -50,6 +51,11 @@ function lockfileDompurifyVersions(lockfile: string): Version[] {
   return [...keys].map((m): Version => [Number(m[1]), Number(m[2]), Number(m[3])])
 }
 
+/** How many resolved mermaid keys the lockfile holds; the override header line is not one. */
+function lockfileMermaidKeyCount(lockfile: string): number {
+  return [...lockfile.matchAll(/^ {2}mermaid@\d+\.\d+\.\d+[(:]/gm)].length
+}
+
 describe('dompurify past the sanitizer bypass advisories', () => {
   it('the root manifest overrides every dompurify below the sanitizer bypass fixes', () => {
     const manifest = JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf-8')) as {
@@ -62,11 +68,17 @@ describe('dompurify past the sanitizer bypass advisories', () => {
   })
 
   it('every dompurify the lockfile resolves is past the sanitizer bypass advisories', () => {
-    const versions = lockfileDompurifyVersions(
-      readFileSync(resolve(ROOT, 'pnpm-lock.yaml'), 'utf-8'),
-    )
+    const lockfile = readFileSync(resolve(ROOT, 'pnpm-lock.yaml'), 'utf-8')
+    const versions = lockfileDompurifyVersions(lockfile)
 
-    expect(versions.length, 'no dompurify key found in pnpm-lock.yaml').toBeGreaterThan(0)
+    // dompurify comes in only through mermaid, an optional peer of `@theokit/ui` that pnpm stops
+    // resolving once the lockfile is re-resolved. No dompurify key is a pass only when no mermaid is
+    // resolved either; a mermaid key with no dompurify key means the scan stopped matching.
+    if (versions.length === 0) {
+      expect(lockfileMermaidKeyCount(lockfile), 'mermaid resolved but no dompurify key found').toBe(
+        0,
+      )
+    }
     expect(versions.filter((v) => !isPatched3x(v)).map((v) => v.join('.'))).toEqual([])
   })
 
@@ -84,6 +96,18 @@ describe('dompurify past the sanitizer bypass advisories', () => {
     expect(versionParts('3.x')).toBeUndefined()
     expect(versionParts('*')).toBeUndefined()
     expect(isPatched3x(versionParts('>=3.4.17'))).toBe(false)
+  })
+
+  it('the mermaid scan counts resolved keys and skips an override header line', () => {
+    const sample = [
+      'overrides:',
+      '  mermaid@<11.16.1: ^11.16.1',
+      'packages:',
+      '  mermaid@11.15.0:',
+    ].join('\n')
+
+    expect(lockfileMermaidKeyCount(sample)).toBe(1)
+    expect(lockfileMermaidKeyCount('packages:\n  katex@0.18.10:')).toBe(0)
   })
 
   it('the lockfile scan reads a key with a peer suffix and skips the override header line', () => {
