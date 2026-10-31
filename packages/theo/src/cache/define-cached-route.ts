@@ -53,6 +53,7 @@ interface RouteCacheValue {
 const setCookieWarnedRoutes = new WeakSet()
 const variesCookieWarnedRoutes = new WeakSet()
 const oversizedWarnedRoutes = new WeakSet()
+const revalidateFailureWarnedRoutes = new WeakSet()
 
 /**
  * Wrap a `RouteConfig` with cache-aware handler logic.
@@ -70,9 +71,17 @@ const oversizedWarnedRoutes = new WeakSet()
  * 5. Cacheable → write entry + return Response with X-Theo-Cache: MISS
  * 6. Not cacheable → return original Response unchanged
  *
- * Concurrent dedupe is INTENTIONALLY NOT used for routes — Response objects
- * cannot be safely shared across concurrent callers (body is single-use stream).
- * Each request that misses runs the handler independently.
+ * Requests are single-flight per cache key (B-667), per process and per
+ * `defineCachedRoute` call: concurrent misses of one key share one handler run. The leader's `Response` is never shared (single-use body):
+ * each follower builds its own `Response` from the cached value, with
+ * X-Theo-Cache: MISS. When the leader's response is not cacheable (Set-Cookie,
+ * stream, error status, `cacheable` refusing it), it stays the leader's own and
+ * each follower runs the handler itself. A thrown leader rejects its followers
+ * with the same error, unless the leader's own request signal was aborted; a
+ * Node IncomingMessage arrives here without a signal, so that exception does not
+ * apply to it. A stale key starts one background revalidation at a time; a failed
+ * one keeps the stale entry and is reported once per route with `console.warn`,
+ * naming the method and path (never the key, which carries request data).
  */
 export function defineCachedRoute<
   TQuery extends z.ZodType = z.ZodUndefined,
@@ -116,6 +125,11 @@ export function defineCachedRoute<
       `[theokit:cache] defineCachedRoute: 'cookie'/'set-cookie' removed from varies — they fragment cache to zero hit rate (EC-2)`,
     )
   }
+
+  // B-667 — per-route, per-key: the leader's outcome while its handler runs.
+  const inFlight = new Map<string, Promise<LeaderOutcome>>()
+  // B-667 — keys whose background revalidation is running.
+  const revalidating = new Set<string>()
 
   const wrappedHandler = async (ctx: {
     query: z.infer<TQuery>
@@ -162,6 +176,8 @@ export function defineCachedRoute<
       cacheErrors,
       baseTags,
       webRequest,
+      inFlight,
+      revalidating,
     }
 
     if (cached) {
@@ -174,9 +190,8 @@ export function defineCachedRoute<
       return buildResponseFromCache(cached.value, 'stale', maxAge, swr)
     }
 
-    // ---- Miss: run handler ----
-    const response = await invokeHandlerAsResponse(handler, ctx)
-    return persistAndReturn(routeCacheCtx, response)
+    // ---- Miss: one handler run per key (B-667) ----
+    return runMissSingleFlight(routeCacheCtx, handler, ctx)
   }
 
   return {
@@ -191,7 +206,7 @@ export function defineCachedRoute<
 
 /**
  * T4.3 options-bag context (PV-6 — Clean Code consensus ≤ 4 params).
- * Collapses 10/11 positional params of `persistAndReturn` and
+ * Collapses 10/11 positional params of `persistOutcome` and
  * `scheduleRouteRevalidate` to 2 params each (ctx + payload).
  *
  * Some fields are derived from `cache` config (EC-22 documented redundancy) —
@@ -212,6 +227,60 @@ interface RouteCacheCtx {
   cacheErrors: boolean
   baseTags: string[]
   webRequest: Request
+  /** The route's miss slots, keyed by cache key (B-667). */
+  inFlight: Map<string, Promise<LeaderOutcome>>
+  /** The route's keys under background revalidation (B-667). */
+  revalidating: Set<string>
+}
+
+/**
+ * What a miss leader hands its followers. Never the leader's `Response`: its body
+ * is single-use, and an uncacheable one (a `Set-Cookie`) belongs to its own request.
+ */
+type LeaderOutcome = { kind: 'cached'; value: RouteCacheValue } | { kind: 'uncacheable' }
+
+async function runMissSingleFlight<THandlerCtx>(
+  ctx: RouteCacheCtx,
+  handler: (handlerCtx: THandlerCtx) => unknown,
+  handlerCtx: THandlerCtx,
+): Promise<Response> {
+  // The check and the claim run with no await between them, so the next caller sees the slot.
+  const pending = ctx.inFlight.get(ctx.key)
+  if (pending) {
+    const outcome = await pending
+    if (outcome.kind === 'cached') {
+      return buildResponseFromCache(outcome.value, 'miss', ctx.maxAge, ctx.swr)
+    }
+    const own = await persistOutcome(ctx, await invokeHandlerAsResponse(handler, handlerCtx))
+    return own.response
+  }
+  let publish!: (outcome: LeaderOutcome) => void
+  let fail!: (err: unknown) => void
+  const slot = new Promise<LeaderOutcome>((resolve, reject) => {
+    publish = resolve
+    fail = reject
+  })
+  // A leader with no follower must not raise an unhandled rejection.
+  slot.catch(() => undefined)
+  ctx.inFlight.set(ctx.key, slot)
+  try {
+    const { response, value } = await persistOutcome(
+      ctx,
+      await invokeHandlerAsResponse(handler, handlerCtx),
+    )
+    publish(value ? { kind: 'cached', value } : { kind: 'uncacheable' })
+    return response
+  } catch (err) {
+    // The leader's client went away: its error is not taken as the followers' cause, and
+    // each follower runs the handler itself. A shared failure that happens to land after
+    // the abort is re-run by the followers rather than shared (bounded, EC-1). A Node
+    // IncomingMessage reaches here as a signal-less Request, so this cannot fire there.
+    if (ctx.webRequest.signal.aborted) publish({ kind: 'uncacheable' })
+    else fail(err)
+    throw err
+  } finally {
+    ctx.inFlight.delete(ctx.key)
+  }
 }
 
 function buildRouteCacheEntry(value: RouteCacheValue, ctx: RouteCacheCtx): CacheEntry {
@@ -228,14 +297,18 @@ function buildRouteCacheEntry(value: RouteCacheValue, ctx: RouteCacheCtx): Cache
   }
 }
 
-async function persistAndReturn(ctx: RouteCacheCtx, response: Response): Promise<Response> {
-  const cacheableResult = await tryCacheResponse(response, ctx)
-  if (!cacheableResult) {
+/** Write a cacheable response; `value` is set only when it was written. */
+async function persistOutcome(
+  ctx: RouteCacheCtx,
+  response: Response,
+): Promise<{ response: Response; value?: RouteCacheValue }> {
+  const value = await tryCacheResponse(response, ctx)
+  if (!value) {
     // Not cached — return original response unchanged
-    return response
+    return { response }
   }
-  await ctx.engine.set(ctx.key, buildRouteCacheEntry(cacheableResult, ctx))
-  return buildResponseFromCache(cacheableResult, 'miss', ctx.maxAge, ctx.swr)
+  await ctx.engine.set(ctx.key, buildRouteCacheEntry(value, ctx))
+  return { response: buildResponseFromCache(value, 'miss', ctx.maxAge, ctx.swr), value }
 }
 
 function scheduleRouteRevalidate<THandlerCtx>(
@@ -243,14 +316,29 @@ function scheduleRouteRevalidate<THandlerCtx>(
   handler: (handlerCtx: THandlerCtx) => unknown,
   handlerCtx: THandlerCtx,
 ): void {
+  // One revalidation per key at a time, released when it settles. One that never settles
+  // keeps the key claimed: later stale windows of that key get no background refresh,
+  // and only a miss after the swr window refills the entry (no timeout bounds the claim).
+  if (ctx.revalidating.has(ctx.key)) return
+  ctx.revalidating.add(ctx.key)
   void (async () => {
     try {
-      const response = await invokeHandlerAsResponse(handler, handlerCtx)
-      const result = await tryCacheResponse(response, ctx)
-      if (!result) return
-      await ctx.engine.set(ctx.key, buildRouteCacheEntry(result, ctx))
-    } catch {
-      // Stale entry remains; future request retries on its own stale-check
+      await persistOutcome(ctx, await invokeHandlerAsResponse(handler, handlerCtx))
+    } catch (err) {
+      // The stale entry stays and the next stale hit retries. Reported once per route, so
+      // a handler that keeps failing in the background is visible without flooding the log.
+      // The message names the method and path, never the key: the key carries the query
+      // string and every varied header value, an Authorization header among them (CWE-532).
+      if (!revalidateFailureWarnedRoutes.has(ctx.routeConfig)) {
+        revalidateFailureWarnedRoutes.add(ctx.routeConfig)
+        const { pathname } = new URL(ctx.webRequest.url)
+        console.warn(
+          `[theokit:cache] background revalidation failed for ${ctx.webRequest.method} ${pathname}; serving stale until it succeeds`,
+          err,
+        )
+      }
+    } finally {
+      ctx.revalidating.delete(ctx.key)
     }
   })()
 }
