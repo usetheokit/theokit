@@ -187,15 +187,19 @@ export function createWebchatRoutes(options: WebchatRoutesOptions): (request: Re
     }
     if (pathname !== CHAT_PATH || request.method !== 'POST') return notFound()
     if (!accepts(request.headers.get('authorization') ?? undefined)) return unauthorized()
-    const body = await boundedBody(request).catch((error: unknown) => {
-      // A client that leaves mid-upload errors the body stream: answer, since the listener would
-      // otherwise log "request failed" and write a 500 to a socket that is already gone.
-      if (request.signal.aborted) return null
-      throw error
-    })
-    if (body === null) return clientLeft()
-    if (body === undefined) return tooLarge()
-    const bounded = new Request(request.url, { method: 'POST', headers: request.headers, body, signal: request.signal })
-    return chat(bounded, options.runTurn)
+    return boundedChat(request, options.runTurn)
   }
+}
+
+/** An authorized chat post: its body read within the bound, then handed to `chat`. */
+async function boundedChat(request: Request, runTurn: TurnRunner): Promise<Response> {
+  const body = await boundedBody(request).catch((error: unknown) => {
+    // A client that leaves mid-upload errors the body stream: answer, since the listener would
+    // otherwise log "request failed" and write a 500 to a socket that is already gone.
+    if (request.signal.aborted) return null
+    throw error
+  })
+  if (body === null) return clientLeft()
+  if (body === undefined) return tooLarge()
+  return chat(new Request(request.url, { method: 'POST', headers: request.headers, body, signal: request.signal }), runTurn)
 }
