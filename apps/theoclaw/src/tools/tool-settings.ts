@@ -154,6 +154,18 @@ function readSearch(env: Env): SearchSettings {
 }
 
 /**
+ * `read-only` promises an agent that writes nothing, and the browser server runs outside the
+ * sandbox with screenshot, console and PDF tools that write the file they are given.
+ */
+function refuseBrowserUnderReadOnly(hostTools: boolean, sandboxMode: SandboxMode, browser: BrowserSettings | undefined): void {
+  if (!hostTools || sandboxMode !== 'read-only' || browser === undefined) return
+  throw new TheoClawConfigError(
+    'THEOCLAW_BROWSER=on is refused with THEOCLAW_SANDBOX=read-only: the browser server runs unsandboxed and writes the screenshots, console logs and PDFs it is asked for; unset THEOCLAW_BROWSER or choose workspace-write',
+    { variable: 'THEOCLAW_BROWSER' },
+  )
+}
+
+/**
  * Read the tool settings from the environment and the working directory, before any runner
  * starts. Throws `TheoClawConfigError` for a bad `THEOCLAW_HOST_TOOLS`, a bad `THEOCLAW_SANDBOX` (with
  * host tools off too), a bad tool root, or a `THEOCLAW_BROWSER=on` the host cannot run. Builds the
@@ -175,6 +187,7 @@ export function resolveToolSettings(env: Env, cwd: string, deps: ToolDeps = {}):
       { variable: 'THEOCLAW_EXTERNAL_TOOLS' },
     )
   }
+  refuseBrowserUnderReadOnly(hostTools, sandboxMode, browser)
   const workspace = realpathSync(cwd)
   const { toolRoot, lines } = prepareToolRoot(workspace)
   const mode: SandboxMode = hostTools ? sandboxMode : 'read-only'
@@ -242,25 +255,30 @@ export function hostToolsProtectedPaths(env: Env, stateDir: string | undefined, 
 }
 
 /**
- * With host tools on, refuse a start the sandbox cannot make safe, unless the operator chose
- * `danger-full-access`, where the shell is unconfined by choice and nothing below holds: a backend
- * that is not a `LinuxSandbox` (the shell would run unconfined); a workspace inside a root the
- * `workspace-write` sandbox also leaves writable (`/tmp`), where the shell could rewrite
- * `.theokit/settings.json`, whose hooks the SDK runs outside the sandbox on the next agent; or any
- * of `protectedPaths` inside any root the shell can write, the tool root included. The caller names
- * every protected path, an empty list included, so none can be left out by omission.
+ * With host tools on, refuse a start the sandbox cannot make safe: a backend that is not a
+ * `LinuxSandbox` (the shell would run unconfined); a workspace inside a root the `workspace-write`
+ * sandbox also leaves writable (`/tmp`), where the shell could rewrite `.theokit/settings.json`,
+ * whose hooks the SDK runs outside the sandbox on the next agent; or any of `protectedPaths` inside
+ * any root the shell can write, the tool root included. Under `danger-full-access` the shell is
+ * unconfined by choice, so only the tool-root half of the last check holds: the file writers are
+ * bound to the tool root whatever the mode. The caller names every protected path, an empty list
+ * included, so none can be left out by omission.
  */
 export function checkHostToolsPosture(
   settings: ToolSettings,
   protectedPaths: readonly ProtectedPath[],
   deps: ToolDeps = {},
 ): void {
-  if (!settings.hostTools || settings.sandboxMode === 'danger-full-access') return
+  if (!settings.hostTools) return
+  if (settings.sandboxMode === 'danger-full-access') {
+    for (const target of protectedPaths) refuseWritableProtectedPath(target, [settings.toolRoot])
+    return
+  }
   if (!settings.sandboxEnforced) {
     const { sandboxMode } = settings
     const { detail } = resolveSandboxPosture({ mode: sandboxMode, ...(deps.detect === undefined ? {} : { detect: deps.detect }) })
     throw new TheoClawConfigError(
-      `THEOCLAW_HOST_TOOLS=on needs an enforced sandbox (THEOCLAW_SANDBOX=${sandboxMode}): ${detail}; set THEOCLAW_SANDBOX=danger-full-access to run the shell unconfined`,
+      `THEOCLAW_HOST_TOOLS=on needs an enforced sandbox (THEOCLAW_SANDBOX=${sandboxMode}): ${detail}; install bubblewrap and allow unprivileged user namespaces, or set THEOCLAW_SANDBOX=danger-full-access to run the shell unconfined on purpose`,
       { variable: 'THEOCLAW_SANDBOX' },
     )
   }
@@ -291,7 +309,7 @@ function refuseWritableProtectedPath({ path, variable }: ProtectedPath, roots: r
   const root = roots.find((candidate) => isWithin(real, realPathOrSelf(candidate)))
   if (root === undefined) return
   throw new TheoClawConfigError(
-    `THEOCLAW_HOST_TOOLS=on refuses ${variable} ${path}: it lies under ${root}, which the sandboxed shell can write`,
+    `THEOCLAW_HOST_TOOLS=on refuses ${variable} ${path}: it lies under ${root}, which the host tools can write`,
     { variable },
   )
 }

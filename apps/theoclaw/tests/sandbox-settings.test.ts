@@ -1,10 +1,13 @@
-import { mkdtempSync, realpathSync, rmSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { mkdirSync, mkdtempSync, realpathSync, rmSync } from 'node:fs'
+import { join } from 'node:path'
 
 import { LinuxSandbox, LocalSandbox } from '@theokit/agents/sandbox'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { TheoClawConfigError } from '../src/control-plane/errors.js'
 import { readSandboxMode } from '../src/sandbox/sandbox-mode.js'
+import { agentToolOptions } from '../src/tools/tool-registry.js'
 import { resolveToolSettings } from '../src/tools/tool-settings.js'
 import { makeHostToolsWorkspace } from './host-tools-workspace.js'
 import { enforced, notEnforced, startForTools, stop, tempCwd } from './tool-start-fixtures.js'
@@ -12,6 +15,8 @@ import type { ToolStart } from './tool-start-fixtures.js'
 
 const OFF_LINE = 'sandbox: off (danger-full-access), shell_exec runs unconfined'
 const THREE_MODES = /read-only, workspace-write, danger-full-access/
+const GIT_DIFF_OFF_LINE = 'tools: git_diff is off (sandbox not enforced: '
+const FAKE_BROWSER_CLI = '/opt/fake/@playwright/mcp/cli.js'
 
 const cleanups: (() => void)[] = []
 const started: ToolStart[] = []
@@ -39,9 +44,19 @@ async function start(...args: Parameters<typeof startForTools>): Promise<ToolSta
   return result
 }
 
+/** A browsers directory holding one Chromium build, so `THEOCLAW_BROWSER=on` resolves. */
+function installedBrowser(): { readonly resolveCli: () => string; readonly browsersDir: string } {
+  const dir = realpathSync(mkdtempSync('/tmp/theoclaw-sandbox-browsers-'))
+  cleanups.push(() => rmSync(dir, { recursive: true, force: true }))
+  mkdirSync(join(dir, 'chromium-1200'))
+  return { resolveCli: () => FAKE_BROWSER_CLI, browsersDir: dir }
+}
+
 /** The writable binds bubblewrap receives: what the backend actually lets the shell write. */
 function writableBinds(sandbox: LinuxSandbox): string[] {
   const argv = sandbox.wrapCommand('true') ?? ''
+  // A quoting change in the SDK must fail the read-only case too, not leave it matching nothing.
+  expect(argv).toContain("'--ro-bind'")
   return [...argv.matchAll(/'--bind' '([^']+)' '[^']+'/g)].map((match) => match[1] as string)
 }
 
@@ -106,6 +121,15 @@ describe('THEOCLAW_SANDBOX at start', () => {
       expect(result.error?.message).toContain('bwrap not found on PATH')
       expect(result.builds()).toBe(0)
     })
+
+    it(`names installing bubblewrap as the fix for an unenforced sandbox under ${mode}, before the opt-out`, async () => {
+      const result = await start({ THEOCLAW_HOST_TOOLS: 'on', THEOCLAW_SANDBOX: mode }, hostWorkspace(), { detect: notEnforced })
+      const message = result.error?.message ?? ''
+      const fix = message.indexOf('install bubblewrap')
+      expect(fix).toBeGreaterThan(-1)
+      expect(message).toContain('unprivileged user namespaces')
+      expect(fix).toBeLessThan(message.indexOf('THEOCLAW_SANDBOX=danger-full-access'))
+    })
   }
 
   // The writable binds are pinned as literals, not read back from `writableRootsFor`: a change in
@@ -154,5 +178,62 @@ describe('THEOCLAW_SANDBOX at start', () => {
     const result = await start({ THEOCLAW_HOST_TOOLS: 'on', THEOCLAW_SANDBOX: 'danger-full-access' }, tmpWorkspace(), { detect: notEnforced })
     expect(result.error).toBeUndefined()
     expect(result.builds()).toBeGreaterThan(0)
+  })
+
+  it('registers no git_diff under danger-full-access with a git tool root, and writes its off line', () => {
+    const workspace = hostWorkspace()
+    const toolRoot = join(workspace, 'files')
+    mkdirSync(toolRoot, { mode: 0o700 })
+    execFileSync('git', ['init', '-q', toolRoot])
+    const settings = resolveToolSettings({ THEOCLAW_HOST_TOOLS: 'on', THEOCLAW_SANDBOX: 'danger-full-access' }, workspace, {
+      detect: enforced,
+      warn: () => undefined,
+    })
+    expect(settings.gitRepository).toBe(true)
+    expect(agentToolOptions(settings).tools.map((tool) => tool.name)).not.toContain('git_diff')
+    expect(settings.offLines.filter((line) => line.startsWith(GIT_DIFF_OFF_LINE))).toHaveLength(1)
+  })
+
+  it('refuses THEOCLAW_STATE_DIR inside the tool root under danger-full-access: the file writers could pair anyone', async () => {
+    const workspace = hostWorkspace()
+    const stateDir = join(workspace, 'files', 'state')
+    const env = { THEOCLAW_HOST_TOOLS: 'on', THEOCLAW_SANDBOX: 'danger-full-access', THEOCLAW_STATE_DIR: stateDir }
+    const result = await start(env, workspace, { detect: notEnforced })
+    expect(result.error).toBeInstanceOf(TheoClawConfigError)
+    expect((result.error as TheoClawConfigError).variable).toBe('THEOCLAW_STATE_DIR')
+    expect(result.error?.message).toContain(stateDir)
+    expect(result.builds()).toBe(0)
+  })
+
+  it('starts with THEOCLAW_STATE_DIR under /tmp under danger-full-access: only the tool root is still guarded', async () => {
+    const stateDir = tmpWorkspace()
+    const env = { THEOCLAW_HOST_TOOLS: 'on', THEOCLAW_SANDBOX: 'danger-full-access', THEOCLAW_STATE_DIR: stateDir }
+    const result = await start(env, hostWorkspace(), { detect: notEnforced })
+    expect(result.error).toBeUndefined()
+  })
+
+  it('refuses THEOCLAW_BROWSER=on under read-only with host tools on: the browser server writes files', () => {
+    let error: unknown
+    try {
+      resolveToolSettings({ THEOCLAW_HOST_TOOLS: 'on', THEOCLAW_SANDBOX: 'read-only', THEOCLAW_BROWSER: 'on' }, hostWorkspace(), {
+        detect: enforced,
+        warn: () => undefined,
+        browser: installedBrowser(),
+      })
+    } catch (caught) {
+      error = caught
+    }
+    expect(error).toBeInstanceOf(TheoClawConfigError)
+    expect((error as TheoClawConfigError).variable).toBe('THEOCLAW_BROWSER')
+    expect((error as Error).message).toContain('THEOCLAW_SANDBOX=read-only')
+  })
+
+  it('keeps THEOCLAW_BROWSER=on under workspace-write', () => {
+    const settings = resolveToolSettings(
+      { THEOCLAW_HOST_TOOLS: 'on', THEOCLAW_SANDBOX: 'workspace-write', THEOCLAW_BROWSER: 'on' },
+      hostWorkspace(),
+      { detect: enforced, warn: () => undefined, browser: installedBrowser() },
+    )
+    expect(settings.browser).toEqual({ cliPath: FAKE_BROWSER_CLI })
   })
 })

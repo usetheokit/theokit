@@ -299,10 +299,17 @@ stops the start before any runner, with host tools off too.
 | `danger-full-access` | every path the process user can write: no sandbox | registered |
 
 Under `read-only` and `workspace-write` the start refuses when the sandbox is not enforced, naming
-`THEOCLAW_SANDBOX` and the reason, and keeps the `/tmp` and `THEOCLAW_STATE_DIR` refusals above.
+`THEOCLAW_SANDBOX`, the reason and the fix (install bubblewrap and allow unprivileged user
+namespaces, as the CI job does), and keeps the `/tmp` and `THEOCLAW_STATE_DIR` refusals above.
+`read-only` governs the shell and the file tools; the browser server (`THEOCLAW_BROWSER=on`) runs
+outside the sandbox and writes the screenshots, console logs and PDFs it is asked for, so the start
+refuses the two together.
 Under `danger-full-access` it starts without bubblewrap, under `/tmp` too, and prints
-`sandbox: off (danger-full-access), shell_exec runs unconfined`; `git_diff` stays off. With host
-tools off the shell is not registered and every mode keeps a read-only sandbox.
+`sandbox: off (danger-full-access), shell_exec runs unconfined`; `git_diff` stays off. **The shell
+can then rewrite `pairing.json` in a `THEOCLAW_STATE_DIR` outside `files/` (and so pair any sender)
+and the SDK's `.theokit/settings.json`, whose hooks run on the next agent**; the start still refuses
+a `THEOCLAW_STATE_DIR` under `files/`, which the file-writing tools could rewrite in any mode. With
+host tools off the shell is not registered and every mode keeps a read-only sandbox.
 
 The live check of the sandbox (`THEOCLAW_MODEL` set in the environment):
 

@@ -95,8 +95,11 @@ and versioning follows [Semantic Versioning](https://semver.org/).
   start, with host tools off too. Under `read-only` the shell can write nothing and `write_file`,
   `edit_file` and `apply_patch` are not registered; under `workspace-write` it can write only
   `files/` and `/tmp`; under `danger-full-access` it runs unconfined, the start needs no
-  bubblewrap and prints one line saying so. An unenforced sandbox under the other two modes refuses
-  the start naming `THEOCLAW_SANDBOX`. The parity ledger records OC-76 as shipped, checked by
+  bubblewrap and prints one line saying so, and still refuses a `THEOCLAW_STATE_DIR` under `files/`,
+  which the file-writing tools can rewrite. `read-only` with `THEOCLAW_BROWSER=on` stops the start:
+  the browser server runs unsandboxed and writes files. An unenforced sandbox under the other two
+  modes refuses the start naming `THEOCLAW_SANDBOX` and the fix (install bubblewrap, allow
+  unprivileged user namespaces). The parity ledger records OC-76 as shipped, checked by
   `tests/live/sandbox.live.test.ts` against a real model; `non-main` and per-session scope wait on
   B-683. The `theoclaw` CI job installs bubblewrap for the confinement tests.
 - MCP servers and ACP coding agents for the `/control` agent (B-388), named in one JSON file by

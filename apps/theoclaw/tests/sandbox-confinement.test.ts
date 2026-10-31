@@ -125,21 +125,38 @@ describe('the tools each mode registers', () => {
     for (const writer of FILE_WRITERS) expect(names).not.toContain(writer)
   })
 
-  it('host tools off keeps a read-only LinuxSandbox in every mode', async () => {
-    for (const mode of MODES) {
-      const { workspace, outside } = workspaceAndOutside()
+  for (const mode of ['workspace-write', 'danger-full-access'] as const) {
+    it(`${mode} registers write_file, edit_file, apply_patch and shell_exec`, () => {
+      const { workspace } = workspaceAndOutside()
+      const names = agentToolOptions(settingsFor(mode, workspace)).tools.map((tool) => tool.name)
+      for (const tool of [...FILE_WRITERS, 'shell_exec']) expect(names).toContain(tool)
+    })
+  }
+
+  for (const mode of MODES) {
+    it(`host tools off keeps a read-only LinuxSandbox under ${mode}`, () => {
+      const { workspace } = workspaceAndOutside()
       const settings = resolveToolSettings({ THEOCLAW_SANDBOX: mode }, workspace)
       expect(settings.sandbox).toBeInstanceOf(LinuxSandbox)
       expect(settings.mode).toBe('read-only')
+    })
+
+    it(`host tools off registers no shell under ${mode}`, () => {
+      const { workspace } = workspaceAndOutside()
+      const settings = resolveToolSettings({ THEOCLAW_SANDBOX: mode }, workspace)
       expect(agentToolOptions(settings).tools.map((tool) => tool.name)).not.toContain('shell_exec')
-      // The backend itself binds nothing writable: a command run on it cannot write outside.
+    })
+
+    it(`host tools off leaves the backend unable to write outside under ${mode}`, async () => {
+      const { workspace, outside } = workspaceAndOutside()
+      const settings = resolveToolSettings({ THEOCLAW_SANDBOX: mode }, workspace)
       const target = join(outside, 'x')
       const result = await settings.sandbox.execute(`echo x > ${target}`)
       expect(result.exitCode).not.toBe(0)
       expect(result.stderr).toMatch(/Read-only file system/)
       expect(existsSync(target)).toBe(false)
-    }
-  })
+    })
+  }
 })
 
 describe('one backend per start', () => {
@@ -154,6 +171,8 @@ describe('one backend per start', () => {
     started.push(start)
     expect(start.error).toBeUndefined()
     const afterStart = detections
+    // The counter must be live before its stillness means anything: the start consulted the seam.
+    expect(afterStart).toBeGreaterThan(0)
     const roots = new Set<string>()
     for (let agent = 0; agent < 10; agent += 1) {
       const options = await runControlTurn(start)
