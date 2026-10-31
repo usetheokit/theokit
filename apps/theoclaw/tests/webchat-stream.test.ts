@@ -109,7 +109,7 @@ function dataFrames(body: string): unknown[] {
  * Read the body until a text chunk arrives. The presenter's `start` frame comes before the turn has
  * produced anything, so the first read alone says nothing about the model's output.
  */
-async function readUntilText(reader: ReadableStreamDefaultReader<Uint8Array>): Promise<void> {
+async function readUntilText(reader: ReadableStreamDefaultReader<Uint8Array>): Promise<string> {
   const decoder = new TextDecoder();
   let seen = "";
   while (!seen.includes('"type":"text-delta"')) {
@@ -117,6 +117,7 @@ async function readUntilText(reader: ReadableStreamDefaultReader<Uint8Array>): P
     if (done) throw new Error("the body ended before any text chunk");
     seen += decoder.decode(value, { stream: true });
   }
+  return seen;
 }
 
 function chunksOfType(frames: unknown[], type: string): { readonly [key: string]: unknown }[] {
@@ -338,7 +339,7 @@ describe("cancelling a WebChat turn", () => {
 
     const [slow, fast] = await Promise.all([handle(chatRequest({ message: "slow" })), handle(chatRequest({ message: "fast" }))]);
     const slowReader = slow.body!.getReader();
-    await readUntilText(slowReader);
+    const slowSeen = await readUntilText(slowReader);
     await slowReader.cancel();
     const fastFrames = dataFrames(await fast.text());
 
@@ -346,6 +347,9 @@ describe("cancelling a WebChat turn", () => {
       .map((chunk) => chunk.delta)
       .join("");
     expect(fastText).toBe("reply to fast");
+    // review round 1, F-tests-7: the slow stream holds its own reply and nothing of the other tab's.
+    expect(slowSeen).toContain("slow reply");
+    expect(slowSeen).not.toContain("reply to fast");
     expect(fastFrames.at(-1)).toBe("[DONE]");
     expect(stub.calls.built + slowStub.calls.built).toBe(2);
     await waitFor(() => slowStub.calls.cancels === 1, "the aborted turn's cancel");

@@ -31,7 +31,7 @@ export default defineConfig({
     // code B-372 adds, and its plan bounds it at 90% on all three counters.
     coverage: {
       provider: 'v8',
-      include: ['src/control-plane/**'],
+      include: ['src/control-plane/**', 'src/webchat/**'],
       thresholds: { lines: 90, branches: 90, functions: 90 },
     },
   },

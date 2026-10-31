@@ -69,8 +69,11 @@ describe("readBearerToken", () => {
     expect(readBearerToken({ SOME_TOKEN: TOKEN }, "SOME_TOKEN")).toBe(TOKEN);
   });
 
-  it("refuses a padded value naming the variable and not the value", () => {
-    const padded = ` ${TOKEN}`;
+  it.each([
+    ["a leading space", ` ${TOKEN}`],
+    ["a trailing space", `${TOKEN} `],
+    ["a trailing newline", `${TOKEN}\n`],
+  ])("refuses a value padded with %s, naming the variable and not the value", (_padding, padded) => {
     const error = refusalOf(() => readBearerToken({ SOME_TOKEN: padded }, "SOME_TOKEN"));
     expect(error.variable).toBe("SOME_TOKEN");
     expect(error.message).toContain("SOME_TOKEN");
