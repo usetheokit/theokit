@@ -443,4 +443,62 @@ describe('defineCachedRoute single-flight (B-667)', () => {
     expect(second.headers.get('X-Theo-Cache')).toBe('STALE')
     expect(gated.entries() - before.entries, 'revalidations across two stale hits').toBe(2)
   })
+
+  it('test_a_lone_throwing_leader_rejects_without_an_unhandled_rejection', async () => {
+    const { engine } = countingEngine()
+    const failure = new Error('lone leader failed')
+    const gated = gatedHandler(() => {
+      throw failure
+    })
+    const route = defineCachedRoute(engine, { cache: { maxAge: 60 }, handler: gated.handler })
+    const unhandled: unknown[] = []
+    const onUnhandled = (reason: unknown): void => {
+      unhandled.push(reason)
+    }
+    process.on('unhandledRejection', onUnhandled)
+    try {
+      const lone = call(route, makeCtx(get()))
+      gated.release()
+      await expect(lone).rejects.toBe(failure)
+      // Node reports an unhandled rejection once the microtask queue drains, before the
+      // next macrotask runs, so one setImmediate is past the point it would have fired.
+      await new Promise((r) => setImmediate(r))
+    } finally {
+      process.off('unhandledRejection', onUnhandled)
+    }
+
+    expect(unhandled, 'unhandled rejections from a leader with no follower').toEqual([])
+    // The key is free: the next request runs the handler again.
+    gated.rearm((run) => Response.json({ run }))
+    const next = call(route, makeCtx(get()))
+    gated.release()
+    expect((await next).status).toBe(200)
+    expect(gated.entries()).toBe(2)
+  })
+
+  it('test_a_failed_revalidation_reports_its_error', async () => {
+    const { engine } = countingEngine()
+    const gated = gatedHandler()
+    const route = defineCachedRoute(engine, {
+      cache: { maxAge: 1, swr: 600 },
+      handler: gated.handler,
+    })
+    await populateThenStale(route, gated)
+    const failure = new Error('revalidation failed')
+    gated.rearm(() => {
+      throw failure
+    })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    const stale = await call(route, makeCtx(get()))
+    gated.release()
+    await waitFor(() => warn.mock.calls.length > 0, 'the failed revalidation to be reported')
+
+    expect(stale.headers.get('X-Theo-Cache')).toBe('STALE')
+    expect(warn).toHaveBeenCalledTimes(1)
+    const [message, reported] = warn.mock.calls[0] ?? []
+    expect(String(message)).toContain('background revalidation failed')
+    expect(String(message)).toContain('route:GET')
+    expect(reported).toBe(failure)
+  })
 })
