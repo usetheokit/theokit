@@ -100,6 +100,11 @@ async function startLive(workspace: string) {
       THEOCLAW_PORT: '0',
       THEOCLAW_WORKSPACE: workspace,
       THEOCLAW_TELEGRAM_TOKEN: 'live-stand-in-telegram-token',
+      // Every start names its owners (B-371); each live sender is one, so a group answers it too, and
+      // a group answers without a mention, since these events carry no bot identity to mention.
+      THEOCLAW_OWNERS: LIVE_SENDERS.map((sender) => `telegram:${sender}`).join(','),
+      THEOCLAW_DM_POLICY: 'allowlist',
+      THEOCLAW_GROUP_ACTIVATION: 'always',
     },
     agentFactory: () => {
       throw new Error('the /control factory must not build a chat agent')
@@ -134,6 +139,9 @@ async function ask(telegram: FakeAdapter, event: MessageEvent): Promise<string> 
   await waitFor(() => telegram.sent.length > before, TURN_TIMEOUT_MS - 10_000, `the reply to "${event.text}"`)
   return telegram.sent[before]!.text
 }
+
+/** The sender of each case: every one is an owner, the policy that admits a sender in a group. */
+const LIVE_SENDERS = ['live-dm-recall', 'live-group-sender', 'live-restart', 'live-reset', 'live-queue'] as const
 
 const SAY = (word: string): string => `For this conversation my code word is ${word}. Reply with just: noted.`
 const RECALL = 'What is my code word? Answer with the code word only.'
@@ -178,6 +186,9 @@ describe.skipIf(!LIVE)('chat sessions against a real model', () => {
     const { telegram, runs } = await startLive(freshWorkspace())
 
     await ask(telegram, messageEvent('telegram', SAY(word), 'live-group-sender'))
+    // The positive control: the dm session itself recalls the word, so the group's not recalling it
+    // is the sessions' isolation, not a model that ignores its history.
+    expect((await ask(telegram, messageEvent('telegram', RECALL, 'live-group-sender'))).toLowerCase()).toContain(word)
     const reply = await ask(telegram, groupEvent(RECALL, 'live-group-sender'))
 
     expect(reply.toLowerCase()).not.toContain(word)
@@ -208,6 +219,8 @@ describe.skipIf(!LIVE)('chat sessions against a real model', () => {
     const { telegram, runs } = await startLive(freshWorkspace())
 
     await ask(telegram, messageEvent('telegram', SAY(word), 'live-reset'))
+    // The positive control: before the reset the session recalls the word.
+    expect((await ask(telegram, messageEvent('telegram', RECALL, 'live-reset'))).toLowerCase()).toContain(word)
     expect(await ask(telegram, messageEvent('telegram', '/reset', 'live-reset'))).toBe('Started a new conversation.')
     const reply = await ask(telegram, messageEvent('telegram', RECALL, 'live-reset'))
 
