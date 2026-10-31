@@ -8,6 +8,7 @@ import {
   RETRY_IMMEDIATELY,
   assertQueuedJobIsRetriedToItsDefinitionMaxAttempts,
 } from './helpers/queued-job-retry-oracle.js'
+import { assertMigrateIsIdempotent } from './helpers/migrate-idempotency-oracle.js'
 
 const POSTGRES_URL = process.env.POSTGRES_URL
 
@@ -325,12 +326,18 @@ describe.skipIf(!POSTGRES_URL || !pgAvailable)(
     })
 
     it('migrate() is idempotent (safe to re-run on every deploy)', async () => {
-      await backend.migrate()
-      await backend.migrate()
-      const r = await pool.query<{ count: string }>(
-        `SELECT count(*)::text as count FROM theokit_jobs_ci`,
+      // B-668 — the shared oracle (also run against mutants on pg-mem), plus the catalog check
+      // only real Postgres can answer: both indexes still exist after the re-runs.
+      await assertMigrateIsIdempotent({ backend, pool, table: 'theokit_jobs_ci' })
+      const names = ['theokit_jobs_ci_available_at_idx', 'theokit_jobs_ci_idempotency_key_idx']
+      const idx = await pool.query<{ indexname: string }>(
+        `SELECT indexname FROM pg_indexes WHERE tablename = 'theokit_jobs_ci' AND indexname = ANY($1)`,
+        [names],
       )
-      expect(r.rows.length).toBe(1)
+      expect(
+        idx.rows.map((r) => r.indexname).sort((a, b) => a.localeCompare(b)),
+        'both theokit_jobs_ci indexes still exist in pg_indexes after the re-runs',
+      ).toEqual(names)
     })
   },
 )
