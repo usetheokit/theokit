@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createInterface } from 'node:readline'
@@ -32,7 +32,7 @@ createInterface({ input: process.stdin }).on('line', (line) => {
     send({ jsonrpc: '2.0', id: message.id, result: { tools: [{ name: 'browser_navigate' }, { name: 'browser_run_code_unsafe' }, { name: 'browser_snapshot' }] } })
   } else {
     const env = Object.keys(process.env).filter((key) => key.startsWith('PLAYWRIGHT_MCP_'))
-    send({ jsonrpc: '2.0', id: message.id, result: { called: message.params?.name, cwd: process.cwd(), argv: process.argv.slice(2), env } })
+    send({ jsonrpc: '2.0', id: message.id, result: { called: message.params?.name, cwd: process.cwd(), argv: process.argv.slice(2), env, pid: process.pid } })
   }
 })
 `
@@ -79,6 +79,33 @@ async function exchange(requests: readonly object[], env: NodeJS.ProcessEnv = pr
   return answers
 }
 
+/** Resolve once `pid` is no longer running, or reject naming it after the deadline. */
+async function processGone(pid: number): Promise<void> {
+  const deadline = Date.now() + DEADLINE_MS
+  for (;;) {
+    try {
+      process.kill(pid, 0)
+    } catch {
+      return
+    }
+    if (Date.now() > deadline) throw new Error(`process ${pid} still running ${DEADLINE_MS} ms after the wrapper got SIGTERM`)
+    await new Promise((resolve) => setTimeout(resolve, 50))
+  }
+}
+
+/** Start the wrapper with `args` and resolve with its exit code and stderr once it closes. */
+async function runWrapper(args: readonly string[]): Promise<{ readonly code: number | null; readonly stderr: string }> {
+  const [proxy] = (browserServer({ cliPath: standInCli() }) as { args: string[] }).args
+  const child = spawn(process.execPath, [proxy as string, ...args], { stdio: ['pipe', 'pipe', 'pipe'] })
+  let stderr = ''
+  child.stderr.on('data', (chunk: Buffer) => {
+    stderr += chunk.toString()
+  })
+  child.stdin.end()
+  const code = await new Promise<number | null>((resolve) => child.once('close', (exit) => resolve(exit)))
+  return { code, stderr }
+}
+
 describe('the browser server wrapper', () => {
   it('lists no tool outside the offered set', async () => {
     const answers = await exchange([{ method: 'tools/list' }])
@@ -97,7 +124,8 @@ describe('the browser server wrapper', () => {
     const result = answers.get(1)?.result as { called: string; cwd: string; argv: string[] }
     expect(result.called).toBe('browser_navigate')
     expect(result.cwd).not.toBe(process.cwd())
-    expect(result.cwd.startsWith(tmpdir())).toBe(true)
+    // The child reports its resolved cwd; a symlinked temp directory (macOS /var) is resolved too (F-tests-13).
+    expect(result.cwd.startsWith(realpathSync(tmpdir()))).toBe(true)
     expect(result.argv.slice(-2)).toEqual(['--output-dir', result.cwd])
     expect(existsSync(result.cwd)).toBe(false)
   })
@@ -113,5 +141,39 @@ describe('the browser server wrapper', () => {
     const answers = await exchange([{ method: 'initialize', params }])
     const seen = answers.get(1)?.result?.seen as { capabilities: Record<string, unknown> }
     expect(seen.capabilities).toEqual({})
+  })
+
+  it('forwards SIGTERM to the server and removes its directory', async () => {
+    // Review round 2 (F-tests-9): disposing an agent ends the wrapper by signal, not by closing stdin.
+    const server = browserServer({ cliPath: standInCli() }) as { command: string; args: string[] }
+    const child = spawn(server.command, server.args, { stdio: ['pipe', 'pipe', 'pipe'] })
+    const closed = new Promise<number | null>((resolve) => child.once('close', (code) => resolve(code)))
+    const answer = await new Promise<Answer>((resolve) => {
+      createInterface({ input: child.stdout }).once('line', (line) => resolve(JSON.parse(line) as Answer))
+      child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'browser_navigate', arguments: {} } })}\n`)
+    })
+    const { pid, cwd } = answer.result as { pid: number; cwd: string }
+    child.kill('SIGTERM')
+    // The stand-in dies of the forwarded signal, so the wrapper exits 1 (ended on a signal).
+    expect(await closed).toBe(1)
+    await processGone(pid)
+    expect(existsSync(cwd)).toBe(false)
+  })
+
+  it('exits 2 naming its usage when started without a CLI', async () => {
+    const { code, stderr } = await runWrapper([])
+    expect(code).toBe(2)
+    expect(stderr).toContain('usage: browser-proxy.mjs <playwright-mcp cli>')
+  })
+
+  it('exits with the server status and leaves no directory when the CLI does not exist', async () => {
+    const missing = join(mkdtempSync(join(tmpdir(), 'theoclaw-missing-')), 'cli.mjs')
+    cleanups.push(() => rmSync(join(missing, '..'), { recursive: true, force: true }))
+    const before = new Set(readdirSync(tmpdir()).filter((name) => name.startsWith('theoclaw-browser-')))
+    const { code, stderr } = await runWrapper([missing])
+    expect(code).toBe(1)
+    expect(stderr).toContain('Cannot find module')
+    const left = readdirSync(tmpdir()).filter((name) => name.startsWith('theoclaw-browser-') && !before.has(name))
+    expect(left).toEqual([])
   })
 })
