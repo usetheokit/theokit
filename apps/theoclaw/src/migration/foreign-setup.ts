@@ -3,7 +3,7 @@ import { join } from 'node:path'
 
 import { parse as parseYaml } from 'yaml'
 
-import type { NormalisedMcp } from './mcp-entry.js'
+import { type NormalisedMcp, normaliseMcpEntry } from './mcp-entry.js'
 
 /**
  * What a reader returns (FR-001, FR-002): the instructions, MCP entries, skills and memories of one
@@ -68,6 +68,16 @@ export function readCapped(path: string, rel: string, dropped: DroppedEntry[]): 
   return readFileSync(path, 'utf8')
 }
 
+/** The names in `dir`; none when it does not exist. */
+function listDir(dir: string): string[] {
+  try {
+    return readdirSync(dir)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []
+    throw error
+  }
+}
+
 /** Whether `path` is a regular file, a symlink followed; `false` when it does not exist. */
 function isFile(path: string): boolean {
   try {
@@ -82,15 +92,8 @@ function isFile(path: string): boolean {
  * The entries of `dir` that are directories, a symlink to one included (a skill linked into
  * `~/.claude/skills` is a skill), by name; none when `dir` does not exist.
  */
-export function subdirectories(dir: string): string[] {
-  let names: string[]
-  try {
-    names = readdirSync(dir)
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []
-    throw error
-  }
-  return names.filter((name) => isDirectory(join(dir, name))).sort()
+function subdirectories(dir: string): string[] {
+  return listDir(dir).filter((name) => isDirectory(join(dir, name))).sort()
 }
 
 function isDirectory(path: string): boolean {
@@ -152,4 +155,53 @@ export function readSkillsDir(dir: string, relBase: string, dropped: DroppedEntr
     skills.push({ ...parsed.skill, path: rel })
   }
   return skills
+}
+
+/** Each of `files` (`[path, rel]`) that exists and is under the cap, in the order given. */
+export function readTextFiles(files: ReadonlyArray<readonly [string, string]>, dropped: DroppedEntry[]): TextFile[] {
+  const read: TextFile[] = []
+  for (const [path, rel] of files) {
+    const text = readCapped(path, rel, dropped)
+    if (text !== undefined) read.push({ path: rel, text })
+  }
+  return read
+}
+
+/** The `*.md` regular files directly under `dir`, `first` (when present) ahead of the rest by name. */
+export function markdownFiles(dir: string, first: string): string[] {
+  const files = listDir(dir).filter((name) => name.endsWith('.md') && isFile(join(dir, name))).sort()
+  return files.includes(first) ? [first, ...files.filter((name) => name !== first)] : files
+}
+
+/**
+ * The carried entries of one source's MCP map, `file` naming it in the dropped paths: an entry
+ * that is not carried as `<file>#<server>`, a key that is not as `<file>#<server>.<key>`.
+ */
+export function normaliseMcpMap(map: Record<string, unknown>, file: string, dropped: DroppedEntry[]): Record<string, NormalisedMcp> {
+  const carried: Record<string, NormalisedMcp> = {}
+  for (const [name, raw] of Object.entries(map)) {
+    const normalised = normaliseMcpEntry(raw)
+    if (normalised.reason !== undefined) {
+      dropped.push({ path: `${file}#${name}`, reason: normalised.reason })
+      continue
+    }
+    for (const key of normalised.notCarried) dropped.push({ path: `${file}#${name}.${key}`, reason: 'field not carried' })
+    carried[name] = normalised.entry
+  }
+  return carried
+}
+
+/** `user` without the names `project` carries, each shadowed one listed as dropped by `pathOf`. */
+export function shadow<T>(
+  user: Record<string, T>,
+  project: Record<string, T>,
+  pathOf: (name: string, value: T) => string,
+  dropped: DroppedEntry[],
+): Record<string, T> {
+  const kept: Record<string, T> = {}
+  for (const [name, value] of Object.entries(user)) {
+    if (Object.hasOwn(project, name)) dropped.push({ path: pathOf(name, value), reason: 'shadowed by the project scope' })
+    else kept[name] = value
+  }
+  return { ...kept, ...project }
 }

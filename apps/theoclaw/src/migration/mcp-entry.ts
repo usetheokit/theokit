@@ -21,13 +21,10 @@ export interface UrlMcp {
 
 export type NormalisedMcp = StdioMcp | UrlMcp
 
-export interface NormalisedEntry {
-  readonly entry?: NormalisedMcp
-  /** Why the entry is not carried; set exactly when `entry` is not. */
-  readonly reason?: string
-  /** Keys of the raw entry the carried shape has no place for, listed as `field not carried`. */
-  readonly notCarried: string[]
-}
+/** The carried entry and the keys left out of it, or why the entry is not carried at all. */
+export type NormalisedEntry =
+  | { readonly entry: NormalisedMcp; readonly notCarried: string[]; readonly reason?: undefined }
+  | { readonly reason: string; readonly entry?: undefined; readonly notCarried?: undefined }
 
 // The brief narrows the URL keys to these three: `auth` and `requestTimeoutMs`, which the runtime
 // also reads, are listed as not carried on purpose (FR-003).
@@ -36,7 +33,7 @@ const URL_KEYS = new Set(['type', 'url', 'headers'])
 
 type Raw = Record<string, unknown>
 
-function isPlainObject(value: unknown): value is Raw {
+export function isPlainObject(value: unknown): value is Raw {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
@@ -66,10 +63,10 @@ function isHttpUrl(value: string): boolean {
 function stdioEntry(raw: Raw): NormalisedEntry {
   const args = raw.args
   if (args !== undefined && !(Array.isArray(args) && args.every((arg) => typeof arg === 'string'))) {
-    return { reason: 'args is not an array of strings', notCarried: [] }
+    return { reason: 'args is not an array of strings' }
   }
   const env = raw.env === undefined ? undefined : stringRecord(raw.env)
-  if (raw.env !== undefined && env === undefined) return { reason: 'env value is not a string, number or boolean', notCarried: [] }
+  if (raw.env !== undefined && env === undefined) return { reason: 'env value is not a string, number or boolean' }
   const cwd = typeof raw.cwd === 'string' ? raw.cwd : undefined
   const entry: StdioMcp = {
     command: raw.command as string,
@@ -92,10 +89,10 @@ function urlType(type: unknown): string {
 
 function urlEntry(raw: Raw): NormalisedEntry {
   const url = raw.url as string
-  if (!isHttpUrl(url)) return { reason: 'url is not http: or https:', notCarried: [] }
+  if (!isHttpUrl(url)) return { reason: 'url is not http: or https:' }
   const headers = raw.headers === undefined ? undefined : stringRecord(raw.headers)
   if (raw.headers !== undefined && headers === undefined) {
-    return { reason: 'headers value is not a string, number or boolean', notCarried: [] }
+    return { reason: 'headers value is not a string, number or boolean' }
   }
   const entry: UrlMcp = { type: urlType(raw.type), url, ...(headers === undefined ? {} : { headers }) }
   return { entry, notCarried: Object.keys(raw).filter((key) => !URL_KEYS.has(key)) }
@@ -103,9 +100,9 @@ function urlEntry(raw: Raw): NormalisedEntry {
 
 /** The carried shape of one foreign MCP entry, or the reason it is not carried. */
 export function normaliseMcpEntry(raw: unknown): NormalisedEntry {
-  if (!isPlainObject(raw)) return { reason: 'not an object', notCarried: [] }
+  if (!isPlainObject(raw)) return { reason: 'not an object' }
   const hasCommand = present(raw.command)
   const hasUrl = present(raw.url)
-  if (hasCommand === hasUrl) return { reason: hasCommand ? 'both command and url' : 'neither command nor url', notCarried: [] }
+  if (hasCommand === hasUrl) return { reason: hasCommand ? 'both command and url' : 'neither command nor url' }
   return hasCommand ? stdioEntry(raw) : urlEntry(raw)
 }

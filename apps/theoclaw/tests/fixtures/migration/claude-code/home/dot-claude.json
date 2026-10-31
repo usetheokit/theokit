@@ -1,0 +1,18 @@
+{
+  "numStartups": 12,
+  "projects": { "/somewhere/else": { "allowedTools": [] } },
+  "mcpServers": {
+    "db": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "fixture-db-server"],
+      "env": { "DB_TOKEN": "fixture-secret-db-token" }
+    },
+    "search": {
+      "type": "http",
+      "url": "https://search.example.test/mcp",
+      "headers": { "Authorization": "Bearer fixture-secret-search-header" }
+    },
+    "shared": { "command": "user-shared-server" }
+  }
+}
