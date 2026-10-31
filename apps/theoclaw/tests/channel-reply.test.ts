@@ -17,7 +17,16 @@ import {
 import type { TurnAgent } from '../src/channels/reply-handler.js'
 import { createContainer } from '../src/composition.js'
 import type { SessionLease } from '../src/sessions/session-agents.js'
-import { FakeAdapter, FakeAgent, assistant, deferred, finished, messageEvent, thinking, waitFor } from './fakes.js'
+import {
+  FakeAdapter,
+  FakeAgent,
+  assistant,
+  deferred,
+  finished,
+  messageEvent,
+  thinking,
+  waitFor,
+} from './fakes.js'
 import type { FakeTurn } from './fakes.js'
 
 /** The presenter's fixed sentence for a turn that failed before any text (`@theokit/presenter`). */
@@ -48,8 +57,10 @@ const noReset = async (): Promise<void> => undefined
 
 /** One lease of `agent` per call, as the composition root's chat boundary hands out. */
 function withOne(agent: TurnAgent) {
-  return async <R>(_event: MessageEvent, work: (lease: SessionLease) => R | Promise<R>): Promise<R> =>
-    work({ agent, release: () => undefined })
+  return async <R>(
+    _event: MessageEvent,
+    work: (lease: SessionLease) => R | Promise<R>,
+  ): Promise<R> => work({ agent, release: () => undefined })
 }
 
 /**
@@ -130,33 +141,28 @@ describe('createReplyHandler', () => {
     const event = messageEvent('discord', 'hello')
     const { ctx, replies } = fakeContext(event)
 
-    await expect(createReplyHandler({ reset: noReset, withAgent: withOne(agent) })(event, ctx)).rejects.toBe(failure)
+    await expect(
+      createReplyHandler({ reset: noReset, withAgent: withOne(agent) })(event, ctx),
+    ).rejects.toBe(failure)
 
     expect(replies.map((reply) => reply.text)).toEqual([ERROR_SENTENCE])
   })
 
-  it('releases the lease once after a delivered reply', async () => {
-    const agent = new FakeAgent({ frames: [assistant('Hi!'), finished()] })
+  it.each([
+    ['a delivered reply', new FakeAgent({ frames: [assistant('Hi!'), finished()] })],
+    [
+      'a failed turn',
+      new FakeAgent({ frames: [], streamError: new Error('provider unreachable') }),
+    ],
+  ])('releases the lease once after %s', async (_case, agent) => {
     const release = vi.fn()
     const event = messageEvent('telegram', 'hello')
-    const { ctx } = fakeContext(event)
-
-    await createReplyHandler({ reset: noReset, withAgent: async (_event, work) => work({ agent, release }) })(event, ctx)
-
-    expect(release).toHaveBeenCalledTimes(1)
-  })
-
-  it('releases the lease once after a failed turn', async () => {
-    const failure = new Error('provider unreachable')
-    const agent = new FakeAgent({ frames: [], streamError: failure })
-    const release = vi.fn()
-    const event = messageEvent('telegram', 'hello')
-    const { ctx } = fakeContext(event)
-
-    await expect(
-      createReplyHandler({ reset: noReset, withAgent: async (_event, work) => work({ agent, release }) })(event, ctx),
-    ).rejects.toBe(failure)
-
+    const handle = createReplyHandler({
+      reset: noReset,
+      withAgent: async (_event, work) => work({ agent, release }),
+    })
+    // The failed turn's rethrow is pinned by 'answers with the error sentence and rethrows'; here only the release counts.
+    await handle(event, fakeContext(event).ctx).catch(() => undefined)
     expect(release).toHaveBeenCalledTimes(1)
   })
 
@@ -166,7 +172,9 @@ describe('createReplyHandler', () => {
     const event = messageEvent('slack', 'hello')
     const { ctx, replies } = fakeContext(event)
 
-    await expect(createReplyHandler({ reset: noReset, withAgent: withOne(agent) })(event, ctx)).rejects.toBe(failure)
+    await expect(
+      createReplyHandler({ reset: noReset, withAgent: withOne(agent) })(event, ctx),
+    ).rejects.toBe(failure)
 
     expect(replies.map((reply) => reply.text)).toEqual(['Half an ans'])
   })
@@ -240,7 +248,10 @@ describe('createReplyHandler', () => {
     await createReplyHandler({ reset: noReset, withAgent: withOne(agent) })(event, ctx)
 
     expect(replies).toEqual([
-      { text: channelRendering('line').translate('**Hi**'), format: channelRendering('line').format },
+      {
+        text: channelRendering('line').translate('**Hi**'),
+        format: channelRendering('line').format,
+      },
     ])
   })
 
@@ -257,7 +268,9 @@ describe('createReplyHandler', () => {
       },
     }
 
-    await expect(createReplyHandler({ reset: noReset, withAgent: withOne(agent) })(event, ctx)).rejects.toBe(unreachable)
+    await expect(
+      createReplyHandler({ reset: noReset, withAgent: withOne(agent) })(event, ctx),
+    ).rejects.toBe(unreachable)
 
     expect(attempts).toBe(1)
   })
@@ -284,7 +297,10 @@ describe('createReplyHandler', () => {
     const failure = new Error('provider unreachable')
     const agent = new FakeAgent({ frames: [], streamError: failure })
     const event = messageEvent('telegram', 'hello')
-    const { ctx } = fakeContext(event, { ok: false, error: { code: 'rate_limited', message: 'slow' } })
+    const { ctx } = fakeContext(event, {
+      ok: false,
+      error: { code: 'rate_limited', message: 'slow' },
+    })
 
     const turn = createReplyHandler({ reset: noReset, withAgent: withOne(agent) })(event, ctx)
 
@@ -313,9 +329,15 @@ describe('createReplyHandler', () => {
   it('a refused reply after the factory failed keeps the factory error as its cause', async () => {
     const failure = new Error('THEOCLAW_MODEL is not a known model')
     const event = messageEvent('telegram', 'hello')
-    const { ctx } = fakeContext(event, { ok: false, error: { code: 'rate_limited', message: 'slow' } })
+    const { ctx } = fakeContext(event, {
+      ok: false,
+      error: { code: 'rate_limited', message: 'slow' },
+    })
 
-    const turn = createReplyHandler({ reset: noReset, withAgent: () => Promise.reject(failure) })(event, ctx)
+    const turn = createReplyHandler({ reset: noReset, withAgent: () => Promise.reject(failure) })(
+      event,
+      ctx,
+    )
 
     await expect(turn).rejects.toBeInstanceOf(ReplyDeliveryError)
     await expect(turn).rejects.toHaveProperty('cause', failure)
@@ -351,7 +373,8 @@ describe('createReplyHandler', () => {
       })
       const handler = createReplyHandler({
         reset: noReset,
-        withAgent: (_event, work) => composition.withAgent((agent) => work({ agent, release: () => undefined })),
+        withAgent: (_event, work) =>
+          composition.withAgent((agent) => work({ agent, release: () => undefined })),
       })
       const first = messageEvent('telegram', 'one', 'user-1')
       const second = messageEvent('telegram', 'two', 'user-2')
@@ -406,7 +429,11 @@ describe('createReplyHandler in a GatewayRunner', () => {
     })
     const agent = new FakeAgent({ frames: [assistant('hi'), finished()] })
 
-    const errors = await runOne(adapter, createReplyHandler({ reset: noReset, withAgent: withOne(agent) }), 'hello')
+    const errors = await runOne(
+      adapter,
+      createReplyHandler({ reset: noReset, withAgent: withOne(agent) }),
+      'hello',
+    )
 
     expect(errors).toHaveLength(1)
     expect(errors[0]).toBeInstanceOf(ReplyDeliveryError)
@@ -419,7 +446,11 @@ describe('createReplyHandler in a GatewayRunner', () => {
     const adapter = new FakeAdapter('telegram')
     const agent = new FakeAgent({ frames: [assistant('Half an ans')], streamError: failure })
 
-    const errors = await runOne(adapter, createReplyHandler({ reset: noReset, withAgent: withOne(agent) }), 'hello')
+    const errors = await runOne(
+      adapter,
+      createReplyHandler({ reset: noReset, withAgent: withOne(agent) }),
+      'hello',
+    )
 
     expect(errors).toEqual([failure])
     expect(adapter.sent.map((message) => message.text)).toEqual(['Half an ans'])
@@ -463,11 +494,12 @@ function handlerOver(agent: SdkShapedAgent): GatewayHandler {
   const agents = createContainer<TurnAgent>({ factory: () => agent })
   return createReplyHandler({
     reset: noReset,
-    withAgent: (_event, work) => agents.withAgent((turnAgent) => work({ agent: turnAgent, release: () => undefined })),
+    withAgent: (_event, work) =>
+      agents.withAgent((turnAgent) => work({ agent: turnAgent, release: () => undefined })),
   })
 }
 
-describe("the /control request boundary tears its agent down", () => {
+describe('the /control request boundary tears its agent down', () => {
   it("runs the agent's teardown once after a finished turn", async () => {
     const agent = new SdkShapedAgent({ frames: [assistant('Hi!'), finished()] })
     const event = messageEvent('telegram', 'hello')
