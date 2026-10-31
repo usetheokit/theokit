@@ -10,7 +10,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1122 export(s) across 25 entry point(s).
+1148 export(s) across 25 entry point(s).
 
 Measured against `@theokit/sdk@5.11.0`.
 
@@ -40,6 +40,7 @@ Measured against `@theokit/sdk@5.11.0`.
 | `assistantText` | value |
 | `auditEnvReachability` | value |
 | `AuthenticationError` | value |
+| `BodyTooLargeError` | value |
 | `BudgetExceededError` | value |
 | `buildAgentCard` | value |
 | `buildMcpToolDescriptors` | value |
@@ -72,10 +73,12 @@ Measured against `@theokit/sdk@5.11.0`.
 | `createAgentExecutionContext` | value |
 | `createApiErrorHandler` | value |
 | `createDraft` | value |
+| `createOpenAICompatibleRoutes` | value |
 | `createPermissionsPlugin` | value |
 | `createSdkAgentStream` | value |
 | `createThinkTagExtractor` | value |
 | `createToolHooksPlugin` | value |
+| `createToolInvokeRoute` | value |
 | `createToolSeen` | value |
 | `CredentialPoolExhaustedError` | value |
 | `declareAgentShape` | value |
@@ -137,6 +140,7 @@ Measured against `@theokit/sdk@5.11.0`.
 | `MainLoopCapability` | value |
 | `MalformedGuardrailResultError` | value |
 | `mapWithConcurrency` | value |
+| `MAX_REQUEST_BODY_BYTES` | value |
 | `MCP_PROTOCOL_VERSION` | value |
 | `McpFileError` | value |
 | `mcpRegistry` | value |
@@ -162,10 +166,12 @@ Measured against `@theokit/sdk@5.11.0`.
 | `promptInjectionDetector` | value |
 | `Provider` | value |
 | `RateLimitError` | value |
+| `readCappedBody` | value |
 | `reasoningEffortOf` | value |
 | `recordWiring` | value |
 | `reflectionStrategyConfigSchema` | value |
 | `refreshModelCatalog` | value |
+| `renderTranscript` | value |
 | `resolveCompactionStrategy` | value |
 | `resolveCompatSources` | value |
 | `resolveDecomposition` | value |
@@ -358,6 +364,10 @@ Measured against `@theokit/sdk@5.11.0`.
 | `ModelCapabilities` | type |
 | `ModelOption` | type |
 | `NamedTool` | type |
+| `OpenAIChatMessage` | type |
+| `OpenAIChatRequest` | type |
+| `OpenAICompatibleRoutesOptions` | type |
+| `OpenAITextPart` | type |
 | `OutputModerationOptions` | type |
 | `ParsedModelId` | type |
 | `PartialToolCallEvent` | type |
@@ -413,15 +423,18 @@ Measured against `@theokit/sdk@5.11.0`.
 | `TextDeltaEvent` | type |
 | `ThinkingEvent` | type |
 | `TimeoutAction` | type |
+| `ToolArgsValidator` | type |
 | `ToolboxOptions` | type |
 | `ToolboxSource` | type |
 | `ToolboxWalkResult` | type |
 | `ToolCallEvent` | type |
 | `ToolCallVeto` | type |
+| `ToolCallVetoPort` | type |
 | `ToolComNome` | type |
 | `ToolDeclaration` | type |
 | `ToolHooks` | type |
 | `ToolHooksPlugin` | type |
+| `ToolInvokeRouteOptions` | type |
 | `ToolOptions` | type |
 | `ToolResultContentBlock` | type |
 | `ToolResultEvent` | type |
@@ -448,6 +461,7 @@ Measured against `@theokit/sdk@5.11.0`.
 | `agentsPlugin` | value |
 | `applyPosture` | value |
 | `APPROVAL_MODES` | value |
+| `BodyTooLargeError` | value |
 | `BudgetExceededError` | value |
 | `buildModelSelection` | value |
 | `CompatImportUnsupportedError` | value |
@@ -461,10 +475,12 @@ Measured against `@theokit/sdk@5.11.0`.
 | `ContextualTool` | value |
 | `createAgentExecutionContext` | value |
 | `createApiErrorHandler` | value |
+| `createOpenAICompatibleRoutes` | value |
 | `createPermissionsPlugin` | value |
 | `createSdkAgentStream` | value |
 | `createThinkTagExtractor` | value |
 | `createToolHooksPlugin` | value |
+| `createToolInvokeRoute` | value |
 | `createToolSeen` | value |
 | `delegate` | value |
 | `delegateBackground` | value |
@@ -489,12 +505,15 @@ Measured against `@theokit/sdk@5.11.0`.
 | `isToolResult` | value |
 | `loadMcpJson` | value |
 | `loadPersonalMcpServers` | value |
+| `MAX_REQUEST_BODY_BYTES` | value |
 | `McpFileError` | value |
 | `mcpRegistry` | value |
 | `mcpToolApprovals` | value |
 | `presentUIMessageStream` | value |
 | `projectContextMetadataOnlyKnobs` | value |
+| `readCappedBody` | value |
 | `reasoningEffortOf` | value |
+| `renderTranscript` | value |
 | `resolveCompatSources` | value |
 | `resolveMcpServers` | value |
 | `resolveSettingSources` | value |
@@ -562,6 +581,10 @@ Measured against `@theokit/sdk@5.11.0`.
 | `McpRegistryConfig` | type |
 | `McpRequestContext` | type |
 | `McpSelection` | type |
+| `OpenAIChatMessage` | type |
+| `OpenAIChatRequest` | type |
+| `OpenAICompatibleRoutesOptions` | type |
+| `OpenAITextPart` | type |
 | `PartialToolCallEvent` | type |
 | `PermissionsPluginOptions` | type |
 | `ProcessInputContext` | type |
@@ -584,11 +607,14 @@ Measured against `@theokit/sdk@5.11.0`.
 | `StreamEvent` | type |
 | `TextDeltaEvent` | type |
 | `ThinkingEvent` | type |
+| `ToolArgsValidator` | type |
 | `ToolboxWalkResult` | type |
 | `ToolCallEvent` | type |
 | `ToolCallVeto` | type |
+| `ToolCallVetoPort` | type |
 | `ToolHooks` | type |
 | `ToolHooksPlugin` | type |
+| `ToolInvokeRouteOptions` | type |
 | `ToolResultEvent` | type |
 | `ToolWalkResult` | type |
 
