@@ -72,7 +72,7 @@ interface PendingToolResult {
  * and the timestamp fallback came from. An id-less event never matches, so it double-renders
  * visibly rather than vanishing (fail-loud, unchanged from the original design's intent).
  */
-export interface ToolSeen {
+interface ToolSeen {
   readonly started: Set<string>
   readonly completed: Set<string>
   /**

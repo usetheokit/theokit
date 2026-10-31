@@ -113,7 +113,6 @@ export {
   flushPendingToolResults,
   translateTimelineEvent,
   type SdkTimelineEvent,
-  type ToolSeen,
 } from './sdk-timeline.js'
 // M31 builder-only: `AgentBuilder.create()` (below) is the public authoring surface; `defineAgent` is now
 // internal (the AgentBuilder.create() builder's `.build()` delegates to it via source path), removed from the
