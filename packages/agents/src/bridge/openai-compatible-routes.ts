@@ -8,10 +8,7 @@ import { randomUUID } from 'node:crypto'
 
 import { z } from 'zod'
 
-import { BodyTooLargeError, readCappedBody } from './read-capped-body.js'
-
-/** The largest request body either HTTP surface reads: 1 MiB, far above any chat request. */
-export const MAX_REQUEST_BODY_BYTES = 1_048_576
+import { BodyTooLargeError, MAX_REQUEST_BODY_BYTES, readCappedBody } from './read-capped-body.js'
 
 const MODELS_PATH = '/v1/models'
 const COMPLETIONS_PATH = '/v1/chat/completions'
