@@ -109,7 +109,11 @@ function listen(server: Server, options: ListenOptions): Promise<void> {
   })
 }
 
-function handleFor(server: Server, control: ControlSocket | undefined): ControlPlaneHandle {
+function handleFor(
+  server: Server,
+  control: ControlSocket | undefined,
+  sessions: ControlSocketOptions['sessions'],
+): ControlPlaneHandle {
   let closing: Promise<void> | undefined
   return {
     server,
@@ -128,10 +132,15 @@ function handleFor(server: Server, control: ControlSocket | undefined): ControlP
         try {
           await control?.close()
         } finally {
-          await new Promise<void>((resolve, reject) => {
-            server.closeAllConnections()
-            server.close((error) => (error === undefined ? resolve() : reject(error)))
-          })
+          try {
+            // The session agents outlive their turns, so they go with the control plane.
+            await sessions?.close()
+          } finally {
+            await new Promise<void>((resolve, reject) => {
+              server.closeAllConnections()
+              server.close((error) => (error === undefined ? resolve() : reject(error)))
+            })
+          }
         }
       })()),
   }
@@ -157,5 +166,5 @@ export async function listenControlPlane(options: ListenOptions): Promise<Contro
   await listen(server, options)
   // After the bind, a server-level error (an accept failure such as EMFILE) is written, not thrown.
   server.on('error', (error) => options.stderr(`theoclaw: control plane server error: ${describeError(error)}`))
-  return handleFor(server, control)
+  return handleFor(server, control, options.control?.sessions)
 }

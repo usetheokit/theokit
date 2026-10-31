@@ -30,6 +30,7 @@ import { installOutputMask, type MaskableStream } from './channels/output-mask.j
 import { type ConfiguredPlatform, resolvePlatforms } from './channels/platforms.js'
 import { createReplyHandler, type TurnAgent } from './channels/reply-handler.js'
 import { createChannelAgentFactory, sessionAgentOptions } from './control-plane/agent-factory.js'
+import { controlOptions } from './control-plane/control-wiring.js'
 import { type ControlPlaneHandle, listenControlPlane } from './control-plane/listener.js'
 import { formatAddress, type HttpHandler, reportSurfacesOff, serveHandler } from './control-plane/serve.js'
 import { type ControlPlaneSettings, readControlPlaneSettings } from './control-plane/settings.js'
@@ -458,9 +459,10 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
   })
   const extraTools = workflowTools(options.draftAgentFactory, stderr)
   // `/control` agents also hold `run_code` and `delegate_all`; their workers come from the same factory.
-  const agents = createContainer<TurnAgent>({
-    factory: () => options.agentFactory(controlAgentToolOptions(tools, options.agentFactory, extraTools)),
-  })
+  // Session agents come from the same call, so a session turn holds the same tools.
+  const buildControlAgent = async (): Promise<TurnAgent> =>
+    options.agentFactory(controlAgentToolOptions(tools, options.agentFactory, extraTools))
+  const agents = createContainer<TurnAgent>({ factory: buildControlAgent })
   composedApp = composed
   const listen = options.listen ?? listenControlPlane
   serving = listen({
@@ -470,7 +472,7 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
     stderr,
     ...(settings.controlToken === undefined
       ? {}
-      : { control: { token: settings.controlToken, runTurn: createTurnRunner(agents.withAgent) } }),
+      : { control: controlOptions(settings.controlToken, agents.withAgent, buildControlAgent, stderr) }),
   })
   let handle: ControlPlaneHandle
   try {
