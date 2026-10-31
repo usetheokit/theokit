@@ -5,6 +5,7 @@ import WebSocket from "ws";
 
 import { createContainer } from "../src/composition.js";
 import { TheoClawConfigError } from "../src/control-plane/errors.js";
+import { MAX_MESSAGE_BYTES } from "../src/control-plane/limits.js";
 import { type ControlPlaneHandle, healthHandler, listenControlPlane } from "../src/control-plane/listener.js";
 import { createTurnRunner, type TurnAgent } from "../src/control-plane/turn.js";
 
@@ -427,12 +428,25 @@ describe("the /control socket", () => {
     const client = await connect();
     const closed = new Promise<number>((resolve) => client.socket.once("close", (code) => resolve(code)));
 
-    client.socket.send("x".repeat(65_537));
+    client.socket.send("x".repeat(MAX_MESSAGE_BYTES + 1));
 
     expect(await closed).toBe(1009);
     const { host, port } = handle!.address();
     expect((await fetch(`http://${host}:${port}/health`)).status).toBe(200);
     expect(stderrLines.join("\n")).toContain("control socket error");
+  });
+
+  it("serves a chat frame of exactly MAX_MESSAGE_BYTES bytes", async () => {
+    await startPlane([{ messages: [text("hi"), finished] }]);
+    const client = await connect();
+    const envelope = JSON.stringify({ type: "chat", message: "" });
+    const frame = JSON.stringify({ type: "chat", message: "x".repeat(MAX_MESSAGE_BYTES - envelope.length) });
+    expect(frame.length).toBe(MAX_MESSAGE_BYTES);
+
+    client.socket.send(frame);
+
+    const frames = await client.until(turnEnded, "the end of the at-bound turn");
+    expect(finalFrames(frames)).toEqual([{ type: "done" }]);
   });
 
   it("refuses a control token shorter than 32 characters without printing it", async () => {
