@@ -184,6 +184,8 @@ describe('the tool options each agent receives', () => {
   it('composeTheoClaw opens every chat session agent with shell withheld and no tool', async () => {
     // The chat path no longer calls `agentFactory`: each session's agent is opened through
     // `getOrCreate`, with the options `createChannelAgentFactory` pins (theoclaw-sessions D5).
+    // It replaces B-382's "with no toolSettings still hands the factory shell withheld", whose
+    // subject, the chat path calling `agentFactory`, no longer exists.
     const received: AgentOptions[] = []
     const { builders } = fakeBuilders()
     const { loop, router, sessions } = composeTheoClaw({
