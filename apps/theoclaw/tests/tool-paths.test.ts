@@ -167,8 +167,19 @@ describe('the state-directory veto', () => {
     expect(await (await vetoOf(settings))('apply_patch', { patch })).toMatchObject({ block: true })
   })
 
-  it('refuses a browser call whose filename enters .theokit', async () => {
+  it('refuses a browser call whose absolute filename enters .theokit', async () => {
     // Review round 1 (F-dom-2, LCR0135): the browser server's file tools name their file `filename`.
+    // The server resolves a relative name against its own temp directory (browser-proxy.mjs), so an
+    // absolute path is the form that still reaches the workspace's state (review round 2, F-tests-10).
+    const { workspace, settings } = workspaceWithCanaries()
+    const veto = await vetoOf(settings)
+    const call = { function: '() => 1', filename: join(workspace, '.theokit', 'settings.json') }
+    expect(await veto('mcp_browser_browser_evaluate', call)).toMatchObject({ block: true })
+    expect(await veto('mcp_browser_browser_evaluate', { ...call, filename: join(workspace, 'page.json') })).toBeUndefined()
+  })
+
+  it('refuses a relative browser filename into .theokit as defence in depth', async () => {
+    // Harmless after the wrapper (it lands under the server's temp directory), refused all the same.
     const { settings } = workspaceWithCanaries()
     const veto = await vetoOf(settings)
     const call = { function: '() => 1', filename: '../.theokit/settings.json' }

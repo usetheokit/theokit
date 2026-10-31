@@ -35,7 +35,9 @@ function checkPath(value: unknown, settings: ToolSettings): Verdict {
 
 function pathArguments(args: Record<string, unknown>): unknown[] {
   const found: unknown[] = []
-  // `filename`: the browser server's file tools name the file they write or read with it.
+  // `filename`: the browser server's file tools name the file they write or read with it. The server
+  // resolves a relative one against its own temp directory, not the tool root, so for `mcp_browser_*`
+  // the veto's real guard is an absolute filename; a relative one is refused as defence in depth.
   for (const key of ['path', 'file_path', 'filename'] as const) {
     if (key in args) found.push(args[key])
   }
