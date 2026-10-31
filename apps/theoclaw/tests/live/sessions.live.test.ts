@@ -72,6 +72,7 @@ function watched(agent: SessionAgent, runs: RunRecord[]): SessionAgent {
       const run = await agent.send(text)
       return {
         stream: () => run.stream(),
+        cancel: () => run.cancel(),
         wait: async () => {
           const result = await run.wait()
           record.endedAt = Date.now()
