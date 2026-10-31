@@ -237,7 +237,7 @@ describe('auditScope over a quoted lockfile entry', () => {
     expect(() => auditScope(broken)).toThrow(`pnpm-lock.yaml line ${line}: escape in "@theokit\\u002fpresenter" is not read`)
   })
 
-  it.each(["'it''s'", "'''"])('refuses the doubled single quote in the single-quoted entry %s', (key) => {
+  it.each(["'it''s'", "'''"])('refuses a doubled single quote inside a single-quoted entry %s', (key) => {
     const broken = withPresenterKey(key)
     const line = lineOf(broken, `      ${key}:`)
     expect(() => auditScope(broken)).toThrow(`pnpm-lock.yaml line ${line}: escape in ${key} is not read`)
@@ -263,6 +263,24 @@ describe('auditScope over a quoted lockfile entry', () => {
   it.each(['version:', "version: ''", 'version: ""'])('refuses the empty version line %s naming the entry', (version) => {
     expect(() => auditScope(withPresenterVersion(version))).toThrow(
       'pnpm-lock.yaml line 31: packages/agents dependencies @theokit/presenter has an empty version',
+    )
+  })
+
+  it.each(['version:  ', "version: ' '", 'version: "  "'])('refuses the whitespace-only version line %j naming the entry', (version) => {
+    expect(() => auditScope(withPresenterVersion(version))).toThrow(
+      'pnpm-lock.yaml line 31: packages/agents dependencies @theokit/presenter has an empty version',
+    )
+  })
+
+  it.each(['version: null', 'version: Null', 'version: NULL', 'version: ~'])('refuses the YAML null version line %s naming the entry', (version) => {
+    expect(() => auditScope(withPresenterVersion(version))).toThrow(
+      'pnpm-lock.yaml line 31: packages/agents dependencies @theokit/presenter has an empty version',
+    )
+  })
+
+  it.each(['version: link:', "version: 'link:'", 'version: link:  '])('refuses the empty link target %j naming the entry', (version) => {
+    expect(() => auditScope(withPresenterVersion(version))).toThrow(
+      'pnpm-lock.yaml line 31: packages/agents dependencies @theokit/presenter has an empty link target',
     )
   })
 

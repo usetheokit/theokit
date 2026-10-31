@@ -15,7 +15,8 @@
  * scope when TheoClaw declares the package itself.
  * The app's importer is derived from where this file lives, and a lockfile without it exits 2, so a
  * moved app fails closed instead of matching no path. A lockfile that is not version 9.0, or whose
- * importers block holds a dependency with no `version:` line or an empty one, exits 2 too, and so does
+ * importers block holds a dependency with no `version:` line, a blank or null one, or a `link:` with no
+ * target, exits 2 too, and so does
  * an unbalanced quote or an escape in a key or value it reads, so a layout change in pnpm's writer
  * cannot shrink the scope to the app alone.
  *
@@ -94,6 +95,20 @@ function closeDependency(state) {
   }
 }
 
+/** The YAML spellings of null, which a `version:` line carrying them reads as no version at all. */
+const YAML_NULL = new Set(['null', 'Null', 'NULL', '~'])
+
+/** `version` as read for the open entry; throws on a blank or null one, and on a `link:` with no target. */
+function readVersion(state, version) {
+  const refuse = (what) => {
+    const { section, name } = state.open
+    return new AuditReportError(`${LOCKFILE} line ${state.line}: ${state.importer} ${section} ${name} has an empty ${what}`)
+  }
+  if (version.trim() === '' || YAML_NULL.has(version)) throw refuse('version')
+  if (version.startsWith('link:') && version.slice('link:'.length).trim() === '') throw refuse('link target')
+  return version
+}
+
 /** What each indentation of the importers block opens: an importer, a section, a dependency, its version. */
 const ENTRY_BY_INDENT = {
   2: (state, key) => {
@@ -117,12 +132,7 @@ const ENTRY_BY_INDENT = {
   },
   8: (state, key, value) => {
     if (!state.open || unquote(key, state.line) !== 'version') return
-    const version = unquote(value ?? '', state.line)
-    if (version === '') {
-      const { section, name } = state.open
-      throw new AuditReportError(`${LOCKFILE} line ${state.line}: ${state.importer} ${section} ${name} has an empty version`)
-    }
-    state.open.version = version
+    state.open.version = readVersion(state, unquote(value ?? '', state.line))
   },
 }
 
