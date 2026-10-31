@@ -54,9 +54,10 @@ function countingEngine(storage: InMemoryCacheAdapter = new InMemoryCacheAdapter
 }
 
 async function waitFor(condition: () => boolean, what: string): Promise<void> {
-  const deadline = Date.now() + 2000
+  // A real clock: the stale tests mock Date.now, which would freeze this deadline.
+  const deadline = performance.now() + 2000
   while (!condition()) {
-    if (Date.now() > deadline) throw new Error(`timed out waiting for: ${what}`)
+    if (performance.now() > deadline) throw new Error(`timed out waiting for: ${what}`)
     await new Promise((r) => setImmediate(r))
   }
   // One more macrotask so every caller resumed past its lookup has reached the handler.
@@ -413,5 +414,33 @@ describe('defineCachedRoute single-flight (B-667)', () => {
     const response = await next
     expect(response.headers.get('X-Theo-Cache')).toBe('MISS')
     expect(gated.entries()).toBe(2)
+  })
+
+  it('test_an_uncacheable_revalidation_frees_the_key_for_the_next_stale_hit', async () => {
+    const { engine } = countingEngine()
+    const gated = gatedHandler()
+    const route = defineCachedRoute(engine, {
+      cache: { maxAge: 1, swr: 600 },
+      handler: gated.handler,
+    })
+    await populateThenStale(route, gated)
+    // The revalidation returns Set-Cookie, so it writes nothing (the early return).
+    gated.rearm((run) => new Response(`run ${run}`, { headers: { 'set-cookie': `s=${run}` } }))
+
+    const before = { entries: gated.entries(), settled: gated.settled() }
+    const first = await call(route, makeCtx(get()))
+    await waitFor(() => gated.entries() - before.entries >= 1, 'the first revalidation')
+    gated.release()
+    await waitFor(() => gated.settled() > before.settled, 'the uncacheable revalidation to settle')
+
+    gated.rearm((run) => new Response(`run ${run}`, { headers: { 'set-cookie': `s=${run}` } }))
+    const second = await call(route, makeCtx(get()))
+    await waitFor(() => gated.entries() - before.entries >= 2, 'a second revalidation')
+    gated.release()
+    await waitFor(() => gated.settled() - before.settled >= 2, 'the second revalidation to settle')
+
+    expect(first.headers.get('X-Theo-Cache')).toBe('STALE')
+    expect(second.headers.get('X-Theo-Cache')).toBe('STALE')
+    expect(gated.entries() - before.entries, 'revalidations across two stale hits').toBe(2)
   })
 })

@@ -119,6 +119,8 @@ export function defineCachedRoute<
 
   // B-667 — per-route, per-key: the leader's outcome while its handler runs.
   const inFlight = new Map<string, Promise<LeaderOutcome>>()
+  // B-667 — keys whose background revalidation is running.
+  const revalidating = new Set<string>()
 
   const wrappedHandler = async (ctx: {
     query: z.infer<TQuery>
@@ -166,6 +168,7 @@ export function defineCachedRoute<
       baseTags,
       webRequest,
       inFlight,
+      revalidating,
     }
 
     if (cached) {
@@ -217,6 +220,8 @@ interface RouteCacheCtx {
   webRequest: Request
   /** The route's miss slots, keyed by cache key (B-667). */
   inFlight: Map<string, Promise<LeaderOutcome>>
+  /** The route's keys under background revalidation (B-667). */
+  revalidating: Set<string>
 }
 
 /**
@@ -302,6 +307,11 @@ function scheduleRouteRevalidate<THandlerCtx>(
   handler: (handlerCtx: THandlerCtx) => unknown,
   handlerCtx: THandlerCtx,
 ): void {
+  // One revalidation per key at a time, released when it settles. One that never settles
+  // keeps the key claimed: later stale windows of that key get no background refresh,
+  // and only a miss after the swr window refills the entry (no timeout bounds the claim).
+  if (ctx.revalidating.has(ctx.key)) return
+  ctx.revalidating.add(ctx.key)
   void (async () => {
     try {
       const response = await invokeHandlerAsResponse(handler, handlerCtx)
@@ -310,6 +320,8 @@ function scheduleRouteRevalidate<THandlerCtx>(
       await ctx.engine.set(ctx.key, buildRouteCacheEntry(result, ctx))
     } catch {
       // Stale entry remains; future request retries on its own stale-check
+    } finally {
+      ctx.revalidating.delete(ctx.key)
     }
   })()
 }
