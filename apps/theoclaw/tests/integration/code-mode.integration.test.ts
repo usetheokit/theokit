@@ -76,6 +76,8 @@ describe('run_code and delegate_all on a /control agent, over the model stub', (
     const tools = (stub.requests[0]?.tools ?? []) as { function: { name: string; description: string } }[]
     const advertised = new Map(tools.map((tool) => [tool.function.name, tool.function.description]))
     expect(advertised.get('run_code')).toBe(codeModeTool(readOnlyTools(settings), settings).description)
+    expect(advertised.get('run_code')).toContain('JavaScript')
+    expect(advertised.get('run_code')).toContain('await api.list_dir({ path: string })')
     expect(advertised.get('delegate_all')).toBe(delegateAllTool(neverBuilt).description)
   })
 

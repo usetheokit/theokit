@@ -63,7 +63,7 @@
   {"id":"OC-62","status":"open"},
   {"id":"OC-63","status":"open"},
   {"id":"OC-64","status":"open"},
-  {"id":"OC-65","status":"open"},
+  {"id":"OC-65","status":"shipped","check":{"path":"apps/theoclaw/tests/live/code-mode.live.test.ts","test":"a real model's script calls two tools in one run_code for OC-65"},"verified_on":"2026-10-31"},
   {"id":"OC-66","status":"shipped","gaps":["B-677","B-678","B-679"],"check":{"path":"apps/theoclaw/tests/live/workflows.live.test.ts","test":"a real model runs the two-step digest workflow for OC-66"},"verified_on":"2026-10-31","note":"the check covers the typed pipeline: the committed two-step digest workflow (an agent step that drafts, then a step whose output schema types the points), run from a /control turn through the digest tool on a fresh tool-less draft agent per call; the JSON-only llm-task step waits on B-678 (generateObject cannot withhold the shell or turn memory off) and resumable approvals on B-677 (a suspended run cannot reach the model with its run id), both adopted by B-679; only the /control agent holds the tool, and chat-reply agents hold none"},
   {"id":"OC-67","status":"open"},
   {"id":"OC-68","status":"open"},
@@ -109,7 +109,7 @@
   {"id":"H-2","status":"open"},
   {"id":"H-3","status":"open"},
   {"id":"H-4","status":"open"},
-  {"id":"H-5","status":"open"},
+  {"id":"H-5","status":"shipped","check":{"path":"apps/theoclaw/tests/live/code-mode.live.test.ts","test":"a real model fans out to two sub-agents and waits for both for H-5"},"verified_on":"2026-10-31"},
   {"id":"H-6","status":"out","reason":"Hibernating when idle solves a cloud cost nobody pays with one self-hosted instance per person.","declared_by":"human/paulo","declared_on":"2026-09-17","declared_at":".squad/wiki/product/product-vision.md:243"},
   {"id":"H-7","status":"out","reason":"Batch trajectory generation for training tool-calling models is model-training tooling, not a capability of a personal messaging assistant.","declared_by":"human/paulo","declared_on":"2026-10-06","declared_at":"apps/theoclaw/parity/decisions-2026-10-06.md"}
 ]

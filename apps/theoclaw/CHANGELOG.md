@@ -13,6 +13,17 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `/control` agents get `run_code` and `delegate_all` (B-386). With `run_code` the agent writes a
+  script that calls `read_file`, `list_dir`, `web_fetch` and `web_search` (when configured) as
+  `api.<name>(input)` inside a QuickJS-WASM sandbox from `@theokit/agents/code-mode-quickjs`. Only
+  the script's result reaches the model, and the file contents it read do not. Each call passes the
+  same `.theokit`/`.theoclaw` veto as a direct call, and the tool's description tells the model the script is JavaScript. A script gets 10 s, 32 MiB and 16 calls, and a
+  result over 16384 characters is refused with its length. With `delegate_all` the agent runs 1 to 4
+  tasks at once on fresh `worker` agents that hold only the read-only tools, so a worker can neither
+  run a script nor delegate. A worker that fails is reported as `delegation_failed` beside the others.
+  Chat replies still get no tool. The app pins `quickjs-emscripten-core` and
+  `@jitl/quickjs-wasmfile-release-sync` at 0.32.0. The parity ledger records OC-65 and H-5 as
+  shipped, checked by `tests/live/code-mode.live.test.ts`.
 - The `digest` tool of the `/control` agent (B-387, OC-66): a typed two-step workflow from
   `@theokit/sdk/workflow`, where a draft step on a fresh agent with no tool, no `shell` and memory off
   lists the key points of a text, and a second step checks them as `{ points }` (1 to 10). Each call

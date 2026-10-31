@@ -16,6 +16,19 @@ const MAX_RESULT_CHARACTERS = 16_384
 /** The only tools a script may call: they read, and change nothing on the host (plan D3). */
 const SCRIPT_TOOL_NAMES: ReadonlySet<string> = new Set(['read_file', 'list_dir', 'web_fetch', 'web_search'])
 
+/**
+ * What the generated instructions do not say: the sandbox runs JavaScript. Measured on a real model
+ * (gemini-2.5-flash-lite, 2026-10-31): told only "an async function body", it wrote Python three
+ * times in a row and the run ended in error; told the language, it once left a `Promise.all(...).then`
+ * chain unreturned and got null.
+ */
+const SCRIPT_LANGUAGE = [
+  'The code is JavaScript (ECMAScript 2023), not Python. It runs as the body of an async function:',
+  'call `const file = await api.read_file({ path: "a.txt" })`, read `file.content`, and end with `return <value>`.',
+  'Each api call takes one object argument and resolves to the tool\'s answer, parsed when it is JSON.',
+  'Await every call and `return` the final value at the top level of the code: a value that is not returned is lost, and the tool answers null.',
+].join(' ')
+
 /** Builds one worker: a fresh agent holding only the read-only tools (plan D4). */
 export type CreateWorker = () => Promise<TurnAgent>
 
@@ -48,7 +61,7 @@ export function codeModeTool(tools: readonly CustomTool[], settings: ToolSetting
   })
   return {
     ...tool,
-    description: instructions,
+    description: `${SCRIPT_LANGUAGE}\n\n${instructions}`,
     handler: async (input) => {
       const result = await tool.handler(input)
       if (result.length > MAX_RESULT_CHARACTERS) throw new CodeModeResultTooLongError(result.length)
