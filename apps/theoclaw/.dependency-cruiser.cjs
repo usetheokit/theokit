@@ -72,10 +72,11 @@ module.exports = {
       name: 'nothing-imports-the-entry',
       severity: 'error',
       comment:
-        'src/main.ts is the process entry and a leaf: it wires the real process into the ' +
-        'composition root, and nothing in src or tests may import it.',
+        'src/main.ts and src/import-main.ts are the process entries and leaves: main.ts wires the ' +
+        'real process into the composition root, import-main.ts runs the migration import, and ' +
+        'nothing in src or tests may import either.',
       from: { path: '^(src|tests)/' },
-      to: { path: '^src/main\\.ts$' },
+      to: { path: '^src/(main|import-main)\\.ts$' },
     },
     {
       // B-371: `composition.ts` is the only module that wires authorization into the channels. The

@@ -59,7 +59,9 @@ describe("the entry boundary", () => {
 
     expect(entryRule.severity).toBe("error");
     expect(to.test("src/main.ts")).toBe(true);
+    expect(to.test("src/import-main.ts")).toBe(true);
     expect(to.test("src/main.tsx")).toBe(false);
+    expect(to.test("src/import-main.tsx")).toBe(false);
     expect(from.test("src/composition.ts")).toBe(true);
     expect(from.test("tests/composition.test.ts")).toBe(true);
     expect(from.test("src/channels/channel-loop.ts")).toBe(true);
