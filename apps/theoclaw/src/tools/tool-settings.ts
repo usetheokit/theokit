@@ -285,6 +285,12 @@ export function checkHostToolsPosture(
   // The `workspace-write` roots under `read-only` too: `read-only`'s are none, which would make the
   // refusals below vacuous; `danger-full-access` returned above, its roots being every path.
   const roots = writableRootsFor('workspace-write', settings.toolRoot) ?? []
+  refuseWorkspaceUnderWritableRoot(settings, roots)
+  for (const target of protectedPaths) refuseWritableProtectedPath(target, roots)
+}
+
+/** Refuse a workspace inside a writable root other than the tool root (`/tmp`). */
+function refuseWorkspaceUnderWritableRoot(settings: ToolSettings, roots: readonly string[]): void {
   for (const root of roots) {
     // The workspace is a real path, so the root is compared as one too: bwrap binds what a
     // symlinked `/tmp` points at.
@@ -294,7 +300,6 @@ export function checkHostToolsPosture(
       { variable: 'THEOCLAW_HOST_TOOLS' },
     )
   }
-  for (const target of protectedPaths) refuseWritableProtectedPath(target, roots)
 }
 
 /** Refuse a protected path whose real path (symlinks followed) lies inside any of `roots`. */
