@@ -10,7 +10,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1106 export(s) across 24 entry point(s).
+1110 export(s) across 25 entry point(s).
 
 Measured against `@theokit/sdk@5.11.0`.
 
@@ -980,6 +980,15 @@ Measured against `@theokit/sdk@5.11.0`.
 | `CodeModeConfig` | type |
 | `CodeModePermission` | type |
 | `Sandbox` | type |
+
+## `@theokit/agents/code-mode-quickjs`
+
+| Symbol | Kind |
+|---|---|
+| `CodeModeSandboxError` | value |
+| `createQuickJsSandbox` | value |
+| `CodeModeSandboxErrorCode` | type |
+| `QuickJsSandboxOptions` | type |
 
 ## `@theokit/agents/client`
 

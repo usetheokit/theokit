@@ -33,6 +33,8 @@ export default defineConfig({
     tools: 'src/tools-entry.ts',
     // B-386 — scripts that call tools by RPC, over an injected sandbox; imports no VM.
     'code-mode': 'src/code-mode-entry.ts',
+    // B-386 — the QuickJS-WASM sandbox. The only entry that imports the VM, an optional peer.
+    'code-mode-quickjs': 'src/code-mode-quickjs-entry.ts',
     // M84 — the client chain came from the CLI; its own subpath because `use-agent` imports React.
     client: 'src/client-entry.ts',
     'client-react': 'src/client-react-entry.ts',
@@ -59,5 +61,13 @@ export default defineConfig({
     options.sourcesContent = false
   },
   clean: true,
-  external: ['@theokit/http', '@theokit/presenter', '@theokit/sdk', '@theokit/sdk-tools', 'zod'],
+  external: [
+    '@jitl/quickjs-wasmfile-release-sync',
+    '@theokit/http',
+    '@theokit/presenter',
+    '@theokit/sdk',
+    '@theokit/sdk-tools',
+    'quickjs-emscripten-core',
+    'zod',
+  ],
 })
