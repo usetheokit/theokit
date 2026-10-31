@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- `theokit`: a `pg.Pool` passed to `PostgresJobBackend` or `createPostgresCronLock` no longer exits the process when Postgres drops an idle connection. When the pool has no `error` listener, both attach one that logs a structured warning (`component: "theokit:jobs"` or `"theokit:cron"`, the table, the Postgres error code), and the next query reconnects. A listener attached before is left as the only one (#1037)
+- `theokit`: `theokit generate` writes route, action, page, ws, controller, agent, toolbox, workflow, eval, sandbox and memory files under the configured `serverDir`, `appDir` and `agentsDir`. They were hardcoded to `server/`, `app/` and `agents/`, so in the scaffold (`src/server`, `src/app`) the file landed outside every scanned directory. `generate agent` writes `<agentsDir>/<name>.ts`, which is served at `/api/agents/<name>`, with a placeholder `policy` that refuses every caller until one is declared (#1031)
+- `theokit`: `theokit generate resource` refuses a project without `<serverDir>/db/index.ts` before writing anything, naming the file and printing a minimal `export const db` for the project's dialect. The generated routes import `db` from it, and the command reported success while the next build failed with `Could not resolve "../../db/index.js"` (#1038)
+
 ## [create-theokit 3.0.20, theokit 0.76.0] - 2026-10-30
 
 ### Added

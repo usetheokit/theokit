@@ -36,6 +36,8 @@ function createTempProject(): string {
   mkdirSync(join(dir, 'server/db'), { recursive: true })
   // `generateResource` appends the table to this file and refuses without it.
   writeFileSync(join(dir, 'server/db/schema.ts'), '// generated tables append here\n')
+  // The generated routes import `db` from here, and the generator refuses without it.
+  writeFileSync(join(dir, 'server/db/index.ts'), 'export const db = {}\n')
   writeFileSync(join(dir, 'theo.config.ts'), 'export default {}')
   writeFileSync(join(dir, 'package.json'), '{}')
   return dir

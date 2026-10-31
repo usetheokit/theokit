@@ -136,6 +136,14 @@ before closing storage. `jobs.worker` tunes it (`pollIntervalMs`, `batchSize`, `
 leased to one of them. To run a worker on its own, call `createJobWorker(createJobRunner(backend,
 definitions)).start()` from `theokit/server/jobs`.
 
+The pool you pass is yours, and so is its `error` listener if you attach one. A `pg.Pool` emits
+`error` when Postgres drops an idle connection, and the worker keeps idle clients in the pool. If
+the pool has no `error` listener when the backend is constructed, `PostgresJobBackend` attaches one
+that logs a structured warning (`component: "theokit:jobs"`), the process stays up and the next
+query reconnects. `createPostgresCronLock(pool)` does the same with `component: "theokit:cron"`.
+Attach `pool.on('error', ...)` before passing the pool to handle it yourself; theokit then adds
+nothing.
+
 In `theokit dev`, route modules load through Vite, so a route that imports the backend from
 `theo.config.ts` gets a second instance of it. Use `ctx.queue` to enqueue. Deploy targets other
 than `node` do not wire `ctx.queue`; `theokit build` says so when `jobs` is set.
