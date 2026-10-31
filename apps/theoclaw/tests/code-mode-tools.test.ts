@@ -62,12 +62,16 @@ function controlTool(settings: ToolSettings, name: string, build: (options: Agen
 
 const neverBuilt = (): Promise<TurnAgent> => Promise.reject(new Error('no worker expected'))
 
-/** A worker agent that answers `answer`, or ends with status error, and records its disposal. */
-function fakeWorker(answer: string | 'fail'): { agent: TurnAgent; disposed: () => boolean } {
+/**
+ * A worker agent that answers `answer`, ends with status error (`fail`), or streams an error event
+ * and still reports `finished` (`streamed-error`); it records its disposal.
+ */
+function fakeWorker(answer: string | 'fail' | 'streamed-error'): { agent: TurnAgent; disposed: () => boolean } {
   let disposed = false
   const agent = {
     send: async () => ({
       stream: async function* () {
+        if (answer === 'streamed-error') yield { type: 'error', code: 'provider_overloaded' }
         yield { type: 'assistant' }
       },
       wait: async () => (answer === 'fail' ? { status: 'error' } : { status: 'finished', result: answer }),
@@ -172,6 +176,33 @@ describe('run_code and delegate_all on a /control agent', () => {
       ['read_file', 'list_dir', 'web_fetch'],
     ])
     expect(workers.map((worker) => worker.disposed())).toEqual([true, true])
+  })
+
+  it('builds each worker with the state-directory veto plugin', async () => {
+    const { settings } = readOnlyWorkspace()
+    const plugins: string[][] = []
+    const tool = controlTool(settings, 'delegate_all', async (options) => {
+      plugins.push(options.plugins.map((plugin) => plugin.name))
+      return fakeWorker('fine').agent
+    })
+
+    await tool.handler({ tasks: [{ agent: 'worker', task: 'one' }, { agent: 'worker', task: 'two' }] })
+
+    expect(plugins).toEqual([['theoclaw-path-veto'], ['theoclaw-path-veto']])
+  })
+
+  it('reports a worker whose stream carries an error as delegation_failed even when wait() says finished', async () => {
+    const { settings } = readOnlyWorkspace()
+    const worker = fakeWorker('streamed-error')
+    const tool = controlTool(settings, 'delegate_all', async () => worker.agent)
+
+    const answer = JSON.parse(String(await tool.handler({ tasks: [{ agent: 'worker', task: 'one' }] }))) as {
+      results: { ok: boolean; error?: string; message?: string }[]
+    }
+
+    expect(answer.results[0]).toMatchObject({ agent: 'worker', ok: false, error: 'delegation_failed' })
+    expect(answer.results[0]?.message).toContain('provider_overloaded')
+    expect(worker.disposed()).toBe(true)
   })
 
   it('reports a failing worker as delegation_failed beside a succeeding one', async () => {
