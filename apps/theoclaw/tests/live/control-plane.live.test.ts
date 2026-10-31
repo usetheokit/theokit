@@ -7,7 +7,8 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import WebSocket from "ws";
+
+import { runControlTurn } from "./support/control-turn.js";
 
 /**
  * AC-006 (B-372): OC-22 and OC-23 against a real model, through the BUILT entry (`dist/main.js`),
@@ -81,34 +82,13 @@ describe.skipIf(!LIVE)("the control plane against a real model", () => {
 
   it("a real-model turn over the control WebSocket of the started process", { timeout: 90_000 }, async () => {
     expect(output).toMatch(/control plane listening on 127\.0\.0\.1:/);
-    const socket = new WebSocket(`ws://127.0.0.1:${port}/control`, { headers: { Authorization: `Bearer ${TOKEN}` } });
-    const frames: Array<Record<string, unknown>> = [];
-    socket.on("message", (raw) => frames.push(JSON.parse(String(raw)) as Record<string, unknown>));
-    await new Promise<void>((resolve, reject) => {
-      socket.once("open", () => resolve());
-      socket.once("error", reject);
-    });
-    const isFinal = (frame: Record<string, unknown>) =>
-      frame.type === "done" || (frame.type === "error" && frame.code === "turn_failed");
-
-    socket.send(JSON.stringify({ type: "chat", message: "Reply with the single word: pong" }));
-    const deadline = Date.now() + 60_000;
-    while (!frames.some(isFinal)) {
-      if (Date.now() > deadline) throw new Error(`no final frame within 60 s: ${JSON.stringify(frames)}`);
-      await new Promise((resolve) => setTimeout(resolve, 100));
-    }
-    const countAtEnd = frames.length;
     // Anything after the final frame would be a second ending; 500 ms is the window the plan names.
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    socket.close();
+    const turn = await runControlTurn(port, TOKEN, "Reply with the single word: pong", 60_000, 500);
+    if (turn.status === "timeout") throw new Error(`no final frame within 60 s: ${JSON.stringify(turn.frames)}`);
 
-    const texts = frames
-      .filter((frame) => frame.type === "event")
-      .map((frame) => frame.event as { type: string; content?: unknown })
-      .filter((event) => event.type === "text_delta" && typeof event.content === "string" && event.content.trim() !== "");
-    expect(texts.length, `frames: ${JSON.stringify(frames)}`).toBeGreaterThan(0);
-    expect(frames.filter(isFinal)).toEqual([{ type: "done" }]);
-    expect(frames.length).toBe(countAtEnd);
+    expect(turn.text.trim().length, `frames: ${JSON.stringify(turn.frames)}`).toBeGreaterThan(0);
+    expect(turn.frames.filter((frame) => frame.type === "done" || frame.type === "error")).toEqual([{ type: "done" }]);
+    expect(turn.frames.length).toBe(turn.framesAtEnd);
   });
 
   it("the started process answers GET /health on its port and is unreachable on the host's non-loopback address", { timeout: 30_000 }, async () => {
