@@ -12,6 +12,7 @@ import type { TheoClawAgentOptions } from '../src/agent/create-agent.js'
 import { TheoClawConfigError } from '../src/control-plane/errors.js'
 import { browserServer, readBrowser } from '../src/tools/browser-server.js'
 import type { BrowserDeps } from '../src/tools/browser-server.js'
+import type { ImportedSetup } from '../src/migration/import-store.js'
 import type { TurnAgent } from '../src/agent-port.js'
 import { agentToolOptions, controlAgentToolOptions, NO_TOOL_OPTIONS } from '../src/tools/tool-registry.js'
 import type { AgentToolOptions } from '../src/tools/tool-registry.js'
@@ -221,5 +222,25 @@ describe('THEOCLAW_BROWSER', () => {
     await createTheoClawAgent(options)
     expect(create).toHaveBeenCalledTimes(1)
     expect(create.mock.calls[0]?.[0]).toMatchObject({ mcpServers: { browser: browserServer({ cliPath: CLI }) } })
+  })
+
+  it('keeps the browser server beside the servers of an import whose MCP is on', () => {
+    const imported: ImportedSetup = {
+      kind: 'claude-code',
+      instructions: '',
+      memory: '',
+      mcpServers: { docs: { command: 'docs-mcp' }, browser: { command: 'imported-browser' } },
+      skills: [],
+      counts: { instructions: 0, memories: 0, skills: 0, mcpServers: 2 },
+    }
+    const settings = settingsWith({ THEOCLAW_BROWSER: 'on' })
+    const options = theoClawAgentOptions({
+      model: 'm',
+      apiKey: 'k',
+      toolOptions: agentToolOptions(settings),
+      imported: { setup: imported, mcp: true },
+    })
+    // An imported server named `browser` does not replace the one THEOCLAW_BROWSER configured.
+    expect(options.mcpServers).toEqual({ docs: { command: 'docs-mcp' }, browser: browserServer({ cliPath: CLI }) })
   })
 })
