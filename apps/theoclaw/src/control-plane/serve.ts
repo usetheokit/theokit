@@ -1,3 +1,5 @@
+import { isIPv6 } from 'node:net'
+
 import { healthHandler } from './listener.js'
 import type { ControlPlaneSettings } from './settings.js'
 
@@ -33,4 +35,9 @@ export function reportSurfacesOff(
   if (settings.webchatToken === undefined) {
     stdout('theoclaw: webchat off (THEOCLAW_WEBCHAT_TOKEN unset)')
   }
+}
+
+/** A bound address as the listening line writes it, an IPv6 host in brackets. */
+export function formatAddress(address: { readonly host: string; readonly port: number }): string {
+  return isIPv6(address.host) ? `[${address.host}]:${address.port}` : `${address.host}:${address.port}`
 }

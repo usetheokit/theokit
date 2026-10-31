@@ -28,6 +28,13 @@ const PROFILE_OWNED = ['THEOKIT_HOME', 'THEOKIT_AUTH_HOME', 'THEOCLAW_STATE_DIR'
 
 export const NO_PROFILE: TheoClawInstance = { label: 'theoclaw', overrides: {} }
 
+/** The first line a start writes, naming the instance and where its state lives. */
+export function startLine(instance: TheoClawInstance): string {
+  return instance.directory === undefined
+    ? 'theoclaw: instance started, no profile'
+    : `${instance.label}: instance started, profile directory ${instance.directory}`
+}
+
 type Env = Readonly<Record<string, string | undefined>>
 
 /**

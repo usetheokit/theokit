@@ -2,7 +2,6 @@ import 'reflect-metadata'
 
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { mkdirSync, statSync } from 'node:fs'
-import { isIPv6 } from 'node:net'
 import { join } from 'node:path'
 
 import { Container } from '@theokit/di'
@@ -32,14 +31,14 @@ import { type ConfiguredPlatform, resolvePlatforms } from './channels/platforms.
 import { createReplyHandler, type TurnAgent } from './channels/reply-handler.js'
 import { createChannelAgentFactory, sessionAgentOptions } from './control-plane/agent-factory.js'
 import { type ControlPlaneHandle, listenControlPlane } from './control-plane/listener.js'
-import { type HttpHandler, reportSurfacesOff, serveHandler } from './control-plane/serve.js'
+import { formatAddress, type HttpHandler, reportSurfacesOff, serveHandler } from './control-plane/serve.js'
 import { type ControlPlaneSettings, readControlPlaneSettings } from './control-plane/settings.js'
 import { installShutdown, type SignalSource } from './control-plane/shutdown.js'
 import { createTurnRunner } from './control-plane/turn.js'
 import { createBonjourPublisher } from './discovery/bonjour-publisher.js'
 import { announceOnLan, type LanAnnouncement, stopThenClose } from './discovery/lan-announcer.js'
 import { parseDiscoveryMode, type PublisherFactory } from './discovery/publisher.js'
-import { NO_PROFILE, type TheoClawInstance } from './instance.js'
+import { NO_PROFILE, startLine, type TheoClawInstance } from './instance.js'
 import { Generations } from './sessions/generations.js'
 import { type SessionAgent, SessionAgents, type SessionLease } from './sessions/session-agents.js'
 import { createSessionRouter } from './sessions/session-key.js'
@@ -316,17 +315,6 @@ export interface RunningTheoClaw extends ComposedTheoClaw, ControlPlaneHandle {
 }
 
 const NOTHING_TO_WITHDRAW: LanAnnouncement = { stop: () => Promise.resolve() }
-
-function formatAddress(address: { readonly host: string; readonly port: number }): string {
-  return isIPv6(address.host) ? `[${address.host}]:${address.port}` : `${address.host}:${address.port}`
-}
-
-/** The first line a start writes, naming the instance and where its state lives. */
-function startLine(instance: TheoClawInstance): string {
-  return instance.directory === undefined
-    ? 'theoclaw: instance started, no profile'
-    : `${instance.label}: instance started, profile directory ${instance.directory}`
-}
 
 function lineWriter(stream: MaskableStream | undefined): (line: string) => void {
   return (line) => void stream?.write(`${line}\n`)
