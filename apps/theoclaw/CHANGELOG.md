@@ -26,6 +26,21 @@ and versioning follows [Semantic Versioning](https://semver.org/).
   Chat replies still get no tool. The app pins `quickjs-emscripten-core` and
   `@jitl/quickjs-wasmfile-release-sync` at 0.32.0. The parity ledger records OC-65 and H-5 as
   shipped, checked by `tests/live/code-mode.live.test.ts`.
+- A terminal UI and a desktop client of the one running instance (B-376, OC-36 desktop part, H-1).
+  `/control` chat frames may name a `session`: one agent is kept per session id
+  (`^[A-Za-z0-9_-]{1,64}$`), at most 16, the least recently used idle one disposed first and `busy`
+  when all 16 run, all disposed when the control plane closes. `{"type":"interrupt","session"}`
+  stops that session's turn (the owner gets `interrupted`, another socket `interrupt_ok`, an idle
+  session `no_turn`) by aborting the signal the turn was sent with, and a socket that closes cancels
+  the session turns it owns; the next chat frame on the session redirects on the same agent, and one
+  sent while the cancelled turn unwinds waits up to 5 s for it. Session turns stream text as it is
+  generated. Sessionless frames are unchanged. `pnpm --filter theoclaw run tui` opens an Ink TUI on
+  `@theokit/tui` (multiline input, `/interrupt`, `/new`, `/quit`, tool cards, Esc to interrupt), and
+  `desktop:sidecar` is the process the desktop template's shell spawns per turn; both read
+  `THEOCLAW_CONTROL_TOKEN`, `THEOCLAW_PORT`, `THEOCLAW_CONNECT_HOST` (default `127.0.0.1`) and
+  `THEOCLAW_SESSION` (default `owner`), build no agent, and print neither the token nor the model key.
+  Upstream in this repository: `@theokit/tauri`'s `cancelCommand`, the desktop template's
+  `cancel_turn`, and the timeline translator exported from `@theokit/agents/bridge`.
 - The `digest` tool of the `/control` agent (B-387, OC-66): a typed two-step workflow from
   `@theokit/sdk/workflow`, where a draft step on a fresh agent with no tool, no `shell` and memory off
   lists the key points of a text, and a second step checks them as `{ points }` (1 to 10). Each call
