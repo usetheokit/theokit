@@ -25,7 +25,11 @@ const NO_STORE = { 'cache-control': 'no-store' }
 const PAGE_CSP = "default-src 'self'; style-src 'self' 'unsafe-inline'"
 const MISSING_BUNDLE = 'run the build:web script of the theoclaw package\n'
 
-/** Required by the generator's context and never read by it: TheoClaw has one agent, built elsewhere. */
+/**
+ * Required by the generator's context and never read by it: TheoClaw has one agent, built elsewhere.
+ * `webchat-stream.test.ts` pins that the stream does not change with these; B-510 (a per-request hook
+ * on the generator) is the follow-up that removes this placeholder and the per-request rebuild.
+ */
 const COMPILED_OPTIONS: AgentRouteContext['compiledOptions'] = { tools: [], agents: {}, stream: true }
 
 function ignore(): void {}

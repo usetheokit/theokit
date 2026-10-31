@@ -2,6 +2,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { type AgentRouteContext, generateAgentRoutes } from "@theokit/agents/bridge";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createContainer } from "../src/composition.js";
@@ -9,6 +10,7 @@ import { createTurnRunner, type TurnAgent, type TurnRun } from "../src/control-p
 import { createWebchatRun } from "../src/webchat/create-run.js";
 import { TheoClawConfigError } from "../src/control-plane/errors.js";
 import { MAX_MESSAGE_BYTES } from "../src/control-plane/limits.js";
+import { WEBCHAT_CHAT_PATH, WEBCHAT_ROUTE } from "../src/webchat/paths.js";
 import { createWebchatRoutes } from "../src/webchat/routes.js";
 
 const TOKEN = "w".repeat(40);
@@ -452,5 +454,37 @@ describe("cancelling a WebChat turn", () => {
     expect(stub.calls.built + slowStub.calls.built).toBe(2);
     await waitFor(() => slowStub.calls.cancels === 1, "the aborted turn's cancel");
     expect(stub.calls.cancels).toBe(0);
+  });
+});
+
+// F-arch-3: routes.ts hands the generator a placeholder `compiledOptions` on the bet that it never
+// reads them. This pins that bet: were the generator to start honouring them (B-510), the placeholder's
+// `tools: []` and `stream: true` would become live behaviour, and this test would say so.
+describe("the chat route's stream and the generator's compiledOptions", () => {
+  async function framesWith(compiledOptions: AgentRouteContext["compiledOptions"]): Promise<unknown[]> {
+    const { runTurn } = stubRunner({ messages: () => [text("same answer"), finished] });
+    const routes = generateAgentRoutes({
+      walkResult: { route: WEBCHAT_ROUTE },
+      compiledOptions,
+      createRun: createWebchatRun(runTurn, new AbortController().signal),
+    });
+    const post = routes.find((route) => route.method === "POST" && route.path === WEBCHAT_CHAT_PATH);
+    const body = await (await post!.handler(chatRequest({ message: "hi" }))).text();
+    // A text part's id is a fresh UUID and the duration a clock reading: neither depends on the options.
+    return dataFrames(body).map((frame) =>
+      JSON.parse(JSON.stringify(frame, (key, value: unknown) => (key === "id" || key === "durationMs" ? "_" : value))),
+    );
+  }
+
+  it("streams the same frames whatever compiledOptions the generator is given", async () => {
+    const placeholder = await framesWith({ tools: [], agents: {}, stream: true });
+    const distinctive = await framesWith({
+      tools: [{ name: "a_tool_the_route_never_registered" }],
+      agents: { other: {} },
+      stream: false,
+    } as unknown as AgentRouteContext["compiledOptions"]);
+
+    expect(distinctive).toEqual(placeholder);
+    expect(JSON.stringify(placeholder)).toContain("same answer");
   });
 });
