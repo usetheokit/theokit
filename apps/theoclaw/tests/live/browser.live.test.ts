@@ -14,8 +14,10 @@ import { agentToolOptions } from '../../src/tools/tool-registry.js'
 import { resolveToolSettings } from '../../src/tools/tool-settings.js'
 
 /**
- * OC-60 (B-383): the browser on a real model, built through the process's own path
- * (`resolveToolSettings`, `agentToolOptions`, `createTheoClawAgent`). It runs only with
+ * OC-60 (B-383): the browser on a real model, built from `resolveToolSettings`, `agentToolOptions`
+ * and `createTheoClawAgent`. The process builds `/control` agents through `controlAgentToolOptions`,
+ * which delegates the browser to `agentToolOptions`, and `main.ts`'s own `Agent.create` spread; that
+ * composition is pinned offline by browser-settings.test.ts's `/control` turn. It runs only with
  * THEOCLAW_LIVE=1; with it set and no Chromium installed, `resolveToolSettings` refuses naming
  * `browser:install`, so the case fails loudly instead of skipping. The page writes a token made at
  * test time with JavaScript, so the raw body (what `web_fetch` reads) does not hold it.
@@ -61,22 +63,26 @@ function literalPattern(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
-/** 1 when no process's command line holds `path`, 0 when one does (pgrep's own codes). */
-function pgrepExit(path: string): number {
-  return spawnSync('pgrep', ['-f', literalPattern(path)]).status ?? -1
+/**
+ * The pids of the processes whose command line holds `path` (pgrep's `-f`). The CLI path is the
+ * shared pnpm-store one, so a test compares sets taken before and after its own turn rather than
+ * reading any match as its own server (review round 1, F-tests-3).
+ */
+function serverPids(path: string): Set<number> {
+  const out = spawnSync('pgrep', ['-f', literalPattern(path)], { encoding: 'utf8' }).stdout
+  return new Set(out.split('\n').filter((line) => line.trim() !== '').map(Number))
 }
 
-/** Wait until no browser server started from `cliPath` is running, or fail naming the pids left. */
-async function waitForNoServer(cliPath: string): Promise<number> {
+/** Wait until none of `pids` is running, or fail naming the ones left. */
+async function waitForGone(path: string, pids: ReadonlySet<number>): Promise<void> {
   const deadline = Date.now() + DISPOSE_DEADLINE_MS
-  while (pgrepExit(cliPath) !== 1) {
-    if (Date.now() > deadline) {
-      const pids = spawnSync('pgrep', ['-f', literalPattern(cliPath)], { encoding: 'utf8' }).stdout.trim()
-      throw new Error(`browser server still running ${DISPOSE_DEADLINE_MS} ms after dispose: pids ${pids}`)
-    }
+  for (;;) {
+    const running = serverPids(path)
+    const left = [...pids].filter((pid) => running.has(pid))
+    if (left.length === 0) return
+    if (Date.now() > deadline) throw new Error(`browser server still running ${DISPOSE_DEADLINE_MS} ms after dispose: pids ${left.join(' ')}`)
     await new Promise((resolve) => setTimeout(resolve, 100))
   }
-  return pgrepExit(cliPath)
 }
 
 describe.skipIf(!LIVE)('the browser against a real model', () => {
@@ -124,16 +130,19 @@ describe.skipIf(!LIVE)('the browser against a real model', () => {
     expect(cliPath, 'THEOCLAW_BROWSER=on resolved a CLI').toBeDefined()
 
     const { model, apiKey } = liveModel()
+    const before = serverPids(cliPath as string)
     const agent = await createTheoClawAgent(theoClawAgentOptions({ model, apiKey, toolOptions: agentToolOptions(settings) }))
+    let own = new Set<number>()
     try {
       // The server is spawned by the first browser call, not by `create`, so the case runs a turn.
       const run = await agent.send(`Open ${page.url} in the browser and tell me the text of the element with id v.`)
       await run.wait()
-      expect(pgrepExit(cliPath as string), 'a browser server is running before dispose').toBe(0)
+      own = new Set([...serverPids(cliPath as string)].filter((pid) => !before.has(pid)))
+      expect(own.size, 'this agent started a browser server before dispose').toBeGreaterThan(0)
     } finally {
       await agent[Symbol.asyncDispose]()
     }
-    // EC-1: a disposed agent leaves no browser server running.
-    expect(await waitForNoServer(cliPath as string)).toBe(1)
+    // EC-1: a disposed agent leaves no browser server of its own running.
+    await waitForGone(cliPath as string, own)
   })
 })
