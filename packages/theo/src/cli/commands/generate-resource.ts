@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 
 import {
@@ -59,6 +59,8 @@ type ResourceDialect = 'sqlite' | 'postgresql'
 interface DialectSpec {
   /** The Drizzle module the table builders come from. */
   readonly module: string
+  /** A minimal `<serverDir>/db/index.ts` exporting `db`, shown when the project has none. */
+  readonly dbIndexExample: readonly string[]
   /** Matches an existing named import from `module`; group 1 is the list of names. */
   readonly importPattern: RegExp
   /** The table builder function. */
@@ -73,6 +75,12 @@ interface DialectSpec {
 const DIALECTS: Record<ResourceDialect, DialectSpec> = {
   sqlite: {
     module: 'drizzle-orm/sqlite-core',
+    dbIndexExample: [
+      `import Database from 'better-sqlite3'`,
+      `import { drizzle } from 'drizzle-orm/better-sqlite3'`,
+      `import * as schema from './schema.js'`,
+      `export const db = drizzle(new Database('data.db'), { schema })`,
+    ],
     importPattern: /import\s*\{([^}]*)\}\s*from\s*['"]drizzle-orm\/sqlite-core['"]/,
     table: 'sqliteTable',
     columns: ['integer', 'text'],
@@ -96,6 +104,14 @@ const DIALECTS: Record<ResourceDialect, DialectSpec> = {
   },
   postgresql: {
     module: 'drizzle-orm/pg-core',
+    dbIndexExample: [
+      `import pg from 'pg'`,
+      `import { drizzle } from 'drizzle-orm/node-postgres'`,
+      `import * as schema from './schema.js'`,
+      `const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL })`,
+      `pool.on('error', (err) => console.warn('[pg] idle client error:', err.message))`,
+      `export const db = drizzle(pool, { schema })`,
+    ],
     importPattern: /import\s*\{([^}]*)\}\s*from\s*['"]drizzle-orm\/pg-core['"]/,
     table: 'pgTable',
     columns: ['boolean', 'integer', 'serial', 'text', 'timestamp'],
@@ -380,6 +396,9 @@ function readIfPresent(path: string): string | undefined {
   }
 }
 
+/** The files TypeScript resolves `../../db/index.js` to. */
+const DB_INDEX_FILES = ['index.ts', 'index.tsx', 'index.js']
+
 /** Create `path` only if it does not exist; `false` when it already did. */
 function createExclusive(path: string, content: string): boolean {
   try {
@@ -444,6 +463,22 @@ export function generateResource(
   }
   const dialect = DIALECTS[dialectName]
   const queries = QUERIES[dialectName]
+
+  // The routes import `db` from `<serverDir>/db/index.js`. Without the file the command reported
+  // success and the next build failed with `Could not resolve` (usetheokit/theokit#1038). Which
+  // driver to install is the project's choice, so the generator refuses rather than writing one.
+  const dbIndexRel = join(serverDir, 'db', 'index.ts')
+  if (!DB_INDEX_FILES.some((file) => existsSync(resolve(cwd, serverDir, 'db', file)))) {
+    const example = dialect.dbIndexExample.map((line) => '    ' + line).join('\n')
+    return {
+      status: 'not_a_project',
+      message:
+        `${dbIndexRel} not found. The routes \`theokit generate resource\` writes import \`db\` ` +
+        `from it, so the build would fail to resolve it. Create it with \`export const db\`, for ` +
+        `example (${dialectName}):\n\n${example}\n\n` +
+        `Nothing was written.`,
+    }
+  }
 
   // 1. Create the route files first: an existing route refuses before the schema is touched.
   mkdirSync(dirname(routeIndexPath), { recursive: true })
