@@ -105,7 +105,7 @@
   {"id":"OC-104","status":"open"},
   {"id":"OC-105","status":"open"},
   {"id":"OC-106","status":"open"},
-  {"id":"H-1","status":"shipped","check":{"path":"apps/theoclaw/tests/live/surfaces.live.test.ts","test":"the TUI and the desktop share one conversation, each interrupted and redirected, for H-1"},"verified_on":"2026-10-31","note":"the Ink TUI on @theokit/tui: multiline input, slash completion (/interrupt, /new, /quit), streamed text and a tool card, Esc to interrupt and a redirect that keeps the conversation; the code word given in the TUI is answered from the desktop on the same session"},
+  {"id":"H-1","status":"shipped","check":{"path":"apps/theoclaw/tests/live/surfaces.live.test.ts","test":"the TUI and the desktop share one conversation, each interrupted and redirected, for H-1"},"verified_on":"2026-10-31","note":"the Ink TUI on @theokit/tui: multiline input, slash completion (/interrupt, /new, /quit), streamed text and a tool card, Esc to interrupt and a redirect that keeps the conversation; the code word given in the TUI is answered from the desktop on the same session; the tool card is checked by the name the card draws (ReadFile), which the prompt cannot supply, and the live run was repeated green at 7cb01c1e after that check replaced one the echoed prompt satisfied"},
   {"id":"H-2","status":"open"},
   {"id":"H-3","status":"open"},
   {"id":"H-4","status":"open"},
