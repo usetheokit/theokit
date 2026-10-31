@@ -97,6 +97,11 @@ export function createControlSessions(options: ControlSessionsOptions): ControlS
   const maxSessions = options.maxSessions ?? MAX_CONTROL_SESSIONS
   const drainMs = options.drainMs ?? CANCEL_DRAIN_MS
   const entries = new Map<string, Entry>()
+  /**
+   * Turns sent to a session whose cancelled turn is still unwinding: not admitted yet, but already
+   * interruptible, and cancelled with their socket like an admitted turn.
+   */
+  const waiting = new Map<Running, string>()
   let clock = 0
   let closed = false
 
@@ -136,14 +141,26 @@ export function createControlSessions(options: ControlSessionsOptions): ControlS
     }
   }
 
+  function cancelRun(run: TurnRun): void {
+    run.cancel?.().catch((error: unknown) => {
+      options.report(`theoclaw: control session cancel failed: ${describeError(error)}`)
+    })
+  }
+
   function stop(turn: Running): 'cancelled' | 'no_turn' {
     if (turn.eventsEnded) return 'no_turn'
     turn.cancelRequested = true
     turn.controller.abort()
-    turn.run?.cancel?.().catch((error: unknown) => {
-      options.report(`theoclaw: control session cancel failed: ${describeError(error)}`)
-    })
+    if (turn.run !== undefined) cancelRun(turn.run)
     return 'cancelled'
+  }
+
+  /** The session's newest turn still to stop: one waiting to be admitted, else the running one. */
+  function stoppable(session: string): Running | undefined {
+    for (const [turn, name] of waiting) {
+      if (name === session && !turn.cancelRequested) return turn
+    }
+    return entries.get(session)?.running
   }
 
   /** Wait, at most `drainMs`, for a cancelled turn on `session` to unwind. */
@@ -164,6 +181,10 @@ export function createControlSessions(options: ControlSessionsOptions): ControlS
     if (evicted?.agent !== undefined) await disposeReported(evicted.agent)
     let agent = entry.agent
     if (agent === undefined) {
+      if (turn.controller.signal.aborted) {
+        entries.delete(session)
+        return INTERRUPTED
+      }
       try {
         agent = await options.build()
       } catch (error) {
@@ -186,7 +207,7 @@ export function createControlSessions(options: ControlSessionsOptions): ControlS
       emit,
       onRun: (run) => {
         turn.run = run
-        if (turn.cancelRequested) void run.cancel?.()
+        if (turn.cancelRequested) cancelRun(run)
       },
     })
     turn.eventsEnded = true
@@ -196,9 +217,19 @@ export function createControlSessions(options: ControlSessionsOptions): ControlS
   async function run(session: string, message: string, emit: (event: TurnEvent) => void, owner: object): Promise<SessionOutcome> {
     if (closed) return { ok: false, code: 'turn_failed', reason: 'the control plane is closing' }
     if (!SESSION_ID.test(session)) return { ok: false, code: 'bad_frame' }
-    await drain(session)
-    if (closed) return { ok: false, code: 'turn_failed', reason: 'the control plane is closing' }
+    // The turn exists before the drain, so an interrupt or a closed socket reaches it while it waits.
     const turn = running(owner)
+    waiting.set(turn, session)
+    try {
+      await drain(session)
+    } finally {
+      waiting.delete(turn)
+    }
+    if (turn.controller.signal.aborted) {
+      turn.end()
+      return INTERRUPTED
+    }
+    if (closed) return { ok: false, code: 'turn_failed', reason: 'the control plane is closing' }
     const admission = admit(session, turn)
     if ('ok' in admission) return admission
     const { entry } = admission
@@ -216,16 +247,20 @@ export function createControlSessions(options: ControlSessionsOptions): ControlS
   return {
     run,
     interrupt: (session) => {
-      const turn = entries.get(session)?.running
+      const turn = stoppable(session)
       return turn === undefined ? 'no_turn' : stop(turn)
     },
     cancelOwnedBy: (owner) => {
+      for (const turn of waiting.keys()) {
+        if (turn.owner === owner) stop(turn)
+      }
       for (const entry of entries.values()) {
         if (entry.running?.owner === owner) stop(entry.running)
       }
     },
     close: async () => {
       closed = true
+      for (const turn of waiting.keys()) stop(turn)
       const turns = [...entries.values()].flatMap((entry) => (entry.running === undefined ? [] : [entry.running]))
       for (const turn of turns) stop(turn)
       // A turn whose build is held disposes its own agent when the build arrives (`turnOn`).

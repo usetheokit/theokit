@@ -319,6 +319,64 @@ describe("the control session store (T2.2)", () => {
     expect(f.agents[0]!.sent).toEqual(["first", "redirect"]);
   });
 
+  it("an interrupt while a turn waits for the cancelled turn to unwind stops the waiting turn", async () => {
+    const teardown = deferred<void>();
+    const f = storeOf(() => ({ frames: [assistant("ok"), finished()], before: new Promise<void>(() => undefined), teardown: teardown.promise }));
+    const me = owner();
+    const first = f.sessions.run("s1", "first", collect().emit, me);
+    await waitFor(() => f.agents[0]?.signals.length === 1, 2000, "the send");
+    f.sessions.interrupt("s1");
+    const waiting = f.sessions.run("s1", "redirect", collect().emit, me);
+    expect(f.sessions.interrupt("s1")).toBe("cancelled");
+    teardown.resolve();
+    expect(await first).toEqual({ ok: false, code: "interrupted" });
+    expect(await waiting).toEqual({ ok: false, code: "interrupted" });
+    expect(f.agents[0]!.sent).toEqual(["first"]);
+  });
+
+  it("cancelOwnedBy stops a turn that waits for the cancelled turn to unwind", async () => {
+    const teardown = deferred<void>();
+    const f = storeOf(() => ({ frames: [assistant("ok"), finished()], before: new Promise<void>(() => undefined), teardown: teardown.promise }));
+    const me = owner();
+    void f.sessions.run("s1", "first", collect().emit, me);
+    await waitFor(() => f.agents[0]?.signals.length === 1, 2000, "the send");
+    f.sessions.interrupt("s1");
+    const waiting = f.sessions.run("s1", "redirect", collect().emit, me);
+    f.sessions.cancelOwnedBy(me);
+    teardown.resolve();
+    expect(await waiting).toEqual({ ok: false, code: "interrupted" });
+    expect(f.agents[0]!.sent).toEqual(["first"]);
+  });
+
+  it("a cancel that rejects is reported, never left unhandled", async () => {
+    const sendGate = deferred<void>();
+    const reports: string[] = [];
+    let sends = 0;
+    const sessions = createControlSessions({
+      build: async () => {
+        const agent = new FakeAgent({ frames: [assistant("x")], sendGate: sendGate.promise });
+        const send = agent.send.bind(agent);
+        return {
+          send: async (text: string, options?: { readonly signal?: AbortSignal }) => {
+            sends += 1;
+            const run = await send(text, options);
+            return { ...run, cancel: () => Promise.reject(new Error("cancel refused")) };
+          },
+        };
+      },
+      report: (line) => void reports.push(line),
+    });
+    openStores.push(sessions);
+    const turn = sessions.run("s1", "hi", collect().emit, owner());
+    await waitFor(() => sends === 1, 2000, "send to be called");
+    // Interrupted while send is pending: the run is cancelled the moment it arrives.
+    sessions.interrupt("s1");
+    sendGate.resolve();
+    expect(await turn).toEqual({ ok: false, code: "interrupted" });
+    await waitFor(() => reports.length > 0, 2000, "the cancel failure line");
+    expect(reports[0]).toContain("cancel refused");
+  });
+
   it("a turn sent while a cancelled turn never unwinds gets busy after 5000 ms", async () => {
     vi.useFakeTimers();
     const f = storeOf(() => ({ frames: [assistant("ok")], before: new Promise<void>(() => undefined), teardown: new Promise<void>(() => undefined) }));
@@ -626,6 +684,15 @@ describe("the control socket speaks sessions and interrupt (T2.3)", () => {
     await waitFor(() => plane.stderr.length > 0, 2000, "a stderr line");
     expect(plane.stderr.filter((l) => l.includes("interrupted"))).toEqual(["theoclaw: control session owner-7 turn interrupted"]);
     expect(plane.stderr.join("\n")).not.toContain("secret text");
+  });
+
+  it("a chat frame whose session is null runs sessionless, as the field was ignored before", async () => {
+    const plane = await startSessionPlane(() => quick);
+    const client = await peer(plane);
+    client.send({ type: "chat", message: "hi", session: null });
+    await client.until(hasType("done"), "done");
+    expect(client.frames.at(-1)).toEqual({ type: "done" });
+    expect(plane.builds()).toBe(0);
   });
 
   it("a sessionless chat frame still runs a fresh agent beside the sessions", async () => {

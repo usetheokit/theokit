@@ -39,7 +39,10 @@ type Frame =
   | { readonly kind: 'chat'; readonly message: string; readonly session?: string }
   | { readonly kind: 'interrupt'; readonly session: string }
 
-/** The frame's `session`, when it is a string. Validated by the session store, not here. */
+/**
+ * The frame's `session`, when it is a string. `null` reads as absent, as the field was ignored
+ * before sessions existed. Validated by the session store, not here.
+ */
 function sessionOf(frame: { session?: unknown }): string | undefined {
   return typeof frame.session === 'string' ? frame.session : undefined
 }
@@ -63,7 +66,7 @@ function parseFrame(raw: { toString(): string }, isBinary: boolean): Frame | und
   if (frame?.type === 'interrupt') return session === undefined ? undefined : { kind: 'interrupt', session }
   const message = frame?.type === 'chat' ? frame.message : undefined
   if (typeof message !== 'string' || message === '') return undefined
-  if (frame?.session !== undefined && session === undefined) return undefined
+  if (frame?.session !== undefined && frame.session !== null && session === undefined) return undefined
   return session === undefined ? { kind: 'chat', message } : { kind: 'chat', message, session }
 }
 
