@@ -381,11 +381,8 @@ function workflowTools(factory: StartOptions['draftAgentFactory'], write: (line:
 function startWebchat(options: StartOptions, token: string | undefined): HttpHandler | undefined {
   if (token === undefined) return undefined
   const agents = createContainer<TurnAgent>({ factory: () => options.agentFactory(NO_TOOL_OPTIONS) })
-  return createWebchatRoutes({
-    token,
-    runTurn: createTurnRunner(agents.withAgent),
-    assetsDir: options.webchatAssetsDir ?? WEBCHAT_ASSETS_DIR,
-  })
+  const assetsDir = options.webchatAssetsDir ?? WEBCHAT_ASSETS_DIR
+  return createWebchatRoutes({ token, runTurn: createTurnRunner(agents.withAgent), assetsDir })
 }
 
 /**
