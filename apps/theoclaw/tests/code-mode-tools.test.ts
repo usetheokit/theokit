@@ -292,6 +292,45 @@ describe('run_code and delegate_all on a /control agent', () => {
     expect(answer.results.map((entry) => entry.error)).toEqual(['delegation_failed', 'delegation_failed'])
   })
 
+  it('cancels a worker already running when the parent turn aborts', async () => {
+    const { settings } = readOnlyWorkspace()
+    const controller = new AbortController()
+    const cancelled: boolean[] = []
+    let streaming = 0
+    const tool = controlTool(settings, 'delegate_all', async () => {
+      const index = cancelled.push(false) - 1
+      let stop = (): void => undefined
+      const stopped = new Promise<void>((resolve) => {
+        stop = resolve
+      })
+      const run = {
+        // The abort fires only once both workers are inside stream(), after each registered its listener.
+        stream: async function* () {
+          streaming += 1
+          if (streaming === 2) controller.abort()
+          await stopped
+        },
+        wait: async () => {
+          await stopped
+          return { status: 'cancelled' }
+        },
+        cancel: async () => {
+          cancelled[index] = true
+          stop()
+        },
+      }
+      return { send: async () => run, [Symbol.asyncDispose]: async () => undefined }
+    })
+    const tasks = [{ agent: 'worker', task: 'one' }, { agent: 'worker', task: 'two' }]
+
+    const answer = JSON.parse(String(await tool.handler({ tasks }, { signal: controller.signal }))) as {
+      results: { ok: boolean; error?: string }[]
+    }
+
+    expect(cancelled).toEqual([true, true])
+    expect(answer.results.map((entry) => entry.error)).toEqual(['delegation_failed', 'delegation_failed'])
+  })
+
   it('builds no worker for a task whose turn already aborted', async () => {
     const { settings } = readOnlyWorkspace()
     let built = 0
