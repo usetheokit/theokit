@@ -1,6 +1,6 @@
 import 'reflect-metadata'
 
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { GatewayRunner, channelRendering } from '@theokit/gateway'
 import type { GatewayContext, GatewayHandler, MessageEvent, SendResult } from '@theokit/gateway'
@@ -133,6 +133,31 @@ describe('createReplyHandler', () => {
     await expect(createReplyHandler({ reset: noReset, withAgent: withOne(agent) })(event, ctx)).rejects.toBe(failure)
 
     expect(replies.map((reply) => reply.text)).toEqual([ERROR_SENTENCE])
+  })
+
+  it('releases the lease once after a delivered reply', async () => {
+    const agent = new FakeAgent({ frames: [assistant('Hi!'), finished()] })
+    const release = vi.fn()
+    const event = messageEvent('telegram', 'hello')
+    const { ctx } = fakeContext(event)
+
+    await createReplyHandler({ reset: noReset, withAgent: async (_event, work) => work({ agent, release }) })(event, ctx)
+
+    expect(release).toHaveBeenCalledTimes(1)
+  })
+
+  it('releases the lease once after a failed turn', async () => {
+    const failure = new Error('provider unreachable')
+    const agent = new FakeAgent({ frames: [], streamError: failure })
+    const release = vi.fn()
+    const event = messageEvent('telegram', 'hello')
+    const { ctx } = fakeContext(event)
+
+    await expect(
+      createReplyHandler({ reset: noReset, withAgent: async (_event, work) => work({ agent, release }) })(event, ctx),
+    ).rejects.toBe(failure)
+
+    expect(release).toHaveBeenCalledTimes(1)
   })
 
   it('sends the partial text once and rethrows when the agent fails after text', async () => {
