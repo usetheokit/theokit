@@ -3,6 +3,8 @@ import {
   createPostgresCronLock,
   type PostgresCronLockOptions,
 } from '../cron/cron-lock.js'
+import { createLogger } from '../observability/logger.js'
+import { keepPoolErrorsFromExitingTheProcess } from '../storage/error-listener.js'
 import type { PostgresFactory, StorageManager } from '../storage/storage-manager.js'
 import type { PoolLike } from '../storage/storage-types.js'
 
@@ -44,6 +46,12 @@ import {
  * a finite value (e.g., 5000) so a saturated pool errors instead of
  * deadlocking. Suggested pool size: `min(workerConcurrency * 1.5, 20)`.
  *
+ * Pool errors: a `pg.Pool` emits `error` when Postgres drops one of its idle connections, and Node
+ * exits on an `error` event with no listener. The constructor attaches a listener that logs a
+ * structured warning (`component: "theokit:jobs"`, the table, the Postgres error code) when the
+ * pool has none, and the next query reconnects. Attach your own `pool.on('error', ...)` before
+ * constructing the backend to handle it differently; the backend then leaves the pool alone.
+ *
  * @see https://github.com/graphile/worker (Postgres SKIP LOCKED reference)
  */
 
@@ -67,6 +75,7 @@ export interface PostgresJobBackendOptions {
 }
 
 const DEFAULT_TABLE = 'theokit_jobs'
+const backendLogger = createLogger({ context: { component: 'theokit:jobs' } })
 const MAX_DEFAULT_RETRY_DELAY_SECONDS = 3600
 const MAX_ENQUEUE_ROUNDS = 3
 
@@ -92,6 +101,9 @@ export class PostgresJobBackend implements JobBackend {
     }
     this.#pool = opts.pool
     this.#table = opts.tableName ?? DEFAULT_TABLE
+    // The worker polls this pool, so it always holds idle clients for Postgres to drop
+    // (usetheokit/theokit#1037).
+    keepPoolErrorsFromExitingTheProcess(opts.pool, backendLogger, { table: this.#table })
     this.#retryDelaySeconds = opts.retryDelaySeconds ?? defaultRetryDelaySeconds
   }
 

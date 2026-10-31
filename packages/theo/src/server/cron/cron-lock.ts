@@ -1,3 +1,5 @@
+import { createLogger } from '../observability/logger.js'
+import { keepPoolErrorsFromExitingTheProcess } from '../storage/error-listener.js'
 import type { PoolLike } from '../storage/storage-types.js'
 
 /**
@@ -21,6 +23,7 @@ export interface PostgresCronLockOptions {
 }
 
 const TABLE_NAME = /^[a-z_][a-z0-9_]*$/
+const cronLockLogger = createLogger({ context: { component: 'theokit:cron' } })
 
 /**
  * A `CronLock` on a shared Postgres: one row per fired tick, keyed by `(name, scheduled_at)`. The
@@ -31,6 +34,9 @@ const TABLE_NAME = /^[a-z_][a-z0-9_]*$/
  *
  * Each row is also a record of when the tick fired and nothing else; rows past `retentionDays` are
  * removed as the cron keeps firing.
+ *
+ * When `pool` has an event API and no `error` listener, one is attached that logs a structured
+ * warning instead of letting a dropped idle connection exit the process (usetheokit/theokit#1037).
  */
 export function createPostgresCronLock(
   pool: PoolLike,
@@ -42,6 +48,7 @@ export function createPostgresCronLock(
       `Invalid cron lock table name "${table}": use lowercase letters, digits and underscores.`,
     )
   }
+  keepPoolErrorsFromExitingTheProcess(pool, cronLockLogger, { table })
   const retentionDays = options.retentionDays ?? 7
   let ready: Promise<unknown> | undefined
 
