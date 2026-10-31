@@ -22,7 +22,7 @@ import { z } from 'zod'
 
 import { delegate, type DelegateOptions } from '../bridge/agent-orchestrator.js'
 import { DelegationTimeoutError } from '../bridge/delegation-lifecycle.js'
-import { isPort, type DelegationTarget } from '../bridge/delegation-scoring.js'
+import { isPort, type DelegationPort, type DelegationTarget } from '../bridge/delegation-scoring.js'
 import {
   DelegationBudgetExceededError,
   DelegationError,
@@ -196,6 +196,18 @@ export type DelegationOutcome =
   | { readonly ok: false; readonly error: string; readonly message: string }
 
 /**
+ * A port's run, handed the delegating run's signal when there is one. The signal reaches a port
+ * only: a `SubAgentSpec` runs through `delegate()`, which takes none.
+ */
+function runPort(
+  port: DelegationPort,
+  task: string,
+  signal: AbortSignal | undefined,
+): Promise<DelegationResult> {
+  return signal === undefined ? port.run(task) : port.run(task, { signal })
+}
+
+/**
  * Run one task on one target and map a delegation refusal to `{ ok: false, error, message }`.
  * Anything that is not a delegation outcome (a defect: a malformed spec, a bug in a port) is
  * rethrown, never turned into prose for the model to reason about. Shared by `delegate` and
@@ -205,10 +217,11 @@ export async function runDelegation(
   target: DelegationTarget,
   task: string,
   defaults: DelegateOptions | undefined,
+  signal?: AbortSignal,
 ): Promise<DelegationOutcome> {
   try {
     const result: DelegationResult = isPort(target)
-      ? await target.run(task)
+      ? await runPort(target, task, signal)
       : await delegate(target, task, defaults ?? {})
 
     return { ok: true, response: result.response }

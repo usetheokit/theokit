@@ -273,4 +273,28 @@ describe('createDelegateAllTool', () => {
       ],
     })
   })
+
+  it("hands the run's abort signal to every task's port", async () => {
+    const seen: (AbortSignal | undefined)[] = []
+    const port = {
+      run: async (task: string, options?: { signal?: AbortSignal }) => {
+        seen.push(options?.signal)
+        return result(task)
+      },
+    }
+    const tool = createDelegateAllTool({ roster: [{ name: 'worker', target: port }] })
+    const controller = new AbortController()
+
+    await tool.handler(
+      {
+        tasks: [
+          { agent: 'worker', task: 'one' },
+          { agent: 'worker', task: 'two' },
+        ],
+      },
+      { signal: controller.signal },
+    )
+
+    expect(seen).toEqual([controller.signal, controller.signal])
+  })
 })

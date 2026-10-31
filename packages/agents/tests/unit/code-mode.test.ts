@@ -107,4 +107,26 @@ describe('createCodeMode on @theokit/agents/code-mode', () => {
     expect(instructions).toContain('api.read_file({ path: string })')
     expect(instructions).toContain('api.list_dir({ path: string })')
   })
+
+  it("forwards the run's abort signal to the sandbox and to each tool the script calls", async () => {
+    const tool = spyTool('read_file')
+    let sandboxSignal: AbortSignal | undefined
+    const sandbox: Sandbox = {
+      run: async (_code, api, options) => {
+        sandboxSignal = options?.signal
+        return api.read_file?.({ path: 'a' }, options)
+      },
+    }
+    const codeMode = createCodeMode({
+      tools: [tool],
+      sandbox,
+      onPermissionRequest: () => ({ granted: true }),
+    })
+    const controller = new AbortController()
+
+    await codeMode.tool.handler({ code: 'x' }, { signal: controller.signal })
+
+    expect(sandboxSignal).toBe(controller.signal)
+    expect(tool.handler).toHaveBeenCalledWith({ path: 'a' }, { signal: controller.signal })
+  })
 })

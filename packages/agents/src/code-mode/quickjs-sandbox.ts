@@ -4,13 +4,20 @@
  * ECMAScript globals and `api` and nothing of the host: no `require`, `process`, `fetch` or timers.
  * Only JSON crosses the boundary, in both directions.
  *
- * Four bounds, each a typed failure (`CodeModeSandboxError.code`):
+ * Four bounds and the run's own signal, each a typed failure (`CodeModeSandboxError.code`):
  *  - time: one deadline per run, checked by the interrupt handler while bytecode runs AND raced
  *    against every awaited host call, since no bytecode runs while the host is awaited (EC-1);
  *  - memory: the runtime's own allocation limit;
  *  - calls: the call past `maxCalls` is refused before the host is called, and the run ends with
  *    `call_limit` even when the script catches that refusal;
- *  - result: a value `JSON.stringify` cannot carry is refused rather than returned half-read.
+ *  - result: a value `JSON.stringify` cannot carry is refused rather than returned half-read;
+ *  - cancellation: the caller's `signal` aborting ends the run with `cancelled`. It is observed
+ *    while a host call is awaited and before the run starts; no event fires while bytecode runs,
+ *    so a script that never awaits is bounded by its deadline instead.
+ *
+ * Each host call receives a signal of its own run, aborted when the run ends for any reason (its
+ * deadline, a cancellation, a failure), so a tool still in flight is told to stop rather than left
+ * running after the script has given up.
  *
  * Every handle and deferred a run creates is disposed before its context and runtime, on every
  * path, so a failure surfaces its own code and never the runtime's leak assertion (EC-2).
@@ -28,7 +35,7 @@ import {
   type QuickJSWASMModule,
 } from 'quickjs-emscripten-core'
 
-import type { CodeModeApi, Sandbox } from './code-mode.js'
+import type { CodeModeApi, CodeModeCallOptions, Sandbox } from './code-mode.js'
 
 export interface QuickJsSandboxOptions {
   /** The whole run's bound, host calls included. Default 10000. */
@@ -45,6 +52,7 @@ export type CodeModeSandboxErrorCode =
   | 'memory_limit'
   | 'call_limit'
   | 'unserialisable_result'
+  | 'cancelled'
 
 /** A script run that did not produce a JSON value, with the reason as a stable code. */
 export class CodeModeSandboxError extends TheokitAgentError {
@@ -70,6 +78,7 @@ interface Owned {
 /** What one run knows about why it stopped, set where the VM cannot say it. */
 interface RunState {
   interrupted: boolean
+  cancelled: boolean
   callLimitReached: boolean
   calls: number
 }
@@ -93,6 +102,7 @@ function classify(thrown: unknown, state: RunState): CodeModeSandboxError {
       'the script made more api calls than its limit allows',
     )
   }
+  if (state.cancelled) return new CodeModeSandboxError('cancelled', "the run's signal aborted")
   if (state.interrupted)
     return new CodeModeSandboxError('timeout', 'the script ran past its deadline')
   const message = messageOf(thrown)
@@ -107,7 +117,18 @@ function classify(thrown: unknown, state: RunState): CodeModeSandboxError {
 class QuickJsRun {
   private readonly owned: Owned[] = []
   private readonly pending = new Set<Promise<void>>()
-  private readonly state: RunState = { interrupted: false, callLimitReached: false, calls: 0 }
+  private readonly state: RunState = {
+    interrupted: false,
+    cancelled: false,
+    callLimitReached: false,
+    calls: 0,
+  }
+  /** Aborted when the run ends, or when the caller's signal aborts: what each host call receives. */
+  private readonly hostCalls = new AbortController()
+  private readonly onAbort = (): void => {
+    this.state.cancelled = true
+    this.hostCalls.abort()
+  }
   private readonly runtime: QuickJSRuntime
   private readonly context: QuickJSContext
   private readonly jsonParse: QuickJSHandle
@@ -120,7 +141,11 @@ class QuickJsRun {
     module: QuickJSWASMModule,
     private readonly limits: Required<QuickJsSandboxOptions>,
     private readonly deadline: number,
+    private readonly signal: AbortSignal | undefined,
   ) {
+    // A signal that aborted while the module compiled fires no event: read it now as well.
+    if (signal?.aborted === true) this.onAbort()
+    else signal?.addEventListener('abort', this.onAbort, { once: true })
     this.runtime = module.newRuntime()
     this.runtime.setMemoryLimit(limits.memoryLimitBytes)
     this.runtime.setInterruptHandler(() => {
@@ -168,7 +193,7 @@ class QuickJsRun {
 
   /** Answer one `api.<name>(input)` with a VM promise the host call settles. */
   private callHost(
-    call: (args: unknown) => Promise<unknown>,
+    call: (args: unknown, options?: CodeModeCallOptions) => Promise<unknown>,
     argument: QuickJSHandle | undefined,
   ): QuickJSHandle {
     this.state.calls += 1
@@ -182,7 +207,7 @@ class QuickJsRun {
         : this.context.dump(argument)
     const deferred = this.own(this.context.newPromise())
     const settled = Promise.resolve()
-      .then(() => call(input))
+      .then(() => call(input, { signal: this.hostCalls.signal }))
       .then(
         (value) => {
           this.settleDeferred(deferred, () => this.toHandle(value), 'resolve')
@@ -247,6 +272,11 @@ class QuickJsRun {
     const deadlineReached = new Promise<void>((resolve) => {
       this.timer = setTimeout(resolve, Math.max(0, this.deadline - Date.now()))
     })
+    const cancelled = new Promise<void>((resolve) => {
+      this.hostCalls.signal.addEventListener('abort', () => {
+        resolve()
+      })
+    })
     for (;;) {
       const jobs = this.runtime.executePendingJobs()
       if (jobs.error) {
@@ -274,7 +304,8 @@ class QuickJsRun {
           'the script awaits a promise that nothing can settle',
         )
       }
-      await Promise.race([...this.pending, deadlineReached])
+      await Promise.race([...this.pending, deadlineReached, cancelled])
+      if (this.state.cancelled) throw classify(undefined, this.state)
       if (Date.now() > this.deadline) {
         this.state.interrupted = true
         throw classify(undefined, this.state)
@@ -312,6 +343,8 @@ class QuickJsRun {
   /** Dispose everything this run made, newest first, then the context and the runtime. */
   private dispose(failure: unknown): void {
     clearTimeout(this.timer)
+    this.signal?.removeEventListener('abort', this.onAbort)
+    this.hostCalls.abort()
     try {
       for (const item of [...this.owned].reverse()) {
         if (item.alive) item.dispose()
@@ -335,10 +368,13 @@ export function createQuickJsSandbox(options: QuickJsSandboxOptions = {}): Sandb
   const limits: Required<QuickJsSandboxOptions> = { ...DEFAULTS, ...options }
   let module: Promise<QuickJSWASMModule> | undefined
   return {
-    run: async (code, api) => {
+    run: async (code, api, options) => {
       const deadline = Date.now() + limits.timeoutMs
+      if (options?.signal?.aborted === true) {
+        throw new CodeModeSandboxError('cancelled', "the run's signal aborted before it started")
+      }
       module ??= newQuickJSWASMModuleFromVariant(variant)
-      const run = new QuickJsRun(await module, limits, deadline)
+      const run = new QuickJsRun(await module, limits, deadline, options?.signal)
       try {
         return await run.execute(code, api)
       } finally {

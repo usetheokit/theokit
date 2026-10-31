@@ -215,7 +215,8 @@ describe('createQuickJsSandbox', () => {
 
     await sandbox.run('return await api.list_dir()', { list_dir })
 
-    expect(list_dir).toHaveBeenCalledWith({})
+    // The second argument is the run's own signal, which every host call receives.
+    expect(list_dir).toHaveBeenCalledWith({}, { signal: expect.any(AbortSignal) as unknown })
   })
 
   it('hands the script the raw string when the host result is not JSON', async () => {
@@ -242,5 +243,41 @@ describe('createQuickJsSandbox', () => {
     ])
 
     expect([one, two]).toEqual([1, 2])
+  })
+
+  it('ends a run with cancelled when its signal aborts during a host call, and aborts that call', async () => {
+    const sandbox = createQuickJsSandbox({ timeoutMs: 5000 })
+    const controller = new AbortController()
+    let hostSignal: AbortSignal | undefined
+    const api: CodeModeApi = {
+      web_fetch: (_args, options) => {
+        hostSignal = options?.signal
+        setImmediate(() => {
+          controller.abort()
+        })
+        return new Promise<never>(() => undefined)
+      },
+    }
+    const started = Date.now()
+
+    const code = await codeOf(
+      sandbox.run('return await api.web_fetch({ url: "x" })', api, { signal: controller.signal }),
+    )
+
+    expect(code).toBe('cancelled')
+    expect(Date.now() - started).toBeLessThan(1000)
+    expect(hostSignal?.aborted).toBe(true)
+  })
+
+  it('refuses to start a run whose signal already aborted', async () => {
+    const sandbox = createQuickJsSandbox()
+    const add = vi.fn(async () => 1)
+
+    const code = await codeOf(
+      sandbox.run('return await api.add({})', { add }, { signal: AbortSignal.abort() }),
+    )
+
+    expect(code).toBe('cancelled')
+    expect(add).not.toHaveBeenCalled()
   })
 })

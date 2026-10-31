@@ -27,7 +27,8 @@ export type CreateDelegateAllToolOptions = CreateDelegateToolOptions
  * sub-agent) is reported as `{ ok: false, error, message }` beside the others; a defect in any task
  * is rethrown, but only once every task has settled, so no sub-agent is left running unobserved
  * (several defects together as one `AggregateError`). Each task runs with the same `defaults`, so a
- * `budget` there bounds each task, not the call: one call may spend up to four times it.
+ * `budget` there bounds each task, not the call: one call may spend up to four times it. The run's
+ * `ctx.signal` is handed to every port, so a cancelled turn can stop its sub-agents.
  */
 export function createDelegateAllTool(options: CreateDelegateAllToolOptions) {
   const { roster, defaults, name = 'delegate_all', description } = options
@@ -65,7 +66,7 @@ export function createDelegateAllTool(options: CreateDelegateAllToolOptions) {
         'Each sub-agent runs its own turn with its own token cost; reach for it when the work splits into independent parts. ' +
         'Returns JSON: { results: [{ agent, ok: true, response } | { agent, ok: false, error, message }] }, in the order given.',
     inputSchema,
-    handler: async (raw: unknown): Promise<string> => {
+    handler: async (raw: unknown, ctx?: { signal?: AbortSignal }): Promise<string> => {
       const { tasks } = inputSchema.parse(raw)
 
       // Every promise exists before the first await: the tasks run at once, not one after another.
@@ -79,7 +80,7 @@ export function createDelegateAllTool(options: CreateDelegateAllToolOptions) {
           )
           return Promise.reject(unknown)
         }
-        return runDelegation(target, task, defaults)
+        return runDelegation(target, task, defaults, ctx?.signal)
       })
       const settled = await Promise.allSettled(pending)
 

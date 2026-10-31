@@ -25,13 +25,28 @@
 import type { CustomTool } from '@theokit/sdk'
 import { TheokitAgentError } from '@theokit/sdk/errors'
 
+/**
+ * What a run hands along with each call: the run's `AbortSignal`, so a cancelled turn stops the
+ * script and the host tool calls it started instead of leaving them running unobserved.
+ */
+export interface CodeModeCallOptions {
+  readonly signal?: AbortSignal
+}
+
 /** The restricted API handed to sandboxed code: declared tool names → permission-gated callables. */
-export type CodeModeApi = Record<string, (args: unknown) => Promise<unknown>>
+export type CodeModeApi = Record<
+  string,
+  (args: unknown, options?: CodeModeCallOptions) => Promise<unknown>
+>
 
 /** The injected isolation boundary. The app supplies a vetted implementation. */
 export interface Sandbox {
-  /** Run `code` with access to ONLY `api` (the restricted tool surface). Resolve the code's result. */
-  run(code: string, api: CodeModeApi): Promise<unknown>
+  /**
+   * Run `code` with access to ONLY `api` (the restricted tool surface). Resolve the code's result.
+   * An implementation that honours `options.signal` ends the run when it aborts and passes a signal
+   * to each `api` call; one that ignores it runs to its own bound.
+   */
+  run(code: string, api: CodeModeApi, options?: CodeModeCallOptions): Promise<unknown>
 }
 
 /** A permission decision for one tool call from sandboxed code. */
@@ -66,7 +81,7 @@ export interface CodeModeConfig {
  * result its callers read.
  */
 export type CodeModeTool = Omit<CustomTool, 'handler'> & {
-  handler: (input: Record<string, unknown>) => Promise<string>
+  handler: (input: Record<string, unknown>, ctx?: CodeModeCallOptions) => Promise<string>
 }
 
 /**
@@ -147,10 +162,13 @@ export function createCodeMode(config: CodeModeConfig): {
   // Assemble the restricted API: each declared tool becomes a permission-gated callable.
   const api: CodeModeApi = {}
   for (const tool of config.tools) {
-    api[tool.name] = async (args: unknown): Promise<unknown> => {
+    api[tool.name] = async (args: unknown, options?: CodeModeCallOptions): Promise<unknown> => {
       const decision = await config.onPermissionRequest({ tool: tool.name, args })
       if (!decision.granted) throw new CodeModePermissionDeniedError(tool.name, decision.reason)
-      return tool.handler(args as Record<string, unknown>)
+      const input = args as Record<string, unknown>
+      return options?.signal === undefined
+        ? tool.handler(input)
+        : tool.handler(input, { signal: options.signal })
     }
   }
 
@@ -165,9 +183,12 @@ export function createCodeMode(config: CodeModeConfig): {
       properties: { code: { type: 'string', description: 'The code to run in the sandbox.' } },
       required: ['code'],
     },
-    handler: async (input: Record<string, unknown>): Promise<string> => {
+    handler: async (input: Record<string, unknown>, ctx?: CodeModeCallOptions): Promise<string> => {
       const code = typeof input.code === 'string' ? input.code : ''
-      const result = await config.sandbox.run(code, api)
+      const result =
+        ctx?.signal === undefined
+          ? await config.sandbox.run(code, api)
+          : await config.sandbox.run(code, api, { signal: ctx.signal })
       return typeof result === 'string' ? result : JSON.stringify(result)
     },
   }

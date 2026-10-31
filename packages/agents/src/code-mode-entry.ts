@@ -5,6 +5,7 @@ export {
   CodeModePermissionDeniedError,
   createCodeMode,
   type CodeModeApi,
+  type CodeModeCallOptions,
   type CodeModeConfig,
   type CodeModePermission,
   type CodeModeTool,
