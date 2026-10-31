@@ -274,3 +274,20 @@ describe('makeHostToolsWorkspace', () => {
     expect(() => makeHostToolsWorkspace(join(repository, 'base'))).toThrow(/is inside a git repository/)
   })
 })
+
+describe('the extra tools of a /control agent', () => {
+  const extraTool = (name: string): CustomTool =>
+    ({ name, description: `the ${name} tool`, inputSchema: { type: 'object' }, handler: () => '' }) as CustomTool
+
+  it('appends the extra tools after the published ones', () => {
+    const settings = resolveToolSettings({}, tempWorkspace(), { detect: notEnforced, ...quiet })
+    const names = agentToolOptions(settings, [extraTool('digest')]).tools.map((tool) => tool.name)
+    expect(names.at(-1)).toBe('digest')
+    expect(names.slice(0, -1)).toEqual(buildTools(settings).map((tool) => tool.name))
+  })
+
+  it('adds no tool when no extra is given', () => {
+    const settings = resolveToolSettings({}, tempWorkspace(), { detect: notEnforced, ...quiet })
+    expect(agentToolOptions(settings).tools).toHaveLength(buildTools(settings).length)
+  })
+})

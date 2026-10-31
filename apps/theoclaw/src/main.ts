@@ -3,9 +3,11 @@ import 'reflect-metadata'
 import { homedir } from 'node:os'
 
 import { Agent } from '@theokit/sdk'
+import type { SDKAgent } from '@theokit/sdk'
 
 import { startTheoClaw } from './composition.js'
-import { type CreateAgent, createAgentFactory } from './control-plane/agent-factory.js'
+import type { TheoClawAgentOptions } from './agent/create-agent.js'
+import { type CreateAgent, createAgentFactory, createChannelAgentFactory } from './control-plane/agent-factory.js'
 import { describeError } from './control-plane/errors.js'
 import { applyInstance, resolveInstance, type TheoClawInstance } from './instance.js'
 
@@ -39,13 +41,16 @@ try {
 process.title = instance.label
 
 const workspace = instance.workspace
-const create: CreateAgent = (options) =>
+const createSdkAgent = (options: TheoClawAgentOptions): Promise<SDKAgent> =>
   Agent.create({ ...options, ...(workspace === undefined ? {} : { local: { cwd: workspace } }) })
+const create: CreateAgent = createSdkAgent
 
 startTheoClaw({
   env: process.env,
   instance,
   agentFactory: createAgentFactory(process.env, create),
+  // The `digest` tool's draft agents (B-387): the chat path's factory, so no tool, no shell, memory off.
+  draftAgentFactory: createChannelAgentFactory(process.env, createSdkAgent),
   signals: process,
   exit: (code) => process.exit(code),
 }).catch(fail)

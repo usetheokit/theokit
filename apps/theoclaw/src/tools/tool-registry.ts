@@ -80,9 +80,10 @@ export function buildTools(settings: ToolSettings): CustomTool[] {
 }
 
 /**
- * The options of one agent: a fresh tool list (a todolist is never shared between two agents) and
- * the state-directory veto.
+ * The options of one agent: a fresh tool list (a todolist is never shared between two agents), then
+ * the `extra` tools the composition root passes in (the workflow tools, B-387), and the
+ * state-directory veto.
  */
-export function agentToolOptions(settings: ToolSettings): AgentToolOptions {
-  return { tools: buildTools(settings), plugins: [pathVetoPlugin(settings)] }
+export function agentToolOptions(settings: ToolSettings, extra: readonly CustomTool[] = []): AgentToolOptions {
+  return { tools: [...buildTools(settings), ...extra], plugins: [pathVetoPlugin(settings)] }
 }

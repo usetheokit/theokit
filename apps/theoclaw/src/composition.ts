@@ -12,7 +12,7 @@ import type { BasePlatformAdapter, MessageEvent, PlatformName } from '@theokit/g
 import { teamsActivityVerifier } from '@theokit/gateway-teams'
 import type { TeamsActivityVerifierOptions } from '@theokit/gateway-teams'
 import { Agent } from '@theokit/sdk'
-import type { AgentOptions } from '@theokit/sdk'
+import type { AgentOptions, CustomTool, SDKAgent } from '@theokit/sdk'
 
 import { createOwnerPolicyHook } from './authorization/owner-policy-hook.js'
 import { createPairingStore, type PairingStore } from './authorization/pairing-store.js'
@@ -57,6 +57,7 @@ import { agentToolOptions } from './tools/tool-registry.js'
 import type { AgentToolOptions } from './tools/tool-registry.js'
 import { checkHostToolsPosture, resolveToolSettings } from './tools/tool-settings.js'
 import type { ToolDeps, ToolSettings } from './tools/tool-settings.js'
+import { createWorkflowTools } from './workflows/workflow-tools.js'
 
 /**
  * The composition root — where concretes are wired into the container, and the only place that
@@ -295,6 +296,8 @@ export interface StartOptions extends Omit<TheoClawOptions, 'write'> {
   readonly toolDeps?: ToolDeps
   /** Which instance this process is (B-514); the process entry resolved and applied it. Default: no profile. */
   readonly instance?: TheoClawInstance
+  /** Builds the tool-less agent of one `digest` call (B-387, D3). Absent: no workflow tool. */
+  readonly draftAgentFactory?: () => Promise<SDKAgent>
   /** The SDK's live agent cache, turned off at start (D2). Default `Agent.registry`. */
   readonly agentRegistry?: { configure(options: { readonly maxAgents: number; readonly idleTimeoutMs: number }): void }
 }
@@ -368,6 +371,11 @@ function announceInstance(given: TheoClawInstance | undefined, stderr: (line: st
   const instance = given ?? NO_PROFILE
   stderr(startLine(instance))
   return instance
+}
+
+/** The `/control` agents' workflow tools: one request boundary per call over the draft factory. */
+function workflowTools(factory: StartOptions['draftAgentFactory'], write: (line: string) => void): CustomTool[] {
+  return createWorkflowTools({ write, ...(factory === undefined ? {} : { withDraftAgent: createContainer({ factory }).withAgent }) })
 }
 
 /** `GET /health` is the control plane's; every other path goes to the webhook router. */
@@ -444,7 +452,8 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
     ...(pairing === undefined ? {} : { pairing }),
     write: stderr,
   })
-  const agents = createContainer<TurnAgent>({ factory: () => options.agentFactory(agentToolOptions(tools)) })
+  const extraTools = workflowTools(options.draftAgentFactory, stderr)
+  const agents = createContainer<TurnAgent>({ factory: () => options.agentFactory(agentToolOptions(tools, extraTools)) })
   composedApp = composed
   const listen = options.listen ?? listenControlPlane
   serving = listen({
