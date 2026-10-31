@@ -4,8 +4,6 @@
  * nothing about the agent that answers; the caller passes `complete`, which turns one parsed request
  * into the assistant's text (plan D1). Errors follow the OpenAI shape `{error:{message,type,param,code}}`.
  */
-import { randomUUID } from 'node:crypto'
-
 import { z } from 'zod'
 
 import { MAX_REQUEST_BODY_BYTES, readCappedJson } from './read-capped-body.js'
@@ -148,7 +146,7 @@ async function parseChat(
 
 function completion(model: string, content: string): Response {
   return Response.json({
-    id: `chatcmpl-${randomUUID()}`,
+    id: `chatcmpl-${crypto.randomUUID()}`,
     object: 'chat.completion',
     created: Math.floor(Date.now() / 1000),
     model,
