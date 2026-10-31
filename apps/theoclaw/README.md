@@ -49,6 +49,23 @@ A user unit stops when you log out unless lingering is on. `install` prints the 
 off: `loginctl enable-linger "$USER"`. Only Linux with `systemd --user` is supported: macOS
 (launchd) and Windows are refused by name.
 
+## Container
+
+```bash
+docker build -f apps/theoclaw/Dockerfile -t theoclaw .     # from the repository root
+docker run -d --name theoclaw --user "$(id -u):$(id -g)" \
+  -v ~/.config/theoclaw:/data -p 127.0.0.1:8787:8787 theoclaw
+```
+
+The image runs `/app/apps/theoclaw/dist/main.js` as a non-root user, reads the configuration file
+`/data/theoclaw.env`, and keeps every write under `/data`: `THEOCLAW_STATE_DIR=/data/state`,
+`THEOCLAW_WORKSPACE=/data/work` and `THEOKIT_HOME=/data/theokit`. These are set in the image and
+win over the file, so a file onboarded on the host works unchanged. Mount the directory that holds
+`theoclaw.env` at `/data`, and run with `--user` set to the uid that owns it, because the file is
+mode 0600. Inside a container the listener binds `0.0.0.0` (`THEOCLAW_PUBLIC_BIND=yes`), so the
+control token is the whole gate on `/control`. Publish the port on `127.0.0.1` unless you mean to
+expose it.
+
 ## Update
 
 ```bash

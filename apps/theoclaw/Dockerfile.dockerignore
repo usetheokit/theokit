@@ -1,0 +1,40 @@
+# Read by BuildKit in place of the root .dockerignore for apps/theoclaw/Dockerfile (B-374).
+# The root file's entries come first, unchanged; Docker matches them only at the context root.
+
+# Common — version control, OS noise, editor cruft.
+.git/
+.gitignore
+.svn/
+.hg/
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.idea/
+.vscode/
+
+# theo-packs internals
+theopacks.json
+.dockerignore
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.next/cache/
+.turbo/
+dist/
+build/
+coverage/
+.nyc_output/
+
+# This image's own: nested installs and builds would clash with the builder's frozen install.
+.git
+**/node_modules
+**/dist
+# Credentials: the README keeps them in apps/theoclaw/.env, and Docker does not read .gitignore.
+**/.env
+**/.env.*
+**/*.env
+!**/.env.example
