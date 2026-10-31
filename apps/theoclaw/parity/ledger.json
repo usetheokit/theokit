@@ -74,7 +74,7 @@
   {"id":"OC-73","status":"open"},
   {"id":"OC-74","status":"open"},
   {"id":"OC-75","status":"open"},
-  {"id":"OC-76","status":"open"},
+  {"id":"OC-76","status":"shipped","gaps":["B-683"],"check":{"path":"apps/theoclaw/tests/live/sandbox.live.test.ts","test":"a real model's shell write outside the workspace fails under workspace-write"},"verified_on":"2026-10-31","note":"read-only = OpenClaw workspace ro, workspace-write = rw (the tool root, and /tmp, which the SDK keeps writable), danger-full-access = mode off; not covered: non-main and session/agent/shared scope (B-683), workspace none"},
   {"id":"OC-77","status":"open"},
   {"id":"OC-78","status":"open"},
   {"id":"OC-79","status":"open"},

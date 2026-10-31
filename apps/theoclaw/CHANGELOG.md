@@ -41,6 +41,15 @@ and versioning follows [Semantic Versioning](https://semver.org/).
   the new script that installs the build the server's Playwright expects. The README says how to
   give Chromium its system libraries without root (`LD_LIBRARY_PATH`). The parity ledger records
   OC-60 as shipped, checked by `tests/live/browser.live.test.ts`; OC-62 (computer use) stays open.
+- The shell's sandbox mode is the operator's choice (B-392): `THEOCLAW_SANDBOX` takes `read-only`,
+  `workspace-write` (the default, as before) or `danger-full-access`, and any other value stops the
+  start, with host tools off too. Under `read-only` the shell can write nothing and `write_file`,
+  `edit_file` and `apply_patch` are not registered; under `workspace-write` it can write only
+  `files/` and `/tmp`; under `danger-full-access` it runs unconfined, the start needs no
+  bubblewrap and prints one line saying so. An unenforced sandbox under the other two modes refuses
+  the start naming `THEOCLAW_SANDBOX`. The parity ledger records OC-76 as shipped, checked by
+  `tests/live/sandbox.live.test.ts` against a real model; `non-main` and per-session scope wait on
+  B-683. The `theoclaw` CI job installs bubblewrap for the confinement tests.
 - The `/control` agent's tools (B-382): `read_file`, `list_dir`, `view_image`, `web_fetch` and
   `todolist` always, all from `@theokit/agents/tools` and bound to `files/` under the working
   directory; `web_search` with `BRAVE_API_KEY` (or `THEOKIT_SEARCH_API_URL` with

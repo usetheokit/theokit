@@ -196,10 +196,12 @@ writes their prompt.
 | `read_file`, `list_dir`, `view_image`, `web_fetch`, `todolist` | always |
 | `web_search` | with `BRAVE_API_KEY`, or with both `THEOKIT_SEARCH_API_URL` and `THEOKIT_SEARCH_API_KEY` |
 | `git_diff` | when `files/` is itself a git repository and the sandbox is enforced |
-| `write_file`, `edit_file`, `apply_patch`, `shell_exec` | with `THEOCLAW_HOST_TOOLS=on` |
+| `shell_exec` | with `THEOCLAW_HOST_TOOLS=on` |
+| `write_file`, `edit_file`, `apply_patch` | with `THEOCLAW_HOST_TOOLS=on`, unless `THEOCLAW_SANDBOX=read-only` |
 
-`THEOCLAW_HOST_TOOLS` is `on` or unset; any other value is refused. With it on, the shell runs in a
-bubblewrap sandbox that can write only `files/` and `/tmp`, and the start refuses when bubblewrap
+`THEOCLAW_HOST_TOOLS` is `on` or unset; any other value is refused. With it on, under the default
+`THEOCLAW_SANDBOX=workspace-write` (the modes are below), the shell runs in a bubblewrap sandbox
+that can write only `files/` and `/tmp`, and the start refuses when bubblewrap
 is not available, when the working directory lies under `/tmp`, or when `THEOCLAW_STATE_DIR` lies
 under `files/` or `/tmp` (symlinks followed), where the shell could rewrite `pairing.json` and pair
 any sender. **The sandboxed shell can still
@@ -208,6 +210,27 @@ resolves into `.theokit` or `.theoclaw` beside `files/` is refused before the to
 a `git_diff` with no path. The SDK's own unsandboxed `shell` is never offered. Search keys are
 masked in the output like every other credential. A start line says when web search is off, and
 when `git_diff` is off because the sandbox is not enforced.
+
+`THEOCLAW_SANDBOX` chooses the shell's sandbox when host tools are on (B-392). Any other value
+stops the start before any runner, with host tools off too.
+
+| Mode | The shell can write | The file-writing tools |
+|---|---|---|
+| `read-only` | nothing | not registered: they take no sandbox, so only leaving them out keeps the mode true |
+| `workspace-write` (default) | `files/` and `/tmp`, which the SDK keeps writable | registered |
+| `danger-full-access` | every path the process user can write: no sandbox | registered |
+
+Under `read-only` and `workspace-write` the start refuses when the sandbox is not enforced, naming
+`THEOCLAW_SANDBOX` and the reason, and keeps the `/tmp` and `THEOCLAW_STATE_DIR` refusals above.
+Under `danger-full-access` it starts without bubblewrap, under `/tmp` too, and prints
+`sandbox: off (danger-full-access), shell_exec runs unconfined`; `git_diff` stays off. With host
+tools off the shell is not registered and every mode keeps a read-only sandbox.
+
+The live check of the sandbox (`THEOCLAW_MODEL` set in the environment):
+
+```bash
+THEOCLAW_LIVE=1 pnpm --filter theoclaw exec vitest run tests/live/sandbox.live.test.ts
+```
 
 The live check of the tools:
 
