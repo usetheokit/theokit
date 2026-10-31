@@ -62,18 +62,37 @@ function checkGitDiff(args: Record<string, unknown>): Verdict {
   return undefined
 }
 
-function judge(context: PreToolCallContext, settings: ToolSettings): Verdict {
-  const args = context.args
-  if (typeof args !== 'object' || args === null) throw new MalformedArgument('the arguments are not an object')
-  if (context.name === 'git_diff') {
+function judge(name: string, rawArgs: unknown, settings: ToolSettings): Verdict {
+  if (typeof rawArgs !== 'object' || rawArgs === null) throw new MalformedArgument('the arguments are not an object')
+  const args = rawArgs as Record<string, unknown>
+  if (name === 'git_diff') {
     return checkGitDiff(args) ?? pathArguments(args).map((path) => checkPath(path, settings)).find(Boolean)
   }
-  const candidates = context.name === 'apply_patch' ? patchDestinations(args.patch) : pathArguments(args)
+  const candidates = name === 'apply_patch' ? patchDestinations(args.patch) : pathArguments(args)
   for (const candidate of candidates) {
     const verdict = checkPath(candidate, settings)
     if (verdict !== undefined) return verdict
   }
   return undefined
+}
+
+/** The veto's verdict, malformed arguments included; every failure is a refusal, never a throw. */
+function verdictOf(name: string, args: unknown, settings: ToolSettings): Verdict {
+  try {
+    return judge(name, args, settings)
+  } catch (error) {
+    return refuse(`refused a malformed tool call: ${describeError(error)}`)
+  }
+}
+
+/**
+ * The veto for one tool call made outside the SDK's dispatch: the refusal message, or `undefined`
+ * when the call may run. A script's `api` call runs the tool's handler directly and skips the
+ * `pre_tool_call` plugins, so `run_code`'s permission gate asks this instead (plan D3); the plugin
+ * below asks the same function, so both give one verdict for one call.
+ */
+export function vetoToolCall(name: string, args: unknown, settings: ToolSettings): string | undefined {
+  return verdictOf(name, args, settings)?.message
 }
 
 /**
@@ -90,11 +109,9 @@ export function pathVetoPlugin(settings: ToolSettings): Plugin {
     version: '1.0.0',
     register: (ctx) => {
       ctx.on('pre_tool_call', (context: unknown) => {
-        try {
-          return judge(context as PreToolCallContext, settings)
-        } catch (error) {
-          return refuse(`refused a malformed tool call: ${describeError(error)}`)
-        }
+        // A missing context reads as missing arguments, which the veto refuses as malformed.
+        const call = (context ?? {}) as Partial<PreToolCallContext>
+        return verdictOf(String(call.name), call.args, settings)
       })
     },
   }

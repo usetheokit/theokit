@@ -6,6 +6,7 @@
   "type": "module",
   "license": "Apache-2.0",
   "dependencies": {
+    "@jitl/quickjs-wasmfile-release-sync": "0.32.0",
     "@line/bot-sdk": "11.3.0",
     "@mattermost/client": "11.9.0",
     "@microsoft/teams.apps": "2.1.1",
@@ -37,6 +38,7 @@
     "mailparser": "3.12.4",
     "matrix-js-sdk": "42.4.0",
     "nodemailer": "10.2.1",
+    "quickjs-emscripten-core": "0.32.0",
     "react": "19.2.7",
     "react-dom": "19.2.7",
     "reflect-metadata": "0.2.2",
