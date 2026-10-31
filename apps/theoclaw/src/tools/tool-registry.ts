@@ -1,4 +1,4 @@
-import type { CustomTool, Plugin } from '@theokit/sdk'
+import type { CustomTool, McpServerConfig, Plugin } from '@theokit/sdk'
 import { bindToolScope } from '@theokit/agents/tool-scope'
 import {
   createApplyPatchTool,
@@ -17,6 +17,7 @@ import {
 } from '@theokit/agents/tools'
 
 import type { TurnAgent } from '../agent-port.js'
+import { browserServer } from './browser-server.js'
 import { codeModeTool, delegateAllTool, type CreateWorker } from './code-mode-tools.js'
 import { pathVetoPlugin } from './path-veto.js'
 import type { ToolSettings } from './tool-settings.js'
@@ -28,6 +29,8 @@ import type { ToolSettings } from './tool-settings.js'
 export interface AgentToolOptions {
   readonly tools: readonly CustomTool[]
   readonly plugins: readonly Plugin[]
+  /** The stdio browser server, only with `THEOCLAW_BROWSER=on` (B-383); absent otherwise. */
+  readonly mcpServers?: Readonly<Record<string, McpServerConfig>>
 }
 
 /** `web_search` over the adapter the settings chose, or none when search is off. */
@@ -99,9 +102,10 @@ export function buildTools(settings: ToolSettings): CustomTool[] {
 
 /**
  * The options of one agent: a fresh tool list (a todolist is never shared between two agents), then
- * the `extra` tools the composition root passes in (the workflow tools, B-387), and the
- * state-directory veto. Given a worker factory (a `/control` agent's, B-386), the list also holds
- * `run_code` over the read-only tools and `delegate_all` over that factory's workers.
+ * the `extra` tools the composition root passes in (the workflow tools, B-387), the state-directory
+ * veto, and the browser server when `THEOCLAW_BROWSER=on` (B-383). Given a worker factory (a
+ * `/control` agent's, B-386), the list also holds `run_code` over the read-only tools and
+ * `delegate_all` over that factory's workers. A chat agent holds no tool and no server.
  */
 export function agentToolOptions(
   settings: ToolSettings,
@@ -112,7 +116,8 @@ export function agentToolOptions(
   if (createWorker !== undefined) {
     tools.push(codeModeTool(readOnlyTools(settings), settings), delegateAllTool(createWorker))
   }
-  return { tools, plugins: [pathVetoPlugin(settings)] }
+  const base = { tools, plugins: [pathVetoPlugin(settings)] }
+  return settings.browser === undefined ? base : { ...base, mcpServers: { browser: browserServer(settings.browser) } }
 }
 
 /** A worker's options: the read-only tools and the veto, never `run_code` or `delegate_all` (FR-010). */

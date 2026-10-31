@@ -6,6 +6,8 @@ import { createSandboxBackend, LinuxSandbox, resolveSandboxPosture, writableRoot
 import type { BwrapDetection, SandboxBackend, SandboxMode } from '@theokit/agents/sandbox'
 
 import { TheoClawConfigError } from '../control-plane/errors.js'
+import { browserLine, readBrowser } from './browser-server.js'
+import type { BrowserDeps, BrowserSettings } from './browser-server.js'
 import { isWithin, realPathOf, SymlinkLoopError } from './real-path.js'
 
 /** Where web search goes, chosen from the keys present at start. */
@@ -30,6 +32,8 @@ export interface ToolSettings {
   readonly mode: SandboxMode
   readonly fetchImpl: typeof fetch
   readonly search: SearchSettings
+  /** The browser server's CLI with `THEOCLAW_BROWSER=on`; absent when the browser is off. */
+  readonly browser?: BrowserSettings
   /** Values the output mask must hide (the search keys). */
   readonly secrets: readonly string[]
   /** One line each for what is off, or what the start changed, written at start. */
@@ -42,6 +46,8 @@ export interface ToolDeps {
   readonly fetchImpl?: typeof fetch
   /** Where the sandbox fallback warning goes. Default: the SDK's (`console.warn`). */
   readonly warn?: (message: string) => void
+  /** The browser CLI resolver and browsers directory. Default: the installed package and Playwright's own. */
+  readonly browser?: BrowserDeps
 }
 
 type Env = Readonly<Record<string, string | undefined>>
@@ -140,12 +146,14 @@ function readSearch(env: Env): SearchSettings {
 
 /**
  * Read the tool settings from the environment and the working directory, before any runner
- * starts. Throws `TheoClawConfigError` for a bad `THEOCLAW_HOST_TOOLS` or a bad tool root. Builds
+ * starts. Throws `TheoClawConfigError` for a bad `THEOCLAW_HOST_TOOLS`, a bad tool root, or a
+ * `THEOCLAW_BROWSER=on` the host cannot run. Builds
  * the process's one sandbox backend: `read-only` with host tools off, `workspace-write` with them on.
  */
 export function resolveToolSettings(env: Env, cwd: string, deps: ToolDeps = {}): ToolSettings {
   const hostTools = readHostTools(env)
   const search = readSearch(env)
+  const browser = readBrowser(env, deps.browser)
   const workspace = realpathSync(cwd)
   const { toolRoot, lines } = prepareToolRoot(workspace)
   const mode: SandboxMode = hostTools ? 'workspace-write' : 'read-only'
@@ -163,6 +171,7 @@ export function resolveToolSettings(env: Env, cwd: string, deps: ToolDeps = {}):
     offLines.push(`tools: git_diff is off (sandbox not enforced: ${detail})`)
   }
   if (search.kind === 'off') offLines.push(SEARCH_OFF_LINE)
+  offLines.push(browserLine(browser))
   return {
     workspace,
     toolRoot,
@@ -173,6 +182,7 @@ export function resolveToolSettings(env: Env, cwd: string, deps: ToolDeps = {}):
     mode,
     fetchImpl: deps.fetchImpl ?? globalThis.fetch,
     search,
+    browser,
     // Every search key set, the unused one too: a key is a secret whether or not it is chosen.
     secrets: [env.BRAVE_API_KEY, env.THEOKIT_SEARCH_API_KEY].flatMap((value) => nonBlank(value) ?? []),
     offLines,
