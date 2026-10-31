@@ -87,6 +87,28 @@ describe('createQuickJsSandbox', () => {
     )
   })
 
+  it('rejects a cyclic result as unserialisable_result, through the VM JSON.stringify', async () => {
+    const sandbox = createQuickJsSandbox()
+
+    const error = await rejectionOf(
+      sandbox.run('const node = {}; node.self = node; return node', {}),
+    )
+
+    expect(error).toBeInstanceOf(CodeModeSandboxError)
+    expect((error as CodeModeSandboxError).code).toBe('unserialisable_result')
+    // The VM's own reason, not the typeof branch's "the script returned a <kind>".
+    expect((error as Error).message).not.toContain('the script returned a')
+  })
+
+  it('rejects a bigint result as unserialisable_result', async () => {
+    const sandbox = createQuickJsSandbox()
+
+    const error = await rejectionOf(sandbox.run('return 1n', {}))
+
+    expect((error as CodeModeSandboxError).code).toBe('unserialisable_result')
+    expect((error as Error).message).toContain('the script returned a bigint')
+  })
+
   it('interrupts an infinite loop with timeout', async () => {
     const sandbox = createQuickJsSandbox({ timeoutMs: 200 })
     const started = Date.now()
