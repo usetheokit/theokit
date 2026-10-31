@@ -9,6 +9,8 @@ import { TheoClawConfigError } from '../control-plane/errors.js'
 import { readSandboxMode } from '../sandbox/sandbox-mode.js'
 import { browserLine, readBrowser } from './browser-server.js'
 import type { BrowserDeps, BrowserSettings } from './browser-server.js'
+import { resolveExternalTools } from './external-tools.js'
+import type { ExternalTools } from './external-tools.js'
 import { isWithin, realPathOf, SymlinkLoopError } from './real-path.js'
 
 /** Where web search goes, chosen from the keys present at start. */
@@ -38,7 +40,9 @@ export interface ToolSettings {
   readonly search: SearchSettings
   /** The browser server's CLI with `THEOCLAW_BROWSER=on`; absent when the browser is off. */
   readonly browser?: BrowserSettings
-  /** Values the output mask must hide (the search keys). */
+  /** The MCP servers and ACP agents of `THEOCLAW_EXTERNAL_TOOLS`, for the `/control` agent only. */
+  readonly external: ExternalTools
+  /** Values the output mask must hide (the search keys, the external tools' header and env values). */
   readonly secrets: readonly string[]
   /** One line each for what is off, or what the start changed, written at start. */
   readonly offLines: readonly string[]
@@ -161,6 +165,7 @@ export function resolveToolSettings(env: Env, cwd: string, deps: ToolDeps = {}):
   const sandboxMode = readSandboxMode(env)
   const search = readSearch(env)
   const browser = readBrowser(env, deps.browser)
+  const external = resolveExternalTools(env)
   const workspace = realpathSync(cwd)
   const { toolRoot, lines } = prepareToolRoot(workspace)
   const mode: SandboxMode = hostTools ? sandboxMode : 'read-only'
@@ -192,8 +197,12 @@ export function resolveToolSettings(env: Env, cwd: string, deps: ToolDeps = {}):
     fetchImpl: deps.fetchImpl ?? globalThis.fetch,
     search,
     browser,
+    external,
     // Every search key set, the unused one too: a key is a secret whether or not it is chosen.
-    secrets: [env.BRAVE_API_KEY, env.THEOKIT_SEARCH_API_KEY].flatMap((value) => nonBlank(value) ?? []),
+    secrets: [
+      ...[env.BRAVE_API_KEY, env.THEOKIT_SEARCH_API_KEY].flatMap((value) => nonBlank(value) ?? []),
+      ...external.secrets,
+    ],
     offLines,
   }
 }

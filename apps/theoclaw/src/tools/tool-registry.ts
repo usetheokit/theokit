@@ -33,6 +33,24 @@ export interface AgentToolOptions {
   readonly mcpServers?: Readonly<Record<string, McpServerConfig>>
 }
 
+/**
+ * The name of every tool `buildTools` can register, so an external tool cannot take one of them.
+ * The same eleven names `tests/tool-registry.test.ts` pins for the tools `buildTools` returns.
+ */
+export const BUILT_TOOL_NAMES: readonly string[] = [
+  'read_file',
+  'list_dir',
+  'view_image',
+  'web_fetch',
+  'todolist',
+  'web_search',
+  'git_diff',
+  'write_file',
+  'edit_file',
+  'apply_patch',
+  'shell_exec',
+]
+
 /** `web_search` over the adapter the settings chose, or none when search is off. */
 function webSearchTool(settings: ToolSettings): CustomTool | undefined {
   const { kind, url, key } = settings.search

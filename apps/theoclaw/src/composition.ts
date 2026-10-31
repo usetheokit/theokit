@@ -340,9 +340,13 @@ function startToolSettings(options: StartOptions, policy: AuthorizationPolicy): 
   // A profiled instance's agents work in its workspace (B-514), so their tool root is made there.
   const cwd = options.cwd ?? options.instance?.workspace ?? process.cwd()
   const tools = resolveToolSettings(options.env, cwd, options.toolDeps)
-  // The pairing list lives in the state directory: a shell that could write it could pair anyone.
-  const protectedPaths =
-    policy.stateDir === undefined ? [] : [{ path: policy.stateDir, variable: 'THEOCLAW_STATE_DIR' }]
+  // The pairing list lives in the state directory: a shell that could write it could pair anyone;
+  // the external tools file names the processes the next start spawns, outside the sandbox.
+  const external = options.env.THEOCLAW_EXTERNAL_TOOLS?.trim()
+  const protectedPaths = [
+    ...(policy.stateDir === undefined ? [] : [{ path: policy.stateDir, variable: 'THEOCLAW_STATE_DIR' }]),
+    ...(external === undefined || external === '' ? [] : [{ path: external, variable: 'THEOCLAW_EXTERNAL_TOOLS' }]),
+  ]
   checkHostToolsPosture(tools, protectedPaths, options.toolDeps)
   return tools
 }
