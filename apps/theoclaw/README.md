@@ -331,8 +331,11 @@ that tool runs model-written JavaScript in the server process, outside every san
 carrying a prompt injection could have asked for host code execution. A call to it is refused
 before it reaches the server. The server's working directory, which is also where its tools
 write a `filename` and their automatic output, is a fresh directory under the system temp
-directory, removed when the server exits; the workspace, `.theokit` and `.theoclaw` are outside
-it, and the path veto refuses a `filename` into the state directories as well.
+directory, removed when the server exits after the agent is disposed or the wrapper gets SIGTERM,
+SIGINT or SIGHUP. A wrapper killed with SIGKILL (the SDK does so to a server that answers no
+request within its 30-second budget) cannot remove it, and a `theoclaw-browser-*` directory stays
+under the temp directory. The workspace, `.theokit` and `.theoclaw` are outside it, and the path
+veto refuses a `filename` into the state directories as well.
 `PLAYWRIGHT_MCP_*` variables do not reach the server. What stays is what a browser does: it
 loads any reachable URL, runs that page's JavaScript inside Chromium, and can upload a file from
 its own temporary directory to a page.

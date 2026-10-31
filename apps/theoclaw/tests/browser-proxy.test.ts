@@ -88,7 +88,7 @@ async function processGone(pid: number): Promise<void> {
     } catch {
       return
     }
-    if (Date.now() > deadline) throw new Error(`process ${pid} still running ${DEADLINE_MS} ms after the wrapper got SIGTERM`)
+    if (Date.now() > deadline) throw new Error(`process ${pid} still running ${DEADLINE_MS} ms after the wrapper got a signal`)
     await new Promise((resolve) => setTimeout(resolve, 50))
   }
 }
@@ -143,8 +143,9 @@ describe('the browser server wrapper', () => {
     expect(seen.capabilities).toEqual({})
   })
 
-  it('forwards SIGTERM to the server and removes its directory', async () => {
-    // Review round 2 (F-tests-9): disposing an agent ends the wrapper by signal, not by closing stdin.
+  // Review round 2 (F-tests-9, F-dom-5): disposing an agent ends the wrapper by signal, not by closing
+  // stdin, and a closed terminal sends SIGHUP; each is forwarded, so the directory is removed.
+  it.each(['SIGTERM', 'SIGINT', 'SIGHUP'] as const)('forwards %s to the server and removes its directory', async (signal) => {
     const server = browserServer({ cliPath: standInCli() }) as { command: string; args: string[] }
     const child = spawn(server.command, server.args, { stdio: ['pipe', 'pipe', 'pipe'] })
     const closed = new Promise<number | null>((resolve) => child.once('close', (code) => resolve(code)))
@@ -153,7 +154,7 @@ describe('the browser server wrapper', () => {
       child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'browser_navigate', arguments: {} } })}\n`)
     })
     const { pid, cwd } = answer.result as { pid: number; cwd: string }
-    child.kill('SIGTERM')
+    child.kill(signal)
     // The stand-in dies of the forwarded signal, so the wrapper exits 1 (ended on a signal).
     expect(await closed).toBe(1)
     await processGone(pid)

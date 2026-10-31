@@ -13,7 +13,9 @@
  *   `roots` capability is stripped from `initialize`); the directory is removed when it exits;
  * - `PLAYWRIGHT_MCP_*` variables are dropped, so the environment cannot widen the server's config.
  *
- * Exits with the server's status, 1 when it ended on a signal, 2 when started without a CLI.
+ * Exits with the server's status, 1 when it ended on a signal (SIGTERM, SIGINT and SIGHUP are
+ * forwarded to it), 2 when started without a CLI or when the server cannot be spawned. A SIGKILL
+ * cannot be forwarded: the server then exits on its stdin closing and the directory stays behind.
  */
 import { spawn } from 'node:child_process'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -122,7 +124,8 @@ createInterface({ input: server.stdout }).on('line', (line) => {
 
 // The server ending its stdin read is how it learns the client left; a write after that is not an error here.
 server.stdin.on('error', () => undefined)
-for (const signal of ['SIGTERM', 'SIGINT']) process.on(signal, () => server.kill(signal))
+// SIGHUP too: a closed terminal would otherwise kill the wrapper and leave the directory behind.
+for (const signal of ['SIGTERM', 'SIGINT', 'SIGHUP']) process.on(signal, () => server.kill(signal))
 
 server.on('error', (error) => {
   process.stderr.write(`browser-proxy: could not start ${cliPath}: ${error.message}\n`)
