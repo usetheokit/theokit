@@ -66,33 +66,55 @@ async function advance(runner: Runner, root: string, branch: string): Promise<vo
   await must(runner, root, `git merge --ff-only origin/${branch}`, 'merge', '--ff-only', `origin/${branch}`)
 }
 
-export async function update(opts: { readonly channel?: string }, io: UpdateIo, runner: Runner): Promise<number> {
-  const branch = channelBranch(opts.channel ?? io.env.THEOCLAW_UPDATE_CHANNEL ?? 'stable')
+interface Position {
+  readonly head: string
+  /** The commit the update starts from: HEAD before the move, else the stale marker's commit. */
+  readonly from: string | undefined
+  readonly current: boolean
+}
+
+/** Where the checkout, the build and the unit stand once the checkout has moved. */
+function position(dist: string, before: string, head: string, restartedMarker: string, unitInstalled: boolean): Position {
+  const installed = readMarker(join(dist, '.installed-commit'))
+  const restarted = readMarker(restartedMarker)
+  const unitCurrent = !unitInstalled || restarted === head
+  if (head !== before) return { head, from: before, current: false }
+  if (installed !== head) return { head, from: installed, current: false }
+  return { head, from: restarted, current: unitCurrent }
+}
+
+async function rebuild(io: UpdateIo, runner: Runner, dist: string, label: string, unitInstalled: boolean): Promise<void> {
+  const install = await runner(join(dirname(dist), 'install.sh'), [])
+  io.stdout.write(install.stdout)
+  if (install.code !== 0) throw new StepFailed(`install.sh failed (exit ${install.code}): ${install.stderr.trim()}`)
+  if (!unitInstalled) return
+  const restart = await runner('systemctl', ['--user', 'restart', `${label}.service`])
+  if (restart.code !== 0) throw new StepFailed(`systemctl --user restart ${label}.service failed: ${restart.stderr.trim()}`)
+}
+
+async function run(io: UpdateIo, runner: Runner, branch: string): Promise<void> {
   const dist = dirname(io.entry)
   const label = resolveInstance(io.env, { homeDir: io.homeDir }).label
+  const root = await must(runner, dist, 'git rev-parse --show-toplevel', 'rev-parse', '--show-toplevel')
+  const before = await must(runner, root, 'git rev-parse HEAD', 'rev-parse', 'HEAD')
+  await advance(runner, root, branch)
+  const head = await must(runner, root, 'git rev-parse HEAD', 'rev-parse', 'HEAD')
+  const restartedMarker = join(dist, `.restarted-commit-${label}`)
+  const unitInstalled = existsSync(unitPath(label, io.homeDir))
+  const at = position(dist, before, head, restartedMarker, unitInstalled)
+  if (at.current) {
+    io.stdout.write(`theoclaw update: already up to date on ${branch} at ${head}\n`)
+    return
+  }
+  await rebuild(io, runner, dist, label, unitInstalled)
+  if (unitInstalled) writeFileSync(restartedMarker, `${head}\n`)
+  io.stdout.write(`updated ${at.from ?? 'an unrecorded build'} -> ${head}\n`)
+}
+
+export async function update(opts: { readonly channel?: string }, io: UpdateIo, runner: Runner): Promise<number> {
+  const branch = channelBranch(opts.channel ?? io.env.THEOCLAW_UPDATE_CHANNEL ?? 'stable')
   try {
-    const root = await must(runner, dist, 'git rev-parse --show-toplevel', 'rev-parse', '--show-toplevel')
-    const before = await must(runner, root, 'git rev-parse HEAD', 'rev-parse', 'HEAD')
-    await advance(runner, root, branch)
-    const head = await must(runner, root, 'git rev-parse HEAD', 'rev-parse', 'HEAD')
-    const installed = readMarker(join(dist, '.installed-commit'))
-    const restartedMarker = join(dist, `.restarted-commit-${label}`)
-    const restarted = readMarker(restartedMarker)
-    const unitInstalled = existsSync(unitPath(label, io.homeDir))
-    if (head === before && installed === head && (!unitInstalled || restarted === head)) {
-      io.stdout.write(`theoclaw update: already up to date on ${branch} at ${head}\n`)
-      return 0
-    }
-    const from = head !== before ? before : installed !== head ? installed : restarted
-    const install = await runner(join(dirname(dist), 'install.sh'), [])
-    io.stdout.write(install.stdout)
-    if (install.code !== 0) throw new StepFailed(`install.sh failed (exit ${install.code}): ${install.stderr.trim()}`)
-    if (unitInstalled) {
-      const restart = await runner('systemctl', ['--user', 'restart', `${label}.service`])
-      if (restart.code !== 0) throw new StepFailed(`systemctl --user restart ${label}.service failed: ${restart.stderr.trim()}`)
-      writeFileSync(restartedMarker, `${head}\n`)
-    }
-    io.stdout.write(`updated ${from ?? 'an unrecorded build'} -> ${head}\n`)
+    await run(io, runner, branch)
     return 0
   } catch (error) {
     if (!(error instanceof StepFailed)) throw error

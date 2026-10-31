@@ -5,11 +5,11 @@ import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import type { Writable } from 'node:stream'
 import { fileURLToPath } from 'node:url'
-import { parseArgs } from 'node:util'
 
 import { describeError, TheoClawConfigError } from './control-plane/errors.js'
 import { daemonInstall, type DaemonIo, daemonStatus, daemonUninstall, runCommand, type Runner } from './daemon.js'
-import { type OnboardInput, type OnboardOptions, onboard } from './onboard.js'
+import { parseOnboard, parseUpdate, UsageError } from './cli-args.js'
+import { type OnboardInput, onboard } from './onboard.js'
 import { update } from './update.js'
 
 /**
@@ -51,49 +51,6 @@ const USAGE = `usage: theoclaw <command>
                             fetch and fast-forward the checkout on its channel, rebuild, restart
   theoclaw --help           this text
 `
-
-/** Bad usage: the command line itself is wrong, which is exit 2 rather than a refusal. */
-class UsageError extends Error {}
-
-function parseOnboard(args: readonly string[]): OnboardOptions {
-  let values
-  try {
-    ;({ values } = parseArgs({
-      args: [...args],
-      strict: true,
-      allowPositionals: false,
-      options: {
-        yes: { type: 'boolean' },
-        force: { type: 'boolean' },
-        model: { type: 'string' },
-        'api-key-env': { type: 'string' },
-        port: { type: 'string' },
-        owners: { type: 'string' },
-        workspace: { type: 'string' },
-      },
-    }))
-  } catch (error) {
-    throw new UsageError(`theoclaw onboard: ${describeError(error)}`)
-  }
-  return {
-    yes: values.yes === true,
-    force: values.force === true,
-    model: values.model,
-    apiKeyEnv: values['api-key-env'],
-    port: values.port,
-    owners: values.owners,
-    workspace: values.workspace,
-  }
-}
-
-function parseUpdate(args: readonly string[]): { channel?: string } {
-  try {
-    const { values } = parseArgs({ args: [...args], strict: true, allowPositionals: false, options: { channel: { type: 'string' } } })
-    return { channel: values.channel }
-  } catch (error) {
-    throw new UsageError(`theoclaw update: ${describeError(error)}`)
-  }
-}
 
 /**
  * The entry as a child in its own process group, so a terminal's SIGINT reaches only this process,

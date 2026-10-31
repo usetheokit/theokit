@@ -18,9 +18,7 @@ const SYSTEM_TOOLS = ['bash', 'sh', 'dirname', 'mkdir', 'chmod', 'mv', 'cat', 'r
 
 const scratch: string[] = []
 
-afterEach(() => {
-  for (const dir of scratch.splice(0)) rmSync(dir, { recursive: true, force: true })
-})
+afterEach(() => scratch.splice(0).forEach((dir) => rmSync(dir, { recursive: true, force: true })))
 
 type Stub = 'node' | 'git' | 'corepack' | 'pnpm'
 

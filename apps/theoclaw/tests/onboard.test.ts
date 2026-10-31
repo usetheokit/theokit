@@ -1,84 +1,16 @@
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { PassThrough } from 'node:stream'
 
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { parseAuthorizationPolicy } from '../src/authorization/policy.js'
-import { loadConfiguration } from '../src/config-file.js'
-import { TheoClawConfigError } from '../src/control-plane/errors.js'
 import { readControlPlaneSettings } from '../src/control-plane/settings.js'
 import { type OnboardIo, type OnboardOptions, onboard } from '../src/onboard.js'
 import { readSessionSettings } from '../src/sessions/session-settings.js'
+import { FLAGS, KEY, cleanScratch, configFile, harness, listing, mode, readBack, refusal } from './support/onboard-harness.js'
 
-const KEY = 'sk-onboard-test-key-0123456789'
-const scratch: string[] = []
-
-afterEach(() => {
-  for (const dir of scratch.splice(0)) rmSync(dir, { recursive: true, force: true })
-})
-
-interface Harness {
-  readonly home: string
-  readonly io: OnboardIo
-  readonly stdoutText: () => string
-}
-
-function harness(extraEnv: Record<string, string> = {}, tty = false): Harness {
-  const home = mkdtempSync(join(tmpdir(), 'theoclaw-onboard-'))
-  scratch.push(home)
-  let stdoutText = ''
-  const stdout = new PassThrough()
-  stdout.on('data', (chunk: Buffer) => (stdoutText += chunk.toString()))
-  const env: NodeJS.ProcessEnv = {
-    XDG_CONFIG_HOME: join(home, 'config'),
-    XDG_DATA_HOME: join(home, 'data'),
-    XDG_STATE_HOME: join(home, 'state'),
-    ONBOARD_TEST_KEY: KEY,
-    ...extraEnv,
-  }
-  const io: OnboardIo = { env, homeDir: home, stdin: new PassThrough(), stdout, isTTY: tty }
-  return { home, io, stdoutText: () => stdoutText }
-}
-
-const FLAGS: OnboardOptions = {
-  yes: true,
-  force: false,
-  model: 'openrouter/google/gemini-2.5-flash-lite',
-  apiKeyEnv: 'ONBOARD_TEST_KEY',
-  port: '8787',
-  owners: 'telegram:1',
-}
-
-function configFile(h: Harness, name = 'theoclaw.env'): string {
-  return join(h.home, 'config', 'theoclaw', name)
-}
-
-function readBack(path: string): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = { THEOCLAW_CONFIG: path }
-  loadConfiguration(env, '/nonexistent')
-  delete env.THEOCLAW_CONFIG
-  return env
-}
-
-function mode(path: string): number {
-  return statSync(path).mode & 0o777
-}
-
-function listing(dir: string): string[] {
-  if (!existsSync(dir)) return []
-  return readdirSync(dir, { recursive: true }).map(String).sort()
-}
-
-async function refusal(promise: Promise<unknown>): Promise<TheoClawConfigError> {
-  const error = await promise.then(
-    () => undefined,
-    (thrown: unknown) => thrown,
-  )
-  expect(error).toBeInstanceOf(TheoClawConfigError)
-  return error as TheoClawConfigError
-}
+afterEach(cleanScratch)
 
 describe('theoclaw onboard', () => {
   it('onboarding writes the six settings at mode 0600 in a 0700 directory', async () => {

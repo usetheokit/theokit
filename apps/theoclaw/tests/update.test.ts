@@ -1,13 +1,10 @@
-import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { PassThrough } from 'node:stream'
 
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { runCommand, type Runner, unitPath } from '../src/daemon.js'
-import { channelBranch, update, type UpdateIo } from '../src/update.js'
+import { channelBranch, update } from '../src/update.js'
+import { cleanScratch, commit, git, harness, installUnit, installedAt, snapshot, world } from './support/update-world.js'
 
 /**
  * `theoclaw update` (B-374, T4.1) over real git repositories in a scratch directory: a bare origin,
@@ -15,120 +12,8 @@ import { channelBranch, update, type UpdateIo } from '../src/update.js'
  * `systemctl` are stubbed through the runner, and the stubbed install writes the installed-commit
  * marker the way `install.sh` does.
  */
-const scratch: string[] = []
 
-afterEach(() => {
-  for (const dir of scratch.splice(0)) rmSync(dir, { recursive: true, force: true })
-})
-
-const GIT_ENV = { GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@example.com', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@example.com' }
-
-function git(cwd: string, ...args: string[]): string {
-  return execFileSync('git', args, { cwd, encoding: 'utf8', env: { ...process.env, ...GIT_ENV } }).trim()
-}
-
-function commit(cwd: string, file: string, content: string): string {
-  writeFileSync(join(cwd, file), content)
-  git(cwd, 'add', file)
-  git(cwd, 'commit', '-q', '-m', `change ${file}`)
-  return git(cwd, 'rev-parse', 'HEAD')
-}
-
-interface World {
-  readonly root: string
-  readonly home: string
-  readonly origin: string
-  readonly checkout: string
-  /** A second clone that pushes to origin, standing in for upstream. */
-  readonly upstream: string
-  readonly dist: string
-  readonly c0: string
-}
-
-function world(): World {
-  const root = mkdtempSync(join(tmpdir(), 'theoclaw-update-'))
-  scratch.push(root)
-  const origin = join(root, 'origin.git')
-  const upstream = join(root, 'upstream')
-  git(root, 'init', '-q', '--bare', '-b', 'main', origin)
-  git(root, 'clone', '-q', origin, upstream)
-  mkdirSync(join(upstream, 'apps', 'theoclaw'), { recursive: true })
-  writeFileSync(join(upstream, '.gitignore'), 'dist/\n')
-  git(upstream, 'add', '.gitignore')
-  const c0 = commit(upstream, 'README', 'c0\n')
-  git(upstream, 'push', '-q', 'origin', 'main')
-  git(upstream, 'push', '-q', 'origin', 'main:develop')
-  const checkout = join(root, 'theokit')
-  git(root, 'clone', '-q', origin, checkout)
-  const dist = join(checkout, 'apps', 'theoclaw', 'dist')
-  mkdirSync(dist, { recursive: true })
-  writeFileSync(join(dist, 'main.js'), '')
-  const home = join(root, 'home')
-  mkdirSync(home)
-  return { root, home, origin, checkout, upstream, dist, c0 }
-}
-
-interface Harness {
-  readonly io: UpdateIo
-  readonly runner: Runner
-  readonly installs: () => number
-  readonly restarts: () => string[]
-  readonly stdout: () => string
-  readonly stderr: () => string
-}
-
-function harness(w: World, options: { env?: NodeJS.ProcessEnv; installExit?: number[]; restartExit?: number[] } = {}): Harness {
-  let installs = 0
-  const restarts: string[] = []
-  const installExit = [...(options.installExit ?? [])]
-  const restartExit = [...(options.restartExit ?? [])]
-  const runner: Runner = async (command, args) => {
-    if (command === 'git') return runCommand(command, args)
-    if (command.endsWith('install.sh')) {
-      installs += 1
-      const code = installExit.shift() ?? 0
-      if (code === 0) writeFileSync(join(w.dist, '.installed-commit'), `${git(w.checkout, 'rev-parse', 'HEAD')}\n`)
-      return { code, stdout: '', stderr: code === 0 ? '' : 'install failed' }
-    }
-    if (command === 'systemctl' && args[1] === 'restart') {
-      const code = restartExit.shift() ?? 0
-      if (code === 0) restarts.push(args[2]!)
-      return { code, stdout: '', stderr: code === 0 ? '' : 'restart failed' }
-    }
-    throw new Error(`unexpected command ${command} ${args.join(' ')}`)
-  }
-  let out = ''
-  let err = ''
-  const stdout = new PassThrough()
-  const stderr = new PassThrough()
-  stdout.on('data', (chunk: Buffer) => (out += chunk.toString()))
-  stderr.on('data', (chunk: Buffer) => (err += chunk.toString()))
-  const io: UpdateIo = {
-    env: { ...options.env },
-    homeDir: w.home,
-    cwd: w.root,
-    platform: 'linux',
-    nodePath: process.execPath,
-    entry: join(w.dist, 'main.js'),
-    stdout,
-    stderr,
-  }
-  return { io, runner, installs: () => installs, restarts: () => restarts, stdout: () => out, stderr: () => err }
-}
-
-function installedAt(w: World, sha: string): void {
-  writeFileSync(join(w.dist, '.installed-commit'), `${sha}\n`)
-}
-
-function snapshot(w: World): { branch: string; head: string; status: string } {
-  return { branch: git(w.checkout, 'rev-parse', '--abbrev-ref', 'HEAD'), head: git(w.checkout, 'rev-parse', 'HEAD'), status: git(w.checkout, 'status', '--porcelain') }
-}
-
-function installUnit(w: World, label: string): void {
-  const path = unitPath(label, w.home)
-  mkdirSync(join(path, '..'), { recursive: true })
-  writeFileSync(path, '[Unit]\n')
-}
+afterEach(cleanScratch)
 
 describe('theoclaw update', () => {
   it('update fast-forwards a clean checkout and refuses a dirty one unchanged', async () => {
