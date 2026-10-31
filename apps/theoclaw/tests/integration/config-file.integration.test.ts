@@ -1,18 +1,21 @@
 /**
  * The configuration file through the real process entry (B-374, T1.1): a file at the path
  * `configurationPath` names supplies every setting the start needs, the entry reads it with
- * `loadConfiguration`, and a variable set in the environment still wins over the file.
+ * `loadConfiguration`, and a variable set in the environment still wins over the file. A file
+ * `onboard` wrote (T1.2) starts the same entry with nothing else in the environment.
  */
 import { type ChildProcess, spawn } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
+import { PassThrough } from 'node:stream'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { configurationPath, loadConfiguration } from '../../src/config-file.js'
+import { onboard } from '../../src/onboard.js'
 
 const APP_DIR = fileURLToPath(new URL('../..', import.meta.url))
 const ENTRY = join(APP_DIR, 'src', 'main.ts')
@@ -87,5 +90,27 @@ describe('the configuration file read by the process entry', () => {
     expect(Number(port)).toBeGreaterThan(1)
     expect((await fetch(`http://127.0.0.1:${port}/health`)).status).toBe(200)
     expect(output).not.toContain(token)
+  })
+
+  it('a file onboard wrote starts the entry with nothing else in the environment', { timeout: 45_000 }, async () => {
+    dir = mkdtempSync(join(tmpdir(), 'theoclaw-onboard-entry-'))
+    const env: NodeJS.ProcessEnv = { XDG_CONFIG_HOME: join(dir, 'config'), XDG_DATA_HOME: join(dir, 'data'), XDG_STATE_HOME: join(dir, 'state'), KEY_VAR: `key-${randomBytes(8).toString('hex')}` }
+    const path = await onboard(
+      { yes: true, force: false, model: 'stub', apiKeyEnv: 'KEY_VAR', port: '0', owners: 'telegram:owner' },
+      { env, homeDir: dir, stdin: new PassThrough(), stdout: new PassThrough(), isTTY: false },
+    )
+
+    let output = ''
+    child = spawn(process.execPath, ['--import', TSX_LOADER, ENTRY], {
+      cwd: dir,
+      env: { PATH: process.env.PATH, HOME: dir, THEOCLAW_CONFIG: path },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    child.stdout!.on('data', (chunk: Buffer) => (output += chunk.toString()))
+    child.stderr!.on('data', (chunk: Buffer) => (output += chunk.toString()))
+
+    const [, port] = await waitForOutput(() => output, /control plane listening on 127\.0\.0\.1:(\d+)/, child)
+    expect((await fetch(`http://127.0.0.1:${port}/health`)).status).toBe(200)
+    expect(output).not.toContain(env.KEY_VAR)
   })
 })

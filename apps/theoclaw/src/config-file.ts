@@ -1,5 +1,5 @@
-import { existsSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { chmodSync, closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, writeSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import { parseEnv } from 'node:util'
 
 import { TheoClawConfigError } from './control-plane/errors.js'
@@ -55,4 +55,54 @@ export function loadConfiguration(env: NodeJS.ProcessEnv, homeDir: string): stri
     if (env[key] === undefined) env[key] = value
   }
   return path
+}
+
+/** What `util.parseEnv` cannot read back inside double quotes, since it unescapes nothing. */
+const UNWRITABLE: ReadonlyArray<readonly [RegExp, string]> = [
+  [/"/, 'a double quote'],
+  [/\\/, 'a backslash'],
+  [/[\r\n]/, 'a line break'],
+]
+
+/**
+ * Refuse any entry whose value the file cannot hold, naming the setting and the character class,
+ * never the value, which may be the model key.
+ */
+export function assertWritable(entries: Readonly<Record<string, string>>): void {
+  for (const [key, value] of Object.entries(entries)) {
+    const found = UNWRITABLE.find(([pattern]) => pattern.test(value))
+    if (found !== undefined) {
+      throw new TheoClawConfigError(`${key} cannot hold ${found[1]} in the configuration file`, { variable: key })
+    }
+  }
+}
+
+/**
+ * Write `entries` as `KEY="value"` lines at mode 0600 in a directory at mode 0700: a temporary
+ * file in the same directory, synced, then renamed over `path`, so a reader never sees half a
+ * file. An existing file is refused without `force`, before the temporary file exists.
+ */
+export function writeConfiguration(path: string, entries: Readonly<Record<string, string>>, options: { readonly force: boolean }): void {
+  assertWritable(entries)
+  if (existsSync(path) && !options.force) {
+    throw new TheoClawConfigError(`${path} exists; pass --force to replace it`, { variable: 'THEOCLAW_CONFIG' })
+  }
+  const directory = dirname(path)
+  mkdirSync(directory, { recursive: true, mode: 0o700 })
+  chmodSync(directory, 0o700)
+  const text = Object.entries(entries).map(([key, value]) => `${key}="${value}"\n`).join('')
+  const temporary = `${path}.${process.pid}.tmp`
+  const fd = openSync(temporary, 'wx', 0o600)
+  try {
+    writeSync(fd, text)
+    fsyncSync(fd)
+  } finally {
+    closeSync(fd)
+  }
+  try {
+    renameSync(temporary, path)
+  } catch (error) {
+    rmSync(temporary, { force: true })
+    throw error
+  }
 }
