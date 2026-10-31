@@ -2,6 +2,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 import type { McpServerConfig } from '@theokit/sdk'
 
@@ -23,6 +24,12 @@ export interface BrowserDeps {
 type Env = Readonly<Record<string, string | undefined>>
 
 const INSTALL_HINT = 'run `pnpm --filter theoclaw run browser:install`'
+/**
+ * The wrapper the server runs under (`tools/browser-proxy.mjs`): it leaves `browser_run_code_unsafe`
+ * out of the tool list and owns the server's file root. `src/tools` and `dist/tools` are both two
+ * levels under the app, so one relative path serves the tests and the built process.
+ */
+const PROXY_PATH = fileURLToPath(new URL('../../tools/browser-proxy.mjs', import.meta.url))
 /** The directory names Playwright gives a Chromium build: the full browser or the headless shell. */
 const CHROMIUM_BUILD = /^chromium(_headless_shell)?-\d+$/
 
@@ -107,9 +114,15 @@ export function browserLine(settings: BrowserSettings | undefined): string {
 }
 
 /**
- * The stdio server a `/control` agent spawns: headless Chromium on a fresh profile per session. It
- * carries neither `env` nor `envPolicy`, so the SDK's `inherit-scrubbed` default applies (NFR-004).
+ * The stdio server a `/control` agent spawns: headless Chromium on a fresh profile per session,
+ * started through the wrapper, which offers every default tool but `browser_run_code_unsafe` and
+ * runs the server in its own temporary directory (review round 1, F-dom-1, F-dom-2). It carries
+ * neither `env` nor `envPolicy`, so the SDK's `inherit-scrubbed` default applies (NFR-004).
  */
 export function browserServer(settings: BrowserSettings): McpServerConfig {
-  return { type: 'stdio', command: process.execPath, args: [settings.cliPath, '--headless', '--isolated', '--browser', 'chromium'] }
+  return {
+    type: 'stdio',
+    command: process.execPath,
+    args: [PROXY_PATH, settings.cliPath, '--headless', '--isolated', '--browser', 'chromium'],
+  }
 }

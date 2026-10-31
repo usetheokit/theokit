@@ -167,6 +167,15 @@ describe('the state-directory veto', () => {
     expect(await (await vetoOf(settings))('apply_patch', { patch })).toMatchObject({ block: true })
   })
 
+  it('refuses a browser call whose filename enters .theokit', async () => {
+    // Review round 1 (F-dom-2, LCR0135): the browser server's file tools name their file `filename`.
+    const { settings } = workspaceWithCanaries()
+    const veto = await vetoOf(settings)
+    const call = { function: '() => 1', filename: '../.theokit/settings.json' }
+    expect(await veto('mcp_browser_browser_evaluate', call)).toMatchObject({ block: true })
+    expect(await veto('mcp_browser_browser_evaluate', { ...call, filename: 'page.json' })).toBeUndefined()
+  })
+
   it('a handler error becomes a block, not a throw', async () => {
     const { settings } = workspaceWithCanaries()
     const hostile = { get path(): string { throw new Error('a getter that throws') } }

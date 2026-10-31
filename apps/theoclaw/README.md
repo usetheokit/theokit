@@ -326,6 +326,17 @@ and the others the server lists), so the agent can read what a page renders with
 `web_fetch` cannot. Chat agents never get it. The browser can open any URL the process can reach,
 loopback services included, which is why it is off unless set.
 
+The server runs under `tools/browser-proxy.mjs`, which leaves `browser_run_code_unsafe` out:
+that tool runs model-written JavaScript in the server process, outside every sandbox, so a page
+carrying a prompt injection could have asked for host code execution. A call to it is refused
+before it reaches the server. The server's working directory, which is also where its tools
+write a `filename` and their automatic output, is a fresh directory under the system temp
+directory, removed when the server exits; the workspace, `.theokit` and `.theoclaw` are outside
+it, and the path veto refuses a `filename` into the state directories as well.
+`PLAYWRIGHT_MCP_*` variables do not reach the server. What stays is what a browser does: it
+loads any reachable URL, runs that page's JavaScript inside Chromium, and can upload a file from
+its own temporary directory to a page.
+
 | Variable | Meaning |
 |---|---|
 | `THEOCLAW_BROWSER` | `on` or unset; any other value is refused. With `on` the start refuses, naming the fix, when `@playwright/mcp` does not resolve or no Chromium build is in the browsers directory. |

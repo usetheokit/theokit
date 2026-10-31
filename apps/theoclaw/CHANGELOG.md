@@ -75,6 +75,10 @@ and versioning follows [Semantic Versioning](https://semver.org/).
   the new script that installs the build the server's Playwright expects. The README says how to
   give Chromium its system libraries without root (`LD_LIBRARY_PATH`). The parity ledger records
   OC-60 as shipped, checked by `tests/live/browser.live.test.ts`; OC-62 (computer use) stays open.
+  The server runs under a wrapper that leaves out `browser_run_code_unsafe` (host code execution
+  outside the sandbox) and starts it in a temporary directory removed on exit, so its files never
+  land in the workspace; the path veto also refuses a browser `filename` into `.theokit` or
+  `.theoclaw`.
 - The shell's sandbox mode is the operator's choice (B-392): `THEOCLAW_SANDBOX` takes `read-only`,
   `workspace-write` (the default, as before) or `danger-full-access`, and any other value stops the
   start, with host tools off too. Under `read-only` the shell can write nothing and `write_file`,

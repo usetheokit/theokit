@@ -10,6 +10,34 @@ import { browserServer, readBrowser } from '../src/tools/browser-server.js'
 
 const DEADLINE_MS = 30_000
 
+/** Every tool `@playwright/mcp@0.0.83` lists by default, less `browser_run_code_unsafe`. */
+const OFFERED_TOOLS = [
+  'browser_click',
+  'browser_close',
+  'browser_console_messages',
+  'browser_drag',
+  'browser_drop',
+  'browser_emulate_media',
+  'browser_evaluate',
+  'browser_file_upload',
+  'browser_fill_form',
+  'browser_find',
+  'browser_handle_dialog',
+  'browser_hover',
+  'browser_navigate',
+  'browser_navigate_back',
+  'browser_network_request',
+  'browser_network_requests',
+  'browser_press_key',
+  'browser_resize',
+  'browser_select_option',
+  'browser_snapshot',
+  'browser_tabs',
+  'browser_take_screenshot',
+  'browser_type',
+  'browser_wait_for',
+]
+
 const cleanups: (() => void)[] = []
 afterEach(() => {
   for (const cleanup of cleanups.splice(0)) cleanup()
@@ -82,7 +110,7 @@ function listTools(server: StdioCommand, env: NodeJS.ProcessEnv): Promise<string
 }
 
 describe('the browser server over stdio', () => {
-  it('lists browser_navigate and browser_snapshot over stdio', async () => {
+  it('lists exactly the offered browser tools over stdio, browser_run_code_unsafe not among them', async () => {
     // EC-2: no browser in the browsers directory, so the list must answer without one.
     const emptyBrowsers = mkdtempSync(join(tmpdir(), 'theoclaw-no-browsers-'))
     cleanups.push(() => rmSync(emptyBrowsers, { recursive: true, force: true }))
@@ -96,8 +124,10 @@ describe('the browser server over stdio', () => {
     const server = browserServer(settings as NonNullable<typeof settings>) as StdioCommand
     // The whole environment, not the SDK's scrubbed one: this pins the server's tool list, not the scrub.
     const names = await listTools(server, { ...process.env, PLAYWRIGHT_BROWSERS_PATH: emptyBrowsers })
-    expect(names).toContain('browser_navigate')
-    expect(names).toContain('browser_snapshot')
+    // The whole list, so a bump that changes what a /control model can call is a reviewed diff
+    // (review round 1, F-dom-3); the RCE-equivalent tool is not offered (F-dom-1, LCR0134).
+    expect([...names].sort()).toEqual(OFFERED_TOOLS)
+    expect(names).not.toContain('browser_run_code_unsafe')
   }, DEADLINE_MS + 5_000)
 
   it('defines browser:install as the bundled Playwright install', () => {

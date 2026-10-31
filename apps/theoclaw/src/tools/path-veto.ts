@@ -35,7 +35,8 @@ function checkPath(value: unknown, settings: ToolSettings): Verdict {
 
 function pathArguments(args: Record<string, unknown>): unknown[] {
   const found: unknown[] = []
-  for (const key of ['path', 'file_path'] as const) {
+  // `filename`: the browser server's file tools name the file they write or read with it.
+  for (const key of ['path', 'file_path', 'filename'] as const) {
     if (key in args) found.push(args[key])
   }
   if ('paths' in args) {

@@ -16,10 +16,12 @@ import type { TurnAgent } from '../src/agent-port.js'
 import { agentToolOptions, controlAgentToolOptions, NO_TOOL_OPTIONS } from '../src/tools/tool-registry.js'
 import type { AgentToolOptions } from '../src/tools/tool-registry.js'
 import { resolveToolSettings } from '../src/tools/tool-settings.js'
-import { notEnforced, startForTools, stop, tempCwd } from './tool-start-fixtures.js'
+import { notEnforced, runControlTurn, startForTools, stop, tempCwd } from './tool-start-fixtures.js'
 import type { ToolStart } from './tool-start-fixtures.js'
 
 const CLI = '/opt/fake/@playwright/mcp/cli.js'
+/** The wrapper the server is started through: it filters the tool list and owns the file root. */
+const PROXY = join(import.meta.dirname, '..', 'tools', 'browser-proxy.mjs')
 const ON_LINE = 'tools: browser is on (headless chromium, isolated profile)'
 const OFF_LINE = 'tools: browser is off (THEOCLAW_BROWSER unset)'
 const MODEL_ENV = { THEOCLAW_MODEL: 'openrouter/m', OPENROUTER_API_KEY: 'router-key' }
@@ -89,7 +91,7 @@ describe('THEOCLAW_BROWSER', () => {
     expect(servers?.browser).toEqual({
       type: 'stdio',
       command: process.execPath,
-      args: [CLI, '--headless', '--isolated', '--browser', 'chromium'],
+      args: [PROXY, CLI, '--headless', '--isolated', '--browser', 'chromium'],
     })
     expect(settings.offLines).toContain(ON_LINE)
     expect(settings.offLines).not.toContain(OFF_LINE)
@@ -194,6 +196,14 @@ describe('THEOCLAW_BROWSER', () => {
     started.push(result)
     expect(result.error).toBeUndefined()
     expect(result.output()).toContain(ON_LINE)
+  })
+
+  it('gives a /control turn of the started process the browser server', async () => {
+    // Review round 1 (F-tests-2, F-wire-1): through the composition, not one layer below it.
+    const result = await startForTools({ THEOCLAW_BROWSER: 'on' }, tempCwd(cleanups), { detect: notEnforced, browser: installed() })
+    started.push(result)
+    const options = await runControlTurn(result)
+    expect(Object.keys(options.mcpServers ?? {})).toEqual(['browser'])
   })
 
   it('spawns the browser server with neither env nor envPolicy', () => {
