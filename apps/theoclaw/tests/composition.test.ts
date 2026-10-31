@@ -442,16 +442,14 @@ describe('the chat path names no per-message factory', () => {
   it('names channelAgentFactory nowhere and calls Agent.create only in the /control factory', () => {
     const files = sources(SRC).map((path) => ({ path: relative(SRC, path), text: readFileSync(path, 'utf8') }))
     expect(files.filter(({ text }) => /channelAgentFactory/.test(text)).map(({ path }) => path)).toEqual([])
-    // `main.ts` builds the `create` it hands `createAgentFactory`, the `/control` factory, alone.
+    // `main.ts` builds the `create` it hands `createAgentFactory` alone; only the `/control` one takes the import (FR-009).
     expect(files.filter(({ text }) => /Agent\.create\(/.test(text)).map(({ path }) => path).sort()).toEqual(
       [join('agent', 'create-agent.ts'), 'main.ts'].sort(),
     )
     expect(files.filter(({ text }) => /createTheoClawAgent\b/.test(text)).map(({ path }) => path).sort()).toEqual(
       [join('agent', 'create-agent.ts'), join('control-plane', 'agent-factory.ts')].sort(),
     )
-    expect(readFileSync(join(SRC, 'main.ts'), 'utf8')).toContain('agentFactory: createAgentFactory(process.env, create, imported)')
-    // WebChat is a chat surface: its factory takes no import (B-375, FR-009).
-    expect(readFileSync(join(SRC, 'main.ts'), 'utf8')).toContain('webchatAgentFactory: createAgentFactory(process.env, create),')
+    expect(readFileSync(join(SRC, 'main.ts'), 'utf8')).toMatch(/agentFactory: createAgentFactory\(process\.env, create, imported\),\n\s+webchatAgentFactory: createAgentFactory\(process\.env, create\),/)
   })
 })
 
