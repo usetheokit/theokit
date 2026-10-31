@@ -359,10 +359,14 @@ function pairingStoreFor(
   return policy.stateDir === undefined ? undefined : createPairingStore({ dir: policy.stateDir, write })
 }
 
-/** What the start says about the tools: each one left off and why, and the shell's reach when host tools are on. */
+/**
+ * What the start says about the tools: each one left off and why, the shell's reach when host tools
+ * are on, and the external MCP servers and ACP agents by name (never a header or env value).
+ */
 function writeToolLines(tools: ToolSettings, write: (line: string) => void): void {
   for (const line of tools.offLines) write(line)
   if (tools.hostTools) write(SHELL_READ_LINE)
+  if (tools.external.startLine !== undefined) write(tools.external.startLine)
 }
 
 /** Write the instance's start line, the first line of the start, and return the instance in effect. */

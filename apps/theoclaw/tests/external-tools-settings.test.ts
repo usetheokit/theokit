@@ -152,6 +152,19 @@ describe('the external tools file at start', () => {
     expect(result.output()).not.toContain('tools: external')
   })
 
+  it('prints one line naming the servers and agents, and no header value', async () => {
+    const header = 'Bearer start-line-secret-0123'
+    const path = toolsFile({
+      mcpServers: { docs: { url: 'https://x.example/mcp', headers: { Authorization: header } }, files: STDIO },
+      acpAgents: [AGENT],
+    })
+    const result = await start({ [VARIABLE]: path }, tempCwd(cleanups), { detect: notEnforced })
+    expect(result.error).toBeUndefined()
+    const lines = result.output().split('\n').filter((line) => line.startsWith('tools: external:'))
+    expect(lines).toEqual(['tools: external: 2 MCP servers (docs, files), 1 ACP agent (coder)'])
+    expect(result.output()).not.toContain(header)
+  })
+
   it('masks every header and env value', async () => {
     const header = 'Bearer header-secret-0123456789'
     const envValue = 'env-secret-abcdefghij'

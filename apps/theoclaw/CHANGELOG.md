@@ -65,6 +65,17 @@ and versioning follows [Semantic Versioning](https://semver.org/).
   the start naming `THEOCLAW_SANDBOX`. The parity ledger records OC-76 as shipped, checked by
   `tests/live/sandbox.live.test.ts` against a real model; `non-main` and per-session scope wait on
   B-683. The `theoclaw` CI job installs bubblewrap for the confinement tests.
+- MCP servers and ACP coding agents for the `/control` agent (B-388), named in one JSON file by
+  `THEOCLAW_EXTERNAL_TOOLS`. MCP servers reach the SDK's `mcpServers` option; each ACP agent is one
+  `createACPTool` from `theokit/server/agent`, run in `files/`, with every permission request
+  refused. The start validates the file before any runner starts and refuses an HTTP server's
+  `auth` (the SDK ignores it, B-680), `envPolicy: "all"`, a relative command, a server name the SDK
+  would rewrite, an ACP name that collides with another tool, and, with host tools on, a file under
+  `files/` or `/tmp`. Header and env values are masked and the start prints one line naming the
+  servers and agents; chat replies still get no tool. An ACP agent inherits TheoClaw's environment
+  and its stderr is not masked (B-681). The parity ledger records OC-67 and OC-68 as shipped,
+  checked by `tests/live/external-tools.live.test.ts`, with their missing parts filed as B-680,
+  B-681, B-682, B-684 and B-685.
 - The `/control` agent's tools (B-382): `read_file`, `list_dir`, `view_image`, `web_fetch` and
   `todolist` always, all from `@theokit/agents/tools` and bound to `files/` under the working
   directory; `web_search` with `BRAVE_API_KEY` (or `THEOKIT_SEARCH_API_URL` with

@@ -292,6 +292,50 @@ LD_LIBRARY_PATH=~/.cache/chromium-user-libs PLAYWRIGHT_BROWSERS_PATH=~/.cache/ms
   pnpm --filter theoclaw exec vitest run tests/live/browser.live.test.ts
 ```
 
+### MCP servers and ACP agents
+
+`THEOCLAW_EXTERNAL_TOOLS` names one JSON file of MCP servers and ACP coding agents for the
+`/control` agent; chat replies still get none of them. The start reads and validates the file
+before any runner starts, and refuses it naming the file and the key:
+
+```json
+{
+  "mcpServers": {
+    "docs": { "url": "https://docs.example/mcp", "headers": { "Authorization": "Bearer <token>" } },
+    "files": { "command": "/usr/local/bin/files-mcp", "args": ["--root", "/srv/files"] }
+  },
+  "acpAgents": [
+    { "name": "coder", "description": "A coding agent; send it a task.", "command": "/usr/local/bin/coder-acp", "timeoutMs": 600000 }
+  ]
+}
+```
+
+- An MCP server with `url` is HTTP (`type` `http` or `sse`), anything else stdio. The SDK names
+  its tools `mcp_<server>_<tool>`, so a server name must match `^[a-z](?:[a-z0-9-]{0,62}[a-z0-9])?$`.
+- An HTTP server's `auth` is refused: `@theokit/sdk` 5.11.0 would send the request without the
+  credentials and say nothing (B-680). Put the token in `headers`, and put only credential values
+  there and in `env`: every header and env value of 8 characters or more is masked in the output.
+- `envPolicy: "all"` is refused, so a stdio server never inherits the model key; the SDK's default
+  drops secret-like variables and `env` adds what the server needs.
+- A `command` with a `/` must be absolute; a bare name is looked up on `PATH`.
+- Each ACP agent is one tool named `name`, a `createACPTool` from `theokit/server/agent` run in
+  `files/`, one process per call. Its name may not be a TheoClaw tool's, a name the SDK reserves
+  (`shell`, `memory_search`, `memory_get`), or start with `mcp_`. Every permission it asks for is
+  refused, so it answers in text but changes nothing (asking the owner is B-684).
+- **An ACP agent inherits the environment of the TheoClaw process**, channel tokens included, and
+  its stderr is not masked: an `env` option and a piped stderr are B-681. Run only agents you would
+  trust with those values.
+- With `THEOCLAW_HOST_TOOLS=on` the file may not lie under `files/` or `/tmp`, where the shell could
+  rewrite which processes the next start spawns. A stdio server is a host process outside the tool
+  sandbox.
+
+The start prints one line naming them, e.g. `tools: external: 2 MCP servers (docs, files), 1 ACP
+agent (coder)`. The live check runs a stdio MCP fixture and a fixture ACP agent on a real model:
+
+```bash
+THEOCLAW_LIVE=1 pnpm --filter theoclaw exec vitest run tests/live/external-tools.live.test.ts
+```
+
 The live check runs a real turn against the built entry:
 
 ```bash
