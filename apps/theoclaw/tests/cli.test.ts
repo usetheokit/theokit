@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { type CliIo, runCli } from '../src/cli.js'
-import type { Runner } from '../src/daemon.js'
+import type { Runner } from '../src/run-command.js'
 import { loadConfiguration } from '../src/config-file.js'
 import { cleanScratch, harness, processGroup, scratchDir, stubEntry, waitForLog } from './support/cli-harness.js'
 

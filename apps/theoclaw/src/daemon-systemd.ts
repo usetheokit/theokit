@@ -1,7 +1,9 @@
-import { mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
-import type { DaemonBackend, DaemonIo, Runner, RunResult } from './daemon-common.js'
+import { TheoClawConfigError } from './control-plane/errors.js'
+import type { DaemonBackend, DaemonIo } from './daemon-common.js'
+import type { Runner, RunResult } from './run-command.js'
 
 /** The Linux backend (B-374, OC-32): a `systemd --user` unit that runs the built entry. */
 
@@ -10,12 +12,19 @@ export function unitPath(label: string, home: string): string {
   return join(home, '.config', 'systemd', 'user', `${label}.service`)
 }
 
+/** A line break would end the directive and start another, so no value may hold one. */
+function specifiers(value: string): string {
+  if (/[\r\n]/.test(value)) throw new TheoClawConfigError('a unit file value cannot hold a line break')
+  return value.replaceAll('%', '%%')
+}
+
 /**
- * systemd.syntax(7): a value with a space, a quote or a backslash is double-quoted; `%` and `$`
- * are doubled, since systemd expands specifiers and variables in ExecStart and Environment.
+ * systemd.syntax(7): a value with a space, a quote or a backslash is double-quoted, and `%` is
+ * doubled everywhere. `$` is doubled only in ExecStart=, the one directive here that expands
+ * variables; Environment= gives it no meaning (systemd.exec(5)).
  */
-function quoted(value: string): string {
-  const escaped = value.replaceAll('%', '%%').replaceAll('$', '$$$$')
+function quoted(value: string, variables: boolean): string {
+  const escaped = variables ? specifiers(value).replaceAll('$', '$$$$') : specifiers(value)
   return /[\s"\\]/.test(escaped) ? `"${escaped.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"` : escaped
 }
 
@@ -35,16 +44,28 @@ export function unitFor(input: UnitInput): string {
     '',
     '[Service]',
     'Type=simple',
-    `ExecStart=${quoted(input.nodePath)} ${quoted(input.entryPath)}`,
-    `Environment=${quoted(`THEOCLAW_CONFIG=${input.configPath}`)}`,
-    ...(input.profile === undefined ? [] : [`Environment=${quoted(`THEOCLAW_PROFILE=${input.profile}`)}`]),
-    `WorkingDirectory=${quoted(input.workingDirectory)}`,
+    `ExecStart=${quoted(input.nodePath, true)} ${quoted(input.entryPath, true)}`,
+    `Environment=${quoted(`THEOCLAW_CONFIG=${input.configPath}`, false)}`,
+    ...(input.profile === undefined ? [] : [`Environment=${quoted(`THEOCLAW_PROFILE=${input.profile}`, false)}`]),
+    // WorkingDirectory= takes the rest of the line as the path and removes no quotes.
+    `WorkingDirectory=${specifiers(input.workingDirectory)}`,
     'Restart=on-failure',
     '',
     '[Install]',
     'WantedBy=default.target',
     '',
   ].join('\n')
+}
+
+/** Write `text` to `path` through a temporary file and a rename, so the unit is never half written. */
+function replaceUnit(path: string, text: string): void {
+  const temporary = `${path}.${process.pid}.tmp`
+  try {
+    writeFileSync(temporary, text)
+    renameSync(temporary, path)
+  } finally {
+    rmSync(temporary, { force: true })
+  }
 }
 
 async function systemctl(runner: Runner, ...args: string[]): Promise<RunResult> {
@@ -64,16 +85,18 @@ export const systemdBackend: DaemonBackend = {
   async install(io, runner, target) {
     const { label, profile, configPath, workingDirectory } = target
     const unit = unitPath(label, io.homeDir)
+    const text = unitFor({ label, nodePath: io.nodePath, entryPath: io.entry, configPath, profile, workingDirectory })
     mkdirSync(dirname(unit), { recursive: true })
-    const temporary = `${unit}.${process.pid}.tmp`
-    writeFileSync(temporary, unitFor({ label, nodePath: io.nodePath, entryPath: io.entry, configPath, profile, workingDirectory }))
-    renameSync(temporary, unit)
+    const previous = existsSync(unit) ? readFileSync(unit, 'utf8') : undefined
+    replaceUnit(unit, text)
     // `enable --now` leaves a running unit as it is, so a reinstall restarts it onto the new unit file.
     for (const args of [['daemon-reload'], ['enable', '--now', `${label}.service`], ['restart', `${label}.service`]]) {
       const result = await systemctl(runner, ...args)
       if (result.code !== 0) {
         io.stderr.write(`theoclaw daemon: systemctl --user ${args.join(' ')} failed: ${result.stderr.trim()}\n`)
-        rmSync(unit, { force: true })
+        // A reinstall puts the working unit back; a first install leaves no unit behind.
+        if (previous === undefined) rmSync(unit, { force: true })
+        else replaceUnit(unit, previous)
         await systemctl(runner, 'daemon-reload')
         return 1
       }

@@ -5,7 +5,8 @@ import { PassThrough } from 'node:stream'
 
 import { afterEach } from 'vitest'
 
-import type { DaemonIo, Runner } from '../../src/daemon.js'
+import type { DaemonIo } from '../../src/daemon.js'
+import type { Runner } from '../../src/run-command.js'
 
 const scratch: string[] = []
 
@@ -33,7 +34,7 @@ export type Answer = { code?: number; stdout?: string; stderr?: string }
  * A scratch home with a built entry and an onboarded configuration file, and a runner that records
  * every command and answers from `answers` by the command's first two words.
  */
-export function harness(options: { env?: NodeJS.ProcessEnv; platform?: NodeJS.Platform; uid?: number; answers?: Record<string, Answer[]>; configure?: boolean } = {}): Harness {
+export function harness(options: { env?: NodeJS.ProcessEnv; platform?: NodeJS.Platform; uid?: number; answers?: Record<string, Answer[]>; configure?: boolean; workspace?: boolean } = {}): Harness {
   const home = mkdtempSync(join(tmpdir(), 'theoclaw-daemon-'))
   scratch.push(home)
   const entry = join(home, 'checkout', 'dist', 'main.js')
@@ -45,7 +46,7 @@ export function harness(options: { env?: NodeJS.ProcessEnv; platform?: NodeJS.Pl
   if (options.configure !== false) {
     const name = env.THEOCLAW_PROFILE === undefined ? 'theoclaw.env' : `theoclaw-${env.THEOCLAW_PROFILE}.env`
     mkdirSync(join(home, 'config', 'theoclaw'), { recursive: true })
-    writeFileSync(join(home, 'config', 'theoclaw', name), `THEOCLAW_WORKSPACE="${workspace}"\n`)
+    writeFileSync(join(home, 'config', 'theoclaw', name), options.workspace === false ? 'THEOCLAW_PORT="8787"\n' : `THEOCLAW_WORKSPACE="${workspace}"\n`)
   }
   const calls: Call[] = []
   const answers = options.answers ?? {}
@@ -66,3 +67,11 @@ export function harness(options: { env?: NodeJS.ProcessEnv; platform?: NodeJS.Pl
   return { io, home, calls, runner, stdout: () => out, stderr: () => err }
 }
 
+export function unitEnvironment(unit: string): Record<string, string> {
+  const pairs = [...unit.matchAll(/^Environment=(?:"([^"]*)"|(\S+))$/gm)].map((match) => (match[1] ?? match[2])!)
+  return Object.fromEntries(pairs.map((pair) => [pair.slice(0, pair.indexOf('=')), pair.slice(pair.indexOf('=') + 1)]))
+}
+
+export function systemctl(h: Harness): string[] {
+  return h.calls.filter((call) => call.command === 'systemctl').map((call) => call.args.join(' '))
+}

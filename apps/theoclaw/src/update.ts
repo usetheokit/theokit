@@ -2,8 +2,9 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
 import { TheoClawConfigError } from './control-plane/errors.js'
-import { type DaemonIo, type Runner, unitPath } from './daemon.js'
+import { type DaemonIo, unitPath } from './daemon.js'
 import { plistPath } from './daemon-launchd.js'
+import type { Runner } from './run-command.js'
 import { resolveInstance } from './instance.js'
 
 /**

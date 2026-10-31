@@ -1,7 +1,8 @@
-import { type DaemonBackend, type DaemonIo, type Runner, checkInstallable, resolveTarget } from './daemon-common.js'
+import { type DaemonBackend, type DaemonIo, checkInstallable, resolveTarget } from './daemon-common.js'
 import { launchdBackend } from './daemon-launchd.js'
 import { schtasksBackend } from './daemon-schtasks.js'
 import { systemdBackend } from './daemon-systemd.js'
+import type { Runner } from './run-command.js'
 
 /**
  * `theoclaw daemon install|uninstall|status` (B-374, B-692, OC-32): the instance as a login service.
@@ -9,7 +10,7 @@ import { systemdBackend } from './daemon-systemd.js'
  * `Runner`, so the tests drive the manager's answers and the live check drives the real one.
  */
 
-export { type DaemonIo, type Runner, type RunResult, runCommand } from './daemon-common.js'
+export { type DaemonIo } from './daemon-common.js'
 export { unitFor, unitPath } from './daemon-systemd.js'
 
 const BACKENDS: Readonly<Partial<Record<NodeJS.Platform, DaemonBackend>>> = {

@@ -4,16 +4,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import { daemonInstall, daemonStatus, daemonUninstall, unitFor, unitPath } from '../src/daemon.js'
-import { type Harness, harness } from './support/daemon-harness.js'
-
-function unitEnvironment(unit: string): Record<string, string> {
-  const pairs = [...unit.matchAll(/^Environment=(?:"([^"]*)"|(\S+))$/gm)].map((match) => (match[1] ?? match[2])!)
-  return Object.fromEntries(pairs.map((pair) => [pair.slice(0, pair.indexOf('=')), pair.slice(pair.indexOf('=') + 1)]))
-}
-
-function systemctl(h: Harness): string[] {
-  return h.calls.filter((call) => call.command === 'systemctl').map((call) => call.args.join(' '))
-}
+import { harness, systemctl, unitEnvironment } from './support/daemon-harness.js'
 
 describe('theoclaw daemon', () => {
   it('the unit runs the built entry with the configuration file', async () => {
@@ -115,7 +106,7 @@ describe('theoclaw daemon', () => {
     expect(unit).toContain('Environment="THEOCLAW_CONFIG=/c/a b.env"')
     expect(unit).toContain('Environment=THEOCLAW_PROFILE=a')
     expect(unit).toContain('Description=TheoClaw (theoclaw-a)')
-    // systemd expands $VAR and %specifiers in both lines, so a literal one is doubled.
+    // ExecStart= expands $VAR and %specifiers, so a literal one is doubled there.
     const dollar = unitFor({ label: 'theoclaw', nodePath: '/n/$HOME/node', entryPath: '/e/100%/main.js', configPath: '/c.env', workingDirectory: '/w' })
     expect(dollar).toContain('ExecStart=/n/$$HOME/node /e/100%%/main.js')
   })
