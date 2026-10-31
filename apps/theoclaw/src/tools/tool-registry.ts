@@ -71,7 +71,8 @@ export function readOnlyTools(settings: ToolSettings): CustomTool[] {
  * - always the five read-only tools, and web search when a search key is set;
  * - `git_diff` only when the tool root is a repository AND the sandbox is enforced, since git runs
  *   repository-configured helpers (`diff.external`) that only the kernel sandbox keeps in the root;
- * - write, edit, apply_patch and the sandboxed shell only with `THEOCLAW_HOST_TOOLS=on`.
+ * - the sandboxed shell only with `THEOCLAW_HOST_TOOLS=on`, and write, edit and apply_patch with it
+ *   unless `THEOCLAW_SANDBOX=read-only`.
  *
  * The interactive shell and its stdin tool are never registered: they take a PTY, not this backend.
  */
@@ -90,12 +91,12 @@ export function buildTools(settings: ToolSettings): CustomTool[] {
   if (search !== undefined) tools.push(search)
   if (settings.gitRepository && settings.sandboxEnforced) tools.push(scope.bind(createGitDiffTool)())
   if (settings.hostTools) {
-    tools.push(
-      scope.bind(createWriteFileTool)(),
-      scope.bind(createEditFileTool)(),
-      scope.bind(createApplyPatchTool)(),
-      scope.bind(createShellTool)(),
-    )
+    // The file writers take a project root and no sandbox, so `read-only` can only leave them out
+    // (plan D3); the shell stays, confined by the read-only backend.
+    if (settings.sandboxMode !== 'read-only') {
+      tools.push(scope.bind(createWriteFileTool)(), scope.bind(createEditFileTool)(), scope.bind(createApplyPatchTool)())
+    }
+    tools.push(scope.bind(createShellTool)())
   }
   return tools
 }
