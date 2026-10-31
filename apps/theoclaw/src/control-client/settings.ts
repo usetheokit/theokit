@@ -1,6 +1,6 @@
+import { MIN_BEARER_TOKEN_LENGTH } from '../control-plane/bearer.js'
 import { parsePort } from '../control-plane/bind.js'
 import { TheoClawConfigError } from '../control-plane/errors.js'
-import { MIN_CONTROL_TOKEN_LENGTH } from '../control-plane/settings.js'
 
 /** Where a surface reaches the running instance, and as whom. */
 export interface ControlClientSettings {
@@ -16,8 +16,8 @@ const SESSION_ID = /^[A-Za-z0-9_-]{1,64}$/
 function readToken(env: Readonly<Record<string, string | undefined>>): string {
   const token = env.THEOCLAW_CONTROL_TOKEN ?? ''
   // The message never carries the value: a short token is still most of a secret.
-  if (token.length < MIN_CONTROL_TOKEN_LENGTH) {
-    throw new TheoClawConfigError(`THEOCLAW_CONTROL_TOKEN must be at least ${MIN_CONTROL_TOKEN_LENGTH} characters`, {
+  if (token.length < MIN_BEARER_TOKEN_LENGTH) {
+    throw new TheoClawConfigError(`THEOCLAW_CONTROL_TOKEN must be at least ${MIN_BEARER_TOKEN_LENGTH} characters`, {
       variable: 'THEOCLAW_CONTROL_TOKEN',
     })
   }

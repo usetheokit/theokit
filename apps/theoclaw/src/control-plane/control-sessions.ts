@@ -142,7 +142,7 @@ export function createControlSessions(options: ControlSessionsOptions): ControlS
   }
 
   function cancelRun(run: TurnRun): void {
-    run.cancel?.().catch((error: unknown) => {
+    run.cancel().catch((error: unknown) => {
       options.report(`theoclaw: control session cancel failed: ${describeError(error)}`)
     })
   }

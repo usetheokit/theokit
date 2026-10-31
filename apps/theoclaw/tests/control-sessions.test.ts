@@ -463,6 +463,7 @@ describe("the control session store (T2.2)", () => {
             yield { type: "assistant", message: { role: "assistant", content: [{ type: "text", text: "plain" }] } };
           },
           wait: async () => ({ status: "finished" }),
+          cancel: async () => undefined,
         }),
       }),
       report: () => undefined,
