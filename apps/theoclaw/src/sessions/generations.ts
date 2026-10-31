@@ -78,8 +78,8 @@ export class Generations {
       const generation = this.current(key) + 1
       if (this.file !== undefined) {
         const counts = { ...Object.fromEntries(this.#counts), [key]: generation }
-        const data: SessionsFile = { version: 1, generations: counts }
-        await atomicWriteJson(this.file, data, { mode: 0o600 })
+        const contents: SessionsFile = { version: 1, generations: counts }
+        await atomicWriteJson(this.file, contents, { mode: 0o600 })
       }
       this.#counts.set(key, generation)
       return generation
