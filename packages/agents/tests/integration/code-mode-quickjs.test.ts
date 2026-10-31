@@ -49,7 +49,7 @@ describe('code mode over QuickJS and a real read_file', () => {
     const result = await tool.handler({ code: script })
 
     expect(result).toBe('{"sum":42}')
-    expect(String(result)).not.toContain('sentinel')
+    expect(result).not.toContain('sentinel')
   })
 
   it('surfaces a denied tool call to the script as an error it can catch', async () => {
