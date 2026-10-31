@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [create-theokit 3.0.21, theokit 0.76.1] - 2026-10-31
+
 ### Fixed
 
 - `theokit`: a `pg.Pool` passed to `PostgresJobBackend` or `createPostgresCronLock` no longer exits the process when Postgres drops an idle connection. When the pool has no `error` listener, both attach one that logs a structured warning (`component: "theokit:jobs"` or `"theokit:cron"`, the table, the Postgres error code), and the next query reconnects. A listener attached before is left as the only one (#1037)
