@@ -1,10 +1,7 @@
 import type { CustomTool } from '@theokit/sdk'
 import { describe, expect, it, vi } from 'vitest'
 
-import {
-  createToolInvokeRoute,
-  type ToolInvokeRouteOptions,
-} from '../../src/bridge/tool-invoke-route.js'
+import { createToolInvokeRoute, type ToolInvokeRouteOptions } from '../../src/bridge/index.js'
 
 const URL_ = 'http://127.0.0.1:8080/tools/invoke'
 const ONE_MIB = 1_048_576
