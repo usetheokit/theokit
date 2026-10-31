@@ -47,26 +47,42 @@ function sessionOf(frame: { session?: unknown }): string | undefined {
   return typeof frame.session === 'string' ? frame.session : undefined
 }
 
+type RawFrame = { type?: unknown; message?: unknown; session?: unknown }
+
+/** A text message's JSON object, or undefined for binary, not-JSON, or a JSON value that is not an object. */
+function readObject(raw: { toString(): string }, isBinary: boolean): RawFrame | undefined {
+  if (isBinary) return undefined
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(String(raw))
+  } catch {
+    // Not JSON is a malformed frame, answered `bad_frame` by the caller: the parse error has no
+    // more to say than that.
+    return undefined
+  }
+  return typeof parsed === 'object' && parsed !== null ? (parsed as RawFrame) : undefined
+}
+
+/** A chat frame's message, or undefined when the frame is not a chat frame with a non-empty one. */
+function chatMessage(frame: RawFrame): string | undefined {
+  if (frame.type !== 'chat' || typeof frame.message !== 'string') return undefined
+  return frame.message === '' ? undefined : frame.message
+}
+
 /**
  * The frame a text message carries, or undefined for anything else. The frame is typed by what is
  * read of it rather than as `RawData`, a name the `ws` package itself does not export (only
  * `@types/ws` declares it).
  */
 function parseFrame(raw: { toString(): string }, isBinary: boolean): Frame | undefined {
-  if (isBinary) return undefined
-  let frame: { type?: unknown; message?: unknown; session?: unknown } | null
-  try {
-    frame = JSON.parse(String(raw)) as typeof frame
-  } catch {
-    // Not JSON is a malformed frame, answered `bad_frame` by the caller: the parse error has no
-    // more to say than that.
-    return undefined
-  }
-  const session = frame === null ? undefined : sessionOf(frame)
-  if (frame?.type === 'interrupt') return session === undefined ? undefined : { kind: 'interrupt', session }
-  const message = frame?.type === 'chat' ? frame.message : undefined
-  if (typeof message !== 'string' || message === '') return undefined
-  if (frame?.session !== undefined && frame.session !== null && session === undefined) return undefined
+  const frame = readObject(raw, isBinary)
+  if (frame === undefined) return undefined
+  const session = sessionOf(frame)
+  if (frame.type === 'interrupt') return session === undefined ? undefined : { kind: 'interrupt', session }
+  const message = chatMessage(frame)
+  if (message === undefined) return undefined
+  // A session that is present but not a string is refused; an absent or null one runs sessionless.
+  if (frame.session !== undefined && frame.session !== null && session === undefined) return undefined
   return session === undefined ? { kind: 'chat', message } : { kind: 'chat', message, session }
 }
 
