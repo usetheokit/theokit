@@ -90,10 +90,7 @@ export interface AgentCompositionOptions<TAgent> {
 }
 
 export interface AgentComposition<TAgent> {
-  /**
-   * Run `work` inside one request. The agent it receives is that request's, and no other request
-   * can observe it.
-   */
+  /** Run `work` inside one request. The agent it receives is that request's, and no other request can observe it. */
   withAgent<R>(work: (agent: TAgent) => R | Promise<R>): Promise<R>
 }
 
@@ -325,10 +322,7 @@ function lineWriter(stream: MaskableStream | undefined): (line: string) => void 
   return (line) => void stream?.write(`${line}\n`)
 }
 
-/**
- * Every value the output mask hides: the channel credentials, both model keys, both bearer tokens
- * and the web search keys.
- */
+/** Every value the output mask hides: the channel credentials, both model keys, both bearer tokens and the web search keys. */
 function processSecrets(env: StartOptions['env'], settings: ControlPlaneSettings, tools: ToolSettings): string[] {
   const keys = [env.THEOKIT_API_KEY, env.OPENROUTER_API_KEY]
     .map((value) => (value ?? '').trim())
