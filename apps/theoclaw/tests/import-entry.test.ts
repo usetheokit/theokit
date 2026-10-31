@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url'
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
+import { readImport } from '../src/migration/import-store.js'
 import { copyFixture, FIXTURE_SECRETS } from './migration-fixtures.js'
 
 /** The built import entry; `pnpm --filter theoclaw run build` writes it. */
@@ -262,6 +263,52 @@ describe('the start with an import', () => {
     expect(notes[0]).toContain('THEOCLAW_MIGRATION_START_UNSET')
     expect(notes[0]).toContain('"db"')
     expect(output).not.toContain('fixture-secret-start-sentinel')
+  })
+})
+
+/** T5.1: the live test's MCP fixture server answers the handshake, before any paid turn depends on it. */
+describe('the token MCP fixture server', () => {
+  const SERVER = fileURLToPath(new URL('./live/fixtures/token-mcp-server.mjs', import.meta.url))
+  let dir = ''
+
+  beforeEach(() => {
+    dir = realpathSync(mkdtempSync(join(tmpdir(), 'theoclaw-migration-')))
+  })
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('answers initialize, tools/list and tools/call with its token when run from an imported config', () => {
+    const source = join(dir, 'hermes')
+    const home = join(dir, 'user-home')
+    mkdirSync(source)
+    mkdirSync(home)
+    writeFileSync(join(source, 'config.yaml'), `mcp_servers:\n  token:\n    command: ${JSON.stringify(process.execPath)}\n    args: [${JSON.stringify(SERVER)}, tok-offline]\n`)
+    const stateDir = join(dir, 'state')
+    const imported = spawnSync(process.execPath, [IMPORT_ENTRY, '--from', 'hermes', '--source', source], {
+      cwd: dir,
+      env: { PATH: process.env.PATH ?? '', HOME: home, THEOCLAW_STATE_DIR: stateDir },
+      encoding: 'utf8',
+      timeout: 60_000,
+    })
+    expect(imported.status, imported.stderr).toBe(0)
+    const server = readImport(stateDir)?.mcpServers.token as { command: string; args: string[] }
+    const requests = [
+      { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'test', version: '0' } } },
+      { jsonrpc: '2.0', method: 'notifications/initialized' },
+      { jsonrpc: '2.0', id: 2, method: 'tools/list' },
+      { jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'reveal_token', arguments: {} } },
+    ]
+
+    const run = spawnSync(server.command, server.args, { input: requests.map((request) => JSON.stringify(request)).join('\n') + '\n', encoding: 'utf8', timeout: 30_000 })
+
+    expect(run.status, run.stderr).toBe(0)
+    const answers = run.stdout.trim().split('\n').map((line) => JSON.parse(line) as { id: number; result: Record<string, unknown> })
+    expect(answers.map((answer) => answer.id)).toEqual([1, 2, 3])
+    expect(answers[0]!.result.protocolVersion).toBe('2025-06-18')
+    expect(answers[1]!.result.tools).toEqual([expect.objectContaining({ name: 'reveal_token' })])
+    expect(answers[2]!.result.content).toEqual([{ type: 'text', text: 'tok-offline' }])
   })
 })
 
