@@ -56,6 +56,7 @@ import {
   withRoute,
 } from './webhooks/platform-routes.js'
 import { createWebhookRouter, type WebhookRoute } from './webhooks/router.js'
+import { theoClawApiFor } from './http-api/api-routes.js'
 import type { TeamsVerifier } from './webhooks/teams.js'
 import { controlAgentToolOptions } from './tools/tool-registry.js'
 import { triggerRoutes } from './triggers/trigger-route.js'
@@ -424,9 +425,10 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
   const { withAgent } = createContainer<TurnAgent>({ factory: buildControlAgent })
   composedApp = composed
   const devices = devicePairingFor(policy.stateDir, settings.controlToken, stderr)
+  const api = theoClawApiFor(settings.controlToken, { model: settings.model, withAgent, toolSettings: tools, extraTools, stderr })
   const listen = options.listen ?? listenControlPlane
   serving = listen({
-    handler: serveHandler(composed.router, startWebchat(options, settings.webchatToken, secretValues), devices),
+    handler: serveHandler(composed.router, startWebchat(options, settings.webchatToken, secretValues), devices, api),
     port: settings.port,
     host: settings.host,
     stderr,
