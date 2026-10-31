@@ -439,10 +439,13 @@ describe('the chat path names no per-message factory', () => {
   it('names channelAgentFactory nowhere and calls Agent.create only in the /control factory', () => {
     const files = sources(SRC).map((path) => ({ path: relative(SRC, path), text: readFileSync(path, 'utf8') }))
     expect(files.filter(({ text }) => /channelAgentFactory/.test(text)).map(({ path }) => path)).toEqual([])
-    expect(files.filter(({ text }) => /Agent\.create\(/.test(text)).map(({ path }) => path)).toEqual([join('agent', 'create-agent.ts')])
+    // `main.ts` builds the `create` it hands `createAgentFactory`, the `/control` factory, alone.
+    expect(files.filter(({ text }) => /Agent\.create\(/.test(text)).map(({ path }) => path).sort()).toEqual(
+      [join('agent', 'create-agent.ts'), 'main.ts'].sort(),
+    )
     expect(files.filter(({ text }) => /createTheoClawAgent\b/.test(text)).map(({ path }) => path).sort()).toEqual(
       [join('agent', 'create-agent.ts'), join('control-plane', 'agent-factory.ts')].sort(),
     )
-    expect(readFileSync(join(SRC, 'main.ts'), 'utf8')).toContain('agentFactory: createAgentFactory(process.env)')
+    expect(readFileSync(join(SRC, 'main.ts'), 'utf8')).toContain('agentFactory: createAgentFactory(process.env, create)')
   })
 })
