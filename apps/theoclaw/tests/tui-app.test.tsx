@@ -164,9 +164,9 @@ describe("theoclaw-tui (T4.2)", () => {
     await tui.type("hi", ENTER);
     await tui.until((f) => f.includes("Hel"), "the first delta");
     // Drawn while the instance still holds the rest of the turn: the cancel hint is still up.
-    expect(tui.screen()).toContain("esc");
+    expect(tui.screen()).toContain("esc to interrupt");
     hold.resolve();
-    await waitFor(() => !tui.screen().includes("esc"), 3000, "the turn to end");
+    await waitFor(() => !tui.screen().includes("esc to interrupt"), 3000, "the turn to end");
   });
 });
 
