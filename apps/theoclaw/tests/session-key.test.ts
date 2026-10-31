@@ -76,12 +76,37 @@ describe('sessionKeyFor', () => {
 
   it('adds the account label under per-account-channel-peer', () => {
     const settings: SessionKeySettings = { dmScope: 'per-account-channel-peer', peerLinks: new Map(), accountLabel: 'work' }
-    expect(sessionKeyFor(event({ sender: 'u1' }), settings)).toBe('telegram-work-dm-u1')
+    expect(sessionKeyFor(event({ sender: 'u1' }), settings)).toBe('telegram-dm-work-u1')
   })
 
-  it('replaces dashes in every id segment', () => {
-    expect(sessionKeyFor(event({ sender: 'a-b' }), DEFAULT)).toBe('telegram-dm-a_b')
-    expect(sessionKeyFor(event({ type: 'thread', channel: 'g-1', topicId: 't-2' }), DEFAULT)).toBe('telegram-tpc-g_1-t_2')
+  it('escapes dashes and underscores in every id segment', () => {
+    expect(sessionKeyFor(event({ sender: 'a-b' }), DEFAULT)).toBe('telegram-dm-a_db')
+    expect(sessionKeyFor(event({ sender: 'a_b' }), DEFAULT)).toBe('telegram-dm-a__b')
+    expect(sessionKeyFor(event({ type: 'thread', channel: 'g-1', topicId: 't_2' }), DEFAULT)).toBe('telegram-tpc-g_d1-t__2')
+  })
+
+  // CWE-706: a key selects a long-lived agent and its stored history, so two ids must never share one.
+  it('keys ids differing only in a dash or an underscore apart, in every segment', () => {
+    const pairs: readonly (readonly [EventShape, EventShape])[] = [
+      [{ sender: 'a-b' }, { sender: 'a_b' }],
+      [{ sender: '-_' }, { sender: '_-' }],
+      [{ sender: 'a_d' }, { sender: 'a-' }],
+      [{ type: 'group', channel: 'g-1' }, { type: 'group', channel: 'g_1' }],
+      [{ type: 'thread', channel: 'g', topicId: 't-1' }, { type: 'thread', channel: 'g', topicId: 't_1' }],
+      [{ type: 'thread', channel: 'g-t', topicId: '1' }, { type: 'thread', channel: 'g', topicId: 't-1' }],
+    ]
+    for (const [left, right] of pairs) {
+      expect(sessionKeyFor(event(left), DEFAULT)).not.toBe(sessionKeyFor(event(right), DEFAULT))
+    }
+    const labelled = (accountLabel: string): SessionKeySettings => ({ dmScope: 'per-account-channel-peer', peerLinks: new Map(), accountLabel })
+    expect(sessionKeyFor(event(), labelled('a-b'))).not.toBe(sessionKeyFor(event(), labelled('a_b')))
+  })
+
+  it('never keys an account-labelled dm like a thread', () => {
+    const settings: SessionKeySettings = { dmScope: 'per-account-channel-peer', peerLinks: new Map(), accountLabel: 'tpc' }
+    const dm = sessionKeyFor(event({ sender: 'u1' }), settings)
+    const thread = sessionKeyFor(event({ type: 'thread', channel: 'dm', topicId: 'u1' }), settings)
+    expect(dm).not.toBe(thread)
   })
 
   it('gives the same key on 1000 calls and reads no process env', () => {
