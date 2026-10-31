@@ -88,6 +88,39 @@ describe('createBonjourPublisher on a name another host already answers for', ()
     expect((errors[0]?.cause as Error).message).toContain(name)
   }, TEST_TIMEOUT_MS)
 
+  it('contains an onError that throws on the conflict, as a process warning', async () => {
+    const name = `throwing-${randomUUID()}`
+    await holdName(name)
+    const conflictLogged = captureLibraryLog()
+    const warnings: string[] = []
+    vi.spyOn(process, 'emitWarning').mockImplementation((warning: string | Error) => {
+      warnings.push(String(warning))
+    })
+    const uncaught: unknown[] = []
+    const onUncaught = (error: unknown): void => {
+      uncaught.push(error)
+    }
+    process.on('uncaughtException', onUncaught)
+    try {
+      publisher = createBonjourPublisher({
+        onError: () => {
+          throw new Error('the log stream is closed')
+        },
+      })
+      publisher.publish({ name, type: 'theoclaw', port: 40006, txt: { path: '/control' } })
+
+      // Positive control: the library still withdrew the service although the report threw.
+      await waitFor(conflictLogged, 'the library withdrawal')
+    } finally {
+      process.off('uncaughtException', onUncaught)
+    }
+
+    expect(uncaught).toEqual([])
+    expect(warnings).toHaveLength(1)
+    expect(warnings[0]).toContain('the log stream is closed')
+    expect(warnings[0]).toContain('NAME_IN_USE')
+  }, TEST_TIMEOUT_MS)
+
   it('the announcer logs one stop line on a conflict', async () => {
     const short = randomUUID().slice(0, 8)
     const port = 40003

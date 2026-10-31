@@ -65,19 +65,32 @@ function nameInUse(name: string): Error & { readonly code: 'NAME_IN_USE' } {
 /**
  * The library answers a probe that finds the name taken only by calling the service's own `stop` and
  * writing `console.log`; TheoClaw's withdrawals go through `unpublishAll`, never `stop`. So a `stop`
- * outside a withdrawal is the conflict, reported before the library tears the service down, which it
- * does even if the report throws (plan D1). The probe answers asynchronously, so the wrap is in place
- * before any answer can arrive. `withdrawing` is never cleared: a probe answer can still arrive after
- * `unpublishAll` resolved, and that late `stop` is TheoClaw's withdrawal, not a conflict.
+ * outside a withdrawal is the conflict, reported before the library tears the service down (plan D1).
+ * The probe answers asynchronously, so the wrap is in place before any answer can arrive. `withdrawing`
+ * is never cleared: a probe answer can still arrive after `unpublishAll` resolved, and that late `stop`
+ * is TheoClaw's withdrawal, not a conflict. `onConflict` never throws: it goes through `deliver`.
  */
 function observeConflict(published: Service, withdrawing: () => boolean, onConflict: () => void): void {
   const stop = published.stop?.bind(published)
   published.stop = (callback?: CallableFunction) => {
-    try {
-      if (!withdrawing()) onConflict()
-    } finally {
-      stop?.(callback)
-    }
+    if (!withdrawing()) onConflict()
+    stop?.(callback)
+  }
+}
+
+/**
+ * Every report runs on the library's socket callbacks, where a throw is an uncaught exception that
+ * exits the process (FR-006). So a throw from `onError` stays here, and is written as a process
+ * warning naming both the report and what `onError` threw.
+ */
+function deliver(onError: (error: TheoClawDiscoveryError) => void, error: TheoClawDiscoveryError): void {
+  try {
+    onError(error)
+  } catch (thrown) {
+    const reason = thrown instanceof Error ? thrown.message : String(thrown)
+    process.emitWarning(`onError threw while reporting ${error.code} on route ${error.route}: ${reason}`, {
+      type: 'TheoClawDiscoveryWarning',
+    })
   }
 }
 
@@ -89,7 +102,7 @@ function observeConflict(published: Service, withdrawing: () => boolean, onConfl
 export function createBonjourPublisher(options: BonjourPublisherOptions): ServicePublisher {
   const { onError, interface: iface, ip } = options
   const report = (error: unknown, route: DiscoveryErrorRoute): void => {
-    onError(new TheoClawDiscoveryError(error, route))
+    deliver(onError, new TheoClawDiscoveryError(error, route))
   }
   const config = { ...(iface === undefined ? {} : { interface: iface }), ...(ip === undefined ? {} : { ip }) }
   const bonjour = new Bonjour(config as Partial<ServiceConfig>, (error: unknown) => report(error, 'answer'))
