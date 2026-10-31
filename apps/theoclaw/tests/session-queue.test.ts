@@ -227,7 +227,7 @@ describe('the chat path through startTheoClaw', () => {
 
     expect(telegram.sent[0]!.text).toBe('Something went wrong on my side and I could not finish that.')
     expect(telegram.sent[1]!.text).toBe('answer')
-    expect(ids).toEqual(['theoclaw-telegram-dm-provider_failure-g0'])
+    expect(ids).toEqual(['theoclaw-telegram-dm-provider_dfailure-g0'])
   })
 
   it('startTheoClaw creates the transcript directory with mode 0700', async () => {

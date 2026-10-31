@@ -67,7 +67,7 @@ answers `Started a new conversation.` and runs no model turn; the earlier transc
 
 | Variable | Meaning |
 |---|---|
-| `THEOCLAW_DM_SCOPE` | How direct messages are grouped: `main` (one conversation for every direct message), `per-peer` (one per person, across platforms, through `THEOCLAW_PEER_LINKS`), `per-channel-peer` (the default: one per platform and sender) or `per-account-channel-peer` (the same, prefixed by `THEOCLAW_ACCOUNT_LABEL`). |
+| `THEOCLAW_DM_SCOPE` | How direct messages are grouped: `main` (one conversation for every direct message), `per-peer` (one per person, across platforms, through `THEOCLAW_PEER_LINKS`), `per-channel-peer` (the default: one per platform and sender) or `per-account-channel-peer` (the same, keyed with `THEOCLAW_ACCOUNT_LABEL` as well). |
 | `THEOCLAW_PEER_LINKS` | `<platform>:<senderId>=<name>` pairs separated by commas; senders linked to one name share a session under `per-peer`. A name holds letters, digits and underscores. |
 | `THEOCLAW_ACCOUNT_LABEL` | Required by `per-account-channel-peer`. |
 | `THEOCLAW_SESSION_IDLE_MINUTES` | Minutes a chat's agent stays open with no turn, 1 to 1440, default 30. Its conversation is kept: the next message resumes it from disk. |

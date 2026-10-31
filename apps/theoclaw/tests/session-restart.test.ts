@@ -325,7 +325,7 @@ describe('a restart', () => {
     const second = await start(await reloaded(), workspace, ids)
     await say(second.telegram, 'what was the word', 'restart-reset')
 
-    expect(ids).toEqual(['theoclaw-telegram-dm-restart_reset-g1'])
+    expect(ids).toEqual(['theoclaw-telegram-dm-restart_dreset-g1'])
     expect(stub.userTexts(stub.requests.at(-1)!)).toEqual(['what was the word'])
   })
 })

@@ -14,9 +14,14 @@ export interface SessionKeySettings {
   readonly accountLabel?: string
 }
 
-/** `-` separates key segments, so an id keeps none of its own, as the gateway's `defaultStrategy` does. */
+/**
+ * `-` separates key segments, so an id keeps none of its own: `_` is written `__` and `-` is written
+ * `_d`. Both are escaped, so no two ids give one segment. A key selects a long-lived agent and its
+ * stored history, so `a-b` and `a_b` sharing one would hand one sender the other's conversation
+ * (CWE-706); the gateway's `defaultStrategy`, which maps `-` to `_` alone, keeps no history.
+ */
 function segment(id: string): string {
-  return id.replace(/-/g, '_')
+  return id.replace(/[_-]/g, (character) => (character === '_' ? '__' : '_d'))
 }
 
 function dmKey(event: MessageEvent, settings: SessionKeySettings): string {
@@ -31,7 +36,8 @@ function dmKey(event: MessageEvent, settings: SessionKeySettings): string {
     case 'per-channel-peer':
       return `${event.platform}-dm-${sender}`
     case 'per-account-channel-peer':
-      return `${event.platform}-${segment(settings.accountLabel ?? '')}-dm-${sender}`
+      // `dm` stays the second segment, so no label makes a direct message's key a thread's or a group's.
+      return `${event.platform}-dm-${segment(settings.accountLabel ?? '')}-${sender}`
   }
 }
 
