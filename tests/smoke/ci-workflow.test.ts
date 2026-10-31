@@ -191,6 +191,21 @@ describe('CI Workflow', () => {
     expect(workflow.jobs.theoclaw['timeout-minutes']).toBeLessThanOrEqual(3)
   })
 
+  // gateway-webchat review F-tests-2 / F-dom-3: the built-bundle test (AC-005) runs only under
+  // THEOCLAW_BUNDLE=1 after build:web, and no job did either, so a bundle that builds but throws at
+  // load, or grows past its budget, shipped green.
+  it('the theoclaw job builds the WebChat page, then runs the built-bundle test with THEOCLAW_BUNDLE=1', () => {
+    const workflow = loadWorkflow('ci.yml')
+    const steps: { run?: string; env?: Record<string, string> }[] = workflow.jobs.theoclaw.steps
+    const build = steps.findIndex(
+      (step) => step.run?.trim() === 'pnpm --filter theoclaw run build:web',
+    )
+    const bundle = steps.findIndex((step) => step.run?.includes('tests/webchat-bundle.test.ts'))
+    expect(build, 'a build:web step').toBeGreaterThanOrEqual(0)
+    expect(bundle, 'a step running tests/webchat-bundle.test.ts').toBeGreaterThan(build)
+    expect(steps[bundle]?.env?.THEOCLAW_BUNDLE).toBe('1')
+  })
+
   it('every job reaches the one check branch protection requires', () => {
     const workflow = loadWorkflow('ci.yml')
     const needs: string[] = workflow.jobs['ci-ok'].needs

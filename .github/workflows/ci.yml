@@ -610,6 +610,15 @@ jobs:
         run: pnpm --filter theoclaw run typecheck
       - name: boundaries
         run: pnpm --filter theoclaw run boundaries
+      # AC-005 (B-368): the WebChat page bundle builds within its byte budget (build-web.mjs fails
+      # past it) and loads in a DOM. The bundle test runs only with THEOCLAW_BUNDLE=1, after
+      # build:web, so until this step no job ran it (gateway-webchat review F-tests-2).
+      - name: WebChat page bundle
+        run: pnpm --filter theoclaw run build:web
+      - name: WebChat bundle loads
+        env:
+          THEOCLAW_BUNDLE: '1'
+        run: pnpm --filter theoclaw exec vitest run tests/webchat-bundle.test.ts
       # ESLint over `tools/`. The root config ignores `apps/**`, so the parity checker and its test
       # were read by no analyzer until this step (code review #67).
       - name: lint
