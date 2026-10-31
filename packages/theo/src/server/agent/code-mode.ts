@@ -12,5 +12,6 @@ export {
   type CodeModeApi,
   type CodeModeConfig,
   type CodeModePermission,
+  type CodeModeTool,
   type Sandbox,
 } from '@theokit/agents/code-mode'

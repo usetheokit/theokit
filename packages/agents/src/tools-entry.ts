@@ -136,6 +136,13 @@ export {
   type DelegateRosterEntry,
 } from './tools/delegate-tool.js'
 
+// B-386 — the fan-out counterpart: several delegations in one call, answered together. Same side
+// of the seam as `createDelegateTool`, for the same reason.
+export {
+  createDelegateAllTool,
+  type CreateDelegateAllToolOptions,
+} from './tools/delegate-all-tool.js'
+
 // B-079 + B-080 — the tools through which the agent declares the work it is JUDGED on. They live
 // here for the same reason `createDelegateTool` does: an agent-facing tool belongs on the
 // agent-facing surface, and a consumer should not have to know which package implements what.

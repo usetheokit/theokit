@@ -71,13 +71,14 @@ export interface CreateDelegateToolOptions {
   readonly description?: string
 }
 
-function assertUsableRoster(
+export function assertUsableRoster(
   roster: readonly DelegateRosterEntry[],
   defaults: DelegateOptions | undefined,
+  factory = 'createDelegateTool',
 ): void {
   if (roster.length === 0) {
     throw new DelegateToolConfigError(
-      'createDelegateTool: the roster is empty — a delegate tool with no reachable target is a defect, not a configuration.',
+      `${factory}: the roster is empty — a delegate tool with no reachable target is a defect, not a configuration.`,
       'empty_roster',
     )
   }
@@ -88,7 +89,7 @@ function assertUsableRoster(
       // Two entries sharing a name collapse into one enum member and lookup then resolves to
       // whichever is found first — silent dispatch to the wrong sub-agent, which reads as success.
       throw new DelegateToolConfigError(
-        `createDelegateTool: duplicate roster name ${JSON.stringify(name)} — each target must be uniquely addressable.`,
+        `${factory}: duplicate roster name ${JSON.stringify(name)} — each target must be uniquely addressable.`,
         'duplicate_name',
       )
     }
@@ -102,7 +103,7 @@ function assertUsableRoster(
   // into the keyless case would turn a typo into an unauthenticated run.
   if (needsCredential && defaults?.apiKey !== null && !defaults?.apiKey) {
     throw new DelegateToolConfigError(
-      'createDelegateTool: a SubAgentSpec target requires defaults.apiKey — delegate() refuses an ' +
+      `${factory}: a SubAgentSpec target requires defaults.apiKey — delegate() refuses an ` +
         "empty key, and without this check the failure would surface at the model's first call " +
         'instead of at startup. Pass `apiKey: null` when the provider takes no credential.',
       'missing_api_key',
@@ -189,7 +190,44 @@ function messageForModel(code: string, error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-function describeRoster(roster: readonly DelegateRosterEntry[]): string {
+/** What one delegation answers the model: its response, or a refusal it can act on. */
+export type DelegationOutcome =
+  | { readonly ok: true; readonly response: string }
+  | { readonly ok: false; readonly error: string; readonly message: string }
+
+/**
+ * Run one task on one target and map a delegation refusal to `{ ok: false, error, message }`.
+ * Anything that is not a delegation outcome (a defect: a malformed spec, a bug in a port) is
+ * rethrown, never turned into prose for the model to reason about. Shared by `delegate` and
+ * `delegate_all`, so one rule decides what a refusal tells the model.
+ */
+export async function runDelegation(
+  target: DelegationTarget,
+  task: string,
+  defaults: DelegateOptions | undefined,
+): Promise<DelegationOutcome> {
+  try {
+    const result: DelegationResult = isPort(target)
+      ? await target.run(task)
+      : await delegate(target, task, defaults ?? {})
+
+    return { ok: true, response: result.response }
+  } catch (error) {
+    const code = errorCodeOf(error)
+    if (code === undefined) {
+      // Not a delegation outcome — a defect (a malformed spec, a bug in a port). Catching it
+      // would hand the model prose to reason about instead of failing where a human can see it.
+      throw error
+    }
+    // A delegation refusal is INFORMATION the model can act on: delegate less, or finish the
+    // work itself. Throwing here would end the parent's turn over a recoverable signal. Nothing
+    // is swallowed — the typed error's identity crosses as a stable code; the message travels except
+    // where withholding it IS the point (see `messageForModel`).
+    return { ok: false, error: code, message: messageForModel(code, error) }
+  }
+}
+
+export function describeRoster(roster: readonly DelegateRosterEntry[]): string {
   return roster.map((entry) => entry.name).join(', ')
 }
 
@@ -255,25 +293,7 @@ export function createDelegateTool(options: CreateDelegateToolOptions) {
         )
       }
 
-      try {
-        const result: DelegationResult = isPort(target)
-          ? await target.run(task)
-          : await delegate(target, task, defaults ?? {})
-
-        return JSON.stringify({ ok: true, response: result.response })
-      } catch (error) {
-        const code = errorCodeOf(error)
-        if (code === undefined) {
-          // Not a delegation outcome — a defect (a malformed spec, a bug in a port). Catching it
-          // would hand the model prose to reason about instead of failing where a human can see it.
-          throw error
-        }
-        // A delegation refusal is INFORMATION the model can act on: delegate less, or finish the
-        // work itself. Throwing here would end the parent's turn over a recoverable signal. Nothing
-        // is swallowed — the typed error's identity crosses as a stable code; the message travels except
-        // where withholding it IS the point (see `messageForModel`).
-        return JSON.stringify({ ok: false, error: code, message: messageForModel(code, error) })
-      }
+      return JSON.stringify(await runDelegation(target, task, defaults))
     },
   })
 }

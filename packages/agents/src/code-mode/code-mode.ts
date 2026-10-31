@@ -61,6 +61,15 @@ export interface CodeModeConfig {
 }
 
 /**
+ * The code-mode tool: an SDK `CustomTool` whose handler always answers a string (the script's JSON
+ * result). Narrower than `CustomTool` on purpose, so `theokit`'s pass-through keeps the `string`
+ * result its callers read.
+ */
+export type CodeModeTool = Omit<CustomTool, 'handler'> & {
+  handler: (input: Record<string, unknown>) => Promise<string>
+}
+
+/**
  * Thrown when the permission gate denies a tool call from sandboxed code. A `TheokitAgentError`, so
  * `isTransientError` reads it: a denial is refused the same way on every attempt.
  */
@@ -112,7 +121,10 @@ function generateCodeModeInstructions(tools: CustomTool[], toolName: string): st
  * and returns the code's result. `instructions` (add it to the agent's system prompt) teaches the
  * model the sandboxed-code contract + the available `api.<name>(input)` calls.
  */
-export function createCodeMode(config: CodeModeConfig): { tool: CustomTool; instructions: string } {
+export function createCodeMode(config: CodeModeConfig): {
+  tool: CodeModeTool
+  instructions: string
+} {
   if (typeof config.onPermissionRequest !== 'function') {
     throw new Error(
       'createCodeMode requires onPermissionRequest (security by default — no default-allow for any tool).',
@@ -143,7 +155,7 @@ export function createCodeMode(config: CodeModeConfig): { tool: CustomTool; inst
   }
 
   const name = config.name ?? 'run_code'
-  const tool: CustomTool = {
+  const tool: CodeModeTool = {
     name,
     description:
       config.description ??

@@ -1,0 +1,8 @@
+---
+"@theokit/agents": minor
+"theokit": patch
+---
+
+`@theokit/agents` adds three things an agent uses inside its own turn. `@theokit/agents/code-mode` exports `createCodeMode`, moved from `theokit`. A script that calls tools as `api.<name>(input)` returns only its result to the model, and every call still passes the required permission gate. `@theokit/agents/code-mode-quickjs` exports `createQuickJsSandbox`, which runs each script in a fresh QuickJS-WASM runtime with nothing of the host visible (no `require`, `process`, `fetch` or timers). A run is bounded at 10 s wall clock (host calls included), 32 MiB of memory and 16 api calls. Every failure is a typed `CodeModeSandboxError` whose `code` is `script_error`, `timeout`, `memory_limit`, `call_limit` or `unserialisable_result`. Its two VM packages, `quickjs-emscripten-core` and `@jitl/quickjs-wasmfile-release-sync` at 0.32.0, are optional peers, and no other entry point loads them. `@theokit/agents/tools` adds `createDelegateAllTool`, `delegate_all`: 1 to 4 delegations started together and answered together in input order. A refused task comes back as `{ agent, ok: false, error, message }` beside the others, and the same `defaults` apply to each task, so a `budget` bounds each task, not the call. (B-386)
+
+`theokit/server/agent` keeps every export name. Its `code-mode` module now re-exports `@theokit/agents/code-mode`, so `createCodeMode` takes the SDK's `CustomTool` (a theokit tool is still accepted). Its `tool.handler` still resolves to a `string` (the new `CodeModeTool` type). `CodeModePermissionDeniedError` now extends `TheokitAgentError`, with `code: 'CODE_MODE_PERMISSION_DENIED'` and `isRetryable: false`. Its name and message are unchanged.

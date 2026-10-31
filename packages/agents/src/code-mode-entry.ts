@@ -7,5 +7,6 @@ export {
   type CodeModeApi,
   type CodeModeConfig,
   type CodeModePermission,
+  type CodeModeTool,
   type Sandbox,
 } from './code-mode/code-mode.js'

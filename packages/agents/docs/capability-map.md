@@ -10,7 +10,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1110 export(s) across 25 entry point(s).
+1113 export(s) across 25 entry point(s).
 
 Measured against `@theokit/sdk@5.11.0`.
 
@@ -874,6 +874,7 @@ Measured against `@theokit/sdk@5.11.0`.
 | `createApplyPatchTool` | value |
 | `createBraveWebSearchAdapter` | value |
 | `createCurrentTimeTool` | value |
+| `createDelegateAllTool` | value |
 | `createDelegateTool` | value |
 | `createEditFileTool` | value |
 | `createGenericHttpSearchAdapter` | value |
@@ -929,6 +930,7 @@ Measured against `@theokit/sdk@5.11.0`.
 | `CreateApplyPatchToolOptions` | type |
 | `CreateBraveWebSearchAdapterOptions` | type |
 | `CreateCurrentTimeToolOptions` | type |
+| `CreateDelegateAllToolOptions` | type |
 | `CreateDelegateToolOptions` | type |
 | `CreateEditFileToolOptions` | type |
 | `CreateGenericHttpSearchAdapterOptions` | type |
@@ -979,6 +981,7 @@ Measured against `@theokit/sdk@5.11.0`.
 | `CodeModeApi` | type |
 | `CodeModeConfig` | type |
 | `CodeModePermission` | type |
+| `CodeModeTool` | type |
 | `Sandbox` | type |
 
 ## `@theokit/agents/code-mode-quickjs`
