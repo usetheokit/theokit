@@ -546,6 +546,54 @@ pnpm --filter theoclaw run build
 THEOCLAW_LIVE=1 pnpm --filter theoclaw exec vitest run tests/live/instance-profiles.live.test.ts
 ```
 
+## Import a Claude Code or Hermes setup
+
+TheoClaw can take over the instructions, MCP servers, skills and memories of a Claude Code or a
+Hermes setup you already have. The import is a copy: it is validated, written under
+`THEOCLAW_STATE_DIR/import` (directories at 0700, files at 0600), and the next start hands it to the
+`/control` agent. The source is never changed, and a failed import leaves a previous one as it was.
+
+```bash
+pnpm --filter theoclaw run build
+# Claude Code: the user scope, plus a project's scope and auto memory
+THEOCLAW_STATE_DIR=~/.local/state/theoclaw pnpm --filter theoclaw run import -- --from claude-code --project ~/code/my-project
+# Hermes
+THEOCLAW_STATE_DIR=~/.local/state/theoclaw pnpm --filter theoclaw run import -- --from hermes
+```
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `--from claude-code\|hermes` | required | which kind of setup to read |
+| `--source <dir>` | `~/.claude` for `claude-code`, `~/.hermes` for `hermes` | the setup's directory |
+| `--project <dir>` | none | `claude-code` only: the project whose scope and auto memory are read |
+| `--home <dir>` | your home | `claude-code` only: where `.claude.json` is read |
+
+With `THEOCLAW_PROFILE` set, the import goes to that profile's state directory, as the start's does.
+
+What each source reads:
+
+- **Claude Code** — `<source>/CLAUDE.md`, then the project's `CLAUDE.md` and `.claude/CLAUDE.md`;
+  the `mcpServers` of `<home>/.claude.json` and of the project's `.mcp.json`; the skills under
+  `<source>/skills` and the project's `.claude/skills`; and the `*.md` files of the auto memory under
+  `<source>/projects/<the project's git root, encoded>/memory`, `MEMORY.md` first. A project entry
+  wins over a user entry of the same name.
+- **Hermes** — `SOUL.md`, then `AGENTS.md`; the MCP map of `config.yaml` (`mcp_servers`, else
+  `mcp.servers`, else `mcp`); the skills under `skills/<name>/SKILL.md`; and `memories/MEMORY.md`
+  then `memories/USER.md`. Channels (`platforms/`, `channel_directory.json`) are not imported.
+
+The command prints one line per kind with its count and one `dropped <path>: <reason>` line for
+everything it found and did not carry: a file over 262144 bytes, a skill without `name` or
+`description`, an MCP entry with neither or both of `command` and `url`, a field TheoClaw does not
+carry. It prints no value of any MCP `env` or `headers` entry. An MCP server the framework's own
+reader would ignore refuses the whole import, naming the server.
+
+At start, TheoClaw writes `theoclaw: imported <kind> setup: …` after its instance line. The import
+reaches the `/control` agent only: the instructions and the memory, read-only, go into its system
+prompt, and the skills are inline with a `skill_read` tool. **Channel and WebChat agents receive nothing
+from the import**, since anyone allowed to message the bot could ask a chat agent to repeat its
+prompt. The imported MCP servers stay off until you set `THEOCLAW_IMPORTED_MCP=on`; any other value
+stops the start.
+
 ## Keeping secrets out of the repository
 
 `.env` and `.env.*` are ignored at the repository root; only `.env.example` is tracked. Do not

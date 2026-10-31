@@ -60,6 +60,17 @@ and versioning follows [Semantic Versioning](https://semver.org/).
   - `apps/theoclaw/Dockerfile` builds an image that runs as a non-root user and keeps every write
     under `/data`.
   - Installing from the npm registry waits on B-691.
+- Importing a Claude Code or Hermes setup (B-375, OC-35): `node dist/import-main.js --from
+  claude-code|hermes` (`pnpm --filter theoclaw run import`, with `--source`, `--project` and `--home`)
+  copies the instructions, MCP servers, skills and memories of the setup into
+  `THEOCLAW_STATE_DIR/import` at 0700/0600, after the framework's `loadMcpJson` reads the staged MCP
+  file back; a server it would ignore refuses the whole import and a previous import is left as it
+  was. It prints a count per kind and a `dropped <path>: <reason>` line for every entry it did not
+  carry, and no MCP `env` or `headers` value. The next start writes `theoclaw: imported <kind> setup:
+  ...` after its instance line and hands the import to the `/control` agent only: instructions and
+  read-only memory in its system prompt, the skills inline with a `skill_read` tool, and the MCP
+  servers only with `THEOCLAW_IMPORTED_MCP=on` (any other value stops the start). Channel, session
+  and WebChat agents receive nothing from it.
 - The `digest` tool of the `/control` agent (B-387, OC-66): a typed two-step workflow from
   `@theokit/sdk/workflow`, where a draft step on a fresh agent with no tool, no `shell` and memory off
   lists the key points of a text, and a second step checks them as `{ points }` (1 to 10). Each call
