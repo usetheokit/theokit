@@ -5,6 +5,9 @@
   "description": "A personal AI assistant that lives where its user already writes.",
   "type": "module",
   "license": "Apache-2.0",
+  "bin": {
+    "theoclaw": "./dist/cli.js"
+  },
   "dependencies": {
     "@jitl/quickjs-wasmfile-release-sync": "0.32.0",
     "@line/bot-sdk": "11.3.0",
