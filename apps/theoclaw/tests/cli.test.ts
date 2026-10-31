@@ -8,6 +8,7 @@ import { PassThrough } from 'node:stream'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { type CliIo, runCli } from '../src/cli.js'
+import type { Runner } from '../src/daemon.js'
 import { loadConfiguration } from '../src/config-file.js'
 
 const scratch: string[] = []
@@ -85,6 +86,27 @@ describe('the theoclaw command line', () => {
   })
 })
 
+describe('theoclaw daemon on the command line', () => {
+  it('daemon dispatches install, uninstall and status', async () => {
+    const seen: string[] = []
+    const runner: Runner = (command, args) => {
+      seen.push([command, ...args].join(' '))
+      return Promise.resolve({ code: 0, stdout: command === 'systemctl' && args.includes('is-active') ? 'active\n' : '', stderr: '' })
+    }
+    const h = harness()
+    const io: CliIo = { ...h.io, runner }
+    // No configuration file in the scratch home, so install refuses before systemctl runs.
+    expect(await runCli(['daemon', 'install'], io)).toBe(1)
+    expect(h.stderr()).toContain('theoclaw onboard')
+    expect(await runCli(['daemon', 'status'], io)).toBe(0)
+    expect(await runCli(['daemon', 'uninstall'], io)).toBe(0)
+    expect(seen).toContain('systemctl --user is-active theoclaw.service')
+    expect(seen).toContain('systemctl --user daemon-reload')
+    expect(await runCli(['daemon', 'restart-everything'], io)).toBe(2)
+    expect(await runCli(['daemon'], io)).toBe(2)
+  })
+})
+
 interface Harness {
   readonly io: CliIo
   readonly signals: EventEmitter
@@ -110,6 +132,10 @@ function harness(entry = '/nonexistent/main.js'): Harness {
     isTTY: false,
     entry,
     signals,
+    cwd: dir,
+    platform: 'linux',
+    nodePath: process.execPath,
+    runner: () => Promise.reject(new Error('no command expected')),
   }
   return { io, signals, stdout: () => out, stderr: () => err }
 }

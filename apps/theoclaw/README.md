@@ -32,6 +32,23 @@ never goes on the command line. The file is `~/.config/theoclaw/theoclaw.env` (m
 value the way the start does and writes nothing when one is refused. It keeps an existing file
 unless you pass `--force`.
 
+## Run as a service
+
+```bash
+theoclaw daemon install     # writes ~/.config/systemd/user/theoclaw.service, enables and starts it
+theoclaw daemon status      # exit 0 when the unit is active, 3 otherwise
+theoclaw daemon uninstall   # stops, disables and removes the unit
+```
+
+The unit runs `node <checkout>/apps/theoclaw/dist/main.js` with `THEOCLAW_CONFIG` set to the
+configuration file's absolute path, in the configured `THEOCLAW_WORKSPACE`, and restarts on
+failure. With `THEOCLAW_PROFILE` set, it is `theoclaw-<profile>.service`, and several profiles run
+side by side. `install` refuses when the configuration file or the build is missing.
+
+A user unit stops when you log out unless lingering is on. `install` prints the command when it is
+off: `loginctl enable-linger "$USER"`. Only Linux with `systemd --user` is supported: macOS
+(launchd) and Windows are refused by name.
+
 ## Configuration
 
 TheoClaw reads its configuration from environment variables, all prefixed `THEOCLAW_`. The full

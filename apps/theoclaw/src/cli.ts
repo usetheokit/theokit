@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
 
 import { describeError, TheoClawConfigError } from './control-plane/errors.js'
+import { daemonInstall, type DaemonIo, daemonStatus, daemonUninstall, runCommand, type Runner } from './daemon.js'
 import { type OnboardInput, type OnboardOptions, onboard } from './onboard.js'
 
 /**
@@ -22,16 +23,14 @@ export interface SignalSource {
   removeListener(signal: 'SIGINT' | 'SIGTERM', listener: (signal: NodeJS.Signals) => void): unknown
 }
 
-export interface CliIo {
-  readonly env: NodeJS.ProcessEnv
-  readonly homeDir: string
+export interface CliIo extends DaemonIo {
   readonly stdin: OnboardInput
   readonly stdout: Writable
   readonly stderr: Writable
   readonly isTTY: boolean
-  /** The built process entry, `dist/main.js` beside this file. */
-  readonly entry: string
   readonly signals: SignalSource
+  /** Runs `systemctl`, `loginctl` and `git` for `daemon` and `update`. */
+  readonly runner: Runner
 }
 
 const USAGE = `usage: theoclaw <command>
@@ -40,6 +39,9 @@ const USAGE = `usage: theoclaw <command>
   theoclaw onboard          write the configuration file, asking for each setting
       --yes --model <id> --api-key-env <NAME> --port <n> --owners <platform:id,...>
       [--workspace <absolute dir>] [--force]
+  theoclaw daemon install   run TheoClaw as a systemd user unit, started now and at login
+  theoclaw daemon uninstall stop and remove that unit
+  theoclaw daemon status    exit 0 when the unit is active, 3 otherwise
   theoclaw --help           this text
 `
 
@@ -108,12 +110,26 @@ function startChild(args: readonly string[], io: CliIo): Promise<number> {
 
 type Command = (args: readonly string[], io: CliIo) => Promise<number>
 
+const DAEMON_VERBS: Readonly<Record<string, (io: CliIo, runner: Runner) => Promise<number>>> = {
+  install: daemonInstall,
+  uninstall: daemonUninstall,
+  status: daemonStatus,
+}
+
+function daemon(args: readonly string[], io: CliIo): Promise<number> {
+  const [verb, ...extra] = args
+  const run = verb === undefined ? undefined : DAEMON_VERBS[verb]
+  if (run === undefined || extra.length > 0) throw new UsageError('theoclaw daemon: expected install, uninstall or status')
+  return run(io, io.runner)
+}
+
 const COMMANDS: Readonly<Record<string, Command>> = {
   start: startChild,
   onboard: async (args, io) => {
     await onboard(parseOnboard(args), io)
     return 0
   },
+  daemon,
   '--help': (_args, io) => {
     io.stdout.write(USAGE)
     return Promise.resolve(0)
@@ -162,6 +178,10 @@ if (isMain()) {
     isTTY: process.stdin.isTTY === true && process.stdout.isTTY === true,
     entry: join(dirname(fileURLToPath(import.meta.url)), 'main.js'),
     signals: process,
+    cwd: process.cwd(),
+    platform: process.platform,
+    nodePath: process.execPath,
+    runner: runCommand,
   }
   runCli(process.argv.slice(2), io).then(
     (code) => process.exit(code),
