@@ -7,6 +7,8 @@ import { fileURLToPath } from "node:url";
 
 import { afterEach, describe, expect, it } from "vitest";
 
+import { WORKSPACE } from "./composition-fixtures.js";
+
 const APP_DIR = fileURLToPath(new URL("..", import.meta.url));
 // The entry makes its tool root `files/` in its working directory (B-382), so it runs in a scratch
 // directory rather than the checkout; the entry and the tsx loader are named by absolute path.
@@ -43,6 +45,7 @@ const COMPLETE_ENV: Readonly<Record<string, string | undefined>> = {
   THEOCLAW_CONTROL_TOKEN: TOKEN,
   THEOCLAW_OWNERS: "telegram:owner",
   THEOCLAW_DM_POLICY: "allowlist",
+  THEOCLAW_WORKSPACE: WORKSPACE,
 };
 
 /**

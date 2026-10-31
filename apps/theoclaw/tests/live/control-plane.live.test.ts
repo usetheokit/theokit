@@ -58,6 +58,7 @@ describe.skipIf(!LIVE)("the control plane against a real model", () => {
         THEOCLAW_CONTROL_TOKEN: TOKEN,
         THEOCLAW_OWNERS: "telegram:owner",
         THEOCLAW_DM_POLICY: "allowlist",
+        THEOCLAW_WORKSPACE: home,
       },
       stdio: ["ignore", "pipe", "pipe"],
     });

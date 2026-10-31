@@ -1,10 +1,14 @@
 import { describe, expect, it } from "vitest";
 
 import { effectiveToolNames } from "@theokit/sdk";
+import type { AgentOptions } from "@theokit/sdk";
+
+import { composeTheoClaw } from "../src/composition.js";
 
 import {
   createAgentFactory,
   createChannelAgentFactory,
+  sessionAgentOptions,
   type CreateAgent,
 } from "../src/control-plane/agent-factory.js";
 import type { TurnAgent } from "../src/control-plane/turn.js";
@@ -12,6 +16,8 @@ import { agentToolOptions } from "../src/tools/tool-registry.js";
 import { resolveToolSettings } from "../src/tools/tool-settings.js";
 import { makeHostToolsWorkspace } from "./host-tools-workspace.js";
 import { notEnforced } from "./tool-start-fixtures.js";
+import { fakeBuilders, TELEGRAM_AND_LINE } from "./composition-fixtures.js";
+import { FakeAgent, assistant, finished, messageEvent, waitFor } from "./fakes.js";
 
 const unusedAgent: TurnAgent = { send: () => Promise.reject(new Error("not used")) };
 
@@ -136,5 +142,80 @@ describe("createChannelAgentFactory", () => {
     await createChannelAgentFactory({ THEOCLAW_MODEL: "m", OPENROUTER_API_KEY: "k" }, create)();
 
     expect(options[0]?.memory).toEqual({ enabled: false });
+  });
+});
+
+/**
+ * The options the chat path passes for one chat reply's agent, read where it passes them: one
+ * message through `composeTheoClaw`, whose session agents `getOrCreate` opens through
+ * `createChannelAgentFactory` (plan T5.1). The same two guarantees as above, end to end.
+ */
+function chatPathRecording(): {
+  create: (env: Readonly<Record<string, string | undefined>>) => () => Promise<void>;
+  options: AgentOptions[];
+} {
+  const options: AgentOptions[] = [];
+  const create = (env: Readonly<Record<string, string | undefined>>) => async (): Promise<void> => {
+    const { adapters, builders } = fakeBuilders();
+    const { loop, sessions } = composeTheoClaw({
+      env: {
+        // Every DM reaches the agent, so the options the session agent is opened with are read.
+        THEOCLAW_OWNERS: TELEGRAM_AND_LINE.THEOCLAW_OWNERS,
+        THEOCLAW_DM_POLICY: "open",
+        THEOCLAW_TELEGRAM_TOKEN: TELEGRAM_AND_LINE.THEOCLAW_TELEGRAM_TOKEN,
+        THEOCLAW_WORKSPACE: TELEGRAM_AND_LINE.THEOCLAW_WORKSPACE,
+        ...env,
+      },
+      agentFactory: () => unusedAgent,
+      getOrCreate: async (_id, passed) => {
+        options.push(passed);
+        return Object.assign(new FakeAgent({ frames: [assistant("ok"), finished()] }), { dispose: async () => undefined });
+      },
+      builders,
+      write: () => undefined,
+    });
+    await loop.ready;
+    const telegram = adapters.get("telegram")!;
+    await telegram.deliver(messageEvent("telegram", "hello"));
+    await waitFor(() => telegram.sent.length === 1, 1000, "the chat reply");
+    await loop.stopAll();
+    await sessions.disposeAll();
+  };
+  return { create, options };
+}
+
+/** B-377's two guarantees, read on the options `composeTheoClaw` passes to `getOrCreate`. */
+describe("the chat path's agent options", () => {
+  it("builds the agent of a chat reply with no tool at all, the shell included", async () => {
+    const { create, options } = chatPathRecording();
+
+    await create({ THEOCLAW_MODEL: "openrouter/m", OPENROUTER_API_KEY: "router-key" })();
+
+    expect(options).toHaveLength(1);
+    const catalog = effectiveToolNames({ ...options[0] });
+    expect(catalog.names).toEqual([]);
+    expect(catalog.unresolved).toEqual([]);
+    expect(options[0]).toMatchObject({ model: "openrouter/m", apiKey: "router-key" });
+  });
+
+  it("turns memory off so a chat reply writes no transcript under the cwd", async () => {
+    const { create, options } = chatPathRecording();
+
+    await create({ THEOCLAW_MODEL: "m", OPENROUTER_API_KEY: "k" })();
+
+    expect(options[0]?.memory).toEqual({ enabled: false });
+  });
+});
+
+describe("sessionAgentOptions", () => {
+  it("keeps the transcripts under the workspace", () => {
+    expect(sessionAgentOptions({ THEOCLAW_MODEL: "m", OPENROUTER_API_KEY: "k" }, "/ws").local).toEqual({
+      cwd: "/ws",
+      sessionDir: "/ws/.theoclaw",
+    });
+  });
+
+  it("refuses a missing model with the start's own words", () => {
+    expect(() => sessionAgentOptions({ OPENROUTER_API_KEY: "k" }, "/ws")).toThrow("THEOCLAW_MODEL");
   });
 });

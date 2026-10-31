@@ -4,7 +4,7 @@ import type { MessageEvent, WhatsAppMessageEvent } from '@theokit/gateway'
 import { createHmac } from 'node:crypto'
 
 import { composeTheoClaw } from '../src/composition.js'
-import { fakeBuilders, noAgent } from './composition-fixtures.js'
+import { fakeBuilders, noAgent, WORKSPACE } from './composition-fixtures.js'
 import { FakeAdapter } from './fakes.js'
 
 /**
@@ -21,6 +21,7 @@ const SMS_ENV = {
   THEOCLAW_SMS_TWILIO_AUTH_TOKEN: 'sms-auth-token',
   THEOCLAW_SMS_TWILIO_FROM_NUMBER: '+12025550123',
   THEOCLAW_SMS_PUBLIC_URL: 'https://theoclaw.example.org/webhooks/sms',
+  THEOCLAW_WORKSPACE: WORKSPACE,
 }
 
 const WHATSAPP_ENV = {
@@ -31,6 +32,7 @@ const WHATSAPP_ENV = {
   THEOCLAW_WHATSAPP_PHONE_NUMBER_ID: '1234',
   THEOCLAW_WHATSAPP_APP_SECRET: 'wa-app-secret',
   THEOCLAW_WHATSAPP_VERIFY_TOKEN: 'wa-verify',
+  THEOCLAW_WORKSPACE: WORKSPACE,
 }
 
 /** An SMS stand-in that verifies signatures as told and records the URL each check was given. */

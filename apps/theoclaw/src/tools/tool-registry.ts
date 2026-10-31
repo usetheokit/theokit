@@ -86,13 +86,3 @@ export function buildTools(settings: ToolSettings): CustomTool[] {
 export function agentToolOptions(settings: ToolSettings): AgentToolOptions {
   return { tools: buildTools(settings), plugins: [pathVetoPlugin(settings)] }
 }
-
-/**
- * The options of an agent that holds no tool at all: a chat reply's, since whoever reaches the agent
- * writes its prompt (everyone under `THEOCLAW_DM_POLICY=open`). Frozen to the arrays, so no caller
- * can add a tool to the one instance every chat agent shares.
- */
-export const NO_TOOL_OPTIONS: AgentToolOptions = Object.freeze({
-  tools: Object.freeze([]),
-  plugins: Object.freeze([]),
-})

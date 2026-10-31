@@ -7,13 +7,16 @@ import { createAgentProvider } from "@theokit/di-agent";
 import { createContainer } from "../src/composition.js";
 
 import { createHmac } from 'node:crypto'
+import { readdirSync, readFileSync } from 'node:fs'
+import { join, relative } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 import type { WhatsAppMessageEvent } from '@theokit/gateway'
 
 import { composeTheoClaw } from '../src/composition.js'
 import { MAX_BODY_BYTES } from '../src/webhooks/router.js'
 import type { TeamsVerifier } from '../src/webhooks/teams.js'
-import { chunkedPost, fakeBuilders, noAgent, signedLinePost, TELEGRAM_AND_LINE } from './composition-fixtures.js'
+import { chunkedPost, fakeBuilders, noAgent, signedLinePost, TELEGRAM_AND_LINE, WORKSPACE } from './composition-fixtures.js'
 import { FakeAdapter, FakeAgent, assistant, deferred, finished, waitFor } from './fakes.js'
 
 /**
@@ -159,17 +162,20 @@ describe('composeTheoClaw', () => {
     await loop.stopAll()
   })
 
-  // The join the item ships: a message entering a route reaches an agent of the channel factory,
-  // and its answer leaves through the same platform's adapter.
+  // The join the item ships: a message entering a route reaches its session's agent, resolved
+  // through `getOrCreate` and never through the `/control` factory, and its answer leaves through
+  // the same platform's adapter.
   it('answers a LINE message with the reply of an agent from the channel factory', async () => {
-    const channelAgent = new FakeAgent({ frames: [assistant('hi from theo'), finished()] })
+    const channelAgent = Object.assign(new FakeAgent({ frames: [assistant('hi from theo'), finished()] }), {
+      dispose: async () => undefined,
+    })
     const { adapters, builders } = fakeBuilders()
     const { loop, router } = composeTheoClaw({
       env: TELEGRAM_AND_LINE,
       agentFactory: () => {
         throw new Error('the /control factory must not build a chat agent')
       },
-      channelAgentFactory: () => channelAgent,
+      getOrCreate: async () => channelAgent,
       builders,
       write: () => undefined,
     })
@@ -215,6 +221,7 @@ describe('composeTheoClaw', () => {
       THEOCLAW_SMS_TWILIO_AUTH_TOKEN: 'auth-token',
       THEOCLAW_SMS_TWILIO_FROM_NUMBER: '+15550000000',
       THEOCLAW_SMS_PUBLIC_URL: 'https://example.org/webhooks/sms',
+      THEOCLAW_WORKSPACE: WORKSPACE,
     }
     const { loop, router } = composeTheoClaw({ env, agentFactory: noAgent, builders, write: () => undefined })
     await loop.ready
@@ -235,6 +242,7 @@ const WHATSAPP_ENV = {
   THEOCLAW_WHATSAPP_PHONE_NUMBER_ID: '1234',
   THEOCLAW_WHATSAPP_APP_SECRET: 'wa-app-secret',
   THEOCLAW_WHATSAPP_VERIFY_TOKEN: 'wa-verify',
+  THEOCLAW_WORKSPACE: WORKSPACE,
 }
 
 /** A started WhatsApp stand-in: a FakeAdapter that also converts envelopes, counting each call. */
@@ -294,6 +302,7 @@ const TEAMS_ENV = {
   THEOCLAW_TEAMS_CLIENT_ID: 'teams-client-id',
   THEOCLAW_TEAMS_CLIENT_SECRET: 'teams-client-secret',
   THEOCLAW_TEAMS_TENANT_ID: '00000000-0000-4000-8000-000000000000',
+  THEOCLAW_WORKSPACE: WORKSPACE,
 }
 
 /** A verifier factory that counts how often it builds and how often its verifier runs. */
@@ -414,5 +423,29 @@ describe('composeTheoClaw with Teams', () => {
     expect(lines.some((line) => line.startsWith('teams: the activity verifier could not be built'))).toBe(true)
     expect(lines.join('\n')).not.toContain('not-a-guid-tenant')
     await loop.stopAll()
+  })
+})
+
+// AC-008 as amended by D5 (v1.4: `createChannelAgentFactory` stays, B-377 option A): the chat path
+// builds no per-message agent, and `Agent.create(` is called only by the `/control` factory: since
+// B-382 that call sits in `createTheoClawAgent`, which only the `/control` factory uses.
+describe('the chat path names no per-message factory', () => {
+  const SRC = fileURLToPath(new URL('../src/', import.meta.url))
+  const sources = (directory: string): string[] =>
+    readdirSync(directory, { withFileTypes: true }).flatMap((entry) =>
+      entry.isDirectory() ? sources(join(directory, entry.name)) : entry.name.endsWith('.ts') ? [join(directory, entry.name)] : [],
+    )
+
+  it('names channelAgentFactory nowhere and calls Agent.create only in the /control factory', () => {
+    const files = sources(SRC).map((path) => ({ path: relative(SRC, path), text: readFileSync(path, 'utf8') }))
+    expect(files.filter(({ text }) => /channelAgentFactory/.test(text)).map(({ path }) => path)).toEqual([])
+    // `main.ts` builds the `create` it hands `createAgentFactory`, the `/control` factory, alone.
+    expect(files.filter(({ text }) => /Agent\.create\(/.test(text)).map(({ path }) => path).sort()).toEqual(
+      [join('agent', 'create-agent.ts'), 'main.ts'].sort(),
+    )
+    expect(files.filter(({ text }) => /createTheoClawAgent\b/.test(text)).map(({ path }) => path).sort()).toEqual(
+      [join('agent', 'create-agent.ts'), join('control-plane', 'agent-factory.ts')].sort(),
+    )
+    expect(readFileSync(join(SRC, 'main.ts'), 'utf8')).toContain('agentFactory: createAgentFactory(process.env, create)')
   })
 })

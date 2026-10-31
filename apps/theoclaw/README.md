@@ -26,6 +26,7 @@ so a file kept outside the repository and sourced from your shell profile is als
 | `THEOCLAW_PORT` | Port of the one listener that serves the webhook routes, `/health` and `/control`. Digits only, 0 to 65535. |
 | `THEOCLAW_STATE_DIR` | Where pairings are kept. Required under the default `THEOCLAW_DM_POLICY=pairing`; see below. |
 | `THEOCLAW_OWNERS` | Who the instance serves: comma-separated `platform:senderId`, e.g. `telegram:42,matrix:@me:matrix.org`. Required even with no platform configured; see [Who may talk to the instance](#who-may-talk-to-the-instance). |
+| `THEOCLAW_WORKSPACE` | Absolute path of an existing directory. Each chat's transcript and the session generations are kept under `<THEOCLAW_WORKSPACE>/.theoclaw/` (created with mode 0700). Startup fails and names the variable when it is unset, relative or not a directory. Under `THEOCLAW_PROFILE` the profile sets it to its own `workspace` and an explicit value is refused (see [Several instances on one host](#several-instances-on-one-host)). |
 
 ### Who may talk to the instance
 
@@ -55,6 +56,28 @@ TheoClaw instances in one channel stop after at most two direct messages and nev
 group, because neither is the other's owner. Under `open` both answer every direct message, so two
 instances can keep answering each other's DMs on the seven platforms whose adapters do not drop a
 message written by another bot. Choose `open` only for an instance no other bot writes to.
+
+### Chat sessions
+
+Every chat is one continuing conversation, kept across messages and across restarts: a group or a
+forum topic is one conversation for all its members, and a direct message follows
+`THEOCLAW_DM_SCOPE`. A message sent while the chat's previous turn still runs is answered after it,
+with that turn in its history. Sending exactly `/new` or `/reset` starts the chat afresh: TheoClaw
+answers `Started a new conversation.` and runs no model turn; the earlier transcript stays on disk.
+
+| Variable | Meaning |
+|---|---|
+| `THEOCLAW_DM_SCOPE` | How direct messages are grouped: `main` (one conversation for every direct message), `per-peer` (one per person, across platforms, through `THEOCLAW_PEER_LINKS`), `per-channel-peer` (the default: one per platform and sender) or `per-account-channel-peer` (the same, keyed with `THEOCLAW_ACCOUNT_LABEL` as well). |
+| `THEOCLAW_PEER_LINKS` | `<platform>:<senderId>=<name>` pairs separated by commas; senders linked to one name share a session under `per-peer`. A name holds letters, digits and underscores. |
+| `THEOCLAW_ACCOUNT_LABEL` | Required by `per-account-channel-peer`. |
+| `THEOCLAW_SESSION_IDLE_MINUTES` | Minutes a chat's agent stays open with no turn, 1 to 1440, default 30. Its conversation is kept: the next message resumes it from disk. |
+| `THEOCLAW_MAX_OPEN_SESSIONS` | Chat agents kept open at once, 1 to 10000, default 200; above it the least recently used idle one is closed. |
+
+**What is stored, and who can write it.** Every sender who reaches the agent starts a conversation:
+an owner, a paired sender, and under `THEOCLAW_DM_POLICY=open` anyone who can message the bot. Every
+message and reply is kept in
+`<THEOCLAW_WORKSPACE>/.theoclaw/`. Chat agents still run without the `shell` tool and with memory
+off. To forget every conversation, stop TheoClaw and delete that directory.
 
 ### Platforms
 
@@ -125,7 +148,9 @@ and TheoClaw keeps serving on its address.
 
 ```bash
 pnpm --filter theoclaw run build
+mkdir -p ~/theoclaw-workspace
 THEOCLAW_MODEL=openrouter/google/gemini-2.5-flash-lite THEOCLAW_PORT=8787 \
+  THEOCLAW_WORKSPACE=~/theoclaw-workspace \
   THEOCLAW_CONTROL_TOKEN="$(openssl rand -hex 24)" pnpm --filter theoclaw start
 ```
 
@@ -138,6 +163,7 @@ the listener. `GET /health` answers `{"status":"ok"}`.
 | `THEOCLAW_MODEL` | Required. The model each turn runs. |
 | `THEOKIT_API_KEY` or `OPENROUTER_API_KEY` | Required. The model key, passed to the SDK; `THEOKIT_API_KEY` wins when both are set. |
 | `THEOCLAW_PORT` | Required. Digits only, 0 to 65535; 0 picks a free port. A port in use is refused by name. |
+| `THEOCLAW_WORKSPACE` | Required. An absolute, existing directory; chat sessions are kept under its `.theoclaw/`. |
 | `THEOCLAW_HOST` | Optional. The address to bind; default `127.0.0.1`. `localhost`, `::1` and `127.x.y.z` are loopback. The generic `HOST` is ignored. |
 | `THEOCLAW_PUBLIC_BIND` | Must be exactly `yes` to bind a non-loopback `THEOCLAW_HOST`. The bearer token is then the whole gate. |
 | `THEOCLAW_CONTROL_TOKEN` | Optional, 32 characters or more. Without it the `/control` socket is off and every upgrade answers 404. |
@@ -153,7 +179,8 @@ any other path answers 404 and a missing or wrong token 401, before any agent is
 the running turn. Frames are capped at 65536 bytes.
 
 Each turn's agent is built without the SDK's `shell` tool and with memory off, so a chat frame runs
-no command on the host and leaves no transcript on disk. The SDK still adds one entry per turn to
+no command on the host and leaves no transcript on disk. A `/control` turn is one agent of its own,
+never a chat session's. The SDK still adds one entry per turn to
 `.theokit/agents/registry.json` under the process's working directory; no option turns that off.
 
 ### The `/control` agent's tools
@@ -240,7 +267,9 @@ With `THEOCLAW_PROFILE=work` the instance:
   there, and `THEOCLAW_STATE_DIR` to `~/.theokit/profiles/work/state`, so `pairing.json` does too
   (a profiled instance always has a pairing store, empty until its owner approves someone);
 - builds its agents in `~/.theokit/profiles/work/workspace`, so the agent registry and any memory
-  under the working directory stay in the profile. That directory is also the agent's working
+  under the working directory stay in the profile. It sets `THEOCLAW_WORKSPACE` to that directory,
+  so every chat's transcript and `sessions.json` are kept in its `.theoclaw/` too, and two profiles
+  never share a conversation. That directory is also the agent's working
   directory: tools and project configuration resolve against it, not against the directory you
   started TheoClaw in;
 - calls itself `theoclaw-work`. Its first line on stderr is
@@ -248,8 +277,8 @@ With `THEOCLAW_PROFILE=work` the instance:
   the authoritative label. The process title (`ps`) is set to the same name, but the kernel
   truncates it to the length of the original command line, so it can be cut short.
 
-A profile cannot be combined with an explicit `THEOKIT_HOME`, `THEOKIT_AUTH_HOME` or
-`THEOCLAW_STATE_DIR`: the start stops and names each one set. Unset them before moving to profiles.
+A profile cannot be combined with an explicit `THEOKIT_HOME`, `THEOKIT_AUTH_HOME`,
+`THEOCLAW_STATE_DIR` or `THEOCLAW_WORKSPACE`: the start stops and names each one set. Unset them before moving to profiles.
 Restarting an instance with the same profile keeps everything it wrote before. With no
 `THEOCLAW_PROFILE`, nothing moves and the first line is `theoclaw: instance started, no profile`.
 

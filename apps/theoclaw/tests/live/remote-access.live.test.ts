@@ -84,8 +84,12 @@ async function startClaw(withToken: boolean): Promise<Claw> {
   if (!model || !modelKey) throw new Error('THEOCLAW_LIVE=1 needs THEOCLAW_MODEL and THEOKIT_API_KEY or OPENROUTER_API_KEY')
   const token = withToken ? randomBytes(24).toString('hex') : undefined
   if (token !== undefined) tokensIssued.push(token)
+  // Every start needs the workspace its chat sessions are kept in (B-378).
+  const workspace = mkdtempSync(join(tmpdir(), 'theoclaw-remote-workspace-'))
+  scratch.push(workspace)
   const env: Record<string, string | undefined> = {
     THEOCLAW_MODEL: model,
+    THEOCLAW_WORKSPACE: workspace,
     ...(process.env.THEOKIT_API_KEY ? { THEOKIT_API_KEY: process.env.THEOKIT_API_KEY } : {}),
     ...(process.env.OPENROUTER_API_KEY ? { OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY } : {}),
     THEOCLAW_OWNERS: 'telegram:owner',
