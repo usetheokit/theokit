@@ -53,6 +53,10 @@
       "types": "./dist/tools.d.ts",
       "import": "./dist/tools.js"
     },
+    "./code-mode": {
+      "types": "./dist/code-mode.d.ts",
+      "import": "./dist/code-mode.js"
+    },
     "./client": {
       "types": "./dist/client.d.ts",
       "import": "./dist/client.js"

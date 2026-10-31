@@ -281,6 +281,11 @@ export default defineConfig({
       // M75 — the hook engine subpath. Every new `@theokit/agents/*` entry needs a line here, ABOVE
       // the bare specifier: a string alias matches by prefix, so without it this resolves to the
       // nonsense path `…/src/index.ts/hooks` instead of erroring.
+      // B-386 — code mode, above the bare specifier for the same prefix reason.
+      '@theokit/agents/code-mode': path.resolve(
+        __dirname,
+        'packages/agents/src/code-mode-entry.ts',
+      ),
       '@theokit/agents/tool-scope': path.resolve(__dirname, 'packages/agents/src/tools/index.ts'),
       '@theokit/agents/mcp-health': path.resolve(
         __dirname,

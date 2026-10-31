@@ -31,6 +31,8 @@ export default defineConfig({
     config: 'src/config-entry.ts',
     // M62 — pass-through of the sdk-tools factories.
     tools: 'src/tools-entry.ts',
+    // B-386 — scripts that call tools by RPC, over an injected sandbox; imports no VM.
+    'code-mode': 'src/code-mode-entry.ts',
     // M84 — the client chain came from the CLI; its own subpath because `use-agent` imports React.
     client: 'src/client-entry.ts',
     'client-react': 'src/client-react-entry.ts',

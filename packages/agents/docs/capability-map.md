@@ -10,9 +10,9 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1100 export(s) across 23 entry point(s).
+1106 export(s) across 24 entry point(s).
 
-Measured against `@theokit/sdk@5.9.2`.
+Measured against `@theokit/sdk@5.11.0`.
 
 ## `@theokit/agents`
 
@@ -969,6 +969,17 @@ Measured against `@theokit/sdk@5.9.2`.
 | `VitestSummary` | type |
 | `WebSearchCallback` | type |
 | `WebSearchResult` | type |
+
+## `@theokit/agents/code-mode`
+
+| Symbol | Kind |
+|---|---|
+| `CodeModePermissionDeniedError` | value |
+| `createCodeMode` | value |
+| `CodeModeApi` | type |
+| `CodeModeConfig` | type |
+| `CodeModePermission` | type |
+| `Sandbox` | type |
 
 ## `@theokit/agents/client`
 
