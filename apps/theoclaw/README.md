@@ -486,6 +486,66 @@ set -a; . ~/.config/theoclaw/dev.env; set +a
 THEOCLAW_LIVE=1 pnpm --filter theoclaw exec vitest run tests/live/remote-access.live.test.ts
 ```
 
+## OpenAI-compatible API and tool invocation
+
+With `THEOCLAW_CONTROL_TOKEN` set, the listener also serves an OpenAI-compatible API and a tool
+route, both behind that token as `Authorization: Bearer <THEOCLAW_CONTROL_TOKEN>`. Turning the
+control socket on turns them on; with the token unset their paths answer 404. A request without the
+token, or with another, answers 401 before its body is read or any agent is built.
+
+Point the official OpenAI client at the instance, with the control token as its API key:
+
+```ts
+import OpenAI from 'openai'
+
+const client = new OpenAI({ baseURL: 'http://127.0.0.1:<THEOCLAW_PORT>/v1', apiKey: process.env.THEOCLAW_CONTROL_TOKEN })
+const models = await client.models.list() // THEOCLAW_MODEL, the one model served
+const reply = await client.chat.completions.create({
+  model: process.env.THEOCLAW_MODEL!,
+  messages: [{ role: 'user', content: 'Hello' }],
+})
+```
+
+- `GET /v1/models` lists `THEOCLAW_MODEL`; `POST /v1/chat/completions` runs one TheoClaw turn and
+  answers its text as one `chat.completion` choice. A request naming another model answers 404
+  `model_not_found`.
+- Streaming is not supported: `stream: true` answers 400 `stream_unsupported`. Other OpenAI
+  parameters (`temperature`, `max_tokens`, ...) are accepted and ignored. Only text content parts
+  are read.
+- The instance keeps no conversation between requests: each request's `messages` are the whole
+  transcript (a lone user message is sent as it is; a longer list as `role: text` lines).
+- A chat completion's agent holds no tool, as every chat surface's. A failed turn answers 502
+  `turn_failed`; its reason is written to stderr, never to the client.
+- Bodies are capped at 1 MiB (413).
+
+`POST /tools/invoke` runs one tool of the `/control` agent's set, exactly that set: the
+`THEOCLAW_HOST_TOOLS=on` tools only when they are on.
+
+```bash
+curl -s http://127.0.0.1:<THEOCLAW_PORT>/tools/invoke \
+  -H "Authorization: Bearer $THEOCLAW_CONTROL_TOKEN" -H 'content-type: application/json' \
+  -d '{"tool":"list_dir","args":{"path":"."}}'
+# {"ok":true,"result":...}
+```
+
+- An unknown tool answers 404 `not_found`; a body without a tool name 400 `invalid_request`.
+- The state-directory veto the `/control` agents run applies here too: a path into the workspace's
+  `.theokit` or `.theoclaw` (symlinks followed), or a malformed path argument, answers 403 `refused`
+  and the tool does not run.
+- `args` are checked against the tool's own input schema first, as a model turn's are: a mismatch
+  answers 400 `invalid_args` naming the first issue.
+- Each request builds its tools afresh, so the API keeps no state between requests: a `todolist`
+  starts empty on every call.
+- A tool that throws answers 500 `tool_error` with its message.
+
+The live check calls both routes on the built entry against a real model:
+
+```bash
+set -a; . ~/.config/theoclaw/dev.env; set +a
+pnpm --filter theoclaw run build
+THEOCLAW_LIVE=1 pnpm --filter theoclaw exec vitest run tests/live/http-api.live.test.ts
+```
+
 ## Several instances on one host
 
 Set `THEOCLAW_PROFILE` to run more than one TheoClaw on one machine, each with its own state and its
