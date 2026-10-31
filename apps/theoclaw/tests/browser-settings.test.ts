@@ -12,7 +12,9 @@ import type { TheoClawAgentOptions } from '../src/agent/create-agent.js'
 import { TheoClawConfigError } from '../src/control-plane/errors.js'
 import { browserServer, readBrowser } from '../src/tools/browser-server.js'
 import type { BrowserDeps } from '../src/tools/browser-server.js'
-import { agentToolOptions } from '../src/tools/tool-registry.js'
+import type { TurnAgent } from '../src/agent-port.js'
+import { agentToolOptions, controlAgentToolOptions, NO_TOOL_OPTIONS } from '../src/tools/tool-registry.js'
+import type { AgentToolOptions } from '../src/tools/tool-registry.js'
 import { resolveToolSettings } from '../src/tools/tool-settings.js'
 import { notEnforced, startForTools, stop, tempCwd } from './tool-start-fixtures.js'
 import type { ToolStart } from './tool-start-fixtures.js'
@@ -91,6 +93,35 @@ describe('THEOCLAW_BROWSER', () => {
     })
     expect(settings.offLines).toContain(ON_LINE)
     expect(settings.offLines).not.toContain(OFF_LINE)
+  })
+
+  it('gives the control agent the browser beside run_code and delegate_all, and its workers none', async () => {
+    const settings = settingsWith({ THEOCLAW_BROWSER: 'on' })
+    const workerOptions: AgentToolOptions[] = []
+    const worker: TurnAgent = {
+      send: async () => ({
+        stream: async function* () {
+          yield { type: 'assistant' }
+        },
+        wait: async () => ({ status: 'finished', result: 'done' }),
+        cancel: async () => {},
+      }),
+      [Symbol.asyncDispose]: async () => {},
+    } as unknown as TurnAgent
+    const control = controlAgentToolOptions(settings, async (options) => {
+      workerOptions.push(options)
+      return worker
+    })
+
+    expect(Object.keys(control.mcpServers ?? {})).toEqual(['browser'])
+    const names = control.tools.map((tool) => tool.name)
+    expect(names).toContain('run_code')
+    expect(names).toContain('delegate_all')
+    const delegate = control.tools.find((tool) => tool.name === 'delegate_all')
+    await delegate?.handler({ tasks: [{ agent: 'worker', task: 'one' }] })
+    expect(workerOptions).toHaveLength(1)
+    expect('mcpServers' in (workerOptions[0] as object)).toBe(false)
+    expect('mcpServers' in NO_TOOL_OPTIONS).toBe(false)
   })
 
   it('builds a chat agent with no mcp server even with the browser on', async () => {
