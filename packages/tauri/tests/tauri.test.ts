@@ -117,6 +117,69 @@ describe('createTauriChannelSource (@theokit/tauri)', () => {
   })
 })
 
+/** A fake core whose `run_turn` never settles, so a turn stays in flight until it is aborted. */
+function heldCore(): { core: TauriCore; invoke: ReturnType<typeof vi.fn> } {
+  const invoke = vi.fn((cmd: string) =>
+    cmd === 'run_turn' ? new Promise(() => undefined) : Promise.resolve(undefined),
+  )
+  class Channel implements TauriChannel {
+    onmessage: (line: string) => void = () => undefined
+  }
+  return { core: { invoke, Channel } as unknown as TauriCore, invoke }
+}
+
+const commandsOf = (invoke: ReturnType<typeof vi.fn>): unknown[] =>
+  invoke.mock.calls.map((c) => c[0])
+
+describe('createTauriChannelSource abort (@theokit/tauri)', () => {
+  it('abort invokes the cancel command when one is set', async () => {
+    const { core, invoke } = heldCore()
+    const source = createTauriChannelSource(core, { cancelCommand: 'cancel_turn' })
+    const abort = source.start(
+      { message: 'x' },
+      { onLine: () => undefined, onClose: () => undefined },
+    )
+    abort()
+    await tick()
+    expect(commandsOf(invoke).filter((c) => c === 'cancel_turn')).toHaveLength(1)
+  })
+
+  it('abort stays a no-op without a cancel command', async () => {
+    const { core, invoke } = heldCore()
+    const source = createTauriChannelSource(core)
+    const abort = source.start(
+      { message: 'x' },
+      { onLine: () => undefined, onClose: () => undefined },
+    )
+    abort()
+    await tick()
+    expect(commandsOf(invoke)).toEqual(['run_turn'])
+  })
+
+  it('a rejected cancel command reaches onError and never throws from abort', async () => {
+    const invoke = vi.fn((cmd: string) =>
+      cmd === 'run_turn'
+        ? new Promise(() => undefined)
+        : Promise.reject(new Error('no such command')),
+    )
+    const core = {
+      invoke,
+      Channel: class implements TauriChannel {
+        onmessage: (line: string) => void = () => undefined
+      },
+    } as unknown as TauriCore
+    const source = createTauriChannelSource(core, { cancelCommand: 'cancel_turn' })
+    let error: unknown
+    const abort = source.start(
+      { message: 'x' },
+      { onLine: () => undefined, onClose: () => undefined, onError: (e) => (error = e) },
+    )
+    expect(() => abort()).not.toThrow()
+    await tick()
+    expect((error as Error).message).toBe('no such command')
+  })
+})
+
 describe('createTauriAgentClient (@theokit/tauri)', () => {
   it('streams a turn over the Tauri transport into reconstructed UIMessages', async () => {
     const { core } = fakeCore([
@@ -135,6 +198,18 @@ describe('createTauriAgentClient (@theokit/tauri)', () => {
       .map((p) => p.text)
       .join('')
     expect(text).toBe('Hi')
+  })
+})
+
+describe('createTauriAgentClient cancel (@theokit/tauri)', () => {
+  it('createTauriAgentClient forwards the cancel command', async () => {
+    const { core, invoke } = heldCore()
+    const client = createTauriAgentClient(core, { cancelCommand: 'cancel_turn' })
+    client.send({ message: 'hi' })
+    await tick()
+    client.abort()
+    await tick()
+    expect(commandsOf(invoke).filter((c) => c === 'cancel_turn')).toHaveLength(1)
   })
 })
 
