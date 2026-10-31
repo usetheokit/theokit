@@ -117,6 +117,9 @@ export function defineCachedRoute<
     )
   }
 
+  // B-667 — per-route, per-key: the leader's outcome while its handler runs.
+  const inFlight = new Map<string, Promise<LeaderOutcome>>()
+
   const wrappedHandler = async (ctx: {
     query: z.infer<TQuery>
     body: z.infer<TBody>
@@ -162,6 +165,7 @@ export function defineCachedRoute<
       cacheErrors,
       baseTags,
       webRequest,
+      inFlight,
     }
 
     if (cached) {
@@ -174,9 +178,8 @@ export function defineCachedRoute<
       return buildResponseFromCache(cached.value, 'stale', maxAge, swr)
     }
 
-    // ---- Miss: run handler ----
-    const response = await invokeHandlerAsResponse(handler, ctx)
-    return persistAndReturn(routeCacheCtx, response)
+    // ---- Miss: one handler run per key (B-667) ----
+    return runMissSingleFlight(routeCacheCtx, handler, ctx)
   }
 
   return {
@@ -191,7 +194,7 @@ export function defineCachedRoute<
 
 /**
  * T4.3 options-bag context (PV-6 — Clean Code consensus ≤ 4 params).
- * Collapses 10/11 positional params of `persistAndReturn` and
+ * Collapses 10/11 positional params of `persistOutcome` and
  * `scheduleRouteRevalidate` to 2 params each (ctx + payload).
  *
  * Some fields are derived from `cache` config (EC-22 documented redundancy) —
@@ -212,6 +215,58 @@ interface RouteCacheCtx {
   cacheErrors: boolean
   baseTags: string[]
   webRequest: Request
+  /** The route's miss slots, keyed by cache key (B-667). */
+  inFlight: Map<string, Promise<LeaderOutcome>>
+}
+
+/**
+ * What a miss leader hands its followers. Never the leader's `Response`: its body
+ * is single-use, and an uncacheable one (a `Set-Cookie`) belongs to its own request.
+ */
+type LeaderOutcome = { kind: 'cached'; value: RouteCacheValue } | { kind: 'uncacheable' }
+
+async function runMissSingleFlight<THandlerCtx>(
+  ctx: RouteCacheCtx,
+  handler: (handlerCtx: THandlerCtx) => unknown,
+  handlerCtx: THandlerCtx,
+): Promise<Response> {
+  // The check and the claim run with no await between them, so the next caller sees the slot.
+  const pending = ctx.inFlight.get(ctx.key)
+  if (pending) {
+    const outcome = await pending
+    if (outcome.kind === 'cached') {
+      return buildResponseFromCache(outcome.value, 'miss', ctx.maxAge, ctx.swr)
+    }
+    const own = await persistOutcome(ctx, await invokeHandlerAsResponse(handler, handlerCtx))
+    return own.response
+  }
+  let publish!: (outcome: LeaderOutcome) => void
+  let fail!: (err: unknown) => void
+  const slot = new Promise<LeaderOutcome>((resolve, reject) => {
+    publish = resolve
+    fail = reject
+  })
+  // A leader with no follower must not raise an unhandled rejection.
+  slot.catch(() => undefined)
+  ctx.inFlight.set(ctx.key, slot)
+  try {
+    const { response, value } = await persistOutcome(
+      ctx,
+      await invokeHandlerAsResponse(handler, handlerCtx),
+    )
+    publish(value ? { kind: 'cached', value } : { kind: 'uncacheable' })
+    return response
+  } catch (err) {
+    // The leader's client went away: its error is not taken as the followers' cause, and
+    // each follower runs the handler itself. A shared failure that happens to land after
+    // the abort is re-run by the followers rather than shared (bounded, EC-1). A Node
+    // IncomingMessage reaches here as a signal-less Request, so this cannot fire there.
+    if (ctx.webRequest.signal.aborted) publish({ kind: 'uncacheable' })
+    else fail(err)
+    throw err
+  } finally {
+    ctx.inFlight.delete(ctx.key)
+  }
 }
 
 function buildRouteCacheEntry(value: RouteCacheValue, ctx: RouteCacheCtx): CacheEntry {
@@ -228,14 +283,18 @@ function buildRouteCacheEntry(value: RouteCacheValue, ctx: RouteCacheCtx): Cache
   }
 }
 
-async function persistAndReturn(ctx: RouteCacheCtx, response: Response): Promise<Response> {
-  const cacheableResult = await tryCacheResponse(response, ctx)
-  if (!cacheableResult) {
+/** Write a cacheable response; `value` is set only when it was written. */
+async function persistOutcome(
+  ctx: RouteCacheCtx,
+  response: Response,
+): Promise<{ response: Response; value?: RouteCacheValue }> {
+  const value = await tryCacheResponse(response, ctx)
+  if (!value) {
     // Not cached — return original response unchanged
-    return response
+    return { response }
   }
-  await ctx.engine.set(ctx.key, buildRouteCacheEntry(cacheableResult, ctx))
-  return buildResponseFromCache(cacheableResult, 'miss', ctx.maxAge, ctx.swr)
+  await ctx.engine.set(ctx.key, buildRouteCacheEntry(value, ctx))
+  return { response: buildResponseFromCache(value, 'miss', ctx.maxAge, ctx.swr), value }
 }
 
 function scheduleRouteRevalidate<THandlerCtx>(
