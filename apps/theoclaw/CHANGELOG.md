@@ -41,6 +41,25 @@ and versioning follows [Semantic Versioning](https://semver.org/).
   `THEOCLAW_SESSION` (default `owner`), build no agent, and print neither the token nor the model key.
   Upstream in this repository: `@theokit/tauri`'s `cancelCommand`, the desktop template's
   `cancel_turn`, and the timeline translator exported from `@theokit/agents/bridge`.
+- Install, configure, run as a service, containerise and update TheoClaw (B-374, OC-30 to OC-34):
+  - `git clone … && theokit/apps/theoclaw/install.sh` builds the app from a source checkout and
+    writes the `theoclaw` launcher into `~/.local/bin` (`THEOCLAW_BIN_DIR` picks another directory).
+    It never writes into Node's global directory.
+  - `theoclaw onboard` asks for the model, the key (never echoed), the port, the owners and the
+    workspace, or takes them as `--yes` flags with the key read from the variable
+    `--api-key-env` names. It checks them the way the start does and writes
+    `~/.config/theoclaw/theoclaw.env` at mode 0600. A refused value writes nothing.
+  - The entry loads that file (`THEOCLAW_CONFIG` names another one), and a variable set in the
+    environment wins over it.
+  - `theoclaw start` runs the instance in the foreground.
+  - `theoclaw daemon install|uninstall|status` runs it as a `systemd --user` unit. macOS and
+    Windows are refused by name until B-692.
+  - `theoclaw update [--channel stable|dev]` (`THEOCLAW_UPDATE_CHANNEL`) fast-forwards the
+    checkout on `main` or `develop`, rebuilds and restarts the unit. It refuses a checkout with
+    local changes or local commits.
+  - `apps/theoclaw/Dockerfile` builds an image that runs as a non-root user and keeps every write
+    under `/data`.
+  - Installing from the npm registry waits on B-691.
 - The `digest` tool of the `/control` agent (B-387, OC-66): a typed two-step workflow from
   `@theokit/sdk/workflow`, where a draft step on a fresh agent with no tool, no `shell` and memory off
   lists the key points of a text, and a second step checks them as `{ points }` (1 to 10). Each call

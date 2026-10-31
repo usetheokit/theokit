@@ -105,6 +105,7 @@ describe('theoclaw daemon', () => {
       const h = harness({ platform })
       expect(await daemonInstall(h.io, h.runner)).toBe(1)
       expect(h.stderr()).toContain(platform)
+      expect(h.stderr()).toContain('B-692')
       expect(existsSync(unitPath('theoclaw', h.home))).toBe(false)
       expect(h.calls).toEqual([])
     }

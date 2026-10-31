@@ -30,7 +30,7 @@
   {"id":"OC-29","status":"out","reason":"One instance serves one person, the first non-goal of the product vision, so a team server is out.","declared_by":"human/paulo","declared_on":"2026-10-04","declared_at":".squad/wiki/product/objectives.md:224"},
   {"id":"OC-30","status":"open"},
   {"id":"OC-31","status":"open"},
-  {"id":"OC-32","status":"open"},
+  {"id":"OC-32","status":"shipped","gaps":["B-692"],"check":{"path":"apps/theoclaw/tests/live/daemon.live.test.ts","test":"a systemd user unit answers a real-model turn and uninstalls cleanly"},"verified_on":"2026-10-31","note":"theoclaw daemon install writes a systemd --user unit that runs the built entry with the configuration file, enables and starts it, and uninstall removes it; checked on a Linux host with a real unit and a real model; launchd on macOS and the Windows scheduler wait on B-692, and both are refused by name"},
   {"id":"OC-33","status":"open"},
   {"id":"OC-34","status":"open"},
   {"id":"OC-35","status":"open"},

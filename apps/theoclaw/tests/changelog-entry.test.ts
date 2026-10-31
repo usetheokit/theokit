@@ -59,4 +59,16 @@ describe('the CHANGELOG', () => {
     expect(section).toContain('`digest`')
     expect(section).toContain('/control')
   })
+
+  it('announces the install, onboarding, daemon, container and update surface (B-374)', () => {
+    const section = unreleased()
+
+    expect(section).toContain('B-374')
+    for (const name of ['install.sh', 'theoclaw onboard', 'theoclaw daemon', 'theoclaw update', '--channel', 'Dockerfile', 'THEOCLAW_CONFIG', 'THEOCLAW_UPDATE_CHANNEL']) {
+      expect(section, name).toContain(name)
+    }
+    // The two halves this release does not reach are named by their items.
+    expect(section).toContain('B-691')
+    expect(section).toContain('B-692')
+  })
 })

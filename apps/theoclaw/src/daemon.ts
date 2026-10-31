@@ -35,7 +35,7 @@ export interface DaemonIo {
 }
 
 /** The registered item that carries launchd and the Windows scheduler (T6.1). */
-export const UNSUPPORTED_PLATFORM_ITEM = 'the macOS and Windows follow-up'
+export const UNSUPPORTED_PLATFORM_ITEM = 'B-692'
 
 /** The command runner of the real process: `execFile`, with a command that cannot start as 127. */
 export const runCommand: Runner = (command, args) =>
