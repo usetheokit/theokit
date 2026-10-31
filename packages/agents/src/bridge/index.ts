@@ -105,6 +105,23 @@ export {
   type Segment,
 } from './think-tag-extractor.js'
 export { translateSdkEvent, type SdkMessage } from './event-translator.js'
+// B-373 — the OpenAI-compatible routes and the tool route, Web-standard handlers over ports, with
+// every option and callback type they take, so a consumer can type what it passes.
+export {
+  createOpenAICompatibleRoutes,
+  renderTranscript,
+  type OpenAIChatMessage,
+  type OpenAIChatRequest,
+  type OpenAICompatibleRoutesOptions,
+  type OpenAITextPart,
+} from './openai-compatible-routes.js'
+export {
+  createToolInvokeRoute,
+  type ToolArgsValidator,
+  type ToolCallVetoPort,
+  type ToolInvokeRouteOptions,
+} from './tool-invoke-route.js'
+export { BodyTooLargeError, MAX_REQUEST_BODY_BYTES, readCappedBody } from './read-capped-body.js'
 export { presentUIMessageStream } from './present-ui-message-stream.js'
 // B-376 — the `run.events()` timeline translator, so a consumer that streams live text deltas
 // translates them with the code `sdk-adapter.ts` uses rather than a copy (REQ-7).
