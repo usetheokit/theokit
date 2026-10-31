@@ -29,12 +29,14 @@
     "@theokit/http": "workspace:*",
     "@theokit/presenter": "workspace:*",
     "@theokit/sdk": "5.11.0",
+    "@theokit/tui": "0.80.0",
     "@theokit/ui": "1.12.2",
     "@usetheo/ui": "0.28.2",
     "bonjour-service": "1.4.4",
     "discord.js": "14.27.0",
     "grammy": "1.46.0",
     "imapflow": "1.7.8",
+    "ink": "7.1.1",
     "libphonenumber-js": "1.13.15",
     "mailparser": "3.12.4",
     "matrix-js-sdk": "42.4.0",
@@ -63,6 +65,7 @@
     "eslint-plugin-sonarjs": "3.0.7",
     "globals": "15.15.0",
     "happy-dom": "21.0.4",
+    "ink-testing-library": "4.0.0",
     "theokit": "workspace:*",
     "tsx": "4.22.4",
     "typescript": "5.9.3",
@@ -82,6 +85,7 @@
     "check:versions": "node tools/check-exact-versions.mjs package.json",
     "audit": "node tools/audit-theoclaw.mjs",
     "browser:install": "node tools/install-browser.mjs",
-    "desktop:sidecar": "node dist/desktop/sidecar.js"
+    "desktop:sidecar": "node dist/desktop/sidecar.js",
+    "tui": "node dist/tui/main.js"
   }
 }

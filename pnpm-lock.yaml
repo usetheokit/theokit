@@ -272,6 +272,9 @@ importers:
       '@usetheo/ui':
         specifier: 0.28.2
         version: 0.28.2(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(tailwindcss@4.3.1)
+      '@theokit/tui':
+        specifier: 0.80.0
+        version: 0.80.0(@types/react@19.2.17)(lowlight@3.3.0)(react@19.2.7)
       bonjour-service:
         specifier: 1.4.4
         version: 1.4.4
@@ -284,6 +287,9 @@ importers:
       imapflow:
         specifier: 1.7.8
         version: 1.7.8
+      ink:
+        specifier: 7.1.1
+        version: 7.1.1(@types/react@19.2.17)(react@19.2.7)
       libphonenumber-js:
         specifier: 1.13.15
         version: 1.13.15
@@ -363,6 +369,9 @@ importers:
       happy-dom:
         specifier: 21.0.4
         version: 21.0.4
+      ink-testing-library:
+        specifier: 4.0.0
+        version: 4.0.0(@types/react@19.2.17)
       theokit:
         specifier: workspace:*
         version: link:../../packages/theo
