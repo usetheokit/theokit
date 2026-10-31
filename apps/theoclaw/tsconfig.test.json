@@ -1,6 +1,7 @@
 {
   "extends": "../../tsconfig.json",
   "compilerOptions": {
+    "paths": {},
     "noEmit": true,
     "strict": true,
     "types": ["node", "reflect-metadata"]

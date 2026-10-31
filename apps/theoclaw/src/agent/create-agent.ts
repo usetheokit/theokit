@@ -14,7 +14,7 @@ export interface TheoClawAgentOptions<Model extends string | ModelSelection = st
   readonly memory: { readonly enabled: false }
   readonly tools?: CustomTool[]
   readonly plugins?: Plugin[]
-  /** The browser server of a `/control` agent with `THEOCLAW_BROWSER=on`; never on a chat agent. */
+  /** Only on a `/control` agent: its browser server with `THEOCLAW_BROWSER=on`, and the servers its external tools file names; never on a chat agent. */
   readonly mcpServers?: Record<string, McpServerConfig>
 }
 
@@ -39,7 +39,7 @@ export function theoClawAgentOptions<Model extends string | ModelSelection>(
     memory: { enabled: false } as const,
   }
   if (input.toolOptions === undefined) return base
-  // Copied: the SDK takes mutable arrays, and each agent gets its own.
+  // Copied: the SDK takes mutable arrays and maps, and each agent gets its own.
   const { tools, plugins, mcpServers } = input.toolOptions
   return {
     ...base,

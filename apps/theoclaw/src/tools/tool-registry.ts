@@ -1,4 +1,5 @@
 import type { CustomTool, McpServerConfig, Plugin } from '@theokit/sdk'
+import { createACPTool } from 'theokit/server/agent'
 import { bindToolScope } from '@theokit/agents/tool-scope'
 import {
   createApplyPatchTool,
@@ -29,8 +30,32 @@ import type { ToolSettings } from './tool-settings.js'
 export interface AgentToolOptions {
   readonly tools: readonly CustomTool[]
   readonly plugins: readonly Plugin[]
-  /** The stdio browser server, only with `THEOCLAW_BROWSER=on` (B-383); absent otherwise. */
+  /** The browser server with `THEOCLAW_BROWSER=on` (B-383) and the MCP servers of `THEOCLAW_EXTERNAL_TOOLS`; absent when neither names one. */
   readonly mcpServers?: Readonly<Record<string, McpServerConfig>>
+}
+
+/**
+ * The answer to every permission an ACP agent asks for (plan D3): the host-tools sandbox does not
+ * confine the agent's process, so a grant would reach further than any setting says. Asking the
+ * owner instead is B-684.
+ */
+function refuseEveryPermission(): { granted: false } {
+  return { granted: false }
+}
+
+/** One `createACPTool` per agent of the external tools file, each run in the tool root. */
+function acpTools(settings: ToolSettings): CustomTool[] {
+  return settings.external.acpAgents.map((agent) =>
+    createACPTool({
+      name: agent.name,
+      description: agent.description,
+      command: agent.command,
+      ...(agent.args === undefined ? {} : { args: [...agent.args] }),
+      ...(agent.timeoutMs === undefined ? {} : { timeoutMs: agent.timeoutMs }),
+      cwd: settings.toolRoot,
+      onPermissionRequest: refuseEveryPermission,
+    }),
+  )
 }
 
 /**
@@ -90,7 +115,8 @@ export function readOnlyTools(settings: ToolSettings): CustomTool[] {
  * - `git_diff` only when the tool root is a repository AND the sandbox is enforced, since git runs
  *   repository-configured helpers (`diff.external`) that only the kernel sandbox keeps in the root;
  * - the sandboxed shell only with `THEOCLAW_HOST_TOOLS=on`, and write, edit and apply_patch with it
- *   unless `THEOCLAW_SANDBOX=read-only`.
+ *   unless `THEOCLAW_SANDBOX=read-only`;
+ * - one ACP tool per agent `THEOCLAW_EXTERNAL_TOOLS` names, every permission it asks refused.
  *
  * The interactive shell and its stdin tool are never registered: they take a PTY, not this backend.
  */
@@ -116,15 +142,18 @@ export function buildTools(settings: ToolSettings): CustomTool[] {
     }
     tools.push(scope.bind(createShellTool)())
   }
+  tools.push(...acpTools(settings))
   return tools
 }
 
 /**
  * The options of one agent: a fresh tool list (a todolist is never shared between two agents), then
  * the `extra` tools the composition root passes in (the workflow tools, B-387), the state-directory
- * veto, and the browser server when `THEOCLAW_BROWSER=on` (B-383). Given a worker factory (a
- * `/control` agent's, B-386), the list also holds `run_code` over the read-only tools and
- * `delegate_all` over that factory's workers. A chat agent holds no tool and no server.
+ * veto, and the MCP servers: the browser server when `THEOCLAW_BROWSER=on` (B-383) and a copy of the
+ * external ones when the file names any, so an agent without them gets exactly the options it got
+ * before them. Given a worker factory (a `/control` agent's, B-386), the list also holds `run_code`
+ * over the read-only tools and `delegate_all` over that factory's workers. A chat agent holds no tool
+ * and no server.
  */
 export function agentToolOptions(
   settings: ToolSettings,
@@ -136,7 +165,19 @@ export function agentToolOptions(
     tools.push(codeModeTool(readOnlyTools(settings), settings), delegateAllTool(createWorker))
   }
   const base = { tools, plugins: [pathVetoPlugin(settings)] }
-  return settings.browser === undefined ? base : { ...base, mcpServers: { browser: browserServer(settings.browser) } }
+  const servers = mcpServersOf(settings)
+  return Object.keys(servers).length === 0 ? base : { ...base, mcpServers: servers }
+}
+
+/**
+ * The browser server and the external ones in one map. The external tools file cannot name a server
+ * `browser` (`external-tools.ts`), so neither replaces the other.
+ */
+function mcpServersOf(settings: ToolSettings): Record<string, McpServerConfig> {
+  return {
+    ...settings.external.mcpServers,
+    ...(settings.browser === undefined ? {} : { browser: browserServer(settings.browser) }),
+  }
 }
 
 /** A worker's options: the read-only tools and the veto, never `run_code` or `delegate_all` (FR-010). */
