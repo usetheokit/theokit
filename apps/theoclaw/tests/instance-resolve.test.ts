@@ -68,29 +68,50 @@ describe('resolveInstance', () => {
       expect(error.message).toBe('THEOCLAW_PROFILE must match ^[a-z0-9][a-z0-9-]{0,15}$')
       expect(error.variable).toBe('THEOCLAW_PROFILE')
     }
-    expect(resolveInstance({ THEOCLAW_PROFILE: 'a'.repeat(16) }, { homeDir: HOME }).label).toBe(`theoclaw-${'a'.repeat(16)}`)
+    expect(resolveInstance({ THEOCLAW_PROFILE: 'a'.repeat(16) }, { homeDir: HOME }).label).toBe(
+      `theoclaw-${'a'.repeat(16)}`,
+    )
   })
 
-  it('refuses a profile combined with THEOKIT_HOME, THEOKIT_AUTH_HOME, THEOCLAW_STATE_DIR or THEOCLAW_WORKSPACE', () => {
-    for (const variable of ['THEOKIT_HOME', 'THEOKIT_AUTH_HOME', 'THEOCLAW_STATE_DIR', 'THEOCLAW_WORKSPACE']) {
+  it('refuses a profile combined with THEOKIT_HOME, THEOKIT_AUTH_HOME or THEOCLAW_STATE_DIR', () => {
+    for (const variable of ['THEOKIT_HOME', 'THEOKIT_AUTH_HOME', 'THEOCLAW_STATE_DIR']) {
       const error = refusal({ THEOCLAW_PROFILE: 'a', [variable]: '/secret-path' })
-      expect(error.message).toBe(`THEOCLAW_PROFILE cannot be combined with ${variable}: unset them or the profile`)
+      expect(error.message).toBe(
+        `THEOCLAW_PROFILE cannot be combined with ${variable}: unset them or the profile`,
+      )
       expect(error.message).not.toContain('/secret-path')
     }
     const both = refusal({ THEOCLAW_PROFILE: 'a', THEOKIT_HOME: '/x', THEOCLAW_STATE_DIR: '/y' })
-    expect(both.message).toBe('THEOCLAW_PROFILE cannot be combined with THEOKIT_HOME, THEOCLAW_STATE_DIR: unset them or the profile')
+    expect(both.message).toBe(
+      'THEOCLAW_PROFILE cannot be combined with THEOKIT_HOME, THEOCLAW_STATE_DIR: unset them or the profile',
+    )
+  })
+
+  // B-378: the profile owns the chat sessions' workspace too, so two profiles never share one.
+  it('refuses a profile combined with THEOCLAW_WORKSPACE without printing its value', () => {
+    const error = refusal({ THEOCLAW_PROFILE: 'a', THEOCLAW_WORKSPACE: '/secret-path' })
+    expect(error.message).toBe(
+      'THEOCLAW_PROFILE cannot be combined with THEOCLAW_WORKSPACE: unset them or the profile',
+    )
+    expect(error.message).not.toContain('/secret-path')
   })
 
   it('reports the name before a conflict', () => {
-    expect(refusal({ THEOCLAW_PROFILE: '../x', THEOKIT_HOME: '/x' }).message).toContain('must match')
+    expect(refusal({ THEOCLAW_PROFILE: '../x', THEOKIT_HOME: '/x' }).message).toContain(
+      'must match',
+    )
   })
 
   it('resolves a padded profile name to its trimmed form', () => {
-    expect(resolveInstance({ THEOCLAW_PROFILE: '  a  ' }, { homeDir: HOME }).label).toBe('theoclaw-a')
+    expect(resolveInstance({ THEOCLAW_PROFILE: '  a  ' }, { homeDir: HOME }).label).toBe(
+      'theoclaw-a',
+    )
     expect(resolveInstance({ THEOCLAW_PROFILE: '0' }, { homeDir: HOME }).label).toBe('theoclaw-0')
   })
 
   it('a blank home variable beside a profile is no conflict', () => {
-    expect(resolveInstance({ THEOCLAW_PROFILE: 'a', THEOKIT_HOME: ' ' }, { homeDir: HOME }).label).toBe('theoclaw-a')
+    expect(
+      resolveInstance({ THEOCLAW_PROFILE: 'a', THEOKIT_HOME: ' ' }, { homeDir: HOME }).label,
+    ).toBe('theoclaw-a')
   })
 })
