@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -14,7 +14,13 @@ import { generate, generateCommand } from '../../packages/theo/src/cli/commands/
  */
 const dirs: string[] = []
 
-function project(opts: { serverDir?: string; schema?: string; drizzleDialect?: string }): string {
+function project(opts: {
+  serverDir?: string
+  schema?: string
+  drizzleDialect?: string
+  /** Write `<serverDir>/db/index.ts` beside the schema (default true). */
+  dbIndex?: boolean
+}): string {
   const dir = mkdtempSync(join(tmpdir(), 'theo-gen-resource-'))
   dirs.push(dir)
   const serverDir = opts.serverDir ?? 'server'
@@ -30,6 +36,9 @@ function project(opts: { serverDir?: string; schema?: string; drizzleDialect?: s
   if (opts.schema !== undefined) {
     mkdirSync(join(dir, serverDir, 'db'), { recursive: true })
     writeFileSync(join(dir, serverDir, 'db', 'schema.ts'), opts.schema)
+    if (opts.dbIndex !== false) {
+      writeFileSync(join(dir, serverDir, 'db', 'index.ts'), 'export const db = {}\n')
+    }
   }
   if (opts.drizzleDialect !== undefined) {
     writeFileSync(
@@ -141,5 +150,41 @@ describe('generate resource follows the project layout and dialect', () => {
     expect(result.status).toBe('invalid_config')
     expect(result.message).toContain('"mysql"')
     expect(readFileSync(join(dir, 'server/db/schema.ts'), 'utf-8')).toBe('')
+  })
+
+  // The routes import `db` from `<serverDir>/db/index.js`. Without that file the command reported
+  // `Created resource` and the next build failed with `Could not resolve` (usetheokit/theokit#1038).
+  it.each([
+    ['sqlite', "import { text } from 'drizzle-orm/sqlite-core'\n", 'drizzle-orm/better-sqlite3'],
+    ['postgresql', "import { pgTable } from 'drizzle-orm/pg-core'\n", 'drizzle-orm/node-postgres'],
+  ])(
+    'refuses a %s project without db/index.ts, names the file and what it exports, and writes nothing',
+    async (_dialect, schema, driverModule) => {
+      const dir = project({ serverDir: 'src/server', schema, dbIndex: false })
+      const result = await generate({
+        cwd: dir,
+        type: 'resource',
+        name: 'posts',
+        fields: ['title:string'],
+      })
+      expect(result.status).toBe('not_a_project')
+      expect(result.message).toContain(join('src/server', 'db', 'index.ts'))
+      expect(result.message).toContain('export const db')
+      expect(result.message).toContain(driverModule)
+      expect(existsSync(join(dir, 'src/server/routes/posts'))).toBe(false)
+      expect(readFileSync(join(dir, 'src/server/db/schema.ts'), 'utf-8')).toBe(schema)
+    },
+  )
+
+  it('accepts a db/index.js beside the schema', async () => {
+    const dir = project({ schema: '', dbIndex: false })
+    writeFileSync(join(dir, 'server/db/index.js'), 'export const db = {}\n')
+    const result = await generate({
+      cwd: dir,
+      type: 'resource',
+      name: 'posts',
+      fields: ['title:string'],
+    })
+    expect(result.status).toBe('created')
   })
 })

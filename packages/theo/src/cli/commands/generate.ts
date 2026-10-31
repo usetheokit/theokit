@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
-import { resolve, dirname } from 'node:path'
+import { posix, resolve, dirname } from 'node:path'
 
 import { loadConfig } from '../../config/load-config.js'
 
@@ -59,15 +59,12 @@ function toCamelCase(name: string): string {
   return pascal.charAt(0).toLowerCase() + pascal.slice(1)
 }
 
-function generateRouteTemplate(name: string): string {
+function generateRouteTemplate(name: string, displayPath: string): string {
   return [
     `import { route, type AccessDecision } from 'theokit/server'`,
     `import { z } from 'zod'`,
     ``,
-    ...undecidedPolicyDeclaration(
-      `server/routes/${name}.ts`,
-      'a stub today is a real handler tomorrow',
-    ),
+    ...undecidedPolicyDeclaration(displayPath, 'a stub today is a real handler tomorrow'),
     ``,
     `export const GET = route()`,
     `  .policy(${UNDECIDED_POLICY_IDENT})`,
@@ -118,13 +115,18 @@ function generateActionTemplate(name: string): string {
  * plan Q4 scenario 1: roundtrip serialize). Skeleton uses vitest BDD shape
  * per testing.md.
  */
-function generateAgentTemplate(name: string): string {
+function generateAgentTemplate(name: string, displayPath: string): string {
   return [
     `import { AgentBuilder } from '@theokit/agents'`,
+    `import type { AccessDecision } from 'theokit/server'`,
     `import { z } from 'zod'`,
     ``,
     `// Zero-config: this file is auto-served at POST /api/agents/${name}.`,
     `// Add tools with tool('name')...build() and chain them via .tool(...).`,
+    ``,
+    ...undecidedPolicyDeclaration(displayPath, 'an agent endpoint runs a model on your key'),
+    `export const policy = ${UNDECIDED_POLICY_IDENT}`,
+    ``,
     `export default AgentBuilder.create()`,
     `  .input(z.object({ message: z.string() }))`,
     `  .model('openai/gpt-4o-mini')`,
@@ -245,47 +247,102 @@ function generateMemoryTemplate(_name: string): string {
   ].join('\n')
 }
 
+/** The project directories from `theo.config.ts`, each relative to the project root. */
+interface ProjectLayout {
+  appDir: string
+  serverDir: string
+  agentsDir: string
+}
+
 /** Where a single-file kind is written, relative to the project root, and what it says. */
 interface SingleFileKind {
-  path: (name: string) => string
-  template: (name: string) => string
+  path: (name: string, layout: ProjectLayout) => string
+  /** `displayPath` is the project-relative path, for a template that names its own file. */
+  template: (name: string, displayPath: string) => string
 }
 
 /**
- * The single-file kinds. `resource` writes several files and `schedule` reads its directory from
- * the project config, so neither is here.
+ * The single-file kinds. `resource` writes several files and `schedule` checks more than its
+ * directory, so neither is here. Every path starts from a directory `theo.config.ts` declares: the
+ * scaffold puts them under `src/`, and a hardcoded `server/` wrote files no scanner reads (#1031).
  */
 const SINGLE_FILE_KINDS: Partial<Record<GeneratorType, SingleFileKind>> = {
-  // Agent-capability generators. These live UNDER `agents/` — they are facets of the agent domain,
-  // not standalone top-level concerns — and the folder-semantic scanner treats each as composition
-  // (never a phantom route).
-  workflow: { path: (name) => `agents/workflows/${name}.ts`, template: generateWorkflowTemplate },
-  eval: { path: (name) => `agents/evals/${name}.ts`, template: generateEvalTemplate },
-  sandbox: { path: (name) => `agents/sandbox/${name}.ts`, template: generateSandboxTemplate },
-  memory: { path: (name) => `agents/memory/${name}.ts`, template: generateMemoryTemplate },
-  route: { path: (name) => `server/routes/${name}.ts`, template: generateRouteTemplate },
-  action: { path: (name) => `server/actions/${name}.ts`, template: generateActionTemplate },
-  page: { path: (name) => `app/${name}/page.tsx`, template: generatePageTemplate },
-  ws: { path: (name) => `server/ws/${name}.ts`, template: generateWsTemplate },
+  // Agent-capability generators. These live UNDER `agentsDir` — they are facets of the agent
+  // domain, not standalone top-level concerns — and the folder-semantic scanner treats each as
+  // composition (never a phantom route).
+  workflow: {
+    path: (name, { agentsDir }) => posix.join(agentsDir, 'workflows', `${name}.ts`),
+    template: generateWorkflowTemplate,
+  },
+  eval: {
+    path: (name, { agentsDir }) => posix.join(agentsDir, 'evals', `${name}.ts`),
+    template: generateEvalTemplate,
+  },
+  sandbox: {
+    path: (name, { agentsDir }) => posix.join(agentsDir, 'sandbox', `${name}.ts`),
+    template: generateSandboxTemplate,
+  },
+  memory: {
+    path: (name, { agentsDir }) => posix.join(agentsDir, 'memory', `${name}.ts`),
+    template: generateMemoryTemplate,
+  },
+  route: {
+    path: (name, { serverDir }) => posix.join(serverDir, 'routes', `${name}.ts`),
+    template: generateRouteTemplate,
+  },
+  action: {
+    path: (name, { serverDir }) => posix.join(serverDir, 'actions', `${name}.ts`),
+    template: generateActionTemplate,
+  },
+  page: {
+    path: (name, { appDir }) => posix.join(appDir, name, 'page.tsx'),
+    template: generatePageTemplate,
+  },
+  ws: {
+    path: (name, { serverDir }) => posix.join(serverDir, 'ws', `${name}.ts`),
+    template: generateWsTemplate,
+  },
   controller: {
-    path: (name) => `server/controllers/${name}.controller.ts`,
+    path: (name, { serverDir }) => posix.join(serverDir, 'controllers', `${name}.controller.ts`),
     template: generateControllerTemplate,
   },
-  agent: { path: (name) => `server/agents/${name}.agent.ts`, template: generateAgentTemplate },
+  // `<agentsDir>/<name>.ts` is what the agent scanner serves at `/api/agents/<name>`, the URL the
+  // template promises. The old `server/agents/<name>.agent.ts` was outside `agentsDir` in both the
+  // flat and the scaffold layout, so the agent was never served.
+  agent: {
+    path: (name, { agentsDir }) => posix.join(agentsDir, `${name}.ts`),
+    template: generateAgentTemplate,
+  },
   toolbox: {
-    path: (name) => `server/toolboxes/${name}.tools.ts`,
+    path: (name, { serverDir }) => posix.join(serverDir, 'toolboxes', `${name}.tools.ts`),
     template: generateToolboxTemplate,
   },
 }
 
-function resolveTemplate(
+/** The project layout from `theo.config.ts`, or the refusal naming why it could not be read. */
+async function readLayout(cwd: string): Promise<ProjectLayout | GenerateResult> {
+  try {
+    const { appDir, serverDir, agentsDir } = await loadConfig(cwd)
+    return { appDir, serverDir, agentsDir }
+  } catch (err) {
+    return {
+      status: 'invalid_config',
+      message: `Cannot read ${resolve(cwd, 'theo.config.ts')}: ${(err as Error).message}`,
+    }
+  }
+}
+
+async function resolveTemplate(
   cwd: string,
   kind: GeneratorType,
   name: string,
-): { filePath: string; content: string } | null {
+): Promise<Target | GenerateResult | null> {
   const spec = SINGLE_FILE_KINDS[kind]
   if (spec === undefined) return null
-  return { filePath: resolve(cwd, spec.path(name)), content: spec.template(name) }
+  const layout = await readLayout(cwd)
+  if ('status' in layout) return layout
+  const displayPath = spec.path(name, layout)
+  return { filePath: resolve(cwd, displayPath), content: spec.template(name, displayPath) }
 }
 
 function generateActionTestTemplate(name: string): string {
@@ -387,7 +444,7 @@ async function resolveTarget(
 ): Promise<Target | GenerateResult> {
   // A schedule's directory comes from the project config, so resolving it is async and may refuse.
   if (type === 'schedule') return resolveScheduleTarget(cwd, name)
-  const target = resolveTemplate(cwd, type, name)
+  const target = await resolveTemplate(cwd, type, name)
   if (target === null) return { status: 'invalid_kind', message: `Unknown type: ${type}` }
   return target
 }
@@ -438,16 +495,9 @@ export async function generate(opts: GenerateOptions): Promise<GenerateResult> {
 
   // Resource generates multiple files — handle separately
   if (kind === 'resource') {
-    let serverDir: string
-    try {
-      serverDir = (await loadConfig(cwd)).serverDir
-    } catch (err) {
-      return {
-        status: 'invalid_config',
-        message: `Cannot read ${resolve(cwd, 'theo.config.ts')}: ${(err as Error).message}`,
-      }
-    }
-    return generateResource(cwd, name, opts.fields ?? [], serverDir)
+    const layout = await readLayout(cwd)
+    if ('status' in layout) return layout
+    return generateResource(cwd, name, opts.fields ?? [], layout.serverDir)
   }
 
   const resolved = await resolveTarget(cwd, kind, name)
