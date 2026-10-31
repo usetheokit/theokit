@@ -73,6 +73,11 @@ export function applyFrame(view: TuiView, frame: ControlFrame): TuiView {
   }
 }
 
+/** A line for the owner that is not part of any turn: the view is otherwise unchanged. */
+export function addNotice(view: TuiView, variant: 'warning' | 'error', text: string): TuiView {
+  return { ...view, transcript: [...view.transcript, { kind: 'notice', variant, text }] }
+}
+
 /** The connection failed mid-turn: the turn ends with the reason. */
 export function failTurn(view: TuiView, reason: string): TuiView {
   return { transcript: [...view.transcript, { kind: 'notice', variant: 'error', text: reason }], running: false }

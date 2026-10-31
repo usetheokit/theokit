@@ -183,7 +183,8 @@ describe.skipIf(!LIVE)("the TUI and the desktop on one running instance, against
       "\r",
     );
     // A tool card, then text as it is generated: Esc lands while the turn still streams.
-    await waitFor(() => tui.screen().includes("read_file"), 90_000, `the tool card; screen:\n${tui.screen()}`);
+    // The card draws `read_file` as `ReadFile`; the prompt holds only `read_file`, so the echo cannot match.
+    await waitFor(() => tui.screen().includes("ReadFile"), 90_000, `the tool card; screen:\n${tui.screen()}`);
     // The marker once in the prompt, once more when the reply's text has begun streaming.
     await waitFor(() => tui.screen().split(MARKER).length > 2, 90_000, `streamed text after the tool; screen:\n${tui.screen()}`);
     await tui.type("\u001B");

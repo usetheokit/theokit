@@ -13,7 +13,7 @@ import { Text, useInput } from 'ink'
 import { type ReactElement, useRef, useState } from 'react'
 
 import type { ControlClient } from '../control-client/control-client.js'
-import { applyFrame, failTurn, INITIAL_VIEW, nextSessionId, startTurn, type TranscriptEntry, type TuiView } from './frames.js'
+import { addNotice, applyFrame, failTurn, INITIAL_VIEW, nextSessionId, startTurn, type TranscriptEntry, type TuiView } from './frames.js'
 
 export interface TheoClawTuiProps {
   /** The connection to the running instance; the TUI builds no agent (plan D1). */
@@ -53,6 +53,8 @@ export function TheoClawTui({ client, session: base, onExit }: TheoClawTuiProps)
   const [session, setSession] = useState(base)
   const fresh = useRef(0)
   const running = useRef(false)
+  // A message submitted while a turn runs (a redirect typed right after Esc), sent once it ends.
+  const queued = useRef<string | undefined>(undefined)
 
   const interrupt = (): void => {
     if (running.current) client.interrupt(session)
@@ -67,6 +69,9 @@ export function TheoClawTui({ client, session: base, onExit }: TheoClawTuiProps)
       setView((current) => failTurn(current, error instanceof Error ? error.message : String(error)))
     } finally {
       running.current = false
+      const next = queued.current
+      queued.current = undefined
+      if (next !== undefined) void send(next)
     }
   }
 
@@ -80,13 +85,18 @@ export function TheoClawTui({ client, session: base, onExit }: TheoClawTuiProps)
     if (trimmed === '/interrupt') return interrupt()
     if (trimmed === '/quit') return void client.close().then(onExit)
     if (trimmed === '/new') {
+      // The running turn stays on this session: switching now would leave Esc nothing to stop.
+      if (running.current) return setView((current) => addNotice(current, 'warning', 'a turn is running: press Esc first'))
       fresh.current += 1
       setSession(nextSessionId(base, fresh.current))
       setView(INITIAL_VIEW)
       return
     }
-    // One turn at a time: a message typed while one runs waits for Esc or the turn's end.
-    if (running.current) return
+    // One turn at a time: a message typed while one runs is sent when it ends (by Esc or by itself).
+    if (running.current) {
+      queued.current = text
+      return setView((current) => addNotice(current, 'warning', 'sent when the running turn ends'))
+    }
     void send(text)
   }
 

@@ -101,10 +101,11 @@ describe("theoclaw-tui (T4.2)", () => {
   });
 
   it("a tool event renders a tool card before the turn ends", async () => {
-    const instance = await startInstance(() => ({ frames: [], toolHeld: true }));
+    // The card draws `lookup_ledger` as `LookupLedger`, which nothing the owner typed contains.
+    const instance = await startInstance(() => ({ frames: [], toolHeld: true, toolName: "lookup_ledger" }));
     const tui = await renderTui(instance);
-    await tui.type("read it", ENTER);
-    await tui.until((f) => f.includes("read"), "the tool card");
+    await tui.type("go", ENTER);
+    await tui.until((f) => f.includes("LookupLedger"), "the tool card");
     expect(instance.agents[0]!.signals[0]!.aborted).toBe(false);
   });
 
@@ -154,6 +155,35 @@ describe("theoclaw-tui (T4.2)", () => {
     await tui.until((f) => f.includes("interrupted"), "the turn shown interrupted");
     await tui.type("again", ENTER);
     await waitFor(() => instance.agents[0]!.sent.length === 2, 3000, "the redirect to reach the instance");
+  });
+
+  it("a redirect typed right after Esc is sent once the interrupted turn ends", async () => {
+    const teardown = deferred<void>();
+    const instance = await startInstance((n) =>
+      n === 0 ? { frames: [assistant("x")], before: new Promise<void>(() => undefined), teardown: teardown.promise } : quick,
+    );
+    const tui = await renderTui(instance);
+    await tui.type("hi", ENTER);
+    await waitFor(() => instance.agents[0]?.signals.length === 1, 3000, "the turn to start");
+    // The cancelled run is still unwinding, so the TUI still holds the turn when the redirect is typed.
+    await tui.type(ESC, "again", ENTER);
+    await tui.until((f) => f.includes("sent when the running turn ends"), "the queued notice");
+    teardown.resolve();
+    await waitFor(() => instance.agents[0]!.sent.length === 2, 3000, "the redirect to reach the instance");
+    expect(instance.agents[0]!.sent).toEqual(["hi", "again"]);
+  });
+
+  it("/new during a turn is refused, so Esc still stops that turn", async () => {
+    const instance = await startInstance(() => ({ frames: [assistant("never")], before: new Promise<void>(() => undefined) }));
+    const tui = await renderTui(instance);
+    await tui.type("hi", ENTER);
+    await waitFor(() => instance.agents[0]?.signals.length === 1, 3000, "the turn to start");
+    await tui.type("/new", ENTER, ENTER);
+    await tui.until((f) => f.includes("press Esc first"), "the refusal");
+    expect(tui.screen()).toContain("session owner");
+    expect(tui.screen()).not.toContain("owner-1");
+    await tui.type(ESC);
+    await waitFor(() => instance.agents[0]!.cancels === 1, 2000, "the instance to cancel the original turn");
   });
 
   it("partial assistant text is drawn before the turn ends", async () => {
