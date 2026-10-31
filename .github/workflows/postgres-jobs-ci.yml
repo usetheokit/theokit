@@ -24,6 +24,8 @@ on:
       - 'tests/integration/cron-lock-postgres-real.test.ts'
       - 'packages/theo/src/server/storage/error-listener.ts'
       - 'tests/integration/user-pools-survive-a-dropped-idle-connection.test.ts'
+      - 'packages/theo/src/server/storage/use-database.ts'
+      - 'tests/integration/use-database-postgres-survives-a-dropped-connection.test.ts'
       - '.github/workflows/postgres-jobs-ci.yml'
 
 permissions:
@@ -102,4 +104,4 @@ jobs:
           URL="${SCHEME}://${PG_USER}:${PG_PASSWORD}@localhost:5432/${PG_DATABASE}"
           echo "POSTGRES_URL=${URL}" >> "$GITHUB_ENV"
       - name: Run real-Postgres integration test
-        run: pnpm vitest run tests/integration/job-backend-postgres-real.test.ts tests/integration/storage-manager-postgres-real.test.ts tests/integration/cron-lock-postgres-real.test.ts tests/integration/user-pools-survive-a-dropped-idle-connection.test.ts
+        run: pnpm vitest run tests/integration/job-backend-postgres-real.test.ts tests/integration/storage-manager-postgres-real.test.ts tests/integration/cron-lock-postgres-real.test.ts tests/integration/user-pools-survive-a-dropped-idle-connection.test.ts tests/integration/use-database-postgres-survives-a-dropped-connection.test.ts
