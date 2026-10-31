@@ -37,14 +37,14 @@ path, published for an application to call, and present with no caller at all.
 | Tag validation | `validateTags`, **drops and warns, never refuses** | Wired — **correction, see below** | `packages/theo/src/cache/validation.ts:20` |
 | Key derivation from the request | excluded-query list, sorted query, lowercased host | Wired, but **its config key is inert** | `packages/theo/src/cache/key-derivation.ts:60` |
 | **Function-level caching** | `defineCachedFunction`, keyed by name + arguments | Published — **correction, see below** | `packages/theo/src/cache/define-cached-function.ts:39` |
-| Route-level caching | `defineCachedRoute` wrapping a handler | Published | `packages/theo/src/cache/define-cached-route.ts:83` |
-| **Single-flight per cached-route key** | `defineCachedRoute` single-flight per cache key: one handler run for concurrent misses, one background revalidation per stale key | Wired — new on 2026-10-31 (B-667) | `packages/theo/src/cache/define-cached-route.ts:239` |
+| Route-level caching | `defineCachedRoute` wrapping a handler | Published | `packages/theo/src/cache/define-cached-route.ts:86` |
+| **Single-flight per cached-route key** | `defineCachedRoute` single-flight per cache key, per process and per `defineCachedRoute` call: one handler run for concurrent misses, one background revalidation per stale key | Wired — new on 2026-10-31 (B-667) | `packages/theo/src/cache/define-cached-route.ts:242` |
 | Per-route rules | first match wins over compiled patterns | **No caller — see below** | `packages/theo/src/cache/route-rules.ts:24` |
 | Shared-cache headers | `s-maxage` + `stale-while-revalidate` | Wired | `packages/theo/src/cache/cache-control-header.ts:21` |
-| Cache-status header | `X-Theo-Cache`, **now emitted in production too** | Wired — new on 2026-08-20 | `packages/theo/src/cache/define-cached-route.ts:473` |
+| Cache-status header | `X-Theo-Cache`, **now emitted in production too** | Wired — new on 2026-08-20 | `packages/theo/src/cache/define-cached-route.ts:484` |
 | Pluggable storage | adapter interface, one in-memory implementation | Wired | `packages/theo/src/cache/in-memory-adapter.ts:24` |
 | Engine initialised at boot | `theo dev` and `theo start` both init from `theo.config.ts` | Wired — new on 2026-08-20 | `packages/theo/src/server/cache-bootstrap.ts:28` |
-| Cacheability guards | Set-Cookie, SSE, chunked, status, oversized body | Wired — **correction, see below** | `packages/theo/src/cache/define-cached-route.ts:389` |
+| Cacheability guards | Set-Cookie, SSE, chunked, status, oversized body | Wired — **correction, see below** | `packages/theo/src/cache/define-cached-route.ts:400` |
 | Error isolation | `onError` per phase | **Interface only — no production caller passes one** | `packages/theo/src/cache/cache-engine.ts:31` |
 
 `Published` means an application can import it from `theokit/server`: the cache barrel
@@ -68,8 +68,8 @@ consequence this file used to carry:
 * **A configured `defaults` reaches the route that declared none.** The config's `defaults` object is
   passed through the bootstrap (`packages/theo/src/server/cache-bootstrap.ts:45`) into the engine
   (`packages/theo/src/cache/engine-singleton.ts:43`), and `defineCachedRoute` reads `engine.defaults` at
-  define time (`packages/theo/src/cache/define-cached-route.ts:96`).
-* **`X-Theo-Cache` is emitted unconditionally** (`packages/theo/src/cache/define-cached-route.ts:473`).
+  define time (`packages/theo/src/cache/define-cached-route.ts:99`).
+* **`X-Theo-Cache` is emitted unconditionally** (`packages/theo/src/cache/define-cached-route.ts:484`).
   It used to be written only when `NODE_ENV !== 'production'` — so the one signal distinguishing a hit
   from a miss vanished in the only environment where anyone needed to check.
 
@@ -97,8 +97,8 @@ and one of those was wrong about the guarantee as well.
    `packages/theo/src/cache/cache-engine.ts:249`, and a search of `packages/theo/src` and
    `packages/agents/src` finds no caller supplying one. The real guard is `tryCacheResponse`, which
    refuses a response carrying `set-cookie` and warns once per route
-   (`packages/theo/src/cache/define-cached-route.ts:395`), with a defence-in-depth strip when the surviving
-   headers are serialised (`packages/theo/src/cache/define-cached-route.ts:434`). Same outcome, different
+   (`packages/theo/src/cache/define-cached-route.ts:406`), with a defence-in-depth strip when the surviving
+   headers are serialised (`packages/theo/src/cache/define-cached-route.ts:445`). Same outcome, different
    code — and the difference matters, because the credited mechanism is the one nobody is protecting.
 3. **The excluded-query-parameter list is real and applied by default.** 29 tracking parameters
    (`packages/theo/src/cache/key-derivation.ts:6`) are dropped whenever a caller passes no explicit list
@@ -106,7 +106,7 @@ and one of those was wrong about the guarantee as well.
    single-use entries and the hit rate collapses for reasons nobody attributes to the cache.
 4. **The route wrapper caches after middleware, by construction.** It wraps the handler rather than the
    router, so a cache lookup happens after auth and CSRF have run
-   (`packages/theo/src/cache/define-cached-route.ts:60`). That is a structural guarantee, not a review
+   (`packages/theo/src/cache/define-cached-route.ts:61`). That is a structural guarantee, not a review
    convention.
 
 **Correction, and this one inverts a claim.** The previous edition said "Tags are validated at the
@@ -126,7 +126,7 @@ validation throws (`packages/theo/src/cache/validation.ts:75` and
 |---|---|
 | **A tag typo that fails** | See the correction above. `revalidateTag('user-42')` against a tag stored as `user_42` and `revalidateTag(reserved_prefix + 'x')` are indistinguishable to the caller: both return `{ deleted: 0 }`. This is the highest-value item on the list and it is a return type, not an engine change. |
 | **`routeRules` reaching the engine** | The config key is declared (`packages/theo/src/config/schemas/cache.ts:40`) and parsed, and the matcher is implemented (`packages/theo/src/cache/route-rules.ts:24`, `packages/theo/src/cache/route-rules.ts:35`). Nothing connects them: the bootstrap forwards only `enabled`, `storage`, `maxEntries` and `defaults` (`packages/theo/src/server/cache-bootstrap.ts:38`), and neither `compileRouteRules` nor `resolveRouteRule` has a production caller. A `routeRules` block in `theo.config.ts` validates and is discarded in silence. |
-| **`keyDerivation` reaching the engine** | Same shape, one layer down. The key is declared (`packages/theo/src/config/schemas/cache.ts:33`), but the only production call site passes just `prefix`, `varies` and `getKey` (`packages/theo/src/cache/define-cached-route.ts:152`), so a configured `excludeQuery` or `sortQuery` never applies. `lowercaseHost` is inert twice over: `KeyDerivationOptions` has no such field, and the host is lowercased unconditionally (`packages/theo/src/cache/key-derivation.ts:71`). |
+| **`keyDerivation` reaching the engine** | Same shape, one layer down. The key is declared (`packages/theo/src/config/schemas/cache.ts:33`), but the only production call site passes just `prefix`, `varies` and `getKey` (`packages/theo/src/cache/define-cached-route.ts:155`), so a configured `excludeQuery` or `sortQuery` never applies. `lowercaseHost` is inert twice over: `KeyDerivationOptions` has no such field, and the host is lowercased unconditionally (`packages/theo/src/cache/key-derivation.ts:71`). |
 | **An observable cache failure** | `onError` is declared per phase (`packages/theo/src/cache/cache-engine.ts:31`) and invoked on every storage fault (`packages/theo/src/cache/cache-engine.ts:197`, `packages/theo/src/cache/cache-engine.ts:285`, `packages/theo/src/cache/cache-engine.ts:299`), but the boot path passes no hook (`packages/theo/src/server/cache-bootstrap.ts:38`), so in a real application every one of those calls is a no-op. A cache that has stopped working is indistinguishable from a cache that is missing every time. |
 | **A safe default key for a cached function** | `defineCachedFunction` derives its key with `JSON.stringify(args)` unless `getKey` is given (`packages/theo/src/cache/define-cached-function.ts:53`). A `Date`, a `Map`, a `Set`, a function or an `undefined` argument all serialise lossily or collide, silently. The rule this needs is the one the previous edition wrote for captured values: represent it in the key, or refuse to cache. |
 | **Named lifetime profiles** | Every call site invents its own seconds. The shipped default is `maxAge: 1` (`packages/theo/src/cache/constants.ts:11`, mirrored at `packages/theo/src/config/schemas/cache.ts:28`) — a one-second cache, which is a reasonable floor and a terrible lifetime. Nothing to review, nothing to tune centrally. |
@@ -176,11 +176,19 @@ list below starts from what is actually absent.
    and until they land, `theo.config.ts` accepts blocks it silently ignores — which is worse than not
    accepting them. `onError` goes first because it is the one that makes the other two debuggable.
 3. **Done on 2026-10-31 (B-667): `defineCachedRoute` single-flight.** Concurrent misses of one key share
-   one handler run (`packages/theo/src/cache/define-cached-route.ts:239`); followers build their own
+   one handler run (`packages/theo/src/cache/define-cached-route.ts:242`); followers build their own
    `Response` from the cached value, and run the handler themselves when the leader's response is not
    cacheable, so a `Set-Cookie` never crosses requests. A stale key starts one background revalidation at a
-   time (`packages/theo/src/cache/define-cached-route.ts:311`). A leader whose own client aborted does not
+   time (`packages/theo/src/cache/define-cached-route.ts:314`). A leader whose own client aborted does not
    fail its followers, except behind a Node `IncomingMessage`, which reaches the wrapper with no signal.
+   A failed background revalidation keeps the stale entry and is reported once per route with
+   `console.warn`, naming the method and path and never the cache key, which carries the query string
+   and every varied header value (`packages/theo/src/cache/define-cached-route.ts:335`). It does not
+   reach the app's `onError` hook, which the engine's own background revalidation reports to with phase
+   `revalidate`: the `CacheEngine` interface exposes no such hook to the wrapper. Accepted edge case: the
+   in-flight slot lives in the wrapper's closure, so a request arriving after `revalidatePath`,
+   `revalidateTag` or `engine.invalidate` can still join a handler run that started before the
+   invalidation; the entry that run writes is the pre-invalidation answer until it expires.
 4. **Refuse an unrepresentable cache key.** Give `defineCachedFunction` a key derivation that either
    handles non-JSON arguments explicitly or throws at call time
    (`packages/theo/src/cache/define-cached-function.ts:53`). Silent collision is the worst failure a cache
