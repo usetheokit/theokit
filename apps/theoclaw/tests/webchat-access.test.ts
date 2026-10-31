@@ -34,8 +34,8 @@ afterEach(async () => {
 })
 
 /** A started TheoClaw whose agent factory counts the agents it builds. */
-async function start(options: { readonly token?: string; readonly assetsDir?: string } = {}) {
-  const calls = { built: 0, toolOptions: [] as AgentToolOptions[] }
+async function start(options: { readonly token?: string; readonly assetsDir?: string; readonly webchat?: boolean } = {}) {
+  const calls = { built: 0, toolOptions: [] as AgentToolOptions[], webchat: [] as AgentToolOptions[] }
   const capture = capturingStream()
   const { builders } = fakeBuilders()
   const env = { ...TELEGRAM_AND_LINE, ...(options.token === undefined ? {} : { THEOCLAW_WEBCHAT_TOKEN: options.token }) }
@@ -46,6 +46,14 @@ async function start(options: { readonly token?: string; readonly assetsDir?: st
       calls.toolOptions.push(toolOptions)
       return new FakeAgent({ frames: [assistant('hello from the agent'), finished()] })
     },
+    ...(options.webchat === true
+      ? {
+          webchatAgentFactory: (toolOptions: AgentToolOptions) => {
+            calls.webchat.push(toolOptions)
+            return new FakeAgent({ frames: [assistant('hello from the webchat agent'), finished()] })
+          },
+        }
+      : {}),
     builders,
     signals: new EventEmitter(),
     exit: vi.fn(),
@@ -164,5 +172,15 @@ describe('the /webchat routes on the started listener', () => {
     expect(await served.text()).toContain('hello from the agent')
 
     expect(calls.toolOptions).toEqual([NO_TOOL_OPTIONS])
+  })
+
+  it('builds a served turn\'s agent from webchatAgentFactory when the start has one, never the /control factory (B-375, FR-009)', async () => {
+    const { base, calls } = await start({ token: TOKEN, webchat: true })
+
+    const served = await post(base, '/webchat/chat', `Bearer ${TOKEN}`)
+    expect(await served.text()).toContain('hello from the webchat agent')
+
+    expect(calls.webchat).toEqual([NO_TOOL_OPTIONS])
+    expect(calls.built).toBe(0)
   })
 })

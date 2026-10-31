@@ -299,6 +299,10 @@ export interface StartOptions extends Omit<TheoClawOptions, 'write'> {
   readonly toolDeps?: ToolDeps
   /** Which instance this process is (B-514); the process entry resolved and applied it. Default: no profile. */
   readonly instance?: TheoClawInstance
+  /** The migration import's line (FR-010, D1), computed by the entry and written after the instance line. */
+  readonly importedLine?: string
+  /** WebChat's agents, which an import must not reach (FR-009). Default: `agentFactory`. */
+  readonly webchatAgentFactory?: StartOptions['agentFactory']
   /** Builds the tool-less agent of one `digest` call (B-387, D3). Absent: no workflow tool. */
   readonly draftAgentFactory?: () => Promise<SDKAgent>
   /** The SDK's live agent cache, turned off at start (D2). Default `Agent.registry`. */
@@ -359,10 +363,10 @@ function writeToolLines(tools: ToolSettings, write: (line: string) => void): voi
   if (tools.external.startLine !== undefined) write(tools.external.startLine)
 }
 
-/** Write the instance's start line, the first line of the start, and return the instance in effect. */
-function announceInstance(given: TheoClawInstance | undefined, stderr: (line: string) => void): TheoClawInstance {
+/** Write the instance's start line, the first line of the start, then any import line, and return the instance. */
+function announceInstance(given: TheoClawInstance | undefined, stderr: (line: string) => void, imported?: string): TheoClawInstance {
   const instance = given ?? NO_PROFILE
-  stderr(startLine(instance))
+  for (const line of [startLine(instance), ...(imported === undefined ? [] : [imported])]) stderr(line)
   return instance
 }
 
@@ -378,7 +382,9 @@ function workflowTools(factory: StartOptions['draftAgentFactory'], write: (line:
  */
 function startWebchat(options: StartOptions, token: string | undefined): HttpHandler | undefined {
   if (token === undefined) return undefined
-  const agents = createContainer<TurnAgent>({ factory: () => options.agentFactory(NO_TOOL_OPTIONS) })
+  const agents = createContainer<TurnAgent>({
+    factory: () => (options.webchatAgentFactory ?? options.agentFactory)(NO_TOOL_OPTIONS),
+  })
   const assetsDir = options.webchatAssetsDir ?? WEBCHAT_ASSETS_DIR
   return createWebchatRoutes({ token, runTurn: createTurnRunner(agents.withAgent), assetsDir })
 }
@@ -415,7 +421,7 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
   const secrets = resolvePlatforms(options.env).secrets
   const pairing = pairingStoreFor(policy, (line) => stderr(redactSecrets(maskSecrets(line, secrets))))
   // First, once every setting is checked: the line holds a label and a directory, never a secret.
-  const instance = announceInstance(options.instance, stderr)
+  const instance = announceInstance(options.instance, stderr, options.importedLine)
   const mask = installOutputMask(processSecrets(options.env, settings, tools), streams)
   const stdout = options.stdout ?? lineWriter(streams[0])
   const flushOnExit = (): void => mask.flush()

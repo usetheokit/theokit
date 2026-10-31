@@ -449,7 +449,9 @@ describe('the chat path names no per-message factory', () => {
     expect(files.filter(({ text }) => /createTheoClawAgent\b/.test(text)).map(({ path }) => path).sort()).toEqual(
       [join('agent', 'create-agent.ts'), join('control-plane', 'agent-factory.ts')].sort(),
     )
-    expect(readFileSync(join(SRC, 'main.ts'), 'utf8')).toContain('agentFactory: createAgentFactory(process.env, create)')
+    expect(readFileSync(join(SRC, 'main.ts'), 'utf8')).toContain('agentFactory: createAgentFactory(process.env, create, imported)')
+    // WebChat is a chat surface: its factory takes no import (B-375, FR-009).
+    expect(readFileSync(join(SRC, 'main.ts'), 'utf8')).toContain('webchatAgentFactory: createAgentFactory(process.env, create),')
   })
 })
 
