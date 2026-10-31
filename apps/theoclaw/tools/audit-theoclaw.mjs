@@ -15,8 +15,9 @@
  * scope when TheoClaw declares the package itself.
  * The app's importer is derived from where this file lives, and a lockfile without it exits 2, so a
  * moved app fails closed instead of matching no path. A lockfile that is not version 9.0, or whose
- * importers block holds a dependency with no `version:` line, exits 2 too, so a layout change in
- * pnpm's writer cannot shrink the scope to the app alone.
+ * importers block holds a dependency with no `version:` line or an empty one, exits 2 too, and so does
+ * an unbalanced quote or an escape in a key or value it reads, so a layout change in pnpm's writer
+ * cannot shrink the scope to the app alone.
  *
  * Exit 0 with no TheoClaw advisory, 1 with one line per advisory, 2 when the report cannot be read.
  * A malformed advisory exits 2 even when it reaches only another importer: without its paths the
@@ -115,7 +116,13 @@ const ENTRY_BY_INDENT = {
     state.deps.push(state.open)
   },
   8: (state, key, value) => {
-    if (state.open && unquote(key, state.line) === 'version') state.open.version = unquote(value ?? '', state.line)
+    if (!state.open || unquote(key, state.line) !== 'version') return
+    const version = unquote(value ?? '', state.line)
+    if (version === '') {
+      const { section, name } = state.open
+      throw new AuditReportError(`${LOCKFILE} line ${state.line}: ${state.importer} ${section} ${name} has an empty version`)
+    }
+    state.open.version = version
   },
 }
 

@@ -193,6 +193,9 @@ describe('auditScope over a quoted lockfile entry', () => {
   const PRESENTER_ENTRY = "      '@theokit/presenter':\n        specifier: workspace:*\n        version: link:../presenter"
   /** The fixture with the `@theokit/presenter` key of `packages/agents` rewritten as `key`. */
   const withPresenterKey = (key) => LOCKFILE.replace(PRESENTER_ENTRY, PRESENTER_ENTRY.replace("'@theokit/presenter'", key))
+  /** The fixture with the version line of that entry (line 31) rewritten as `version`. */
+  const withPresenterVersion = (version) =>
+    LOCKFILE.replace(PRESENTER_ENTRY, PRESENTER_ENTRY.replace('version: link:../presenter', version))
   /** The 1-based line of `text` that reads exactly `line`. */
   const lineOf = (text, line) => text.split('\n').indexOf(line) + 1
 
@@ -234,16 +237,42 @@ describe('auditScope over a quoted lockfile entry', () => {
     expect(() => auditScope(broken)).toThrow(`pnpm-lock.yaml line ${line}: escape in "@theokit\\u002fpresenter" is not read`)
   })
 
-  it('refuses a doubled single quote inside a single-quoted entry', () => {
-    for (const key of ["'it''s'", "'''"]) {
-      const broken = withPresenterKey(key)
-      const line = lineOf(broken, `      ${key}:`)
-      expect(() => auditScope(broken)).toThrow(`pnpm-lock.yaml line ${line}: escape in ${key} is not read`)
-    }
+  it.each(["'it''s'", "'''"])('refuses the doubled single quote in the single-quoted entry %s', (key) => {
+    const broken = withPresenterKey(key)
+    const line = lineOf(broken, `      ${key}:`)
+    expect(() => auditScope(broken)).toThrow(`pnpm-lock.yaml line ${line}: escape in ${key} is not read`)
+  })
+
+  it('refuses a backslash inside a double-quoted version value', () => {
+    const broken = withPresenterVersion('version: "link:..\\presenter"')
+    expect(() => auditScope(broken)).toThrow('pnpm-lock.yaml line 31: escape in "link:..\\presenter" is not read')
+  })
+
+  it('reads a double-quoted importer key with the quotes removed', () => {
+    const quoted = LOCKFILE.replace('  packages/agents:\n', '  "packages/agents":\n')
+    expect(quoted).not.toBe(LOCKFILE)
+    expect([...auditScope(quoted).keys()]).toEqual(expect.arrayContaining(['packages__agents', 'packages__presenter']))
+  })
+
+  it('reads a double-quoted version key with the quotes removed', () => {
+    const quoted = withPresenterVersion('"version": link:../presenter')
+    expect(quoted).not.toBe(LOCKFILE)
+    expect([...auditScope(quoted).keys()]).toEqual([...SCOPE.keys()])
+  })
+
+  it.each(['version:', "version: ''", 'version: ""'])('refuses the empty version line %s naming the entry', (version) => {
+    expect(() => auditScope(withPresenterVersion(version))).toThrow(
+      'pnpm-lock.yaml line 31: packages/agents dependencies @theokit/presenter has an empty version',
+    )
+  })
+
+  it('refuses an unbalanced lockfileVersion naming its line', () => {
+    const broken = `\n${LOCKFILE.replace("lockfileVersion: '9.0'", 'lockfileVersion: "9.0')}`
+    expect(() => auditScope(broken)).toThrow('pnpm-lock.yaml line 2: unbalanced quote in "9.0')
   })
 
   it('ignores an odd quote under a section the reader skips', () => {
-    const meta = LOCKFILE.replace('  packages/http:\n', '  packages/http:\n    dependenciesMeta:\n      "x:\n        injected: true\n')
+    const meta = LOCKFILE.replace('  packages/http:\n', '  packages/http:\n    dependenciesMeta:\n      "x:\n        "injected: true\n')
     expect(meta).not.toBe(LOCKFILE)
     expect([...auditScope(meta).keys()]).toEqual([...SCOPE.keys()])
   })
