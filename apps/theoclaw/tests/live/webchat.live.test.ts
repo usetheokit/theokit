@@ -58,6 +58,10 @@ describe.skipIf(!LIVE)("WebChat against a real model", () => {
         ...(process.env.OPENROUTER_API_KEY ? { OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY } : {}),
         THEOCLAW_PORT: "0",
         THEOCLAW_WEBCHAT_TOKEN: TOKEN,
+        // Every start needs an owner (B-371) and a workspace (B-378), as control-plane.live.test.ts has.
+        THEOCLAW_OWNERS: "telegram:owner",
+        THEOCLAW_DM_POLICY: "allowlist",
+        THEOCLAW_WORKSPACE: home,
       },
       stdio: ["ignore", "pipe", "pipe"],
     });

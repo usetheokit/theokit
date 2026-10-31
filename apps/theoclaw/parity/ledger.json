@@ -10,7 +10,7 @@
   {"id":"OC-9","status":"open"},
   {"id":"OC-10","status":"open"},
   {"id":"OC-11","status":"out","reason":"OpenClaw does not ship these channels itself, so there is nothing to reach parity with.","declared_by":"human/paulo","declared_on":"2026-10-04","declared_at":".squad/wiki/product/objectives.md:225"},
-  {"id":"OC-12","status":"shipped","check":{"path":"apps/theoclaw/tests/live/webchat.live.test.ts","test":"a real-model conversation through the page's transport to the started process"},"verified_on":"2026-10-26"},
+  {"id":"OC-12","status":"shipped","check":{"path":"apps/theoclaw/tests/live/webchat.live.test.ts","test":"a real-model conversation through the page's transport to the started process"},"verified_on":"2026-10-31"},
   {"id":"OC-13","status":"open"},
   {"id":"OC-14","status":"open"},
   {"id":"OC-15","status":"out","reason":"Real-time voice over phone and meeting infrastructure is a different product from a messaging assistant.","declared_by":"human/paulo","declared_on":"2026-10-04","declared_at":".squad/wiki/product/objectives.md:223"},
