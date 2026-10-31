@@ -7,7 +7,7 @@
  */
 import type { CustomTool } from '@theokit/sdk'
 
-import { BodyTooLargeError, MAX_REQUEST_BODY_BYTES, readCappedBody } from './read-capped-body.js'
+import { MAX_REQUEST_BODY_BYTES, readCappedJson } from './read-capped-body.js'
 
 const INVOKE_PATH = '/tools/invoke'
 
@@ -48,16 +48,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-/** The parsed body, or the response that refuses it (413 past the cap, 400 when it is not JSON). */
+/** The parsed body, or the response that refuses it (413 past the cap, 400 otherwise). */
 async function readJson(request: Request): Promise<unknown> {
-  try {
-    const bytes = await readCappedBody(request, MAX_REQUEST_BODY_BYTES)
-    return JSON.parse(new TextDecoder().decode(bytes)) as unknown
-  } catch (error) {
-    if (error instanceof BodyTooLargeError)
-      return failure(413, 'body_too_large', error.message, { connection: 'close' })
-    return failure(400, 'invalid_request', 'the request body is not JSON')
-  }
+  const body = await readCappedJson(request, MAX_REQUEST_BODY_BYTES)
+  if (body.ok) return body.value
+  if (body.reason === 'too_large')
+    return failure(413, 'body_too_large', body.message, { connection: 'close' })
+  return failure(400, 'invalid_request', body.message)
 }
 
 /** The tool and its arguments, or the 400 / 404 that answers the request. */
@@ -94,7 +91,10 @@ async function run(
   try {
     const invalid = options.validate?.(call.tool, call.args)
     if (invalid !== undefined) return failure(400, 'invalid_args', invalid)
-    return Response.json({ ok: true, result: await call.tool.handler(call.args, { signal }) })
+    // Typed as never undefined, but a JavaScript tool can return nothing: `null` keeps `result` in
+    // the body, which `Response.json` would otherwise drop.
+    const result: unknown = await call.tool.handler(call.args, { signal })
+    return Response.json({ ok: true, result: result ?? null })
   } catch (error) {
     // A validator that cannot judge the schema is the tool's defect, as is a handler that throws.
     return failure(500, 'tool_error', messageOf(error))

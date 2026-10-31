@@ -245,4 +245,31 @@ describe('createToolInvokeRoute', () => {
 
     expect(handler.mock.calls[0]?.[0]).toEqual({})
   })
+
+  it('answers a null result when the tool returns nothing', async () => {
+    const tool = echoTool((() => undefined) as unknown as Handler)
+
+    const { body } = await answered({ tools: [tool] }, invoke({ tool: 'echo', args: {} }))
+
+    expect(body).toEqual({ ok: true, result: null })
+  })
+
+  it('answers 400 naming a body that could not be read, not a JSON error', async () => {
+    const broken = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        controller.error(new Error('connection reset'))
+      },
+    })
+
+    const { status, body } = await answered(
+      { tools: [echoTool()] },
+      new Request(URL_, { method: 'POST', body: broken, duplex: 'half' } as RequestInit),
+    )
+
+    expect(status).toBe(400)
+    expect(body.error).toEqual({
+      type: 'invalid_request',
+      message: 'the request body could not be read',
+    })
+  })
 })
