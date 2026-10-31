@@ -21,8 +21,8 @@ import { applyInstance, resolveInstance, type TheoClawInstance } from './instanc
  *
  * The instance comes first (B-514, plan D2): `THEOCLAW_PROFILE` is resolved and applied to the real
  * environment before `startTheoClaw` runs, so no agent exists while the SDK still reads the shared
- * home, and each `/control` agent works in the profile's `workspace`, where memory, transcripts and
- * the agent registry follow the cwd. Nothing imports this file, so
+ * home. Each `/control` agent works in the profile's `workspace`, and the profile sets
+ * `THEOCLAW_WORKSPACE` to it, so the chat sessions keep their transcripts there too. Nothing imports this file, so
  * `tests/live/instance-profiles.live.test.ts` is what proves the order.
  */
 function fail(error: unknown): never {
