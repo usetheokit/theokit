@@ -191,7 +191,7 @@ describe('install.sh', () => {
     expect(install(m, { STUB_GIT_SHA: sha }).status).toBe(0)
     expect(readFileSync(marker, 'utf8').trim()).toBe(sha)
 
-    for (const failure of [{ STUB_PNPM_EXIT: '1' }, { STUB_NODE_BUILD_EXIT: '1' }]) {
+    for (const failure of [{ STUB_PNPM_EXIT: '1' }, { STUB_NODE_BUILD_EXIT: '1' }] as Array<Record<string, string>>) {
       const failing = machine(['node', 'git', 'pnpm'])
       expect(install(failing, { STUB_GIT_SHA: sha, ...failure }).status).toBe(1)
       expect(existsSync(join(failing.checkout, 'apps', 'theoclaw', 'dist', '.installed-commit'))).toBe(false)
