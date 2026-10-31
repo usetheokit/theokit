@@ -3,6 +3,35 @@
 A personal AI assistant that lives where its user already writes: one agent answering on Telegram,
 Discord, Slack, Matrix, Mattermost, e-mail, LINE, WhatsApp, Microsoft Teams and SMS.
 
+## Install
+
+```bash
+git clone https://github.com/usetheokit/theokit.git theokit && theokit/apps/theoclaw/install.sh
+```
+
+It needs `git` and Node 22 or later, and network access to the npm registry. The script installs
+and builds TheoClaw and its workspace packages in the clone, then writes the launcher
+`~/.local/bin/theoclaw` (`THEOCLAW_BIN_DIR` picks another directory). It says so when that
+directory is not on your `PATH`. With no `pnpm` installed, it puts corepack's `pnpm` in
+`~/.local/share/theoclaw/bin` for the build. It never writes into Node's global directory. Running
+it again rebuilds and rewrites the same launcher. Publishing to the npm registry is not available
+yet.
+
+Then write the configuration and start:
+
+```bash
+theoclaw onboard     # asks for the model, the key (not shown), the port, the owners and the workspace
+theoclaw start
+```
+
+`theoclaw onboard --yes --model <id> --api-key-env <NAME> --port <n> --owners <platform:id,...>`
+does the same without prompts, and reads the key from the variable `--api-key-env` names. The key
+never goes on the command line. The file is `~/.config/theoclaw/theoclaw.env` (mode 0600, in a
+0700 directory), or `theoclaw-<profile>.env` with `THEOCLAW_PROFILE`, or the path in
+`THEOCLAW_CONFIG`. A variable set in the environment wins over the file. Onboarding checks every
+value the way the start does and writes nothing when one is refused. It keeps an existing file
+unless you pass `--force`.
+
 ## Configuration
 
 TheoClaw reads its configuration from environment variables, all prefixed `THEOCLAW_`. The full
