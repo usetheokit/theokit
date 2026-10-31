@@ -216,6 +216,59 @@ set -a; . ~/.config/theoclaw/dev.env; set +a
 THEOCLAW_LIVE=1 THEOCLAW_HOST_TOOLS=on pnpm --filter theoclaw exec vitest run tests/live/tools.live.test.ts
 ```
 
+### The `/control` agent's browser
+
+With `THEOCLAW_BROWSER=on`, `/control` agents also get a headless Chromium through the pinned
+`@playwright/mcp` server, spawned over stdio with an isolated profile per session. Its tools reach
+the model as `mcp_browser_<tool>` (`mcp_browser_browser_navigate`, `mcp_browser_browser_snapshot`
+and the others the server lists), so the agent can read what a page renders with JavaScript, which
+`web_fetch` cannot. Chat agents never get it. The browser can open any URL the process can reach,
+loopback services included, which is why it is off unless set.
+
+| Variable | Meaning |
+|---|---|
+| `THEOCLAW_BROWSER` | `on` or unset; any other value is refused. With `on` the start refuses, naming the fix, when `@playwright/mcp` does not resolve or no Chromium build is in the browsers directory. |
+| `PLAYWRIGHT_BROWSERS_PATH` | Optional. Where Playwright keeps its browsers; default `~/.cache/ms-playwright`. `0` (browsers inside the package) is refused. |
+
+Install the Chromium build the server's own Playwright expects, once per host:
+
+```bash
+pnpm --filter theoclaw run browser:install
+```
+
+**Chromium also needs system libraries.** On a host without them the start still succeeds (it
+checks that the build is installed, not that it can run), and the first browser call returns a
+tool error naming the missing library, e.g. `libatk-1.0.so.0: cannot open shared object file`.
+With root, `sudo npx playwright install-deps chromium` installs them. Without root, unpack the
+distribution's packages into a directory of your own and point the loader at it; on Ubuntu 24.04
+the browser needed these:
+
+```bash
+mkdir -p ~/.cache/chromium-user-libs/debs && cd ~/.cache/chromium-user-libs/debs
+apt-get download libatk1.0-0t64 libatk-bridge2.0-0t64 libatspi2.0-0t64 libxcomposite1 libxdamage1 \
+  libxfixes3 libxrandr2 libxrender1 libxi6 libgbm1 libasound2t64 libcups2t64 libcairo2 \
+  libpango-1.0-0 libavahi-common3 libavahi-client3 libxcb-render0 libxcb-shm0 libpixman-1-0 \
+  libthai0 libdatrie1 libharfbuzz0b libgraphite2-3
+for deb in *.deb; do dpkg-deb -x "$deb" x; done
+cp -a x/usr/lib/x86_64-linux-gnu/. ~/.cache/chromium-user-libs/
+LD_LIBRARY_PATH=~/.cache/chromium-user-libs ldd ~/.cache/ms-playwright/chromium-*/chrome-linux64/chrome | grep 'not found'
+```
+
+The last line prints nothing when every library is found. Start TheoClaw, or run the live check,
+with `LD_LIBRARY_PATH=~/.cache/chromium-user-libs` set: the server inherits it and Chromium loads
+from it. The libraries are host state; the repository carries none of them.
+
+The live check of the browser needs a model that calls the server's tools by their advertised
+names: `openrouter/google/gemini-2.5-flash` does, while `gemini-2.5-flash-lite` drops the
+`mcp_browser_` prefix and gets `Unknown tool`.
+
+```bash
+set -a; . ~/.config/theoclaw/dev.env; set +a
+LD_LIBRARY_PATH=~/.cache/chromium-user-libs PLAYWRIGHT_BROWSERS_PATH=~/.cache/ms-playwright \
+  THEOCLAW_LIVE=1 THEOCLAW_MODEL=openrouter/google/gemini-2.5-flash \
+  pnpm --filter theoclaw exec vitest run tests/live/browser.live.test.ts
+```
+
 The live check runs a real turn against the built entry:
 
 ```bash

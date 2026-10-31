@@ -33,6 +33,14 @@ and versioning follows [Semantic Versioning](https://semver.org/).
   text; a run that does not complete reaches the model as a tool error. Chat-reply agents hold no
   tool. The JSON-only `llm-task` step and resumable approvals are not in this release (B-677, B-678,
   B-679).
+- A headless browser for `/control` agents (B-383): with `THEOCLAW_BROWSER=on` each `/control`
+  agent gets the pinned `@playwright/mcp` server (0.0.83) over stdio, headless Chromium on an
+  isolated profile, so it reads what a page renders with JavaScript; chat agents never get it. The
+  start refuses any other value, a missing `@playwright/mcp`, `PLAYWRIGHT_BROWSERS_PATH=0`, and a
+  browsers directory with no Chromium build, naming `pnpm --filter theoclaw run browser:install`,
+  the new script that installs the build the server's Playwright expects. The README says how to
+  give Chromium its system libraries without root (`LD_LIBRARY_PATH`). The parity ledger records
+  OC-60 as shipped, checked by `tests/live/browser.live.test.ts`; OC-62 (computer use) stays open.
 - The `/control` agent's tools (B-382): `read_file`, `list_dir`, `view_image`, `web_fetch` and
   `todolist` always, all from `@theokit/agents/tools` and bound to `files/` under the working
   directory; `web_search` with `BRAVE_API_KEY` (or `THEOKIT_SEARCH_API_URL` with
