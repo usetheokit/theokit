@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
+import { loadConfiguration } from './config-file.js'
 import { TheoClawConfigError } from './control-plane/errors.js'
 import { type DaemonIo, unitPath } from './daemon.js'
 import { plistPath } from './daemon-launchd.js'
@@ -55,7 +56,8 @@ async function must(runner: Runner, root: string, step: string, ...args: string[
 /** Moves the checkout onto `branch` and fast-forwards it; refuses, untouched, a branch that diverged. */
 async function advance(runner: Runner, root: string, branch: string): Promise<void> {
   const git = gitIn(root, runner)
-  if ((await git('status', '--porcelain')).stdout !== '') throw new StepFailed('the checkout has local changes; commit or discard them first')
+  // A status git could not produce is no proof of a clean checkout.
+  if ((await must(runner, root, 'git status', 'status', '--porcelain')) !== '') throw new StepFailed('the checkout has local changes; commit or discard them first')
   await must(runner, root, `git fetch origin ${branch}`, 'fetch', 'origin', branch)
   const local = (await git('rev-parse', '--verify', '--quiet', `refs/heads/${branch}`)).code === 0
   if (local && (await git('merge-base', '--is-ancestor', branch, `origin/${branch}`)).code !== 0) {
@@ -127,9 +129,12 @@ async function run(io: UpdateIo, runner: Runner, branch: string): Promise<void> 
 }
 
 export async function update(opts: { readonly channel?: string }, io: UpdateIo, runner: Runner): Promise<number> {
-  const branch = channelBranch(opts.channel ?? io.env.THEOCLAW_UPDATE_CHANNEL ?? 'stable')
+  // The settings the start reads: the configuration file fills what the environment leaves unset.
+  const env: NodeJS.ProcessEnv = { ...io.env }
+  loadConfiguration(env, io.homeDir)
+  const branch = channelBranch(opts.channel ?? env.THEOCLAW_UPDATE_CHANNEL ?? 'stable')
   try {
-    await run(io, runner, branch)
+    await run({ ...io, env }, runner, branch)
     return 0
   } catch (error) {
     if (!(error instanceof StepFailed)) throw error
