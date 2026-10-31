@@ -42,6 +42,10 @@ printf '#!/bin/sh\nexec node "%s" "$@"\n' "$APP_DIR/dist/cli.js" >"$temporary"
 chmod 0755 "$temporary"
 mv -f "$temporary" "$BIN_DIR/theoclaw"
 
+# Last, so a failed install never leaves it current: `theoclaw update` re-runs an install whose
+# marker names an older commit than HEAD.
+git -C "$ROOT" rev-parse HEAD >"$APP_DIR/dist/.installed-commit"
+
 echo "theoclaw install: installed $BIN_DIR/theoclaw"
 case ":$PATH:" in
   *":$BIN_DIR:"*) ;;

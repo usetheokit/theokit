@@ -40,7 +40,8 @@ export const UNSUPPORTED_PLATFORM_ITEM = 'the macOS and Windows follow-up'
 /** The command runner of the real process: `execFile`, with a command that cannot start as 127. */
 export const runCommand: Runner = (command, args) =>
   new Promise((settle) => {
-    execFile(command, [...args], { encoding: 'utf8' }, (error, stdout, stderr) => {
+    // 64 MiB: `update` runs install.sh through this runner, and pnpm's install output is long.
+    execFile(command, [...args], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }, (error, stdout, stderr) => {
       if (error === null) return settle({ code: 0, stdout, stderr })
       const code = typeof error.code === 'number' ? error.code : 127
       settle({ code, stdout, stderr: stderr || describeError(error) })

@@ -10,6 +10,7 @@ import { parseArgs } from 'node:util'
 import { describeError, TheoClawConfigError } from './control-plane/errors.js'
 import { daemonInstall, type DaemonIo, daemonStatus, daemonUninstall, runCommand, type Runner } from './daemon.js'
 import { type OnboardInput, type OnboardOptions, onboard } from './onboard.js'
+import { update } from './update.js'
 
 /**
  * The `theoclaw` command (B-374, plan D2). A second leaf entry beside `src/main.ts`: it never
@@ -42,6 +43,8 @@ const USAGE = `usage: theoclaw <command>
   theoclaw daemon install   run TheoClaw as a systemd user unit, started now and at login
   theoclaw daemon uninstall stop and remove that unit
   theoclaw daemon status    exit 0 when the unit is active, 3 otherwise
+  theoclaw update [--channel stable|dev]
+                            fetch and fast-forward the checkout on its channel, rebuild, restart
   theoclaw --help           this text
 `
 
@@ -76,6 +79,15 @@ function parseOnboard(args: readonly string[]): OnboardOptions {
     port: values.port,
     owners: values.owners,
     workspace: values.workspace,
+  }
+}
+
+function parseUpdate(args: readonly string[]): { channel?: string } {
+  try {
+    const { values } = parseArgs({ args: [...args], strict: true, allowPositionals: false, options: { channel: { type: 'string' } } })
+    return { channel: values.channel }
+  } catch (error) {
+    throw new UsageError(`theoclaw update: ${describeError(error)}`)
   }
 }
 
@@ -130,6 +142,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     return 0
   },
   daemon,
+  update: (args, io) => update(parseUpdate(args), io, io.runner),
   '--help': (_args, io) => {
     io.stdout.write(USAGE)
     return Promise.resolve(0)

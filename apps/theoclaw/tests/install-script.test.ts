@@ -45,7 +45,7 @@ const STUBS: Readonly<Record<Stub, string>> = {
     `  *) ${RECORD}; echo "$PATH" > "$RECORD_DIR/node.path"; /usr/bin/mkdir -p apps/theoclaw/dist; echo '#!/usr/bin/env node' > apps/theoclaw/dist/cli.js ;;`,
     'esac',
   ].join('\n'),
-  git: ['#!/bin/sh', RECORD].join('\n'),
+  git: ['#!/bin/sh', RECORD, 'case "$*" in *"rev-parse HEAD"*) echo "${STUB_GIT_SHA:-0000000000000000000000000000000000000000}" ;; esac'].join('\n'),
   pnpm: ['#!/bin/sh', RECORD, 'exit "${STUB_PNPM_EXIT:-0}"'].join('\n'),
   // `enable --install-directory <dir> pnpm` writes a recording pnpm into <dir>, as corepack does.
   corepack: [
@@ -184,5 +184,18 @@ describe('install.sh', () => {
     expect(result.status, result.stderr).toBe(0)
     expect(existsSync(join(binDir, 'theoclaw'))).toBe(true)
     expect(result.stdout).toContain(`${binDir} is not on PATH`)
+  })
+
+  it('install writes the installed commit only after the build and the launcher succeed', () => {
+    const sha = 'abcdef0123456789abcdef0123456789abcdef01'
+    const m = machine(['node', 'git', 'pnpm'])
+    const marker = join(m.checkout, 'apps', 'theoclaw', 'dist', '.installed-commit')
+    expect(install(m, { STUB_GIT_SHA: sha }).status).toBe(0)
+    expect(readFileSync(marker, 'utf8').trim()).toBe(sha)
+
+    const failing = machine(['node', 'git', 'pnpm'])
+    const failedMarker = join(failing.checkout, 'apps', 'theoclaw', 'dist', '.installed-commit')
+    expect(install(failing, { STUB_GIT_SHA: sha, STUB_PNPM_EXIT: '1' }).status).toBe(1)
+    expect(existsSync(failedMarker)).toBe(false)
   })
 })

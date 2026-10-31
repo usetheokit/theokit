@@ -53,6 +53,17 @@ describe('the theoclaw command line', () => {
     expect(await runCli([], none.io)).toBe(2)
   })
 
+  it('help names the six subcommands and an undefined one exits 2', async () => {
+    const help = harness()
+    expect(await runCli(['--help'], help.io)).toBe(0)
+    for (const name of ['theoclaw start', 'theoclaw onboard', 'theoclaw daemon install', 'theoclaw daemon uninstall', 'theoclaw daemon status', 'theoclaw update']) {
+      expect(help.stdout()).toContain(name)
+    }
+    const unknown = harness()
+    expect(await runCli(['upgrade'], unknown.io)).toBe(2)
+    expect(await runCli(['update', '--channel'], unknown.io)).toBe(2)
+  })
+
   it('a refused subcommand prints its message and exits 1', async () => {
     const h = harness()
     expect(await runCli(['onboard'], h.io)).toBe(1)

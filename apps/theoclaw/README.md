@@ -49,6 +49,21 @@ A user unit stops when you log out unless lingering is on. `install` prints the 
 off: `loginctl enable-linger "$USER"`. Only Linux with `systemd --user` is supported: macOS
 (launchd) and Windows are refused by name.
 
+## Update
+
+```bash
+theoclaw update                  # the stable channel: follows main, which only releases reach
+theoclaw update --channel dev    # follows develop, where work is integrated before a release
+```
+
+`THEOCLAW_UPDATE_CHANNEL` sets the default channel; `stable` is used when neither is given. The
+command fetches the channel's branch, switches the checkout to it, and fast-forwards it. Then it
+runs `install.sh` again and restarts the instance's unit when one is installed. A checkout with
+local changes, or with commits the channel does not have, is refused before anything moves, and
+the message names the branch. A run whose install or restart failed is finished by the next
+`theoclaw update`, which says `already up to date` only when the build and the unit both run the
+checked-out commit. The first update after `theoclaw daemon install` always rebuilds and restarts.
+
 ## Configuration
 
 TheoClaw reads its configuration from environment variables, all prefixed `THEOCLAW_`. The full
