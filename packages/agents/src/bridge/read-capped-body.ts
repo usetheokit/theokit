@@ -45,3 +45,34 @@ export async function readCappedBody(
   }
   return concatenate(chunks, total)
 }
+
+/** A capped JSON body: its value, or why it was refused. */
+export type CappedJson =
+  | { readonly ok: true; readonly value: unknown }
+  | {
+      readonly ok: false
+      readonly reason: 'too_large' | 'not_json' | 'unreadable'
+      readonly message: string
+    }
+
+/**
+ * The body read through `readCappedBody` and parsed as JSON. Three refusals, so each route answers
+ * them in its own envelope: past the cap, not JSON, and a body that could not be read at all (the
+ * client went away or sent a broken stream), which is not a JSON error.
+ */
+export async function readCappedJson(request: Request, maxBytes: number): Promise<CappedJson> {
+  let bytes: Uint8Array
+  try {
+    bytes = await readCappedBody(request, maxBytes)
+  } catch (error) {
+    if (error instanceof BodyTooLargeError)
+      return { ok: false, reason: 'too_large', message: error.message }
+    return { ok: false, reason: 'unreadable', message: 'the request body could not be read' }
+  }
+  try {
+    return { ok: true, value: JSON.parse(new TextDecoder().decode(bytes)) as unknown }
+  } catch {
+    // A SyntaxError is the only thing `JSON.parse` throws on a string; its text adds nothing.
+    return { ok: false, reason: 'not_json', message: 'the request body is not JSON' }
+  }
+}

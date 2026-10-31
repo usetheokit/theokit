@@ -8,7 +8,7 @@ import { randomUUID } from 'node:crypto'
 
 import { z } from 'zod'
 
-import { BodyTooLargeError, MAX_REQUEST_BODY_BYTES, readCappedBody } from './read-capped-body.js'
+import { MAX_REQUEST_BODY_BYTES, readCappedJson } from './read-capped-body.js'
 
 const MODELS_PATH = '/v1/models'
 const COMPLETIONS_PATH = '/v1/chat/completions'
@@ -112,17 +112,13 @@ export function renderTranscript(messages: readonly OpenAIChatMessage[]): string
   return messages.map((message) => `${message.role}: ${textOf(message)}`).join('\n\n')
 }
 
-/** The parsed JSON body, or the response that refuses it (413 past the cap, 400 when unreadable). */
+/** The parsed JSON body, or the response that refuses it (413 past the cap, 400 otherwise). */
 async function readJson(request: Request): Promise<unknown> {
-  try {
-    const bytes = await readCappedBody(request, MAX_REQUEST_BODY_BYTES)
-    return JSON.parse(new TextDecoder().decode(bytes)) as unknown
-  } catch (error) {
-    if (error instanceof BodyTooLargeError) {
-      return openAIError(413, 'body_too_large', error.message, null, { connection: 'close' })
-    }
-    return openAIError(400, 'invalid_body', 'the request body is not JSON')
-  }
+  const body = await readCappedJson(request, MAX_REQUEST_BODY_BYTES)
+  if (body.ok) return body.value
+  if (body.reason === 'too_large')
+    return openAIError(413, 'body_too_large', body.message, null, { connection: 'close' })
+  return openAIError(400, 'invalid_body', body.message)
 }
 
 /** The chat request, or the response that refuses it before any model turn runs. */

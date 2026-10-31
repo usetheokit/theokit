@@ -155,6 +155,54 @@ describe('createOpenAICompatibleRoutes', () => {
     expect(error.message).toBe('the model turn failed')
   })
 
+  it('accepts a body of exactly 1 MiB', async () => {
+    const complete = vi.fn<Complete>(async () => 'hello')
+    const json = JSON.stringify({ model: 'm', messages: [{ role: 'user', content: 'hi' }] })
+    const padded = json.slice(0, -1) + ' '.repeat(ONE_MIB - json.length) + '}'
+    expect(new TextEncoder().encode(padded).byteLength).toBe(ONE_MIB)
+
+    const response = await routes(complete)(chat(padded))
+
+    expect(response?.status).toBe(200)
+    expect(complete).toHaveBeenCalledTimes(1)
+  })
+
+  it('answers 400 invalid_body for an empty body', async () => {
+    const response = await routes()(new Request(`${BASE}/v1/chat/completions`, { method: 'POST' }))
+
+    expect(response?.status).toBe(400)
+    expect(errorOf(await json(response)).type).toBe('invalid_body')
+  })
+
+  it('answers 400 naming a body that could not be read, not a JSON error', async () => {
+    const complete = vi.fn<Complete>(async () => 'hello')
+    const broken = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        controller.error(new Error('connection reset'))
+      },
+    })
+    const request = new Request(`${BASE}/v1/chat/completions`, {
+      method: 'POST',
+      body: broken,
+      duplex: 'half',
+    } as RequestInit)
+
+    const response = await routes(complete)(request)
+
+    expect(response?.status).toBe(400)
+    const error = errorOf(await json(response))
+    expect(error.type).toBe('invalid_body')
+    expect(error.message).toBe('the request body could not be read')
+    expect(complete).not.toHaveBeenCalled()
+  })
+
+  it('answers 405 with an allow header for GET /v1/chat/completions', async () => {
+    const response = await routes()(new Request(`${BASE}/v1/chat/completions`))
+
+    expect(response?.status).toBe(405)
+    expect(response?.headers.get('allow')).toBe('POST')
+  })
+
   it('answers 413 for a body over 1 MiB', async () => {
     const complete = vi.fn<Complete>(async () => 'hello')
 
