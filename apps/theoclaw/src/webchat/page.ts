@@ -1,5 +1,7 @@
 /** The WebChat page: an HTML shell that loads the bundle `build:web` writes, and where that bundle is. */
 
+import { WEBCHAT_ASSETS_PREFIX } from './paths.js'
+
 /** The assets `build:web` writes, served by name and nothing else (no URL path reaches the file system). */
 export const WEBCHAT_ASSETS = {
   'app.js': 'text/javascript; charset=utf-8',
@@ -21,11 +23,11 @@ export function renderPage(): string {
     '<meta charset="utf-8">',
     '<meta name="viewport" content="width=device-width, initial-scale=1">',
     '<title>TheoClaw</title>',
-    '<link rel="stylesheet" href="/webchat/assets/app.css">',
+    `<link rel="stylesheet" href="${WEBCHAT_ASSETS_PREFIX}app.css">`,
     '</head>',
     '<body>',
     '<div id="root"></div>',
-    '<script type="module" src="/webchat/assets/app.js"></script>',
+    `<script type="module" src="${WEBCHAT_ASSETS_PREFIX}app.js"></script>`,
     '</body>',
     '</html>',
     '',

@@ -10,6 +10,7 @@ import { MAX_MESSAGE_BYTES } from '../control-plane/limits.js'
 import type { TurnRunner } from '../control-plane/turn.js'
 import { createWebchatRun } from './create-run.js'
 import { renderPage, WEBCHAT_ASSETS } from './page.js'
+import { WEBCHAT_ASSETS_PREFIX, WEBCHAT_CHAT_PATH, WEBCHAT_ROUTE } from './paths.js'
 
 export interface WebchatRoutesOptions {
   /** The WebChat token every chat post must carry; at least 32 characters. */
@@ -19,9 +20,6 @@ export interface WebchatRoutesOptions {
   readonly assetsDir: string | URL
 }
 
-const ROUTE = '/webchat'
-const CHAT_PATH = `${ROUTE}/chat`
-const ASSETS_PREFIX = `${ROUTE}/assets/`
 const NO_STORE = { 'cache-control': 'no-store' }
 /** The components set inline styles, so the page allows them and nothing else from elsewhere. */
 const PAGE_CSP = "default-src 'self'; style-src 'self' 'unsafe-inline'"
@@ -150,12 +148,12 @@ async function chat(request: Request, runTurn: TurnRunner): Promise<Response> {
   if (request.signal.aborted) stopTurn()
   else request.signal.addEventListener('abort', stopTurn, { once: true })
   const routes = generateAgentRoutes({
-    walkResult: { route: ROUTE },
+    walkResult: { route: WEBCHAT_ROUTE },
     compiledOptions: COMPILED_OPTIONS,
     createRun: createWebchatRun(runTurn, turn.signal),
   })
-  const post = routes.find((route) => route.method === 'POST' && route.path === CHAT_PATH)
-  if (post === undefined) throw new Error(`generateAgentRoutes returned no POST ${CHAT_PATH}`)
+  const post = routes.find((route) => route.method === 'POST' && route.path === WEBCHAT_CHAT_PATH)
+  if (post === undefined) throw new Error(`generateAgentRoutes returned no POST ${WEBCHAT_CHAT_PATH}`)
   const response = await post.handler(request)
   const headers = new Headers(response.headers)
   headers.set('cache-control', 'no-store')
@@ -180,11 +178,11 @@ export function createWebchatRoutes(options: WebchatRoutesOptions): (request: Re
   const accepts = bearerCheck(options.token)
   return async (request) => {
     const { pathname } = new URL(request.url)
-    if (request.method === 'GET' && pathname === ROUTE) return page(options.assetsDir)
-    if (request.method === 'GET' && pathname.startsWith(ASSETS_PREFIX)) {
-      return asset(options.assetsDir, pathname.slice(ASSETS_PREFIX.length))
+    if (request.method === 'GET' && pathname === WEBCHAT_ROUTE) return page(options.assetsDir)
+    if (request.method === 'GET' && pathname.startsWith(WEBCHAT_ASSETS_PREFIX)) {
+      return asset(options.assetsDir, pathname.slice(WEBCHAT_ASSETS_PREFIX.length))
     }
-    if (pathname !== CHAT_PATH || request.method !== 'POST') return notFound()
+    if (pathname !== WEBCHAT_CHAT_PATH || request.method !== 'POST') return notFound()
     if (!accepts(request.headers.get('authorization') ?? undefined)) return unauthorized()
     return boundedChat(request, options.runTurn)
   }
