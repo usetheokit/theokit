@@ -40,7 +40,7 @@ const STUBS: Readonly<Record<Stub, string>> = {
     'case "$1" in',
     '  -p) echo "${STUB_NODE_MAJOR:-22}" ;;',
     '  --version) echo "v${STUB_NODE_MAJOR:-22}.0.0" ;;',
-    `  *) ${RECORD}; echo "$PATH" > "$RECORD_DIR/node.path"; /usr/bin/mkdir -p apps/theoclaw/dist; echo '#!/usr/bin/env node' > apps/theoclaw/dist/cli.js ;;`,
+    `  *) ${RECORD}; echo "$PATH" > "$RECORD_DIR/node.path"; /usr/bin/mkdir -p apps/theoclaw/dist; echo '#!/usr/bin/env node' > apps/theoclaw/dist/cli.js; exit "\${STUB_NODE_BUILD_EXIT:-0}" ;;`,
     'esac',
   ].join('\n'),
   git: ['#!/bin/sh', RECORD, 'case "$*" in *"rev-parse HEAD"*) echo "${STUB_GIT_SHA:-0000000000000000000000000000000000000000}" ;; esac'].join('\n'),
@@ -191,9 +191,10 @@ describe('install.sh', () => {
     expect(install(m, { STUB_GIT_SHA: sha }).status).toBe(0)
     expect(readFileSync(marker, 'utf8').trim()).toBe(sha)
 
-    const failing = machine(['node', 'git', 'pnpm'])
-    const failedMarker = join(failing.checkout, 'apps', 'theoclaw', 'dist', '.installed-commit')
-    expect(install(failing, { STUB_GIT_SHA: sha, STUB_PNPM_EXIT: '1' }).status).toBe(1)
-    expect(existsSync(failedMarker)).toBe(false)
+    for (const failure of [{ STUB_PNPM_EXIT: '1' }, { STUB_NODE_BUILD_EXIT: '1' }]) {
+      const failing = machine(['node', 'git', 'pnpm'])
+      expect(install(failing, { STUB_GIT_SHA: sha, ...failure }).status).toBe(1)
+      expect(existsSync(join(failing.checkout, 'apps', 'theoclaw', 'dist', '.installed-commit'))).toBe(false)
+    }
   })
 })
