@@ -209,8 +209,10 @@ export function createControlSessions(options: ControlSessionsOptions): ControlS
         turn.run = run
         if (turn.cancelRequested) cancelRun(run)
       },
+      onEventsEnded: () => {
+        turn.eventsEnded = true
+      },
     })
-    turn.eventsEnded = true
     return turn.cancelRequested ? INTERRUPTED : outcome
   }
 

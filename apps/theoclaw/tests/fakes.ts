@@ -145,6 +145,10 @@ export interface FakeTurn {
   readonly afterDeltas?: Promise<void>
   /** `events()` opens one tool call and holds inside it until the signal aborts. */
   readonly toolHeld?: boolean
+  /** The held tool call's name. Default `read`. */
+  readonly toolName?: string
+  /** A run that was not aborted resolves `wait()` only once this settles (events ended, outcome pending). */
+  readonly waitGate?: Promise<void>
   /** A cancelled run's `wait()` resolves only once this settles (a run still unwinding). */
   readonly teardown?: Promise<void>
 }
@@ -201,7 +205,7 @@ export class FakeAgent {
         await until(turn.before, signal)
         if (turn.toolHeld === true) {
           if (aborted()) return
-          yield { kind: 'delta', update: { type: 'tool-call-started', callId: 'call-1', toolCall: { name: 'read', args: {} } } }
+          yield { kind: 'delta', update: { type: 'tool-call-started', callId: 'call-1', toolCall: { name: turn.toolName ?? 'read', args: {} } } }
           await until(never, signal)
           return
         }
@@ -220,10 +224,21 @@ export class FakeAgent {
         this.cancels += 1
       },
       wait: async () => {
-        if (!aborted()) return turn.result ?? { status: 'finished' }
+        if (!aborted()) {
+          if (turn.waitGate) await turn.waitGate
+          return turn.result ?? { status: 'finished' }
+        }
         if (turn.teardown) await turn.teardown
         return { status: 'cancelled' }
       },
     }
+  }
+}
+
+/** A fake agent that counts its disposals, as the session store disposes through `Symbol.asyncDispose`. */
+export class DisposableFake extends FakeAgent {
+  disposed = 0
+  async [Symbol.asyncDispose](): Promise<void> {
+    this.disposed += 1
   }
 }

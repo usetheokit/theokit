@@ -19,6 +19,8 @@ export interface SessionTurnOptions {
   readonly emit: (event: TurnEvent) => void
   /** Called once `send` resolved, so an interrupt that arrives later can also cancel the run. */
   readonly onRun: (run: TurnRun) => void
+  /** Called once the run's events ended, before its outcome: an interrupt from here on stops nothing. */
+  readonly onEventsEnded: () => void
 }
 
 /** Every translated event of the run, live text deltas included; the first streamed error's code. */
@@ -53,5 +55,6 @@ export async function runSessionTurn(agent: TurnAgent, options: SessionTurnOptio
   const run = await agent.send(options.message, { signal: options.signal })
   options.onRun(run)
   const streamedError = await emitTimeline(run, options)
+  options.onEventsEnded()
   return outcomeOf(await run.wait(), streamedError)
 }
