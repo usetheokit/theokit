@@ -191,6 +191,89 @@ describe('SessionAgents lifetime', () => {
   })
 })
 
+/** Generations whose next move waits for `held`, so a test can act while a reset is still writing. */
+function heldGenerations(held: Promise<void>): Generations {
+  const counts = new Map<string, number>()
+  return {
+    current: (key: string) => counts.get(key) ?? 0,
+    next: async (key: string) => {
+      await held
+      const generation = (counts.get(key) ?? 0) + 1
+      counts.set(key, generation)
+      return generation
+    },
+  } as unknown as Generations
+}
+
+describe('SessionAgents reset', () => {
+  it("a reset with no turn in flight disposes the old generation's agent", async () => {
+    const { sessions, built } = harness()
+    ;(await sessions.lease(dm('u1'))).release()
+
+    await sessions.reset(dm('u1'))
+    await Promise.resolve()
+
+    expect(built.map((agent) => [agent.id, agent.disposes])).toEqual([['theoclaw-telegram-dm-u1-g0', 1]])
+  })
+
+  it('a reset during a turn disposes the old agent only once its lease is released', async () => {
+    const { sessions, built } = harness()
+    const lease = await sessions.lease(dm('u1'))
+
+    await sessions.reset(dm('u1'))
+    await Promise.resolve()
+    expect(built[0]?.disposes).toBe(0)
+    lease.release()
+    await Promise.resolve()
+    expect(built[0]?.disposes).toBe(1)
+
+    ;(await sessions.lease(dm('u1'))).release()
+    expect(built.map((agent) => agent.id)).toEqual(['theoclaw-telegram-dm-u1-g0', 'theoclaw-telegram-dm-u1-g1'])
+  })
+
+  it('a message sent while a reset is still moving the generation runs on the new generation', async () => {
+    const write = deferred<void>()
+    const getOrCreate = vi.fn(async (id: string) => new CountingAgent(id))
+    const sessions = new SessionAgents({
+      router: createSessionRouter(settings()),
+      getOrCreate,
+      optionsFor: () => ({ model: 'stub' }),
+      generations: heldGenerations(write.promise),
+      settings: settings(),
+      write: () => undefined,
+    })
+
+    const reset = sessions.reset(dm('u1'))
+    const lease = sessions.lease(dm('u1'))
+    write.resolve()
+    await reset
+    ;(await lease).release()
+
+    expect(getOrCreate.mock.calls.map(([id]) => id)).toEqual(['theoclaw-telegram-dm-u1-g1'])
+  })
+
+  it('a reset whose write fails still lets the next message run on the generation it kept', async () => {
+    const write = deferred<void>()
+    const getOrCreate = vi.fn(async (id: string) => new CountingAgent(id))
+    const sessions = new SessionAgents({
+      router: createSessionRouter(settings()),
+      getOrCreate,
+      optionsFor: () => ({ model: 'stub' }),
+      generations: heldGenerations(write.promise),
+      settings: settings(),
+      write: () => undefined,
+    })
+
+    const reset = sessions.reset(dm('u1')).catch((error: unknown) => error)
+    const lease = sessions.lease(dm('u1'))
+    write.reject(new Error('disk full'))
+
+    expect(await reset).toEqual(new Error('disk full'))
+    ;(await lease).release()
+    expect(getOrCreate.mock.calls.map(([id]) => id)).toEqual(['theoclaw-telegram-dm-u1-g0'])
+  })
+})
+
 describe('SessionAgents stopping', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -236,6 +319,35 @@ describe('SessionAgents stopping', () => {
 
     expect(stopped).toBe(2)
     await Promise.all([first, second])
+  })
+
+  it('refuses a lease that waited on a dispose while stopping began, and opens no agent', async () => {
+    const hold = deferred<void>()
+    const { sessions, getOrCreate } = harness({}, hold.promise)
+    ;(await sessions.lease(dm('u1'))).release()
+    await vi.advanceTimersByTimeAsync(31 * MINUTE)
+
+    const waiting = sessions.lease(dm('u1')).catch((error: unknown) => error)
+    const stopping = sessions.disposeAll()
+    hold.resolve()
+    await stopping
+
+    expect(await waiting).toEqual(new Error('theoclaw is stopping: no new chat turn starts'))
+    expect(getOrCreate).toHaveBeenCalledTimes(1)
+  })
+
+  it('a dispose that fails is logged naming the session, and the session reopens on its next message', async () => {
+    const failing = Promise.reject(new Error('socket closed'))
+    failing.catch(() => undefined)
+    const { sessions, built, lines, getOrCreate } = harness({}, failing)
+    ;(await sessions.lease(dm('u1'))).release()
+
+    await vi.advanceTimersByTimeAsync(31 * MINUTE)
+    ;(await sessions.lease(dm('u1'))).release()
+
+    expect(built[0]?.disposes).toBe(1)
+    expect(lines).toEqual(['theoclaw: disposing the agent of session telegram-dm-u1 failed: socket closed'])
+    expect(getOrCreate).toHaveBeenCalledTimes(2)
   })
 
   it('refuses a lease once stopping has begun', async () => {
