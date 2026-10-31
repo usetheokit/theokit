@@ -92,10 +92,12 @@ describe('readSessionSettings', () => {
     expect(refusal(BASE, () => ({ isDirectory: () => false })).variable).toBe('THEOCLAW_WORKSPACE')
   })
 
-  it('refuses THEOCLAW_SESSION_IDLE_MINUTES=0', () => {
-    const error = refusal({ ...BASE, THEOCLAW_SESSION_IDLE_MINUTES: '0' })
-    expect(error.variable).toBe('THEOCLAW_SESSION_IDLE_MINUTES')
-    expect(error.message).toContain('1 to 1440')
+  it('refuses THEOCLAW_SESSION_IDLE_MINUTES outside 1 to 1440', () => {
+    for (const value of ['0', '1441', '2.5', 'many']) {
+      const error = refusal({ ...BASE, THEOCLAW_SESSION_IDLE_MINUTES: value })
+      expect(error.variable).toBe('THEOCLAW_SESSION_IDLE_MINUTES')
+      expect(error.message).toContain('1 to 1440')
+    }
   })
 
   it('refuses THEOCLAW_MAX_OPEN_SESSIONS outside 1 to 10000', () => {

@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events'
-import { statSync } from 'node:fs'
+import { chmodSync, mkdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 
 import type { MessageEvent } from '@theokit/gateway'
@@ -133,6 +133,7 @@ const STUB_KEY = 'sk-stub-key-0123456789'
 describe('the chat path through startTheoClaw', () => {
   const workspace = scratchWorkspace()
   const fresh = scratchWorkspace()
+  const existing = scratchWorkspace()
   const running: RunningTheoClaw[] = []
   afterAll(async () => {
     for (const app of running.splice(0)) {
@@ -242,6 +243,23 @@ describe('the chat path through startTheoClaw', () => {
     running.push(app)
 
     expect(statSync(join(fresh, '.theoclaw')).mode & 0o777).toBe(0o700)
+  })
+
+  it("startTheoClaw leaves an existing transcript directory's mode as it was", async () => {
+    const workspace = existing
+    mkdirSync(join(workspace, '.theoclaw'))
+    chmodSync(join(workspace, '.theoclaw'), 0o750)
+    const app = await startTheoClaw({
+      env: { ...OPEN_DMS, THEOCLAW_WORKSPACE: workspace },
+      agentFactory: throwingAgentFactory().factory,
+      builders: fakeBuilders().builders,
+      signals: new EventEmitter(),
+      exit: vi.fn(),
+      streams: [capturingStream()],
+    })
+    running.push(app)
+
+    expect(statSync(join(workspace, '.theoclaw')).mode & 0o777).toBe(0o750)
   })
 })
 
