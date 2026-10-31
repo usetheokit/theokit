@@ -444,8 +444,7 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
     write: stderr,
   })
   writeToolLines(tools, stderr)
-  // The raw factory goes to the composition, which hands chat agents no tool; only the `/control`
-  // turn's agents get the tool options.
+  // The composition gets the raw factory: chat agents hold no tool, only `/control` agents do.
   const composed = composeTheoClaw({
     ...options,
     policy,
@@ -455,11 +454,10 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
     write: stderr,
   })
   const extraTools = workflowTools(options.draftAgentFactory, stderr)
-  // `/control` agents also hold `run_code` and `delegate_all`; their workers come from the same factory.
-  // Session agents come from the same call, so a session turn holds the same tools.
+  // `/control` and session agents hold `run_code` and `delegate_all`, workers from the same factory.
   const buildControlAgent = async (): Promise<TurnAgent> =>
     options.agentFactory(controlAgentToolOptions(tools, options.agentFactory, extraTools))
-  const agents = createContainer<TurnAgent>({ factory: buildControlAgent })
+  const { withAgent } = createContainer<TurnAgent>({ factory: buildControlAgent })
   composedApp = composed
   const listen = options.listen ?? listenControlPlane
   serving = listen({
@@ -469,7 +467,7 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
     stderr,
     ...(settings.controlToken === undefined
       ? {}
-      : { control: controlOptions(settings.controlToken, agents.withAgent, buildControlAgent, stderr) }),
+      : { control: controlOptions(settings.controlToken, withAgent, buildControlAgent, stderr) }),
   })
   let handle: ControlPlaneHandle
   try {
