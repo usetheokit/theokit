@@ -31,7 +31,8 @@ import { installOutputMask, type MaskableStream } from './channels/output-mask.j
 import { type ConfiguredPlatform, resolvePlatforms } from './channels/platforms.js'
 import { createReplyHandler, type TurnAgent } from './channels/reply-handler.js'
 import { createChannelAgentFactory, sessionAgentOptions } from './control-plane/agent-factory.js'
-import { type ControlPlaneHandle, healthHandler, listenControlPlane } from './control-plane/listener.js'
+import { type ControlPlaneHandle, listenControlPlane } from './control-plane/listener.js'
+import { type HttpHandler, reportSurfacesOff, serveHandler } from './control-plane/serve.js'
 import { type ControlPlaneSettings, readControlPlaneSettings } from './control-plane/settings.js'
 import { installShutdown, type SignalSource } from './control-plane/shutdown.js'
 import { createTurnRunner } from './control-plane/turn.js'
@@ -383,26 +384,6 @@ function workflowTools(factory: StartOptions['draftAgentFactory'], write: (line:
   return createWorkflowTools({ write, ...(factory === undefined ? {} : { withDraftAgent: createContainer({ factory }).withAgent }) })
 }
 
-type HttpHandler = (request: Request) => Promise<Response>
-
-/** `/webchat` itself or anything under `/webchat/`, and not `/webchatx` (EC-4). */
-function isWebchatPath(pathname: string): boolean {
-  return pathname === '/webchat' || pathname.startsWith('/webchat/')
-}
-
-/**
- * `GET /health` is the control plane's; `/webchat` paths go to WebChat when it is on and answer 404
- * when it is off; every other path goes to the webhook router.
- */
-function serveHandler(router: HttpHandler, webchat: HttpHandler | undefined): HttpHandler {
-  return async (request) => {
-    const { pathname } = new URL(request.url)
-    if (pathname === '/health') return healthHandler(request)
-    if (!isWebchatPath(pathname)) return router(request)
-    return webchat === undefined ? new Response(null, { status: 404 }) : webchat(request)
-  }
-}
-
 /**
  * The WebChat routes, or `undefined` while `THEOCLAW_WEBCHAT_TOKEN` is unset. WebChat is a chat
  * surface, so its agents hold no tool, as every chat agent (B-382): the tool options reach only the
@@ -416,16 +397,6 @@ function startWebchat(options: StartOptions, token: string | undefined): HttpHan
     runTurn: createTurnRunner(agents.withAgent),
     assetsDir: options.webchatAssetsDir ?? WEBCHAT_ASSETS_DIR,
   })
-}
-
-/** One line for each owner surface left off because its token is unset. */
-function reportSurfacesOff(settings: ControlPlaneSettings, stdout: (line: string) => void): void {
-  if (settings.controlToken === undefined) {
-    stdout('theoclaw: control socket off (THEOCLAW_CONTROL_TOKEN unset)')
-  }
-  if (settings.webchatToken === undefined) {
-    stdout('theoclaw: webchat off (THEOCLAW_WEBCHAT_TOKEN unset)')
-  }
 }
 
 /**
