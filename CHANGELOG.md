@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [create-theokit 3.0.20, theokit 0.76.0] - 2026-10-30
+
 ### Added
 
 - `theokit`: `theokit start` and `theokit dev` run the jobs declared under `<serverDir>/jobs/` with an in-process worker when `jobs.backend` is set. It polls, backs off while the backend is unreachable, and on `SIGTERM` waits up to 20 seconds for the job in progress. `jobs.worker` tunes it and `enabled: false` turns it off; `createJobWorker` is exported from `theokit/server/jobs`. Nothing read `.theokit/jobs.json` before, so enqueued jobs never ran (#1010)

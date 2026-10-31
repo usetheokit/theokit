@@ -1,5 +1,0 @@
----
-"theokit": minor
----
-
-`PostgresJobBackend` keeps a job that failed for good instead of deleting it, and waits before a retry. A job whose attempts were exhausted, or whose handler threw `NonRetryableError`, was deleted with its input and its error, so an operator could not see what failed, why, or replay it; and a retry ran on the next tick, three attempts in 18 ms. Now every `nack` writes the error to the new `last_error` column; a final failure sets the new `failed_at` column and `dequeue` never returns that job again; and a retried job becomes available after `retryDelaySeconds(attempts)` seconds, a new `PostgresJobBackend` option defaulting to `min(2^attempts, 3600)`. List failed jobs with `SELECT * FROM theokit_jobs WHERE failed_at IS NOT NULL`. Nothing deletes failed rows, so purge them yourself. A failed job keeps its idempotency key, so enqueueing the same key again returns the failed job's id. `migrate()` adds both columns to a table created by an earlier version. `InMemoryJobBackend` still drops a failed job and retries at once, and now logs a warning naming the job and its last error. (#1014)
