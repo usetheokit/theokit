@@ -1,5 +1,7 @@
 import type { z } from 'zod'
 
+import type { RouteContext } from '../../core/contracts/route-context.js'
+
 /**
  * Action wire-protocol accept mode per plan g3-server-actions-and-useaction
  * v1.2 ADR D1. Default behavior (when omitted) is `'json'`. `'form'` opts the
@@ -9,7 +11,12 @@ import type { z } from 'zod'
  */
 export type ActionAccept = 'form' | 'json'
 
-export interface ActionConfig<TInput extends z.ZodType, TCtx = unknown> {
+/**
+ * `TCtx` defaults to {@link RouteContext}, the augmentable interface route handlers use: the
+ * action executor builds `ctx` the same way (middleware, plugin decorations, `ctx.queue` when
+ * `jobs.backend` is set), so one declaration types both (usetheokit/theokit#1096).
+ */
+export interface ActionConfig<TInput extends z.ZodType, TCtx = RouteContext> {
   /**
    * Zod input schema. Required: every action declares its input contract via
    * Zod (architecture rule: zod-is-SSOT). The shape becomes the handler's
@@ -45,7 +52,7 @@ export interface ActionConfig<TInput extends z.ZodType, TCtx = unknown> {
  * pre-G3 identity. Existing callsites (`defineAction({input, handler})`)
  * continue to compile — `accept` is opt-in.
  */
-export function defineAction<TInput extends z.ZodType, TCtx = unknown>(
+export function defineAction<TInput extends z.ZodType, TCtx = RouteContext>(
   config: ActionConfig<TInput, TCtx>,
 ): ActionConfig<TInput, TCtx> {
   return config

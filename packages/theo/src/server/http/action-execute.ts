@@ -8,12 +8,14 @@ import {
   type ActionErrorCode,
 } from '../../core/contracts/action-protocol.js'
 import { parseRequestBody, type ParsedBody } from '../body-parser.js'
+import type { JobBackend } from '../jobs/job-backend.js'
 import type { PluginContext } from '../plugin-types.js'
 import type { PluginRunner } from '../plugins/plugin-runner.js'
 import type { LoadModule } from '../scan/module-loader.js'
 import { dispatchCsrfWarn } from '../security/csrf-warn-dispatch.js'
 import { enforceCsrf, type CsrfMode, type DisallowedConfig } from '../security/csrf.js'
 
+import { attachJobQueue } from './attach-job-queue.js'
 import { sendError } from './execute.js'
 import { formDataToObject } from './form-data-to-object.js'
 import { handleRequestError } from './handle-request-error.js'
@@ -72,6 +74,8 @@ export interface ExecuteActionOptions {
   pluginRunner?: PluginRunner
   csrfMode?: CsrfMode
   disallowed?: DisallowedConfig
+  /** `theo.config.ts > jobs.backend`. Present, the handler gets `ctx.queue`, as a route does. */
+  jobBackend?: JobBackend
 }
 
 // Backwards-compatible positional signature; the options-shape is the new
@@ -88,6 +92,7 @@ export async function executeAction(
   pluginRunner?: PluginRunner,
   csrfMode: CsrfMode = 'strict',
   disallowed?: DisallowedConfig,
+  jobBackend?: JobBackend,
 ): Promise<void> {
   return executeActionWithOptions({
     filePath,
@@ -100,6 +105,7 @@ export async function executeAction(
     pluginRunner,
     csrfMode,
     disallowed,
+    jobBackend,
   })
 }
 
@@ -162,6 +168,7 @@ interface ActionPipeline {
   loadModule: LoadModule
   req: IncomingMessage
   res: ServerResponse
+  jobBackend: JobBackend | undefined
 }
 
 async function runPreHandlerPipeline(p: ActionPipeline): Promise<boolean> {
@@ -175,6 +182,10 @@ async function runPreHandlerPipeline(p: ActionPipeline): Promise<boolean> {
     const preResult = await p.pluginRunner.runPreHandler(p.buildPluginCtx(p.ctx))
     if (preResult.shortCircuited) return false
   }
+  // usetheokit/theokit#1096 — the same ctx.queue and outbox lifecycle a route gets, after every
+  // writer of ctx above. An action error carries its own 4xx/5xx status, so a failed action
+  // discards what it enqueued.
+  if (p.jobBackend) attachJobQueue(p.ctx, p.res, p.jobBackend)
   return true
 }
 
@@ -313,6 +324,7 @@ async function executeActionWithOptions(opts: ExecuteActionOptions): Promise<voi
     pluginRunner,
     csrfMode = 'strict',
     disallowed,
+    jobBackend,
   } = opts
 
   // ADR-0028 R3a / #119 — plugin hooks see a Web `Request` in every runtime (built once, shared across
@@ -359,6 +371,7 @@ async function executeActionWithOptions(opts: ExecuteActionOptions): Promise<voi
       loadModule,
       req,
       res,
+      jobBackend,
     }
     if (!(await runPreHandlerPipeline(pipeline))) return
     ctx = pipeline.ctx

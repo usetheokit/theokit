@@ -7,15 +7,13 @@ import {
   type RoutePolicy,
 } from '../../core/contracts/route-policy.js'
 import { TheoError } from '../../core/contracts/theo-error.js'
-import { DuplicateContextKeyError } from '../jobs/duplicate-context-key-error.js'
-import { createOutbox } from '../jobs/outbox.js'
-import { createOutboxDispatcher, createQueueClient } from '../jobs/queue-client.js'
 import { warnOnce } from '../observability/logger.js'
 import type { PluginContext } from '../plugin-types.js'
 import type { PluginRunner } from '../plugins/plugin-runner.js'
 import { dispatchCsrfWarn } from '../security/csrf-warn-dispatch.js'
 import { enforceCsrf } from '../security/csrf.js'
 
+import { attachJobQueue } from './attach-job-queue.js'
 import type { ExecuteRouteContext } from './execute-context.js'
 import { isZodLike, parseQueryAndBody, runZodValidation } from './execute-stages.js'
 import { runMiddlewareAndContext } from './middleware-runner.js'
@@ -216,31 +214,7 @@ export async function executeRoute(ctx: ExecuteRouteContext): Promise<void> {
 
     // T2.1 — wire ctx.queue + outbox lifecycle when jobBackend is configured.
     // EC-202: throw on collision instead of silent override.
-    if (jobBackend) {
-      if (ctx.queue !== undefined) {
-        throw new DuplicateContextKeyError('queue', {
-          reason:
-            'A plugin or middleware already decorated ctx.queue; choose a different key OR remove jobs.backend from theo.config.ts.',
-        })
-      }
-      const outbox = createOutbox()
-      const queueClient = createQueueClient(jobBackend, outbox)
-      ctx.queue = queueClient
-
-      // Discard on abort or 4xx (handler throws cascade to 500 via catch
-      // below, where statusCode is already >= 400).
-      res.on('close', () => {
-        if (!res.writableFinished) outbox.discard()
-      })
-      // Flush on commit, only when response indicates success.
-      res.on('finish', () => {
-        if (res.statusCode >= 400) {
-          outbox.discard()
-          return
-        }
-        void outbox.flush(createOutboxDispatcher(jobBackend))
-      })
-    }
+    if (jobBackend) attachJobQueue(ctx, res, jobBackend)
 
     const mod = await loadModule(route.filePath)
     const routeConfig = mod[method]

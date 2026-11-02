@@ -1,6 +1,7 @@
 import { describe, it, expectTypeOf } from 'vitest'
 import { defineAction } from '../../packages/theo/src/server/define/define-action.js'
 import { z } from 'zod'
+import type { RouteContext } from '../../packages/theo/src/core/contracts/route-context.js'
 
 describe('defineAction type inference', () => {
   it('should infer input type from Zod schema', () => {
@@ -35,11 +36,12 @@ describe('defineAction type inference', () => {
     })
   })
 
-  it('should default ctx to unknown when TCtx omitted', () => {
+  // usetheokit/theokit#1096 — the default was `unknown`, which made every `ctx.<key>` a TS18046.
+  it('should default ctx to RouteContext when TCtx omitted', () => {
     defineAction({
       input: z.object({ name: z.string() }),
       handler: ({ ctx }) => {
-        expectTypeOf(ctx).toBeUnknown()
+        expectTypeOf(ctx).toEqualTypeOf<RouteContext>()
         return { ok: true }
       },
     })
