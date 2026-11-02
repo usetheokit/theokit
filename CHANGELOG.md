@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Fixed
 
 - `theokit`: `loadConfig` reads `theo.config.ts` in a package without `"type": "module"` on a Node that cannot strip types (below 22.18). tsx loads it as CommonJS there and the default export arrives wrapped, so the config was replaced by the defaults without a message and every command ran on `server/`, `app/` and the default port. The wrapper is now unwrapped, and a default export with a `default` key beside other keys, or a non-object default in `theo.config.<NODE_ENV>.ts`, fails with `TheoConfigError` naming the file instead of being ignored (#1100)
+- Workspace tests: the dist gate's validation of `packages/theo/dist` now reaches the vitest run it precedes. `test`, `test:watch`, `test:types` and `test:coverage` export `THEOKIT_TEST_RUN_ID` before the gate, and the build helper keys its per-run marker on it, so no worker of the run re-decides by the ten-minute window and could rebuild dist while its siblings read it. A direct `npx vitest run` keeps the parent-pid fallback. The scripts need a POSIX shell (B-700)
 
 ## [create-theokit 3.0.25, @theokit/http 2.3.1, theokit 0.77.1] - 2026-11-02
 
@@ -54,7 +55,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `theokit`: `theokit generate ws` writes a handler that loads. It imported `defineWebSocket` from `theokit/server`, which no public entry point exports, so the socket closed on connect; it now uses `websocket()` from `theokit/server/define` (#986)
 - `theokit`: `theokit generate controller` writes a controller that `theokit build` accepts. `@Controller()` serves it at `/api/<name>` and a generated guard answers 403 until an access decision replaces it; the old `@Controller('<name>')` failed the build on an unreachable prefix and on an undeclared access decision. When the project does not depend on `@theokit/http`, which the scaffold does not install, the command prints `pnpm add @theokit/http reflect-metadata` (#986)
 - `theokit`: the route, action, agent, toolbox and sandbox templates `theokit generate` writes import from `theokit/server/define` instead of the deprecated `theokit/server` entry, which prints a deprecation warning when a file imports a value from it (#986)
-- Workspace tests: the dist gate's validation of `packages/theo/dist` now reaches the vitest run it precedes. `test`, `test:watch`, `test:types` and `test:coverage` export `THEOKIT_TEST_RUN_ID` before the gate, and the build helper keys its per-run marker on it, so no worker of the run re-decides by the ten-minute window and could rebuild dist while its siblings read it. A direct `npx vitest run` keeps the parent-pid fallback. The scripts need a POSIX shell (B-700)
 
 ## [create-theokit 3.0.21, theokit 0.76.1] - 2026-10-31
 
