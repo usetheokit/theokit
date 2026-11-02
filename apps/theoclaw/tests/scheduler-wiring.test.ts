@@ -1,17 +1,21 @@
+import { EventEmitter } from 'node:events'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import type { PlatformName, SendResult } from '@theokit/gateway'
 import { createJobStore, type JobStore, ScheduleStoreError } from '@theokit/agents/tools'
+import type { AgentOptions } from '@theokit/sdk'
+import { Cron } from '@theokit/sdk'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import type { TurnAgent, TurnRun } from '../src/agent-port.js'
 import type { StartedPlatform } from '../src/channels/channel-loop.js'
-import { NO_TOOL_OPTIONS, type AgentToolOptions } from '../src/tools/tool-registry.js'
+import type { AgentToolOptions } from '../src/tools/tool-registry.js'
 import { resolveToolSettings } from '../src/tools/tool-settings.js'
 import { type RunningScheduler, scheduleFile, wireScheduler } from '../src/scheduler/scheduler-wiring.js'
-import { FakeAdapter } from './fakes.js'
+import { fakeBuilders, signedLinePost } from './composition-fixtures.js'
+import { FakeAdapter, FakeAgent, waitFor } from './fakes.js'
 import { notEnforced, runControlTurn, startForTools, stop, tempCwd } from './tool-start-fixtures.js'
 
 const SCHEDULE_TOOLS = ['schedule_job', 'list_scheduled_jobs', 'cancel_scheduled_job']
@@ -187,7 +191,7 @@ describe('wireScheduler', () => {
 })
 
 describe('startTheoClaw with the scheduler', () => {
-  it('gives the schedule tools to control agents and none to chat agents', async () => {
+  it('gives the schedule tools to control agents', async () => {
     const workspace = tempCwd(cleanups)
     const app = await startForTools({ THEOCLAW_WORKSPACE: workspace }, workspace, { detect: notEnforced })
     try {
@@ -195,11 +199,75 @@ describe('startTheoClaw with the scheduler', () => {
       const options = await runControlTurn(app)
       const names = options.tools.map((tool) => tool.name)
       for (const name of SCHEDULE_TOOLS) expect(names).toContain(name)
-      expect(NO_TOOL_OPTIONS.tools).toEqual([])
       expect(app.output()).toContain('scheduler: 0 jobs, heartbeat off')
     } finally {
       await stop(app)
     }
+  })
+
+  it('opens a chat agent with no schedule tool in a start that has the scheduler', async () => {
+    const workspace = tempCwd(cleanups)
+    const received: AgentOptions[] = []
+    const app = await startForTools({ THEOCLAW_WORKSPACE: workspace }, workspace, { detect: notEnforced }, {
+      getOrCreate: (_id, options) => {
+        received.push(options)
+        return Promise.resolve(Object.assign(new FakeAgent({ frames: [] }), { dispose: () => Promise.resolve() }))
+      },
+    })
+    try {
+      expect(app.error).toBeUndefined()
+      await app.app?.loop.ready
+      expect((await app.app?.router(signedLinePost()))?.status).toBe(200)
+      await waitFor(() => received.length === 1, 2000, 'the chat agent to be opened')
+      const names = (received[0]?.tools ?? []).map((tool) => tool.name)
+      for (const name of SCHEDULE_TOOLS) expect(names).not.toContain(name)
+    } finally {
+      await stop(app)
+    }
+  })
+
+  it('aborts an in-flight scheduled run on SIGTERM before any adapter stops', async () => {
+    const workspace = tempCwd(cleanups)
+    mkdirSync(join(workspace, '.theoclaw'), { recursive: true, mode: 0o700 })
+    await createJobStore(scheduleFile(workspace)).put({
+      id: 'job-sigterm',
+      cron: '0 0 1 1 *',
+      prompt: 'hold',
+      target: { platform: 'telegram', channelId: '42' },
+      createdAt: 1,
+    })
+    const { adapters, builders } = fakeBuilders()
+    const runAgent = new AnsweringAgent(undefined)
+    const signals = new EventEmitter()
+    let exited: () => void = () => undefined
+    const exit = new Promise<void>((resolve) => {
+      exited = resolve
+    })
+    const app = await startForTools({ THEOCLAW_WORKSPACE: workspace }, workspace, { detect: notEnforced }, {
+      builders,
+      signals,
+      exit: () => exited(),
+      importFreeAgentFactory: () => runAgent,
+    })
+    expect(app.error).toBeUndefined()
+    const sdkJob = (await Cron.list({ runtime: 'local' })).items.find((item) => item.name === 'job-sigterm')
+    if (sdkJob === undefined) throw new Error('the stored job was not registered')
+    await Cron.run(sdkJob.id)
+    await waitFor(() => runAgent.signals.length === 1, 2000, 'the scheduled run to start')
+    const disconnectsAtAbort: number[] = []
+    runAgent.signals[0]?.addEventListener(
+      'abort',
+      () => {
+        for (const adapter of adapters.values()) disconnectsAtAbort.push(adapter.disconnects)
+      },
+      { once: true },
+    )
+    signals.emit('SIGTERM')
+    await exit
+    expect(runAgent.signals[0]?.aborted).toBe(true)
+    expect(disconnectsAtAbort.length).toBeGreaterThan(0)
+    expect(disconnectsAtAbort.every((count) => count === 0)).toBe(true)
+    expect([...adapters.values()].flatMap((adapter) => adapter.sent)).toEqual([])
   })
 
   it('refuses the start on a malformed schedules.json before any channel connects', async () => {

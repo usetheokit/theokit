@@ -43,7 +43,7 @@ export type BuildRunAgent = (toolOptions: AgentToolOptions) => TurnAgent | Promi
  * A scheduled run's agent options: the read-only worker's, which hold no schedule tool, so a
  * scheduled run cannot schedule whatever its prompt says (plan D3, REQ-9 property 3).
  */
-export function runAgentToolOptions(tools: ToolSettings): AgentToolOptions {
+function runAgentToolOptions(tools: ToolSettings): AgentToolOptions {
   return workerToolOptions(tools)
 }
 
@@ -51,7 +51,7 @@ export function runAgentToolOptions(tools: ToolSettings): AgentToolOptions {
  * Run one prompt on a fresh worker agent inside its own request boundary, which disposes it. A run
  * that ends `error` or `cancelled`, or with no answer, is a failure naming its status or code.
  */
-export function createRunPort(buildRunAgent: BuildRunAgent, tools: ToolSettings): RunPort {
+function createRunPort(buildRunAgent: BuildRunAgent, tools: ToolSettings): RunPort {
   const { withAgent } = createContainer<TurnAgent>({ factory: () => buildRunAgent(runAgentToolOptions(tools)) })
   return (prompt, signal) =>
     withAgent(async (agent) => {
@@ -70,7 +70,7 @@ export function createRunPort(buildRunAgent: BuildRunAgent, tools: ToolSettings)
  * broadcast answer are (OC-90), so a configured value never reaches a channel. An adapter that throws
  * is reported as `adapter_threw`: `DeliveryRouter.send` does not catch it.
  */
-export function createDeliverPort(loop: Pick<ChannelLoop, 'started'>, secrets: readonly string[] = []): DeliverPort {
+function createDeliverPort(loop: Pick<ChannelLoop, 'started'>, secrets: readonly string[] = []): DeliverPort {
   return async (target, text) => {
     const router = new DeliveryRouter()
     for (const { adapter } of loop.started.values()) router.register(adapter)
