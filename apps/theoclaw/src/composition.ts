@@ -1,11 +1,10 @@
 import 'reflect-metadata'
 
-import { AsyncLocalStorage } from 'node:async_hooks'
 import { mkdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { redactSecrets } from '@theokit/gateway'
-import type { BasePlatformAdapter, MessageEvent, PlatformName } from '@theokit/gateway'
+import type { BasePlatformAdapter, PlatformName } from '@theokit/gateway'
 import { teamsActivityVerifier } from '@theokit/gateway-teams'
 import type { TeamsActivityVerifierOptions } from '@theokit/gateway-teams'
 import { Agent } from '@theokit/sdk'
@@ -28,7 +27,7 @@ import type { ChannelLoop, PlatformBuild } from './channels/channel-loop.js'
 import { installOutputMask, type MaskableStream } from './channels/output-mask.js'
 import { type ConfiguredPlatform, resolvePlatforms } from './channels/platforms.js'
 import { createReplyHandler, type TurnAgent } from './channels/reply-handler.js'
-import { createChannelAgentFactory, sessionAgentOptions } from './control-plane/agent-factory.js'
+import { createSdkChannelAgentFactory } from './control-plane/agent-factory.js'
 import { controlOptions } from './control-plane/control-wiring.js'
 import { type ControlPlaneHandle, listenControlPlane } from './control-plane/listener.js'
 import { formatAddress, type HttpHandler, reportSurfacesOff, serveHandler } from './control-plane/serve.js'
@@ -42,9 +41,9 @@ import { createBonjourPublisher } from './discovery/bonjour-publisher.js'
 import { announceOnLan, type LanAnnouncement, stopThenClose } from './discovery/lan-announcer.js'
 import { parseDiscoveryMode, type PublisherFactory } from './discovery/publisher.js'
 import { NO_PROFILE, startLine, type TheoClawInstance } from './instance.js'
+import { chatSessions, sessionsFile } from './sessions/chat-sessions.js'
 import { Generations } from './sessions/generations.js'
-import { type SessionAgent, SessionAgents, type SessionLease } from './sessions/session-agents.js'
-import { createSessionRouter } from './sessions/session-key.js'
+import type { SessionAgent, SessionAgents } from './sessions/session-agents.js'
 import { readSessionSettings, type SessionSettings } from './sessions/session-settings.js'
 import {
   type Handle,
@@ -57,6 +56,8 @@ import {
 import { createWebhookRouter, type WebhookRoute } from './webhooks/router.js'
 import type { TeamsVerifier } from './webhooks/teams.js'
 import { controlAgentToolOptions, NO_TOOL_OPTIONS } from './tools/tool-registry.js'
+import { triggerRoutes } from './triggers/trigger-route.js'
+import { type EventSettings, readEventSettings } from './triggers/trigger-settings.js'
 import type { AgentToolOptions } from './tools/tool-registry.js'
 import { checkHostToolsPosture, hostToolsProtectedPaths, type ProtectedPath, resolveToolSettings } from './tools/tool-settings.js'
 import type { ToolDeps, ToolSettings } from './tools/tool-settings.js'
@@ -103,6 +104,10 @@ export interface TheoClawOptions {
   readonly teamsVerifierFactory?: (options: TeamsActivityVerifierOptions) => TeamsVerifier
   /** Every value a reply must not carry (`processSecrets`); the channel credentials when absent. */
   readonly secrets?: readonly string[]
+  /** The triggers and approved hooks `startTheoClaw` already read; read here when absent (B-397). */
+  readonly events?: EventSettings
+  /** Builds one trigger run's agent, fresh per run: no tool, like a chat agent. Default: the channel factory. */
+  readonly triggerAgentFactory?: () => Promise<TurnAgent>
 }
 
 export interface ComposedTheoClaw {
@@ -110,47 +115,6 @@ export interface ComposedTheoClaw {
   readonly router: (request: Request) => Promise<Response>
   /** The chat sessions' agents; `disposeAll()` at stop is the only end of their lifetime (D2). */
   readonly sessions: SessionAgents
-}
-
-/** Where the session generations are kept. */
-function sessionsFile(workspace: string): string {
-  return join(workspace, '.theoclaw', 'sessions.json')
-}
-
-/** The chat path's request boundary: it holds the request's event and leases that session's agent. */
-type ChatBoundary = <R>(event: MessageEvent, work: (lease: SessionLease) => R | Promise<R>) => Promise<R>
-
-/**
- * The chat path's sessions and the request boundary over them. `@theokit/di-agent`'s factory takes
- * no argument and `runInRequest` takes no seed, so the event reaches the factory through an
- * `AsyncLocalStorage` set around the request: per request, which a shared variable would not be
- * once two sessions are dispatched at once. The lease the boundary resolves carries no dispose, so
- * the end of the request leaves the agent open (D2).
- */
-function chatSessions(options: TheoClawOptions): { readonly sessions: SessionAgents; readonly withAgent: ChatBoundary } {
-  const settings = options.sessionSettings ?? readSessionSettings(options.env, statSync)
-  const open = options.getOrCreate ?? ((id: string, agentOptions: AgentOptions) => Agent.getOrCreate(id, agentOptions))
-  const sessions = new SessionAgents({
-    router: createSessionRouter(settings),
-    // Opened by the chat path's own factory, whose protected options are applied last, so the
-    // `shell` withholding and memory off hold whatever `optionsFor` returns (B-377 option A). Only
-    // those keys are re-pinned, `local` merged so the session's cwd and the hook gate both hold (B-397).
-    getOrCreate: (id, sessionOptions) =>
-      createChannelAgentFactory(options.env, (channel) => open(id, { ...sessionOptions, ...channel, local: { ...sessionOptions.local, ...channel.local } }))(),
-    optionsFor: () => sessionAgentOptions(options.env, settings.workspace),
-    generations: options.generations ?? Generations.load(sessionsFile(settings.workspace)),
-    settings,
-    write: options.write,
-  })
-  const currentEvent = new AsyncLocalStorage<MessageEvent>()
-  const boundary = createContainer<SessionLease>({
-    factory: () => {
-      const event = currentEvent.getStore()
-      if (event === undefined) throw new Error('a chat agent was resolved outside a message')
-      return sessions.lease(event)
-    },
-  })
-  return { sessions, withAgent: (event, work) => currentEvent.run(event, () => boundary.withAgent(work)) }
 }
 
 /**
@@ -227,10 +191,17 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
   const routes = new Map<PlatformName, WebhookRoute>(
     [...webhooks].map(([platform, { methods }]) => [platform, { methods, handle: startedRoute(loop, platform, handles) }]),
   )
+  const events = options.events ?? readEventSettings(options.env, configured.map((entry) => entry.platform))
+  const triggerFactory = options.triggerAgentFactory ?? createSdkChannelAgentFactory(options.env)
   const router = createWebhookRouter({
     routes,
     isStarted: (platform) => loop.started.has(platform),
     write: maskedWrite,
+    triggers: triggerRoutes(events.triggers, {
+      adapterFor: (platform) => loop.started.get(platform)?.adapter,
+      withAgent: createContainer<TurnAgent>({ factory: triggerFactory }).withAgent,
+      write: maskedWrite,
+    }),
   })
   return { loop, router, sessions: chat.sessions }
 }
@@ -357,6 +328,7 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
   // Read before the mask and the shutdown are installed, so a missing owner leaves nothing behind.
   const policy = parseAuthorizationPolicy(options.env)
   const tools = startToolSettings(options, policy)
+  const events = readEventSettings(options.env, resolvePlatforms(options.env).configured.map((entry) => entry.platform))
   const sessionSettings = readSessionSettings(options.env, statSync)
   const generations = Generations.load(sessionsFile(sessionSettings.workspace))
   const scheduleStore = loadScheduleStore(sessionSettings.workspace)
@@ -376,7 +348,7 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
   const pairing = pairingStoreFor(policy, (line) => stderr(redactSecrets(maskSecrets(line, secrets))))
   // First, once every setting is checked: the line holds a label and a directory, never a secret.
   const instance = announceInstance(options.instance, stderr, options.importedLine)
-  const secretValues = processSecrets(options, settings, tools)
+  const secretValues = processSecrets(options, settings, tools, events)
   const mask = installOutputMask(secretValues, streams)
   const stdout = options.stdout ?? lineWriter(streams[0])
   const flushOnExit = (): void => mask.flush()
@@ -411,6 +383,7 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
     policy,
     sessionSettings,
     generations,
+    events,
     ...(pairing === undefined ? {} : { pairing }),
     write: stderr,
     secrets: secretValues,

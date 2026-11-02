@@ -85,3 +85,8 @@ export function createChannelAgentFactory<A>(
 ): () => Promise<A> {
   return async () => create(agentOptionsFor(env))
 }
+
+/** The chat path's factory over the SDK, for a caller given no `create` of its own: a trigger run's default (B-397). */
+export function createSdkChannelAgentFactory(env: BindEnvironment): () => Promise<TurnAgent> {
+  return createChannelAgentFactory(env, createTheoClawAgent)
+}

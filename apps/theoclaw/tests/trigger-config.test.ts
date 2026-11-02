@@ -2,10 +2,16 @@
  * B-397 FR-002 (AC-001): the triggers `THEOCLAW_TRIGGERS` names are read at start, and a bad one
  * refuses the start, naming the variable and never its value.
  */
-import { describe, expect, it } from 'vitest'
+import { createHmac } from 'node:crypto'
+import { EventEmitter } from 'node:events'
 
+import { describe, expect, it, vi } from 'vitest'
+
+import { composeTheoClaw, startTheoClaw } from '../src/composition.js'
 import { TheoClawConfigError } from '../src/control-plane/errors.js'
 import { eventSecrets, readEventSettings, readTriggerSettings } from '../src/triggers/trigger-settings.js'
+import { capturingStream, fakeBuilders, noAgent, TELEGRAM_AND_LINE, WORKSPACE } from './composition-fixtures.js'
+import { FakeAgent, assistant, finished } from './fakes.js'
 
 const SECRET = 'a-secret-of-16ch'
 const TELEGRAM = ['telegram'] as const
@@ -121,5 +127,78 @@ describe('eventSecrets', () => {
     const fingerprint = 'b'.repeat(64)
     const settings = readEventSettings({ ...CI, THEOCLAW_APPROVED_HOOKS: fingerprint }, TELEGRAM)
     expect([...eventSecrets(settings)].sort()).toEqual([SECRET, fingerprint].sort())
+  })
+})
+
+/** FR-001: `/hooks/<name>` reaches its trigger's route in the composed app; anything else is refused. */
+describe('the composed trigger routes', () => {
+  const ENV = {
+    ...TELEGRAM_AND_LINE,
+    THEOCLAW_TRIGGERS: 'ci',
+    THEOCLAW_TRIGGER_CI_SECRET: SECRET,
+    THEOCLAW_TRIGGER_CI_REPLY_TO: 'telegram:42',
+  }
+
+  function signedPost(path: string, body = '{}'): Request {
+    return new Request(`http://localhost${path}`, {
+      method: 'POST',
+      headers: { 'x-hub-signature-256': `sha256=${createHmac('sha256', SECRET).update(body).digest('hex')}` },
+      body,
+    })
+  }
+
+  async function composed() {
+    const { builders } = fakeBuilders()
+    const app = composeTheoClaw({
+      env: ENV,
+      agentFactory: noAgent,
+      triggerAgentFactory: async () => new FakeAgent({ frames: [assistant('done'), finished()] }),
+      builders,
+      write: () => undefined,
+    })
+    await app.loop.ready
+    return app
+  }
+
+  it('answers 404 for a trigger name that is not configured', async () => {
+    const { router, loop } = await composed()
+    expect((await router(signedPost('/hooks/deploy'))).status).toBe(404)
+    await loop.stopAll()
+  })
+
+  it('answers 405 for GET /hooks/ci', async () => {
+    const { router, loop } = await composed()
+    expect((await router(new Request('http://localhost/hooks/ci'))).status).toBe(405)
+    await loop.stopAll()
+  })
+
+  it('answers 404 for POST /hooks/CI, and routes /hooks/ci/ like /hooks/ci (EC-7)', async () => {
+    const { router, loop } = await composed()
+    expect((await router(signedPost('/hooks/CI'))).status).toBe(404)
+    expect((await router(signedPost('/hooks/ci/'))).status).toBe(202)
+    await loop.stopAll()
+  })
+
+  it("routes a configured trigger's signed POST to its route (202)", async () => {
+    const { router, loop } = await composed()
+    expect((await router(signedPost('/hooks/ci'))).status).toBe(202)
+    await loop.stopAll()
+  })
+
+  it('the start refuses a bad trigger before the listener is called', async () => {
+    const listen = vi.fn()
+    await expect(
+      startTheoClaw({
+        cwd: WORKSPACE,
+        env: { ...ENV, THEOCLAW_TRIGGER_CI_REPLY_TO: 'slack:C1' },
+        agentFactory: noAgent,
+        builders: fakeBuilders().builders,
+        signals: new EventEmitter(),
+        exit: vi.fn(),
+        listen,
+        streams: [capturingStream()],
+      }),
+    ).rejects.toThrow('THEOCLAW_TRIGGER_CI_REPLY_TO names slack, which is not configured')
+    expect(listen).not.toHaveBeenCalled()
   })
 })

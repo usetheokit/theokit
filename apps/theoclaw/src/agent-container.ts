@@ -6,7 +6,7 @@ import { createAgentProvider } from '@theokit/di-agent'
 /**
  * The agent container the composition root wires its concretes into (`rules/architecture.md` § 1:
  * "Composition root is at the top… never deep inside business code"). It lives in its own module so
- * a wiring module the root calls (`scheduler/scheduler-wiring.ts`) can open the same boundary
+ * a wiring module the root calls (`scheduler/scheduler-wiring.ts`, `triggers/trigger-wiring.ts`) can open the same boundary
  * without importing the root back; `composition.ts` re-exports it.
  *
  * **It exposes a request BOUNDARY rather than a resolve.** The container refuses a REQUEST-scoped

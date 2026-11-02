@@ -109,3 +109,11 @@ export function createTriggerRoute(options: TriggerRouteOptions): WebhookRoute {
     },
   }
 }
+
+/** One route per trigger, keyed by name, sharing the reply adapters, the agent boundary and the writer. */
+export function triggerRoutes(
+  triggers: readonly TriggerSettings[],
+  shared: Omit<TriggerRouteOptions, 'trigger' | 'verify'>,
+): ReadonlyMap<string, WebhookRoute> {
+  return new Map(triggers.map((trigger) => [trigger.name, createTriggerRoute({ ...shared, trigger })]))
+}

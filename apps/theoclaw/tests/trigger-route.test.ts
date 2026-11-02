@@ -9,6 +9,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { TurnAgent } from '../src/agent-port.js'
 import { createTriggerRoute } from '../src/triggers/trigger-route.js'
+import { createWebhookRouter, MAX_BODY_BYTES } from '../src/webhooks/router.js'
 import type { TriggerSettings } from '../src/triggers/trigger-settings.js'
 import { FakeAdapter, FakeAgent, assistant, deferred, finished, waitFor } from './fakes.js'
 
@@ -192,5 +193,29 @@ describe('concurrent deliveries', () => {
     expect(statuses.map((response) => response.status)).toEqual([202, 202])
     expect(Date.now() - startedAt).toBeLessThan(1000)
     hold.resolve()
+  })
+})
+describe('through the webhook router', () => {
+  function routed(): { readonly h: Harness; readonly router: (request: Request) => Promise<Response> } {
+    const h = harness()
+    const router = createWebhookRouter({
+      routes: new Map(),
+      triggers: new Map([['ci', createTriggerRoute({ trigger: TRIGGER, adapterFor: () => h.adapter, withAgent: async (work) => work(new FakeAgent({ frames: [assistant('ok'), finished()] }) as unknown as TurnAgent), write: () => undefined })]]),
+      isStarted: () => true,
+      write: () => undefined,
+    })
+    return { h, router }
+  }
+
+  it('answers 413 past 1 MiB', async () => {
+    const { router } = routed()
+    const body = 'x'.repeat(MAX_BODY_BYTES + 1)
+    expect((await router(delivery(body))).status).toBe(413)
+  })
+
+  it('accepts a body of exactly 1048576 bytes with 202 (EC-4)', async () => {
+    const { router } = routed()
+    const body = 'x'.repeat(MAX_BODY_BYTES)
+    expect((await router(delivery(body))).status).toBe(202)
   })
 })
