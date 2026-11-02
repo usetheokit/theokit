@@ -3,7 +3,7 @@
  * re-exports it), so an app that depends on `@theokit/agents` and not on the web package reaches it.
  * Typed over the SDK's own `CustomTool`, so any SDK tool, a published factory's included, is accepted.
  *
- * M29 (ADR-0041) — `createCodeMode`: expose a set of tools to agent-authored code run inside an
+ * M29 — `createCodeMode`: expose a set of tools to agent-authored code run inside an
  * ISOLATION boundary, so the agent composes tools programmatically instead of one call at a time.
  *
  * Security posture (the whole point of this feature):
@@ -100,7 +100,7 @@ export class CodeModePermissionDeniedError extends TheokitAgentError {
   }
 }
 
-/** M40 (ADR-0049) — render a tool's JSON-Schema input as a readable arg shape, e.g. `{ limit: number, region?: string }`. */
+/** M40 — render a tool's JSON-Schema input as a readable arg shape, e.g. `{ limit: number, region?: string }`. */
 function describeToolInput(inputSchema: Record<string, unknown>): string {
   const props = (inputSchema.properties as Record<string, { type?: unknown }> | undefined) ?? {}
   const required = new Set((inputSchema.required as string[] | undefined) ?? [])
@@ -113,7 +113,7 @@ function describeToolInput(inputSchema: Record<string, unknown>): string {
 }
 
 /**
- * M40 (ADR-0049) — generate the model-facing instructions from the SAME `tools` allow-list
+ * M40 — generate the model-facing instructions from the SAME `tools` allow-list
  * `createCodeMode` captures (DRY — cannot drift from the api surface it describes). Teaches the model
  * that its code runs in a sandbox, the available `api.<name>(input)` calls (ONLY this allow-list —
  * least-privilege scoping), and the return contract. Add it to the agent's system prompt.
@@ -130,7 +130,7 @@ function generateCodeModeInstructions(tools: CustomTool[], toolName: string): st
 }
 
 /**
- * Build a code-mode tool + its generated model instructions (M40 / ADR-0049). Fails fast if
+ * Build a code-mode tool + its generated model instructions (M40). Fails fast if
  * `onPermissionRequest` or `sandbox` is missing (security by default). `tool` takes `{ code }`,
  * assembles the permission-gated restricted API from `tools`, runs the code in the injected sandbox,
  * and returns the code's result. `instructions` (add it to the agent's system prompt) teaches the
