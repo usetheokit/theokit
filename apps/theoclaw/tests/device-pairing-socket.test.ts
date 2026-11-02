@@ -103,4 +103,64 @@ describe('device pairing over /control', () => {
     await start()
     expect((await upgrade('some-other-token-that-is-long-enough-99')).status).toBe(401)
   })
+
+  it('an owner revokes a device: its open socket closes and its token is refused', async () => {
+    await start()
+    const owner = (await upgrade(OWNER_TOKEN)).socket!
+    const { code } = await ask(owner, { type: 'pair_code' })
+    const { id } = (await (await pair({ code, name: 'laptop', token: DEVICE_TOKEN })).json()) as { id: string }
+    await ask(owner, { type: 'approve_device', id })
+    const device = (await upgrade(DEVICE_TOKEN)).socket!
+    const closed = new Promise<number>((resolve) => device.once('close', (closeCode) => resolve(closeCode)))
+
+    expect(await ask(owner, { type: 'revoke_device', id })).toEqual({ type: 'device_revoked', id })
+    await closed
+    expect(device.readyState).toBe(WebSocket.CLOSED)
+    expect((await upgrade(DEVICE_TOKEN)).status).toBe(401)
+    expect(owner.readyState).toBe(WebSocket.OPEN)
+  })
+
+  it('a device socket cannot revoke a device', async () => {
+    await start()
+    const owner = (await upgrade(OWNER_TOKEN)).socket!
+    const { code } = await ask(owner, { type: 'pair_code' })
+    const { id } = (await (await pair({ code, name: 'laptop', token: DEVICE_TOKEN })).json()) as { id: string }
+    await ask(owner, { type: 'approve_device', id })
+    const device = (await upgrade(DEVICE_TOKEN)).socket!
+    expect(await ask(device, { type: 'revoke_device', id })).toEqual({ type: 'error', code: 'forbidden' })
+    expect(await ask(device, { type: 'pending_devices' })).toEqual({ type: 'error', code: 'forbidden' })
+    expect((await upgrade(DEVICE_TOKEN)).status).toBe(101)
+  })
+
+  it('answers bad_frame for a non-string id and the reason for an unknown one', async () => {
+    await start()
+    const owner = (await upgrade(OWNER_TOKEN)).socket!
+    expect(await ask(owner, { type: 'approve_device', id: 7 })).toEqual({ type: 'error', code: 'bad_frame' })
+    expect(await ask(owner, { type: 'approve_device', id: 'nope' })).toEqual({
+      type: 'error',
+      code: 'approve_failed',
+      reason: 'unknown_request',
+    })
+    expect(await ask(owner, { type: 'revoke_device', id: 7 })).toEqual({ type: 'error', code: 'bad_frame' })
+    expect(await ask(owner, { type: 'revoke_device', id: 'nope' })).toEqual({ type: 'error', code: 'revoke_failed' })
+  })
+
+  it('lists no pending device once it is approved', async () => {
+    await start()
+    const owner = (await upgrade(OWNER_TOKEN)).socket!
+    const { code } = await ask(owner, { type: 'pair_code' })
+    const { id } = (await (await pair({ code, name: 'laptop', token: DEVICE_TOKEN })).json()) as { id: string }
+    await ask(owner, { type: 'approve_device', id })
+    expect(await ask(owner, { type: 'pending_devices' })).toEqual({ type: 'pending_devices', devices: [] })
+  })
+
+  it('refuses a pairing body over the size limit with 413 before reading it all', async () => {
+    await start()
+    const owner = (await upgrade(OWNER_TOKEN)).socket!
+    const { code } = await ask(owner, { type: 'pair_code' })
+    const big = await pair({ code, name: 'laptop', token: DEVICE_TOKEN, padding: 'x'.repeat(70_000) })
+    expect(big.status).toBe(413)
+    // The code was not spent by the refused body.
+    expect((await pair({ code, name: 'laptop', token: DEVICE_TOKEN })).status).toBe(202)
+  })
 })

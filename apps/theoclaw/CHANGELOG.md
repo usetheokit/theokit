@@ -21,6 +21,10 @@ and versioning follows [Semantic Versioning](https://semver.org/).
   gets `202 { id }`; its token still answers `401` on `/control` until the owner approves it, and then
   opens the socket like the owner's token, except that a device socket cannot issue a code or approve
   (`forbidden`). `<THEOCLAW_STATE_DIR>/devices.json` (mode 0600) keeps only each approved token's
+  SHA-256 digest. `{"type":"revoke_device","id":...}` on the owner socket ends an approved device's
+  access (`device_revoked`) and closes the sockets it already has open. A device token needs 10 distinct
+  characters, at most 20 requests wait at once (`429` beyond that, and a request lapses with its code),
+  and a `POST /control/pair` body over 64 KiB answers `413` without being read in full.
   SHA-256 digest. Without a state directory or a control token pairing is off and nothing changes.
 - `theoclaw security audit [--fix]` (B-708, OC-89). It reads the configuration the start would see
   and reports risky settings by id without printing a value: a file or its own directory open

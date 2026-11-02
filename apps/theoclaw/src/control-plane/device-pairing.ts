@@ -16,10 +16,14 @@ import { describeError, TheoClawConfigError } from './errors.js'
 const CODE_TTL_MS = 600_000
 const FILE_NAME = 'devices.json'
 const MAX_NAME_LENGTH = 64
+/** At most this many requests wait for the owner; a request waits as long as a setup code lives. */
+const MAX_PENDING = 20
+/** A token a client picks must hold at least this many distinct characters, so `aaaa...` is refused. */
+const MIN_DISTINCT_TOKEN_CHARS = 10
 
 export type PairingRequest =
   | { readonly ok: true; readonly id: string }
-  | { readonly ok: false; readonly reason: 'unknown_or_expired' | 'bad_token' | 'bad_name' }
+  | { readonly ok: false; readonly reason: 'unknown_or_expired' | 'bad_token' | 'bad_name' | 'too_many_pending' }
 
 export type DeviceApproval =
   | { readonly ok: true; readonly name: string }
@@ -42,6 +46,8 @@ export interface DevicePairing {
   revoke(id: string): Promise<boolean>
   /** True for an `Authorization` header carrying an approved device's token. */
   accepts(authorization: string | undefined): boolean
+  /** The id of the approved device whose token the header carries, or undefined. */
+  deviceIdFor(authorization: string | undefined): string | undefined
 }
 
 export interface DevicePairingOptions {
@@ -123,6 +129,14 @@ export function createDevicePairing(options: DevicePairingOptions): DevicePairin
   let approved = load(path)
   const codes = new Map<string, number>()
   const waiting = new Map<string, Device>()
+  const waitingSince = new Map<string, number>()
+  const dropExpiredRequests = (): void => {
+    for (const [id, since] of waitingSince) {
+      if (clock() - since < CODE_TTL_MS) continue
+      waiting.delete(id)
+      waitingSince.delete(id)
+    }
+  }
   // One chain for every write, so two approvals never interleave their read-modify-write.
   let writes: Promise<unknown> = Promise.resolve()
 
@@ -141,6 +155,17 @@ export function createDevicePairing(options: DevicePairingOptions): DevicePairin
     return result
   }
 
+  const matchingDevice = (authorization: string | undefined): Device | undefined => {
+    const presented = BEARER.exec(authorization ?? '')?.[1]
+    if (presented === undefined) return undefined
+    const wanted = Buffer.from(digestOf(presented), 'hex')
+    // Every entry is compared, so the time does not say which device matched.
+    return approved.reduce<Device | undefined>(
+      (hit, entry) => (timingSafeEqual(Buffer.from(entry.digest, 'hex'), wanted) ? entry : hit),
+      undefined,
+    )
+  }
+
   return {
     issueSetupCode() {
       for (const [code, issuedAt] of codes) if (clock() - issuedAt >= CODE_TTL_MS) codes.delete(code)
@@ -156,15 +181,24 @@ export function createDevicePairing(options: DevicePairingOptions): DevicePairin
       }
       const trimmed = name.trim()
       if (trimmed === '' || trimmed.length > MAX_NAME_LENGTH) return { ok: false, reason: 'bad_name' }
-      if (token.length < MIN_BEARER_TOKEN_LENGTH || token.trim() !== token) return { ok: false, reason: 'bad_token' }
+      if (token.length < MIN_BEARER_TOKEN_LENGTH || token.trim() !== token || new Set(token).size < MIN_DISTINCT_TOKEN_CHARS) {
+        return { ok: false, reason: 'bad_token' }
+      }
+      dropExpiredRequests()
+      if (waiting.size >= MAX_PENDING) return { ok: false, reason: 'too_many_pending' }
       codes.delete(code)
       const id = randomBytes(8).toString('hex')
       waiting.set(id, { id, name: trimmed, digest: digestOf(token) })
+      waitingSince.set(id, clock())
       return { ok: true, id }
     },
-    pending: () => [...waiting.values()].map(({ id, name }) => ({ id, name })),
+    pending() {
+      dropExpiredRequests()
+      return [...waiting.values()].map(({ id, name }) => ({ id, name }))
+    },
     approve(id) {
       return serialized(async () => {
+        dropExpiredRequests()
         const device = waiting.get(id)
         if (device === undefined) return { ok: false, reason: 'unknown_request' } as const
         // Approved only once the file holds it, so a device is never approved in memory alone.
@@ -172,6 +206,7 @@ export function createDevicePairing(options: DevicePairingOptions): DevicePairin
         if (!(await save(next))) return { ok: false, reason: 'write_failed' } as const
         approved = next
         waiting.delete(id)
+        waitingSince.delete(id)
         return { ok: true, name: device.name } as const
       })
     },
@@ -184,12 +219,7 @@ export function createDevicePairing(options: DevicePairingOptions): DevicePairin
         return true
       })
     },
-    accepts(authorization) {
-      const presented = BEARER.exec(authorization ?? '')?.[1]
-      if (presented === undefined) return false
-      const wanted = Buffer.from(digestOf(presented), 'hex')
-      // Every entry is compared, so the time does not say which device matched.
-      return approved.reduce((hit, entry) => timingSafeEqual(Buffer.from(entry.digest, 'hex'), wanted) || hit, false)
-    },
+    accepts: (authorization) => matchingDevice(authorization) !== undefined,
+    deviceIdFor: (authorization) => matchingDevice(authorization)?.id,
   }
 }

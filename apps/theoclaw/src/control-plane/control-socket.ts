@@ -109,7 +109,13 @@ function sessionEnd(session: string, outcome: SessionOutcome, stderr: (line: str
  * socket is open, and one final frame per turn. A sessionless turn whose socket closed runs to its
  * end and its frames are dropped (EC-1); a session turn whose socket closed is cancelled (FR-005).
  */
-function serve(ws: WebSocket, options: ControlSocketOptions, stderr: (line: string) => void, owner: boolean): void {
+function serve(
+  ws: WebSocket,
+  options: ControlSocketOptions,
+  stderr: (line: string) => void,
+  who: { owner: boolean; revoked: (id: string) => void },
+): void {
+  const { owner } = who
   let busy = false
   let current: string | undefined
   const send = (frame: unknown): void => {
@@ -155,9 +161,12 @@ function serve(ws: WebSocket, options: ControlSocketOptions, stderr: (line: stri
     })
   }
   ws.on('message', (raw, isBinary) => {
-    const paired = handleDeviceFrame(options.devices, owner, readObject(raw, isBinary))
+    const paired = handleDeviceFrame(options.devices, owner, readObject(raw, isBinary), who.revoked)
     if (paired === undefined) return onFrame(raw, isBinary)
-    void paired.then(send)
+    void paired.then(send).catch((error: unknown) => {
+      stderr(`theoclaw: device frame failed: ${describeError(error)}`)
+      send({ type: 'error', code: 'device_frame_failed' })
+    })
   })
 }
 
@@ -179,11 +188,26 @@ export function attachControlSocket(
   }
   const tokenMatches = bearerCheck(options.token)
   const wss = new WebSocketServer({ noServer: true, maxPayload: MAX_MESSAGE_BYTES })
+  // The sockets opened with each approved device's token, so revoking the device can end them.
+  const deviceSockets = new Map<string, Set<WebSocket>>()
+  const revoked = (id: string): void => {
+    for (const socket of deviceSockets.get(id) ?? []) socket.close(1008, 'device revoked')
+    deviceSockets.delete(id)
+  }
   server.on('upgrade', (request: IncomingMessage, socket: Duplex, head: Buffer) => {
     if (pathOf(request) !== CONTROL_PATH) return refuse(socket, '404 Not Found')
     const owner = tokenMatches(request.headers.authorization)
     if (!owner && options.devices?.accepts(request.headers.authorization) !== true) return refuse(socket, '401 Unauthorized')
-    wss.handleUpgrade(request, socket, head, (ws) => serve(ws, options, stderr, owner))
+    const deviceId = owner ? undefined : options.devices?.deviceIdFor(request.headers.authorization)
+    wss.handleUpgrade(request, socket, head, (ws) => {
+      if (deviceId !== undefined) {
+        const open = deviceSockets.get(deviceId) ?? new Set<WebSocket>()
+        open.add(ws)
+        deviceSockets.set(deviceId, open)
+        ws.on('close', () => open.delete(ws))
+      }
+      serve(ws, options, stderr, { owner, revoked })
+    })
   })
   return {
     close: () =>
