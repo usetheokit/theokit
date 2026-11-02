@@ -49,6 +49,9 @@ export function createScheduleTools(options: CreateScheduleToolsOptions): Custom
   const { scheduler, platforms } = options
   const maxJobs = options.maxJobs ?? DEFAULT_MAX_JOBS
   const listed = platforms.join(', ')
+  // Jobs whose `add` is still awaited: two calls in one turn would both pass a check of the stored
+  // jobs alone, so a slot is reserved before the await (review finding F-wire-6).
+  let pending = 0
 
   const scheduleJob = Tool.create({
     name: 'schedule_job',
@@ -65,9 +68,10 @@ export function createScheduleTools(options: CreateScheduleToolsOptions): Custom
           `platform ${JSON.stringify(input.platform)} is not configured; use one of: ${listed}`,
         )
       }
-      if (scheduler.list().length >= maxJobs)
+      if (scheduler.list().length + pending >= maxJobs)
         return refuse(`the schedule already holds ${String(maxJobs)} jobs`)
       const id = `job-${crypto.randomUUID().slice(0, 8)}`
+      pending += 1
       try {
         const { nextRunAt } = await scheduler.add({
           id,
@@ -81,6 +85,8 @@ export function createScheduleTools(options: CreateScheduleToolsOptions): Custom
         return JSON.stringify({ ok: true, id, nextRunAt })
       } catch (error) {
         return refuse(error instanceof Error ? error.message : String(error))
+      } finally {
+        pending -= 1
       }
     },
   })
