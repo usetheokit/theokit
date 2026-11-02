@@ -21,12 +21,12 @@
  * `verify/`. The verification command must print the node test runner's TAP totals
  * (`# pass N`, `# fail N`).
  *
- *   node tools/side-by-side.mjs --task docs/parity/tasks/t1-duration-parser \
+ *   node tools/side-by-side.mjs --task tests/parity/tasks/t1-duration-parser \
  *     --competitor claude --theocode-model anthropic/claude-sonnet-4-5 \
  *     --competitor-model claude-sonnet-4-5 --competitor-provider anthropic [--effort medium] \
  *     [--competitor-effort medium] [--not-like-for-like "<reason>"] [--out docs/parity/runs]
  *
- *   node tools/side-by-side.mjs --check-seeds docs/parity/tasks
+ *   node tools/side-by-side.mjs --check-seeds tests/parity/tasks
  *     proves every task's seed fails its verification and prints its hash; runs no agent.
  *
  * Not in the `lint` chain: it drives two agent CLIs against real models, which a check cannot do.
