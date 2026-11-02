@@ -36,6 +36,7 @@ import { type ControlPlaneSettings, readControlPlaneSettings } from './control-p
 import { processSecrets } from './secrets.js'
 import { installShutdown, type SignalSource } from './control-plane/shutdown.js'
 import { createTurnRunner } from './control-plane/turn.js'
+import { heartbeatJob, readHeartbeatSettings } from './scheduler/heartbeat.js'
 import { loadScheduleStore, type RunningScheduler, wireScheduler } from './scheduler/scheduler-wiring.js'
 import { createBonjourPublisher } from './discovery/bonjour-publisher.js'
 import { announceOnLan, type LanAnnouncement, stopThenClose } from './discovery/lan-announcer.js'
@@ -359,6 +360,7 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
   const sessionSettings = readSessionSettings(options.env, statSync)
   const generations = Generations.load(sessionsFile(sessionSettings.workspace))
   const scheduleStore = loadScheduleStore(sessionSettings.workspace)
+  const heartbeat = readHeartbeatSettings(options.env)
   // `SessionAgents` alone decides when a session's agent is disposed: the SDK's cache and its idle
   // sweep know nothing of a turn in flight. `Agent.create` never reads the cache, so `/control`
   // turns are unaffected.
@@ -416,7 +418,8 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
   // `/control` agents hold `run_code` and `delegate_all`; their read-only workers carry no import.
   const buildWorker = options.importFreeAgentFactory ?? options.agentFactory
   const platforms = resolvePlatforms(options.env).configured.map((entry) => entry.platform)
-  scheduled = wireScheduler({ store: scheduleStore, loop: composed.loop, buildRunAgent: buildWorker, tools, platforms, write: stderr })
+  const beat = heartbeat === undefined ? {} : { heartbeat: heartbeatJob(sessionSettings.workspace, heartbeat) }
+  scheduled = wireScheduler({ store: scheduleStore, loop: composed.loop, buildRunAgent: buildWorker, tools, platforms, ...beat, write: stderr })
   const extraTools = [...workflowTools(options.draftAgentFactory, stderr), ...scheduled.scheduleTools]
   const buildControlAgent = async (): Promise<TurnAgent> =>
     options.agentFactory(controlAgentToolOptions(tools, buildWorker, extraTools))

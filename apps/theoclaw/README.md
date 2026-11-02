@@ -324,6 +324,42 @@ set -a; . ~/.config/theoclaw/dev.env; set +a
 THEOCLAW_LIVE=1 THEOCLAW_HOST_TOOLS=on pnpm --filter theoclaw exec vitest run tests/live/tools.live.test.ts
 ```
 
+### Scheduled jobs and the heartbeat
+
+`/control` agents also hold three schedule tools, so the owner schedules in a sentence ("every
+morning at 9, post a summary of the news to telegram channel -100123"). Chat agents never hold
+them.
+
+| Tool | What it does |
+|---|---|
+| `schedule_job` | stores a job: a cron (5 fields or `@hourly`, `@daily`, `@weekly`, `@monthly`, `@yearly`), a prompt, a configured platform and a channel id, optionally a name and an IANA timezone (UTC by default) |
+| `list_scheduled_jobs` | lists the jobs with their id, name, cron and target |
+| `cancel_scheduled_job` | removes a job by id |
+
+Jobs are kept in `<workspace>/.theoclaw/schedules.json` (mode 0600), so they survive a restart; a
+file that does not parse refuses the start, as `sessions.json` does. At most 50 jobs are kept, and
+a platform that is not configured, a cron or a timezone the scheduler rejects is refused with
+nothing stored. Each run is a read-only worker agent (the read-only tools, no shell and no schedule
+tool, so a scheduled run cannot schedule) told that nobody is present. Its prompt carries the last
+4000 characters of the previous run's answer. Its answer is sent to the job's channel, unless the
+answer is `[SILENT]` alone, which sends nothing; a `[SILENT]` beside other text is removed and the
+rest is sent. A run that fails sends one line, `Scheduled job <name> failed: <reason>`. A fire that
+starts while the job's previous run is still going is skipped. A send to a platform that is not
+connected is printed as `scheduler: job <name>: <platform>: <code>`, and the answer is still kept
+for the next run. The start prints `scheduler: <n> jobs, heartbeat <on|off>`.
+
+`THEOCLAW_HEARTBEAT` adds a heartbeat: `<cron> <platform>:<channelId>`, for example
+`THEOCLAW_HEARTBEAT="*/30 * * * * telegram:-100123"`. On each fire it reads `HEARTBEAT.md` in the
+workspace as its prompt, so an edit takes effect on the next fire without a restart. An absent or
+blank `HEARTBEAT.md` runs nothing and calls no model. A value with no target, a platform outside the
+ten, or a cron the scheduler rejects refuses the start, naming the variable.
+
+The live check (`THEOCLAW_MODEL` and `OPENROUTER_API_KEY` set; one case waits for a real minute tick):
+
+```bash
+THEOCLAW_LIVE=1 pnpm --filter theoclaw exec vitest run tests/live/scheduler.live.test.ts
+```
+
 ### The `/control` agent's browser
 
 With `THEOCLAW_BROWSER=on`, `/control` agents also get a headless Chromium through the pinned
@@ -421,7 +457,7 @@ before any runner starts, and refuses it naming the file and the key:
   the absolute `PATH` entries only, below). A stdio `cwd` must be absolute. `timeoutMs` and `requestTimeoutMs` are whole milliseconds up to 2147483647, the
   longest delay a Node timer holds.
 - Each ACP agent is one tool named `name`, a `createACPTool` from `theokit/server/agent` run in
-  `files/`, one process per call. Its name may not be a TheoClaw tool's (`run_code`, `delegate_all` and `digest` included), a name the SDK reserves
+  `files/`, one process per call. Its name may not be a TheoClaw tool's (`run_code`, `delegate_all`, `digest` and the three schedule tools included), a name the SDK reserves
   (`shell`, `memory_search`, `memory_get`), or start with `mcp_`. Every permission it asks for is
   refused (asking the owner is B-684). That stops only what the agent asks about: it runs as the
   TheoClaw user, outside the tool sandbox, and an agent that writes without asking (its own
