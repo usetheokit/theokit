@@ -41,6 +41,8 @@ import { mkdtempSync, readdirSync, readFileSync, writeFileSync, rmSync } from 'n
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+import { describeCommandFailure, runWithOneRetry } from './describe-command-failure.mjs'
+
 const only = process.argv[2]
 const pkgs = readdirSync('packages', { withFileTypes: true })
   .filter((e) => e.isDirectory())
@@ -127,8 +129,14 @@ for (const dir of pkgs) {
       '--ignore-scripts',
     ]
     const opts = { cwd: out, stdio: ['ignore', 'ignore', 'pipe'], timeout: 300000 }
-    // eslint-disable-next-line sonarjs/no-os-command-from-path -- toolchain binary, fixed argv
-    execFileSync('npm', args, opts)
+    // One retry for the INSTALL only, never for the import probes below: a registry hiccup failed
+    // this step once (release run 38473703093) and passed on rerun. The first failure is printed in
+    // full either way, so a transient error is told apart from a tarball that does not install.
+    runWithOneRetry(
+      // eslint-disable-next-line sonarjs/no-os-command-from-path -- toolchain binary, fixed argv
+      () => execFileSync('npm', args, opts),
+      (line) => console.error(`  ~ ${manifest.name}: npm install ${line}`),
+    )
 
     const entries = Object.keys(manifest.exports ?? { '.': 1 }).filter(
       (k) => k.startsWith('.') && !k.endsWith('.json') && !k.includes('*'),
@@ -153,7 +161,9 @@ for (const dir of pkgs) {
     }
     console.log(`  ${manifest.name}: ${entries.length} entry point(s) probed`)
   } catch (err) {
-    console.error(`  ! ${manifest.name}: ${String(err.message).slice(0, 110)}`)
+    // The whole stderr, not a slice of `err.message`: that message starts with the full argv,
+    // which alone filled the old 110-character cut and hid npm's error (release run 38473703093).
+    console.error(`  ! ${manifest.name}: ${describeCommandFailure(err)}`)
     bad += 1
   } finally {
     rmSync(out, { recursive: true, force: true })

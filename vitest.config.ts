@@ -259,6 +259,10 @@ export default defineConfig({
         __dirname,
         'packages/theo/src/server/rate-limit/index.ts',
       ),
+      // The authoring subpath every generator template imports from, above `theokit/server` for the
+      // same prefix reason: below it, a generated route loaded under vitest failed with "Cannot
+      // find package 'theokit/server/define'".
+      'theokit/server/define': path.resolve(__dirname, 'packages/theo/src/server/define/index.ts'),
       'theokit/server': path.resolve(__dirname, 'packages/theo/src/server/index.ts'),
       theokit: path.resolve(__dirname, 'packages/theo/src/index.ts'),
       // M84 — the subpath BEFORE the bar: a string alias matches by prefix, so `@theokit/agents`
