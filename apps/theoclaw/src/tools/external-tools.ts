@@ -159,7 +159,8 @@ function checkAcpNames(agents: readonly AcpAgentConfig[], path: string): void {
   }
 }
 
-function secretsOf(servers: Readonly<Record<string, McpServerConfig>>): string[] {
+/** The values the output mask hides for `servers`: every header and env value of at least 8 characters. */
+export function secretsOf(servers: Readonly<Record<string, McpServerConfig>>): string[] {
   return Object.values(servers).flatMap((server) => {
     const values = 'url' in server ? server.headers : server.env
     return Object.values(values ?? {}).filter((value) => value.length >= MIN_MASKED_LENGTH)

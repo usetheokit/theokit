@@ -72,7 +72,11 @@ and versioning follows [Semantic Versioning](https://semver.org/).
   servers only with `THEOCLAW_IMPORTED_MCP=on` (any other value stops the start). Channel, session
   and WebChat agents, and the `run_code` and `delegate_all` workers, receive nothing from it. With
   `THEOCLAW_HOST_TOOLS=on` and `THEOCLAW_IMPORTED_MCP=on`, the start refuses an imported stdio
-  command or cwd inside a root the sandboxed shell can write, as for `THEOCLAW_EXTERNAL_TOOLS`.
+  command, cwd or script argument (absolute, with a slash, or a file in the cwd, each resolved as
+  the SDK spawns it) inside a root the sandboxed shell can write, as for `THEOCLAW_EXTERNAL_TOOLS`.
+  The import's env and header values of 8 characters or more are masked in the process output. An
+  import holds `THEOCLAW_STATE_DIR/import.lock`: a second import is refused while it runs, and a
+  start leaves an import's swap in flight alone.
 - The `digest` tool of the `/control` agent (B-387, OC-66): a typed two-step workflow from
   `@theokit/sdk/workflow`, where a draft step on a fresh agent with no tool, no `shell` and memory off
   lists the key points of a text, and a second step checks them as `{ points }` (1 to 10). Each call

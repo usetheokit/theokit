@@ -302,6 +302,8 @@ export interface StartOptions extends Omit<TheoClawOptions, 'write'> {
   readonly importFreeAgentFactory?: StartOptions['agentFactory']
   /** The processes an import starts outside the sandbox (`importedMcpPaths`), protected with host tools on. */
   readonly importedPaths?: readonly ProtectedPath[]
+  /** The import's env and header values (`importedMcpSecrets`), hidden by the output mask with the others. */
+  readonly importedSecrets?: readonly string[]
   /** Builds the tool-less agent of one `digest` call (B-387, D3). Absent: no workflow tool. */
   readonly draftAgentFactory?: () => Promise<SDKAgent>
   /** The SDK's live agent cache, turned off at start (D2). Default `Agent.registry`. */
@@ -324,13 +326,14 @@ function lineWriter(stream: MaskableStream | undefined): (line: string) => void 
   return (line) => void stream?.write(`${line}\n`)
 }
 
-/** Every value the output mask hides: the channel credentials, both model keys, both bearer tokens and the web search keys. */
-function processSecrets(env: StartOptions['env'], settings: ControlPlaneSettings, tools: ToolSettings): string[] {
+/** Every value the output mask hides: the channel credentials, both model keys, both bearer tokens, the tools' and the import's values. */
+function processSecrets(options: StartOptions, settings: ControlPlaneSettings, tools: ToolSettings): string[] {
+  const { env } = options
   const keys = [env.THEOKIT_API_KEY, env.OPENROUTER_API_KEY]
     .map((value) => (value ?? '').trim())
     .filter((value) => value !== '')
   const tokens = [settings.controlToken, settings.webchatToken].filter((token) => token !== undefined)
-  return [...resolvePlatforms(env).secrets, ...keys, ...tokens, ...tools.secrets]
+  return [...resolvePlatforms(env).secrets, ...keys, ...tokens, ...tools.secrets, ...(options.importedSecrets ?? [])]
 }
 
 const SHELL_READ_LINE = 'tools: host tools are on; the shell can read every file the process user can read'
@@ -418,7 +421,7 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
   const pairing = pairingStoreFor(policy, (line) => stderr(redactSecrets(maskSecrets(line, secrets))))
   // First, once every setting is checked: the line holds a label and a directory, never a secret.
   const instance = announceInstance(options.instance, stderr, options.importedLine)
-  const mask = installOutputMask(processSecrets(options.env, settings, tools), streams)
+  const mask = installOutputMask(processSecrets(options, settings, tools), streams)
   const stdout = options.stdout ?? lineWriter(streams[0])
   const flushOnExit = (): void => mask.flush()
   options.signals.on('exit', flushOnExit)

@@ -605,7 +605,8 @@ prompt, and the skills are inline with a `skill_read` tool. **Channel and WebCha
 from the import**, since anyone allowed to message the bot could ask a chat agent to repeat its
 prompt; nor do the `/control` agent's `run_code` and `delegate_all` workers. The imported MCP servers
 stay off until you set `THEOCLAW_IMPORTED_MCP=on`; any other value stops the start. With host tools
-on, the start refuses an imported stdio command or cwd the sandboxed shell could write.
+on, the start refuses an imported stdio command, cwd or script argument the sandboxed shell could
+write. Imported env and header values are masked in the output, and two imports never run at once.
 
 ## Keeping secrets out of the repository
 
