@@ -19,8 +19,8 @@ const TOKEN = "control-token-for-the-sidecar-tests-4b9d1";
 const MODEL_KEY = "sk-or-model-key-for-the-sidecar-tests-77";
 const APP = new URL("..", import.meta.url).pathname;
 
-let handles: ControlPlaneHandle[] = [];
-let children: ChildProcess[] = [];
+const handles: ControlPlaneHandle[] = [];
+const children: ChildProcess[] = [];
 afterEach(async () => {
   for (const child of children.splice(0)) child.kill("SIGKILL");
   for (const handle of handles.splice(0)) await handle.close();

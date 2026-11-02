@@ -349,6 +349,11 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- `pnpm --filter theoclaw exec eslint src tests` lints the app's TypeScript sources and tests (B-664).
+  `eslint.config.mjs` ignored `src/**` and `tests/**` and the root config ignores `apps/**`, so no
+  linter read a TheoClaw `.ts` file and the command exited 2 with every file ignored. The config now
+  reads both with `typescript-eslint`'s recommended set; the 16 errors it found are fixed.
+
 - A `delegate_all` worker whose parent turn was cancelled could end the whole process: when its
   run's cancellation rejected and its stream or `wait()` rejected too, the cancellation's rejection
   was never observed, and Node's default for an unhandled rejection is to exit. The cancellation's

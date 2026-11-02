@@ -22,8 +22,8 @@ interface Plane {
   builds: () => number;
 }
 
-let planes: ControlPlaneHandle[] = [];
-let sockets: WebSocket[] = [];
+const planes: ControlPlaneHandle[] = [];
+const sockets: WebSocket[] = [];
 
 afterEach(async () => {
   for (const socket of sockets.splice(0)) socket.terminate();

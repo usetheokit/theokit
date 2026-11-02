@@ -29,7 +29,6 @@ class AnsweringAgent implements TurnAgent {
     this.options.push(options)
     const answer = this.answer
     return Promise.resolve({
-      // eslint-disable-next-line @typescript-eslint/require-await -- the port's stream is async
       async *stream() {
         yield { type: 'assistant' }
       },

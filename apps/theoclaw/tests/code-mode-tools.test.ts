@@ -258,6 +258,7 @@ describe('run_code and delegate_all on a /control agent', () => {
         stop = resolve
       })
       const run = {
+        // eslint-disable-next-line require-yield -- a worker that never emits an event until it is stopped
         stream: async function* () {
           await stopped
         },
@@ -305,6 +306,7 @@ describe('run_code and delegate_all on a /control agent', () => {
       })
       const run = {
         // The abort fires only once both workers are inside stream(), after each registered its listener.
+        // eslint-disable-next-line require-yield -- a worker that never emits an event until it is stopped
         stream: async function* () {
           streaming += 1
           if (streaming === 2) controller.abort()

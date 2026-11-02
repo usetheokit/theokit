@@ -24,7 +24,6 @@ class RecordingAgent implements TurnAgent {
   send(text: string): Promise<TurnRun> {
     this.prompts.push(text)
     return Promise.resolve({
-      // eslint-disable-next-line @typescript-eslint/require-await -- the port's stream is async
       async *stream() {
         yield { type: 'assistant' }
       },

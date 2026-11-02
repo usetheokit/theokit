@@ -25,10 +25,10 @@ const APP = new URL("..", import.meta.url).pathname;
 const ENTER = "\r";
 const ESC = "\u001B";
 
-let handles: ControlPlaneHandle[] = [];
-let clients: ControlClient[] = [];
-let unmounts: (() => void)[] = [];
-let children: ChildProcess[] = [];
+const handles: ControlPlaneHandle[] = [];
+const clients: ControlClient[] = [];
+const unmounts: (() => void)[] = [];
+const children: ChildProcess[] = [];
 afterEach(async () => {
   for (const unmount of unmounts.splice(0)) unmount();
   for (const child of children.splice(0)) child.kill("SIGKILL");

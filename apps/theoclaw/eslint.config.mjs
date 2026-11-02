@@ -21,7 +21,7 @@ export default [
   // vitest `.todo` modifier it refuses, which is not a task left undone.
   { files: ['tools/**/*.mjs'], rules: { 'sonarjs/todo-tag': 'off' } },
   // TypeScript sources and tests: the recommended sets, without type information, which measured
-  // 26 errors on the tree when this block was added and none after they were fixed. A `_` prefix
+  // 16 errors on the tree when this block was added and none after they were fixed. A `_` prefix
   // marks a binding as deliberately unused, the convention the tree already follows (rest
   // destructuring that drops a key, a fake's parameters kept for the port's signature).
   ...tseslint.config({
@@ -29,6 +29,10 @@ export default [
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     languageOptions: { globals: globals.node },
     rules: {
+      // A `let` assigned once, after a closure that reads it was written, is a late binding and not
+      // a constant: `startTheoClaw` declares the handles its shutdown hook reads before the
+      // composition that produces them exists.
+      'prefer-const': ['error', { ignoreReadBeforeAssign: true }],
       '@typescript-eslint/no-unused-vars': [
         'error',
         { args: 'all', argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },

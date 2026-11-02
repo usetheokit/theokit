@@ -23,7 +23,7 @@ const TOKEN = "control-token-for-the-client-tests-31a7c";
 const run = promisify(execFile);
 
 let handles: ControlPlaneHandle[] = [];
-let clients: ControlClient[] = [];
+const clients: ControlClient[] = [];
 afterEach(async () => {
   for (const client of clients.splice(0)) await client.close().catch(() => undefined);
   for (const handle of handles.splice(0)) await handle.close();
