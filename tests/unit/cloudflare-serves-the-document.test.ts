@@ -29,6 +29,7 @@ const STUB_SOURCE = `
 export const matchRoute = () => null
 export const compilePattern = () => ({})
 export const executeRoute = () => {}
+export const serveReservedRoute = async () => null
 export const createProductionLoader = () => () => ({})
 export const createWebShim = () => ({ req: {}, res: { setHeader() {}, statusCode: 200 }, toResponse: () => new Response('route') })
 export const generateNonce = () => 'test-nonce'
