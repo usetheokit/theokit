@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import {
   copyFileSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -292,11 +293,31 @@ describe('every generated kind runs in a scaffolded app', () => {
     }
   }, 60_000)
 
-  it('a generated sandbox tool runs a shell command', async () => {
+  // #1070 — the generated tool runs a command only where bubblewrap confines it, and refuses
+  // elsewhere unless THEOKIT_SANDBOX_ALLOW_UNCONFINED=1. Which branch this host takes is the SDK's
+  // own answer, so the case asserts the right behavior on a CI runner without bubblewrap too.
+  it('a generated sandbox tool runs a command confined, or refuses to run it unconfined', async () => {
     const { runCommandTool } = (await load('src/server/agents/sandbox/run-command.ts')) as {
       runCommandTool: BuiltTool
     }
-    expect(await runCommandTool.handler({ command: 'echo sandboxed' })).toBe('sandboxed\n')
+    const { resolveSandboxPosture } = await import('@theokit/sdk/sandbox')
+    if (resolveSandboxPosture({ mode: 'workspace-write' }).enforced) {
+      expect(await runCommandTool.handler({ command: 'echo sandboxed' })).toBe('sandboxed\n')
+      const escape = join(dir, 'escape-proof.txt')
+      const write = await runCommandTool.handler({ command: `touch ${escape}` })
+      expect(write).toMatch(/^exit [1-9]/)
+      expect(existsSync(escape)).toBe(false)
+      return
+    }
+    await expect(runCommandTool.handler({ command: 'echo sandboxed' })).rejects.toMatchObject({
+      name: 'SandboxNotAvailableError',
+    })
+    vi.stubEnv('THEOKIT_SANDBOX_ALLOW_UNCONFINED', '1')
+    try {
+      expect(await runCommandTool.handler({ command: 'echo sandboxed' })).toBe('sandboxed\n')
+    } finally {
+      vi.unstubAllEnvs()
+    }
   })
 
   it('a generated memory note loads and wires nothing', async () => {
