@@ -122,7 +122,9 @@ and versioning follows [Semantic Versioning](https://semver.org/).
   `PATH`, `HOME` and the locale, terminal and XDG variables, so no TheoClaw secret is in the
   environment it receives; it runs as the TheoClaw user and can still read TheoClaw's environment
   from `/proc`, so this is not a secret boundary. A command that cannot be found or run is reported
-  under its own name, not `env`'s. Its stderr is not masked and it has no `env` option (B-681). The parity ledger records OC-67 and OC-68 as shipped,
+  under its own name, not `env`'s. A bare ACP command is looked up only
+  on the absolute `PATH` entries and started by its absolute path, and the agent receives only those entries as its
+  `PATH` (or none), so an empty, `.` or relative entry never runs a file from `files/` (B-706). Its stderr is not masked and it has no `env` option (B-681). The parity ledger records OC-67 and OC-68 as shipped,
   checked by `tests/live/external-tools.live.test.ts`, with their missing parts filed as B-680,
   B-681, B-682, B-684 and B-685.
 - The `/control` agent's tools (B-382): `read_file`, `list_dir`, `view_image`, `web_fetch` and

@@ -417,8 +417,8 @@ before any runner starts, and refuses it naming the file and the key:
   there and in `env`: every header and env value of 8 characters or more is masked in the output.
 - `envPolicy: "all"` is refused, so a stdio server never inherits the model key; the SDK's default
   drops secret-like variables and `env` adds what the server needs.
-- A `command` with a `/` must be absolute; a bare name is looked up on `PATH`. A stdio `cwd` must
-  be absolute. `timeoutMs` and `requestTimeoutMs` are whole milliseconds up to 2147483647, the
+- A `command` with a `/` must be absolute; a bare name is looked up on `PATH` (an ACP agent's on
+  the absolute `PATH` entries only, below). A stdio `cwd` must be absolute. `timeoutMs` and `requestTimeoutMs` are whole milliseconds up to 2147483647, the
   longest delay a Node timer holds.
 - Each ACP agent is one tool named `name`, a `createACPTool` from `theokit/server/agent` run in
   `files/`, one process per call. Its name may not be a TheoClaw tool's (`run_code`, `delegate_all` and `digest` included), a name the SDK reserves
@@ -432,7 +432,11 @@ before any runner starts, and refuses it naming the file and the key:
   that logs in through its home directory still finds its login. That is all `env -i` does, and it
   is not a secret boundary: the agent runs as the TheoClaw user, so it can still read TheoClaw's
   environment from `/proc/<TheoClaw pid>/environ` (and anything else that user can read). Only an
-  agent you trust with those secrets belongs in `acpAgents`. A `command` may not contain `=`. Its
+  agent you trust with those secrets belongs in `acpAgents`. A `command` may not contain `=`. A
+  bare ACP `command` is looked up only on the absolute `PATH` entries (an empty entry, `.` or a
+  relative directory would resolve inside `files/`) and started by the path found there, and the
+  agent receives only those entries as its `PATH`, or no `PATH` when none is absolute; to use an
+  agent from such a directory, put the directory on `PATH` as an absolute entry. Its
   stderr is TheoClaw's and is not masked, and there is no `env` option to give it a variable: both
   are B-681. A `command` that cannot be found or run rejects with an `AcpTransportClosedError`
   naming that command.
