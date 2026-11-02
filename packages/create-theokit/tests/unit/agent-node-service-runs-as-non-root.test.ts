@@ -48,4 +48,23 @@ describe('agent-node service Dockerfile', () => {
     expect(['root', '0']).not.toContain(user)
     expect(lastUser?.i ?? -1).toBeGreaterThan(lastCopy?.i ?? Number.MAX_SAFE_INTEGER)
   })
+
+  it('keeps the pnpm preparation fatal and the runtime owner wired to the non-root user', () => {
+    const target = mkdtempSync(join(tmpdir(), 'agent-node-corepack-'))
+    dirs.push(target)
+
+    scaffoldServices({ targetDir: target, projectName: 'demo', backends: ['node'] })
+
+    const steps = instructions(
+      readFileSync(join(target, 'services', 'worker', 'Dockerfile'), 'utf-8'),
+    )
+    const prepare = steps.find((s) => s.keyword === 'RUN' && s.args.includes('corepack prepare'))
+    expect(prepare, 'no corepack prepare step').toBeDefined()
+    expect(prepare?.args, 'a failed prepare must fail the build').not.toContain('|| true')
+    expect(prepare?.args, 'pnpm must be pinned, not latest').not.toContain('pnpm@latest')
+    expect(steps.some((s) => s.keyword === 'ENV' && s.args.startsWith('COREPACK_HOME='))).toBe(true)
+    for (const copy of steps.filter((s) => s.keyword === 'COPY')) {
+      expect(copy.args).toContain('--chown=1000:1000')
+    }
+  })
 })
