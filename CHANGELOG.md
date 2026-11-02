@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [@theokit/agents 16.1.1, create-theokit 3.0.22, theokit 0.76.2] - 2026-11-02
+
 ### Fixed
 
 - `theokit`: `theokit generate ws` writes a handler that loads. It imported `defineWebSocket` from `theokit/server`, which no public entry point exports, so the socket closed on connect; it now uses `websocket()` from `theokit/server/define` (#986)
