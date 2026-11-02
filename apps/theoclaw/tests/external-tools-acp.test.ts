@@ -69,9 +69,12 @@ async function expectProcessGone(pidFile: string): Promise<void> {
 }
 
 describe('the ACP tools of the external tools file', () => {
-  it('refuses every permission request over 10 calls', async () => {
-    const { tool, record } = acpTool({})
-    for (let i = 0; i < 10; i += 1) await expect(call(tool)).resolves.toBe('done')
+  it('refuses every permission request over 10 calls, leaving no process after each', async () => {
+    const { tool, record, pidFile } = acpTool({})
+    for (let i = 0; i < 10; i += 1) {
+      await expect(call(tool)).resolves.toBe('done')
+      await expectProcessGone(pidFile)
+    }
     const answers = readFileSync(record, 'utf8').trim().split('\n')
     expect(answers).toHaveLength(10)
     expect(answers.every((answer) => answer === 'reject-once')).toBe(true)
@@ -93,21 +96,47 @@ describe('the ACP tools of the external tools file', () => {
     await expect(call(tool)).resolves.toBe('done')
     const names = JSON.parse(readFileSync(envFile, 'utf8')) as string[]
     expect(names).toContain('PATH')
+    if (process.env.HOME !== undefined) expect(names).toContain('HOME')
     expect(names).not.toContain('THEOCLAW_CONTROL_TOKEN')
     expect(names).not.toContain('OPENROUTER_API_KEY')
     expect(names).not.toContain('THEOCLAW_TELEGRAM_TOKEN')
   })
 
-  it('rejects with a typed error when the command is missing', async () => {
+  it('rejects a missing command with an error naming the agent, not env', async () => {
     const { tool } = acpTool({ command: '/nonexistent/theoclaw-acp-agent', args: [] })
-    await expect(call(tool)).rejects.toBeInstanceOf(AcpTransportClosedError)
+    const error: unknown = await call(tool).catch((caught: unknown) => caught)
+    expect(error).toBeInstanceOf(AcpTransportClosedError)
+    expect((error as AcpTransportClosedError).command).toBe('/nonexistent/theoclaw-acp-agent')
+    expect((error as Error).message).toContain('"/nonexistent/theoclaw-acp-agent"')
+    expect((error as Error).message).toContain('could not be found or run')
+    expect((error as Error).message).not.toContain('/usr/bin/env')
+  })
+
+  it('rejects a command that is not executable with an error naming it', async () => {
+    const cwd = tempCwd(cleanups)
+    const script = join(cwd, 'not-executable-agent')
+    writeFileSync(script, '#!/bin/sh\n', { mode: 0o644 })
+    const { tool } = acpTool({ command: script, args: [] })
+    const error: unknown = await call(tool).catch((caught: unknown) => caught)
+    expect(error).toBeInstanceOf(AcpTransportClosedError)
+    expect((error as Error).message).toContain(`"${script}" could not be found or run`)
+  })
+
+  it('rejects a bare command name found on no PATH directory with an error naming it', async () => {
+    const { tool } = acpTool({ command: 'theoclaw-no-such-acp-agent', args: [] })
+    const error: unknown = await call(tool).catch((caught: unknown) => caught)
+    expect(error).toBeInstanceOf(AcpTransportClosedError)
+    expect((error as Error).message).toContain('"theoclaw-no-such-acp-agent" could not be found or run')
   })
 
   it('rejects with a typed error when the agent exits mid-turn, leaving no process', async () => {
     const cwd = tempCwd(cleanups)
     const pidFile = join(cwd, 'agent.pid')
     const { tool } = acpTool({ args: [FIXTURE, `--pid-file=${pidFile}`, '--exit-on=session/prompt'] })
-    await expect(call(tool)).rejects.toBeInstanceOf(AcpTransportClosedError)
+    const error: unknown = await call(tool).catch((caught: unknown) => caught)
+    expect(error).toBeInstanceOf(AcpTransportClosedError)
+    expect((error as AcpTransportClosedError).command).toBe(process.execPath)
+    expect((error as Error).message).not.toContain('/usr/bin/env')
     await expectProcessGone(pidFile)
   })
 
@@ -115,7 +144,10 @@ describe('the ACP tools of the external tools file', () => {
     const cwd = tempCwd(cleanups)
     const pidFile = join(cwd, 'agent.pid')
     const { tool } = acpTool({ args: [FIXTURE, `--pid-file=${pidFile}`, '--silent-on=session/prompt'], timeoutMs: 500 })
-    await expect(call(tool)).rejects.toBeInstanceOf(AcpRequestTimeoutError)
+    const error: unknown = await call(tool).catch((caught: unknown) => caught)
+    expect(error).toBeInstanceOf(AcpRequestTimeoutError)
+    expect((error as Error).message).toContain(`"${process.execPath}"`)
+    expect((error as Error).message).not.toContain('/usr/bin/env')
     await expectProcessGone(pidFile)
   })
 })
