@@ -79,6 +79,19 @@ describe('the import entry', () => {
     expect(run.stderr).toContain("Unknown option '--frmo'")
   })
 
+  it('refuses --project or --home with --from hermes, staging nothing', () => {
+    const hermes = copyFixture('hermes', join(dir, 'hermes'))
+
+    const project = runImport(['--from', 'hermes', '--source', hermes, '--project', dir], { stateDir })
+    const homeFlag = runImport(['--from', 'hermes', '--source', hermes, '--home', home], { stateDir })
+
+    expect([project.status, homeFlag.status]).toEqual([1, 1])
+    for (const run of [project, homeFlag]) {
+      expect(run.stderr).toContain('theoclaw import: --project and --home are read only with --from claude-code')
+    }
+    expect(existsSync(stateDir) ? readdirSync(stateDir) : []).toEqual([])
+  })
+
   it('the import entry prints counts and dropped lines and no MCP secret', () => {
     const claude = copyFixture('claude-code', join(dir, 'claude'))
     const hermes = copyFixture('hermes', join(dir, 'hermes'))
