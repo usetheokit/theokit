@@ -175,6 +175,8 @@ function upgradeStatus(path: string, authorization?: string): Promise<number | u
 
 const finalFrames = (frames: Array<Record<string, unknown>>) =>
   frames.filter((frame) => frame.type === "done" || (frame.type === "error" && frame.code === "turn_failed"));
+// A wait condition, not an outcome: it also accepts turn_failed, so a test whose turn must
+// succeed asserts finalFrames(frames) equals [{ type: "done" }] after waiting on it.
 const turnEnded = (frames: Array<Record<string, unknown>>) => finalFrames(frames).length > 0;
 
 async function connections(): Promise<number> {
@@ -218,8 +220,12 @@ describe("the /control socket", () => {
     await startPlane([{ messages: [text("hi"), finished] }]);
 
     const client = await connect("/control", `bearer ${TOKEN}`);
+    expect(client.socket.readyState).toBe(WebSocket.OPEN);
     client.send({ type: "chat", message: "hello" });
-    await client.until(turnEnded, "the end of the turn");
+    const frames = await client.until(turnEnded, "the end of the turn");
+
+    expect(finalFrames(frames)).toEqual([{ type: "done" }]);
+    expect(builtAgents).toBe(1);
   });
 
   it("streams a stub agent's events as JSON frames ending in done", async () => {
@@ -445,8 +451,12 @@ describe("the /control socket", () => {
     await startPlane([{ messages: [text("hi"), finished] }], token);
 
     const client = await connect("/control", `Bearer ${token}`);
+    expect(client.socket.readyState).toBe(WebSocket.OPEN);
     client.send({ type: "chat", message: "hello" });
-    await client.until(turnEnded, "the end of the turn");
+    const frames = await client.until(turnEnded, "the end of the turn");
+
+    expect(finalFrames(frames)).toEqual([{ type: "done" }]);
+    expect(builtAgents).toBe(1);
   });
 
   it("answers turn_failed and frees the socket when the runner itself rejects", async () => {
