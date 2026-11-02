@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- `theokit`: `theokit generate controller` names every package a controller build needs that `package.json` does not declare (`@theokit/http`, `reflect-metadata`, and `@swc/core` as a dev dependency) and prints the install command for the project's package manager. It checked whether `@theokit/http` resolved, which it always does in an npm-installed scaffold, so the notice never appeared and `theokit build` failed on the missing `@swc/core` (#986)
+
+## [@theokit/agents 16.1.1, create-theokit 3.0.22, theokit 0.76.2] - 2026-11-02
+
+### Fixed
+
 - `theokit`: `theokit generate ws` writes a handler that loads. It imported `defineWebSocket` from `theokit/server`, which no public entry point exports, so the socket closed on connect; it now uses `websocket()` from `theokit/server/define` (#986)
 - `theokit`: `theokit generate controller` writes a controller that `theokit build` accepts. `@Controller()` serves it at `/api/<name>` and a generated guard answers 403 until an access decision replaces it; the old `@Controller('<name>')` failed the build on an unreachable prefix and on an undeclared access decision. When the project does not depend on `@theokit/http`, which the scaffold does not install, the command prints `pnpm add @theokit/http reflect-metadata` (#986)
 - `theokit`: the route, action, agent, toolbox and sandbox templates `theokit generate` writes import from `theokit/server/define` instead of the deprecated `theokit/server` entry, which prints a deprecation warning when a file imports a value from it (#986)

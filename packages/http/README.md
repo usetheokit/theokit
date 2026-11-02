@@ -12,7 +12,11 @@ NestJS-style decorators (`@Controller`, `@Get`, `@Post`, `@Body`, `@UseGuards`) 
 
 ```bash
 pnpm add @theokit/http reflect-metadata
+pnpm add -D @swc/core
 ```
+
+`theokit dev` and `theokit build` compile every controller file with SWC, so a theokit app needs
+`@swc/core` even when its controllers use no parameter decorators.
 
 The decorators are the TypeScript legacy kind, so the consuming project needs:
 
