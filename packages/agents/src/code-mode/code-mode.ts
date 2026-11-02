@@ -148,23 +148,34 @@ function checkArguments(tool: CustomTool, args: unknown): Record<string, unknown
     throw new CodeModeInvalidArgumentsError(tool.name, undefined, 'expected an object')
   }
   const input = args as Record<string, unknown>
+  checkRequiredArguments(tool, input)
+  checkArgumentTypes(tool, input)
+  return input
+}
+
+function checkRequiredArguments(tool: CustomTool, input: Record<string, unknown>): void {
   const required: unknown = tool.inputSchema.required
   for (const name of Array.isArray(required) ? required : []) {
     if (typeof name === 'string' && !Object.hasOwn(input, name)) {
       throw new CodeModeInvalidArgumentsError(tool.name, name, 'is required')
     }
   }
+}
+
+function checkArgumentTypes(tool: CustomTool, input: Record<string, unknown>): void {
   for (const [key, value] of Object.entries(input)) {
     const type = declaredTypeOf(tool.inputSchema, key)
-    const matches =
-      type !== undefined && Object.hasOwn(PRIMITIVE_CHECKS, type)
-        ? PRIMITIVE_CHECKS[type]
-        : undefined
+    const matches = primitiveCheckFor(type)
     if (matches !== undefined && !matches(value)) {
       throw new CodeModeInvalidArgumentsError(tool.name, key, `expected ${type}`)
     }
   }
-  return input
+}
+
+function primitiveCheckFor(type: string | undefined): ((value: unknown) => boolean) | undefined {
+  return type !== undefined && Object.hasOwn(PRIMITIVE_CHECKS, type)
+    ? PRIMITIVE_CHECKS[type]
+    : undefined
 }
 
 /**
