@@ -177,6 +177,8 @@ function upgradeStatus(path: string, authorization?: string): Promise<number | u
 
 const finalFrames = (frames: Array<Record<string, unknown>>) =>
   frames.filter((frame) => frame.type === "done" || (frame.type === "error" && frame.code === "turn_failed"));
+// A wait condition, not an outcome: it also accepts turn_failed, so a test whose turn must
+// succeed asserts finalFrames(frames) equals [{ type: "done" }] after waiting on it.
 const turnEnded = (frames: Array<Record<string, unknown>>) => finalFrames(frames).length > 0;
 
 async function connections(): Promise<number> {
