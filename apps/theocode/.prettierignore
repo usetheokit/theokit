@@ -52,4 +52,4 @@ pnpm-lock.yaml
 # B-418 — the parity task seeds are hashed byte for byte by `tools/side-by-side.mjs`, and the hash
 # is what proves both agents started from the same tree. A formatter rewriting a seed changes the
 # hash every run record cites, so the seeds are kept exactly as written.
-docs/parity/tasks/
+tests/parity/tasks/

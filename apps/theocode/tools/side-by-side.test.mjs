@@ -225,7 +225,7 @@ describe('parseTestCounts and computeVerdict', () => {
 
 describe('the versioned task set', () => {
   it('every versioned task seed fails its verification before any agent runs', async () => {
-    const tasksDir = fileURLToPath(new URL('../docs/parity/tasks', import.meta.url))
+    const tasksDir = fileURLToPath(new URL('../tests/parity/tasks', import.meta.url))
     const script = fileURLToPath(new URL('./side-by-side.mjs', import.meta.url))
     const result = await spawnExec('node', [script, '--check-seeds', tasksDir], { cwd: root })
     expect(result.stderr).toBe('')
