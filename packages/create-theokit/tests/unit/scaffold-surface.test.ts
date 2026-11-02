@@ -228,21 +228,20 @@ describe('applySurface (M45)', () => {
     scaffold(targetDir, 'my-desk')
     applySurface({ targetDir, projectName: 'my-desk', surface: 'desktop' })
 
-    // `cancelCommand` ships in @theokit/tauri 1.1.0 (B-376); 1.0.0 and the 0.x line lack it, and a
-    // range that still admits them installs a transport whose abort is a no-op for the template above.
+    // `cancelCommand` ships in @theokit/tauri 1.1.0 (B-376): packages/tauri is at 1.0.0 and
+    // .changeset/tauri-cancel-command.md bumps it a minor. 1.0.0 and the 0.x line lack it, and a range
+    // that still admits them installs a transport whose abort is a no-op for the template above.
+    // A caret range's lowest release is its own version, so that version must be >= 1.1.0.
     const pkg = JSON.parse(read('package.json')) as { dependencies: Record<string, string> }
     const range = pkg.dependencies['@theokit/tauri']
     const caret = /^\^(\d+)\.(\d+)\.(\d+)$/.exec(range ?? '')
     expect(caret, `@theokit/tauri range '${range}' is not a caret range`).not.toBeNull()
     const [major, minor] = [Number(caret![1]), Number(caret![2])]
+    const lowestCarriesCancel = major > 1 || (major === 1 && minor >= 1)
     expect(
-      major,
-      `@theokit/tauri range '${range}' admits a release line without cancelCommand`,
-    ).toBe(1)
-    expect(
-      minor,
-      `@theokit/tauri range '${range}' admits 1.0.x, which lacks cancelCommand`,
-    ).toBeGreaterThanOrEqual(1)
+      lowestCarriesCancel,
+      `@theokit/tauri range '${range}' admits a release below 1.1.0, which lacks cancelCommand`,
+    ).toBe(true)
   })
 
   it('desktop scaffolds a Tauri app: sidecar + src-tauri + React webview on @theokit/ui + @theokit/tauri', () => {
