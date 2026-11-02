@@ -21,7 +21,7 @@ describe('action() builder — identity-shape delegation', () => {
     })
 
     expect(built.input).toBe(legacy.input)
-    const ctx = { input: { email: 'a@b.c' }, ctx: undefined }
+    const ctx = { input: { email: 'a@b.c' }, ctx: {} }
     expect(await built.handler(ctx)).toEqual(await legacy.handler(ctx))
   })
 

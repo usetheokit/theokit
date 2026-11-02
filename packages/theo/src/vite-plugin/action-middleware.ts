@@ -13,10 +13,13 @@ import {
   type DisallowedConfig,
   type PluginRunner,
 } from '../server/internal-api.js'
+import type { JobBackend } from '../server/jobs/job-backend.js'
 
 const PREFIX = '/api/__actions/'
 
 interface ActionMiddlewareOptions {
+  /** `theo.config.ts > jobs.backend`, handed to every action as `ctx.queue` (#1096). */
+  jobBackend?: JobBackend
   pluginRunner?: PluginRunner
   /**
    * CSRF mode passed through to `executeAction`. Parity with the route
@@ -107,6 +110,7 @@ export function createActionMiddleware(
         pluginRunner,
         csrfMode,
         disallowed,
+        options?.jobBackend,
       )
       logRequest(
         {

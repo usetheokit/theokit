@@ -109,6 +109,7 @@ export async function runConfigureServer(
       pluginRunner: ctx.pluginRunner,
       csrfMode: ctx.csrfMode,
       disallowed: ctx.disallowed,
+      jobBackend: ctx.jobBackend,
     }),
   )
   // M2 — agent convention (`/api/agents/<name>`) before the generic api-middleware
