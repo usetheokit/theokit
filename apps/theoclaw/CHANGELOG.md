@@ -328,6 +328,10 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- A `delegate_all` worker whose parent turn was cancelled could end the whole process: when its
+  run's cancellation rejected and its stream or `wait()` rejected too, the cancellation's rejection
+  was never observed, and Node's default for an unhandled rejection is to exit. The cancellation's
+  failure is now caught where it starts and reported beside the run's (B-398 review, LCR #76).
 - A configured value holding a marker pair (`**`, `~~`, `-_x_-`) reached a chat reply with only its
   markers removed: the reply was masked after the platform's dialect had rewritten them, so the
   rendered value no longer matched. The turn's text is now masked as it streams, before the
