@@ -1,5 +1,14 @@
 # create-theo
 
+## 3.0.21
+
+### Patch Changes
+
+- The scaffold's pins now match what this release publishes, so a project created from it
+  installs the version just cut rather than the previous one:
+
+  - theokit: ^0.76.0 -> ^0.76.1
+
 ## 3.0.20
 
 ### Patch Changes

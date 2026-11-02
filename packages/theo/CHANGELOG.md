@@ -1,5 +1,15 @@
 # theo
 
+## 0.76.1
+
+### Patch Changes
+
+- dcb732b: `defineCachedRoute` now runs the handler once per cache key when requests for that key arrive together, within one process and one `defineCachedRoute` call. Before, 10 concurrent misses of one key ran the handler 10 times, and 10 concurrent stale hits started 10 background revalidations. Requests that arrive while a key's handler is running wait for it and each build their own `Response` from the cached value (`X-Theo-Cache: MISS`). When the response is not cacheable (it carries `Set-Cookie`, streams, has an uncached error status, or `cacheable` refuses it), it stays with its own request, and each waiting request runs the handler itself. When the handler throws, every waiting request rejects with the same error, unless the first request's own client aborted. That exception needs a request signal, so it does not apply to a Node `IncomingMessage`. A stale key starts one background revalidation at a time, and the key is freed when the run settles. A background revalidation that fails keeps the stale entry and is now reported once per route with `console.warn`, naming the method and path but not the cache key (which carries the query string and varied header values), where before it was swallowed. (B-667)
+- 377b9ba: `theokit generate resource` refuses a project without `<serverDir>/db/index.ts` (or `.tsx`/`.js`) before writing anything. The routes it writes import `db` from that file, and the command neither created nor checked it, so it reported `Created resource` and the next `theokit build` failed with `Could not resolve "../../db/index.js"`. The refusal names the file and prints a minimal `export const db` for the project's dialect (Drizzle over `better-sqlite3` for SQLite, `node-postgres` for PostgreSQL). (#1038)
+- b7291d0: `theokit generate` writes route, action, page, ws, controller, agent, toolbox, workflow, eval, sandbox and memory files under the directories `theo.config.ts` declares (`serverDir`, `appDir`, `agentsDir`). They were hardcoded to `server/`, `app/` and `agents/`, so in the `create-theokit` scaffold (`src/server`, `src/app`) the file landed where no scanner looks and the CLI reported success. `generate agent` now writes `<agentsDir>/<name>.ts`, the file served at `/api/agents/<name>` as its comment says, and the agent carries a placeholder `policy` that refuses every caller until you declare one; the old `server/agents/<name>.agent.ts` was never served. A `theo.config.ts` that cannot be loaded is refused by name. (#1031)
+- b3aa155: `useDatabase(name, postgresql({ url }))` no longer exits the process when Postgres drops its connection. db0's Postgres connector opens one `pg.Client` with no `error` listener, so a restart, a failover or `pg_terminate_backend` took the process down. For a `postgresql` database `useDatabase` now opens the client and attaches a listener that logs a structured warning (`component: "theokit:storage"`, the database name, the Postgres error code). db0 keeps the closed client, so later queries on that database still fail until restart; use `usePostgres` for a pool that reconnects. (#1051)
+- 5d5a338: A `pg.Pool` passed to `new PostgresJobBackend({ pool })` or `createPostgresCronLock(pool)` no longer exits the process when Postgres drops one of its idle connections. Neither attached an `error` listener, so with the job worker polling the pool since 0.76.0 a Postgres restart, a failover or `pg_terminate_backend` took `theokit start` down. When the pool has no `error` listener, both now attach one that logs a structured warning (`component: "theokit:jobs"` or `"theokit:cron"`, the table, the Postgres error code), and the next query reconnects. A listener you attached first stays the only one. (#1037)
+
 ## 0.76.0
 
 ### Minor Changes
@@ -331,8 +341,8 @@
   A nested-layout project with no agents — the layout `create-theokit` scaffolds — was told, on every dev
   start and every build that reached this path:
 
-                      [theokit] agentsDir "agents" resolves to "<root>/src/agents", which is not a directory, so NO agents
-                      were found and every /api/agents/* route will 404.
+                        [theokit] agentsDir "agents" resolves to "<root>/src/agents", which is not a directory, so NO agents
+                        were found and every /api/agents/* route will 404.
 
   About routes it does not have, and a directory it never configured. Two defects in one line.
 
