@@ -13,6 +13,14 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Fetched content reaches the model as data, and no configured value is sent to a person or a
+  client (B-398, OC-88 and OC-90). Every agent send passes the SDK's `toolResultGuard`, so a tool
+  result is framed in `<untrusted-tool-output>`, and every system prompt opens with a notice that
+  framed text is data. One list of configured values, the one the process output mask already used, now
+  also masks chat replies, broadcast answers and threads, and every `/control`, session and WebChat
+  event, with a value split across streamed deltas held back until it can be told apart. The parity
+  ledger records OC-88 and OC-90 as shipped, checked by `tests/live/security.live.test.ts`; OC-89,
+  OC-91 and OC-92 stay open.
 - `/control` agents get `run_code` and `delegate_all` (B-386). With `run_code` the agent writes a
   script that calls `read_file`, `list_dir`, `web_fetch` and `web_search` (when configured) as
   `api.<name>(input)` inside a QuickJS-WASM sandbox from `@theokit/agents/code-mode-quickjs`. Only
