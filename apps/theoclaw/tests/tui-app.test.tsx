@@ -225,7 +225,9 @@ describe("theoclaw-tui entry (T4.2)", { timeout: 40_000 }, () => {
       await new Promise((resolve) => setTimeout(resolve, 50));
     }
     await waitFor(() => instance.agents[0]?.sent.length === 1, 10_000, "the turn to reach the instance");
-    await new Promise((resolve) => setTimeout(resolve, 500)); // the error frame is drawn; nothing is awaited on it
+    // The turn's error is drawn before the token check reads the output, so the frame carrying the
+    // secret-bearing message has reached the terminal (rules/testing.md § 3: a condition, not a delay).
+    await waitFor(() => tui.output().includes("the turn"), 10_000, `the turn's error to be drawn; output: ${tui.output()}`);
     for (const key of ["/", "q", "u", "i", "t", ENTER, ENTER]) {
       tui.child.stdin!.write(key);
       await new Promise((resolve) => setTimeout(resolve, 50));
