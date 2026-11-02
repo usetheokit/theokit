@@ -148,9 +148,7 @@ export function createScheduler(options: CreateSchedulerOptions): Scheduler {
     if (inFlight.has(id)) {
       const count = (skips.get(id) ?? 0) + 1
       skips.set(id, count)
-      write(
-        `scheduler: job ${jobName(store, transients, id)}: fire skipped, the previous fire still runs (${String(count)} skipped)`,
-      )
+      write(skipLine(jobName(store, transients, id), count))
       return Promise.resolve('skipped')
     }
     const controller = new AbortController()
@@ -172,9 +170,7 @@ export function createScheduler(options: CreateSchedulerOptions): Scheduler {
         if (sdkIds.has(job.id)) continue
         // One job the SDK refuses (a hand-edited cron) is reported and skipped; the others still run.
         await register(job).catch((error: unknown) => {
-          write(
-            `scheduler: job ${job.name ?? job.id}: ${error instanceof Error ? error.message : String(error)}`,
-          )
+          reportFailure(write, job, error)
         })
       }
       await Cron.start()
@@ -205,14 +201,31 @@ export function createScheduler(options: CreateSchedulerOptions): Scheduler {
       return next
     },
     async cancel(id) {
+      const held = store.get(id)
       await unregister(id)
       if (transients.delete(id)) return true
-      return store.remove(id)
+      return removeOrRestore(store, id, () =>
+        held === undefined
+          ? undefined
+          : register(held).catch((error: unknown) => {
+              reportFailure(write, held, error)
+            }),
+      )
     },
     list: () => store.list(),
     fire,
     skipped: (id) => skips.get(id) ?? 0,
   }
+}
+
+function skipLine(name: string, count: number): string {
+  return `scheduler: job ${name}: fire skipped, the previous fire still runs (${String(count)} skipped)`
+}
+
+function reportFailure(write: (line: string) => void, job: ScheduledJob, error: unknown): void {
+  write(
+    `scheduler: job ${job.name ?? job.id}: ${error instanceof Error ? error.message : String(error)}`,
+  )
 }
 
 async function sendOrReport(
@@ -233,6 +246,23 @@ async function sendOrReport(
     )
   }
   return result.ok
+}
+
+/**
+ * Remove `id` from the store. When the save fails the job is still stored, so `restore` gives it its
+ * timer back: it neither stays listed without firing nor fires untracked after a restart.
+ */
+async function removeOrRestore(
+  store: JobStore,
+  id: string,
+  restore: () => Promise<unknown> | undefined,
+): Promise<boolean> {
+  try {
+    return await store.remove(id)
+  } catch (error) {
+    await restore()
+    throw error
+  }
 }
 
 function jobName(

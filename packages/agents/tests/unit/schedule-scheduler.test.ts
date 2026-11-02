@@ -355,6 +355,23 @@ describe('createScheduler', () => {
     ).toEqual([])
   })
 
+  it('re-registers the SDK job when the store refuses a cancel', async () => {
+    const refusing: JobStore = { ...store, remove: () => Promise.reject(new Error('disk full')) }
+    await store.put(job('a'))
+    scheduler = createScheduler({
+      store: refusing,
+      run: answering().run,
+      deliver: () => Promise.resolve({ ok: true }),
+      write: (line) => lines.push(line),
+    })
+    await scheduler.start()
+    await expect(scheduler.cancel('a')).rejects.toThrow('disk full')
+    expect(store.get('a')).toBeDefined()
+    expect(
+      (await Cron.list({ runtime: 'local' })).items.filter((item) => item.name === 'a'),
+    ).toHaveLength(1)
+  })
+
   it('removes the SDK job when the store refuses the write (F-tests-2)', async () => {
     const refusing: JobStore = { ...store, put: () => Promise.reject(new Error('disk full')) }
     scheduler = createScheduler({
