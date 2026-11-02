@@ -134,6 +134,28 @@ function composedTriggers(
   })
 }
 
+/** One line per platform left unconfigured, and per configured one no sender can reach under the DM policy. */
+function reportUnservedPlatforms(
+  skipped: ReturnType<typeof resolvePlatforms>['skipped'],
+  configured: ReturnType<typeof resolvePlatforms>['configured'],
+  policy: AuthorizationPolicy,
+  write: (line: string) => void,
+): void {
+  for (const { platform, missing } of skipped) {
+    write(`${platform}: not configured (missing ${missing.join(', ')})`)
+  }
+  // Only `open` admits a sender no platform authenticates; under the rest such a channel serves nobody.
+  if (policy.dmPolicy !== 'open') {
+    for (const { platform } of configured.filter(
+      (entry) => !isAuthenticatedSender(entry.platform),
+    )) {
+      write(
+        `${platform}: no sender can be admitted under THEOCLAW_DM_POLICY=${policy.dmPolicy}: its sender id is not authenticated, so its messages are dropped without a reply`,
+      )
+    }
+  }
+}
+
 /**
  * Wire the app: the configured platforms, one runner each, the reply handler, and the routes.
  * Returns at once; the loop keeps starting slow platforms while the router already serves (EC-2).
@@ -145,19 +167,7 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
   const platforms = resolvePlatforms(options.env)
   const { configured, skipped } = platforms
   const secrets = options.secrets ?? platforms.secrets
-  for (const { platform, missing } of skipped) {
-    options.write(`${platform}: not configured (missing ${missing.join(', ')})`)
-  }
-  // Only `open` admits a sender no platform authenticates; under the rest such a channel serves nobody.
-  if (policy.dmPolicy !== 'open') {
-    for (const { platform } of configured.filter(
-      (entry) => !isAuthenticatedSender(entry.platform),
-    )) {
-      options.write(
-        `${platform}: no sender can be admitted under THEOCLAW_DM_POLICY=${policy.dmPolicy}: its sender id is not authenticated, so its messages are dropped without a reply`,
-      )
-    }
-  }
+  reportUnservedPlatforms(skipped, configured, policy, options.write)
   // What the routes and the router write can carry a configured value (a verifier's message, an
   // SDK error): masked here as the loop masks its own lines, whatever stream the caller writes to.
   const maskedWrite = (line: string): void => options.write(redactSecrets(maskSecrets(line, secrets)))
