@@ -1,5 +1,6 @@
 import type { TurnAgent } from '../agent-port.js'
 import { createControlSessions } from './control-sessions.js'
+import type { DevicePairing } from './device-pairing.js'
 import type { ControlSocketOptions } from './control-socket.js'
 import { createTurnRunner, type WithAgent } from './turn.js'
 
@@ -15,6 +16,12 @@ export function controlOptions(
   build: () => Promise<TurnAgent>,
   report: (line: string) => void,
   secrets: readonly string[] = [],
+  devices?: DevicePairing,
 ): ControlSocketOptions {
-  return { token, runTurn: createTurnRunner(withAgent, secrets), sessions: createControlSessions({ build, report, secrets }) }
+  return {
+    token,
+    runTurn: createTurnRunner(withAgent, secrets),
+    sessions: createControlSessions({ build, report, secrets }),
+    ...(devices === undefined ? {} : { devices }),
+  }
 }

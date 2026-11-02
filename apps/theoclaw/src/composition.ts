@@ -30,6 +30,7 @@ import { createReplyHandler, type TurnAgent } from './channels/reply-handler.js'
 import { createSdkChannelAgentFactory, webchatAgentFactory } from './control-plane/agent-factory.js'
 import type { CreateAgent } from './control-plane/agent-factory.js'
 import { controlOptions } from './control-plane/control-wiring.js'
+import { createDevicePairing } from './control-plane/device-pairing.js'
 import { type HttpHandler, serveHandler } from './control-plane/http-dispatch.js'
 import { type ControlPlaneHandle, listenControlPlane } from './control-plane/listener.js'
 import { readControlPlaneSettings } from './control-plane/settings.js'
@@ -423,15 +424,20 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
     options.agentFactory(controlAgentToolOptions(tools, buildWorker, extraTools))
   const { withAgent } = createContainer<TurnAgent>({ factory: buildControlAgent })
   composedApp = composed
+  // Pairing needs a state directory to keep the approved devices, and a control token to approve with.
+  const devices =
+    policy.stateDir === undefined || settings.controlToken === undefined
+      ? undefined
+      : createDevicePairing({ dir: policy.stateDir, write: stderr })
   const listen = options.listen ?? listenControlPlane
   serving = listen({
-    handler: serveHandler(composed.router, startWebchat(options, settings.webchatToken, secretValues)),
+    handler: serveHandler(composed.router, startWebchat(options, settings.webchatToken, secretValues), devices),
     port: settings.port,
     host: settings.host,
     stderr,
     ...(settings.controlToken === undefined
       ? {}
-      : { control: controlOptions(settings.controlToken, withAgent, buildControlAgent, stderr, secretValues) }),
+      : { control: controlOptions(settings.controlToken, withAgent, buildControlAgent, stderr, secretValues, devices) }),
   })
   let handle: ControlPlaneHandle
   try {

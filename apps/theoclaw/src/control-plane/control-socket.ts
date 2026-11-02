@@ -4,6 +4,8 @@ import type { Duplex } from 'node:stream'
 import { WebSocket, WebSocketServer } from 'ws'
 
 import { bearerCheck, MIN_BEARER_TOKEN_LENGTH } from './bearer.js'
+import { handleDeviceFrame } from './device-frames.js'
+import type { DevicePairing } from './device-pairing.js'
 import type { ControlSessions, SessionOutcome } from './control-sessions.js'
 import { describeError, TheoClawConfigError } from './errors.js'
 import { MAX_MESSAGE_BYTES } from './limits.js'
@@ -18,6 +20,11 @@ export interface ControlSocketOptions {
    * `bad_frame`, so a caller that never passes it keeps the sessionless protocol unchanged.
    */
   readonly sessions?: ControlSessions
+  /**
+   * Device pairing (OC-91). With it an approved device's token opens the socket beside the owner's
+   * bearer token, and only an owner socket can issue a setup code or approve a device.
+   */
+  readonly devices?: DevicePairing
 }
 
 /** What the listener holds of the socket server: the clients it must end before closing. */
@@ -102,7 +109,7 @@ function sessionEnd(session: string, outcome: SessionOutcome, stderr: (line: str
  * socket is open, and one final frame per turn. A sessionless turn whose socket closed runs to its
  * end and its frames are dropped (EC-1); a session turn whose socket closed is cancelled (FR-005).
  */
-function serve(ws: WebSocket, options: ControlSocketOptions, stderr: (line: string) => void): void {
+function serve(ws: WebSocket, options: ControlSocketOptions, stderr: (line: string) => void, owner: boolean): void {
   let busy = false
   let current: string | undefined
   const send = (frame: unknown): void => {
@@ -127,6 +134,8 @@ function serve(ws: WebSocket, options: ControlSocketOptions, stderr: (line: stri
         send({ type: 'error', code: outcome.code })
       })
   ws.on('message', (raw, isBinary) => {
+    const paired = handleDeviceFrame(options.devices, owner, readObject(raw, isBinary))
+    if (paired !== undefined) return void paired.then(send)
     const frame = parseFrame(raw, isBinary)
     if (frame === undefined) return send({ type: 'error', code: 'bad_frame' })
     const session = frame.session
@@ -169,8 +178,9 @@ export function attachControlSocket(
   const wss = new WebSocketServer({ noServer: true, maxPayload: MAX_MESSAGE_BYTES })
   server.on('upgrade', (request: IncomingMessage, socket: Duplex, head: Buffer) => {
     if (pathOf(request) !== CONTROL_PATH) return refuse(socket, '404 Not Found')
-    if (!tokenMatches(request.headers.authorization)) return refuse(socket, '401 Unauthorized')
-    wss.handleUpgrade(request, socket, head, (ws) => serve(ws, options, stderr))
+    const owner = tokenMatches(request.headers.authorization)
+    if (!owner && options.devices?.accepts(request.headers.authorization) !== true) return refuse(socket, '401 Unauthorized')
+    wss.handleUpgrade(request, socket, head, (ws) => serve(ws, options, stderr, owner))
   })
   return {
     close: () =>
