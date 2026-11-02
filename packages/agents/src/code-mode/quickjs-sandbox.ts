@@ -53,6 +53,7 @@ export type CodeModeSandboxErrorCode =
   | 'call_limit'
   | 'unserialisable_result'
   | 'cancelled'
+  | 'host_call_unsettled'
 
 /** A script run that did not produce a JSON value, with the reason as a stable code. */
 export class CodeModeSandboxError extends TheokitAgentError {
@@ -67,7 +68,47 @@ export class CodeModeSandboxError extends TheokitAgentError {
   }
 }
 
+/** A sandbox option that is not a usable limit, refused when the sandbox is built (B-697). */
+export class CodeModeSandboxConfigError extends TheokitAgentError {
+  override readonly name = 'CodeModeSandboxConfigError'
+
+  constructor(
+    readonly option: keyof QuickJsSandboxOptions,
+    readonly value: unknown,
+    expected: string,
+  ) {
+    super(`code-mode sandbox: option ${option} must be ${expected} (got ${String(value)})`, {
+      code: 'CODE_MODE_SANDBOX_CONFIG',
+      isRetryable: false,
+    })
+  }
+}
+
 const DEFAULTS = { timeoutMs: 10_000, memoryLimitBytes: 33_554_432, maxCalls: 16 } as const
+
+/** How long a run waits, after aborting them, for the host calls it started to settle (B-697 D2). */
+const HOST_CALL_GRACE_MS = 250
+
+/**
+ * The run's limits: an option given as `undefined` keeps its default, and a value that cannot bound
+ * a run (NaN, infinite, negative, a fractional call count) is refused rather than silently used.
+ */
+function checkedLimits(options: QuickJsSandboxOptions): Required<QuickJsSandboxOptions> {
+  const given = Object.fromEntries(
+    Object.entries(options).filter(([, value]) => value !== undefined),
+  ) as QuickJsSandboxOptions
+  const limits: Required<QuickJsSandboxOptions> = { ...DEFAULTS, ...given }
+  for (const option of ['timeoutMs', 'memoryLimitBytes'] as const) {
+    const value = limits[option]
+    if (!Number.isFinite(value) || value <= 0) {
+      throw new CodeModeSandboxConfigError(option, value, 'a finite number greater than 0')
+    }
+  }
+  if (!Number.isInteger(limits.maxCalls) || limits.maxCalls < 0) {
+    throw new CodeModeSandboxConfigError('maxCalls', limits.maxCalls, 'an integer of at least 0')
+  }
+  return limits
+}
 
 /** Anything a run must dispose: a handle, a deferred promise. */
 interface Owned {
@@ -172,6 +213,31 @@ class QuickJsRun {
       throw failure
     } finally {
       this.dispose(failure)
+      await this.waitForHostCalls(failure)
+    }
+  }
+
+  /**
+   * After the run aborted them, give the host calls still in flight a short grace to settle. A run
+   * that would otherwise succeed never resolves while one is still running: it says it could not
+   * stop it. A run already failing keeps its own error.
+   */
+  private async waitForHostCalls(failure: unknown): Promise<void> {
+    if (this.pending.size === 0) return
+    let grace: ReturnType<typeof setTimeout> | undefined
+    const graceOver = new Promise<void>((resolve) => {
+      grace = setTimeout(resolve, HOST_CALL_GRACE_MS)
+    })
+    try {
+      await Promise.race([Promise.allSettled([...this.pending]), graceOver])
+    } finally {
+      clearTimeout(grace)
+    }
+    if (failure === undefined && this.pending.size > 0) {
+      throw new CodeModeSandboxError(
+        'host_call_unsettled',
+        `a host call was still running ${HOST_CALL_GRACE_MS} ms after the run aborted it`,
+      )
     }
   }
 
@@ -365,7 +431,7 @@ class QuickJsRun {
  * calls. The WASM module is compiled once per sandbox, on its first run.
  */
 export function createQuickJsSandbox(options: QuickJsSandboxOptions = {}): Sandbox {
-  const limits: Required<QuickJsSandboxOptions> = { ...DEFAULTS, ...options }
+  const limits = checkedLimits(options)
   let module: Promise<QuickJSWASMModule> | undefined
   return {
     run: async (code, api, options) => {

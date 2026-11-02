@@ -1,6 +1,7 @@
 // B-386 — the QuickJS-WASM `Sandbox` for `createCodeMode`. The only entry that imports the VM:
 // its two packages are optional peers, installed and loaded only by an app that imports this one.
 export {
+  CodeModeSandboxConfigError,
   CodeModeSandboxError,
   createQuickJsSandbox,
   type CodeModeSandboxErrorCode,
