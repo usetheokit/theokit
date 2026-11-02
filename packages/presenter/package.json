@@ -47,7 +47,7 @@
     "ai": "7.0.14",
     "tsup": "^8.5.1",
     "typescript": "^5.9.3",
-    "vitest": "^4.1.9",
+    "vitest": "^4.1.12",
     "zod": "^4.4.3"
   },
   "license": "Apache-2.0",
