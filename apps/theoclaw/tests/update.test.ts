@@ -1,10 +1,11 @@
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { afterEach, describe, expect, it } from 'vitest'
 
+import { plistPath } from '../src/daemon-launchd.js'
 import { channelBranch, update } from '../src/update.js'
-import { cleanScratch, commit, git, harness, installUnit, installedAt, snapshot, world } from './support/update-world.js'
+import { cleanScratch, commit, git, harness, installLaunchAgent, installUnit, installedAt, snapshot, world } from './support/update-world.js'
 
 /**
  * `theoclaw update` (B-374, T4.1) over real git repositories in a scratch directory: a bare origin,
@@ -107,6 +108,30 @@ describe('theoclaw update', () => {
     expect(b.stdout()).not.toContain('already up to date')
     expect(b.restarts()).toEqual(['theoclaw-b.service'])
     expect(readFileSync(join(w.dist, '.restarted-commit-theoclaw-b'), 'utf8').trim()).toBe(c1)
+  })
+
+  it('update_kickstarts_an_installed_launchd_agent_on_macos', async () => {
+    const w = world()
+    installedAt(w, w.c0)
+    installLaunchAgent(w, 'theoclaw')
+    writeFileSync(join(w.dist, '.restarted-commit-theoclaw'), `${w.c0}\n`)
+    const c1 = commit(w.upstream, 'next', '1\n')
+    git(w.upstream, 'push', '-q', 'origin', 'main')
+
+    const h = harness(w, { platform: 'darwin', uid: 501, restartExit: [1] })
+    expect(await update({}, h.io, h.runner)).toBe(1)
+    expect(h.stderr()).toContain('launchctl kickstart -k gui/501/theoclaw failed: kickstart failed')
+    const retry = harness(w, { platform: 'darwin', uid: 501 })
+    expect(await update({}, retry.io, retry.runner)).toBe(0)
+    expect(retry.restarts()).toEqual(['gui/501/theoclaw'])
+    expect(readFileSync(join(w.dist, '.restarted-commit-theoclaw'), 'utf8').trim()).toBe(c1)
+
+    const bare = harness(w, { platform: 'darwin', uid: 501 })
+    rmSync(plistPath('theoclaw', w.home))
+    commit(w.upstream, 'again', '2\n')
+    git(w.upstream, 'push', '-q', 'origin', 'main')
+    expect(await update({}, bare.io, bare.runner)).toBe(0)
+    expect(bare.restarts()).toEqual([])
   })
 
   it('a retry after a failed restart restarts', async () => {

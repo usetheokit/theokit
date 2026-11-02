@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path'
 
 import { TheoClawConfigError } from './control-plane/errors.js'
 import { type DaemonIo, type Runner, unitPath } from './daemon.js'
+import { plistPath } from './daemon-launchd.js'
 import { resolveInstance } from './instance.js'
 
 /**
@@ -83,13 +84,26 @@ function position(dist: string, before: string, head: string, restartedMarker: s
   return { head, from: restarted, current: unitCurrent }
 }
 
+/** Whether the platform's login service for this instance is installed: a systemd unit or a LaunchAgent. */
+function serviceInstalled(io: UpdateIo, label: string): boolean {
+  if (io.platform === 'darwin') return existsSync(plistPath(label, io.homeDir))
+  return existsSync(unitPath(label, io.homeDir))
+}
+
+/** The command that restarts the installed service onto the new build. */
+function restartCommand(io: UpdateIo, label: string): { command: string; args: string[] } {
+  if (io.platform === 'darwin') return { command: 'launchctl', args: ['kickstart', '-k', `gui/${io.uid ?? 'unknown'}/${label}`] }
+  return { command: 'systemctl', args: ['--user', 'restart', `${label}.service`] }
+}
+
 async function rebuild(io: UpdateIo, runner: Runner, dist: string, label: string, unitInstalled: boolean): Promise<void> {
   const install = await runner(join(dirname(dist), 'install.sh'), [])
   io.stdout.write(install.stdout)
   if (install.code !== 0) throw new StepFailed(`install.sh failed (exit ${install.code}): ${install.stderr.trim()}`)
   if (!unitInstalled) return
-  const restart = await runner('systemctl', ['--user', 'restart', `${label}.service`])
-  if (restart.code !== 0) throw new StepFailed(`systemctl --user restart ${label}.service failed: ${restart.stderr.trim()}`)
+  const { command, args } = restartCommand(io, label)
+  const restart = await runner(command, args)
+  if (restart.code !== 0) throw new StepFailed(`${command} ${args.join(' ')} failed: ${restart.stderr.trim()}`)
 }
 
 async function run(io: UpdateIo, runner: Runner, branch: string): Promise<void> {
@@ -100,7 +114,7 @@ async function run(io: UpdateIo, runner: Runner, branch: string): Promise<void> 
   await advance(runner, root, branch)
   const head = await must(runner, root, 'git rev-parse HEAD', 'rev-parse', 'HEAD')
   const restartedMarker = join(dist, `.restarted-commit-${label}`)
-  const unitInstalled = existsSync(unitPath(label, io.homeDir))
+  const unitInstalled = serviceInstalled(io, label)
   const at = position(dist, before, head, restartedMarker, unitInstalled)
   if (at.current) {
     io.stdout.write(`theoclaw update: already up to date on ${branch} at ${head}\n`)

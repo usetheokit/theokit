@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
 import { type RunResult, runCommand, type Runner, unitPath } from '../../src/daemon.js'
+import { plistPath } from '../../src/daemon-launchd.js'
 import { type UpdateIo } from '../../src/update.js'
 
 const scratch: string[] = []
@@ -63,7 +64,7 @@ export interface Harness {
   readonly stderr: () => string
 }
 
-export function harness(w: World, options: { env?: NodeJS.ProcessEnv; installExit?: number[]; restartExit?: number[] } = {}): Harness {
+export function harness(w: World, options: { env?: NodeJS.ProcessEnv; installExit?: number[]; restartExit?: number[]; platform?: NodeJS.Platform; uid?: number } = {}): Harness {
   let installs = 0
   const restarts: string[] = []
   const installExit = [...(options.installExit ?? [])]
@@ -81,6 +82,7 @@ export function harness(w: World, options: { env?: NodeJS.ProcessEnv; installExi
       return step(installExit, () => writeFileSync(join(w.dist, '.installed-commit'), `${git(w.checkout, 'rev-parse', 'HEAD')}\n`), 'install')
     }
     if (command === 'systemctl' && args[1] === 'restart') return step(restartExit, () => restarts.push(args[2]!), 'restart')
+    if (command === 'launchctl' && args[0] === 'kickstart') return step(restartExit, () => restarts.push(args[2]!), 'kickstart')
     throw new Error(`unexpected command ${command} ${args.join(' ')}`)
   }
   let out = ''
@@ -93,7 +95,8 @@ export function harness(w: World, options: { env?: NodeJS.ProcessEnv; installExi
     env: { ...options.env },
     homeDir: w.home,
     cwd: w.root,
-    platform: 'linux',
+    platform: options.platform ?? 'linux',
+    ...(options.uid === undefined ? {} : { uid: options.uid }),
     nodePath: process.execPath,
     entry: join(w.dist, 'main.js'),
     stdout,
@@ -114,6 +117,12 @@ export function installUnit(w: World, label: string): void {
   const path = unitPath(label, w.home)
   mkdirSync(join(path, '..'), { recursive: true })
   writeFileSync(path, '[Unit]\n')
+}
+
+export function installLaunchAgent(w: World, label: string): void {
+  const path = plistPath(label, w.home)
+  mkdirSync(join(path, '..'), { recursive: true })
+  writeFileSync(path, '<plist/>\n')
 }
 
 /** Removes every scratch directory made since the last call. */

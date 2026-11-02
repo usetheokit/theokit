@@ -157,6 +157,7 @@ if (isMain()) {
     cwd: process.cwd(),
     platform: process.platform,
     nodePath: process.execPath,
+    uid: process.getuid?.(),
     runner: runCommand,
   }
   runCli(process.argv.slice(2), io).then(
