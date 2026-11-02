@@ -1,5 +1,5 @@
 import { accessSync, constants, statSync } from 'node:fs'
-import { delimiter, join } from 'node:path'
+import { delimiter, isAbsolute, join } from 'node:path'
 
 import {
   AcpTransportClosedError,
@@ -41,17 +41,17 @@ const ENV_BINARY = '/usr/bin/env'
 /**
  * The transport of one ACP call: the agent's own command, run through `env -i` with the kept
  * variables. `env` replaces itself with the agent, so the pid and process group the transport
- * closes are the agent's. A command that is not an executable file (looked up on `PATH` when it has
- * no `/`, as `env` would) is reported closed before anything is spawned, and a channel that closes
+ * closes are the agent's. A command with no `/` is looked up here, on the absolute `PATH` entries
+ * only, and `env` is handed the absolute path it resolved to: `env` would resolve an empty or
+ * relative entry against the agent's working directory, the tool root (B-706). A command that is
+ * not an executable file is reported closed before anything is spawned, and a channel that closes
  * later is reported against the agent's command, not `env`'s.
  */
 export function scrubbedAgentTransport(config: AcpToolConfig): AcpToolTransport {
-  if (!runnable(config.command)) return closedTransport(new AcpTransportClosedError(config.command, COULD_NOT_RUN))
-  const kept = KEPT_VARIABLES.flatMap((name) => {
-    const value = process.env[name]
-    return value === undefined ? [] : [`${name}=${value}`]
-  })
-  const inner = new NodeAcpTransport(ENV_BINARY, ['-i', '--', ...kept, config.command, ...(config.args ?? [])], config.cwd)
+  const searched = absolutePathEntries()
+  const resolved = resolveCommand(config.command, searched)
+  if (resolved === undefined) return closedTransport(new AcpTransportClosedError(config.command, COULD_NOT_RUN))
+  const inner = new NodeAcpTransport(ENV_BINARY, ['-i', '--', ...keptVariables(searched), resolved, ...(config.args ?? [])], config.cwd)
   return {
     send: (line) => {
       inner.send(line)
@@ -71,10 +71,33 @@ export function scrubbedAgentTransport(config: AcpToolConfig): AcpToolTransport 
 
 const COULD_NOT_RUN = 'could not be found or run'
 
-/** Whether `command` names an executable file, directly or through `PATH`. */
-function runnable(command: string): boolean {
-  if (command.includes('/')) return executableFile(command)
-  return (process.env.PATH ?? '').split(delimiter).some((dir) => dir !== '' && executableFile(join(dir, command)))
+/**
+ * The executable file `command` names: itself when it has a `/`, else the first one on an absolute
+ * `PATH` entry. A candidate containing `=` is skipped, because `env` would read it as an assignment.
+ */
+function resolveCommand(command: string, searched: readonly string[]): string | undefined {
+  if (command.includes('/')) return executableFile(command) ? command : undefined
+  return searched
+    .map((dir) => join(dir, command))
+    .find((candidate) => !candidate.includes('=') && executableFile(candidate))
+}
+
+/** The absolute entries of TheoClaw's `PATH`; an empty entry, `.` or `bin` would resolve in the tool root. */
+function absolutePathEntries(): string[] {
+  return (process.env.PATH ?? '').split(delimiter).filter((dir) => isAbsolute(dir))
+}
+
+/** The kept variables as `env` assignments, with `PATH` replaced by the entries the command was searched on. */
+function keptVariables(searched: readonly string[]): string[] {
+  return KEPT_VARIABLES.flatMap((name) => {
+    const value = name === 'PATH' ? agentPath(searched) : process.env[name]
+    return value === undefined ? [] : [`${name}=${value}`]
+  })
+}
+
+/** The agent's `PATH`: the absolute entries only, or none at all, since an empty `PATH=` is itself one empty entry. */
+function agentPath(searched: readonly string[]): string | undefined {
+  return searched.length === 0 ? undefined : searched.join(delimiter)
 }
 
 function executableFile(path: string): boolean {
