@@ -166,6 +166,7 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
     const webhook = webhookPlatform(entry, deps)
     if (webhook !== undefined) webhooks.set(entry.platform, webhook)
   }
+  const events = options.events ?? readEventSettings(options.env, configured.map((entry) => entry.platform))
   const handles = new WeakMap<BasePlatformAdapter, Handle>()
   const loop = startChannelLoop({
     platforms: (options.builders ?? adapterBuilders)(configured, { requireMention: policy.groupActivation === 'mention' }).map((build) =>
@@ -182,6 +183,7 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
         adapterFor: (platform) => loop.started.get(platform as PlatformName)?.adapter,
         write: maskedWrite,
       },
+      goal: events.goal,
     }),
     hooks: [ownerPolicy, groupActivation],
     secrets,
@@ -191,7 +193,6 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
   const routes = new Map<PlatformName, WebhookRoute>(
     [...webhooks].map(([platform, { methods }]) => [platform, { methods, handle: startedRoute(loop, platform, handles) }]),
   )
-  const events = options.events ?? readEventSettings(options.env, configured.map((entry) => entry.platform))
   const triggerFactory = options.triggerAgentFactory ?? createSdkChannelAgentFactory(options.env)
   const router = createWebhookRouter({
     routes,

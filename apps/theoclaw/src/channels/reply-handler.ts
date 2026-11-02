@@ -10,6 +10,7 @@ import { createStreamMask } from './stream-mask.js'
 import type { StreamMask } from './stream-mask.js'
 import type { BroadcastGroup, BroadcastGroups } from './broadcast-groups.js'
 import { deliverText } from './deliver.js'
+import { type GoalSettings, GOAL_USAGE_REPLY, goalOf, runGoal } from './goal-command.js'
 import type { SessionLease } from '../sessions/session-agents.js'
 
 /** The reply to a turn that produced no visible answer (D8): reasoning only, tools only, nothing. */
@@ -54,6 +55,8 @@ export interface ReplyHandlerOptions {
    * the answer a broadcast group's other members and thread receive. Default: none.
    */
   readonly secrets?: readonly string[]
+  /** What `/goal` runs with (B-397 FR-008); without it, `/goal` is an ordinary message. */
+  readonly goal?: GoalSettings
 }
 
 /** A turn whose run resolved with `status: "error"`, which the SDK reports without rejecting. */
@@ -244,6 +247,31 @@ async function fanOut(broadcast: BroadcastOptions, group: BroadcastGroup, event:
 }
 
 /**
+ * One `/goal`: a bare one gets the usage line and takes no lease; otherwise the session's agent runs
+ * the goal loop and the person gets one reply, `<status>: <final text>`. A loop that threw is
+ * rethrown after that reply, so the runner fires `on_error`. In a broadcast group it is the
+ * session's own goal, with no fan-out.
+ */
+async function answerGoal(settings: GoalSettings, options: ReplyHandlerOptions, event: MessageEvent, ctx: GatewayContext, goal: string): Promise<void> {
+  if (goal === '') {
+    await send(ctx, { text: GOAL_USAGE_REPLY, format: 'plain' }, { failed: false, answer: GOAL_USAGE_REPLY })
+    return
+  }
+  const outcome = await options.withAgent(event, async (lease) => {
+    try {
+      return await runGoal(lease.agent, goal, settings)
+    } finally {
+      lease.release()
+    }
+  })
+  // B-398 FR-006 holds for a goal's reply too: no configured value reaches the chat.
+  const reply = maskSecrets(outcome.reply, options.secrets ?? [])
+  const failure: TurnOutcome = outcome.error === undefined ? { failed: false, answer: reply } : { failed: true, error: outcome.error }
+  await send(ctx, { text: reply, format: 'plain' }, failure)
+  if (outcome.error !== undefined) throw outcome.error
+}
+
+/**
  * The handler every runner uses: one agent turn per message with text, on the agent of the
  * message's session. In a broadcast group's member channel the turn carries the group's thread,
  * runs after the group's earlier turns, and its answer also reaches every other member; the
@@ -264,6 +292,11 @@ export function createReplyHandler(options: ReplyHandlerOptions): GatewayHandler
         throw error
       }
       await send(ctx, { text: NEW_CONVERSATION_REPLY, format: 'plain' }, { failed: false, answer: NEW_CONVERSATION_REPLY })
+      return
+    }
+    const goal = options.goal === undefined ? undefined : goalOf(text)
+    if (options.goal !== undefined && goal !== undefined) {
+      await answerGoal(options.goal, options, event, ctx, goal)
       return
     }
     const broadcast = options.broadcast

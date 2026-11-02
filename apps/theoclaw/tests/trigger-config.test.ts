@@ -202,3 +202,13 @@ describe('the composed trigger routes', () => {
     expect(listen).not.toHaveBeenCalled()
   })
 })
+
+describe('the goal settings at start', () => {
+  it('readEventSettings carries the goal budget', () => {
+    expect(readEventSettings({ ...CI, THEOCLAW_GOAL_TOKEN_BUDGET: '700' }, TELEGRAM).goal.tokenBudget).toBe(700)
+  })
+
+  it('refuses a bad goal budget at start, naming the variable', () => {
+    expect(() => readEventSettings({ ...CI, THEOCLAW_GOAL_TOKEN_BUDGET: '0' }, TELEGRAM)).toThrow('THEOCLAW_GOAL_TOKEN_BUDGET')
+  })
+})

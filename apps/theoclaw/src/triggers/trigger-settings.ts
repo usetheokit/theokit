@@ -1,6 +1,7 @@
 import type { PlatformName } from '@theokit/gateway'
 
 import { parseApprovedHooks } from '../agent/hook-approval.js'
+import { type GoalSettings, readGoalSettings } from '../channels/goal-command.js'
 import { TheoClawConfigError } from '../control-plane/errors.js'
 
 /** The variable that names the configured triggers, comma-separated (B-397 FR-002). */
@@ -19,10 +20,11 @@ export interface TriggerSettings {
   readonly instructions?: string
 }
 
-/** What the event features read at start: the triggers and the hook fingerprints the owner approved. */
+/** What the event features read at start: the triggers, the hook fingerprints the owner approved, and `/goal`'s budget. */
 export interface EventSettings {
   readonly triggers: readonly TriggerSettings[]
   readonly approvedHooks: ReadonlySet<string>
+  readonly goal: GoalSettings
 }
 
 type Env = Readonly<Record<string, string | undefined>>
@@ -96,9 +98,9 @@ export function readTriggerSettings(env: Env, configured: readonly PlatformName[
   return triggerNames(env).map((name) => triggerSettings(env, name, configured))
 }
 
-/** The triggers and the approved hook fingerprints, read once at start. */
+/** The triggers, the approved hook fingerprints and the goal settings, read once at start. */
 export function readEventSettings(env: Env, configured: readonly PlatformName[]): EventSettings {
-  return { triggers: readTriggerSettings(env, configured), approvedHooks: parseApprovedHooks(env) }
+  return { triggers: readTriggerSettings(env, configured), approvedHooks: parseApprovedHooks(env), goal: readGoalSettings(env) }
 }
 
 /** Every trigger secret and every approved fingerprint, which the process output mask hides (NFR-003). */

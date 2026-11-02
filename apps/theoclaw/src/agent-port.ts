@@ -22,6 +22,24 @@ export interface TurnAgent {
     text: string,
     options?: { readonly signal?: AbortSignal; readonly toolResultGuard?: { readonly delimit?: boolean } },
   ): Promise<TurnRun>
+  /**
+   * The SDK's goal loop (B-397 FR-008): it yields events and returns the final status and text. A
+   * local SDK agent has it; an agent without it cannot run `/goal`, which then answers `failed`.
+   */
+  runUntil?(goal: string, options: GoalRunOptions): AsyncGenerator<unknown, GoalRunResult, void>
+}
+
+/** What `/goal` passes the goal loop: the budget, and the chat's own model for the judge (plan D4). */
+export interface GoalRunOptions {
+  readonly tokenBudget: number
+  readonly agentModel: string
+  readonly judgeApiKey: string
+}
+
+/** How a goal loop ended: `completed`, `budget_limited`, `failed`, `paused` or `blocked`, and its last answer. */
+export interface GoalRunResult {
+  readonly status: string
+  readonly finalResponse?: string | undefined
 }
 
 /**
