@@ -33,9 +33,12 @@ describe('theokit add — bundled adapters (T6.1)', () => {
     expect(result.packageInstalled).toMatch(/bundled|theokit/)
   })
 
-  it('all current registry entries are bundled (no real npm packages exist)', () => {
-    for (const [, entry] of Object.entries(KNOWN_PACKAGES)) {
-      expect(entry.kind).toBe('bundled')
+  it('the deploy adapters are bundled; only first-party plugins install from npm (#1076)', () => {
+    for (const name of ['bun', 'deno', 'netlify', 'aws-lambda', 'static']) {
+      expect(KNOWN_PACKAGES[name].kind).toBe('bundled')
+    }
+    for (const [name, entry] of Object.entries(KNOWN_PACKAGES)) {
+      if (entry.kind === 'external') expect(entry.npm).toBe(`@theokit/${name}`)
     }
   })
 

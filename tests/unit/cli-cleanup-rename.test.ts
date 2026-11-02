@@ -44,12 +44,12 @@ describe('cli-cleanup-rename (T0.2)', () => {
     expect(content).toMatch(/export\s+async\s+function\s+gcAgentRegistry/)
   })
 
-  it('test_cli_cleanup_wired_from_build — build.ts imports cleanOutDir from cleanup.js directly', async () => {
-    // The real wiring (no barrel): the build command imports cleanOutDir from the
-    // concrete module path. This is the caller that keeps cleanOutDir non-dead.
+  it('test_cli_cleanup_wired_from_build — build.ts imports cleanBuildOutput from cleanup.js directly', async () => {
+    // The real wiring (no barrel): the build command imports cleanBuildOutput, the cleanOutDir
+    // wrapper that keeps the agent context in `.theokit/` (#1079), from the concrete module path.
     const build = await readFile(resolve(SRC, 'cli/commands/build.ts'), 'utf8')
     expect(build).toMatch(
-      /import\s*\{\s*cleanOutDir\s*\}\s*from\s*['"]\.\.\/cleanup\/cleanup\.js['"]/,
+      /import\s*\{\s*cleanBuildOutput\s*\}\s*from\s*['"]\.\.\/cleanup\/cleanup\.js['"]/,
     )
   })
 
