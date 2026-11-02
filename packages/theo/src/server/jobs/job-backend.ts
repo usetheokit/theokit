@@ -10,6 +10,8 @@
  * modifying TheoKit core.
  */
 
+import type { PoolLike } from '../storage/storage-types.js'
+
 export interface JobEnqueueInput {
   /** The job name (matches a `defineJob` declaration). */
   name: string
@@ -90,6 +92,29 @@ export interface JobBackend {
    * `JobLeaseLostError` and leaves the job alone when that lease no longer holds it.
    */
   nack(jobId: string, opts: JobNackOptions): Promise<void>
+
+  /**
+   * Optional: persist a job through `client`, a connection inside a transaction the caller opened,
+   * so the job commits or rolls back with the caller's writes (usetheokit/theokit#1077). Only a
+   * backend whose jobs live in the caller's database can offer it; `ctx.queue.enqueueInTransaction`
+   * refuses a backend without it rather than enqueueing outside the transaction.
+   */
+  enqueueInTransaction?(client: PoolLike, input: JobEnqueueInput): Promise<{ jobId: string }>
+
+  /**
+   * Optional: resolve when the backend's store answers, reject when it does not. `GET /__theo/ready`
+   * calls it under `theokit start` and `theokit dev`, so an unreachable job store answers 503
+   * (usetheokit/theokit#1071). A backend with nothing remote to reach leaves it out.
+   */
+  ping?(): Promise<void>
+
+  /**
+   * Optional: create or upgrade whatever storage the backend needs (a table, an index). Must be
+   * idempotent and safe to run from several processes at once. `theokit start` and `theokit dev`
+   * call it once at boot, before serving a request or starting the worker, and refuse to boot when
+   * it rejects (usetheokit/theokit#1072). A backend that needs no setup leaves it out.
+   */
+  migrate?(): Promise<void>
 
   /**
    * Optional: return the existing jobId if `key` was enqueued within `ttlSeconds`. Pass `name` to

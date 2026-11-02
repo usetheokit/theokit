@@ -20,6 +20,11 @@ import type { JobEnqueueInput } from './job-backend.js'
  * committed), we log + continue. The response is already gone; partial
  * dispatch is better than zero. Each failure goes to `onError` (default:
  * `console.warn`).
+ *
+ * This buffer is not atomic with the handler's own database writes: they commit on another
+ * connection before the flush. When the job must exist exactly when a row does, use
+ * `ctx.queue.enqueueInTransaction(client, ...)`, which writes the job inside the caller's
+ * transaction (usetheokit/theokit#1077).
  */
 
 export interface OutboxFlushOptions {

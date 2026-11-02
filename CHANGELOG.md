@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- `theokit`: `GET /__theo/ready` reports the app's dependencies under `theokit start` and `theokit dev`. It pings a `jobs.backend` that has `ping()` (`PostgresJobBackend` runs `SELECT 1`) and calls the new `ready` probe from `theo.config.ts`, answering 503 when either fails. It always answered 200 under `start`, and under `dev` both reserved routes fell through to the SPA (#1071)
+- `theokit`: `ctx.queue.enqueueInTransaction(client, name, input)` and `PostgresJobBackend.enqueueInTransaction(client, input)` write a job through a connection inside the caller's transaction, so the job commits or rolls back with the caller's rows. A backend without the method rejects with `TransactionalEnqueueUnsupportedError` instead of enqueueing outside the transaction (#1077)
+
+### Fixed
+
+- `theokit`: `theokit generate sandbox` writes a tool that runs commands under bubblewrap confinement through `createSandboxBackend` and checks `resolveSandboxPosture` first. Where confinement is unavailable it throws `SandboxNotAvailableError` unless `THEOKIT_SANDBOX_ALLOW_UNCONFINED=1` is set. The old template used `LocalSandbox` while telling the model the sandbox was isolated and the developer it was safe, and the command could write into the app directory, read `/etc/passwd` and reach the network (#1070)
+- `theokit`: a `route()` handler's `ctx` is typed `RouteContext`, an interface exported from `theokit/server/define` that an app augments with the keys its config provides, such as `queue: QueueClient` when `jobs.backend` is set. It was `unknown`, so the documented `ctx.queue.enqueue(...)` failed with TS18046 and every app cast `ctx`. Keys nobody declared read as `unknown`. `callProcedure` passes an empty context when the caller supplies none, as the HTTP path does (#1073)
+- `create-theokit`: the scaffold's `types/jobs.d.ts` augments `JobRegistry` on `theokit/server/jobs` instead of the deprecated `theokit/server`, so typed `ctx.queue.enqueue` works in an app that imports only subpaths; job names were `never` there. It also carries a commented `RouteContext` block that types `ctx.queue` once `jobs.backend` is set (#1074)
+- `theokit`: `theokit start` and `theokit dev` call `migrate()` on the configured `jobs.backend` at boot, so a `PostgresJobBackend` creates its `theokit_jobs` table without the app calling it. A boot that cannot create the table fails with `JOB_BACKEND_SETUP_FAILED` instead of answering 2xx while every enqueued job is dropped. `PostgresJobBackend.migrate()` also survives replicas running it at the same moment, where concurrent `CREATE TABLE IF NOT EXISTS` failed with a unique violation on `pg_type` (#1072)
+
+## [create-theokit 3.0.23, theokit 0.76.3] - 2026-11-02
+
 ### Fixed
 
 - `theokit`: `theokit generate controller` names every package a controller build needs that `package.json` does not declare (`@theokit/http`, `reflect-metadata`, and `@swc/core` as a dev dependency) and prints the install command for the project's package manager. It checked whether `@theokit/http` resolved, which it always does in an npm-installed scaffold, so the notice never appeared and `theokit build` failed on the missing `@swc/core` (#986)

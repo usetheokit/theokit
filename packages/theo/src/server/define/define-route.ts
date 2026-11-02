@@ -6,6 +6,7 @@ import type { z } from 'zod'
 export type { RouteConfig } from '../../core/contracts/route-config.js'
 
 import type { RouteConfig } from '../../core/contracts/route-config.js'
+import type { RouteContext } from '../../core/contracts/route-context.js'
 
 /**
  * Define a typed HTTP route.
@@ -15,7 +16,7 @@ export function defineRoute<
   TQuery extends z.ZodType = z.ZodUndefined,
   TBody extends z.ZodType = z.ZodUndefined,
   TParams extends z.ZodType = z.ZodUndefined,
-  TCtx = unknown,
+  TCtx = RouteContext,
   TResponse = unknown,
 >(
   config: RouteConfig<TQuery, TBody, TParams, TCtx, TResponse>,

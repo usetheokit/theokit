@@ -12,7 +12,8 @@ describe('default template — JobRegistry augmentation example (T2.2)', () => {
 
   it('jobs.d.ts contains declare module + JobRegistry augmentation', () => {
     const content = readFileSync(resolve(TEMPLATE, 'types/jobs.d.ts'), 'utf8')
-    expect(content).toMatch(/declare module 'theokit\/server'/)
+    expect(content).toMatch(/declare module 'theokit\/server\/jobs'/)
+    expect(content).not.toMatch(/declare module 'theokit\/server'/)
     expect(content).toMatch(/interface JobRegistry/)
   })
 

@@ -87,7 +87,11 @@ describe('theo generate', () => {
     }
   })
 
-  it('should create a sandbox file that emits LocalSandbox', async () => {
+  // usetheokit/theokit#1070 — the template told the model "isolated sandbox" and the developer
+  // "SAFELY" while running `LocalSandbox`, which the SDK documents as NOT an isolation boundary: the
+  // command wrote into the app directory, read /etc/passwd and resolved DNS. The tool now asks for
+  // confinement and refuses to run without it unless the developer opts in by name.
+  it('should create a sandbox tool that refuses to run unconfined', async () => {
     const dir = createTempProject()
     const orig = process.cwd()
     process.chdir(dir)
@@ -100,9 +104,15 @@ describe('theo generate', () => {
       expect(content).toContain("from 'theokit/server/define'")
       expect(content).toContain("from '@theokit/sdk/sandbox'")
       expect(content).toContain("tool('run_command')")
-      expect(content).toContain('new LocalSandbox(')
-      expect(content).toContain('sandbox.execute(')
       expect(content).toContain('runCommandTool')
+      // Confinement is requested and checked before anything runs.
+      expect(content).toContain('createSandboxBackend(')
+      expect(content).toContain('resolveSandboxPosture(')
+      expect(content).toContain('throw new SandboxNotAvailableError(')
+      expect(content).toContain('THEOKIT_SANDBOX_ALLOW_UNCONFINED')
+      expect(content).not.toContain('new LocalSandbox(')
+      // No claim the code cannot back.
+      expect(content).not.toMatch(/isolated|SAFELY|safely/)
     } finally {
       process.chdir(orig)
       rmSync(dir, { recursive: true, force: true })

@@ -1,4 +1,5 @@
 import { describe, it, expectTypeOf } from 'vitest'
+import type { RouteContext } from '../../packages/theo/src/core/contracts/route-context.js'
 import { defineRoute } from '../../packages/theo/src/server/define/define-route.js'
 import { defineAction } from '../../packages/theo/src/server/define/define-action.js'
 import { z } from 'zod'
@@ -73,11 +74,11 @@ describe('Wave 7 — Type Safety End-to-End', () => {
     })
   })
 
-  // ctx is unknown in route handler
-  it('ctx is unknown in route handler', () => {
+  // usetheokit/theokit#1073 — ctx is the augmentable RouteContext, no longer `unknown`.
+  it('ctx is RouteContext in route handler', () => {
     defineRoute({
       handler: ({ ctx }) => {
-        expectTypeOf(ctx).toBeUnknown()
+        expectTypeOf(ctx).toEqualTypeOf<RouteContext>()
         return { ok: true }
       },
     })
