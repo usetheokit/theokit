@@ -1,6 +1,7 @@
 import 'reflect-metadata'
 
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -26,7 +27,14 @@ import { nodeRequest, recordingResponse } from '../helpers/node-http-stubs.js'
  * "may an unauthenticated caller reach this?" and "does this route authenticate by other means?" —
  * and a route can be public without wanting the CSRF gate lifted.
  */
-const TEST_ROOT = resolve(__dirname, '../../packages/theo/__csrf_exempt_test__')
+// Outside the source tree (B-429): a concurrent lint, build or typecheck must never see it. Bare
+// imports resolve through a link to the package's own node_modules in the parent directory.
+const TEST_PARENT = mkdtempSync(join(tmpdir(), 'theokit-csrf-exempt-test-'))
+symlinkSync(
+  resolve(__dirname, '../../packages/theo/node_modules'),
+  join(TEST_PARENT, 'node_modules'),
+)
+const TEST_ROOT = join(TEST_PARENT, 'work')
 const CONTROLLERS_DIR = join(TEST_ROOT, 'controllers')
 
 const CONTROLLER_SRC = `
