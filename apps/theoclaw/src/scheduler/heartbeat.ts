@@ -7,7 +7,7 @@ import { TheoClawConfigError } from '../control-plane/errors.js'
 import { PLATFORMS } from '../channels/platforms.js'
 import type { TransientSchedule } from './scheduler-wiring.js'
 
-/** The file whose text is the heartbeat's prompt, in the workspace. */
+/** The file whose text is the heartbeat's prompt, in the workspace. Exported for its tests and the live check. */
 export const HEARTBEAT_FILE = 'HEARTBEAT.md'
 
 const VARIABLE = 'THEOCLAW_HEARTBEAT'
@@ -19,10 +19,15 @@ export interface HeartbeatSettings {
 
 /**
  * Read `THEOCLAW_HEARTBEAT`: `<5-field cron or @shorthand> <platform>:<channelId>`, the last
- * space-separated token being the target. Unset or blank: no heartbeat. Synchronous, so the start
- * refuses a malformed value before it installs anything (`TheoClawConfigError` naming the variable).
+ * space-separated token being the target, whose platform must be one of `configured` (a heartbeat
+ * to a platform with no adapter would pay for a model run on every fire and send nothing). Unset or
+ * blank: no heartbeat. Synchronous, so the start refuses a malformed value before it installs
+ * anything (`TheoClawConfigError` naming the variable).
  */
-export function readHeartbeatSettings(env: Readonly<Record<string, string | undefined>>): HeartbeatSettings | undefined {
+export function readHeartbeatSettings(
+  env: Readonly<Record<string, string | undefined>>,
+  configured: readonly string[],
+): HeartbeatSettings | undefined {
   const value = env[VARIABLE]?.trim()
   if (value === undefined || value === '') return undefined
   const tokens = value.split(/\s+/)
@@ -34,6 +39,9 @@ export function readHeartbeatSettings(env: Readonly<Record<string, string | unde
   const platform = targetToken.slice(0, separator)
   if (!PLATFORMS.some((spec) => spec.platform === platform)) {
     throw refuse(`names platform ${JSON.stringify(platform)}, which is none of ${PLATFORMS.map((spec) => spec.platform).join(', ')}`)
+  }
+  if (!configured.includes(platform)) {
+    throw refuse(`names platform ${JSON.stringify(platform)}, which is not configured (configured: ${configured.join(', ') || 'none'})`)
   }
   const cron = tokens.join(' ')
   const problem = cronProblem(cron)

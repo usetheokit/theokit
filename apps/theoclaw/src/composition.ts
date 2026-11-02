@@ -351,11 +351,12 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
   // Read before the mask and the shutdown are installed, so a missing owner leaves nothing behind.
   const policy = parseAuthorizationPolicy(options.env)
   const tools = startToolSettings(options, policy)
-  const events = readEventSettings(options.env, resolvePlatforms(options.env).configured.map((entry) => entry.platform))
+  const platforms = resolvePlatforms(options.env).configured.map((entry) => entry.platform)
+  const events = readEventSettings(options.env, platforms)
   const sessionSettings = readSessionSettings(options.env, statSync)
   const generations = Generations.load(sessionsFile(sessionSettings.workspace))
   const scheduleStore = loadScheduleStore(sessionSettings.workspace)
-  const heartbeat = readHeartbeatSettings(options.env)
+  const heartbeat = readHeartbeatSettings(options.env, platforms)
   // `SessionAgents` alone decides when a session's agent is disposed: the SDK's cache and its idle
   // sweep know nothing of a turn in flight. `Agent.create` never reads the cache, so `/control`
   // turns are unaffected.
@@ -413,7 +414,6 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
   })
   // `/control` agents hold `run_code` and `delegate_all`; their read-only workers carry no import.
   const buildWorker = options.importFreeAgentFactory ?? options.agentFactory
-  const platforms = resolvePlatforms(options.env).configured.map((entry) => entry.platform)
   const beat = heartbeat === undefined ? {} : { heartbeat: heartbeatJob(sessionSettings.workspace, heartbeat) }
   scheduled = wireScheduler({ store: scheduleStore, loop: composed.loop, buildRunAgent: buildWorker, tools, platforms, ...beat, write: stderr, secrets: secretValues })
   const extraTools = [...workflowTools(options.draftAgentFactory, stderr), ...scheduled.scheduleTools]

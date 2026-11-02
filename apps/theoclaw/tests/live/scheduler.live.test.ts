@@ -170,7 +170,7 @@ describe.skipIf(!LIVE)('scheduled runs against a real model', () => {
     const r = rig()
     const { workspace } = r
     const beat = nonce()
-    const settings = readHeartbeatSettings({ THEOCLAW_HEARTBEAT: '0 0 1 1 * telegram:42' })
+    const settings = readHeartbeatSettings({ THEOCLAW_HEARTBEAT: '0 0 1 1 * telegram:42' }, ['telegram'])
     if (settings === undefined) throw new Error('the heartbeat was not read')
     const running = await scheduler(r, createJobStore(scheduleFile(workspace)), heartbeatJob(workspace, settings))
 
