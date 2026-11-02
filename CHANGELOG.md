@@ -9,6 +9,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Fixed
 
 - `theokit`: `theokit generate controller` names every package a controller build needs that `package.json` does not declare (`@theokit/http`, `reflect-metadata`, and `@swc/core` as a dev dependency) and prints the install command for the project's package manager. It checked whether `@theokit/http` resolved, which it always does in an npm-installed scaffold, so the notice never appeared and `theokit build` failed on the missing `@swc/core` (#986)
+- `theokit`: `theokit build` no longer deletes the agent context in `.theokit/`. It emptied the whole directory before writing its output there, so the first build of a fresh scaffold removed `THEO.md`, `rules/` and `personalities/`. The build now keeps `THEO.md`, `rules/`, `personalities/`, `skills/`, `agents/`, `commands/` and `hooks.json`, plus local agent state such as `memory/`, `THEO.local.md` and `mcp-tokens.json` (#1079)
+- `create-theokit`: the scaffold's `.gitignore` versions the agent context in `.theokit/` (`THEO.md`, `rules/`, `personalities/`, `skills/`, `agents/`, `commands/`, `hooks.json`) and ignores everything else there: build output, agent memory, local overrides and MCP tokens. It ignored all of `.theokit/`, so the files the scaffold writes and the docs tell you to edit never reached git (#1075)
 
 ## [@theokit/agents 16.1.1, create-theokit 3.0.22, theokit 0.76.2] - 2026-11-02
 

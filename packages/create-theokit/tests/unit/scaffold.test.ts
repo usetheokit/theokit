@@ -3,6 +3,7 @@ import { mkdtempSync, existsSync, readFileSync, mkdirSync, writeFileSync, rmSync
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
+import { spawnSync } from 'node:child_process'
 
 import { scaffold } from '../../src/index.js'
 
@@ -138,5 +139,31 @@ describe('scaffold', () => {
 
     // Target directory should be cleaned up
     expect(existsSync(targetDir)).toBe(false)
+  })
+
+  // #1075 — the template ignored all of `.theokit/`, so the THEO.md, rules and personalities the
+  // scaffold writes were never versioned. Only build output, runtime state and credentials are ignored.
+  it.each([
+    ['.theokit/THEO.md', false],
+    ['.theokit/rules/server-routes.md', false],
+    ['.theokit/personalities/concise.md', false],
+    ['.theokit/skills/review/SKILL.md', false],
+    ['.theokit/agents/helper.md', false],
+    ['.theokit/commands/ship.md', false],
+    ['.theokit/hooks.json', false],
+    ['.theokit/manifest.json', true],
+    ['.theokit/client/index.html', true],
+    ['.theokit/agents.d.ts', true],
+    ['.theokit/memory/MEMORY.md', true],
+    ['.theokit/mcp-tokens.json', true],
+    ['.theokit/THEO.local.md', true],
+  ])('git ignores %s: %s', (path, ignored) => {
+    scaffold(targetDir, 'test-app')
+    // eslint-disable-next-line sonarjs/no-os-command-from-path -- the assertion is what git itself decides
+    expect(spawnSync('git', ['init', '-q'], { cwd: targetDir }).status).toBe(0)
+    // `check-ignore --no-index` answers from the rules alone, for a path that need not exist.
+    // eslint-disable-next-line sonarjs/no-os-command-from-path -- the assertion is what git itself decides
+    const result = spawnSync('git', ['check-ignore', '-q', '--no-index', path], { cwd: targetDir })
+    expect(result.status).toBe(ignored ? 0 : 1)
   })
 })
