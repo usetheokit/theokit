@@ -17,8 +17,9 @@ export const BUILT_TOOL_NAMES: readonly string[] = [
 ]
 
 /**
- * The tools a `/control` agent holds beyond `buildTools`: `run_code` and `delegate_all` (B-386) and
- * the `digest` workflow (B-387), and the three schedule tools (B-396). An ACP agent under one of them would fail `Agent.create` on every
+ * The tools a `/control` agent holds beyond `buildTools`: `run_code` and `delegate_all` (B-386),
+ * the `digest` workflow (B-387), the three schedule tools (B-396), and `delegate`, `question` and
+ * the two task tools (B-611). An ACP agent under one of them would fail `Agent.create` on every
  * `/control` turn instead of at start. `tests/tool-registry.test.ts` checks it against what
  * `controlAgentToolOptions` adds.
  */
@@ -29,6 +30,10 @@ export const CONTROL_TOOL_NAMES: readonly string[] = [
   'schedule_job',
   'list_scheduled_jobs',
   'cancel_scheduled_job',
+  'delegate',
+  'question',
+  'task_declare',
+  'task_complete',
 ]
 
 /**

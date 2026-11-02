@@ -2,7 +2,7 @@ import { DelegationError } from '@theokit/agents'
 import type { DelegationPort, DelegationResult } from '@theokit/agents'
 import { createCodeMode } from '@theokit/agents/code-mode'
 import { createQuickJsSandbox } from '@theokit/agents/code-mode-quickjs'
-import { createDelegateAllTool } from '@theokit/agents/tools'
+import { createDelegateAllTool, createDelegateTool } from '@theokit/agents/tools'
 import type { CustomTool } from '@theokit/sdk'
 
 import type { TurnAgent, TurnRun } from '../agent-port.js'
@@ -177,4 +177,9 @@ async function runWorker(createWorker: CreateWorker, task: string, signal: Abort
 /** `delegate_all` over one `worker` roster entry: up to four read-only workers at once. */
 export function delegateAllTool(createWorker: CreateWorker): CustomTool {
   return createDelegateAllTool({ roster: [{ name: 'worker', target: workerPort(createWorker) }] })
+}
+
+/** `delegate` over the same `worker` roster entry: one read-only worker, its answer returned to the parent (B-611). */
+export function delegateTool(createWorker: CreateWorker): CustomTool {
+  return createDelegateTool({ roster: [{ name: 'worker', target: workerPort(createWorker) }] })
 }

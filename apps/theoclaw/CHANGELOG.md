@@ -13,6 +13,13 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `delegate`, `question`, `task_declare` and `task_complete` on a `/control` agent (B-611).
+  `delegate` hands one task to the same read-only worker `delegate_all` uses and returns its
+  answer; `question` answers `{ ok: false, error: "no_asker" }` at once, because the `/control`
+  socket has no frame to answer a question mid-turn, and tells the model to ask in its reply; the
+  two task tools keep each agent's declarations in a registry of its own. Chat agents and workers
+  still hold none of them.
+
 - Signed triggers, a hook approval gate and `/goal` (B-397). `THEOCLAW_TRIGGERS` names triggers,
   each with `THEOCLAW_TRIGGER_<NAME>_SECRET` (16 characters or more), `_REPLY_TO`
   (`<platform>:<channel id>` on a configured platform) and optional `_INSTRUCTIONS`; a bad one

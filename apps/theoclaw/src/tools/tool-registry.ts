@@ -20,7 +20,8 @@ import {
 import type { TurnAgent } from '../agent-port.js'
 import { scrubbedAgentTransport } from './acp-transport.js'
 import { browserServer } from './browser-server.js'
-import { codeModeTool, delegateAllTool, type CreateWorker } from './code-mode-tools.js'
+import { codeModeTool, delegateAllTool, delegateTool, type CreateWorker } from './code-mode-tools.js'
+import { questionTool, taskTools } from './control-tools.js'
 import { pathVetoPlugin } from './path-veto.js'
 import type { ToolSettings } from './tool-settings.js'
 
@@ -141,8 +142,9 @@ export function buildTools(settings: ToolSettings): CustomTool[] {
  * veto, and the MCP servers: the browser server when `THEOCLAW_BROWSER=on` (B-383) and a copy of the
  * external ones when the file names any, so an agent without them gets exactly the options it got
  * before them. Given a worker factory (a `/control` agent's, B-386), the list also holds `run_code`
- * over the read-only tools and `delegate_all` over that factory's workers. A chat agent holds no tool
- * and no server.
+ * over the read-only tools, `delegate_all` and `delegate` over that factory's workers, `question`
+ * with no asker and the two task tools over a registry of its own (B-611). A chat agent holds no
+ * tool and no server.
  */
 export function agentToolOptions(
   settings: ToolSettings,
@@ -151,7 +153,13 @@ export function agentToolOptions(
 ): AgentToolOptions {
   const tools = [...buildTools(settings), ...extra]
   if (createWorker !== undefined) {
-    tools.push(codeModeTool(readOnlyTools(settings), settings), delegateAllTool(createWorker))
+    tools.push(
+      codeModeTool(readOnlyTools(settings), settings),
+      delegateAllTool(createWorker),
+      delegateTool(createWorker),
+      questionTool(),
+      ...taskTools(),
+    )
   }
   const base = { tools, plugins: [pathVetoPlugin(settings)] }
   const servers = mcpServersOf(settings)
