@@ -113,19 +113,16 @@ export function createScheduler(options: CreateSchedulerOptions): Scheduler {
   const send = (job: ScheduledJob, text: string): Promise<boolean> =>
     sendOrReport(deliver, write, job, text)
 
+  /** A stop, or a cancel of this job while it ran, wins: nothing is stored or sent after it (EC-1, EC-2). */
+  const cancelledDuring = (id: string, signal: AbortSignal): boolean =>
+    signal.aborted || stopped || (!transients.has(id) && store.get(id) === undefined)
+
   const runOnce = async (id: string, signal: AbortSignal): Promise<FireOutcome> => {
     const built = await promptOf(store, transients, id)
     if (built === undefined) return 'empty'
     const { job, prompt } = built
-    let result: RunResult
-    try {
-      result = await run(prompt, signal)
-    } catch (error) {
-      result = { ok: false, error: error instanceof Error ? error.message : String(error) }
-    }
-    // A stop, or a cancel of this job while it ran, wins: nothing is stored or sent after it (EC-1, EC-2).
-    if (signal.aborted || stopped) return 'cancelled'
-    if (!transients.has(id) && store.get(id) === undefined) return 'cancelled'
+    const result = await runCaught(run, prompt, signal)
+    if (cancelledDuring(id, signal)) return 'cancelled'
     if (!result.ok) {
       await send(job, `Scheduled job ${job.name ?? job.id} failed: ${result.error}`)
       return 'failed'
@@ -250,4 +247,13 @@ async function remember(
     return true
   }
   return store.setPreviousOutput(id, text)
+}
+
+/** Run the prompt; a run that throws is reported as a failed result, like one that ends `error`. */
+async function runCaught(run: RunPort, prompt: string, signal: AbortSignal): Promise<RunResult> {
+  try {
+    return await run(prompt, signal)
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error) }
+  }
 }

@@ -89,18 +89,30 @@ function cronProblem(cron: string): string | undefined {
   return bad === undefined ? undefined : `${cron} has an invalid ${bad.name} field`
 }
 
-function fieldAccepted(field: string, range: { readonly min: number; readonly max: number }): boolean {
+interface FieldRange {
+  readonly min: number
+  readonly max: number
+}
+
+function fieldAccepted(field: string, range: FieldRange): boolean {
   if (field === '*') return true
-  if (field.startsWith('*/')) {
-    const step = numberOf(field.slice(2))
-    return step !== undefined && step > 0 && step <= range.max
-  }
+  if (field.startsWith('*/')) return stepAccepted(field.slice(2), range)
   if (field.includes(',')) return field.split(',').every((part) => fieldAccepted(part, range))
-  if (field.includes('-')) {
-    const [start, end, ...rest] = field.split('-').map(numberOf)
-    return rest.length === 0 && start !== undefined && end !== undefined && start >= range.min && end <= range.max && start <= end
-  }
-  const value = numberOf(field)
+  if (field.includes('-')) return spanAccepted(field, range)
+  return inRange(numberOf(field), range)
+}
+
+function stepAccepted(text: string, range: FieldRange): boolean {
+  const step = numberOf(text)
+  return step !== undefined && step > 0 && step <= range.max
+}
+
+function spanAccepted(field: string, range: FieldRange): boolean {
+  const [start, end, ...rest] = field.split('-').map(numberOf)
+  return rest.length === 0 && inRange(start, range) && inRange(end, range) && (start ?? 0) <= (end ?? 0)
+}
+
+function inRange(value: number | undefined, range: FieldRange): boolean {
   return value !== undefined && value >= range.min && value <= range.max
 }
 
