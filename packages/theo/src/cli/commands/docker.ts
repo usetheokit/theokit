@@ -124,23 +124,25 @@ export async function dockerCommand(options?: { force?: boolean }): Promise<void
   const dockerfilePath = resolve(cwd, 'Dockerfile')
   const dockerignorePath = resolve(cwd, '.dockerignore')
 
-  if (existsSync(dockerfilePath) && !options?.force) {
+  const pkgManager = detectPkgManager(cwd)
+  const { serverDir, agentsDir, distDir } = await loadConfig(cwd)
+  const dockerfile = generateDockerfile({
+    pkgManager,
+    sourceRoots: [topLevelDir(serverDir), topLevelDir(agentsDir)],
+    distDir,
+    hasConfigFile: existsSync(resolve(cwd, 'theo.config.ts')),
+    hasPnpmWorkspace: existsSync(resolve(cwd, 'pnpm-workspace.yaml')),
+  })
+
+  // `wx` refuses an existing file in the same call that creates it. A separate exists check
+  // followed by a write leaves a window, wider now that the config load sits between them.
+  try {
+    writeFileSync(dockerfilePath, dockerfile, { flag: options?.force ? 'w' : 'wx' })
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err
     console.log('\n  ⚠ Dockerfile already exists. Use --force to overwrite.\n')
     return
   }
-
-  const pkgManager = detectPkgManager(cwd)
-  const { serverDir, agentsDir, distDir } = await loadConfig(cwd)
-  writeFileSync(
-    dockerfilePath,
-    generateDockerfile({
-      pkgManager,
-      sourceRoots: [topLevelDir(serverDir), topLevelDir(agentsDir)],
-      distDir,
-      hasConfigFile: existsSync(resolve(cwd, 'theo.config.ts')),
-      hasPnpmWorkspace: existsSync(resolve(cwd, 'pnpm-workspace.yaml')),
-    }),
-  )
   writeFileSync(dockerignorePath, generateDockerignore(distDir))
 
   console.log(`\n  ✓ Generated Dockerfile (${pkgManager})`)
