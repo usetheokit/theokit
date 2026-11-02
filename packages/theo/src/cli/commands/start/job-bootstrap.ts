@@ -63,7 +63,7 @@ function isJobDefinition(value: unknown): value is JobDefinition {
  * `migrate()` of the configured `jobs.backend` rejected at boot. The process must not serve: every
  * route would answer 2xx while the outbox dropped each job it enqueued (usetheokit/theokit#1072).
  */
-export class JobBackendSetupError extends Error {
+class JobBackendSetupError extends Error {
   readonly code = 'JOB_BACKEND_SETUP_FAILED'
   readonly backend: string
   constructor(backend: string, cause: unknown) {

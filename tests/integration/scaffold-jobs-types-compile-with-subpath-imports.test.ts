@@ -95,9 +95,21 @@ export const POST = route()
   .policy('public')
   .handler(({ ctx }) => {
     ctx.queue.enqueue('process-document', { documentId: 'doc-1' })
-    // @ts-expect-error the registry types the input: documentId is a string
+    return { ok: true }
+  })
+  .build()
+`,
+    )
+    // The registry has to type the call, not merely let it through: a wrong input and an unknown
+    // name are compile errors, and only those two.
+    writeFileSync(
+      join(APP, 'src', 'misuse.ts'),
+      `import { route } from 'theokit/server/define'
+
+export const POST = route()
+  .policy('public')
+  .handler(({ ctx }) => {
     ctx.queue.enqueue('process-document', { documentId: 1 })
-    // @ts-expect-error a name missing from the registry is refused
     ctx.queue.enqueue('not-a-job', {})
     return { ok: true }
   })
@@ -106,7 +118,15 @@ export const POST = route()
     )
 
     const { status, output } = compile()
-    expect(output).toBe('')
-    expect(status).toBe(0)
+    const errors = output.split('\n').filter((line) => line.includes('error TS'))
+    expect(
+      errors.filter((line) => !line.includes('src/misuse.ts')),
+      output,
+    ).toEqual([])
+    expect(
+      errors.map((line) => /\((\d+),/.exec(line)?.[1]),
+      output,
+    ).toEqual(['6', '7'])
+    expect(status).toBe(2)
   })
 })
