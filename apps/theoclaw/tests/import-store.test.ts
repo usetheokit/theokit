@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process'
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -203,6 +204,52 @@ describe('the import store', () => {
     // The interrupted swap is undone before the refused stage, and the stale staging is gone.
     expect(readdirSync(stateDir)).toEqual(['import'])
     expect(readImport(stateDir)?.instructions).toBe('Follow the house style.')
+  })
+
+  /** A pid no process holds: a child that already exited. */
+  const exitedPid = (): number => spawnSync(process.execPath, ['-e', '']).pid ?? 0
+
+  /** LCR0111 (review round 2): two imports, or an import and a start's recovery, never interleave. */
+  it('refuses an import while a running process holds the import lock, staging nothing and keeping the previous import', () => {
+    writeImport(stateDir, setupWith({}), { now })
+    const before = snapshot(join(stateDir, 'import'))
+    writeFileSync(join(stateDir, 'import.lock'), `${process.ppid}\n`)
+
+    const error = refusal(() => writeImport(stateDir, setupWith({ instructions: [{ path: 'CLAUDE.md', text: 'Second.' }] }), { now }))
+
+    expect(error.variable).toBe('THEOCLAW_STATE_DIR')
+    expect(error.message).toContain('import.lock')
+    expect(snapshot(join(stateDir, 'import'))).toEqual(before)
+    expect(readdirSync(stateDir).sort()).toEqual(['import', 'import.lock'])
+  })
+
+  it('takes over an import lock whose process is gone, and releases it after the import', () => {
+    mkdirSync(stateDir, { recursive: true })
+    writeFileSync(join(stateDir, 'import.lock'), `${exitedPid()}\n`)
+
+    writeImport(stateDir, setupWith({}), { now })
+
+    expect(readdirSync(stateDir)).toEqual(['import'])
+  })
+
+  it('releases the import lock after a refused import', () => {
+    const bad = setupWith({ mcpServers: { bad: { command: 'x', env: { K: [] } } } as unknown as ForeignSetup['mcpServers'] })
+
+    refusal(() => writeImport(stateDir, bad, { now }))
+
+    expect(readdirSync(stateDir)).toEqual([])
+  })
+
+  it('leaves a lone import.previous-* in place, with a note, while a running import holds the lock', () => {
+    writeImport(stateDir, setupWith({}), { now })
+    renameSync(join(stateDir, 'import'), join(stateDir, 'import.previous-999'))
+    writeFileSync(join(stateDir, 'import.lock'), `${process.ppid}\n`)
+    const notes: string[] = []
+
+    expect(readImport(stateDir, { onWarn: (note) => notes.push(note) })).toBeUndefined()
+
+    expect(readdirSync(stateDir).sort()).toEqual(['import.lock', 'import.previous-999'])
+    expect(notes).toEqual([`an import is being written in ${stateDir}; its previous copy is left as found`])
   })
 
   it('writes an import into a state directory it creates at 0700 (EC-5)', () => {

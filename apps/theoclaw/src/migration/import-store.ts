@@ -1,4 +1,4 @@
-import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, linkSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { loadMcpJson } from '@theokit/agents/bridge'
@@ -41,6 +41,7 @@ const IMPORT = 'import'
 const KINDS: ReadonlyArray<ForeignSetup['kind']> = ['claude-code', 'hermes']
 const STAGING_PREFIX = 'import.staging-'
 const PREVIOUS_PREFIX = 'import.previous-'
+const LOCK = 'import.lock'
 const FILES = { manifest: 'manifest.json', instructions: 'instructions.md', memories: 'memories.md', mcp: '.mcp.json' } as const
 
 function writePrivate(path: string, text: string): void {
@@ -80,6 +81,71 @@ function recover(stateDir: string, removeStale: boolean): void {
   if (!removeStale) return
   const stale = names.filter((name) => name.startsWith(STAGING_PREFIX) || (hasImport && name.startsWith(PREVIOUS_PREFIX)))
   for (const name of stale) rmSync(join(stateDir, name), { recursive: true, force: true })
+}
+
+function processAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (error) {
+    return code(error) === 'EPERM'
+  }
+}
+
+/** Whether a running process holds `lock`; a lock whose process is gone holds nothing. */
+function lockHeld(lock: string): boolean {
+  let text: string
+  try {
+    text = readFileSync(lock, 'utf8')
+  } catch (error) {
+    if (code(error) === 'ENOENT') return false
+    throw error
+  }
+  const pid = Number(text.trim())
+  return Number.isSafeInteger(pid) && pid > 0 && processAlive(pid)
+}
+
+/**
+ * Take `<stateDir>/import.lock`, so an import and a start's recovery never interleave between a read
+ * of the directory and a rename (EC-4). The lock is linked in whole from a file that already holds the
+ * pid, so nobody reads it empty; one left by a process that is gone is taken over. Returns the release,
+ * or `undefined` while a running process holds it. Two takers of one stale lock can still race, which
+ * needs two imports started within the same instant after a crash.
+ */
+function tryLock(stateDir: string): (() => void) | undefined {
+  const lock = join(stateDir, LOCK)
+  const claim = `${lock}.${process.pid}`
+  writePrivate(claim, `${process.pid}\n`)
+  try {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        linkSync(claim, lock)
+        return () => rmSync(lock, { force: true })
+      } catch (error) {
+        if (code(error) !== 'EEXIST' || lockHeld(lock)) break
+        rmSync(lock, { force: true })
+      }
+    }
+    return undefined
+  } finally {
+    rmSync(claim, { force: true })
+  }
+}
+
+/** A start's `recover`, under the lock: while an import holds it, a lone previous copy is its swap in flight. */
+function recoverForRead(stateDir: string, onWarn: (warning: string) => void): void {
+  const names = existsSync(stateDir) ? readdirSync(stateDir) : []
+  if (names.includes(IMPORT) || names.filter((name) => name.startsWith(PREVIOUS_PREFIX)).length !== 1) return
+  const unlock = tryLock(stateDir)
+  if (unlock === undefined) {
+    onWarn(`an import is being written in ${stateDir}; its previous copy is left as found`)
+    return
+  }
+  try {
+    recover(stateDir, false)
+  } finally {
+    unlock()
+  }
 }
 
 /** A skill as staged: its parsed name and description re-emitted, then its body. */
@@ -198,9 +264,15 @@ function swap(stateDir: string, staging: string): void {
  */
 export function writeImport(stateDir: string, setup: ForeignSetup, opts: { readonly now: Date }): { readonly notes: string[] } {
   ensureStateDir(stateDir)
-  recover(stateDir, true)
+  const unlock = tryLock(stateDir)
+  if (unlock === undefined) {
+    const lock = join(stateDir, LOCK)
+    throw new TheoClawConfigError(`THEOCLAW_STATE_DIR: another import holds ${lock}; run the import again once it ended`, { variable: 'THEOCLAW_STATE_DIR' })
+  }
   const staging = join(stateDir, `${STAGING_PREFIX}${process.pid}-${opts.now.getTime()}`)
   try {
+    // Under the lock, every staging directory and stale previous copy is one an ended import left.
+    recover(stateDir, true)
     stage(staging, setup, opts.now)
     const { refusal = unreadSkills(staging, setup), notes } = validate(staging, Object.keys(setup.mcpServers).length)
     if (refusal !== undefined) throw new TheoClawConfigError(`the import was refused, nothing was replaced: ${refusal}`)
@@ -208,6 +280,7 @@ export function writeImport(stateDir: string, setup: ForeignSetup, opts: { reado
     return { notes }
   } finally {
     rmSync(staging, { recursive: true, force: true })
+    unlock()
   }
 }
 
@@ -250,7 +323,7 @@ export function readImport(
   stateDir: string,
   opts: { readonly onWarn?: (warning: string) => void; readonly env?: NodeJS.ProcessEnv } = {},
 ): ImportedSetup | undefined {
-  recover(stateDir, false)
+  recoverForRead(stateDir, opts.onWarn ?? (() => {}))
   const dir = join(stateDir, IMPORT)
   const manifestPath = join(dir, FILES.manifest)
   if (!existsSync(manifestPath)) return undefined
