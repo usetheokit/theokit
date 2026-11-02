@@ -3,7 +3,8 @@
 /* eslint-disable security/detect-non-literal-fs-filename --
    every path here is the one store file the caller chose (the app passes `<workspace>/.theoclaw/schedules.json`)
    or its temporary sibling; nothing in a path comes from a job, a prompt or a model answer */
-import { chmod, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { readFileSync } from 'node:fs'
+import { chmod, mkdir, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 
 import { TheokitAgentError } from '@theokit/sdk/errors'
@@ -61,14 +62,15 @@ const DIRECTORY_MODE = 0o700
 let tempCounter = 0
 
 /**
- * Open the store at `filePath`. An absent file is an empty store; a file that does not parse, has
+ * Open the store at `filePath`, reading it synchronously so a host can refuse its start on a bad
+ * file before it installs anything (as TheoClaw does with `sessions.json`). An absent file is an empty store; a file that does not parse, has
  * another version, or holds a job missing a required field raises {@link ScheduleStoreError}.
  * Every mutation writes a temporary file with mode 0600 beside it and renames it over the file, and
  * mutations run one after another, so the file is always whole.
  */
-export async function createJobStore(filePath: string): Promise<JobStore> {
+export function createJobStore(filePath: string): JobStore {
   const jobs = new Map<string, ScheduledJob>()
-  for (const job of await loadJobs(filePath)) jobs.set(job.id, job)
+  for (const job of loadJobs(filePath)) jobs.set(job.id, job)
 
   let chain: Promise<unknown> = Promise.resolve()
   const serialized = <T>(mutation: () => T): Promise<T> => {
@@ -99,10 +101,10 @@ export async function createJobStore(filePath: string): Promise<JobStore> {
   }
 }
 
-async function loadJobs(filePath: string): Promise<ScheduledJob[]> {
+function loadJobs(filePath: string): ScheduledJob[] {
   let text: string
   try {
-    text = await readFile(filePath, 'utf8')
+    text = readFileSync(filePath, 'utf8')
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []
     throw error

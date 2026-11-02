@@ -169,8 +169,11 @@ function mcpServersOf(settings: ToolSettings): Record<string, McpServerConfig> {
   }
 }
 
-/** A worker's options: the read-only tools and the veto, never `run_code` or `delegate_all` (FR-010). */
-function workerToolOptions(settings: ToolSettings): AgentToolOptions {
+/**
+ * A worker's options: the read-only tools and the veto, never `run_code` or `delegate_all` (FR-010).
+ * A scheduled run's agent gets the same (B-396), so it holds no schedule tool either.
+ */
+export function workerToolOptions(settings: ToolSettings): AgentToolOptions {
   return { tools: readOnlyTools(settings), plugins: [pathVetoPlugin(settings)] }
 }
 

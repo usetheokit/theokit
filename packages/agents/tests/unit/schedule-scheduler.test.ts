@@ -27,7 +27,7 @@ let lines: string[]
 
 beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), 'schedule-scheduler-'))
-  store = await createJobStore(join(dir, 'schedules.json'))
+  store = createJobStore(join(dir, 'schedules.json'))
   sends = []
   lines = []
 })
@@ -188,6 +188,27 @@ describe('createScheduler', () => {
     expect(await first).toBe('delivered')
     expect(gate.calls()).toBe(1)
     expect(s.skipped('a')).toBe(1)
+  })
+
+  it('reports a stored job the SDK refuses at start and runs the others', async () => {
+    await store.put(job('bad', { cron: 'not a cron' }))
+    await store.put(job('good', { cron: '*/5 * * * *' }))
+    const s = make(answering().run)
+    await s.start()
+    expect(lines).toEqual([expect.stringMatching(/^scheduler: job name bad: .*cron/i)])
+    const names = (await Cron.list({ runtime: 'local' })).items.map((item) => item.name)
+    expect(names).toContain('good')
+    expect(names).not.toContain('bad')
+  })
+
+  it('registers nothing when started after stop', async () => {
+    await store.put(job('a'))
+    const s = make(answering().run)
+    await s.stop()
+    await s.start()
+    expect(
+      (await Cron.list({ runtime: 'local' })).items.filter((item) => item.name === 'a'),
+    ).toEqual([])
   })
 
   it('refuses a cron the SDK rejects and stores nothing', async () => {

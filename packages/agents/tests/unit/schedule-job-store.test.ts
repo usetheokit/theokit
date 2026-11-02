@@ -41,12 +41,12 @@ async function writeRaw(text: string): Promise<void> {
 
 describe('createJobStore', () => {
   it('reads an absent file as an empty store', async () => {
-    const store = await createJobStore(file)
+    const store = createJobStore(file)
     expect(store.list()).toEqual([])
   })
 
   it('keeps the file parseable and mode 0600 over 100 saves of 50 jobs', async () => {
-    const store = await createJobStore(file)
+    const store = createJobStore(file)
     for (let i = 0; i < 100; i++) {
       await store.put(job(`job-${String(i % 50)}`, { previousOutput: `run ${String(i)}` }))
       const parsed = JSON.parse(await readFile(file, 'utf8')) as {
@@ -57,7 +57,7 @@ describe('createJobStore', () => {
       expect((await stat(file)).mode & 0o777).toBe(0o600)
     }
     expect(store.list()).toHaveLength(50)
-    const reopened = await createJobStore(file)
+    const reopened = createJobStore(file)
     expect(reopened.list()).toHaveLength(50)
     expect(reopened.get('job-49')?.previousOutput).toBe('run 99')
   })
@@ -69,23 +69,23 @@ describe('createJobStore', () => {
         jobs: [{ id: 'a', cron: '* * * * *', prompt: 'p', createdAt: 1 }],
       }),
     )
-    const refusal = createJobStore(file)
-    await expect(refusal).rejects.toBeInstanceOf(ScheduleStoreError)
-    await expect(refusal).rejects.toThrow(file)
-    await expect(refusal).rejects.toThrow('job 0')
+    const refusal = () => createJobStore(file)
+    expect(refusal).toThrow(ScheduleStoreError)
+    expect(refusal).toThrow(file)
+    expect(refusal).toThrow('job 0')
   })
 
   it('refuses a file that is not JSON naming the file', async () => {
     await writeRaw('{ not json')
-    const refusal = createJobStore(file)
-    await expect(refusal).rejects.toBeInstanceOf(ScheduleStoreError)
-    await expect(refusal).rejects.toThrow(file)
+    const refusal = () => createJobStore(file)
+    expect(refusal).toThrow(ScheduleStoreError)
+    expect(refusal).toThrow(file)
   })
 
   it('keeps both jobs when two puts start together', async () => {
-    const store = await createJobStore(file)
+    const store = createJobStore(file)
     await Promise.all([store.put(job('a')), store.put(job('b'))])
-    const reopened = await createJobStore(file)
+    const reopened = createJobStore(file)
     expect(
       reopened
         .list()
@@ -95,34 +95,34 @@ describe('createJobStore', () => {
   })
 
   it('round-trips an output with quotes, newlines and emoji (EC-3)', async () => {
-    const store = await createJobStore(file)
+    const store = createJobStore(file)
     await store.put(job('a'))
     const text = 'He said "hi"\nthen left \u{1F44B} \\ done'
     await store.setPreviousOutput('a', text)
-    const reopened = await createJobStore(file)
+    const reopened = createJobStore(file)
     expect(reopened.get('a')?.previousOutput).toBe(text)
   })
 
   it('refuses an unknown store version naming the file (EC-6)', async () => {
     await writeRaw(JSON.stringify({ version: 2, jobs: [] }))
-    const refusal = createJobStore(file)
-    await expect(refusal).rejects.toBeInstanceOf(ScheduleStoreError)
-    await expect(refusal).rejects.toThrow(file)
-    await expect(refusal).rejects.toThrow('version')
+    const refusal = () => createJobStore(file)
+    expect(refusal).toThrow(ScheduleStoreError)
+    expect(refusal).toThrow(file)
+    expect(refusal).toThrow('version')
   })
 
   it('ignores a previous output for a job no longer stored (EC-1)', async () => {
-    const store = await createJobStore(file)
+    const store = createJobStore(file)
     await store.put(job('a'))
     expect(await store.remove('a')).toBe(true)
     expect(await store.setPreviousOutput('a', 'late')).toBe(false)
     expect(store.list()).toEqual([])
-    const reopened = await createJobStore(file)
+    const reopened = createJobStore(file)
     expect(reopened.get('a')).toBeUndefined()
   })
 
   it('reports false when removing an id it does not hold', async () => {
-    const store = await createJobStore(file)
+    const store = createJobStore(file)
     expect(await store.remove('missing')).toBe(false)
   })
 })

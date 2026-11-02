@@ -16,7 +16,7 @@ let tools: CustomTool[]
 
 beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), 'schedule-tools-'))
-  store = await createJobStore(join(dir, 'schedules.json'))
+  store = createJobStore(join(dir, 'schedules.json'))
   scheduler = createScheduler({
     store,
     run: () => Promise.resolve({ ok: true, text: 'ok' }),

@@ -47,7 +47,10 @@ export interface CreateSchedulerOptions {
 }
 
 export interface Scheduler {
-  /** Register every stored job with the SDK `Cron` and start its timer. */
+  /**
+   * Register every stored job with the SDK `Cron` and start its timer. A job the SDK refuses is
+   * reported through `write` and skipped; after `stop()` this does nothing.
+   */
   start(): Promise<void>
   /** Abort in-flight runs, wait for them, and remove every SDK job this scheduler registered. */
   stop(): Promise<void>
@@ -152,8 +155,16 @@ export function createScheduler(options: CreateSchedulerOptions): Scheduler {
 
   return {
     async start() {
+      // A start that arrives after `stop()` (a shutdown during the host's start) registers nothing.
+      if (stopped) return
       for (const job of store.list()) {
-        if (!sdkIds.has(job.id)) await register(job)
+        if (sdkIds.has(job.id)) continue
+        // One job the SDK refuses (a hand-edited cron) is reported and skipped; the others still run.
+        await register(job).catch((error: unknown) => {
+          write(
+            `scheduler: job ${job.name ?? job.id}: ${error instanceof Error ? error.message : String(error)}`,
+          )
+        })
       }
       await Cron.start()
     },

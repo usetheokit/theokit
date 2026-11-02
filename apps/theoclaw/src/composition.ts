@@ -4,8 +4,6 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 import { mkdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 
-import { Container } from '@theokit/di'
-import { createAgentProvider } from '@theokit/di-agent'
 import { redactSecrets } from '@theokit/gateway'
 import type { BasePlatformAdapter, MessageEvent, PlatformName } from '@theokit/gateway'
 import { teamsActivityVerifier } from '@theokit/gateway-teams'
@@ -13,6 +11,7 @@ import type { TeamsActivityVerifierOptions } from '@theokit/gateway-teams'
 import { Agent } from '@theokit/sdk'
 import type { AgentOptions, CustomTool, SDKAgent } from '@theokit/sdk'
 
+import { createContainer } from './agent-container.js'
 import { createOwnerPolicyHook } from './authorization/owner-policy-hook.js'
 import { createPairingStore, type PairingStore } from './authorization/pairing-store.js'
 import {
@@ -37,6 +36,7 @@ import { type ControlPlaneSettings, readControlPlaneSettings } from './control-p
 import { processSecrets } from './secrets.js'
 import { installShutdown, type SignalSource } from './control-plane/shutdown.js'
 import { createTurnRunner } from './control-plane/turn.js'
+import { loadScheduleStore, type RunningScheduler, wireScheduler } from './scheduler/scheduler-wiring.js'
 import { createBonjourPublisher } from './discovery/bonjour-publisher.js'
 import { announceOnLan, type LanAnnouncement, stopThenClose } from './discovery/lan-announcer.js'
 import { parseDiscoveryMode, type PublisherFactory } from './discovery/publisher.js'
@@ -63,51 +63,7 @@ import { createWorkflowTools } from './workflows/workflow-tools.js'
 import { WEBCHAT_ASSETS_DIR } from './webchat/page.js'
 import { createWebchatRoutes } from './webchat/routes.js'
 
-/**
- * The composition root — where concretes are wired into the container, and the only place that
- * happens (`rules/architecture.md` § 1: "Composition root is at the top… never deep inside
- * business code").
- *
- * **It exposes a request BOUNDARY rather than a resolve.** The container refuses a REQUEST-scoped
- * resolve outside one, with a typed error saying so:
- *
- *     ScopeViolationError: REQUEST scope requires container.runInRequest(...) to be active.
- *
- * That refusal is the reason this shape is what it is. A `resolveAgent()` that opened its own
- * boundary per call would make "one agent per request" mean "one agent per resolve", and two
- * collaborators serving the same inbound message would each get their own — which is the isolation
- * the scope exists to provide, inverted. The caller declares the request; everything resolved
- * inside it shares one agent.
- *
- * Decorators are deliberately absent. `@theokit/di-agent` publishes sixteen, and its own README
- * records — measured 2026-09-17 across every repository in the ecosystem — that fourteen are read
- * by nothing, anywhere; `@Workflow` and `@Step` are the two with a consumer, and that consumer
- * lives inside `di-agent` itself. A declaration this code carried would compile, record metadata,
- * and run nothing.
- */
-export interface AgentCompositionOptions<TAgent> {
-  /** How one agent is built. Called once per request boundary, never shared across two. */
-  readonly factory: () => TAgent | Promise<TAgent>
-}
-
-export interface AgentComposition<TAgent> {
-  /** Run `work` inside one request. The agent it receives is that request's, and no other request can observe it. */
-  withAgent<R>(work: (agent: TAgent) => R | Promise<R>): Promise<R>
-}
-
-export function createContainer<TAgent>(
-  options: AgentCompositionOptions<TAgent>,
-): AgentComposition<TAgent> {
-  const container = new Container()
-  const provider = createAgentProvider<TAgent>({ factory: options.factory })
-
-  container.register(provider)
-
-  return {
-    withAgent: (work) =>
-      container.runInRequest(async () => work(await container.resolveAsync<TAgent>(provider.provide))),
-  }
-}
+export { createContainer, type AgentComposition, type AgentCompositionOptions } from './agent-container.js'
 
 /** Everything the running app is made of, for the entry and for tests. */
 export interface TheoClawOptions {
@@ -402,6 +358,7 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
   const tools = startToolSettings(options, policy)
   const sessionSettings = readSessionSettings(options.env, statSync)
   const generations = Generations.load(sessionsFile(sessionSettings.workspace))
+  const scheduleStore = loadScheduleStore(sessionSettings.workspace)
   // `SessionAgents` alone decides when a session's agent is disposed: the SDK's cache and its idle
   // sweep know nothing of a turn in flight. `Agent.create` never reads the cache, so `/control`
   // turns are unaffected.
@@ -423,13 +380,15 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
   const flushOnExit = (): void => mask.flush()
   options.signals.on('exit', flushOnExit)
   let composedApp: ComposedTheoClaw | undefined
+  let scheduled: RunningScheduler | undefined
   let serving: Promise<ControlPlaneHandle> | undefined
   // Bound once the listener resolves; the shutdown hook reads it late, as it reads `serving`.
   let announcement: LanAnnouncement | undefined
   const removeShutdown = installShutdown({
     signals: options.signals,
-    // The loop first, so no turn starts once the agents are being disposed.
+    // The scheduler, then the loop, so no run or turn starts once the agents are being disposed.
     stopAll: async () => {
+      await scheduled?.stop()
       await composedApp?.loop.stopAll()
       await composedApp?.sessions.disposeAll()
     },
@@ -454,9 +413,11 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
     write: stderr,
     secrets: secretValues,
   })
-  const extraTools = workflowTools(options.draftAgentFactory, stderr)
   // `/control` agents hold `run_code` and `delegate_all`; their read-only workers carry no import.
   const buildWorker = options.importFreeAgentFactory ?? options.agentFactory
+  const platforms = resolvePlatforms(options.env).configured.map((entry) => entry.platform)
+  scheduled = wireScheduler({ store: scheduleStore, loop: composed.loop, buildRunAgent: buildWorker, tools, platforms, write: stderr })
+  const extraTools = [...workflowTools(options.draftAgentFactory, stderr), ...scheduled.scheduleTools]
   const buildControlAgent = async (): Promise<TurnAgent> =>
     options.agentFactory(controlAgentToolOptions(tools, buildWorker, extraTools))
   const { withAgent } = createContainer<TurnAgent>({ factory: buildControlAgent })
@@ -479,6 +440,7 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
     // the entry exit 1.
     removeShutdown()
     options.signals.off('exit', flushOnExit)
+    await scheduled.stop()
     await composed.loop.stopAll()
     await composed.sessions.disposeAll()
     // The mask stays: the entry writes this error and exits, and that line is masked too.
@@ -492,7 +454,13 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
     createPublisher: options.createPublisher ?? createBonjourPublisher,
   })
   reportSurfacesOff(settings, stdout)
+  // Last: a shutdown that began during the start has already stopped it, and then this registers nothing.
+  await scheduled.start()
   // `close` withdraws the announcement first, as the shutdown does: a caller that closes the
   // running instance directly must not leave the service advertised.
-  return { ...handle, ...composed, announcement, instance, close: () => stopThenClose(announcement, handle) }
+  const close = async (): Promise<void> => {
+    await scheduled?.stop()
+    await stopThenClose(announcement, handle)
+  }
+  return { ...handle, ...composed, announcement, instance, close }
 }

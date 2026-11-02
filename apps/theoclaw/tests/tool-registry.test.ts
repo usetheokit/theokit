@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 
 import type { BwrapDetection } from '@theokit/agents/sandbox'
 import { resolveSandboxPosture } from '@theokit/agents/sandbox'
+import { createJobStore, createScheduler, createScheduleTools } from '@theokit/agents/tools'
 import { effectiveToolNames } from '@theokit/sdk'
 import type { CustomTool } from '@theokit/sdk'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -52,13 +53,20 @@ describe('BUILT_TOOL_NAMES', () => {
   })
 })
 describe('CONTROL_TOOL_NAMES', () => {
-  it('names every tool a /control agent holds beyond buildTools, and only those', () => {
+  it('names every tool a /control agent holds beyond buildTools, and only those', async () => {
     const settings = resolveToolSettings({}, tempWorkspace(), { detect: notEnforced, ...quiet })
     const workflows = createWorkflowTools({ withDraftAgent: () => Promise.reject(new Error('not used')), write: () => undefined })
-    const options = controlAgentToolOptions(settings, () => ({ send: () => Promise.reject(new Error('not used')) }), workflows)
+    // The schedule tools reach `/control` agents through the same `extra` list (B-396).
+    const scheduler = createScheduler({
+      store: createJobStore(join(tempWorkspace(), 'schedules.json')),
+      run: () => Promise.reject(new Error('not used')),
+      deliver: () => Promise.reject(new Error('not used')),
+    })
+    const extra = [...workflows, ...createScheduleTools({ scheduler, platforms: ['telegram'] })]
+    const options = controlAgentToolOptions(settings, () => ({ send: () => Promise.reject(new Error('not used')) }), extra)
     const built = new Set(buildTools(settings).map((tool) => tool.name))
-    const extra = options.tools.map((tool) => tool.name).filter((name) => !built.has(name))
-    expect(extra.sort()).toEqual([...CONTROL_TOOL_NAMES].sort())
+    const added = options.tools.map((tool) => tool.name).filter((name) => !built.has(name))
+    expect(added.sort()).toEqual([...CONTROL_TOOL_NAMES].sort())
   })
 })
 
