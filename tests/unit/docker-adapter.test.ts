@@ -110,6 +110,9 @@ describe('Docker Adapter', () => {
   // (the create-theokit layout), so the image build failed at that COPY.
   it('copies the directories the configured serverDir and agentsDir live in', async () => {
     const dir = createTempProject('package-lock.json')
+    // ESM like the scaffold: without it, a Node that cannot strip types loads the config through
+    // tsx as CommonJS and the default export arrives wrapped, so the paths read as the defaults.
+    writeFileSync(join(dir, 'package.json'), '{"type":"module"}')
     writeFileSync(
       join(dir, 'theo.config.ts'),
       "export default { appDir: 'src/app', serverDir: 'src/server', agentsDir: 'src/server/agents' }\n",
