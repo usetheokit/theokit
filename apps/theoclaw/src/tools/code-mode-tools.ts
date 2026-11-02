@@ -6,6 +6,7 @@ import { createDelegateAllTool } from '@theokit/agents/tools'
 import type { CustomTool } from '@theokit/sdk'
 
 import type { TurnAgent, TurnRun } from '../agent-port.js'
+import { untrustedContentSendOptions } from '../agent/untrusted-content.js'
 import { describeError } from '../control-plane/errors.js'
 import { vetoToolCall } from './path-veto.js'
 import type { ToolSettings } from './tool-settings.js'
@@ -137,7 +138,7 @@ async function runWorker(createWorker: CreateWorker, task: string, signal: Abort
   const agent = await createWorker()
   let outcome: DelegationResult
   try {
-    const run = await agent.send(task)
+    const run = await agent.send(task, untrustedContentSendOptions())
     const { streamed, ...result } = await untilSettled(run, signal)
     if (streamed !== undefined) throw new Error(`the worker's run streamed an error (${streamed})`)
     if (result.status !== 'finished') throw new Error(`the worker's run ended with status ${result.status}`)

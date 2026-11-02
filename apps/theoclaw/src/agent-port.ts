@@ -15,8 +15,13 @@ export interface TurnAgent {
   /**
    * Start one run. `signal` stops the model work of that run: the SDK composes it into its dispatch
    * signal, where `run.cancel()` alone only moves the local run's status (B-376, plan D2).
+   * `toolResultGuard` frames every tool result of the run as data; the SDK reads it per send, so
+   * every send spreads `untrustedContentSendOptions()` (B-398, OC-88).
    */
-  send(text: string, options?: { readonly signal?: AbortSignal }): Promise<TurnRun>
+  send(
+    text: string,
+    options?: { readonly signal?: AbortSignal; readonly toolResultGuard?: { readonly delimit?: boolean } },
+  ): Promise<TurnRun>
 }
 
 /**

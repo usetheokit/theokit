@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { type SdkMessage, translateSdkEvent } from '@theokit/agents/bridge'
 
 import type { TurnAgent, TurnRun } from '../agent-port.js'
+import { untrustedContentSendOptions } from '../agent/untrusted-content.js'
 import { describeError } from './errors.js'
 
 export type { TurnAgent, TurnRun } from '../agent-port.js'
@@ -142,7 +143,7 @@ export function outcomeOf(result: { readonly status: string }, streamedError: st
 }
 
 async function runWith(agent: TurnAgent, options: TurnOptions): Promise<TurnOutcome> {
-  const run = await agent.send(options.message)
+  const run = await agent.send(options.message, untrustedContentSendOptions())
   // Checked before any listener is added: a listener on a signal that already aborted never fires (EC-1).
   if (options.signal?.aborted === true) return cancelRun(run)
   const watch = watchAbort(options.signal)

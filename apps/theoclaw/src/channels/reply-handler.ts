@@ -4,6 +4,7 @@ import { ChatPresenter, fromSdkMessage } from '@theokit/presenter'
 import type { AgentOutputEvent, ChatMessage } from '@theokit/presenter'
 
 import type { TurnAgent } from '../agent-port.js'
+import { untrustedContentSendOptions } from '../agent/untrusted-content.js'
 import type { BroadcastGroup, BroadcastGroups } from './broadcast-groups.js'
 import type { SessionLease } from '../sessions/session-agents.js'
 
@@ -144,7 +145,7 @@ async function streamTurn(
   // An ERROR or EXPIRED status in the stream fails the turn even when `wait()` reports it finished.
   const streamed: StreamedTurn = { answer: '', error: undefined }
   try {
-    const run = await agent.send(prompt)
+    const run = await agent.send(prompt, untrustedContentSendOptions())
     for await (const frame of run.stream()) presentFrame(frame, presenter, streamed)
     const result = await run.wait()
     if (result.status !== 'error' && streamed.error === undefined) {

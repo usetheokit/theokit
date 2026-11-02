@@ -8,6 +8,7 @@ import {
 } from '@theokit/agents/bridge'
 
 import type { TurnAgent, TurnRun } from '../agent-port.js'
+import { untrustedContentSendOptions } from '../agent/untrusted-content.js'
 import { outcomeOf, type TurnEvent, type TurnOutcome } from './turn.js'
 
 /** Where a session turn's translated events go, and who learns of the run once it exists. */
@@ -52,7 +53,7 @@ async function emitTimeline(run: TurnRun, options: SessionTurnOptions): Promise<
  * throws; the session store decides what an interrupted or failed turn answers.
  */
 export async function runSessionTurn(agent: TurnAgent, options: SessionTurnOptions): Promise<TurnOutcome> {
-  const run = await agent.send(options.message, { signal: options.signal })
+  const run = await agent.send(options.message, { ...untrustedContentSendOptions(), signal: options.signal })
   options.onRun(run)
   const streamedError = await emitTimeline(run, options)
   options.onEventsEnded()
