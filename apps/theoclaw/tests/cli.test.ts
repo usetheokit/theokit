@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { afterEach, describe, expect, it } from 'vitest'
@@ -43,7 +43,7 @@ describe('the theoclaw command line', () => {
   it('help names the six subcommands and an undefined one exits 2', async () => {
     const help = harness()
     expect(await runCli(['--help'], help.io)).toBe(0)
-    for (const name of ['theoclaw start', 'theoclaw onboard', 'theoclaw daemon install', 'theoclaw daemon uninstall', 'theoclaw daemon status', 'theoclaw update']) {
+    for (const name of ['theoclaw start', 'theoclaw onboard', 'theoclaw daemon install', 'theoclaw daemon uninstall', 'theoclaw daemon status', 'theoclaw update', 'theoclaw backup <dir>', 'theoclaw restore <dir>']) {
       expect(help.stdout()).toContain(name)
     }
     const unknown = harness()
@@ -115,5 +115,25 @@ describe('theoclaw daemon on the command line', () => {
     expect(await runCli(['daemon', 'restart-everything'], io)).toBe(2)
     expect(await runCli(['daemon'], io)).toBe(2)
   })
-})
 
+  it('backup and restore move an instance and exit 0, and a refusal exits 1 naming it', async () => {
+    const dir = scratchDir()
+    const env = { THEOCLAW_STATE_DIR: join(dir, 'state'), THEOCLAW_WORKSPACE: join(dir, 'workspace') }
+    mkdirSync(env.THEOCLAW_STATE_DIR)
+    mkdirSync(env.THEOCLAW_WORKSPACE)
+    writeFileSync(join(env.THEOCLAW_WORKSPACE, 'note.txt'), 'hello')
+    const backup = harness()
+    expect(await runCli(['backup', join(dir, 'b')], { ...backup.io, env: { ...backup.io.env, ...env } })).toBe(0)
+    expect(backup.stdout()).toContain('backed up 1 files')
+
+    const target = { THEOCLAW_STATE_DIR: join(dir, 'restored-state'), THEOCLAW_WORKSPACE: join(dir, 'restored-workspace') }
+    const restore = harness()
+    expect(await runCli(['restore', join(dir, 'b')], { ...restore.io, env: { ...restore.io.env, ...target } })).toBe(0)
+    expect(readFileSync(join(target.THEOCLAW_WORKSPACE, 'note.txt'), 'utf8')).toBe('hello')
+
+    const again = harness()
+    expect(await runCli(['restore', join(dir, 'b')], { ...again.io, env: { ...again.io.env, ...target } })).toBe(1)
+    expect(again.stderr()).toMatch(/^theoclaw: .*is not empty/m)
+    expect(await runCli(['backup'], harness().io)).toBe(2)
+  })
+})

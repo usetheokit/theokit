@@ -112,6 +112,23 @@ function pause(ms: number): void {
 type Attempt = { readonly taken: true } | { readonly taken: false; readonly retry: boolean }
 
 /**
+ * Another taker holds this generation's takeover file. It may be mid-takeover: give it a moment,
+ * then retry once the lock moved on; a generation still stale after that is a takeover that never
+ * finished, refused naming both files.
+ */
+function waitForOtherTaker(path: string, stale: LockClaim, takeover: string): Attempt {
+  for (let waited = 0; waited < TAKEOVER_PATIENCE_MS; waited += TAKEOVER_POLL_MS) {
+    if (readClaim(path)?.nonce !== stale.nonce) return { taken: false, retry: true }
+    pause(TAKEOVER_POLL_MS)
+  }
+  if (readClaim(path)?.nonce !== stale.nonce) return { taken: false, retry: true }
+  throw new InstanceLockedError(
+    `${path} names a process that is gone and ${takeover} says a takeover of it never finished; if no theoclaw process runs, delete both files`,
+    path,
+  )
+}
+
+/**
  * Take over a lock whose holder is gone, serialised per generation: only the taker that creates
  * `<lock>.takeover-<nonce>` touches the lock, and only while the lock still carries that nonce
  * with a dead pid. A nonce is never issued twice, so a takeover file of a gone generation can
@@ -124,16 +141,7 @@ function takeOver(path: string, claimPath: string, stale: LockClaim, hooks: Inst
     writePrivate(takeover, `${process.pid}\n`, 'wx')
   } catch (error) {
     if (errorCode(error) !== 'EEXIST') throw error
-    // Another taker may be mid-takeover: give it a moment before calling the takeover abandoned.
-    for (let waited = 0; waited < TAKEOVER_PATIENCE_MS; waited += TAKEOVER_POLL_MS) {
-      if (readClaim(path)?.nonce !== stale.nonce) return { taken: false, retry: true }
-      pause(TAKEOVER_POLL_MS)
-    }
-    if (readClaim(path)?.nonce !== stale.nonce) return { taken: false, retry: true }
-    throw new InstanceLockedError(
-      `${path} names a process that is gone and ${takeover} says a takeover of it never finished; if no theoclaw process runs, delete both files`,
-      path,
-    )
+    return waitForOtherTaker(path, stale, takeover)
   }
   try {
     const now = readClaim(path)

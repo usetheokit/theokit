@@ -6,6 +6,8 @@ import { dirname, join } from 'node:path'
 import type { Writable } from 'node:stream'
 import { fileURLToPath } from 'node:url'
 
+import { backupInstance, BackupRefusal, restoreInstance } from './backup/backup.js'
+import { InstanceLockedError } from './backup/instance-lock.js'
 import { describeError, TheoClawConfigError } from './control-plane/errors.js'
 import { daemonInstall, type DaemonIo, daemonStatus, daemonUninstall, runCommand, type Runner } from './daemon.js'
 import { parseOnboard, parseUpdate, UsageError } from './cli-args.js'
@@ -49,6 +51,8 @@ const USAGE = `usage: theoclaw <command>
   theoclaw daemon status    exit 0 when the unit is active, 3 otherwise
   theoclaw update [--channel stable|dev]
                             fetch and fast-forward the checkout on its channel, rebuild, restart
+  theoclaw backup <dir>     copy the stopped instance's state and workspace to <dir>, with a sha256 manifest
+  theoclaw restore <dir>    verify a backup and copy it into an empty instance
   theoclaw --help           this text
 `
 
@@ -94,6 +98,30 @@ function daemon(args: readonly string[], io: CliIo): Promise<number> {
   return run(io, io.runner)
 }
 
+/** The one directory argument of `backup` and `restore`. */
+function directoryArgument(name: string, args: readonly string[]): string {
+  const [dir, ...extra] = args
+  if (dir === undefined || dir.startsWith('-') || extra.length > 0) throw new UsageError(`theoclaw ${name}: expected one directory`)
+  return dir
+}
+
+/** `backup` and `restore` (B-400 FR-008, FR-009): exit 0, or 1 with the refusal on stderr. */
+function backupCommand(name: 'backup' | 'restore'): Command {
+  return async (args, io) => {
+    const dir = directoryArgument(name, args)
+    try {
+      const run = name === 'backup' ? backupInstance : restoreInstance
+      const { files } = run(io.env, dir, { homeDir: io.homeDir })
+      io.stdout.write(`theoclaw: ${name === 'backup' ? 'backed up' : 'restored'} ${files.length} files ${name === 'backup' ? 'to' : 'from'} ${dir}\n`)
+      return 0
+    } catch (error) {
+      if (!(error instanceof BackupRefusal) && !(error instanceof InstanceLockedError)) throw error
+      io.stderr.write(`theoclaw: ${error.message}\n`)
+      return 1
+    }
+  }
+}
+
 const COMMANDS: Readonly<Record<string, Command>> = {
   start: startChild,
   onboard: async (args, io) => {
@@ -102,6 +130,8 @@ const COMMANDS: Readonly<Record<string, Command>> = {
   },
   daemon,
   update: (args, io) => update(parseUpdate(args), io, io.runner),
+  backup: backupCommand('backup'),
+  restore: backupCommand('restore'),
   '--help': (_args, io) => {
     io.stdout.write(USAGE)
     return Promise.resolve(0)
