@@ -48,7 +48,7 @@ describe('checkHostToolsPosture with protected paths', () => {
 describe('hostToolsProtectedPaths', () => {
   it('names the state directory and the external tools file, each by its variable', () => {
     const settings = hostToolSettings()
-    const paths = hostToolsProtectedPaths({ THEOCLAW_EXTERNAL_TOOLS: ' /srv/tools.json ' }, '/srv/state', settings)
+    const paths = hostToolsProtectedPaths({ THEOCLAW_EXTERNAL_TOOLS: ' /srv/tools.json ' }, '/srv/state', settings, [])
     expect(paths).toEqual([
       { path: '/srv/state', variable: 'THEOCLAW_STATE_DIR' },
       { path: '/srv/tools.json', variable: 'THEOCLAW_EXTERNAL_TOOLS' },
@@ -56,6 +56,6 @@ describe('hostToolsProtectedPaths', () => {
   })
 
   it('names nothing without a state directory or an external tools file', () => {
-    expect(hostToolsProtectedPaths({ THEOCLAW_EXTERNAL_TOOLS: '  ' }, undefined, hostToolSettings())).toEqual([])
+    expect(hostToolsProtectedPaths({ THEOCLAW_EXTERNAL_TOOLS: '  ' }, undefined, hostToolSettings(), [])).toEqual([])
   })
 })

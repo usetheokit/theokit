@@ -449,7 +449,7 @@ describe('the chat path names no per-message factory', () => {
     expect(files.filter(({ text }) => /createTheoClawAgent\b/.test(text)).map(({ path }) => path).sort()).toEqual(
       [join('agent', 'create-agent.ts'), join('control-plane', 'agent-factory.ts')].sort(),
     )
-    expect(readFileSync(join(SRC, 'main.ts'), 'utf8')).toMatch(/agentFactory: createAgentFactory\(process\.env, create, imported\),\n\s+webchatAgentFactory: createAgentFactory\(process\.env, create\),/)
+    expect(readFileSync(join(SRC, 'main.ts'), 'utf8')).toMatch(/agentFactory: createAgentFactory\(process\.env, create, imported\),\n\s+importFreeAgentFactory: createAgentFactory\(process\.env, create\),\n\s+importedPaths: importedMcpPaths\(imported\),/)
   })
 })
 

@@ -1,4 +1,8 @@
+import { isAbsolute } from 'node:path'
+
+import type { AgentImport } from '../agent/create-agent.js'
 import { TheoClawConfigError } from '../control-plane/errors.js'
+import type { ProtectedPath } from '../tools/tool-settings.js'
 import { type ImportedSetup, readImport } from './import-store.js'
 
 /**
@@ -33,4 +37,18 @@ export function importedSetupLine(imported: ImportedSetup, mcp: boolean): string
     `theoclaw: imported ${imported.kind} setup: ${instructions} instruction files, ${memories} memory files, ` +
     `${skills} skills, ${mcpServers} MCP servers (${mcp ? 'on' : 'off: set THEOCLAW_IMPORTED_MCP=on'})`
   )
+}
+
+/**
+ * The paths an import's servers execute from, when `THEOCLAW_IMPORTED_MCP=on` starts them: every
+ * absolute stdio command and working directory. Each is a host process outside the sandbox, so with
+ * host tools on the start refuses any of them inside a root the shell can write, as it does for the
+ * external tools file (`externalToolPaths`).
+ */
+export function importedMcpPaths(imported: AgentImport | undefined): ProtectedPath[] {
+  if (imported === undefined || !imported.mcp) return []
+  const executed = Object.values(imported.setup.mcpServers).flatMap((server) =>
+    'url' in server ? [] : [server.command, ...(server.cwd === undefined ? [] : [server.cwd])],
+  )
+  return executed.filter((path) => isAbsolute(path)).map((path) => ({ path, variable: 'THEOCLAW_IMPORTED_MCP' }))
 }

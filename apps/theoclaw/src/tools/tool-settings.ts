@@ -247,11 +247,17 @@ export interface ProtectedPath {
 /**
  * Every path `checkHostToolsPosture` must keep out of the shell's reach at start: the state
  * directory, where the pairing list lives (a shell that could write it could pair anyone), and the
- * external tools file with every process it names (`externalToolPaths`).
+ * external tools file with every process it names (`externalToolPaths`), and every process a
+ * migration import starts (`imported`, from `importedMcpPaths`).
  */
-export function hostToolsProtectedPaths(env: Env, stateDir: string | undefined, settings: ToolSettings): ProtectedPath[] {
+export function hostToolsProtectedPaths(
+  env: Env,
+  stateDir: string | undefined,
+  settings: ToolSettings,
+  imported: readonly ProtectedPath[],
+): ProtectedPath[] {
   const state = stateDir === undefined ? [] : [{ path: stateDir, variable: 'THEOCLAW_STATE_DIR' }]
-  return [...state, ...externalToolPaths(env, settings.external)]
+  return [...state, ...externalToolPaths(env, settings.external), ...imported]
 }
 
 /**

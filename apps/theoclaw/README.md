@@ -598,8 +598,9 @@ At start, TheoClaw writes `theoclaw: imported <kind> setup: …` after its insta
 reaches the `/control` agent only: the instructions and the memory, read-only, go into its system
 prompt, and the skills are inline with a `skill_read` tool. **Channel and WebChat agents receive nothing
 from the import**, since anyone allowed to message the bot could ask a chat agent to repeat its
-prompt. The imported MCP servers stay off until you set `THEOCLAW_IMPORTED_MCP=on`; any other value
-stops the start.
+prompt; nor do the `/control` agent's `run_code` and `delegate_all` workers. The imported MCP servers
+stay off until you set `THEOCLAW_IMPORTED_MCP=on`; any other value stops the start. With host tools
+on, the start refuses an imported stdio command or cwd the sandboxed shell could write.
 
 ## Keeping secrets out of the repository
 

@@ -48,7 +48,7 @@ async function start(options: { readonly token?: string; readonly assetsDir?: st
     },
     ...(options.webchat === true
       ? {
-          webchatAgentFactory: (toolOptions: AgentToolOptions) => {
+          importFreeAgentFactory: (toolOptions: AgentToolOptions) => {
             calls.webchat.push(toolOptions)
             return new FakeAgent({ frames: [assistant('hello from the webchat agent'), finished()] })
           },
@@ -174,7 +174,7 @@ describe('the /webchat routes on the started listener', () => {
     expect(calls.toolOptions).toEqual([NO_TOOL_OPTIONS])
   })
 
-  it('builds a served turn\'s agent from webchatAgentFactory when the start has one, never the /control factory (B-375, FR-009)', async () => {
+  it('builds a served turn\'s agent from importFreeAgentFactory when the start has one, never the /control factory (B-375, FR-009)', async () => {
     const { base, calls } = await start({ token: TOKEN, webchat: true })
 
     const served = await post(base, '/webchat/chat', `Bearer ${TOKEN}`)

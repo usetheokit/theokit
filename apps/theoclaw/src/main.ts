@@ -11,7 +11,7 @@ import { type CreateAgent, createAgentFactory, createChannelAgentFactory } from 
 import { loadConfiguration } from './config-file.js'
 import { describeError } from './control-plane/errors.js'
 import { applyInstance, resolveInstance, type TheoClawInstance } from './instance.js'
-import { importedSetupLine, readImportAtStart, requireImportedMcp } from './migration/import-start.js'
+import { importedMcpPaths, importedSetupLine, readImportAtStart, requireImportedMcp } from './migration/import-start.js'
 
 /**
  * The process entry: the real environment, signals, exit and output streams, and the `/control`
@@ -59,9 +59,10 @@ const create: CreateAgent = createSdkAgent
 startTheoClaw({
   env: process.env,
   instance,
-  // The import reaches the `/control` agents only; WebChat's and the chat path's factories take none (FR-009).
+  // The import reaches the `/control` agents only; WebChat's, the workers' and the chat path's factories take none (FR-009).
   agentFactory: createAgentFactory(process.env, create, imported),
-  webchatAgentFactory: createAgentFactory(process.env, create),
+  importFreeAgentFactory: createAgentFactory(process.env, create),
+  importedPaths: importedMcpPaths(imported),
   ...(imported === undefined ? {} : { importedLine: importedSetupLine(imported.setup, imported.mcp) }),
   // The `digest` tool's draft agents (B-387): the chat path's factory, so no tool, no shell, memory off.
   draftAgentFactory: createChannelAgentFactory(process.env, createSdkAgent),

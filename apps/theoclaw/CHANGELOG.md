@@ -70,7 +70,9 @@ and versioning follows [Semantic Versioning](https://semver.org/).
   ...` after its instance line and hands the import to the `/control` agent only: instructions and
   read-only memory in its system prompt, the skills inline with a `skill_read` tool, and the MCP
   servers only with `THEOCLAW_IMPORTED_MCP=on` (any other value stops the start). Channel, session
-  and WebChat agents receive nothing from it.
+  and WebChat agents, and the `run_code` and `delegate_all` workers, receive nothing from it. With
+  `THEOCLAW_HOST_TOOLS=on` and `THEOCLAW_IMPORTED_MCP=on`, the start refuses an imported stdio
+  command or cwd inside a root the sandboxed shell can write, as for `THEOCLAW_EXTERNAL_TOOLS`.
 - The `digest` tool of the `/control` agent (B-387, OC-66): a typed two-step workflow from
   `@theokit/sdk/workflow`, where a draft step on a fresh agent with no tool, no `shell` and memory off
   lists the key points of a text, and a second step checks them as `{ points }` (1 to 10). Each call

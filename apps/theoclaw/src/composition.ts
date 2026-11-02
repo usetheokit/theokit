@@ -56,7 +56,7 @@ import { createWebhookRouter, type WebhookRoute } from './webhooks/router.js'
 import type { TeamsVerifier } from './webhooks/teams.js'
 import { controlAgentToolOptions, NO_TOOL_OPTIONS } from './tools/tool-registry.js'
 import type { AgentToolOptions } from './tools/tool-registry.js'
-import { checkHostToolsPosture, hostToolsProtectedPaths, resolveToolSettings } from './tools/tool-settings.js'
+import { checkHostToolsPosture, hostToolsProtectedPaths, type ProtectedPath, resolveToolSettings } from './tools/tool-settings.js'
 import type { ToolDeps, ToolSettings } from './tools/tool-settings.js'
 import { createWorkflowTools } from './workflows/workflow-tools.js'
 import { WEBCHAT_ASSETS_DIR } from './webchat/page.js'
@@ -298,8 +298,10 @@ export interface StartOptions extends Omit<TheoClawOptions, 'write'> {
   readonly instance?: TheoClawInstance
   /** The migration import's line (FR-010, D1), computed by the entry and written after the instance line. */
   readonly importedLine?: string
-  /** WebChat's agents, which an import must not reach (FR-009). Default: `agentFactory`. */
-  readonly webchatAgentFactory?: StartOptions['agentFactory']
+  /** WebChat's agents and every `/control` agent's workers, which an import must not reach (FR-009). Default: `agentFactory`. */
+  readonly importFreeAgentFactory?: StartOptions['agentFactory']
+  /** The processes an import starts outside the sandbox (`importedMcpPaths`), protected with host tools on. */
+  readonly importedPaths?: readonly ProtectedPath[]
   /** Builds the tool-less agent of one `digest` call (B-387, D3). Absent: no workflow tool. */
   readonly draftAgentFactory?: () => Promise<SDKAgent>
   /** The SDK's live agent cache, turned off at start (D2). Default `Agent.registry`. */
@@ -338,7 +340,7 @@ function startToolSettings(options: StartOptions, policy: AuthorizationPolicy): 
   // A profiled instance's agents work in its workspace (B-514), so their tool root is made there.
   const cwd = options.cwd ?? options.instance?.workspace ?? process.cwd()
   const tools = resolveToolSettings(options.env, cwd, options.toolDeps)
-  checkHostToolsPosture(tools, hostToolsProtectedPaths(options.env, policy.stateDir, tools), options.toolDeps)
+  checkHostToolsPosture(tools, hostToolsProtectedPaths(options.env, policy.stateDir, tools, options.importedPaths ?? []), options.toolDeps)
   return tools
 }
 
@@ -377,7 +379,7 @@ function workflowTools(factory: StartOptions['draftAgentFactory'], write: (line:
 function startWebchat(options: StartOptions, token: string | undefined): HttpHandler | undefined {
   if (token === undefined) return undefined
   const agents = createContainer<TurnAgent>({
-    factory: () => (options.webchatAgentFactory ?? options.agentFactory)(NO_TOOL_OPTIONS),
+    factory: () => (options.importFreeAgentFactory ?? options.agentFactory)(NO_TOOL_OPTIONS),
   })
   const assetsDir = options.webchatAssetsDir ?? WEBCHAT_ASSETS_DIR
   return createWebchatRoutes({ token, runTurn: createTurnRunner(agents.withAgent), assetsDir })
@@ -452,9 +454,10 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
     write: stderr,
   })
   const extraTools = workflowTools(options.draftAgentFactory, stderr)
-  // `/control` and session agents hold `run_code` and `delegate_all`, workers from the same factory.
+  // `/control` agents hold `run_code` and `delegate_all`; their read-only workers carry no import.
+  const buildWorker = options.importFreeAgentFactory ?? options.agentFactory
   const buildControlAgent = async (): Promise<TurnAgent> =>
-    options.agentFactory(controlAgentToolOptions(tools, options.agentFactory, extraTools))
+    options.agentFactory(controlAgentToolOptions(tools, buildWorker, extraTools))
   const { withAgent } = createContainer<TurnAgent>({ factory: buildControlAgent })
   composedApp = composed
   const listen = options.listen ?? listenControlPlane
