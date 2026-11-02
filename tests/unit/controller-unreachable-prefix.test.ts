@@ -1,6 +1,7 @@
 import 'reflect-metadata'
 
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -28,7 +29,14 @@ import {
  * runtime cannot route to is that failure reached by a different road, and it deserves the same
  * answer: fail the build, name the controller, name the fix.
  */
-const TEST_ROOT = resolve(__dirname, '../../packages/theo/__controller_prefix_gate_test__')
+// Outside the source tree (B-429): a concurrent lint, build or typecheck must never see it. Bare
+// imports resolve through a link to the package's own node_modules in the parent directory.
+const TEST_PARENT = mkdtempSync(join(tmpdir(), 'theokit-controller-prefix-gate-test-'))
+symlinkSync(
+  resolve(__dirname, '../../packages/theo/node_modules'),
+  join(TEST_PARENT, 'node_modules'),
+)
+const TEST_ROOT = join(TEST_PARENT, 'work')
 const SERVER_DIR = join(TEST_ROOT, 'server')
 const DIST_DIR = join(TEST_ROOT, '.theokit')
 
