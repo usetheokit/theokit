@@ -40,6 +40,7 @@ const b = () => globalThis.__THEO_DEPLOY_IDENTITY_HARNESS__
 export const matchRoute = () => null
 export const compilePattern = () => ({})
 export const executeRoute = () => {}
+export const serveReservedRoute = async () => null
 export const createProductionLoader = () => () => ({})
 export const generateNonce = () => 'test-nonce'
 export const buildSecurityHeaders = () => ({})

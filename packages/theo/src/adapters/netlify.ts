@@ -20,6 +20,8 @@ import { type DeployedCsrfOptions } from './deployed-csrf.js'
 import { deployedEntryPreamble } from './deployed-preamble.js'
 import { deployedRateLimitFragment, rateLimitCheckFragment } from './deployed-rate-limit.js'
 import type { DeployedRateLimitOptions } from './deployed-rate-limit.js'
+import { deployedReservedRoutesFragment, reservedRouteBranch } from './deployed-reserved-routes.js'
+import type { DeployedReservedRoutesOptions } from './deployed-reserved-routes.js'
 import {
   deployedRuntimeConfigFragment,
   type DeployedRuntimeConfigOptions,
@@ -77,6 +79,7 @@ export function renderNetlifyFunction(
     DeployedRuntimeConfigOptions &
     DeployedCorsOptions &
     DeployedRateLimitOptions &
+    DeployedReservedRoutesOptions &
     DeployedServerDirOptions & {
       routes?: readonly BakedRoute[]
       /**
@@ -139,7 +142,13 @@ export function renderNetlifyFunction(
     `// theo.config.ts to read. The netlify.toml redirect routes only /api/* here,`,
     `// so this covers the API and not the document Netlify's static host serves`,
     `// (usetheokit/theokit#412).`,
-    ...deployedEntryPreamble(runtimeConfig, agentsFragment, opts, 'netlify'),
+    ...deployedEntryPreamble(
+      runtimeConfig,
+      agentsFragment,
+      opts,
+      'netlify',
+      deployedReservedRoutesFragment(opts),
+    ),
     ``,
     // B-027 — emitted only when a limit is declared.
     ...(opts.rateLimit === undefined
@@ -177,6 +186,7 @@ export function renderNetlifyFunction(
     ``,
     `async function handleRequest(request) {`,
     `  const url = new URL(request.url)`,
+    ...reservedRouteBranch('url.pathname', '  '),
     `  if (!url.pathname.startsWith('/api/')${agentsFragment.hostBypass}) {`,
     `    return new Response('Not Found', { status: 404 })`,
     `  }`,
@@ -298,6 +308,40 @@ const THEO_SPA_FALLBACK_TARGET = [
   '  to = "/index.html"',
   '  status = 200',
 ].join('\n')
+
+/**
+ * #1097 — the reserved routes the function answers. No file matches them, so without this rule
+ * they reached the SPA fallback and were answered with the document.
+ */
+const THEO_RESERVED_FROM = '/__theo/*'
+const THEO_RESERVED_TARGET = [
+  '[[redirects]]',
+  `  from = "${THEO_RESERVED_FROM}"`,
+  `  to = "${THEO_REDIRECT_TO}"`,
+  '  status = 200',
+  '  force = true',
+].join('\n')
+
+/**
+ * Add the reserved-routes rule unless one exists, AHEAD of any `/*` rule: Netlify applies the
+ * first rule that matches, so a rule appended after a project's own fallback would never fire.
+ */
+function withReservedRoutesRedirect(source: string): string {
+  const lines = source.split(/\r?\n/)
+  const blocks = parseRedirectBlocks(lines)
+  if (blocks.some((b) => b.from === THEO_RESERVED_FROM)) return source
+  const fallback = blocks.find((b) => b.from === THEO_SPA_FALLBACK_FROM)
+  if (fallback === undefined) {
+    const sep = source.endsWith('\n') ? '' : '\n'
+    return `${source}${sep}\n${THEO_RESERVED_TARGET}\n`
+  }
+  return [
+    ...lines.slice(0, fallback.startLine),
+    THEO_RESERVED_TARGET,
+    '',
+    ...lines.slice(fallback.startLine),
+  ].join('\n')
+}
 
 /** Append the fallback unless some `/*` rule exists — the project's own wins. */
 function withSpaFallback(source: string): string {
@@ -450,7 +494,9 @@ export function mergeNetlifyToml(
   const headersBlock = renderHeadersBlock(securityHeaders)
 
   if (existing === null || existing.trim().length === 0) {
-    return withFunctionsDeclared(withSpaFallback(`${THEO_REDIRECT_TARGET}\n\n${headersBlock}\n`))
+    return withFunctionsDeclared(
+      withSpaFallback(withReservedRoutesRedirect(`${THEO_REDIRECT_TARGET}\n\n${headersBlock}\n`)),
+    )
   }
 
   existing = withoutGeneratedHeaders(existing)
@@ -464,7 +510,9 @@ export function mergeNetlifyToml(
       // The redirect is already there. The headers block is regenerated regardless, because it
       // carries configuration and the redirect does not.
       const sep = existing.endsWith('\n') ? '' : '\n'
-      return withFunctionsDeclared(withSpaFallback(`${existing}${sep}\n${headersBlock}\n`))
+      return withFunctionsDeclared(
+        withSpaFallback(withReservedRoutesRedirect(`${existing}${sep}\n${headersBlock}\n`)),
+      )
     }
     throw new NetlifyConflictError(b.from, b.to ?? '(unknown)')
   }
@@ -472,7 +520,9 @@ export function mergeNetlifyToml(
   // No conflict — append target block.
   const sep = existing.endsWith('\n') ? '' : '\n'
   return withFunctionsDeclared(
-    withSpaFallback(`${existing}${sep}\n${THEO_REDIRECT_TARGET}\n\n${headersBlock}\n`),
+    withSpaFallback(
+      withReservedRoutesRedirect(`${existing}${sep}\n${THEO_REDIRECT_TARGET}\n\n${headersBlock}\n`),
+    ),
   )
 }
 
@@ -559,6 +609,8 @@ export async function buildNetlify(
       csrf: config.security?.csrf,
       disallowed: config.security?.disallowed,
       cors: config.security?.cors,
+      // #1097 — a probe cannot ride as a literal; the entry fails `/__theo/ready` closed instead.
+      readyProbeDeclared: config.ready !== undefined,
       // #425 — a selector, not a transformer, so it rides as a literal like the values above.
       serialization: config.serialization,
     }),

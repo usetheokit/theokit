@@ -249,6 +249,11 @@ export default config()
   .build()
 ```
 
+The entries the `vercel`, `netlify`, `cloudflare`, `bun`, `deno-deploy` and `aws-lambda` targets
+emit answer the same two routes. A `ready` probe is a function, which a generated entry cannot
+carry, so on those targets `theokit build` names it as not applied and `GET /__theo/ready` answers
+503 while it stays in the config. Remove `ready`, or build for `node`, to get a 200 there.
+
 Cloudflare Workers, step by step: [`docs/wiki/sops/cloudflare-deploy.md`](https://github.com/usetheokit/theokit/blob/main/docs/wiki/sops/cloudflare-deploy.md).
 
 ## Licence
