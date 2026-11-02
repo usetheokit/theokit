@@ -311,6 +311,76 @@ describe('runTask', () => {
     expect(record.verdict).toBe('theocode_won')
   })
 
+  it('an agent that outlives its bound is a void side naming the bound it was given', async () => {
+    /** @type {number | undefined} */
+    let agentBound
+    const solve = fakeExec({ 'fake-theocode': 'solves', 'fake-claude': 'solves' })
+    const record = await runTask({
+      taskDir: await writeTask(),
+      theocode,
+      competitorName: 'claude',
+      competitor: claude,
+      notLikeForLike: null,
+      agentTimeoutMs: 1234,
+      exec: async (cmd, args, options) => {
+        if (cmd !== 'fake-theocode' || args[0] === '--version') return solve(cmd, args, options)
+        agentBound = options.timeoutMs
+        return { code: 137, stdout: '', stderr: '', timedOut: true }
+      },
+      workRoot: join(root, 'work'),
+    })
+    expect(agentBound).toBe(1234)
+    expect(record.sides[0].outcome).toBe('void')
+    expect(record.sides[0].voidReason).toBe(
+      'theocode: the agent CLI ran past 1234 ms and was killed',
+    )
+    expect(record.counted).toBe(false)
+  })
+
+  it('a verification whose output carries no totals is refused, quoting its last lines', async () => {
+    const run = runTask({
+      taskDir: await writeTask({
+        verify: ['node', 'silent.mjs'],
+        extraVerify: { 'silent.mjs': "console.log('nothing to count')\nprocess.exitCode = 1\n" },
+      }),
+      theocode,
+      competitorName: 'claude',
+      competitor: claude,
+      notLikeForLike: null,
+      exec: fakeExec({ 'fake-theocode': 'solves', 'fake-claude': 'solves' }),
+      workRoot: join(root, 'work'),
+    })
+    await expect(run).rejects.toThrow(
+      'the verification output carries no "# pass N" and "# fail N" totals; last lines: nothing to count',
+    )
+  })
+
+  it('a task.json without a verify command is refused before any agent runs', async () => {
+    const taskDir = await writeTask()
+    await writeFile(
+      join(taskDir, 'task.json'),
+      JSON.stringify({ id: 'sum', title: 'fix add', prompt: 'Fix it.', verify: [] }),
+    )
+    /** @type {string[]} */
+    const ran = []
+    const run = runTask({
+      taskDir,
+      theocode,
+      competitorName: 'claude',
+      competitor: claude,
+      notLikeForLike: null,
+      exec: async (cmd, args, options) => {
+        ran.push(cmd)
+        return spawnExec(cmd, args, options)
+      },
+      workRoot: join(root, 'work'),
+    })
+    await expect(run).rejects.toThrow(
+      `${taskDir}/task.json: "verify" must be a non-empty command array`,
+    )
+    expect(ran).toEqual([])
+  })
+
   it('a verification that outlives its bound is killed and scores that side failed, with the reason', async () => {
     const record = await runTask({
       taskDir: await writeTask(),
@@ -457,6 +527,27 @@ describe('the CLI', () => {
     expect(record.counted).toBe(false)
     expect(await readdir(scratch)).toEqual([])
   }, 60_000)
+
+  it('refuses an --agent-timeout-ms that is not a positive integer', async () => {
+    const result = await runCli([
+      '--task',
+      await writeTask(),
+      '--competitor',
+      'claude',
+      '--theocode-model',
+      'anthropic/claude-sonnet-4-5',
+      '--competitor-provider',
+      'anthropic',
+      '--competitor-model',
+      'claude-sonnet-4-5',
+      '--agent-timeout-ms',
+      'soon',
+    ])
+    expect(result.code).toBe(1)
+    expect(result.stderr).toContain(
+      'side-by-side: --agent-timeout-ms must be a positive integer, got "soon"',
+    )
+  })
 
   it('refuses different models with no --not-like-for-like declaration before any agent runs', async () => {
     const taskDir = await writeTask()
