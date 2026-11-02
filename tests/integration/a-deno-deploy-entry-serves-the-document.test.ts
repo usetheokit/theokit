@@ -29,6 +29,7 @@ export const scanServerRoutes = () => []
 export const scanWebSocketRoutes = () => []
 export const matchRoute = () => null
 export const executeRoute = () => {}
+export const serveReservedRoute = async () => null
 export const createProductionLoader = () => async () => ({ default: {} })
 export const createWebShim = () => ({ req: { headers: {} }, res: { setHeader() {} }, toResponse: () => new Response('r') })
 export const buildSecurityHeaders = () => ({ 'X-Frame-Options': 'DENY' })

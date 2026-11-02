@@ -8,7 +8,7 @@ export const SILENT = '[SILENT]'
 export const PREVIOUS_OUTPUT_LIMIT = 4000
 
 /** What every scheduled run is told before its task. */
-export const SCHEDULED_PREAMBLE = [
+const SCHEDULED_PREAMBLE = [
   'This is a scheduled run: nobody is present to answer a question, so do the task and answer once.',
   `If there is nothing worth sending, answer ${SILENT} alone and nothing is sent.`,
   `Never combine ${SILENT} with other content.`,

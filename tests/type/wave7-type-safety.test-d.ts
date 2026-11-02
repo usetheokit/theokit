@@ -84,12 +84,12 @@ describe('Wave 7 — Type Safety End-to-End', () => {
     })
   })
 
-  // ctx is unknown in action handler
-  it('ctx is unknown in action handler', () => {
+  // usetheokit/theokit#1096 — an action's ctx is the same RouteContext a route's is
+  it('ctx is RouteContext in action handler', () => {
     defineAction({
       input: z.object({ value: z.string() }),
       handler: ({ ctx }) => {
-        expectTypeOf(ctx).toBeUnknown()
+        expectTypeOf(ctx).toEqualTypeOf<RouteContext>()
         return { ok: true }
       },
     })

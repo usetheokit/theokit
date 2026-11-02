@@ -19,6 +19,8 @@ import {
   rateLimitCheckFragment,
   type DeployedRateLimitOptions,
 } from './deployed-rate-limit.js'
+import { deployedReservedRoutesFragment, reservedRouteBranch } from './deployed-reserved-routes.js'
+import type { DeployedReservedRoutesOptions } from './deployed-reserved-routes.js'
 import {
   deployedRuntimeConfigFragment,
   agentsDirLiteral,
@@ -95,7 +97,8 @@ export function renderBunEntry(
     DeployedRuntimeConfigOptions &
     DeployedServerDirOptions &
     DeployedCorsOptions &
-    DeployedRateLimitOptions = {},
+    DeployedRateLimitOptions &
+    DeployedReservedRoutesOptions = {},
 ): string {
   // The whole implementation of `ssrStreaming` in this adapter used to be the text of this comment:
   // `opts.ssrStreaming` was read, and its only effect was which string landed on line 4 of the emitted
@@ -170,7 +173,13 @@ export function renderBunEntry(
     `// the HTML document (static file + SPA fallback below), so the document gets`,
     `// these headers too -- with a nonce-less CSP, because that HTML was written`,
     `// at build time and carries no nonce on its script tags (EC-4).`,
-    ...deployedEntryPreamble(runtimeConfig, agentsFragment, opts, 'bun'),
+    ...deployedEntryPreamble(
+      runtimeConfig,
+      agentsFragment,
+      opts,
+      'bun',
+      deployedReservedRoutesFragment(opts),
+    ),
     ``,
     ...deployedRateLimitFragment(opts.rateLimit, 'bun', 'server.requestIP(request)?.address'),
     ``,
@@ -229,6 +238,7 @@ function bunHandleRequestFragment(
     `async function handleRequest(request) {`,
     `    const url = new URL(request.url)`,
     `    const pathname = url.pathname`,
+    ...reservedRouteBranch('pathname', '    '),
     ``,
     `    // 1) Static assets`,
     ...(document === undefined
@@ -322,6 +332,8 @@ export async function buildBun(
     csrf: config.security?.csrf,
     disallowed: config.security?.disallowed,
     cors: config.security?.cors,
+    // #1097 — a probe cannot ride as a literal; the entry fails `/__theo/ready` closed instead.
+    readyProbeDeclared: config.ready !== undefined,
     // #425 — a selector, not a transformer, so it rides as a literal like the values above.
     serialization: config.serialization,
     // #425 — the ONE concern that is not a literal. A closure cannot be baked, so a plugin

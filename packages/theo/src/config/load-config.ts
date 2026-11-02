@@ -50,6 +50,60 @@ export function deepMerge(
   return result
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+/**
+ * The config object a config module exports by default.
+ *
+ * #1100 — on a Node that cannot strip types, tsx compiles a `.ts` config in a package without
+ * `"type": "module"` as CommonJS, and the namespace arrives as `{ default: { default: config } }`.
+ * Reading one level handed the schema `{ default: config }`; the schema drops unknown keys, so
+ * every command ran on the defaults and said nothing. A wrapper (`default`, optionally with
+ * `__esModule`) is unwrapped; a `default` key next to anything else is a shape this loader does not
+ * understand, and it says so rather than guessing.
+ */
+function readDefaultExport(
+  mod: Record<string, unknown>,
+  filePath: string,
+): Record<string, unknown> {
+  let value = mod.default
+  while (
+    isRecord(value) &&
+    Object.hasOwn(value, 'default') &&
+    Object.keys(value).every((key) => key === 'default' || key === '__esModule')
+  ) {
+    value = value.default
+  }
+
+  if (!isRecord(value)) {
+    throw new TheoConfigError(
+      [
+        {
+          field: '_export',
+          message: 'theo.config.ts must use export default defineConfig({...})',
+        },
+      ],
+      filePath,
+    )
+  }
+  if (Object.hasOwn(value, 'default')) {
+    throw new TheoConfigError(
+      [
+        {
+          field: '_export',
+          message:
+            'the default export carries a `default` key beside other keys, which is not a config ' +
+            'object. Export the config itself: export default config()...build()',
+        },
+      ],
+      filePath,
+    )
+  }
+  return value
+}
+
 export async function loadConfig(dir: string): Promise<TheoConfig> {
   // T1.3 — Load .env BEFORE reading theo.config.ts. Defensive: CLI commands
   // (dev/build/start) already call loadEnv() first, but programmatic users
@@ -70,22 +124,8 @@ export async function loadConfig(dir: string): Promise<TheoConfig> {
     throw new TheoConfigError([{ field: '_file', message: (err as Error).message }], configPath)
   }
 
-  const userConfig = mod.default
-
-  if (userConfig == null || typeof userConfig !== 'object') {
-    throw new TheoConfigError(
-      [
-        {
-          field: '_export',
-          message: 'theo.config.ts must use export default defineConfig({...})',
-        },
-      ],
-      configPath,
-    )
-  }
-
   // Merge with per-environment config if NODE_ENV is set
-  let rawConfig = userConfig as Record<string, unknown>
+  let rawConfig = readDefaultExport(mod, configPath)
   const nodeEnv = process.env.NODE_ENV
 
   if (nodeEnv) {
@@ -93,16 +133,13 @@ export async function loadConfig(dir: string): Promise<TheoConfig> {
     const envPath = resolve(dir, envFile)
 
     if (existsSync(envPath)) {
+      let envMod: Record<string, unknown>
       try {
-        const envMod = await importUserModule(envPath)
-        const envConfig = envMod.default
-
-        if (envConfig != null && typeof envConfig === 'object') {
-          rawConfig = deepMerge(rawConfig, envConfig as Record<string, unknown>)
-        }
+        envMod = await importUserModule(envPath)
       } catch (err) {
         throw new TheoConfigError([{ field: '_file', message: (err as Error).message }], envPath)
       }
+      rawConfig = deepMerge(rawConfig, readDefaultExport(envMod, envPath))
     }
   }
 

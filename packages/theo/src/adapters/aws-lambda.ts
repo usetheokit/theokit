@@ -19,6 +19,7 @@ import {
   rateLimitCheckFragment,
   type DeployedRateLimitOptions,
 } from './deployed-rate-limit.js'
+import { deployedReservedRoutesFragment, reservedRouteBranch } from './deployed-reserved-routes.js'
 import { deployedRuntimeConfigFragment, serverDirLiteral } from './deployed-runtime-config.js'
 import { deployedTraceFragment } from './deployed-trace.js'
 import { nodeAdapter } from './node.js'
@@ -218,6 +219,7 @@ function awsLambdaHandlerFragment(
     `}`,
     ``,
     `async function routeRequest(event, path) {`,
+    ...reservedRouteBranch('path', '  '),
     `  if (!path.startsWith('/api/')${agentsHostBypass}) {`,
     `    return new Response(`,
     `      'Static assets must be served from CloudFront or a separate static host.',`,
@@ -306,7 +308,13 @@ export function renderAwsLambdaEntry(
     `// theo.config.ts to read. Non-API paths 404 here and the document is served`,
     `// from CloudFront or another static host, so this covers the API and not the`,
     `// page (usetheokit/theokit#412).`,
-    ...deployedEntryPreamble(runtimeConfig, agentsFragment, opts, 'aws-lambda'),
+    ...deployedEntryPreamble(
+      runtimeConfig,
+      agentsFragment,
+      opts,
+      'aws-lambda',
+      deployedReservedRoutesFragment(opts),
+    ),
     ``,
     `function eventV2ToRequest(event) {`,
     `  const method = event.requestContext?.http?.method ?? 'GET'`,
@@ -403,6 +411,8 @@ export async function buildAwsLambda(
     csrf: config.security?.csrf,
     disallowed: config.security?.disallowed,
     cors: config.security?.cors,
+    // #1097 — a probe cannot ride as a literal; the entry fails `/__theo/ready` closed instead.
+    readyProbeDeclared: config.ready !== undefined,
     // #425 — a selector, not a transformer, so it rides as a literal like the values above.
     serialization: config.serialization,
   })

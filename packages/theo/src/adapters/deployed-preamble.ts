@@ -3,6 +3,7 @@ import type { SecurityHeadersConfig } from '../core/contracts/security-headers.j
 import type { DeployedAgentsFragment } from './deployed-agents.js'
 import { deployedCorsFragment, type DeployedCorsOptions } from './deployed-cors.js'
 import { deployedCsrfFragment, type DeployedCsrfOptions } from './deployed-csrf.js'
+import type { DeployedReservedRoutesFragment } from './deployed-reserved-routes.js'
 import { securityHeadersDeclarations } from './security-headers.js'
 
 /**
@@ -44,14 +45,17 @@ export function deployedEntryPreamble(
   agentsFragment: DeployedAgentsFragment,
   opts: { securityHeaders?: SecurityHeadersConfig } & DeployedCsrfOptions & DeployedCorsOptions,
   host: string,
+  reservedRoutes: DeployedReservedRoutesFragment,
 ): string[] {
   return [
     ...securityHeadersDeclarations(opts.securityHeaders),
     ``,
     ...runtimeConfig.imports,
     ...agentsFragment.imports,
+    ...reservedRoutes.imports,
     ...runtimeConfig.declarations,
     ...agentsFragment.declarations,
+    ...reservedRoutes.declarations,
     ...deployedCsrfFragment(opts),
     ``,
     ...deployedCorsFragment(opts.cors, host),

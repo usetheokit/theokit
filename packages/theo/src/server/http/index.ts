@@ -10,6 +10,9 @@ export { envelopeCodeToStatus } from '../../core/contracts/envelope-code-to-stat
 // reachable only through a barrel scheduled for removal strands whoever adopts it. Three of this
 // file's exports already come from `core/contracts/`, so the shape is the precedent, not a new one.
 export { injectModulePreloads } from '../../core/contracts/module-preloads.js'
+// usetheokit/theokit#1097 — the deployed Web entries answer the reserved routes through the same
+// function `theokit start` calls, and they import from this subpath, not from `define`.
+export { defineReadyRoute, serveReservedRoute } from '../define/health-route.js'
 export { handleRequestError, handleWebRequestError } from './handle-request-error.js'
 export * from './execute.js'
 export * from './action-execute.js'
