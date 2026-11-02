@@ -15,8 +15,10 @@
  * scope when TheoClaw declares the package itself.
  * The app's importer is derived from where this file lives, and a lockfile without it exits 2, so a
  * moved app fails closed instead of matching no path. A lockfile that is not version 9.0, or whose
- * importers block holds a dependency with no `version:` line, exits 2 too, so a layout change in
- * pnpm's writer cannot shrink the scope to the app alone.
+ * importers block holds a dependency with no `version:` line, a blank or null one, or a `link:` with no
+ * target, exits 2 too, and so does
+ * an unbalanced quote or an escape in a key or value it reads, so a layout change in pnpm's writer
+ * cannot shrink the scope to the app alone.
  *
  * Exit 0 with no TheoClaw advisory, 1 with one line per advisory, 2 when the report cannot be read.
  * A malformed advisory exits 2 even when it reaches only another importer: without its paths the
@@ -49,7 +51,24 @@ const importerId = (key) => key.split('/').join('__')
 /** One `key:` or `key: value` line of the importers block, with its indentation. */
 const LOCK_ENTRY = /^( {2,8})(\S.*?):(?: (.+))?$/
 
-const unquote = (text) => text.replace(/^'(.*)'$/, '$1')
+/** One `'…'` or `"…"` pair around a scalar, the quote in group 1 and the text inside in group 2. */
+const QUOTE_PAIR = /^(['"])(.*)\1$/
+
+/**
+ * `text` without its quote pair, either style. Throws for a quote with no matching close, and for an
+ * escape (`''` single-quoted, a backslash double-quoted): left undecoded, the name would match no
+ * audit path and narrow the scope silently.
+ */
+function unquote(text, line) {
+  if (text[0] !== "'" && text[0] !== '"') return text
+  const pair = QUOTE_PAIR.exec(text)
+  if (!pair) throw new AuditReportError(`${LOCKFILE} line ${line}: unbalanced quote in ${text}`)
+  const [, quote, inner] = pair
+  if (inner.includes(quote) || (quote === '"' && inner.includes('\\'))) {
+    throw new AuditReportError(`${LOCKFILE} line ${line}: escape in ${text} is not read`)
+  }
+  return inner
+}
 
 /** The lockfile format whose importers layout `readImporters` was written for. */
 const LOCKFILE_VERSION = '9.0'
@@ -60,7 +79,8 @@ const DEPENDENCY_SECTIONS = new Set([...PRODUCTION_SECTIONS, 'devDependencies'])
 /** Throws unless the lockfile declares the version whose layout this reader parses. */
 function assertLockfileVersion(lockText) {
   const found = LOCKFILE_VERSION_LINE.exec(lockText)
-  const version = found ? unquote(found[1].trim()) : '(none)'
+  const line = found ? lockText.slice(0, found.index).split('\n').length : 0
+  const version = found ? unquote(found[1].trim(), line) : '(none)'
   if (version !== LOCKFILE_VERSION) {
     throw new AuditReportError(`${LOCKFILE} has lockfileVersion ${version}; this reader reads ${LOCKFILE_VERSION}`)
   }
@@ -75,29 +95,44 @@ function closeDependency(state) {
   }
 }
 
+/** The YAML spellings of null, which a `version:` line carrying them reads as no version at all. */
+const YAML_NULL = new Set(['null', 'Null', 'NULL', '~'])
+
+/** `version` as read for the open entry; throws on a blank or null one, and on a `link:` with no target. */
+function readVersion(state, version) {
+  const refuse = (what) => {
+    const { section, name } = state.open
+    return new AuditReportError(`${LOCKFILE} line ${state.line}: ${state.importer} ${section} ${name} has an empty ${what}`)
+  }
+  if (version.trim() === '' || YAML_NULL.has(version)) throw refuse('version')
+  if (version.startsWith('link:') && version.slice('link:'.length).trim() === '') throw refuse('link target')
+  return version
+}
+
 /** What each indentation of the importers block opens: an importer, a section, a dependency, its version. */
 const ENTRY_BY_INDENT = {
   2: (state, key) => {
     closeDependency(state)
-    state.importer = unquote(key)
+    state.importer = unquote(key, state.line)
     state.deps = []
     state.importers.set(state.importer, state.deps)
   },
   4: (state, key, value) => {
     closeDependency(state)
-    state.section = key
-    if (value !== undefined && DEPENDENCY_SECTIONS.has(key)) {
-      throw new AuditReportError(`${state.importer} ${key} is not a block mapping in ${LOCKFILE}`)
+    state.section = unquote(key, state.line)
+    if (value !== undefined && DEPENDENCY_SECTIONS.has(state.section)) {
+      throw new AuditReportError(`${state.importer} ${state.section} is not a block mapping in ${LOCKFILE}`)
     }
   },
   6: (state, key) => {
     closeDependency(state)
     if (!DEPENDENCY_SECTIONS.has(state.section)) return
-    state.open = { section: state.section, name: unquote(key), version: null }
+    state.open = { section: state.section, name: unquote(key, state.line), version: null }
     state.deps.push(state.open)
   },
   8: (state, key, value) => {
-    if (key === 'version' && state.open) state.open.version = unquote(value ?? '')
+    if (!state.open || unquote(key, state.line) !== 'version') return
+    state.open.version = readVersion(state, unquote(value ?? '', state.line))
   },
 }
 
@@ -109,9 +144,10 @@ const ENTRY_BY_INDENT = {
  */
 function readImporters(lockText) {
   assertLockfileVersion(lockText)
-  const state = { importers: new Map(), importer: null, deps: null, section: null, open: null }
+  const state = { importers: new Map(), importer: null, deps: null, section: null, open: null, line: 0 }
   let inBlock = false
-  for (const line of lockText.split('\n')) {
+  for (const [index, line] of lockText.split('\n').entries()) {
+    state.line = index + 1
     if (/^\S/.test(line)) {
       if (inBlock) closeDependency(state)
       inBlock = line === 'importers:'

@@ -12,7 +12,7 @@
  * @internal
  */
 import type { Guardrail } from '../guardrails/index.js'
-import { GuardrailError, runInputGuards, runOutputGuards } from '../guardrails/index.js'
+import { GuardrailViolationError, runInputGuards, runOutputGuards } from '../guardrails/index.js'
 
 import type { SdkAgentHandle, SdkSendOptions, SdkTurnHandle } from './sdk-adapter.js'
 
@@ -100,11 +100,13 @@ function forwardedMembers(
  *
  * A turn that fails never ends its stream empty, which a reader of `stream()` alone would take for a
  * finished turn with no text (loop-code-review LCR0104). A run resolved with `status: 'error'`, and
- * a guard that refuses (`GuardrailError`), end it with the terminal message the SDK's own stream
- * emits for a failed run, `{ type: 'status', status: 'ERROR', message }`. Only `'error'` is mapped,
- * as in the SDK, whose stream ends a cancelled run with no status message. A guard's message names
- * the guard and its reason, which `wait()` already rejects with. Any other rejection is a fault,
- * not an outcome, so `stream()` rethrows it and `wait()` rejects with the same error.
+ * a guard that refuses (`GuardrailViolationError`), end it with the terminal message the SDK's own
+ * stream emits for a failed run, `{ type: 'status', status: 'ERROR', message }`. Only `'error'` is
+ * mapped, as in the SDK, whose stream ends a cancelled run with no status message. A guard's message
+ * names the guard and its reason, which `wait()` already rejects with. Any other rejection is a
+ * fault, not an outcome, so `stream()` rethrows it and `wait()` rejects with the same error. That
+ * includes a guard defect such as `MalformedGuardrailResultError` (a `redact` with no text): a guard
+ * written wrong is not a guard refusing (B-457).
  */
 function guardTurn(turn: SdkTurnHandle, guardrails: readonly Guardrail[]): SdkTurnHandle {
   let outcome: ReturnType<SdkTurnHandle['wait']> | undefined
@@ -123,7 +125,7 @@ function guardTurn(turn: SdkTurnHandle, guardrails: readonly Guardrail[]): SdkTu
       try {
         out = await guardedOutcome()
       } catch (err) {
-        if (!(err instanceof GuardrailError)) throw err
+        if (!(err instanceof GuardrailViolationError)) throw err
         yield errorStatus(err.message)
         return
       }
