@@ -66,10 +66,15 @@ jobs:
     uses: usetheokit/shared-workflows/.github/workflows/dep-check.yml@v1 # zizmor: ignore[unpinned-uses] first-party moving major, ADR-0021
     with:
       # On an ordinary push only the offline check runs, so the feedback stays about a
-      # minute. The three expensive ones turn on for the release pull request — the last
+      # minute. The install and strand legs turn on for the release pull request, the last
       # moment where "who does this strand" and "does the tarball actually install" can
       # still change a decision. `github.base_ref` is empty outside a pull request, so
       # these are false on push.
+      #
+      # The floor legs also run on pull requests into `develop`. Gated on `main` alone, a
+      # floor violation merged into `develop` and was caught only on the release pull
+      # request: `ToolContext` imported under `@theokit/sdk ^5.3.0` though only 5.8.0
+      # exports it (#977, PR #976). A floor break belongs to the pull request that adds it.
       run-install-check: ${{ github.base_ref == 'main' || inputs.full == true }}
-      run-floor-check: ${{ github.base_ref == 'main' || inputs.full == true }}
+      run-floor-check: ${{ github.base_ref == 'main' || github.base_ref == 'develop' || inputs.full == true }}
       run-impact-check: ${{ github.base_ref == 'main' || inputs.full == true }}
