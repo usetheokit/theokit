@@ -1,0 +1,6 @@
+{
+  "id": "t1-duration-parser",
+  "title": "duration-string parser from failing tests",
+  "prompt": "The tests in duration.test.mjs fail. Implement parseDuration in duration.mjs so that they pass. Do not edit the test file.",
+  "verify": ["node", "--test", "--test-reporter=tap", "duration.test.mjs"]
+}

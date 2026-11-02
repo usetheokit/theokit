@@ -10,6 +10,7 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import {
@@ -220,4 +221,20 @@ describe('parseTestCounts and computeVerdict', () => {
     expect(computeVerdict('solved', 'solved')).toBe('equal')
     expect(computeVerdict('failed', 'failed')).toBe('both_failed')
   })
+})
+
+describe('the versioned task set', () => {
+  it('every versioned task seed fails its verification before any agent runs', async () => {
+    const tasksDir = fileURLToPath(new URL('../docs/parity/tasks', import.meta.url))
+    const script = fileURLToPath(new URL('./side-by-side.mjs', import.meta.url))
+    const result = await spawnExec('node', [script, '--check-seeds', tasksDir], { cwd: root })
+    expect(result.stderr).toBe('')
+    expect(result.code).toBe(0)
+    const lines = result.stdout.trim().split('\n')
+    expect(lines).toHaveLength(6)
+    for (const line of lines)
+      expect(line).toMatch(
+        /^t\d-[a-z-]+ {2}[0-9a-f]{64} {2}seed fails as it must: \d+ pass, [1-9]\d* fail$/,
+      )
+  }, 60_000)
 })

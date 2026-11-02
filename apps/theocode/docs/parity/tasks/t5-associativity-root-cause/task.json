@@ -1,0 +1,6 @@
+{
+  "id": "t5-associativity-root-cause",
+  "title": "root-cause a wrong-associativity bug across 3 files",
+  "prompt": "The tests in total.test.mjs fail. Find the root cause and fix it. Do not edit the test file.",
+  "verify": ["node", "--test", "--test-reporter=tap", "total.test.mjs"]
+}

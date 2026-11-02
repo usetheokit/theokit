@@ -1,0 +1,6 @@
+{
+  "id": "t3-money-ledger",
+  "title": "4-requirement money-ledger spec, agent writes its own tests",
+  "prompt": "Implement the Ledger class described in SPEC.md in ledger.mjs, and write your own tests for it with node:test.",
+  "verify": ["node", "--test", "--test-reporter=tap", "ledger.verify.test.mjs"]
+}
