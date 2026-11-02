@@ -13,6 +13,19 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Signed triggers, a hook approval gate and `/goal` (B-397). `THEOCLAW_TRIGGERS` names triggers,
+  each with `THEOCLAW_TRIGGER_<NAME>_SECRET` (16 characters or more), `_REPLY_TO`
+  (`<platform>:<channel id>` on a configured platform) and optional `_INSTRUCTIONS`; a bad one
+  refuses the start, naming the variable. `POST /hooks/<name>`, signed like a GitHub webhook
+  (`x-hub-signature-256`), answers `202` and starts one run on a fresh tool-less agent whose answer
+  is sent once to the reply channel; a wrong or missing signature answers `401` with nothing run or
+  written, a repeated `x-theoclaw-delivery` id `200`, an id over 256 characters `400`, and a reply
+  platform not yet started `503`. Every agent now carries a hook approval gate on its local options:
+  a hook command runs only when its fingerprint is listed in `THEOCLAW_APPROVED_HOOKS`. `/goal <text>`
+  runs the chat agent's goal loop under `THEOCLAW_GOAL_TOKEN_BUDGET` tokens (default 20000) and
+  replies once with the final status and answer. Trigger secrets and approved fingerprints are
+  masked in the output. The parity ledger is unchanged: OC-17, OC-86 and OC-87 stay `open`.
+
 - Fetched content reaches the model as data, and no configured value is sent to a person or a
   client (B-398, OC-88 and OC-90). Every agent send passes the SDK's `toolResultGuard`, so a tool
   result is framed in `<untrusted-tool-output>`, and every system prompt opens with a notice that

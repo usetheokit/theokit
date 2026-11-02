@@ -197,6 +197,64 @@ must be that exact URL, because Twilio signs the URL it called.
 - Matrix and Mattermost can run locally in Docker (Synapse and the Mattermost preview image), so
   they need no external account.
 
+### Triggers
+
+A trigger lets another system start a run with a signed HTTP POST, the way a CI job or a monitor
+calls a webhook. `THEOCLAW_TRIGGERS` names the triggers, comma-separated; each name is a lower-case
+letter followed by up to 31 of `a-z`, `0-9` or `-`. Every trigger then has its own variables, with
+the name upper-cased and `-` written as `_`:
+
+| Variable | Meaning |
+|---|---|
+| `THEOCLAW_TRIGGER_<NAME>_SECRET` | The signing secret, at least 16 characters. |
+| `THEOCLAW_TRIGGER_<NAME>_REPLY_TO` | `<platform>:<channel id>`, for example `telegram:123456`; the platform must be configured. |
+| `THEOCLAW_TRIGGER_<NAME>_INSTRUCTIONS` | Optional text put before the delivered body. |
+
+A bad trigger refuses the start and names the variable, never its value. A trigger is called with
+`POST /hooks/<name>`, signed the way GitHub signs a webhook: an `x-hub-signature-256` header holding
+`sha256=` and the hex HMAC-SHA256 of the raw body, keyed by the secret. A GitHub webhook pointed at
+`https://<host>/hooks/<name>` with the same secret works as it is.
+
+| Answer | When |
+|---|---|
+| `202` | Accepted: one run starts on a fresh agent with no tool, and its answer is sent once to `REPLY_TO`. |
+| `401` | The signature is missing or wrong. Nothing runs and nothing about the body is written. |
+| `400` | `x-theoclaw-delivery` is longer than 256 characters. |
+| `200` | A delivery whose `x-theoclaw-delivery` id was already accepted: nothing runs again. |
+| `503` | The reply platform has not started yet. The id is not kept, so a retry runs. |
+| `404`, `405`, `413` | An unknown trigger name, a method other than POST, a body over 1 MiB. |
+
+Each trigger remembers its last 1000 delivery ids in memory, so a retry after a restart runs again,
+and a run in flight when the process stops sends no reply. A failed run writes
+`trigger <name>: run failed (<code>)`, and a reply the platform refused writes
+`trigger <name>: the reply was not delivered (<code>)`. Trigger secrets are hidden from the output.
+
+### Approved hooks
+
+Every TheoClaw agent refuses to spawn a hook command unless the owner approved it. The SDK reads
+hook commands from the working directory's `.theokit/hooks.json` and `.theokit/settings.json`, and
+TheoClaw's agents load no project setting today, so no project hook runs either way: the approval
+gate is there for the day a project source is turned on. `THEOCLAW_APPROVED_HOOKS` lists the
+approved commands by fingerprint, comma-separated: the hex sha256 of the hook's event as the file
+spells it, its command and its timeout in milliseconds (30000 unless the file sets `timeout`), one
+per line. For a `Stop` hook running `touch x`:
+
+```bash
+node -e "console.log(require('node:crypto').createHash('sha256').update(process.argv[1]).digest('hex'))" "$(printf 'Stop\ntouch x\n30000')"
+```
+
+An item that is not 64 hex characters refuses the start. Approved fingerprints are hidden from the
+output.
+
+### Goals
+
+Sending `/goal <what you want done>` runs the chat agent's goal loop: it works turn after turn until
+a judge on the chat's own model says the goal is done or blocked, or the turns spend
+`THEOCLAW_GOAL_TOKEN_BUDGET` tokens (a positive whole number, default 20000). TheoClaw answers once,
+with the final status (`completed`, `budget_limited`, `failed`, `paused` or `blocked`), a colon and
+the last answer. A bare `/goal` answers a usage line and runs nothing. In a broadcast group the goal
+runs in the sender's own session and its answer is not sent to the other members.
+
 ### LAN discovery
 
 A TheoClaw bound to a LAN address (`THEOCLAW_HOST` with `THEOCLAW_PUBLIC_BIND=yes`) announces itself
