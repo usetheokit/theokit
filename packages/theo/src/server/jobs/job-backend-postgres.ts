@@ -78,6 +78,18 @@ const DEFAULT_TABLE = 'theokit_jobs'
 const backendLogger = createLogger({ context: { component: 'theokit:jobs' } })
 const MAX_DEFAULT_RETRY_DELAY_SECONDS = 3600
 const MAX_ENQUEUE_ROUNDS = 3
+const MAX_MIGRATE_ATTEMPTS = 3
+/**
+ * SQLSTATEs a concurrent `CREATE ... IF NOT EXISTS` raises when another session created the same
+ * object first: unique_violation (on a catalog index such as `pg_type_typname_nsp_index`),
+ * duplicate_table and duplicate_object.
+ */
+const CONCURRENT_DDL_CODES = new Set(['23505', '42P07', '42710'])
+
+function isConcurrentDdlRace(err: unknown): boolean {
+  const code = (err as { code?: unknown } | null)?.code
+  return typeof code === 'string' && CONCURRENT_DDL_CODES.has(code)
+}
 
 const defaultRetryDelaySeconds = (attempts: number): number =>
   Math.min(2 ** attempts, MAX_DEFAULT_RETRY_DELAY_SECONDS)
@@ -142,10 +154,35 @@ export class PostgresJobBackend implements JobBackend {
   }
 
   /**
-   * Create or upgrade the schema. Idempotent (uses IF NOT EXISTS).
-   * Call once at process start; safe to re-run on every deploy.
+   * Round-trip `SELECT 1` on the pool; rejects when Postgres is unreachable. `GET /__theo/ready`
+   * calls it when this is the configured `jobs.backend` (usetheokit/theokit#1071).
+   */
+  async ping(): Promise<void> {
+    await this.#pool.query('SELECT 1')
+  }
+
+  /**
+   * Create or upgrade the schema. Idempotent (uses IF NOT EXISTS) and safe to re-run on every
+   * deploy. `theokit start` and `theokit dev` call it once at boot when this is the configured
+   * `jobs.backend` (usetheokit/theokit#1072), so an app does not have to.
+   *
+   * Replicas booting together run it concurrently, and Postgres does not make concurrent
+   * `CREATE ... IF NOT EXISTS` on one name safe: the losers fail with a unique violation on
+   * `pg_type` (36 of 80 calls, 8 at a time). A call that loses that race runs again, and the second
+   * run finds the objects the winner created.
    */
   async migrate(): Promise<void> {
+    for (let attempt = 1; ; attempt++) {
+      try {
+        await this.#migrateOnce()
+        return
+      } catch (err) {
+        if (attempt >= MAX_MIGRATE_ATTEMPTS || !isConcurrentDdlRace(err)) throw err
+      }
+    }
+  }
+
+  async #migrateOnce(): Promise<void> {
     const t = this.#table
     await this.#pool.query(`
       CREATE TABLE IF NOT EXISTS ${t} (
@@ -182,6 +219,39 @@ export class PostgresJobBackend implements JobBackend {
   }
 
   async enqueue(input: JobEnqueueInput): Promise<{ jobId: string }> {
+    return this.#insertJob(this.#pool, input)
+  }
+
+  /**
+   * Enqueue through `client`, a connection inside a transaction the caller opened, so the job
+   * commits or rolls back with the caller's own writes: the transactional outbox in its usual
+   * sense (usetheokit/theokit#1077). The job is invisible to workers until the commit, a rollback
+   * leaves no job, and an enqueue that fails aborts the transaction, so a committed row cannot be
+   * left without its job. The table has to live in the database `client` is connected to.
+   *
+   * ```ts
+   * const client = await pool.connect()
+   * try {
+   *   await client.query('BEGIN')
+   *   const task = await client.query('INSERT INTO task (title) VALUES ($1) RETURNING id', [title])
+   *   await backend.enqueueInTransaction(client, { name: 'process-task', input: { taskId: task.rows[0].id } })
+   *   await client.query('COMMIT')
+   * } catch (err) {
+   *   await client.query('ROLLBACK')
+   *   throw err
+   * } finally {
+   *   client.release()
+   * }
+   * ```
+   *
+   * `ctx.queue.enqueueInTransaction(client, name, input)` is the typed form for route handlers.
+   * Idempotency keys behave as in `enqueue`.
+   */
+  async enqueueInTransaction(client: PoolLike, input: JobEnqueueInput): Promise<{ jobId: string }> {
+    return this.#insertJob(client, input)
+  }
+
+  async #insertJob(db: PoolLike, input: JobEnqueueInput): Promise<{ jobId: string }> {
     const t = this.#table
     const values = [
       input.name,
@@ -203,7 +273,7 @@ export class PostgresJobBackend implements JobBackend {
     // frees the key; the loop then inserts again. Three rounds is far beyond what that window
     // allows, and running out is reported rather than returned as a fake id.
     for (let round = 0; round < MAX_ENQUEUE_ROUNDS; round++) {
-      const inserted = await this.#pool.query<{ id: string }>(
+      const inserted = await db.query<{ id: string }>(
         `INSERT INTO ${t} (id, name, input, max_attempts, available_at, traceparent, idempotency_key)
          VALUES ($1, $2, $3::jsonb, $4, NOW() + ($5 || ' seconds')::interval, $6, $7)
          ON CONFLICT DO NOTHING
@@ -211,7 +281,7 @@ export class PostgresJobBackend implements JobBackend {
         [randomId(), ...values],
       )
       if (inserted.rows.length > 0) return { jobId: inserted.rows[0].id }
-      const existing = await this.#pool.query<{ id: string }>(
+      const existing = await db.query<{ id: string }>(
         `SELECT id FROM ${t} WHERE name = $1 AND idempotency_key = $2 LIMIT 1`,
         [input.name, input.idempotencyKey],
       )

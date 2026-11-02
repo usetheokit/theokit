@@ -127,6 +127,54 @@ export default config()
 (a 4xx, a 5xx or an aborted request discards it). A job is a file under `<serverDir>/jobs/`
 exporting `defineJob(name, { handler })`.
 
+A route handler's `ctx` is a `RouteContext` (from `theokit/server/define`), whose keys are
+`unknown` until the app declares them. `ctx.queue` is there only when `jobs.backend` is set, so
+declare it yourself in a `.d.ts` file, together with the job names in `JobRegistry` (the scaffold's
+`types/jobs.d.ts` has both blocks):
+
+```typescript
+declare module 'theokit/server/jobs' {
+  interface JobRegistry {
+    'send-email': { to: string; subject: string }
+  }
+}
+declare module 'theokit/server/define' {
+  interface RouteContext {
+    queue: import('theokit/server/jobs').QueueClient
+  }
+}
+export {}
+```
+
+`theokit start` and `theokit dev` call the backend's `migrate()` once at boot, so the
+`theokit_jobs` table is created (or upgraded) before the first request. If that fails, for example
+because the database is unreachable, the boot fails rather than serving routes whose jobs would be
+lost. Do not call `migrate()` from `theo.config.ts`: `theokit build` loads that file too, and the
+build would then need a database.
+
+The outbox hands jobs over after the response, on a different connection from the one your route
+wrote with, so a route can commit a row and then lose its job to a failure in between. When the job
+table lives in your own database, write the job inside your transaction instead:
+
+```typescript
+const client = await pool.connect()
+try {
+  await client.query('BEGIN')
+  const task = await client.query('INSERT INTO task (title) VALUES ($1) RETURNING id', [title])
+  await ctx.queue.enqueueInTransaction(client, 'process-task', { taskId: task.rows[0].id })
+  await client.query('COMMIT')
+} catch (err) {
+  await client.query('ROLLBACK')
+  throw err
+} finally {
+  client.release()
+}
+```
+
+The job commits or rolls back with the row, and workers cannot see it before the commit. It needs a
+backend with `enqueueInTransaction` (`PostgresJobBackend` has it); any other backend rejects with
+`TransactionalEnqueueUnsupportedError` instead of enqueueing outside the transaction.
+
 `theokit start` and `theokit dev` run a job worker in the same process whenever jobs are declared
 and a backend is set: it polls the backend, runs each job and backs off while the backend is
 unreachable. On `SIGTERM`, `start` stops polling and waits up to 20 seconds for the job in progress
@@ -189,6 +237,17 @@ theokit mcp <agent>                  # serve an agent as an MCP server over stdi
 
 `theokit build --target <name>`: `node` (default), `theo-cloud`, `vercel`, `netlify`,
 `cloudflare`, `bun`, `deno-deploy`, `aws-lambda`, `static`.
+
+`theokit start` and `theokit dev` answer two reserved routes ahead of your own:
+`GET /__theo/health` is always 200 while the process is up, and `GET /__theo/ready` is 200 only
+when the app's dependencies answer, 503 otherwise. Readiness pings a `jobs.backend` that supports
+it (`PostgresJobBackend` runs `SELECT 1`) and calls the `ready` probe you declare:
+
+```typescript
+export default config()
+  .set({ ready: async () => (await pool.query('SELECT 1')).rowCount === 1 })
+  .build()
+```
 
 Cloudflare Workers, step by step: [`docs/wiki/sops/cloudflare-deploy.md`](https://github.com/usetheokit/theokit/blob/main/docs/wiki/sops/cloudflare-deploy.md).
 

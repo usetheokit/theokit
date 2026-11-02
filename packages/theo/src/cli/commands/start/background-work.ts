@@ -5,7 +5,7 @@ import { cronLockFromConfig } from '../../../server/cron/cron-lock-from-config.j
 import { createCronScheduler } from '../../../server/cron/cron-runtime-node.js'
 
 import { loadCronDefinitions } from './cron-bootstrap.js'
-import { loadJobDefinitions, startJobWorker } from './job-bootstrap.js'
+import { loadJobDefinitions, prepareJobBackend, startJobWorker } from './job-bootstrap.js'
 
 /** What `theokit start` runs beside the HTTP server: the cron scheduler and the job worker. */
 export interface BackgroundWork {
@@ -27,6 +27,9 @@ export async function startBackgroundWork(
   projectRoot: string,
   loadModule: (filePath: string) => unknown,
 ): Promise<BackgroundWork> {
+  // #1072 — the job table exists before a cron, a route or the worker can touch it, and a boot that
+  // cannot create it rejects here, before `start` listens.
+  await prepareJobBackend(config)
   const summaries: string[] = []
   const cronDefinitions = await loadCronDefinitions(
     resolve(distDir, 'crons.json'),

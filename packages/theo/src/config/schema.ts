@@ -416,6 +416,18 @@ export const theoConfigSchema = z
         message: 'formatError must be a function',
       })
       .optional(),
+    /**
+     * Readiness probe for `GET /__theo/ready` under `theokit start` and `theokit dev`. Resolve
+     * `true` when the app's dependencies are up; `false`, a throw or a rejection answers 503. A
+     * configured `jobs.backend` that can be pinged (`PostgresJobBackend`) is probed as well, so its
+     * database being down answers 503 without this key. Before usetheokit/theokit#1071 nothing
+     * could register a probe and the route always answered 200.
+     */
+    ready: z
+      .custom<() => boolean | Promise<boolean>>((val) => typeof val === 'function', {
+        message: 'ready must be a function returning a boolean or a Promise of one',
+      })
+      .optional(),
   })
   // EC-2 fix: cross-config refine — no service may share TheoKit's web port.
   .refine((cfg) => !Object.values(cfg.services).some((s) => s.port === cfg.port), {

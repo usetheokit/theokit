@@ -1,4 +1,5 @@
 import { describe, it, expectTypeOf } from 'vitest'
+import type { RouteContext } from '../../packages/theo/src/core/contracts/route-context.js'
 import { z } from 'zod'
 import { defineRoute } from '../../packages/theo/src/server/define/define-route.js'
 
@@ -48,10 +49,11 @@ describe('defineRoute type inference', () => {
     })
   })
 
-  it('should default ctx to unknown when TCtx omitted', () => {
+  // usetheokit/theokit#1073 — the default is the augmentable RouteContext, no longer `unknown`.
+  it('should default ctx to RouteContext when TCtx omitted', () => {
     defineRoute({
       handler: ({ ctx }) => {
-        expectTypeOf(ctx).toBeUnknown()
+        expectTypeOf(ctx).toEqualTypeOf<RouteContext>()
         return { ok: true }
       },
     })

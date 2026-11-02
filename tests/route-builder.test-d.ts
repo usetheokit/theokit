@@ -6,6 +6,7 @@ import { z } from 'zod'
 
 import { route } from '../packages/theo/src/server/define/route-builder.js'
 import type { RouteConfig } from '../packages/theo/src/core/contracts/route-config.js'
+import type { RouteContext } from '../packages/theo/src/core/contracts/route-context.js'
 
 test('a complete chain resolves to RouteConfig', () => {
   const r = route()
@@ -23,4 +24,18 @@ test('build() before handler() is a compile error', () => {
       .build()
   }
   expectTypeOf(assertGuard).toBeFunction()
+})
+
+// usetheokit/theokit#1073 — the handler's ctx was `unknown`, so `ctx.queue` was TS18046 in every
+// route. It is the augmentable RouteContext: undeclared keys read as `unknown`, and a key an app
+// declares on RouteContext (the scaffold's `types/jobs.d.ts` declares `queue`) is typed.
+test('the handler ctx is RouteContext, whose undeclared keys are unknown', () => {
+  route()
+    .policy('public')
+    .handler(({ ctx }) => {
+      expectTypeOf(ctx).toEqualTypeOf<RouteContext>()
+      expectTypeOf(ctx.anyKeyNobodyDeclared).toBeUnknown()
+      return null
+    })
+    .build()
 })

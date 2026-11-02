@@ -5,6 +5,7 @@ import type { ViteDevServer } from 'vite'
 import { broadcastRouteManifest } from '../devtools/server-side/route-manifest.js'
 import { scanRoutes } from '../router/scan.js'
 import { isRouteFile } from '../router/types.js'
+import type { ReservedRoutes } from '../server/define/health-route.js'
 import {
   CsrfReadinessStore,
   type AuditLogger,
@@ -22,6 +23,7 @@ import { createActionMiddleware } from './action-middleware.js'
 import { createAgentMiddleware } from './agent-middleware.js'
 import { createApiMiddleware } from './api-middleware.js'
 import type { ResolvedOpenApi } from './config-resolve.js'
+import { createReservedRouteMiddleware } from './reserved-route-middleware.js'
 import { setupSsrDevMiddleware } from './ssr-dev-middleware.js'
 import { setupWsUpgrade } from './ws-upgrade.js'
 
@@ -52,6 +54,8 @@ interface ConfigureServerCtx {
   services: ServicesConfig | undefined
   rateLimit: RateLimitConfig | undefined
   jobBackend: JobBackend | undefined
+  /** `/__theo/health` and `/__theo/ready`, served before every other middleware (#1071). */
+  reservedRoutes: ReservedRoutes
   csrfReadinessStoreOverride: CsrfReadinessStore | undefined
   virtualEntryServerId: string
   resolvedManifestId: string
@@ -92,6 +96,10 @@ export async function runConfigureServer(
       /* fail silently — dev-only convenience */
     }
   })
+
+  // #1071 — the reserved routes `theokit start` serves, ahead of every other middleware as there, so
+  // a probe written against dev gets the same answer. They used to fall through to the SPA's HTML.
+  server.middlewares.use(createReservedRouteMiddleware(ctx.reservedRoutes))
 
   // Server middleware (action before API — more specific prefix first). `serverDir` honors the
   // config `serverDir` (default `<projectRoot>/server`) — no longer hardcoded (#95).

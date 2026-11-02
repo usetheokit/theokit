@@ -43,6 +43,11 @@ interface PgPoolLike {
   // misclassifies because the return type goes through PgQueryResult<R>.
   query<R>(sql: string, params?: unknown[]): Promise<PgQueryResult<R>>
   end: () => Promise<void>
+  connect: () => Promise<PgClientLike>
+}
+interface PgClientLike {
+  query<R>(sql: string, params?: unknown[]): Promise<PgQueryResult<R>>
+  release: () => void
 }
 
 describe.skipIf(!POSTGRES_URL)('PostgresJobBackend — real Postgres CI (T3.1)', () => {
@@ -338,6 +343,108 @@ describe.skipIf(!POSTGRES_URL || !pgAvailable)(
         idx.rows.map((r) => r.indexname).sort((a, b) => a.localeCompare(b)),
         'both theokit_jobs_ci indexes still exist in pg_indexes after the re-runs',
       ).toEqual(names)
+    })
+
+    // usetheokit/theokit#1077 — a job enqueued through the caller's transaction commits and rolls
+    // back with the row it is about, so a route cannot commit a task and lose the job processing it.
+    describe('enqueueInTransaction', () => {
+      const TASKS = 'theokit_jobs_ci_tasks'
+
+      beforeAll(async () => {
+        await pool.query(`CREATE TABLE IF NOT EXISTS ${TASKS} (id SERIAL PRIMARY KEY, title TEXT)`)
+      })
+      afterAll(async () => {
+        await pool.query(`DROP TABLE IF EXISTS ${TASKS}`)
+      })
+      beforeEach(async () => {
+        await pool.query(`DELETE FROM ${TASKS}`)
+      })
+
+      async function inTransaction(
+        work: (client: PgClientLike) => Promise<void>,
+        outcome: 'COMMIT' | 'ROLLBACK',
+      ): Promise<void> {
+        const client = await pool.connect()
+        try {
+          await client.query('BEGIN')
+          await work(client)
+          await client.query(outcome)
+        } catch (err) {
+          await client.query('ROLLBACK')
+          throw err
+        } finally {
+          client.release()
+        }
+      }
+
+      it('test_a_job_enqueued_in_a_committed_transaction_is_leased_with_its_row_committed', async () => {
+        let jobId = ''
+        await inTransaction(async (client) => {
+          const task = await client.query<{ id: number }>(
+            `INSERT INTO ${TASKS} (title) VALUES ('t') RETURNING id`,
+          )
+          const enqueued = await backend.enqueueInTransaction(client, {
+            name: 'process-task',
+            input: { taskId: task.rows[0].id },
+          })
+          jobId = enqueued.jobId
+          const outside = await pool.query(`SELECT id FROM theokit_jobs_ci WHERE id = $1`, [jobId])
+          expect(outside.rows, 'the job is invisible to workers before the commit').toHaveLength(0)
+        }, 'COMMIT')
+
+        const tasks = await pool.query<{ id: number }>(`SELECT id FROM ${TASKS}`)
+        const leases = await backend.dequeue({ batchSize: 1, lockSeconds: 30 })
+        expect(leases.map((l) => l.jobId)).toEqual([jobId])
+        expect(leases[0].input).toEqual({ taskId: tasks.rows[0].id })
+      })
+
+      it('test_a_job_enqueued_in_a_rolled_back_transaction_never_exists', async () => {
+        await inTransaction(async (client) => {
+          await client.query(`INSERT INTO ${TASKS} (title) VALUES ('t')`)
+          await backend.enqueueInTransaction(client, { name: 'process-task', input: {} })
+        }, 'ROLLBACK')
+
+        expect((await pool.query(`SELECT id FROM ${TASKS}`)).rows).toHaveLength(0)
+        expect((await pool.query(`SELECT id FROM theokit_jobs_ci`)).rows).toHaveLength(0)
+      })
+
+      it('test_a_failed_enqueue_aborts_the_row_it_was_written_with', async () => {
+        const broken = new PostgresJobBackend({ pool, tableName: 'theokit_jobs_ci_missing' })
+        await expect(
+          inTransaction(async (client) => {
+            await client.query(`INSERT INTO ${TASKS} (title) VALUES ('t')`)
+            await broken.enqueueInTransaction(client, { name: 'process-task', input: {} })
+          }, 'COMMIT'),
+        ).rejects.toThrow(/theokit_jobs_ci_missing/)
+
+        expect((await pool.query(`SELECT id FROM ${TASKS}`)).rows).toHaveLength(0)
+      })
+    })
+
+    // usetheokit/theokit#1072 — `theokit start` now runs migrate() at boot, so every replica runs it
+    // at the same moment. Concurrent `CREATE TABLE IF NOT EXISTS` on a fresh table fails in Postgres
+    // with a unique violation on pg_type: 36 of 80 calls (8 at a time, 10 fresh tables) failed
+    // before migrate() retried the race.
+    it('test_replicas_migrating_a_fresh_table_at_the_same_time_all_succeed', async () => {
+      const PoolCtor = ((await pgModulePromise)!.Pool ??
+        (await pgModulePromise)!.default?.Pool) as new (config: unknown) => PgPoolLike
+      const REPLICAS = 8
+      const wide = new PoolCtor({ connectionString: POSTGRES_URL, max: REPLICAS })
+      const table = `theokit_jobs_race_${String(Date.now())}`
+      try {
+        const outcomes = await Promise.allSettled(
+          Array.from({ length: REPLICAS }, () =>
+            new PostgresJobBackend({ pool: wide, tableName: table }).migrate(),
+          ),
+        )
+        const failures = outcomes.flatMap((o) =>
+          o.status === 'rejected' ? [(o.reason as Error).message] : [],
+        )
+        expect(failures).toEqual([])
+      } finally {
+        await wide.query(`DROP TABLE IF EXISTS ${table}`)
+        await wide.end()
+      }
     })
   },
 )

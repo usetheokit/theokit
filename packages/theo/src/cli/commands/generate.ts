@@ -5,11 +5,13 @@ import { loadConfig } from '../../config/load-config.js'
 
 import { detectProjectPackageManager, type PackageManager } from './add.js'
 import { pathTraversalRefusal } from './generate-containment.js'
+import { toCamelCase, toPascalCase } from './generate-names.js'
 import {
   UNDECIDED_POLICY_IDENT,
   undecidedPolicyDeclaration,
 } from './generate-policy-placeholder.js'
 import { generateResource } from './generate-resource.js'
+import { generateSandboxTemplate } from './generate-sandbox.js'
 import { resolveScheduleTarget } from './generate-schedule.js'
 import {
   VALID_TYPES,
@@ -46,18 +48,6 @@ const RESERVED_BASENAMES = new Set([
 function hasReservedSegment(name: string): boolean {
   const basename = name.includes('/') ? (name.split('/').pop() ?? name) : name
   return RESERVED_BASENAMES.has(basename)
-}
-
-function toPascalCase(name: string): string {
-  return name
-    .split(/[-/]/)
-    .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
-    .join('')
-}
-
-function toCamelCase(name: string): string {
-  const pascal = toPascalCase(name)
-  return pascal.charAt(0).toLowerCase() + pascal.slice(1)
 }
 
 function generateRouteTemplate(name: string, displayPath: string): string {
@@ -205,37 +195,6 @@ function generateEvalTemplate(name: string): string {
     `  // Mirror your agent: same model (+ systemPrompt) so this evaluates the agent your users talk to.`,
     `  agent: { apiKey: process.env.OPENROUTER_API_KEY ?? '', model: { id: 'openai/gpt-4o-mini' } },`,
     `})`,
-    ``,
-  ].join('\n')
-}
-
-function generateSandboxTemplate(name: string): string {
-  const camel = toCamelCase(name)
-  const base = name.split('/').pop() ?? name
-  const snake = base.replace(/-/g, '_')
-  return [
-    `import { tool } from 'theokit/server/define'`,
-    `import { LocalSandbox } from '@theokit/sdk/sandbox'`,
-    `import { z } from 'zod'`,
-    ``,
-    `/**`,
-    ` * A sandbox-backed agent tool. \`LocalSandbox\` (@theokit/sdk) runs a shell command with a timeout +`,
-    ` * output cap, isolated from your app process — so the agent can run commands SAFELY. This IS an agent`,
-    ` * capability: connect it to your agent with \`.tool(...)\`:`,
-    ` *`,
-    ` *   // agents/chat.ts`,
-    ` *   import { ${camel}Tool } from './sandbox/${base}.js'`,
-    ` *   AgentBuilder.create().model(...).tool(${camel}Tool).build()`,
-    ` */`,
-    `export const ${camel}Tool = tool('${snake}')`,
-    `  .describe('Run a shell command in an isolated sandbox and return its output.')`,
-    `  .input(z.object({ command: z.string().describe('The shell command to run, e.g. "ls -la"') }))`,
-    `  .execute(async ({ command }) => {`,
-    `    const sandbox = new LocalSandbox({ timeoutMs: 5_000 })`,
-    `    const { stdout, stderr, exitCode } = await sandbox.execute(command)`,
-    `    return exitCode === 0 ? stdout : \`exit \${exitCode}: \${stderr}\``,
-    `  })`,
-    `  .build()`,
     ``,
   ].join('\n')
 }
