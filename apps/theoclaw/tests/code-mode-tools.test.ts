@@ -331,6 +331,86 @@ describe('run_code and delegate_all on a /control agent', () => {
     expect(answer.results.map((entry) => entry.error)).toEqual(['delegation_failed', 'delegation_failed'])
   })
 
+  it('reports an aborted worker whose cancel and stream both reject, and leaves no rejection unhandled', async () => {
+    const { settings } = readOnlyWorkspace()
+    const controller = new AbortController()
+    const unhandled: unknown[] = []
+    const record = (reason: unknown): void => void unhandled.push(reason)
+    process.on('unhandledRejection', record)
+    cleanups.push(() => process.off('unhandledRejection', record))
+    const tool = controlTool(settings, 'delegate_all', async () => {
+      let cancelled = (): void => undefined
+      const cancelCalled = new Promise<void>((resolve) => {
+        cancelled = resolve
+      })
+      const run = {
+        // The stream fails only once the abort has called cancel(), which rejects first (LCR #76).
+        stream: async function* () {
+          controller.abort()
+          await cancelCalled
+          yield* []
+          throw new Error('stream broke')
+        },
+        wait: async () => ({ status: 'cancelled' }),
+        cancel: () => {
+          cancelled()
+          return Promise.reject(new Error('cancel refused'))
+        },
+      }
+      return { send: async () => run, [Symbol.asyncDispose]: async () => undefined }
+    })
+
+    const answer = JSON.parse(
+      String(await tool.handler({ tasks: [{ agent: 'worker', task: 'one' }] }, { signal: controller.signal })),
+    ) as { results: { ok: boolean; error?: string; message?: string }[] }
+    // Node reports an unhandled rejection after the microtasks of the tick that left it unhandled;
+    // one macrotask later every such report of this run has been made.
+    await new Promise((resolve) => setImmediate(resolve))
+
+    expect(unhandled).toEqual([])
+    expect(answer.results[0]).toMatchObject({ agent: 'worker', ok: false, error: 'delegation_failed' })
+    expect(answer.results[0]?.message).toContain('stream broke')
+    expect(answer.results[0]?.message).toContain('cancel refused')
+  })
+
+  it('reports a worker whose run ends with a status other than finished as delegation_failed', async () => {
+    const { settings } = readOnlyWorkspace()
+    const tool = controlTool(settings, 'delegate_all', async () => ({
+      send: async () => ({
+        stream: async function* () {
+          yield { type: 'assistant' }
+        },
+        wait: async () => ({ status: 'cancelled' }),
+        cancel: async () => undefined,
+      }),
+      [Symbol.asyncDispose]: async () => undefined,
+    }))
+
+    const answer = JSON.parse(String(await tool.handler({ tasks: [{ agent: 'worker', task: 'one' }] }))) as {
+      results: { ok: boolean; error?: string; message?: string }[]
+    }
+
+    expect(answer.results[0]).toMatchObject({ agent: 'worker', ok: false, error: 'delegation_failed' })
+    expect(answer.results[0]?.message).toContain('ended with status cancelled')
+  })
+
+  it('reports a worker whose run and disposal both fail with both failures, the run first', async () => {
+    const { settings } = readOnlyWorkspace()
+    const tool = controlTool(settings, 'delegate_all', async () => ({
+      ...fakeWorker('fail').agent,
+      [Symbol.asyncDispose]: async () => {
+        throw new Error('dispose failed')
+      },
+    }))
+
+    const answer = JSON.parse(String(await tool.handler({ tasks: [{ agent: 'worker', task: 'one' }] }))) as {
+      results: { ok: boolean; error?: string; message?: string }[]
+    }
+
+    expect(answer.results[0]).toMatchObject({ agent: 'worker', ok: false, error: 'delegation_failed' })
+    expect(answer.results[0]?.message).toMatch(/ended with status error.*disposing the worker then failed: .*dispose failed/)
+  })
+
   it('builds no worker for a task whose turn already aborted', async () => {
     const { settings } = readOnlyWorkspace()
     let built = 0

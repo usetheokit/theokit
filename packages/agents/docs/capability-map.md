@@ -10,7 +10,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1122 export(s) across 25 entry point(s).
+1138 export(s) across 25 entry point(s).
 
 Measured against `@theokit/sdk@5.11.0`.
 
@@ -890,11 +890,14 @@ Measured against `@theokit/sdk@5.11.0`.
 | `createGitStatusTool` | value |
 | `createGlobTool` | value |
 | `createInteractiveShellTool` | value |
+| `createJobStore` | value |
 | `createListDirTool` | value |
 | `createPlanModeTool` | value |
 | `createQuestionTool` | value |
 | `createReadFileTool` | value |
 | `createRunVitestTool` | value |
+| `createScheduler` | value |
+| `createScheduleTools` | value |
 | `createSearchTextTool` | value |
 | `createSessionArtifactStore` | value |
 | `createShellTool` | value |
@@ -924,6 +927,7 @@ Measured against `@theokit/sdk@5.11.0`.
 | `renderToolList` | value |
 | `replaceUnique` | value |
 | `resolveAndScreen` | value |
+| `ScheduleStoreError` | value |
 | `screenedFetch` | value |
 | `SsrfBlockedError` | value |
 | `todoItemsToPlanNodes` | value |
@@ -949,6 +953,8 @@ Measured against `@theokit/sdk@5.11.0`.
 | `CreateListDirToolOptions` | type |
 | `CreateReadFileToolOptions` | type |
 | `CreateRunVitestToolOptions` | type |
+| `CreateSchedulerOptions` | type |
+| `CreateScheduleToolsOptions` | type |
 | `CreateSearchTextToolOptions` | type |
 | `CreateShellToolOptions` | type |
 | `CreateViewImageToolOptions` | type |
@@ -956,7 +962,11 @@ Measured against `@theokit/sdk@5.11.0`.
 | `CreateWebSearchToolOptions` | type |
 | `CreateWriteFileToolOptions` | type |
 | `DelegateRosterEntry` | type |
+| `DeliverPort` | type |
+| `DeliveryResult` | type |
 | `EnvContextOptions` | type |
+| `FireOutcome` | type |
+| `JobStore` | type |
 | `PlanModeTool` | type |
 | `PlanModeToolOptions` | type |
 | `PlanModeToolWithStore` | type |
@@ -965,6 +975,11 @@ Measured against `@theokit/sdk@5.11.0`.
 | `QuestionToolOptions` | type |
 | `RepoMapOptions` | type |
 | `ResolveAndScreenOptions` | type |
+| `RunPort` | type |
+| `RunResult` | type |
+| `ScheduledJob` | type |
+| `Scheduler` | type |
+| `ScheduleTarget` | type |
 | `ScreenedFetchOptions` | type |
 | `SessionArtifactStore` | type |
 | `SessionArtifactStoreOptions` | type |
@@ -973,6 +988,7 @@ Measured against `@theokit/sdk@5.11.0`.
 | `TodoItem` | type |
 | `TodolistTool` | type |
 | `ToolGuidanceMap` | type |
+| `TransientJobOptions` | type |
 | `TruncationMode` | type |
 | `TruncationOptions` | type |
 | `TruncationResult` | type |

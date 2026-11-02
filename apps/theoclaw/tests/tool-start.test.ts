@@ -171,12 +171,15 @@ describe('the tool options each agent receives', () => {
     const result = await start({}, tempCwd(cleanups), { detect: notEnforced })
     const options = await runControlTurn(result)
     expect(effectiveToolNames(theoClawAgentOptions({ model: 'm', apiKey: 'k', toolOptions: options })).names).not.toContain('shell')
-    // B-386: a `/control` agent also holds `run_code` and `delegate_all`.
+    // B-386: a `/control` agent also holds `run_code` and `delegate_all`; B-396: and the three schedule tools.
     expect(options.tools.map((tool) => tool.name).sort()).toEqual([
+      'cancel_scheduled_job',
       'delegate_all',
       'list_dir',
+      'list_scheduled_jobs',
       'read_file',
       'run_code',
+      'schedule_job',
       'todolist',
       'view_image',
       'web_fetch',

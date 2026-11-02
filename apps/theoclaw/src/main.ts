@@ -53,7 +53,7 @@ process.title = instance.label
 
 const workspace = instance.workspace
 const createSdkAgent = (options: TheoClawAgentOptions): Promise<SDKAgent> =>
-  Agent.create({ ...options, ...(workspace === undefined ? {} : { local: { cwd: workspace } }) })
+  Agent.create({ ...options, local: { ...options.local, ...(workspace === undefined ? {} : { cwd: workspace }) } })
 const create: CreateAgent = createSdkAgent
 
 startTheoClaw({
@@ -67,6 +67,8 @@ startTheoClaw({
   ...(imported === undefined ? {} : { importedLine: importedSetupLine(imported.setup, imported.mcp) }),
   // The `digest` tool's draft agents (B-387): the chat path's factory, so no tool, no shell, memory off.
   draftAgentFactory: createChannelAgentFactory(process.env, createSdkAgent),
+  // A trigger run's agent (B-397): the chat path's factory too, a fresh one per run, in the workspace.
+  triggerAgentFactory: createChannelAgentFactory(process.env, createSdkAgent),
   signals: process,
   exit: (code) => process.exit(code),
 }).catch(fail)

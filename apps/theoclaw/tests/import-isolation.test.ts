@@ -5,6 +5,7 @@ import WebSocket from 'ws'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import type { AgentImport, TheoClawAgentOptions } from '../src/agent/create-agent.js'
+import { UNTRUSTED_CONTENT_NOTICE } from '../src/agent/untrusted-content.js'
 import { createAgentFactory } from '../src/control-plane/agent-factory.js'
 import { TheoClawConfigError } from '../src/control-plane/errors.js'
 import { importedMcpPaths, importedMcpSecrets } from '../src/migration/import-start.js'
@@ -184,7 +185,7 @@ describe('the workers of a /control agent that carries an import', () => {
 
     expect(built).toHaveLength(2)
     const worker = built[1]!
-    expect(worker).not.toHaveProperty('systemPrompt')
+    expect(worker.systemPrompt).toBe(UNTRUSTED_CONTENT_NOTICE)
     expect(worker).not.toHaveProperty('skills')
     expect(worker).not.toHaveProperty('mcpServers')
     expect(worker.tools?.map((tool) => tool.name)).not.toContain('delegate_all')

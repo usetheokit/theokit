@@ -18,11 +18,18 @@ export const BUILT_TOOL_NAMES: readonly string[] = [
 
 /**
  * The tools a `/control` agent holds beyond `buildTools`: `run_code` and `delegate_all` (B-386) and
- * the `digest` workflow (B-387). An ACP agent under one of them would fail `Agent.create` on every
+ * the `digest` workflow (B-387), and the three schedule tools (B-396). An ACP agent under one of them would fail `Agent.create` on every
  * `/control` turn instead of at start. `tests/tool-registry.test.ts` checks it against what
  * `controlAgentToolOptions` adds.
  */
-export const CONTROL_TOOL_NAMES: readonly string[] = ['run_code', 'delegate_all', 'digest']
+export const CONTROL_TOOL_NAMES: readonly string[] = [
+  'run_code',
+  'delegate_all',
+  'digest',
+  'schedule_job',
+  'list_scheduled_jobs',
+  'cancel_scheduled_job',
+]
 
 /**
  * The MCP server names TheoClaw gives its own servers: `browser` with `THEOCLAW_BROWSER=on` (B-383).

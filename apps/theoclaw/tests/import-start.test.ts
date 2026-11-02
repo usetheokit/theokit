@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createTheoClawAgent, theoClawAgentOptions } from '../src/agent/create-agent.js'
 import type { TheoClawAgentOptions } from '../src/agent/create-agent.js'
+import { UNTRUSTED_CONTENT_NOTICE } from '../src/agent/untrusted-content.js'
 import { createAgentFactory, createChannelAgentFactory } from '../src/control-plane/agent-factory.js'
 import type { TurnAgent } from '../src/control-plane/turn.js'
 import { readClaudeCodeSetup } from '../src/migration/claude-code-source.js'
@@ -127,7 +128,7 @@ describe('an import reaching the agents', () => {
 
     expect(withImport.options[0]).toEqual(without.options[0])
     expect(withImport.options[0]).toEqual(theoClawAgentOptions({ model: 'openrouter/m', apiKey: 'router-key' }))
-    expect(withImport.options[0]).not.toHaveProperty('systemPrompt')
+    expect(withImport.options[0]?.systemPrompt).toBe(UNTRUSTED_CONTENT_NOTICE)
     expect(withImport.options[0]).not.toHaveProperty('skills')
     expect(withImport.options[0]).not.toHaveProperty('mcpServers')
   })

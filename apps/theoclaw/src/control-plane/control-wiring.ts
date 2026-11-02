@@ -14,6 +14,7 @@ export function controlOptions(
   withAgent: WithAgent,
   build: () => Promise<TurnAgent>,
   report: (line: string) => void,
+  secrets: readonly string[] = [],
 ): ControlSocketOptions {
-  return { token, runTurn: createTurnRunner(withAgent), sessions: createControlSessions({ build, report }) }
+  return { token, runTurn: createTurnRunner(withAgent, secrets), sessions: createControlSessions({ build, report, secrets }) }
 }

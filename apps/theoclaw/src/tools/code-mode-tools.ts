@@ -6,6 +6,7 @@ import { createDelegateAllTool } from '@theokit/agents/tools'
 import type { CustomTool } from '@theokit/sdk'
 
 import type { TurnAgent, TurnRun } from '../agent-port.js'
+import { untrustedContentSendOptions } from '../agent/untrusted-content.js'
 import { describeError } from '../control-plane/errors.js'
 import { vetoToolCall } from './path-veto.js'
 import type { ToolSettings } from './tool-settings.js'
@@ -82,26 +83,40 @@ async function streamedErrorOf(run: TurnRun): Promise<string | undefined> {
 
 /**
  * The run's outcome, its stream drained first. While it runs, an abort of `signal` cancels it; the
- * cancellation's own failure, if any, rejects here rather than being lost.
+ * cancellation's own failure, if any, rejects here rather than being lost. Its handler is attached
+ * when the cancellation starts, so a run that fails while the cancellation is still rejecting
+ * reports both instead of leaving one unhandled, which would end the process (LCR #76).
  */
 async function untilSettled(
   run: TurnRun,
   signal: AbortSignal | undefined,
 ): Promise<Awaited<ReturnType<TurnRun['wait']>> & { readonly streamed: string | undefined }> {
-  let cancelling: Promise<void> | undefined
+  let cancelling: Promise<{ readonly failure: unknown } | undefined> | undefined
   const cancel = (): void => {
-    cancelling ??= run.cancel()
+    cancelling ??= run.cancel().then(
+      () => undefined,
+      (failure: unknown) => ({ failure }),
+    )
   }
   if (signal?.aborted === true) cancel()
   else signal?.addEventListener('abort', cancel, { once: true })
+  let result: Awaited<ReturnType<TurnRun['wait']>> & { readonly streamed: string | undefined }
   try {
     const streamed = await streamedErrorOf(run)
-    const result = await run.wait()
-    await cancelling
-    return { ...result, streamed }
+    result = { ...(await run.wait()), streamed }
+  } catch (error) {
+    const cancelled = await cancelling
+    if (cancelled === undefined) throw error
+    throw new AggregateError(
+      [error, cancelled.failure],
+      `${describeError(error)}; cancelling the worker's run then failed: ${describeError(cancelled.failure)}`,
+    )
   } finally {
     signal?.removeEventListener('abort', cancel)
   }
+  const cancelled = await cancelling
+  if (cancelled !== undefined) throw cancelled.failure
+  return result
 }
 
 async function disposeWorker(agent: TurnAgent): Promise<void> {
@@ -137,7 +152,7 @@ async function runWorker(createWorker: CreateWorker, task: string, signal: Abort
   const agent = await createWorker()
   let outcome: DelegationResult
   try {
-    const run = await agent.send(task)
+    const run = await agent.send(task, untrustedContentSendOptions())
     const { streamed, ...result } = await untilSettled(run, signal)
     if (streamed !== undefined) throw new Error(`the worker's run streamed an error (${streamed})`)
     if (result.status !== 'finished') throw new Error(`the worker's run ended with status ${result.status}`)

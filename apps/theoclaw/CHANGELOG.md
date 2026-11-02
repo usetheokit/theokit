@@ -13,6 +13,42 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Signed triggers, a hook approval gate and `/goal` (B-397). `THEOCLAW_TRIGGERS` names triggers,
+  each with `THEOCLAW_TRIGGER_<NAME>_SECRET` (16 characters or more), `_REPLY_TO`
+  (`<platform>:<channel id>` on a configured platform) and optional `_INSTRUCTIONS`; a bad one
+  refuses the start, naming the variable. `POST /hooks/<name>`, signed like a GitHub webhook
+  (`x-hub-signature-256`), answers `202` and starts one run on a fresh tool-less agent whose answer
+  is sent once to the reply channel; a wrong or missing signature answers `401` with nothing run or
+  written, a repeated `x-theoclaw-delivery` id `200`, an id over 256 characters `400`, and a reply
+  platform not yet started `503`. Every agent now carries a hook approval gate on its local options:
+  a hook command runs only when its fingerprint is listed in `THEOCLAW_APPROVED_HOOKS`. `/goal <text>`
+  runs the chat agent's goal loop under `THEOCLAW_GOAL_TOKEN_BUDGET` tokens (default 20000) and
+  replies once with the final status and answer. Trigger secrets and approved fingerprints are
+  masked in the output, and a trigger's reply and a `/goal` reply are masked like a chat reply
+  (B-398); a trigger run frames its tool results as untrusted data like every other send. The parity ledger is unchanged: OC-17, OC-86 and OC-87 stay `open`.
+
+- Fetched content reaches the model as data, and no configured value is sent to a person or a
+  client (B-398, OC-88 and OC-90). Every agent send passes the SDK's `toolResultGuard`, so a tool
+  result is framed in `<untrusted-tool-output>`, and every system prompt opens with a notice that
+  framed text is data. One list of configured values, the one the process output mask already used, now
+  also masks chat replies, broadcast answers and threads, and every `/control`, session and WebChat
+  event, with a value split across streamed deltas held back until it can be told apart. The parity
+  ledger records OC-88 and OC-90 as shipped, checked by `tests/live/security.live.test.ts`; OC-89,
+  OC-91 and OC-92 stay open.
+- Scheduled jobs and a heartbeat (B-396; OC-84, OC-85 and Hermes row 4 shipped). `/control` agents
+  hold `schedule_job`, `list_scheduled_jobs` and `cancel_scheduled_job`, so the owner schedules a
+  prompt in a sentence; chat agents never hold them. Jobs are kept in
+  `<workspace>/.theoclaw/schedules.json` (mode 0600, a malformed file refuses the start) and run on
+  the SDK `Cron` timer as read-only worker agents that hold no schedule tool. Each run's prompt
+  carries the last 4000 characters of the previous answer, and the answer is sent to the job's
+  platform and channel through the gateway's `DeliveryRouter`, unless it is `[SILENT]` alone, with
+  every configured value masked as in a chat reply (OC-90). A run's send frames its tool results as
+  data (OC-88). A
+  failed run sends one failure line, an overlapping fire is skipped, and the shutdown aborts runs in
+  flight before the platforms stop. `THEOCLAW_HEARTBEAT="<cron> <platform>:<channel>"` runs
+  `HEARTBEAT.md` from the workspace as a prompt on each fire, and nothing when the file is absent or
+  blank. The mechanism is `@theokit/agents/tools` (`createJobStore`, `createScheduler`,
+  `createScheduleTools`), in this repository. The live check is `tests/live/scheduler.live.test.ts`.
 - `/control` agents get `run_code` and `delegate_all` (B-386). With `run_code` the agent writes a
   script that calls `read_file`, `list_dir`, `web_fetch` and `web_search` (when configured) as
   `api.<name>(input)` inside a QuickJS-WASM sandbox from `@theokit/agents/code-mode-quickjs`. Only
@@ -306,6 +342,15 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- A `delegate_all` worker whose parent turn was cancelled could end the whole process: when its
+  run's cancellation rejected and its stream or `wait()` rejected too, the cancellation's rejection
+  was never observed, and Node's default for an unhandled rejection is to exit. The cancellation's
+  failure is now caught where it starts and reported beside the run's (B-398 review, LCR #76).
+- A configured value holding a marker pair (`**`, `~~`, `-_x_-`) reached a chat reply with only its
+  markers removed: the reply was masked after the platform's dialect had rewritten them, so the
+  rendered value no longer matched. The turn's text is now masked as it streams, before the
+  presenter renders it, with the same hold-back for a value split across frames, and masked again
+  after rendering (B-398 review, LCR #78).
 - An owner's `/approve` whose `pairing.json` write failed lost the code: the store dropped it
   before the save, and the stranger, refused for the hour, could not ask for another. A failed save
   now keeps the code until it expires, so the owner can send the same `/approve` again (B-371).

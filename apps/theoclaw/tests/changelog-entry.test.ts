@@ -71,4 +71,17 @@ describe('the CHANGELOG', () => {
     expect(section).toContain('B-691')
     expect(section).toContain('B-692')
   })
+
+  it('announces the signed triggers, the hook approval gate and /goal (B-397)', () => {
+    const section = unreleased()
+
+    expect(section).toContain('B-397')
+    for (const name of ['THEOCLAW_TRIGGERS', '/hooks/<name>', 'x-theoclaw-delivery', 'THEOCLAW_APPROVED_HOOKS', '/goal', 'THEOCLAW_GOAL_TOKEN_BUDGET']) {
+      expect(section, name).toContain(name)
+    }
+    const readme = readFileSync(join(__dirname, '..', 'README.md'), 'utf8')
+    for (const heading of ['### Triggers', '### Approved hooks', '### Goals']) {
+      expect(readme, heading).toContain(heading)
+    }
+  })
 })
