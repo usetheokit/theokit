@@ -173,6 +173,30 @@ describe('createTriggerRoute', () => {
   })
 })
 
+describe('a reply adapter whose sendMessage throws', () => {
+  it('writes one line naming the trigger and the error name, and does not retry', async () => {
+    let calls = 0
+    const adapter = new FakeAdapter('telegram', {
+      send: async () => {
+        calls += 1
+        throw new TypeError('socket closed with chat 42')
+      },
+    })
+    const lines: string[] = []
+    const route = createTriggerRoute({
+      trigger: TRIGGER,
+      adapterFor: () => adapter,
+      withAgent: async (work) => work(new FakeAgent({ frames: [assistant('done'), finished()] }) as unknown as TurnAgent),
+      write: (line) => lines.push(line),
+    })
+    expect((await route.handle(delivery('{}'))).status).toBe(202)
+    await waitFor(() => lines.length === 1, 5000, 'the delivery failure line')
+    expect(lines[0]).toBe('trigger ci: the reply was not delivered (TypeError)')
+    expect(lines[0]).not.toContain('chat 42')
+    expect(calls).toBe(1)
+  })
+})
+
 describe('concurrent deliveries', () => {
   it('two deliveries with the same id sent at once: exactly one 202, one 200, and one run', async () => {
     const h = harness()
@@ -210,7 +234,9 @@ describe('through the webhook router', () => {
   it('answers 413 past 1 MiB', async () => {
     const { router } = routed()
     const body = 'x'.repeat(MAX_BODY_BYTES + 1)
-    expect((await router(delivery(body))).status).toBe(413)
+    const response = await router(delivery(body))
+    expect(response.status).toBe(413)
+    expect(response.headers.get('connection')).toBe('close')
   })
 
   it('accepts a body of exactly 1048576 bytes with 202 (EC-4)', async () => {
