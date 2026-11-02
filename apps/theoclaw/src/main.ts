@@ -10,8 +10,9 @@ import type { AgentImport, TheoClawAgentOptions } from './agent/create-agent.js'
 import { type CreateAgent, createAgentFactory, createChannelAgentFactory } from './control-plane/agent-factory.js'
 import { loadConfiguration } from './config-file.js'
 import { describeError } from './control-plane/errors.js'
-import { applyInstance, resolveInstance, type TheoClawInstance } from './instance.js'
+import { resolveInstance, type TheoClawInstance } from './instance.js'
 import { importedMcpPaths, importedMcpSecrets, importedSetupLine, readImportAtStart, requireImportedMcp } from './migration/import-start.js'
+import { claimInstance } from './backup/instance-lock.js'
 import { readTelemetrySettings, registerTelemetry, type RegisteredTelemetry } from './telemetry/otel.js'
 
 /**
@@ -45,7 +46,10 @@ try {
   // The configuration file first (B-374): it fills only what the environment leaves unset.
   loadConfiguration(process.env, homedir())
   instance = resolveInstance(process.env, { homeDir: homedir() })
-  applyInstance(instance, process.env)
+  // The instance lock before `applyInstance` creates the targets (B-400 FR-010): a start refused
+  // while a backup or a restore runs leaves both as they were. Released when the process exits.
+  const release = claimInstance(instance, process.env)
+  if (release !== undefined) process.once('exit', release)
   // After the instance, so a profile's own state directory is the one read (FR-010, FR-011).
   const mcp = requireImportedMcp(process.env)
   const setup = readImportAtStart(process.env, (line) => process.stderr.write(`${line}\n`))
