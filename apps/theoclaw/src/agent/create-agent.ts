@@ -3,6 +3,7 @@ import type { CustomTool, InlineSkill, McpServerConfig, ModelSelection, Plugin, 
 
 import type { ImportedSetup } from '../migration/import-store.js'
 import type { AgentToolOptions } from '../tools/tool-registry.js'
+import { UNTRUSTED_CONTENT_NOTICE } from './untrusted-content.js'
 
 /** The options every TheoClaw agent is created with, every one of them. */
 export interface TheoClawAgentOptions<Model extends string | ModelSelection = string> {
@@ -15,8 +16,11 @@ export interface TheoClawAgentOptions<Model extends string | ModelSelection = st
   readonly memory: { readonly enabled: false }
   readonly tools?: CustomTool[]
   readonly plugins?: Plugin[]
-  /** An import's instructions and read-only memory (FR-008); only a `/control` agent has one. */
-  readonly systemPrompt?: string
+  /**
+   * Opens with `UNTRUSTED_CONTENT_NOTICE` on every agent (B-398 FR-002); a `/control` agent with an
+   * import has the import's instructions and read-only memory after it (FR-008).
+   */
+  readonly systemPrompt: string
   readonly skills?: { readonly inline: InlineSkill[] }
   /**
    * Only on a `/control` agent: its browser server with `THEOCLAW_BROWSER=on`, the servers its
@@ -53,6 +57,7 @@ export function theoClawAgentOptions<Model extends string | ModelSelection>(
     apiKey: input.apiKey,
     withheldBuiltinTools: ['shell'] as const,
     memory: { enabled: false } as const,
+    systemPrompt: UNTRUSTED_CONTENT_NOTICE,
   }
   const withTools: TheoClawAgentOptions<Model> = input.toolOptions === undefined ? base : withToolOptions(base, input.toolOptions)
   return input.imported === undefined ? withTools : withImport(withTools, input.imported)
@@ -74,11 +79,10 @@ function withToolOptions<Model extends string | ModelSelection>(
   }
 }
 
-/** The import's system prompt: its instructions, then its memory under a read-only heading. */
-function importedPrompt(setup: ImportedSetup): string | undefined {
+/** The notice, then the import's instructions, then its memory under a read-only heading. */
+function importedPrompt(setup: ImportedSetup): string {
   const memory = setup.memory === '' ? '' : `## Imported memory (read-only)\n\n${setup.memory}`
-  const prompt = [setup.instructions, memory].filter((part) => part !== '').join('\n\n')
-  return prompt === '' ? undefined : prompt
+  return [UNTRUSTED_CONTENT_NOTICE, setup.instructions, memory].filter((part) => part !== '').join('\n\n')
 }
 
 /**
@@ -91,12 +95,11 @@ function withImport<Model extends string | ModelSelection>(
   imported: AgentImport,
 ): TheoClawAgentOptions<Model> {
   const { setup, mcp } = imported
-  const systemPrompt = importedPrompt(setup)
   const hasSkills = setup.skills.length > 0
   const hasServers = mcp && Object.keys(setup.mcpServers).length > 0
   return {
     ...options,
-    ...(systemPrompt === undefined ? {} : { systemPrompt }),
+    systemPrompt: importedPrompt(setup),
     ...(hasSkills ? { skills: { inline: [...setup.skills] }, tools: [...(options.tools ?? []), SkillReadTool.create(setup.skills)] } : {}),
     // The browser server and the external tools file's servers keep their names: an imported
     // server with one of them does not replace it.
@@ -115,7 +118,7 @@ export function createTheoClawAgent<Model extends string | ModelSelection>(
     memory: options.memory,
     ...(options.tools === undefined ? {} : { tools: options.tools }),
     ...(options.plugins === undefined ? {} : { plugins: options.plugins }),
-    ...(options.systemPrompt === undefined ? {} : { systemPrompt: options.systemPrompt }),
+    systemPrompt: options.systemPrompt,
     ...(options.skills === undefined ? {} : { skills: options.skills }),
     ...(options.mcpServers === undefined ? {} : { mcpServers: options.mcpServers }),
   })
