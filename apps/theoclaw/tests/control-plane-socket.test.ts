@@ -218,8 +218,12 @@ describe("the /control socket", () => {
     await startPlane([{ messages: [text("hi"), finished] }]);
 
     const client = await connect("/control", `bearer ${TOKEN}`);
+    expect(client.socket.readyState).toBe(WebSocket.OPEN);
     client.send({ type: "chat", message: "hello" });
-    await client.until(turnEnded, "the end of the turn");
+    const frames = await client.until(turnEnded, "the end of the turn");
+
+    expect(finalFrames(frames)).toEqual([{ type: "done" }]);
+    expect(builtAgents).toBe(1);
   });
 
   it("streams a stub agent's events as JSON frames ending in done", async () => {
@@ -445,8 +449,12 @@ describe("the /control socket", () => {
     await startPlane([{ messages: [text("hi"), finished] }], token);
 
     const client = await connect("/control", `Bearer ${token}`);
+    expect(client.socket.readyState).toBe(WebSocket.OPEN);
     client.send({ type: "chat", message: "hello" });
-    await client.until(turnEnded, "the end of the turn");
+    const frames = await client.until(turnEnded, "the end of the turn");
+
+    expect(finalFrames(frames)).toEqual([{ type: "done" }]);
+    expect(builtAgents).toBe(1);
   });
 
   it("answers turn_failed and frees the socket when the runner itself rejects", async () => {
