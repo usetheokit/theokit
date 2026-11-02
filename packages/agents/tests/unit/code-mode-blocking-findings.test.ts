@@ -1,7 +1,9 @@
-import { describe, expect, it } from 'vitest'
+import type { CustomTool } from '@theokit/sdk'
+import { describe, expect, it, vi } from 'vitest'
 
-import { type CodeModeApi } from '../../src/code-mode-entry.js'
+import { createCodeMode, type CodeModeApi, type Sandbox } from '../../src/code-mode-entry.js'
 import { createQuickJsSandbox } from '../../src/code-mode-quickjs-entry.js'
+import { createListDirTool } from '../../src/tools-entry.js'
 
 /** What a run settled to: its value, or the stable `code` of the error it rejected with. */
 async function outcomeOf(run: Promise<unknown>): Promise<{ value: unknown; code?: string }> {
@@ -129,6 +131,132 @@ describe('code mode keeps the contracts loop-code-review found broken', () => {
 
       expect(outcome).toEqual({ value: 1 })
       expect(settledOnAbort).toBe(true)
+    })
+  })
+
+  describe('the handler result (#84)', () => {
+    /** A code-mode tool over a sandbox that returns `value`, whatever the script. */
+    function returning(value: unknown): ReturnType<typeof createCodeMode>['tool'] {
+      const sandbox: Sandbox = { run: async () => value }
+      return createCodeMode({
+        tools: [
+          {
+            name: 'noop',
+            description: 'noop',
+            inputSchema: { type: 'object' },
+            handler: async () => 'x',
+          },
+        ],
+        sandbox,
+        onPermissionRequest: () => ({ granted: true }),
+      }).tool
+    }
+
+    // #84 (code-mode.ts:192): the handler typed Promise<string> resolved undefined.
+    it('the code-mode handler resolves a string when the sandbox returns undefined', async () => {
+      const result: unknown = await returning(undefined).handler({ code: 'return' })
+
+      expect(result).toBe('null')
+    })
+
+    it('edge: resolves null for a function result', async () => {
+      const result: unknown = await returning(() => 1).handler({ code: 'return' })
+
+      expect(result).toBe('null')
+    })
+
+    it('edge: resolves null for an object whose toJSON answers undefined', async () => {
+      const result: unknown = await returning({ toJSON: () => undefined }).handler({
+        code: 'return',
+      })
+
+      expect(result).toBe('null')
+    })
+  })
+
+  describe('script arguments (#85)', () => {
+    /** A plain `CustomTool` (no `Tool.create` validation) whose handler records its calls. */
+    function plainRead(): CustomTool & { handler: ReturnType<typeof vi.fn> } {
+      return {
+        name: 'read',
+        description: 'read a path',
+        inputSchema: {
+          type: 'object',
+          properties: { path: { type: 'string' } },
+          required: ['path'],
+        },
+        handler: vi.fn(async () => 'ran'),
+      }
+    }
+
+    /** Run one `api.<name>(args)` call through code mode; the error it rejected with, if any. */
+    async function callWith(tool: CustomTool, args: unknown): Promise<unknown> {
+      const sandbox: Sandbox = { run: async (_code, api) => api[tool.name]?.(args) }
+      const { tool: codeMode } = createCodeMode({
+        tools: [tool],
+        sandbox,
+        onPermissionRequest: () => ({ granted: true }),
+      })
+      return codeMode.handler({ code: 'x' }).then(
+        () => undefined,
+        (error: unknown) => error,
+      )
+    }
+
+    // #85 (code-mode.ts:168): script arguments reached a plain CustomTool without its schema check.
+    it('does not call a plain CustomTool handler with arguments its inputSchema refuses', async () => {
+      const read = plainRead()
+
+      const error = await callWith(read, {})
+
+      expect(read.handler).not.toHaveBeenCalled()
+      expect(error).toMatchObject({
+        code: 'CODE_MODE_INVALID_ARGUMENTS',
+        tool: 'read',
+        property: 'path',
+        message: expect.stringMatching(/'read'.*path.*required/) as unknown,
+      })
+    })
+
+    it('negative: refuses a property of the wrong type', async () => {
+      const read = plainRead()
+
+      const error = await callWith(read, { path: 3 })
+
+      expect(read.handler).not.toHaveBeenCalled()
+      expect(error).toMatchObject({
+        code: 'CODE_MODE_INVALID_ARGUMENTS',
+        property: 'path',
+        message: expect.stringMatching(/expected string/) as unknown,
+      })
+    })
+
+    it('edge: calls the handler with arguments the schema accepts', async () => {
+      const read = plainRead()
+
+      const error = await callWith(read, { path: 'a.txt' })
+
+      expect(error).toBeUndefined()
+      expect(read.handler).toHaveBeenCalledWith({ path: 'a.txt' })
+    })
+
+    it('negative: refuses a null argument', async () => {
+      const read = plainRead()
+
+      const error = await callWith(read, null)
+
+      expect(read.handler).not.toHaveBeenCalled()
+      expect(error).toMatchObject({ code: 'CODE_MODE_INVALID_ARGUMENTS', property: undefined })
+    })
+
+    it('edge: accepts a call to the real list_dir schema', async () => {
+      const listDir = createListDirTool({ projectRoot: '.' })
+      const handler = vi.fn(async () => '[]')
+
+      const error = await callWith({ ...listDir, handler }, { path: '.' })
+
+      expect(error).toBeUndefined()
+      expect(handler).toHaveBeenCalledOnce()
     })
   })
 })

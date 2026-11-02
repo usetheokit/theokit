@@ -2,6 +2,7 @@
 // script calls, over an injected `Sandbox`. The VM lives on `./code-mode-quickjs`, so importing
 // this subpath loads no WASM.
 export {
+  CodeModeInvalidArgumentsError,
   CodeModePermissionDeniedError,
   createCodeMode,
   type CodeModeApi,

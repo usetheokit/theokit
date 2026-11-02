@@ -100,6 +100,82 @@ export class CodeModePermissionDeniedError extends TheokitAgentError {
   }
 }
 
+/**
+ * Thrown when a script calls a tool with arguments whose top-level shape the tool's `inputSchema`
+ * refuses (B-697 D4), before the permission gate or the tool sees them. `property` is the argument
+ * at fault, `undefined` when the arguments are not an object at all.
+ */
+export class CodeModeInvalidArgumentsError extends TheokitAgentError {
+  override readonly name = 'CodeModeInvalidArgumentsError'
+
+  constructor(
+    readonly tool: string,
+    readonly property: string | undefined,
+    reason: string,
+  ) {
+    const at = property === undefined ? '' : ` ${property}`
+    super(`code-mode: tool '${tool}' refused its arguments:${at} ${reason}`, {
+      code: 'CODE_MODE_INVALID_ARGUMENTS',
+      isRetryable: false,
+    })
+  }
+}
+
+/** The JSON Schema primitive types the argument check reads; any other `type` is the tool's job. */
+const PRIMITIVE_CHECKS: Readonly<Partial<Record<string, (value: unknown) => boolean>>> = {
+  string: (value) => typeof value === 'string',
+  number: (value) => typeof value === 'number',
+  integer: (value) => Number.isInteger(value),
+  boolean: (value) => typeof value === 'boolean',
+}
+
+/** The declared `type` of one property, when the schema gives it as a single string. */
+function declaredTypeOf(inputSchema: Record<string, unknown>, key: string): string | undefined {
+  const properties = inputSchema.properties as
+    | Partial<Record<string, { type?: unknown }>>
+    | undefined
+  const type = properties?.[key]?.type
+  return typeof type === 'string' ? type : undefined
+}
+
+/**
+ * B-697 D4 — the top-level shape of a script's arguments against the tool's `inputSchema`: an
+ * object, every `required` name present, every property of a declared primitive type of that type.
+ * Nested objects, `enum`, `pattern` and the rest stay the tool's own validation.
+ */
+function checkArguments(tool: CustomTool, args: unknown): Record<string, unknown> {
+  if (typeof args !== 'object' || args === null || Array.isArray(args)) {
+    throw new CodeModeInvalidArgumentsError(tool.name, undefined, 'expected an object')
+  }
+  const input = args as Record<string, unknown>
+  const required: unknown = tool.inputSchema.required
+  for (const name of Array.isArray(required) ? required : []) {
+    if (typeof name === 'string' && !Object.hasOwn(input, name)) {
+      throw new CodeModeInvalidArgumentsError(tool.name, name, 'is required')
+    }
+  }
+  for (const [key, value] of Object.entries(input)) {
+    const type = declaredTypeOf(tool.inputSchema, key)
+    const matches =
+      type !== undefined && Object.hasOwn(PRIMITIVE_CHECKS, type)
+        ? PRIMITIVE_CHECKS[type]
+        : undefined
+    if (matches !== undefined && !matches(value)) {
+      throw new CodeModeInvalidArgumentsError(tool.name, key, `expected ${type}`)
+    }
+  }
+  return input
+}
+
+/**
+ * A result as the JSON text the tool answers. `JSON.stringify` has no text for `undefined`, a
+ * function, a symbol or an object whose `toJSON` answers one of those: that result reads `null`.
+ */
+function jsonTextOf(result: unknown): string {
+  const text: unknown = JSON.stringify(result)
+  return typeof text === 'string' ? text : 'null'
+}
+
 /** M40 — render a tool's JSON-Schema input as a readable arg shape, e.g. `{ limit: number, region?: string }`. */
 function describeToolInput(inputSchema: Record<string, unknown>): string {
   const props = (inputSchema.properties as Record<string, { type?: unknown }> | undefined) ?? {}
@@ -163,9 +239,9 @@ export function createCodeMode(config: CodeModeConfig): {
   const api: CodeModeApi = {}
   for (const tool of config.tools) {
     api[tool.name] = async (args: unknown, options?: CodeModeCallOptions): Promise<unknown> => {
+      const input = checkArguments(tool, args)
       const decision = await config.onPermissionRequest({ tool: tool.name, args })
       if (!decision.granted) throw new CodeModePermissionDeniedError(tool.name, decision.reason)
-      const input = args as Record<string, unknown>
       return options?.signal === undefined
         ? tool.handler(input)
         : tool.handler(input, { signal: options.signal })
@@ -189,7 +265,9 @@ export function createCodeMode(config: CodeModeConfig): {
         ctx?.signal === undefined
           ? await config.sandbox.run(code, api)
           : await config.sandbox.run(code, api, { signal: ctx.signal })
-      return typeof result === 'string' ? result : JSON.stringify(result)
+      // A result JSON has no text for still resolves the string the tool promises (B-697, #84).
+      if (typeof result === 'string') return result
+      return jsonTextOf(result)
     },
   }
   return { tool, instructions: generateCodeModeInstructions(config.tools, name) }
