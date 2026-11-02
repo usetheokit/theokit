@@ -4,6 +4,7 @@ import type { TurnAgent as ReplyTurnAgent, TurnRun as ReplyTurnRun } from "../sr
 import { createContainer } from "../src/composition.js";
 import {
   createTurnRunner,
+  outcomeOf,
   runTheoClawTurn,
   type TurnAgent,
   type TurnEvent,
@@ -415,5 +416,25 @@ describe("the events of one streamed message", () => {
       code: "turn_failed",
       reason: "the run streamed an error (AGENT_ERROR)",
     });
+  });
+});
+
+describe("outcomeOf carries the usage record (B-400 EC-8)", () => {
+  const result = { status: "finished", usage: { inputTokens: 4, outputTokens: 2 }, cost: { amountUsd: 0.5 } };
+
+  it("a finished run with a model carries its usage", () => {
+    expect(outcomeOf(result, undefined, "stub/model")).toEqual({
+      ok: true,
+      usage: { inputTokens: 4, outputTokens: 2, model: "stub/model", costUsd: 0.5 },
+    });
+  });
+
+  it("a failed run carries no usage", () => {
+    expect(outcomeOf({ ...result, status: "error" }, undefined, "stub/model")).not.toHaveProperty("usage");
+    expect(outcomeOf(result, "provider_error", "stub/model")).not.toHaveProperty("usage");
+  });
+
+  it("a runner given no model carries no usage", () => {
+    expect(outcomeOf(result, undefined)).toEqual({ ok: true });
   });
 });

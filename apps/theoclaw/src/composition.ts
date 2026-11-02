@@ -362,13 +362,14 @@ function workflowTools(factory: StartOptions['draftAgentFactory'], write: (line:
  * surface, so its agents hold no tool, as every chat agent (B-382): the tool options reach only the
  * `/control` turn's agents.
  */
-function startWebchat(options: StartOptions, token: string | undefined, secrets: readonly string[]): HttpHandler | undefined {
+function startWebchat(options: StartOptions, settings: ControlPlaneSettings, secrets: readonly string[], write: (line: string) => void): HttpHandler | undefined {
+  const token = settings.webchatToken
   if (token === undefined) return undefined
   const agents = createContainer<TurnAgent>({
     factory: () => (options.importFreeAgentFactory ?? options.agentFactory)(NO_TOOL_OPTIONS),
   })
   const assetsDir = options.webchatAssetsDir ?? WEBCHAT_ASSETS_DIR
-  return createWebchatRoutes({ token, runTurn: createTurnRunner(agents.withAgent, secrets), assetsDir })
+  return createWebchatRoutes({ token, runTurn: createTurnRunner(agents.withAgent, secrets, settings.model), assetsDir, write })
 }
 
 /**
@@ -450,13 +451,13 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
   composedApp = composed
   const listen = options.listen ?? listenControlPlane
   serving = listen({
-    handler: serveHandler(composed.router, startWebchat(options, settings.webchatToken, secretValues)),
+    handler: serveHandler(composed.router, startWebchat(options, settings, secretValues, stderr)),
     port: settings.port,
     host: settings.host,
     stderr,
     ...(settings.controlToken === undefined
       ? {}
-      : { control: controlOptions(settings.controlToken, withAgent, buildControlAgent, stderr, secretValues) }),
+      : { control: controlOptions(settings.controlToken, withAgent, buildControlAgent, stderr, secretValues, settings.model) }),
   })
   let handle: ControlPlaneHandle
   try {

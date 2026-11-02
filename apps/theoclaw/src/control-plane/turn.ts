@@ -5,6 +5,7 @@ import { type SdkMessage, translateSdkEvent } from '@theokit/agents/bridge'
 import type { TurnAgent, TurnRun } from '../agent-port.js'
 import { untrustedContentSendOptions } from '../agent/untrusted-content.js'
 import { maskSecrets } from '../channels/channel-loop.js'
+import { type TurnUsage, usageOf } from '../usage/turn-usage.js'
 import { describeError } from './errors.js'
 import { createEventMask } from './event-mask.js'
 
@@ -19,7 +20,7 @@ export type TurnEvent = ReturnType<typeof translateSdkEvent>[number]
  * never passes.
  */
 export type TurnOutcome =
-  | { readonly ok: true }
+  | { readonly ok: true; readonly usage?: TurnUsage }
   | { readonly ok: false; readonly code: 'turn_failed' | 'turn_cancelled'; readonly reason: string }
 
 /** Runs `work` with one agent of its own request, as `createContainer().withAgent` does. */
@@ -34,6 +35,8 @@ export interface TurnOptions {
   readonly signal?: AbortSignal
   /** Values no event may carry (`processSecrets`, B-398 FR-007). Default: none. */
   readonly secrets?: readonly string[]
+  /** The model the agents run (`THEOCLAW_MODEL`); a finished turn's outcome carries its usage only with it. */
+  readonly model?: string
 }
 
 /** A turn for one chat message: the message, where each translated event goes, and what cancels it. */
@@ -141,9 +144,14 @@ async function streamRun(run: TurnRun, options: TurnOptions, aborted?: Promise<t
  * error fails the turn even when `wait()` reports it finished. Shared by the sessionless turn and
  * the session turn (`session-turn.ts`).
  */
-export function outcomeOf(result: { readonly status: string }, streamedError: string | undefined): TurnOutcome {
+export function outcomeOf(
+  result: Awaited<ReturnType<TurnRun['wait']>>,
+  streamedError: string | undefined,
+  model?: string,
+): TurnOutcome {
   if (streamedError !== undefined) return failed(`the run streamed an error (${streamedError})`)
-  return result.status === 'error' ? failed('the run ended with status error') : { ok: true }
+  if (result.status === 'error') return failed('the run ended with status error')
+  return model === undefined ? { ok: true } : { ok: true, usage: usageOf(result, model) }
 }
 
 async function runWith(agent: TurnAgent, options: TurnOptions, flush: () => void): Promise<TurnOutcome> {
@@ -156,7 +164,7 @@ async function runWith(agent: TurnAgent, options: TurnOptions, flush: () => void
   if ('cancelled' in streamed) return streamed.cancelled
   flush()
   const { streamedError } = streamed
-  return outcomeOf(await run.wait(), streamedError)
+  return outcomeOf(await run.wait(), streamedError, options.model)
 }
 
 /**
@@ -175,9 +183,11 @@ export async function runTheoClawTurn(options: TurnOptions): Promise<TurnOutcome
   }
   const secrets = options.secrets ?? []
   const mask = createEventMask(secrets, options.emit)
+  // The model id reaches a frame and a log line; a configured value inside it is masked there too.
+  const model = options.model === undefined ? {} : { model: maskSecrets(options.model, secrets) }
   let outcome: TurnOutcome
   try {
-    outcome = await options.withAgent((agent) => runWith(agent, { ...options, emit: mask.emit }, mask.flush))
+    outcome = await options.withAgent((agent) => runWith(agent, { ...options, ...model, emit: mask.emit }, mask.flush))
   } catch (error) {
     outcome = failed(describeError(error))
   }
@@ -185,8 +195,19 @@ export async function runTheoClawTurn(options: TurnOptions): Promise<TurnOutcome
   return outcome.ok ? outcome : { ...outcome, reason: maskSecrets(outcome.reason, secrets) }
 }
 
-/** The runner the control socket and WebChat call: one fresh run id per turn. */
-export function createTurnRunner(withAgent: WithAgent, secrets: readonly string[] = []): TurnRunner {
+/**
+ * The runner the control socket and WebChat call: one fresh run id per turn. With `model`, a
+ * finished turn's outcome carries its usage record (B-400 FR-003).
+ */
+export function createTurnRunner(withAgent: WithAgent, secrets: readonly string[] = [], model?: string): TurnRunner {
   return (message, emit, signal) =>
-    runTheoClawTurn({ withAgent, message, runId: randomUUID(), emit, secrets, ...(signal === undefined ? {} : { signal }) })
+    runTheoClawTurn({
+      withAgent,
+      message,
+      runId: randomUUID(),
+      emit,
+      secrets,
+      ...(signal === undefined ? {} : { signal }),
+      ...(model === undefined ? {} : { model }),
+    })
 }

@@ -57,6 +57,12 @@ export function formatUsageLine(surface: UsageSurface, usage: TurnUsage): string
   return `theoclaw: usage ${surface} ${usage.model} in=${usage.inputTokens} out=${usage.outputTokens} cost=${cost}`
 }
 
+/** The keys a final `done` frame carries for a finished turn (FR-003). */
+export function usageFrameFields(usage: TurnUsage): Record<string, unknown> {
+  const cost = usage.costUsd === undefined ? { costUnpriced: true } : { costUsd: usage.costUsd }
+  return { usage: { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens }, model: usage.model, ...cost }
+}
+
 /** The footer `/usage` appends under a chat reply (FR-005). */
 export function formatUsageFooter(mode: UsageFooterMode, usage: TurnUsage): string {
   const tokens = `${usage.inputTokens} in · ${usage.outputTokens} out`
