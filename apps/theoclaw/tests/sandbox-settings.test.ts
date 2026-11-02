@@ -236,4 +236,22 @@ describe('THEOCLAW_SANDBOX at start', () => {
     )
     expect(settings.browser).toEqual({ cliPath: FAKE_BROWSER_CLI })
   })
+
+  it('keeps THEOCLAW_BROWSER=on under read-only with host tools off: no shell or file tool runs then', () => {
+    const settings = resolveToolSettings(
+      { THEOCLAW_SANDBOX: 'read-only', THEOCLAW_BROWSER: 'on' },
+      hostWorkspace(),
+      { detect: enforced, warn: () => undefined, browser: installedBrowser() },
+    )
+    expect(settings.browser).toEqual({ cliPath: FAKE_BROWSER_CLI })
+  })
+
+  it('keeps THEOCLAW_BROWSER=on under danger-full-access', () => {
+    const settings = resolveToolSettings(
+      { THEOCLAW_HOST_TOOLS: 'on', THEOCLAW_SANDBOX: 'danger-full-access', THEOCLAW_BROWSER: 'on' },
+      hostWorkspace(),
+      { detect: enforced, warn: () => undefined, browser: installedBrowser() },
+    )
+    expect(settings.browser).toEqual({ cliPath: FAKE_BROWSER_CLI })
+  })
 })

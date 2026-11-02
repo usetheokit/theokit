@@ -154,8 +154,10 @@ function readSearch(env: Env): SearchSettings {
 }
 
 /**
- * `read-only` promises an agent that writes nothing, and the browser server runs outside the
- * sandbox with screenshot, console and PDF tools that write the file they are given.
+ * `read-only` confines the shell and the file tools, and the browser server is the one built-in
+ * server that runs outside the sandbox and writes: its screenshot, console and PDF tools write the
+ * file they are given. MCP servers the operator names (`THEOCLAW_EXTERNAL_TOOLS`, an import) run
+ * outside the sandbox in every mode and are not refused here.
  */
 function refuseBrowserUnderReadOnly(hostTools: boolean, sandboxMode: SandboxMode, browser: BrowserSettings | undefined): void {
   if (!hostTools || sandboxMode !== 'read-only' || browser === undefined) return
