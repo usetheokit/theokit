@@ -101,14 +101,16 @@ describe('theoclaw daemon', () => {
     expect(existsSync(unitPath('theoclaw', unconfigured.home))).toBe(false)
     expect(unconfigured.calls).toEqual([])
 
-    for (const platform of ['darwin', 'win32'] as const) {
-      const h = harness({ platform })
-      expect(await daemonInstall(h.io, h.runner)).toBe(1)
-      expect(h.stderr()).toContain(platform)
-      expect(h.stderr()).toContain('B-692')
-      expect(existsSync(unitPath('theoclaw', h.home))).toBe(false)
-      expect(h.calls).toEqual([])
-    }
+  })
+
+  it('a_platform_with_no_backend_is_refused_and_nothing_is_written', async () => {
+    const h = harness({ platform: 'freebsd' })
+    for (const verb of [daemonInstall, daemonUninstall, daemonStatus]) expect(await verb(h.io, h.runner)).toBe(1)
+    expect(h.stderr()).toContain('freebsd is not supported')
+    expect(h.stderr()).toContain('launchd')
+    expect(h.stderr()).toContain('Task Scheduler')
+    expect(existsSync(unitPath('theoclaw', h.home))).toBe(false)
+    expect(h.calls).toEqual([])
   })
 
   it('daemon removes the unit again when systemctl refuses to start it', async () => {
