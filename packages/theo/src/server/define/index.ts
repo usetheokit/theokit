@@ -47,6 +47,7 @@ export {
 } from '../../core/contracts/route-policy.js'
 
 export { route, type RouteBuilder } from './route-builder.js'
+export type { RouteContext } from '../../core/contracts/route-context.js'
 export { action, type ActionBuilder } from './action-builder.js'
 export { websocket, type WebSocketBuilder } from './websocket-builder.js'
 export { middleware, type MiddlewareBuilder } from './middleware-builder.js'

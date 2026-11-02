@@ -31,7 +31,7 @@ describe('route() builder — identity-shape delegation', () => {
       body: { text: 'hi' },
       params: { id: '7' },
       request: new Request('http://x/'),
-      ctx: undefined,
+      ctx: {},
     }
     expect(await built.handler(ctx)).toEqual(await legacy.handler(ctx))
   })
