@@ -1,6 +1,6 @@
 import type { TurnAgent } from '../agent-port.js'
 import { createControlSessions } from './control-sessions.js'
-import type { DevicePairing } from './device-pairing.js'
+import { createDevicePairing, type DevicePairing } from './device-pairing.js'
 import type { ControlSocketOptions } from './control-socket.js'
 import { createTurnRunner, type WithAgent } from './turn.js'
 
@@ -24,4 +24,16 @@ export function controlOptions(
     sessions: createControlSessions({ build, report, secrets }),
     ...(devices === undefined ? {} : { devices }),
   }
+}
+
+/**
+ * Device pairing (OC-91) needs a state directory to keep the approved devices and a control token
+ * for the owner to approve with; without either it is off and `/control` is unchanged.
+ */
+export function devicePairingFor(
+  stateDir: string | undefined,
+  controlToken: string | undefined,
+  write: (line: string) => void,
+): DevicePairing | undefined {
+  return stateDir === undefined || controlToken === undefined ? undefined : createDevicePairing({ dir: stateDir, write })
 }

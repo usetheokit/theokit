@@ -133,9 +133,7 @@ function serve(ws: WebSocket, options: ControlSocketOptions, stderr: (line: stri
         stderr(`theoclaw: turn failed: ${outcome.reason}`)
         send({ type: 'error', code: outcome.code })
       })
-  ws.on('message', (raw, isBinary) => {
-    const paired = handleDeviceFrame(options.devices, owner, readObject(raw, isBinary))
-    if (paired !== undefined) return void paired.then(send)
+  const onFrame = (raw: { toString(): string }, isBinary: boolean): void => {
     const frame = parseFrame(raw, isBinary)
     if (frame === undefined) return send({ type: 'error', code: 'bad_frame' })
     const session = frame.session
@@ -155,6 +153,11 @@ function serve(ws: WebSocket, options: ControlSocketOptions, stderr: (line: stri
       busy = false
       current = undefined
     })
+  }
+  ws.on('message', (raw, isBinary) => {
+    const paired = handleDeviceFrame(options.devices, owner, readObject(raw, isBinary))
+    if (paired === undefined) return onFrame(raw, isBinary)
+    void paired.then(send)
   })
 }
 
