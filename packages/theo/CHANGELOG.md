@@ -1,5 +1,18 @@
 # theo
 
+## 0.77.0
+
+### Minor Changes
+
+- 6b47e66: `ctx.queue.enqueueInTransaction(client, name, input, opts)` writes a job through `client`, a connection inside a transaction the caller opened, so the job commits or rolls back with the caller's own rows. `PostgresJobBackend.enqueueInTransaction(client, input)` is the backend form, and `JobBackend` gains it as an optional method. The per-request outbox hands jobs over after the response on another connection, so a route could commit a row and lose its job; with this, a committed row always has its job. A backend without the method rejects with `TransactionalEnqueueUnsupportedError` (`code: "TRANSACTIONAL_ENQUEUE_UNSUPPORTED"`). (#1077)
+- 86f4b49: `GET /__theo/ready` answers 503 when the app's dependencies are down. Under `theokit start` and `theokit dev` it pings the configured `jobs.backend` when the backend has `ping()` (`PostgresJobBackend` runs `SELECT 1`; `JobBackend` gains `ping` as an optional method) and calls the `ready` probe an app declares in `theo.config.ts`, a function resolving to a boolean. Before, `start` registered only the liveness route, so readiness answered 200 with Postgres stopped and nothing could register a probe. `theokit dev` now serves `/__theo/health` and `/__theo/ready` too; both used to return the SPA's HTML. (#1071)
+
+### Patch Changes
+
+- 61fc101: `theokit generate sandbox` writes a tool that asks for bubblewrap confinement through `createSandboxBackend({ mode: 'workspace-write' })` and checks `resolveSandboxPosture` before every command. Where bubblewrap is missing or cannot run, the tool throws `SandboxNotAvailableError` instead of running the command on the host; setting `THEOKIT_SANDBOX_ALLOW_UNCONFINED=1` opts into unconfined execution. The template used `LocalSandbox`, which the SDK documents as not an isolation boundary, while its tool description told the model the sandbox was isolated and its comment told the developer it was safe: a generated tool wrote into the app directory, read `/etc/passwd` and resolved DNS. The generated text now says what confinement covers and that the command can still read what the user can read. Files generated before this release keep the old code; regenerate them or switch them to `createSandboxBackend` by hand. (#1070)
+- 465bab8: A `route()` handler's `ctx` is typed `RouteContext`, exported from `theokit/server/define`. It was `unknown`, so the documented `ctx.queue.enqueue(...)` failed with TS18046 and apps had to cast `ctx`. `RouteContext` is open to declaration merging: an app that sets `jobs.backend` declares `queue: import('theokit/server/jobs').QueueClient` on it once, and keys nobody declared read as `unknown`. `RouteConfig`'s default context type is `RouteContext` as well, and `callProcedure` hands the handler an empty context when the caller supplies none, as the HTTP path does. The `JobRegistry` JSDoc now shows the augmentation on `theokit/server/jobs`. (#1073, #1074)
+- da9a796: `theokit start` and `theokit dev` call `migrate()` on the configured `jobs.backend` once at boot, before serving a request or starting the worker. A `PostgresJobBackend` set up as the README shows now creates its `theokit_jobs` table by itself; before, the worker logged `relation "theokit_jobs" does not exist` on every tick and each enqueued job was dropped after the route answered 2xx. If `migrate()` rejects, the boot fails with `JOB_BACKEND_SETUP_FAILED` and names the cause. Remove any `await backend.migrate()` from `theo.config.ts`: `theokit build` loads that file too and needed a database because of it. `migrate()` also retries when another replica creates the table at the same moment. (#1072)
+
 ## 0.76.3
 
 ### Patch Changes
@@ -355,8 +368,8 @@
   A nested-layout project with no agents — the layout `create-theokit` scaffolds — was told, on every dev
   start and every build that reached this path:
 
-                            [theokit] agentsDir "agents" resolves to "<root>/src/agents", which is not a directory, so NO agents
-                            were found and every /api/agents/* route will 404.
+                              [theokit] agentsDir "agents" resolves to "<root>/src/agents", which is not a directory, so NO agents
+                              were found and every /api/agents/* route will 404.
 
   About routes it does not have, and a directory it never configured. Two defects in one line.
 
