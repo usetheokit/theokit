@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- `theokit`: `ctx.queue.enqueueInTransaction(client, name, input)` and `PostgresJobBackend.enqueueInTransaction(client, input)` write a job through a connection inside the caller's transaction, so the job commits or rolls back with the caller's rows. A backend without the method rejects with `TransactionalEnqueueUnsupportedError` instead of enqueueing outside the transaction (#1077)
+
 ### Fixed
 
 - `theokit`: `theokit start` and `theokit dev` call `migrate()` on the configured `jobs.backend` at boot, so a `PostgresJobBackend` creates its `theokit_jobs` table without the app calling it. A boot that cannot create the table fails with `JOB_BACKEND_SETUP_FAILED` instead of answering 2xx while every enqueued job is dropped. `PostgresJobBackend.migrate()` also survives replicas running it at the same moment, where concurrent `CREATE TABLE IF NOT EXISTS` failed with a unique violation on `pg_type` (#1072)

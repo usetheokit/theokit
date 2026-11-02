@@ -133,6 +133,29 @@ because the database is unreachable, the boot fails rather than serving routes w
 lost. Do not call `migrate()` from `theo.config.ts`: `theokit build` loads that file too, and the
 build would then need a database.
 
+The outbox hands jobs over after the response, on a different connection from the one your route
+wrote with, so a route can commit a row and then lose its job to a failure in between. When the job
+table lives in your own database, write the job inside your transaction instead:
+
+```typescript
+const client = await pool.connect()
+try {
+  await client.query('BEGIN')
+  const task = await client.query('INSERT INTO task (title) VALUES ($1) RETURNING id', [title])
+  await ctx.queue.enqueueInTransaction(client, 'process-task', { taskId: task.rows[0].id })
+  await client.query('COMMIT')
+} catch (err) {
+  await client.query('ROLLBACK')
+  throw err
+} finally {
+  client.release()
+}
+```
+
+The job commits or rolls back with the row, and workers cannot see it before the commit. It needs a
+backend with `enqueueInTransaction` (`PostgresJobBackend` has it); any other backend rejects with
+`TransactionalEnqueueUnsupportedError` instead of enqueueing outside the transaction.
+
 `theokit start` and `theokit dev` run a job worker in the same process whenever jobs are declared
 and a backend is set: it polls the backend, runs each job and backs off while the backend is
 unreachable. On `SIGTERM`, `start` stops polling and waits up to 20 seconds for the job in progress
