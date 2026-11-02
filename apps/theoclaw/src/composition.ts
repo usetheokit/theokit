@@ -13,18 +13,16 @@ import type { TeamsActivityVerifierOptions } from '@theokit/gateway-teams'
 import { Agent } from '@theokit/sdk'
 import type { AgentOptions, CustomTool, SDKAgent } from '@theokit/sdk'
 
-import { createOwnerPolicyHook } from './authorization/owner-policy-hook.js'
 import { createPairingStore, type PairingStore } from './authorization/pairing-store.js'
 import {
   type AuthorizationPolicy,
   isAuthenticatedSender,
-  isPolicyOwner,
   parseAuthorizationPolicy,
 } from './authorization/policy.js'
 import { type AdapterBuildOptions, adapterBuilders } from './channels/adapter-factory.js'
 import { createBroadcastGroups } from './channels/broadcast-groups.js'
 import { maskSecrets, startChannelLoop } from './channels/channel-loop.js'
-import { createGroupActivationHook } from './channels/group-activation-hook.js'
+import { channelHooks } from './channel-hooks.js'
 import type { ChannelLoop, PlatformBuild } from './channels/channel-loop.js'
 import { installOutputMask, type MaskableStream } from './channels/output-mask.js'
 import { type ConfiguredPlatform, resolvePlatforms } from './channels/platforms.js'
@@ -225,17 +223,6 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
   const maskedWrite = (line: string): void => options.write(redactSecrets(maskSecrets(line, secrets)))
   // The store exists only with a state directory; the hook runs without one under the other policies.
   const pairing = options.pairing ?? pairingStoreFor(policy, maskedWrite)
-  const ownerPolicy = createOwnerPolicyHook({
-    policy,
-    ...(pairing === undefined ? {} : { pairing }),
-    write: maskedWrite,
-  })
-  // Runs after the owner policy, so only owners and paired senders reach it (FR-007).
-  const groupActivation = createGroupActivationHook({
-    isOwner: (platform, senderId) => isPolicyOwner(policy, platform, senderId),
-    mode: policy.groupActivation,
-    write: maskedWrite,
-  })
   const deps: WebhookDeps = {
     write: maskedWrite,
     verifierFactory: options.teamsVerifierFactory ?? teamsActivityVerifier,
@@ -262,7 +249,7 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
         write: maskedWrite,
       },
     }),
-    hooks: [ownerPolicy, groupActivation],
+    hooks: channelHooks({ policy, ...(pairing === undefined ? {} : { pairing }), write: maskedWrite }),
     secrets,
     write: options.write,
     ...(options.startTimeoutMs === undefined ? {} : { startTimeoutMs: options.startTimeoutMs }),
