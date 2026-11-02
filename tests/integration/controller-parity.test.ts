@@ -1,6 +1,7 @@
 import 'reflect-metadata'
 
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { Readable } from 'node:stream'
 import { join, resolve } from 'node:path'
@@ -23,7 +24,14 @@ import { emitClientDts } from '../../packages/theo/src/vite-plugin/app-typed-cli
  * with a Vite-shaped stub whose `ssrLoadModule` is `loadControllerWithSwc` (what
  * the Task 1.1 transform + real `ssrLoadModule` produce together).
  */
-const TEST_ROOT = resolve(__dirname, '../../packages/theo/__controller_parity_e2e__')
+// Outside the source tree (B-429): a concurrent lint, build or typecheck must never see it. Bare
+// imports resolve through a link to the package's own node_modules in the parent directory.
+const TEST_PARENT = mkdtempSync(join(tmpdir(), 'theokit-controller-parity-e2e-'))
+symlinkSync(
+  resolve(__dirname, '../../packages/theo/node_modules'),
+  join(TEST_PARENT, 'node_modules'),
+)
+const TEST_ROOT = join(TEST_PARENT, 'work')
 const SERVER_DIR = join(TEST_ROOT, 'server')
 const DIST_DIR = join(TEST_ROOT, '.theokit')
 

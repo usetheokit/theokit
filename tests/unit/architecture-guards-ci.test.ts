@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { readFile, stat, writeFile, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, stat, writeFile, rm } from 'node:fs/promises'
 import { execSync } from 'node:child_process'
-import { resolve } from 'node:path'
+import { tmpdir } from 'node:os'
+import { dirname, resolve } from 'node:path'
 
 const REPO = resolve(__dirname, '../..')
 
@@ -119,7 +120,14 @@ describe('architecture-guards CI (T1.1)', () => {
   it('test_dependency_cruiser_forbids_cross_module_internal_import — vite-plugin→server/_internal is caught', async () => {
     // Given: a file in a module (vite-plugin) that IS allowed to depend on
     // server (direction-wise), but reaches into server/_internal (private).
-    const probe = resolve(REPO, 'packages/theo/src/vite-plugin/__internal_privacy_probe.ts')
+    // The probe tree lives in a temp directory that mirrors the repo-relative paths the rule
+    // matches, so no concurrent lint, build or typecheck of the real tree ever sees it (B-429).
+    const sandbox = await mkdtemp(resolve(tmpdir(), 'theokit-privacy-'))
+    const probe = resolve(sandbox, 'packages/theo/src/vite-plugin/breach.ts')
+    const target = resolve(sandbox, 'packages/theo/src/server/_internal/atomic-write.ts')
+    await mkdir(dirname(probe), { recursive: true })
+    await mkdir(dirname(target), { recursive: true })
+    await writeFile(target, 'export const writeAtomic = 1\n', 'utf8')
     await writeFile(
       probe,
       "import { writeAtomic } from '../server/_internal/atomic-write.js'\nexport const _p = writeAtomic\n",
@@ -130,10 +138,10 @@ describe('architecture-guards CI (T1.1)', () => {
       let caught = false
       let output = ''
       try {
+        // eslint-disable-next-line sonarjs/os-command -- fixed binary and repo paths, no user input
         output = execSync(
-          // eslint-disable-next-line sonarjs/no-os-command-from-path
-          'node_modules/.bin/dependency-cruiser packages/theo/src --config .dependency-cruiser.cjs --no-progress',
-          { cwd: REPO, encoding: 'utf8' },
+          `"${resolve(REPO, 'node_modules/.bin/dependency-cruiser')}" packages/theo/src --config "${resolve(REPO, '.dependency-cruiser.cjs')}" --no-progress`,
+          { cwd: sandbox, encoding: 'utf8' },
         )
       } catch (e) {
         caught = true
@@ -142,7 +150,7 @@ describe('architecture-guards CI (T1.1)', () => {
       expect(caught).toBe(true)
       expect(output).toMatch(/no-cross-module-internal-import/)
     } finally {
-      await rm(probe, { force: true })
+      await rm(sandbox, { recursive: true, force: true })
     }
   }, 30_000)
 
