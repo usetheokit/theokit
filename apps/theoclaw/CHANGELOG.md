@@ -22,8 +22,6 @@ and versioning follows [Semantic Versioning](https://semver.org/).
   opens the socket like the owner's token, except that a device socket cannot issue a code or approve
   (`forbidden`). `<THEOCLAW_STATE_DIR>/devices.json` (mode 0600) keeps only each approved token's
   SHA-256 digest. Without a state directory or a control token pairing is off and nothing changes.
-
-
 - `theoclaw security audit [--fix]` (B-708, OC-89). It reads the configuration the start would see
   and reports risky settings by id without printing a value: a file or its own directory open
   beyond the owner, a public bind, `THEOCLAW_DM_POLICY=open`, an unconfined sandbox and a short
