@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto'
 import { EventEmitter } from 'node:events'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -8,6 +8,8 @@ import { type SdkMessage, translateSdkEvent } from '@theokit/agents/bridge'
 import { afterAll, describe, expect, it } from 'vitest'
 
 import { createTheoClawAgent, theoClawAgentOptions } from '../../src/agent/create-agent.js'
+import { loadConfiguration } from '../../src/config-file.js'
+import { auditConfiguration, fixFindings } from '../../src/security-audit.js'
 import { startTheoClaw } from '../../src/composition.js'
 import { createAgentFactory } from '../../src/control-plane/agent-factory.js'
 import type { ControlPlaneHandle } from '../../src/control-plane/listener.js'
@@ -211,10 +213,50 @@ describe.skipIf(!LIVE)('security against a real model', () => {
 
       const surfaces = { stdout: stdout.text(), stderr: stderr.text(), frames: JSON.stringify(turn.frames), reply: turn.text }
       const matches = Object.entries(surfaces).flatMap(([surface, text]) => values.filter((value) => text.includes(value)).map(() => surface))
-      console.log(`OC-90 live: reply ${JSON.stringify(turn.text)}`)
+      console.log(`OC-90 live: reply ${JSON.stringify(turn.text)}\n`)
       expect(matches).toEqual([])
       // The model repeated what it was asked to, so the 0 above is a masked answer, not a refusal.
       expect(turn.text).toContain('[redacted]')
+    } finally {
+      await app?.close()
+    }
+  })
+
+  it('the audit repairs a risky configuration file and TheoClaw still answers a real turn from it for OC-89', { timeout: 60_000 }, async () => {
+    countTurn()
+    const { model, apiKey } = liveModel()
+    const home = mkdtempSync(join(scratch, 'audit-home-'))
+    const dir = join(home, 'theoclaw')
+    mkdirSync(dir, { recursive: true })
+    chmodSync(dir, 0o755)
+    const path = join(dir, 'theoclaw.env')
+    const controlToken = `live-control-token-${randomBytes(16).toString('hex')}`
+    const workspace = mkdtempSync(join(scratch, 'ws-'))
+    const keyVariable = process.env.THEOKIT_API_KEY ? 'THEOKIT_API_KEY' : 'OPENROUTER_API_KEY'
+    const lines = [`THEOCLAW_MODEL="${model}"`, `${keyVariable}="${apiKey}"`, 'THEOCLAW_PORT="0"', `THEOCLAW_CONTROL_TOKEN="${controlToken}"`, 'THEOCLAW_OWNERS="telegram:owner"', 'THEOCLAW_DM_POLICY="allowlist"', `THEOCLAW_WORKSPACE="${workspace}"`, 'THEOCLAW_SANDBOX="danger-full-access"']
+    writeFileSync(path, `${lines.join('\n')}\n`, { mode: 0o644 })
+    chmodSync(path, 0o644)
+
+    const before = auditConfiguration({ THEOCLAW_CONFIG: path }, home)
+    expect(before.map((finding) => finding.id).sort()).toEqual(['SA-001', 'SA-002', 'SA-005'])
+    expect(fixFindings(before, path).sort()).toEqual(['SA-001', 'SA-002'])
+    expect(statSync(path).mode & 0o777).toBe(0o600)
+    expect(statSync(dir).mode & 0o777).toBe(0o700)
+    expect(auditConfiguration({ THEOCLAW_CONFIG: path }, home).map((finding) => finding.id)).toEqual(['SA-005'])
+
+    // The repaired file is the one the start reads: one real turn through it.
+    const env: NodeJS.ProcessEnv = { THEOCLAW_CONFIG: path }
+    loadConfiguration(env, home)
+    const stdout = capturingStream()
+    const stderr = capturingStream()
+    let app: ControlPlaneHandle | undefined
+    try {
+      app = await startTheoClaw({ cwd: workspace, env, agentFactory: createAgentFactory(env), signals: new EventEmitter(), exit: () => undefined, streams: [stdout, stderr] })
+      const turn = await runControlTurn(app.address().port, controlToken, 'Reply with the single word: ready', 45_000)
+      if (turn.status !== 'finished') throw new Error(`the turn ended ${turn.status}: ${turn.error}`)
+      process.stderr.write(`OC-89 live: reply ${JSON.stringify(turn.text)}\n`)
+      expect(turn.text.length).toBeGreaterThan(0)
+      expect(stdout.text() + stderr.text()).not.toContain(controlToken)
     } finally {
       await app?.close()
     }

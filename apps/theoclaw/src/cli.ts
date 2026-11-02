@@ -10,6 +10,7 @@ import { describeError, TheoClawConfigError } from './control-plane/errors.js'
 import { daemonInstall, type DaemonIo, daemonStatus, daemonUninstall, runCommand, type Runner } from './daemon.js'
 import { parseOnboard, parseUpdate, UsageError } from './cli-args.js'
 import { type OnboardInput, onboard } from './onboard.js'
+import { securityCommand } from './security-audit.js'
 import { update } from './update.js'
 
 /**
@@ -49,6 +50,8 @@ const USAGE = `usage: theoclaw <command>
   theoclaw daemon status    exit 0 when the unit is active, 3 otherwise
   theoclaw update [--channel stable|dev]
                             fetch and fast-forward the checkout on its channel, rebuild, restart
+  theoclaw security audit [--fix]
+                            report risky configuration; --fix narrows file permissions; exit 3 while findings remain
   theoclaw --help           this text
 `
 
@@ -102,6 +105,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
   },
   daemon,
   update: (args, io) => update(parseUpdate(args), io, io.runner),
+  security: securityCommand,
   '--help': (_args, io) => {
     io.stdout.write(USAGE)
     return Promise.resolve(0)

@@ -69,6 +69,7 @@ expose it.
 ## Update
 
 ```bash
+theoclaw security audit        # report risky configuration; --fix narrows the file and directory modes (exit 3 while findings remain)
 theoclaw update                  # the stable channel: follows main, which only releases reach
 theoclaw update --channel dev    # follows develop, where work is integrated before a release
 ```

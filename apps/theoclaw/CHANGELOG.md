@@ -23,6 +23,12 @@ and versioning follows [Semantic Versioning](https://semver.org/).
   (`forbidden`). `<THEOCLAW_STATE_DIR>/devices.json` (mode 0600) keeps only each approved token's
   SHA-256 digest. Without a state directory or a control token pairing is off and nothing changes.
 
+
+- `theoclaw security audit [--fix]` (B-708, OC-89). It reads the configuration the start would see
+  and reports risky settings by id without printing a value: a file or its own directory open
+  beyond the owner, a public bind, `THEOCLAW_DM_POLICY=open`, an unconfined sandbox and a short
+  token. `--fix` narrows the file to 600 and its own directory to 700 and leaves the other
+  findings to a person; the exit code is 3 while findings remain.
 - `delegate`, `question`, `task_declare` and `task_complete` on a `/control` agent (B-611).
   `delegate` hands one task to the same read-only worker `delegate_all` uses and returns its
   answer; `question` answers `{ ok: false, error: "no_asker" }` at once, because the `/control`
