@@ -84,9 +84,10 @@ export default defineConfig({
           // guarantee the original setting was written for.
           // `tests/integration/typecheck-clean-gate.test.ts` is one of them: it runs
           // `pnpm typecheck`, which is `pnpm build:packages && tsc --noEmit`, and every package's
-          // tsup config cleans its dist before writing it. Run beside the parallel `root` project's
-          // files it would delete a dist another file is reading (B-700); serialized here, no other
-          // file of this group reads dist while it rebuilds.
+          // tsup config cleans its dist before writing it. Serialized here, no other file of this
+          // group reads dist while it rebuilds (B-700). This removes contention within the group
+          // only: files of the parallel `root` project and the package projects run beside it and
+          // can still read a dist it is rebuilding.
           include: ['tests/integration/**/*.test.ts', 'tests/smoke/**/*.test.ts'],
           // The type-test suite belongs to `root` alone. Without this, both projects inherit the
           // top-level `typecheck.include` and 22 `.test-d.ts` files are checked TWICE — measured,
@@ -203,7 +204,7 @@ export default defineConfig({
       provider: 'v8',
       // Write the report even when a test fails (B-700). A `root-serial` file can read
       // `packages/theo/dist` while another project rebuilds it, so the coverage leg can go red on
-      // that race after `npm test` passed the same head. The kit's validator (#1251) re-runs such a
+      // that race after `pnpm test` passed the same head. The kit's validator (#1251) re-runs such a
       // failure on its own, and it reads the coverage numbers from this report: without it, a red
       // run leaves nothing to read.
       reportOnFailure: true,
