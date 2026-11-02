@@ -15,6 +15,7 @@
 import type { z } from 'zod'
 
 import type { RouteConfig } from '../../core/contracts/route-config.js'
+import type { RouteContext } from '../../core/contracts/route-context.js'
 import type { RoutePolicy } from '../../core/contracts/route-policy.js'
 
 import { defineRoute } from './define-route.js'
@@ -32,7 +33,7 @@ export interface RouteBuilder<
   TQuery extends z.ZodType = z.ZodUndefined,
   TBody extends z.ZodType = z.ZodUndefined,
   TParams extends z.ZodType = z.ZodUndefined,
-  TCtx = unknown,
+  TCtx = RouteContext,
   TResponse = unknown,
   THandlerSet extends boolean = false,
 > {
@@ -140,7 +141,8 @@ function makeRouteBuilder(spec: RouteSpecAccumulator): RouteBuilder {
 /**
  * Start a fluent route definition. Chain `.query/.body/.params/.response/.status/.csrf`, declare
  * `.policy()` (which the route scanner requires), then `.handler()` and `.build()` for the
- * `RouteConfig`.
+ * `RouteConfig`. The handler's `ctx` is a {@link RouteContext}, which an app augments with the keys
+ * its config provides (`ctx.queue` when `jobs.backend` is set).
  */
 export function route(): RouteBuilder {
   return makeRouteBuilder({})

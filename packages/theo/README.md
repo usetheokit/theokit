@@ -127,6 +127,25 @@ export default config()
 (a 4xx, a 5xx or an aborted request discards it). A job is a file under `<serverDir>/jobs/`
 exporting `defineJob(name, { handler })`.
 
+A route handler's `ctx` is a `RouteContext` (from `theokit/server/define`), whose keys are
+`unknown` until the app declares them. `ctx.queue` is there only when `jobs.backend` is set, so
+declare it yourself in a `.d.ts` file, together with the job names in `JobRegistry` (the scaffold's
+`types/jobs.d.ts` has both blocks):
+
+```typescript
+declare module 'theokit/server/jobs' {
+  interface JobRegistry {
+    'send-email': { to: string; subject: string }
+  }
+}
+declare module 'theokit/server/define' {
+  interface RouteContext {
+    queue: import('theokit/server/jobs').QueueClient
+  }
+}
+export {}
+```
+
 `theokit start` and `theokit dev` call the backend's `migrate()` once at boot, so the
 `theokit_jobs` table is created (or upgraded) before the first request. If that fails, for example
 because the database is unreachable, the boot fails rather than serving routes whose jobs would be

@@ -15,13 +15,14 @@
 
 import type { z } from 'zod'
 
+import type { RouteContext } from './route-context.js'
 import type { RoutePolicy } from './route-policy.js'
 
 export interface RouteConfig<
   TQuery extends z.ZodType = z.ZodUndefined,
   TBody extends z.ZodType = z.ZodUndefined,
   TParams extends z.ZodType = z.ZodUndefined,
-  TCtx = unknown,
+  TCtx = RouteContext,
   TResponse = unknown,
 > {
   query?: TQuery

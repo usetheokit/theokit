@@ -15,6 +15,7 @@
 import type { z } from 'zod'
 
 import type { RouteConfig } from '../../core/contracts/route-config.js'
+import type { RouteContext } from '../../core/contracts/route-context.js'
 import { evaluateRoutePolicy, subjectFromContext } from '../../core/contracts/route-policy.js'
 
 import {
@@ -111,7 +112,9 @@ export async function callProcedure(
     body: validated.body,
     params: validated.params,
     request: inProcessRequest(),
-    ctx: ctx,
+    // A handler's `ctx` is typed `RouteContext`, an object, and over HTTP it always is one. A caller
+    // that supplies no context gets an empty one here too (usetheokit/theokit#1073).
+    ctx: (ctx ?? {}) as RouteContext,
   })
 
   // Server-fault response validation (parity with the HTTP path) — only for plain values, and only
