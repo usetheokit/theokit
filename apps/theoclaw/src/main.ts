@@ -9,6 +9,7 @@ import { startTheoClaw } from './composition.js'
 import type { AgentImport, TheoClawAgentOptions } from './agent/create-agent.js'
 import { type CreateAgent, createAgentFactory, createChannelAgentFactory } from './control-plane/agent-factory.js'
 import { loadConfiguration } from './config-file.js'
+import { parseEntryArguments } from './entry-arguments.js'
 import { describeError } from './control-plane/errors.js'
 import { applyInstance, resolveInstance, type TheoClawInstance } from './instance.js'
 import { importedMcpPaths, importedMcpSecrets, importedSetupLine, readImportAtStart, requireImportedMcp } from './migration/import-start.js'
@@ -37,7 +38,13 @@ function fail(error: unknown): never {
 let instance: TheoClawInstance
 let imported: AgentImport | undefined
 try {
-  // The configuration file first (B-374): it fills only what the environment leaves unset.
+  // The arguments first: a scheduled task passes its configuration as arguments, not as environment.
+  const parsed = parseEntryArguments(process.argv.slice(2), process.env)
+  if (!parsed.ok) {
+    process.stderr.write(`theoclaw: ${parsed.error}\n`)
+    process.exit(2)
+  }
+  // The configuration file next (B-374): it fills only what the environment leaves unset.
   loadConfiguration(process.env, homedir())
   instance = resolveInstance(process.env, { homeDir: homedir() })
   applyInstance(instance, process.env)
