@@ -419,7 +419,7 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
   const buildWorker = options.importFreeAgentFactory ?? options.agentFactory
   const platforms = resolvePlatforms(options.env).configured.map((entry) => entry.platform)
   const beat = heartbeat === undefined ? {} : { heartbeat: heartbeatJob(sessionSettings.workspace, heartbeat) }
-  scheduled = wireScheduler({ store: scheduleStore, loop: composed.loop, buildRunAgent: buildWorker, tools, platforms, ...beat, write: stderr })
+  scheduled = wireScheduler({ store: scheduleStore, loop: composed.loop, buildRunAgent: buildWorker, tools, platforms, ...beat, write: stderr, secrets: secretValues })
   const extraTools = [...workflowTools(options.draftAgentFactory, stderr), ...scheduled.scheduleTools]
   const buildControlAgent = async (): Promise<TurnAgent> =>
     options.agentFactory(controlAgentToolOptions(tools, buildWorker, extraTools))

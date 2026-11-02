@@ -16,9 +16,10 @@ import { DeliveryRouter } from '@theokit/gateway'
 import type { PlatformName } from '@theokit/gateway'
 import type { CustomTool } from '@theokit/sdk'
 
+import { untrustedContentSendOptions } from '../agent/untrusted-content.js'
 import { createContainer } from '../agent-container.js'
 import type { TurnAgent } from '../agent-port.js'
-import type { ChannelLoop } from '../channels/channel-loop.js'
+import { type ChannelLoop, maskSecrets } from '../channels/channel-loop.js'
 import { type AgentToolOptions, workerToolOptions } from '../tools/tool-registry.js'
 import type { ToolSettings } from '../tools/tool-settings.js'
 
@@ -54,7 +55,7 @@ export function createRunPort(buildRunAgent: BuildRunAgent, tools: ToolSettings)
   const { withAgent } = createContainer<TurnAgent>({ factory: () => buildRunAgent(runAgentToolOptions(tools)) })
   return (prompt, signal) =>
     withAgent(async (agent) => {
-      const run = await agent.send(prompt, { signal })
+      const run = await agent.send(prompt, { ...untrustedContentSendOptions(), signal })
       const outcome = await run.wait()
       if (outcome.status === 'error' || outcome.status === 'cancelled' || outcome.result === undefined) {
         return { ok: false, error: outcome.error?.code ?? `the run ended ${outcome.status}` }
@@ -65,10 +66,11 @@ export function createRunPort(buildRunAgent: BuildRunAgent, tools: ToolSettings)
 
 /**
  * Deliver through a `DeliveryRouter` built at each send from the adapters connected by then, so a
- * platform that connects after the start is reached. An adapter that throws is reported as
- * `adapter_threw`: `DeliveryRouter.send` does not catch it.
+ * platform that connects after the start is reached. The text is masked first, as a chat reply and a
+ * broadcast answer are (OC-90), so a configured value never reaches a channel. An adapter that throws
+ * is reported as `adapter_threw`: `DeliveryRouter.send` does not catch it.
  */
-export function createDeliverPort(loop: Pick<ChannelLoop, 'started'>): DeliverPort {
+export function createDeliverPort(loop: Pick<ChannelLoop, 'started'>, secrets: readonly string[] = []): DeliverPort {
   return async (target, text) => {
     const router = new DeliveryRouter()
     for (const { adapter } of loop.started.values()) router.register(adapter)
@@ -77,7 +79,7 @@ export function createDeliverPort(loop: Pick<ChannelLoop, 'started'>): DeliverPo
         platform: target.platform as PlatformName,
         // As the broadcast send does: a scheduled answer goes to a channel, not a reply thread.
         channel: { id: target.channelId, type: 'group' },
-        text,
+        text: maskSecrets(text, secrets),
       })
     } catch {
       return { ok: false, error: { code: 'adapter_threw' } }
@@ -102,6 +104,8 @@ export interface WireSchedulerOptions {
   readonly platforms: readonly string[]
   readonly heartbeat?: TransientSchedule
   readonly write: (line: string) => void
+  /** The configured values masked out of every delivered answer (OC-90). */
+  readonly secrets?: readonly string[]
 }
 
 export interface RunningScheduler {
@@ -125,7 +129,7 @@ export function wireScheduler(options: WireSchedulerOptions): RunningScheduler {
   const scheduler = createScheduler({
     store: options.store,
     run: createRunPort(options.buildRunAgent, options.tools),
-    deliver: createDeliverPort(options.loop),
+    deliver: createDeliverPort(options.loop, options.secrets),
     write: options.write,
   })
   const { heartbeat } = options

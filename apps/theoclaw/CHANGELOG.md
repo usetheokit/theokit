@@ -27,7 +27,9 @@ and versioning follows [Semantic Versioning](https://semver.org/).
   `<workspace>/.theoclaw/schedules.json` (mode 0600, a malformed file refuses the start) and run on
   the SDK `Cron` timer as read-only worker agents that hold no schedule tool. Each run's prompt
   carries the last 4000 characters of the previous answer, and the answer is sent to the job's
-  platform and channel through the gateway's `DeliveryRouter`, unless it is `[SILENT]` alone. A
+  platform and channel through the gateway's `DeliveryRouter`, unless it is `[SILENT]` alone, with
+  every configured value masked as in a chat reply (OC-90). A run's send frames its tool results as
+  data (OC-88). A
   failed run sends one failure line, an overlapping fire is skipped, and the shutdown aborts runs in
   flight before the platforms stop. `THEOCLAW_HEARTBEAT="<cron> <platform>:<channel>"` runs
   `HEARTBEAT.md` from the workspace as a prompt on each fire, and nothing when the file is absent or

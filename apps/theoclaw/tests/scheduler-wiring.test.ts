@@ -19,11 +19,13 @@ const SCHEDULE_TOOLS = ['schedule_job', 'list_scheduled_jobs', 'cancel_scheduled
 /** An agent that answers `answer`, or holds until its signal aborts when `answer` is undefined. */
 class AnsweringAgent implements TurnAgent {
   readonly signals: (AbortSignal | undefined)[] = []
+  readonly options: unknown[] = []
   constructor(private readonly answer: string | undefined) {}
 
   send(_text: string, options?: { readonly signal?: AbortSignal }): Promise<TurnRun> {
     const signal = options?.signal
     this.signals.push(signal)
+    this.options.push(options)
     const answer = this.answer
     return Promise.resolve({
       // eslint-disable-next-line @typescript-eslint/require-await -- the port's stream is async
@@ -66,7 +68,11 @@ function connect(adapter: FakeAdapter): void {
   started.set(adapter.platform, { adapter } as unknown as StartedPlatform)
 }
 
-async function start(agent: TurnAgent, built: AgentToolOptions[] = []): Promise<RunningScheduler> {
+async function start(
+  agent: TurnAgent,
+  built: AgentToolOptions[] = [],
+  secrets: readonly string[] = [],
+): Promise<RunningScheduler> {
   running = wireScheduler({
     store,
     loop: { started },
@@ -77,6 +83,7 @@ async function start(agent: TurnAgent, built: AgentToolOptions[] = []): Promise<
     tools: resolveToolSettings({}, dir, { detect: notEnforced, warn: () => undefined }),
     platforms: ['telegram', 'slack'],
     write: (line) => lines.push(line),
+    secrets,
   })
   await running.start()
   return running
@@ -100,6 +107,27 @@ describe('wireScheduler', () => {
     expect(await scheduler.fire('job-1')).toBe('delivered')
     expect(telegram.sent).toEqual([{ channel: { id: '42', type: 'group' }, text: 'hello there' }])
     expect(lines[0]).toBe('scheduler: 0 jobs, heartbeat off')
+  })
+
+  it('sends the run with the untrusted content options, so its tool results reach the model framed (OC-88)', async () => {
+    connect(new FakeAdapter('telegram'))
+    const agent = new AnsweringAgent('ok')
+    const { scheduler } = await start(agent)
+    await scheduler.add(job())
+    await scheduler.fire('job-1')
+    expect(agent.options[0]).toMatchObject({ toolResultGuard: { delimit: true } })
+    expect(agent.signals[0]).toBeInstanceOf(AbortSignal)
+  })
+
+  it('masks a configured value in the delivered answer (OC-90)', async () => {
+    const telegram = new FakeAdapter('telegram')
+    connect(telegram)
+    const { scheduler } = await start(new AnsweringAgent('the key is sk-live-123, keep it'), [], ['sk-live-123'])
+    await scheduler.add(job())
+    expect(await scheduler.fire('job-1')).toBe('delivered')
+    const sent = telegram.sent.map((message) => message.text).join('\n')
+    expect(sent).not.toContain('sk-live-123')
+    expect(sent).toContain('the key is')
   })
 
   it('prints one line when a delivery has no adapter', async () => {

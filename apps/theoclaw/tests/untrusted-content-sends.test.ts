@@ -6,8 +6,8 @@ import { describe, expect, it } from 'vitest'
 const SRC = join(import.meta.dirname, '..', 'src')
 
 /**
- * The `.send(` calls in `src` whose receiver is not an agent (brief FR-004): a WebSocket frame and
- * the ACP transport's line, each keyed by file and receiver so a new agent send in the same file
+ * The `.send(` calls in `src` whose receiver is not an agent (brief FR-004): a WebSocket frame,
+ * the ACP transport's line and a scheduled answer's `DeliveryRouter` send, each keyed by file and receiver so a new agent send in the same file
  * is still checked. A bare `send(` with no receiver is a local function and is out of reach of the
  * match below, which requires a `.` before `send(`.
  */
@@ -15,6 +15,7 @@ const NOT_AGENTS: ReadonlySet<string> = new Set([
   'control-plane/control-socket.ts:ws',
   'control-client/control-client.ts:socket',
   'tools/acp-transport.ts:inner',
+  'scheduler/scheduler-wiring.ts:router',
 ])
 
 interface SendCall {
