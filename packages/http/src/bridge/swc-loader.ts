@@ -124,10 +124,13 @@ export async function transformControllerSource(
   const swc = await loadSwc()
   if (!swc) {
     throw new HttpDecoratorsConfigError(
-      `@swc/core is required for parameter decorators (@Body, @Param, @Query). ` +
-        `Install it:\n\n  pnpm add -D @swc/core\n\n` +
-        `esbuild (used by tsx/Vite) cannot parse parameter decorators. ` +
-        `SWC handles them correctly with full metadata emission.`,
+      // #1086 — every controller is compiled here, not only those with parameter decorators, and
+      // the project may use any package manager. This package cannot read the lockfile through
+      // `theokit` (which depends on it), so the message names the package, not a command.
+      `@swc/core is required to compile every controller: it emits the decorator metadata ` +
+        `(@Controller, @Get, @Body, @Param, @Query ...) that esbuild, used by tsx and Vite, cannot. ` +
+        `Add @swc/core to the project as a dev dependency with its package manager, then rebuild. ` +
+        `(compiling ${filename})`,
     )
   }
 
