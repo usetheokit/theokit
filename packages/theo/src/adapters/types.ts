@@ -7,6 +7,7 @@ import type { DeployedAgent } from './deployed-agents.js'
 import type { DeployedCorsOptions } from './deployed-cors.js'
 import type { DeployedCsrfOptions } from './deployed-csrf.js'
 import type { DeployedRateLimitOptions } from './deployed-rate-limit.js'
+import type { DeployedReservedRoutesOptions } from './deployed-reserved-routes.js'
 import type {
   DeployedAgentsDirOptions,
   DeployedRuntimeConfigOptions,
@@ -34,7 +35,8 @@ export type DeployedEntryOptions = {
   DeployedRuntimeConfigOptions &
   DeployedServerDirOptions &
   DeployedCorsOptions &
-  DeployedRateLimitOptions
+  DeployedRateLimitOptions &
+  DeployedReservedRoutesOptions
 
 /**
  * Build context injected by the CLI into adapter.build.
@@ -118,6 +120,7 @@ export type ConfigConcern =
   | 'plugins'
   | 'securityHeaders'
   | 'jobs'
+  | 'ready'
 
 export interface DeployAdapter {
   name: string

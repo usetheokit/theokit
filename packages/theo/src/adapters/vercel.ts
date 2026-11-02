@@ -22,6 +22,7 @@ import {
   rateLimitCheckFragment,
   type DeployedRateLimitOptions,
 } from './deployed-rate-limit.js'
+import { deployedReservedRoutesFragment, reservedRouteBranch } from './deployed-reserved-routes.js'
 import { deployedRuntimeConfigFragment, serverDirLiteral } from './deployed-runtime-config.js'
 import { deployedTraceFragment } from './deployed-trace.js'
 import { nodeAdapter } from './node.js'
@@ -180,6 +181,7 @@ function vercelRouteRequestFragment(
   return [
     `async function routeRequest(nodeReq) {`,
     `  const url = new URL(nodeReq.url ?? '/', 'http://' + (nodeReq.headers?.host ?? 'localhost'))`,
+    ...reservedRouteBranch('url.pathname', '  '),
     ``,
     // B-317 — emitted only when this function does NOT render the document. With a document branch
     // every path is legitimate: `/api/*` is a route and everything else is a page, so refusing
@@ -342,7 +344,13 @@ export function renderVercelFunctionEntry(
     `// theo.config.ts to read. config.json routes only /api/* here, so this`,
     `// covers the API and not the document Vercel's static host serves`,
     `// (usetheokit/theokit#412).`,
-    ...deployedEntryPreamble(runtimeConfig, agentsFragment, opts, 'vercel'),
+    ...deployedEntryPreamble(
+      runtimeConfig,
+      agentsFragment,
+      opts,
+      'vercel',
+      deployedReservedRoutesFragment(opts),
+    ),
     ``,
     `// Vercel Functions invoke this default export with a (req, res) pair`,
     `// (Node IncomingMessage-style). \`routeRequest\` produces a Web Response for`,
@@ -419,6 +427,9 @@ export function renderVercelConfigJson(
         continue: true,
       },
       { src: '/api/(.*)', dest: '/api' },
+      // #1097 — the reserved routes the function answers. No file matches them, so without this
+      // rule they reached the last route below and were answered with the document.
+      { src: '/__theo/(health|ready)', dest: '/api' },
       { handle: 'filesystem' },
       // B-317 — where a path with no matching file goes. `{ handle: 'filesystem' }` above still
       // serves every real file, so this is reached only by a page request: to the function when the
@@ -590,6 +601,8 @@ export async function buildVercel(
       csrf: config.security?.csrf,
       disallowed: config.security?.disallowed,
       cors: config.security?.cors,
+      // #1097 — a probe cannot ride as a literal; the entry fails `/__theo/ready` closed instead.
+      readyProbeDeclared: config.ready !== undefined,
       // #425 — a selector, not a transformer, so it rides as a literal like the values above.
       serialization: config.serialization,
     }),

@@ -19,6 +19,7 @@ import { deployedAgentsFragment, scannedFromLoaderCache } from './deployed-agent
 import { planDeployedPlugins } from './deployed-plugins-module.js'
 import { deployedEntryPreamble } from './deployed-preamble.js'
 import { deployedRateLimitFragment, rateLimitCheckFragment } from './deployed-rate-limit.js'
+import { deployedReservedRoutesFragment, reservedRouteBranch } from './deployed-reserved-routes.js'
 import {
   agentsDirLiteral,
   deployedRuntimeConfigFragment,
@@ -190,7 +191,13 @@ export function renderDenoEntry(port: number, opts: DeployedEntryOptions = {}): 
     `// carried here as a literal because the deployed isolate has no`,
     `// theo.config.ts to read. The document is served by this entry too`,
     `// (usetheokit/theokit#951), so it carries the baseline as well.`,
-    ...deployedEntryPreamble(runtimeConfig, agentsFragment, opts, TARGET),
+    ...deployedEntryPreamble(
+      runtimeConfig,
+      agentsFragment,
+      opts,
+      TARGET,
+      deployedReservedRoutesFragment(opts, 'npm:'),
+    ),
     ``,
     ...CLIENT_SERVER_FRAGMENT,
     ``,
@@ -256,6 +263,7 @@ export function renderDenoEntry(port: number, opts: DeployedEntryOptions = {}): 
     ``,
     `async function handleRequest(request) {`,
     `  const url = new URL(request.url)`,
+    ...reservedRouteBranch('url.pathname', '  '),
     ``,
     `  if (!url.pathname.startsWith('/api/')${agentsFragment.hostBypass}) {`,
     `    return serveClient(request, url)`,
@@ -303,6 +311,8 @@ export async function buildDeno(
     csrf: config.security?.csrf,
     disallowed: config.security?.disallowed,
     cors: config.security?.cors,
+    // #1097 — a probe cannot ride as a literal; the entry fails `/__theo/ready` closed instead.
+    readyProbeDeclared: config.ready !== undefined,
     // #425 — a selector, not a transformer, so it rides as a literal like the values above.
     serialization: config.serialization,
     // #425 — the ONE concern that is not a literal. A closure cannot be baked, so a plugin

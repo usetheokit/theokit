@@ -40,6 +40,7 @@ export const CONFIG_CONCERNS = [
   'plugins',
   'securityHeaders',
   'jobs',
+  'ready',
 ] as const satisfies readonly ConfigConcern[]
 
 /**
@@ -70,6 +71,7 @@ const CONFIG_KEY: Record<ConfigConcern, string> = {
   plugins: 'plugins',
   securityHeaders: 'security.headers',
   jobs: 'jobs.backend',
+  ready: 'ready',
 }
 
 /** Whether the config declares each concern, one predicate per concern. */
@@ -94,6 +96,9 @@ const IS_DECLARED: Record<ConfigConcern, (config: TheoConfig) => boolean> = {
   // A constructed backend (a pool, a map) has no literal a deployed entry could hold, so only
   // `theokit start` wires `ctx.queue` from it (usetheokit/theokit#1009).
   jobs: (config) => config.jobs !== undefined,
+  // A probe is a closure too, so only `theokit start` runs it; a deployed entry fails
+  // `/__theo/ready` closed instead (usetheokit/theokit#1097).
+  ready: (config) => config.ready !== undefined,
 }
 
 function isDeclared(config: TheoConfig, concern: ConfigConcern): boolean {
