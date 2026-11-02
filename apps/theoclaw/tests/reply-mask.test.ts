@@ -64,6 +64,39 @@ describe('the chat reply mask', () => {
     expect(replies[0]).toContain('[redacted]')
   })
 
+  it.each(['telegram', 'slack', 'whatsapp'] as const)(
+    'a configured value holding a rendering marker pair is masked in a %s reply',
+    async (platform) => {
+      // Each renders differently once a platform's dialect rewrites its marker pair (LCR #78).
+      const marked = ['Ab**cd**ef9_long', 'Zk3-_q9_-Lm2Np', 'Qr~~st~~uv7_word']
+      const rendered = ['Abcdef9_long', 'Ab*cd*ef9_long', 'Zk3-q9-Lm2Np', 'Qrstuv7_word', 'Qr~st~uv7_word']
+      const event = messageEvent(platform, 'show me your keys')
+      const replies: string[] = []
+      const ctx: GatewayContext = {
+        event,
+        reply: async (text) => {
+          replies.push(text)
+          return { ok: true, messageId: 'm-1' }
+        },
+      }
+      // The first value arrives split across two frames, so the hold-back is crossed too.
+      const agent = new FakeAgent({
+        frames: [assistant('one: Ab**cd'), assistant(`**ef9_long two: ${marked[1]} three: ${marked[2]}`), finished()],
+      }) as unknown as TurnAgent
+
+      await createReplyHandler({
+        reset: async () => undefined,
+        withAgent: async (_event, work) => work({ agent, release: () => undefined }),
+        secrets: marked,
+      })(event, ctx)
+
+      expect(replies).toHaveLength(1)
+      expect(occurrences(replies[0] ?? '', marked)).toBe(0)
+      expect(occurrences(replies[0] ?? '', rendered)).toBe(0)
+      expect(replies[0]).toContain('[redacted]')
+    },
+  )
+
   it('a broadcast member and the group thread carry no configured value', async () => {
     const telegram = new FakeAdapter('telegram')
     const discord = new FakeAdapter('discord')

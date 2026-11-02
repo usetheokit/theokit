@@ -6,6 +6,8 @@ import type { AgentOutputEvent, ChatMessage } from '@theokit/presenter'
 import type { TurnAgent } from '../agent-port.js'
 import { untrustedContentSendOptions } from '../agent/untrusted-content.js'
 import { maskSecrets } from './channel-loop.js'
+import { createStreamMask } from './stream-mask.js'
+import type { StreamMask } from './stream-mask.js'
 import type { BroadcastGroup, BroadcastGroups } from './broadcast-groups.js'
 import type { SessionLease } from '../sessions/session-agents.js'
 
@@ -121,24 +123,40 @@ type TurnOutcome =
   | { readonly failed: false; readonly answer: string }
   | { readonly failed: true; readonly error: unknown }
 
-/** What a turn's stream left behind: its plain answer and the error code it streamed, if any. */
+/**
+ * What a turn's stream left behind: its plain answer and the error code it streamed, if any; and
+ * the mask its text crosses before the presenter renders it.
+ */
 interface StreamedTurn {
   answer: string
   error: string | undefined
+  readonly mask: StreamMask
 }
 
 /**
  * Present one frame's events. The spread gives the frame an anonymous type, which the presenter's
  * index signature accepts. A streamed `finish` is dropped: it would emit and reset the presenter
- * before the one synthetic finish the reply is taken from (D8).
+ * before the one synthetic finish the reply is taken from (D8). Text is masked before the presenter
+ * renders it: a platform's dialect rewrites marker pairs (`**`, `~~`, `_`), so a value holding one
+ * no longer matches once rendered (LCR #78). The mask holds back an end that could still grow into
+ * a value split across frames.
  */
 function presentFrame(frame: { readonly type: string }, presenter: ChatPresenter, streamed: StreamedTurn): void {
   for (const output of fromSdkMessage({ ...frame })) {
     if (output.type === 'error') streamed.error = output.code
-    // The answer before any platform rendering, for a broadcast group's thread and its other members.
-    if (output.type === 'text') streamed.answer += output.text
-    if (output.type !== 'finish') presenter.present(output)
+    if (output.type === 'text') {
+      // The answer before any platform rendering, for a broadcast group's thread and its other members.
+      streamed.answer += output.text
+      const released = streamed.mask.push(output.text)
+      if (released !== '') presenter.present({ ...output, text: released })
+    } else if (output.type !== 'finish') presenter.present(output)
   }
+}
+
+/** Present whatever text the mask still holds, masked, once the stream ends or fails. */
+function flushMask(presenter: ChatPresenter, streamed: StreamedTurn): void {
+  const rest = streamed.mask.flush()
+  if (rest !== '') presenter.present({ type: 'text', text: rest })
 }
 
 /** Stream the agent's answer into the presenter; a failure is returned, not thrown. */
@@ -147,12 +165,17 @@ async function streamTurn(
   event: MessageEvent,
   prompt: string,
   presenter: ChatPresenter,
+  secrets: readonly string[],
 ): Promise<TurnOutcome> {
   // An ERROR or EXPIRED status in the stream fails the turn even when `wait()` reports it finished.
-  const streamed: StreamedTurn = { answer: '', error: undefined }
+  const streamed: StreamedTurn = { answer: '', error: undefined, mask: createStreamMask(secrets) }
   try {
     const run = await agent.send(prompt, untrustedContentSendOptions())
-    for await (const frame of run.stream()) presentFrame(frame, presenter, streamed)
+    try {
+      for await (const frame of run.stream()) presentFrame(frame, presenter, streamed)
+    } finally {
+      flushMask(presenter, streamed)
+    }
     const result = await run.wait()
     if (result.status !== 'error' && streamed.error === undefined) {
       return { failed: false, answer: streamed.answer === '' ? NO_ANSWER_REPLY : streamed.answer }
@@ -179,9 +202,10 @@ async function answerTurn(options: ReplyHandlerOptions, event: MessageEvent, ctx
     return await options.withAgent(event, async (lease) => {
       started = true
       try {
-        const outcome = await streamTurn(lease.agent, event, prompt, presenter)
-        // Masked after rendering, so a value is caught in the platform's own format; the answer a
-        // broadcast group records and fans out is masked before any member renders it.
+        const outcome = await streamTurn(lease.agent, event, prompt, presenter, secrets)
+        // Masked before rendering (in the stream) and again after it, so a value is caught in the
+        // model's text and in the platform's own format; the answer a broadcast group records and
+        // fans out is masked before any member renders it.
         const reply = finishTurn(presenter)
         await send(ctx, { ...reply, text: maskSecrets(reply.text, secrets) }, outcome)
         if (outcome.failed) throw outcome.error

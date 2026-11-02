@@ -328,6 +328,11 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- A configured value holding a marker pair (`**`, `~~`, `-_x_-`) reached a chat reply with only its
+  markers removed: the reply was masked after the platform's dialect had rewritten them, so the
+  rendered value no longer matched. The turn's text is now masked as it streams, before the
+  presenter renders it, with the same hold-back for a value split across frames, and masked again
+  after rendering (B-398 review, LCR #78).
 - An owner's `/approve` whose `pairing.json` write failed lost the code: the store dropped it
   before the save, and the stranger, refused for the hour, could not ask for another. A failed save
   now keeps the code until it expires, so the owner can send the same `/approve` again (B-371).
