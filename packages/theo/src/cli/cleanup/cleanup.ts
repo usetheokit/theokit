@@ -26,6 +26,55 @@ import type {
 const DEFAULT_SKIP = ['.git', '.gitkeep', '.gitignore']
 // DEFAULT_MAX_AGENTS removed in Phase 7 — gcAgentRegistry is a tombstone.
 
+/**
+ * `.theokit/` holds two unrelated things: what `theokit build` writes (the default `distDir`), and
+ * the agent context the framework and `@theokit/sdk` read at runtime. These lists name the second
+ * kind so the build stops deleting it (#1079) and the generated ignore files can tell the two apart
+ * (#1075, #1069).
+ */
+
+/**
+ * Entries a person writes and the project versions and ships: the instruction file, rules,
+ * personalities, skills, sub-agents, slash commands and hooks.
+ *
+ * `packages/create-theokit/templates/default/_gitignore` un-ignores the same names; a test keeps
+ * the two in step, because create-theokit cannot import from this package.
+ */
+export const AUTHORED_AGENT_CONTEXT = [
+  'THEO.md',
+  'rules',
+  'personalities',
+  'skills',
+  'agents',
+  'commands',
+  'hooks.json',
+] as const
+
+/**
+ * Entries the agent runtime or a single developer writes: memory, local overrides, credentials,
+ * trust and approval records, plugin bundles. A build keeps them; git and the image leave them out,
+ * since several hold tokens.
+ */
+const LOCAL_AGENT_STATE = [
+  'THEO.local.md',
+  'AGENTS.local.md',
+  'memory',
+  'context',
+  'context.json',
+  'config.json',
+  'settings.json',
+  'mcp.json',
+  'hooks',
+  'plugins',
+  'cron',
+  'profiles',
+  'auth.json',
+  'mcp-tokens.json',
+  'credential-pool.json',
+  'tool-permissions.json',
+  'hook-approvals.json',
+] as const
+
 function normalizeSkipName(name: string): string {
   // EC-11 — strip trailing slash + leading `./`
   return basename(name.replace(/\/$/, ''))
@@ -120,4 +169,16 @@ export async function gcAgentRegistry(
  */
 export function __resetGcDeprecationWarnedForTests(): void {
   warnedOnce = false
+}
+
+/**
+ * Empty the build output directory before `theokit build` writes into it, keeping the agent context
+ * and local agent state that share `.theokit/` with the build output. Emptying it whole deleted the
+ * scaffold's THEO.md, rules and personalities on the first build (#1079).
+ */
+export async function cleanBuildOutput(distDir: string): Promise<CleanOutDirResult> {
+  return cleanOutDir({
+    dir: distDir,
+    skip: [...DEFAULT_SKIP, ...AUTHORED_AGENT_CONTEXT, ...LOCAL_AGENT_STATE],
+  })
 }
