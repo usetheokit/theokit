@@ -321,8 +321,9 @@ function agentCommand(name, side, dir, prompt) {
   if (name === 'theocode')
     return [
       side.bin,
+      // Headless TheoCode is the bare `theocode [OPTIONS] PROMPT`: it has no `run` subcommand,
+      // and an unknown leading word would become part of the prompt.
       [
-        'run',
         '-C',
         dir,
         '--skip-git-repo-check',
