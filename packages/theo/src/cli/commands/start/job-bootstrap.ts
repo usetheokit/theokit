@@ -67,7 +67,7 @@ class JobBackendSetupError extends Error {
   readonly code = 'JOB_BACKEND_SETUP_FAILED'
   readonly backend: string
   constructor(backend: string, cause: unknown) {
-    const reason = cause instanceof Error ? cause.message : String(cause)
+    const reason = describeCause(cause)
     super(
       `jobs.backend (${backend}) could not create its storage at boot: ${reason}. ` +
         'Jobs enqueued now would be lost, so the server did not start. Check that the database ' +
@@ -77,6 +77,24 @@ class JobBackendSetupError extends Error {
     this.name = 'JobBackendSetupError'
     this.backend = backend
   }
+}
+
+/**
+ * The text of a setup failure. `pg` connecting to `localhost` tries every address it resolves to
+ * and rejects with an `AggregateError` whose own message is empty, which printed "could not create
+ * its storage at boot: ." on a CI runner. The attempts are listed instead, and an error without a
+ * message falls back to its code.
+ */
+function describeCause(cause: unknown): string {
+  if (cause instanceof AggregateError && cause.message === '') {
+    return cause.errors.map(describeCause).join('; ')
+  }
+  if (cause instanceof Error) {
+    const code = (cause as { code?: unknown }).code
+    if (cause.message !== '') return cause.message
+    return typeof code === 'string' ? code : cause.name
+  }
+  return String(cause)
 }
 
 /**
