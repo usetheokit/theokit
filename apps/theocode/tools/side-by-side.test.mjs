@@ -27,6 +27,7 @@ import {
   spawnExec,
   writeRecord,
 } from './side-by-side.mjs'
+import { parseExecArgs } from '../packages/cli/src/runtime/args.ts'
 
 const BROKEN = 'export const add = (a, b) => a - b\n'
 const FIXED = 'export const add = (a, b) => a + b\n'
@@ -261,6 +262,53 @@ describe('runTask', () => {
     })
     expect(record.sides[0].permissionMode).toBe('sandbox workspace-write, approvals never')
     expect(record.sides[1].permissionMode).toBe('no sandbox, permissions skipped')
+  })
+
+  it('TheoCode receives the task prompt unchanged as its headless prompt, with no extra word', async () => {
+    /** @type {Record<string, string[]>} */
+    const argvByBin = {}
+    const solve = fakeExec({ 'fake-theocode': 'solves', 'fake-claude': 'solves' })
+    const record = await runTask({
+      taskDir: await writeTask(),
+      theocode,
+      competitorName: 'claude',
+      competitor: claude,
+      notLikeForLike: null,
+      exec: async (cmd, args, options) => {
+        if (cmd.startsWith('fake-') && args[0] !== '--version') argvByBin[cmd] = args
+        return solve(cmd, args, options)
+      },
+      workRoot: join(root, 'work'),
+    })
+    const parsed = parseExecArgs(argvByBin['fake-theocode'], false)
+    expect(parsed).toMatchObject({ mode: 'run', prompt: 'The tests fail. Fix sum.mjs.' })
+    expect(record.sides[0].outcome).toBe('solved')
+  })
+
+  it('a codex competitor runs through codex exec with the same prompt and is recorded unsandboxed', async () => {
+    /** @type {Record<string, string[]>} */
+    const argvByBin = {}
+    const solve = fakeExec({ 'fake-theocode': 'solves', 'fake-codex': 'claims' })
+    const record = await runTask({
+      taskDir: await writeTask(),
+      theocode: { provider: 'openai', model: 'openai/gpt-5', effort: 'high', bin: 'fake-theocode' },
+      competitorName: 'codex',
+      competitor: { provider: 'openai', model: 'gpt-5', effort: 'high', bin: 'fake-codex' },
+      notLikeForLike: null,
+      exec: async (cmd, args, options) => {
+        if (cmd.startsWith('fake-') && args[0] !== '--version') argvByBin[cmd] = args
+        return solve(cmd, args, options)
+      },
+      workRoot: join(root, 'work'),
+    })
+    const codexArgv = argvByBin['fake-codex']
+    expect(codexArgv[0]).toBe('exec')
+    expect(codexArgv).toContain('model_reasoning_effort=high')
+    expect(codexArgv.at(-1)).toBe('The tests fail. Fix sum.mjs.')
+    expect(record.sides[1].name).toBe('codex')
+    expect(record.sides[1].permissionMode).toBe('no sandbox, approvals bypassed')
+    expect(record.sides[1].outcome).toBe('failed')
+    expect(record.verdict).toBe('theocode_won')
   })
 
   it('a verification that outlives its bound is killed and scores that side failed, with the reason', async () => {
