@@ -9,6 +9,8 @@ import { TheoClawConfigError } from '../control-plane/errors.js'
 import { readSandboxMode } from '../sandbox/sandbox-mode.js'
 import { browserLine, readBrowser } from './browser-server.js'
 import type { BrowserDeps, BrowserSettings } from './browser-server.js'
+import { computerLine, readComputer } from './computer-settings.js'
+import type { ComputerDeps, ComputerSettings } from './computer-settings.js'
 import { externalToolPaths, resolveExternalTools } from './external-tools.js'
 import type { ExternalTools } from './external-tools.js'
 import { isWithin, realPathOf, SymlinkLoopError } from './real-path.js'
@@ -42,6 +44,8 @@ export interface ToolSettings {
   readonly search: SearchSettings
   /** The browser server's CLI with `THEOCLAW_BROWSER=on`; absent when the browser is off. */
   readonly browser?: BrowserSettings
+  /** The X display the `computer` tool drives with `THEOCLAW_COMPUTER=on`; absent when it is off. */
+  readonly computer?: ComputerSettings
   /** The MCP servers and ACP agents of `THEOCLAW_EXTERNAL_TOOLS`, for the `/control` agent only. */
   readonly external: ExternalTools
   /** Values the output mask must hide (the search keys, the external tools' header and env values). */
@@ -63,6 +67,8 @@ export interface ToolDeps {
   readonly warn?: (message: string) => void
   /** The browser CLI resolver and browsers directory. Default: the installed package and Playwright's own. */
   readonly browser?: BrowserDeps
+  /** How `xdotool` is found. Default: the first executable on `PATH`. */
+  readonly computer?: ComputerDeps
 }
 
 type Env = Readonly<Record<string, string | undefined>>
@@ -186,6 +192,7 @@ export function resolveToolSettings(env: Env, cwd: string, deps: ToolDeps = {}):
   const sandboxMode = readSandboxMode(env)
   const search = readSearch(env)
   const browser = readBrowser(env, deps.browser)
+  const computer = readComputer(env, { hostTools, sandboxMode }, deps.computer)
   const external = resolveExternalTools(env)
   if (hostTools && external.acpAgents.length > 0) {
     // An ACP agent runs unsandboxed in the tool root, one new process per call: with the shell able
@@ -215,7 +222,7 @@ export function resolveToolSettings(env: Env, cwd: string, deps: ToolDeps = {}):
   }
   if (search.kind === 'off') offLines.push(SEARCH_OFF_LINE)
   if (mode === 'danger-full-access') offLines.push(SANDBOX_OFF_LINE)
-  offLines.push(browserLine(browser))
+  offLines.push(browserLine(browser), computerLine(computer))
   return {
     workspace,
     toolRoot,
@@ -229,6 +236,7 @@ export function resolveToolSettings(env: Env, cwd: string, deps: ToolDeps = {}):
     ...(deps.lookup === undefined ? {} : { lookup: deps.lookup }),
     search,
     browser,
+    ...(computer === undefined ? {} : { computer }),
     external,
     // Every search key set, the unused one too: a key is a secret whether or not it is chosen.
     secrets: [
