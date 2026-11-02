@@ -389,7 +389,7 @@ function generatePageTemplate(name: string): string {
 
 function generateWsTemplate(_name: string): string {
   // `websocket()` is the public builder. The `defineWebSocket` this template used to import is not
-  // exported by any public entry point (ADR-0043 D1), so the generated file failed to load.
+  // exported by any public entry point, so the generated file failed to load.
   return [
     `import { websocket } from 'theokit/server/define'`,
     ``,
