@@ -30,6 +30,12 @@
  * unexpected error is 2 as well: Node's default of 1 would read as "pillars failing" when the truth
  * is that nothing was checked.
  *
+ * ## Where it runs
+ *
+ * Not in any merge gate (decision D8 of the pillar-map plan: it exits 1 until every pillar is
+ * answered). `.github/workflows/program-counts.yml` runs it weekly through
+ * `scripts/report-program-counts.mjs` and writes the count to the job summary.
+ *
  * ## Paths
  *
  * `--map` and `--results` resolve against the process's working directory. Under
