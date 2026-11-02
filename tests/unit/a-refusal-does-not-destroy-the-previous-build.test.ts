@@ -31,7 +31,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const cleanOutDir = vi.fn(async () => {})
 
-vi.mock('../../packages/theo/src/cli/cleanup/cleanup.js', () => ({ cleanOutDir }))
+// `buildCommand` empties the output through `cleanBuildOutput`, which wraps `cleanOutDir` with the
+// agent-context skip list (#1079). Both names point at the same spy so the probe sees either.
+vi.mock('../../packages/theo/src/cli/cleanup/cleanup.js', () => ({
+  cleanOutDir,
+  cleanBuildOutput: cleanOutDir,
+}))
 
 // The fixture config is the SCHEMA's own defaults plus the three fields this test needs. Hand-writing
 // the object meant chasing one missing field per run — `agentsDir`, then something a `paths[1]` join

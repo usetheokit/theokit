@@ -23,16 +23,24 @@ export class UnknownPackageError extends Error {
 /**
  * EC-4 — strict whitelist of characters allowed in package input.
  * Lowercase ASCII letters, digits, hyphens. Must start with letter/digit.
- * Rejects: shell metacharacters, path traversal, scope syntax, uppercase.
+ * Rejects: shell metacharacters, path traversal, uppercase, and every scope but `@theokit/`.
+ *
+ * The `@theokit/` scope is accepted because the help text and the Plugins page document
+ * `theokit add @theokit/plugin-payments` (#1076). The scope is stripped before the whitelist
+ * lookup, so it only ever names an entry already in `KNOWN_PACKAGES`.
  */
-const PACKAGE_NAME_REGEX = /^[a-z0-9][a-z0-9-]*$/
+const FIRST_PARTY_SCOPE = '@theokit/'
+const PACKAGE_NAME_REGEX = /^(@theokit\/)?[a-z0-9][a-z0-9-]*$/
 
 export function validatePackageInput(input: string): true {
   if (typeof input !== 'string' || input.length === 0) {
     throw new InvalidPackageNameError(input, 'must be a non-empty string')
   }
   if (!PACKAGE_NAME_REGEX.test(input)) {
-    throw new InvalidPackageNameError(input, 'allowed: lowercase letters, digits, hyphens only')
+    throw new InvalidPackageNameError(
+      input,
+      'allowed: lowercase letters, digits, hyphens, and an optional @theokit/ scope',
+    )
   }
   return true
 }
@@ -91,6 +99,26 @@ export const KNOWN_PACKAGES: Record<string, PackageRegistryEntry> = {
     kind: 'bundled',
     usage: 'theokit build --target=static',
   },
+  // #1076 — the first-party plugins published under @theokit. Install by short or scoped name.
+  ...firstPartyPlugins([
+    'plugin-canvas',
+    'plugin-copilot',
+    'plugin-db-drizzle',
+    'plugin-email',
+    'plugin-forms',
+    'plugin-payments',
+    'plugin-realtime',
+    'plugin-voice',
+  ]),
+}
+
+function firstPartyPlugins(names: readonly string[]): Record<string, PackageRegistryEntry> {
+  return Object.fromEntries(
+    names.map((name) => {
+      const npm = `${FIRST_PARTY_SCOPE}${name}`
+      return [name, { kind: 'external', npm, usage: `import { ... } from '${npm}'` }]
+    }),
+  )
 }
 
 function levenshtein(a: string, b: string): number {
@@ -145,16 +173,19 @@ export async function runAdd(deps: RunAddDeps): Promise<AddResult> {
   validatePackageInput(deps.input)
 
   const registry = deps.registry ?? KNOWN_PACKAGES
-  if (!Object.hasOwn(registry, deps.input)) {
-    const suggestion = findSuggestion(deps.input, Object.keys(registry))
+  const name = deps.input.startsWith(FIRST_PARTY_SCOPE)
+    ? deps.input.slice(FIRST_PARTY_SCOPE.length)
+    : deps.input
+  if (!Object.hasOwn(registry, name)) {
+    const suggestion = findSuggestion(name, Object.keys(registry))
     throw new UnknownPackageError(deps.input, suggestion)
   }
-  const entry = registry[deps.input]
+  const entry = registry[name]
 
   // T6.1 — bundled adapters need no install
   if (entry.kind === 'bundled') {
     return {
-      packageInstalled: `${deps.input} (bundled inside theokit)`,
+      packageInstalled: `${name} (bundled inside theokit)`,
       packageManager: 'bundled',
       usage: entry.usage,
       exitCode: 0,
@@ -203,7 +234,7 @@ export async function addCommand(input: string): Promise<void> {
   try {
     const result = await runAdd({ input, cwd: process.cwd() })
     console.log(`\n  ✓ Installed ${result.packageInstalled} via ${result.packageManager}\n`)
-    console.log(`  Next: import { /* ... */ } from '${result.packageInstalled}'\n`)
+    console.log(`  Next: ${result.usage}\n`)
   } catch (err) {
     console.error(`\n  ✗ ${(err as Error).message}\n`)
     process.exit(1)

@@ -36,7 +36,7 @@ import {
 // never runs (EC-2 absorbed: no stale dist artifact).
 import { emitOpenApi } from '../../vite-plugin/openapi-emit/emit.js'
 import { loadRoutesForOpenApi } from '../../vite-plugin/openapi-emit/load-routes.js'
-import { cleanOutDir } from '../cleanup/cleanup.js'
+import { cleanBuildOutput } from '../cleanup/cleanup.js'
 import { preflightNodeAndBindings } from '../preflight-node-version.js'
 
 import { describeServicesManifest } from './build/describe-services-manifest.js'
@@ -89,9 +89,10 @@ export async function buildCommand(options?: { target?: string }): Promise<void>
   assertRateLimitEnforceable(config, adapter, target)
   assertStreamingSupported(config, adapter, target, await streamingTargets())
 
-  // T2.2 — Clean .theokit/ at build start (Astro pattern). Skip .git*.
+  // T2.2 — Clean .theokit/ at build start (Astro pattern), keeping the agent context that lives
+  // beside the build output (#1079).
   const distDirAbs = resolve(cwd, config.distDir)
-  await cleanOutDir({ dir: distDirAbs })
+  await cleanBuildOutput(distDirAbs)
 
   // EC-201 — cross-reference note when config.adapters[] diverges from
   // the --target flag. --target is authoritative per ADR D2.

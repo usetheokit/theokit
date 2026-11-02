@@ -4,7 +4,17 @@ node_modules/
 .pnp.*
 
 # theokit
-.theokit/
+# `.theokit/` holds the agent context you write AND what `theokit build` generates. The context
+# (THEO.md, rules, personalities, skills, agents, commands, hooks.json) is versioned; build
+# output, agent memory, local overrides and MCP tokens stay out (#1075).
+.theokit/*
+!.theokit/THEO.md
+!.theokit/rules/
+!.theokit/personalities/
+!.theokit/skills/
+!.theokit/agents/
+!.theokit/commands/
+!.theokit/hooks.json
 dist/
 
 # env files

@@ -1,7 +1,8 @@
-import { describe, it, expect } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { afterAll, describe, it, expect } from 'vitest'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
-import { resolve } from 'node:path'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
 
 import { resolveSessionBaseDir } from '../../packages/theo/src/server/agent/mount-agent.js'
 
@@ -30,18 +31,33 @@ const TEMPLATE_ROOT = resolve(
   '../../packages/create-theokit/templates/default',
 )
 
-/** The scaffold ships its ignore file as `_gitignore`; the CLI renames it on write. */
-const ignoreLines = readFileSync(resolve(TEMPLATE_ROOT, '_gitignore'), 'utf-8')
-  .split('\n')
-  .map((l) => l.trim())
-  .filter((l) => l.length > 0 && !l.startsWith('#'))
+/**
+ * Does git ignore this app-relative path under the scaffold's ignore file?
+ *
+ * Asked of git itself, in a throwaway repository holding only the template's `_gitignore` (the CLI
+ * renames it on write). A prefix match stood in for git until the template gained `.theokit/*` with
+ * negations for the agent context (#1075), which a prefix match cannot read.
+ */
+const ignoreRepo = mkdtempSync(join(tmpdir(), 'scaffold-gitignore-'))
+writeFileSync(
+  join(ignoreRepo, '.gitignore'),
+  readFileSync(resolve(TEMPLATE_ROOT, '_gitignore'), 'utf-8'),
+)
+// eslint-disable-next-line sonarjs/no-os-command-from-path -- the assertion is what git itself decides
+spawnSync('git', ['init', '-q'], { cwd: ignoreRepo })
+afterAll(() => {
+  rmSync(ignoreRepo, { recursive: true, force: true })
+})
 
-/** Does any pattern in the ignore file cover this app-relative path? */
 function isIgnored(appRelativePath: string): boolean {
-  return ignoreLines.some((pattern) => {
-    const dir = pattern.replace(/\/$/u, '')
-    return appRelativePath === dir || appRelativePath.startsWith(`${dir}/`)
+  // eslint-disable-next-line sonarjs/no-os-command-from-path -- the assertion is what git itself decides
+  const result = spawnSync('git', ['check-ignore', '-q', '--no-index', appRelativePath], {
+    cwd: ignoreRepo,
   })
+  if (result.status !== 0 && result.status !== 1) {
+    throw new Error(`git check-ignore failed for ${appRelativePath}: ${String(result.stderr)}`)
+  }
+  return result.status === 0
 }
 
 describe('the scaffold ignores what the framework writes into the app (#395)', () => {
