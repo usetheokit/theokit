@@ -201,6 +201,12 @@ export default defineConfig({
     },
     coverage: {
       provider: 'v8',
+      // Write the report even when a test fails (B-700). A `root-serial` file can read
+      // `packages/theo/dist` while another project rebuilds it, so the coverage leg can go red on
+      // that race after `npm test` passed the same head. The kit's validator (#1251) re-runs such a
+      // failure on its own, and it reads the coverage numbers from this report: without it, a red
+      // run leaves nothing to read.
+      reportOnFailure: true,
       reporter: ['text', 'html', 'lcov', 'json-summary'],
       reportsDirectory: './coverage',
       include: ['packages/*/src/**/*.{ts,tsx}'],
