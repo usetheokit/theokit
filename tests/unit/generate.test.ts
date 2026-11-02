@@ -235,7 +235,7 @@ describe('theo generate', () => {
     try {
       await generateCommand('ws', 'events')
       const content = readFileSync(join(dir, 'server/ws/events.ts'), 'utf-8')
-      // `defineWebSocket` is exported by no public entry point (ADR-0043 D1); importing it made the
+      // `defineWebSocket` is exported by no public entry point; importing it made the
       // generated file fail to load.
       expect(content).toContain('websocket()')
       expect(content).toContain("from 'theokit/server/define'")
