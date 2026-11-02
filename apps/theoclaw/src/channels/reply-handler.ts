@@ -5,6 +5,7 @@ import type { AgentOutputEvent, ChatMessage } from '@theokit/presenter'
 
 import type { TurnAgent } from '../agent-port.js'
 import { untrustedContentSendOptions } from '../agent/untrusted-content.js'
+import { maskSecrets } from './channel-loop.js'
 import type { BroadcastGroup, BroadcastGroups } from './broadcast-groups.js'
 import type { SessionLease } from '../sessions/session-agents.js'
 
@@ -45,6 +46,11 @@ export interface ReplyHandlerOptions {
   readonly reset: (event: MessageEvent) => Promise<void>
   /** Without it, every channel is its own conversation. */
   readonly broadcast?: BroadcastOptions
+  /**
+   * Values no reply may carry (`processSecrets`, B-398 FR-006): masked in the origin's reply and in
+   * the answer a broadcast group's other members and thread receive. Default: none.
+   */
+  readonly secrets?: readonly string[]
 }
 
 /** A turn whose run resolved with `status: "error"`, which the SDK reports without rejecting. */
@@ -167,15 +173,19 @@ async function streamTurn(
  */
 async function answerTurn(options: ReplyHandlerOptions, event: MessageEvent, ctx: GatewayContext, prompt: string): Promise<string> {
   const presenter = presenterFor(event)
+  const secrets = options.secrets ?? []
   let started = false
   try {
     return await options.withAgent(event, async (lease) => {
       started = true
       try {
         const outcome = await streamTurn(lease.agent, event, prompt, presenter)
-        await send(ctx, finishTurn(presenter), outcome)
+        // Masked after rendering, so a value is caught in the platform's own format; the answer a
+        // broadcast group records and fans out is masked before any member renders it.
+        const reply = finishTurn(presenter)
+        await send(ctx, { ...reply, text: maskSecrets(reply.text, secrets) }, outcome)
         if (outcome.failed) throw outcome.error
-        return outcome.answer
+        return maskSecrets(outcome.answer, secrets)
       } finally {
         lease.release()
       }
@@ -252,7 +262,8 @@ export function createReplyHandler(options: ReplyHandlerOptions): GatewayHandler
     // Entered before any await, so the group's turns run in delivery order.
     await group.run(async () => {
       const answer = await answerTurn(options, event, ctx, group.prompt(event.text))
-      group.record(event.platform, event.text, answer)
+      // A member's own message joins the thread too, so it is masked as the answer is.
+      group.record(event.platform, maskSecrets(event.text, options.secrets ?? []), answer)
       await fanOut(broadcast, group, event, answer)
     })
   }

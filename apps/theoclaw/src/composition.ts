@@ -34,6 +34,7 @@ import { controlOptions } from './control-plane/control-wiring.js'
 import { type ControlPlaneHandle, listenControlPlane } from './control-plane/listener.js'
 import { formatAddress, type HttpHandler, reportSurfacesOff, serveHandler } from './control-plane/serve.js'
 import { type ControlPlaneSettings, readControlPlaneSettings } from './control-plane/settings.js'
+import { processSecrets } from './secrets.js'
 import { installShutdown, type SignalSource } from './control-plane/shutdown.js'
 import { createTurnRunner } from './control-plane/turn.js'
 import { createBonjourPublisher } from './discovery/bonjour-publisher.js'
@@ -143,6 +144,8 @@ export interface TheoClawOptions {
   readonly pairing?: PairingStore
   /** Builds the Teams activity verifier, once (D4). Defaults to the package's `teamsActivityVerifier`. */
   readonly teamsVerifierFactory?: (options: TeamsActivityVerifierOptions) => TeamsVerifier
+  /** Every value a reply must not carry (`processSecrets`); the channel credentials when absent. */
+  readonly secrets?: readonly string[]
 }
 
 export interface ComposedTheoClaw {
@@ -201,7 +204,9 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
   // First: a bad authorization value stops the start before any adapter is built.
   const policy = options.policy ?? parseAuthorizationPolicy(options.env)
   const chat = chatSessions(options)
-  const { configured, skipped, secrets } = resolvePlatforms(options.env)
+  const platforms = resolvePlatforms(options.env)
+  const { configured, skipped } = platforms
+  const secrets = options.secrets ?? platforms.secrets
   for (const { platform, missing } of skipped) {
     options.write(`${platform}: not configured (missing ${missing.join(', ')})`)
   }
@@ -248,6 +253,7 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
     handler: createReplyHandler({
       withAgent: chat.withAgent,
       reset: (event) => chat.sessions.reset(event),
+      secrets,
       // `loop` is read per message, after it exists: a member whose platform has not started is
       // reported as not delivered.
       broadcast: {
@@ -324,16 +330,6 @@ const NOTHING_TO_WITHDRAW: LanAnnouncement = { stop: () => Promise.resolve() }
 
 function lineWriter(stream: MaskableStream | undefined): (line: string) => void {
   return (line) => void stream?.write(`${line}\n`)
-}
-
-/** Every value the output mask hides: the channel credentials, both model keys, both bearer tokens, the tools' and the import's values. */
-function processSecrets(options: StartOptions, settings: ControlPlaneSettings, tools: ToolSettings): string[] {
-  const { env } = options
-  const keys = [env.THEOKIT_API_KEY, env.OPENROUTER_API_KEY]
-    .map((value) => (value ?? '').trim())
-    .filter((value) => value !== '')
-  const tokens = [settings.controlToken, settings.webchatToken].filter((token) => token !== undefined)
-  return [...resolvePlatforms(env).secrets, ...keys, ...tokens, ...tools.secrets, ...(options.importedSecrets ?? [])]
 }
 
 const SHELL_READ_LINE = 'tools: host tools are on; the shell can read every file the process user can read'
@@ -421,7 +417,8 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
   const pairing = pairingStoreFor(policy, (line) => stderr(redactSecrets(maskSecrets(line, secrets))))
   // First, once every setting is checked: the line holds a label and a directory, never a secret.
   const instance = announceInstance(options.instance, stderr, options.importedLine)
-  const mask = installOutputMask(processSecrets(options, settings, tools), streams)
+  const secretValues = processSecrets(options, settings, tools)
+  const mask = installOutputMask(secretValues, streams)
   const stdout = options.stdout ?? lineWriter(streams[0])
   const flushOnExit = (): void => mask.flush()
   options.signals.on('exit', flushOnExit)
@@ -455,6 +452,7 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
     generations,
     ...(pairing === undefined ? {} : { pairing }),
     write: stderr,
+    secrets: secretValues,
   })
   const extraTools = workflowTools(options.draftAgentFactory, stderr)
   // `/control` agents hold `run_code` and `delegate_all`; their read-only workers carry no import.
