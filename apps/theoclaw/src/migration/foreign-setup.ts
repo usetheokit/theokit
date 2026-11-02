@@ -116,14 +116,14 @@ function parseSkill(text: string, taken: ReadonlySet<string>): ParsedSkill {
   const lacks = { reason: 'frontmatter lacks name or description' }
   const match = FRONTMATTER.exec(text)
   if (match === null) return lacks
-  let data: unknown
+  let frontmatter: unknown
   try {
-    data = parseYaml(match[1])
+    frontmatter = parseYaml(match[1])
   } catch {
     // Unparsable YAML declares no name: FR-003 has one reason for both.
     return lacks
   }
-  const { name, description } = (typeof data === 'object' && data !== null ? data : {}) as Record<string, unknown>
+  const { name, description } = (typeof frontmatter === 'object' && frontmatter !== null ? frontmatter : {}) as Record<string, unknown>
   if (typeof name !== 'string' || typeof description !== 'string') return lacks
   if (!SAFE_SKILL_NAME.test(name)) return { reason: 'skill name is not a safe directory name' }
   if (taken.has(name)) return { reason: 'duplicated name' }
