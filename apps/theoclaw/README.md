@@ -419,6 +419,20 @@ The live check (`THEOCLAW_MODEL` and `OPENROUTER_API_KEY` set; one case waits fo
 THEOCLAW_LIVE=1 pnpm --filter theoclaw exec vitest run tests/live/scheduler.live.test.ts
 ```
 
+### The `/control` agent's desktop
+
+With `THEOCLAW_COMPUTER=on`, `/control` agents get one `computer` tool for an X display:
+`screenshot` (a description of the screen with pixel coordinates, from a tool-less agent shown the
+image; each one costs one extra model call), `mouse_move`, `left_click` and `type` (no control
+characters, so nothing presses Return). It runs outside the sandbox and types into any window the
+display shows, so it needs `THEOCLAW_HOST_TOOLS=on`, is refused under `THEOCLAW_SANDBOX=read-only`,
+and chat agents never get it. Only an Xvfb started with `-fbdir` is supported:
+
+```sh
+Xvfb :99 -screen 0 1024x768x24 -fbdir /tmp/xvfb -nolisten tcp &
+DISPLAY=:99 THEOCLAW_HOST_TOOLS=on THEOCLAW_COMPUTER=on THEOCLAW_COMPUTER_FRAMEBUFFER=/tmp/xvfb/Xvfb_screen0 ...
+```
+
 ### The `/control` agent's browser
 
 With `THEOCLAW_BROWSER=on`, `/control` agents also get a headless Chromium through the pinned
@@ -445,6 +459,8 @@ its own temporary directory to a page.
 | Variable | Meaning |
 |---|---|
 | `THEOCLAW_BROWSER` | `on` or unset; any other value is refused. With `on` the start refuses, naming the fix, when `@playwright/mcp` does not resolve or no Chromium build is in the browsers directory. |
+| `THEOCLAW_COMPUTER` | `on` or unset; any other value is refused. With `on` the start refuses, naming what is missing, without `THEOCLAW_HOST_TOOLS=on`, under `read-only`, without `DISPLAY`, without `xdotool` on `PATH`, or when `THEOCLAW_COMPUTER_FRAMEBUFFER` is not a readable Xvfb XWD file. |
+| `THEOCLAW_COMPUTER_FRAMEBUFFER` | The XWD file Xvfb keeps under `-fbdir` (`<dir>/Xvfb_screen0`); read by `THEOCLAW_COMPUTER=on`. |
 | `PLAYWRIGHT_BROWSERS_PATH` | Optional. Where Playwright keeps its browsers; default `~/.cache/ms-playwright`. `0` (browsers inside the package) is refused. |
 
 Install the Chromium build the server's own Playwright expects, once per host:

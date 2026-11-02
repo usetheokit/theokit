@@ -60,7 +60,7 @@
   {"id":"OC-59","status":"shipped","gaps":["B-591","B-592","B-609","B-597","B-612","B-611"],"check":{"path":"apps/theoclaw/tests/live/tools.live.test.ts","test":"a real model fetches a page and uses the todolist"},"verified_on":"2026-10-26","note":"of the 13 named entries: web_fetch ships here with a live check, view_image and web_search are wired without one (web_search's waits on a search key, OC-63); goals B-612 (not measured as a tool); tts B-591, pdf B-592, secrets B-609, structured_output B-597, subagents and ask_user B-611; computer is OC-62, nodes OC-42, message B-369, sessions_* B-378; the tools reach only the /control agent, and chat-reply agents hold none"},
   {"id":"OC-60","status":"shipped","check":{"path":"apps/theoclaw/tests/live/browser.live.test.ts","test":"a real model reads a value a page renders with JavaScript for OC-60"},"verified_on":"2026-10-31"},
   {"id":"OC-61","status":"open"},
-  {"id":"OC-62","status":"open"},
+  {"id":"OC-62","status":"shipped","check":{"path":"apps/theoclaw/tests/live/computer.live.test.ts","test":"a real model takes a screenshot, moves the pointer and types into a window for OC-62"},"verified_on":"2026-11-02","note":"Xvfb -fbdir displays only; the screenshot reaches the model through a tool-less agent on a user turn (B-676 D1)"},
   {"id":"OC-63","status":"open"},
   {"id":"OC-64","status":"open"},
   {"id":"OC-65","status":"shipped","check":{"path":"apps/theoclaw/tests/live/code-mode.live.test.ts","test":"a real model's script calls two tools in one run_code for OC-65"},"verified_on":"2026-10-31"},

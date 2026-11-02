@@ -13,6 +13,15 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- A `computer` tool for `/control` agents (B-676, OC-62). With `THEOCLAW_COMPUTER=on`,
+  `THEOCLAW_HOST_TOOLS=on`, `DISPLAY` set, `xdotool` on `PATH` and `THEOCLAW_COMPUTER_FRAMEBUFFER`
+  naming the XWD file an Xvfb started with `-fbdir` keeps (`<dir>/Xvfb_screen0`), the agent can
+  `screenshot`, `mouse_move`, `left_click` and `type` on that display. A screenshot is decoded in
+  Node and shown to a tool-less agent on a user turn, whose description is the tool result (an
+  image tool result ends an OpenRouter run). The start refuses a host that cannot run it and the
+  tool is refused under `THEOCLAW_SANDBOX=read-only`; typed text may hold no control character.
+  Chat agents and workers never hold it.
+
 - Device pairing for `/control` (B-709, OC-91). With `THEOCLAW_CONTROL_TOKEN` and `THEOCLAW_STATE_DIR`
   set, the owner's `/control` socket answers `{"type":"pair_code"}` with a one-time setup code valid for
   ten minutes, `{"type":"pending_devices"}` with the requests waiting, and
