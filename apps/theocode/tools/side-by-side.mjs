@@ -19,7 +19,9 @@
  *      final message is recorded and never read for the verdict;
  *   5. an agent CLI that exits nonzero or outlives `--agent-timeout-ms` (a login, quota or flag
  *      error, or a hang) did not attempt the task: its side is `void`, the verdict is `void`, the
- *      record is not counted, and the tail of the agent's stderr is kept as the reason.
+ *      record is not counted, and the tail of the agent's stderr is kept as the reason;
+ *   6. a verification that outlives its bound (the agent left code that never exits) is killed,
+ *      with every process it started, and that side is `failed` with the reason recorded.
  *
  * Each side records the sandbox and permission mode its CLI ran under. They are not alike: TheoCode
  * runs sandboxed (`workspace-write`), while Codex and Claude Code run with the sandbox or the
@@ -73,6 +75,15 @@ export class SeedAlreadyPassesError extends SideBySideError {
   constructor(taskId, counts) {
     super(
       `task ${taskId}: the untouched seed already passes its verification (${counts.pass} pass, ${counts.fail} fail); the task measures nothing`,
+    )
+  }
+}
+
+export class SeedVerificationHangsError extends SideBySideError {
+  /** @param {string} taskId @param {number} timeoutMs */
+  constructor(taskId, timeoutMs) {
+    super(
+      `task ${taskId}: the untouched seed's verification ran past ${timeoutMs} ms and was killed; a seed must fail by its totals, not by hanging`,
     )
   }
 }
@@ -150,9 +161,10 @@ export function parseTestCounts(output) {
 /**
  * A side solved the task only when the verification exited 0, at least one check ran and none
  * failed.
- * @param {{ counts: { pass: number, fail: number }, verifyExitCode: number }} verification
+ * @param {{ counts: { pass: number, fail: number } | null, verifyExitCode: number }} verification
  */
 function sideOutcome({ counts, verifyExitCode }) {
+  if (counts === null) return 'failed'
   return verifyExitCode === 0 && counts.fail === 0 && counts.pass > 0 ? 'solved' : 'failed'
 }
 
@@ -194,18 +206,22 @@ function assessLikeForLike(theocode, competitor, declaration) {
 
 /** Thirty minutes: longer than any of the six tasks took by hand, short enough to end a hang. */
 const DEFAULT_AGENT_TIMEOUT_MS = 30 * 60 * 1000
+/** Five minutes: each task's verification is one small test file that runs in seconds. */
+const DEFAULT_VERIFY_TIMEOUT_MS = 5 * 60 * 1000
 
 /** @type {Exec} */
 export function spawnExec(cmd, args, { cwd, timeoutMs }) {
   return new Promise((resolve, reject) => {
-    const child = spawn(cmd, args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] })
+    // Its own process group, so a timeout also kills what it started (`node --test` runs each
+    // test file in a child that would otherwise outlive the kill).
+    const child = spawn(cmd, args, { cwd, stdio: ['ignore', 'pipe', 'pipe'], detached: true })
     let stdout = ''
     let stderr = ''
     let timedOut = false
     const timer = timeoutMs
       ? setTimeout(() => {
           timedOut = true
-          child.kill('SIGKILL')
+          killGroup(child)
         }, timeoutMs)
       : null
     child.stdout.on('data', (chunk) => (stdout += chunk))
@@ -219,6 +235,16 @@ export function spawnExec(cmd, args, { cwd, timeoutMs }) {
       resolve({ code: code ?? 1, stdout, stderr, timedOut })
     })
   })
+}
+
+/** @param {import('node:child_process').ChildProcess} child */
+function killGroup(child) {
+  try {
+    process.kill(-(/** @type {number} */ (child.pid)), 'SIGKILL')
+  } catch (error) {
+    // ESRCH: the group already exited between the timer firing and the kill.
+    if (/** @type {NodeJS.ErrnoException} */ (error).code !== 'ESRCH') throw error
+  }
 }
 
 /** @param {string} taskDir */
@@ -250,26 +276,34 @@ async function prepareCopy(exec, seedDir, dest) {
   ])
 }
 
-/** @param {Exec} exec @param {{ verify: string[], verifyDir: string }} task @param {string} dir */
-async function verifyTree(exec, task, dir) {
+/**
+ * @param {Exec} exec @param {{ verify: string[], verifyDir: string }} task @param {string} dir
+ * @param {number} timeoutMs
+ */
+async function verifyTree(exec, task, dir, timeoutMs) {
   await cp(task.verifyDir, dir, { recursive: true, force: true })
   const [cmd, ...args] = task.verify
-  const result = await exec(cmd, args, { cwd: dir })
+  const result = await exec(cmd, args, { cwd: dir, timeoutMs })
+  // A killed run never printed its totals: it has no counts, not unparsable ones.
+  if (result.timedOut) return { counts: null, verifyExitCode: result.code, verifyTimedOut: true }
   return {
     counts: parseTestCounts(`${result.stdout}\n${result.stderr}`),
     verifyExitCode: result.code,
+    verifyTimedOut: false,
   }
 }
 
 /**
  * Proves a task's seed fails its verification and returns the seed's hash. No agent runs.
  * @param {Exec} exec @param {Awaited<ReturnType<typeof loadTask>>} task @param {string} workRoot
+ * @param {number} [verifyTimeoutMs]
  */
-async function checkSeed(exec, task, workRoot) {
+async function checkSeed(exec, task, workRoot, verifyTimeoutMs = DEFAULT_VERIFY_TIMEOUT_MS) {
   const dir = join(workRoot, `${task.id}-seed-check`)
   await prepareCopy(exec, task.seedDir, dir)
   const seedHash = await hashTree(task.seedDir)
-  const verification = await verifyTree(exec, task, dir)
+  const verification = await verifyTree(exec, task, dir, verifyTimeoutMs)
+  if (verification.counts === null) throw new SeedVerificationHangsError(task.id, verifyTimeoutMs)
   if (sideOutcome(verification) === 'solved')
     throw new SeedAlreadyPassesError(task.id, verification.counts)
   return { seedHash, ...verification }
@@ -342,13 +376,13 @@ function voidReasonOf(name, agent, timeoutMs) {
  * Runs one agent and verifies its tree. An agent that exited nonzero or timed out is `void`: its
  * tree is not verified, because the seed it left untouched would read as a loss.
  * @param {Exec} exec @param {'theocode'|'claude'|'codex'} name @param {any} side @param {any} task
- * @param {string} dir @param {number} timeoutMs
+ * @param {string} dir @param {{ agentMs: number, verifyMs: number }} timeouts
  */
-async function runSide(exec, name, side, task, dir, timeoutMs) {
+async function runSide(exec, name, side, task, dir, timeouts) {
   const version = await exec(side.bin, ['--version'], { cwd: dir })
   const [cmd, args, permissionMode] = agentCommand(name, side, dir, task.prompt)
-  const agent = await exec(cmd, args, { cwd: dir, timeoutMs })
-  const voidReason = voidReasonOf(name, agent, timeoutMs)
+  const agent = await exec(cmd, args, { cwd: dir, timeoutMs: timeouts.agentMs })
+  const voidReason = voidReasonOf(name, agent, timeouts.agentMs)
   const base = {
     name,
     cliVersion: version.stdout.trim() || null,
@@ -361,16 +395,33 @@ async function runSide(exec, name, side, task, dir, timeoutMs) {
     agentStderrTail: tail(agent.stderr),
   }
   if (voidReason)
-    return { ...base, counts: null, verifyExitCode: null, outcome: 'void', voidReason }
-  const verification = await verifyTree(exec, task, dir)
-  return { ...base, ...verification, outcome: sideOutcome(verification), voidReason: null }
+    return {
+      ...base,
+      counts: null,
+      verifyExitCode: null,
+      verifyTimedOut: false,
+      outcome: 'void',
+      voidReason,
+      failReason: null,
+    }
+  const verification = await verifyTree(exec, task, dir, timeouts.verifyMs)
+  const failReason = verification.verifyTimedOut
+    ? `${name}: the verification ran past ${timeouts.verifyMs} ms and was killed`
+    : null
+  return {
+    ...base,
+    ...verification,
+    outcome: sideOutcome(verification),
+    voidReason: null,
+    failReason,
+  }
 }
 
 /**
  * Runs one task on both sides and returns the record. Refuses before any agent runs on an unlike
  * pair without a declaration, on a competitor flag the competitor's CLI cannot take, on a seed that
  * already passes, and on seed copies that differ. A work root it creates itself is removed after.
- * @param {{ taskDir: string, theocode: any, competitorName: 'claude'|'codex', competitor: any, notLikeForLike: string | null, exec?: Exec, workRoot?: string, agentTimeoutMs?: number, now?: () => Date }} options
+ * @param {{ taskDir: string, theocode: any, competitorName: 'claude'|'codex', competitor: any, notLikeForLike: string | null, exec?: Exec, workRoot?: string, agentTimeoutMs?: number, verifyTimeoutMs?: number, now?: () => Date }} options
  */
 export async function runTask(options) {
   const { taskDir, theocode, competitorName, competitor, notLikeForLike } = options
@@ -398,16 +449,19 @@ export async function runTask(options) {
 async function runTaskIn(options, task, comparison, workRoot) {
   const { theocode, competitorName, competitor } = options
   const exec = options.exec ?? spawnExec
-  const timeoutMs = options.agentTimeoutMs ?? DEFAULT_AGENT_TIMEOUT_MS
-  const seed = await checkSeed(exec, task, workRoot)
+  const timeouts = {
+    agentMs: options.agentTimeoutMs ?? DEFAULT_AGENT_TIMEOUT_MS,
+    verifyMs: options.verifyTimeoutMs ?? DEFAULT_VERIFY_TIMEOUT_MS,
+  }
+  const seed = await checkSeed(exec, task, workRoot, timeouts.verifyMs)
   const theoDir = join(workRoot, `${task.id}-theocode`)
   const compDir = join(workRoot, `${task.id}-${competitorName}`)
   await prepareCopy(exec, task.seedDir, theoDir)
   await prepareCopy(exec, task.seedDir, compDir)
   const copyHash = await assertSeedsIdentical(theoDir, compDir)
   if (copyHash !== seed.seedHash) throw new SeedMismatchError(seed.seedHash, copyHash)
-  const theoSide = await runSide(exec, 'theocode', theocode, task, theoDir, timeoutMs)
-  const compSide = await runSide(exec, competitorName, competitor, task, compDir, timeoutMs)
+  const theoSide = await runSide(exec, 'theocode', theocode, task, theoDir, timeouts)
+  const compSide = await runSide(exec, competitorName, competitor, task, compDir, timeouts)
   const voidReasons = [theoSide.voidReason, compSide.voidReason].filter(Boolean)
   return {
     task: task.id,

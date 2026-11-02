@@ -17,6 +17,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   SeedAlreadyPassesError,
   SeedMismatchError,
+  SeedVerificationHangsError,
   UnlikeSidesError,
   assertSeedsIdentical,
   computeVerdict,
@@ -28,6 +29,7 @@ import {
 
 const BROKEN = 'export const add = (a, b) => a - b\n'
 const FIXED = 'export const add = (a, b) => a + b\n'
+const HANGS = 'setInterval(() => {}, 1000)\nexport const add = (a, b) => a + b\n'
 const TEST = [
   "import { test } from 'node:test'",
   "import assert from 'node:assert/strict'",
@@ -76,9 +78,10 @@ async function writeTask({
 
 /**
  * Fake agent CLIs: `solves` writes the fix, `claims` only says it passed, `cheats` rewrites the
- * test to assert nothing, `crashes` exits 1 before touching the tree (a login or quota error).
+ * test to assert nothing, `crashes` exits 1 before touching the tree (a login or quota error),
+ * `hangs` leaves code that never lets the verification exit.
  * Everything else (git, node) runs for real.
- * @param {Record<string, 'solves' | 'claims' | 'cheats' | 'crashes'>} behaviour
+ * @param {Record<string, 'solves' | 'claims' | 'cheats' | 'crashes' | 'hangs'>} behaviour
  */
 function fakeExec(behaviour) {
   /** @type {import('./side-by-side.mjs').Exec} */
@@ -89,6 +92,7 @@ function fakeExec(behaviour) {
     if (role === 'crashes')
       return { code: 1, stdout: '', stderr: 'Error: not logged in. Run /login.\n' }
     if (role === 'solves') await writeFile(join(options.cwd, 'sum.mjs'), FIXED)
+    if (role === 'hangs') await writeFile(join(options.cwd, 'sum.mjs'), HANGS)
     if (role === 'cheats')
       await writeFile(
         join(options.cwd, 'sum.test.mjs'),
@@ -256,6 +260,50 @@ describe('runTask', () => {
     })
     expect(record.sides[0].permissionMode).toBe('sandbox workspace-write, approvals never')
     expect(record.sides[1].permissionMode).toBe('no sandbox, permissions skipped')
+  })
+
+  it('a verification that outlives its bound is killed and scores that side failed, with the reason', async () => {
+    const record = await runTask({
+      taskDir: await writeTask(),
+      theocode,
+      competitorName: 'claude',
+      competitor: claude,
+      notLikeForLike: null,
+      exec: fakeExec({ 'fake-theocode': 'solves', 'fake-claude': 'hangs' }),
+      workRoot: join(root, 'work'),
+      verifyTimeoutMs: 3000,
+    })
+    expect(record.sides[0].outcome).toBe('solved')
+    expect(record.sides[0].verifyTimedOut).toBe(false)
+    expect(record.sides[1].outcome).toBe('failed')
+    expect(record.sides[1].verifyTimedOut).toBe(true)
+    expect(record.sides[1].failReason).toBe(
+      'claude: the verification ran past 3000 ms and was killed',
+    )
+    expect(record.verdict).toBe('theocode_won')
+    expect(record.counted).toBe(true)
+  }, 30_000)
+
+  it('a seed whose verification outlives its bound is refused before any agent runs', async () => {
+    const ran = []
+    const exec = fakeExec({ 'fake-theocode': 'solves', 'fake-claude': 'solves' })
+    await expect(
+      runTask({
+        taskDir: await writeTask({ verify: ['node', '-e', 'setInterval(() => {}, 1000)'] }),
+        theocode,
+        competitorName: 'claude',
+        competitor: claude,
+        notLikeForLike: null,
+        exec: async (cmd, args, options) => {
+          ran.push(cmd)
+          return exec(cmd, args, options)
+        },
+        workRoot: join(root, 'work'),
+        verifyTimeoutMs: 500,
+      }),
+    ).rejects.toThrow(new SeedVerificationHangsError('sum', 500))
+    expect(ran).not.toContain('fake-theocode')
+    expect(ran).not.toContain('fake-claude')
   })
 
   it('a seed that already passes is refused before any agent runs', async () => {
