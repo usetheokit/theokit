@@ -192,6 +192,7 @@ export async function tryServeAction(c: RequestHandlerCtx): Promise<boolean> {
     c.pluginRunner,
     c.csrfMode,
     c.disallowed,
+    c.jobBackend,
   )
   logRequest({
     method: c.req.method ?? 'POST',

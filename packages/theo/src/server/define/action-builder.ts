@@ -12,6 +12,8 @@
  */
 import type { z } from 'zod'
 
+import type { RouteContext } from '../../core/contracts/route-context.js'
+
 import { defineAction, type ActionConfig, type ActionAccept } from './define-action.js'
 
 /** Compile-error carrier: `.execute`/`.build()` reached before `.input()`. */
@@ -32,7 +34,7 @@ type UnsetMarker = 'theokit.unset' & { readonly __brand: 'theokit.unset' }
  */
 export interface ActionBuilder<
   TInput extends z.ZodType | UnsetMarker = UnsetMarker,
-  TCtx = unknown,
+  TCtx = RouteContext,
   THandlerSet extends boolean = false,
 > {
   /** Set the Zod input schema. Required — every action declares its input contract (zod-is-SSOT). */

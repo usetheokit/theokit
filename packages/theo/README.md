@@ -112,7 +112,7 @@ stays up and the next query reconnects. Attach your own, as above, to handle it 
 
 ## Jobs
 
-Declare a backend in `theo.config.ts` and every file route gets `ctx.queue`:
+Declare a backend in `theo.config.ts` and every file route and server action gets `ctx.queue`:
 
 ```typescript
 import { config } from 'theokit'
@@ -127,7 +127,7 @@ export default config()
 (a 4xx, a 5xx or an aborted request discards it). A job is a file under `<serverDir>/jobs/`
 exporting `defineJob(name, { handler })`.
 
-A route handler's `ctx` is a `RouteContext` (from `theokit/server/define`), whose keys are
+A route or action handler's `ctx` is a `RouteContext` (from `theokit/server/define`), whose keys are
 `unknown` until the app declares them. `ctx.queue` is there only when `jobs.backend` is set, so
 declare it yourself in a `.d.ts` file, together with the job names in `JobRegistry` (the scaffold's
 `types/jobs.d.ts` has both blocks):
