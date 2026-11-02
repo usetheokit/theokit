@@ -4,7 +4,9 @@ import { type SdkMessage, translateSdkEvent } from '@theokit/agents/bridge'
 
 import type { TurnAgent, TurnRun } from '../agent-port.js'
 import { untrustedContentSendOptions } from '../agent/untrusted-content.js'
+import { maskSecrets } from '../channels/channel-loop.js'
 import { describeError } from './errors.js'
+import { createEventMask } from './event-mask.js'
 
 export type { TurnAgent, TurnRun } from '../agent-port.js'
 
@@ -30,6 +32,8 @@ export interface TurnOptions {
   readonly emit: (event: TurnEvent) => void
   /** Aborted when whoever asked for the turn is gone: the run is cancelled and the turn ends. */
   readonly signal?: AbortSignal
+  /** Values no event may carry (`processSecrets`, B-398 FR-007). Default: none. */
+  readonly secrets?: readonly string[]
 }
 
 /** A turn for one chat message: the message, where each translated event goes, and what cancels it. */
@@ -142,13 +146,15 @@ export function outcomeOf(result: { readonly status: string }, streamedError: st
   return result.status === 'error' ? failed('the run ended with status error') : { ok: true }
 }
 
-async function runWith(agent: TurnAgent, options: TurnOptions): Promise<TurnOutcome> {
+async function runWith(agent: TurnAgent, options: TurnOptions, flush: () => void): Promise<TurnOutcome> {
   const run = await agent.send(options.message, untrustedContentSendOptions())
   // Checked before any listener is added: a listener on a signal that already aborted never fires (EC-1).
   if (options.signal?.aborted === true) return cancelRun(run)
   const watch = watchAbort(options.signal)
   const streamed = await streamRun(run, options, watch.aborted).finally(() => watch.release())
+  // A cancelled turn emits nothing more: what the mask still holds is dropped, never sent.
   if ('cancelled' in streamed) return streamed.cancelled
+  flush()
   const { streamedError } = streamed
   return outcomeOf(await run.wait(), streamedError)
 }
@@ -167,15 +173,20 @@ export async function runTheoClawTurn(options: TurnOptions): Promise<TurnOutcome
   if (options.signal?.aborted === true) {
     return { ok: false, code: 'turn_cancelled', reason: 'the turn was cancelled before it started' }
   }
+  const secrets = options.secrets ?? []
+  const mask = createEventMask(secrets, options.emit)
+  let outcome: TurnOutcome
   try {
-    return await options.withAgent((agent) => runWith(agent, options))
+    outcome = await options.withAgent((agent) => runWith(agent, { ...options, emit: mask.emit }, mask.flush))
   } catch (error) {
-    return failed(describeError(error))
+    outcome = failed(describeError(error))
   }
+  // WebChat sends a failed turn's reason to the client, and an SDK error may echo a key.
+  return outcome.ok ? outcome : { ...outcome, reason: maskSecrets(outcome.reason, secrets) }
 }
 
 /** The runner the control socket and WebChat call: one fresh run id per turn. */
-export function createTurnRunner(withAgent: WithAgent): TurnRunner {
+export function createTurnRunner(withAgent: WithAgent, secrets: readonly string[] = []): TurnRunner {
   return (message, emit, signal) =>
-    runTheoClawTurn({ withAgent, message, runId: randomUUID(), emit, ...(signal === undefined ? {} : { signal }) })
+    runTheoClawTurn({ withAgent, message, runId: randomUUID(), emit, secrets, ...(signal === undefined ? {} : { signal }) })
 }

@@ -15,6 +15,20 @@ import { capturingStream, fakeBuilders, TELEGRAM_AND_LINE } from './composition-
 import { assistant, FakeAgent, finished } from './fakes.js'
 
 const TOKEN = 'webchat-token-value-0123456789abcdef'
+
+/**
+ * The text a served turn streamed, its `text-delta` parts joined: the reply mask may hold back the
+ * end of a delta that could grow into a configured value and release it as a delta of its own
+ * (B-398 FR-007), so the text is read the way a client reads it, not as one raw chunk.
+ */
+function servedText(body: string): string {
+  return body
+    .split('\n')
+    .filter((line) => line.startsWith('data: {'))
+    .map((line) => JSON.parse(line.slice('data: '.length)) as { type?: string; delta?: string })
+    .flatMap((part) => (part.type === 'text-delta' && typeof part.delta === 'string' ? [part.delta] : []))
+    .join('')
+}
 const APP_DIR = resolve(fileURLToPath(new URL('..', import.meta.url)))
 
 /** A directory holding a built page, so the tests never depend on whether `build:web` ran. */
@@ -158,7 +172,7 @@ describe('the /webchat routes on the started listener', () => {
 
     await post(base, '/webchat/chat', `Bearer wrong-${TOKEN}`)
     const served = await post(base, '/webchat/chat', `Bearer ${TOKEN}`)
-    expect(await served.text()).toContain('hello from the agent')
+    expect(servedText(await served.text())).toContain('hello from the agent')
     capture.write(`the token is ${TOKEN}\n`)
 
     expect(capture.text()).toContain('the token is [redacted]\n')
@@ -169,7 +183,7 @@ describe('the /webchat routes on the started listener', () => {
     const { base, calls } = await start({ token: TOKEN })
 
     const served = await post(base, '/webchat/chat', `Bearer ${TOKEN}`)
-    expect(await served.text()).toContain('hello from the agent')
+    expect(servedText(await served.text())).toContain('hello from the agent')
 
     expect(calls.toolOptions).toEqual([NO_TOOL_OPTIONS])
   })
@@ -178,7 +192,7 @@ describe('the /webchat routes on the started listener', () => {
     const { base, calls } = await start({ token: TOKEN, webchat: true })
 
     const served = await post(base, '/webchat/chat', `Bearer ${TOKEN}`)
-    expect(await served.text()).toContain('hello from the webchat agent')
+    expect(servedText(await served.text())).toContain('hello from the webchat agent')
 
     expect(calls.webchat).toEqual([NO_TOOL_OPTIONS])
     expect(calls.built).toBe(0)

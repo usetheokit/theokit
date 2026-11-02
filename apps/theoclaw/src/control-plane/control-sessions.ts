@@ -27,6 +27,8 @@ export interface ControlSessionsOptions {
   readonly drainMs?: number
   /** Where a disposal that failed outside any turn is written, one line each. */
   readonly report: (line: string) => void
+  /** Values no session turn's event may carry (`processSecrets`, B-398 FR-007). Default: none. */
+  readonly secrets?: readonly string[]
 }
 
 export interface ControlSessions {
@@ -205,6 +207,7 @@ export function createControlSessions(options: ControlSessionsOptions): ControlS
       runId: randomUUID(),
       signal: turn.controller.signal,
       emit,
+      secrets: options.secrets ?? [],
       onRun: (run) => {
         turn.run = run
         if (turn.cancelRequested) cancelRun(run)

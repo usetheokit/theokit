@@ -9,6 +9,7 @@ import {
 
 import type { TurnAgent, TurnRun } from '../agent-port.js'
 import { untrustedContentSendOptions } from '../agent/untrusted-content.js'
+import { createEventMask } from './event-mask.js'
 import { outcomeOf, type TurnEvent, type TurnOutcome } from './turn.js'
 
 /** Where a session turn's translated events go, and who learns of the run once it exists. */
@@ -22,6 +23,8 @@ export interface SessionTurnOptions {
   readonly onRun: (run: TurnRun) => void
   /** Called once the run's events ended, before its outcome: an interrupt from here on stops nothing. */
   readonly onEventsEnded: () => void
+  /** Values no event may carry (`processSecrets`, B-398 FR-007). Default: none. */
+  readonly secrets?: readonly string[]
 }
 
 /** Every translated event of the run, live text deltas included; the first streamed error's code. */
@@ -55,7 +58,10 @@ async function emitTimeline(run: TurnRun, options: SessionTurnOptions): Promise<
 export async function runSessionTurn(agent: TurnAgent, options: SessionTurnOptions): Promise<TurnOutcome> {
   const run = await agent.send(options.message, { ...untrustedContentSendOptions(), signal: options.signal })
   options.onRun(run)
-  const streamedError = await emitTimeline(run, options)
+  const mask = createEventMask(options.secrets ?? [], options.emit)
+  const streamedError = await emitTimeline(run, { ...options, emit: mask.emit })
+  // An interrupted turn emits nothing more: what the mask still holds is dropped, never sent.
+  if (!options.signal.aborted) mask.flush()
   options.onEventsEnded()
   return outcomeOf(await run.wait(), streamedError)
 }
