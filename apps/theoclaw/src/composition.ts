@@ -117,6 +117,21 @@ export interface ComposedTheoClaw {
   readonly sessions: SessionAgents
 }
 
+/** The trigger routes (B-397): each run on a fresh tool-less agent in its own request boundary, replying through a started adapter. */
+function composedTriggers(
+  options: TheoClawOptions,
+  events: EventSettings,
+  loop: ChannelLoop,
+  write: (line: string) => void,
+): ReadonlyMap<string, WebhookRoute> {
+  const factory = options.triggerAgentFactory ?? createSdkChannelAgentFactory(options.env)
+  return triggerRoutes(events.triggers, {
+    adapterFor: (platform) => loop.started.get(platform)?.adapter,
+    withAgent: createContainer<TurnAgent>({ factory }).withAgent,
+    write,
+  })
+}
+
 /**
  * Wire the app: the configured platforms, one runner each, the reply handler, and the routes.
  * Returns at once; the loop keeps starting slow platforms while the router already serves (EC-2).
@@ -193,16 +208,11 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
   const routes = new Map<PlatformName, WebhookRoute>(
     [...webhooks].map(([platform, { methods }]) => [platform, { methods, handle: startedRoute(loop, platform, handles) }]),
   )
-  const triggerFactory = options.triggerAgentFactory ?? createSdkChannelAgentFactory(options.env)
   const router = createWebhookRouter({
     routes,
     isStarted: (platform) => loop.started.has(platform),
     write: maskedWrite,
-    triggers: triggerRoutes(events.triggers, {
-      adapterFor: (platform) => loop.started.get(platform)?.adapter,
-      withAgent: createContainer<TurnAgent>({ factory: triggerFactory }).withAgent,
-      write: maskedWrite,
-    }),
+    triggers: composedTriggers(options, events, loop, maskedWrite),
   })
   return { loop, router, sessions: chat.sessions }
 }
