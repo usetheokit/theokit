@@ -17,7 +17,7 @@ import { preflightNodeAndBindings } from '../preflight-node-version.js'
 
 import { configureStorageManagerFromConfig } from './start/bootstrap-stages.js'
 import { loadCronModules } from './start/cron-bootstrap.js'
-import { loadJobModules, startJobWorker } from './start/job-bootstrap.js'
+import { loadJobModules, prepareJobBackend, startJobWorker } from './start/job-bootstrap.js'
 
 interface DevOptions {
   port?: number
@@ -74,6 +74,10 @@ export async function startDevServer(cwd: string, options?: DevOptions): Promise
   // #1020 — the storage counterpart. `start` applied `config.storage` and `dev` did not, so every
   // `usePostgres(...)` threw "Database not configured" in development.
   await configureStorageManagerFromConfig(config.storage)
+
+  // #1072 — create the job table before Vite serves a route that enqueues into it. A failure stops
+  // the boot here, before any service or port is taken.
+  await prepareJobBackend(config)
 
   // Wave 2 (T1.1) — spawn polyglot services BEFORE Vite. Healthcheck gates
   // readiness. Empty `services: {}` → early return (Wave 1 BC preserved).

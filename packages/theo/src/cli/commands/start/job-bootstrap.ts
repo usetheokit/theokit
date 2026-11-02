@@ -59,6 +59,45 @@ function isJobDefinition(value: unknown): value is JobDefinition {
   )
 }
 
+/**
+ * `migrate()` of the configured `jobs.backend` rejected at boot. The process must not serve: every
+ * route would answer 2xx while the outbox dropped each job it enqueued (usetheokit/theokit#1072).
+ */
+export class JobBackendSetupError extends Error {
+  readonly code = 'JOB_BACKEND_SETUP_FAILED'
+  readonly backend: string
+  constructor(backend: string, cause: unknown) {
+    const reason = cause instanceof Error ? cause.message : String(cause)
+    super(
+      `jobs.backend (${backend}) could not create its storage at boot: ${reason}. ` +
+        'Jobs enqueued now would be lost, so the server did not start. Check that the database ' +
+        'in theo.config.ts is reachable and that its user may create tables.',
+      { cause },
+    )
+    this.name = 'JobBackendSetupError'
+    this.backend = backend
+  }
+}
+
+/**
+ * Run `migrate()` on the configured `jobs.backend`, when it has one, before anything can enqueue
+ * or dequeue. `theokit start` and `theokit dev` call it at boot whether or not this process runs
+ * the worker: a web-only process enqueues into the same table.
+ *
+ * It used to be the app's job, and nothing told the app: the README configured a
+ * `PostgresJobBackend` without the call, and a fresh database answered 2xx while every job was
+ * dropped. Calling it from `theo.config.ts` instead made `theokit build` need a database.
+ */
+export async function prepareJobBackend(config: Pick<TheoConfig, 'jobs'>): Promise<void> {
+  const backend = jobBackendFromConfig(config)
+  if (backend?.migrate === undefined) return
+  try {
+    await backend.migrate()
+  } catch (err) {
+    throw new JobBackendSetupError(backend.name, err)
+  }
+}
+
 export interface JobWorkerBootstrap {
   /** The running worker, or `undefined` when none was started (see `summary`). */
   readonly worker: JobWorker | undefined

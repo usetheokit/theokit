@@ -92,6 +92,14 @@ export interface JobBackend {
   nack(jobId: string, opts: JobNackOptions): Promise<void>
 
   /**
+   * Optional: create or upgrade whatever storage the backend needs (a table, an index). Must be
+   * idempotent and safe to run from several processes at once. `theokit start` and `theokit dev`
+   * call it once at boot, before serving a request or starting the worker, and refuse to boot when
+   * it rejects (usetheokit/theokit#1072). A backend that needs no setup leaves it out.
+   */
+  migrate?(): Promise<void>
+
+  /**
    * Optional: return the existing jobId if `key` was enqueued within `ttlSeconds`. Pass `name` to
    * scope the lookup to one job type, as `enqueue` deduplicates on (name, key); without it, a key
    * shared by two job types may return either job.
