@@ -53,6 +53,15 @@ describe('theoclaw daemon', () => {
     expect(h.calls).toEqual([])
   })
 
+  it('darwin_and_win32_are_dispatched_to_a_backend_not_refused_as_unsupported', async () => {
+    for (const platform of ['darwin', 'win32'] as const) {
+      const h = harness({ platform, uid: 501, env: { USERNAME: 'dev' } })
+      await daemonStatus(h.io, h.runner)
+      expect(h.stderr(), platform).not.toContain('is not supported')
+      expect(h.calls.length, platform).toBe(1)
+    }
+  })
+
   it('daemon removes the unit again when systemctl refuses to start it', async () => {
     const h = harness({ answers: { 'systemctl enable': [{ code: 1, stderr: 'Failed to enable unit: boom' }] } })
     expect(await daemonInstall(h.io, h.runner)).toBe(1)
