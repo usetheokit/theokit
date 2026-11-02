@@ -6,7 +6,7 @@ import config from '../../vitest.config.js'
  * The coverage run writes its report even when a test fails (B-700).
  *
  * `root-serial` tests read `packages/theo/dist` while another project can be rebuilding it, so the
- * coverage leg can go red on a race that `npm test` already passed at the same head. The kit's
+ * coverage leg can go red on a race that `pnpm test` already passed at the same head. The kit's
  * validator (#1251) re-runs such a failure on its own, but it can only read the coverage numbers if
  * vitest wrote a report. Vitest's default skips the report on a failed run.
  */
