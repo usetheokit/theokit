@@ -616,6 +616,9 @@ jobs:
       # failed rather than reporting "the job failed". They were verified by hand in the session
       # that wrote them (B-004) and by nothing since — which is the item this job closes.
       - name: test
+        # B-624: the sandbox-confinement tests fail, never skip, when bubblewrap is not enforced here.
+        env:
+          THEOCLAW_REQUIRE_SANDBOX: '1'
         run: pnpm --filter theoclaw test
       - name: typecheck
         run: pnpm --filter theoclaw run typecheck

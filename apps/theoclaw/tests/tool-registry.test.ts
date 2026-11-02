@@ -18,6 +18,7 @@ import { BUILT_TOOL_NAMES, CONTROL_TOOL_NAMES } from '../src/tools/tool-names.js
 import { createWorkflowTools } from '../src/workflows/workflow-tools.js'
 import { resolveToolSettings } from '../src/tools/tool-settings.js'
 import { makeHostToolsWorkspace } from './host-tools-workspace.js'
+import { sandboxRequirement } from './sandbox-requirement.js'
 import { advertisedTools, startModelStub } from './model-stub.js'
 
 const sandboxCalls = vi.hoisted(() => ({ create: 0, boundSandboxes: [] as unknown[] }))
@@ -263,11 +264,12 @@ describe('the tools at work', () => {
   })
 
   const posture = resolveSandboxPosture({ mode: 'workspace-write' })
+  // THEOCLAW_REQUIRE_SANDBOX=1 (set by the CI theoclaw job) turns the skip below into a failure.
   // read-only: git cannot even write its temp file, so the helper never starts; workspace-write:
   // the helper starts inside the sandbox and its write outside the tool root is refused.
   const confinedBy = { '': /unable to create temp-file: Read-only file system/, on: /helper-ran': Read-only file system/ }
   for (const hostTools of ['', 'on'] as const) {
-    it.skipIf(!posture.enforced)(
+    it.skipIf(sandboxRequirement(process.env, posture) === 'skip')(
       `a diff.external helper set in the tool root's repository config writes nothing outside the tool root when git_diff runs, host tools "${hostTools}" (needs an enforced sandbox; here: ${posture.detail})`,
       async () => {
         const workspace = hostWorkspace()
