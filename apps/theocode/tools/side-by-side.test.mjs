@@ -8,6 +8,7 @@
  * run for real against a small task written to a temporary directory.
  */
 import { execFile } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { chmod, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -351,44 +352,54 @@ describe('the CLI', () => {
     return path
   }
 
-  it('runs a task end to end from its flags, writes the record and removes its work tree', async () => {
-    const taskDir = await writeTask()
-    const theoBin = await fakeBin('fake-theocode', 'exit 0')
-    const claudeBin = await fakeBin('fake-claude', 'echo "Error: not logged in" >&2; exit 1')
-    const scratch = join(root, 'tmp')
-    await mkdir(scratch)
+  /**
+   * @param {string[]} args
+   * @param {Record<string, string>} [env]
+   * @returns {Promise<{ code: number, stdout: string, stderr: string }>}
+   */
+  function runCli(args, env = {}) {
     const script = fileURLToPath(new URL('./side-by-side.mjs', import.meta.url))
-    const out = join(root, 'runs')
-    /** @type {{ code: number, stdout: string, stderr: string }} */
-    const result = await new Promise((resolve, reject) => {
+    return new Promise((resolve, reject) => {
       execFile(
         'node',
-        [
-          script,
-          '--task',
-          taskDir,
-          '--competitor',
-          'claude',
-          '--theocode-bin',
-          theoBin,
-          '--competitor-bin',
-          claudeBin,
-          '--theocode-model',
-          'anthropic/claude-sonnet-4-5',
-          '--competitor-provider',
-          'anthropic',
-          '--competitor-model',
-          'claude-sonnet-4-5',
-          '--out',
-          out,
-        ],
-        { cwd: root, env: { ...process.env, TMPDIR: scratch } },
+        [script, ...args],
+        { cwd: root, env: { ...process.env, ...env } },
         (error, stdout, stderr) =>
           error && typeof error.code !== 'number'
             ? reject(error)
             : resolve({ code: error ? Number(error.code) : 0, stdout, stderr }),
       )
     })
+  }
+
+  it('runs a task end to end from its flags, writes the record and removes its work tree', async () => {
+    const taskDir = await writeTask()
+    const theoBin = await fakeBin('fake-theocode', 'exit 0')
+    const claudeBin = await fakeBin('fake-claude', 'echo "Error: not logged in" >&2; exit 1')
+    const scratch = join(root, 'tmp')
+    await mkdir(scratch)
+    const out = join(root, 'runs')
+    const result = await runCli(
+      [
+        '--task',
+        taskDir,
+        '--competitor',
+        'claude',
+        '--theocode-bin',
+        theoBin,
+        '--competitor-bin',
+        claudeBin,
+        '--theocode-model',
+        'anthropic/claude-sonnet-4-5',
+        '--competitor-provider',
+        'anthropic',
+        '--competitor-model',
+        'claude-sonnet-4-5',
+        '--out',
+        out,
+      ],
+      { TMPDIR: scratch },
+    )
     expect(result.stderr).toBe('')
     expect(result.code).toBe(0)
     expect(result.stdout).toMatch(/^sum: void \(not counted: claude: the agent CLI exited 1\) -> /)
@@ -397,6 +408,37 @@ describe('the CLI', () => {
     expect(record.sides.map((side) => side.name)).toEqual(['theocode', 'claude'])
     expect(record.counted).toBe(false)
     expect(await readdir(scratch)).toEqual([])
+  }, 60_000)
+
+  it('refuses different models with no --not-like-for-like declaration before any agent runs', async () => {
+    const taskDir = await writeTask()
+    const ran = join(root, 'agent-ran')
+    const theoBin = await fakeBin('fake-theocode', `touch ${ran}; exit 0`)
+    const claudeBin = await fakeBin('fake-claude', `touch ${ran}; exit 0`)
+    const out = join(root, 'runs')
+    const result = await runCli([
+      '--task',
+      taskDir,
+      '--competitor',
+      'claude',
+      '--theocode-bin',
+      theoBin,
+      '--competitor-bin',
+      claudeBin,
+      '--theocode-model',
+      'openai-chatgpt/gpt-5.6-terra',
+      '--competitor-provider',
+      'anthropic',
+      '--competitor-model',
+      'claude-sonnet-4-5',
+      '--out',
+      out,
+    ])
+    expect(result.code).toBe(1)
+    expect(result.stderr).toMatch(/^side-by-side: the two sides differ \(.*model.*\)/)
+    expect(result.stderr).toContain('pass --not-like-for-like "<reason>"')
+    expect(existsSync(ran)).toBe(false)
+    expect(existsSync(out)).toBe(false)
   }, 60_000)
 })
 
