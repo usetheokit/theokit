@@ -1,0 +1,38 @@
+name: Program counts
+
+# The pillar map (`pnpm check:pillars`, OBJ-8) and the TheoClaw parity ledger (OBJ-6) shipped in
+# 0.75.0 and ran in no workflow, so their counts moved where nobody saw them. This runs both and
+# writes the counts to the job summary.
+#
+# NOT a merge gate, by decision D8 of the pillar-map plan: both checkers exit 1 until the program
+# they measure is finished, and a required step would be red on every push. So there is no `push`
+# or `pull_request` trigger, and the job fails only when an instrument could NOT measure (unreadable
+# input, no counts line, a parity source that does not parse). A finished-or-not verdict is the
+# number in the summary. See `scripts/report-program-counts.mjs`.
+
+on:
+  schedule:
+    - cron: '41 6 * * 1' # weekly, Monday 06:41 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: program-counts
+  cancel-in-progress: false
+
+jobs:
+  counts:
+    name: Pillar map and parity ledger counts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: '.nvmrc'
+      # No install: both checkers read the working tree with node's stdlib only.
+      - run: node scripts/report-program-counts.mjs
