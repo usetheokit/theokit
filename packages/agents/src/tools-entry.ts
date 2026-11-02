@@ -156,3 +156,27 @@ export {
   type TaskRegistry,
   type TaskToolOptions,
 } from './tools/task-tools.js'
+
+// B-396 — scheduled runs: a durable job store, a scheduler over the SDK `Cron`'s public `workflow`
+// target, and the three tools through which an owner schedules in a sentence. The SDK `Cron` keeps
+// its jobs in a process `Map` and drops each run's text, so delivery, suppression and continuity
+// live on this side of the seam, with `run` and `deliver` as ports the host passes.
+export {
+  createJobStore,
+  ScheduleStoreError,
+  type JobStore,
+  type ScheduledJob,
+  type ScheduleTarget,
+} from './schedule/job-store.js'
+export {
+  createScheduler,
+  type CreateSchedulerOptions,
+  type DeliverPort,
+  type DeliveryResult,
+  type FireOutcome,
+  type RunPort,
+  type RunResult,
+  type Scheduler,
+  type TransientJobOptions,
+} from './schedule/scheduler.js'
+export { createScheduleTools, type CreateScheduleToolsOptions } from './schedule/schedule-tools.js'

@@ -6,6 +6,8 @@
 import { chmod, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 
+import { TheokitAgentError } from '@theokit/sdk/errors'
+
 /** Where a scheduled job's answer is sent: one platform and one channel on it. */
 export interface ScheduleTarget {
   platform: string
@@ -38,13 +40,16 @@ export interface JobStore {
   setPreviousOutput(id: string, text: string): Promise<boolean>
 }
 
-/** A store file that cannot be read as jobs. The message names the file and what is wrong. */
-export class ScheduleStoreError extends Error {
+/**
+ * A store file that cannot be read as jobs. The message names the file and what is wrong. Not
+ * retryable: the same file is refused the same way until somebody edits it.
+ */
+export class ScheduleStoreError extends TheokitAgentError {
+  override readonly name = 'ScheduleStoreError'
   readonly file: string
 
   constructor(file: string, detail: string) {
-    super(`${file}: ${detail}`)
-    this.name = 'ScheduleStoreError'
+    super(`${file}: ${detail}`, { code: 'SCHEDULE_STORE_INVALID', isRetryable: false })
     this.file = file
   }
 }
