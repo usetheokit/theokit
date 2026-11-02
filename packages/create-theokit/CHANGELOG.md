@@ -1,5 +1,12 @@
 # create-theo
 
+## 3.0.25
+
+### Patch Changes
+
+- e2dc4e5: The scaffold's `.gitignore` versions the agent context in `.theokit/` (`THEO.md`, `rules/`, `personalities/`, `skills/`, `agents/`, `commands/`, `hooks.json`) and ignores everything else there: build output, agent memory, local overrides and MCP tokens. It ignored all of `.theokit/`, so the files the scaffold writes and the docs tell you to edit never reached git. (#1075)
+- bf346db: The scaffold declares `vitest ^5.1.0`. `^3.0.0` installed tinypool and `@vitest/mocker` versions with two critical advisories (GHSA-5gmw-xhrv-c9v3, GHSA-85c8-ppgw-ccpr, GHSA-82fw-gwwq-j7x9), so every fresh install reported `2 critical`. The scaffold's tests, typecheck and lint pass on the new version. (#1078)
+
 ## 3.0.24
 
 ### Patch Changes

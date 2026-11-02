@@ -1,5 +1,15 @@
 # theo
 
+## 0.77.1
+
+### Patch Changes
+
+- e2dc4e5: `theokit build` no longer deletes the agent context in `.theokit/`. It emptied the whole directory before writing its output there, so the first build of a fresh scaffold removed `THEO.md`, `rules/` and `personalities/`. The build now keeps `THEO.md`, `rules/`, `personalities/`, `skills/`, `agents/`, `commands/` and `hooks.json`, plus local agent state such as `memory/`, `THEO.local.md` and `mcp-tokens.json`. (#1079)
+- ef7574b: The Dockerfile `theokit docker` writes builds and runs a create-theokit scaffold. It ran `npx theo build`, which installed and ran the unrelated npm package `theo` and failed the image build; it now calls `./node_modules/.bin/theokit` for `build` and `start`. The runner stage copies the top-level directory of the configured `serverDir` and `agentsDir` (`src` in the scaffold) instead of a hardcoded `server/`, copies `pnpm-workspace.yaml` for pnpm projects, and sets `HOST=0.0.0.0` so the server answers outside the container. The generated `.dockerignore` sends the agent context in `.theokit/` to the build and keeps local agent state and old build output out. (#1069)
+- 9bd0f95: `theokit add` installs the first-party plugins, by scoped name (`theokit add @theokit/plugin-db-drizzle`) or short name (`theokit add plugin-db-drizzle`): canvas, copilot, db-drizzle, email, forms, payments, realtime and voice. The help text and the Plugins page documented `theokit add @theokit/plugin-payments`, but the whitelist held only the five bundled build targets and the name check refused every scoped name. Other scopes are still refused. (#1076)
+- Updated dependencies [0ea22e5]
+  - @theokit/http@2.3.1
+
 ## 0.77.0
 
 ### Minor Changes
@@ -368,8 +378,8 @@
   A nested-layout project with no agents — the layout `create-theokit` scaffolds — was told, on every dev
   start and every build that reached this path:
 
-                              [theokit] agentsDir "agents" resolves to "<root>/src/agents", which is not a directory, so NO agents
-                              were found and every /api/agents/* route will 404.
+                                [theokit] agentsDir "agents" resolves to "<root>/src/agents", which is not a directory, so NO agents
+                                were found and every /api/agents/* route will 404.
 
   About routes it does not have, and a directory it never configured. Two defects in one line.
 
