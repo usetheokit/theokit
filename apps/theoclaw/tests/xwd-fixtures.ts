@@ -49,6 +49,7 @@ function writePixel(data: Buffer, at: number, [red, green, blue]: readonly [numb
     else data.writeUInt32LE(value, at)
     return
   }
+  if (bytesPerPixel !== 3) return // 16 bpp fixtures are refused by the decoder, so their pixels stay zero
   const bytes = msbFirst ? [red, green, blue] : [blue, green, red]
   bytes.forEach((byte, offset) => data.writeUInt8(byte, at + offset))
 }
