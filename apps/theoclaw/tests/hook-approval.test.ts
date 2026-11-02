@@ -3,11 +3,18 @@
  * commands whose fingerprint the owner listed in `THEOCLAW_APPROVED_HOOKS`.
  */
 import { createHash } from 'node:crypto'
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
-import { describe, expect, it } from 'vitest'
+import { Agent } from '@theokit/sdk'
+import { afterEach, describe, expect, it } from 'vitest'
 
+import { theoClawAgentOptions } from '../src/agent/create-agent.js'
 import { createHookApprovalGate, hookFingerprint, parseApprovedHooks } from '../src/agent/hook-approval.js'
 import { TheoClawConfigError } from '../src/control-plane/errors.js'
+import { waitFor } from './fakes.js'
+import { startModelStub } from './model-stub.js'
 
 const STOP_HOOK = { command: 'touch x', event: 'stop', sourceEvent: 'Stop', timeoutMs: 30_000 } as const
 
@@ -85,5 +92,80 @@ describe('parseApprovedHooks', () => {
 
   it('refuses an empty entry between two fingerprints', () => {
     expect(refusal(`${sha256('a')},,${sha256('b')}`).variable).toBe('THEOCLAW_APPROVED_HOOKS')
+  })
+})
+
+/** The hook commands of the NFR-004 workspace: one `PreToolUse`, one `Stop`, each touching a marker. */
+interface HookWorkspace {
+  readonly cwd: string
+  readonly preToolMarker: string
+  readonly stopMarker: string
+  /** The fingerprints the SDK reports for the two commands (the default 30 s timeout). */
+  readonly fingerprints: readonly string[]
+}
+
+function hookWorkspace(): HookWorkspace {
+  const cwd = mkdtempSync(join(tmpdir(), 'theoclaw-hooks-'))
+  const preToolMarker = join(cwd, 'pre-tool.marker')
+  const stopMarker = join(cwd, 'stop.marker')
+  const preTool = `touch ${preToolMarker}`
+  const stop = `touch ${stopMarker}`
+  mkdirSync(join(cwd, '.theokit'))
+  writeFileSync(
+    join(cwd, '.theokit', 'settings.json'),
+    JSON.stringify({
+      hooks: {
+        PreToolUse: [{ matcher: '*', hooks: [{ type: 'command', command: preTool }] }],
+        Stop: [{ hooks: [{ type: 'command', command: stop }] }],
+      },
+    }),
+  )
+  const fingerprints = [
+    hookFingerprint({ sourceEvent: 'PreToolUse', command: preTool, timeoutMs: 30_000 }),
+    hookFingerprint({ sourceEvent: 'Stop', command: stop, timeoutMs: 30_000 }),
+  ]
+  return { cwd, preToolMarker, stopMarker, fingerprints }
+}
+
+const realCleanups: (() => Promise<void>)[] = []
+afterEach(async () => {
+  for (const cleanup of realCleanups.splice(0).reverse()) await cleanup()
+})
+
+/**
+ * One turn of a real SDK agent built from TheoClaw's own options, in `workspace`. The project
+ * setting source is turned on here, because TheoClaw's agents load none (plan D3), and without it
+ * the SDK would read no hook at all and the refusal could not fail. `gated: false` drops the gate,
+ * which is the control that proves the hooks do run when nothing refuses them.
+ */
+async function runOneTurn(workspace: HookWorkspace, approvedHooks: ReadonlySet<string>, gated = true): Promise<void> {
+  const stub = await startModelStub([{ text: 'done' }])
+  realCleanups.push(() => stub.close())
+  const options = theoClawAgentOptions({ model: { id: 'lmstudio/stub', url: stub.url }, apiKey: 'stub-key', approvedHooks })
+  const local = { ...(gated ? options.local : {}), cwd: workspace.cwd, settingSources: ['project' as const] }
+  const agent = await Agent.create({ ...options, local })
+  realCleanups.push(() => agent[Symbol.asyncDispose]())
+  const run = await agent.send('say done')
+  expect((await run.wait()).status).toBe('finished')
+}
+
+describe('a real SDK agent with the gate (NFR-004)', () => {
+  it('spawns 0 hook commands from .theokit/settings.json with an empty approved list', async () => {
+    const workspace = hookWorkspace()
+    await runOneTurn(workspace, new Set())
+    expect(existsSync(workspace.stopMarker)).toBe(false)
+    expect(existsSync(workspace.preToolMarker)).toBe(false)
+  })
+
+  it('spawns the Stop hook once its fingerprint is approved', async () => {
+    const workspace = hookWorkspace()
+    await runOneTurn(workspace, new Set(workspace.fingerprints))
+    await waitFor(() => existsSync(workspace.stopMarker), 10_000, 'the approved Stop hook to touch its marker')
+  })
+
+  it('spawns the Stop hook when no gate is set, so the refusal above is the gate and not the setup', async () => {
+    const workspace = hookWorkspace()
+    await runOneTurn(workspace, new Set(), false)
+    await waitFor(() => existsSync(workspace.stopMarker), 10_000, 'the ungated Stop hook to touch its marker')
   })
 })

@@ -1,7 +1,8 @@
 import { join } from 'node:path'
 
 import { createTheoClawAgent, theoClawAgentOptions } from '../agent/create-agent.js'
-import type { AgentImport, TheoClawAgentOptions } from '../agent/create-agent.js'
+import type { AgentImport, TheoClawAgentOptions, TheoClawLocalOptions } from '../agent/create-agent.js'
+import { parseApprovedHooks } from '../agent/hook-approval.js'
 import type { AgentToolOptions } from '../tools/tool-registry.js'
 import type { BindEnvironment } from './bind.js'
 import { requireModel } from './settings.js'
@@ -12,7 +13,7 @@ export type CreateAgent = (options: TheoClawAgentOptions) => Promise<TurnAgent>
 
 /** A chat session's options: the protected set, plus where its transcripts live. */
 export interface SessionAgentOptions extends TheoClawAgentOptions {
-  readonly local: { readonly cwd: string; readonly sessionDir: string }
+  readonly local: TheoClawLocalOptions & { readonly cwd: string; readonly sessionDir: string }
 }
 
 /**
@@ -30,7 +31,7 @@ export interface SessionAgentOptions extends TheoClawAgentOptions {
  */
 export function agentOptionsFor(env: BindEnvironment): TheoClawAgentOptions {
   const { model, modelKey } = requireModel(env)
-  return theoClawAgentOptions({ model, apiKey: modelKey })
+  return theoClawAgentOptions({ model, apiKey: modelKey, approvedHooks: parseApprovedHooks(env) })
 }
 
 /**
@@ -40,7 +41,8 @@ export function agentOptionsFor(env: BindEnvironment): TheoClawAgentOptions {
  * profile, `workspace` is the profile's own, the directory its `/control` agents work in too.
  */
 export function sessionAgentOptions(env: BindEnvironment, workspace: string): SessionAgentOptions {
-  return { ...agentOptionsFor(env), local: { cwd: workspace, sessionDir: join(workspace, '.theoclaw') } }
+  const options = agentOptionsFor(env)
+  return { ...options, local: { ...options.local, cwd: workspace, sessionDir: join(workspace, '.theoclaw') } }
 }
 
 /**
@@ -61,6 +63,7 @@ export function createAgentFactory(
       theoClawAgentOptions({
         model,
         apiKey: modelKey,
+        approvedHooks: parseApprovedHooks(env),
         ...(toolOptions === undefined ? {} : { toolOptions }),
         ...(imported === undefined ? {} : { imported }),
       }),

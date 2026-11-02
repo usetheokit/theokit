@@ -1,9 +1,22 @@
 import { Agent, SkillReadTool } from '@theokit/sdk'
-import type { CustomTool, InlineSkill, McpServerConfig, ModelSelection, Plugin, SDKAgent } from '@theokit/sdk'
+import type { CustomTool, HookApprovalGate, InlineSkill, McpServerConfig, ModelSelection, Plugin, SDKAgent } from '@theokit/sdk'
 
 import type { ImportedSetup } from '../migration/import-store.js'
 import type { AgentToolOptions } from '../tools/tool-registry.js'
+import { createHookApprovalGate } from './hook-approval.js'
 import { UNTRUSTED_CONTENT_NOTICE } from './untrusted-content.js'
+
+/**
+ * The SDK's local options TheoClaw sets. `hooks` is on every agent (B-397 FR-007): the SDK reads a
+ * hook gate only here, and throws on a top-level `hooks`. No agent sets `settingSources`, so the SDK
+ * loads no project hook today and the gate is defense in depth (plan D3). Whoever adds `cwd` or
+ * `sessionDir` merges them into this object, so the gate is never dropped.
+ */
+export interface TheoClawLocalOptions {
+  readonly hooks: HookApprovalGate
+  readonly cwd?: string
+  readonly sessionDir?: string
+}
 
 /** The options every TheoClaw agent is created with, every one of them. */
 export interface TheoClawAgentOptions<Model extends string | ModelSelection = string> {
@@ -14,6 +27,7 @@ export interface TheoClawAgentOptions<Model extends string | ModelSelection = st
   readonly withheldBuiltinTools: readonly 'shell'[]
   /** Off, so a finished turn writes no transcript under `.theokit/memory/sessions/` in the cwd. */
   readonly memory: { readonly enabled: false }
+  readonly local: TheoClawLocalOptions
   readonly tools?: CustomTool[]
   readonly plugins?: Plugin[]
   /**
@@ -43,11 +57,13 @@ export interface TheoClawAgentInput<Model extends string | ModelSelection> {
   readonly toolOptions?: AgentToolOptions
   /** A migration import (FR-008); absent for every channel and session agent (FR-009). */
   readonly imported?: AgentImport
+  /** The hook fingerprints the owner approved (`THEOCLAW_APPROVED_HOOKS`); absent refuses every hook. */
+  readonly approvedHooks?: ReadonlySet<string>
 }
 
 /**
- * The one place an agent's options are assembled: memory off and the builtin `shell` withheld,
- * always, plus the tool options when the agent has tools.
+ * The one place an agent's options are assembled: memory off, the builtin `shell` withheld and the
+ * hook gate, always, plus the tool options when the agent has tools.
  */
 export function theoClawAgentOptions<Model extends string | ModelSelection>(
   input: TheoClawAgentInput<Model>,
@@ -58,6 +74,7 @@ export function theoClawAgentOptions<Model extends string | ModelSelection>(
     withheldBuiltinTools: ['shell'] as const,
     memory: { enabled: false } as const,
     systemPrompt: UNTRUSTED_CONTENT_NOTICE,
+    local: { hooks: createHookApprovalGate(input.approvedHooks ?? new Set()) },
   }
   const withTools: TheoClawAgentOptions<Model> = input.toolOptions === undefined ? base : withToolOptions(base, input.toolOptions)
   return input.imported === undefined ? withTools : withImport(withTools, input.imported)
@@ -116,6 +133,7 @@ export function createTheoClawAgent<Model extends string | ModelSelection>(
     apiKey: options.apiKey,
     withheldBuiltinTools: [...options.withheldBuiltinTools],
     memory: options.memory,
+    local: options.local,
     ...(options.tools === undefined ? {} : { tools: options.tools }),
     ...(options.plugins === undefined ? {} : { plugins: options.plugins }),
     systemPrompt: options.systemPrompt,

@@ -53,7 +53,7 @@ process.title = instance.label
 
 const workspace = instance.workspace
 const createSdkAgent = (options: TheoClawAgentOptions): Promise<SDKAgent> =>
-  Agent.create({ ...options, ...(workspace === undefined ? {} : { local: { cwd: workspace } }) })
+  Agent.create({ ...options, local: { ...options.local, ...(workspace === undefined ? {} : { cwd: workspace }) } })
 const create: CreateAgent = createSdkAgent
 
 startTheoClaw({
