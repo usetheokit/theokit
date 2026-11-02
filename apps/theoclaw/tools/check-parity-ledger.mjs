@@ -9,6 +9,9 @@
  * `source-parse` violation instead of a shorter list that passes.
  *
  * Every rule runs on every entry and nothing returns early: one run reports every violation.
+ *
+ * Not a merge gate: it exits 1 while any row is open. `.github/workflows/program-counts.yml` runs
+ * it weekly through `scripts/report-program-counts.mjs` and writes the counts to the job summary.
  */
 import { closeSync, constants, fstatSync, openSync, readFileSync, realpathSync } from 'node:fs'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
