@@ -13,6 +13,16 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Device pairing for `/control` (B-709, OC-91). With `THEOCLAW_CONTROL_TOKEN` and `THEOCLAW_STATE_DIR`
+  set, the owner's `/control` socket answers `{"type":"pair_code"}` with a one-time setup code valid for
+  ten minutes, `{"type":"pending_devices"}` with the requests waiting, and
+  `{"type":"approve_device","id":...}` with `device_approved`. A new device posts
+  `{ code, name, token }` to `POST /control/pair` with a token of its own (32 characters or more) and
+  gets `202 { id }`; its token still answers `401` on `/control` until the owner approves it, and then
+  opens the socket like the owner's token, except that a device socket cannot issue a code or approve
+  (`forbidden`). `<THEOCLAW_STATE_DIR>/devices.json` (mode 0600) keeps only each approved token's
+  SHA-256 digest. Without a state directory or a control token pairing is off and nothing changes.
+
 - `delegate`, `question`, `task_declare` and `task_complete` on a `/control` agent (B-611).
   `delegate` hands one task to the same read-only worker `delegate_all` uses and returns its
   answer; `question` answers `{ ok: false, error: "no_asker" }` at once, because the `/control`
