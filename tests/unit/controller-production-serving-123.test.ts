@@ -1,6 +1,15 @@
 import 'reflect-metadata'
 
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -30,7 +39,14 @@ import { createControllerDispatcher } from '../../packages/theo/src/server/http/
  * deployed app carry a compiler to redo work the build already did — while turning a missing
  * optional peer into a runtime 404 rather than a build failure.
  */
-const TEST_ROOT = resolve(__dirname, '../../packages/theo/__controller_prod_123_test__')
+// Outside the source tree (B-429): a concurrent lint, build or typecheck must never see it. Bare
+// imports resolve through a link to the package's own node_modules in the parent directory.
+const TEST_PARENT = mkdtempSync(join(tmpdir(), 'theokit-controller-prod-123-test-'))
+symlinkSync(
+  resolve(__dirname, '../../packages/theo/node_modules'),
+  join(TEST_PARENT, 'node_modules'),
+)
+const TEST_ROOT = join(TEST_PARENT, 'work')
 const SERVER_DIR = join(TEST_ROOT, 'server')
 const DIST_DIR = join(TEST_ROOT, '.theokit')
 

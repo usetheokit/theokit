@@ -1,6 +1,7 @@
 import 'reflect-metadata'
 
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { Readable } from 'node:stream'
 import { join, resolve } from 'node:path'
@@ -43,7 +44,14 @@ import type { TheoApp } from '../../packages/theo/src/server/plugin-types.js'
  * `expect(fired).toBe(true)` passes on both the correct behaviour and on #609. The number is the
  * whole finding in one direction and half of it in the other, so every assertion here counts.
  */
-const TEST_ROOT = resolve(__dirname, '../../packages/theo/__controller_plugin_lifecycle__')
+// Outside the source tree (B-429): a concurrent lint, build or typecheck must never see it. Bare
+// imports resolve through a link to the package's own node_modules in the parent directory.
+const TEST_PARENT = mkdtempSync(join(tmpdir(), 'theokit-controller-plugin-lifecycle-'))
+symlinkSync(
+  resolve(__dirname, '../../packages/theo/node_modules'),
+  join(TEST_PARENT, 'node_modules'),
+)
+const TEST_ROOT = join(TEST_PARENT, 'work')
 const SERVER_DIR = join(TEST_ROOT, 'server')
 const CONTROLLERS_DIR = join(SERVER_DIR, 'controllers')
 const ROUTES_DIR = join(SERVER_DIR, 'routes')
