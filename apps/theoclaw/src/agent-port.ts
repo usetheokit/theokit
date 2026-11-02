@@ -37,9 +37,17 @@ export interface TurnRun {
   stream(): AsyncIterable<{ readonly type: string }>
   /**
    * How the run ended; a failed one may carry the SDK's error code. `result` is the final answer,
-   * which a `delegate_all` worker hands back to its parent (B-386).
+   * which a `delegate_all` worker hands back to its parent (B-386). `usage` and `cost` are the SDK
+   * run's token counts and priced amount, which every finished turn reports (B-400, plan D1); an
+   * `amountUsd` the SDK left undefined means the run was not priced, never that it was free.
    */
-  wait(): Promise<{ readonly status: string; readonly result?: string; readonly error?: { readonly code?: string } }>
+  wait(): Promise<{
+    readonly status: string
+    readonly result?: string
+    readonly error?: { readonly code?: string }
+    readonly usage?: { readonly inputTokens?: number; readonly outputTokens?: number }
+    readonly cost?: { readonly amountUsd?: number | undefined }
+  }>
   /** Move the run to cancelled and stop its in-flight tool calls; the SDK `Run` always has it (plan D2). */
   cancel(): Promise<void>
   /** Messages and live deltas in the order the loop produced them; what a session turn streams. */
