@@ -166,4 +166,21 @@ describe('scaffold', () => {
     const result = spawnSync('git', ['check-ignore', '-q', '--no-index', path], { cwd: targetDir })
     expect(result.status).toBe(ignored ? 0 : 1)
   })
+
+  // #1078 — `vitest ^3` installed tinypool and @vitest/mocker versions with two critical advisories
+  // (GHSA-5gmw-xhrv-c9v3, GHSA-85c8-ppgw-ccpr, GHSA-82fw-gwwq-j7x9). 4.1.11 is the first release clear
+  // of all three. The template asks for ^5.1.0 rather than ^4.1.12 because npm 10.9.9 crashed
+  // resolving a fresh scaffold with ^4.1.12 ("Cannot read properties of null (reading 'edgesOut')"
+  // in arborist's peer-set walk), measured 2026-11-02; ^5.1.0 installs, tests and audits clean.
+  it('declares a vitest range whose floor is clear of the critical advisories', () => {
+    scaffold(targetDir, 'test-app')
+    const pkg = JSON.parse(readFileSync(join(targetDir, 'package.json'), 'utf-8')) as {
+      devDependencies: Record<string, string>
+    }
+    const range = pkg.devDependencies.vitest
+    const floor = /^\^(\d+)\.(\d+)\.(\d+)$/.exec(range)
+    expect(floor, `vitest range "${range}" is not a caret range`).not.toBeNull()
+    const [major, minor, patch] = floor!.slice(1).map(Number)
+    expect(major * 1e6 + minor * 1e3 + patch).toBeGreaterThanOrEqual(4 * 1e6 + 1 * 1e3 + 11)
+  })
 })
