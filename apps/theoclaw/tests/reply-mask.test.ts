@@ -15,7 +15,7 @@ import { createEventMask } from '../src/control-plane/event-mask.js'
 import type { ControlPlaneHandle } from '../src/control-plane/listener.js'
 import { runTheoClawTurn, type TurnEvent } from '../src/control-plane/turn.js'
 import { capturingStream, fakeBuilders, OPEN_DMS } from './composition-fixtures.js'
-import { FakeAdapter, FakeAgent, assistant, finished, messageEvent, waitFor } from './fakes.js'
+import { FakeAdapter, FakeAgent, assistant, finished, messageEvent, turnText, waitFor } from './fakes.js'
 
 /** Three configured values, as `processSecrets` would list them. */
 const VALUES = ['bearer-token-0123456789abcdef0123456789ab', 'sk-or-model-key-ABCDEFGHIJ', 'tg-123456:telegram-token-value']
@@ -267,7 +267,7 @@ describe('the /control and session event mask', () => {
     const agent = new FakeAgent({ frames: [assistant(`hello ${SECRET.slice(0, HALF)}`), assistant('never sent')], afterDeltas: undefined, before: undefined })
     const gated: TurnAgent = {
       send: async (text, options) => {
-        const run = await agent.send(text, options)
+        const run = await agent.send(turnText(text), options)
         return {
           ...run,
           async *stream() {

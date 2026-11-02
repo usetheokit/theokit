@@ -15,7 +15,7 @@ import { createBroadcastGroups } from '../../src/channels/broadcast-groups.js'
 import { createReplyHandler } from '../../src/channels/reply-handler.js'
 import { createContainer } from '../../src/composition.js'
 import { createChannelAgentFactory } from '../../src/control-plane/agent-factory.js'
-import { FakeAdapter, messageEvent, waitFor } from '../fakes.js'
+import { FakeAdapter, messageEvent, turnText, waitFor } from '../fakes.js'
 
 /**
  * AC-008 (B-371): OC-18, OC-19 and OC-21 against a real model. Each test runs the owner policy hook,
@@ -65,7 +65,7 @@ async function liveApp({ env, platforms }: LiveOptions) {
       const agent = await real()
       return {
         send: async (text) => {
-          prompts.push(text)
+          prompts.push(turnText(text))
           const run = await agent.send(text)
           return {
             stream: () => run.stream(),

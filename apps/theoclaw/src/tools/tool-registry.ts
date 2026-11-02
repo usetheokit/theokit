@@ -21,6 +21,7 @@ import type { TurnAgent } from '../agent-port.js'
 import { scrubbedAgentTransport } from './acp-transport.js'
 import { browserServer } from './browser-server.js'
 import { codeModeTool, delegateAllTool, delegateTool, type CreateWorker } from './code-mode-tools.js'
+import { computerTool } from './computer-tool.js'
 import { questionTool, taskTools } from './control-tools.js'
 import { pathVetoPlugin } from './path-veto.js'
 import type { ToolSettings } from './tool-settings.js'
@@ -150,8 +151,13 @@ export function agentToolOptions(
   settings: ToolSettings,
   extra: readonly CustomTool[] = [],
   createWorker?: CreateWorker,
+  buildDescriber?: () => Promise<TurnAgent>,
 ): AgentToolOptions {
   const tools = [...buildTools(settings), ...extra]
+  if (createWorker !== undefined && buildDescriber !== undefined && settings.computer !== undefined) {
+    // Only where a worker factory exists, which is the `/control` agent: the screenshot's describer is built by it (B-676 Q1).
+    tools.push(computerTool(settings.computer, buildDescriber))
+  }
   if (createWorker !== undefined) {
     tools.push(
       codeModeTool(readOnlyTools(settings), settings),
@@ -195,5 +201,11 @@ export function controlAgentToolOptions(
   build: (toolOptions: AgentToolOptions) => TurnAgent | Promise<TurnAgent>,
   extra: readonly CustomTool[] = [],
 ): AgentToolOptions {
-  return agentToolOptions(settings, extra, async () => build(workerToolOptions(settings)))
+  return agentToolOptions(
+    settings,
+    extra,
+    async () => build(workerToolOptions(settings)),
+    // The screenshot's describer holds no tool and no plugin: it can only answer (B-676 D1).
+    async () => build({ tools: [], plugins: [] }),
+  )
 }

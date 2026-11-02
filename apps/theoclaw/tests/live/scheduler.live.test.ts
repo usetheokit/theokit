@@ -14,7 +14,7 @@ import { type RunningScheduler, scheduleFile, wireScheduler } from '../../src/sc
 import { type AgentToolOptions, controlAgentToolOptions } from '../../src/tools/tool-registry.js'
 import { resolveToolSettings } from '../../src/tools/tool-settings.js'
 import type { ToolSettings } from '../../src/tools/tool-settings.js'
-import { FakeAdapter } from '../fakes.js'
+import { FakeAdapter, turnText } from '../fakes.js'
 import { makeHostToolsWorkspace } from '../host-tools-workspace.js'
 
 /**
@@ -63,7 +63,7 @@ function rig(): Rig {
     const agent = await createTheoClawAgent(theoClawAgentOptions({ model, apiKey, toolOptions }))
     return {
       send: (text, options) => {
-        prompts.push(text)
+        prompts.push(turnText(text))
         return agent.send(text, options)
       },
       [Symbol.asyncDispose]: () => agent[Symbol.asyncDispose](),

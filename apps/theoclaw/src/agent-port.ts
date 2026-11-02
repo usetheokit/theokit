@@ -11,6 +11,14 @@
  * marks the agent disposed, so calling it first makes that disposal return without tearing the
  * session down, and every turn would leak its agent session.
  */
+/**
+ * What one `send` carries: the text alone, or the text with images the model reads on that user
+ * turn (the `computer` tool's screenshot, B-676 D1). The SDK agent accepts both shapes.
+ */
+export type TurnMessage =
+  | string
+  | { readonly text: string; readonly images: { readonly data: string; readonly mimeType: string }[] }
+
 export interface TurnAgent {
   /**
    * Start one run. `signal` stops the model work of that run: the SDK composes it into its dispatch
@@ -19,7 +27,7 @@ export interface TurnAgent {
    * every send spreads `untrustedContentSendOptions()` (B-398, OC-88).
    */
   send(
-    text: string,
+    message: TurnMessage,
     options?: { readonly signal?: AbortSignal; readonly toolResultGuard?: { readonly delimit?: boolean } },
   ): Promise<TurnRun>
   /**

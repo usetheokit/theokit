@@ -5,7 +5,7 @@ import { createQuickJsSandbox } from '@theokit/agents/code-mode-quickjs'
 import { createDelegateAllTool, createDelegateTool } from '@theokit/agents/tools'
 import type { CustomTool } from '@theokit/sdk'
 
-import type { TurnAgent, TurnRun } from '../agent-port.js'
+import type { TurnAgent, TurnMessage, TurnRun } from '../agent-port.js'
 import { untrustedContentSendOptions } from '../agent/untrusted-content.js'
 import { describeError } from '../control-plane/errors.js'
 import { vetoToolCall } from './path-veto.js'
@@ -147,12 +147,17 @@ function workerPort(createWorker: CreateWorker): DelegationPort {
  * disposal that throws all reject: a worker whose disposal failed is in a state nobody knows, as a
  * `/control` turn's is (`runTheoClawTurn`).
  */
-async function runWorker(createWorker: CreateWorker, task: string, signal: AbortSignal | undefined): Promise<DelegationResult> {
+export async function runWorker(
+  createWorker: CreateWorker,
+  task: TurnMessage,
+  signal: AbortSignal | undefined,
+): Promise<DelegationResult> {
   if (signal?.aborted === true) throw new Error('the turn that delegated was cancelled before the worker started')
   const agent = await createWorker()
   let outcome: DelegationResult
   try {
-    const run = await agent.send(task, untrustedContentSendOptions())
+    // The signal reaches the send too: the SDK composes it into its dispatch signal, where cancelling the run only moves its local status.
+    const run = await agent.send(task, { ...untrustedContentSendOptions(), ...(signal === undefined ? {} : { signal }) })
     const { streamed, ...result } = await untilSettled(run, signal)
     if (streamed !== undefined) throw new Error(`the worker's run streamed an error (${streamed})`)
     if (result.status !== 'finished') throw new Error(`the worker's run ended with status ${result.status}`)

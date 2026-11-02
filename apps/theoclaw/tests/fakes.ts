@@ -1,6 +1,8 @@
 import { BasePlatformAdapter } from '@theokit/gateway'
 import type { MessageEvent, OutboundMessage, PlatformName, SendResult } from '@theokit/gateway'
 
+import type { TurnMessage } from '../src/agent-port.js'
+
 /** A promise the test settles by hand, to hold a connect or a handler at a chosen point. */
 export interface Deferred<T> {
   readonly promise: Promise<T>
@@ -241,4 +243,9 @@ export class DisposableFake extends FakeAgent {
   async [Symbol.asyncDispose](): Promise<void> {
     this.disposed += 1
   }
+}
+
+/** The text of a message the port carries, whether it was sent as a string or with images. */
+export function turnText(message: TurnMessage): string {
+  return typeof message === 'string' ? message : message.text
 }
