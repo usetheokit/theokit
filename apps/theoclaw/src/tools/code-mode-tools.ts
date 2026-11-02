@@ -1,4 +1,9 @@
-import { DelegationError } from '@theokit/agents'
+import {
+  DelegationBudgetExceededError,
+  DelegationError,
+  DelegationTimeoutError,
+  GuardrailError,
+} from '@theokit/agents'
 import type { DelegationPort, DelegationResult } from '@theokit/agents'
 import { createCodeMode } from '@theokit/agents/code-mode'
 import { createQuickJsSandbox } from '@theokit/agents/code-mode-quickjs'
@@ -16,6 +21,12 @@ const MAX_RESULT_CHARACTERS = 16_384
 
 /** The only tools a script may call: they read, and change nothing on the host (plan D3). */
 const SCRIPT_TOOL_NAMES: ReadonlySet<string> = new Set(['read_file', 'list_dir', 'web_fetch', 'web_search'])
+
+/**
+ * The longest `web_fetch` a script may ask for: the sandbox's own deadline. The shipped `web_fetch`
+ * ignores the run's abort, so its own timeout is what bounds it once the run has ended (B-697 D3).
+ */
+const SCRIPT_WEB_FETCH_TIMEOUT_MS = 10_000
 
 /**
  * What the generated instructions do not say: the sandbox runs JavaScript. Measured on a real model
@@ -52,7 +63,7 @@ class CodeModeResultTooLongError extends Error {
  */
 export function codeModeTool(tools: readonly CustomTool[], settings: ToolSettings): CustomTool {
   const { tool, instructions } = createCodeMode({
-    tools: [...tools],
+    tools: cappedScriptTools(tools),
     sandbox: createQuickJsSandbox(),
     onPermissionRequest: ({ tool: name, args }) => {
       if (!SCRIPT_TOOL_NAMES.has(name)) return { granted: false, reason: `${name} is not one of the tools a script may call` }
@@ -70,6 +81,24 @@ export function codeModeTool(tools: readonly CustomTool[], settings: ToolSetting
       return result
     },
   }
+}
+
+/** The `timeout_ms` a script's `web_fetch` runs with: what it asked for, if positive, up to the cap. */
+function scriptFetchTimeout(asked: unknown): number {
+  const value = Number(asked)
+  return value > 0 ? Math.min(value, SCRIPT_WEB_FETCH_TIMEOUT_MS) : SCRIPT_WEB_FETCH_TIMEOUT_MS
+}
+
+/** The script's tools, with `web_fetch`'s `timeout_ms` held at `SCRIPT_WEB_FETCH_TIMEOUT_MS` at most. */
+function cappedScriptTools(tools: readonly CustomTool[]): CustomTool[] {
+  return tools.map((tool) =>
+    tool.name !== 'web_fetch'
+      ? tool
+      : {
+          ...tool,
+          handler: (input, ctx) => tool.handler({ ...input, timeout_ms: scriptFetchTimeout(input.timeout_ms) }, ctx),
+        },
+  )
 }
 
 /** Drain the run's stream and return the code of the first error event, if any. */
@@ -125,8 +154,30 @@ async function disposeWorker(agent: TurnAgent): Promise<void> {
 }
 
 /**
+ * A worker failure `delegate_all` must read as itself: a guardrail error, whose message must not
+ * reach the model, and a delegation error, which already says what failed (B-697 D1, #80). A guarded
+ * worker whose disposal or cancellation also failed passes too, so it ends the turn as a defect
+ * rather than leak the guard's trigger inside a wrapped message (EC-1).
+ */
+function passesThrough(error: unknown): boolean {
+  if (error instanceof AggregateError) return carriesGuardrailError(error)
+  return (
+    error instanceof GuardrailError ||
+    error instanceof DelegationError ||
+    error instanceof DelegationBudgetExceededError ||
+    error instanceof DelegationTimeoutError
+  )
+}
+
+/** Whether a guardrail error sits anywhere in `error`, an aggregate of aggregates included. */
+function carriesGuardrailError(error: unknown): boolean {
+  if (error instanceof GuardrailError) return true
+  return error instanceof AggregateError && error.errors.some(carriesGuardrailError)
+}
+
+/**
  * The one roster entry of `delegate_all`: each task gets a fresh worker, runs one turn, and is
- * disposed. Every way a worker can fail, its build and its disposal included, is a
+ * disposed. Every other way a worker can fail, its build and its disposal included, is a
  * `DelegationError`, so `delegate_all` reports it beside the other tasks instead of ending the
  * parent's turn (EC-3). The parent turn's signal cancels each worker's run when it aborts.
  */
@@ -136,7 +187,7 @@ function workerPort(createWorker: CreateWorker): DelegationPort {
       try {
         return await runWorker(createWorker, task, options?.signal)
       } catch (error) {
-        throw error instanceof DelegationError ? error : new DelegationError('worker', error)
+        throw passesThrough(error) ? error : new DelegationError('worker', error)
       }
     },
   }
