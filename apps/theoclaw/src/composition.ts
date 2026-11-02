@@ -23,6 +23,7 @@ import { type AdapterBuildOptions, adapterBuilders } from './channels/adapter-fa
 import { createBroadcastGroups } from './channels/broadcast-groups.js'
 import { maskSecrets, startChannelLoop } from './channels/channel-loop.js'
 import { channelHooks } from './channel-hooks.js'
+import { createUsageHook } from './channels/usage-hook.js'
 import type { ChannelLoop, PlatformBuild } from './channels/channel-loop.js'
 import { installOutputMask, type MaskableStream } from './channels/output-mask.js'
 import { type ConfiguredPlatform, resolvePlatforms } from './channels/platforms.js'
@@ -168,11 +169,12 @@ type ChatBoundary = <R>(event: MessageEvent, work: (lease: SessionLease) => R | 
  * once two sessions are dispatched at once. The lease the boundary resolves carries no dispose, so
  * the end of the request leaves the agent open (D2).
  */
-function chatSessions(options: TheoClawOptions): { readonly sessions: SessionAgents; readonly withAgent: ChatBoundary } {
+function chatSessions(options: TheoClawOptions): { readonly sessions: SessionAgents; readonly withAgent: ChatBoundary; readonly keyOf: (event: MessageEvent) => string } {
   const settings = options.sessionSettings ?? readSessionSettings(options.env, statSync)
+  const router = createSessionRouter(settings)
   const open = options.getOrCreate ?? ((id: string, agentOptions: AgentOptions) => Agent.getOrCreate(id, agentOptions))
   const sessions = new SessionAgents({
-    router: createSessionRouter(settings),
+    router,
     // Opened by the chat path's own factory, whose protected options are applied last, so the
     // `shell` withholding and memory off hold whatever `optionsFor` returns (B-377 option A). Only
     // those two keys are re-pinned: a tool-bearing key added to `optionsFor` would pass through.
@@ -191,7 +193,8 @@ function chatSessions(options: TheoClawOptions): { readonly sessions: SessionAge
       return sessions.lease(event)
     },
   })
-  return { sessions, withAgent: (event, work) => currentEvent.run(event, () => boundary.withAgent(work)) }
+  const keyOf = (event: MessageEvent): string => router.resolveAgentId(event)
+  return { sessions, keyOf, withAgent: (event, work) => currentEvent.run(event, () => boundary.withAgent(work)) }
 }
 
 /**
@@ -223,6 +226,8 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
   const maskedWrite = (line: string): void => options.write(redactSecrets(maskSecrets(line, secrets)))
   // The store exists only with a state directory; the hook runs without one under the other policies.
   const pairing = options.pairing ?? pairingStoreFor(policy, maskedWrite)
+  const usage = createUsageHook({ keyOf: chat.keyOf })
+  const model = options.env.THEOCLAW_MODEL
   const deps: WebhookDeps = {
     write: maskedWrite,
     verifierFactory: options.teamsVerifierFactory ?? teamsActivityVerifier,
@@ -241,6 +246,7 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
       withAgent: chat.withAgent,
       reset: (event) => chat.sessions.reset(event),
       secrets,
+      ...(model === undefined ? {} : { usage: { modeFor: usage.modeFor, model, write: maskedWrite } }),
       // `loop` is read per message, after it exists: a member whose platform has not started is
       // reported as not delivered.
       broadcast: {
@@ -249,7 +255,7 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
         write: maskedWrite,
       },
     }),
-    hooks: channelHooks({ policy, ...(pairing === undefined ? {} : { pairing }), write: maskedWrite }),
+    hooks: channelHooks({ policy, ...(pairing === undefined ? {} : { pairing }), write: maskedWrite, ...(model === undefined ? {} : { usage: usage.hook }) }),
     secrets,
     write: options.write,
     ...(options.startTimeoutMs === undefined ? {} : { startTimeoutMs: options.startTimeoutMs }),

@@ -3,11 +3,13 @@ import type { BasePlatformAdapter, GatewayContext, GatewayHandler, MessageEvent,
 import { ChatPresenter, fromSdkMessage } from '@theokit/presenter'
 import type { AgentOutputEvent, ChatMessage } from '@theokit/presenter'
 
-import type { TurnAgent } from '../agent-port.js'
+import type { TurnAgent, TurnRun } from '../agent-port.js'
 import { untrustedContentSendOptions } from '../agent/untrusted-content.js'
 import { maskSecrets } from './channel-loop.js'
 import type { BroadcastGroup, BroadcastGroups } from './broadcast-groups.js'
 import type { SessionLease } from '../sessions/session-agents.js'
+import { formatUsageFooter, formatUsageLine, type TurnUsage, usageOf } from '../usage/turn-usage.js'
+import type { UsageMode } from './usage-hook.js'
 
 /** The reply to a turn that produced no visible answer (D8): reasoning only, tools only, nothing. */
 export const NO_ANSWER_REPLY = 'I could not come up with an answer to that.'
@@ -51,6 +53,17 @@ export interface ReplyHandlerOptions {
    * the answer a broadcast group's other members and thread receive. Default: none.
    */
   readonly secrets?: readonly string[]
+  /** A finished turn's usage: its line, and the footer its conversation's `/usage` asks for (FR-005). */
+  readonly usage?: ReplyUsageOptions
+}
+
+export interface ReplyUsageOptions {
+  /** The conversation's `/usage` mode, read when the reply is sent (EC-7). */
+  readonly modeFor: (event: MessageEvent) => UsageMode
+  /** The model the chat agents run (`THEOCLAW_MODEL`). */
+  readonly model: string
+  /** Where the usage line goes; the masked write. */
+  readonly write: (line: string) => void
 }
 
 /** A turn whose run resolved with `status: "error"`, which the SDK reports without rejecting. */
@@ -118,7 +131,7 @@ async function send(
 }
 
 type TurnOutcome =
-  | { readonly failed: false; readonly answer: string }
+  | { readonly failed: false; readonly answer: string; readonly result?: Awaited<ReturnType<TurnRun['wait']>> }
   | { readonly failed: true; readonly error: unknown }
 
 /** What a turn's stream left behind: its plain answer and the error code it streamed, if any. */
@@ -155,7 +168,7 @@ async function streamTurn(
     for await (const frame of run.stream()) presentFrame(frame, presenter, streamed)
     const result = await run.wait()
     if (result.status !== 'error' && streamed.error === undefined) {
-      return { failed: false, answer: streamed.answer === '' ? NO_ANSWER_REPLY : streamed.answer }
+      return { failed: false, answer: streamed.answer === '' ? NO_ANSWER_REPLY : streamed.answer, result }
     }
     presenter.present(AGENT_ERROR)
     return { failed: true, error: new AgentTurnError(event.platform, result.error?.code ?? streamed.error) }
@@ -182,7 +195,7 @@ async function answerTurn(options: ReplyHandlerOptions, event: MessageEvent, ctx
         const outcome = await streamTurn(lease.agent, event, prompt, presenter)
         // Masked after rendering, so a value is caught in the platform's own format; the answer a
         // broadcast group records and fans out is masked before any member renders it.
-        const reply = finishTurn(presenter)
+        const reply = withFooter(finishTurn(presenter), options.usage, event, outcome)
         await send(ctx, { ...reply, text: maskSecrets(reply.text, secrets) }, outcome)
         if (outcome.failed) throw outcome.error
         return maskSecrets(outcome.answer, secrets)
@@ -198,6 +211,24 @@ async function answerTurn(options: ReplyHandlerOptions, event: MessageEvent, ctx
     await send(ctx, finishTurn(presenter), { failed: true, error })
     throw error
   }
+}
+
+/**
+ * The reply with the footer the conversation's `/usage` mode asks for, read now, as the reply is
+ * sent (EC-7); a finished turn also writes its usage line. Only the sender's reply carries it: a
+ * broadcast group's other members get the answer alone.
+ */
+function withFooter(
+  reply: Pick<ChatMessage, 'text' | 'format'>,
+  usage: ReplyUsageOptions | undefined,
+  event: MessageEvent,
+  outcome: TurnOutcome,
+): Pick<ChatMessage, 'text' | 'format'> {
+  if (usage === undefined || outcome.failed || outcome.result === undefined) return reply
+  const record: TurnUsage = usageOf(outcome.result, usage.model)
+  usage.write(formatUsageLine('channel', record))
+  const mode = usage.modeFor(event)
+  return mode === 'off' ? reply : { ...reply, text: `${reply.text}\n\n${formatUsageFooter(mode, record)}` }
 }
 
 /** Why one member could not be reached; a code or an error name, never the message or an id. */

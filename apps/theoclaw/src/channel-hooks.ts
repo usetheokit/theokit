@@ -11,11 +11,13 @@ export interface ChannelHookOptions {
   readonly pairing?: PairingStore
   /** The masked write the hooks report through. */
   readonly write: (line: string) => void
+  /** The `/usage` hook (B-400 FR-005), run third. */
+  readonly usage?: GatewayHook
 }
 
 /**
  * The gateway hooks the channel loop runs, in order. The owner policy is first, so every later
- * hook sees only owners and paired senders (FR-007).
+ * hook sees only owners and paired senders (FR-007); `/usage` is answered last.
  */
 export function channelHooks(options: ChannelHookOptions): readonly GatewayHook[] {
   const { policy, pairing, write } = options
@@ -25,5 +27,5 @@ export function channelHooks(options: ChannelHookOptions): readonly GatewayHook[
     mode: policy.groupActivation,
     write,
   })
-  return [ownerPolicy, groupActivation]
+  return options.usage === undefined ? [ownerPolicy, groupActivation] : [ownerPolicy, groupActivation, options.usage]
 }
