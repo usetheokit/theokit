@@ -1,5 +1,11 @@
 # theo
 
+## 0.76.3
+
+### Patch Changes
+
+- 952e4c2: `theokit generate controller` names every package a controller build needs that the project's `package.json` does not declare: `@theokit/http` and `reflect-metadata`, plus `@swc/core` as a dev dependency. It prints the install command for the project's package manager, read from its lockfile. It used to check whether `@theokit/http` resolved, and in an npm-installed scaffold it always does because `theokit` depends on it, so the notice never appeared and `theokit build` failed on the missing `@swc/core`. (#986)
+
 ## 0.76.2
 
 ### Patch Changes
@@ -349,8 +355,8 @@
   A nested-layout project with no agents — the layout `create-theokit` scaffolds — was told, on every dev
   start and every build that reached this path:
 
-                          [theokit] agentsDir "agents" resolves to "<root>/src/agents", which is not a directory, so NO agents
-                          were found and every /api/agents/* route will 404.
+                            [theokit] agentsDir "agents" resolves to "<root>/src/agents", which is not a directory, so NO agents
+                            were found and every /api/agents/* route will 404.
 
   About routes it does not have, and a directory it never configured. Two defects in one line.
 
