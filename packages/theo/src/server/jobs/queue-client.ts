@@ -1,3 +1,5 @@
+import type { PoolLike } from '../storage/storage-types.js'
+
 import type { JobBackend, JobEnqueueInput } from './job-backend.js'
 import type { JobRegistry } from './job-types.js'
 import type { Outbox } from './outbox.js'
@@ -40,6 +42,39 @@ export interface QueueClient {
     input: JobRegistry[JobName],
     opts?: EnqueueOptions,
   ): Promise<{ jobId: string }>
+  /**
+   * Write the job NOW through `client`, a connection inside a transaction you opened, so it commits
+   * or rolls back with your own writes (usetheokit/theokit#1077). It bypasses the per-request
+   * outbox: the response status does not decide whether the job exists, your transaction does.
+   * Needs a backend with `enqueueInTransaction` (`PostgresJobBackend`, whose table must live in the
+   * database `client` is connected to); any other backend rejects with
+   * `TransactionalEnqueueUnsupportedError`.
+   */
+  enqueueInTransaction<JobName extends keyof JobRegistry>(
+    client: PoolLike,
+    name: JobName,
+    input: JobRegistry[JobName],
+    opts?: EnqueueOptions,
+  ): Promise<{ jobId: string }>
+}
+
+/**
+ * `ctx.queue.enqueueInTransaction` was called with a `jobs.backend` that cannot write through the
+ * caller's connection. Enqueueing through the outbox instead would drop the atomicity the caller
+ * asked for, so the call fails.
+ */
+export class TransactionalEnqueueUnsupportedError extends Error {
+  readonly code = 'TRANSACTIONAL_ENQUEUE_UNSUPPORTED'
+  readonly backend: string
+  constructor(backend: string) {
+    super(
+      `jobs.backend (${backend}) cannot enqueue inside the caller's transaction: it has no ` +
+        'enqueueInTransaction method. Use PostgresJobBackend with its table in the database the ' +
+        'transaction runs on, or use ctx.queue.enqueue for the after-response outbox.',
+    )
+    this.name = 'TransactionalEnqueueUnsupportedError'
+    this.backend = backend
+  }
 }
 
 interface CreateQueueClientOptions {
@@ -100,6 +135,19 @@ export function createQueueClient(
       }
       outbox.push(entry)
       return promise
+    },
+
+    async enqueueInTransaction(client, name, input, enqueueOpts) {
+      if (backend.enqueueInTransaction === undefined) {
+        throw new TransactionalEnqueueUnsupportedError(backend.name)
+      }
+      return backend.enqueueInTransaction(client, {
+        name: name,
+        input,
+        idempotencyKey: enqueueOpts?.idempotencyKey,
+        delaySeconds: enqueueOpts?.delaySeconds,
+        traceparent,
+      })
     },
   }
 }

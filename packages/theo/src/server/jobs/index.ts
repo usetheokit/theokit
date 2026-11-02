@@ -34,7 +34,11 @@ export type { PoolLike, PostgresJobBackendOptions } from './job-backend-postgres
 // Outbox + queue client
 export { createOutbox } from './outbox.js'
 export type { Outbox, OutboxFlushOptions } from './outbox.js'
-export { createQueueClient, createOutboxDispatcher } from './queue-client.js'
+export {
+  createQueueClient,
+  createOutboxDispatcher,
+  TransactionalEnqueueUnsupportedError,
+} from './queue-client.js'
 export type { QueueClient, EnqueueOptions } from './queue-client.js'
 
 // Runner

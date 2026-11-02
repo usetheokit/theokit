@@ -10,6 +10,8 @@
  * modifying TheoKit core.
  */
 
+import type { PoolLike } from '../storage/storage-types.js'
+
 export interface JobEnqueueInput {
   /** The job name (matches a `defineJob` declaration). */
   name: string
@@ -90,6 +92,14 @@ export interface JobBackend {
    * `JobLeaseLostError` and leaves the job alone when that lease no longer holds it.
    */
   nack(jobId: string, opts: JobNackOptions): Promise<void>
+
+  /**
+   * Optional: persist a job through `client`, a connection inside a transaction the caller opened,
+   * so the job commits or rolls back with the caller's writes (usetheokit/theokit#1077). Only a
+   * backend whose jobs live in the caller's database can offer it; `ctx.queue.enqueueInTransaction`
+   * refuses a backend without it rather than enqueueing outside the transaction.
+   */
+  enqueueInTransaction?(client: PoolLike, input: JobEnqueueInput): Promise<{ jobId: string }>
 
   /**
    * Optional: create or upgrade whatever storage the backend needs (a table, an index). Must be

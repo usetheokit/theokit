@@ -211,6 +211,39 @@ export class PostgresJobBackend implements JobBackend {
   }
 
   async enqueue(input: JobEnqueueInput): Promise<{ jobId: string }> {
+    return this.#insertJob(this.#pool, input)
+  }
+
+  /**
+   * Enqueue through `client`, a connection inside a transaction the caller opened, so the job
+   * commits or rolls back with the caller's own writes: the transactional outbox in its usual
+   * sense (usetheokit/theokit#1077). The job is invisible to workers until the commit, a rollback
+   * leaves no job, and an enqueue that fails aborts the transaction, so a committed row cannot be
+   * left without its job. The table has to live in the database `client` is connected to.
+   *
+   * ```ts
+   * const client = await pool.connect()
+   * try {
+   *   await client.query('BEGIN')
+   *   const task = await client.query('INSERT INTO task (title) VALUES ($1) RETURNING id', [title])
+   *   await backend.enqueueInTransaction(client, { name: 'process-task', input: { taskId: task.rows[0].id } })
+   *   await client.query('COMMIT')
+   * } catch (err) {
+   *   await client.query('ROLLBACK')
+   *   throw err
+   * } finally {
+   *   client.release()
+   * }
+   * ```
+   *
+   * `ctx.queue.enqueueInTransaction(client, name, input)` is the typed form for route handlers.
+   * Idempotency keys behave as in `enqueue`.
+   */
+  async enqueueInTransaction(client: PoolLike, input: JobEnqueueInput): Promise<{ jobId: string }> {
+    return this.#insertJob(client, input)
+  }
+
+  async #insertJob(db: PoolLike, input: JobEnqueueInput): Promise<{ jobId: string }> {
     const t = this.#table
     const values = [
       input.name,
@@ -232,7 +265,7 @@ export class PostgresJobBackend implements JobBackend {
     // frees the key; the loop then inserts again. Three rounds is far beyond what that window
     // allows, and running out is reported rather than returned as a fake id.
     for (let round = 0; round < MAX_ENQUEUE_ROUNDS; round++) {
-      const inserted = await this.#pool.query<{ id: string }>(
+      const inserted = await db.query<{ id: string }>(
         `INSERT INTO ${t} (id, name, input, max_attempts, available_at, traceparent, idempotency_key)
          VALUES ($1, $2, $3::jsonb, $4, NOW() + ($5 || ' seconds')::interval, $6, $7)
          ON CONFLICT DO NOTHING
@@ -240,7 +273,7 @@ export class PostgresJobBackend implements JobBackend {
         [randomId(), ...values],
       )
       if (inserted.rows.length > 0) return { jobId: inserted.rows[0].id }
-      const existing = await this.#pool.query<{ id: string }>(
+      const existing = await db.query<{ id: string }>(
         `SELECT id FROM ${t} WHERE name = $1 AND idempotency_key = $2 LIMIT 1`,
         [input.name, input.idempotencyKey],
       )
