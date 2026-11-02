@@ -9,6 +9,7 @@ import { maskSecrets } from './channel-loop.js'
 import { createStreamMask } from './stream-mask.js'
 import type { StreamMask } from './stream-mask.js'
 import type { BroadcastGroup, BroadcastGroups } from './broadcast-groups.js'
+import { deliverText } from './deliver.js'
 import type { SessionLease } from '../sessions/session-agents.js'
 
 /** The reply to a turn that produced no visible answer (D8): reasoning only, tools only, nothing. */
@@ -228,19 +229,7 @@ async function answerTurn(options: ReplyHandlerOptions, event: MessageEvent, ctx
 async function sendToMember(adapter: BasePlatformAdapter | undefined, channelId: string, platform: string, answer: string): Promise<string | undefined> {
   if (adapter === undefined) return 'not started'
   // Rendered for the member's own platform, not the origin's dialect.
-  const presenter = new ChatPresenter({ channel: { id: channelId, type: 'group' }, ...channelRendering(platform as PlatformName) })
-  presenter.present({ type: 'text', text: answer })
-  const reply = finishTurn(presenter)
-  try {
-    const result = await adapter.sendMessage({
-      channel: { id: channelId, type: 'group' },
-      text: reply.text,
-      ...(reply.format ? { format: reply.format } : {}),
-    })
-    return result.ok ? undefined : (result.error?.code ?? 'refused')
-  } catch (error) {
-    return error instanceof Error ? error.name : 'thrown'
-  }
+  return deliverText(adapter, platform as PlatformName, channelId, answer)
 }
 
 /** Send the answer to every other member, each on its own: one that fails costs only itself. */
