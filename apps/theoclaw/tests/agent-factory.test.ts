@@ -210,6 +210,15 @@ describe("the chat path's agent options", () => {
   });
 });
 
+describe("telemetry on the agent options (B-400 EC-8)", () => {
+  it("telemetry is absent with THEOCLAW_OTEL unset", async () => {
+    const { create, options } = optionsRecordingCreate();
+    await createAgentFactory({ THEOCLAW_MODEL: "m", THEOKIT_API_KEY: "k" }, create)();
+    expect(options[0]).not.toHaveProperty("telemetry");
+    expect(sessionAgentOptions({ THEOCLAW_MODEL: "m", THEOKIT_API_KEY: "k" }, "/tmp/ws")).not.toHaveProperty("telemetry");
+  });
+});
+
 describe("sessionAgentOptions", () => {
   it("keeps the transcripts under the workspace", () => {
     expect(sessionAgentOptions({ THEOCLAW_MODEL: "m", OPENROUTER_API_KEY: "k" }, "/ws").local).toEqual({

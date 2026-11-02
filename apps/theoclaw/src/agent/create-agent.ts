@@ -2,6 +2,7 @@ import { Agent, SkillReadTool } from '@theokit/sdk'
 import type { CustomTool, InlineSkill, McpServerConfig, ModelSelection, Plugin, SDKAgent } from '@theokit/sdk'
 
 import type { ImportedSetup } from '../migration/import-store.js'
+import type { AgentTelemetry } from '../telemetry/otel.js'
 import type { AgentToolOptions } from '../tools/tool-registry.js'
 import { UNTRUSTED_CONTENT_NOTICE } from './untrusted-content.js'
 
@@ -28,6 +29,8 @@ export interface TheoClawAgentOptions<Model extends string | ModelSelection = st
    * a chat agent.
    */
   readonly mcpServers?: Record<string, McpServerConfig>
+  /** SDK telemetry, present only with `THEOCLAW_OTEL=on` (B-400 FR-006); never prompt content. */
+  readonly telemetry?: AgentTelemetry
 }
 
 /** An import handed to a `/control` agent, and whether its MCP servers are on (`THEOCLAW_IMPORTED_MCP`). */
@@ -43,6 +46,8 @@ export interface TheoClawAgentInput<Model extends string | ModelSelection> {
   readonly toolOptions?: AgentToolOptions
   /** A migration import (FR-008); absent for every channel and session agent (FR-009). */
   readonly imported?: AgentImport
+  /** SDK telemetry for every agent while `THEOCLAW_OTEL=on` (B-400 FR-006). */
+  readonly telemetry?: AgentTelemetry
 }
 
 /**
@@ -58,6 +63,7 @@ export function theoClawAgentOptions<Model extends string | ModelSelection>(
     withheldBuiltinTools: ['shell'] as const,
     memory: { enabled: false } as const,
     systemPrompt: UNTRUSTED_CONTENT_NOTICE,
+    ...(input.telemetry === undefined ? {} : { telemetry: input.telemetry }),
   }
   const withTools: TheoClawAgentOptions<Model> = input.toolOptions === undefined ? base : withToolOptions(base, input.toolOptions)
   return input.imported === undefined ? withTools : withImport(withTools, input.imported)
@@ -121,5 +127,6 @@ export function createTheoClawAgent<Model extends string | ModelSelection>(
     systemPrompt: options.systemPrompt,
     ...(options.skills === undefined ? {} : { skills: options.skills }),
     ...(options.mcpServers === undefined ? {} : { mcpServers: options.mcpServers }),
+    ...(options.telemetry === undefined ? {} : { telemetry: { ...options.telemetry } }),
   })
 }

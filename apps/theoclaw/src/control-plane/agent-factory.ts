@@ -2,6 +2,7 @@ import { join } from 'node:path'
 
 import { createTheoClawAgent, theoClawAgentOptions } from '../agent/create-agent.js'
 import type { AgentImport, TheoClawAgentOptions } from '../agent/create-agent.js'
+import { agentTelemetry, readTelemetrySettings } from '../telemetry/otel.js'
 import type { AgentToolOptions } from '../tools/tool-registry.js'
 import type { BindEnvironment } from './bind.js'
 import { requireModel } from './settings.js'
@@ -30,7 +31,7 @@ export interface SessionAgentOptions extends TheoClawAgentOptions {
  */
 export function agentOptionsFor(env: BindEnvironment): TheoClawAgentOptions {
   const { model, modelKey } = requireModel(env)
-  return theoClawAgentOptions({ model, apiKey: modelKey })
+  return theoClawAgentOptions({ model, apiKey: modelKey, ...agentTelemetry(readTelemetrySettings(env)) })
 }
 
 /**
@@ -61,6 +62,7 @@ export function createAgentFactory(
       theoClawAgentOptions({
         model,
         apiKey: modelKey,
+        ...agentTelemetry(readTelemetrySettings(env)),
         ...(toolOptions === undefined ? {} : { toolOptions }),
         ...(imported === undefined ? {} : { imported }),
       }),
