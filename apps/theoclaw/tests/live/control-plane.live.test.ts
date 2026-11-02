@@ -87,7 +87,10 @@ describe.skipIf(!LIVE)("the control plane against a real model", () => {
     if (turn.status === "timeout") throw new Error(`no final frame within 60 s: ${JSON.stringify(turn.frames)}`);
 
     expect(turn.text.trim().length, `frames: ${JSON.stringify(turn.frames)}`).toBeGreaterThan(0);
-    expect(turn.frames.filter((frame) => frame.type === "done" || frame.type === "error")).toEqual([{ type: "done" }]);
+    // One final frame, a done; since B-400 it carries the turn's usage record.
+    const finals = turn.frames.filter((frame) => frame.type === "done" || frame.type === "error");
+    expect(finals.map((frame) => frame.type)).toEqual(["done"]);
+    expect(finals[0]).toMatchObject({ type: "done", usage: { inputTokens: expect.any(Number), outputTokens: expect.any(Number) } });
     expect(turn.frames.length).toBe(turn.framesAtEnd);
   });
 

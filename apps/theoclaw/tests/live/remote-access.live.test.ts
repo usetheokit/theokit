@@ -389,7 +389,7 @@ describe.skipIf(!LIVE)('remote access over an SSH local forward', () => {
     expect(status).toBe(101)
     const frames = await turnThrough(forward.localPort, claw.token!)
     const last = frames.at(-1)
-    expect(last).toEqual({ type: 'done' })
+    expect(last).toMatchObject({ type: 'done' })
     const texts = frames.filter(isNonEmptyText)
     expect(texts.length, `frames: ${JSON.stringify(frames)}`).toBeGreaterThan(0)
     // The counter the refusal tests read does count: an accepted turn built its agent.
@@ -399,18 +399,18 @@ describe.skipIf(!LIVE)('remote access over an SSH local forward', () => {
   it('accepts the owner again after the forward is closed and reopened', async () => {
     const claw = await startClaw(true)
     const first = await forwardTo(claw)
-    expect((await turnThrough(first.localPort, claw.token!)).at(-1)).toEqual({ type: 'done' })
+    expect((await turnThrough(first.localPort, claw.token!)).at(-1)).toMatchObject({ type: 'done' })
     await first.close()
     const second = await forwardTo(claw)
     const frames = await turnThrough(second.localPort, claw.token!)
     const last = frames.at(-1)
-    expect(last).toEqual({ type: 'done' })
+    expect(last).toMatchObject({ type: 'done' })
   })
 
   it('the turn crossed the test sshd and stops when it stops', async () => {
     const claw = await startClaw(true)
     const forward = await forwardTo(claw)
-    expect((await turnThrough(forward.localPort, claw.token!)).at(-1)).toEqual({ type: 'done' })
+    expect((await turnThrough(forward.localPort, claw.token!)).at(-1)).toMatchObject({ type: 'done' })
     const log = forward.sshdLog()
     expect(log).toMatch(/Accepted publickey for \S+/)
     await forward.close()
