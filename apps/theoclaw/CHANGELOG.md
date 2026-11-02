@@ -21,6 +21,18 @@ and versioning follows [Semantic Versioning](https://semver.org/).
   event, with a value split across streamed deltas held back until it can be told apart. The parity
   ledger records OC-88 and OC-90 as shipped, checked by `tests/live/security.live.test.ts`; OC-89,
   OC-91 and OC-92 stay open.
+- Scheduled jobs and a heartbeat (B-396; OC-84, OC-85 and Hermes row 4 shipped). `/control` agents
+  hold `schedule_job`, `list_scheduled_jobs` and `cancel_scheduled_job`, so the owner schedules a
+  prompt in a sentence; chat agents never hold them. Jobs are kept in
+  `<workspace>/.theoclaw/schedules.json` (mode 0600, a malformed file refuses the start) and run on
+  the SDK `Cron` timer as read-only worker agents that hold no schedule tool. Each run's prompt
+  carries the last 4000 characters of the previous answer, and the answer is sent to the job's
+  platform and channel through the gateway's `DeliveryRouter`, unless it is `[SILENT]` alone. A
+  failed run sends one failure line, an overlapping fire is skipped, and the shutdown aborts runs in
+  flight before the platforms stop. `THEOCLAW_HEARTBEAT="<cron> <platform>:<channel>"` runs
+  `HEARTBEAT.md` from the workspace as a prompt on each fire, and nothing when the file is absent or
+  blank. The mechanism is `@theokit/agents/tools` (`createJobStore`, `createScheduler`,
+  `createScheduleTools`), in this repository. The live check is `tests/live/scheduler.live.test.ts`.
 - `/control` agents get `run_code` and `delegate_all` (B-386). With `run_code` the agent writes a
   script that calls `read_file`, `list_dir`, `web_fetch` and `web_search` (when configured) as
   `api.<name>(input)` inside a QuickJS-WASM sandbox from `@theokit/agents/code-mode-quickjs`. Only
