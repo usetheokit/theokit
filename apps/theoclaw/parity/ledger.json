@@ -95,7 +95,7 @@
   {"id":"OC-94","status":"open"},
   {"id":"OC-95","status":"open"},
   {"id":"OC-96","status":"open"},
-  {"id":"OC-97","status":"open"},
+  {"id":"OC-97","status":"shipped","check":{"path":"apps/theoclaw/tests/live/usage.live.test.ts","test":"the done frame's tokens equal the provider's usage response and are above 0"},"verified_on":"2026-11-02","note":"each finished chat, /control and WebChat turn reports its input and output tokens, the model and its USD cost (or unpriced, never 0) in its final frame or event and one stderr line; /usage off|tokens|cost|full sets a per-conversation reply footer, reset on restart; measured live as the done frame's tokens equal to the provider's own usage response through a recording proxy"},
   {"id":"OC-98","status":"open"},
   {"id":"OC-99","status":"open"},
   {"id":"OC-100","status":"open"},

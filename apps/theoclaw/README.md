@@ -253,7 +253,9 @@ Connect to `ws://127.0.0.1:<port>/control` with `Authorization: Bearer <THEOCLAW
 any other path answers 404 and a missing or wrong token 401, before any agent is built. Send
 `{"type":"chat","message":"..."}` as a text frame. Each event of the turn arrives as
 `{"type":"event","event":{...}}`, and the turn ends with exactly one `{"type":"done"}` or
-`{"type":"error","code":"turn_failed"}`. A chat frame during a turn gets
+`{"type":"error","code":"turn_failed"}`. A finished turn's `done` carries what it used:
+`"usage":{"inputTokens":n,"outputTokens":n}`, the `"model"`, and `"costUsd"` when the SDK priced the
+run or `"costUnpriced":true` when it did not (never 0 for an unknown price). A chat frame during a turn gets
 `{"type":"error","code":"busy"}`, anything else `{"type":"error","code":"bad_frame"}`; neither ends
 the running turn. Frames are capped at 65536 bytes.
 
@@ -611,6 +613,48 @@ prompt; nor do the `/control` agent's `run_code` and `delegate_all` workers. The
 stay off until you set `THEOCLAW_IMPORTED_MCP=on`; any other value stops the start. With host tools
 on, the start refuses an imported stdio command, cwd or script argument the sandboxed shell could
 write. Imported env and header values are masked in the output, and two imports never run at once.
+
+## Usage, telemetry and backups
+
+**Usage and cost.** Every finished turn, chat, `/control` or WebChat, writes one line to stderr:
+`theoclaw: usage <channel|control|webchat> <model> in=<tokens> out=<tokens> cost=$<amount>`, or
+`cost=unpriced` when the SDK has no price for the model. The amount keeps six significant digits,
+so a tiny cost prints its digits rather than 0. The `/control` `done` frame carries the same record
+(see above), and the WebChat `done` event carries `usage`, `cost` (absent when unpriced) and
+`model`. In a chat, an owner or a paired sender can ask for a footer under each reply with
+`/usage tokens`, `/usage cost` or `/usage full`, and remove it with `/usage off`. The setting is
+per conversation, never reaches the model, and **resets to off when TheoClaw restarts**.
+
+**OpenTelemetry.** Set `THEOCLAW_OTEL=on` and `OTEL_EXPORTER_OTLP_ENDPOINT` (an `http://` or
+`https://` collector base, such as `http://127.0.0.1:4318`) to export the SDK's spans
+(`agent.send` and its children) and histograms (`theokit_llm_call_duration_ms` and the others) over
+OTLP/HTTP to `<endpoint>/v1/traces` and `<endpoint>/v1/metrics`. The service is named after the
+instance (`theoclaw`, or `theoclaw-<profile>`). Spans carry metadata and no content: no prompt,
+reply or tool argument. Off by default, since it sends turn metadata off the host; `on` without an
+endpoint, an endpoint that is not an http(s) URL, or any value but `on` or `off` stops the start.
+A collector that is down costs no turn: each failed export is one `theoclaw: telemetry export
+failed: …` line, and a stop waits at most 2 s for what is pending. Log export, a Prometheus
+endpoint and anonymous usage telemetry are not built (B-712).
+
+**Backup and restore.** Stop the instance, then `theoclaw backup <dir>` copies its state directory
+and workspace (as the start resolves them: the configuration file, then the profile) to
+`<dir>/state` and `<dir>/workspace`, with `manifest.json` listing each file's sha256 and size.
+Directories are written 0700 and files 0600. A backup holds the conversations and no credentials:
+the configuration file, `THEOKIT_HOME` and a migration import (whose `.mcp.json` holds imported MCP
+secrets) are left out, so the host you restore on brings its own. It refuses a target that is not
+empty, a target inside the state directory or workspace, and a symbolic link.
+
+`theoclaw restore <dir>` checks every file against the manifest before it writes anything, then
+copies into an empty or absent state directory and workspace through a staging directory beside
+each, and renames both into place only once every file landed: a restore that fails leaves both
+targets as they were. Session transcripts are moved under the new workspace's own name, so a
+backup restored into another profile keeps each conversation's history. Run it on a stopped
+instance too.
+
+Both commands, and every start, take `<state directory>.instance.lock`, beside the state directory,
+which names the process holding it. A start while a backup or a restore runs is refused naming that
+process, and so is a backup of a running instance. A lock left by a process that is gone is taken
+over. Snapshots of a running instance and offsite copies are not built (B-713).
 
 ## Fetched content and configured values
 

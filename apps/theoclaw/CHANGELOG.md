@@ -13,6 +13,19 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Each finished turn reports its tokens and USD cost, OpenTelemetry export is available, and a
+  stopped instance can be backed up and restored (B-400, OC-97 to OC-99). Every chat, `/control`
+  and WebChat turn writes one `theoclaw: usage …` line, the `/control` `done` frame carries
+  `usage`, `model` and `costUsd` or `costUnpriced: true`, and the WebChat `done` event carries
+  `usage`, `cost` (absent when unpriced) and `model`; an unpriced run is never reported as 0.
+  `/usage off|tokens|cost|full` sets a footer per conversation, reset to off on restart.
+  `THEOCLAW_OTEL=on` with `OTEL_EXPORTER_OTLP_ENDPOINT` exports the SDK's spans and histograms over
+  OTLP/HTTP, without prompt or reply content; it adds six exact `@opentelemetry/*` dependencies.
+  `theoclaw backup <dir>` and `theoclaw restore <dir>` copy the state directory and workspace with
+  a sha256 manifest, leaving out credentials and a migration import. Every start now takes
+  `<state directory>.instance.lock` and refuses while another process holds it. The parity ledger
+  records OC-97 as shipped, checked by `tests/live/usage.live.test.ts`; OC-98 and OC-99 stay open,
+  their missing halves carried by B-712 and B-713.
 - Fetched content reaches the model as data, and no configured value is sent to a person or a
   client (B-398, OC-88 and OC-90). Every agent send passes the SDK's `toolResultGuard`, so a tool
   result is framed in `<untrusted-tool-output>`, and every system prompt opens with a notice that
