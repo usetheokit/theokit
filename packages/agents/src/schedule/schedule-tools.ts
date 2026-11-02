@@ -105,6 +105,8 @@ export function createScheduleTools(options: CreateScheduleToolsOptions): Custom
     inputSchema: cancelInput,
     handler: async (raw: unknown): Promise<string> => {
       const { id } = cancelInput.parse(raw)
+      // Only a stored job: a transient one the host added (the heartbeat) is not the owner's to cancel.
+      if (!scheduler.list().some((job) => job.id === id)) return refuse('no such job')
       return (await scheduler.cancel(id)) ? JSON.stringify({ ok: true }) : refuse('no such job')
     },
   })

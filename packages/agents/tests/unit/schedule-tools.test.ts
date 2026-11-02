@@ -129,4 +129,20 @@ describe('createScheduleTools', () => {
       error: 'no such job',
     })
   })
+
+  it('refuses to cancel a transient job the host added, such as the heartbeat', async () => {
+    const heartbeat = {
+      id: 'heartbeat',
+      cron: '0 0 1 1 *',
+      prompt: '',
+      target: { platform: 'telegram', channelId: '42' },
+      createdAt: 0,
+    }
+    await scheduler.add(heartbeat, { durable: false, prompt: () => Promise.resolve('beat') })
+    expect(await call('cancel_scheduled_job', { id: 'heartbeat' })).toEqual({
+      ok: false,
+      error: 'no such job',
+    })
+    expect(await scheduler.fire('heartbeat')).toBe('delivered')
+  })
 })
