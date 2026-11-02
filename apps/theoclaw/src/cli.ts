@@ -41,13 +41,15 @@ export interface CliIo extends DaemonIo {
 
 const USAGE = `usage: theoclaw <command>
 
-  theoclaw start [args]     run TheoClaw in the foreground with the configuration file
+  theoclaw start [--config <path>] [--profile <name>]
+                            run TheoClaw in the foreground with the configuration file
   theoclaw onboard          write the configuration file, asking for each setting
       --yes --model <id> --api-key-env <NAME> --port <n> --owners <platform:id,...>
       [--workspace <absolute dir>] [--force]
-  theoclaw daemon install   run TheoClaw as a systemd user unit, started now and at login
-  theoclaw daemon uninstall stop and remove that unit
-  theoclaw daemon status    exit 0 when the unit is active, 3 otherwise
+  theoclaw daemon install   run TheoClaw as a login service, started now and at login:
+                            a systemd user unit, a launchd agent or a Task Scheduler task
+  theoclaw daemon uninstall stop and remove that service
+  theoclaw daemon status    exit 0 when the service is running, 3 otherwise
   theoclaw update [--channel stable|dev]
                             fetch and fast-forward the checkout on its channel, rebuild, restart
   theoclaw security audit [--fix]

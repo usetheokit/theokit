@@ -21,7 +21,14 @@ and versioning follows [Semantic Versioning](https://semver.org/).
   image tool result ends an OpenRouter run). The start refuses a host that cannot run it and the
   tool is refused under `THEOCLAW_SANDBOX=read-only`; typed text may hold no control character.
   Chat agents and workers never hold it.
-
+- `theoclaw daemon install|uninstall|status` also runs the instance as a login service on macOS and
+  Windows (B-692, OC-32). On macOS it writes a launchd agent to `~/Library/LaunchAgents` and loads it
+  into `gui/<uid>`; on Windows it registers a Task Scheduler task started at logon, with no execution
+  time limit. A load or registration the platform refuses leaves no definition behind. `theoclaw
+  update` restarts the macOS agent with `launchctl kickstart -k`. The process entry now accepts
+  `--config <path>` and `--profile <name>` (a scheduled task carries no environment), so
+  `theoclaw start <other argument>` exits 2 where it used to ignore the argument. The real-model
+  daemon test runs on `macos-latest` and `windows-latest` through `theoclaw-daemon.yml`.
 - Device pairing for `/control` (B-709, OC-91). With `THEOCLAW_CONTROL_TOKEN` and `THEOCLAW_STATE_DIR`
   set, the owner's `/control` socket answers `{"type":"pair_code"}` with a one-time setup code valid for
   ten minutes, `{"type":"pending_devices"}` with the requests waiting, and

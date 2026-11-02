@@ -35,19 +35,31 @@ unless you pass `--force`.
 ## Run as a service
 
 ```bash
-theoclaw daemon install     # writes ~/.config/systemd/user/theoclaw.service, enables and starts it
-theoclaw daemon status      # exit 0 when the unit is active, 3 otherwise
-theoclaw daemon uninstall   # stops, disables and removes the unit
+theoclaw daemon install     # writes the platform's service definition, loads it and starts it
+theoclaw daemon status      # exit 0 when the service is running, 3 otherwise
+theoclaw daemon uninstall   # stops the service and removes its definition
 ```
 
-The unit runs `node <checkout>/apps/theoclaw/dist/main.js` with `THEOCLAW_CONFIG` set to the
-configuration file's absolute path, in the configured `THEOCLAW_WORKSPACE`, and restarts on
-failure. With `THEOCLAW_PROFILE` set, it is `theoclaw-<profile>.service`, and several profiles run
-side by side. `install` refuses when the configuration file or the build is missing.
+The service runs `node <checkout>/apps/theoclaw/dist/main.js` with the configuration file's
+absolute path, in the configured `THEOCLAW_WORKSPACE`, and restarts on failure. With
+`THEOCLAW_PROFILE` set, the service is named `theoclaw-<profile>`, and several profiles run side by
+side. `install` refuses when the configuration file or the build is missing. Each platform has its
+own backend:
 
-A user unit stops when you log out unless lingering is on. `install` prints the command when it is
-off: `loginctl enable-linger "$USER"`. Only Linux with `systemd --user` is supported: macOS
-(launchd) and Windows are refused by name.
+| Platform | Service | Definition | Output |
+|---|---|---|---|
+| Linux | a `systemd --user` unit | `~/.config/systemd/user/<name>.service` | `journalctl --user -u <name>` |
+| macOS | a launchd agent, loaded into `gui/<uid>` | `~/Library/LaunchAgents/<name>.plist` | `~/Library/Logs/theoclaw/<name>.log` |
+| Windows | a Task Scheduler task, started at your logon | the task `<name>`, registered from an XML file that is removed again | not captured |
+
+A systemd user unit stops when you log out unless lingering is on. `install` prints the command
+when it is off: `loginctl enable-linger "$USER"`. The macOS agent and the Windows task start when
+you log in. On Windows the task passes its configuration as `--config` and `--profile` arguments,
+because a scheduled task carries no environment; the entry accepts those two arguments on every
+platform and exits 2 on any other.
+
+`theoclaw update` restarts the Linux unit and the macOS agent onto the new build. On Windows it
+cannot run `install.sh`, so rebuild by hand and run `theoclaw daemon install` again.
 
 ## Container
 

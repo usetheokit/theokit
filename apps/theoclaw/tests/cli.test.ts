@@ -40,6 +40,14 @@ describe('the theoclaw command line', () => {
     expect(await runCli([], none.io)).toBe(2)
   })
 
+  it('help_names_the_three_daemon_backends', async () => {
+    const help = harness()
+    expect(await runCli(['--help'], help.io)).toBe(0)
+    for (const name of ['systemd', 'launchd', 'Task Scheduler', 'theoclaw start [--config <path>] [--profile <name>]']) {
+      expect(help.stdout()).toContain(name)
+    }
+  })
+
   it('help names the six subcommands and an undefined one exits 2', async () => {
     const help = harness()
     expect(await runCli(['--help'], help.io)).toBe(0)
