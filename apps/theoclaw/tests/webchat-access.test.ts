@@ -8,8 +8,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { RunningTheoClaw } from '../src/composition.js'
 import { startTheoClaw } from '../src/composition.js'
-import type { AgentToolOptions } from '../src/tools/tool-registry.js'
-import { NO_TOOL_OPTIONS } from '../src/tools/tool-registry.js'
+import type { TheoClawAgentOptions } from '../src/agent/create-agent.js'
+import { agentOptionsFor } from '../src/control-plane/agent-factory.js'
 import { WEBCHAT_ASSETS_DIR } from '../src/webchat/page.js'
 import { capturingStream, fakeBuilders, TELEGRAM_AND_LINE } from './composition-fixtures.js'
 import { assistant, FakeAgent, finished } from './fakes.js'
@@ -47,24 +47,32 @@ afterEach(async () => {
   }
 })
 
-/** A started TheoClaw whose agent factory counts the agents it builds. */
+/**
+ * A started TheoClaw that counts the agents it builds: `/control` agents through `agentFactory`, chat
+ * agents through `createChatAgent` with the options each was built from, and, with `webchat`, the
+ * agents of an `importFreeAgentFactory` (B-375, FR-009).
+ */
 async function start(options: { readonly token?: string; readonly assetsDir?: string; readonly webchat?: boolean } = {}) {
-  const calls = { built: 0, toolOptions: [] as AgentToolOptions[], webchat: [] as AgentToolOptions[] }
+  const calls = { built: 0, controlBuilt: 0, chatOptions: [] as TheoClawAgentOptions[], importFree: 0 }
   const capture = capturingStream()
   const { builders } = fakeBuilders()
   const env = { ...TELEGRAM_AND_LINE, ...(options.token === undefined ? {} : { THEOCLAW_WEBCHAT_TOKEN: options.token }) }
   const app = await startTheoClaw({
     env,
-    agentFactory: (toolOptions) => {
+    agentFactory: () => {
+      calls.controlBuilt += 1
+      return new FakeAgent({ frames: [assistant('a /control agent answered')] })
+    },
+    createChatAgent: async (agentOptions) => {
       calls.built += 1
-      calls.toolOptions.push(toolOptions)
+      calls.chatOptions.push(agentOptions)
       return new FakeAgent({ frames: [assistant('hello from the agent'), finished()] })
     },
     ...(options.webchat === true
       ? {
-          importFreeAgentFactory: (toolOptions: AgentToolOptions) => {
-            calls.webchat.push(toolOptions)
-            return new FakeAgent({ frames: [assistant('hello from the webchat agent'), finished()] })
+          importFreeAgentFactory: () => {
+            calls.importFree += 1
+            return new FakeAgent({ frames: [assistant('an import-free agent answered'), finished()] })
           },
         }
       : {}),
@@ -185,16 +193,29 @@ describe('the /webchat routes on the started listener', () => {
     const served = await post(base, '/webchat/chat', `Bearer ${TOKEN}`)
     expect(servedText(await served.text())).toContain('hello from the agent')
 
-    expect(calls.toolOptions).toEqual([NO_TOOL_OPTIONS])
+    expect(calls.chatOptions).toEqual([agentOptionsFor(TELEGRAM_AND_LINE)])
+    expect(calls.chatOptions.map((built) => [built.tools, built.plugins, built.mcpServers])).toEqual([
+      [undefined, undefined, undefined],
+    ])
   })
 
-  it('builds a served turn\'s agent from importFreeAgentFactory when the start has one, never the /control factory (B-375, FR-009)', async () => {
+  it('builds the agent of a served turn through the chat-agent factory, never the /control one (B-377)', async () => {
+    const { base, calls } = await start({ token: TOKEN })
+
+    await (await post(base, '/webchat/chat', `Bearer ${TOKEN}`)).text()
+
+    expect(calls.built).toBe(1)
+    expect(calls.controlBuilt).toBe(0)
+  })
+
+  it('builds a served turn\'s agent through the chat-agent factory even beside an importFreeAgentFactory, so no import reaches it (B-375, FR-009)', async () => {
     const { base, calls } = await start({ token: TOKEN, webchat: true })
 
     const served = await post(base, '/webchat/chat', `Bearer ${TOKEN}`)
-    expect(servedText(await served.text())).toContain('hello from the webchat agent')
+    expect(servedText(await served.text())).toContain('hello from the agent')
 
-    expect(calls.webchat).toEqual([NO_TOOL_OPTIONS])
-    expect(calls.built).toBe(0)
+    expect(calls.chatOptions).toEqual([agentOptionsFor(TELEGRAM_AND_LINE)])
+    expect(calls.importFree).toBe(0)
+    expect(calls.controlBuilt).toBe(0)
   })
 })

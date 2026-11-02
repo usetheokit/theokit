@@ -197,13 +197,3 @@ export function controlAgentToolOptions(
 ): AgentToolOptions {
   return agentToolOptions(settings, extra, async () => build(workerToolOptions(settings)))
 }
-
-/**
- * The options of an agent that holds no tool at all: a WebChat turn's, since whoever holds the
- * WebChat token writes its prompt, as every chat surface (B-382). Frozen to the arrays, so no caller
- * can add a tool to the one instance every such agent shares.
- */
-export const NO_TOOL_OPTIONS: AgentToolOptions = Object.freeze({
-  tools: Object.freeze([]),
-  plugins: Object.freeze([]),
-})

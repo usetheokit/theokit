@@ -90,3 +90,15 @@ export function createChannelAgentFactory<A>(
 export function createSdkChannelAgentFactory(env: BindEnvironment): () => Promise<TurnAgent> {
   return createChannelAgentFactory(env, createTheoClawAgent)
 }
+
+/**
+ * A WebChat turn's agent: one per turn, through `createChannelAgentFactory`, so WebChat holds no
+ * tool, no `shell` and memory off by the same export every chat agent is opened through, not by a
+ * second "no tool" mechanism of its own. `create` defaults to the SDK's, as `createAgentFactory`'s.
+ */
+export function webchatAgentFactory(
+  env: BindEnvironment,
+  create: CreateAgent = createTheoClawAgent,
+): () => Promise<TurnAgent> {
+  return createChannelAgentFactory(env, create)
+}

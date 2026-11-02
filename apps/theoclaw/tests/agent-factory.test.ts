@@ -11,6 +11,7 @@ import {
   createChannelAgentFactory,
   sessionAgentOptions,
   type CreateAgent,
+  webchatAgentFactory,
 } from "../src/control-plane/agent-factory.js";
 import type { TurnAgent } from "../src/control-plane/turn.js";
 import { theoClawAgentOptions, type AgentImport } from "../src/agent/create-agent.js";
@@ -152,6 +153,18 @@ describe("createChannelAgentFactory", () => {
     await createChannelAgentFactory({ THEOCLAW_MODEL: "m", OPENROUTER_API_KEY: "k" }, create)();
 
     expect(options[0]?.memory).toEqual({ enabled: false });
+  });
+});
+
+describe("webchatAgentFactory", () => {
+  it("builds a WebChat turn's agent with the chat options: no tool, no shell, memory off", async () => {
+    const { create, options } = optionsRecordingCreate();
+    const env = { THEOCLAW_MODEL: "openrouter/m", OPENROUTER_API_KEY: "router-key" };
+
+    await webchatAgentFactory(env, create)();
+
+    expect(options).toEqual([agentOptionsFor(env)]);
+    expect(effectiveToolNames({ ...options[0] }).names).toEqual([]);
   });
 });
 

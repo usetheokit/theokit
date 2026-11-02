@@ -27,7 +27,8 @@ import type { ChannelLoop, PlatformBuild } from './channels/channel-loop.js'
 import { installOutputMask, type MaskableStream } from './channels/output-mask.js'
 import { type ConfiguredPlatform, resolvePlatforms } from './channels/platforms.js'
 import { createReplyHandler, type TurnAgent } from './channels/reply-handler.js'
-import { createSdkChannelAgentFactory } from './control-plane/agent-factory.js'
+import { createSdkChannelAgentFactory, webchatAgentFactory } from './control-plane/agent-factory.js'
+import type { CreateAgent } from './control-plane/agent-factory.js'
 import { controlOptions } from './control-plane/control-wiring.js'
 import { type HttpHandler, serveHandler } from './control-plane/http-dispatch.js'
 import { type ControlPlaneHandle, listenControlPlane } from './control-plane/listener.js'
@@ -56,7 +57,7 @@ import {
 } from './webhooks/platform-routes.js'
 import { createWebhookRouter, type WebhookRoute } from './webhooks/router.js'
 import type { TeamsVerifier } from './webhooks/teams.js'
-import { controlAgentToolOptions, NO_TOOL_OPTIONS } from './tools/tool-registry.js'
+import { controlAgentToolOptions } from './tools/tool-registry.js'
 import { triggerRoutes } from './triggers/trigger-route.js'
 import { type EventSettings, readEventSettings } from './triggers/trigger-settings.js'
 import type { AgentToolOptions } from './tools/tool-registry.js'
@@ -256,7 +257,7 @@ export interface StartOptions extends Omit<TheoClawOptions, 'write'> {
   readonly instance?: TheoClawInstance
   /** The migration import's line (FR-010, D1), computed by the entry and written after the instance line. */
   readonly importedLine?: string
-  /** WebChat's agents and every `/control` agent's workers, which an import must not reach (FR-009). Default: `agentFactory`. */
+  /** Every `/control` agent's workers, which an import must not reach (FR-009); WebChat's go through `createChatAgent`. Default: `agentFactory`. */
   readonly importFreeAgentFactory?: StartOptions['agentFactory']
   /** The processes an import starts outside the sandbox (`importedMcpPaths`), protected with host tools on. */
   readonly importedPaths?: readonly ProtectedPath[]
@@ -268,6 +269,8 @@ export interface StartOptions extends Omit<TheoClawOptions, 'write'> {
   readonly agentRegistry?: { configure(options: { readonly maxAgents: number; readonly idleTimeoutMs: number }): void }
   /** Where the WebChat bundle is read from. Default `WEBCHAT_ASSETS_DIR`, where `build:web` writes it. */
   readonly webchatAssetsDir?: string | URL
+  /** Creates a WebChat turn's agent from the chat options `webchatAgentFactory` pins. Default: the SDK's, as `/control`'s. */
+  readonly createChatAgent?: CreateAgent
 }
 
 /** The running process: the channel loop, its webhook router, and the one listener serving both. */
@@ -324,14 +327,12 @@ function workflowTools(factory: StartOptions['draftAgentFactory'], write: (line:
 
 /**
  * The WebChat routes, or `undefined` while `THEOCLAW_WEBCHAT_TOKEN` is unset. WebChat is a chat
- * surface, so its agents hold no tool, as every chat agent (B-382): the tool options reach only the
- * `/control` turn's agents.
+ * surface, so its agents are built through the chat path's factory, as every chat agent: no tool
+ * (B-382), no `shell` and memory off (B-377), whatever the `/control` turn's options become.
  */
 function startWebchat(options: StartOptions, token: string | undefined, secrets: readonly string[]): HttpHandler | undefined {
   if (token === undefined) return undefined
-  const agents = createContainer<TurnAgent>({
-    factory: () => (options.importFreeAgentFactory ?? options.agentFactory)(NO_TOOL_OPTIONS),
-  })
+  const agents = createContainer<TurnAgent>({ factory: webchatAgentFactory(options.env, options.createChatAgent) })
   const assetsDir = options.webchatAssetsDir ?? WEBCHAT_ASSETS_DIR
   return createWebchatRoutes({ token, runTurn: createTurnRunner(agents.withAgent, secrets), assetsDir })
 }

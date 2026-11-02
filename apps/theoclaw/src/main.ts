@@ -65,6 +65,8 @@ startTheoClaw({
   importedPaths: importedMcpPaths(imported),
   importedSecrets: importedMcpSecrets(imported),
   ...(imported === undefined ? {} : { importedLine: importedSetupLine(imported.setup, imported.mcp) }),
+  // WebChat's agents: created like the /control ones, from the chat path's options (no tool, B-382).
+  createChatAgent: create,
   // The `digest` tool's draft agents (B-387): the chat path's factory, so no tool, no shell, memory off.
   draftAgentFactory: createChannelAgentFactory(process.env, createSdkAgent),
   // A trigger run's agent (B-397): the chat path's factory too, a fresh one per run, in the workspace.

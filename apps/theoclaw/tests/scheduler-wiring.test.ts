@@ -8,7 +8,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import type { TurnAgent, TurnRun } from '../src/agent-port.js'
 import type { StartedPlatform } from '../src/channels/channel-loop.js'
-import { NO_TOOL_OPTIONS, type AgentToolOptions } from '../src/tools/tool-registry.js'
+import { agentOptionsFor } from '../src/control-plane/agent-factory.js'
+import type { AgentToolOptions } from '../src/tools/tool-registry.js'
 import { resolveToolSettings } from '../src/tools/tool-settings.js'
 import { type RunningScheduler, scheduleFile, wireScheduler } from '../src/scheduler/scheduler-wiring.js'
 import { FakeAdapter } from './fakes.js'
@@ -195,7 +196,7 @@ describe('startTheoClaw with the scheduler', () => {
       const options = await runControlTurn(app)
       const names = options.tools.map((tool) => tool.name)
       for (const name of SCHEDULE_TOOLS) expect(names).toContain(name)
-      expect(NO_TOOL_OPTIONS.tools).toEqual([])
+      expect(agentOptionsFor({ THEOCLAW_MODEL: 'openrouter/m', THEOKIT_API_KEY: 'k' }).tools).toBeUndefined()
       expect(app.output()).toContain('scheduler: 0 jobs, heartbeat off')
     } finally {
       await stop(app)

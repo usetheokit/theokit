@@ -14,7 +14,7 @@ import { browserServer, readBrowser } from '../src/tools/browser-server.js'
 import type { BrowserDeps } from '../src/tools/browser-server.js'
 import type { ImportedSetup } from '../src/migration/import-store.js'
 import type { TurnAgent } from '../src/agent-port.js'
-import { agentToolOptions, controlAgentToolOptions, NO_TOOL_OPTIONS } from '../src/tools/tool-registry.js'
+import { agentToolOptions, controlAgentToolOptions } from '../src/tools/tool-registry.js'
 import type { AgentToolOptions } from '../src/tools/tool-registry.js'
 import { resolveToolSettings } from '../src/tools/tool-settings.js'
 import { notEnforced, runControlTurn, startForTools, stop, tempCwd } from './tool-start-fixtures.js'
@@ -124,7 +124,6 @@ describe('THEOCLAW_BROWSER', () => {
     await delegate?.handler({ tasks: [{ agent: 'worker', task: 'one' }] })
     expect(workerOptions).toHaveLength(1)
     expect('mcpServers' in (workerOptions[0] as object)).toBe(false)
-    expect('mcpServers' in NO_TOOL_OPTIONS).toBe(false)
   })
 
   it('builds a chat agent with no mcp server even with the browser on', async () => {

@@ -55,7 +55,10 @@ describe('a WebChat client that disconnects mid-turn', () => {
     const { builders } = fakeBuilders()
     const app = await startTheoClaw({
       env: { ...TELEGRAM_AND_LINE, THEOCLAW_WEBCHAT_TOKEN: TOKEN },
-      agentFactory: factory,
+      agentFactory: () => {
+        throw new Error('a WebChat turn built a /control agent')
+      },
+      createChatAgent: async () => factory(),
       builders,
       signals: new EventEmitter(),
       exit: vi.fn(),

@@ -431,7 +431,8 @@ describe('composeTheoClaw with Teams', () => {
 
 // AC-008 as amended by D5 (v1.4: `createChannelAgentFactory` stays, B-377 option A): the chat path
 // builds no per-message agent, and `Agent.create(` is called only by the `/control` factory: since
-// B-382 that call sits in `createTheoClawAgent`, which only the `/control` factory uses.
+// B-382 that call sits in `createTheoClawAgent`, which only `agent-factory.ts` uses (the `/control`
+// factory's default, and WebChat's through `webchatAgentFactory`).
 describe('the chat path names no per-message factory', () => {
   const SRC = fileURLToPath(new URL('../src/', import.meta.url))
   const sources = (directory: string): string[] =>
