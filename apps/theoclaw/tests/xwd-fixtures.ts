@@ -37,16 +37,18 @@ export function buildXwd(options: XwdFixtureOptions): Buffer {
   const data = Buffer.alloc(bytesPerLine * height)
   const pixels = options.pixels ?? []
   for (let index = 0; index < width * height; index++) {
-    const [red, green, blue] = pixels[index] ?? [0, 0, 0]
-    const value = (red << 16) | (green << 8) | blue
-    const at = index * bytesPerPixel
-    if (bytesPerPixel === 4) {
-      if (msbFirst) data.writeUInt32BE(value >>> 0, at)
-      else data.writeUInt32LE(value >>> 0, at)
-    } else if (bytesPerPixel === 3) {
-      const bytes = msbFirst ? [red, green, blue] : [blue, green, red]
-      bytes.forEach((byte, offset) => data.writeUInt8(byte, at + offset))
-    }
+    writePixel(data, index * bytesPerPixel, pixels[index] ?? [0, 0, 0], bytesPerPixel, msbFirst)
   }
   return Buffer.concat([header, data.subarray(0, data.length - truncateBy)])
+}
+
+function writePixel(data: Buffer, at: number, [red, green, blue]: readonly [number, number, number], bytesPerPixel: number, msbFirst: boolean): void {
+  if (bytesPerPixel === 4) {
+    const value = ((red << 16) | (green << 8) | blue) >>> 0
+    if (msbFirst) data.writeUInt32BE(value, at)
+    else data.writeUInt32LE(value, at)
+    return
+  }
+  const bytes = msbFirst ? [red, green, blue] : [blue, green, red]
+  bytes.forEach((byte, offset) => data.writeUInt8(byte, at + offset))
 }

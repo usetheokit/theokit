@@ -78,8 +78,7 @@ function checkFramebuffer(path: string): void {
 /**
  * `THEOCLAW_COMPUTER`: unset or empty is off; `on` checks, in order, host tools, the sandbox mode,
  * `DISPLAY`, `xdotool` and the framebuffer, refusing the start with the first one missing (D2);
- * anything else is refused. The tool types and clicks into whatever window the display shows,
- * outside every sandbox, so it needs the host tools and never runs under `read-only`.
+ * anything else is refused.
  */
 export function readComputer(
   env: Env,
@@ -89,18 +88,27 @@ export function readComputer(
   const value = env[VARIABLE]
   if (value === undefined || value === '') return undefined
   if (value !== 'on') throw new TheoClawConfigError(`${VARIABLE} must be "on" or unset, not "${value}"`, { variable: VARIABLE })
+  checkPosture(posture)
+  const display = trimmed(env, 'DISPLAY')
+  if (display === '') refuse('needs DISPLAY: no X display is named')
+  const xdotool = (deps.findExecutable ?? findOnPath)('xdotool', trimmed(env, 'PATH'))
+  if (xdotool === undefined) refuse('needs xdotool on PATH: install it (for example apt install xdotool)')
+  const framebuffer = trimmed(env, 'THEOCLAW_COMPUTER_FRAMEBUFFER')
+  if (framebuffer === '') refuse('needs THEOCLAW_COMPUTER_FRAMEBUFFER: the XWD file Xvfb keeps under -fbdir, such as <dir>/Xvfb_screen0')
+  checkFramebuffer(framebuffer)
+  return { display, framebuffer, xdotool }
+}
+
+function trimmed(env: Env, name: string): string {
+  return env[name]?.trim() ?? ''
+}
+
+/** The tool drives the host display outside the sandbox: it needs the host tools and never runs under `read-only`. */
+function checkPosture(posture: { readonly hostTools: boolean; readonly sandboxMode: SandboxMode }): void {
   if (!posture.hostTools) refuse('needs THEOCLAW_HOST_TOOLS=on: the tool drives the host display outside the sandbox')
   if (posture.sandboxMode === 'read-only') {
     refuse('is refused with THEOCLAW_SANDBOX=read-only: the tool types into windows on the host; unset THEOCLAW_COMPUTER or choose workspace-write')
   }
-  const display = env.DISPLAY?.trim() ?? ''
-  if (display === '') refuse('needs DISPLAY: no X display is named')
-  const xdotool = (deps.findExecutable ?? findOnPath)('xdotool', env.PATH ?? '')
-  if (xdotool === undefined) refuse('needs xdotool on PATH: install it (for example apt install xdotool)')
-  const framebuffer = env.THEOCLAW_COMPUTER_FRAMEBUFFER?.trim() ?? ''
-  if (framebuffer === '') refuse('needs THEOCLAW_COMPUTER_FRAMEBUFFER: the XWD file Xvfb keeps under -fbdir, such as <dir>/Xvfb_screen0')
-  checkFramebuffer(framebuffer)
-  return { display, framebuffer, xdotool }
 }
 
 /** The start line that says whether the computer tool is on. */
