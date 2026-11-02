@@ -15,8 +15,9 @@ import { makeHostToolsWorkspace } from '../host-tools-workspace.js'
  * B-611: `delegate` on a real model, through the options a `/control` agent is built with
  * (`controlAgentToolOptions` and `createTheoClawAgent`, the worker built by the same factory). It
  * runs only with THEOCLAW_LIVE=1; without it the case skips and CI stays offline. The file holds a
- * token made at test time, so an answer given without the worker cannot hold it, and the case reads
- * the tool-call events off the stream rather than trusting the answer.
+ * phrase made at test time, so an answer given without the worker cannot hold it, and the case reads
+ * the tool-call events off the stream rather than trusting the answer. The phrase is plain words, not
+ * a `tok-<hex>` string: models read that shape as a credential and declined to repeat it (3 of 5 runs).
  */
 const LIVE = process.env.THEOCLAW_LIVE === '1'
 const LIVE_TIMEOUT_MS = 180_000
@@ -73,7 +74,7 @@ async function turn(settings: ToolSettings, prompt: string): Promise<{ answer: s
 describe.skipIf(!LIVE)('delegate against a real model', () => {
   it('a real model delegates one task to a worker and gets its answer', { timeout: LIVE_TIMEOUT_MS }, async () => {
     const settings = liveSettings()
-    const secret = `tok-${randomBytes(6).toString('hex')}`
+    const secret = `harbor lantern ${randomBytes(4).toString('hex')}`
     writeFileSync(join(settings.toolRoot, 'note.txt'), `${secret}\n`)
 
     const result = await turn(
