@@ -1,5 +1,6 @@
 import { type DaemonBackend, type DaemonIo, type Runner, checkInstallable, resolveTarget } from './daemon-common.js'
 import { launchdBackend } from './daemon-launchd.js'
+import { schtasksBackend } from './daemon-schtasks.js'
 import { systemdBackend } from './daemon-systemd.js'
 
 /**
@@ -14,6 +15,7 @@ export { unitFor, unitPath } from './daemon-systemd.js'
 const BACKENDS: Readonly<Partial<Record<NodeJS.Platform, DaemonBackend>>> = {
   linux: systemdBackend,
   darwin: launchdBackend,
+  win32: schtasksBackend,
 }
 
 function backendFor(io: DaemonIo): DaemonBackend | undefined {
