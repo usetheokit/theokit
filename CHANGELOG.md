@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [create-theokit 3.0.24, theokit 0.77.0] - 2026-11-02
+
 ### Added
 
 - `theokit`: `GET /__theo/ready` reports the app's dependencies under `theokit start` and `theokit dev`. It pings a `jobs.backend` that has `ping()` (`PostgresJobBackend` runs `SELECT 1`) and calls the new `ready` probe from `theo.config.ts`, answering 503 when either fails. It always answered 200 under `start`, and under `dev` both reserved routes fell through to the SPA (#1071)
