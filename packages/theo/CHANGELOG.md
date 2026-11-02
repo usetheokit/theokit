@@ -1,5 +1,19 @@
 # theo
 
+## 0.76.3
+
+### Patch Changes
+
+- 952e4c2: `theokit generate controller` names every package a controller build needs that the project's `package.json` does not declare: `@theokit/http` and `reflect-metadata`, plus `@swc/core` as a dev dependency. It prints the install command for the project's package manager, read from its lockfile. It used to check whether `@theokit/http` resolved, and in an npm-installed scaffold it always does because `theokit` depends on it, so the notice never appeared and `theokit build` failed on the missing `@swc/core`. (#986)
+
+## 0.76.2
+
+### Patch Changes
+
+- a71ab34: `theokit generate ws` writes a handler built with `websocket()` from `theokit/server/define`. The old file imported `defineWebSocket` from `theokit/server`, which no public entry point exports, so it failed to load and the socket closed on connect. `theokit generate controller` writes a controller that `theokit build` accepts: `@Controller()` serves it at `/api/<name>`, and a generated guard refuses every request with 403 until you replace it with your own guard or `@Public()`. The old `@Controller('<name>')` with no access decision failed the build twice, once for a prefix the runtime never routes to and once for an undeclared access decision. When the project does not depend on `@theokit/http`, which the scaffold does not install, `generate controller` says so and prints the install command. The route, action, agent, toolbox and sandbox templates import from `theokit/server/define` instead of the deprecated `theokit/server` entry. (#986)
+- Updated dependencies [cbb431c]
+  - @theokit/agents@16.1.1
+
 ## 0.76.1
 
 ### Patch Changes
@@ -341,8 +355,8 @@
   A nested-layout project with no agents — the layout `create-theokit` scaffolds — was told, on every dev
   start and every build that reached this path:
 
-                        [theokit] agentsDir "agents" resolves to "<root>/src/agents", which is not a directory, so NO agents
-                        were found and every /api/agents/* route will 404.
+                            [theokit] agentsDir "agents" resolves to "<root>/src/agents", which is not a directory, so NO agents
+                            were found and every /api/agents/* route will 404.
 
   About routes it does not have, and a directory it never configured. Two defects in one line.
 
