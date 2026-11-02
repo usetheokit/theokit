@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- `theokit`: `GET /__theo/ready` reports the app's dependencies under `theokit start` and `theokit dev`. It pings a `jobs.backend` that has `ping()` (`PostgresJobBackend` runs `SELECT 1`) and calls the new `ready` probe from `theo.config.ts`, answering 503 when either fails. It always answered 200 under `start`, and under `dev` both reserved routes fell through to the SPA (#1071)
 - `theokit`: `ctx.queue.enqueueInTransaction(client, name, input)` and `PostgresJobBackend.enqueueInTransaction(client, input)` write a job through a connection inside the caller's transaction, so the job commits or rolls back with the caller's rows. A backend without the method rejects with `TransactionalEnqueueUnsupportedError` instead of enqueueing outside the transaction (#1077)
 
 ### Fixed

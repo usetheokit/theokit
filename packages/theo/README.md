@@ -238,6 +238,17 @@ theokit mcp <agent>                  # serve an agent as an MCP server over stdi
 `theokit build --target <name>`: `node` (default), `theo-cloud`, `vercel`, `netlify`,
 `cloudflare`, `bun`, `deno-deploy`, `aws-lambda`, `static`.
 
+`theokit start` and `theokit dev` answer two reserved routes ahead of your own:
+`GET /__theo/health` is always 200 while the process is up, and `GET /__theo/ready` is 200 only
+when the app's dependencies answer, 503 otherwise. Readiness pings a `jobs.backend` that supports
+it (`PostgresJobBackend` runs `SELECT 1`) and calls the `ready` probe you declare:
+
+```typescript
+export default config()
+  .set({ ready: async () => (await pool.query('SELECT 1')).rowCount === 1 })
+  .build()
+```
+
 Cloudflare Workers, step by step: [`docs/wiki/sops/cloudflare-deploy.md`](https://github.com/usetheokit/theokit/blob/main/docs/wiki/sops/cloudflare-deploy.md).
 
 ## Licence

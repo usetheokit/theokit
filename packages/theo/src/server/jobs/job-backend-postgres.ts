@@ -154,6 +154,14 @@ export class PostgresJobBackend implements JobBackend {
   }
 
   /**
+   * Round-trip `SELECT 1` on the pool; rejects when Postgres is unreachable. `GET /__theo/ready`
+   * calls it when this is the configured `jobs.backend` (usetheokit/theokit#1071).
+   */
+  async ping(): Promise<void> {
+    await this.#pool.query('SELECT 1')
+  }
+
+  /**
    * Create or upgrade the schema. Idempotent (uses IF NOT EXISTS) and safe to re-run on every
    * deploy. `theokit start` and `theokit dev` call it once at boot when this is the configured
    * `jobs.backend` (usetheokit/theokit#1072), so an app does not have to.

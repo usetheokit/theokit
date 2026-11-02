@@ -19,12 +19,12 @@ import { loadConfig } from '../../../config/load-config.js'
 import { loadEnv } from '../../../config/load-env.js'
 import { resolvePluginSpecifiers } from '../../../config/resolve-plugin-specifiers.js'
 import { initCacheEngineFromConfig } from '../../../server/cache-bootstrap.js'
-import { defineHealthRoute } from '../../../server/define/health-route.js'
 import { createCorsHandler } from '../../../server/http/cors.js'
 import { jobBackendFromConfig } from '../../../server/jobs/job-backend-from-config.js'
 import { createObservabilityPluginFromConfig } from '../../../server/observability-bootstrap.js'
 import { createPluginRunnerFromConfig } from '../../../server/plugins/load-plugins.js'
 import { createRouteRateLimiter } from '../../../server/rate-limit/rate-limit-per-route.js'
+import { reservedRoutesFromConfig } from '../../../server/reserved-routes-from-config.js'
 import { createProductionLoader } from '../../../server/scan/module-loader.js'
 import { resolveTransformer } from '../../../server/transformer.js'
 import { preflightNodeAndBindings } from '../../preflight-node-version.js'
@@ -182,10 +182,9 @@ export async function startCommand(options: StartOptions): Promise<void> {
       assetsMap,
       indexHtml,
       custom500Html,
-      // M7-2: serve a built-in liveness route on the Node listener. Readiness
-      // probe wiring from theo.config.ts is a documented follow-up (see the M7
-      // implementation summary § Scope note).
-      reservedRoutes: { health: defineHealthRoute() },
+      // M7-2 liveness, plus readiness from theo.config.ts: the `ready` probe and the job backend's
+      // ping. Liveness alone left `/__theo/ready` at 200 with the database down (#1071).
+      reservedRoutes: reservedRoutesFromConfig(config),
     }),
   )
 
