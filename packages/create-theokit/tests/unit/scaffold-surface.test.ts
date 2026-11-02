@@ -224,6 +224,27 @@ describe('applySurface (M45)', () => {
     expect(read('frontend/src/App.tsx')).toContain("cancelCommand: 'cancel_turn'")
   })
 
+  it('the desktop pins an @theokit/tauri range whose lowest release carries cancelCommand', () => {
+    scaffold(targetDir, 'my-desk')
+    applySurface({ targetDir, projectName: 'my-desk', surface: 'desktop' })
+
+    // `cancelCommand` ships in @theokit/tauri 1.1.0 (B-376); 1.0.0 and the 0.x line lack it, and a
+    // range that still admits them installs a transport whose abort is a no-op for the template above.
+    const pkg = JSON.parse(read('package.json')) as { dependencies: Record<string, string> }
+    const range = pkg.dependencies['@theokit/tauri']
+    const caret = /^\^(\d+)\.(\d+)\.(\d+)$/.exec(range ?? '')
+    expect(caret, `@theokit/tauri range '${range}' is not a caret range`).not.toBeNull()
+    const [major, minor] = [Number(caret![1]), Number(caret![2])]
+    expect(
+      major,
+      `@theokit/tauri range '${range}' admits a release line without cancelCommand`,
+    ).toBe(1)
+    expect(
+      minor,
+      `@theokit/tauri range '${range}' admits 1.0.x, which lacks cancelCommand`,
+    ).toBeGreaterThanOrEqual(1)
+  })
+
   it('desktop scaffolds a Tauri app: sidecar + src-tauri + React webview on @theokit/ui + @theokit/tauri', () => {
     scaffold(targetDir, 'my-desk')
     applySurface({ targetDir, projectName: 'my-desk', surface: 'desktop' })
