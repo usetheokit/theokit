@@ -1,8 +1,9 @@
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
-import { dirname, join, posix, resolve } from 'node:path'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { dirname, posix, resolve } from 'node:path'
 
 import { loadConfig } from '../../config/load-config.js'
 
+import { detectProjectPackageManager, type PackageManager } from './add.js'
 import { pathTraversalRefusal } from './generate-containment.js'
 import {
   UNDECIDED_POLICY_IDENT,
@@ -492,30 +493,77 @@ function writeTarget(
     }
   }
 
-  if (type === 'controller' && !resolvesFrom(cwd, '@theokit/http')) {
-    return { status: 'created', filePath, kind: type, name, message: CONTROLLER_DEPENDENCY_NOTICE }
+  if (type === 'controller') {
+    const message = controllerDependencyNotice(cwd)
+    if (message !== undefined) return { status: 'created', filePath, kind: type, name, message }
   }
   return { status: 'created', filePath, kind: type, name }
 }
 
 /**
- * What a generated controller needs that the scaffold does not install. `theokit` depends on
- * `@theokit/http`, but a pnpm app reaches only its own direct dependencies, so the generated
- * `import ... from '@theokit/http'` failed to resolve and the dev server could not load the file.
+ * What a controller build needs from the project. The generated file imports `@theokit/http`,
+ * which declares `reflect-metadata` as a required peer. `@theokit/http` sends every controller
+ * through SWC (`transformControllerSource`) and asks for `@swc/core`, an optional peer, so the
+ * build fails without it even for a controller with no parameter decorators.
  */
-const CONTROLLER_DEPENDENCY_NOTICE =
-  'The controller imports @theokit/http, which this project does not depend on. ' +
-  'Install it before running the app: pnpm add @theokit/http reflect-metadata'
+const CONTROLLER_DEPENDENCIES = ['@theokit/http', 'reflect-metadata'] as const
+const CONTROLLER_DEV_DEPENDENCIES = ['@swc/core'] as const
 
-/** Whether Node's package lookup from `cwd` finds `pkg` in a `node_modules` directory. */
-function resolvesFrom(cwd: string, pkg: string): boolean {
-  let dir = resolve(cwd)
-  for (;;) {
-    if (existsSync(join(dir, 'node_modules', pkg, 'package.json'))) return true
-    const parent = dirname(dir)
-    if (parent === dir) return false
-    dir = parent
+/**
+ * The install command for the packages a controller build needs that `package.json` does not
+ * declare, or `undefined` when it declares them all.
+ *
+ * It reads what the project declares, not what resolves. `theokit` and `@theokit/agents` depend
+ * on `@theokit/http`, so npm hoists it into the app's `node_modules` and a resolution check
+ * always passed there, while `@swc/core` was missing and `theokit build` failed (#986).
+ */
+function controllerDependencyNotice(cwd: string): string | undefined {
+  const declared = declaredPackages(cwd)
+  const missing = CONTROLLER_DEPENDENCIES.filter((pkg) => !declared.names.has(pkg))
+  const missingDev = CONTROLLER_DEV_DEPENDENCIES.filter((pkg) => !declared.names.has(pkg))
+  if (missing.length === 0 && missingDev.length === 0) return undefined
+
+  const pm = detectProjectPackageManager(cwd)
+  const commands = [
+    ...(missing.length > 0 ? [installCommand(pm, missing, false)] : []),
+    ...(missingDev.length > 0 ? [installCommand(pm, missingDev, true)] : []),
+  ]
+  return [
+    `A controller build needs ${[...missing, ...missingDev].join(', ')}, which ${declared.source} does not declare.`,
+    `Install before running the app: ${commands.join(' && ')}`,
+  ].join(' ')
+}
+
+function installCommand(pm: PackageManager, packages: readonly string[], dev: boolean): string {
+  const verb = pm === 'npm' ? 'install' : 'add'
+  return [pm, verb, ...(dev ? ['-D'] : []), ...packages].join(' ')
+}
+
+/**
+ * The package names `package.json` lists under `dependencies` or `devDependencies`, and how to
+ * name the file in the notice. A missing or unreadable file declares nothing, and the notice says
+ * why, so the user sees the problem rather than an install list that looks wrong.
+ */
+function declaredPackages(cwd: string): { names: Set<string>; source: string } {
+  const path = resolve(cwd, 'package.json')
+  if (!existsSync(path)) return { names: new Set(), source: 'the project (it has no package.json)' }
+  let manifest: unknown
+  try {
+    manifest = JSON.parse(readFileSync(path, 'utf-8'))
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error)
+    return { names: new Set(), source: `package.json (it does not parse: ${reason})` }
   }
+  const names = new Set<string>()
+  if (typeof manifest === 'object' && manifest !== null) {
+    for (const field of ['dependencies', 'devDependencies'] as const) {
+      const listed = (manifest as Record<string, unknown>)[field]
+      if (typeof listed === 'object' && listed !== null) {
+        for (const pkg of Object.keys(listed)) names.add(pkg)
+      }
+    }
+  }
+  return { names, source: 'package.json' }
 }
 
 /**
