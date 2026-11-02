@@ -1,70 +1,10 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { PassThrough } from 'node:stream'
 
-import { afterEach, describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 
-import { type DaemonIo, daemonInstall, daemonStatus, daemonUninstall, type Runner, unitFor, unitPath } from '../src/daemon.js'
-
-const scratch: string[] = []
-
-afterEach(() => {
-  for (const dir of scratch.splice(0)) rmSync(dir, { recursive: true, force: true })
-})
-
-interface Call {
-  readonly command: string
-  readonly args: readonly string[]
-}
-
-interface Harness {
-  readonly io: DaemonIo
-  readonly home: string
-  readonly calls: Call[]
-  readonly runner: Runner
-  readonly stdout: () => string
-  readonly stderr: () => string
-}
-
-type Answer = { code?: number; stdout?: string; stderr?: string }
-
-/**
- * A scratch home with a built entry and an onboarded configuration file, and a runner that records
- * every command and answers from `answers` by the command's first two words.
- */
-function harness(options: { env?: NodeJS.ProcessEnv; platform?: NodeJS.Platform; answers?: Record<string, Answer[]>; configure?: boolean } = {}): Harness {
-  const home = mkdtempSync(join(tmpdir(), 'theoclaw-daemon-'))
-  scratch.push(home)
-  const entry = join(home, 'checkout', 'dist', 'main.js')
-  mkdirSync(join(home, 'checkout', 'dist'), { recursive: true })
-  writeFileSync(entry, '')
-  const workspace = join(home, 'work')
-  mkdirSync(workspace)
-  const env: NodeJS.ProcessEnv = { XDG_CONFIG_HOME: join(home, 'config'), USER: 'someone', ...options.env }
-  if (options.configure !== false) {
-    const name = env.THEOCLAW_PROFILE === undefined ? 'theoclaw.env' : `theoclaw-${env.THEOCLAW_PROFILE}.env`
-    mkdirSync(join(home, 'config', 'theoclaw'), { recursive: true })
-    writeFileSync(join(home, 'config', 'theoclaw', name), `THEOCLAW_WORKSPACE="${workspace}"\n`)
-  }
-  const calls: Call[] = []
-  const answers = options.answers ?? {}
-  const runner: Runner = (command, args) => {
-    calls.push({ command, args })
-    const key = [command, ...args.filter((arg) => arg !== '--user')].slice(0, 2).join(' ')
-    const queue = answers[key]
-    const answer = queue?.shift() ?? {}
-    return Promise.resolve({ code: answer.code ?? 0, stdout: answer.stdout ?? '', stderr: answer.stderr ?? '' })
-  }
-  let out = ''
-  let err = ''
-  const stdout = new PassThrough()
-  const stderr = new PassThrough()
-  stdout.on('data', (chunk: Buffer) => (out += chunk.toString()))
-  stderr.on('data', (chunk: Buffer) => (err += chunk.toString()))
-  const io: DaemonIo = { env, homeDir: home, cwd: home, platform: options.platform ?? 'linux', nodePath: '/usr/bin/node', entry, stdout, stderr }
-  return { io, home, calls, runner, stdout: () => out, stderr: () => err }
-}
+import { daemonInstall, daemonStatus, daemonUninstall, unitFor, unitPath } from '../src/daemon.js'
+import { type Harness, harness } from './support/daemon-harness.js'
 
 function unitEnvironment(unit: string): Record<string, string> {
   const pairs = [...unit.matchAll(/^Environment=(?:"([^"]*)"|(\S+))$/gm)].map((match) => (match[1] ?? match[2])!)
