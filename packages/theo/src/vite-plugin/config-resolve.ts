@@ -13,6 +13,7 @@
 
 import { loadConfig } from '../config/load-config.js'
 import { resolvePluginSpecifiers } from '../config/resolve-plugin-specifiers.js'
+import type { ReservedRoutes } from '../server/define/health-route.js'
 import {
   createPluginRunnerFromConfig,
   type AuditLogger,
@@ -24,6 +25,7 @@ import {
 import { jobBackendFromConfig } from '../server/jobs/job-backend-from-config.js'
 import type { JobBackend } from '../server/jobs/job-backend.js'
 import { createObservabilityPluginFromConfig } from '../server/observability-bootstrap.js'
+import { reservedRoutesFromConfig } from '../server/reserved-routes-from-config.js'
 import { resolveTransformer, type TheoTransformer } from '../server/transformer.js'
 
 import { detectTheoUi, type TheoUiDetectResult } from './theoui-detect.js'
@@ -52,6 +54,8 @@ interface ResolvedPluginConfig {
   distDir: string
   /** `jobs.backend`, so dev routes get `ctx.queue` as they do under `theokit start` (#1009). */
   jobBackend: JobBackend | undefined
+  /** The `/__theo/*` routes `theokit start` serves, so dev answers them too (#1071). */
+  reservedRoutes: ReservedRoutes
 }
 
 /**
@@ -71,6 +75,7 @@ const DEFAULT_RESOLVED: ResolvedPluginConfig = {
   openapi: undefined,
   distDir: '.theokit',
   jobBackend: undefined,
+  reservedRoutes: {},
 }
 
 export async function resolvePluginConfig(projectRoot: string): Promise<ResolvedPluginConfig> {
@@ -126,6 +131,7 @@ export async function resolvePluginConfig(projectRoot: string): Promise<Resolved
       openapi: userConfig.openapi,
       distDir: userConfig.distDir,
       jobBackend: jobBackendFromConfig(userConfig),
+      reservedRoutes: reservedRoutesFromConfig(userConfig),
     }
   } catch {
     // Config load errors are surfaced elsewhere (validate-structure).

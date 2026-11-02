@@ -102,6 +102,13 @@ export interface JobBackend {
   enqueueInTransaction?(client: PoolLike, input: JobEnqueueInput): Promise<{ jobId: string }>
 
   /**
+   * Optional: resolve when the backend's store answers, reject when it does not. `GET /__theo/ready`
+   * calls it under `theokit start` and `theokit dev`, so an unreachable job store answers 503
+   * (usetheokit/theokit#1071). A backend with nothing remote to reach leaves it out.
+   */
+  ping?(): Promise<void>
+
+  /**
    * Optional: create or upgrade whatever storage the backend needs (a table, an index). Must be
    * idempotent and safe to run from several processes at once. `theokit start` and `theokit dev`
    * call it once at boot, before serving a request or starting the worker, and refuse to boot when
