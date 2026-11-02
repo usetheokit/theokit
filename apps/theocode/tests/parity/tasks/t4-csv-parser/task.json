@@ -1,0 +1,6 @@
+{
+  "id": "t4-csv-parser",
+  "title": "RFC 4180 CSV parser from a 5-rule spec",
+  "prompt": "Implement parseCsv in csv.mjs following the five rules in SPEC.md.",
+  "verify": ["node", "--test", "--test-reporter=tap", "csv.verify.test.mjs"]
+}

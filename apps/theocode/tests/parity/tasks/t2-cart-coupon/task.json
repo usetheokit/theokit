@@ -1,0 +1,6 @@
+{
+  "id": "t2-cart-coupon",
+  "title": "two bugs: module-level shared state and an unclamped coupon",
+  "prompt": "cart.test.mjs fails. Find the bugs in cart.mjs and coupon.mjs and fix them. Do not edit the test file.",
+  "verify": ["node", "--test", "--test-reporter=tap", "cart.test.mjs"]
+}
