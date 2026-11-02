@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- `theokit`: `loadConfig` reads `theo.config.ts` in a package without `"type": "module"` on a Node that cannot strip types (below 22.18). tsx loads it as CommonJS there and the default export arrives wrapped, so the config was replaced by the defaults without a message and every command ran on `server/`, `app/` and the default port. The wrapper is now unwrapped, and a default export with a `default` key beside other keys, or a non-object default in `theo.config.<NODE_ENV>.ts`, fails with `TheoConfigError` naming the file instead of being ignored (#1100)
+
 ## [create-theokit 3.0.25, @theokit/http 2.3.1, theokit 0.77.1] - 2026-11-02
 
 ### Fixed
@@ -123,7 +127,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `pnpm check:pillars` counts the 33 OBJ-8 pillars in `docs/program/pillar-map.json` and fails every pillar that is neither declared out with a reason of 8 words or more nor proven by a recorded passing run of a live TheoClaw or TheoCode test, read from vitest JSON reports passed with `--results`; the test file must really sit inside the app, so a package test reached through the app's `node_modules` link does not count. It is red by design today (`33 of 33 pillars not proven`), counts a row naming no pillar on that same line (`, 1 row names no pillar`), and stays out of CI until each pillar is proven or declared out. TheoClaw's `boundaries` and TheoCode's `depcruise` now carry `proof-imports-only-published-entry-points`, which refuses an import, from source or test, that resolves into a theokit package's `src/`; TheoCode's cruise now includes its test files (#B-416)
 
 - `@theokit/agents`: `DelegationResult` gains `costUnknown?: true`, set when a round of the run reported no finite cost. `cost` stays the spend of the priced rounds, so a run on a model the SDK cannot price no longer returns a bare `{ cost: 0 }` that reads as a price; a run whose every round was priced has no `costUnknown` key (#B-409)
-
 
 ### Changed
 
@@ -347,7 +350,6 @@ own `CHANGELOG.md`.
   defect `rules/foreign-config-surfaces.md` is about. The build's scan still honours
   `config.agentsDir`, which is where the option belongs. (#B-343)
 
-
 - The Netlify target serves a request at all. Two independent causes, both measured on the Netlify
   emulator with the adapter's own output: the function was written to `.netlify/functions/` and the
   `[functions] directory` key was never emitted, so the CLI scanned its default `netlify/functions/`,
@@ -525,7 +527,6 @@ own `CHANGELOG.md`.
 - The OTLP probe stops hanging on a collector that accepts the connection and never answers. `fetch` has no default timeout, so a port with a stuck process left the probe pending with no message and no exit code — measured still waiting at 8081ms. The control now gives up after 5s and reports NOT MEASURED, which is what it exists to do (#B-273)
 - The OTLP probe names the flag, not the collector, when `--ingest` is not a URL. A missing scheme — the likeliest typo — was answered with the guard's own sentence, *"answers below 400 on a path it does not serve"*, sending the reader to debug a collector when the fault was in their argument. `--ingest` is now validated at the boundary with its own message, and the probe's header names all four conditions that reach exit 2 instead of two of them (#B-273)
 - The OTLP probe no longer approves a collector that accepts everything. Its control checks the method, the path and the body it probes with, and reads the whole status range rather than one point on each side: a receiver answering 204 to every request — the most natural swallow-everything stub — was previously approved (#B-273)
-
 
 - The PR quality report no longer reads green when nothing was verified. `ok` guarded on the raw check
   list, which counts a gate excluded as a publisher — so a run whose every surviving check was a
@@ -1269,7 +1270,6 @@ after this release installs it. Per-package detail is in each package's own `CHA
   beside the listing payload precisely so it cannot leak, and scoping a response must not put identity
   back into it.
 
-
 - **The coverage policy reaches the half of the root bar a runtime enumeration cannot see.**
   `root-bar-coverage.test.ts` demanded a verdict for every root-bar VALUE and said in its own header
   that `Object.keys` over an imported namespace cannot see an `export type` by construction. It
@@ -1651,7 +1651,6 @@ own `CHANGELOG.md`.
 
 - An observational hook handler is assigned to its own key instead of being chosen by a two-branch comparison. A third observational event would have landed on `post_assistant_reply` silently; no behaviour changes for the events wired today (B-006)
 
-
 ## [@theokit/agents 13.0.0-next.11] - 2026-09-08
 
 Released with no entry under `[Unreleased]`. Per-package detail is in each package's
@@ -1812,7 +1811,6 @@ own `CHANGELOG.md`.
   pair up front, and charged the release train for it: a dev-only route in a package this repository
   never installs blocked `@theokit/agents@13` from publishing at all. What is lost is recorded in
   `integrate-studio.ts` so the declaration is not re-added without re-making the trade.
-
 
 ## [@theokit/tauri 1.0.0-next.0, theokit 0.65.0-next.0] - 2026-09-01
 
