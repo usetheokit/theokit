@@ -37,6 +37,8 @@ export interface ToolSettings {
   /** The mode the operator chose with `THEOCLAW_SANDBOX` (default `workspace-write`). */
   readonly sandboxMode: SandboxMode
   readonly fetchImpl: typeof fetch
+  /** The DNS lookup `web_fetch` screens a host with; absent in the process, so the SDK's own runs. */
+  readonly lookup?: WebFetchLookup
   readonly search: SearchSettings
   /** The browser server's CLI with `THEOCLAW_BROWSER=on`; absent when the browser is off. */
   readonly browser?: BrowserSettings
@@ -48,10 +50,15 @@ export interface ToolSettings {
   readonly offLines: readonly string[]
 }
 
+/** A DNS lookup shaped as `dns/promises.lookup` with `{ all: true }` (B-398 FR-003). */
+type WebFetchLookup = (host: string, options: { readonly all: true }) => Promise<{ readonly address: string; readonly family: number }[]>
+
 /** What the tests inject; the process passes nothing. */
 export interface ToolDeps {
   readonly detect?: () => BwrapDetection
   readonly fetchImpl?: typeof fetch
+  /** Lets a test serve a page to `web_fetch` offline: its SSRF screen resolves the host through it. */
+  readonly lookup?: WebFetchLookup
   /** Where the sandbox fallback warning goes. Default: the SDK's (`console.warn`). */
   readonly warn?: (message: string) => void
   /** The browser CLI resolver and browsers directory. Default: the installed package and Playwright's own. */
@@ -219,6 +226,7 @@ export function resolveToolSettings(env: Env, cwd: string, deps: ToolDeps = {}):
     mode,
     sandboxMode,
     fetchImpl: deps.fetchImpl ?? globalThis.fetch,
+    ...(deps.lookup === undefined ? {} : { lookup: deps.lookup }),
     search,
     browser,
     external,

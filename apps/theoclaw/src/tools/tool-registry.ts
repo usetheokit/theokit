@@ -70,6 +70,11 @@ function webSearchTool(settings: ToolSettings): CustomTool | undefined {
   return undefined
 }
 
+/** `web_fetch` on the settings' fetch and DNS lookup, its SSRF screen kept (B-398 FR-003). */
+function webFetchTool(settings: ToolSettings): CustomTool {
+  return createWebFetchTool({ fetchImpl: settings.fetchImpl, ...(settings.lookup === undefined ? {} : { lookup: settings.lookup }) })
+}
+
 function scopeOf(settings: ToolSettings): ReturnType<typeof bindToolScope> {
   return bindToolScope({
     projectRoot: settings.toolRoot,
@@ -85,7 +90,7 @@ function scopeOf(settings: ToolSettings): ReturnType<typeof bindToolScope> {
  */
 export function readOnlyTools(settings: ToolSettings): CustomTool[] {
   const scope = scopeOf(settings)
-  const tools: CustomTool[] = [scope.bind(createReadFileTool)(), scope.bind(createListDirTool)(), createWebFetchTool()]
+  const tools: CustomTool[] = [scope.bind(createReadFileTool)(), scope.bind(createListDirTool)(), webFetchTool(settings)]
   const search = webSearchTool(settings)
   if (search !== undefined) tools.push(search)
   return tools
@@ -110,7 +115,7 @@ export function buildTools(settings: ToolSettings): CustomTool[] {
     scope.bind(createReadFileTool)(),
     scope.bind(createListDirTool)(),
     scope.bind(createViewImageTool)(),
-    createWebFetchTool(),
+    webFetchTool(settings),
     // `TodolistTool` types its handler with the todo input union; the SDK validates the model's
     // arguments against the tool's own `inputSchema` before calling it, so the wider type is safe.
     createTodolistTool() as unknown as CustomTool,
