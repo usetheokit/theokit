@@ -97,7 +97,7 @@ describe('theo generate', () => {
       expect(existsSync(filePath)).toBe(true)
       const content = readFileSync(filePath, 'utf-8')
       // The sandbox capability manifests as an agent TOOL (the canonical, connected use).
-      expect(content).toContain("from 'theokit/server'")
+      expect(content).toContain("from 'theokit/server/define'")
       expect(content).toContain("from '@theokit/sdk/sandbox'")
       expect(content).toContain("tool('run_command')")
       expect(content).toContain('new LocalSandbox(')
@@ -190,7 +190,7 @@ describe('theo generate', () => {
       // The property is where `route` comes from, not the exact spelling of the import
       // statement — #416 added `type AccessDecision` to the same line, and an assertion on the
       // whole line failed for a change that left the property untouched.
-      expect(content).toMatch(/import \{[^}]*\broute\b[^}]*\} from 'theokit\/server'/u)
+      expect(content).toMatch(/import \{[^}]*\broute\b[^}]*\} from 'theokit\/server\/define'/u)
     } finally {
       process.chdir(orig)
       rmSync(dir, { recursive: true, force: true })
@@ -228,14 +228,18 @@ describe('theo generate', () => {
     }
   })
 
-  it('ws should contain defineWebSocket', async () => {
+  it('ws should emit the websocket() builder', async () => {
     const dir = createTempProject()
     const orig = process.cwd()
     process.chdir(dir)
     try {
       await generateCommand('ws', 'events')
       const content = readFileSync(join(dir, 'server/ws/events.ts'), 'utf-8')
-      expect(content).toContain('defineWebSocket')
+      // `defineWebSocket` is exported by no public entry point (ADR-0043 D1); importing it made the
+      // generated file fail to load.
+      expect(content).toContain('websocket()')
+      expect(content).toContain("from 'theokit/server/define'")
+      expect(content).not.toContain('defineWebSocket')
     } finally {
       process.chdir(orig)
       rmSync(dir, { recursive: true, force: true })
