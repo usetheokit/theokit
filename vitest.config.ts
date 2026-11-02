@@ -82,6 +82,11 @@ export default defineConfig({
           // The files that genuinely contend: they bind ports (`theokit dev`), run the real build,
           // or drive a scaffolded app end to end. Serialized among THEMSELVES — which is the
           // guarantee the original setting was written for.
+          // `tests/integration/typecheck-clean-gate.test.ts` is one of them: it runs
+          // `pnpm typecheck`, which is `pnpm build:packages && tsc --noEmit`, and every package's
+          // tsup config cleans its dist before writing it. Run beside the parallel `root` project's
+          // files it would delete a dist another file is reading (B-700); serialized here, no other
+          // file of this group reads dist while it rebuilds.
           include: ['tests/integration/**/*.test.ts', 'tests/smoke/**/*.test.ts'],
           // The type-test suite belongs to `root` alone. Without this, both projects inherit the
           // top-level `typecheck.include` and 22 `.test-d.ts` files are checked TWICE — measured,
