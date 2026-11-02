@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- `theokit`: `theokit start` and `theokit dev` call `migrate()` on the configured `jobs.backend` at boot, so a `PostgresJobBackend` creates its `theokit_jobs` table without the app calling it. A boot that cannot create the table fails with `JOB_BACKEND_SETUP_FAILED` instead of answering 2xx while every enqueued job is dropped. `PostgresJobBackend.migrate()` also survives replicas running it at the same moment, where concurrent `CREATE TABLE IF NOT EXISTS` failed with a unique violation on `pg_type` (#1072)
 - `theokit`: `theokit generate controller` names every package a controller build needs that `package.json` does not declare (`@theokit/http`, `reflect-metadata`, and `@swc/core` as a dev dependency) and prints the install command for the project's package manager. It checked whether `@theokit/http` resolved, which it always does in an npm-installed scaffold, so the notice never appeared and `theokit build` failed on the missing `@swc/core` (#986)
 
 ## [@theokit/agents 16.1.1, create-theokit 3.0.22, theokit 0.76.2] - 2026-11-02

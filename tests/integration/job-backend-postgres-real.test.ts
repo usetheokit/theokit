@@ -339,5 +339,31 @@ describe.skipIf(!POSTGRES_URL || !pgAvailable)(
         'both theokit_jobs_ci indexes still exist in pg_indexes after the re-runs',
       ).toEqual(names)
     })
+
+    // usetheokit/theokit#1072 — `theokit start` now runs migrate() at boot, so every replica runs it
+    // at the same moment. Concurrent `CREATE TABLE IF NOT EXISTS` on a fresh table fails in Postgres
+    // with a unique violation on pg_type: 36 of 80 calls (8 at a time, 10 fresh tables) failed
+    // before migrate() retried the race.
+    it('test_replicas_migrating_a_fresh_table_at_the_same_time_all_succeed', async () => {
+      const PoolCtor = ((await pgModulePromise)!.Pool ??
+        (await pgModulePromise)!.default?.Pool) as new (config: unknown) => PgPoolLike
+      const REPLICAS = 8
+      const wide = new PoolCtor({ connectionString: POSTGRES_URL, max: REPLICAS })
+      const table = `theokit_jobs_race_${String(Date.now())}`
+      try {
+        const outcomes = await Promise.allSettled(
+          Array.from({ length: REPLICAS }, () =>
+            new PostgresJobBackend({ pool: wide, tableName: table }).migrate(),
+          ),
+        )
+        const failures = outcomes.flatMap((o) =>
+          o.status === 'rejected' ? [(o.reason as Error).message] : [],
+        )
+        expect(failures).toEqual([])
+      } finally {
+        await wide.query(`DROP TABLE IF EXISTS ${table}`)
+        await wide.end()
+      }
+    })
   },
 )

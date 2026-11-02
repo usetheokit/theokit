@@ -78,6 +78,18 @@ const DEFAULT_TABLE = 'theokit_jobs'
 const backendLogger = createLogger({ context: { component: 'theokit:jobs' } })
 const MAX_DEFAULT_RETRY_DELAY_SECONDS = 3600
 const MAX_ENQUEUE_ROUNDS = 3
+const MAX_MIGRATE_ATTEMPTS = 3
+/**
+ * SQLSTATEs a concurrent `CREATE ... IF NOT EXISTS` raises when another session created the same
+ * object first: unique_violation (on a catalog index such as `pg_type_typname_nsp_index`),
+ * duplicate_table and duplicate_object.
+ */
+const CONCURRENT_DDL_CODES = new Set(['23505', '42P07', '42710'])
+
+function isConcurrentDdlRace(err: unknown): boolean {
+  const code = (err as { code?: unknown } | null)?.code
+  return typeof code === 'string' && CONCURRENT_DDL_CODES.has(code)
+}
 
 const defaultRetryDelaySeconds = (attempts: number): number =>
   Math.min(2 ** attempts, MAX_DEFAULT_RETRY_DELAY_SECONDS)
@@ -142,10 +154,27 @@ export class PostgresJobBackend implements JobBackend {
   }
 
   /**
-   * Create or upgrade the schema. Idempotent (uses IF NOT EXISTS).
-   * Call once at process start; safe to re-run on every deploy.
+   * Create or upgrade the schema. Idempotent (uses IF NOT EXISTS) and safe to re-run on every
+   * deploy. `theokit start` and `theokit dev` call it once at boot when this is the configured
+   * `jobs.backend` (usetheokit/theokit#1072), so an app does not have to.
+   *
+   * Replicas booting together run it concurrently, and Postgres does not make concurrent
+   * `CREATE ... IF NOT EXISTS` on one name safe: the losers fail with a unique violation on
+   * `pg_type` (36 of 80 calls, 8 at a time). A call that loses that race runs again, and the second
+   * run finds the objects the winner created.
    */
   async migrate(): Promise<void> {
+    for (let attempt = 1; ; attempt++) {
+      try {
+        await this.#migrateOnce()
+        return
+      } catch (err) {
+        if (attempt >= MAX_MIGRATE_ATTEMPTS || !isConcurrentDdlRace(err)) throw err
+      }
+    }
+  }
+
+  async #migrateOnce(): Promise<void> {
     const t = this.#table
     await this.#pool.query(`
       CREATE TABLE IF NOT EXISTS ${t} (

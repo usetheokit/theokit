@@ -127,6 +127,12 @@ export default config()
 (a 4xx, a 5xx or an aborted request discards it). A job is a file under `<serverDir>/jobs/`
 exporting `defineJob(name, { handler })`.
 
+`theokit start` and `theokit dev` call the backend's `migrate()` once at boot, so the
+`theokit_jobs` table is created (or upgraded) before the first request. If that fails, for example
+because the database is unreachable, the boot fails rather than serving routes whose jobs would be
+lost. Do not call `migrate()` from `theo.config.ts`: `theokit build` loads that file too, and the
+build would then need a database.
+
 `theokit start` and `theokit dev` run a job worker in the same process whenever jobs are declared
 and a backend is set: it polls the backend, runs each job and backs off while the backend is
 unreachable. On `SIGTERM`, `start` stops polling and waits up to 20 seconds for the job in progress
