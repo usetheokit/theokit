@@ -24,7 +24,8 @@ and versioning follows [Semantic Versioning](https://semver.org/).
   a hook command runs only when its fingerprint is listed in `THEOCLAW_APPROVED_HOOKS`. `/goal <text>`
   runs the chat agent's goal loop under `THEOCLAW_GOAL_TOKEN_BUDGET` tokens (default 20000) and
   replies once with the final status and answer. Trigger secrets and approved fingerprints are
-  masked in the output. The parity ledger is unchanged: OC-17, OC-86 and OC-87 stay `open`.
+  masked in the output, and a trigger's reply and a `/goal` reply are masked like a chat reply
+  (B-398); a trigger run frames its tool results as untrusted data like every other send. The parity ledger is unchanged: OC-17, OC-86 and OC-87 stay `open`.
 
 - Fetched content reaches the model as data, and no configured value is sent to a person or a
   client (B-398, OC-88 and OC-90). Every agent send passes the SDK's `toolResultGuard`, so a tool

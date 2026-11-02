@@ -4,6 +4,8 @@ import { github } from 'theokit/server/webhook'
 import type { VerifyFn } from 'theokit/server/webhook'
 
 import type { TurnAgent } from '../agent-port.js'
+import { untrustedContentSendOptions } from '../agent/untrusted-content.js'
+import { maskSecrets } from '../channels/channel-loop.js'
 import { deliverText } from '../channels/deliver.js'
 import { describeError } from '../control-plane/errors.js'
 import type { WebhookRoute } from '../webhooks/router.js'
@@ -28,6 +30,8 @@ export interface TriggerRouteOptions {
   readonly withAgent: <R>(work: (agent: TurnAgent) => R | Promise<R>) => Promise<R>
   /** Where a failed run or an undelivered reply is written; the process output mask covers it. */
   readonly write: (line: string) => void
+  /** Values no reply may carry (`processSecrets`, B-398 FR-006): masked before the reply is sent. Default: none. */
+  readonly secrets?: readonly string[]
 }
 
 function answer(status: number): Response {
@@ -56,7 +60,7 @@ function promptOf(trigger: TriggerSettings, body: string): string {
 
 /** The run's text and the error code a stream frame reported, if any. */
 async function runText(agent: TurnAgent, prompt: string): Promise<{ readonly text: string; readonly failure?: string }> {
-  const run = await agent.send(prompt)
+  const run = await agent.send(prompt, untrustedContentSendOptions())
   let text = ''
   let streamError: string | undefined
   for await (const frame of run.stream()) {
@@ -90,7 +94,7 @@ export function createTriggerRoute(options: TriggerRouteOptions): WebhookRoute {
       return
     }
     const adapter = adapterFor(platform)
-    const failure = adapter === undefined ? 'not started' : await deliverText(adapter, platform, channelId, outcome.text)
+    const failure = adapter === undefined ? 'not started' : await deliverText(adapter, platform, channelId, maskSecrets(outcome.text, options.secrets ?? []))
     if (failure !== undefined) write(`trigger ${trigger.name}: the reply was not delivered (${failure})`)
   }
 

@@ -37,7 +37,7 @@ function goalAgent(result: { status: string; finalResponse?: string } | Error): 
   })
 }
 
-function harness(agent: TurnAgent, env: Record<string, string> = ENV) {
+function harness(agent: TurnAgent, env: Record<string, string> = ENV, secrets?: readonly string[]) {
   const replies: string[] = []
   let leases = 0
   const handler = createReplyHandler({
@@ -47,6 +47,7 @@ function harness(agent: TurnAgent, env: Record<string, string> = ENV) {
       return work({ agent, release: () => undefined })
     },
     goal: readGoalSettings(env),
+    ...(secrets === undefined ? {} : { secrets }),
   })
   const send = async (text: string): Promise<void> => {
     const event = messageEvent('telegram', text)
@@ -69,6 +70,14 @@ describe('/goal in a chat', () => {
     await h.send('/goal tidy the notes')
     expect(h.replies).toEqual(['budget_limited: partial'])
     expect(agent.calls.map((call) => call.goal)).toEqual(['tidy the notes'])
+  })
+
+  it('masks a configured value in the goal reply (B-398 FR-006)', async () => {
+    const h = harness(goalAgent({ status: 'completed', finalResponse: 'the token is router-key' }), ENV, ['router-key'])
+    await h.send('/goal leak it')
+    expect(h.replies).toHaveLength(1)
+    expect(h.replies[0]).not.toContain('router-key')
+    expect(h.replies[0]).toContain('completed: the token is')
   })
 
   it('answers a bare /goal with one usage line and runs nothing', async () => {

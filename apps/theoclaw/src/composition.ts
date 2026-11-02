@@ -117,18 +117,20 @@ export interface ComposedTheoClaw {
   readonly sessions: SessionAgents
 }
 
-/** The trigger routes (B-397): each run on a fresh tool-less agent in its own request boundary, replying through a started adapter. */
+/** The trigger routes (B-397): each run on a fresh tool-less agent in its own request boundary, replying through a started adapter, its reply masked (B-398 FR-006). */
 function composedTriggers(
   options: TheoClawOptions,
   events: EventSettings,
   loop: ChannelLoop,
   write: (line: string) => void,
+  secrets: readonly string[],
 ): ReadonlyMap<string, WebhookRoute> {
   const factory = options.triggerAgentFactory ?? createSdkChannelAgentFactory(options.env)
   return triggerRoutes(events.triggers, {
     adapterFor: (platform) => loop.started.get(platform)?.adapter,
     withAgent: createContainer<TurnAgent>({ factory }).withAgent,
     write,
+    secrets,
   })
 }
 
@@ -212,7 +214,7 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
     routes,
     isStarted: (platform) => loop.started.has(platform),
     write: maskedWrite,
-    triggers: composedTriggers(options, events, loop, maskedWrite),
+    triggers: composedTriggers(options, events, loop, maskedWrite, secrets),
   })
   return { loop, router, sessions: chat.sessions }
 }

@@ -173,6 +173,25 @@ describe('createTriggerRoute', () => {
   })
 })
 
+/** B-398 FR-006 reaches a trigger's reply: no configured value is sent to the reply channel. */
+describe("a trigger reply carrying a configured value", () => {
+  it("masks every configured value before the reply is sent", async () => {
+    const adapter = new FakeAdapter('telegram')
+    const route = createTriggerRoute({
+      trigger: TRIGGER,
+      adapterFor: () => adapter,
+      withAgent: async (work) => work(new FakeAgent({ frames: [assistant(`the key is ${SECRET} and sk-live-42`), finished()] }) as unknown as TurnAgent),
+      write: () => undefined,
+      secrets: [SECRET, 'sk-live-42'],
+    })
+    expect((await route.handle(delivery('{}'))).status).toBe(202)
+    await waitFor(() => adapter.sent.length === 1, 5000, 'the trigger reply')
+    expect(adapter.sent[0]?.text).not.toContain(SECRET)
+    expect(adapter.sent[0]?.text).not.toContain('sk-live-42')
+    expect(adapter.sent[0]?.text).toContain('the key is')
+  })
+})
+
 describe('a reply adapter whose sendMessage throws', () => {
   it('writes one line naming the trigger and the error name, and does not retry', async () => {
     let calls = 0
