@@ -1,6 +1,6 @@
-import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { chmod, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
@@ -124,5 +124,49 @@ describe('createJobStore', () => {
   it('reports false when removing an id it does not hold', async () => {
     const store = createJobStore(file)
     expect(await store.remove('missing')).toBe(false)
+  })
+  it('creates an absent store directory with mode 0700', async () => {
+    const store = createJobStore(file)
+    await store.put(job('a'))
+    expect((await stat(dirname(file))).mode & 0o777).toBe(0o700)
+  })
+
+  /** Make every save fail (the directory refuses the temporary file) while `act` runs. */
+  async function withSavesRefused(act: () => Promise<void>): Promise<void> {
+    await chmod(dirname(file), 0o500)
+    try {
+      await act()
+    } finally {
+      await chmod(dirname(file), 0o700)
+    }
+  }
+
+  it('leaves the jobs unchanged when a put fails to save (#82)', async () => {
+    const store = createJobStore(file)
+    await store.put(job('a'))
+    await withSavesRefused(async () => {
+      await expect(store.put(job('refused'))).rejects.toThrow()
+    })
+    expect(store.list().map((held) => held.id)).toEqual(['a'])
+    await store.put(job('b'))
+    expect(createJobStore(file).get('refused')).toBeUndefined()
+  })
+
+  it('keeps a job whose remove fails to save (#82)', async () => {
+    const store = createJobStore(file)
+    await store.put(job('a'))
+    await withSavesRefused(async () => {
+      await expect(store.remove('a')).rejects.toThrow()
+    })
+    expect(store.get('a')).toBeDefined()
+  })
+
+  it('keeps the previous output whose save fails (#82)', async () => {
+    const store = createJobStore(file)
+    await store.put(job('a', { previousOutput: 'before' }))
+    await withSavesRefused(async () => {
+      await expect(store.setPreviousOutput('a', 'after')).rejects.toThrow()
+    })
+    expect(store.get('a')?.previousOutput).toBe('before')
   })
 })
