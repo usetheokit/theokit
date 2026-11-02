@@ -37,7 +37,7 @@ export function validatePackageInput(input: string): true {
   return true
 }
 
-type PackageManager = 'pnpm' | 'bun' | 'yarn' | 'npm'
+export type PackageManager = 'pnpm' | 'bun' | 'yarn' | 'npm'
 
 export function detectPackageManager(lockfiles: Record<string, boolean>): PackageManager {
   if (lockfiles['pnpm-lock.yaml']) return 'pnpm'
@@ -45,6 +45,19 @@ export function detectPackageManager(lockfiles: Record<string, boolean>): Packag
   if (lockfiles['yarn.lock']) return 'yarn'
   if (lockfiles['package-lock.json']) return 'npm'
   return 'npm'
+}
+
+/** The package manager whose lockfile sits in `cwd`; npm when there is none. */
+export function detectProjectPackageManager(
+  cwd: string,
+  existsFn: (path: string) => boolean = existsSync,
+): PackageManager {
+  return detectPackageManager({
+    'pnpm-lock.yaml': existsFn(resolve(cwd, 'pnpm-lock.yaml')),
+    'bun.lockb': existsFn(resolve(cwd, 'bun.lockb')),
+    'yarn.lock': existsFn(resolve(cwd, 'yarn.lock')),
+    'package-lock.json': existsFn(resolve(cwd, 'package-lock.json')),
+  })
 }
 
 interface PackageRegistryEntry {
@@ -152,14 +165,7 @@ export async function runAdd(deps: RunAddDeps): Promise<AddResult> {
     throw new Error(`External package "${deps.input}" missing npm field in registry`)
   }
 
-  const existsFn = deps.existsSync ?? ((p: string) => existsSync(p))
-  const lockfiles = {
-    'pnpm-lock.yaml': existsFn(resolve(deps.cwd, 'pnpm-lock.yaml')),
-    'bun.lockb': existsFn(resolve(deps.cwd, 'bun.lockb')),
-    'yarn.lock': existsFn(resolve(deps.cwd, 'yarn.lock')),
-    'package-lock.json': existsFn(resolve(deps.cwd, 'package-lock.json')),
-  }
-  const pm = detectPackageManager(lockfiles)
+  const pm = detectProjectPackageManager(deps.cwd, deps.existsSync)
 
   const args = pm === 'npm' ? ['install', entry.npm] : ['add', entry.npm]
   const spawnFn = deps.spawnPm ?? defaultSpawnPm

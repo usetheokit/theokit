@@ -40,6 +40,13 @@ import { scanRoutes } from '../../packages/theo/src/router/scan.js'
  * root). `@theokit/http` is linked only after the controller is generated, because the scaffold
  * does not install it and the generator must say so.
  *
+ * This layout cannot catch a missing `@swc/core`. The link points at `packages/http`, whose own
+ * `node_modules` holds `@swc/core` as a dev dependency, so the controller transform finds it
+ * although the app never declares it. In an npm-installed scaffold nothing provides it and
+ * `theokit build` failed (#986). Nor can it catch a notice that keys on resolution: `@theokit/http`
+ * is absent here, while npm hoists it into a real scaffold. The notice is pinned against that
+ * layout in `tests/unit/the-controller-notice-names-what-package-json-lacks.test.ts`.
+ *
  * The eval runs against a local OpenAI-compatible server through `OPENROUTER_API_BASE_URL`, so no
  * request leaves the machine. Reads `packages/theo/dist`, `packages/agents/dist` and
  * `packages/http/dist`: build them first.
@@ -214,7 +221,8 @@ describe('every generated kind runs in a scaffolded app', () => {
     const response = await fetch(`${origin}/api/users`)
     expect(response.status).toBe(403)
 
-    expect(controllerResult.message).toContain('pnpm add @theokit/http reflect-metadata')
+    expect(controllerResult.message).toContain('npm install @theokit/http reflect-metadata')
+    expect(controllerResult.message).toContain('npm install -D @swc/core')
   }, 60_000)
 
   it('a generated agent is served under its name and refuses until its policy is decided', async () => {
