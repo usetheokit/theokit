@@ -7,7 +7,8 @@
  * The agents are fakes injected through `exec`; git and the verification command (`node --test`)
  * run for real against a small task written to a temporary directory.
  */
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { execFile } from 'node:child_process'
+import { chmod, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -47,21 +48,27 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true })
 })
 
-/** @param {{ seedSource?: string }} [options] */
-async function writeTask({ seedSource = BROKEN } = {}) {
+/** @param {{ seedSource?: string, verify?: string[], extraVerify?: Record<string, string> }} [options] */
+async function writeTask({
+  seedSource = BROKEN,
+  verify = ['node', '--test', '--test-reporter=tap'],
+  extraVerify = {},
+} = {}) {
   const taskDir = join(root, 'task')
   await mkdir(join(taskDir, 'seed'), { recursive: true })
   await mkdir(join(taskDir, 'verify'), { recursive: true })
   await writeFile(join(taskDir, 'seed', 'sum.mjs'), seedSource)
   await writeFile(join(taskDir, 'seed', 'sum.test.mjs'), TEST)
   await writeFile(join(taskDir, 'verify', 'sum.test.mjs'), TEST)
+  for (const [name, source] of Object.entries(extraVerify))
+    await writeFile(join(taskDir, 'verify', name), source)
   await writeFile(
     join(taskDir, 'task.json'),
     JSON.stringify({
       id: 'sum',
       title: 'fix add',
       prompt: 'The tests fail. Fix sum.mjs.',
-      verify: ['node', '--test', '--test-reporter=tap'],
+      verify,
     }),
   )
   return taskDir
@@ -69,8 +76,9 @@ async function writeTask({ seedSource = BROKEN } = {}) {
 
 /**
  * Fake agent CLIs: `solves` writes the fix, `claims` only says it passed, `cheats` rewrites the
- * test to assert nothing. Everything else (git, node) runs for real.
- * @param {Record<string, 'solves' | 'claims' | 'cheats'>} behaviour
+ * test to assert nothing, `crashes` exits 1 before touching the tree (a login or quota error).
+ * Everything else (git, node) runs for real.
+ * @param {Record<string, 'solves' | 'claims' | 'cheats' | 'crashes'>} behaviour
  */
 function fakeExec(behaviour) {
   /** @type {import('./side-by-side.mjs').Exec} */
@@ -78,6 +86,8 @@ function fakeExec(behaviour) {
     const role = behaviour[cmd]
     if (!role) return spawnExec(cmd, args, options)
     if (args[0] === '--version') return { code: 0, stdout: `${cmd} 1.0.0\n`, stderr: '' }
+    if (role === 'crashes')
+      return { code: 1, stdout: '', stderr: 'Error: not logged in. Run /login.\n' }
     if (role === 'solves') await writeFile(join(options.cwd, 'sum.mjs'), FIXED)
     if (role === 'cheats')
       await writeFile(
@@ -168,6 +178,86 @@ describe('runTask', () => {
     expect(JSON.parse(await readFile(path, 'utf8')).counted).toBe(false)
   })
 
+  it('a side whose agent CLI exits nonzero is a void run, not a counted loss', async () => {
+    const record = await runTask({
+      taskDir: await writeTask(),
+      theocode,
+      competitorName: 'claude',
+      competitor: claude,
+      notLikeForLike: null,
+      exec: fakeExec({ 'fake-theocode': 'solves', 'fake-claude': 'crashes' }),
+      workRoot: join(root, 'work'),
+    })
+    expect(record.sides[0].outcome).toBe('solved')
+    expect(record.sides[1].agentExitCode).toBe(1)
+    expect(record.sides[1].outcome).toBe('void')
+    expect(record.sides[1].agentStderrTail).toContain('not logged in')
+    expect(record.verdict).toBe('void')
+    expect(record.counted).toBe(false)
+    expect(record.voidReason).toMatch(/claude: the agent CLI exited 1/)
+  })
+
+  it('a verification that exits nonzero is not solved even when its totals show no failure', async () => {
+    const CANCELLING = [
+      "import { add } from './sum.mjs'",
+      "console.log('# pass 2')",
+      "console.log('# fail 0')",
+      'if (add(2, 3) !== 5) process.exitCode = 1',
+      '',
+    ].join('\n')
+    const record = await runTask({
+      taskDir: await writeTask({
+        verify: ['node', 'verify-cancelled.mjs'],
+        extraVerify: { 'verify-cancelled.mjs': CANCELLING },
+      }),
+      theocode,
+      competitorName: 'claude',
+      competitor: claude,
+      notLikeForLike: null,
+      exec: fakeExec({ 'fake-theocode': 'claims', 'fake-claude': 'solves' }),
+      workRoot: join(root, 'work'),
+    })
+    expect(record.seedVerifyExitCode).toBe(1)
+    expect(record.sides[0].verifyExitCode).toBe(1)
+    expect(record.sides[0].outcome).toBe('failed')
+    expect(record.sides[1].outcome).toBe('solved')
+    expect(record.verdict).toBe('theocode_lost')
+  })
+
+  it('claude with an effort is refused before any agent runs', async () => {
+    const ran = []
+    const exec = fakeExec({ 'fake-theocode': 'solves', 'fake-claude': 'solves' })
+    await expect(
+      runTask({
+        taskDir: await writeTask(),
+        theocode: { ...theocode, effort: 'medium' },
+        competitorName: 'claude',
+        competitor: { ...claude, effort: 'medium' },
+        notLikeForLike: null,
+        exec: async (cmd, args, options) => {
+          ran.push(cmd)
+          return exec(cmd, args, options)
+        },
+        workRoot: join(root, 'work'),
+      }),
+    ).rejects.toThrow(/claude takes no effort flag/)
+    expect(ran).toEqual([])
+  })
+
+  it('each side records the sandbox and permission mode its agent ran under', async () => {
+    const record = await runTask({
+      taskDir: await writeTask(),
+      theocode,
+      competitorName: 'claude',
+      competitor: claude,
+      notLikeForLike: null,
+      exec: fakeExec({ 'fake-theocode': 'solves', 'fake-claude': 'solves' }),
+      workRoot: join(root, 'work'),
+    })
+    expect(record.sides[0].permissionMode).toBe('sandbox workspace-write, approvals never')
+    expect(record.sides[1].permissionMode).toBe('no sandbox, permissions skipped')
+  })
+
   it('a seed that already passes is refused before any agent runs', async () => {
     const ran = []
     const exec = fakeExec({ 'fake-theocode': 'solves', 'fake-claude': 'solves' })
@@ -188,6 +278,78 @@ describe('runTask', () => {
     expect(ran).not.toContain('fake-theocode')
     expect(ran).not.toContain('fake-claude')
   })
+})
+
+describe('spawnExec', () => {
+  it('kills a command that outlives its timeout and reports a nonzero code', async () => {
+    const result = await spawnExec('node', ['-e', 'setTimeout(() => {}, 10_000)'], {
+      cwd: root,
+      timeoutMs: 200,
+    })
+    expect(result.code).not.toBe(0)
+    expect(result.timedOut).toBe(true)
+  })
+})
+
+describe('the CLI', () => {
+  /** @param {string} name @param {string} body */
+  async function fakeBin(name, body) {
+    const path = join(root, name)
+    await writeFile(
+      path,
+      `#!/bin/sh\nif [ "$1" = "--version" ]; then echo "${name} 1.0.0"; exit 0; fi\n${body}\n`,
+    )
+    await chmod(path, 0o755)
+    return path
+  }
+
+  it('runs a task end to end from its flags, writes the record and removes its work tree', async () => {
+    const taskDir = await writeTask()
+    const theoBin = await fakeBin('fake-theocode', 'exit 0')
+    const claudeBin = await fakeBin('fake-claude', 'echo "Error: not logged in" >&2; exit 1')
+    const scratch = join(root, 'tmp')
+    await mkdir(scratch)
+    const script = fileURLToPath(new URL('./side-by-side.mjs', import.meta.url))
+    const out = join(root, 'runs')
+    /** @type {{ code: number, stdout: string, stderr: string }} */
+    const result = await new Promise((resolve, reject) => {
+      execFile(
+        'node',
+        [
+          script,
+          '--task',
+          taskDir,
+          '--competitor',
+          'claude',
+          '--theocode-bin',
+          theoBin,
+          '--competitor-bin',
+          claudeBin,
+          '--theocode-model',
+          'anthropic/claude-sonnet-4-5',
+          '--competitor-provider',
+          'anthropic',
+          '--competitor-model',
+          'claude-sonnet-4-5',
+          '--out',
+          out,
+        ],
+        { cwd: root, env: { ...process.env, TMPDIR: scratch } },
+        (error, stdout, stderr) =>
+          error && typeof error.code !== 'number'
+            ? reject(error)
+            : resolve({ code: error ? Number(error.code) : 0, stdout, stderr }),
+      )
+    })
+    expect(result.stderr).toBe('')
+    expect(result.code).toBe(0)
+    expect(result.stdout).toMatch(/^sum: void \(not counted: claude: the agent CLI exited 1\) -> /)
+    const [file] = await readdir(out)
+    const record = JSON.parse(await readFile(join(out, file), 'utf8'))
+    expect(record.sides.map((side) => side.name)).toEqual(['theocode', 'claude'])
+    expect(record.counted).toBe(false)
+    expect(await readdir(scratch)).toEqual([])
+  }, 60_000)
 })
 
 describe('assertSeedsIdentical', () => {
@@ -213,6 +375,10 @@ describe('parseTestCounts and computeVerdict', () => {
       fail: 1,
     })
     expect(() => parseTestCounts('SyntaxError: Unexpected token')).toThrow(/no "# pass N"/)
+  })
+
+  it('counts cancelled tests as failures', () => {
+    expect(parseTestCounts('# pass 2\n# fail 0\n# cancelled 1\n')).toEqual({ pass: 2, fail: 1 })
   })
 
   it('names a loss only when TheoCode failed and the competitor solved', () => {
