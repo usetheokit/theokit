@@ -10,7 +10,7 @@
   {"id":"OC-9","status":"open"},
   {"id":"OC-10","status":"open"},
   {"id":"OC-11","status":"out","reason":"OpenClaw does not ship these channels itself, so there is nothing to reach parity with.","declared_by":"human/paulo","declared_on":"2026-10-04","declared_at":".squad/wiki/product/objectives.md:225"},
-  {"id":"OC-12","status":"shipped","check":{"path":"apps/theoclaw/tests/live/webchat.live.test.ts","test":"a real-model conversation through the page's transport to the started process"},"verified_on":"2026-11-02"},
+  {"id":"OC-12","status":"shipped","check":{"path":"apps/theoclaw/tests/live/webchat.live.test.ts","test":"a real-model conversation through the page's transport to the started process"},"verified_on":"2026-11-02","note":"re-run at 9332cb47, a head holding the reviewed head 79bb9ae1 (after the rebase that added the output mask, the hook approval gate and the untrusted-content notice to the WebChat turn), after node scripts/live-model-build.mjs theoclaw, with THEOCLAW_MODEL=openrouter/google/gemini-2.5-flash-lite: 2 files and 3 tests passed"},
   {"id":"OC-13","status":"open"},
   {"id":"OC-14","status":"open"},
   {"id":"OC-15","status":"out","reason":"Real-time voice over phone and meeting infrastructure is a different product from a messaging assistant.","declared_by":"human/paulo","declared_on":"2026-10-04","declared_at":".squad/wiki/product/objectives.md:223"},
