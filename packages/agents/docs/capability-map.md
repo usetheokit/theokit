@@ -10,7 +10,7 @@ A symbol reachable from one specifier is NOT reachable from another: importing f
 symbol that lives on a subpath type-checks against the bundled declaration and throws at run time
 with `does not provide an export named`. That is the mistake this file exists to prevent.
 
-1138 export(s) across 25 entry point(s).
+1140 export(s) across 25 entry point(s).
 
 Measured against `@theokit/sdk@5.11.0`.
 
@@ -1174,8 +1174,10 @@ Measured against `@theokit/sdk@5.11.0`.
 
 | Symbol | Kind |
 |---|---|
+| `createA2AJsonRpcHandler` | value |
 | `createA2ATool` | value |
 | `A2AAuth` | type |
+| `A2AJsonRpcHandlerOptions` | type |
 | `A2AToolConfig` | type |
 
 ## `@theokit/agents/evals`
