@@ -24,6 +24,12 @@
  * (a per-run marker plus a ten-minute window) was written to fix a real race and duplicating it
  * would be the DRY violation that matters: two copies of one piece of knowledge.
  *
+ * The per-run marker is keyed on the run id this script's caller exports, `THEOKIT_TEST_RUN_ID`.
+ * Every script that runs this gate before vitest begins with `export THEOKIT_TEST_RUN_ID=$$;`, so
+ * the marker written here vouches for dist to every worker of the vitest run that follows, and no
+ * worker re-decides by the clock (B-700). Without the variable the id is this process's parent
+ * pid, which no vitest worker shares.
+ *
  * ## What still runs lazily, deliberately
  *
  * `npx vitest run` invoked directly bypasses this script. The seven call sites keep their lazy

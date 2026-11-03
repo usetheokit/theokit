@@ -74,6 +74,23 @@ function distMissing(): void {
   rmSync(DIST_TYPES, { force: true })
 }
 
+/**
+ * Run `body` with `THEOKIT_TEST_RUN_ID` set to `value`, restoring what the run itself exported.
+ *
+ * `pnpm test` exports the variable for every worker (B-700), so a case that needs a known id sets
+ * it here and puts the run's own value back, never leaving a foreign id for a later case.
+ */
+function withExportedRunId(value: string, body: () => void): void {
+  const before = process.env.THEOKIT_TEST_RUN_ID
+  process.env.THEOKIT_TEST_RUN_ID = value
+  try {
+    body()
+  } finally {
+    if (before === undefined) delete process.env.THEOKIT_TEST_RUN_ID
+    else process.env.THEOKIT_TEST_RUN_ID = before
+  }
+}
+
 beforeEach(() => {
   __resetBuildDecisionForTests()
   rmSync(MARKER, { force: true })
@@ -115,10 +132,14 @@ describe('the marker identifies the RUN, not a moment in time', () => {
     // which depends on when the machine last built and is nothing to do with this behaviour.
     mkdirSync(resolve(tmpdir(), 'theokit-test-locks'), { recursive: true })
     markDistValidatedForThisRun(MARKER)
-    const mine = JSON.parse(readFileSync(MARKER, 'utf8')) as { runId: number }
-    expect(mine.runId).toBe(process.ppid)
+    // Relative to the id the helper wrote, never to `process.ppid`: under `pnpm test` the run id is
+    // the exported `THEOKIT_TEST_RUN_ID`, and a test that assumed the parent pid would encode the
+    // very mismatch B-700 removed.
+    const mine = JSON.parse(readFileSync(MARKER, 'utf8')) as { runId: unknown }
+    expect(typeof mine.runId).toBe('string')
+    expect(mine.runId).not.toBe('')
 
-    writeFileSync(MARKER, JSON.stringify({ runId: mine.runId + 100_000 }), 'utf8')
+    writeFileSync(MARKER, JSON.stringify({ runId: `${String(mine.runId)}-foreign` }), 'utf8')
     const old = new Date(Date.now() - 60 * 60 * 1000)
     utimesSync(MARKER, old, old)
 
@@ -137,7 +158,9 @@ describe('the marker identifies the RUN, not a moment in time', () => {
 
   it('test_a_marker_from_another_run_over_a_MISSING_dist_is_not_usable', () => {
     // The absolute half of the claim above, expressed where it holds unconditionally.
-    writeFileSync(MARKER, JSON.stringify({ runId: process.ppid + 100_000 }), 'utf8')
+    markDistValidatedForThisRun(MARKER)
+    const mine = JSON.parse(readFileSync(MARKER, 'utf8')) as { runId: unknown }
+    writeFileSync(MARKER, JSON.stringify({ runId: `${String(mine.runId)}-foreign` }), 'utf8')
     // Previously `if (existsSync(dts)) return` — so on any machine with a build, this case
     // exercised nothing and reported success.
     distMissing()
@@ -173,5 +196,47 @@ describe('the marker identifies the RUN, not a moment in time', () => {
     // Previously skipped whenever a build existed, which is most of the time.
     distMissing()
     expect(isDistUsableWithoutRebuilding(MARKER, DIST_TYPES)).toBe(false)
+  })
+})
+
+describe('the run id is the one the run exported (B-700)', () => {
+  it('test_an_exported_run_id_is_the_one_the_marker_records', () => {
+    // The dist gate and every vitest worker inherit `THEOKIT_TEST_RUN_ID` from one shell; the
+    // parent pid differs between them. So the exported id, not the pid, is what the marker records.
+    withExportedRunId('b700-exported', () => {
+      markDistValidatedForThisRun(MARKER)
+    })
+    expect(JSON.parse(readFileSync(MARKER, 'utf8'))).toEqual({ runId: 'b700-exported' })
+  })
+
+  it('test_an_empty_exported_run_id_falls_back_to_the_parent_pid', () => {
+    // An empty value is unset: `npx vitest run` invoked directly keeps the parent pid it always had.
+    withExportedRunId('', () => {
+      markDistValidatedForThisRun(MARKER)
+    })
+    expect(JSON.parse(readFileSync(MARKER, 'utf8'))).toEqual({ runId: String(process.ppid) })
+  })
+
+  it('test_a_marker_with_a_runId_of_another_type_is_not_from_this_run', () => {
+    // Negative case: a marker the helper cannot read as an id vouches for nothing, and the window
+    // decides. Over a dist past the window that means a rebuild, never a trust.
+    writeFileSync(MARKER, JSON.stringify({ runId: { x: 1 } }), 'utf8')
+    distExists(FRESH_WINDOW_MS + 60_000)
+    withExportedRunId('[object Object]', () => {
+      expect(isDistUsableWithoutRebuilding(MARKER, DIST_TYPES)).toBe(false)
+    })
+  })
+
+  it('test_a_numeric_marker_matches_the_same_id_as_a_string', () => {
+    // A marker written before the id became a string records a number. It reads as its string form,
+    // so it still matches its own run and still does not match another.
+    writeFileSync(MARKER, JSON.stringify({ runId: 4242 }), 'utf8')
+    distExists(FRESH_WINDOW_MS + 60_000)
+    withExportedRunId('4242', () => {
+      expect(isDistUsableWithoutRebuilding(MARKER, DIST_TYPES)).toBe(true)
+    })
+    withExportedRunId('4243', () => {
+      expect(isDistUsableWithoutRebuilding(MARKER, DIST_TYPES)).toBe(false)
+    })
   })
 })

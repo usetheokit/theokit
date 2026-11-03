@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Fixed
 
 - `theokit`: `loadConfig` reads `theo.config.ts` in a package without `"type": "module"` on a Node that cannot strip types (below 22.18). tsx loads it as CommonJS there and the default export arrives wrapped, so the config was replaced by the defaults without a message and every command ran on `server/`, `app/` and the default port. The wrapper is now unwrapped, and a default export with a `default` key beside other keys, or a non-object default in `theo.config.<NODE_ENV>.ts`, fails with `TheoConfigError` naming the file instead of being ignored (#1100)
+- Workspace tests: the dist gate's validation of `packages/theo/dist` now reaches the vitest run it precedes. `test`, `test:watch`, `test:types` and `test:coverage` export `THEOKIT_TEST_RUN_ID` before the gate, and the build helper keys its per-run marker on it, so no worker of the run re-decides by the ten-minute window and could rebuild dist while its siblings read it. A direct `npx vitest run` keeps the parent-pid fallback. The scripts need a POSIX shell (B-700)
 
 ## [create-theokit 3.0.25, @theokit/http 2.3.1, theokit 0.77.1] - 2026-11-02
 

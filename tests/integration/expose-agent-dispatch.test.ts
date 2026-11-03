@@ -1,6 +1,7 @@
 import 'reflect-metadata'
 
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
@@ -16,7 +17,14 @@ import { createControllerDispatcher } from '../../packages/theo/src/server/http/
  * proven by the showcase dogfood (Phase 4). The fixture lives under `packages/theo/` so the swc-compiled
  * controller's bare imports (`@theokit/http`) resolve.
  */
-const TEST_ROOT = resolve(__dirname, '../../packages/theo/__expose_dispatch_e2e__')
+// Outside the source tree (B-429): a concurrent lint, build or typecheck must never see it. Bare
+// imports resolve through a link to the package's own node_modules in the parent directory.
+const TEST_PARENT = mkdtempSync(join(tmpdir(), 'theokit-expose-dispatch-e2e-'))
+symlinkSync(
+  resolve(__dirname, '../../packages/theo/node_modules'),
+  join(TEST_PARENT, 'node_modules'),
+)
+const TEST_ROOT = join(TEST_PARENT, 'work')
 const CONTROLLERS_DIR = join(TEST_ROOT, 'controllers')
 
 const CONTROLLER_SRC = `

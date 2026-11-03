@@ -1,7 +1,8 @@
 import 'reflect-metadata'
 
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -36,7 +37,10 @@ import { collectControllerRouteData } from '../../packages/theo/src/vite-plugin/
  * says so, rather than leaving a reader to wonder why one method got types and its neighbour did
  * not. That is a real limit of the approach and is asserted below, not hidden.
  */
-const TEST_ROOT = resolve(__dirname, '../../packages/theo/__controller_body_types_124_test__')
+// Outside the source tree (B-429): a concurrent lint, build or typecheck must never see it. The
+// generated controller's bare imports resolve through a link to the package's own node_modules.
+const TEST_ROOT = mkdtempSync(join(tmpdir(), 'theokit-controller-body-types-'))
+symlinkSync(resolve(__dirname, '../../packages/theo/node_modules'), join(TEST_ROOT, 'node_modules'))
 const CONTROLLERS_DIR = join(TEST_ROOT, 'controllers')
 const DTS_OUT = join(TEST_ROOT, '.theokit', 'client.d.ts')
 
