@@ -34,9 +34,13 @@
 //                  handling). Enumerated with a per-key verdict in
 //                  `docs/surfaces/sandbox-vocabulary.md`.
 //
-// The gap that matters is NETWORK. This surface has no network policy at all — no domain allowlist,
-// no proxy, no per-path read/write lists. A checklist that greps for `sandbox`, finds this module
-// and stops has just reported a network and filesystem policy that does not exist here.
+// The gap that matters is NETWORK. This surface ENFORCES no network policy — no domain allowlist,
+// no proxy, no per-path read/write lists. Since `@theokit/sdk` 5.13 a backend can STATE its egress
+// (`SandboxBackend.networkPolicy`, a `SandboxNetworkPolicy`; `LocalSandbox` says `unrestricted`), so a
+// tool can ask what a sandbox can reach, but nothing here restricts it: a microVM backend that does
+// (usetheokit/theokit#1130) is written against `execute`/`uploadFile`/`dispose`. A checklist that
+// greps for `sandbox`, finds this module and stops has just reported a network and filesystem policy
+// that does not exist here.
 //
 // Stated at both ends, as the three earlier same-word collisions are: `checkpoint` (B-059),
 // `MEMORY.md` (B-054), `plugins` (B-055).
@@ -80,6 +84,7 @@ export {
   SandboxNotAvailableError,
   SandboxSecurityError,
   seccompPathForArch,
+  shellEscapePosix,
   wrapCommandForSandbox,
   // M67 — surfaced by the 4.49 floor bump. It states which roots a posture actually permits writing
   // to; a consumer deriving that by hand re-derives the confinement policy, which is how an
@@ -98,6 +103,7 @@ export type {
   ProvisionRepoOptions,
   SandboxConfig,
   SandboxMode,
+  SandboxNetworkPolicy,
   SandboxPosture,
   SandboxProvider,
   SeccompOptions,
