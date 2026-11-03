@@ -9,13 +9,28 @@ import { join } from 'node:path'
 
 import { afterEach, describe, expect, it } from 'vitest'
 
+import type { A2APeer } from '../src/a2a/a2a-settings.js'
+import { peerTools } from '../src/a2a/peer-tools.js'
+import { createTheoClawAgent, theoClawAgentOptions } from '../src/agent/create-agent.js'
+import type { TurnAgent } from '../src/agent-port.js'
+import { controlAgentToolOptions } from '../src/tools/tool-registry.js'
+import type { AgentToolOptions } from '../src/tools/tool-registry.js'
+import { resolveToolSettings } from '../src/tools/tool-settings.js'
+import { makeHostToolsWorkspace } from './host-tools-workspace.js'
+import { advertisedTools, startModelStub } from './model-stub.js'
+import type { ModelStub } from './model-stub.js'
+
 import { a2aLines, readA2ASettings } from '../src/a2a/a2a-settings.js'
 import { TheoClawConfigError } from '../src/control-plane/errors.js'
 import { processSecrets } from '../src/secrets.js'
 import { auditConfiguration } from '../src/security-audit.js'
 import { cleanScratch, scratchDir } from './support/cli-harness.js'
 
-afterEach(cleanScratch)
+const cleanups: (() => void | Promise<void>)[] = []
+afterEach(async () => {
+  cleanScratch()
+  for (const cleanup of cleanups.splice(0)) await cleanup()
+})
 
 const INBOUND = 'inbound-token-0123456789abcdef0123456789'
 const PEER_B = 'peer-b-token-0123456789abcdef0123456789ab'
@@ -170,5 +185,86 @@ describe('readA2ASettings', () => {
       'THEOCLAW_A2A_PEER_TOKEN_B',
     )
     expect(JSON.stringify(findings)).not.toContain('a'.repeat(20))
+  })
+})
+
+const PEERS: readonly A2APeer[] = [
+  { name: 'b', baseUrl: 'http://127.0.0.1:1', token: PEER_B },
+  { name: 'c', baseUrl: 'http://127.0.0.1:2', token: PEER_C },
+]
+
+/** One agent turn against the stub, drained so every request it makes is recorded. */
+async function turn(agent: TurnAgent & Partial<AsyncDisposable>, prompt: string): Promise<void> {
+  try {
+    const run = await agent.send(prompt)
+    for await (const _event of run.stream()) {
+      // Drained, so the run proceeds; the stub records what each request carried.
+    }
+    await run.wait()
+  } finally {
+    await agent[Symbol.asyncDispose]?.()
+  }
+}
+
+describe('the peer tools', () => {
+  it('gives the control agent one peer tool per peer and never a chat agent or a worker', async () => {
+    const workspace = makeHostToolsWorkspace()
+    cleanups.push(() => workspace.remove())
+    const tools = resolveToolSettings({}, workspace.path, { detect: () => ({ ok: true, bin: '/usr/bin/bwrap' }), warn: () => undefined })
+    const stub: ModelStub = await startModelStub([
+      { toolCalls: [{ name: 'delegate', args: { agent: 'worker', task: 'say ok' } }] },
+      { text: 'worker ok' },
+      { text: 'control done' },
+      { text: 'chat reply' },
+    ])
+    cleanups.push(() => stub.close())
+    const model = { id: 'lmstudio/stub', url: stub.url }
+    const build = (toolOptions: AgentToolOptions): Promise<TurnAgent> => createTheoClawAgent(theoClawAgentOptions({ model, apiKey: 'stub-key', toolOptions }))
+
+    await turn(await build(controlAgentToolOptions(tools, build, peerTools(PEERS))), 'delegate something')
+    // A chat agent is built with no tool options at all (control-plane/agent-factory.ts).
+    await turn(await createTheoClawAgent(theoClawAgentOptions({ model, apiKey: 'stub-key' })), 'hello')
+
+    const control = advertisedTools(stub.requests[0])
+    expect(control.filter((name) => name.startsWith('peer_')).sort()).toEqual(['peer_b', 'peer_c'])
+    const worker = advertisedTools(stub.requests[1])
+    expect(worker.length).toBeGreaterThan(0)
+    expect(worker.some((name) => name.startsWith('peer_'))).toBe(false)
+    expect(advertisedTools(stub.requests[3]).some((name) => name.startsWith('peer_'))).toBe(false)
+  })
+
+  it('a peer tool names the peer when the connection is refused', async () => {
+    const refused = new TypeError('fetch failed')
+    const [tool] = peerTools([PEERS[0] as A2APeer], { fetchImpl: () => Promise.reject(refused) })
+    const call = tool?.handler({ message: 'hi' })
+    await expect(call).rejects.toThrow('A2A call to "peer_b" failed: fetch failed')
+    await expect(call).rejects.toMatchObject({ cause: refused })
+
+    const controller = new AbortController()
+    const reason = new Error('the turn was cancelled')
+    const [waiting] = peerTools([PEERS[0] as A2APeer], {
+      fetchImpl: (_url, init) =>
+        new Promise<Response>((_resolve, reject) => {
+          init.signal?.addEventListener('abort', () => {
+            reject(init.signal?.reason as Error)
+          })
+        }),
+    })
+    const cancelled = waiting?.handler({ message: 'hi' }, { signal: controller.signal })
+    controller.abort(reason)
+    await expect(cancelled).rejects.toBe(reason)
+  })
+
+  it('a peer tool reports a peer that answers too late', async () => {
+    const [tool] = peerTools([PEERS[0] as A2APeer], {
+      timeoutMs: 50,
+      fetchImpl: (_url, init) =>
+        new Promise<Response>((_resolve, reject) => {
+          init.signal?.addEventListener('abort', () => {
+            reject(init.signal?.reason as Error)
+          })
+        }),
+    })
+    await expect(tool?.handler({ message: 'hi' })).rejects.toThrow('A2A call to "peer_b" failed: no answer within 50 ms')
   })
 })

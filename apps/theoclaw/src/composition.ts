@@ -35,6 +35,8 @@ import { type ControlPlaneHandle, listenControlPlane } from './control-plane/lis
 import { readControlPlaneSettings } from './control-plane/settings.js'
 import { processSecrets } from './secrets.js'
 import { a2aLines, readA2ASettings } from './a2a/a2a-settings.js'
+import { a2aRoute } from './a2a/a2a-route.js'
+import { peerTools } from './a2a/peer-tools.js'
 import { installShutdown, type SignalSource } from './control-plane/shutdown.js'
 import { formatAddress, reportSurfacesOff } from './control-plane/start-output.js'
 import { createTurnRunner } from './control-plane/turn.js'
@@ -421,7 +423,7 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
   const platforms = resolvePlatforms(options.env).configured.map((entry) => entry.platform)
   const beat = heartbeat === undefined ? {} : { heartbeat: heartbeatJob(sessionSettings.workspace, heartbeat) }
   scheduled = wireScheduler({ store: scheduleStore, loop: composed.loop, buildRunAgent: buildWorker, tools, platforms, ...beat, write: stderr, secrets: secretValues })
-  const extraTools = [...workflowTools(options.draftAgentFactory, stderr), ...scheduled.scheduleTools]
+  const extraTools = [...workflowTools(options.draftAgentFactory, stderr), ...scheduled.scheduleTools, ...peerTools(a2a.peers)]
   const buildControlAgent = async (): Promise<TurnAgent> =>
     options.agentFactory(controlAgentToolOptions(tools, buildWorker, extraTools))
   const { withAgent } = createContainer<TurnAgent>({ factory: buildControlAgent })
@@ -429,7 +431,7 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
   const devices = devicePairingFor(policy.stateDir, settings.controlToken, stderr)
   const listen = options.listen ?? listenControlPlane
   serving = listen({
-    handler: serveHandler(composed.router, startWebchat(options, settings.webchatToken, secretValues), devices),
+    handler: serveHandler(composed.router, startWebchat(options, settings.webchatToken, secretValues), devices, a2a.token === undefined ? undefined : a2aRoute({ token: a2a.token, buildWorker, tools, secrets: secretValues, write: stderr })),
     port: settings.port,
     host: settings.host,
     stderr,
