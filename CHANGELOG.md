@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- `theokit`: `theokit build --target netlify` places its `/api/*` redirect ahead of a `/*` catch-all already in the project's `netlify.toml`, and a rebuild moves one an earlier build appended after it. The rule was appended at the end, and Netlify applies the first rule that matches, so with a project catch-all no route reached the function (#1123)
+
 ## [create-theokit 3.0.27, theokit 0.77.3] - 2026-11-03
 
 ### Fixed
