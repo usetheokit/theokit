@@ -130,9 +130,15 @@ export class PostgresJobBackend implements JobBackend {
    *   new PostgresJobBackend({ pool, ...options })
    *   ```
    *
-   * Errors thrown by the manager (unknown dbName, dangling server reference,
-   * manager already disposed) propagate to the caller with actionable text.
+   * With a configured manager the pool is resolved at once, so errors thrown by the manager
+   * (unknown dbName, dangling server reference, manager already disposed) propagate to the caller
+   * with actionable text.
    *
+   * Called from `theo.config.ts`, where `jobs.backend` is declared, the manager has no
+   * configuration yet: the framework applies the config's `storage` block only after the module has
+   * been evaluated. The pool is then resolved on the first query, which `theokit start` and `theokit
+   * dev` make when they create the table at boot, and the same errors surface there
+   * (usetheokit/theokit#1133).
    */
   static fromStorageManager(
     manager: StorageManager,
@@ -140,8 +146,16 @@ export class PostgresJobBackend implements JobBackend {
     factory: PostgresFactory,
     options?: Omit<PostgresJobBackendOptions, 'pool'>,
   ): PostgresJobBackend {
-    const pool = manager.usePostgres(dbName, factory)
-    return new PostgresJobBackend({ pool, ...options })
+    if (manager.isConfigured()) {
+      return new PostgresJobBackend({ pool: manager.usePostgres(dbName, factory), ...options })
+    }
+    let pool: PoolLike | undefined
+    const resolve = (): PoolLike => (pool ??= manager.usePostgres(dbName, factory))
+    return new PostgresJobBackend({
+      // The manager owns the pool and drains it on dispose, so the proxy has no `end`.
+      pool: { query: (sql, params) => resolve().query(sql, params) },
+      ...options,
+    })
   }
 
   /**
