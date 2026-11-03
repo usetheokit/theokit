@@ -98,7 +98,7 @@ describe('createScheduleTools', () => {
     expect(store.list()).toEqual([])
   })
 
-  it('refuses the 51st job', async () => {
+  it('refuses a job past the configured limit', async () => {
     for (let i = 0; i < 3; i++) expect((await call('schedule_job', valid)).ok).toBe(true)
     const answer = await call('schedule_job', valid)
     expect(answer.ok).toBe(false)
@@ -144,5 +144,27 @@ describe('createScheduleTools', () => {
       error: 'no such job',
     })
     expect(await scheduler.fire('heartbeat')).toBe('delivered')
+  })
+  it('refuses the 51st job when no limit is configured (F-tests-5)', async () => {
+    const unlimited = createScheduleTools({ scheduler, platforms: ['telegram'] })
+    const schedule = unlimited.find((entry) => entry.name === 'schedule_job')
+    const scheduleOnce = async (): Promise<Record<string, unknown>> =>
+      JSON.parse(String(await schedule?.handler(valid))) as Record<string, unknown>
+    for (let i = 0; i < 50; i++) expect((await scheduleOnce()).ok).toBe(true)
+    const answer = await scheduleOnce()
+    expect(answer.ok).toBe(false)
+    expect(String(answer.error)).toContain('50')
+    expect(store.list()).toHaveLength(50)
+  })
+
+  it('holds the limit when schedule_job calls run in parallel (F-wire-6)', async () => {
+    for (let i = 0; i < 2; i++) expect((await call('schedule_job', valid)).ok).toBe(true)
+    const answers = await Promise.all([
+      call('schedule_job', valid),
+      call('schedule_job', valid),
+      call('schedule_job', valid),
+    ])
+    expect(answers.filter((answer) => answer.ok === true)).toHaveLength(1)
+    expect(store.list()).toHaveLength(3)
   })
 })

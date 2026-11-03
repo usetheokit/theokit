@@ -5,7 +5,11 @@ import { Cron } from '@theokit/sdk'
 import { fn, Workflow } from '@theokit/sdk/workflow'
 
 import type { JobStore, ScheduledJob, ScheduleTarget } from './job-store.js'
-import { buildScheduledPrompt, readScheduledAnswer } from './scheduled-prompt.js'
+import {
+  buildScheduledPrompt,
+  PREVIOUS_OUTPUT_LIMIT,
+  readScheduledAnswer,
+} from './scheduled-prompt.js'
 
 /** What one run of a scheduled prompt produced. */
 export type RunResult = { ok: true; text: string } | { ok: false; error: string }
@@ -72,7 +76,11 @@ interface TransientJob {
   previousOutput?: string
 }
 
-/** Build a scheduler over `store`. `run` and `deliver` are the caller's ports (plan D1). */
+/**
+ * Build a scheduler over `store`. `run` and `deliver` are the caller's ports (plan D1). Its timers
+ * are the SDK `Cron`, which is process-global: `stop()` deletes this scheduler's own SDK jobs and
+ * stops the SDK timer only when no other SDK job is left in the process.
+ */
 export function createScheduler(options: CreateSchedulerOptions): Scheduler {
   const { store, run, deliver } = options
   const write = options.write ?? ((line: string) => process.stderr.write(`${line}\n`))
@@ -106,8 +114,10 @@ export function createScheduler(options: CreateSchedulerOptions): Scheduler {
   const unregister = async (id: string): Promise<void> => {
     const sdkId = sdkIds.get(id)
     if (sdkId === undefined) return
-    sdkIds.delete(id)
+    // The mapping goes only once the SDK job is gone: a delete that throws leaves the job with its
+    // timer handle, so a later cancel can still remove it (review finding #83).
     await Cron.delete(sdkId)
+    sdkIds.delete(id)
   }
 
   const send = (job: ScheduledJob, text: string): Promise<boolean> =>
@@ -136,7 +146,9 @@ export function createScheduler(options: CreateSchedulerOptions): Scheduler {
   const fire = (id: string): Promise<FireOutcome> => {
     if (stopped) return Promise.resolve('cancelled')
     if (inFlight.has(id)) {
-      skips.set(id, (skips.get(id) ?? 0) + 1)
+      const count = (skips.get(id) ?? 0) + 1
+      skips.set(id, count)
+      write(skipLine(jobName(store, transients, id), count))
       return Promise.resolve('skipped')
     }
     const controller = new AbortController()
@@ -158,9 +170,7 @@ export function createScheduler(options: CreateSchedulerOptions): Scheduler {
         if (sdkIds.has(job.id)) continue
         // One job the SDK refuses (a hand-edited cron) is reported and skipped; the others still run.
         await register(job).catch((error: unknown) => {
-          write(
-            `scheduler: job ${job.name ?? job.id}: ${error instanceof Error ? error.message : String(error)}`,
-          )
+          reportFailure(write, job, error)
         })
       }
       await Cron.start()
@@ -172,7 +182,9 @@ export function createScheduler(options: CreateSchedulerOptions): Scheduler {
       await Promise.all(running.map((entry) => entry.done))
       for (const id of [...sdkIds.keys()]) await unregister(id)
       transients.clear()
-      await Cron.stop()
+      // `Cron.stop()` is process-global: it clears every SDK timer, another scheduler's or the
+      // consumer's own. Stop it only when no SDK job is left once this scheduler's are deleted.
+      if ((await Cron.status()).jobCount === 0) await Cron.stop()
     },
     async add(job, transient) {
       const next = await register(job)
@@ -189,14 +201,31 @@ export function createScheduler(options: CreateSchedulerOptions): Scheduler {
       return next
     },
     async cancel(id) {
+      const held = store.get(id)
       await unregister(id)
       if (transients.delete(id)) return true
-      return store.remove(id)
+      return removeOrRestore(store, id, () =>
+        held === undefined
+          ? undefined
+          : register(held).catch((error: unknown) => {
+              reportFailure(write, held, error)
+            }),
+      )
     },
     list: () => store.list(),
     fire,
     skipped: (id) => skips.get(id) ?? 0,
   }
+}
+
+function skipLine(name: string, count: number): string {
+  return `scheduler: job ${name}: fire skipped, the previous fire still runs (${String(count)} skipped)`
+}
+
+function reportFailure(write: (line: string) => void, job: ScheduledJob, error: unknown): void {
+  write(
+    `scheduler: job ${job.name ?? job.id}: ${error instanceof Error ? error.message : String(error)}`,
+  )
 }
 
 async function sendOrReport(
@@ -217,6 +246,31 @@ async function sendOrReport(
     )
   }
   return result.ok
+}
+
+/**
+ * Remove `id` from the store. When the save fails the job is still stored, so `restore` gives it its
+ * timer back: it neither stays listed without firing nor fires untracked after a restart.
+ */
+async function removeOrRestore(
+  store: JobStore,
+  id: string,
+  restore: () => Promise<unknown> | undefined,
+): Promise<boolean> {
+  try {
+    return await store.remove(id)
+  } catch (error) {
+    await restore()
+    throw error
+  }
+}
+
+function jobName(
+  store: JobStore,
+  transients: ReadonlyMap<string, TransientJob>,
+  id: string,
+): string {
+  return (transients.get(id)?.job ?? store.get(id))?.name ?? id
 }
 
 async function promptOf(
@@ -242,11 +296,13 @@ async function remember(
   text: string,
 ): Promise<boolean> {
   const transient = transients.get(id)
+  // Only the tail is ever read back (`buildScheduledPrompt`), so only the tail is kept.
+  const tail = text.slice(-PREVIOUS_OUTPUT_LIMIT)
   if (transient !== undefined) {
-    transient.previousOutput = text
+    transient.previousOutput = tail
     return true
   }
-  return store.setPreviousOutput(id, text)
+  return store.setPreviousOutput(id, tail)
 }
 
 /** Run the prompt; a run that throws is reported as a failed result, like one that ends `error`. */

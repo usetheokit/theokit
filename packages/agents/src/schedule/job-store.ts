@@ -69,33 +69,38 @@ let tempCounter = 0
  * mutations run one after another, so the file is always whole.
  */
 export function createJobStore(filePath: string): JobStore {
-  const jobs = new Map<string, ScheduledJob>()
+  let jobs = new Map<string, ScheduledJob>()
   for (const job of loadJobs(filePath)) jobs.set(job.id, job)
 
+  // A mutation works on a copy, and the copy replaces the held jobs only once it is saved: a save
+  // that throws (EACCES, ENOSPC) leaves memory as it is on disk, so a refused write is not listed,
+  // counted, or persisted by the next mutation (review finding #82).
   let chain: Promise<unknown> = Promise.resolve()
-  const serialized = <T>(mutation: () => T): Promise<T> => {
-    const next = chain.then(async () => {
-      const result = mutation()
-      await saveJobs(filePath, [...jobs.values()])
+  const serialized = <T>(mutation: (next: Map<string, ScheduledJob>) => T): Promise<T> => {
+    const done = chain.then(async () => {
+      const next = new Map(jobs)
+      const result = mutation(next)
+      await saveJobs(filePath, [...next.values()])
+      jobs = next
       return result
     })
-    chain = next.catch(() => undefined)
-    return next
+    chain = done.catch(() => undefined)
+    return done
   }
 
   return {
     list: () => [...jobs.values()],
     get: (id) => jobs.get(id),
     put: (job) =>
-      serialized(() => {
-        jobs.set(job.id, job)
+      serialized((next) => {
+        next.set(job.id, job)
       }),
-    remove: (id) => serialized(() => jobs.delete(id)),
+    remove: (id) => serialized((next) => next.delete(id)),
     setPreviousOutput: (id, text) =>
-      serialized(() => {
-        const held = jobs.get(id)
+      serialized((next) => {
+        const held = next.get(id)
         if (held === undefined) return false
-        jobs.set(id, { ...held, previousOutput: text })
+        next.set(id, { ...held, previousOutput: text })
         return true
       }),
   }
