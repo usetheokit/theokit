@@ -105,6 +105,7 @@ workflow; do not modify an installed gate to make it accept another branch.
 | Gateway core tests | 339 passed |
 | SDK tools goal, structured output and search-adapter tests | 37 passed |
 | SDK core full default suite | 6306 passed, 6 failed, 21 skipped, 6 todo |
+| Generated agent-node container (B-661 runtime evidence) | PASS; uid/gid 1000:1000, HTTP health 200, Docker HEALTHCHECK healthy |
 
 The six SDK failures are in the real-provider integration tests, all routed through
 OpenRouter: Anthropic tools, vision, streaming and structured output, plus reasoning
@@ -116,3 +117,12 @@ or dismissed as environmental without evidence. No paid account was replenished 
 no failing real-provider test was changed to skip or pass.
 
 This validation is not a full framework-wide test run or a completed sprint review.
+
+The B-661 container was rendered through the actual `scaffoldServices` implementation
+and built with its unchanged Dockerfile. Startup succeeded while `/app`, `node_modules`
+and the shared Corepack cache were root-owned and not writable to uid 1000; observed
+writes were confined to `/tmp`. This proves that specific generated service and dependency
+resolution on Linux amd64, not future resolutions or every supported platform. The local
+runtime report and command logs are preserved under
+`.squad/records/reviews/b661-container-runtime-2026-11-03.md` and its adjacent evidence
+directory. No review finding or verdict was automatically closed by this measurement.
