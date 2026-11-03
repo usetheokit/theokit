@@ -27,7 +27,7 @@ jobs:
     name: Live model (real provider)
     if: inputs.suite != 'theoclaw-container' && inputs.suite != 'theoclaw-daemon'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
     # One model for the preflight and both live steps. The default must equal DEFAULT_LIVE_MODEL in
     # scripts/live-model.mjs, which the preflight re-exports; the workflow test pins that.
     env:

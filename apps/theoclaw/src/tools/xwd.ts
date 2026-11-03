@@ -36,11 +36,18 @@ const MAX_SIDE = 16384
 const MAX_PIXELS = 33_554_432
 const MAX_COLORS = 65_536
 
-/** Read and check the header; pixel bytes are not required to be present (see `xwdToPng`). */
-export function readXwdHeader(bytes: Buffer, path: string): XwdHeader {
-  if (bytes.length < HEADER_BYTES) throw new XwdFormatError(path, 'file length', bytes.length)
+/** The header_size and ncolors fields place the pixel data; both come from the file, so both are bounded. */
+function dataOffsetOf(bytes: Buffer, path: string): number {
+  const headerSize = bytes.readUInt32BE(0)
+  if (headerSize < HEADER_BYTES || headerSize > bytes.length) throw new XwdFormatError(path, 'header_size', headerSize)
+  const colors = bytes.readUInt32BE(76)
+  if (colors > MAX_COLORS) throw new XwdFormatError(path, 'ncolors', colors)
+  return headerSize + colors * COLOR_ENTRY_BYTES
+}
+
+/** The picture's size and depth: each side, the area (the allocation) and the pixel format. */
+function checkGeometry(bytes: Buffer, path: string): void {
   const field = (offset: number): number => bytes.readUInt32BE(offset)
-  const headerSize = field(0)
   const bitsPerPixel = field(44)
   const width = field(16)
   const height = field(20)
@@ -49,12 +56,19 @@ export function readXwdHeader(bytes: Buffer, path: string): XwdHeader {
   if (width < 1 || width > MAX_SIDE) throw new XwdFormatError(path, 'width', width)
   if (height < 1 || height > MAX_SIDE) throw new XwdFormatError(path, 'height', height)
   if (width * height > MAX_PIXELS) throw new XwdFormatError(path, 'width x height', width * height)
+  if (field(48) < width * (bitsPerPixel / 8)) throw new XwdFormatError(path, 'bytes_per_line', field(48))
+}
+
+/** Read and check the header; pixel bytes are not required to be present (see `xwdToPng`). */
+export function readXwdHeader(bytes: Buffer, path: string): XwdHeader {
+  if (bytes.length < HEADER_BYTES) throw new XwdFormatError(path, 'file length', bytes.length)
+  checkGeometry(bytes, path)
+  const dataOffset = dataOffsetOf(bytes, path)
+  const field = (offset: number): number => bytes.readUInt32BE(offset)
+  const width = field(16)
+  const height = field(20)
+  const bitsPerPixel = field(44)
   const bytesPerLine = field(48)
-  if (bytesPerLine < width * (bitsPerPixel / 8)) throw new XwdFormatError(path, 'bytes_per_line', bytesPerLine)
-  if (headerSize < HEADER_BYTES || headerSize > bytes.length) throw new XwdFormatError(path, 'header_size', headerSize)
-  const colors = field(76)
-  if (colors > MAX_COLORS) throw new XwdFormatError(path, 'ncolors', colors)
-  const dataOffset = headerSize + colors * COLOR_ENTRY_BYTES
   return {
     width,
     height,

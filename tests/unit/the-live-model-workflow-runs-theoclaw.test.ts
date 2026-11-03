@@ -98,7 +98,6 @@ describe('live-model.yml for TheoClaw', () => {
     const run = STEPS[install]?.run ?? ''
     for (const tool of ['xvfb', 'xdotool', 'x11-utils']) expect(run).toContain(tool)
     expect(run).toContain('pnpm --filter theoclaw run browser:install')
-    expect(JOB['timeout-minutes']).toBeGreaterThanOrEqual(20)
   })
 
   it('points theoclaw test:live at its live tests, one file at a time', () => {

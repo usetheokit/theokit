@@ -15,9 +15,10 @@ export interface XwdFixtureOptions {
 }
 
 const HEADER_BYTES = 100
+const DEFAULTS = { bitsPerPixel: 32, pixmapFormat: 2, msbFirst: false, truncateBy: 0, headerSize: HEADER_BYTES, ncolors: 0 }
 
 export function buildXwd(options: XwdFixtureOptions): Buffer {
-  const { width, height, bitsPerPixel = 32, pixmapFormat = 2, msbFirst = false, truncateBy = 0, headerSize = HEADER_BYTES, ncolors = 0 } = options
+  const { width, height, bitsPerPixel, pixmapFormat, msbFirst, truncateBy, headerSize, ncolors } = { ...DEFAULTS, ...options }
   const bytesPerPixel = bitsPerPixel / 8
   const bytesPerLine = width * bytesPerPixel
   const header = Buffer.alloc(HEADER_BYTES)

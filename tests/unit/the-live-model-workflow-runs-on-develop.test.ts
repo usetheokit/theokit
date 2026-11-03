@@ -69,14 +69,14 @@ describe('live-model.yml', () => {
     expect(WORKFLOW.permissions).toEqual({ contents: 'read' })
   })
 
-  it('stops the job after 20 minutes', () => {
+  it('stops the job after 10 minutes', () => {
     expect(Object.keys(WORKFLOW.jobs).sort((a, b) => a.localeCompare(b))).toEqual([
       'live-model',
       'theoclaw-container',
       'theoclaw-daemon',
     ])
     expect(JOBS).toHaveLength(3)
-    expect(JOB['timeout-minutes']).toBe(20)
+    expect(JOB['timeout-minutes']).toBe(10)
   })
 
   it('hands the key only through step env and never names it in a run line', () => {
