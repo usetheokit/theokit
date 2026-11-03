@@ -34,6 +34,7 @@ import { type HttpHandler, serveHandler } from './control-plane/http-dispatch.js
 import { type ControlPlaneHandle, listenControlPlane } from './control-plane/listener.js'
 import { readControlPlaneSettings } from './control-plane/settings.js'
 import { processSecrets } from './secrets.js'
+import { a2aLines, readA2ASettings } from './a2a/a2a-settings.js'
 import { installShutdown, type SignalSource } from './control-plane/shutdown.js'
 import { formatAddress, reportSurfacesOff } from './control-plane/start-output.js'
 import { createTurnRunner } from './control-plane/turn.js'
@@ -358,6 +359,7 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
   const generations = Generations.load(sessionsFile(sessionSettings.workspace))
   const scheduleStore = loadScheduleStore(sessionSettings.workspace)
   const heartbeat = readHeartbeatSettings(options.env)
+  const a2a = readA2ASettings(options.env)
   // `SessionAgents` alone decides when a session's agent is disposed: the SDK's cache and its idle
   // sweep know nothing of a turn in flight. `Agent.create` never reads the cache, so `/control`
   // turns are unaffected.
@@ -373,7 +375,7 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
   const pairing = pairingStoreFor(policy, (line) => stderr(redactSecrets(maskSecrets(line, secrets))))
   // First, once every setting is checked: the line holds a label and a directory, never a secret.
   const instance = announceInstance(options.instance, stderr, options.importedLine)
-  const secretValues = processSecrets(options, settings, tools, events)
+  const secretValues = processSecrets(options, settings, tools, events, a2a)
   const mask = installOutputMask(secretValues, streams)
   const stdout = options.stdout ?? lineWriter(streams[0])
   const flushOnExit = (): void => mask.flush()
@@ -402,6 +404,7 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
     write: stderr,
   })
   writeToolLines(tools, stderr)
+  for (const line of a2aLines(a2a)) stderr(line)
   // The composition gets the raw factory: chat agents hold no tool, only `/control` agents do.
   const composed = composeTheoClaw({
     ...options,
