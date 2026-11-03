@@ -1,5 +1,12 @@
 # theo
 
+## 0.77.3
+
+### Patch Changes
+
+- 4926609: A server action gets `ctx.queue` when `jobs.backend` is set, under `theokit start` and `theokit dev`, and the handler `ctx` of `action()` and `defineAction` is typed `RouteContext`, like a route's. Jobs an action enqueues reach the backend after a successful response and are discarded when the action fails. Before, `ctx` was `unknown` and `ctx.queue` was `undefined` (#1096).
+- 1cc434a: The entries the `vercel`, `netlify`, `cloudflare`, `bun`, `deno-deploy` and `aws-lambda` targets emit answer `GET /__theo/health` and `GET /__theo/ready` like `theokit start`, and the Vercel and Netlify routing sends both paths to the function. Both used to answer `200 text/html` from the SPA. A `ready` probe in `theo.config.ts` cannot be carried to these targets, so `theokit build` names it as not applied and `/__theo/ready` answers 503 there instead of claiming ready (#1097).
+
 ## 0.77.2
 
 ### Patch Changes
@@ -384,8 +391,8 @@
   A nested-layout project with no agents — the layout `create-theokit` scaffolds — was told, on every dev
   start and every build that reached this path:
 
-                                  [theokit] agentsDir "agents" resolves to "<root>/src/agents", which is not a directory, so NO agents
-                                  were found and every /api/agents/* route will 404.
+                                    [theokit] agentsDir "agents" resolves to "<root>/src/agents", which is not a directory, so NO agents
+                                    were found and every /api/agents/* route will 404.
 
   About routes it does not have, and a directory it never configured. Two defects in one line.
 
