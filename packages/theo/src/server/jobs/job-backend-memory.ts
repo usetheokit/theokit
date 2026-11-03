@@ -174,6 +174,17 @@ export class InMemoryJobBackend implements JobBackend {
     return Promise.resolve()
   }
 
+  async extendLease(
+    jobId: string,
+    opts: { leaseToken: string; lockSeconds: number },
+  ): Promise<Date> {
+    const entry = this.#pending.get(jobId)
+    this.#assertHeld(jobId, entry, opts, 'extend')
+    if (!entry) throw new JobLeaseLostError(jobId, 'extend')
+    entry.lockExpiresAt = Date.now() + opts.lockSeconds * 1000
+    return Promise.resolve(new Date(entry.lockExpiresAt))
+  }
+
   async nack(jobId: string, opts: JobNackOptions): Promise<void> {
     const entry = this.#pending.get(jobId)
     this.#assertHeld(jobId, entry, opts, 'nack')
@@ -235,7 +246,7 @@ export class InMemoryJobBackend implements JobBackend {
     jobId: string,
     entry: PendingEntry | undefined,
     fence: JobLeaseFence | undefined,
-    operation: 'ack' | 'nack',
+    operation: 'ack' | 'nack' | 'extend',
   ): void {
     if (fence?.leaseToken === undefined) return
     if (entry?.leaseToken !== fence.leaseToken) throw new JobLeaseLostError(jobId, operation)

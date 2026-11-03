@@ -371,6 +371,27 @@ export class PostgresJobBackend implements JobBackend {
   }
 
   /**
+   * Keep a lease for `lockSeconds` more, counted from the database clock, and return the new
+   * deadline. The write is fenced by the lease token, so a worker whose lease expired and was handed
+   * to another cannot extend the new holder's lock (usetheokit/theokit#1132).
+   */
+  async extendLease(
+    jobId: string,
+    opts: { leaseToken: string; lockSeconds: number },
+  ): Promise<Date> {
+    const r = await this.#pool.query<{ locked_until: Date | string }>(
+      `UPDATE ${this.#table}
+       SET locked_until = NOW() + ($3 || ' seconds')::interval
+       WHERE id = $1 AND lease_token = $2 AND failed_at IS NULL
+       RETURNING locked_until`,
+      [jobId, opts.leaseToken, opts.lockSeconds.toString()],
+    )
+    if (r.rows.length === 0) throw new JobLeaseLostError(jobId, 'extend')
+    const until = r.rows[0].locked_until
+    return until instanceof Date ? until : new Date(until)
+  }
+
+  /**
    * Record a failure. The job is retried after `retryDelaySeconds(attempts)` while attempts remain,
    * and kept as failed (`failed_at`, `last_error`) once they are exhausted or the failure is
    * non-retryable. It was DELETEd in that case, with its input and its error, so a job that failed

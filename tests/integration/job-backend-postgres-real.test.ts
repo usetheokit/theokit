@@ -180,6 +180,51 @@ describe.skipIf(!POSTGRES_URL || !pgAvailable)(
       expect(await backend.dequeue({ batchSize: 1, lockSeconds: 60 })).toEqual([])
     })
 
+    // usetheokit/theokit#1132 — a handler keeps its lease while it makes progress.
+    it('test_extendLease_pushes_the_lock_forward_so_no_other_worker_can_take_the_job', async () => {
+      const { jobId } = await backend.enqueue({ name: 'long', input: {}, maxAttempts: 3 })
+      const [lease] = await backend.dequeue({ batchSize: 1, lockSeconds: 1 })
+
+      const until = await backend.extendLease(jobId, {
+        leaseToken: lease.leaseToken!,
+        lockSeconds: 60,
+      })
+      expect(until.getTime()).toBeGreaterThan(Date.now() + 50_000)
+
+      await new Promise((r) => setTimeout(r, 1500)) // past the first, 1 second, lock
+      expect(await backend.dequeue({ batchSize: 1, lockSeconds: 60 })).toEqual([])
+      await backend.ack(jobId, { leaseToken: lease.leaseToken })
+      expect(await rowsFor(jobId)).toBe(0)
+    })
+
+    it('test_extendLease_with_an_expired_lease_token_is_refused_and_leaves_the_new_lock', async () => {
+      const { jobId, a, b } = await reLeasedAfterExpiry()
+
+      await expect(
+        backend.extendLease(jobId, { leaseToken: a, lockSeconds: 999 }),
+      ).rejects.toMatchObject({
+        code: 'JOB_LEASE_LOST',
+        operation: 'extend',
+      })
+      // The current holder's 60 second lock is not replaced by the stale 999 second one.
+      const locked = await pool.query<{ secs: number }>(
+        `SELECT EXTRACT(EPOCH FROM (locked_until - NOW()))::float AS secs FROM theokit_jobs_ci WHERE id = $1`,
+        [jobId],
+      )
+      expect(locked.rows[0].secs).toBeLessThan(61)
+      await backend.ack(jobId, { leaseToken: b })
+    })
+
+    it('test_extendLease_of_a_job_that_has_failed_for_good_is_refused', async () => {
+      const { jobId } = await backend.enqueue({ name: 'long', input: {} })
+      const [lease] = await backend.dequeue({ batchSize: 1, lockSeconds: 30 })
+      await backend.nack(jobId, { error: 'boom', nonRetryable: true, leaseToken: lease.leaseToken })
+
+      await expect(
+        backend.extendLease(jobId, { leaseToken: lease.leaseToken!, lockSeconds: 30 }),
+      ).rejects.toBeInstanceOf(JobLeaseLostError)
+    })
+
     // usetheokit/theokit#1013 — the issue's repro: enqueued through the queue client, the job was
     // stored with max_attempts 1 and its first failure deleted it.
     // B-666 — since #1014 a final failure keeps its row, so `attempts = 1` after one tick no longer

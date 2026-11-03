@@ -33,6 +33,15 @@ export interface JobContext<TInput = unknown> {
   readonly signal: AbortSignal
   /** Attempt number (1-indexed). */
   readonly attempt: number
+  /**
+   * Keep this job's lease for `seconds` more, counted from now (default: the lock the worker leased
+   * with), and move the deadline of `signal` with it. Call it while the handler is making
+   * progress, so a job that may run long does not need a long `lockSeconds` for every job.
+   * Rejects with `JobLeaseLostError` (and aborts `signal`) when another worker holds the job now,
+   * and with `JobLeaseExtensionUnsupportedError` when the backend cannot extend a lease
+   * (usetheokit/theokit#1132).
+   */
+  extendLease(seconds?: number): Promise<void>
 }
 
 export interface JobOptions<TInput = unknown> {
