@@ -58,4 +58,47 @@ describe('the SPA fallback in netlify.toml', () => {
     expect(redirectSources(merged).filter((s) => s === '/*')).toHaveLength(1)
     expect(merged).toContain('to = "/app.html"')
   })
+
+  // usetheokit/theokit#1123 — the project's own catch-all was kept, and the `/api/*` rule was
+  // APPENDED after it. Netlify applies the first rule that matches, so every route answered with
+  // the project's document instead of reaching the function.
+  it('test_the_function_rules_come_before_a_project_catch_all', () => {
+    const existing = [
+      '[build]',
+      '  publish = "dist"',
+      '',
+      '[[redirects]]',
+      '  from = "/*"',
+      '  to = "/app.html"',
+      '  status = 200',
+    ].join('\n')
+    const sources = redirectSources(mergeNetlifyToml(existing))
+
+    expect(sources.indexOf('/api/*'), sources.join(' ')).toBeGreaterThanOrEqual(0)
+    expect(sources.indexOf('/api/*'), sources.join(' ')).toBeLessThan(sources.indexOf('/*'))
+    expect(sources.indexOf('/__theo/*'), sources.join(' ')).toBeLessThan(sources.indexOf('/*'))
+  })
+
+  it('test_a_rebuild_moves_a_function_rule_an_earlier_build_left_after_the_catch_all', () => {
+    // The file 0.77.3 wrote for a project with its own `/*`: the function rule last.
+    const brokenByAnEarlierBuild = [
+      '[[redirects]]',
+      '  from = "/*"',
+      '  to = "/app.html"',
+      '  status = 200',
+      '',
+      '[[redirects]]',
+      '  from = "/api/*"',
+      '  to = "/.netlify/functions/theo"',
+      '  status = 200',
+      '  force = true',
+    ].join('\n')
+    const sources = redirectSources(mergeNetlifyToml(brokenByAnEarlierBuild))
+
+    expect(
+      sources.filter((s) => s === '/api/*'),
+      sources.join(' '),
+    ).toHaveLength(1)
+    expect(sources.indexOf('/api/*'), sources.join(' ')).toBeLessThan(sources.indexOf('/*'))
+  })
 })
