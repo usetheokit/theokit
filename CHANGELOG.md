@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [create-theokit 3.0.29, theokit 0.78.0] - 2026-11-03
+
 ### Added
 
 - `@theokit/agents`: `@theokit/agents/sandbox` re-exports `shellEscapePosix` and the `SandboxNetworkPolicy` type, and `SandboxBackend` carries an optional `dispose()` and an optional `networkPolicy`, so a backend for a VM or a container can stop what it holds and state what it can reach. The layer requires `@theokit/sdk` ^5.13.0 (#1130, #1131)
@@ -76,12 +78,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Fixed
 
 - `theokit`: `theokit generate controller` names every package a controller build needs that `package.json` does not declare (`@theokit/http`, `reflect-metadata`, and `@swc/core` as a dev dependency) and prints the install command for the project's package manager. It checked whether `@theokit/http` resolved, which it always does in an npm-installed scaffold, so the notice never appeared and `theokit build` failed on the missing `@swc/core` (#986)
-- `theokit`: `theokit build` no longer deletes the agent context in `.theokit/`. It emptied the whole directory before writing its output there, so the first build of a fresh scaffold removed `THEO.md`, `rules/` and `personalities/`. The build now keeps `THEO.md`, `rules/`, `personalities/`, `skills/`, `agents/`, `commands/` and `hooks.json`, plus local agent state such as `memory/`, `THEO.local.md` and `mcp-tokens.json` (#1079)
-- `create-theokit`: the scaffold's `.gitignore` versions the agent context in `.theokit/` (`THEO.md`, `rules/`, `personalities/`, `skills/`, `agents/`, `commands/`, `hooks.json`) and ignores everything else there: build output, agent memory, local overrides and MCP tokens. It ignored all of `.theokit/`, so the files the scaffold writes and the docs tell you to edit never reached git (#1075)
-- `theokit`: the Dockerfile `theokit docker` writes builds and runs a create-theokit scaffold. It ran `npx theo build`, which installed and ran the unrelated npm package `theo` and failed the image build; it now calls `./node_modules/.bin/theokit` for `build` and `start`. The runner stage copies the top-level directory of the configured `serverDir` and `agentsDir` (`src` in the scaffold) instead of a hardcoded `server/`, copies `pnpm-workspace.yaml` for pnpm projects, and sets `HOST=0.0.0.0` so the server answers outside the container. The generated `.dockerignore` sends the agent context in `.theokit/` to the build and keeps local agent state and old build output out (#1069)
-- `theokit`: `theokit add` installs the first-party plugins, by scoped name (`theokit add @theokit/plugin-db-drizzle`) or short name (`theokit add plugin-db-drizzle`): canvas, copilot, db-drizzle, email, forms, payments, realtime and voice. The help text and the Plugins page documented `theokit add @theokit/plugin-payments`, but the whitelist held only the five bundled build targets and the name check refused every scoped name. Other scopes are still refused (#1076)
-- `create-theokit`: the scaffold declares `vitest ^5.1.0`. `^3.0.0` installed tinypool and `@vitest/mocker` versions with two critical advisories (GHSA-5gmw-xhrv-c9v3, GHSA-85c8-ppgw-ccpr, GHSA-82fw-gwwq-j7x9), so every fresh install reported `2 critical`. The scaffold's tests, typecheck and lint pass on the new version (#1078)
-- `@theokit/http`: without `@swc/core`, compiling a controller fails with an error that says every controller needs it and names it as a dev dependency to add, plus the file being compiled. It said `@swc/core` was required for parameter decorators, which a controller without `@Body`, `@Param` or `@Query` does not contain, and prescribed `pnpm add -D @swc/core` in npm and yarn projects too (#1086)
 
 ## [@theokit/agents 16.1.1, create-theokit 3.0.22, theokit 0.76.2] - 2026-11-02
 
