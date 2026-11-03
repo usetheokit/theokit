@@ -107,8 +107,13 @@ describe('M90 — the infra subpath surface is locked', () => {
     // Those six were never a decision. They were unreachable: the workspace resolved 4.52.1, and a
     // barrel generated against the bottom of a range ships the bottom of the range. The number this
     // floor protects had been counting a smaller SDK than the one the package claimed to support.
+    //
+    // 187 since the floor moved to `@theokit/sdk` ^5.13.0 (usetheokit/theokit#1130, #1131). The delta
+    // is +2, both in `sandbox`, nothing removed: `shellEscapePosix` and the type
+    // `SandboxNetworkPolicy`. `SandboxBackend.dispose` and `.networkPolicy` are members of a class that
+    // was already on the surface, so they add no symbol.
     const total = Object.values(SNAPSHOT).reduce((n, s) => n + s.values.length + s.types.length, 0)
-    expect(total).toBe(185)
+    expect(total).toBe(187)
   })
 
   /**
