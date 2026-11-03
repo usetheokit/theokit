@@ -27,7 +27,7 @@ jobs:
     name: Live model (real provider)
     if: inputs.suite != 'theoclaw-container' && inputs.suite != 'theoclaw-daemon'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     # One model for the preflight and both live steps. The default must equal DEFAULT_LIVE_MODEL in
     # scripts/live-model.mjs, which the preflight re-exports; the workflow test pins that.
     env:
@@ -78,6 +78,13 @@ jobs:
           sudo loginctl enable-linger "$USER"
           timeout 20 bash -c "until [ -S /run/user/$(id -u)/bus ]; do sleep 0.2; done" \
             || { echo "the systemd user manager did not start within 20 s" >&2; exit 1; }
+      # computer.live.test.ts (B-676, OC-62) drives a virtual display: Xvfb, xdotool and x11-utils from
+      # apt, and the Chromium the browser live test also needs. Without them it fails naming the gap.
+      - name: Install the display tools and Chromium for the computer and browser live tests
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends xvfb xdotool x11-utils
+          pnpm --filter theoclaw run browser:install
       - name: TheoClaw live tests (THEOCLAW_LIVE)
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}

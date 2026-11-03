@@ -32,6 +32,9 @@ const HEADER_BYTES = 100
 const COLOR_ENTRY_BYTES = 12
 const ZPIXMAP = 2
 const MAX_SIDE = 16384
+/** The decoded RGB rows are 3 bytes a pixel, so this bounds the allocation near 100 MB. */
+const MAX_PIXELS = 33_554_432
+const MAX_COLORS = 65_536
 
 /** Read and check the header; pixel bytes are not required to be present (see `xwdToPng`). */
 export function readXwdHeader(bytes: Buffer, path: string): XwdHeader {
@@ -45,9 +48,13 @@ export function readXwdHeader(bytes: Buffer, path: string): XwdHeader {
   if (bitsPerPixel !== 24 && bitsPerPixel !== 32) throw new XwdFormatError(path, 'bits_per_pixel', bitsPerPixel)
   if (width < 1 || width > MAX_SIDE) throw new XwdFormatError(path, 'width', width)
   if (height < 1 || height > MAX_SIDE) throw new XwdFormatError(path, 'height', height)
+  if (width * height > MAX_PIXELS) throw new XwdFormatError(path, 'width x height', width * height)
   const bytesPerLine = field(48)
   if (bytesPerLine < width * (bitsPerPixel / 8)) throw new XwdFormatError(path, 'bytes_per_line', bytesPerLine)
-  const dataOffset = headerSize + field(76) * COLOR_ENTRY_BYTES
+  if (headerSize < HEADER_BYTES || headerSize > bytes.length) throw new XwdFormatError(path, 'header_size', headerSize)
+  const colors = field(76)
+  if (colors > MAX_COLORS) throw new XwdFormatError(path, 'ncolors', colors)
+  const dataOffset = headerSize + colors * COLOR_ENTRY_BYTES
   return {
     width,
     height,

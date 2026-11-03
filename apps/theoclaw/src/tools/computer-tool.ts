@@ -107,6 +107,15 @@ export function computerTool(settings: ComputerSettings, buildDescriber: () => P
   const xdotool = (argv: readonly string[], signal: AbortSignal | undefined): Promise<string> =>
     run(settings.xdotool, argv, xdotoolEnv(settings), signal)
 
+  // One host pointer and keyboard: an action's xdotool sequence (move, click, read back) runs whole
+  // before the next one starts, so parallel tool calls cannot land a click at another call's point.
+  let queue: Promise<unknown> = Promise.resolve()
+  function serialized<T>(work: () => Promise<T>): Promise<T> {
+    const result = queue.then(work)
+    queue = result.catch(() => undefined)
+    return result
+  }
+
   async function pointerLocation(action: string, signal: AbortSignal | undefined): Promise<string> {
     const match = LOCATION.exec(await xdotool(['getmouselocation'], signal))
     if (match === null) throw fail(action, 'unreadable pointer location')
@@ -172,9 +181,9 @@ export function computerTool(settings: ComputerSettings, buildDescriber: () => P
         case 'screenshot':
           return screenshot(input, signal)
         case 'type':
-          return typeText(input, signal)
+          return serialized(() => typeText(input, signal))
         default:
-          return pointerAction(input, signal)
+          return serialized(() => pointerAction(input, signal))
       }
     },
   })

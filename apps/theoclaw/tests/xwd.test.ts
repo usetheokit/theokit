@@ -66,6 +66,30 @@ describe('xwd', () => {
     expect(attempt).toThrow(String(value))
   })
 
+  it.each([
+    ['ncolors', { ncolors: 70_000 }, 70_000],
+    ['header_size', { headerSize: 99 }, 99],
+    ['header_size', { headerSize: 100_000 }, 100_000],
+  ] as const)('refuses a %s of %j with a typed error naming the field', (field, options, value) => {
+    const attempt = () => readXwdHeader(buildXwd({ width: 2, height: 2, ...options }), FILE)
+    expect(attempt).toThrow(XwdFormatError)
+    expect(attempt).toThrow(`${field} is ${value}`)
+  })
+
+  it('refuses an area past the pixel cap before allocating, naming width x height', () => {
+    const bytes = buildXwd({ width: 1, height: 1 })
+    bytes.writeUInt32BE(16384, 16)
+    bytes.writeUInt32BE(16384, 20)
+    bytes.writeUInt32BE(16384 * 4, 48)
+    expect(() => readXwdHeader(bytes, FILE)).toThrow(`width x height is ${16384 * 16384}`)
+    expect(() => xwdToPng(bytes, FILE)).toThrow(XwdFormatError)
+  })
+
+  it('accepts the largest header_size the buffer holds and a palette of 256 colours', () => {
+    const bytes = buildXwd({ width: 2, height: 2, ncolors: 256, headerSize: 100 })
+    expect(readXwdHeader(bytes, FILE).dataOffset).toBe(100 + 256 * 12)
+  })
+
   it('refuses bytes too short to hold a header', () => {
     expect(() => readXwdHeader(Buffer.alloc(10), FILE)).toThrow(XwdFormatError)
   })

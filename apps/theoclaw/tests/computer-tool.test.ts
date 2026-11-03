@@ -174,6 +174,37 @@ describe('the computer tool: xdotool', () => {
     expect(Object.keys(runner.calls[0]?.env ?? {})).not.toContain(secretName)
   })
 
+  it('runs concurrent pointer and keyboard actions one at a time, in call order', async () => {
+    const calls: string[] = []
+    let release: () => void = () => undefined
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const run: NonNullable<ComputerToolDeps['run']> = async (_file, argv) => {
+      calls.push(argv.join(' '))
+      if (argv[0] === 'mousemove') await gate
+      return argv[0] === 'getmouselocation' ? 'x:1 y:0 screen:0 window:1' : ''
+    }
+    const tool = build({ run })
+    const move = tool.handler({ action: 'mouse_move', x: 1, y: 0 }, {})
+    const typed = tool.handler({ action: 'type', text: 'a' }, {})
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(calls).toEqual(['mousemove 1 0'])
+    release()
+    await Promise.all([move, typed])
+    expect(calls).toEqual(['mousemove 1 0', 'getmouselocation', 'type --delay 12 -- a'])
+  })
+
+  it('keeps serving actions after one in the queue failed', async () => {
+    const runner = fakeRunner({ fail: new Error('Cannot open display') })
+    const tool = build({ run: runner.run })
+    const first = tool.handler({ action: 'type', text: 'a' }, {})
+    const second = tool.handler({ action: 'type', text: 'b' }, {})
+    await expect(first).rejects.toThrow('computer type failed')
+    await expect(second).rejects.toThrow('computer type failed')
+    expect(runner.calls).toHaveLength(2)
+  })
+
   it('reports an unreadable pointer location as a tool error', async () => {
     const runner = fakeRunner({ location: 'garbage' })
     const outcome = build({ run: runner.run }).handler({ action: 'mouse_move', x: 1, y: 0 }, {})

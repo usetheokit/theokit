@@ -89,6 +89,18 @@ describe('live-model.yml for TheoClaw', () => {
     expect(LIVE_STEP.run?.trim()).toMatch(/2>&1 \| node scripts\/redact-key-shapes\.mjs$/)
   })
 
+  // B-676 F-wire-1: computer.live.test.ts needs Xvfb, xdotool, x11-utils and a Chromium, and the
+  // runner has none until a step installs them; OC-62's ledger check would fail on every push.
+  it('installs the display tools and Chromium before the TheoClaw live tests', () => {
+    const install = stepIndex('apt-get install')
+    expect(install).toBeLessThan(stepIndex('--filter theoclaw test:live'))
+    expect(install).toBeGreaterThan(stepIndex('live-model-build.mjs theoclaw'))
+    const run = STEPS[install]?.run ?? ''
+    for (const tool of ['xvfb', 'xdotool', 'x11-utils']) expect(run).toContain(tool)
+    expect(run).toContain('pnpm --filter theoclaw run browser:install')
+    expect(JOB['timeout-minutes']).toBeGreaterThanOrEqual(20)
+  })
+
   it('points theoclaw test:live at its live tests, one file at a time', () => {
     const pkg = JSON.parse(
       readFileSync(resolve(__dirname, '../../apps/theoclaw/package.json'), 'utf8'),

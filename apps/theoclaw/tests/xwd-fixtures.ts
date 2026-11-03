@@ -9,17 +9,20 @@ export interface XwdFixtureOptions {
   readonly msbFirst?: boolean
   /** Drop this many bytes from the end of the pixel data. */
   readonly truncateBy?: number
+  /** The header_size and ncolors fields as written (default 100 and 0). */
+  readonly headerSize?: number
+  readonly ncolors?: number
 }
 
 const HEADER_BYTES = 100
 
 export function buildXwd(options: XwdFixtureOptions): Buffer {
-  const { width, height, bitsPerPixel = 32, pixmapFormat = 2, msbFirst = false, truncateBy = 0 } = options
+  const { width, height, bitsPerPixel = 32, pixmapFormat = 2, msbFirst = false, truncateBy = 0, headerSize = HEADER_BYTES, ncolors = 0 } = options
   const bytesPerPixel = bitsPerPixel / 8
   const bytesPerLine = width * bytesPerPixel
   const header = Buffer.alloc(HEADER_BYTES)
   const fields: Record<number, number> = {
-    0: HEADER_BYTES,
+    0: headerSize,
     4: 7,
     8: pixmapFormat,
     12: 24,
@@ -31,7 +34,7 @@ export function buildXwd(options: XwdFixtureOptions): Buffer {
     56: 0xff0000,
     60: 0xff00,
     64: 0xff,
-    76: 0,
+    76: ncolors,
   }
   for (const [offset, value] of Object.entries(fields)) header.writeUInt32BE(value, Number(offset))
   const data = Buffer.alloc(bytesPerLine * height)
