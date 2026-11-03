@@ -29,6 +29,7 @@ import { createProductionLoader } from '../../../server/scan/module-loader.js'
 import { resolveTransformer } from '../../../server/transformer.js'
 import { preflightNodeAndBindings } from '../../preflight-node-version.js'
 import { CONTROLLER_MANIFEST_FILE } from '../build/emit-controllers.js'
+import { resolveListenPort } from '../resolve-listen-port.js'
 
 import { assertSdkCompatible } from './assert-sdk-compatible.js'
 import { startBackgroundWork } from './background-work.js'
@@ -95,13 +96,8 @@ export async function startCommand(options: StartOptions): Promise<void> {
 
   const indexHtml = readFileSync(join(clientDir, 'index.html'), 'utf-8')
   const loadModule = createProductionLoader()
-  // `PORT` is what every container platform injects, and `theo start` read only
-  // the config — so an image told to listen on the platform's port listened on
-  // 3000 instead, and the platform's health check found nothing
-  // (usetheokit/theokit#402). Explicit flag beats environment beats config: the
-  // flag is a person typing now, the environment is where the process was put.
-  const envPort = Number.parseInt(process.env.PORT ?? '', 10)
-  const port = options.port ?? (Number.isInteger(envPort) ? envPort : undefined) ?? config.port
+  // Explicit flag beats `PORT` beats config (#402). `theokit dev` resolves it the same way (#1134).
+  const port = resolveListenPort(options.port, process.env, config.port)
   // #353 — observability is registered FIRST when configured, so its span brackets
   // the user's own hooks. The honest cost of one ordered list: its `onResponse`
   // also runs first, so the span closes just before the tail of the chain. Head
