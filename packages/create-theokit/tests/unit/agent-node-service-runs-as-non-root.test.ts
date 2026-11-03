@@ -67,4 +67,30 @@ describe('agent-node service Dockerfile', () => {
       expect(copy.args).toContain('--chown=1000:1000')
     }
   })
+
+  it('installs dependencies with one pnpm command that cannot fall back to npm or demand an absent lockfile', () => {
+    const target = mkdtempSync(join(tmpdir(), 'agent-node-install-'))
+    dirs.push(target)
+
+    scaffoldServices({ targetDir: target, projectName: 'demo', backends: ['node'] })
+
+    const steps = instructions(
+      readFileSync(join(target, 'services', 'worker', 'Dockerfile'), 'utf-8'),
+    )
+    const install = steps.find((s) => s.keyword === 'RUN' && s.args.includes('pnpm install'))
+    expect(install, 'no pnpm install step').toBeDefined()
+    expect(install?.args, 'a failed pnpm install must fail the build, not fall back').not.toContain(
+      '||',
+    )
+    expect(install?.args).not.toContain('npm install')
+    const shipsLockfile = steps.some(
+      (s) => s.keyword === 'COPY' && s.args.includes('pnpm-lock.yaml'),
+    )
+    if (!shipsLockfile) {
+      expect(
+        install?.args,
+        'no lockfile is copied, so --frozen-lockfile can never succeed',
+      ).not.toContain('--frozen-lockfile')
+    }
+  })
 })
