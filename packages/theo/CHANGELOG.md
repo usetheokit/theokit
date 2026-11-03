@@ -1,5 +1,11 @@
 # theo
 
+## 0.77.2
+
+### Patch Changes
+
+- 956d287: `loadConfig` reads `theo.config.ts` in a package without `"type": "module"` on a Node that cannot strip types (below 22.18). tsx loads it as CommonJS there and the default export arrives wrapped, so the config was replaced by the defaults without a message and every command ran on `server/`, `app/` and the default port. The wrapper is now unwrapped, and a default export with a `default` key beside other keys, or a non-object default in `theo.config.<NODE_ENV>.ts`, fails with `TheoConfigError` naming the file instead of being ignored. (#1100)
+
 ## 0.77.1
 
 ### Patch Changes
@@ -378,8 +384,8 @@
   A nested-layout project with no agents — the layout `create-theokit` scaffolds — was told, on every dev
   start and every build that reached this path:
 
-                                [theokit] agentsDir "agents" resolves to "<root>/src/agents", which is not a directory, so NO agents
-                                were found and every /api/agents/* route will 404.
+                                  [theokit] agentsDir "agents" resolves to "<root>/src/agents", which is not a directory, so NO agents
+                                  were found and every /api/agents/* route will 404.
 
   About routes it does not have, and a directory it never configured. Two defects in one line.
 
