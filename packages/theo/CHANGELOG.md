@@ -1,5 +1,16 @@
 # theo
 
+## 0.78.0
+
+### Minor Changes
+
+- c090f80: A job handler can extend its lease with `ctx.extendLease(seconds)`. `lockSeconds` is one value for the whole worker, so a job that may run for 30 minutes forced a one-hour lock on every job, and a worker that crashed left its job unavailable for that hour. A handler that is still making progress now keeps the job, and the deadline of `ctx.signal` moves with the lease. The call rejects with `JobLeaseLostError` (and aborts the signal) when another worker holds the job. `JobBackend` gains an optional `extendLease`, implemented by `PostgresJobBackend` (fenced by the lease token, on the database clock) and `InMemoryJobBackend`; without it the call rejects with `JobLeaseExtensionUnsupportedError` (#1132).
+
+### Patch Changes
+
+- af27d6f: `theokit dev` reads `PORT`, with the same precedence `theokit start` has: `--port`, then `PORT`, then `port` in `theo.config.ts`. It listened on `config.port` whatever `PORT` said, so a script or container that set `PORT` for both commands got it from only one of them. Both commands now resolve the port through one function (#1134).
+- 6d0b8b1: `PostgresJobBackend.fromStorageManager` can be called in `theo.config.ts`, where `jobs.backend` is declared. The framework applies the config's `storage` block only after the module has been evaluated, so the call resolved the pool too early and the config failed to load with `Database "main" not configured`. When the manager has no configuration yet, the pool is now resolved on the first query, which `theokit start` and `theokit dev` make when they create the table at boot, and the same errors surface there. A configured manager still resolves it at once. `StorageManager` gains `isConfigured()` (#1133).
+
 ## 0.77.4
 
 ### Patch Changes
@@ -397,8 +408,8 @@
   A nested-layout project with no agents — the layout `create-theokit` scaffolds — was told, on every dev
   start and every build that reached this path:
 
-                                      [theokit] agentsDir "agents" resolves to "<root>/src/agents", which is not a directory, so NO agents
-                                      were found and every /api/agents/* route will 404.
+                                        [theokit] agentsDir "agents" resolves to "<root>/src/agents", which is not a directory, so NO agents
+                                        were found and every /api/agents/* route will 404.
 
   About routes it does not have, and a directory it never configured. Two defects in one line.
 
