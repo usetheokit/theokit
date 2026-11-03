@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- `@theokit/agents`: `@theokit/agents/sandbox` re-exports `shellEscapePosix` and the `SandboxNetworkPolicy` type, and `SandboxBackend` carries an optional `dispose()` and an optional `networkPolicy`, so a backend for a VM or a container can stop what it holds and state what it can reach. The layer requires `@theokit/sdk` ^5.13.0 (#1130, #1131)
+
+### Changed
+
+- `theokit`: requires `@theokit/sdk` ^5.13.0, the floor `@theokit/agents` now declares for the sandbox surface (#1130, #1131)
+
 ## [create-theokit 3.0.29, theokit 0.78.0] - 2026-11-03
 
 ### Added
