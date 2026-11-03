@@ -1,6 +1,7 @@
 import 'reflect-metadata'
 
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 import { afterAll, beforeAll, describe, it, expect } from 'vitest'
@@ -13,7 +14,14 @@ import { createControllerDispatcher } from '../../packages/theo/src/server/http/
 // Task 1.1 Vite transform + `ssrLoadModule` in a real dev server). The controller +
 // its temp `.mjs` live under `packages/theo/` so their bare imports (`@theokit/http`,
 // `zod`) resolve — the repo root has neither.
-const TEST_ROOT = resolve(__dirname, '../../packages/theo/__controller_dispatch_test__')
+// Outside the source tree (B-429): a concurrent lint, build or typecheck must never see it. Bare
+// imports resolve through a link to the package's own node_modules in the parent directory.
+const TEST_PARENT = mkdtempSync(join(tmpdir(), 'theokit-controller-dispatch-test-'))
+symlinkSync(
+  resolve(__dirname, '../../packages/theo/node_modules'),
+  join(TEST_PARENT, 'node_modules'),
+)
+const TEST_ROOT = join(TEST_PARENT, 'work')
 const CONTROLLERS_DIR = join(TEST_ROOT, 'controllers')
 
 const CONTROLLER_SRC = `

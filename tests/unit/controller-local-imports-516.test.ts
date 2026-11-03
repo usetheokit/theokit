@@ -1,6 +1,6 @@
 import 'reflect-metadata'
 
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -26,7 +26,19 @@ import { emitControllerArtifacts } from '../../packages/theo/src/cli/commands/bu
  * app runs from, loaded the same way file routes already are. Nothing is copied, nothing is
  * bundled, and one definition of the app's modules stays.
  */
-const TEST_ROOT = resolve(__dirname, '../../packages/theo/__controller_local_imports_test__')
+// Outside packages/ (B-429): a concurrent lint, build or typecheck must never see it. It lives in
+// the gitignored `.tmp/` at the repo root, not os.tmpdir(): the emitted module imports the app's
+// `.ts` source by absolute path, and only a file under the vitest root is transformed. Outside it,
+// Node loads the file itself, and Node before 22.18 cannot load `.ts` (CI 22.12 failed on this).
+// Bare imports resolve through a link to the package's own node_modules in the parent directory.
+const SCRATCH_ROOT = resolve(__dirname, '../../.tmp')
+mkdirSync(SCRATCH_ROOT, { recursive: true })
+const TEST_PARENT = mkdtempSync(join(SCRATCH_ROOT, 'controller-local-imports-test-'))
+symlinkSync(
+  resolve(__dirname, '../../packages/theo/node_modules'),
+  join(TEST_PARENT, 'node_modules'),
+)
+const TEST_ROOT = join(TEST_PARENT, 'work')
 const SERVER_DIR = join(TEST_ROOT, 'server')
 const DIST_DIR = join(TEST_ROOT, '.theokit')
 
@@ -60,7 +72,7 @@ export class GreetController {
   )
 })
 
-afterAll(() => rmSync(TEST_ROOT, { recursive: true, force: true }))
+afterAll(() => rmSync(TEST_PARENT, { recursive: true, force: true }))
 
 describe('a controller may import the app it belongs to (#516)', () => {
   it('builds without refusing the relative specifier', async () => {

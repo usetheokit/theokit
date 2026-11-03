@@ -31,6 +31,7 @@ const b = () => globalThis.__THEO_CARD_HARNESS__
 export const matchRoute = () => null
 export const compilePattern = () => ({})
 export const executeRoute = () => {}
+export const serveReservedRoute = async () => null
 export const createProductionLoader = () => () => ({})
 export const createWebShim = (r) => ({ req: {}, res: { setHeader() {}, statusCode: 200 }, toResponse: () => new Response('route') })
 export const generateNonce = () => 'test-nonce'

@@ -82,6 +82,12 @@ export default defineConfig({
           // The files that genuinely contend: they bind ports (`theokit dev`), run the real build,
           // or drive a scaffolded app end to end. Serialized among THEMSELVES — which is the
           // guarantee the original setting was written for.
+          // `tests/integration/typecheck-clean-gate.test.ts` is one of them: it runs
+          // `pnpm typecheck`, which is `pnpm build:packages && tsc --noEmit`, and every package's
+          // tsup config cleans its dist before writing it. Serialized here, no other file of this
+          // group reads dist while it rebuilds (B-700). This removes contention within the group
+          // only: files of the parallel `root` project and the package projects run beside it and
+          // can still read a dist it is rebuilding.
           include: ['tests/integration/**/*.test.ts', 'tests/smoke/**/*.test.ts'],
           // The type-test suite belongs to `root` alone. Without this, both projects inherit the
           // top-level `typecheck.include` and 22 `.test-d.ts` files are checked TWICE — measured,
@@ -196,6 +202,12 @@ export default defineConfig({
     },
     coverage: {
       provider: 'v8',
+      // Write the report even when a test fails (B-700). A `root-serial` file can read
+      // `packages/theo/dist` while another project rebuilds it, so the coverage leg can go red on
+      // that race after `pnpm test` passed the same head. The kit's validator (#1251) re-runs such a
+      // failure on its own, and it reads the coverage numbers from this report: without it, a red
+      // run leaves nothing to read.
+      reportOnFailure: true,
       reporter: ['text', 'html', 'lcov', 'json-summary'],
       reportsDirectory: './coverage',
       include: ['packages/*/src/**/*.{ts,tsx}'],

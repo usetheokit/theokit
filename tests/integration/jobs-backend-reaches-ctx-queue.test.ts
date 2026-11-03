@@ -26,6 +26,7 @@ function writeApp(): void {
   rmSync(APP, { recursive: true, force: true })
   mkdirSync(join(APP, 'app'), { recursive: true })
   mkdirSync(join(APP, 'server', 'routes'), { recursive: true })
+  mkdirSync(join(APP, 'server', 'actions'), { recursive: true })
   mkdirSync(join(APP, '.theokit', 'client'), { recursive: true })
   writeFileSync(join(APP, 'package.json'), '{ "type": "module" }')
   writeFileSync(join(APP, 'app', 'page.tsx'), 'export default function Page() { return null }\n')
@@ -48,6 +49,21 @@ export default { jobs: { backend, worker: { enabled: false } } }
   handler: ({ ctx }) => {
     if (ctx.queue === undefined) return { hasQueue: false }
     ctx.queue.enqueue('hello', { who: 'probe' })
+    return { hasQueue: true }
+  },
+}
+`,
+  )
+  // usetheokit/theokit#1096 — a server action is the other place an app mutates state, and it got
+  // no ctx.queue: executeAction was never handed the backend. The input is a hand-rolled
+  // safeParse so the fixture needs no zod resolution from this directory.
+  writeFileSync(
+    join(APP, 'server', 'actions', 'tasks.ts'),
+    `export const createTask = {
+  input: { safeParse: (value) => ({ success: true, data: value }) },
+  handler: ({ input, ctx }) => {
+    if (ctx.queue === undefined) return { hasQueue: false }
+    ctx.queue.enqueue('from-action', input)
     return { hasQueue: true }
   },
 }
@@ -87,6 +103,24 @@ async function enqueueThenReadBackend(origin: string): Promise<{
   return { enqueue, pending }
 }
 
+async function callActionThenReadBackend(origin: string): Promise<{
+  action: unknown
+  pending: unknown
+}> {
+  const response = await fetch(`${origin}/api/__actions/tasks/createTask`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-theo-action': '1', origin },
+    body: JSON.stringify({ taskId: 7 }),
+    signal: AbortSignal.timeout(5000),
+  })
+  const text = await response.text()
+  await new Promise((r) => setTimeout(r, 200))
+  const pending = (await (
+    await fetch(`${origin}/api/pending`, { signal: AbortSignal.timeout(5000) })
+  ).json()) as unknown
+  return { action: `${String(response.status)} ${text}`, pending }
+}
+
 describe('jobs.backend reaches ctx.queue', () => {
   beforeAll(() => {
     writeApp()
@@ -107,6 +141,17 @@ describe('jobs.backend reaches ctx.queue', () => {
     }
   }, 90_000)
 
+  it('under theokit start, a server action enqueues into the configured backend', async () => {
+    const app = await spawnTheokitStart(APP)
+    try {
+      const { action, pending } = await callActionThenReadBackend(app.origin)
+      expect(action, app.output()).toMatch(/^200 .*"hasQueue".*true/)
+      expect(pending).toEqual({ names: ['from-action'], inputs: [{ taskId: 7 }] })
+    } finally {
+      await app.stop()
+    }
+  }, 90_000)
+
   it('under theokit dev, a route enqueues into the configured backend', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => {})
     const server = await startDevServer(APP, { port: 0 })
@@ -116,6 +161,22 @@ describe('jobs.backend reaches ctx.queue', () => {
       const { enqueue, pending } = await enqueueThenReadBackend(`http://localhost:${String(port)}`)
       expect(enqueue).toEqual({ hasQueue: true })
       expect(pending).toEqual({ names: ['hello'], inputs: [{ who: 'probe' }] })
+    } finally {
+      await server.close()
+    }
+  }, 90_000)
+
+  it('under theokit dev, a server action enqueues into the configured backend', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    const server = await startDevServer(APP, { port: 0 })
+    try {
+      const address = server.httpServer?.address()
+      const port = typeof address === 'object' && address !== null ? address.port : 0
+      const { action, pending } = await callActionThenReadBackend(
+        `http://localhost:${String(port)}`,
+      )
+      expect(action).toMatch(/^200 .*"hasQueue".*true/)
+      expect(pending).toEqual({ names: ['from-action'], inputs: [{ taskId: 7 }] })
     } finally {
       await server.close()
     }

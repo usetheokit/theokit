@@ -114,20 +114,36 @@ const STALE_MARGIN_MS = 30_000
 export const VALIDATION_MARKER = resolve(LOCK_DIR, 'packages-theo-build.validated.json')
 
 /**
- * The id every worker of one vitest run agrees on.
+ * The id every process of one test run agrees on: the dist gate and every vitest worker after it.
  *
- * The parent pid: with the fork pool it is the vitest main process, with the thread pool the workers
- * share the process outright. Either way it is the same value for the whole run and a different one
- * for the next — which is exactly the equivalence class the decision needs, and the one a clock
+ * `THEOKIT_TEST_RUN_ID` when it is set and non-empty. The scripts that run the dist gate before
+ * vitest (`test`, `test:watch`, `test:types`, `test:coverage`) begin with
+ * `export THEOKIT_TEST_RUN_ID=$$;`, so the gate and vitest inherit one value from one shell (B-700).
+ * The parent pid alone could not carry the gate's decision into the run: the gate's parent is the
+ * shell pnpm started for `test:dist-gate`, a worker's is the vitest main process, so the first
+ * worker re-decided by the freshness window and could rebuild dist under its siblings.
+ *
+ * Otherwise the parent pid, the fallback for `npx vitest run` invoked directly: with the fork pool
+ * it is the vitest main process, with the thread pool the workers share the process outright. Either
+ * way it is one value for the whole run and another for the next, the equivalence class a clock
  * cannot express.
+ *
+ * A string, because the exported value is one: a numeric conversion would turn a non-numeric id
+ * into `NaN`, which equals nothing and silently disables the marker. The scripts re-export the id
+ * on every run, so a value left exported in a shell reaches only a direct `vitest` call.
  */
-const runId = (): number => process.ppid
+const runId = (): string => {
+  const exported = process.env.THEOKIT_TEST_RUN_ID
+  return exported !== undefined && exported !== '' ? exported : String(process.ppid)
+}
 
-const markerRunId = (markerPath: string): number | undefined => {
+/** The run id a marker records. A numeric one, written before the id became a string, reads as its string form. */
+const markerRunId = (markerPath: string): string | undefined => {
   try {
     const parsed: unknown = JSON.parse(readFileSync(markerPath, 'utf8'))
     const value = (parsed as { runId?: unknown }).runId
-    return typeof value === 'number' ? value : undefined
+    if (typeof value === 'string') return value
+    return typeof value === 'number' ? String(value) : undefined
   } catch {
     return undefined
   }
