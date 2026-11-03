@@ -1,7 +1,6 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
-import { pathToFileURL } from 'node:url'
+import { join } from 'node:path'
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
@@ -12,6 +11,7 @@ import { renderDenoEntry } from '../../packages/theo/src/adapters/deno-deploy.js
 import { renderNetlifyFunction } from '../../packages/theo/src/adapters/netlify.js'
 import { renderVercelFunctionEntry } from '../../packages/theo/src/adapters/vercel.js'
 import { BUILD_HOOK_TIMEOUT_MS, buildTheokitPackageOnce } from './_helpers/build-theokit-package.js'
+import { loadDeployedEntry } from './_helpers/drive-deployed-entry.js'
 
 /**
  * B-027 / T0.1 — the gate that can see what a `grep` cannot.
@@ -61,9 +61,6 @@ import { BUILD_HOOK_TIMEOUT_MS, buildTheokitPackageOnce } from './_helpers/build
  * module scope. Both also read other globals first, and **bun calls `process.exit(1)` on each failed
  * guard**, so a partial stub terminates the vitest worker instead of failing a test.
  */
-
-const REPO = resolve(__dirname, '../..')
-const THEO = resolve(REPO, 'packages/theo')
 
 /** A limit small enough that two requests trip it. */
 const LIMIT = { windowMs: 60_000, max: 1 } as const
@@ -137,114 +134,19 @@ const DURABLE_ENTRIES = [
 
 type Target = (typeof ENTRIES)[number][0]
 
-/** Every bare specifier the six entries emit, measured rather than assumed. */
-const SPECIFIER_RE = /from '(npm:)?(theokit\/[a-z/-]+)'/g
-
 let workspace: string
-
-/** Resolve a published subpath the way a consumer's runtime does — through the exports map. */
-function resolvePublished(subpath: string): string {
-  const pkg = JSON.parse(readFileSync(join(THEO, 'package.json'), 'utf8')) as {
-    exports: Record<string, { import?: string } | string>
-  }
-  const entry = pkg.exports[subpath]
-  const spec = typeof entry === 'string' ? entry : entry?.import
-  if (spec === undefined) throw new Error(`theokit does not publish "${subpath}"`)
-  return resolve(THEO, spec)
-}
-
-/**
- * Rewrite every `theokit/X` to a `file://` URL under `dist`, asserting the `npm:` prefix was where
- * it belongs first. A deno entry emitting a bare specifier is its own defect, and rewriting without
- * checking would trade one blind spot for another.
- */
-function toDistSpecifiers(source: string, target: Target): string {
-  const prefixed = [...source.matchAll(SPECIFIER_RE)].filter((m) => m[1] === 'npm:')
-  if (target === 'deno-deploy') {
-    expect(prefixed.length, 'the deno entry must emit `npm:` specifiers').toBeGreaterThan(0)
-  } else {
-    expect(prefixed, `${target} must not emit npm: specifiers`).toHaveLength(0)
-  }
-  return source.replace(SPECIFIER_RE, (_all, _npm: string | undefined, bare: string) => {
-    const subpath = bare.replace(/^theokit/, '.')
-    return `from ${JSON.stringify(pathToFileURL(resolvePublished(subpath)).href)}`
-  })
-}
-
-/** Write one entry into its own directory, so two lanes of this suite never share a path. */
-function writeEntry(target: Target, source: string): string {
-  const dir = mkdtempSync(join(workspace, `${target}-`))
-  const file = join(dir, 'entry.mjs')
-  writeFileSync(file, toDistSpecifiers(source, target))
-  return file
-}
-
-interface Captured {
-  handler?: (
-    request: Request,
-    second?: unknown,
-  ) => Promise<Response | undefined> | Response | undefined
-}
-
-/**
- * Install what `bun` and `deno-deploy` read at module scope before `serve`.
- *
- * Every row is derived from the guards, not guessed: `bun.ts:49-52` exits unless `NODE_ENV` is
- * production, `:55-58` unless `Bun` exists, `:59-65` unless `Bun.version` parses to >= 1.1, and
- * `deno-deploy.ts:63-65` throws unless `Deno` exists, `:69-70` reads `Deno.env.get` and `Deno.cwd`.
- */
-function installRuntimeStubs(captured: Captured): () => void {
-  const g = globalThis as Record<string, unknown>
-  const before = { Bun: g.Bun, Deno: g.Deno, env: process.env.NODE_ENV }
-  process.env.NODE_ENV = 'production'
-  g.Bun = {
-    version: '1.2.0',
-    file: () => ({ exists: async () => false }),
-    serve: (o: { fetch?: Captured['handler'] }) => {
-      captured.handler = o.fetch
-      return { stop: () => undefined }
-    },
-  }
-  g.Deno = {
-    env: { get: () => undefined },
-    cwd: () => workspace,
-    serve: (_o: unknown, h?: Captured['handler']) => {
-      captured.handler = h
-      return { finished: Promise.resolve() }
-    },
-  }
-  return () => {
-    g.Bun = before.Bun
-    g.Deno = before.Deno
-    process.env.NODE_ENV = before.env
-  }
-}
 
 /**
  * Load an emitted entry and return a driver that sends ONE request and answers with its status.
- *
- * Six targets, six calling conventions and three response shapes — which is the whole reason this
- * file exists. `cloudflare` and `netlify` export a handler returning a `Response`; `bun` and
- * `deno-deploy` export nothing and hand theirs to `serve`; `vercel` returns undefined and drains
- * into `nodeRes`; `aws-lambda` returns a v2 result object. A driver that only knew one of them
- * would report the other five as passing without exercising anything.
+ * The loading and the six calling conventions live in `_helpers/drive-deployed-entry.ts`; what
+ * stays here is the address each runtime reads, so `address: undefined` really means "nothing to
+ * key on".
  */
 async function load(
   target: Target,
   source: string,
 ): Promise<(address: string | undefined, extra?: Record<string, string>) => Promise<number>> {
-  const file = writeEntry(target, source)
-  const captured: Captured = {}
-  const restore = installRuntimeStubs(captured)
-  let mod: Record<string, unknown>
-  try {
-    mod = (await import(/* @vite-ignore */ pathToFileURL(file).href)) as Record<string, unknown>
-  } finally {
-    restore()
-  }
-
-  const url = 'https://app.test/api/thing'
-  /** The header each runtime reads, so `address: undefined` really means "nothing to key on". */
+  const drive = await loadDeployedEntry(target, source, workspace)
   function headersFor(
     address: string | undefined,
     extra: Record<string, string> = {},
@@ -255,81 +157,8 @@ async function load(
     if (target === 'cloudflare') return { 'cf-connecting-ip': address, ...extra }
     return { 'x-forwarded-for': address, ...extra }
   }
-
-  if (target === 'aws-lambda') {
-    const handler = mod.handler as (event: unknown) => Promise<{ statusCode: number }>
-    return async (address, extra) => {
-      const result = await handler({
-        requestContext: { http: { method: 'GET', path: '/api/thing', sourceIp: address } },
-        headers: headersFor(address, extra),
-        rawPath: '/api/thing',
-      })
-      return result.statusCode
-    }
-  }
-
-  if (target === 'vercel') {
-    const handler = mod.default as (req: unknown, res: unknown) => Promise<void>
-    return async (address, extra) => {
-      let status = 0
-      const res = {
-        writeHead: (s: number) => {
-          status = s
-          return res
-        },
-        flushHeaders: () => undefined,
-        write: () => true,
-        end: () => res,
-        once: () => res,
-        off: () => res,
-        destroy: () => res,
-      }
-      await handler(
-        {
-          method: 'GET',
-          url: '/api/thing',
-          headers: { host: 'app.test', ...headersFor(address, extra) },
-        },
-        res,
-      )
-      return status
-    }
-  }
-
-  // The three Web-shaped ones, plus the two whose handler the `serve` stub captured. `second` is
-  // the runtime source each expects: netlify's context, deno's serve info, bun's server.
-  const exported =
-    typeof mod.default === 'function'
-      ? (mod.default as Captured['handler'])
-      : (mod.default as { fetch?: Captured['handler'] } | undefined)?.fetch
-  const handler = captured.handler ?? exported
-  expect(handler, `${target} exposes no drivable handler`).toBeTypeOf('function')
-  // `!` after the assertion above, not instead of it: if the handler is absent the expect()
-  // has already failed the test, so nothing downstream can run on a nullish value.
-  const drivable = handler!
-
-  const second = (address: string | undefined): unknown => {
-    // `bun` gets a `server` either way: `Bun.serve` always passes one, so an absent object is a
-    // fixture that could not happen. What CAN happen is `requestIP` returning nothing — a
-    // connection already gone — and that is the unnameable case for this target.
-    if (target === 'bun')
-      return { requestIP: () => (address === undefined ? undefined : { address }) }
-    if (address === undefined) return undefined
-    if (target === 'netlify') return { ip: address }
-    if (target === 'deno-deploy') return { remoteAddr: { hostname: address } }
-    return undefined
-  }
-
-  return async (address, extra) => {
-    const response = await drivable(
-      new Request(url, { headers: headersFor(address, extra) }),
-      second(address),
-    )
-    // The four Web-shaped targets always answer with a `Response`; the one that returns nothing
-    // is `vercel`, and it took the branch above. An `undefined` here is a defect in the emitted
-    // entry, and `!` surfaces it as a TypeError naming this line rather than as a silent NaN.
-    return response!.status
-  }
+  return async (address, extra) =>
+    (await drive({ path: '/api/thing', headers: headersFor(address, extra), address })).status
 }
 
 describe('every deployed entry limits its caller (B-027, T0.1)', () => {

@@ -98,6 +98,8 @@ const EXPECTED: Record<BuildTarget, readonly ConfigConcern[] | 'runtime-not-emit
     'securityHeaders',
     'cors',
     'jobs',
+    // #1097 — `theokit start` runs the `ready` probe; the Web targets fail `/__theo/ready` closed.
+    'ready',
   ],
   vercel: ['securityHeaders', 'csrf', 'disallowed', 'cors', 'serialization'],
   cloudflare: ['securityHeaders', 'csrf', 'disallowed', 'cors', 'serialization', 'plugins'],

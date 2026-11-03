@@ -96,6 +96,7 @@ export const extractTraceIdFromRequest = () => 't'
 export const TRACE_HEADER = 'x-trace-id'
 export const createCorsWebHandler = () => null
 export const executeRoute = (...a) => b().executeRoute(...a)
+export const serveReservedRoute = async () => null
 export const resolveTransformer = (...a) => b().resolveTransformer(...a)
 export const createPluginRunnerFromConfig = async (plugins) => {
   if (!Array.isArray(plugins) || plugins.length === 0) return undefined

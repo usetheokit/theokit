@@ -32,6 +32,7 @@ export const scanWebSocketRoutes = () => []
 export const matchRoute = () => null
 export const compilePattern = () => ({})
 export const executeRoute = () => {}
+export const serveReservedRoute = async () => null
 export const createProductionLoader = () => async () => ({ default: {} })
 export const createWebShim = () => ({ req: { headers: {} }, res: { setHeader() {} }, toResponse: () => new Response('r') })
 export const generateNonce = () => 'n'

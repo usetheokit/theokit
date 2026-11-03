@@ -111,6 +111,7 @@ export const matchRoute = (...a) => b().matchRoute(...a)
 export const compilePattern = (...a) => b().compilePattern(...a)
 export const createProductionLoader = (...a) => b().createProductionLoader(...a)
 export const executeRoute = (...a) => b().executeRoute(...a)
+export const serveReservedRoute = async () => null
 export const createWebShim = (...a) => b().createWebShim(...a)
 export const buildSecurityHeaders = (...a) => b().buildSecurityHeaders(...a)
 export const generateNonce = (...a) => b().generateNonce(...a)

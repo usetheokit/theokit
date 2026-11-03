@@ -39,6 +39,8 @@ export const nodeAdapter: DeployAdapter = {
     'cors',
     // #1009 — `theokit start` passes `jobs.backend` to every file route as `ctx.queue`.
     'jobs',
+    // #1071 — `theokit start` serves `/__theo/ready` from the `ready` probe and the jobs backend.
+    'ready',
   ],
   // B-257 — a long-lived process: the in-process counter survives between requests.
   enforcesRateLimit: 'always',
