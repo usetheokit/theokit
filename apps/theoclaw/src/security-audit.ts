@@ -63,7 +63,9 @@ function settingFindings(env: Env): Finding[] {
 }
 
 function tokenFindings(env: Env): Finding[] {
-  return ['THEOCLAW_CONTROL_TOKEN', 'THEOCLAW_WEBCHAT_TOKEN']
+  // The A2A peer tokens are named per peer (B-394, EC-6), so every set one is checked.
+  const peerTokens = Object.keys(env).filter((variable) => variable.startsWith('THEOCLAW_A2A_PEER_TOKEN_'))
+  return ['THEOCLAW_CONTROL_TOKEN', 'THEOCLAW_WEBCHAT_TOKEN', 'THEOCLAW_A2A_TOKEN', ...peerTokens]
     .filter((variable) => {
       const token = (env[variable] ?? '').trim()
       return token !== '' && token.length < MIN_TOKEN_LENGTH

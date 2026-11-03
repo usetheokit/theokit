@@ -49,6 +49,7 @@ const HOST_TOOLS = ['write_file', 'edit_file', 'apply_patch', 'shell_exec'] as c
 async function startApi(options: {
   readonly hostTools?: boolean
   readonly token?: string | undefined
+  readonly a2aToken?: string
   readonly agentFactory?: (toolOptions: AgentToolOptions) => unknown
   /** Builds a chat completion's agent, a chat agent, from the options the chat path pins. */
   readonly createChatAgent?: (agentOptions: TheoClawAgentOptions) => Promise<unknown>
@@ -59,6 +60,7 @@ async function startApi(options: {
   mkdirSync(join(handle.path, '.theoclaw'), { recursive: true })
   const env = {
     THEOCLAW_CONTROL_TOKEN: 'token' in options ? options.token : CONTROL_TOKEN,
+    ...(options.a2aToken === undefined ? {} : { THEOCLAW_A2A_TOKEN: options.a2aToken }),
     ...(options.hostTools === true ? { THEOCLAW_HOST_TOOLS: 'on' } : {}),
   }
   const extra = {
@@ -165,6 +167,19 @@ describe('createTheoClawApi, the token gate', () => {
 })
 
 describe('the API in the started process', () => {
+  it('serves HTTP and A2A on one listener while keeping their bearer tokens separate', async () => {
+    const a2aToken = 'a2a-integration-token-0123456789abcdef'
+    const { base } = await startApi({ a2aToken })
+
+    const card = await fetch(`${base}/.well-known/agent-card.json`)
+    expect(card.status).toBe(200)
+    expect(await card.json()).toMatchObject({ name: 'theoclaw' })
+    expect((await fetch(`${base}/v1/models`, { headers: bearer() })).status).toBe(200)
+    expect((await fetch(`${base}/v1/models`, { headers: bearer(a2aToken) })).status).toBe(401)
+    expect((await fetch(`${base}/a2a`, { method: 'POST', headers: bearer(), body: '{}' })).status).toBe(401)
+    expect((await fetch(`${base}/health`)).status).toBe(200)
+  })
+
   it('answers 404 on every API path when the control token is unset', async () => {
     const { base } = await startApi({ token: undefined })
 

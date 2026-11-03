@@ -31,8 +31,11 @@ import type { CreateAgent } from './control-plane/agent-factory.js'
 import { controlOptions, devicePairingFor } from './control-plane/control-wiring.js'
 import { type HttpHandler, serveHandler } from './control-plane/http-dispatch.js'
 import { type ControlPlaneHandle, listenControlPlane } from './control-plane/listener.js'
-import { readControlPlaneSettings } from './control-plane/settings.js'
+import { readControlPlaneSettings, type ControlPlaneSettings } from './control-plane/settings.js'
 import { processSecrets } from './secrets.js'
+import { a2aLines, readA2ASettings } from './a2a/a2a-settings.js'
+import { a2aRoute } from './a2a/a2a-route.js'
+import { peerTools } from './a2a/peer-tools.js'
 import { installShutdown, type SignalSource } from './control-plane/shutdown.js'
 import { formatAddress, reportSurfacesOff } from './control-plane/start-output.js'
 import { createTurnRunner } from './control-plane/turn.js'
@@ -352,6 +355,7 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
   const generations = Generations.load(sessionsFile(sessionSettings.workspace))
   const scheduleStore = loadScheduleStore(sessionSettings.workspace)
   const heartbeat = readHeartbeatSettings(options.env, platforms)
+  const a2a = readA2ASettings(options.env)
   // `SessionAgents` alone decides when a session's agent is disposed: the SDK's cache and its idle
   // sweep know nothing of a turn in flight. `Agent.create` never reads the cache, so `/control`
   // turns are unaffected.
@@ -367,7 +371,7 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
   const pairing = pairingStoreFor(policy, (line) => stderr(redactSecrets(maskSecrets(line, secrets))))
   // First, once every setting is checked: the line holds a label and a directory, never a secret.
   const instance = announceInstance(options.instance, stderr, options.importedLine)
-  const secretValues = processSecrets(options, settings, tools, events)
+  const secretValues = processSecrets(options, settings, tools, events, a2a)
   const mask = installOutputMask(secretValues, streams)
   const stdout = options.stdout ?? lineWriter(streams[0])
   const flushOnExit = (): void => mask.flush()
@@ -396,6 +400,7 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
     write: stderr,
   })
   writeToolLines(tools, stderr)
+  for (const line of a2aLines(a2a)) stderr(line)
   // The composition gets the raw factory: chat agents hold no tool, only `/control` agents do.
   const composed = composeTheoClaw({
     ...options,
@@ -411,7 +416,7 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
   const buildWorker = options.importFreeAgentFactory ?? options.agentFactory
   const beat = heartbeat === undefined ? {} : { heartbeat: heartbeatJob(sessionSettings.workspace, heartbeat) }
   scheduled = wireScheduler({ store: scheduleStore, loop: composed.loop, buildRunAgent: buildWorker, tools, platforms, ...beat, write: stderr, secrets: secretValues })
-  const extraTools = [...workflowTools(options.draftAgentFactory, stderr), ...scheduled.scheduleTools]
+  const extraTools = [...workflowTools(options.draftAgentFactory, stderr), ...scheduled.scheduleTools, ...peerTools(a2a.peers)]
   const buildControlAgent = async (): Promise<TurnAgent> =>
     options.agentFactory(controlAgentToolOptions(tools, buildWorker, extraTools))
   const { withAgent } = createContainer<TurnAgent>({ factory: buildControlAgent })
@@ -429,7 +434,13 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
   })
   const listen = options.listen ?? listenControlPlane
   serving = listen({
-    handler: serveHandler(composed.router, startWebchat(options, settings, secretValues, stderr), devices, api),
+    handler: serveHandler(
+      composed.router,
+      startWebchat(options, settings, secretValues, stderr),
+      devices,
+      api,
+      a2a.token === undefined ? undefined : a2aRoute({ token: a2a.token, buildWorker, tools, secrets: secretValues, write: stderr }),
+    ),
     port: settings.port,
     host: settings.host,
     stderr,

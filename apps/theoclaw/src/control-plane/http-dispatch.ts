@@ -1,3 +1,4 @@
+import { isA2APath } from '../a2a/a2a-route.js'
 import { isWebchatPath } from '../webchat/paths.js'
 import type { DevicePairing } from './device-pairing.js'
 import { healthHandler } from './listener.js'
@@ -15,17 +16,20 @@ export type PartialHandler = (request: Request) => Promise<Response | undefined>
  * `/webchat` paths go to WebChat when it is on and answer 404 when it is off; the HTTP API (with a
  * control token) answers its own paths; every other path goes to the webhook router, which answers
  * 404 for an API path while the API is off.
+ * `/a2a` and `/.well-known/agent-card.json` are reserved for A2A and answer 404 while it is off.
  */
 export function serveHandler(
   router: HttpHandler,
   webchat: HttpHandler | undefined,
   devices?: DevicePairing,
   api?: PartialHandler,
+  a2a?: HttpHandler,
 ): HttpHandler {
   return async (request) => {
     const { pathname } = new URL(request.url)
     if (pathname === '/health') return healthHandler(request)
     if (pathname === PAIR_PATH && devices !== undefined) return pairRoute(devices, request)
+    if (isA2APath(pathname)) return a2a === undefined ? new Response(null, { status: 404 }) : a2a(request)
     if (isWebchatPath(pathname)) return webchat === undefined ? new Response(null, { status: 404 }) : webchat(request)
     return (await api?.(request)) ?? router(request)
   }

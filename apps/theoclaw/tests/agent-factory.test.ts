@@ -231,6 +231,23 @@ describe("the chat path's agent options", () => {
 });
 
 describe("telemetry on the agent options (B-400 EC-8)", () => {
+  it("keeps hook approval on control and session agents when telemetry is enabled", async () => {
+    const env = {
+      ...MODEL_ENV,
+      THEOCLAW_APPROVED_HOOKS: APPROVED,
+      THEOCLAW_OTEL: "on",
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://127.0.0.1:4318",
+    };
+    const { create, options } = optionsRecordingCreate();
+    await createAgentFactory(env, create)();
+
+    for (const agent of [agentOptionsFor(env), sessionAgentOptions(env, "/ws"), ...options]) {
+      expect(agent.telemetry).toMatchObject({ enabled: true, includeContent: false, autoDetect: false });
+      expect(agent.local.hooks.approve?.(LISTED_HOOK)).toBe(true);
+      expect(agent.local.hooks.approve?.(UNLISTED_HOOK)).toBe(false);
+    }
+  });
+
   it("telemetry is absent with THEOCLAW_OTEL unset", async () => {
     const { create, options } = optionsRecordingCreate();
     await createAgentFactory({ THEOCLAW_MODEL: "m", THEOKIT_API_KEY: "k" }, create)();

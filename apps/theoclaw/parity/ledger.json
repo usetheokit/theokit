@@ -59,7 +59,13 @@
   },
   {
     "id": "OC-13",
-    "status": "open"
+    "status": "shipped",
+    "check": {
+      "path": "apps/theoclaw/tests/live/a2a.live.test.ts",
+      "test": "two instances exchange a task over A2A on a real model for OC-13"
+    },
+    "verified_on": "2026-11-03",
+    "note": "A2A JSON-RPC message/send with bearer peer auth and an agent card; tasks/* and streaming not served (B-394). Run on the item head with THEOCLAW_MODEL=openrouter/google/gemini-2.5-flash-lite: 1 test passed"
   },
   {
     "id": "OC-14",
@@ -584,7 +590,13 @@
   },
   {
     "id": "OC-82",
-    "status": "open"
+    "status": "shipped",
+    "check": {
+      "path": "apps/theoclaw/tests/live/control-tools.live.test.ts",
+      "test": "a real model delegates one task to a worker and gets its answer"
+    },
+    "verified_on": "2026-11-03",
+    "note": "subagents via delegate and delegate_all (B-611, B-386); sessions_spawn, sessions_send, sessions_list/history/search/yield and agents_list not shipped (B-394). Re-run on the B-394 item head with THEOCLAW_MODEL=openrouter/google/gemini-2.5-flash-lite: 1 test passed"
   },
   {
     "id": "OC-83",

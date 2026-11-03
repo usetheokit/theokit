@@ -11,3 +11,5 @@
  */
 export { createA2ATool } from './a2a/a2a-client.js'
 export type { A2AAuth, A2AToolConfig } from './a2a/a2a-client.js'
+export { createA2AJsonRpcHandler } from './a2a/a2a-json-rpc-handler.js'
+export type { A2AJsonRpcHandlerOptions } from './a2a/a2a-json-rpc-handler.js'
