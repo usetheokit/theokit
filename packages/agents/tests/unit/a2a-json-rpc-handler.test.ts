@@ -63,7 +63,7 @@ async function answer(res: Response): Promise<JsonRpcAnswer> {
 
 describe('createA2AJsonRpcHandler', () => {
   it('answers message/send with an agent message carrying the respond text and the request id', async () => {
-    const respond = vi.fn(async () => 'hello')
+    const respond = vi.fn(async (_text: string, _signal: AbortSignal) => 'hello')
     const handle = handlerWith(respond)
 
     const numeric = await answer(
@@ -203,7 +203,7 @@ describe('createA2AJsonRpcHandler', () => {
   })
 
   it('reads only the text parts of a mixed message', async () => {
-    const respond = vi.fn(async () => 'ok')
+    const respond = vi.fn(async (_text: string, _signal: AbortSignal) => 'ok')
     const handle = handlerWith(respond)
     const mixed = await answer(
       await handle(
