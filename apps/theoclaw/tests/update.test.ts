@@ -8,10 +8,9 @@ import { channelBranch, update } from '../src/update.js'
 import { cleanScratch, commit, git, harness, installLaunchAgent, installUnit, installedAt, snapshot, world } from './support/update-world.js'
 
 /**
- * `theoclaw update` (B-374, T4.1) over real git repositories in a scratch directory: a bare origin,
- * the install clone, and a second clone that pushes. Git runs for real; the install step and
- * `systemctl` are stubbed through the runner, and the stubbed install writes the installed-commit
- * marker the way `install.sh` does.
+ * `theoclaw update` (B-374, T4.1) over real git repositories in a scratch directory: a bare origin, the install clone,
+ * and a second clone that pushes. Git runs for real; the install step and `systemctl` are stubbed through the runner,
+ * and the stubbed install writes the installed-commit marker the way `install.sh` does.
  */
 
 afterEach(cleanScratch)

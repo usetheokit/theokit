@@ -3,7 +3,8 @@ import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
-import { runCommand, unitPath } from '../../../src/daemon.js'
+import { unitPath } from '../../../src/daemon.js'
+import { runCommand } from '../../../src/run-command.js'
 import { plistPath } from '../../../src/daemon-launchd.js'
 
 /**

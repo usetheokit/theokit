@@ -2,7 +2,8 @@ import { existsSync, readFileSync } from 'node:fs'
 
 import { describe, expect, it } from 'vitest'
 
-import { daemonInstall, daemonStatus, daemonUninstall, type Runner } from '../src/daemon.js'
+import { daemonInstall, daemonStatus, daemonUninstall } from '../src/daemon.js'
+import type { Runner } from '../src/run-command.js'
 import { type Harness, harness } from './support/daemon-harness.js'
 
 const WINDOWS_ENV = { USERNAME: 'dev', USERDOMAIN: 'BOX' }
