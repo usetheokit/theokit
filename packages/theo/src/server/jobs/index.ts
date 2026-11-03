@@ -13,7 +13,11 @@ export { defineJob } from './define-job.js'
 export type { JobOptions, JobContext, JobDefinition, JobRegistry } from './job-types.js'
 
 // Errors
-export { JobLeaseLostError, NonRetryableError } from './job-backend.js'
+export {
+  JobLeaseExtensionUnsupportedError,
+  JobLeaseLostError,
+  NonRetryableError,
+} from './job-backend.js'
 export { DuplicateContextKeyError } from './duplicate-context-key-error.js'
 
 // Backend contract

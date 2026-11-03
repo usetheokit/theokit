@@ -184,6 +184,13 @@ before closing storage. `jobs.worker` tunes it (`pollIntervalMs`, `batchSize`, `
 leased to one of them. To run a worker on its own, call `createJobWorker(createJobRunner(backend,
 definitions)).start()` from `theokit/server/jobs`.
 
+A job leases for `lockSeconds`, and `ctx.signal` aborts when the lease runs out, so a handler that
+may run longer than that calls `await ctx.extendLease(seconds)` while it makes progress. The
+deadline of `signal` moves with it, and the call rejects with `JobLeaseLostError` (and aborts the
+signal) if another worker holds the job by then. `PostgresJobBackend` and `InMemoryJobBackend` can
+extend a lease; a custom backend opts in with `extendLease`, and without it the call rejects with
+`JobLeaseExtensionUnsupportedError`.
+
 The pool you pass is yours, and so is its `error` listener if you attach one. A `pg.Pool` emits
 `error` when Postgres drops an idle connection, and the worker keeps idle clients in the pool. If
 the pool has no `error` listener when the backend is constructed, `PostgresJobBackend` attaches one

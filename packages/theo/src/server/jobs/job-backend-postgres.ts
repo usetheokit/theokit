@@ -130,9 +130,15 @@ export class PostgresJobBackend implements JobBackend {
    *   new PostgresJobBackend({ pool, ...options })
    *   ```
    *
-   * Errors thrown by the manager (unknown dbName, dangling server reference,
-   * manager already disposed) propagate to the caller with actionable text.
+   * With a configured manager the pool is resolved at once, so errors thrown by the manager
+   * (unknown dbName, dangling server reference, manager already disposed) propagate to the caller
+   * with actionable text.
    *
+   * Called from `theo.config.ts`, where `jobs.backend` is declared, the manager has no
+   * configuration yet: the framework applies the config's `storage` block only after the module has
+   * been evaluated. The pool is then resolved on the first query, which `theokit start` and `theokit
+   * dev` make when they create the table at boot, and the same errors surface there
+   * (usetheokit/theokit#1133).
    */
   static fromStorageManager(
     manager: StorageManager,
@@ -140,8 +146,16 @@ export class PostgresJobBackend implements JobBackend {
     factory: PostgresFactory,
     options?: Omit<PostgresJobBackendOptions, 'pool'>,
   ): PostgresJobBackend {
-    const pool = manager.usePostgres(dbName, factory)
-    return new PostgresJobBackend({ pool, ...options })
+    if (manager.isConfigured()) {
+      return new PostgresJobBackend({ pool: manager.usePostgres(dbName, factory), ...options })
+    }
+    let pool: PoolLike | undefined
+    const resolve = (): PoolLike => (pool ??= manager.usePostgres(dbName, factory))
+    return new PostgresJobBackend({
+      // The manager owns the pool and drains it on dispose, so the proxy has no `end`.
+      pool: { query: (sql, params) => resolve().query(sql, params) },
+      ...options,
+    })
   }
 
   /**
@@ -354,6 +368,27 @@ export class PostgresJobBackend implements JobBackend {
     if (fence?.leaseToken !== undefined && r.rows.length === 0) {
       throw new JobLeaseLostError(jobId, 'ack')
     }
+  }
+
+  /**
+   * Keep a lease for `lockSeconds` more, counted from the database clock, and return the new
+   * deadline. The write is fenced by the lease token, so a worker whose lease expired and was handed
+   * to another cannot extend the new holder's lock (usetheokit/theokit#1132).
+   */
+  async extendLease(
+    jobId: string,
+    opts: { leaseToken: string; lockSeconds: number },
+  ): Promise<Date> {
+    const r = await this.#pool.query<{ locked_until: Date | string }>(
+      `UPDATE ${this.#table}
+       SET locked_until = NOW() + ($3 || ' seconds')::interval
+       WHERE id = $1 AND lease_token = $2 AND failed_at IS NULL
+       RETURNING locked_until`,
+      [jobId, opts.leaseToken, opts.lockSeconds.toString()],
+    )
+    if (r.rows.length === 0) throw new JobLeaseLostError(jobId, 'extend')
+    const until = r.rows[0].locked_until
+    return until instanceof Date ? until : new Date(until)
   }
 
   /**

@@ -6,19 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-## [create-theokit 3.0.28, theokit 0.77.4] - 2026-11-03
+### Added
 
-Released with no entry under `[Unreleased]`. Per-package detail is in each package's
-own `CHANGELOG.md`.
-
-## [create-theokit 3.0.27, theokit 0.77.3] - 2026-11-03
+- `theokit`: a job handler can extend its lease with `ctx.extendLease(seconds)`. `lockSeconds` is one value for the whole worker, so a job that may run for 30 minutes forced a one-hour lock on every job. A handler that is still making progress now keeps the job, and `ctx.signal` moves with the lease. `JobBackend` gains an optional `extendLease`, implemented by `PostgresJobBackend` and `InMemoryJobBackend` (#1132)
 
 ### Fixed
 
-- `theokit`: a server action gets `ctx.queue` when `jobs.backend` is set, under `theokit start` and `theokit dev`, with the outbox rule routes already had: the job reaches the backend after a successful response and is discarded when the action fails. The handler `ctx` of `action()` and `defineAction` is typed `RouteContext`, like a route's. Actions had neither: `ctx` was `unknown` and `ctx.queue` was `undefined` at runtime (#1096)
-- `theokit`: the entries the `vercel`, `netlify`, `cloudflare`, `bun`, `deno-deploy` and `aws-lambda` targets emit answer `GET /__theo/health` (200) and `GET /__theo/ready` with the JSON envelope `theokit start` uses, and the Vercel and Netlify routing sends both paths to the function. Both fell through to the SPA document and answered `200 text/html`, so a health check read any instance as ready. A `ready` probe in `theo.config.ts` cannot be carried to these targets: `theokit build` now names it as not applied, and `/__theo/ready` answers 503 instead of claiming ready (#1097)
+- `theokit`: `PostgresJobBackend.fromStorageManager` can be called in `theo.config.ts`, where `jobs.backend` is declared. The framework applies the config's `storage` block only after the module has been evaluated, so the call failed with `Database "main" not configured`. With an unconfigured manager the pool is now resolved on the first query, and the same errors surface there. `StorageManager` gains `isConfigured()` (#1133)
+- `theokit`: `theokit dev` reads `PORT`, with the same precedence `theokit start` has: `--port`, then `PORT`, then `port` in `theo.config.ts`. It listened on `config.port` whatever `PORT` said. Both commands now resolve the port through one function (#1134)
 
-## [create-theokit 3.0.26, theokit 0.77.2] - 2026-11-03
+## [create-theokit 3.0.28, theokit 0.77.4] - 2026-11-03
 
 ### Fixed
 

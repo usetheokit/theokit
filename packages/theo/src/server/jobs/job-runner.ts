@@ -6,6 +6,7 @@ import {
 
 import {
   type JobBackend,
+  JobLeaseExtensionUnsupportedError,
   type JobLease,
   JobLeaseLostError,
   NonRetryableError,
@@ -71,7 +72,7 @@ export function createJobRunner(
     byName.set(def.name, def)
   }
 
-  const runOne = async (lease: JobLease): Promise<void> => {
+  const runOne = async (lease: JobLease, lockSeconds: number): Promise<void> => {
     const def = byName.get(lease.name)
     if (!def) {
       // Job name not registered in this runner's definition set. Nack
@@ -114,20 +115,40 @@ export function createJobRunner(
     }
 
     const abortController = new AbortController()
-    // Auto-abort when lease expires
-    const lockMs = lease.lockExpiresAt.getTime() - Date.now()
-    const lockTimer = setTimeout(
-      () => {
-        abortController.abort()
-      },
-      Math.max(0, lockMs),
-    )
+    // Auto-abort when the lease expires. `extendLease` moves the deadline, so the timer is re-armed.
+    let lockTimer: ReturnType<typeof setTimeout> | undefined
+    const armLockTimer = (expiresAt: Date): void => {
+      lockTimer = setTimeout(
+        () => {
+          abortController.abort()
+        },
+        Math.max(0, expiresAt.getTime() - Date.now()),
+      )
+    }
+    armLockTimer(lease.lockExpiresAt)
 
     const jobCtx: JobContext = {
       traceId,
       input: parsedInput,
       signal: abortController.signal,
       attempt: lease.attempts,
+      async extendLease(seconds = lockSeconds) {
+        if (backend.extendLease === undefined || lease.leaseToken === undefined) {
+          throw new JobLeaseExtensionUnsupportedError(backend.name)
+        }
+        try {
+          const until = await backend.extendLease(lease.jobId, {
+            leaseToken: lease.leaseToken,
+            lockSeconds: seconds,
+          })
+          clearTimeout(lockTimer)
+          armLockTimer(until)
+        } catch (err) {
+          // Another worker holds the job now: this handler must stop.
+          if (err instanceof JobLeaseLostError) abortController.abort()
+          throw err
+        }
+      },
     }
 
     let failure: unknown
@@ -160,14 +181,12 @@ export function createJobRunner(
 
   return {
     async tick(opts) {
-      const leases = await backend.dequeue({
-        batchSize: opts?.batchSize ?? 10,
-        lockSeconds: opts?.lockSeconds ?? 30,
-      })
+      const lockSeconds = opts?.lockSeconds ?? 30
+      const leases = await backend.dequeue({ batchSize: opts?.batchSize ?? 10, lockSeconds })
       // Process leases sequentially — caller controls concurrency via
       // batchSize and tick frequency.
       for (const lease of leases) {
-        await runOne(lease)
+        await runOne(lease, lockSeconds)
       }
       return leases.length
     },

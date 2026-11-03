@@ -15,6 +15,7 @@ import { orchestrateDev } from '../../services/index.js'
 import { theoPluginAsync } from '../../vite-plugin/index.js'
 import { preflightNodeAndBindings } from '../preflight-node-version.js'
 
+import { resolveListenPort } from './resolve-listen-port.js'
 import { configureStorageManagerFromConfig } from './start/bootstrap-stages.js'
 import { loadCronModules } from './start/cron-bootstrap.js'
 import { loadJobModules, prepareJobBackend, startJobWorker } from './start/job-bootstrap.js'
@@ -98,7 +99,7 @@ export async function startDevServer(cwd: string, options?: DevOptions): Promise
   // LRU + idle eviction natively (configurable via theo.config.ts >
   // agents.registry; lazy-configured on first request).
 
-  const port = options?.port ?? config.port
+  const port = resolveListenPort(options?.port, process.env, config.port)
   // Narrow the rateLimit union: only the legacy flat shape (windowMs+max)
   // flows into the theoPlugin's RateLimitConfig parameter. The per-route
   // variant is consumed inside the api-middleware via the loaded user

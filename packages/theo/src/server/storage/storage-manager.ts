@@ -224,6 +224,14 @@ export class StorageManager {
   }
 
   /** @internal Introspection helper for tests. */
+  /**
+   * Whether `configure()` has been applied. A `theo.config.ts` is evaluated before the framework
+   * applies its own `storage` block, so anything built there sees `false`.
+   */
+  isConfigured(): boolean {
+    return this.#config !== undefined
+  }
+
   __isConfiguredForTests(): boolean {
     return this.#config !== undefined
   }
