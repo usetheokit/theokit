@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Changed
 
 - `theokit`: requires `@theokit/sdk` ^5.13.0, the floor `@theokit/agents` now declares for the sandbox surface (#1130, #1131)
+- `create-theokit`: the default scaffold installs `@theokit/sdk` ^5.13.0, the floor `theokit` now declares (#1130, #1131)
 
 ## [create-theokit 3.0.29, theokit 0.78.0] - 2026-11-03
 
