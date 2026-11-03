@@ -109,6 +109,8 @@ describe("registered telemetry (FR-006, NFR-004)", () => {
     expect(names).toContain("theokit_llm_call_duration_ms");
   });
 
+  // The turn keeps its 1000 ms regression budget below; the test also awaits exporter shutdown,
+  // whose own timeout is 5000 ms, so the harness deadline must allow that cleanup to finish.
   it("an unreachable endpoint does not fail the turn", async () => {
     const model = await stub();
     const lines: string[] = [];
@@ -127,7 +129,7 @@ describe("registered telemetry (FR-006, NFR-004)", () => {
       expect(line).toMatch(/^theoclaw: telemetry export failed: /);
       expect(line.split("\n")).toHaveLength(1);
     }
-  });
+  }, 15_000);
 
   it("an export failure line carries no credential of the endpoint's URL", async () => {
     const lines: string[] = [];

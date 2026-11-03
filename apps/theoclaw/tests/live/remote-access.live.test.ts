@@ -21,8 +21,8 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import WebSocket from 'ws'
 
 import { type RunningTheoClaw, startTheoClaw } from '../../src/composition.js'
-import { createTheoClawAgent } from '../../src/agent/create-agent.js'
-import { createAgentFactory, type TheoClawAgentOptions } from '../../src/control-plane/agent-factory.js'
+import { createTheoClawAgent, type TheoClawAgentOptions } from '../../src/agent/create-agent.js'
+import { createAgentFactory } from '../../src/control-plane/agent-factory.js'
 import { useForwardCleanup } from './support/forward-cleanup.js'
 import { findBinary, openSshForward, type SshForward, waitForForward } from './support/ssh-forward.js'
 
