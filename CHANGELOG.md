@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- `theokit`: `theokit dev` reads `PORT`, with the same precedence `theokit start` has: `--port`, then `PORT`, then `port` in `theo.config.ts`. It listened on `config.port` whatever `PORT` said. Both commands now resolve the port through one function (#1134)
+
 ## [create-theokit 3.0.28, theokit 0.77.4] - 2026-11-03
 
 ### Fixed
