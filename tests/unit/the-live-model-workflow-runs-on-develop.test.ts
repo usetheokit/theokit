@@ -73,8 +73,9 @@ describe('live-model.yml', () => {
     expect(Object.keys(WORKFLOW.jobs).sort((a, b) => a.localeCompare(b))).toEqual([
       'live-model',
       'theoclaw-container',
+      'theoclaw-daemon',
     ])
-    expect(JOBS).toHaveLength(2)
+    expect(JOBS).toHaveLength(3)
     expect(JOB['timeout-minutes']).toBe(10)
   })
 

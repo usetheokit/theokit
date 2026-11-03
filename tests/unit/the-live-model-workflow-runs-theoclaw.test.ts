@@ -55,13 +55,17 @@ describe('live-model.yml for TheoClaw', () => {
     expect(container.if).toBe(
       "github.event_name == 'workflow_dispatch' && inputs.suite == 'theoclaw-container'",
     )
-    expect(JOB.if).toBe("inputs.suite != 'theoclaw-container'")
+    expect(JOB.if).toBe("inputs.suite != 'theoclaw-container' && inputs.suite != 'theoclaw-daemon'")
     const dispatch = WORKFLOW.on.workflow_dispatch as {
       inputs: { suite: { type: string; default: string; options: string[] } }
     }
     expect(dispatch.inputs.suite.type).toBe('choice')
     expect(dispatch.inputs.suite.default).toBe('live-model')
-    expect(dispatch.inputs.suite.options).toEqual(['live-model', 'theoclaw-container'])
+    expect(dispatch.inputs.suite.options).toEqual([
+      'live-model',
+      'theoclaw-container',
+      'theoclaw-daemon',
+    ])
   })
 
   // S-004 loop-test-audit (TP-D2-skipped): apps/theoclaw/tests/live/*.live.test.ts skip unless
