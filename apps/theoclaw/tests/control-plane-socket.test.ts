@@ -40,6 +40,9 @@ interface StubScript {
   readonly sendError?: Error;
   /** Called right before the first message is yielded. */
   readonly onFirstYield?: () => void;
+  /** What `wait()` reports the run used and cost (B-400). */
+  readonly usage?: { readonly inputTokens: number; readonly outputTokens: number };
+  readonly cost?: { readonly amountUsd: number | undefined };
 }
 
 function stubAgent(script: StubScript): TurnAgent {
@@ -54,7 +57,11 @@ function stubAgent(script: StubScript): TurnAgent {
             if (index === 0 && script.gate !== undefined) await script.gate.promise;
           }
         },
-        wait: async () => ({ status: script.status ?? "finished" }),
+        wait: async () => ({
+          status: script.status ?? "finished",
+          ...(script.usage === undefined ? {} : { usage: script.usage }),
+          ...(script.cost === undefined ? {} : { cost: script.cost }),
+        }),
         cancel: async () => undefined,
       };
     },
@@ -68,7 +75,7 @@ let settled: Promise<unknown>[] = [];
 const clients: WebSocket[] = [];
 
 /** A control plane whose agents follow `scripts` in order, one per turn. */
-async function startPlane(scripts: StubScript[], token: string = TOKEN): Promise<ControlPlaneHandle> {
+async function startPlane(scripts: StubScript[], token: string = TOKEN, model?: string): Promise<ControlPlaneHandle> {
   const agents = createContainer<TurnAgent>({
     factory: () => {
       const script = scripts[builtAgents] ?? scripts[scripts.length - 1]!;
@@ -76,7 +83,7 @@ async function startPlane(scripts: StubScript[], token: string = TOKEN): Promise
       return stubAgent(script);
     },
   });
-  const runner = createTurnRunner(agents.withAgent);
+  const runner = createTurnRunner(agents.withAgent, [], model);
   const runTurn: typeof runner = (message, emit) => {
     const outcome = runner(message, emit);
     settled.push(outcome);
@@ -245,6 +252,38 @@ describe("the /control socket", () => {
     expect(texts).toEqual(["first", "second"]);
     expect(frames.at(-1)).toEqual({ type: "done" });
     expect(builtAgents).toBe(1);
+  });
+
+  it("the done frame of a finished turn carries the usage record", async () => {
+    await startPlane(
+      [{ messages: [text("hi"), finished], usage: { inputTokens: 12, outputTokens: 3 }, cost: { amountUsd: 0.001 } }],
+      TOKEN,
+      "stub/model",
+    );
+    const client = await connect();
+
+    client.send({ type: "chat", message: "hello" });
+    const frames = await client.until(turnEnded, "the end of the turn");
+
+    expect(finalFrames(frames)).toEqual([
+      { type: "done", usage: { inputTokens: 12, outputTokens: 3 }, model: "stub/model", costUsd: 0.001 },
+    ]);
+  });
+
+  it("the done frame of an unpriced turn says so and carries no cost", async () => {
+    await startPlane(
+      [{ messages: [text("hi"), finished], usage: { inputTokens: 2, outputTokens: 1 }, cost: { amountUsd: undefined } }],
+      TOKEN,
+      "stub/model",
+    );
+    const client = await connect();
+
+    client.send({ type: "chat", message: "hello" });
+    const frames = await client.until(turnEnded, "the end of the turn");
+
+    expect(finalFrames(frames)).toEqual([
+      { type: "done", usage: { inputTokens: 2, outputTokens: 1 }, model: "stub/model", costUnpriced: true },
+    ]);
   });
 
   it("a successful turn ends with exactly one final frame, done", async () => {

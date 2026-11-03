@@ -9,6 +9,7 @@ import {
 
 import type { TurnAgent, TurnRun } from '../agent-port.js'
 import { untrustedContentSendOptions } from '../agent/untrusted-content.js'
+import { maskSecrets } from '../channels/channel-loop.js'
 import { createEventMask } from './event-mask.js'
 import { outcomeOf, type TurnEvent, type TurnOutcome } from './turn.js'
 
@@ -25,6 +26,8 @@ export interface SessionTurnOptions {
   readonly onEventsEnded: () => void
   /** Values no event may carry (`processSecrets`, B-398 FR-007). Default: none. */
   readonly secrets?: readonly string[]
+  /** The model the agents run; a finished turn's outcome carries its usage only with it (B-400). */
+  readonly model?: string
 }
 
 /** Every translated event of the run, live text deltas included; the first streamed error's code. */
@@ -63,5 +66,6 @@ export async function runSessionTurn(agent: TurnAgent, options: SessionTurnOptio
   // An interrupted turn emits nothing more: what the mask still holds is dropped, never sent.
   if (!options.signal.aborted) mask.flush()
   options.onEventsEnded()
-  return outcomeOf(await run.wait(), streamedError)
+  const model = options.model === undefined ? undefined : maskSecrets(options.model, options.secrets ?? [])
+  return outcomeOf(await run.wait(), streamedError, model)
 }

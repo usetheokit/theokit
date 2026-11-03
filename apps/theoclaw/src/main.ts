@@ -11,8 +11,10 @@ import { type CreateAgent, createAgentFactory, createChannelAgentFactory } from 
 import { loadConfiguration } from './config-file.js'
 import { parseEntryArguments } from './entry-arguments.js'
 import { describeError } from './control-plane/errors.js'
-import { applyInstance, resolveInstance, type TheoClawInstance } from './instance.js'
+import { resolveInstance, type TheoClawInstance } from './instance.js'
 import { importedMcpPaths, importedMcpSecrets, importedSetupLine, readImportAtStart, requireImportedMcp } from './migration/import-start.js'
+import { claimInstance } from './backup/instance-lock.js'
+import { readTelemetrySettings, registerTelemetry, type RegisteredTelemetry } from './telemetry/otel.js'
 
 /**
  * The process entry: the real environment, signals, exit and output streams, and the `/control`
@@ -30,6 +32,9 @@ import { importedMcpPaths, importedMcpSecrets, importedSetupLine, readImportAtSt
  * Nothing imports this file, so
  * `tests/live/instance-profiles.live.test.ts` is what proves the order.
  */
+/** How long the exit waits for telemetry to export what is pending. */
+const TELEMETRY_SHUTDOWN_MS = 2_000
+
 function fail(error: unknown): never {
   process.stderr.write(`theoclaw: ${describeError(error)}\n`)
   process.exit(1)
@@ -37,6 +42,7 @@ function fail(error: unknown): never {
 
 let instance: TheoClawInstance
 let imported: AgentImport | undefined
+let telemetry: RegisteredTelemetry
 try {
   // The arguments first: a scheduled task passes its configuration as arguments, not as environment.
   const parsed = parseEntryArguments(process.argv.slice(2), process.env)
@@ -47,11 +53,16 @@ try {
   // The configuration file next (B-374): it fills only what the environment leaves unset.
   loadConfiguration(process.env, homedir())
   instance = resolveInstance(process.env, { homeDir: homedir() })
-  applyInstance(instance, process.env)
+  // The instance lock before `applyInstance` creates the targets (B-400 FR-010): a start refused
+  // while a backup or a restore runs leaves both as they were. Released when the process exits.
+  const release = claimInstance(instance, process.env)
+  if (release !== undefined) process.once('exit', release)
   // After the instance, so a profile's own state directory is the one read (FR-010, FR-011).
   const mcp = requireImportedMcp(process.env)
   const setup = readImportAtStart(process.env, (line) => process.stderr.write(`${line}\n`))
   imported = setup === undefined ? undefined : { setup, mcp }
+  // Before any agent exists, so every agent records through the providers (B-400 FR-006).
+  telemetry = registerTelemetry(readTelemetrySettings(process.env), { write: (line) => process.stderr.write(`${line}\n`) })
 } catch (error) {
   fail(error)
 }
@@ -79,5 +90,9 @@ startTheoClaw({
   // A trigger run's agent (B-397): the chat path's factory too, a fresh one per run, in the workspace.
   triggerAgentFactory: createChannelAgentFactory(process.env, createSdkAgent),
   signals: process,
-  exit: (code) => process.exit(code),
+  // What is pending is exported first, for at most the bound, so a down collector cannot hold the exit.
+  exit: (code) =>
+    void Promise.race([telemetry.shutdown(), new Promise((resolve) => setTimeout(resolve, TELEMETRY_SHUTDOWN_MS).unref())]).finally(() =>
+      process.exit(code),
+    ),
 }).catch(fail)

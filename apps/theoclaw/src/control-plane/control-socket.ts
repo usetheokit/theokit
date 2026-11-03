@@ -9,6 +9,7 @@ import type { DevicePairing } from './device-pairing.js'
 import type { ControlSessions, SessionOutcome } from './control-sessions.js'
 import { describeError, TheoClawConfigError } from './errors.js'
 import { MAX_MESSAGE_BYTES } from './limits.js'
+import { formatUsageLine, type TurnUsage, usageFrameFields } from '../usage/turn-usage.js'
 import type { TurnRunner } from './turn.js'
 
 export interface ControlSocketOptions {
@@ -93,9 +94,17 @@ function parseFrame(raw: { toString(): string }, isBinary: boolean): Frame | und
   return session === undefined ? { kind: 'chat', message } : { kind: 'chat', message, session }
 }
 
+/** A finished turn's `done` frame: its usage record when the runner priced it, and one usage line (FR-003, FR-004). */
+function done(usage: TurnUsage | undefined, stderr: (line: string) => void, session?: string): Record<string, unknown> {
+  const frame = session === undefined ? { type: 'done' } : { type: 'done', session }
+  if (usage === undefined) return frame
+  stderr(formatUsageLine('control', usage))
+  return { ...frame, ...usageFrameFields(usage) }
+}
+
 /** The final frame of a session turn, and the stderr line an interrupted or failed one writes. */
 function sessionEnd(session: string, outcome: SessionOutcome, stderr: (line: string) => void): Record<string, unknown> {
-  if (outcome.ok) return { type: 'done', session }
+  if (outcome.ok) return done(outcome.usage, stderr, session)
   if (outcome.code === 'interrupted') {
     stderr(`theoclaw: control session ${session} turn interrupted`)
     return { type: 'interrupted', session }
@@ -135,7 +144,7 @@ function serve(
       .then(() => options.runTurn(message, (event) => send({ type: 'event', event })))
       .catch((error: unknown) => ({ ok: false, code: 'turn_failed', reason: describeError(error) }) as const)
       .then((outcome) => {
-        if (outcome.ok) return send({ type: 'done' })
+        if (outcome.ok) return send(done(outcome.usage, stderr))
         stderr(`theoclaw: turn failed: ${outcome.reason}`)
         send({ type: 'error', code: outcome.code })
       })

@@ -11,18 +11,17 @@ import { Agent } from '@theokit/sdk'
 import type { AgentOptions, CustomTool, SDKAgent } from '@theokit/sdk'
 
 import { createContainer } from './agent-container.js'
-import { createOwnerPolicyHook } from './authorization/owner-policy-hook.js'
 import { createPairingStore, type PairingStore } from './authorization/pairing-store.js'
 import {
   type AuthorizationPolicy,
   isAuthenticatedSender,
-  isPolicyOwner,
   parseAuthorizationPolicy,
 } from './authorization/policy.js'
 import { type AdapterBuildOptions, adapterBuilders } from './channels/adapter-factory.js'
 import { createBroadcastGroups } from './channels/broadcast-groups.js'
 import { maskSecrets, startChannelLoop } from './channels/channel-loop.js'
-import { createGroupActivationHook } from './channels/group-activation-hook.js'
+import { channelHooks } from './channel-hooks.js'
+import { createUsageHook } from './channels/usage-hook.js'
 import type { ChannelLoop, PlatformBuild } from './channels/channel-loop.js'
 import { installOutputMask, type MaskableStream } from './channels/output-mask.js'
 import { type ConfiguredPlatform, resolvePlatforms } from './channels/platforms.js'
@@ -175,17 +174,8 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
   const maskedWrite = (line: string): void => options.write(redactSecrets(maskSecrets(line, secrets)))
   // The store exists only with a state directory; the hook runs without one under the other policies.
   const pairing = options.pairing ?? pairingStoreFor(policy, maskedWrite)
-  const ownerPolicy = createOwnerPolicyHook({
-    policy,
-    ...(pairing === undefined ? {} : { pairing }),
-    write: maskedWrite,
-  })
-  // Runs after the owner policy, so only owners and paired senders reach it (FR-007).
-  const groupActivation = createGroupActivationHook({
-    isOwner: (platform, senderId) => isPolicyOwner(policy, platform, senderId),
-    mode: policy.groupActivation,
-    write: maskedWrite,
-  })
+  const usage = createUsageHook({ keyOf: chat.keyOf })
+  const model = options.env.THEOCLAW_MODEL
   const deps: WebhookDeps = {
     write: maskedWrite,
     verifierFactory: options.teamsVerifierFactory ?? teamsActivityVerifier,
@@ -205,6 +195,7 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
       withAgent: chat.withAgent,
       reset: (event) => chat.sessions.reset(event),
       secrets,
+      ...(model === undefined ? {} : { usage: { modeFor: usage.modeFor, model, write: maskedWrite } }),
       // `loop` is read per message, after it exists: a member whose platform has not started is
       // reported as not delivered.
       broadcast: {
@@ -214,7 +205,7 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
       },
       goal: events.goal,
     }),
-    hooks: [ownerPolicy, groupActivation],
+    hooks: channelHooks({ policy, ...(pairing === undefined ? {} : { pairing }), write: maskedWrite, ...(model === undefined ? {} : { usage: usage.hook }) }),
     secrets,
     write: options.write,
     ...(options.startTimeoutMs === undefined ? {} : { startTimeoutMs: options.startTimeoutMs }),
@@ -330,11 +321,12 @@ function workflowTools(factory: StartOptions['draftAgentFactory'], write: (line:
  * surface, so its agents are built through the chat path's factory, as every chat agent: no tool
  * (B-382), no `shell` and memory off (B-377), whatever the `/control` turn's options become.
  */
-function startWebchat(options: StartOptions, token: string | undefined, secrets: readonly string[]): HttpHandler | undefined {
+function startWebchat(options: StartOptions, settings: ControlPlaneSettings, secrets: readonly string[], write: (line: string) => void): HttpHandler | undefined {
+  const token = settings.webchatToken
   if (token === undefined) return undefined
   const agents = createContainer<TurnAgent>({ factory: webchatAgentFactory(options.env, options.createChatAgent) })
   const assetsDir = options.webchatAssetsDir ?? WEBCHAT_ASSETS_DIR
-  return createWebchatRoutes({ token, runTurn: createTurnRunner(agents.withAgent, secrets), assetsDir })
+  return createWebchatRoutes({ token, runTurn: createTurnRunner(agents.withAgent, secrets, settings.model), assetsDir, write })
 }
 
 /**
@@ -426,13 +418,13 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
   const devices = devicePairingFor(policy.stateDir, settings.controlToken, stderr)
   const listen = options.listen ?? listenControlPlane
   serving = listen({
-    handler: serveHandler(composed.router, startWebchat(options, settings.webchatToken, secretValues), devices),
+    handler: serveHandler(composed.router, startWebchat(options, settings, secretValues, stderr), devices),
     port: settings.port,
     host: settings.host,
     stderr,
     ...(settings.controlToken === undefined
       ? {}
-      : { control: controlOptions(settings.controlToken, withAgent, buildControlAgent, stderr, secretValues, devices) }),
+      : { control: controlOptions(settings.controlToken, withAgent, buildControlAgent, stderr, secretValues, devices, settings.model) }),
   })
   let handle: ControlPlaneHandle
   try {

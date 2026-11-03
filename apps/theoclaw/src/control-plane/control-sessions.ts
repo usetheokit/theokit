@@ -29,6 +29,8 @@ export interface ControlSessionsOptions {
   readonly report: (line: string) => void
   /** Values no session turn's event may carry (`processSecrets`, B-398 FR-007). Default: none. */
   readonly secrets?: readonly string[]
+  /** The model the session agents run; a finished turn's outcome carries its usage only with it (B-400). */
+  readonly model?: string
 }
 
 export interface ControlSessions {
@@ -208,6 +210,7 @@ export function createControlSessions(options: ControlSessionsOptions): ControlS
       signal: turn.controller.signal,
       emit,
       secrets: options.secrets ?? [],
+      ...(options.model === undefined ? {} : { model: options.model }),
       onRun: (run) => {
         turn.run = run
         if (turn.cancelRequested) cancelRun(run)

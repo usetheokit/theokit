@@ -17,11 +17,12 @@ export function controlOptions(
   report: (line: string) => void,
   secrets: readonly string[] = [],
   devices?: DevicePairing,
+  model?: string,
 ): ControlSocketOptions {
   return {
     token,
-    runTurn: createTurnRunner(withAgent, secrets),
-    sessions: createControlSessions({ build, report, secrets }),
+    runTurn: createTurnRunner(withAgent, secrets, model),
+    sessions: createControlSessions({ build, report, secrets, ...(model === undefined ? {} : { model }) }),
     ...(devices === undefined ? {} : { devices }),
   }
 }

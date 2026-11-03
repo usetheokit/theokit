@@ -136,7 +136,12 @@ export interface FakeTurn {
   /** Thrown by the stream after its frames. */
   readonly streamError?: Error
   /** What `wait()` resolves. Default `{ status: 'finished' }`. */
-  readonly result?: { readonly status: string; readonly error?: { readonly code?: string } }
+  readonly result?: {
+    readonly status: string
+    readonly error?: { readonly code?: string }
+    readonly usage?: { readonly inputTokens?: number; readonly outputTokens?: number }
+    readonly cost?: { readonly amountUsd?: number | undefined }
+  }
   /** The stream waits on this before its first frame; an aborted signal releases it. */
   readonly before?: Promise<void>
   /** `send` waits on this before it returns the run (the pending window of EC-1). */

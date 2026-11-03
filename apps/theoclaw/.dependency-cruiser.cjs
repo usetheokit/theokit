@@ -79,7 +79,7 @@ module.exports = {
       to: { path: '^src/(main|import-main)\\.ts$' },
     },
     {
-      // B-371: `composition.ts` is the only module that wires authorization into the channels. The
+      // B-371: `composition.ts` and `channel-hooks.ts` are the only modules that wire authorization into the channels. The
       // channel loop takes hooks typed `GatewayHook`, so a channel module never needs the policy.
       // Armed by `tests/authorization-wiring.test.ts`, which cruises a throwaway tree that violates it.
       name: 'channels-must-not-import-authorization',

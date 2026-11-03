@@ -37,11 +37,12 @@ export type ChatBoundary = <R>(event: MessageEvent, work: (lease: SessionLease) 
  * once two sessions are dispatched at once. The lease the boundary resolves carries no dispose, so
  * the end of the request leaves the agent open (D2).
  */
-export function chatSessions(options: ChatSessionsOptions): { readonly sessions: SessionAgents; readonly withAgent: ChatBoundary } {
+export function chatSessions(options: ChatSessionsOptions): { readonly sessions: SessionAgents; readonly withAgent: ChatBoundary; readonly keyOf: (event: MessageEvent) => string } {
   const settings = options.sessionSettings ?? readSessionSettings(options.env, statSync)
+  const router = createSessionRouter(settings)
   const open = options.getOrCreate ?? ((id: string, agentOptions: AgentOptions) => Agent.getOrCreate(id, agentOptions))
   const sessions = new SessionAgents({
-    router: createSessionRouter(settings),
+    router,
     // Opened by the chat path's own factory, whose protected options are applied last, so the
     // `shell` withholding and memory off hold whatever `optionsFor` returns (B-377 option A). Only
     // those keys are re-pinned, `local` merged so the session's cwd and the hook gate both hold (B-397).
@@ -60,5 +61,5 @@ export function chatSessions(options: ChatSessionsOptions): { readonly sessions:
       return sessions.lease(event)
     },
   })
-  return { sessions, withAgent: (event, work) => currentEvent.run(event, () => boundary.withAgent(work)) }
+  return { sessions, keyOf: (event) => router.resolveAgentId(event), withAgent: (event, work) => currentEvent.run(event, () => boundary.withAgent(work)) }
 }
