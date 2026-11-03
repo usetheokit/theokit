@@ -6,17 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [create-theokit 3.0.27, theokit 0.77.3] - 2026-11-03
+
 ### Fixed
 
 - `theokit`: a server action gets `ctx.queue` when `jobs.backend` is set, under `theokit start` and `theokit dev`, with the outbox rule routes already had: the job reaches the backend after a successful response and is discarded when the action fails. The handler `ctx` of `action()` and `defineAction` is typed `RouteContext`, like a route's. Actions had neither: `ctx` was `unknown` and `ctx.queue` was `undefined` at runtime (#1096)
 - `theokit`: the entries the `vercel`, `netlify`, `cloudflare`, `bun`, `deno-deploy` and `aws-lambda` targets emit answer `GET /__theo/health` (200) and `GET /__theo/ready` with the JSON envelope `theokit start` uses, and the Vercel and Netlify routing sends both paths to the function. Both fell through to the SPA document and answered `200 text/html`, so a health check read any instance as ready. A `ready` probe in `theo.config.ts` cannot be carried to these targets: `theokit build` now names it as not applied, and `/__theo/ready` answers 503 instead of claiming ready (#1097)
-- Workspace tests: the dist gate's validation of `packages/theo/dist` now reaches the vitest run it precedes. `test`, `test:watch`, `test:types` and `test:coverage` export `THEOKIT_TEST_RUN_ID` before the gate, and the build helper keys its per-run marker on it, so no worker of the run re-decides by the ten-minute window and could rebuild dist while its siblings read it. A direct `npx vitest run` keeps the parent-pid fallback. The scripts need a POSIX shell (B-700)
 
 ## [create-theokit 3.0.26, theokit 0.77.2] - 2026-11-03
 
 ### Fixed
 
 - `theokit`: `loadConfig` reads `theo.config.ts` in a package without `"type": "module"` on a Node that cannot strip types (below 22.18). tsx loads it as CommonJS there and the default export arrives wrapped, so the config was replaced by the defaults without a message and every command ran on `server/`, `app/` and the default port. The wrapper is now unwrapped, and a default export with a `default` key beside other keys, or a non-object default in `theo.config.<NODE_ENV>.ts`, fails with `TheoConfigError` naming the file instead of being ignored (#1100)
+- Workspace tests: the dist gate's validation of `packages/theo/dist` now reaches the vitest run it precedes. `test`, `test:watch`, `test:types` and `test:coverage` export `THEOKIT_TEST_RUN_ID` before the gate, and the build helper keys its per-run marker on it, so no worker of the run re-decides by the ten-minute window and could rebuild dist while its siblings read it. A direct `npx vitest run` keeps the parent-pid fallback. The scripts need a POSIX shell (B-700)
 
 ## [create-theokit 3.0.25, @theokit/http 2.3.1, theokit 0.77.1] - 2026-11-02
 
