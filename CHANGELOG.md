@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [create-theokit 3.0.27, theokit 0.77.3] - 2026-11-03
+
 ### Fixed
 
 - `theokit`: a server action gets `ctx.queue` when `jobs.backend` is set, under `theokit start` and `theokit dev`, with the outbox rule routes already had: the job reaches the backend after a successful response and is discarded when the action fails. The handler `ctx` of `action()` and `defineAction` is typed `RouteContext`, like a route's. Actions had neither: `ctx` was `unknown` and `ctx.queue` was `undefined` at runtime (#1096)
