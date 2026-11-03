@@ -323,24 +323,41 @@ const THEO_RESERVED_TARGET = [
 ].join('\n')
 
 /**
- * Add the reserved-routes rule unless one exists, AHEAD of any `/*` rule: Netlify applies the
- * first rule that matches, so a rule appended after a project's own fallback would never fire.
+ * Place one of theokit's function redirects AHEAD of any `/*` rule. Netlify applies the first rule
+ * that matches, so a function rule after a project's catch-all never fires (#1123).
+ *
+ * A rule already in place before the catch-all is left as it is. One pointing at our function but
+ * sitting AFTER the catch-all, which builds before #1123 wrote, is moved, so a rebuild repairs the
+ * file. One pointing elsewhere is the project's decision and is not touched here.
  */
-function withReservedRoutesRedirect(source: string): string {
-  const lines = source.split(/\r?\n/)
-  const blocks = parseRedirectBlocks(lines)
-  if (blocks.some((b) => b.from === THEO_RESERVED_FROM)) return source
-  const fallback = blocks.find((b) => b.from === THEO_SPA_FALLBACK_FROM)
-  if (fallback === undefined) {
-    const sep = source.endsWith('\n') ? '' : '\n'
-    return `${source}${sep}\n${THEO_RESERVED_TARGET}\n`
+function withFunctionRedirect(source: string, from: string, target: string): string {
+  let lines = source.split(/\r?\n/)
+  const own = parseRedirectBlocks(lines).find((b) => b.from === from)
+  const fallbackOf = (blocks: NetlifyRedirectBlock[]) =>
+    blocks.find((b) => b.from === THEO_SPA_FALLBACK_FROM)
+  const fallback = fallbackOf(parseRedirectBlocks(lines))
+  if (own !== undefined) {
+    if (own.to !== THEO_REDIRECT_TO) return source
+    if (fallback === undefined || own.startLine < fallback.startLine) return source
+    lines = [...lines.slice(0, own.startLine), ...lines.slice(own.endLine + 1)]
+  }
+  const catchAll = fallbackOf(parseRedirectBlocks(lines))
+  if (catchAll === undefined) {
+    const rest = lines.join('\n')
+    const sep = rest.endsWith('\n') ? '' : '\n'
+    return `${rest}${sep}\n${target}\n`
   }
   return [
-    ...lines.slice(0, fallback.startLine),
-    THEO_RESERVED_TARGET,
+    ...lines.slice(0, catchAll.startLine),
+    target,
     '',
-    ...lines.slice(fallback.startLine),
+    ...lines.slice(catchAll.startLine),
   ].join('\n')
+}
+
+/** #1097 — the reserved routes the function answers, placed by the same rule as `/api/*`. */
+function withReservedRoutesRedirect(source: string): string {
+  return withFunctionRedirect(source, THEO_RESERVED_FROM, THEO_RESERVED_TARGET)
 }
 
 /** Append the fallback unless some `/*` rule exists — the project's own wins. */
@@ -511,17 +528,31 @@ export function mergeNetlifyToml(
       // carries configuration and the redirect does not.
       const sep = existing.endsWith('\n') ? '' : '\n'
       return withFunctionsDeclared(
-        withSpaFallback(withReservedRoutesRedirect(`${existing}${sep}\n${headersBlock}\n`)),
+        withSpaFallback(
+          withReservedRoutesRedirect(
+            withFunctionRedirect(
+              `${existing}${sep}\n${headersBlock}\n`,
+              THEO_REDIRECT_FROM,
+              THEO_REDIRECT_TARGET,
+            ),
+          ),
+        ),
       )
     }
     throw new NetlifyConflictError(b.from, b.to ?? '(unknown)')
   }
 
-  // No conflict — append target block.
+  // No conflict: place the target block ahead of any catch-all (#1123).
   const sep = existing.endsWith('\n') ? '' : '\n'
   return withFunctionsDeclared(
     withSpaFallback(
-      withReservedRoutesRedirect(`${existing}${sep}\n${THEO_REDIRECT_TARGET}\n\n${headersBlock}\n`),
+      withReservedRoutesRedirect(
+        withFunctionRedirect(
+          `${existing}${sep}\n${headersBlock}\n`,
+          THEO_REDIRECT_FROM,
+          THEO_REDIRECT_TARGET,
+        ),
+      ),
     ),
   )
 }
