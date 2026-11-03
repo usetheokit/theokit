@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- `theokit`: `PostgresJobBackend.fromStorageManager` can be called in `theo.config.ts`, where `jobs.backend` is declared. The framework applies the config's `storage` block only after the module has been evaluated, so the call failed with `Database "main" not configured`. With an unconfigured manager the pool is now resolved on the first query, and the same errors surface there. `StorageManager` gains `isConfigured()` (#1133)
 - `theokit`: `theokit dev` reads `PORT`, with the same precedence `theokit start` has: `--port`, then `PORT`, then `port` in `theo.config.ts`. It listened on `config.port` whatever `PORT` said. Both commands now resolve the port through one function (#1134)
 
 ## [create-theokit 3.0.28, theokit 0.77.4] - 2026-11-03
