@@ -21,8 +21,8 @@ const priced = (inputTokens: number, outputTokens: number, amountUsd: number | u
   result: { status: "finished", usage: { inputTokens, outputTokens }, cost: { amountUsd } },
 });
 
-let planes: ControlPlaneHandle[] = [];
-let sockets: WebSocket[] = [];
+const planes: ControlPlaneHandle[] = [];
+const sockets: WebSocket[] = [];
 
 afterEach(async () => {
   for (const socket of sockets.splice(0)) socket.terminate();
