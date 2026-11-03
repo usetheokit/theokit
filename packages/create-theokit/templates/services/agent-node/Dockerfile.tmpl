@@ -7,9 +7,9 @@ WORKDIR /app
 ENV COREPACK_HOME=/usr/local/share/corepack
 RUN corepack enable && corepack prepare pnpm@10 --activate
 
-# Copy manifest and install
+# Copy manifest and install; the scaffold ships no lockfile, so a plain install, and a failure fails the build
 COPY --chown=1000:1000 package.json ./
-RUN pnpm install --frozen-lockfile || npm install
+RUN pnpm install
 
 # Copy source
 COPY --chown=1000:1000 . .

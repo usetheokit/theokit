@@ -82,7 +82,7 @@ describe('agent-node service Dockerfile', () => {
     expect(install?.args, 'a failed pnpm install must fail the build, not fall back').not.toContain(
       '||',
     )
-    expect(install?.args).not.toContain('npm install')
+    expect(install?.args).not.toMatch(/(^|\s)npm\s+install/)
     const shipsLockfile = steps.some(
       (s) => s.keyword === 'COPY' && s.args.includes('pnpm-lock.yaml'),
     )
