@@ -5,7 +5,7 @@ import type { CustomTool } from '@theokit/sdk'
 import OpenAI from 'openai'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { createTheoClawAgent, theoClawAgentOptions } from '../src/agent/create-agent.js'
+import { createTheoClawAgent, type TheoClawAgentOptions } from '../src/agent/create-agent.js'
 import type { RunningTheoClaw } from '../src/composition.js'
 import { createTheoClawApi, validateToolArgs } from '../src/http-api/api-routes.js'
 import { vetoToolCall } from '../src/tools/path-veto.js'
@@ -50,6 +50,8 @@ async function startApi(options: {
   readonly hostTools?: boolean
   readonly token?: string | undefined
   readonly agentFactory?: (toolOptions: AgentToolOptions) => unknown
+  /** Builds a chat completion's agent, a chat agent, from the options the chat path pins. */
+  readonly createChatAgent?: (agentOptions: TheoClawAgentOptions) => Promise<unknown>
   readonly draftAgentFactory?: () => unknown
 }): Promise<ToolStart & { readonly workspace: string; readonly base: string }> {
   const handle = makeHostToolsWorkspace()
@@ -61,6 +63,7 @@ async function startApi(options: {
   }
   const extra = {
     ...(options.agentFactory === undefined ? {} : { agentFactory: options.agentFactory as never }),
+    ...(options.createChatAgent === undefined ? {} : { createChatAgent: options.createChatAgent as never }),
     ...(options.draftAgentFactory === undefined ? {} : { draftAgentFactory: options.draftAgentFactory as never }),
   }
   const start = await startForTools(env, handle.path, { detect: enforced }, extra)
@@ -175,8 +178,8 @@ describe('the API in the started process', () => {
     const stub = await startModelStub([{ text: 'pong from the stub' }])
     cleanups.push(() => void stub.close())
     const { base } = await startApi({
-      agentFactory: (toolOptions) =>
-        createTheoClawAgent(theoClawAgentOptions({ model: { id: 'lmstudio/stub', url: stub.url }, apiKey: 'stub-key', toolOptions })),
+      createChatAgent: (agentOptions) =>
+        createTheoClawAgent({ ...agentOptions, model: { id: 'lmstudio/stub', url: stub.url }, apiKey: 'stub-key' }),
     })
     const client = new OpenAI({ baseURL: `${base}/v1`, apiKey: CONTROL_TOKEN })
 
@@ -189,7 +192,7 @@ describe('the API in the started process', () => {
   })
 
   it('answers 502 turn_failed and writes the reason to stderr when the turn fails', async () => {
-    const start = await startApi({ agentFactory: () => ({ send: () => Promise.reject(new Error('provider said no')) }) })
+    const start = await startApi({ createChatAgent: async () => ({ send: () => Promise.reject(new Error('provider said no')) }) })
 
     const response = await fetch(`${start.base}/v1/chat/completions`, {
       method: 'POST',
@@ -203,7 +206,7 @@ describe('the API in the started process', () => {
   })
 
   it('answers an empty assistant content when the turn emits no text_delta', async () => {
-    const { base } = await startApi({ agentFactory: () => new FakeAgent({ frames: [finished()] }) })
+    const { base } = await startApi({ createChatAgent: async () => new FakeAgent({ frames: [finished()] }) })
     const client = new OpenAI({ baseURL: `${base}/v1`, apiKey: CONTROL_TOKEN })
 
     const completion = await client.chat.completions.create({ model: 'test-model', messages: [{ role: 'user', content: 'x' }] })
@@ -212,7 +215,7 @@ describe('the API in the started process', () => {
   })
 
   it('joins the text of every text_delta into the assistant content', async () => {
-    const { base } = await startApi({ agentFactory: () => new FakeAgent({ frames: [assistant('a'), assistant('b'), finished()] }) })
+    const { base } = await startApi({ createChatAgent: async () => new FakeAgent({ frames: [assistant('a'), assistant('b'), finished()] }) })
     const client = new OpenAI({ baseURL: `${base}/v1`, apiKey: CONTROL_TOKEN })
 
     const completion = await client.chat.completions.create({ model: 'test-model', messages: [{ role: 'user', content: 'x' }] })
@@ -245,20 +248,23 @@ describe('the API in the started process', () => {
   })
 
   it('serves chat completions from an agent that holds no tool (B-382)', async () => {
-    const built: AgentToolOptions[] = []
-    const { base } = await startApi({
+    const built: TheoClawAgentOptions[] = []
+    const start = await startApi({
       hostTools: true,
-      agentFactory: (toolOptions) => {
-        built.push(toolOptions)
+      createChatAgent: async (agentOptions) => {
+        built.push(agentOptions)
         return new FakeAgent({ frames: [assistant('hi'), finished()] })
       },
     })
-    const client = new OpenAI({ baseURL: `${base}/v1`, apiKey: CONTROL_TOKEN })
+    const controlBuiltBefore = start.toolOptions.length
+    const client = new OpenAI({ baseURL: `${start.base}/v1`, apiKey: CONTROL_TOKEN })
 
     await client.chat.completions.create({ model: 'test-model', messages: [{ role: 'user', content: 'x' }] })
 
     expect(built).toHaveLength(1)
-    expect(built[0]?.tools).toHaveLength(0)
+    expect(built[0]?.tools ?? []).toHaveLength(0)
+    expect(built[0]?.plugins ?? []).toHaveLength(0)
+    expect(start.toolOptions).toHaveLength(controlBuiltBefore)
   })
 
   it('refuses a path into the state directory with 403', async () => {

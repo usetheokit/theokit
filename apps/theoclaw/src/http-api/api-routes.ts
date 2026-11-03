@@ -10,7 +10,7 @@ import {
 import { z } from 'zod'
 
 import { bearerCheck } from '../control-plane/bearer.js'
-import type { PartialHandler } from '../control-plane/serve.js'
+import type { PartialHandler } from '../control-plane/http-dispatch.js'
 import { runTheoClawTurn, type TurnEvent, type WithAgent } from '../control-plane/turn.js'
 import { vetoToolCall } from '../tools/path-veto.js'
 import type { ToolSettings } from '../tools/tool-settings.js'
