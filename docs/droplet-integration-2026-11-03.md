@@ -88,3 +88,31 @@ to `develop` or publish packages based solely on recovery coverage.
 The installed kit assumes `workspace` for execution. Before running it on these
 integration checkouts, reconcile that branch assumption through the kit's supported
 workflow; do not modify an installed gate to make it accept another branch.
+
+## Validation at the integrated source
+
+| Check | Result |
+| --- | --- |
+| Full `pnpm build` in all three repositories | PASS |
+| TheoClaw production, test and web TypeScript projects | PASS |
+| SDK workspace and e2e TypeScript projects | PASS |
+| Gateways workspace TypeScript projects | PASS |
+| SDK Biome and subentry checks | PASS; five informational diagnostics |
+| SDK capability map and error-code documentation | PASS; 1270 exports / 53 entries and 256 error codes |
+| Selected TheoClaw integration and unit tests | 157 passed |
+| Selected agents HTTP, A2A, scheduler and capability-map tests | 117 passed |
+| TheoCode side-by-side runner tests | 25 passed |
+| Gateway core tests | 339 passed |
+| SDK tools goal, structured output and search-adapter tests | 37 passed |
+| SDK core full default suite | 6306 passed, 6 failed, 21 skipped, 6 todo |
+
+The six SDK failures are in the real-provider integration tests, all routed through
+OpenRouter: Anthropic tools, vision, streaming and structured output, plus reasoning
+streaming and cancellation during reasoning. The structured-output failure explicitly
+reports `quota_exceeded` (HTTP 402). The other failures report unsuccessful runs or
+missing reasoning deltas; their individual causes are not established by those
+assertions. They remain open, rather than being classified as integration regressions
+or dismissed as environmental without evidence. No paid account was replenished and
+no failing real-provider test was changed to skip or pass.
+
+This validation is not a full framework-wide test run or a completed sprint review.
