@@ -13,6 +13,14 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Agent to agent over A2A (B-394, OC-13). With `THEOCLAW_A2A_TOKEN`, `POST /a2a` answers A2A
+  JSON-RPC `message/send` on a fresh read-only worker, behind the bearer token, a 65536-byte body,
+  a 120000 ms bound and at most 4 tasks in flight, with the reply masked;
+  `GET /.well-known/agent-card.json` names the endpoint and its bearer scheme. With
+  `THEOCLAW_A2A_PEERS` and one `THEOCLAW_A2A_PEER_TOKEN_<NAME>` per peer, the `/control` agent holds
+  one `peer_<name>` tool per peer, bounded at 150000 ms. A plain-http peer off the loopback, a peer
+  URL with credentials and a short or missing token are refused at start. Chat agents and workers
+  never hold a peer tool. OC-82 (subagents) is recorded against the `delegate` live check (B-611).
 - A `computer` tool for `/control` agents (B-676, OC-62). With `THEOCLAW_COMPUTER=on`,
   `THEOCLAW_HOST_TOOLS=on`, `DISPLAY` set, `xdotool` on `PATH` and `THEOCLAW_COMPUTER_FRAMEBUFFER`
   naming the XWD file an Xvfb started with `-fbdir` keeps (`<dir>/Xvfb_screen0`), the agent can

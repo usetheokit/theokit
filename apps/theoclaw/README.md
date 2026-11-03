@@ -317,6 +317,9 @@ the listener. `GET /health` answers `{"status":"ok"}`.
 | `THEOCLAW_PUBLIC_BIND` | Must be exactly `yes` to bind a non-loopback `THEOCLAW_HOST`. The bearer token is then the whole gate. |
 | `THEOCLAW_CONTROL_TOKEN` | Optional, 32 characters or more. Without it the `/control` socket is off and every upgrade answers 404. |
 | `THEOCLAW_WEBCHAT_TOKEN` | Optional, 32 characters or more. Without it `/webchat` is off and every `/webchat` path answers 404. |
+| `THEOCLAW_A2A_TOKEN` | Optional, 32 characters or more. Without it `/a2a` and `/.well-known/agent-card.json` are off and answer 404. |
+| `THEOCLAW_A2A_PEERS` | Optional. Comma-separated `<name>=<base url>` peers the `/control` agent can send a task to; a name is lower case, `^[a-z][a-z0-9_]{0,31}$`. A URL is `https:`, or `http:` only on the loopback. |
+| `THEOCLAW_A2A_PEER_TOKEN_<NAME>` | Required for each peer in `THEOCLAW_A2A_PEERS`, 32 characters or more: the peer's own `THEOCLAW_A2A_TOKEN`. `<NAME>` is the peer's name in upper case. |
 
 ### The `/control` socket
 
@@ -612,6 +615,35 @@ set -a; . ~/.config/theoclaw/dev.env; set +a
 pnpm --filter theoclaw run build && pnpm --filter theoclaw run build:web
 THEOCLAW_LIVE=1 pnpm --filter theoclaw exec vitest run tests/live/webchat.live.test.ts
 ```
+
+### Agent to agent (A2A)
+
+With `THEOCLAW_A2A_TOKEN` set, TheoClaw answers A2A JSON-RPC `message/send` at `POST /a2a` with
+`Authorization: Bearer <THEOCLAW_A2A_TOKEN>`. A missing or wrong token answers 401 before the body
+is read, a body over 65536 bytes 413, and a fifth request while four are running 503 with
+`Retry-After: 5`; no agent is built for any of them. Each task runs on a fresh worker that holds only
+the read-only tools over the tool root and the web fetch, never `write_file`, the shell, `run_code`,
+`delegate` or a peer tool, and is answered within 120000 ms or with JSON-RPC error -32603. The reply
+is masked like every other reply. `GET /.well-known/agent-card.json` answers the instance's agent
+card, which names `<origin>/a2a` and its bearer scheme. Only `message/send` with text parts is
+served: `tasks/*` and streaming are not.
+
+With `THEOCLAW_A2A_PEERS` set, the `/control` agent holds one `peer_<name>` tool per peer. It sends
+the task to the peer's `/a2a` with that peer's token and returns the answer; a peer that does not
+answer within 150000 ms, refuses the connection or answers an error fails the tool call naming the
+peer. Chat agents and workers never hold a peer tool. Two instances on one host:
+
+```bash
+# Instance b serves A2A; its token is what a's peer token must be.
+THEOCLAW_PROFILE=b THEOCLAW_A2A_TOKEN="$(openssl rand -base64 32)" theoclaw
+# Instance a names b as a peer.
+THEOCLAW_PROFILE=a THEOCLAW_A2A_PEERS="b=http://127.0.0.1:<b's port>" \
+  THEOCLAW_A2A_PEER_TOKEN_B="<b's THEOCLAW_A2A_TOKEN>" theoclaw
+```
+
+A peer's text is the worker's user message, and its answer reaches `/control` as a tool result: a
+peer you do not trust can steer what the worker reads from your tool root and what `/control` does
+next. Give the token only to instances you run.
 
 ## Remote access over SSH
 
