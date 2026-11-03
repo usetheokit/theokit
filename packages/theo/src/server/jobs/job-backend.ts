@@ -94,6 +94,16 @@ export interface JobBackend {
   nack(jobId: string, opts: JobNackOptions): Promise<void>
 
   /**
+   * Optional: keep a lease for `lockSeconds` more, counted from now, and return the new deadline.
+   * A handler that is still making progress calls it (through `ctx.extendLease`) so a job that may
+   * run for a long time does not need a long lock for every job. Rejects with `JobLeaseLostError`
+   * (`operation: 'extend'`) when `leaseToken` no longer holds the job: the lease expired and was
+   * handed on, or the job is gone (usetheokit/theokit#1132). A backend that leaves it out cannot
+   * have its leases extended, and `ctx.extendLease` says so.
+   */
+  extendLease?(jobId: string, opts: { leaseToken: string; lockSeconds: number }): Promise<Date>
+
+  /**
    * Optional: persist a job through `client`, a connection inside a transaction the caller opened,
    * so the job commits or rolls back with the caller's writes (usetheokit/theokit#1077). Only a
    * backend whose jobs live in the caller's database can offer it; `ctx.queue.enqueueInTransaction`
@@ -145,8 +155,8 @@ export class NonRetryableError extends Error {
 export class JobLeaseLostError extends Error {
   readonly code = 'JOB_LEASE_LOST'
   readonly jobId: string
-  readonly operation: 'ack' | 'nack'
-  constructor(jobId: string, operation: 'ack' | 'nack') {
+  readonly operation: 'ack' | 'nack' | 'extend'
+  constructor(jobId: string, operation: 'ack' | 'nack' | 'extend') {
     super(
       `Cannot ${operation} job "${jobId}": its lease expired and another worker holds it now, ` +
         'or the job no longer exists. The current holder decides its outcome.',
@@ -154,5 +164,22 @@ export class JobLeaseLostError extends Error {
     this.name = 'JobLeaseLostError'
     this.jobId = jobId
     this.operation = operation
+  }
+}
+
+/**
+ * `ctx.extendLease` was called on a job whose backend has no `extendLease`. The lease keeps its
+ * original deadline and `ctx.signal` aborts when it passes.
+ */
+export class JobLeaseExtensionUnsupportedError extends Error {
+  readonly code = 'JOB_LEASE_EXTENSION_UNSUPPORTED'
+  readonly backend: string
+  constructor(backend: string) {
+    super(
+      `The "${backend}" job backend cannot extend a lease. Give the worker a lockSeconds longer ` +
+        'than the longest job, or use a backend that implements extendLease.',
+    )
+    this.name = 'JobLeaseExtensionUnsupportedError'
+    this.backend = backend
   }
 }
