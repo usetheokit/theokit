@@ -1,0 +1,5 @@
+---
+"@theokit/agents": minor
+---
+
+`@theokit/agents/bridge` serves two new Web-standard HTTP surfaces (B-373). `createOpenAICompatibleRoutes({ models, complete })` answers `GET /v1/models` and a non-streaming `POST /v1/chat/completions` over a `complete` port that turns one request into the assistant's text, so the official OpenAI client can call an agent. Unknown OpenAI parameters are ignored, `stream: true` answers 400 `stream_unsupported`, an unserved model 404 `model_not_found`, and a rejected `complete` 502 `turn_failed` without the provider's message. `renderTranscript` renders the messages as one prompt. `createToolInvokeRoute({ tools, veto, validate })` answers `POST /tools/invoke` with `{tool, args}`: since a handler called directly skips the SDK's `pre_tool_call` plugins and its schema check, the caller passes a `veto` (403) and a `validate` (400 `invalid_args`), run in that order before the handler. Both read at most 1 MiB of body, counted as it streams (`readCappedBody`, `BodyTooLargeError`, `MAX_REQUEST_BODY_BYTES`). No dependency changes.

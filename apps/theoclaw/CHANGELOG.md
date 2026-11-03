@@ -167,6 +167,15 @@ and versioning follows [Semantic Versioning](https://semver.org/).
   The import's env and header values of 8 characters or more are masked in the process output. An
   import holds `THEOCLAW_STATE_DIR/import.lock`: a second import is refused while it runs, and a
   start leaves an import's swap in flight alone.
+- An OpenAI-compatible HTTP API and tool invocation over HTTP (B-373, OC-26, OC-27), behind
+  `THEOCLAW_CONTROL_TOKEN`: `GET /v1/models` and a non-streaming `POST /v1/chat/completions` that
+  the official `openai` client can call, answered by one turn of an agent that holds no tool, and
+  `POST /tools/invoke` running one tool of exactly the `/control` set, with the state-directory veto
+  and the tool's own input schema applied before it runs. `stream: true` is refused (400
+  `stream_unsupported`), bodies are capped at 1 MiB, and the API keeps no state between requests.
+  The two handlers are the new `createOpenAICompatibleRoutes` and `createToolInvokeRoute` of the
+  upstream package `@theokit/agents/bridge`, which also now holds the capped body reader the
+  webhook router uses.
 - The `digest` tool of the `/control` agent (B-387, OC-66): a typed two-step workflow from
   `@theokit/sdk/workflow`, where a draft step on a fresh agent with no tool, no `shell` and memory off
   lists the key points of a text, and a second step checks them as `{ points }` (1 to 10). Each call

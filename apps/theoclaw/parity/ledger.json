@@ -154,11 +154,21 @@
   },
   {
     "id": "OC-26",
-    "status": "open"
+    "status": "shipped",
+    "check": {
+      "path": "apps/theoclaw/tests/live/http-api.live.test.ts",
+      "test": "an OpenAI client gets a real-model answer from the started process for OC-26"
+    },
+    "verified_on": "2026-10-31"
   },
   {
     "id": "OC-27",
-    "status": "open"
+    "status": "shipped",
+    "check": {
+      "path": "apps/theoclaw/tests/live/http-api.live.test.ts",
+      "test": "a tool invoked over HTTP returns its result from the started process for OC-27"
+    },
+    "verified_on": "2026-10-31"
   },
   {
     "id": "OC-28",

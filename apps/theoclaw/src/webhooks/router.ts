@@ -1,3 +1,4 @@
+import { BodyTooLargeError, readCappedBody } from '@theokit/agents/bridge'
 import type { PlatformName } from '@theokit/gateway'
 
 /** One webhook route: what it answers, and the methods it takes. */
@@ -20,48 +21,11 @@ export interface RouterOptions {
   readonly triggers?: ReadonlyMap<string, WebhookRoute>
 }
 
-/** The largest webhook body the router reads: 1 MiB, far above any provider's message (EC-1). */
-export const MAX_BODY_BYTES = 1_048_576
-
-/** A body that grew past the cap while it was being read. */
-class BodyTooLargeError extends Error {
-  constructor(readonly maxBytes: number) {
-    super(`request body exceeds ${maxBytes} bytes`)
-    this.name = 'BodyTooLargeError'
-  }
-}
-
 /**
- * Read the whole body, stopping as soon as it passes `maxBytes`, whether or not the request
- * declared a `content-length` (a chunked body declares none). The bytes are kept as they came, so
- * a signature over the raw body is computed over exactly what the provider sent.
+ * The largest webhook body the router reads: 1 MiB, far above any provider's message (EC-1). A
+ * webhook policy of its own, equal today to the bridge's `MAX_REQUEST_BODY_BYTES` for the API.
  */
-async function readCapped(
-  request: Request,
-  maxBytes: number,
-): Promise<Uint8Array<ArrayBuffer>> {
-  if (request.body === null) return new Uint8Array()
-  const reader = request.body.getReader()
-  const chunks: Uint8Array[] = []
-  let total = 0
-  for (;;) {
-    const { done, value } = await reader.read()
-    if (done) break
-    total += value.byteLength
-    if (total > maxBytes) {
-      await reader.cancel()
-      throw new BodyTooLargeError(maxBytes)
-    }
-    chunks.push(value)
-  }
-  const body = new Uint8Array(total)
-  let offset = 0
-  for (const chunk of chunks) {
-    body.set(chunk, offset)
-    offset += chunk.byteLength
-  }
-  return body
-}
+export const MAX_BODY_BYTES = 1_048_576
 
 function describeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
@@ -86,7 +50,7 @@ function tooLarge(): Response {
 async function cappedRequest(request: Request): Promise<Request> {
   const declared = Number(request.headers.get('content-length') ?? '0')
   if (declared > MAX_BODY_BYTES) throw new BodyTooLargeError(MAX_BODY_BYTES)
-  const body = await readCapped(request, MAX_BODY_BYTES)
+  const body = await readCappedBody(request, MAX_BODY_BYTES)
   // The body is in memory now: the framing headers of the original no longer describe it.
   const headers = new Headers(request.headers)
   headers.delete('content-length')
