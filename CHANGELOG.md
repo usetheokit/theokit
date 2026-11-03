@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [create-theokit 3.0.29, theokit 0.78.0] - 2026-11-03
+
 ### Added
 
 - `theokit`: a job handler can extend its lease with `ctx.extendLease(seconds)`. `lockSeconds` is one value for the whole worker, so a job that may run for 30 minutes forced a one-hour lock on every job. A handler that is still making progress now keeps the job, and `ctx.signal` moves with the lease. `JobBackend` gains an optional `extendLease`, implemented by `PostgresJobBackend` and `InMemoryJobBackend` (#1132)
