@@ -1,5 +1,11 @@
 # theo
 
+## 0.77.4
+
+### Patch Changes
+
+- 292cbee: `theokit build --target netlify` places its `/api/*` redirect ahead of a `/*` catch-all already in the project's `netlify.toml`, and a rebuild moves one an earlier build appended after it. Netlify applies the first rule that matches, so with a project catch-all no route reached the function (#1123).
+
 ## 0.77.3
 
 ### Patch Changes
@@ -391,8 +397,8 @@
   A nested-layout project with no agents — the layout `create-theokit` scaffolds — was told, on every dev
   start and every build that reached this path:
 
-                                    [theokit] agentsDir "agents" resolves to "<root>/src/agents", which is not a directory, so NO agents
-                                    were found and every /api/agents/* route will 404.
+                                      [theokit] agentsDir "agents" resolves to "<root>/src/agents", which is not a directory, so NO agents
+                                      were found and every /api/agents/* route will 404.
 
   About routes it does not have, and a directory it never configured. Two defects in one line.
 
