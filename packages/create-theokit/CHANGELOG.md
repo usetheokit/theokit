@@ -1,5 +1,11 @@
 # create-theo
 
+## 3.0.30
+
+### Patch Changes
+
+- fe5613e: The default scaffold installs `@theokit/sdk` ^5.13.0, the floor `theokit` now declares. At the old pin (^5.11.0) a lockfile resolved at the template's floor did not satisfy the peer range (#1130, #1131).
+
 ## 3.0.29
 
 ### Patch Changes
