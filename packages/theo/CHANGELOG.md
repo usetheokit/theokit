@@ -1,5 +1,13 @@
 # theo
 
+## 0.78.1
+
+### Patch Changes
+
+- dee6684: `theokit` requires `@theokit/sdk` ^5.13.0, the floor its `@theokit/agents` now declares for the sandbox surface (`shellEscapePosix`, `SandboxBackend.dispose` and `networkPolicy`) (#1130, #1131).
+- Updated dependencies [dee6684]
+  - @theokit/agents@16.2.0
+
 ## 0.78.0
 
 ### Minor Changes
@@ -408,8 +416,8 @@
   A nested-layout project with no agents — the layout `create-theokit` scaffolds — was told, on every dev
   start and every build that reached this path:
 
-                                        [theokit] agentsDir "agents" resolves to "<root>/src/agents", which is not a directory, so NO agents
-                                        were found and every /api/agents/* route will 404.
+                                          [theokit] agentsDir "agents" resolves to "<root>/src/agents", which is not a directory, so NO agents
+                                          were found and every /api/agents/* route will 404.
 
   About routes it does not have, and a directory it never configured. Two defects in one line.
 
