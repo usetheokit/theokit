@@ -1,7 +1,14 @@
 import { mkdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 
-import { type DaemonBackend, type DaemonIo, type InstallTarget, type Runner, escapeXml, writeAtomically } from './daemon-common.js'
+import {
+  type DaemonBackend,
+  type DaemonIo,
+  type InstallTarget,
+  type Runner,
+  escapeXml,
+  writeAtomically,
+} from './daemon-common.js'
 
 /**
  * The macOS backend (B-692): a LaunchAgent in `~/Library/LaunchAgents`, bootstrapped into the
@@ -17,7 +24,10 @@ function logPath(label: string, home: string): string {
   return join(home, 'Library', 'Logs', 'theoclaw', `${label}.log`)
 }
 
-export interface PlistInput extends Pick<InstallTarget, 'label' | 'profile' | 'configPath' | 'workingDirectory'> {
+export interface PlistInput extends Pick<
+  InstallTarget,
+  'label' | 'profile' | 'configPath' | 'workingDirectory'
+> {
   readonly nodePath: string
   readonly entryPath: string
   readonly logFile: string
@@ -28,7 +38,10 @@ function entry(key: string, value: string, indent: string): string[] {
 }
 
 export function plistFor(input: PlistInput): string {
-  const environment = [['THEOCLAW_CONFIG', input.configPath], ...(input.profile === undefined ? [] : [['THEOCLAW_PROFILE', input.profile]])]
+  const environment = [
+    ['THEOCLAW_CONFIG', input.configPath],
+    ...(input.profile === undefined ? [] : [['THEOCLAW_PROFILE', input.profile]]),
+  ]
   return [
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">',
@@ -67,12 +80,22 @@ function domain(uid: number): string {
 
 /** The user id, or undefined after saying launchd has no domain to address without one. */
 function userId(io: DaemonIo): number | undefined {
-  if (io.uid === undefined) io.stderr.write('theoclaw daemon: launchd needs the user id, which this process cannot read\n')
+  if (io.uid === undefined)
+    io.stderr.write('theoclaw daemon: launchd needs the user id, which this process cannot read\n')
   return io.uid
 }
 
 function launchctl(runner: Runner, ...args: string[]): ReturnType<Runner> {
   return runner('launchctl', args)
+}
+
+/**
+ * Whether launchd says it has no such service. Only that answer (`print` exits 113, "Could not find
+ * service") counts: a `print` that cannot run, or that reports the service, proves nothing about absence.
+ */
+async function isAbsent(runner: Runner, service: string): Promise<boolean> {
+  const answer = await launchctl(runner, 'print', service)
+  return answer.code === 113 || (answer.code !== 0 && /could not find service/i.test(answer.stderr))
 }
 
 export const launchdBackend: DaemonBackend = {
@@ -83,7 +106,10 @@ export const launchdBackend: DaemonBackend = {
     const path = plistPath(label, io.homeDir)
     const logFile = logPath(label, io.homeDir)
     mkdirSync(join(logFile, '..'), { recursive: true })
-    writeAtomically(path, plistFor({ ...target, nodePath: io.nodePath, entryPath: io.entry, logFile }))
+    writeAtomically(
+      path,
+      plistFor({ ...target, nodePath: io.nodePath, entryPath: io.entry, logFile }),
+    )
     // A loaded agent keeps its old definition, so a reinstall boots it out first; a missing one is no error.
     await launchctl(runner, 'bootout', `${domain(uid)}/${label}`)
     const loaded = await launchctl(runner, 'bootstrap', domain(uid), path)
@@ -99,7 +125,14 @@ export const launchdBackend: DaemonBackend = {
   async uninstall(io, runner, target) {
     const uid = userId(io)
     if (uid === undefined) return 1
-    await launchctl(runner, 'bootout', `${domain(uid)}/${target.label}`)
+    const service = `${domain(uid)}/${target.label}`
+    const booted = await launchctl(runner, 'bootout', service)
+    // A refused bootout leaves the service running, so the definition stays and the owner sees why. A
+    // service that launchd confirms it does not know is already gone, and removing it is idempotent.
+    if (booted.code !== 0 && !(await isAbsent(runner, service))) {
+      io.stderr.write(`theoclaw daemon: launchctl bootout failed: ${booted.stderr.trim()}\n`)
+      return 1
+    }
     rmSync(plistPath(target.label, io.homeDir), { force: true })
     io.stdout.write(`theoclaw daemon: ${target.label} removed\n`)
     return 0
@@ -110,7 +143,12 @@ export const launchdBackend: DaemonBackend = {
     const uid = userId(io)
     if (uid === undefined) return 1
     const answer = await launchctl(runner, 'print', `${domain(uid)}/${target.label}`)
-    const state = answer.code !== 0 ? 'not loaded' : /^\s*state = running$/m.test(answer.stdout) ? 'running' : 'not running'
+    const state =
+      answer.code !== 0
+        ? 'not loaded'
+        : /^\s*state = running$/m.test(answer.stdout)
+          ? 'running'
+          : 'not running'
     io.stdout.write(`${target.label}: ${state}\n`)
     return state === 'running' ? 0 : 3
   },
