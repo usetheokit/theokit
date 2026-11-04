@@ -413,6 +413,8 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- The process entry refuses the names every object inherits (`constructor`, `toString`, `hasOwnProperty`, `__proto__`) instead of taking them as flags, and treats such a name given as the value of `--config` or `--profile` as data. `parseEntryArguments` looked flags up with `FLAGS[flag]` and `value in FLAGS`, which read the prototype chain: `['constructor', 'value']` returned `ok: true` and wrote a property named after a function into `env`, so `main.ts` never exited 2, and `['--config', 'toString']` was refused as a missing value. It now reads own properties only (usetheokit/theokit#1143).
+
 - `pnpm --filter theoclaw exec eslint src tests` lints the app's TypeScript sources and tests (B-664).
   `eslint.config.mjs` ignored `src/**` and `tests/**` and the root config ignores `apps/**`, so no
   linter read a TheoClaw `.ts` file and the command exited 2 with every file ignored. The config now

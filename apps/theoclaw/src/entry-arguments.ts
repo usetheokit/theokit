@@ -6,17 +6,29 @@
 
 export type EntryArguments = { readonly ok: true } | { readonly ok: false; readonly error: string }
 
-const FLAGS: Readonly<Record<string, string>> = { '--config': 'THEOCLAW_CONFIG', '--profile': 'THEOCLAW_PROFILE' }
+const FLAGS: Readonly<Record<string, string>> = {
+  '--config': 'THEOCLAW_CONFIG',
+  '--profile': 'THEOCLAW_PROFILE',
+}
 
 /** Applies the arguments to `env` only when every one is valid, so a refusal changes nothing. */
-export function parseEntryArguments(argv: readonly string[], env: NodeJS.ProcessEnv): EntryArguments {
+export function parseEntryArguments(
+  argv: readonly string[],
+  env: NodeJS.ProcessEnv,
+): EntryArguments {
   const found = new Map<string, string>()
   for (let index = 0; index < argv.length; index += 2) {
     const flag = argv[index]!
-    const variable = FLAGS[flag]
-    if (variable === undefined) return { ok: false, error: `unexpected argument ${flag}; expected --config <path> or --profile <name>` }
+    // Own properties only: an inherited name such as `constructor` or `toString` is not a flag (#1143).
+    const variable = Object.hasOwn(FLAGS, flag) ? FLAGS[flag] : undefined
+    if (variable === undefined)
+      return {
+        ok: false,
+        error: `unexpected argument ${flag}; expected --config <path> or --profile <name>`,
+      }
     const value = argv[index + 1]
-    if (value === undefined || value in FLAGS) return { ok: false, error: `${flag} needs a value` }
+    if (value === undefined || Object.hasOwn(FLAGS, value))
+      return { ok: false, error: `${flag} needs a value` }
     if (found.has(variable)) return { ok: false, error: `${flag} was given twice` }
     found.set(variable, value)
   }
