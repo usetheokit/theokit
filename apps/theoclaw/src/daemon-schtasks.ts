@@ -2,7 +2,14 @@ import { rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { type DaemonBackend, type DaemonIo, type InstallTarget, type Runner, type RunResult, escapeXml } from './daemon-common.js'
+import {
+  type DaemonBackend,
+  type DaemonIo,
+  type InstallTarget,
+  type Runner,
+  type RunResult,
+  escapeXml,
+} from './daemon-common.js'
 
 /**
  * The Windows backend (B-692): a Task Scheduler task named by the instance label, registered from an
@@ -13,7 +20,10 @@ import { type DaemonBackend, type DaemonIo, type InstallTarget, type Runner, typ
 /** The logon type of the task's principal; the one place D5 of the plan changes if the runner refuses it. */
 const LOGON_TYPE = 'InteractiveToken'
 
-export interface TaskInput extends Pick<InstallTarget, 'label' | 'profile' | 'configPath' | 'workingDirectory'> {
+export interface TaskInput extends Pick<
+  InstallTarget,
+  'label' | 'profile' | 'configPath' | 'workingDirectory'
+> {
   readonly nodePath: string
   readonly entryPath: string
   /** `<USERDOMAIN>\<USERNAME>`, or the bare user name when the domain is unset. */
@@ -63,14 +73,42 @@ function schtasks(runner: Runner, ...args: string[]): Promise<RunResult> {
 function taskUser(io: DaemonIo): string | undefined {
   const name = io.env.USERNAME
   if (name === undefined || name === '') {
-    io.stderr.write('theoclaw daemon: USERNAME is not set; Task Scheduler needs the user the task runs as\n')
+    io.stderr.write(
+      'theoclaw daemon: USERNAME is not set; Task Scheduler needs the user the task runs as\n',
+    )
     return undefined
   }
   const domain = io.env.USERDOMAIN
   return domain === undefined || domain === '' ? name : `${domain}\\${name}`
 }
 
-async function fail(io: DaemonIo, runner: Runner, label: string, command: string, result: RunResult): Promise<number> {
+/**
+ * Whether the task exists, from `Get-ScheduledTask` rather than from `schtasks /Query`: the first prints
+ * a word this code chose, the second a message that Windows translates. `unknown` is any answer that
+ * is not one of the two words, a failed or unstartable command included.
+ */
+async function taskPresence(
+  runner: Runner,
+  label: string,
+): Promise<'present' | 'absent' | 'unknown'> {
+  const answer = await runner('powershell.exe', [
+    '-NoProfile',
+    '-NonInteractive',
+    '-Command',
+    `if (Get-ScheduledTask -TaskName '${label}' -ErrorAction SilentlyContinue) { 'present' } else { 'absent' }`,
+  ])
+  if (answer.code !== 0) return 'unknown'
+  const word = answer.stdout.trim()
+  return word === 'present' || word === 'absent' ? word : 'unknown'
+}
+
+async function fail(
+  io: DaemonIo,
+  runner: Runner,
+  label: string,
+  command: string,
+  result: RunResult,
+): Promise<number> {
   io.stderr.write(`theoclaw daemon: schtasks ${command} failed: ${result.stderr.trim()}\n`)
   await schtasks(runner, '/Delete', '/TN', label, '/F')
   return 1
@@ -103,8 +141,10 @@ export const schtasksBackend: DaemonBackend = {
     const { label } = target
     await schtasks(runner, '/End', '/TN', label)
     const deleted = await schtasks(runner, '/Delete', '/TN', label, '/F')
-    // A task that does not exist has nothing to delete; any other refusal is the owner's to see.
-    if (deleted.code !== 0 && (await schtasks(runner, '/Query', '/TN', label)).code === 0) {
+    // A refused or impossible /Delete leaves the task in place. It counts as removed only when the
+    // scheduler is asked and says there is no such task: a command that cannot start (127) or a
+    // query that fails proves nothing, so the owner sees the failure instead (#1142).
+    if (deleted.code !== 0 && (await taskPresence(runner, label)) !== 'absent') {
       io.stderr.write(`theoclaw daemon: schtasks /Delete failed: ${deleted.stderr.trim()}\n`)
       return 1
     }
@@ -114,7 +154,12 @@ export const schtasksBackend: DaemonBackend = {
 
   /** Exit 0 when the task is `Running`, 3 otherwise; the state is the enum name, which schtasks localises and this does not. */
   async status(io, runner, target) {
-    const answer = await runner('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', `(Get-ScheduledTask -TaskName '${target.label}').State`])
+    const answer = await runner('powershell.exe', [
+      '-NoProfile',
+      '-NonInteractive',
+      '-Command',
+      `(Get-ScheduledTask -TaskName '${target.label}').State`,
+    ])
     const state = answer.code === 0 ? answer.stdout.trim() || 'unknown' : 'not installed'
     io.stdout.write(`${target.label}: ${state}\n`)
     return state === 'Running' ? 0 : 3
