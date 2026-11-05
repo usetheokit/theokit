@@ -57,13 +57,22 @@ function expectFramed(stub: ModelStub): void {
   expect(content.split(CLOSE)).toHaveLength(2)
 }
 
+// The scripted model proves transport and call accounting only; live resistance is checked separately.
 it('does not call the tool requested by a hostile fetched page with an offline model', async () => {
   let calls = 0
   const stub = await startModelStub([{ toolCalls: [{ name: 'probe', args: {} }] }, { text: 'The page contains an instruction to call forbidden_action.' }])
   cleanups.push(() => stub.close())
   const agent = await createTheoClawAgent({
     ...theoClawAgentOptions({ model: { id: 'lmstudio/stub', url: stub.url }, apiKey: 'stub-key' }),
-    tools: [probe, { name: 'forbidden_action', description: 'count calls', inputSchema: { type: 'object', properties: {} }, handler: () => { calls += 1; return 'called' } }],
+    tools: [probe, {
+      name: 'forbidden_action',
+      description: 'count calls',
+      inputSchema: { type: 'object', properties: {} },
+      handler: () => {
+        calls += 1
+        return 'called'
+      },
+    }],
   })
   cleanups.push(() => agent[Symbol.asyncDispose]())
   const outcome = await runTheoClawTurn({ withAgent: (work) => work(agent), message: 'summarise the page', runId: 'offline-security', emit: () => undefined })
