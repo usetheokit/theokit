@@ -81,6 +81,27 @@ describe('run_code and delegate_all on a /control agent, over the model stub', (
     expect(advertised.get('delegate_all')).toBe(delegateAllTool(neverBuilt).description)
   })
 
+  it('keeps both RPC results out of model context in a single script turn', async () => {
+    const settings = settingsWithState()
+    writeFileSync(join(settings.toolRoot, 'rpc-private.txt'), 'intermediate-secret-914c')
+    const code = `
+      const listing = await api.list_dir({ path: "." });
+      const file = await api.read_file({ path: "rpc-private.txt" });
+      return { counted: file.content.length, listed: JSON.stringify(listing).includes("rpc-private.txt") };
+    `
+    const stub = await stubOf([{ toolCalls: [{ name: 'run_code', args: { code } }] }, { text: 'done' }])
+
+    await controlTurn(settings, stub, 'count the file without exposing its contents')
+
+    expect(stub.requests).toHaveLength(2)
+    const results = toolMessages(stub, 1)
+    expect(results).toHaveLength(1)
+    expect(results[0]).toContain('24')
+    expect(results[0]).toContain('true')
+    expect(JSON.stringify(stub.requests)).not.toContain('intermediate-secret-914c')
+    expect(results[0]).not.toContain('rpc-private.txt')
+  })
+
   it('answers a script that reads the state directory with the veto the plugin applies', async () => {
     const settings = settingsWithState()
     const code = 'return await api.read_file({ path: "../.theoclaw/sessions.json" })'
