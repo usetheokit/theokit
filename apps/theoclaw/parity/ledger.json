@@ -251,13 +251,11 @@
   },
   {
     "id": "OC-35",
-    "status": "shipped",
-    "check": {
-      "path": "apps/theoclaw/tests/live/migration.live.test.ts",
-      "test": "imported Claude Code and Hermes setups each steer real-model turns through instructions, memory, a skill and an MCP server"
-    },
-    "verified_on": "2026-10-31",
-    "note": "node dist/import-main.js --from claude-code|hermes copies instructions, MCP servers, skills and memories into THEOCLAW_STATE_DIR/import, validated through loadMcpJson; the /control agent gets them at start (MCP behind THEOCLAW_IMPORTED_MCP=on), and channel, session and WebChat agents get nothing; Claude Desktop is not read"
+    "status": "out",
+    "reason": "Claude Code and Hermes import and startup are covered by offline tests, but real-model end-to-end verification cannot run because model credentials are unavailable in this sandbox. No passing live check or verified model name is claimed. Rerun tests/live/migration.live.test.ts with credentials and record the actual model before marking shipped.",
+    "declared_by": "human/requester",
+    "declared_on": "2026-11-05",
+    "declared_at": "apps/theoclaw/parity/oc-35-verification.md"
   },
   {
     "id": "OC-36",

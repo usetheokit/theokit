@@ -14,6 +14,7 @@ import type { TurnAgent } from '../src/control-plane/turn.js'
 import { readClaudeCodeSetup } from '../src/migration/claude-code-source.js'
 import { readHermesSetup } from '../src/migration/hermes-source.js'
 import { type ImportedSetup, readImport, writeImport } from '../src/migration/import-store.js'
+import { readImportAtStart } from '../src/migration/import-start.js'
 import { copyFixture } from './migration-fixtures.js'
 
 const ENV = { THEOCLAW_MODEL: 'openrouter/m', OPENROUTER_API_KEY: 'router-key' }
@@ -85,6 +86,19 @@ describe('an import reaching the agents', () => {
   })
 
   for (const kind of ['claude-code', 'hermes'] as const) {
+    it(`loads the persisted ${kind} sample at instance startup`, () => {
+      const state = join(dir, kind === 'claude-code' ? 'state-claude' : 'state-hermes')
+      const warnings: string[] = []
+      const loaded = readImportAtStart({ THEOCLAW_STATE_DIR: state }, (line) => warnings.push(line))
+
+      expect(loaded).toEqual(imports[kind]!.setup)
+      expect(loaded!.counts.instructions).toBeGreaterThan(0)
+      expect(loaded!.counts.memories).toBeGreaterThan(0)
+      expect(loaded!.counts.skills).toBeGreaterThan(0)
+      expect(loaded!.counts.mcpServers).toBeGreaterThan(0)
+      expect(warnings).toEqual([])
+    })
+
     it(`a ${kind} import reaches the control agent options and Agent.create`, async () => {
       const { setup, expected } = imports[kind]!
       const off = recording()
