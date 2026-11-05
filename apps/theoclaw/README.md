@@ -618,6 +618,14 @@ pnpm --filter theoclaw run build && pnpm --filter theoclaw run build:web
 THEOCLAW_LIVE=1 pnpm --filter theoclaw exec vitest run tests/live/webchat.live.test.ts
 ```
 
+The offline DOM checks exercise both the page source and the built bundle, sending from the
+composer through the WebChat route with a deterministic agent stream:
+
+```bash
+pnpm --filter theoclaw run build:web
+THEOCLAW_BUNDLE=1 pnpm --filter theoclaw exec vitest run tests/webchat
+```
+
 ### Agent to agent (A2A)
 
 With `THEOCLAW_A2A_TOKEN` set, TheoClaw answers A2A JSON-RPC `message/send` at `POST /a2a` with
