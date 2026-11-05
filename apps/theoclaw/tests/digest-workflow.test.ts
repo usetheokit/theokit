@@ -6,7 +6,7 @@ import { createDigestWorkflow, DigestInput, toPoints } from '../src/workflows/di
 
 /** An agent whose every turn finishes with `draft`: all `agentStep` reads of an agent is `send` and `wait`. */
 function draftingAgent(draft: string): { readonly agent: SDKAgent; readonly send: ReturnType<typeof vi.fn> } {
-  const send = vi.fn(async () => ({ wait: async () => ({ status: 'finished', result: draft }) }))
+  const send = vi.fn(async (_prompt: string) => ({ wait: async () => ({ status: 'finished', result: draft }) }))
   return { agent: { agentId: 'agent-digest-test', send } as unknown as SDKAgent, send }
 }
 
@@ -71,4 +71,14 @@ describe('the digest workflow', () => {
     expect(run.status).toBe('failed')
     expect(run.error?.message).toContain('provider unavailable')
   })
+})
+
+it('passes the chat text to the draft and validates the resulting points', async () => {
+  const { agent, send } = draftingAgent('- release approved\n- tests passed')
+  const run = await createDigestWorkflow(agent).run({ text: 'Release approved. Tests passed.' })
+  expect(send).toHaveBeenCalledTimes(1)
+  expect(send.mock.calls[0]).toContainEqual(expect.stringContaining('Release approved. Tests passed.'))
+  expect(run.status).toBe('completed')
+  expect(completedSteps(run)).toBe(2)
+  expect(run.output).toEqual({ points: ['release approved', 'tests passed'] })
 })
