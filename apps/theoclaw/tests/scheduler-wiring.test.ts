@@ -134,6 +134,24 @@ describe('wireScheduler', () => {
     expect(sent).toContain('the key is')
   })
 
+  it('passes the previous output to the next run and lets that run suppress delivery', async () => {
+    const telegram = new FakeAdapter('telegram')
+    connect(telegram)
+    const prompts: string[] = []
+    const agent = new AnsweringAgent('first output')
+    const send = agent.send.bind(agent)
+    agent.send = (text, options) => {
+      prompts.push(text)
+      return prompts.length === 1 ? send(text, options) : new AnsweringAgent('[SILENT]').send(text, options)
+    }
+    const { scheduler } = await start(agent)
+    await scheduler.add(job())
+    expect(await scheduler.fire('job-1')).toBe('delivered')
+    expect(await scheduler.fire('job-1')).toBe('suppressed')
+    expect(prompts[1]).toContain('first output')
+    expect(telegram.sent).toHaveLength(1)
+  })
+
   it('prints one line when a delivery has no adapter', async () => {
     const { scheduler } = await start(new AnsweringAgent('hello'))
     await scheduler.add(job('slack'))
