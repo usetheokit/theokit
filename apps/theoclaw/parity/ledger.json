@@ -637,13 +637,12 @@
   },
   {
     "id": "OC-89",
-    "status": "shipped",
+    "status": "open",
     "check": {
       "path": "apps/theoclaw/tests/live/security.live.test.ts",
       "test": "the audit repairs a risky configuration file and TheoClaw still answers a real turn from it for OC-89"
     },
-    "verified_on": "2026-11-02",
-    "note": "`theoclaw security audit [--fix]` reads the configuration the start would see and reports by id, never by value: file readable beyond its owner (SA-001) and own directory open (SA-002), both repaired by --fix; non-loopback public bind (SA-003), THEOCLAW_DM_POLICY=open (SA-004), THEOCLAW_SANDBOX=danger-full-access (SA-005) and a control or WebChat token under 32 characters (SA-006) are reported and left to a person; exit 0 clean, 3 while findings remain; measured live on openrouter/google/gemini-2.5-flash-lite: a 0644 file in a 0755 directory repaired to 0600 and 0700, SA-005 still reported, then one real turn answered from the repaired file"
+    "note": "Deferred by S-005 B-398 option A; follow-up B-398-AUDIT. See apps/theoclaw/parity/security-plan.md. Existing implementation or checks do not close this follow-up."
   },
   {
     "id": "OC-90",
@@ -661,17 +660,17 @@
   },
   {
     "id": "OC-91",
-    "status": "shipped",
+    "status": "open",
     "check": {
       "path": "apps/theoclaw/tests/live/pairing.live.test.ts",
       "test": "a device is refused until the owner approves it, then runs a real-model turn"
     },
-    "verified_on": "2026-11-02",
-    "note": "setup code and node approval: the owner's /control socket issues a one-time ten-minute setup code (pair_code), a device redeems it at POST /control/pair with a token it chose, stays refused 401 until the owner sends approve_device, and then opens /control with that token; the file keeps only the token's digest; needs THEOCLAW_CONTROL_TOKEN and THEOCLAW_STATE_DIR; measured live on openrouter/google/gemini-2.5-flash-lite: 401 before pairing and before approval, 101 after, one real turn finished; also revoke_device on the owner socket ends a device's access and closes its open sockets; not covered: a QR-code or mobile app, which OpenClaw's device-pair extension also ships"
+    "note": "Deferred by S-005 B-398 option A; follow-up B-398-PAIRING. See apps/theoclaw/parity/security-plan.md. Existing implementation or checks do not close this follow-up."
   },
   {
     "id": "OC-92",
-    "status": "open"
+    "status": "open",
+    "note": "Deferred by S-005 B-398 option A; follow-up B-398-INCOGNITO. See apps/theoclaw/parity/security-plan.md. Existing implementation or checks do not close this follow-up."
   },
   {
     "id": "OC-93",
