@@ -8,6 +8,7 @@
  * SDK-side (sdk-runtime.md); this exposes the agent over the app's own HTTP route.
  */
 import { type CompiledTool, compileLoadedAgentModule } from '@theokit/agents'
+import type { CustomTool } from '@theokit/sdk'
 
 import { type AppResource, buildResourceDescriptors, readAppResource } from './mcp-app-resources.js'
 
@@ -54,9 +55,11 @@ export function isMcpPath(urlPath: string): string | null {
   return match ? decodeURIComponent(match[1]) : null
 }
 
+type JsonRpcId = number | string | null
+
 interface JsonRpcRequest {
   jsonrpc: '2.0'
-  id: number | string | null
+  id: JsonRpcId
   method: string
   params?: unknown
 }
@@ -130,7 +133,7 @@ async function callTool(
 
 /** `resources/read` (M30) — extracted to keep `handleMcpJsonRpc` within the complexity budget. */
 function handleResourcesRead(
-  id: number | string | null,
+  id: JsonRpcId,
   params: unknown,
   appResources: readonly AppResource[],
 ): Response {
@@ -153,17 +156,72 @@ function handleResourcesRead(
   return jsonResponse({ jsonrpc: '2.0', id, result: contents })
 }
 
+/** The tools (and optional approval gate) a JSON-RPC dispatch answers over. */
+interface McpToolSet {
+  tools: readonly CompiledTool[]
+  hitl?: ReadonlyMap<string, unknown>
+}
+
+function rpcResult(id: JsonRpcId, result: unknown): Response {
+  return jsonResponse({ jsonrpc: '2.0', id, result })
+}
+
+function handleInitialize(
+  id: JsonRpcId,
+  name: string,
+  appResources: readonly AppResource[],
+): Response {
+  const capabilities: Record<string, unknown> = { tools: {} }
+  if (appResources.length > 0) capabilities.resources = {}
+  return rpcResult(id, {
+    protocolVersion: MCP_PROTOCOL_VERSION,
+    capabilities,
+    serverInfo: { name, version: '1.0' },
+  })
+}
+
+async function handleToolsCall(id: JsonRpcId, params: unknown, set: McpToolSet): Promise<Response> {
+  const p = params as { name?: unknown; arguments?: unknown } | undefined
+  return rpcResult(id, await callTool(set.tools, p?.name, p?.arguments ?? {}, set.hitl))
+}
+
+/** Route one validated request to its method handler. */
+async function routeMethod(
+  req: JsonRpcRequest,
+  name: string,
+  appResources: readonly AppResource[],
+  set: McpToolSet,
+): Promise<Response> {
+  const { id, method, params } = req
+  switch (method) {
+    case 'initialize':
+      return handleInitialize(id, name, appResources)
+    case 'tools/list':
+      return rpcResult(id, { tools: toolDescriptors(set.tools) })
+    case 'tools/call':
+      return handleToolsCall(id, params, set)
+    case 'resources/list':
+      return rpcResult(id, { resources: buildResourceDescriptors(appResources) })
+    case 'resources/read':
+      return handleResourcesRead(id, params, appResources)
+    default:
+      return jsonResponse({
+        jsonrpc: '2.0',
+        id,
+        error: { code: -32601, message: `Method not found: ${method}` },
+      })
+  }
+}
+
 /**
- * Handle one MCP JSON-RPC request for an agent module. Always returns a 200 JSON-RPC envelope.
- *
- * M30 — `appResources` (optional) are the agent's declared `ui://` App resources; when present the
- * server advertises `capabilities.resources` and answers `resources/list` + `resources/read`.
+ * The JSON-RPC dispatch shared by the agent-module and the plain-tool-list entry points. `resolve`
+ * yields the tools to answer over (compiling the module lazily, inside the error envelope).
  */
-export async function handleMcpJsonRpc(
-  mod: unknown,
+async function dispatchMcp(
   name: string,
   body: unknown,
-  appResources: readonly AppResource[] = [],
+  appResources: readonly AppResource[],
+  resolve: () => McpToolSet,
 ): Promise<Response> {
   if (!isJsonRpcRequest(body)) {
     return jsonResponse({
@@ -172,54 +230,59 @@ export async function handleMcpJsonRpc(
       error: { code: -32600, message: 'Invalid Request' },
     })
   }
-  const { id, method, params } = body
   try {
-    const compiled = compileLoadedAgentModule(mod, `mcp server for "${name}"`)
-    if (method === 'initialize') {
-      const capabilities: Record<string, unknown> = { tools: {} }
-      if (appResources.length > 0) capabilities.resources = {}
-      return jsonResponse({
-        jsonrpc: '2.0',
-        id,
-        result: {
-          protocolVersion: MCP_PROTOCOL_VERSION,
-          capabilities,
-          serverInfo: { name, version: '1.0' },
-        },
-      })
-    }
-    if (method === 'tools/list') {
-      return jsonResponse({
-        jsonrpc: '2.0',
-        id,
-        result: { tools: toolDescriptors(compiled.tools) },
-      })
-    }
-    if (method === 'tools/call') {
-      const p = params as { name?: unknown; arguments?: unknown } | undefined
-      const result = await callTool(compiled.tools, p?.name, p?.arguments ?? {}, compiled.hitl)
-      return jsonResponse({ jsonrpc: '2.0', id, result })
-    }
-    if (method === 'resources/list') {
-      return jsonResponse({
-        jsonrpc: '2.0',
-        id,
-        result: { resources: buildResourceDescriptors(appResources) },
-      })
-    }
-    if (method === 'resources/read') {
-      return handleResourcesRead(id, params, appResources)
-    }
-    return jsonResponse({
-      jsonrpc: '2.0',
-      id,
-      error: { code: -32601, message: `Method not found: ${method}` },
-    })
+    return await routeMethod(body, name, appResources, resolve())
   } catch (err) {
     return jsonResponse({
       jsonrpc: '2.0',
-      id,
+      id: body.id,
       error: { code: -32603, message: err instanceof Error ? err.message : 'Internal error' },
     })
   }
+}
+
+/**
+ * Handle one MCP JSON-RPC request for an agent module. Always returns a 200 JSON-RPC envelope.
+ *
+ * M30 — `appResources` (optional) are the agent's declared `ui://` App resources; when present the
+ * server advertises `capabilities.resources` and answers `resources/list` + `resources/read`.
+ */
+export function handleMcpJsonRpc(
+  mod: unknown,
+  name: string,
+  body: unknown,
+  appResources: readonly AppResource[] = [],
+): Promise<Response> {
+  return dispatchMcp(name, body, appResources, () =>
+    compileLoadedAgentModule(mod, `mcp server for "${name}"`),
+  )
+}
+
+/** Throw when two tools share a name: an MCP client could not tell them apart. */
+function assertUniqueToolNames(tools: readonly CustomTool[]): void {
+  const seen = new Set<string>()
+  for (const t of tools) {
+    if (seen.has(t.name)) {
+      throw new Error(`Duplicate MCP tool name "${t.name}": tool names must be unique.`)
+    }
+    seen.add(t.name)
+  }
+}
+
+/**
+ * Handle one MCP JSON-RPC request for a plain list of tools (no agent module). Answers
+ * `initialize` (with `capabilities.tools` only, no resources), `tools/list` and `tools/call`.
+ *
+ * A list of tools has NO approval gate: nothing is refused as "requires human approval". Whoever
+ * passes a tool in decides that it may run unattended.
+ *
+ * @throws when two tools share a name (called synchronously, before any request is answered).
+ */
+export function handleMcpToolsJsonRpc(
+  tools: readonly CustomTool[],
+  name: string,
+  body: unknown,
+): Promise<Response> {
+  assertUniqueToolNames(tools)
+  return dispatchMcp(name, body, [], () => ({ tools: tools as readonly CompiledTool[] }))
 }
