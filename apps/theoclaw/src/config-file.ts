@@ -119,7 +119,7 @@ export function writeConfiguration(
 
 /** Reload file-owned settings while preserving the caller's environment overrides. */
 export function configurationReloader(env: NodeJS.ProcessEnv, homeDir: string): () => void {
-  const inherited = new Set(Object.keys(env))
+  const inherited = new Set(Object.keys(env).filter((key) => env[key] !== undefined))
   const path = configurationPath(env, homeDir)
   let owned = new Set<string>()
   return () => {

@@ -8,7 +8,7 @@ it('reloads changed and removed file settings while preserving environment overr
   const dir = mkdtempSync(join(tmpdir(), 'reload-'))
   try {
     const path = join(dir, 'config')
-    const env: NodeJS.ProcessEnv = { THEOCLAW_CONFIG: path, OVERRIDE: 'caller' }
+    const env: NodeJS.ProcessEnv = { THEOCLAW_CONFIG: path, OVERRIDE: 'caller', THEOCLAW_MODEL: undefined }
     const reload = configurationReloader(env, dir)
     writeFileSync(path, 'THEOCLAW_MODEL=first\nOLD=yes\nOVERRIDE=file')
     reload()

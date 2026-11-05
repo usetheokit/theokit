@@ -56,7 +56,11 @@ try {
   if (configPath !== undefined) {
     reload()
     const timer = setInterval(() => {
-      try { reload() } catch { process.stderr.write('theoclaw: configuration reload failed\n') }
+      try {
+        reload()
+      } catch {
+        process.stderr.write('theoclaw: configuration reload failed\n')
+      }
     }, 1000)
     timer.unref()
   }
