@@ -601,21 +601,27 @@
   },
   {
     "id": "OC-84",
-    "status": "shipped",
+    "status": "out",
     "check": {
       "path": "apps/theoclaw/tests/live/scheduler.live.test.ts",
       "test": "a real model schedules a job from a sentence and it delivers unattended for OC-84"
     },
-    "verified_on": "2026-11-02"
+    "reason": "Scheduler and heartbeat are implemented and covered by offline checks. Real-model end-to-end verification was not run in this sandbox because model credentials and a real delivery account are unavailable. Run tests/live/scheduler.live.test.ts and record the actual model before marking shipped.",
+    "declared_by": "human/issue-1173-requester",
+    "declared_on": "2026-11-05",
+    "declared_at": "Issue #1173: explicitly permits out with a written reason when live verification is unavailable"
   },
   {
     "id": "OC-85",
-    "status": "shipped",
+    "status": "out",
     "check": {
       "path": "apps/theoclaw/tests/live/scheduler.live.test.ts",
       "test": "a real model answers the heartbeat from HEARTBEAT.md and stays silent when told to for OC-85"
     },
-    "verified_on": "2026-11-02"
+    "reason": "Scheduler and heartbeat are implemented and covered by offline checks. Real-model end-to-end verification was not run in this sandbox because model credentials and a real delivery account are unavailable. Run tests/live/scheduler.live.test.ts and record the actual model before marking shipped.",
+    "declared_by": "human/issue-1173-requester",
+    "declared_on": "2026-11-05",
+    "declared_at": "Issue #1173: explicitly permits out with a written reason when live verification is unavailable"
   },
   {
     "id": "OC-86",
@@ -755,12 +761,15 @@
   },
   {
     "id": "H-4",
-    "status": "shipped",
+    "status": "out",
     "check": {
       "path": "apps/theoclaw/tests/live/scheduler.live.test.ts",
       "test": "a real model's second run after a restart sees the first run's output and a SILENT run sends nothing for H-4"
     },
-    "verified_on": "2026-11-02"
+    "reason": "Scheduler and heartbeat are implemented and covered by offline checks. Real-model end-to-end verification was not run in this sandbox because model credentials and a real delivery account are unavailable. Run tests/live/scheduler.live.test.ts and record the actual model before marking shipped.",
+    "declared_by": "human/issue-1173-requester",
+    "declared_on": "2026-11-05",
+    "declared_at": "Issue #1173: explicitly permits out with a written reason when live verification is unavailable"
   },
   {
     "id": "H-5",
