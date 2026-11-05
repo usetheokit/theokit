@@ -116,3 +116,16 @@ export function writeConfiguration(
     throw error
   }
 }
+
+/** Reload file-owned settings while preserving the caller's environment overrides. */
+export function configurationReloader(env: NodeJS.ProcessEnv, homeDir: string): () => void {
+  const inherited = new Set(Object.keys(env))
+  const path = configurationPath(env, homeDir)
+  let owned = new Set<string>()
+  return () => {
+    const entries = parseEnv(readFileSync(path, 'utf8'))
+    for (const key of owned) if (!inherited.has(key)) delete env[key]
+    for (const [key, value] of Object.entries(entries)) if (!inherited.has(key)) env[key] = value
+    owned = new Set(Object.keys(entries))
+  }
+}

@@ -8,7 +8,7 @@ import type { SDKAgent } from '@theokit/sdk'
 import { startTheoClaw } from './composition.js'
 import type { AgentImport, TheoClawAgentOptions } from './agent/create-agent.js'
 import { type CreateAgent, createAgentFactory, createChannelAgentFactory } from './control-plane/agent-factory.js'
-import { loadConfiguration } from './config-file.js'
+import { configurationReloader, loadConfiguration } from './config-file.js'
 import { parseEntryArguments } from './entry-arguments.js'
 import { describeError } from './control-plane/errors.js'
 import { resolveInstance, type TheoClawInstance } from './instance.js'
@@ -51,7 +51,15 @@ try {
     process.exit(2)
   }
   // The configuration file next (B-374): it fills only what the environment leaves unset.
-  loadConfiguration(process.env, homedir())
+  const reload = configurationReloader(process.env, homedir())
+  const configPath = loadConfiguration(process.env, homedir())
+  if (configPath !== undefined) {
+    reload()
+    const timer = setInterval(() => {
+      try { reload() } catch { process.stderr.write('theoclaw: configuration reload failed\n') }
+    }, 1000)
+    timer.unref()
+  }
   instance = resolveInstance(process.env, { homeDir: homedir() })
   // The instance lock before `applyInstance` creates the targets (B-400 FR-010): a start refused
   // while a backup or a restore runs leaves both as they were. Released when the process exits.
