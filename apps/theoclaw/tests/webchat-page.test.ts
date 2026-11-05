@@ -3,35 +3,17 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { createWebchatRoutes } from "../src/webchat/routes.js";
+
 type ChatAppModule = typeof import("../web/chat-app.js");
 
 const TOKEN = "w".repeat(40);
-
-/** The UIMessage wire a WebChat turn answers with: one text block, then the terminal frames. */
-const REPLY_FRAMES = [
-  { type: "start" },
-  { type: "text-start", id: "t" },
-  { type: "text-delta", id: "t", delta: "hello " },
-  { type: "text-delta", id: "t", delta: "from the agent" },
-  { type: "text-end", id: "t" },
-  { type: "finish" },
-];
 
 interface Recorded {
   readonly url: string;
   readonly method: string;
   readonly headers: Headers;
   readonly body: unknown;
-}
-
-function replyStream(): ReadableStream<Uint8Array> {
-  const text = [...REPLY_FRAMES.map((frame) => `data: ${JSON.stringify(frame)}\n\n`), "data: [DONE]\n\n"].join("");
-  return new ReadableStream({
-    start(controller) {
-      controller.enqueue(new TextEncoder().encode(text));
-      controller.close();
-    },
-  });
 }
 
 let recorded: Recorded[] = [];
@@ -46,15 +28,24 @@ beforeEach(async () => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   recorded = [];
   sessionStorage.clear();
+  const handle = createWebchatRoutes({
+    token: TOKEN,
+    assetsDir: "/unused",
+    runTurn: async (_message, emit) => {
+      emit({ type: "text_delta", content: "hello " });
+      emit({ type: "text_delta", content: "from the agent" });
+      return { ok: true };
+    },
+  });
   vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
     const request = new Request(input, init);
     recorded.push({
       url: request.url,
       method: request.method,
       headers: request.headers,
-      body: JSON.parse(await request.text()) as unknown,
+      body: JSON.parse(await request.clone().text()) as unknown,
     });
-    return new Response(replyStream(), { headers: { "content-type": "text/event-stream" } });
+    return handle(request);
   });
   container = document.createElement("div");
   document.body.append(container);
