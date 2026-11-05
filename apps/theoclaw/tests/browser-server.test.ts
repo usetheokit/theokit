@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createInterface } from 'node:readline'
 
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { browserServer, readBrowser } from '../src/tools/browser-server.js'
 
@@ -110,6 +110,14 @@ function listTools(server: StdioCommand, env: NodeJS.ProcessEnv): Promise<string
 }
 
 describe('the browser server over stdio', () => {
+  it('does not resolve browser dependencies while disabled', () => {
+    const resolveCli = vi.fn(() => { throw new Error('must not resolve') })
+    for (const env of [{}, { THEOCLAW_BROWSER: '' }]) {
+      expect(readBrowser(env, { resolveCli, browsersDir: '/nonexistent/browser-cache' })).toBeUndefined()
+    }
+    expect(resolveCli).not.toHaveBeenCalled()
+  })
+
   it('lists exactly the offered browser tools over stdio, browser_run_code_unsafe not among them', async () => {
     // EC-2: no browser in the browsers directory, so the list must answer without one.
     const emptyBrowsers = mkdtempSync(join(tmpdir(), 'theoclaw-no-browsers-'))
