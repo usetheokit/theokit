@@ -681,19 +681,31 @@
   },
   {
     "id": "OC-93",
-    "status": "open"
+    "status": "out",
+    "declared_by": "human/requester",
+    "declared_on": "2026-11-05",
+    "reason": "Excluded from shipped parity: no executed real-model operations check or account credentials are available; offline coverage alone does not establish parity."
   },
   {
     "id": "OC-94",
-    "status": "open"
+    "status": "out",
+    "declared_by": "human/requester",
+    "declared_on": "2026-11-05",
+    "reason": "Excluded from shipped parity: no executed real-model operations check or account credentials are available; offline coverage alone does not establish parity."
   },
   {
     "id": "OC-95",
-    "status": "open"
+    "status": "out",
+    "declared_by": "human/requester",
+    "declared_on": "2026-11-05",
+    "reason": "Excluded from shipped parity: no executed real-model operations check or account credentials are available; offline coverage alone does not establish parity."
   },
   {
     "id": "OC-96",
-    "status": "open"
+    "status": "out",
+    "declared_by": "human/requester",
+    "declared_on": "2026-11-05",
+    "reason": "Excluded from shipped parity: no executed real-model operations check or account credentials are available; offline coverage alone does not establish parity."
   },
   {
     "id": "OC-97",

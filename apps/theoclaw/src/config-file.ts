@@ -124,6 +124,13 @@ export function configurationReloader(env: NodeJS.ProcessEnv, homeDir: string): 
   let owned = new Set<string>()
   return () => {
     const entries = parseEnv(readFileSync(path, 'utf8'))
+    // Only credentials are dynamic: listener, authorization and adapter settings require restart.
+    const dynamic = new Set(['THEOKIT_API_KEY', 'OPENROUTER_API_KEY'])
+    for (const key of Object.keys(entries)) {
+      if (!dynamic.has(key) && owned.has(key) && entries[key] !== env[key] && !inherited.has(key)) {
+        throw new Error('configuration change requires restart')
+      }
+    }
     for (const key of owned) if (!inherited.has(key)) delete env[key]
     for (const [key, value] of Object.entries(entries)) if (!inherited.has(key)) env[key] = value
     owned = new Set(Object.keys(entries))

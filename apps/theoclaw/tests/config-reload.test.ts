@@ -8,18 +8,40 @@ it('reloads changed and removed file settings while preserving environment overr
   const dir = mkdtempSync(join(tmpdir(), 'reload-'))
   try {
     const path = join(dir, 'config')
-    const env: NodeJS.ProcessEnv = { THEOCLAW_CONFIG: path, OVERRIDE: 'caller', THEOCLAW_MODEL: undefined }
+    const env: NodeJS.ProcessEnv = { THEOCLAW_CONFIG: path, OVERRIDE: 'caller', OPENROUTER_API_KEY: undefined }
     const reload = configurationReloader(env, dir)
-    writeFileSync(path, 'THEOCLAW_MODEL=first\nOLD=yes\nOVERRIDE=file')
+    writeFileSync(path, 'OPENROUTER_API_KEY=first\nOLD=yes\nOVERRIDE=file')
     reload()
-    expect(env.THEOCLAW_MODEL).toBe('first')
-    writeFileSync(path, 'THEOCLAW_MODEL=second')
+    expect(env.OPENROUTER_API_KEY).toBe('first')
+    writeFileSync(path, 'OPENROUTER_API_KEY=second')
     reload()
-    expect(env.THEOCLAW_MODEL).toBe('second')
+    expect(env.OPENROUTER_API_KEY).toBe('second')
     expect(env.OLD).toBeUndefined()
     expect(env.OVERRIDE).toBe('caller')
     rmSync(path)
     expect(reload).toThrow()
-    expect(env.THEOCLAW_MODEL).toBe('second')
+    expect(env.OPENROUTER_API_KEY).toBe('second')
+  } finally { rmSync(dir, { recursive: true, force: true }) }
+})
+
+it('uses a rotated credential for the next agent without rebuilding the factory', async () => {
+  const { createAgentFactory } = await import('../src/control-plane/agent-factory.js')
+  const dir = mkdtempSync(join(tmpdir(), 'reload-agent-'))
+  try {
+    const path = join(dir, 'config')
+    const env = { THEOCLAW_CONFIG: path, THEOCLAW_MODEL: 'openrouter/test' }
+    const reload = configurationReloader(env, dir)
+    const keys: string[] = []
+    const factory = createAgentFactory(env, async (options) => {
+      keys.push(options.apiKey)
+      return { send: async () => { throw new Error('unused') } }
+    })
+    writeFileSync(path, 'OPENROUTER_API_KEY=first')
+    reload()
+    await factory()
+    writeFileSync(path, 'OPENROUTER_API_KEY=second')
+    reload()
+    await factory()
+    expect(keys).toEqual(['first', 'second'])
   } finally { rmSync(dir, { recursive: true, force: true }) }
 })

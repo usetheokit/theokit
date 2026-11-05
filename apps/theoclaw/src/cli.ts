@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { doctorCommand } from './doctor.js'
 import { spawn } from 'node:child_process'
 import { realpathSync } from 'node:fs'
 import { homedir } from 'node:os'
@@ -46,6 +47,7 @@ const USAGE = `usage: theoclaw <command>
 
   theoclaw start [--config <path>] [--profile <name>]
                             run TheoClaw in the foreground with the configuration file
+  theoclaw doctor           verify the model credential without printing it
   theoclaw onboard          write the configuration file, asking for each setting
       --yes --model <id> --api-key-env <NAME> --port <n> --owners <platform:id,...>
       [--workspace <absolute dir>] [--force]
@@ -130,6 +132,7 @@ function backupCommand(name: 'backup' | 'restore'): Command {
 
 const COMMANDS: Readonly<Record<string, Command>> = {
   start: startChild,
+  doctor: doctorCommand,
   onboard: async (args, io) => {
     await onboard(parseOnboard(args), io)
     return 0
