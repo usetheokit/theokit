@@ -2,13 +2,15 @@ import { rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+// Numeric character references are valid in both XML service definitions.
+import { escapeHtml as escapeXml } from 'theokit/server/security'
+
 import {
   type DaemonBackend,
   type DaemonIo,
   type InstallTarget,
   type Runner,
   type RunResult,
-  escapeXml,
 } from './daemon-common.js'
 
 /**

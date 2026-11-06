@@ -79,8 +79,3 @@ export function writeAtomically(path: string, content: string | Buffer): void {
   writeFileSync(temporary, content)
   renameSync(temporary, path)
 }
-
-/** The XML text escapes shared by the launchd plist and the Task Scheduler definition. */
-export function escapeXml(value: string): string {
-  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&apos;')
-}
