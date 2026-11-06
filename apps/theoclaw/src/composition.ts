@@ -369,9 +369,8 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
   const streams = options.streams ?? [process.stdout, process.stderr]
   const secretValues = processSecrets(options, settings, tools, events, a2a)
   const logged = (write: (line: string) => void) => (line: string): void => {
-    const masked = redactSecrets(maskSecrets(line, secretValues))
-    write(masked)
-    options.telemetryLog?.(masked)
+    write(line)
+    if (options.telemetryLog !== undefined) options.telemetryLog(redactSecrets(maskSecrets(line, secretValues)))
   }
   const stderr = logged(options.stderr ?? lineWriter(streams[streams.length - 1]))
   // Loaded before the start line, the mask and the shutdown: an unreadable pairing file leaves nothing behind.

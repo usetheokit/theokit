@@ -62,7 +62,7 @@ try {
   const setup = readImportAtStart(process.env, (line) => process.stderr.write(`${line}\n`))
   imported = setup === undefined ? undefined : { setup, mcp }
   // Before any agent exists, so every agent records through the providers (B-400 FR-006).
-  telemetry = registerTelemetry(readTelemetrySettings(process.env), { write: (line) => process.stderr.write(`${line}\n`) })
+  telemetry = await registerTelemetry(readTelemetrySettings(process.env), { write: (line) => process.stderr.write(`${line}\n`) })
 } catch (error) {
   fail(error)
 }

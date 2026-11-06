@@ -1,8 +1,6 @@
 import { createServer, type Server } from 'node:http'
 
-import { OTLPLogExporter } from '@opentelemetry/exporter-logs-otlp-http'
-import { PrometheusExporter } from '@opentelemetry/exporter-prometheus'
-import { BatchLogRecordProcessor, LoggerProvider, type LogRecordExporter } from '@opentelemetry/sdk-logs'
+import type { LogRecordExporter } from '@opentelemetry/sdk-logs'
 import { diag, DiagLogLevel, metrics, trace } from '@opentelemetry/api'
 import type { DiagLogger } from '@opentelemetry/api'
 import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-http'
@@ -137,8 +135,15 @@ const NOTHING_REGISTERED: RegisteredTelemetry = { log: () => undefined, promethe
  * OTLP/HTTP exporters behind a batch processor and a periodic reader, so an export never runs on
  * the turn path (FR-006, NFR-004). Nothing is registered while telemetry is off.
  */
-export function registerTelemetry(settings: TelemetrySettings, options: RegisterTelemetryOptions): RegisteredTelemetry {
+export async function registerTelemetry(settings: TelemetrySettings, options: RegisterTelemetryOptions): Promise<RegisteredTelemetry> {
   if (!settings.enabled) return NOTHING_REGISTERED
+  // Agent factories read settings even in the TUI and other telemetry-disabled processes.
+  // Keep the optional host exporters off that startup path.
+  const [{ OTLPLogExporter }, { BatchLogRecordProcessor, LoggerProvider }, prometheusModule] = await Promise.all([
+    import('@opentelemetry/exporter-logs-otlp-http'),
+    import('@opentelemetry/sdk-logs'),
+    settings.prometheusPort === undefined ? undefined : import('@opentelemetry/exporter-prometheus'),
+  ])
   diag.setLogger(failureLogger(options.write), DiagLogLevel.ERROR)
   const spanExporter = options.spanExporter ?? new OTLPTraceExporter({ url: `${settings.endpoint}/v1/traces`, timeoutMillis: EXPORT_TIMEOUT_MS })
   const metricExporter =
@@ -150,7 +155,7 @@ export function registerTelemetry(settings: TelemetrySettings, options: Register
     exportTimeoutMillis: EXPORT_TIMEOUT_MS,
   })] })
   const logger = loggerProvider.getLogger('theoclaw')
-  const prometheus = settings.prometheusPort === undefined ? undefined : new PrometheusExporter({ preventServerStart: true })
+  const prometheus = prometheusModule === undefined ? undefined : new prometheusModule.PrometheusExporter({ preventServerStart: true })
   let scrapeServer: Server | undefined
   const prometheusEndpoint = prometheus === undefined ? Promise.resolve(undefined) : new Promise<string | undefined>((resolve) => {
     const reader = prometheus

@@ -69,7 +69,7 @@ describe.skipIf(!LIVE)('OpenTelemetry export against a real model (OC-98)', () =
     closers.push(() => receiver.close())
     const env = { ...process.env, THEOCLAW_OTEL: 'on', OTEL_EXPORTER_OTLP_ENDPOINT: receiver.endpoint, THEOCLAW_PROMETHEUS_PORT: '0' }
     const lines: string[] = []
-    const registered: RegisteredTelemetry = registerTelemetry(readTelemetrySettings(env), { write: (line) => void lines.push(line) })
+    const registered: RegisteredTelemetry = await registerTelemetry(readTelemetrySettings(env), { write: (line) => void lines.push(line) })
     closers.push(() => registered.shutdown())
     const agent = (await createTheoClawAgent(agentOptionsFor(env))) as unknown as TurnAgent & { [Symbol.asyncDispose](): Promise<void> }
     closers.push(() => agent[Symbol.asyncDispose]())

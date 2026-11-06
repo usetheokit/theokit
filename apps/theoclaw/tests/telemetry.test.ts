@@ -100,7 +100,7 @@ describe("registered telemetry (FR-006, NFR-004)", () => {
     const model = await stub();
     const spans = new InMemorySpanExporter();
     const metrics = new InMemoryMetricExporter(AggregationTemporality.CUMULATIVE);
-    const registered = keep(registerTelemetry(readTelemetrySettings(ON), { write: () => undefined, spanExporter: spans, metricExporter: metrics }));
+    const registered = keep(await registerTelemetry(readTelemetrySettings(ON), { write: () => undefined, spanExporter: spans, metricExporter: metrics }));
 
     const turn = await timedTurn(model, ON);
     await registered.flush();
@@ -119,7 +119,7 @@ describe("registered telemetry (FR-006, NFR-004)", () => {
     const lines: string[] = [];
     const baseline = await timedTurn(model, { THEOCLAW_MODEL: "m", THEOKIT_API_KEY: "stub-key" });
     const down = { ...ON, OTEL_EXPORTER_OTLP_ENDPOINT: "http://127.0.0.1:9" };
-    const registered = registerTelemetry(readTelemetrySettings(down), { write: (line) => void lines.push(line) });
+    const registered = await registerTelemetry(readTelemetrySettings(down), { write: (line) => void lines.push(line) });
 
     const turn = await timedTurn(model, down);
     await registered.shutdown();
@@ -137,7 +137,7 @@ describe("registered telemetry (FR-006, NFR-004)", () => {
   it("an export failure line carries no credential of the endpoint's URL", async () => {
     const lines: string[] = [];
     const settings = readTelemetrySettings({ THEOCLAW_OTEL: "on", OTEL_EXPORTER_OTLP_ENDPOINT: "http://user:hunter2-token@127.0.0.1:9" }); // trufflehog:ignore — a made-up credential the mask must remove
-    const registered = registerTelemetry(settings, { write: (line) => void lines.push(line) });
+    const registered = await registerTelemetry(settings, { write: (line) => void lines.push(line) });
     const { diag } = await import("@opentelemetry/api");
     diag.error("export to http://user:hunter2-token@127.0.0.1:9/v1/traces failed"); // trufflehog:ignore — a made-up credential the mask must remove
     await registered.shutdown();
@@ -151,7 +151,7 @@ describe("B-712 log and scrape exports", () => {
   it("exports masked run log lines and exposes SDK turn metrics to a loopback scrape", async () => {
     const model = await stub();
     const logs = new InMemoryLogRecordExporter();
-    const registered = keep(registerTelemetry(readTelemetrySettings({ ...ON, THEOCLAW_PROMETHEUS_PORT: "0" }), {
+    const registered = keep(await registerTelemetry(readTelemetrySettings({ ...ON, THEOCLAW_PROMETHEUS_PORT: "0" }), {
       write: () => undefined, logExporter: logs,
       spanExporter: new InMemorySpanExporter(),
       metricExporter: new InMemoryMetricExporter(AggregationTemporality.CUMULATIVE),
@@ -191,7 +191,7 @@ describe("B-712 log and scrape exports", () => {
     cleanups.push(() => new Promise<void>(resolve => collector.close(() => resolve())));
     const address = collector.address();
     if (address === null || typeof address === "string") throw new Error("No collector address");
-    const registered = registerTelemetry(readTelemetrySettings({ ...ON, OTEL_EXPORTER_OTLP_ENDPOINT: `http://127.0.0.1:${address.port}`, THEOCLAW_PROMETHEUS_PORT: "0" }), {
+    const registered = await registerTelemetry(readTelemetrySettings({ ...ON, OTEL_EXPORTER_OTLP_ENDPOINT: `http://127.0.0.1:${address.port}`, THEOCLAW_PROMETHEUS_PORT: "0" }), {
       write: () => undefined, spanExporter: new InMemorySpanExporter(),
       metricExporter: new InMemoryMetricExporter(AggregationTemporality.CUMULATIVE),
     });
@@ -212,7 +212,7 @@ describe("B-712 log and scrape exports", () => {
   it("keeps anonymous telemetry off by default and sends only an aggregate when opted in", async () => {
     for (const enabled of [false, true]) {
       const exporter = new InMemoryMetricExporter(AggregationTemporality.CUMULATIVE);
-      const registered = registerTelemetry(readTelemetrySettings({ ...ON, THEOCLAW_ANONYMOUS_TELEMETRY: enabled ? "on" : "off" }), {
+      const registered = await registerTelemetry(readTelemetrySettings({ ...ON, THEOCLAW_ANONYMOUS_TELEMETRY: enabled ? "on" : "off" }), {
         write: () => undefined, logExporter: new InMemoryLogRecordExporter(),
         spanExporter: new InMemorySpanExporter(), metricExporter: new InMemoryMetricExporter(AggregationTemporality.CUMULATIVE), anonymousMetricExporter: exporter,
       });
@@ -228,7 +228,7 @@ describe("B-712 log and scrape exports", () => {
   });
 
   it("does not register any export or listener by default", async () => {
-    const registered = registerTelemetry(readTelemetrySettings({}), { write: () => undefined });
+    const registered = await registerTelemetry(readTelemetrySettings({}), { write: () => undefined });
     registered.log("private");
     expect(await registered.prometheusEndpoint).toBeUndefined();
     await registered.shutdown();
