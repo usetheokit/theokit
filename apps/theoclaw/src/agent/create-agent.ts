@@ -18,6 +18,8 @@ export interface TheoClawLocalOptions {
   readonly hooks: HookApprovalGate
   readonly cwd?: string
   readonly sessionDir?: string
+  /** `['plugins']` only for an agent given a plugin workspace (OC-75); absent loads no plugin folder. */
+  readonly settingSources?: Array<'plugins'>
 }
 
 /** The options every TheoClaw agent is created with, every one of them. */
@@ -68,6 +70,8 @@ export interface TheoClawAgentInput<Model extends string | ModelSelection> {
   /** SDK telemetry for every agent while `THEOCLAW_OTEL=on` (B-400 FR-006). */
   readonly telemetry?: AgentTelemetry
   readonly thinking?: ThinkingLevel
+  /** A workspace whose `.theokit/plugins/` holds installed, trusted plugins (OC-75); absent loads none. */
+  readonly pluginWorkspace?: string
 }
 
 /**
@@ -83,7 +87,10 @@ export function theoClawAgentOptions<Model extends string | ModelSelection>(
     withheldBuiltinTools: ['shell'] as const,
     memory: { enabled: false } as const,
     systemPrompt: UNTRUSTED_CONTENT_NOTICE,
-    local: { hooks: createHookApprovalGate(input.approvedHooks ?? new Set()) },
+    local: {
+      hooks: createHookApprovalGate(input.approvedHooks ?? new Set()),
+      ...(input.pluginWorkspace === undefined ? {} : { cwd: input.pluginWorkspace, settingSources: ['plugins' as const] }),
+    },
     ...(input.telemetry === undefined ? {} : { telemetry: input.telemetry }),
     ...(input.thinking === undefined ? {} : { thinking: input.thinking }),
   }

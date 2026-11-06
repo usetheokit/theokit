@@ -557,7 +557,8 @@
   },
   {
     "id": "OC-75",
-    "status": "open"
+    "status": "open",
+    "note": "built offline: PLUGIN.md manifest parser, defineTheoClawPlugin, installPlugin (copy plus trust record) and THEOCLAW_PLUGIN_WORKSPACE for the /control agent (tests/plugins.test.ts); open because no real-model check exists yet and the pinned SDK (5.13.0, root override) predates the 5.14.0 release that imports a manifest entry"
   },
   {
     "id": "OC-76",
