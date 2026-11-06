@@ -567,7 +567,11 @@
   },
   {
     "id": "OC-77",
-    "status": "open"
+    "status": "open",
+    "gaps": [
+      "B-565"
+    ],
+    "note": "moved to B-565 (dod reduced 2026-10-22, delegated): none of the six sandbox backends exists in the ecosystem, so nothing here can be built or checked yet"
   },
   {
     "id": "OC-78",
