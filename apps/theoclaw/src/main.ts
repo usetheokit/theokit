@@ -76,6 +76,7 @@ const create: CreateAgent = createSdkAgent
 
 startTheoClaw({
   env: process.env,
+  telemetryLog: (line) => telemetry.log(line),
   instance,
   // The import reaches the `/control` agents only; WebChat's, the workers' and the chat path's factories take none (FR-009).
   agentFactory: createAgentFactory(process.env, create, imported),

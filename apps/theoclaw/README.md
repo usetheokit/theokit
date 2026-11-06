@@ -856,8 +856,16 @@ instance (`theoclaw`, or `theoclaw-<profile>`). Spans carry metadata and no cont
 reply or tool argument. Off by default, since it sends turn metadata off the host; `on` without an
 endpoint, an endpoint that is not an http(s) URL, or any value but `on` or `off` stops the start.
 A collector that is down costs no turn: each failed export is one `theoclaw: telemetry export
-failed: …` line, and a stop waits at most 2 s for what is pending. Log export, a Prometheus
-endpoint and anonymous usage telemetry are not built (B-712).
+failed: …` line, and a stop waits at most 2 s for what is pending.
+Masked operational log lines also export to `<endpoint>/v1/logs`; these lines can include
+operational metadata and should go only to a collector you trust.
+With OTEL enabled, set `THEOCLAW_PROMETHEUS_PORT=9464` to serve the same metrics at
+`http://127.0.0.1:9464/metrics` (port `0` selects an ephemeral port). No scrape listener starts
+by default. Shutdown closes it.
+Anonymous telemetry is separately opt-in: `THEOCLAW_ANONYMOUS_TELEMETRY=on`, together with
+OTEL enabled, sends only a `theoclaw_anonymous_starts` counter to the configured collector.
+Its resource has the constant service name `theoclaw-anonymous`, with no profile, host, user,
+conversation, prompt or reply attributes. It is off by default; there is no vendor destination.
 
 **Backup and restore.** Stop the instance, then `theoclaw backup <dir>` copies its state directory
 and workspace (as the start resolves them: the configuration file, then the profile) to

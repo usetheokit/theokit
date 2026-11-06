@@ -231,6 +231,8 @@ export interface StartOptions extends Omit<TheoClawOptions, 'write'> {
   readonly exit: (code: number) => void
   /** The streams the output mask wraps; `process.stdout` and `process.stderr` by default. */
   readonly streams?: readonly MaskableStream[]
+  /** Receives operational lines after the same secret masking as local output. */
+  readonly telemetryLog?: (line: string) => void
   /** Where the listening lines go. Default: the first of `streams`. */
   readonly stdout?: (line: string) => void
   /** Where every other line goes. Default: the last of `streams`. */
@@ -365,15 +367,20 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
   // as the operator set it. Under a profile the workspace is the profile's own (`instance.ts`).
   mkdirSync(join(sessionSettings.workspace, '.theoclaw'), { recursive: true, mode: 0o700 })
   const streams = options.streams ?? [process.stdout, process.stderr]
-  const stderr = options.stderr ?? lineWriter(streams[streams.length - 1])
+  const secretValues = processSecrets(options, settings, tools, events, a2a)
+  const logged = (write: (line: string) => void) => (line: string): void => {
+    const masked = redactSecrets(maskSecrets(line, secretValues))
+    write(masked)
+    options.telemetryLog?.(masked)
+  }
+  const stderr = logged(options.stderr ?? lineWriter(streams[streams.length - 1]))
   // Loaded before the start line, the mask and the shutdown: an unreadable pairing file leaves nothing behind.
   const secrets = resolvePlatforms(options.env).secrets
   const pairing = pairingStoreFor(policy, (line) => stderr(redactSecrets(maskSecrets(line, secrets))))
   // First, once every setting is checked: the line holds a label and a directory, never a secret.
   const instance = announceInstance(options.instance, stderr, options.importedLine)
-  const secretValues = processSecrets(options, settings, tools, events, a2a)
   const mask = installOutputMask(secretValues, streams)
-  const stdout = options.stdout ?? lineWriter(streams[0])
+  const stdout = logged(options.stdout ?? lineWriter(streams[0]))
   const flushOnExit = (): void => mask.flush()
   options.signals.on('exit', flushOnExit)
   let composedApp: ComposedTheoClaw | undefined

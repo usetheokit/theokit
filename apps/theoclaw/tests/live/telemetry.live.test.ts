@@ -67,7 +67,7 @@ describe.skipIf(!LIVE)('OpenTelemetry export against a real model (OC-98)', () =
     }
     const receiver = await startReceiver()
     closers.push(() => receiver.close())
-    const env = { ...process.env, THEOCLAW_OTEL: 'on', OTEL_EXPORTER_OTLP_ENDPOINT: receiver.endpoint }
+    const env = { ...process.env, THEOCLAW_OTEL: 'on', OTEL_EXPORTER_OTLP_ENDPOINT: receiver.endpoint, THEOCLAW_PROMETHEUS_PORT: '0' }
     const lines: string[] = []
     const registered: RegisteredTelemetry = registerTelemetry(readTelemetrySettings(env), { write: (line) => void lines.push(line) })
     closers.push(() => registered.shutdown())
@@ -75,7 +75,11 @@ describe.skipIf(!LIVE)('OpenTelemetry export against a real model (OC-98)', () =
     closers.push(() => agent[Symbol.asyncDispose]())
 
     expect(await turn(agent)).toBe('finished')
+    registered.log('theoclaw: live model turn finished')
     await registered.flush()
+    const scrape = await fetch((await registered.prometheusEndpoint)!)
+    expect(await scrape.text()).toContain('theokit_llm_call_duration_ms')
+    expect((receiver.bodies.get('/v1/logs') ?? []).join('')).toContain('theoclaw: live model turn finished')
     await waitFor(() => (receiver.bodies.get('/v1/traces') ?? []).some((body) => body.includes('agent.send')), 20_000, 'an agent.send span')
     await waitFor(
       () => (receiver.bodies.get('/v1/metrics') ?? []).some((body) => body.includes('theokit_llm_call_duration_ms')),
