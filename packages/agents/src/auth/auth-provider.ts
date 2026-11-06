@@ -93,11 +93,34 @@ export function waitWithJitter(attempt: number, baseMs = 200, random = Math.rand
   return Math.round(base * (0.75 + random() * 0.5))
 }
 
+/** How an {@link AuthProvider} decides when a token is stale. */
+export interface AuthProviderOptions {
+  /**
+   * Refresh when the stored access token has less than this many milliseconds left, instead of only
+   * within the SDK's one-minute skew. For a consumer that hands the token to a process that keeps it
+   * for a long time (a sandboxed agent run, a batch job), so the token outlives the process. Applied
+   * to the value re-read under the lock, so it composes with the double-checked locking (#1286).
+   * Default `0`: the SDK's own skew decides, as before.
+   */
+  readonly refreshBeforeMs?: number
+}
+
 export class AuthProvider {
+  private readonly refreshBeforeMs: number
+
   constructor(
     private readonly config: OAuthProviderConfig,
     private readonly store: CredentialStoreConfig,
-  ) {}
+    options: AuthProviderOptions = {},
+  ) {
+    const refreshBeforeMs = options.refreshBeforeMs ?? 0
+    if (!Number.isFinite(refreshBeforeMs) || refreshBeforeMs < 0) {
+      throw new RangeError(
+        `AuthProvider: refreshBeforeMs must be a finite number of milliseconds at or above 0, got ${String(refreshBeforeMs)}`,
+      )
+    }
+    this.refreshBeforeMs = refreshBeforeMs
+  }
 
   /**
    * Refresh a resolved credential if stale. Delegates to `ensureFreshCredential` with the held
@@ -162,6 +185,13 @@ export class AuthProvider {
         doDisco !== undefined
           ? { ...resolved, apiKey: doDisco.access, expiresAt: doDisco.expires }
           : resolved
+      // The margin moves the expiry the SDK decides on, AFTER the re-read: moved before it, the file's
+      // value would overwrite it (#1286). A credential the SDK did not refresh comes back as the same
+      // object, and then the caller gets the real expiry back, not the moved one.
+      const decidedOn =
+        this.refreshBeforeMs > 0 && current.expiresAt !== undefined
+          ? { ...current, expiresAt: current.expiresAt - this.refreshBeforeMs }
+          : current
       // Retry ONLY on the transient class. An `invalid_grant` fails on the FIRST try: the token was
       // revoked and no attempt changes that — insisting only delays the message the user needs to read.
       //
@@ -172,11 +202,12 @@ export class AuthProvider {
       const MAX_ATTEMPTS = 3
       for (let attempt = 0; ; attempt++) {
         try {
-          return await ensureFreshCredential(
-            current,
+          const fresh = await ensureFreshCredential(
+            decidedOn,
             { config: this.config, store: this.store, env },
             deps,
           )
+          return fresh === decidedOn ? current : fresh
         } catch (err) {
           const failure = classifyRefreshFailure(err)
           if (!failure.transient || attempt >= MAX_ATTEMPTS - 1) throw failure
