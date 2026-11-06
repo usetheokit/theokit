@@ -4,6 +4,7 @@ import type { CustomTool, HookApprovalGate, InlineSkill, McpServerConfig, ModelS
 import type { ImportedSetup } from '../migration/import-store.js'
 import type { AgentTelemetry } from '../telemetry/otel.js'
 import type { AgentToolOptions } from '../tools/tool-registry.js'
+import type { ThinkingLevel } from './failover.js'
 import { createHookApprovalGate } from './hook-approval.js'
 import { UNTRUSTED_CONTENT_NOTICE } from './untrusted-content.js'
 
@@ -45,6 +46,8 @@ export interface TheoClawAgentOptions<Model extends string | ModelSelection = st
   readonly mcpServers?: Record<string, McpServerConfig>
   /** SDK telemetry, present only with `THEOCLAW_OTEL=on` (B-400 FR-006); never prompt content. */
   readonly telemetry?: AgentTelemetry
+  /** `THEOCLAW_THINKING` (OC-48), handed to the SDK as `thinking`; absent leaves the model's default. */
+  readonly thinking?: ThinkingLevel
 }
 
 /** An import handed to a `/control` agent, and whether its MCP servers are on (`THEOCLAW_IMPORTED_MCP`). */
@@ -64,6 +67,7 @@ export interface TheoClawAgentInput<Model extends string | ModelSelection> {
   readonly approvedHooks?: ReadonlySet<string>
   /** SDK telemetry for every agent while `THEOCLAW_OTEL=on` (B-400 FR-006). */
   readonly telemetry?: AgentTelemetry
+  readonly thinking?: ThinkingLevel
 }
 
 /**
@@ -81,6 +85,7 @@ export function theoClawAgentOptions<Model extends string | ModelSelection>(
     systemPrompt: UNTRUSTED_CONTENT_NOTICE,
     local: { hooks: createHookApprovalGate(input.approvedHooks ?? new Set()) },
     ...(input.telemetry === undefined ? {} : { telemetry: input.telemetry }),
+    ...(input.thinking === undefined ? {} : { thinking: input.thinking }),
   }
   const withTools: TheoClawAgentOptions<Model> = input.toolOptions === undefined ? base : withToolOptions(base, input.toolOptions)
   return input.imported === undefined ? withTools : withImport(withTools, input.imported)
@@ -146,5 +151,6 @@ export function createTheoClawAgent<Model extends string | ModelSelection>(
     ...(options.skills === undefined ? {} : { skills: options.skills }),
     ...(options.mcpServers === undefined ? {} : { mcpServers: options.mcpServers }),
     ...(options.telemetry === undefined ? {} : { telemetry: { ...options.telemetry } }),
+    ...(options.thinking === undefined ? {} : { thinking: options.thinking }),
   })
 }

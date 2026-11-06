@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { TurnAgent, TurnRun } from '../src/agent-port.js'
+import { createAgentFactory, type CreateAgent } from '../src/control-plane/agent-factory.js'
 import { parseFallbackModel, parseThinkingLevel, withFailover } from '../src/agent/failover.js'
 
 function run(messages: string[], status: string): TurnRun {
@@ -55,5 +56,26 @@ describe('provider settings', () => {
     expect(() => parseThinkingLevel('max')).toThrow('THEOCLAW_THINKING')
     expect(parseFallbackModel('  ')).toBeUndefined()
     expect(parseFallbackModel(' b/model ')).toBe('b/model')
+  })
+})
+
+describe('failover wiring', () => {
+  it('builds the secondary lazily with the fallback model and passes the thinking level', async () => {
+    const built: Array<{ model: string; thinking?: string }> = []
+    const create: CreateAgent = async (options) => {
+      built.push({ model: options.model, ...(options.thinking === undefined ? {} : { thinking: options.thinking }) })
+      return options.model === 'a' ? { send: () => Promise.reject(new Error('down')) } : { send: async () => run(['assistant'], 'finished') }
+    }
+    const env = { THEOCLAW_MODEL: 'a', THEOCLAW_MODEL_FALLBACK: 'b', THEOCLAW_THINKING: 'high', OPENROUTER_API_KEY: 'k' }
+    const agent = await createAgentFactory(env, create)()
+    expect(built).toEqual([{ model: 'a', thinking: 'high' }])
+    expect(await drain(await agent.send('hi'))).toEqual(['assistant'])
+    expect(built.map((entry) => entry.model)).toEqual(['a', 'b'])
+  })
+
+  it('with no fallback the primary agent is returned as is', async () => {
+    const primary: TurnAgent = { send: async () => run([], 'finished') }
+    const agent = await createAgentFactory({ THEOCLAW_MODEL: 'a', OPENROUTER_API_KEY: 'k' }, async () => primary)()
+    expect(agent).toBe(primary)
   })
 })

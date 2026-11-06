@@ -31,6 +31,7 @@ function failoverRun(first: TurnRun, message: TurnMessage, options: SendOptions,
   return {
     async *stream() {
       let streamed = false
+      let primaryError: unknown
       try {
         for await (const item of first.stream()) {
           streamed = true
@@ -38,11 +39,17 @@ function failoverRun(first: TurnRun, message: TurnMessage, options: SendOptions,
         }
       } catch (error) {
         if (streamed) throw error
+        primaryError = error
       }
       if (streamed) return
-      const outcome = await first.wait().catch(() => ({ status: 'failed' }))
-      if (outcome.status !== 'failed') return
-      active = await (await secondary()).send(message, options)
+      // No output from the primary: a thrown stream or a run that did not finish is a failure.
+      const outcome = primaryError !== undefined ? { status: 'failed' } : await first.wait().catch(() => ({ status: 'failed' }))
+      if (outcome.status === 'finished') return
+      try {
+        active = await (await secondary()).send(message, options)
+      } catch (error) {
+        throw new Error(`the primary model failed and so did the fallback: ${error instanceof Error ? error.message : String(error)}`, { cause: error })
+      }
       yield* active.stream()
     },
     wait: () => (active === first ? first.wait() : active.wait()),
