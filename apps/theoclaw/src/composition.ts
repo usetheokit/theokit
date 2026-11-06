@@ -338,7 +338,7 @@ function startWebchat(options: StartOptions, settings: ControlPlaneSettings, sec
   if (token === undefined) return undefined
   const agents = createContainer<TurnAgent>({ factory: webchatAgentFactory(options.env, options.createChatAgent) })
   const assetsDir = options.webchatAssetsDir ?? WEBCHAT_ASSETS_DIR
-  return createWebchatRoutes({ token, runTurn: withMemory(createTurnRunner(agents.withAgent, secrets, settings.model), { ...memory, surface: 'webchat' }), assetsDir, write })
+  return createWebchatRoutes({ token, runTurn: withMemory(createTurnRunner(agents.withAgent, secrets, settings.model), { store: memory.store, write: memory.write, surface: 'webchat' }), assetsDir, write })
 }
 
 /**
