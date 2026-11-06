@@ -548,7 +548,8 @@
   },
   {
     "id": "OC-73",
-    "status": "open"
+    "status": "open",
+    "note": "the oracle gate exists (src/agent/skill-workshop.ts, REQ-12 test offline) but no skill_workshop tool, /learn turn, real example runner or real-model check exists yet; not shipped, and not declared out because only a person may declare out"
   },
   {
     "id": "OC-74",

@@ -57,7 +57,13 @@ export class SkillWorkshop {
 
   private record(draft: SkillDraft, state: SkillState, reason?: string): AuthoredSkill {
     // Re-authoring replaces the earlier version: a new body must earn activation again.
-    const skill = Skill.create({ name: draft.name, description: draft.description, instructions: draft.instructions })
+    let skill: InlineSkill
+    try {
+      skill = Skill.create({ name: draft.name, description: draft.description, instructions: draft.instructions })
+    } catch (error) {
+      this.entries.delete(draft.name)
+      return { name: draft.name, state: 'inactive', reason: `invalid skill: ${error instanceof Error ? error.message : String(error)}` }
+    }
     this.entries.set(draft.name, { state, skill, ...(reason === undefined ? {} : { reason }) })
     return { name: draft.name, state, ...(reason === undefined ? {} : { reason }) }
   }
