@@ -6,11 +6,11 @@ import { join } from 'node:path'
 
 import { afterAll, describe, expect, it } from 'vitest'
 
-import { backupInstance, restoreInstance } from '../../src/backup/backup.js'
+import { downloadBackup, restoreInstance } from '../../src/backup/backup.js'
 
 /**
  * AC-009 (B-400, OC-99's built half): three DM sessions store a code word each against a real
- * model; the instance stops and is backed up. An empty profile recalls none of them (the control
+ * model; the running instance snapshots and uploads before stopping. An empty profile recalls none of them (the control
  * that makes the check able to fail); the backup restored into another empty profile recalls each.
  * Each instance runs in a process of its own (`support/chat-instance.ts`), as a stop and a start
  * do. Runs only with THEOCLAW_LIVE=1, THEOCLAW_MODEL and a key.
@@ -61,11 +61,11 @@ function profile(create: boolean): Profile {
 }
 
 /** Run one instance in its own process over `target`, one DM per sender; its replies, lower-cased, and its stderr. */
-function chat(target: Profile, texts: readonly string[]): Promise<{ readonly replies: string[]; readonly log: string }> {
+function chat(target: Profile, texts: readonly string[], backupDir?: string): Promise<{ readonly replies: string[]; readonly log: string }> {
   const pairs = SENDERS.map((sender, index) => `${sender}=${texts[index]}`)
   const child = spawn(process.execPath, ['--import', TSX_LOADER, INSTANCE, target.workspace, target.state, ...pairs], {
     // A scratch HOME, so nothing the instance keys on the home directory lands in the developer's.
-    env: { PATH: process.env.PATH, HOME: join(target.workspace, '..'), XDG_CONFIG_HOME: target.env.XDG_CONFIG_HOME, THEOCLAW_MODEL: process.env.THEOCLAW_MODEL, THEOKIT_API_KEY: process.env.THEOKIT_API_KEY, OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY },
+    env: { THEOCLAW_LIVE_BACKUP_DIR: backupDir, THEOCLAW_BACKUP_TARGET: process.env.THEOCLAW_BACKUP_TARGET, THEOCLAW_BACKUP_TOKEN: process.env.THEOCLAW_BACKUP_TOKEN, PATH: process.env.PATH, HOME: join(target.workspace, '..'), XDG_CONFIG_HOME: target.env.XDG_CONFIG_HOME, THEOCLAW_MODEL: process.env.THEOCLAW_MODEL, THEOKIT_API_KEY: process.env.THEOKIT_API_KEY, OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY },
     stdio: ['ignore', 'pipe', 'pipe'],
   })
   children.push(child)
@@ -89,9 +89,11 @@ describe.skipIf(!LIVE)('backup and restore against a real model (OC-99)', () => 
     }
     const words = SENDERS.map(() => token())
     const original = profile(true)
-    await chat(original, words.map(SAY))
+    if (!process.env.THEOCLAW_BACKUP_TARGET) throw new Error('live backup needs a fresh HTTPS THEOCLAW_BACKUP_TARGET')
     const backupDir = join(scratch(), 'backup')
-    backupInstance(original.env, backupDir, { homeDir: tmpdir() })
+    await chat(original, words.map(SAY), backupDir)
+    rmSync(backupDir, { recursive: true })
+    await downloadBackup(backupDir, process.env.THEOCLAW_BACKUP_TARGET, process.env.THEOCLAW_BACKUP_TOKEN)
 
     // The control: an empty profile has none of the three conversations.
     const control = await chat(profile(true), SENDERS.map(() => RECALL))

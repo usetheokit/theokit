@@ -15,9 +15,15 @@ fail() {
 
 # Every check runs before anything is written.
 command -v git >/dev/null 2>&1 || fail "git is required"
-command -v node >/dev/null 2>&1 || fail "node 22 or later is required"
-major="$(node -p 'process.versions.node.split(".")[0]')"
-[[ "$major" =~ ^[0-9]+$ ]] && ((major >= 22)) || fail "node 22 or later is required (found $(node --version))"
+command -v node >/dev/null 2>&1 || fail "node 22.16.0 or 23.8.0 and later is required"
+node_version="$(node -p 'process.versions.node')"
+if [[ "$node_version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+  node_major="${BASH_REMATCH[1]}"
+  node_minor="${BASH_REMATCH[2]}"
+  (( (node_major == 22 && node_minor >= 16) || (node_major == 23 && node_minor >= 8) || node_major >= 24 )) || fail "node 22.16.0 or 23.8.0 and later is required (found $node_version)"
+else
+  fail "cannot determine supported node version (found $node_version)"
+fi
 
 # A bare `corepack enable` writes into Node's global bin, which a non-root user cannot write; the
 # shim goes into a directory this user owns, on PATH for the rest of the script, since the build

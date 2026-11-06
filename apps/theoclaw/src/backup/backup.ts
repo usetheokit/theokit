@@ -14,9 +14,14 @@ import {
   statSync,
   writeFileSync,
 } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { openSync, readSync, closeSync } from 'node:fs'
+
 import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path'
 
 import { encodeProjectDir } from '@theokit/sdk/persistence'
+
+import { assertSupportedRuntime } from '../runtime.js'
 
 import { loadConfiguration } from '../config-file.js'
 import { resolveInstance } from '../instance.js'
@@ -49,6 +54,8 @@ export interface Manifest {
 
 export interface BackupOptions {
   readonly homeDir: string
+  /** Snapshot SQLite while the instance keeps running. Other files are copied individually. */
+  readonly live?: boolean
   /** Called after each file is copied; a test seam to pause a copy or fail it midway. */
   readonly onFileCopied?: (path: string) => void
   /** How a staged target is renamed into place; a test seam to fail the second rename. */
@@ -144,14 +151,40 @@ function requireSource(path: string, variable: string): void {
   if (!existsSync(path) || !statSync(path).isDirectory()) throw new BackupRefusal(`${variable} ${path} is not a directory`, path)
 }
 
+/** Detect SQLite by its header, including databases without a conventional extension. */
+function isSQLite(path: string): boolean {
+  const fd = openSync(path, 'r')
+  try {
+    const header = Buffer.alloc(16)
+    return readSync(fd, header, 0, 16, 0) === 16 && header.toString() === 'SQLite format 3\0'
+  } finally { closeSync(fd) }
+}
+
+function snapshotSQLite(from: string, to: string): void {
+  mkdirPrivate(dirname(to))
+  // node:sqlite's backup API is asynchronous. Run it in a child to preserve this API's
+  // synchronous copy/cleanup contract, including callers holding the instance lock.
+  // Unlike VACUUM, the backup API copies database pages without rebuilding rowids.
+  execFileSync(process.execPath, ['--input-type=module', '-e', `
+    import { DatabaseSync, backup } from 'node:sqlite';
+    const db = new DatabaseSync(process.argv[1], { readOnly: true });
+    try {
+      db.exec('PRAGMA busy_timeout = 5000');
+      await backup(db, process.argv[2]);
+    } finally { db.close(); }
+  `, from, to], { timeout: 60_000, stdio: ['ignore', 'pipe', 'pipe'] })
+  chmodSync(to, 0o600)
+}
+
 /**
- * Copy a stopped instance's state directory and workspace to `<dir>/state` and `<dir>/workspace`
- * with a sha256 manifest (FR-008, plan D4). Refuses a running instance (it takes the instance lock
- * for the whole copy, FR-010), a target that is not empty, a target inside either source (EC-2) and
- * a symbolic link. Directories are written 0700 and files 0600 (NFR-003); the migration import is
+ * Copy an instance's state directory and workspace to `<dir>/state` and `<dir>/workspace`
+ * with a sha256 manifest. SQLite databases use consistent snapshots without their sidecars.
+ * Unless live is requested, takes the instance lock and refuses a running instance.
+ * Refuses nonempty targets, targets inside either source, and symbolic links. Directories are written 0700 and files 0600 (NFR-003); the migration import is
  * left out (NFR-002). A copy that fails removes what it wrote.
  */
 export function backupInstance(env: NodeJS.ProcessEnv, dir: string, options: BackupOptions): Manifest {
+  assertSupportedRuntime()
   const targets = resolveTargets(env, options.homeDir)
   requireSource(targets.state, 'THEOCLAW_STATE_DIR')
   requireSource(targets.workspace, 'THEOCLAW_WORKSPACE')
@@ -162,16 +195,20 @@ export function backupInstance(env: NodeJS.ProcessEnv, dir: string, options: Bac
     if (within(real, source)) throw new BackupRefusal(`the backup directory ${target} is inside ${targets[root]}, which it copies`, target)
   }
   if (!isEmptyOrAbsent(target)) throw new BackupRefusal(`the backup directory ${target} is not empty`, target)
-  const lock = takeInstanceLock(targets.state)
+  const lock = options.live ? undefined : takeInstanceLock(targets.state)
   const created = !existsSync(target)
   try {
     mkdirPrivate(target)
     const files: ManifestEntry[] = []
     for (const root of ROOTS) {
       mkdirPrivate(join(target, root))
-      for (const file of listFiles(targets[root], root === 'state' ? excludedFromState : () => false)) {
+      const sourceFiles = listFiles(targets[root], root === 'state' ? excludedFromState : () => false)
+      const databases = new Set(sourceFiles.filter((file) => isSQLite(join(targets[root], file))))
+      for (const file of sourceFiles) {
+        if (['-wal', '-shm', '-journal'].some((suffix) => file.endsWith(suffix) && databases.has(file.slice(0, -suffix.length)))) continue
         const to = join(target, root, file)
-        copyPrivate(join(targets[root], file), to)
+        if (databases.has(file)) snapshotSQLite(join(targets[root], file), to)
+        else copyPrivate(join(targets[root], file), to)
         files.push({ path: `${root}/${file.split(sep).join('/')}`, sha256: sha256Of(to), size: statSync(to).size })
         options.onFileCopied?.(to)
       }
@@ -185,7 +222,7 @@ export function backupInstance(env: NodeJS.ProcessEnv, dir: string, options: Bac
     else for (const name of [...ROOTS, MANIFEST]) rmSync(join(target, name), { recursive: true, force: true })
     throw error
   } finally {
-    lock.release()
+    lock?.release()
   }
 }
 
@@ -354,5 +391,54 @@ export function restoreInstance(env: NodeJS.ProcessEnv, dir: string, options: Ba
   } finally {
     for (const root of ROOTS) if (staging[root] !== undefined) rmSync(staging[root], { recursive: true, force: true })
     lock.release()
+  }
+}
+
+/** An HTTPS object directory: files first, manifest last as the completion marker. */
+function offsiteUrl(target: string, path: string): URL {
+  const base = new URL(target.endsWith('/') ? target : `${target}/`)
+  if (base.protocol !== 'https:' || base.username || base.password || base.search || base.hash) {
+    throw new BackupRefusal('THEOCLAW_BACKUP_TARGET must be an HTTPS object directory without credentials, query or fragment')
+  }
+  return new URL(path.split('/').map(encodeURIComponent).join('/'), base)
+}
+
+async function transfer(target: string, path: string, token: string | undefined, body?: Buffer): Promise<Buffer> {
+  const response = await fetch(offsiteUrl(target, path), {
+    method: body === undefined ? 'GET' : 'PUT',
+    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(body === undefined ? {} : { 'If-None-Match': '*' }) },
+    ...(body === undefined ? {} : { body: new Uint8Array(body) }),
+    redirect: 'error',
+    signal: AbortSignal.timeout(60_000),
+  })
+  if (!response.ok) throw new BackupRefusal(`offsite ${body === undefined ? 'download' : 'upload'} failed (${response.status})`)
+  return Buffer.from(await response.arrayBuffer())
+}
+
+export async function uploadBackup(dir: string, target: string, token?: string): Promise<void> {
+  const manifest = readManifest(dir)
+  const files = verifyBackup(dir, manifest)
+  for (const file of files) await transfer(target, file.entry.path, token, readFileSync(file.from))
+  await transfer(target, MANIFEST, token, readFileSync(join(dir, MANIFEST)))
+}
+
+/** Download to a fresh local directory; verify all bytes before it can be restored. */
+export async function downloadBackup(dir: string, target: string, token?: string): Promise<void> {
+  if (existsSync(dir)) throw new BackupRefusal('offsite download requires an absent local directory', dir)
+  mkdirPrivate(dir)
+  try {
+    writeFileSync(join(dir, MANIFEST), await transfer(target, MANIFEST, token), { mode: 0o600 })
+    const manifest = readManifest(dir)
+    for (const root of ROOTS) mkdirPrivate(join(dir, root))
+    for (const entry of manifest.files) {
+      const place = placeOf(entry)
+      const to = join(dir, place.root, place.path)
+      mkdirPrivate(dirname(to))
+      writeFileSync(to, await transfer(target, entry.path, token), { mode: 0o600, flag: 'wx' })
+    }
+    verifyBackup(dir, manifest)
+  } catch (error) {
+    rmSync(dir, { recursive: true, force: true })
+    throw error
   }
 }

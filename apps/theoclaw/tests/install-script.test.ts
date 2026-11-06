@@ -38,8 +38,8 @@ const STUBS: Readonly<Record<Stub, string>> = {
   node: [
     '#!/bin/sh',
     'case "$1" in',
-    '  -p) echo "${STUB_NODE_MAJOR:-22}" ;;',
-    '  --version) echo "v${STUB_NODE_MAJOR:-22}.0.0" ;;',
+    '  -p) echo "${STUB_NODE_VERSION:-22.16.0}" ;;',
+    '  --version) echo "v${STUB_NODE_VERSION:-22.16.0}" ;;',
     `  *) ${RECORD}; echo "$PATH" > "$RECORD_DIR/node.path"; /usr/bin/mkdir -p apps/theoclaw/dist; echo '#!/usr/bin/env node' > apps/theoclaw/dist/cli.js; exit "\${STUB_NODE_BUILD_EXIT:-0}" ;;`,
     'esac',
   ].join('\n'),
@@ -106,7 +106,7 @@ function launcher(m: Machine): string {
 }
 
 describe('install.sh', () => {
-  it('install refuses without node 22 or git and names the tool', () => {
+  it('install refuses without a supported node or git and names the tool', () => {
     const noGit = machine(['node', 'pnpm'])
     const refusedGit = install(noGit)
     expect(refusedGit.status).toBe(1)
@@ -114,11 +114,20 @@ describe('install.sh', () => {
     expect(existsSync(launcher(noGit))).toBe(false)
 
     const oldNode = machine(['node', 'git', 'pnpm'])
-    const refusedNode = install(oldNode, { STUB_NODE_MAJOR: '20' })
+    const refusedNode = install(oldNode, { STUB_NODE_VERSION: '20.0.0' })
     expect(refusedNode.status).toBe(1)
-    expect(refusedNode.stderr).toMatch(/^theoclaw install: node 22 .*required/m)
+    expect(refusedNode.stderr).toMatch(/^theoclaw install: node 22\.16\.0 .*required/m)
     expect(existsSync(launcher(oldNode))).toBe(false)
     expect(calls(oldNode, 'pnpm')).toEqual([])
+  })
+
+  it.each(['22.12.0', '22.15.9', '23.7.9'])('refuses Node %s before installing or writing a launcher', (version) => {
+    const m = machine(['node', 'git', 'pnpm'])
+    const result = install(m, { STUB_NODE_VERSION: version })
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain('node 22.16.0 or 23.8.0 and later is required')
+    expect(calls(m, 'pnpm')).toEqual([])
+    expect(existsSync(launcher(m))).toBe(false)
   })
 
   it('install runs the filtered install and build, then writes one launcher, twice', () => {

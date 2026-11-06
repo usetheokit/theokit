@@ -9,7 +9,7 @@ Discord, Slack, Matrix, Mattermost, e-mail, LINE, WhatsApp, Microsoft Teams and 
 git clone https://github.com/usetheokit/theokit.git theokit && theokit/apps/theoclaw/install.sh
 ```
 
-It needs `git` and Node 22 or later, and network access to the npm registry. The script installs
+It needs `git` and Node 22.16.0+ (on Node 22) or Node 23.8.0+, and network access to the npm registry. The script installs
 and builds TheoClaw and its workspace packages in the clone, then writes the launcher
 `~/.local/bin/theoclaw` (`THEOCLAW_BIN_DIR` picks another directory). It says so when that
 directory is not on your `PATH`. With no `pnpm` installed, it puts corepack's `pnpm` in
@@ -910,3 +910,33 @@ workspace, and secrets read by reference from a store.
 `.env` and `.env.*` are ignored at the repository root; only `.env.example` is tracked. Do not
 paste token values into issues, logs or test fixtures. To check that a variable is set without
 printing it: `[ -n "$THEOCLAW_TELEGRAM_TOKEN" ] && echo set`.
+
+### Live and offsite backups
+
+SQLite snapshots require the online backup API added in Node 22.16.0 and 23.8.0.
+TheoClaw enforces this runtime requirement at startup and during installation.
+
+`theoclaw backup /private/backups/today --live` snapshots each SQLite database
+(including committed WAL data) while TheoClaw runs. SQLite sidecars are excluded.
+Each database is consistent independently; ordinary files are copied individually,
+so use a stopped backup when you need all files frozen together. Restore still
+requires a stopped instance and empty state and workspace directories.
+
+Set `THEOCLAW_BACKUP_TARGET=https://backup.example/private/unique-backup-id/`
+to upload to an HTTPS object directory supporting GET and conditional PUT
+(`If-None-Match: *`). Use a fresh target for every backup. The optional
+`THEOCLAW_BACKUP_TOKEN` is sent as a bearer token; redirects are refused.
+The endpoint must enforce conditional writes. Files upload first and the verified
+manifest uploads last; a failed upload keeps the local backup for recovery and
+may leave partial remote objects requiring removal by the storage operator.
+Backups contain private session data: use private storage with encryption at rest.
+
+With the same target configured, `theoclaw restore /private/download` downloads
+into an absent local directory, verifies the manifest and hashes, then restores.
+Without a target, backup and restore continue to use local directories.
+
+The credential-gated `tests/live/backup.live.test.ts` checks model recall after a
+running instance uploads and a new instance restores from offsite. It requires
+`THEOCLAW_LIVE=1`, a named `THEOCLAW_MODEL`, its API key, and a fresh
+`THEOCLAW_BACKUP_TARGET` (plus its token if needed). OC-99 remains open until that
+check is actually run and the model and passing result are recorded in the ledger.

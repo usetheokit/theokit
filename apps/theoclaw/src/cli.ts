@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import './runtime.js'
 import { spawn } from 'node:child_process'
 import { realpathSync } from 'node:fs'
 import { homedir } from 'node:os'
@@ -6,7 +7,7 @@ import { dirname, join } from 'node:path'
 import type { Writable } from 'node:stream'
 import { fileURLToPath } from 'node:url'
 
-import { backupInstance, BackupRefusal, restoreInstance } from './backup/backup.js'
+import { backupInstance, BackupRefusal, restoreInstance, uploadBackup, downloadBackup } from './backup/backup.js'
 import { InstanceLockedError } from './backup/instance-lock.js'
 import { describeError, TheoClawConfigError } from './control-plane/errors.js'
 import { daemonInstall, type DaemonIo, daemonStatus, daemonUninstall } from './daemon.js'
@@ -57,7 +58,7 @@ const USAGE = `usage: theoclaw <command>
                             fetch and fast-forward the checkout on its channel, rebuild, restart
   theoclaw security audit [--fix]
                             report risky configuration; --fix narrows file permissions; exit 3 while findings remain
-  theoclaw backup <dir>     copy the stopped instance's state and workspace to <dir>, with a sha256 manifest
+  theoclaw backup <dir>     copy state and workspace; --live snapshots SQLite while running; THEOCLAW_BACKUP_TARGET uploads offsite
   theoclaw restore <dir>    verify a backup and copy it into an empty instance
   theoclaw --help           this text
 `
@@ -114,10 +115,14 @@ function directoryArgument(name: string, args: readonly string[]): string {
 /** `backup` and `restore` (B-400 FR-008, FR-009): exit 0, or 1 with the refusal on stderr. */
 function backupCommand(name: 'backup' | 'restore'): Command {
   return async (args, io) => {
-    const dir = directoryArgument(name, args)
+    const live = name === 'backup' && args.includes('--live')
+    const dir = directoryArgument(name, live ? args.filter((arg) => arg !== '--live') : args)
     try {
+      const target = io.env.THEOCLAW_BACKUP_TARGET
+      if (name === 'restore' && target) await downloadBackup(dir, target, io.env.THEOCLAW_BACKUP_TOKEN)
       const run = name === 'backup' ? backupInstance : restoreInstance
-      const { files } = run(io.env, dir, { homeDir: io.homeDir })
+      const { files } = run(io.env, dir, { homeDir: io.homeDir, live })
+      if (name === 'backup' && target) await uploadBackup(dir, target, io.env.THEOCLAW_BACKUP_TOKEN)
       io.stdout.write(`theoclaw: ${name === 'backup' ? 'backed up' : 'restored'} ${files.length} files ${name === 'backup' ? 'to' : 'from'} ${dir}\n`)
       return 0
     } catch (error) {

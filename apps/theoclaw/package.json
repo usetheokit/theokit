@@ -5,6 +5,9 @@
   "description": "A personal AI assistant that lives where its user already writes.",
   "type": "module",
   "license": "Apache-2.0",
+  "engines": {
+    "node": "^22.16.0 || >=23.8.0"
+  },
   "bin": {
     "theoclaw": "./dist/cli.js"
   },
