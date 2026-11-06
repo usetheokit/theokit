@@ -2,7 +2,7 @@
 // `config`+`store` state and delegates to the SDK's free OAuth-lifecycle functions), plus the auth
 // domain's types re-exported so a consumer types the whole surface from the Theokit layer, never
 // reaching back to `@theokit/sdk/auth`.
-export { AuthProvider } from './auth/auth-provider.js'
+export { AuthProvider, type AuthProviderOptions } from './auth/auth-provider.js'
 
 // M73 — "enriching never reduces". The SDK's store mechanics cross as a PURE PASS-THROUGH.
 //
