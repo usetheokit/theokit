@@ -63,7 +63,7 @@ try {
   const setup = readImportAtStart(process.env, (line) => process.stderr.write(`${line}\n`))
   imported = setup === undefined ? undefined : { setup, mcp }
   // Before any agent exists, so every agent records through the providers (B-400 FR-006).
-  telemetry = registerTelemetry(readTelemetrySettings(process.env), { write: (line) => process.stderr.write(`${line}\n`) })
+  telemetry = await registerTelemetry(readTelemetrySettings(process.env), { write: (line) => process.stderr.write(`${line}\n`) })
 } catch (error) {
   fail(error)
 }
@@ -77,6 +77,7 @@ const create: CreateAgent = createSdkAgent
 
 startTheoClaw({
   env: process.env,
+  telemetryLog: (line) => telemetry.log(line),
   instance,
   // The import reaches the `/control` agents only; WebChat's, the workers' and the chat path's factories take none (FR-009).
   agentFactory: createAgentFactory(process.env, create, imported),

@@ -706,7 +706,8 @@
   },
   {
     "id": "OC-98",
-    "status": "open"
+    "status": "open",
+    "note": "B-712: offline log-export and Prometheus scrape coverage added; real-model verification remains outstanding. No live credentials were available in the implementation sandbox; no person has scoped this row out."
   },
   {
     "id": "OC-99",

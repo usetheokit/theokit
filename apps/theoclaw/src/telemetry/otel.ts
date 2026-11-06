@@ -1,3 +1,6 @@
+import { createServer, type Server } from 'node:http'
+
+import type { LogRecordExporter } from '@opentelemetry/sdk-logs'
 import { diag, DiagLogLevel, metrics, trace } from '@opentelemetry/api'
 import type { DiagLogger } from '@opentelemetry/api'
 import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-http'
@@ -14,7 +17,7 @@ type Env = Readonly<Record<string, string | undefined>>
 /** Whether telemetry is on, and where it is sent (`THEOCLAW_OTEL`, `OTEL_EXPORTER_OTLP_ENDPOINT`). */
 export type TelemetrySettings =
   | { readonly enabled: false }
-  | { readonly enabled: true; readonly endpoint: string; readonly serviceName: string }
+  | { readonly enabled: true; readonly endpoint: string; readonly serviceName: string; readonly prometheusPort?: number; readonly anonymous?: boolean }
 
 /** The SDK's `telemetry` option every agent is created with while telemetry is on (plan D3). */
 export interface AgentTelemetry {
@@ -63,8 +66,22 @@ export function readTelemetrySettings(env: Env): TelemetrySettings {
       variable: 'OTEL_EXPORTER_OTLP_ENDPOINT',
     })
   }
+  const port = blankToUndefined(env.THEOCLAW_PROMETHEUS_PORT)
+  if (port !== undefined && (!/^\d+$/.test(port) || Number(port) > 65535)) {
+    throw new TheoClawConfigError('THEOCLAW_PROMETHEUS_PORT must be an integer from 0 to 65535', { variable: 'THEOCLAW_PROMETHEUS_PORT' })
+  }
+  const anonymous = blankToUndefined(env.THEOCLAW_ANONYMOUS_TELEMETRY)
+  if (anonymous !== undefined && anonymous !== 'on' && anonymous !== 'off') {
+    throw new TheoClawConfigError('THEOCLAW_ANONYMOUS_TELEMETRY must be on or off', { variable: 'THEOCLAW_ANONYMOUS_TELEMETRY' })
+  }
   const profile = blankToUndefined(env.THEOCLAW_PROFILE)
-  return { enabled: true, endpoint: requireHttpEndpoint(endpoint), serviceName: profile === undefined ? 'theoclaw' : `theoclaw-${profile}` }
+  return {
+    enabled: true,
+    endpoint: requireHttpEndpoint(endpoint),
+    serviceName: profile === undefined ? 'theoclaw' : `theoclaw-${profile}`,
+    ...(port === undefined ? {} : { prometheusPort: Number(port) }),
+    ...(anonymous === 'on' ? { anonymous: true } : {}),
+  }
 }
 
 /** The agent option for `settings`, or nothing while telemetry is off. */
@@ -75,13 +92,20 @@ export function agentTelemetry(settings: TelemetrySettings): { readonly telemetr
 export interface RegisterTelemetryOptions {
   /** Where one masked line per export failure goes. */
   readonly write: (line: string) => void
+  /** Replaces the OTLP/HTTP log exporter. */
+  readonly logExporter?: LogRecordExporter
   /** Replaces the OTLP/HTTP span exporter; tests pass an in-memory one. */
   readonly spanExporter?: SpanExporter
   /** Replaces the OTLP/HTTP metric exporter; tests pass an in-memory one. */
   readonly metricExporter?: PushMetricExporter
+  readonly anonymousMetricExporter?: PushMetricExporter
 }
 
 export interface RegisteredTelemetry {
+  /** Records an already masked operational line, never conversation content. */
+  log(line: string): void
+  /** Resolves after the optional loopback listener is ready; undefined when disabled. */
+  readonly prometheusEndpoint: Promise<string | undefined>
   /** Export what is pending now. */
   flush(): Promise<void>
   /** Export what is pending, then unregister the providers. Never rejects. */
@@ -104,35 +128,83 @@ function failureLogger(write: (line: string) => void): DiagLogger {
   return { error: report, warn: ignore, info: ignore, debug: ignore, verbose: ignore }
 }
 
-const NOTHING_REGISTERED: RegisteredTelemetry = { flush: async () => undefined, shutdown: async () => undefined }
+const NOTHING_REGISTERED: RegisteredTelemetry = { log: () => undefined, prometheusEndpoint: Promise.resolve(undefined), flush: async () => undefined, shutdown: async () => undefined }
 
 /**
  * Register a tracer provider and a meter provider as the globals the SDK records through, with
  * OTLP/HTTP exporters behind a batch processor and a periodic reader, so an export never runs on
  * the turn path (FR-006, NFR-004). Nothing is registered while telemetry is off.
  */
-export function registerTelemetry(settings: TelemetrySettings, options: RegisterTelemetryOptions): RegisteredTelemetry {
+export async function registerTelemetry(settings: TelemetrySettings, options: RegisterTelemetryOptions): Promise<RegisteredTelemetry> {
   if (!settings.enabled) return NOTHING_REGISTERED
+  // Agent factories read settings even in the TUI and other telemetry-disabled processes.
+  // Keep the optional host exporters off that startup path.
+  const [{ OTLPLogExporter }, { BatchLogRecordProcessor, LoggerProvider }, prometheusModule] = await Promise.all([
+    import('@opentelemetry/exporter-logs-otlp-http'),
+    import('@opentelemetry/sdk-logs'),
+    settings.prometheusPort === undefined ? undefined : import('@opentelemetry/exporter-prometheus'),
+  ])
   diag.setLogger(failureLogger(options.write), DiagLogLevel.ERROR)
   const spanExporter = options.spanExporter ?? new OTLPTraceExporter({ url: `${settings.endpoint}/v1/traces`, timeoutMillis: EXPORT_TIMEOUT_MS })
   const metricExporter =
     options.metricExporter ?? new OTLPMetricExporter({ url: `${settings.endpoint}/v1/metrics`, timeoutMillis: EXPORT_TIMEOUT_MS })
   // The SDK names the service only as its tracer's scope; the collector reads `service.name` from the resource.
   const resource = resourceFromAttributes({ 'service.name': settings.serviceName })
+  const loggerProvider = new LoggerProvider({ resource, processors: [new BatchLogRecordProcessor({
+    exporter: options.logExporter ?? new OTLPLogExporter({ url: `${settings.endpoint}/v1/logs`, timeoutMillis: EXPORT_TIMEOUT_MS }),
+    exportTimeoutMillis: EXPORT_TIMEOUT_MS,
+  })] })
+  const logger = loggerProvider.getLogger('theoclaw')
+  const prometheus = prometheusModule === undefined ? undefined : new prometheusModule.PrometheusExporter({ preventServerStart: true })
+  let scrapeServer: Server | undefined
+  const prometheusEndpoint = prometheus === undefined ? Promise.resolve(undefined) : new Promise<string | undefined>((resolve) => {
+    const reader = prometheus
+    scrapeServer = createServer((request, response) => {
+      if (request.url !== '/metrics' || request.method !== 'GET') {
+        response.writeHead(404).end()
+        return
+      }
+      reader.getMetricsRequestHandler(request, response)
+    })
+    scrapeServer.once('error', (error) => {
+      diag.error(error.message)
+      resolve(undefined)
+    })
+    scrapeServer.listen(settings.prometheusPort, '127.0.0.1', () => {
+      const address = scrapeServer?.address()
+      resolve(address != null && typeof address !== 'string' ? `http://127.0.0.1:${address.port}/metrics` : undefined)
+    })
+  })
   const tracerProvider = new TracerProvider({ resource, spanProcessors: [new BatchSpanProcessor({ exporter: spanExporter })] })
   const meterProvider = new MeterProvider({
     resource,
-    readers: [new PeriodicExportingMetricReader({ exporter: metricExporter, exportIntervalMillis: METRIC_INTERVAL_MS, exportTimeoutMillis: EXPORT_TIMEOUT_MS })],
+    readers: [...(prometheus === undefined ? [] : [prometheus]), new PeriodicExportingMetricReader({ exporter: metricExporter, exportIntervalMillis: METRIC_INTERVAL_MS, exportTimeoutMillis: EXPORT_TIMEOUT_MS })],
   })
   trace.setGlobalTracerProvider(tracerProvider)
   metrics.setGlobalMeterProvider(meterProvider)
+  // A separate, constant resource avoids profile names, host ids and user identifiers.
+  const anonymousProvider = settings.anonymous ? new MeterProvider({
+    resource: resourceFromAttributes({ 'service.name': 'theoclaw-anonymous' }),
+    readers: [new PeriodicExportingMetricReader({ exporter: options.anonymousMetricExporter ?? new OTLPMetricExporter({ url: `${settings.endpoint}/v1/metrics`, timeoutMillis: EXPORT_TIMEOUT_MS }), exportIntervalMillis: METRIC_INTERVAL_MS })],
+  }) : undefined
+  anonymousProvider?.getMeter('theoclaw-anonymous').createCounter('theoclaw_anonymous_starts').add(1)
   const flush = async (): Promise<void> => {
-    await Promise.allSettled([tracerProvider.forceFlush(), meterProvider.forceFlush()])
+    await Promise.allSettled([tracerProvider.forceFlush(), meterProvider.forceFlush(), loggerProvider.forceFlush(), ...(anonymousProvider ? [anonymousProvider.forceFlush()] : [])])
   }
   return {
+    log: (line) => logger.emit({ body: redactSecrets(line).replace(/\/\/[^/@\s]+@/g, '//***@'), severityText: 'INFO' }),
+    prometheusEndpoint,
     flush,
     shutdown: async () => {
-      await Promise.allSettled([tracerProvider.shutdown(), meterProvider.shutdown()])
+      await prometheusEndpoint
+      if (scrapeServer !== undefined) {
+        const server = scrapeServer
+        await new Promise<void>((resolve) => {
+          server.close(() => resolve())
+          server.closeAllConnections()
+        })
+      }
+      await Promise.allSettled([tracerProvider.shutdown(), meterProvider.shutdown(), loggerProvider.shutdown(), ...(anonymousProvider ? [anonymousProvider.shutdown()] : [])])
       trace.disable()
       metrics.disable()
       diag.disable()
