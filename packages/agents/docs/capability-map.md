@@ -52,7 +52,6 @@ Measured against `@theokit/sdk@5.11.0`.
 | `CheckpointCapability` | value |
 | `coerceToKnownAgentRunErrorCode` | value |
 | `compactionStrategyConfigSchema` | value |
-| `CompatImportUnsupportedError` | value |
 | `compileAgentDefinition` | value |
 | `compileAgentModule` | value |
 | `compileContextWindow` | value |
@@ -112,7 +111,6 @@ Measured against `@theokit/sdk@5.11.0`.
 | `GuardrailsCapability` | value |
 | `GuardrailViolationError` | value |
 | `HookApprovalCapability` | value |
-| `HookGateUnsupportedError` | value |
 | `HumanInTheLoopCapability` | value |
 | `humanizeModelName` | value |
 | `InProcessApprovalRequiredError` | value |
@@ -464,7 +462,6 @@ Measured against `@theokit/sdk@5.11.0`.
 | `BodyTooLargeError` | value |
 | `BudgetExceededError` | value |
 | `buildModelSelection` | value |
-| `CompatImportUnsupportedError` | value |
 | `compileAgentDefinition` | value |
 | `compileAgentModule` | value |
 | `compileContextWindow` | value |
@@ -493,7 +490,6 @@ Measured against `@theokit/sdk@5.11.0`.
 | `flushPendingToolResults` | value |
 | `generateAgentManifest` | value |
 | `generateAgentRoutes` | value |
-| `HookGateUnsupportedError` | value |
 | `isAgentContext` | value |
 | `isAgentDefinition` | value |
 | `isApprovalRequired` | value |
