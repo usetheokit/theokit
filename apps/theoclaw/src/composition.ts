@@ -25,6 +25,7 @@ import { createUsageHook } from './channels/usage-hook.js'
 import type { ChannelLoop, PlatformBuild } from './channels/channel-loop.js'
 import { installOutputMask, type MaskableStream } from './channels/output-mask.js'
 import { type ConfiguredPlatform, resolvePlatforms } from './channels/platforms.js'
+import { readDisplayConfig } from './channels/display-config.js'
 import { createReplyHandler, type TurnAgent } from './channels/reply-handler.js'
 import { createSdkChannelAgentFactory, webchatAgentFactory } from './control-plane/agent-factory.js'
 import type { CreateAgent } from './control-plane/agent-factory.js'
@@ -200,6 +201,7 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
       withAgent: chat.withAgent,
       reset: (event) => chat.sessions.reset(event),
       secrets,
+      display: readDisplayConfig(options.env),
       ...(model === undefined ? {} : { usage: { modeFor: usage.modeFor, model, write: maskedWrite } }),
       // `loop` is read per message, after it exists: a member whose platform has not started is
       // reported as not delivered.
