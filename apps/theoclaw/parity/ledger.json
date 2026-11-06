@@ -710,7 +710,8 @@
   },
   {
     "id": "OC-99",
-    "status": "open"
+    "status": "open",
+    "reason": "Live SQLite snapshots and HTTPS offsite transfer have offline coverage. Real-model recall after offsite restore remains unverified: this sandbox has no model credentials or real offsite account. Run tests/live/backup.live.test.ts with a named THEOCLAW_MODEL and fresh THEOCLAW_BACKUP_TARGET before shipping."
   },
   {
     "id": "OC-100",
