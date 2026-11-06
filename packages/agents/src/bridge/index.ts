@@ -164,8 +164,6 @@ export {
   // B-004 — FIFTH instance of the shape the comment above enumerates (#663, #668, #675, #686). The
   // refusal shipped without crossing this barrel while the class it was written to mirror sat one
   // line below it, so a consumer could only match the message string.
-  CompatImportUnsupportedError,
-  HookGateUnsupportedError,
   type HookApprovalGate,
   type HookApprovalRequest,
 } from './sdk-adapter-create-options.js'
