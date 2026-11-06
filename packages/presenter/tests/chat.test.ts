@@ -166,7 +166,12 @@ describe('B-525 — preview on an edit-capable channel', () => {
 
   it('emits previews no more often than the interval', () => {
     let t = 0
-    const p = new ChatPresenter({ channel, supportsEdit: true, previewIntervalMs: 500, now: () => t })
+    const p = new ChatPresenter({
+      channel,
+      supportsEdit: true,
+      previewIntervalMs: 500,
+      now: () => t,
+    })
     const count = (): number => p.present(text('x')).length
     expect(count()).toBe(1)
     t = 499
