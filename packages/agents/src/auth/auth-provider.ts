@@ -96,8 +96,8 @@ export function waitWithJitter(attempt: number, baseMs = 200, random = Math.rand
 /** How an {@link AuthProvider} decides when a token is stale. */
 export interface AuthProviderOptions {
   /**
-   * Refresh when the stored access token has less than this many milliseconds left, instead of only
-   * within the SDK's one-minute skew. For a consumer that hands the token to a process that keeps it
+   * Refresh when the stored access token has less than this many milliseconds left plus the SDK's
+   * one-minute skew, which still applies on top, instead of only within that skew. For a consumer that hands the token to a process that keeps it
    * for a long time (a sandboxed agent run, a batch job), so the token outlives the process. Applied
    * to the value re-read under the lock, so it composes with the double-checked locking (#1286).
    * Default `0`: the SDK's own skew decides, as before.
