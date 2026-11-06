@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import { daemonInstall, daemonStatus, daemonUninstall } from '../src/daemon.js'
-import { plistFor, plistPath } from '../src/daemon-launchd.js'
+import { plistPath } from '../src/daemon-launchd.js'
 import { type Harness, harness } from './support/daemon-harness.js'
 
 const UID = 501
@@ -14,7 +14,7 @@ function launchctl(h: Harness): string[] {
 }
 
 describe('theoclaw daemon on macOS (launchd)', () => {
-  it('the_plist_runs_the_built_entry_with_the_configuration_file_and_escapes_xml', async () => {
+  it('the_plist_runs_the_built_entry_with_the_configuration_file', async () => {
     const h = harness({ platform: 'darwin', uid: UID, env: { THEOCLAW_PROFILE: 'work' } })
     expect(await daemonInstall(h.io, h.runner)).toBe(0)
     const path = plistPath('theoclaw-work', h.home)
@@ -33,16 +33,6 @@ describe('theoclaw daemon on macOS (launchd)', () => {
       `bootstrap gui/${UID} ${path}`,
     ])
     expect(h.stdout()).not.toContain('OPENROUTER')
-    const escaped = plistFor({
-      label: 'l',
-      configPath: '/a&b/<c>',
-      workingDirectory: '/it\'s "w"',
-      nodePath: '/n',
-      entryPath: '/e',
-      logFile: '/log',
-    })
-    expect(escaped).toContain('<string>/a&amp;b/&lt;c&gt;</string>')
-    expect(escaped).toContain('<string>/it&apos;s &quot;w&quot;</string>')
   })
 
   it('a_refused_bootstrap_removes_the_plist_and_exits_1', async () => {

@@ -1,12 +1,14 @@
 import { mkdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 
+// Numeric character references are valid in both XML service definitions.
+import { escapeHtml as escapeXml } from 'theokit/server/security'
+
 import {
   type DaemonBackend,
   type DaemonIo,
   type InstallTarget,
   type Runner,
-  escapeXml,
   writeAtomically,
 } from './daemon-common.js'
 
