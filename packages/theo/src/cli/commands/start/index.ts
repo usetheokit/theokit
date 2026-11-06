@@ -239,5 +239,7 @@ export async function startCommand(options: StartOptions): Promise<void> {
     for (const line of background.summaries) console.log(`  ${line}\n`)
   })
 
-  installGracefulShutdown(server, () => background.stop())
+  installGracefulShutdown(server, () => background.stop(), {
+    backgroundStopTimeoutMs: config.jobs?.worker.shutdownTimeoutMs,
+  })
 }
