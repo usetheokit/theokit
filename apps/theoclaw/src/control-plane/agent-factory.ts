@@ -93,6 +93,8 @@ export function createAgentFactory(
         ...thinkingOf(env),
         ...agentTelemetry(readTelemetrySettings(env)),
         ...(toolOptions === undefined ? {} : { toolOptions }),
+        // Installed plugins reach only the owner's `/control` agent, never a chat agent (OC-75).
+        ...(env.THEOCLAW_PLUGIN_WORKSPACE === undefined || env.THEOCLAW_PLUGIN_WORKSPACE === '' ? {} : { pluginWorkspace: env.THEOCLAW_PLUGIN_WORKSPACE }),
         ...(imported === undefined ? {} : { imported }),
       }),
     )
