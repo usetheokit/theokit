@@ -5,6 +5,7 @@ import type { ThinkingLevel } from '../agent/failover.js'
 import type { AgentImport, TheoClawAgentOptions, TheoClawLocalOptions } from '../agent/create-agent.js'
 import { parseFallbackModel, parseThinkingLevel, withFailover } from '../agent/failover.js'
 import { parseApprovedHooks } from '../agent/hook-approval.js'
+import { readPersonaPrompt } from '../agent/persona-files.js'
 import { agentTelemetry, readTelemetrySettings } from '../telemetry/otel.js'
 import type { AgentToolOptions } from '../tools/tool-registry.js'
 import type { BindEnvironment } from './bind.js'
@@ -62,7 +63,12 @@ function createWithFailover(env: BindEnvironment, create: CreateAgent, options: 
  */
 export function sessionAgentOptions(env: BindEnvironment, workspace: string): SessionAgentOptions {
   const options = agentOptionsFor(env)
-  return { ...options, local: { ...options.local, cwd: workspace, sessionDir: join(workspace, '.theoclaw') } }
+  const persona = readPersonaPrompt(workspace)
+  return {
+    ...options,
+    systemPrompt: persona === '' ? options.systemPrompt : `${options.systemPrompt}\n\n${persona}`,
+    local: { ...options.local, cwd: workspace, sessionDir: join(workspace, '.theoclaw') },
+  }
 }
 
 /**
