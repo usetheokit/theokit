@@ -97,9 +97,10 @@ export function waitWithJitter(attempt: number, baseMs = 200, random = Math.rand
 export interface AuthProviderOptions {
   /**
    * Refresh when the stored access token has less than this many milliseconds left plus the SDK's
-   * one-minute skew, which still applies on top, instead of only within that skew. For a consumer that hands the token to a process that keeps it
-   * for a long time (a sandboxed agent run, a batch job), so the token outlives the process. Applied
-   * to the value re-read under the lock, so it composes with the double-checked locking (#1286).
+   * one-minute skew, which still applies on top, instead of only within that skew. For a consumer
+   * that hands the token to a process that keeps it for a long time (a sandboxed agent run, a batch
+   * job), so the token outlives the process. Applied to the value re-read under the lock, so it
+   * composes with the double-checked locking (#1286).
    * Default `0`: the SDK's own skew decides, as before.
    */
   readonly refreshBeforeMs?: number
