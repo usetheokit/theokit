@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [@theokit/agents 16.3.0, create-theokit 3.0.31] - 2026-11-06
+
 ### Added
 
 - `@theokit/agents`: `new AuthProvider(config, store, { refreshBeforeMs })` refreshes an OAuth credential when its stored access token has less than that many milliseconds left, applied after the re-read under the lock, so a token handed to a long-running process outlives it. The default stays the SDK's one-minute skew (#1286)
