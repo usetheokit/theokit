@@ -1,7 +1,9 @@
 import { join } from 'node:path'
 
 import { createTheoClawAgent, theoClawAgentOptions } from '../agent/create-agent.js'
+import type { ThinkingLevel } from '../agent/failover.js'
 import type { AgentImport, TheoClawAgentOptions, TheoClawLocalOptions } from '../agent/create-agent.js'
+import { parseFallbackModel, parseThinkingLevel, withFailover } from '../agent/failover.js'
 import { parseApprovedHooks } from '../agent/hook-approval.js'
 import { agentTelemetry, readTelemetrySettings } from '../telemetry/otel.js'
 import type { AgentToolOptions } from '../tools/tool-registry.js'
@@ -32,7 +34,24 @@ export interface SessionAgentOptions extends TheoClawAgentOptions {
  */
 export function agentOptionsFor(env: BindEnvironment): TheoClawAgentOptions {
   const { model, modelKey } = requireModel(env)
-  return theoClawAgentOptions({ model, apiKey: modelKey, approvedHooks: parseApprovedHooks(env), ...agentTelemetry(readTelemetrySettings(env)) })
+  return theoClawAgentOptions({ model, apiKey: modelKey, approvedHooks: parseApprovedHooks(env), ...thinkingOf(env), ...agentTelemetry(readTelemetrySettings(env)) })
+}
+
+function thinkingOf(env: BindEnvironment): { thinking?: ThinkingLevel } {
+  const thinking = parseThinkingLevel(env.THEOCLAW_THINKING)
+  return thinking === undefined ? {} : { thinking }
+}
+
+/**
+ * `create(options)` on the primary model; with `THEOCLAW_MODEL_FALLBACK` set, the agent falls over
+ * to a secondary built lazily from the same options with the fallback model (OC-47). The fallback
+ * runs on the same key; a secondary on another provider's key is not supported.
+ */
+function createWithFailover(env: BindEnvironment, create: CreateAgent, options: TheoClawAgentOptions): Promise<TurnAgent> {
+  const fallback = parseFallbackModel(env.THEOCLAW_MODEL_FALLBACK)
+  return create(options).then((primary) =>
+    fallback === undefined || fallback === options.model ? primary : withFailover(primary, () => create({ ...options, model: fallback })),
+  )
 }
 
 /**
@@ -60,11 +79,12 @@ export function createAgentFactory(
 ): (toolOptions?: AgentToolOptions) => Promise<TurnAgent> {
   return async (toolOptions) => {
     const { model, modelKey } = requireModel(env)
-    return create(
+    return createWithFailover(env, create, 
       theoClawAgentOptions({
         model,
         apiKey: modelKey,
         approvedHooks: parseApprovedHooks(env),
+        ...thinkingOf(env),
         ...agentTelemetry(readTelemetrySettings(env)),
         ...(toolOptions === undefined ? {} : { toolOptions }),
         ...(imported === undefined ? {} : { imported }),
@@ -90,7 +110,7 @@ export function createChannelAgentFactory<A>(
 
 /** The chat path's factory over the SDK, for a caller given no `create` of its own: a trigger run's default (B-397). */
 export function createSdkChannelAgentFactory(env: BindEnvironment): () => Promise<TurnAgent> {
-  return createChannelAgentFactory(env, createTheoClawAgent)
+  return async () => createWithFailover(env, createTheoClawAgent, agentOptionsFor(env))
 }
 
 /**
@@ -102,5 +122,5 @@ export function webchatAgentFactory(
   env: BindEnvironment,
   create: CreateAgent = createTheoClawAgent,
 ): () => Promise<TurnAgent> {
-  return createChannelAgentFactory(env, create)
+  return async () => createWithFailover(env, create, agentOptionsFor(env))
 }
