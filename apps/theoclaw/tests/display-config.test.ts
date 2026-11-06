@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { resolveDisplay, tierOf } from '../src/channels/display-config.js'
+import { readDisplayConfig, resolveDisplay, tierOf } from '../src/channels/display-config.js'
 
 describe('display resolver', () => {
   it('ships tool progress off on Telegram and Slack', () => {
@@ -36,5 +36,20 @@ describe('display resolver', () => {
     expect(resolveDisplay('slack', config).tool_progress).toBe('new')
     expect(resolveDisplay('telegram', config).live_status).toBe('verb')
     expect(resolveDisplay('telegram', {}).tool_progress).toBe('off')
+  })
+
+  it('lets a global override beat a platform default', () => {
+    expect(resolveDisplay('telegram', { global: { tool_progress: 'new' } }).tool_progress).toBe('new')
+  })
+
+  it('reads overrides from the environment and refuses a bad value', () => {
+    const config = readDisplayConfig({
+      THEOCLAW_DISPLAY_LIVE_STATUS: 'verb',
+      THEOCLAW_DISPLAY_TELEGRAM_TOOL_PROGRESS: 'all',
+      THEOCLAW_DISPLAY_SLACK_SHOW_REASONING: 'true',
+    })
+    expect(resolveDisplay('telegram', config)).toMatchObject({ tool_progress: 'all', live_status: 'verb' })
+    expect(resolveDisplay('slack', config)).toMatchObject({ tool_progress: 'off', show_reasoning: true })
+    expect(() => readDisplayConfig({ THEOCLAW_DISPLAY_TOOL_PROGRESS: 'loud' })).toThrow(/THEOCLAW_DISPLAY_TOOL_PROGRESS/)
   })
 })

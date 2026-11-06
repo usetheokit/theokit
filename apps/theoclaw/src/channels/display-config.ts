@@ -1,5 +1,7 @@
 import type { PlatformName } from '@theokit/gateway'
 
+import { TheoClawConfigError } from '../control-plane/errors.js'
+
 /**
  * Per-platform display resolver (B-370, PIECE-1; after Hermes `gateway/display_config.py`).
  * One property picks the tier: whether the platform can edit a message it already sent.
@@ -25,7 +27,7 @@ export type DisplayOverrides = Partial<DisplaySettings>
 
 export interface DisplayConfig {
   readonly global?: DisplayOverrides
-  readonly platforms?: Readonly<Record<string, DisplayOverrides>>
+  readonly platforms?: Readonly<Partial<Record<PlatformName, DisplayOverrides>>>
 }
 
 const TIER_DEFAULTS: Readonly<Record<DisplayTier, DisplaySettings>> = {
@@ -68,6 +70,46 @@ export function resolveDisplay(platform: PlatformName | string, config: DisplayC
     ...TIER_DEFAULTS[tierOf(platform)],
     ...PLATFORM_DEFAULTS[platform],
     ...config.global,
-    ...config.platforms?.[platform],
+    ...config.platforms?.[platform as PlatformName],
   }
+}
+
+type Env = Readonly<Record<string, string | undefined>>
+
+const OVERRIDE_KEYS = ['TOOL_PROGRESS', 'LIVE_STATUS', 'CLEANUP_PROGRESS', 'SHOW_REASONING'] as const
+
+function overrideFrom(env: Env, prefix: string): DisplayOverrides {
+  const out: { -readonly [K in keyof DisplaySettings]?: DisplaySettings[K] } = {}
+  for (const key of OVERRIDE_KEYS) {
+    const variable = `${prefix}${key}`
+    const raw = env[variable]?.trim().toLowerCase()
+    if (raw === undefined || raw === '') continue
+    const bad = (): never => {
+      throw new TheoClawConfigError(`${variable}: unsupported value`, { variable })
+    }
+    if (key === 'TOOL_PROGRESS') out.tool_progress = raw === 'all' || raw === 'new' || raw === 'off' ? raw : bad()
+    else if (key === 'LIVE_STATUS') out.live_status = raw === 'full' || raw === 'verb' || raw === 'off' ? raw : bad()
+    else {
+      const flag = raw === 'true' || raw === 'on' ? true : raw === 'false' || raw === 'off' ? false : bad()
+      if (key === 'CLEANUP_PROGRESS') out.cleanup_progress = flag
+      else out.show_reasoning = flag
+    }
+  }
+  return out
+}
+
+/**
+ * Overrides from the environment: `THEOCLAW_DISPLAY_<KEY>` for every platform and
+ * `THEOCLAW_DISPLAY_<PLATFORM>_<KEY>` for one, with KEY one of TOOL_PROGRESS (all|new|off),
+ * LIVE_STATUS (full|verb|off), CLEANUP_PROGRESS and SHOW_REASONING (true|false). A bad value throws
+ * `TheoClawConfigError` naming the variable. Only known platforms are read, so a variable for a
+ * misspelled platform changes nothing.
+ */
+export function readDisplayConfig(env: Env): DisplayConfig {
+  const platforms: Partial<Record<PlatformName, DisplayOverrides>> = {}
+  for (const platform of Object.keys(PLATFORM_TIERS)) {
+    const overrides = overrideFrom(env, `THEOCLAW_DISPLAY_${platform.toUpperCase()}_`)
+    if (Object.keys(overrides).length > 0) platforms[platform as PlatformName] = overrides
+  }
+  return { global: overrideFrom(env, 'THEOCLAW_DISPLAY_'), platforms }
 }

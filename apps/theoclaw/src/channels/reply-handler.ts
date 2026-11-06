@@ -9,6 +9,8 @@ import { maskSecrets } from './channel-loop.js'
 import { createStreamMask } from './stream-mask.js'
 import type { StreamMask } from './stream-mask.js'
 import type { BroadcastGroup, BroadcastGroups } from './broadcast-groups.js'
+import { type DisplayConfig, resolveDisplay } from './display-config.js'
+import { createProgressGate, type ProgressGate } from './progress.js'
 import { deliverText } from './deliver.js'
 import { type GoalSettings, GOAL_USAGE_REPLY, goalOf, runGoal } from './goal-command.js'
 import type { SessionLease } from '../sessions/session-agents.js'
@@ -59,6 +61,8 @@ export interface ReplyHandlerOptions {
   readonly secrets?: readonly string[]
   /** What `/goal` runs with (B-397 FR-008); without it, `/goal` is an ordinary message. */
   readonly goal?: GoalSettings
+  /** Per-platform display overrides (B-370); without them each platform keeps its tier's defaults. */
+  readonly display?: DisplayConfig
   /** A finished turn's usage: its line, and the footer its conversation's `/usage` asks for (FR-005). */
   readonly usage?: ReplyUsageOptions
 }
@@ -148,6 +152,9 @@ interface StreamedTurn {
   answer: string
   error: string | undefined
   readonly mask: StreamMask
+  /** Progress lines the display settings allow, waiting to be sent. */
+  readonly progress: string[]
+  readonly gate: ProgressGate
 }
 
 /**
@@ -161,6 +168,7 @@ interface StreamedTurn {
 function presentFrame(frame: { readonly type: string }, presenter: ChatPresenter, streamed: StreamedTurn): void {
   for (const output of fromSdkMessage({ ...frame })) {
     if (output.type === 'error') streamed.error = output.code
+    streamed.progress.push(...streamed.gate.lines(output))
     if (output.type === 'text') {
       // The answer before any platform rendering, for a broadcast group's thread and its other members.
       streamed.answer += output.text
@@ -183,13 +191,19 @@ async function streamTurn(
   prompt: string,
   presenter: ChatPresenter,
   secrets: readonly string[],
+  gate: ProgressGate,
+  sendProgress: (line: string) => Promise<void>,
 ): Promise<TurnOutcome> {
   // An ERROR or EXPIRED status in the stream fails the turn even when `wait()` reports it finished.
-  const streamed: StreamedTurn = { answer: '', error: undefined, mask: createStreamMask(secrets) }
+  const streamed: StreamedTurn = { answer: '', error: undefined, mask: createStreamMask(secrets), progress: [], gate }
   try {
     const run = await agent.send(prompt, untrustedContentSendOptions())
     try {
-      for await (const frame of run.stream()) presentFrame(frame, presenter, streamed)
+      for await (const frame of run.stream()) {
+        presentFrame(frame, presenter, streamed)
+        for (const line of streamed.progress.splice(0)) await sendProgress(line)
+      }
+      for (const line of streamed.gate.flush()) await sendProgress(line)
     } finally {
       flushMask(presenter, streamed)
     }
@@ -214,12 +228,21 @@ async function streamTurn(
 async function answerTurn(options: ReplyHandlerOptions, event: MessageEvent, ctx: GatewayContext, prompt: string): Promise<string> {
   const presenter = presenterFor(event)
   const secrets = options.secrets ?? []
+  const gate = createProgressGate(resolveDisplay(event.platform, options.display))
+  // Best effort: a progress line that cannot be sent never fails the turn.
+  const sendProgress = async (line: string): Promise<void> => {
+    try {
+      await ctx.reply(maskSecrets(line, secrets), { format: 'plain' })
+    } catch {
+      // the turn's own reply reports delivery problems
+    }
+  }
   let started = false
   try {
     return await options.withAgent(event, async (lease) => {
       started = true
       try {
-        const outcome = await streamTurn(lease.agent, event, prompt, presenter, secrets)
+        const outcome = await streamTurn(lease.agent, event, prompt, presenter, secrets, gate, sendProgress)
         // Masked before rendering (in the stream) and again after it, so a value is caught in the
         // model's text and in the platform's own format; the answer a broadcast group records and
         // fans out is masked before any member renders it.
