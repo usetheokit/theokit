@@ -69,6 +69,7 @@ import type { ToolDeps, ToolSettings } from './tools/tool-settings.js'
 import { createWorkflowTools } from './workflows/workflow-tools.js'
 import { WEBCHAT_ASSETS_DIR } from './webchat/page.js'
 import { createWebchatRoutes } from './webchat/routes.js'
+import { configuredVoiceReplies, withVoiceReplies } from './voice/voice-replies.js'
 
 export { createContainer, type AgentComposition, type AgentCompositionOptions } from './agent-container.js'
 
@@ -171,7 +172,7 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
   const chat = chatSessions(options)
   const platforms = resolvePlatforms(options.env)
   const { configured, skipped } = platforms
-  const secrets = options.secrets ?? platforms.secrets
+  const secrets = [...(options.secrets ?? platforms.secrets), options.env.THEOCLAW_VOICE_OPENAI_API_KEY?.trim() ?? '']
   reportUnservedPlatforms(skipped, configured, policy, options.write)
   // What the routes and the router write can carry a configured value (a verifier's message, an
   // SDK error): masked here as the loop masks its own lines, whatever stream the caller writes to.
@@ -195,7 +196,7 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
     platforms: (options.builders ?? adapterBuilders)(configured, { requireMention: policy.groupActivation === 'mention' }).map((build) =>
       withRoute(build, webhooks.get(build.platform), handles),
     ),
-    handler: createReplyHandler({
+    handler: withVoiceReplies(createReplyHandler({
       withAgent: chat.withAgent,
       reset: (event) => chat.sessions.reset(event),
       secrets,
@@ -208,7 +209,7 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
         write: maskedWrite,
       },
       goal: events.goal,
-    }),
+    }), configuredVoiceReplies(options.env)),
     hooks: channelHooks({ policy, ...(pairing === undefined ? {} : { pairing }), write: maskedWrite, ...(model === undefined ? {} : { usage: usage.hook }) }),
     secrets,
     write: options.write,

@@ -948,3 +948,11 @@ running instance uploads and a new instance restores from offsite. It requires
 `THEOCLAW_LIVE=1`, a named `THEOCLAW_MODEL`, its API key, and a fresh
 `THEOCLAW_BACKUP_TARGET` (plus its token if needed). OC-99 remains open until that
 check is actually run and the model and passing result are recorded in the ledger.
+
+Telegram voice notes can receive spoken replies when
+`THEOCLAW_VOICE_OPENAI_API_KEY` is set alongside the existing Telegram and chat
+model configuration. Audio is transcribed by `gpt-4o-mini-transcribe`; replies use
+`gpt-4o-mini-tts` with an AI-generated voice caption. Owner and group rules still
+apply. Audio failures fall back to text. See [voice verification](parity/voice-verification.md)
+for limits and the outstanding real-account recording check. Continuous talk and
+wake word are tracked separately in B-722.
