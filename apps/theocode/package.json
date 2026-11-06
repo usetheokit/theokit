@@ -43,7 +43,7 @@
     "@theokit/sdk": "5.13.0",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
-    "@vitest/coverage-v8": "^4.1.11",
+    "@vitest/coverage-v8": "^4.1.12",
     "dependency-cruiser": "18.2.0",
     "esbuild": "0.28.2",
     "eslint": "^10.9.0",
@@ -54,7 +54,7 @@
     "tsx": "^4.19.0",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.68.0",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.12"
   },
   "bin": {
     "theocode": "./dist/theocode.mjs"
