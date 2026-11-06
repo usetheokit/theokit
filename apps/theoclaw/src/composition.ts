@@ -40,6 +40,9 @@ import { peerTools } from './a2a/peer-tools.js'
 import { installShutdown, type SignalSource } from './control-plane/shutdown.js'
 import { formatAddress, reportSurfacesOff } from './control-plane/start-output.js'
 import { createTurnRunner } from './control-plane/turn.js'
+import { MemoryStore } from './memory/memory-store.js'
+import { sessionSearchTool } from './memory/memory-tools.js'
+import { memoryDirectory, withMemory, type MemoryRunnerOptions } from './memory/memory-wiring.js'
 import { heartbeatJob, readHeartbeatSettings } from './scheduler/heartbeat.js'
 import { loadScheduleStore, type RunningScheduler, wireScheduler } from './scheduler/scheduler-wiring.js'
 import { createBonjourPublisher } from './discovery/bonjour-publisher.js'
@@ -330,12 +333,12 @@ function workflowTools(factory: StartOptions['draftAgentFactory'], write: (line:
  * surface, so its agents are built through the chat path's factory, as every chat agent: no tool
  * (B-382), no `shell` and memory off (B-377), whatever the `/control` turn's options become.
  */
-function startWebchat(options: StartOptions, settings: ControlPlaneSettings, secrets: readonly string[], write: (line: string) => void): HttpHandler | undefined {
+function startWebchat(options: StartOptions, settings: ControlPlaneSettings, secrets: readonly string[], write: (line: string) => void, memory: Omit<MemoryRunnerOptions, 'surface'>): HttpHandler | undefined {
   const token = settings.webchatToken
   if (token === undefined) return undefined
   const agents = createContainer<TurnAgent>({ factory: webchatAgentFactory(options.env, options.createChatAgent) })
   const assetsDir = options.webchatAssetsDir ?? WEBCHAT_ASSETS_DIR
-  return createWebchatRoutes({ token, runTurn: createTurnRunner(agents.withAgent, secrets, settings.model), assetsDir, write })
+  return createWebchatRoutes({ token, runTurn: withMemory(createTurnRunner(agents.withAgent, secrets, settings.model), { store: memory.store, write: memory.write, surface: 'webchat' }), assetsDir, write })
 }
 
 /**
@@ -425,7 +428,9 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
   const buildWorker = options.importFreeAgentFactory ?? options.agentFactory
   const beat = heartbeat === undefined ? {} : { heartbeat: heartbeatJob(sessionSettings.workspace, heartbeat) }
   scheduled = wireScheduler({ store: scheduleStore, loop: composed.loop, buildRunAgent: buildWorker, tools, platforms, ...beat, write: stderr, secrets: secretValues })
-  const extraTools = [...workflowTools(options.draftAgentFactory, stderr), ...scheduled.scheduleTools, ...peerTools(a2a.peers)]
+  const memoryStore = new MemoryStore(memoryDirectory(sessionSettings.workspace))
+  const memory = { store: memoryStore, build: async (toolOptions: AgentToolOptions) => buildWorker(toolOptions), write: stderr }
+  const extraTools = [sessionSearchTool(memoryStore), ...workflowTools(options.draftAgentFactory, stderr), ...scheduled.scheduleTools, ...peerTools(a2a.peers)]
   const buildControlAgent = async (): Promise<TurnAgent> =>
     options.agentFactory(controlAgentToolOptions(tools, buildWorker, extraTools))
   const { withAgent } = createContainer<TurnAgent>({ factory: buildControlAgent })
@@ -445,7 +450,7 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
   serving = listen({
     handler: serveHandler(
       composed.router,
-      startWebchat(options, settings, secretValues, stderr),
+      startWebchat(options, settings, secretValues, stderr, memory),
       devices,
       api,
       a2a.token === undefined ? undefined : a2aRoute({ token: a2a.token, buildWorker, tools, secrets: secretValues, write: stderr }),
@@ -455,7 +460,7 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
     stderr,
     ...(settings.controlToken === undefined
       ? {}
-      : { control: controlOptions(settings.controlToken, withAgent, buildControlAgent, stderr, secretValues, devices, settings.model) }),
+      : { control: controlOptions(settings.controlToken, withAgent, buildControlAgent, stderr, secretValues, devices, settings.model, (runner) => withMemory(runner, { ...memory, surface: 'control' })) }),
   })
   let handle: ControlPlaneHandle
   try {

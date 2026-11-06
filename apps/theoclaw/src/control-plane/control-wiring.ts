@@ -2,7 +2,7 @@ import type { TurnAgent } from '../agent-port.js'
 import { createControlSessions } from './control-sessions.js'
 import { createDevicePairing, type DevicePairing } from './device-pairing.js'
 import type { ControlSocketOptions } from './control-socket.js'
-import { createTurnRunner, type WithAgent } from './turn.js'
+import { createTurnRunner, type TurnRunner, type WithAgent } from './turn.js'
 
 /**
  * The `/control` socket's options: the sessionless runner over the per-turn container, and the named
@@ -18,10 +18,11 @@ export function controlOptions(
   secrets: readonly string[] = [],
   devices?: DevicePairing,
   model?: string,
+  wrap: (runner: TurnRunner) => TurnRunner = (runner) => runner,
 ): ControlSocketOptions {
   return {
     token,
-    runTurn: createTurnRunner(withAgent, secrets, model),
+    runTurn: wrap(createTurnRunner(withAgent, secrets, model)),
     sessions: createControlSessions({ build, report, secrets, ...(model === undefined ? {} : { model }) }),
     ...(devices === undefined ? {} : { devices }),
   }
