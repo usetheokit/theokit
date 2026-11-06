@@ -383,7 +383,11 @@
   },
   {
     "id": "OC-54",
-    "status": "open"
+    "status": "open",
+    "gaps": [
+      "B-564"
+    ],
+    "note": "moved to B-564 (dod reduced 2026-10-22, delegated): nothing in the ecosystem prunes aged tool results"
   },
   {
     "id": "OC-55",
