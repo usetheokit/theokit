@@ -1,5 +1,5 @@
-import { cp, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { cp, mkdir, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises'
+import { join, sep } from 'node:path'
 
 import { parsePluginManifest, type PluginManifest } from './manifest.js'
 
@@ -19,9 +19,7 @@ export interface InstallPluginInput {
  */
 export async function installPlugin(input: InstallPluginInput): Promise<PluginManifest> {
   const manifest = parsePluginManifest(await readFile(join(input.source, 'PLUGIN.md'), 'utf8'))
-  await readFile(join(input.source, manifest.entry)).catch(() => {
-    throw new Error(`plugin entry ${manifest.entry} is missing`)
-  })
+  await checkEntry(input.source, manifest.entry)
   const destination = join(input.workspace, '.theokit', 'plugins', manifest.name)
   await rm(destination, { recursive: true, force: true })
   await mkdir(join(destination, '..'), { recursive: true })
@@ -45,4 +43,14 @@ async function trust(trustFile: string, folder: string): Promise<void> {
   if (!folders.includes(folder)) folders.push(folder)
   await mkdir(join(trustFile, '..'), { recursive: true })
   await writeFile(trustFile, JSON.stringify(folders, null, 2))
+}
+
+/** The entry must be a regular file whose realpath stays inside the source folder (no symlink out). */
+async function checkEntry(source: string, entry: string): Promise<void> {
+  const root = await realpath(source)
+  const real = await realpath(join(source, entry)).catch(() => undefined)
+  const info = real === undefined ? undefined : await stat(real)
+  if (real === undefined || info === undefined || !info.isFile() || !real.startsWith(root + sep)) {
+    throw new Error(`plugin entry ${entry} is missing, not a file, or outside the plugin folder`)
+  }
 }

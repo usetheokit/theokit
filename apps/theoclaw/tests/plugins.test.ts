@@ -1,10 +1,11 @@
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { theoClawAgentOptions } from '../src/agent/create-agent.js'
+import { createTheoClawAgent, theoClawAgentOptions } from '../src/agent/create-agent.js'
+import { advertisedTools, startModelStub } from './model-stub.js'
 import { installPlugin } from '../src/plugins/install.js'
 import { parsePluginManifest } from '../src/plugins/manifest.js'
 import { defineTheoClawPlugin } from '../src/plugins/sdk.js'
@@ -49,13 +50,26 @@ describe('plugin install', () => {
     expect(JSON.parse(readFileSync(trustFile, 'utf8'))).toHaveLength(1)
   })
   it('refuses a plugin whose entry is missing', async () => {
-    const source = plugin()
-    const workspace = mkdtempSync(join(tmpdir(), 'tc-plugin-ws-'))
-    mkdirSync(join(workspace, 'x'))
-    await expect(installPlugin({ source, workspace, trustFile: join(workspace, 't.json') })).resolves.toBeDefined()
     const bare = mkdtempSync(join(tmpdir(), 'tc-plugin-bare-'))
     writeFileSync(join(bare, 'PLUGIN.md'), MANIFEST)
+    const workspace = mkdtempSync(join(tmpdir(), 'tc-plugin-ws-'))
     await expect(installPlugin({ source: bare, workspace, trustFile: join(workspace, 't.json') })).rejects.toThrow(/entry/)
+  })
+  it('refuses an entry that is a symlink out of the plugin folder', async () => {
+    const source = plugin()
+    const outside = join(mkdtempSync(join(tmpdir(), 'tc-plugin-out-')), 'evil.mjs')
+    writeFileSync(outside, 'export default {}\n')
+    rmSync(join(source, 'index.mjs'))
+    symlinkSync(outside, join(source, 'index.mjs'))
+    const workspace = mkdtempSync(join(tmpdir(), 'tc-plugin-ws-'))
+    await expect(installPlugin({ source, workspace, trustFile: join(workspace, 't.json') })).rejects.toThrow(/entry/)
+  })
+  it('refuses an entry that is a directory', async () => {
+    const source = plugin()
+    rmSync(join(source, 'index.mjs'))
+    mkdirSync(join(source, 'index.mjs'))
+    const workspace = mkdtempSync(join(tmpdir(), 'tc-plugin-ws-'))
+    await expect(installPlugin({ source, workspace, trustFile: join(workspace, 't.json') })).rejects.toThrow(/entry/)
   })
 })
 
@@ -73,5 +87,34 @@ describe('plugin sdk and agent wiring', () => {
     const local = theoClawAgentOptions({ ...base, pluginWorkspace: '/w' }).local
     expect(local.settingSources).toEqual(['plugins'])
     expect(local.cwd).toBe('/w')
+  })
+  afterEach(() => vi.unstubAllEnvs())
+  it('an installed plugin adds its tool to a real SDK agent (offline, no model call)', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'tc-plugin-home-'))
+    vi.stubEnv('HOME', home)
+    vi.stubEnv('USERPROFILE', home)
+    const source = mkdtempSync(join(tmpdir(), 'tc-plugin-src-'))
+    writeFileSync(join(source, 'PLUGIN.md'), MANIFEST)
+    writeFileSync(
+      join(source, 'index.mjs'),
+      `export default { kind: 'general', name: 'hello-plugin', version: '1.0.0', register(ctx) { ctx.registerTool({ name: 'hello_plugin_tool', description: 'says hello', inputSchema: { type: 'object', properties: {} }, handler: async () => 'plugin-says-hello' }) } }\n`,
+    )
+    const workspace = mkdtempSync(join(tmpdir(), 'tc-plugin-ws-'))
+    await installPlugin({ source, workspace, trustFile: join(home, '.theokit', 'plugins', 'trusted-workspace-plugins.json') })
+    const stub = await startModelStub([{ toolCalls: [{ name: 'hello_plugin_tool', args: {} }] }, { text: 'done' }])
+    const options = theoClawAgentOptions({ model: { id: 'stub/m', url: stub.url }, apiKey: 'sk-or-0123456789abcdef', pluginWorkspace: workspace })
+    const agent = await createTheoClawAgent(options)
+    try {
+      const run = await agent.send('say hello')
+      const result = await run.wait()
+      expect(result.status).toBe('finished')
+      expect(advertisedTools(stub.requests[0])).toContain('hello_plugin_tool')
+      // The second request carries the tool's result, so the agent ran the plugin's tool.
+      expect(JSON.stringify(stub.requests[1])).toContain('plugin-says-hello')
+      expect(stub.requests.length).toBeGreaterThanOrEqual(2)
+    } finally {
+      await agent[Symbol.asyncDispose]()
+      await stub.close()
+    }
   })
 })

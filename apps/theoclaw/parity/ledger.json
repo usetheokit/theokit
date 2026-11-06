@@ -558,7 +558,7 @@
   {
     "id": "OC-75",
     "status": "open",
-    "note": "built offline: PLUGIN.md manifest parser, defineTheoClawPlugin, installPlugin (copy plus trust record) and THEOCLAW_PLUGIN_WORKSPACE for the /control agent (tests/plugins.test.ts); open because no real-model check exists yet and the pinned SDK (5.13.0, root override) predates the 5.14.0 release that imports a manifest entry"
+    "note": "built and pinned to @theokit/sdk 5.14.0 (which imports a trusted manifest entry): PLUGIN.md parser, defineTheoClawPlugin, installPlugin (copy plus trust record) and THEOCLAW_PLUGIN_WORKSPACE for the /control agent; tests/plugins.test.ts proves offline, on the real SDK and a stub model, that an installed plugin's tool is advertised and run; open because no end-to-end check against a real model exists yet, and one cannot be recorded as passing until it has been run"
   },
   {
     "id": "OC-76",
