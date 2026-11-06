@@ -1,3 +1,4 @@
+import './runtime.js'
 import 'reflect-metadata'
 
 import { homedir } from 'node:os'

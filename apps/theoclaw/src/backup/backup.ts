@@ -21,6 +21,8 @@ import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path'
 
 import { encodeProjectDir } from '@theokit/sdk/persistence'
 
+import { assertSupportedRuntime } from '../runtime.js'
+
 import { loadConfiguration } from '../config-file.js'
 import { resolveInstance } from '../instance.js'
 import { takeInstanceLock } from './instance-lock.js'
@@ -182,6 +184,7 @@ function snapshotSQLite(from: string, to: string): void {
  * left out (NFR-002). A copy that fails removes what it wrote.
  */
 export function backupInstance(env: NodeJS.ProcessEnv, dir: string, options: BackupOptions): Manifest {
+  assertSupportedRuntime()
   const targets = resolveTargets(env, options.homeDir)
   requireSource(targets.state, 'THEOCLAW_STATE_DIR')
   requireSource(targets.workspace, 'THEOCLAW_WORKSPACE')

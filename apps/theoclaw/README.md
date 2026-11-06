@@ -9,7 +9,7 @@ Discord, Slack, Matrix, Mattermost, e-mail, LINE, WhatsApp, Microsoft Teams and 
 git clone https://github.com/usetheokit/theokit.git theokit && theokit/apps/theoclaw/install.sh
 ```
 
-It needs `git` and Node 22 or later, and network access to the npm registry. The script installs
+It needs `git` and Node 22.16.0+ (on Node 22) or Node 23.8.0+, and network access to the npm registry. The script installs
 and builds TheoClaw and its workspace packages in the clone, then writes the launcher
 `~/.local/bin/theoclaw` (`THEOCLAW_BIN_DIR` picks another directory). It says so when that
 directory is not on your `PATH`. With no `pnpm` installed, it puts corepack's `pnpm` in
@@ -912,6 +912,9 @@ paste token values into issues, logs or test fixtures. To check that a variable 
 printing it: `[ -n "$THEOCLAW_TELEGRAM_TOKEN" ] && echo set`.
 
 ### Live and offsite backups
+
+SQLite snapshots require the online backup API added in Node 22.16.0 and 23.8.0.
+TheoClaw enforces this runtime requirement at startup and during installation.
 
 `theoclaw backup /private/backups/today --live` snapshots each SQLite database
 (including committed WAL data) while TheoClaw runs. SQLite sidecars are excluded.

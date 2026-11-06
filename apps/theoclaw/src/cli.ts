@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import './runtime.js'
 import { spawn } from 'node:child_process'
 import { realpathSync } from 'node:fs'
 import { homedir } from 'node:os'
