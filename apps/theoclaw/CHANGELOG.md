@@ -13,6 +13,12 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Telegram voice-note replies (B-401, OC-102), enabled with
+  `THEOCLAW_VOICE_OPENAI_API_KEY`: admitted notes are transcribed into the existing
+  chat session and answered with AI-generated speech, with bounded audio requests
+  and text fallback. Offline coverage passes; the real-account/model recorded run
+  remains outstanding and OC-102 remains open. Talk mode and wake word belong to B-722.
+
 - Agent to agent over A2A (B-394, OC-13). With `THEOCLAW_A2A_TOKEN`, `POST /a2a` answers A2A
   JSON-RPC `message/send` on a fresh read-only worker, behind the bearer token, a 65536-byte body,
   a 120000 ms bound and at most 4 tasks in flight, with the reply masked;

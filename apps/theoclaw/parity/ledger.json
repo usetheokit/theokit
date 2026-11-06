@@ -724,7 +724,8 @@
   },
   {
     "id": "OC-102",
-    "status": "open"
+    "status": "open",
+    "note": "B-401: Telegram voice-note transcription and spoken replies implemented with deterministic offline coverage in tests/voice-replies.test.ts. Real-account recorded run with a named THEOCLAW_MODEL, gpt-4o-mini-transcribe and gpt-4o-mini-tts remains unverified: this sandbox has no real chat account or model credentials. See parity/voice-verification.md. Not shipped on offline evidence."
   },
   {
     "id": "OC-103",
