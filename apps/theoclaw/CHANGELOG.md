@@ -13,6 +13,12 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Memory across surfaces (B-381, OC-56, Hermes row 3): `/control` and WebChat turns are kept
+  under `<workspace>/.theoclaw/memory`, the `/control` agent has a `session_search` tool over
+  them, and after each turn a forked reviewer agent holding only `memory_save` keeps durable
+  facts that later turns are shown. Offline tests pass; the real-model check has not been run,
+  so OC-56 and H-3 stay open in the parity ledger. Chat-channel turns are not yet recorded.
+
 - Telegram voice-note replies (B-401, OC-102), enabled with
   `THEOCLAW_VOICE_OPENAI_API_KEY`: admitted notes are transcribed into the existing
   chat session and answered with AI-generated speech, with bounded audio requests
