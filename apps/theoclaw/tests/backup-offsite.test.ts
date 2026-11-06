@@ -84,3 +84,32 @@ it('refuses insecure targets before sending any credentials', async () => {
   expect(fetcher).not.toHaveBeenCalled()
   expect(existsSync(dir)).toBe(false)
 })
+
+it.each([false, true])('preserves deleted-row gaps and references to surviving rowids (live=%s)', (live) => {
+  const root = scratch(), state = join(root, 'state'), workspace = join(root, 'workspace')
+  mkdirSync(state); mkdirSync(workspace)
+  const db = new DatabaseSync(join(state, 'sessions'))
+  db.exec(`
+    PRAGMA journal_mode=WAL;
+    PRAGMA wal_autocheckpoint=0;
+    CREATE TABLE sessions (word TEXT);
+    CREATE TABLE session_references (session_rowid INTEGER);
+    INSERT INTO sessions VALUES ('deleted'), ('surviving');
+    INSERT INTO session_references VALUES (2);
+    DELETE FROM sessions WHERE rowid = 1;
+  `)
+  const lock = live ? takeInstanceLock(state) : undefined
+  if (!live) db.close()
+  try {
+    const env = { THEOCLAW_STATE_DIR: state, THEOCLAW_WORKSPACE: workspace, XDG_CONFIG_HOME: join(root, 'config') }
+    const backup = join(root, 'backup'), restored = join(root, 'restored')
+    backupInstance(env, backup, { homeDir: root, live })
+    restoreInstance({ ...env, THEOCLAW_STATE_DIR: restored, THEOCLAW_WORKSPACE: join(root, 'restored-workspace') }, backup, { homeDir: root })
+    const check = new DatabaseSync(join(restored, 'sessions'))
+    try {
+      expect(check.prepare('SELECT rowid, word FROM sessions').all()).toEqual([{ rowid: 2, word: 'surviving' }])
+      expect(check.prepare('SELECT sessions.word FROM session_references JOIN sessions ON sessions.rowid = session_references.session_rowid').all())
+        .toEqual([{ word: 'surviving' }])
+    } finally { check.close() }
+  } finally { if (live) db.close(); lock?.release() }
+})

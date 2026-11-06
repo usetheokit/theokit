@@ -14,7 +14,7 @@ import {
   statSync,
   writeFileSync,
 } from 'node:fs'
-import { DatabaseSync } from 'node:sqlite'
+import { execFileSync } from 'node:child_process'
 import { openSync, readSync, closeSync } from 'node:fs'
 
 import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path'
@@ -160,12 +160,18 @@ function isSQLite(path: string): boolean {
 
 function snapshotSQLite(from: string, to: string): void {
   mkdirPrivate(dirname(to))
-  const db = new DatabaseSync(from, { readOnly: true })
-  try {
-    db.exec('PRAGMA busy_timeout = 5000')
-    db.exec(`VACUUM INTO '${to.replaceAll("'", "''")}'`)
-    chmodSync(to, 0o600)
-  } finally { db.close() }
+  // node:sqlite's backup API is asynchronous. Run it in a child to preserve this API's
+  // synchronous copy/cleanup contract, including callers holding the instance lock.
+  // Unlike VACUUM, the backup API copies database pages without rebuilding rowids.
+  execFileSync(process.execPath, ['--input-type=module', '-e', `
+    import { DatabaseSync, backup } from 'node:sqlite';
+    const db = new DatabaseSync(process.argv[1], { readOnly: true });
+    try {
+      db.exec('PRAGMA busy_timeout = 5000');
+      await backup(db, process.argv[2]);
+    } finally { db.close(); }
+  `, from, to], { timeout: 60_000, stdio: ['ignore', 'pipe', 'pipe'] })
+  chmodSync(to, 0o600)
 }
 
 /**
