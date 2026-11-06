@@ -1,3 +1,7 @@
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import { effectiveToolNames } from "@theokit/sdk";
@@ -257,6 +261,19 @@ describe("telemetry on the agent options (B-400 EC-8)", () => {
 });
 
 describe("sessionAgentOptions", () => {
+  it("appends the workspace's persona files to the system prompt, after the untrusted-content notice", () => {
+    const dir = mkdtempSync(join(tmpdir(), "persona-ws-"));
+    try {
+      writeFileSync(join(dir, "SOUL.md"), "Be terse.");
+      const env = { THEOCLAW_MODEL: "m", THEOKIT_API_KEY: "k" };
+      const plain = agentOptionsFor(env).systemPrompt;
+      expect(sessionAgentOptions(env, dir).systemPrompt).toBe(`${plain}\n\n## SOUL.md\n\nBe terse.`);
+      expect(sessionAgentOptions(env, join(dir, "none")).systemPrompt).toBe(plain);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("keeps the transcripts under the workspace", () => {
     expect(sessionAgentOptions({ THEOCLAW_MODEL: "m", OPENROUTER_API_KEY: "k" }, "/ws").local).toEqual({
       cwd: "/ws",

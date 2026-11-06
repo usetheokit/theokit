@@ -32,6 +32,6 @@ describe('readPersonaPrompt', () => {
   it('cuts a file over the limit', () => {
     const dir = workspace()
     writeFileSync(join(dir, 'SOUL.md'), 'x'.repeat(PERSONA_FILE_LIMIT + 5))
-    expect(readPersonaPrompt(dir)).toContain('[truncated]')
+    expect(readPersonaPrompt(dir)).toBe(`## SOUL.md\n\n${'x'.repeat(PERSONA_FILE_LIMIT)}\n[truncated]`)
   })
 })

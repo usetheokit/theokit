@@ -379,7 +379,8 @@
   },
   {
     "id": "OC-53",
-    "status": "open"
+    "status": "open",
+    "note": "not shipped: the SDK compacts a run's history itself and TheoClaw adds no /compact command or compaction setting; the real-model check (a long conversation crossing the context limit, next turn answered) has not been run, and no 'out' is declared because that needs a human declarer"
   },
   {
     "id": "OC-54",
@@ -391,7 +392,8 @@
   },
   {
     "id": "OC-55",
-    "status": "open"
+    "status": "open",
+    "note": "not shipped: SOUL.md, IDENTITY.md, USER.md and AGENTS.md are injected into each chat session agent's system prompt and covered by offline tests, but the real-model end-to-end check has not been run"
   },
   {
     "id": "OC-56",
