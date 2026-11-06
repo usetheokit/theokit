@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [create-theokit 3.0.32, theokit 0.79.0] - 2026-11-06
+
+Released with no entry under `[Unreleased]`. Per-package detail is in each package's
+own `CHANGELOG.md`.
+
 ## [@theokit/agents 16.3.0, create-theokit 3.0.31] - 2026-11-06
 
 ### Added
