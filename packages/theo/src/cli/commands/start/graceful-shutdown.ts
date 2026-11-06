@@ -18,7 +18,7 @@ import { warnOnce } from '../../../server/observability/logger.js'
  * How long shutdown waits for the job in progress before moving on, unless the app says otherwise
  * with `jobs.worker.shutdownTimeoutMs` (usetheokit/theokit#1292).
  */
-export const DEFAULT_BACKGROUND_STOP_TIMEOUT_MS = 20_000
+const DEFAULT_BACKGROUND_STOP_TIMEOUT_MS = 20_000
 
 export interface GracefulShutdownOptions {
   /** How long to wait for `stopBackgroundWork`. Default `DEFAULT_BACKGROUND_STOP_TIMEOUT_MS`. */
