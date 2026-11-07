@@ -244,7 +244,7 @@ describe('run_code and delegate_all on a /control agent', () => {
     expect(answer.results[1]?.message).toContain('dispose failed')
   })
 
-  it('cancels every worker run and disposes it when the parent turn aborts', async () => {
+  it('cancels every worker run and disposes it when the parent turn is already aborted as they start', async () => {
     const { settings } = readOnlyWorkspace()
     const controller = new AbortController()
     const cancelled: boolean[] = []
@@ -297,9 +297,11 @@ describe('run_code and delegate_all on a /control agent', () => {
     const { settings } = readOnlyWorkspace()
     const controller = new AbortController()
     const cancelled: boolean[] = []
+    const disposed: boolean[] = []
     let streaming = 0
     const tool = controlTool(settings, 'delegate_all', async () => {
       const index = cancelled.push(false) - 1
+      disposed.push(false)
       let stop = (): void => undefined
       const stopped = new Promise<void>((resolve) => {
         stop = resolve
@@ -321,7 +323,12 @@ describe('run_code and delegate_all on a /control agent', () => {
           stop()
         },
       }
-      return { send: async () => run, [Symbol.asyncDispose]: async () => undefined }
+      return {
+        send: async () => run,
+        [Symbol.asyncDispose]: async () => {
+          disposed[index] = true
+        },
+      }
     })
     const tasks = [{ agent: 'worker', task: 'one' }, { agent: 'worker', task: 'two' }]
 
@@ -330,6 +337,7 @@ describe('run_code and delegate_all on a /control agent', () => {
     }
 
     expect(cancelled).toEqual([true, true])
+    expect(disposed).toEqual([true, true])
     expect(answer.results.map((entry) => entry.error)).toEqual(['delegation_failed', 'delegation_failed'])
   })
 
