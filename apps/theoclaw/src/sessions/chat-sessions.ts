@@ -49,10 +49,16 @@ export function chatSessions(options: ChatSessionsOptions): { readonly sessions:
     // `shell` withholding and memory off hold whatever `optionsFor` returns (B-377 option A). Only
     // those keys are re-pinned, `local` merged so the session's cwd and the hook gate both hold (B-397).
     getOrCreate: async (id, sessionOptions) => {
-      const agent = await createChannelAgentFactory(options.env, (channel) =>
-        open(id, { ...sessionOptions, ...channel, local: { ...sessionOptions.local, ...channel.local } }),
-      )()
-      return incognito ? withIncognitoCleanup(agent, sessionOptions.local?.sessionDir) : agent
+      const dir = sessionOptions.local?.sessionDir
+      try {
+        const agent = await createChannelAgentFactory(options.env, (channel) =>
+          open(id, { ...sessionOptions, ...channel, local: { ...sessionOptions.local, ...channel.local } }),
+        )()
+        return incognito ? withIncognitoCleanup(agent, dir) : agent
+      } catch (error) {
+        if (incognito) removeIncognitoDir(dir)
+        throw error
+      }
     },
     optionsFor: () => sessionAgentOptions(options.env, settings.workspace),
     generations: options.generations ?? Generations.load(sessionsFile(settings.workspace)),
@@ -72,8 +78,6 @@ export function chatSessions(options: ChatSessionsOptions): { readonly sessions:
 
 /** An incognito agent whose private transcript directory is removed once it is disposed. */
 export function withIncognitoCleanup(agent: SessionAgent, dir: string | undefined): SessionAgent {
-  // Only a directory under the temp root is ever removed, whatever `dir` holds.
-  const removable = dir !== undefined && resolve(dir).startsWith(resolve(tmpdir()) + sep)
   return new Proxy(agent, {
     get(target, property) {
       if (property === 'dispose') {
@@ -81,7 +85,7 @@ export function withIncognitoCleanup(agent: SessionAgent, dir: string | undefine
           try {
             await target.dispose()
           } finally {
-            if (removable) rmSync(dir, { recursive: true, force: true })
+            removeIncognitoDir(dir)
           }
         }
       }
@@ -89,4 +93,9 @@ export function withIncognitoCleanup(agent: SessionAgent, dir: string | undefine
       return typeof value === 'function' ? (value as (...args: unknown[]) => unknown).bind(target) : value
     },
   })
+}
+
+/** Only a directory under the temp root is ever removed, whatever `dir` holds. */
+function removeIncognitoDir(dir: string | undefined): void {
+  if (dir !== undefined && resolve(dir).startsWith(resolve(tmpdir()) + sep)) rmSync(dir, { recursive: true, force: true })
 }

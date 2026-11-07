@@ -1,4 +1,4 @@
-import { mkdtempSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -80,9 +80,9 @@ export function sessionAgentOptions(env: BindEnvironment, workspace: string): Se
   return {
     ...options,
     systemPrompt: persona === '' ? options.systemPrompt : `${options.systemPrompt}\n\n${persona}`,
-    // Incognito: the transcript goes to a private temp directory, never the workspace; the chat
-    // sessions remove it when the agent is disposed.
-    local: { ...options.local, cwd: workspace, sessionDir: incognito ? mkdtempSync(join(tmpdir(), 'theoclaw-incognito-')) : join(workspace, '.theoclaw') },
+    // Incognito: the transcript goes to a fresh path under the temp root, never the workspace, created by
+    // the SDK only when it writes; the chat sessions remove it when the agent is disposed.
+    local: { ...options.local, cwd: workspace, sessionDir: incognito ? join(tmpdir(), `theoclaw-incognito-${randomUUID()}`) : join(workspace, '.theoclaw') },
   }
 }
 

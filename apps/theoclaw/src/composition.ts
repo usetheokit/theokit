@@ -27,7 +27,7 @@ import { installOutputMask, type MaskableStream } from './channels/output-mask.j
 import { type ConfiguredPlatform, resolvePlatforms } from './channels/platforms.js'
 import { readDisplayConfig } from './channels/display-config.js'
 import { createReplyHandler, type TurnAgent } from './channels/reply-handler.js'
-import { createSdkChannelAgentFactory, webchatAgentFactory } from './control-plane/agent-factory.js'
+import { createSdkChannelAgentFactory, isIncognito, webchatAgentFactory } from './control-plane/agent-factory.js'
 import type { CreateAgent } from './control-plane/agent-factory.js'
 import { controlOptions, devicePairingFor } from './control-plane/control-wiring.js'
 import { type HttpHandler, serveHandler } from './control-plane/http-dispatch.js'
@@ -221,6 +221,7 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
       reset: (event) => chat.sessions.reset(event),
       secrets,
       display: readDisplayConfig(options.env),
+      incognito: isIncognito(options.env),
       ...(model === undefined ? {} : { usage: { modeFor: usage.modeFor, model, write: maskedWrite } }),
       // `loop` is read per message, after it exists: a member whose platform has not started is
       // reported as not delivered.
