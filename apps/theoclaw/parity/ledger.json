@@ -201,7 +201,7 @@
       "test": "a clean container installs, onboards, replies within 60 s and updates"
     },
     "verified_on": "2026-10-31",
-    "note": "the README's install command clones the repository and runs install.sh, which installs and builds the app and writes the theoclaw launcher; checked in a clean node:22 container on the dispatched theoclaw-container run (https://github.com/usetheokit/theokit/actions/runs/41188190008); the npm registry install (`npm i -g theoclaw`) is packaged but not run in a container here"
+    "note": "the README's install command clones the repository and runs install.sh, which installs and builds the app and writes the theoclaw launcher; checked in a clean node:22 container on the dispatched theoclaw-container run (https://github.com/usetheokit/theokit/actions/runs/41188190008); the registry half (`npm i -g theoclaw`) is out by owner decision 2026-11-02 (theoclaw is not published to npm for now), so the install is the source install, apps/theoclaw/install.sh; the model that answered is set by THEOCLAW_MODEL on that run and is not named in this checkout, and this sandbox has no Docker or model key to re-run it"
   },
   {
     "id": "OC-31",
