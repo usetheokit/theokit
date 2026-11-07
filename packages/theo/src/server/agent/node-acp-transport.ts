@@ -56,10 +56,18 @@ const GROUP_POLL_MS = 20
  */
 const OWN_PROCESS_GROUP = process.platform !== 'win32'
 
+/** What {@link NodeAcpTransport} can set on the agent process beyond its command line. */
+export interface NodeAcpTransportOptions {
+  /** The agent's whole environment. Left out, the agent gets the parent's (`process.env`). */
+  env?: Record<string, string | undefined>
+  /** Receives what the agent writes to stderr. Left out, the agent's stderr is the parent's. */
+  stderr?: (chunk: string) => void
+}
+
 /** Stdio transport backed by a spawned subprocess (the default for `createACPTool`). */
 export class NodeAcpTransport implements AcpToolTransport {
   // stdin=pipe, stdout=pipe, stderr=inherit → the third stream is null.
-  private readonly proc: ChildProcessByStdio<Writable, Readable, null>
+  private readonly proc: ChildProcessByStdio<Writable, Readable, Readable | null>
   private closed: AcpTransportClosedError | undefined
   private readonly listeners: ((error: AcpTransportClosedError) => void)[] = []
   /** Settles when the process has exited (or never started). */
@@ -69,16 +77,30 @@ export class NodeAcpTransport implements AcpToolTransport {
     private readonly command: string,
     args: string[] = [],
     cwd?: string,
+    options: NodeAcpTransportOptions = {},
   ) {
     // `detached` makes the agent the leader of a new process group (POSIX), the group close signals.
     this.proc = spawn(command, args, {
       cwd,
-      stdio: ['pipe', 'pipe', 'inherit'],
+      // `env` replaces the parent's environment whole; undefined keeps the default (inherit).
+      env: options.env,
+      stdio: ['pipe', 'pipe', options.stderr === undefined ? 'inherit' : 'pipe'],
       detached: OWN_PROCESS_GROUP,
     })
     // A pipe cuts stdout wherever it likes; a streaming decoder carries a multibyte character split
     // across two chunks instead of turning each half into U+FFFD.
     this.proc.stdout.setEncoding('utf8')
+    const sink = options.stderr
+    if (sink !== undefined && this.proc.stderr !== null) {
+      this.proc.stderr.setEncoding('utf8')
+      this.proc.stderr.on('data', (chunk: string) => {
+        try {
+          sink(chunk)
+        } catch {
+          // A throwing sink must not take the host down.
+        }
+      })
+    }
     // 'exit', not 'close': a grandchild holding stdout open delays 'close' but not the exit.
     this.exited = new Promise((resolve) => {
       this.proc.once('exit', () => {
@@ -132,6 +154,7 @@ export class NodeAcpTransport implements AcpToolTransport {
       // the pipes must not keep the host's event loop alive.
       this.proc.stdin.destroy()
       this.proc.stdout.destroy()
+      this.proc.stderr?.destroy()
       this.proc.unref()
     }
   }
