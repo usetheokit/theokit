@@ -557,7 +557,8 @@ before any runner starts, and refuses it naming the file and the key:
 - Each ACP agent is one tool named `name`, a `createACPTool` from `theokit/server/agent` run in
   `files/`, one process per call. Its name may not be a TheoClaw tool's (`run_code`, `delegate_all`, `digest` and the three schedule tools included), a name the SDK reserves
   (`shell`, `memory_search`, `memory_get`), or start with `mcp_`. Every permission it asks for is
-  refused (asking the owner is B-684). That stops only what the agent asks about: it runs as the
+  put to the owner through the exec-approval asker and granted, once, only on a yes; a no, no answer
+  within 2 minutes or no asker refuses it. That stops only what the agent asks about: it runs as the
   TheoClaw user, outside the tool sandbox, and an agent that writes without asking (its own
   auto-accept mode or project settings) is not stopped by it.
 - An ACP agent starts through `env -i` with only `PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`,

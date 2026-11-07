@@ -19,6 +19,7 @@ import {
 
 import type { TurnAgent } from '../agent-port.js'
 import { scrubbedAgentTransport } from './acp-transport.js'
+import { acpPermissionHandler, type AcpPermissionOptions } from './acp-permission.js'
 import { browserServer } from './browser-server.js'
 import { codeModeTool, delegateAllTool, delegateTool, type CreateWorker } from './code-mode-tools.js'
 import { computerTool } from './computer-tool.js'
@@ -38,17 +39,8 @@ export interface AgentToolOptions {
   readonly mcpServers?: Readonly<Record<string, McpServerConfig>>
 }
 
-/**
- * The answer to every permission an ACP agent asks for (plan D3): the host-tools sandbox does not
- * confine the agent's process, so a grant would reach further than any setting says. Asking the
- * owner instead is B-684.
- */
-function refuseEveryPermission(): { granted: false } {
-  return { granted: false }
-}
-
 /** One `createACPTool` per agent of the external tools file, each run in the tool root without the host secrets. */
-function acpTools(settings: ToolSettings): CustomTool[] {
+function acpTools(settings: ToolSettings, permission: AcpPermissionOptions): CustomTool[] {
   return settings.external.acpAgents.map((agent) =>
     createACPTool({
       name: agent.name,
@@ -57,7 +49,7 @@ function acpTools(settings: ToolSettings): CustomTool[] {
       ...(agent.args === undefined ? {} : { args: [...agent.args] }),
       ...(agent.timeoutMs === undefined ? {} : { timeoutMs: agent.timeoutMs }),
       cwd: settings.toolRoot,
-      onPermissionRequest: refuseEveryPermission,
+      onPermissionRequest: acpPermissionHandler(agent.name, permission),
       transportFactory: scrubbedAgentTransport,
     }),
   )
@@ -108,11 +100,11 @@ export function readOnlyTools(settings: ToolSettings): CustomTool[] {
  *   repository-configured helpers (`diff.external`) that only the kernel sandbox keeps in the root;
  * - the sandboxed shell only with `THEOCLAW_HOST_TOOLS=on`, and write, edit and apply_patch with it
  *   unless `THEOCLAW_SANDBOX=read-only`;
- * - one ACP tool per agent `THEOCLAW_EXTERNAL_TOOLS` names, every permission it asks refused.
+ * - one ACP tool per agent `THEOCLAW_EXTERNAL_TOOLS` names, every permission it asks put to the owner (refused without an asker).
  *
  * The interactive shell and its stdin tool are never registered: they take a PTY, not this backend.
  */
-export function buildTools(settings: ToolSettings): CustomTool[] {
+export function buildTools(settings: ToolSettings, permission: AcpPermissionOptions = {}): CustomTool[] {
   const scope = scopeOf(settings)
   const tools: CustomTool[] = [
     scope.bind(createReadFileTool)(),
@@ -134,7 +126,7 @@ export function buildTools(settings: ToolSettings): CustomTool[] {
     }
     tools.push(scope.bind(createShellTool)())
   }
-  tools.push(...acpTools(settings))
+  tools.push(...acpTools(settings, permission))
   return tools
 }
 
@@ -155,7 +147,7 @@ export function agentToolOptions(
   buildDescriber?: () => Promise<TurnAgent>,
   execApproval?: ExecApprovalOptions,
 ): AgentToolOptions {
-  const tools = [...buildTools(settings), ...extra]
+  const tools = [...buildTools(settings, execApproval === undefined ? {} : { ask: execApproval.ask }), ...extra]
   if (createWorker !== undefined && buildDescriber !== undefined && settings.computer !== undefined) {
     // Only where a worker factory exists, which is the `/control` agent: the screenshot's describer is built by it (B-676 Q1).
     tools.push(computerTool(settings.computer, buildDescriber))

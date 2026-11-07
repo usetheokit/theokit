@@ -5,6 +5,7 @@ import type { CustomTool } from '@theokit/sdk'
 import { AcpRequestTimeoutError, AcpTransportClosedError } from 'theokit/server/agent'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import type { AcpPermissionOptions } from '../src/tools/acp-permission.js'
 import { buildTools } from '../src/tools/tool-registry.js'
 import { resolveToolSettings } from '../src/tools/tool-settings.js'
 import { notEnforced, tempCwd } from './tool-start-fixtures.js'
@@ -25,7 +26,7 @@ interface AgentUnderTest {
 }
 
 /** The ACP tool `buildTools` builds from an external tools file naming one agent. */
-function acpTool(agent: { command?: string; args?: string[]; timeoutMs?: number }): AgentUnderTest {
+function acpTool(agent: { command?: string; args?: string[]; timeoutMs?: number }, permission: AcpPermissionOptions = {}): AgentUnderTest {
   const cwd = tempCwd(cleanups)
   const record = join(cwd, 'permissions.log')
   const pidFile = join(cwd, 'agent.pid')
@@ -38,7 +39,7 @@ function acpTool(agent: { command?: string; args?: string[]; timeoutMs?: number 
     }),
   )
   const settings = resolveToolSettings({ THEOCLAW_EXTERNAL_TOOLS: file }, cwd, { detect: notEnforced, warn: () => undefined })
-  const tool = buildTools(settings).find((candidate) => candidate.name === 'asker')
+  const tool = buildTools(settings, permission).find((candidate) => candidate.name === 'asker')
   if (tool === undefined) throw new Error('buildTools built no ACP tool named asker')
   return { tool, record, pidFile }
 }
@@ -67,6 +68,43 @@ async function expectProcessGone(pidFile: string): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, 25))
   }
 }
+
+describe('the owner is asked for an ACP agent permission request (B-684)', () => {
+  async function answerOf(permission: AcpPermissionOptions): Promise<string> {
+    const { tool, record } = acpTool({}, permission)
+    await expect(call(tool)).resolves.toBe('done')
+    return readFileSync(record, 'utf8').trim()
+  }
+
+  it('grants on the owner yes, naming the agent and the step in the question', async () => {
+    const ask = vi.fn(async () => 'once' as const)
+    expect(await answerOf({ ask })).toBe('allow-once')
+    expect(ask).toHaveBeenCalledWith('ACP agent asker asks permission: write a file (edit)')
+  })
+
+  it('grants on an always answer, once', async () => {
+    expect(await answerOf({ ask: async () => 'always' })).toBe('allow-once')
+  })
+
+  it('refuses on the owner no', async () => {
+    expect(await answerOf({ ask: async () => 'deny' })).toBe('reject-once')
+  })
+
+  it('refuses when the owner does not answer in time', async () => {
+    expect(await answerOf({ ask: () => new Promise(() => undefined), timeoutMs: 50 })).toBe('reject-once')
+  })
+
+  it('refuses when the question cannot be asked, or nobody can be asked', async () => {
+    expect(
+      await answerOf({
+        ask: async () => {
+          throw new Error('channel down')
+        },
+      }),
+    ).toBe('reject-once')
+    expect(await answerOf({})).toBe('reject-once')
+  })
+})
 
 describe('the ACP tools of the external tools file', () => {
   it('refuses every permission request over 10 calls, leaving no process after each', async () => {
