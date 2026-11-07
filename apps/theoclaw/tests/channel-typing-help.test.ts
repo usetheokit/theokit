@@ -4,7 +4,9 @@ import { describe, expect, it } from 'vitest'
 
 import type { GatewayContext, MessageEvent } from '@theokit/gateway'
 
-import { createHelpHook, HELP_TEXT } from '../src/channels/help-hook.js'
+import { createGroupActivationHook } from '../src/channels/group-activation-hook.js'
+import { createUsageHook } from '../src/channels/usage-hook.js'
+import { createHelpHook, HELP_COMMANDS, HELP_TEXT } from '../src/channels/help-hook.js'
 import { createReplyHandler } from '../src/channels/reply-handler.js'
 import { showTyping } from '../src/channels/typing.js'
 import { FakeAdapter, FakeAgent, assistant, finished, messageEvent } from './fakes.js'
@@ -66,5 +68,34 @@ describe('/help (OC-105)', () => {
     expect(decide('/commands')).toEqual({ block: true, message: HELP_TEXT })
     expect(decide('/helpful')).toBeUndefined()
     expect(decide('please /help')).toBeUndefined()
+  })
+})
+
+describe('the commands /help lists', () => {
+  it('each is answered by its own handler without a model turn', async () => {
+    const usage = createUsageHook().hook
+    const activation = createGroupActivationHook({ isOwner: () => true, mode: 'mention', write: () => undefined })
+    let sends = 0
+    const agent = { send: async () => (sends += 1, never()) } as never
+    const never = (): never => {
+      throw new Error('the model was reached')
+    }
+    const handler = createReplyHandler({
+      withAgent: async (_e, work) => work({ agent, release: () => undefined }),
+      reset: async () => undefined,
+      goal: { tokenBudget: 1, judge: () => never() },
+    })
+    for (const command of HELP_COMMANDS) {
+      expect(HELP_TEXT).toContain(command)
+      // /activation is a group command: in a DM it is an ordinary message.
+      const base = messageEvent('telegram', command)
+      const event = { ...base, channel: { ...base.channel, type: 'group' } } as MessageEvent
+      const hooked = [usage, activation].map((hook) => hook.pre_inbound?.({ event } as never))
+      const log: string[] = []
+      if ((await Promise.all(hooked)).some((d) => d?.block === true)) continue
+      await handler(event, ctxFor(event, log)).catch(() => undefined)
+      expect(log.length).toBeGreaterThan(0)
+    }
+    expect(sends).toBe(0)
   })
 })

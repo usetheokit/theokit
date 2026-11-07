@@ -753,11 +753,13 @@
   },
   {
     "id": "OC-105",
-    "status": "open"
+    "status": "open",
+    "note": "not shipped, no live check run: chat answers /help, /commands, /new, /reset, /goal, /usage and /activation without the model (offline tests only, tests/channel-typing-help.test.ts); /status /model /think /reasoning /fast /elevated /compact /stop /tts /config /mcp /plugins /skill /learn /loop /steer /export /approve /allowlist /acp and the rest of the registry are not built"
   },
   {
     "id": "OC-106",
-    "status": "open"
+    "status": "open",
+    "note": "not shipped, no live check run: a typing indicator is shown through the adapter's startTyping/stopTyping while a turn or /goal runs (offline tests only); typingMode and per-channel ackReaction are not built, the installed @theokit/gateway has no reaction API"
   },
   {
     "id": "H-1",
