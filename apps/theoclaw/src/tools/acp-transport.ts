@@ -69,7 +69,7 @@ export function scrubbedAgentTransport(config: AcpToolConfig): AcpToolTransport 
   }
 }
 
-const COULD_NOT_RUN = 'could not be found or run'
+const COULD_NOT_RUN = 'could not be found or run (a command is an absolute path or a bare name found on PATH)'
 
 /**
  * The executable file `command` names: itself when it has a `/`, else the first one on an absolute
