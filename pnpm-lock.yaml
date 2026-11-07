@@ -246,6 +246,9 @@ importers:
       '@theokit/agents':
         specifier: workspace:*
         version: link:../../packages/agents
+      '@theokit/agents-pty':
+        specifier: workspace:*
+        version: link:../../packages/agents-pty
       '@theokit/di':
         specifier: 0.2.1
         version: 0.2.1(reflect-metadata@0.2.2)

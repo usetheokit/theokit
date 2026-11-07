@@ -14,6 +14,8 @@ export const BUILT_TOOL_NAMES: readonly string[] = [
   'edit_file',
   'apply_patch',
   'shell_exec',
+  'interactive_shell',
+  'write_stdin',
 ]
 
 /**

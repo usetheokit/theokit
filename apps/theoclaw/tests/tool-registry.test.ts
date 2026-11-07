@@ -50,7 +50,7 @@ const HOST = ['apply_patch', 'edit_file', 'shell_exec', 'write_file']
 
 describe('BUILT_TOOL_NAMES', () => {
   it('names every tool buildTools can register, and only those', () => {
-    expect([...BUILT_TOOL_NAMES].sort()).toEqual([...READ_ONLY, 'git_diff', 'web_search', ...HOST].sort())
+    expect([...BUILT_TOOL_NAMES].sort()).toEqual([...READ_ONLY, 'git_diff', 'web_search', ...HOST, 'interactive_shell', 'write_stdin'].sort())
   })
 })
 describe('CONTROL_TOOL_NAMES', () => {

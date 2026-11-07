@@ -71,6 +71,7 @@ import { controlAgentToolOptions } from './tools/tool-registry.js'
 import { triggerRoutes } from './triggers/trigger-route.js'
 import { type EventSettings, readEventSettings } from './triggers/trigger-settings.js'
 import type { AgentToolOptions } from './tools/tool-registry.js'
+import { withInteractiveShell } from './tools/interactive-shell.js'
 import { checkHostToolsPosture, hostToolsProtectedPaths, type ProtectedPath, resolveToolSettings } from './tools/tool-settings.js'
 import type { ToolDeps, ToolSettings } from './tools/tool-settings.js'
 import type { GenerateObject } from './workflows/triage-workflow.js'
@@ -402,7 +403,7 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
   const discovery = parseDiscoveryMode(options.env)
   // Read before the mask and the shutdown are installed, so a missing owner leaves nothing behind.
   const policy = parseAuthorizationPolicy(options.env)
-  const tools = startToolSettings(options, policy)
+  let tools = startToolSettings(options, policy)
   const platforms = resolvePlatforms(options.env).configured.map((entry) => entry.platform)
   const events = readEventSettings(options.env, platforms)
   const sessionSettings = readSessionSettings(options.env, statSync)
@@ -458,6 +459,8 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
     },
     write: stderr,
   })
+  // After the shutdown hook is in place, so a signal during the probe still closes cleanly. Nothing reads `tools` before this.
+  tools = await withInteractiveShell(tools, options.toolDeps)
   writeToolLines(tools, stderr)
   for (const line of a2aLines(a2a)) stderr(line)
   // The composition gets the raw factory: chat agents hold no tool, only `/control` agents do.
