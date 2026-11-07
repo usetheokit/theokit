@@ -8,8 +8,8 @@
       "capability": "/raw prints the reply verbatim (not a toggle)",
       "status": "shipped",
       "evidence": {
-        "file": "packages/tui/tests/demo/every-command.test.tsx",
-        "test": "drives every command in its own session and reports what the user sees"
+        "file": "packages/tui/tests/commands/raw-command.test.ts",
+        "test": "test_the_last_reply_is_written_verbatim_including_a_line_no_terminal_could_fit"
       }
     },
     {
@@ -18,8 +18,8 @@
       "capability": "/sandbox shows and changes the sandbox mode",
       "status": "shipped",
       "evidence": {
-        "file": "packages/tui/tests/demo/every-command.test.tsx",
-        "test": "drives every command in its own session and reports what the user sees"
+        "file": "packages/tui/tests/commands/sandbox-command.test.ts",
+        "test": "test_taking_the_armed_mode_consumes_it"
       }
     },
     {

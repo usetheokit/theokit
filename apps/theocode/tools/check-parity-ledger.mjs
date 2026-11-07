@@ -49,6 +49,9 @@ export function ledgerProblems(rows, read, answeredCodexNames = [], surface = nu
       out.push(`${id}: status must be one of ${STATUSES.join(', ')}`)
       continue
     }
+    if (/unknown command/i.test(`${row.answer ?? ''} ${row.status}`)) {
+      out.push(`${id}: answered with 'unknown command'`)
+    }
     // The answer is derived from the real command surface (registry builtins + codex-names
     // pointers), never from a field a row author could leave blank.
     const slash = /^codex:slash:(.+)$/.exec(id)
@@ -92,8 +95,8 @@ function main(argv) {
   const read = (p) => (existsSync(join(root, p)) ? readFileSync(join(root, p), 'utf8') : null)
   const names = read('packages/tui/src/commands/codex-names.ts')
   const registry = read('packages/tui/src/commands/registry.ts')
-  const answered = names && registry ? [...parseLocalSurface(registry, names).pointers] : []
   const surface = names && registry ? parseLocalSurface(registry, names) : null
+  const answered = surface ? [...surface.pointers] : []
   const problems = ledgerProblems(rows, read, answered, surface)
   if (problems.length === 0 && argv.includes('--run')) {
     const files = [...new Set(rows.filter((r) => r.status === 'shipped').map((r) => r.evidence.file))]
