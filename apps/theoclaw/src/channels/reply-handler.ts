@@ -16,6 +16,7 @@ import { type GoalSettings, GOAL_USAGE_REPLY, goalOf, runGoal } from './goal-com
 import type { SessionLease } from '../sessions/session-agents.js'
 import { formatUsageFooter, formatUsageLine, type TurnUsage, usageOf } from '../usage/turn-usage.js'
 import type { UsageMode } from './usage-hook.js'
+import { showTyping, type TypingOptions } from './typing.js'
 
 /** The reply to a turn that produced no visible answer (D8): reasoning only, tools only, nothing. */
 export const NO_ANSWER_REPLY = 'I could not come up with an answer to that.'
@@ -65,6 +66,8 @@ export interface ReplyHandlerOptions {
   readonly display?: DisplayConfig
   /** A finished turn's usage: its line, and the footer its conversation's `/usage` asks for (FR-005). */
   readonly usage?: ReplyUsageOptions
+  /** A typing indicator shown while a turn or goal runs (OC-106); without it, none. */
+  readonly typing?: TypingOptions
 }
 
 export interface ReplyUsageOptions {
@@ -241,6 +244,7 @@ async function answerTurn(options: ReplyHandlerOptions, event: MessageEvent, ctx
   try {
     return await options.withAgent(event, async (lease) => {
       started = true
+      const stopTyping = showTyping(options.typing, event.platform, event.channel.id)
       try {
         const outcome = await streamTurn(lease.agent, event, prompt, presenter, secrets, gate, sendProgress)
         // Masked before rendering (in the stream) and again after it, so a value is caught in the
@@ -251,6 +255,7 @@ async function answerTurn(options: ReplyHandlerOptions, event: MessageEvent, ctx
         if (outcome.failed) throw outcome.error
         return maskSecrets(outcome.answer, secrets)
       } finally {
+        await stopTyping()
         lease.release()
       }
     })
@@ -312,9 +317,11 @@ async function answerGoal(settings: GoalSettings, options: ReplyHandlerOptions, 
     return
   }
   const outcome = await options.withAgent(event, async (lease) => {
+    const stopTyping = showTyping(options.typing, event.platform, event.channel.id)
     try {
       return await runGoal(lease.agent, goal, settings)
     } finally {
+      await stopTyping()
       lease.release()
     }
   })

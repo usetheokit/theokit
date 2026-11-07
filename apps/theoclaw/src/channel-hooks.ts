@@ -3,6 +3,7 @@ import type { GatewayHook } from '@theokit/gateway'
 import { createOwnerPolicyHook } from './authorization/owner-policy-hook.js'
 import type { PairingStore } from './authorization/pairing-store.js'
 import { type AuthorizationPolicy, isPolicyOwner } from './authorization/policy.js'
+import { createHelpHook } from './channels/help-hook.js'
 import { createGroupActivationHook } from './channels/group-activation-hook.js'
 
 export interface ChannelHookOptions {
@@ -27,5 +28,6 @@ export function channelHooks(options: ChannelHookOptions): readonly GatewayHook[
     mode: policy.groupActivation,
     write,
   })
-  return options.usage === undefined ? [ownerPolicy, groupActivation] : [ownerPolicy, groupActivation, options.usage]
+  const help = createHelpHook()
+  return options.usage === undefined ? [ownerPolicy, groupActivation, help] : [ownerPolicy, groupActivation, options.usage, help]
 }
