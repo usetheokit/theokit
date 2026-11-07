@@ -50,6 +50,15 @@ class DropsIndexOnRerun extends PostgresJobBackend {
   }
 }
 
+/** The second and later migrate() throw, as a plain CREATE TABLE without IF NOT EXISTS would. */
+class ThrowsOnRerun extends PostgresJobBackend {
+  #runs = 0
+  override async migrate(): Promise<void> {
+    if (++this.#runs > 1) throw new Error('relation already exists')
+    await super.migrate()
+  }
+}
+
 let pool: PoolLike
 
 beforeEach(() => {
@@ -91,6 +100,13 @@ describe('B-668 — the migrate idempotency oracle rejects a migrate() that is n
     const backend = await migrated(new DropsIndexOnRerun({ pool, tableName: TABLE }))
     await expect(assertMigrateIsIdempotent({ backend, pool, table: TABLE })).rejects.toThrow(
       /deduplicates/,
+    )
+  })
+
+  it('test_the_oracle_rejects_a_migrate_that_throws_on_rerun', async () => {
+    const backend = await migrated(new ThrowsOnRerun({ pool, tableName: TABLE }))
+    await expect(assertMigrateIsIdempotent({ backend, pool, table: TABLE })).rejects.toThrow(
+      /already exists/,
     )
   })
 
