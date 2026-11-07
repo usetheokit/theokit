@@ -139,7 +139,13 @@ describe('the /webchat routes on the started listener', () => {
 
     const page = await fetch(`${base}/webchat`)
 
-    expect(page.headers.get('content-security-policy')).toBe("default-src 'self'; style-src 'self' 'unsafe-inline'")
+    expect(page.headers.get('content-security-policy')).toContain("style-src 'self' 'unsafe-inline'")
+    expect(page.headers.get('content-security-policy')).toContain("frame-ancestors 'none'")
+    expect(page.headers.get('content-security-policy')).toContain("base-uri 'none'")
+    expect(page.headers.get('content-security-policy')).toContain("form-action 'none'")
+    expect(page.headers.get('x-frame-options')).toBe('DENY')
+    expect(page.headers.get('x-content-type-options')).toBe('nosniff')
+    expect(page.headers.get('referrer-policy')).toBe('no-referrer')
   })
 
   it('answers GET /webchat 503 naming build:web when the bundle is missing', async () => {

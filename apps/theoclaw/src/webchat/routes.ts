@@ -24,7 +24,10 @@ export interface WebchatRoutesOptions {
 
 const NO_STORE = { 'cache-control': 'no-store' }
 /** The components set inline styles, so the page allows them and nothing else from elsewhere. */
-const PAGE_CSP = "default-src 'self'; style-src 'self' 'unsafe-inline'"
+const PAGE_CSP =
+  "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'; object-src 'none'"
+/** The page holds the token in the tab: no framing (clickjacking), no sniffing, no referrer leak. */
+const PAGE_HARDENING = { 'x-frame-options': 'DENY', 'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer' }
 const MISSING_BUNDLE = 'run the build:web script of the theoclaw package\n'
 
 /**
@@ -81,7 +84,7 @@ async function page(assetsDir: string | URL): Promise<Response> {
     return new Response(MISSING_BUNDLE, { status: 503, headers: { 'content-type': 'text/plain; charset=utf-8', ...NO_STORE } })
   }
   return new Response(renderPage(), {
-    headers: { 'content-type': 'text/html; charset=utf-8', 'content-security-policy': PAGE_CSP, ...NO_STORE },
+    headers: { 'content-type': 'text/html; charset=utf-8', 'content-security-policy': PAGE_CSP, ...PAGE_HARDENING, ...NO_STORE },
   })
 }
 
