@@ -265,6 +265,8 @@ describe('the tools at work', () => {
 
   const posture = resolveSandboxPosture({ mode: 'workspace-write' })
   // THEOCLAW_REQUIRE_SANDBOX=1 (set by the CI theoclaw job) turns the skip below into a failure.
+  // Skip owner: theoclaw maintainers (B-624); the skip applies only to machines without bubblewrap and
+  // is reviewed by 2026-12-31. CI cannot reach it: the flag makes an unenforced sandbox throw.
   // read-only: git cannot even write its temp file, so the helper never starts; workspace-write:
   // the helper starts inside the sandbox and its write outside the tool root is refused.
   const confinedBy = { '': /unable to create temp-file: Read-only file system/, on: /helper-ran': Read-only file system/ }
