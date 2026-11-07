@@ -62,6 +62,8 @@ function liveSettings(prepare?: (toolRoot: string) => void): ToolSettings {
 interface Turn {
   readonly answer: string
   readonly toolCalls: string[]
+  /** Each tool_result event, cut short, so a wrong answer shows whether the tool or the model failed. */
+  readonly toolResults: string[]
 }
 
 /** One turn on a fresh agent; fails naming the status when the run does not finish. */
@@ -71,12 +73,17 @@ async function turn(settings: ToolSettings, prompt: string): Promise<Turn> {
   try {
     const run = await agent.send(prompt)
     const toolCalls: string[] = []
+    const toolResults: string[] = []
     for await (const event of run.stream()) {
+      if (event.type === 'tool_result') {
+        const { toolName, output } = event as { toolName?: unknown; output?: unknown }
+        toolResults.push(`${String(toolName)}: ${String(output).slice(0, 300)}`)
+      }
       if (event.type === 'tool_call' && 'name' in event && 'status' in event && event.status === 'running') toolCalls.push(String(event.name))
     }
     const outcome = await run.wait()
     if (outcome.status !== 'finished') throw new Error(`the run ended ${outcome.status}: ${JSON.stringify(outcome)}`)
-    return { answer: String((outcome as { result?: unknown }).result ?? ''), toolCalls }
+    return { answer: String((outcome as { result?: unknown }).result ?? ''), toolCalls, toolResults }
   } finally {
     await agent[Symbol.asyncDispose]()
   }
@@ -107,7 +114,7 @@ describe.skipIf(!LIVE)('the core tools against a real model', () => {
     expect(result.answer).toContain(digest)
   })
 
-  it('a real model fetches a page and uses the todolist', { timeout: 120_000 }, async () => {
+  it('a real model fetches a page and uses the todolist', { timeout: 120_000 }, async (ctx) => {
     const settings = liveSettings()
     const result = await turn(
       settings,
@@ -115,7 +122,13 @@ describe.skipIf(!LIVE)('the core tools against a real model', () => {
     )
     expect(result.toolCalls).toContain('todolist')
     expect(result.toolCalls).toContain('web_fetch')
-    expect(result.answer).toContain('Example Domain')
+    // B-660: the cause of the runner's missing 'Example Domain' is not known offline. When the fetch
+    // itself failed on the network, the runner cannot reach example.com: skip, naming that reason.
+    const fetched = result.toolResults.filter((line) => line.startsWith('web_fetch:'))
+    if (fetched.length > 0 && fetched.every((line) => /ENOTFOUND|ECONNREFUSED|ECONNRESET|ETIMEDOUT|EAI_AGAIN|fetch failed|network/i.test(line))) {
+      ctx.skip(`the runner cannot reach example.com (runner network, not the product): ${fetched.join(' | ')}`)
+    }
+    expect(result.answer, `the answer was: ${result.answer}; tool results: ${result.toolResults.join(' | ')}`).toContain('Example Domain')
   })
 
   it('a real model lists, writes, edits and patches a file in the tool root', { timeout: 180_000 }, async () => {

@@ -53,6 +53,8 @@ interface Started {
   readonly signals: EventEmitter
   readonly exited: Promise<number>
   stopped: boolean
+  /** What the worker wrote to stderr: the turn_failed reason is only there. */
+  readonly stderrLines: string[]
 }
 
 const cleanups: Array<() => Promise<void>> = []
@@ -114,6 +116,7 @@ async function start(lan: boolean): Promise<Started> {
   const signals = new EventEmitter()
   let onExit: (code: number) => void = () => undefined
   const exited = new Promise<number>((resolve) => (onExit = resolve))
+  const stderrLines: string[] = []
   const called = performance.now()
   const running = await startTheoClaw({
     env,
@@ -121,13 +124,13 @@ async function start(lan: boolean): Promise<Started> {
     agentFactory: createAgentFactory(env),
     builders: () => [],
     stdout: () => undefined,
-    stderr: () => undefined,
+    stderr: (line) => stderrLines.push(line),
     // No stream to mask: the worker's own streams must not stay wrapped after the test.
     streams: [],
     signals,
     exit: (code) => onExit(code),
   })
-  const started: Started = { running, token, called, resolved: performance.now(), signals, exited, stopped: false }
+  const started: Started = { running, token, called, resolved: performance.now(), signals, exited, stopped: false, stderrLines }
   cleanups.push(async () => {
     if (!started.stopped) await stop(started)
   })
@@ -138,6 +141,12 @@ function instanceName(running: RunningTheoClaw): string {
   return `${serviceName(hostname(), running.address().port)}._theoclaw._tcp.local`
 }
 
+/**
+ * B-660: on the GitHub runner this turn ended in turn_failed (run 41098236714). The frame carries
+ * only the code, and the cause (runner multicast or network, or the product) could not be
+ * determined offline; the failure message now carries the worker's stderr reason, so the next
+ * Live model run names it. Until then this test is not skipped, so a product fault is not hidden.
+ */
 /** One chat frame over `/control`: resolves with the non-empty text deltas once the `done` frame arrives. */
 async function controlTurn(started: Started): Promise<string[]> {
   const { host, port } = started.running.address()
@@ -151,7 +160,7 @@ async function controlTurn(started: Started): Promise<string[]> {
         const frame = JSON.parse(String(raw)) as Record<string, unknown>
         frames.push(frame)
         if (frame.type === 'done') resolve()
-        if (frame.type === 'error') reject(new Error(`the turn failed: ${JSON.stringify(frame)}`))
+        if (frame.type === 'error') reject(new Error(`the turn failed: ${JSON.stringify(frame)}; stderr: ${started.stderrLines.join(' | ')}`))
       })
       socket.once('error', reject)
     })
