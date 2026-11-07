@@ -1,4 +1,5 @@
 import { request } from "node:http";
+import { createServer, connect as tcpConnect, type Server } from "node:net";
 
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
@@ -235,6 +236,56 @@ describe("the /control socket", () => {
 
     expect(finalFrames(frames)).toEqual([{ type: "done" }]);
     expect(builtAgents).toBe(1);
+  });
+
+  it("through a loopback forwarder, accepts only the owner's token whatever identity headers claim", async () => {
+    await startPlane([{ messages: [text("hi"), finished] }]);
+    const target = handle!.address();
+    // A stand-in for an SSH local forward or a trusted proxy: every connection arrives from loopback.
+    const forwarder: Server = createServer((inbound) => {
+      const outbound = tcpConnect(target.port, target.host);
+      inbound.pipe(outbound).pipe(inbound);
+      inbound.on("error", () => outbound.destroy());
+      outbound.on("error", () => inbound.destroy());
+    });
+    await new Promise<void>((resolve) => forwarder.listen(0, "127.0.0.1", resolve));
+    const forwardedPort = (forwarder.address() as { port: number }).port;
+    try {
+      const status = (headers: Record<string, string>) =>
+        new Promise<number | undefined>((resolve, reject) => {
+          const req = request({
+            host: "127.0.0.1",
+            port: forwardedPort,
+            path: "/control",
+            headers: {
+              Connection: "Upgrade",
+              Upgrade: "websocket",
+              "Sec-WebSocket-Version": "13",
+              "Sec-WebSocket-Key": "dGhlIHNhbXBsZSBub25jZQ==",
+              "X-Forwarded-For": "127.0.0.1",
+              Forwarded: "for=127.0.0.1",
+              ...headers,
+            },
+          });
+          req.on("response", (response) => {
+            response.resume();
+            resolve(response.statusCode);
+          });
+          req.on("upgrade", (_r, socket) => {
+            socket.destroy();
+            resolve(101);
+          });
+          req.on("error", reject);
+          req.end();
+        });
+
+      expect(await status({})).toBe(401);
+      expect(await status({ Authorization: `Bearer ${TOKEN}x` })).toBe(401);
+      expect(await status({ Authorization: `Bearer ${TOKEN}` })).toBe(101);
+      expect(builtAgents).toBe(0);
+    } finally {
+      await new Promise<void>((resolve) => forwarder.close(() => resolve()));
+    }
   });
 
   it("streams a stub agent's events as JSON frames ending in done", async () => {
