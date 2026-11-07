@@ -753,11 +753,13 @@
   },
   {
     "id": "OC-103",
-    "status": "open"
+    "status": "open",
+    "note": "not shipped, no live check run: audio transcription: src/media/understanding.ts transcribeAudio against an OpenAI-compatible endpoint, and Telegram voice notes via src/voice/voice-replies.ts; whisper-cli, Deepgram and realtime WS are not built (offline tests only, tests/media-understanding.test.ts); the real-model check (recorded audio with known text transcribed word for word, image of a known object described naming it) has not been run"
   },
   {
     "id": "OC-104",
-    "status": "open"
+    "status": "open",
+    "note": "not shipped, no live check run: image description and audio transcript folded into turn text by withMediaContext; video, PDF and link understanding are not built, and it is not yet wired into the channel handler (offline tests only, tests/media-understanding.test.ts); the real-model check (recorded audio with known text transcribed word for word, image of a known object described naming it) has not been run"
   },
   {
     "id": "OC-105",
