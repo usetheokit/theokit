@@ -61,6 +61,7 @@ import {
 import { createWebhookRouter, type WebhookRoute } from './webhooks/router.js'
 import { theoClawApiFor } from './http-api/api-routes.js'
 import type { TeamsVerifier } from './webhooks/teams.js'
+import { createExecApprovalStore, type ExecApprovalOptions } from './tools/exec-approval.js'
 import { controlAgentToolOptions } from './tools/tool-registry.js'
 import { triggerRoutes } from './triggers/trigger-route.js'
 import { type EventSettings, readEventSettings } from './triggers/trigger-settings.js'
@@ -82,6 +83,12 @@ export interface TheoClawOptions {
    * start resolved: a fresh tool list per agent (plan D3). Chat replies never use it.
    */
   readonly agentFactory: (toolOptions: AgentToolOptions) => TurnAgent | Promise<TurnAgent>
+  /**
+   * The person-facing side of exec approval (B-549): who is asked, and an optional model reviewer.
+   * With `ask` and a `THEOCLAW_STATE_DIR`, every `shell_exec` of a `/control` agent is held to a
+   * saved approval, the reviewer, then the person. Absent: the shell runs as before.
+   */
+  readonly execApproval?: Pick<ExecApprovalOptions, 'ask' | 'reviewer'>
   /**
    * The session generations, loaded from `<workspace>/.theoclaw/sessions.json`. `startTheoClaw`
    * loads them before anything starts, so a malformed file refuses the start; `composeTheoClaw`
@@ -298,6 +305,12 @@ function startToolSettings(options: StartOptions, policy: AuthorizationPolicy): 
   return tools
 }
 
+/** The exec gate's options: needs an asker and a state directory to keep saved approvals in. */
+function execApprovalFor(given: TheoClawOptions['execApproval'], stateDir: string | undefined): ExecApprovalOptions | undefined {
+  if (given?.ask === undefined || stateDir === undefined) return undefined
+  return { ...given, store: createExecApprovalStore(stateDir) }
+}
+
 /** The store of `policy.stateDir`, or none without one. Throws on a state file it cannot read. */
 function pairingStoreFor(
   policy: AuthorizationPolicy,
@@ -426,8 +439,9 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
   const beat = heartbeat === undefined ? {} : { heartbeat: heartbeatJob(sessionSettings.workspace, heartbeat) }
   scheduled = wireScheduler({ store: scheduleStore, loop: composed.loop, buildRunAgent: buildWorker, tools, platforms, ...beat, write: stderr, secrets: secretValues })
   const extraTools = [...workflowTools(options.draftAgentFactory, stderr), ...scheduled.scheduleTools, ...peerTools(a2a.peers)]
+  const execApproval = execApprovalFor(options.execApproval, policy.stateDir)
   const buildControlAgent = async (): Promise<TurnAgent> =>
-    options.agentFactory(controlAgentToolOptions(tools, buildWorker, extraTools))
+    options.agentFactory(controlAgentToolOptions(tools, buildWorker, extraTools, execApproval))
   const { withAgent } = createContainer<TurnAgent>({ factory: buildControlAgent })
   composedApp = composed
   const devices = devicePairingFor(policy.stateDir, settings.controlToken, stderr)
@@ -438,7 +452,7 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
     model: settings.model,
     withAgent: chatAgents.withAgent,
     toolSettings: tools,
-    controlTools: () => controlAgentToolOptions(tools, buildWorker, extraTools).tools,
+    controlTools: () => controlAgentToolOptions(tools, buildWorker, extraTools, execApproval).tools,
     stderr,
   })
   const listen = options.listen ?? listenControlPlane

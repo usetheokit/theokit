@@ -22,6 +22,7 @@ import { scrubbedAgentTransport } from './acp-transport.js'
 import { browserServer } from './browser-server.js'
 import { codeModeTool, delegateAllTool, delegateTool, type CreateWorker } from './code-mode-tools.js'
 import { computerTool } from './computer-tool.js'
+import { execApprovalPlugin, type ExecApprovalOptions } from './exec-approval.js'
 import { questionTool, taskTools } from './control-tools.js'
 import { pathVetoPlugin } from './path-veto.js'
 import type { ToolSettings } from './tool-settings.js'
@@ -152,6 +153,7 @@ export function agentToolOptions(
   extra: readonly CustomTool[] = [],
   createWorker?: CreateWorker,
   buildDescriber?: () => Promise<TurnAgent>,
+  execApproval?: ExecApprovalOptions,
 ): AgentToolOptions {
   const tools = [...buildTools(settings), ...extra]
   if (createWorker !== undefined && buildDescriber !== undefined && settings.computer !== undefined) {
@@ -167,7 +169,10 @@ export function agentToolOptions(
       ...taskTools(),
     )
   }
-  const base = { tools, plugins: [pathVetoPlugin(settings)] }
+  // The exec gate is installed only with host tools on and an asker wired: without one there is
+  // nobody to approve, and refusing every shell call would turn the shell off, which is not its job.
+  const plugins = [pathVetoPlugin(settings), ...(execApproval !== undefined && settings.hostTools ? [execApprovalPlugin(execApproval)] : [])]
+  const base = { tools, plugins }
   const servers = mcpServersOf(settings)
   return Object.keys(servers).length === 0 ? base : { ...base, mcpServers: servers }
 }
@@ -200,6 +205,7 @@ export function controlAgentToolOptions(
   settings: ToolSettings,
   build: (toolOptions: AgentToolOptions) => TurnAgent | Promise<TurnAgent>,
   extra: readonly CustomTool[] = [],
+  execApproval?: ExecApprovalOptions,
 ): AgentToolOptions {
   return agentToolOptions(
     settings,
@@ -207,5 +213,6 @@ export function controlAgentToolOptions(
     async () => build(workerToolOptions(settings)),
     // The screenshot's describer holds no tool and no plugin: it can only answer (B-676 D1).
     async () => build({ tools: [], plugins: [] }),
+    execApproval,
   )
 }
