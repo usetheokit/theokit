@@ -582,15 +582,18 @@
   },
   {
     "id": "OC-78",
-    "status": "open"
+    "status": "open",
+    "note": "exec approval built (src/tools/exec-approval.ts, tests/exec-approval.test.ts proves an exec without approval is refused); stays open, carried by a follow-up item blocked by B-369 (dod reduced 2026-10-22, S-003 decision B-393 option A)"
   },
   {
     "id": "OC-79",
-    "status": "open"
+    "status": "open",
+    "note": "not built: no /elevated and no minimal, coding, messaging or full tool profile exists yet; open, and not shipped because no end-to-end check against a real model exists or was run"
   },
   {
     "id": "OC-80",
-    "status": "open"
+    "status": "open",
+    "note": "repeat detection built: src/tools/loop-detection.ts blocks a fourth identical tool call within the last 20 with a stated reason (tests/loop-detection.test.ts, offline); argument-churn and no-progress detection are not built; open because no end-to-end check against a real model exists yet, and none was run"
   },
   {
     "id": "OC-81",
