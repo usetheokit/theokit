@@ -13,6 +13,8 @@ export interface ChannelHookOptions {
   readonly write: (line: string) => void
   /** The `/usage` hook (B-400 FR-005), run third. */
   readonly usage?: GatewayHook
+  /** The `/acp` hook (B-685), run last. */
+  readonly acp?: GatewayHook
 }
 
 /**
@@ -27,5 +29,5 @@ export function channelHooks(options: ChannelHookOptions): readonly GatewayHook[
     mode: policy.groupActivation,
     write,
   })
-  return options.usage === undefined ? [ownerPolicy, groupActivation] : [ownerPolicy, groupActivation, options.usage]
+  return [ownerPolicy, groupActivation, ...(options.usage === undefined ? [] : [options.usage]), ...(options.acp === undefined ? [] : [options.acp])]
 }

@@ -13,6 +13,10 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `/acp start <agent>`, `/acp list`, `/acp send <id> <text>` and `/acp stop <id>` (B-685, OC-68): the
+  owner runs ACP agents of `THEOCLAW_EXTERNAL_TOOLS` as sessions, each one agent process that
+  stops with `/acp stop` or at shutdown. Permission requests stay refused (B-684).
+
 - Telegram voice-note replies (B-401, OC-102), enabled with
   `THEOCLAW_VOICE_OPENAI_API_KEY`: admitted notes are transcribed into the existing
   chat session and answered with AI-generated speech, with bounded audio requests

@@ -15,6 +15,7 @@ import { createPairingStore, type PairingStore } from './authorization/pairing-s
 import {
   type AuthorizationPolicy,
   isAuthenticatedSender,
+  isPolicyOwner,
   parseAuthorizationPolicy,
 } from './authorization/policy.js'
 import { type AdapterBuildOptions, adapterBuilders } from './channels/adapter-factory.js'
@@ -65,7 +66,9 @@ import { createExecApprovalStore, type ExecApprovalOptions } from './tools/exec-
 import { controlAgentToolOptions } from './tools/tool-registry.js'
 import { triggerRoutes } from './triggers/trigger-route.js'
 import { type EventSettings, readEventSettings } from './triggers/trigger-settings.js'
-import type { AgentToolOptions } from './tools/tool-registry.js'
+import { isPolicyOwner } from './authorization/policy.js'
+import { createAcpHook } from './channels/acp-hook.js'
+import { type AcpSessions, createAcpSessions } from './tools/acp-sessions.js'
 import { checkHostToolsPosture, hostToolsProtectedPaths, type ProtectedPath, resolveToolSettings } from './tools/tool-settings.js'
 import type { ToolDeps, ToolSettings } from './tools/tool-settings.js'
 import { createWorkflowTools } from './workflows/workflow-tools.js'
@@ -122,6 +125,8 @@ export interface TheoClawOptions {
   readonly events?: EventSettings
   /** Builds one trigger run's agent, fresh per run: no tool, like a chat agent. Default: the channel factory. */
   readonly triggerAgentFactory?: () => Promise<TurnAgent>
+  /** The ACP sessions `/acp` starts, lists and stops (B-685); without them `/acp` is an ordinary message. */
+  readonly acpSessions?: AcpSessions
 }
 
 export interface ComposedTheoClaw {
@@ -219,7 +224,7 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
       },
       goal: events.goal,
     }), configuredVoiceReplies(options.env)),
-    hooks: channelHooks({ policy, ...(pairing === undefined ? {} : { pairing }), write: maskedWrite, ...(model === undefined ? {} : { usage: usage.hook }) }),
+    hooks: channelHooks({ policy, ...(pairing === undefined ? {} : { pairing }), write: maskedWrite, ...(model === undefined ? {} : { usage: usage.hook }), ...(options.acpSessions === undefined ? {} : { acp: createAcpHook({ sessions: options.acpSessions, isOwner: (platform, senderId) => isPolicyOwner(policy, platform, senderId), mask: (text) => redactSecrets(maskSecrets(text, secrets)) }) }) }),
     secrets,
     write: options.write,
     ...(options.startTimeoutMs === undefined ? {} : { startTimeoutMs: options.startTimeoutMs }),
@@ -399,6 +404,7 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
   const flushOnExit = (): void => mask.flush()
   options.signals.on('exit', flushOnExit)
   let composedApp: ComposedTheoClaw | undefined
+  const acpSessions = createAcpSessions({ agents: tools.external.acpAgents, cwd: tools.toolRoot })
   let scheduled: RunningScheduler | undefined
   let serving: Promise<ControlPlaneHandle> | undefined
   // Bound once the listener resolves; the shutdown hook reads it late, as it reads `serving`.
@@ -409,6 +415,7 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
     stopAll: async () => {
       await scheduled?.stop()
       await composedApp?.loop.stopAll()
+      await acpSessions.stopAll()
       await composedApp?.sessions.disposeAll()
     },
     closeServer: async () => {
@@ -430,6 +437,7 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
     sessionSettings,
     generations,
     events,
+    acpSessions,
     ...(pairing === undefined ? {} : { pairing }),
     write: stderr,
     secrets: secretValues,
@@ -481,6 +489,7 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
     options.signals.off('exit', flushOnExit)
     await scheduled.stop()
     await composed.loop.stopAll()
+    await acpSessions.stopAll()
     await composed.sessions.disposeAll()
     // The mask stays: the entry writes this error and exits, and that line is masked too.
     mask.flush()

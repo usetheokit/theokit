@@ -139,7 +139,10 @@ describe('the external tools reach the /control agent only', () => {
   })
 
   it('every ACP tool comes from theokit/server/agent', () => {
-    const sources = sourceFiles(join(import.meta.dirname, '..', 'src')).map((path) => readFileSync(path, 'utf8'))
+    // The one exception is `/acp` (B-685): a session outlives a call, which `createACPTool` cannot express.
+    const sources = sourceFiles(join(import.meta.dirname, '..', 'src'))
+      .filter((path) => !path.endsWith('acp-sessions.ts'))
+      .map((path) => readFileSync(path, 'utf8'))
     expect(sources.filter((text) => text.includes('AcpClient'))).toEqual([])
     expect(sources.filter((text) => text.includes("'initialize'") || text.includes('"initialize"'))).toEqual([])
     expect(sources.some((text) => text.includes("from 'theokit/server/agent'"))).toBe(true)
