@@ -28,6 +28,7 @@ import { codeModeTool, delegateAllTool, delegateTool, type CreateWorker } from '
 import { computerTool } from './computer-tool.js'
 import { execApprovalPlugin, type ExecApprovalOptions } from './exec-approval.js'
 import { questionTool, taskTools } from './control-tools.js'
+import { loopDetectionPlugin } from './loop-detection.js'
 import { pathVetoPlugin } from './path-veto.js'
 import type { ToolSettings } from './tool-settings.js'
 
@@ -172,7 +173,7 @@ export function agentToolOptions(
   }
   // The exec gate is installed only with host tools on and an asker wired: without one there is
   // nobody to approve, and refusing every shell call would turn the shell off, which is not its job.
-  const plugins = [pathVetoPlugin(settings), ...(execApproval !== undefined && settings.hostTools ? [execApprovalPlugin(execApproval)] : [])]
+  const plugins = [pathVetoPlugin(settings), loopDetectionPlugin(), ...(execApproval !== undefined && settings.hostTools ? [execApprovalPlugin(execApproval)] : [])]
   const base = { tools, plugins }
   const servers = mcpServersOf(settings)
   return Object.keys(servers).length === 0 ? base : { ...base, mcpServers: servers }
@@ -194,7 +195,7 @@ function mcpServersOf(settings: ToolSettings): Record<string, McpServerConfig> {
  * A scheduled run's agent gets the same (B-396), so it holds no schedule tool either.
  */
 export function workerToolOptions(settings: ToolSettings): AgentToolOptions {
-  return { tools: readOnlyTools(settings), plugins: [pathVetoPlugin(settings)] }
+  return { tools: readOnlyTools(settings), plugins: [pathVetoPlugin(settings), loopDetectionPlugin()] }
 }
 
 /**

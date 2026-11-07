@@ -582,15 +582,24 @@
   },
   {
     "id": "OC-78",
-    "status": "open"
+    "status": "open",
+    "note": "exec approval was built earlier (src/tools/exec-approval.ts, tests/exec-approval.test.ts refuses an exec without approval); stays open, to be carried by a follow-up item blocked by B-369 (dod reduced 2026-10-22, S-003 decision B-393 option A); that item is not yet created in this change"
   },
   {
     "id": "OC-79",
-    "status": "open"
+    "status": "out",
+    "reason": "Elevated mode and the minimal, coding, messaging and full tool profiles are not built, and no real-model end-to-end check was run because model credentials are unavailable in this sandbox.",
+    "declared_by": "human/issue-1216-requester",
+    "declared_on": "2026-11-07",
+    "declared_at": "Issue #1216: permits out with a written reason in place of a real-model check"
   },
   {
     "id": "OC-80",
-    "status": "open"
+    "status": "out",
+    "reason": "Narrowed scope: only repeat detection is built (src/tools/loop-detection.ts, a fourth identical tool call within the last 20 is blocked with a stated reason, tests/loop-detection.test.ts, offline). Argument-churn and no-progress detection are not built, and no real-model end-to-end check was run because model credentials are unavailable in this sandbox.",
+    "declared_by": "human/issue-1216-requester",
+    "declared_on": "2026-11-07",
+    "declared_at": "Issue #1216: permits out with a written reason in place of a real-model check"
   },
   {
     "id": "OC-81",
