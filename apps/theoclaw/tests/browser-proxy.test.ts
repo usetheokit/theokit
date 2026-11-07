@@ -26,6 +26,7 @@ import { createInterface } from 'node:readline'
 const send = (message) => process.stdout.write(JSON.stringify(message) + '\\n')
 createInterface({ input: process.stdin }).on('line', (line) => {
   const message = JSON.parse(line)
+  if (Array.isArray(message)) return send({ jsonrpc: '2.0', id: 99, result: { leakedBatch: message.length } })
   if (message.id === undefined) return
   if (message.method === 'initialize') send({ jsonrpc: '2.0', id: message.id, result: { seen: message.params } })
   else if (message.method === 'tools/list') {
@@ -52,7 +53,7 @@ interface Answer {
 }
 
 /** Start the configured server, send `requests` (ids 1..n), and resolve with each answer by id once the child has closed. */
-async function exchange(requests: readonly object[], env: NodeJS.ProcessEnv = process.env): Promise<Map<number, Answer>> {
+async function exchange(requests: readonly object[], env: NodeJS.ProcessEnv = process.env, raw: readonly string[] = []): Promise<Map<number, Answer>> {
   const server = browserServer({ cliPath: standInCli() }) as { command: string; args: string[] }
   const child = spawn(server.command, server.args, { env, stdio: ['pipe', 'pipe', 'pipe'] })
   let stderr = ''
@@ -66,12 +67,13 @@ async function exchange(requests: readonly object[], env: NodeJS.ProcessEnv = pr
     createInterface({ input: child.stdout }).on('line', (line) => {
       const answer = JSON.parse(line) as Answer
       answers.set(answer.id, answer)
-      if (answers.size === requests.length) {
+      if (answers.size === requests.length + raw.length) {
         clearTimeout(timer)
         resolve()
       }
     })
   })
+  for (const line of raw) child.stdin.write(`${line}\n`)
   requests.forEach((request, index) => child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id: index + 1, ...request })}\n`))
   await all
   child.stdin.end()
@@ -117,6 +119,14 @@ describe('the browser server wrapper', () => {
     const answers = await exchange([{ method: 'tools/call', params: { name: 'browser_run_code_unsafe', arguments: { code: '1' } } }])
     expect(answers.get(1)?.result).toBeUndefined()
     expect(answers.get(1)?.error?.message).toBe('theoclaw: the browser tool browser_run_code_unsafe is not offered')
+  })
+
+  it('refuses a JSON-RPC batch, so a tools/call inside it cannot bypass the offered set', async () => {
+    const batch = JSON.stringify([{ jsonrpc: '2.0', id: 7, method: 'tools/call', params: { name: 'browser_run_code_unsafe', arguments: { code: '1' } } }])
+    const answers = await exchange([{ method: 'tools/list' }], process.env, [batch])
+    expect(answers.has(99)).toBe(false)
+    const refusal = [...answers.values()].find((answer) => answer.error !== undefined)
+    expect(refusal?.error?.code).toBe(-32600)
   })
 
   it('starts the server in a fresh directory outside the workspace, its output directory, and removes it on exit', async () => {
