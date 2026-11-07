@@ -182,3 +182,29 @@ describe('agent-route session id field', () => {
     expect(await post({ message: 'hi' })).toMatch(/^session-\d+$/)
   })
 })
+
+describe('agent-route-generator abort propagation (B-510)', () => {
+  it('hands the request signal to createRun so a departing client can cancel the run', async () => {
+    let received: AbortSignal | undefined
+    const routes = generateAgentRoutes({
+      walkResult: { route: '/api/agents/support' },
+      compiledOptions: applyCapabilities([new ModelCapability('claude-sonnet-4-5-20250929')]),
+      createRun: async function* (_m, _s, signal) {
+        received = signal
+      },
+    })
+    const controller = new AbortController()
+    const request = new Request('http://localhost/api/agents/support/chat', {
+      method: 'POST',
+      body: JSON.stringify({ message: 'hi' }),
+      signal: controller.signal,
+    })
+
+    await (await routes[0].handler(request)).text()
+
+    expect(received).toBeDefined()
+    expect(received?.aborted).toBe(false)
+    controller.abort()
+    expect(received?.aborted).toBe(true)
+  })
+})
