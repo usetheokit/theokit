@@ -69,14 +69,15 @@ export function scrubbedAgentTransport(config: AcpToolConfig): AcpToolTransport 
   }
 }
 
-const COULD_NOT_RUN = 'could not be found or run'
+const COULD_NOT_RUN = 'could not be found or run (a command is an absolute path or a bare name found on PATH)'
 
 /**
  * The executable file `command` names: itself when it has a `/`, else the first one on an absolute
  * `PATH` entry. A candidate containing `=` is skipped, because `env` would read it as an assignment.
  */
 function resolveCommand(command: string, searched: readonly string[]): string | undefined {
-  if (command.includes('/')) return executableFile(command) ? command : undefined
+  // A relative one would be found from TheoClaw's cwd but resolved by `env` in the agent's, the tool root.
+  if (command.includes('/')) return isAbsolute(command) && executableFile(command) ? command : undefined
   return searched
     .map((dir) => join(dir, command))
     .find((candidate) => !candidate.includes('=') && executableFile(candidate))

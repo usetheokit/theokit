@@ -1,5 +1,5 @@
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { join, relative } from 'node:path'
 
 import { AcpTransportClosedError } from 'theokit/server/agent'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -183,5 +183,21 @@ describe('an ACP agent named by a bare command (B-706)', () => {
     plant(command, marker)
     await callAgent(space, '.:bin')
     expect(existsSync(marker)).toBe(true)
+  })
+
+  it('negative: refuses a relative command with a slash even when it exists relative to the process cwd', async () => {
+    const { scrubbedAgentTransport } = await import('../src/tools/acp-transport.js')
+    const space = workspace(AGENT)
+    // Present relative to the process cwd, which the old check used, but not relative to the agent's cwd.
+    const dir = mkdtempSync(join(process.cwd(), 'b706-'))
+    cleanups.push(() => rmSync(dir, { recursive: true, force: true }))
+    const marker = join(space.cwd, 'planted-ran')
+    plant(join(dir, AGENT), marker)
+    const command = join(relative(process.cwd(), dir), AGENT)
+    const closed: unknown[] = []
+    scrubbedAgentTransport({ name: 'asker', description: 'asks', command, args: [], cwd: space.toolRoot, timeoutMs: 5_000 } as never).onClose((error) => closed.push(error))
+    // A refused command is reported closed at once; the old code spawned `env` instead.
+    expect(closed[0]).toBeInstanceOf(AcpTransportClosedError)
+    expect(existsSync(marker)).toBe(false)
   })
 })
