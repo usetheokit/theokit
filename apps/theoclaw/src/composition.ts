@@ -37,6 +37,10 @@ import { processSecrets } from './secrets.js'
 import { a2aLines, readA2ASettings } from './a2a/a2a-settings.js'
 import { a2aRoute } from './a2a/a2a-route.js'
 import { peerTools } from './a2a/peer-tools.js'
+import { RelayClient, relayTools } from './relay/relay-client.js'
+import { RelayMailbox, relayRoute } from './relay/relay-server.js'
+import { readRelaySettings, relaySecrets } from './relay/relay-settings.js'
+import { RelayState } from './relay/relay-state.js'
 import { installShutdown, type SignalSource } from './control-plane/shutdown.js'
 import { formatAddress, reportSurfacesOff } from './control-plane/start-output.js'
 import { createTurnRunner } from './control-plane/turn.js'
@@ -377,6 +381,7 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
   const scheduleStore = loadScheduleStore(sessionSettings.workspace)
   const heartbeat = readHeartbeatSettings(options.env, platforms)
   const a2a = readA2ASettings(options.env)
+  const relay = readRelaySettings(options.env)
   // `SessionAgents` alone decides when a session's agent is disposed: the SDK's cache and its idle
   // sweep know nothing of a turn in flight. `Agent.create` never reads the cache, so `/control`
   // turns are unaffected.
@@ -386,7 +391,7 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
   // as the operator set it. Under a profile the workspace is the profile's own (`instance.ts`).
   mkdirSync(join(sessionSettings.workspace, '.theoclaw'), { recursive: true, mode: 0o700 })
   const streams = options.streams ?? [process.stdout, process.stderr]
-  const secretValues = processSecrets(options, settings, tools, events, a2a)
+  const secretValues = [...processSecrets(options, settings, tools, events, a2a), ...relaySecrets(relay)]
   const logged = (write: (line: string) => void) => (line: string): void => {
     write(line)
     if (options.telemetryLog !== undefined) options.telemetryLog(redactSecrets(maskSecrets(line, secretValues)))
@@ -441,7 +446,12 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
   const buildWorker = options.importFreeAgentFactory ?? options.agentFactory
   const beat = heartbeat === undefined ? {} : { heartbeat: heartbeatJob(sessionSettings.workspace, heartbeat) }
   scheduled = wireScheduler({ store: scheduleStore, loop: composed.loop, buildRunAgent: buildWorker, tools, platforms, ...beat, write: stderr, secrets: secretValues })
-  const extraTools = [...workflowTools(options.draftAgentFactory, options.generateObject, stderr), ...scheduled.scheduleTools, ...peerTools(a2a.peers)]
+  const relayDir = join(sessionSettings.workspace, '.theoclaw')
+  const relayState = relay.client === undefined ? undefined : RelayState.load(join(relayDir, 'relay.json'), relay.peers)
+  if (relayState !== undefined) stderr(`relay: public key ${relayState.publicKey}`)
+  const relayTool = relayState === undefined || relay.client === undefined || relay.peers.size === 0 ? [] : relayTools(relayState, new RelayClient(relay.client.url, relay.client.token))
+  const relayHandler = relay.serveToken === undefined ? undefined : relayRoute(relay.serveToken, new RelayMailbox(100, join(relayDir, 'relay-mailbox.json')))
+  const extraTools = [...workflowTools(options.draftAgentFactory, options.generateObject, stderr), ...scheduled.scheduleTools, ...peerTools(a2a.peers), ...relayTool]
   const execApproval = execApprovalFor(options.execApproval, policy.stateDir)
   const buildControlAgent = async (): Promise<TurnAgent> =>
     options.agentFactory(controlAgentToolOptions(tools, buildWorker, extraTools, execApproval))
@@ -466,6 +476,7 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
       devices,
       api,
       a2a.token === undefined ? undefined : a2aRoute({ token: a2a.token, buildWorker, tools, secrets: secretValues, write: stderr }),
+      relayHandler,
     ),
     port: settings.port,
     host: settings.host,
