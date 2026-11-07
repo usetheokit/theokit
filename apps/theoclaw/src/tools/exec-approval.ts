@@ -11,7 +11,7 @@ const EXEC_TOOL = 'shell_exec'
 
 /** The commands the person approved to run again without being asked, kept in the state directory. */
 export interface ExecApprovalStore {
-  /** True only for a command spelled exactly as one the person saved. */
+  /** True only for a command spelled exactly as one the person saved; the approval holds wherever that command runs. */
   has(command: string): boolean
   /** Saved on disk before it counts; rejects when the file cannot be written. */
   add(command: string): Promise<void>
@@ -25,8 +25,13 @@ function load(path: string): Set<string> {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return new Set()
     throw new Error(`${path} cannot be read: ${describeError(error)}`)
   }
-  const parsed = JSON.parse(text) as { approved?: unknown }
-  const list = parsed.approved
+  let parsed: { approved?: unknown }
+  try {
+    parsed = JSON.parse(text) as { approved?: unknown }
+  } catch (error) {
+    throw new Error(`${path} is not valid JSON (${describeError(error)}); fix or remove it`)
+  }
+  const list = parsed?.approved
   if (!Array.isArray(list) || !list.every((entry) => typeof entry === 'string')) {
     throw new Error(`${path} is not an exec approvals file ({ "approved": [...] }); fix or remove it`)
   }
