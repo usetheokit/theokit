@@ -6,7 +6,7 @@ import { createSandboxBackend, LinuxSandbox, resolveSandboxPosture, writableRoot
 import type { BwrapDetection, SandboxBackend, SandboxMode } from '@theokit/agents/sandbox'
 
 import { TheoClawConfigError } from '../control-plane/errors.js'
-import { readSandboxMode } from '../sandbox/sandbox-mode.js'
+import { readSandboxMode, readSandboxSessions, sandboxModeForSession } from '../sandbox/sandbox-mode.js'
 import { browserLine, readBrowser } from './browser-server.js'
 import type { BrowserDeps, BrowserSettings } from './browser-server.js'
 import { computerLine, readComputer } from './computer-settings.js'
@@ -245,6 +245,23 @@ export function resolveToolSettings(env: Env, cwd: string, deps: ToolDeps = {}):
     ],
     offLines,
   }
+}
+
+/**
+ * The settings of one session under `THEOCLAW_SANDBOX_SESSIONS`: `settings` itself when the session
+ * runs the chosen mode, else a copy with a backend of its own mode. With host tools off the mode is
+ * already `read-only` for every session.
+ */
+export function toolSettingsForSession(settings: ToolSettings, env: Env, sessionKey: string, deps: ToolDeps = {}): ToolSettings {
+  const sandboxMode = sandboxModeForSession(settings.sandboxMode, readSandboxSessions(env), sessionKey)
+  if (sandboxMode === settings.sandboxMode || !settings.hostTools) return settings
+  const sandbox = createSandboxBackend({
+    mode: sandboxMode,
+    workDir: settings.toolRoot,
+    ...(deps.detect === undefined ? {} : { detect: deps.detect }),
+    ...(deps.warn === undefined ? {} : { warn: deps.warn }),
+  })
+  return { ...settings, sandbox, mode: sandboxMode, sandboxMode, sandboxEnforced: sandbox instanceof LinuxSandbox }
 }
 
 function realPathOrSelf(path: string): string {

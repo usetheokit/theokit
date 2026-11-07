@@ -24,3 +24,29 @@ export function readSandboxMode(env: Readonly<Record<string, string | undefined>
     variable: 'THEOCLAW_SANDBOX',
   })
 }
+
+/** The session key of the owner's main session (`THEOCLAW_DM_SCOPE=main`). */
+export const MAIN_SESSION_KEY = 'main'
+
+/** Which sessions `THEOCLAW_SANDBOX` binds: every one (default), or all but the main session. */
+export type SandboxSessions = 'all' | 'non-main'
+
+/** `THEOCLAW_SANDBOX_SESSIONS`: unset or blank is `all`, `non-main` is itself, anything else is refused. */
+export function readSandboxSessions(env: Readonly<Record<string, string | undefined>>): SandboxSessions {
+  const value = env.THEOCLAW_SANDBOX_SESSIONS?.trim() ?? ''
+  if (value === '' || value === 'all') return 'all'
+  if (value === 'non-main') return 'non-main'
+  throw new TheoClawConfigError(`THEOCLAW_SANDBOX_SESSIONS must be one of all, non-main; got "${value}"`, {
+    variable: 'THEOCLAW_SANDBOX_SESSIONS',
+  })
+}
+
+/**
+ * The sandbox mode of one session. Under `all` every session runs the chosen mode. Under `non-main`
+ * the main session runs it and any other session runs `workspace-write`, or `read-only` when that
+ * is what was chosen: a session is never given more than the operator's mode allows.
+ */
+export function sandboxModeForSession(chosen: SandboxMode, sessions: SandboxSessions, sessionKey: string): SandboxMode {
+  if (sessions === 'all' || sessionKey === MAIN_SESSION_KEY) return chosen
+  return chosen === 'read-only' ? 'read-only' : 'workspace-write'
+}

@@ -562,7 +562,7 @@
       "test": "a real model's shell write outside the workspace fails under workspace-write"
     },
     "verified_on": "2026-10-31",
-    "note": "read-only = OpenClaw workspace ro for the shell and file tools (the unsandboxed browser server is refused with it), workspace-write = rw (the tool root, and /tmp, which the SDK keeps writable), danger-full-access = mode off; not covered: non-main and session/agent/shared scope (B-683), workspace none"
+    "note": "read-only = OpenClaw workspace ro for the shell and file tools (the unsandboxed browser server is refused with it), workspace-write = rw (the tool root, and /tmp, which the SDK keeps writable), danger-full-access = mode off; THEOCLAW_SANDBOX_SESSIONS=non-main picks workspace-write for a non-main session (toolSettingsForSession, unit-tested, not yet wired into a running agent: chat agents hold no tool and /control turns carry no session key); not covered: agent and shared scope, workspace none"
   },
   {
     "id": "OC-77",
