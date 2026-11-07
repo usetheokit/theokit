@@ -19,16 +19,19 @@ describe('generateDockerfile', () => {
     }
   })
 
-  it.each(['npm', 'pnpm', 'yarn'] as const)('runs the installed CLI by path, not npx (%s)', (pkgManager) => {
-    const out = generateDockerfile({
-      pkgManager,
-      sourceRoots: ['src'],
-      distDir: '.theokit',
-      hasConfigFile: false,
-      hasPnpmWorkspace: false,
-    })
-    expect(out).not.toMatch(/npx/)
-    expect(out).toContain('RUN ./node_modules/.bin/theokit build')
-    expect(out).toContain('CMD ["./node_modules/.bin/theokit", "start"]')
-  })
+  it.each(['npm', 'pnpm', 'yarn'] as const)(
+    'runs the installed CLI by path, not npx (%s)',
+    (pkgManager) => {
+      const out = generateDockerfile({
+        pkgManager,
+        sourceRoots: ['src'],
+        distDir: '.theokit',
+        hasConfigFile: false,
+        hasPnpmWorkspace: false,
+      })
+      expect(out).not.toMatch(/npx/)
+      expect(out).toContain('RUN ./node_modules/.bin/theokit build')
+      expect(out).toContain('CMD ["./node_modules/.bin/theokit", "start"]')
+    },
+  )
 })
