@@ -7,6 +7,7 @@ import {
   createEditFileTool,
   createGenericHttpSearchAdapter,
   createGitDiffTool,
+  createInteractiveShellTool,
   createListDirTool,
   createReadFileTool,
   createShellTool,
@@ -15,6 +16,7 @@ import {
   createWebFetchTool,
   createWebSearchTool,
   createWriteFileTool,
+  createWriteStdinTool,
 } from '@theokit/agents/tools'
 
 import type { TurnAgent } from '../agent-port.js'
@@ -102,7 +104,9 @@ export function readOnlyTools(settings: ToolSettings): CustomTool[] {
  *   unless `THEOCLAW_SANDBOX=read-only`;
  * - one ACP tool per agent `THEOCLAW_EXTERNAL_TOOLS` names, every permission it asks put to the owner (refused without an asker).
  *
- * The interactive shell and its stdin tool are never registered: they take a PTY, not this backend.
+ * The interactive shell and its stdin tool take a PTY, not this backend: they are registered only
+ * when `settings.interactive` is set, which `withInteractiveShell` does once a real session is
+ * proven to write in the tool root and nowhere else on this host.
  */
 export function buildTools(settings: ToolSettings, permission: AcpPermissionOptions = {}): CustomTool[] {
   const scope = scopeOf(settings)
@@ -125,6 +129,9 @@ export function buildTools(settings: ToolSettings, permission: AcpPermissionOpti
       tools.push(scope.bind(createWriteFileTool)(), scope.bind(createEditFileTool)(), scope.bind(createApplyPatchTool)())
     }
     tools.push(scope.bind(createShellTool)())
+    if (settings.interactive !== undefined) {
+      tools.push(createInteractiveShellTool({ interactive: settings.interactive }), createWriteStdinTool({ interactive: settings.interactive }))
+    }
   }
   tools.push(...acpTools(settings, permission))
   return tools

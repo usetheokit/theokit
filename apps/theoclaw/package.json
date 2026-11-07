@@ -37,6 +37,7 @@
     "@playwright/mcp": "0.0.83",
     "@slack/bolt": "5.1.0",
     "@theokit/agents": "workspace:*",
+    "@theokit/agents-pty": "workspace:*",
     "@theokit/di": "0.2.1",
     "@theokit/di-agent": "0.5.0",
     "@theokit/gateway": "0.11.0",

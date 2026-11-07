@@ -7,7 +7,8 @@ import type { Plugin, PreToolCallContext } from '@theokit/sdk'
 import { describeError } from '../control-plane/errors.js'
 
 const FILE_NAME = 'exec-approvals.json'
-const EXEC_TOOL = 'shell_exec'
+/** The tools that start a command: `interactive_shell` is held to the same decision as `shell_exec`. */
+const EXEC_TOOLS: readonly string[] = ['shell_exec', 'interactive_shell']
 
 /** The commands the person approved to run again without being asked, kept in the state directory. */
 export interface ExecApprovalStore {
@@ -118,7 +119,7 @@ export function createExecApproval(options: ExecApprovalOptions): (command: stri
   }
 }
 
-/** A `pre_tool_call` plugin that holds every `shell_exec` call to the decision. */
+/** A `pre_tool_call` plugin that holds every `shell_exec` and `interactive_shell` call to the decision. */
 export function execApprovalPlugin(options: ExecApprovalOptions): Plugin {
   const decide = createExecApproval(options)
   return {
@@ -128,7 +129,7 @@ export function execApprovalPlugin(options: ExecApprovalOptions): Plugin {
     register: (ctx) => {
       ctx.on('pre_tool_call', async (context: unknown) => {
         const call = (context ?? {}) as Partial<PreToolCallContext>
-        if (call.name !== EXEC_TOOL) return undefined
+        if (call.name === undefined || !EXEC_TOOLS.includes(call.name)) return undefined
         const command = (call.args as { command?: unknown } | undefined)?.command
         if (typeof command !== 'string' || command === '') return { block: true, message: 'theoclaw: the command is missing' }
         const decision = await decide(command)

@@ -69,6 +69,7 @@ describe('exec approval plugin', () => {
     expect(await denied({ name: 'shell_exec', args: { command: 'make' } })).toMatchObject({ block: true })
     const allowed = handlerOf({ store: store(), ask: async () => 'once' })
     expect(await allowed({ name: 'shell_exec', args: { command: 'make' } })).toBeUndefined()
+    expect(await denied({ name: 'interactive_shell', args: { command: 'python3' } })).toMatchObject({ block: true })
   })
 
   it('ignores other tools and blocks a missing command', async () => {

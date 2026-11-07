@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path'
 
 import { createSandboxBackend, LinuxSandbox, resolveSandboxPosture, writableRootsFor } from '@theokit/agents/sandbox'
 import type { BwrapDetection, SandboxBackend, SandboxMode } from '@theokit/agents/sandbox'
+import type { InteractiveBackend } from '@theokit/agents/interactive'
 
 import { TheoClawConfigError } from '../control-plane/errors.js'
 import { readSandboxMode, readSandboxSessions, sandboxModeForSession } from '../sandbox/sandbox-mode.js'
@@ -38,6 +39,8 @@ export interface ToolSettings {
   readonly mode: SandboxMode
   /** The mode the operator chose with `THEOCLAW_SANDBOX` (default `workspace-write`). */
   readonly sandboxMode: SandboxMode
+  /** The interactive shell confined to this mode's sandbox, present only once `withInteractiveShell` proved it on this host. */
+  readonly interactive?: InteractiveBackend
   readonly fetchImpl: typeof fetch
   /** The DNS lookup `web_fetch` screens a host with; absent in the process, so the SDK's own runs. */
   readonly lookup?: WebFetchLookup
@@ -261,7 +264,9 @@ export function toolSettingsForSession(settings: ToolSettings, env: Env, session
     ...(deps.detect === undefined ? {} : { detect: deps.detect }),
     ...(deps.warn === undefined ? {} : { warn: deps.warn }),
   })
-  return { ...settings, sandbox, mode: sandboxMode, sandboxMode, sandboxEnforced: sandbox instanceof LinuxSandbox }
+  // The proven interactive shell belongs to the chosen mode; a session of another mode gets none.
+  const { interactive: _chosenMode, ...rest } = settings
+  return { ...rest, sandbox, mode: sandboxMode, sandboxMode, sandboxEnforced: sandbox instanceof LinuxSandbox }
 }
 
 function realPathOrSelf(path: string): string {

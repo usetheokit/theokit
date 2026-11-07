@@ -71,6 +71,7 @@ import { controlAgentToolOptions } from './tools/tool-registry.js'
 import { triggerRoutes } from './triggers/trigger-route.js'
 import { type EventSettings, readEventSettings } from './triggers/trigger-settings.js'
 import type { AgentToolOptions } from './tools/tool-registry.js'
+import { withInteractiveShell } from './tools/interactive-shell.js'
 import { checkHostToolsPosture, hostToolsProtectedPaths, type ProtectedPath, resolveToolSettings } from './tools/tool-settings.js'
 import type { ToolDeps, ToolSettings } from './tools/tool-settings.js'
 import type { GenerateObject } from './workflows/triage-workflow.js'
@@ -310,12 +311,12 @@ function lineWriter(stream: MaskableStream | undefined): (line: string) => void 
 const SHELL_READ_LINE = 'tools: host tools are on; the shell can read every file the process user can read'
 
 /** The tool settings, every refusal included, before anything opens (FR-008). */
-function startToolSettings(options: StartOptions, policy: AuthorizationPolicy): ToolSettings {
+async function startToolSettings(options: StartOptions, policy: AuthorizationPolicy): Promise<ToolSettings> {
   // A profiled instance's agents work in its workspace (B-514), so their tool root is made there.
   const cwd = options.cwd ?? options.instance?.workspace ?? process.cwd()
   const tools = resolveToolSettings(options.env, cwd, options.toolDeps)
   checkHostToolsPosture(tools, hostToolsProtectedPaths(options.env, policy.stateDir, tools, options.importedPaths ?? []), options.toolDeps)
-  return tools
+  return withInteractiveShell(tools, options.toolDeps)
 }
 
 /** The exec gate's options: needs an asker and a state directory to keep saved approvals in. */
@@ -402,7 +403,7 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
   const discovery = parseDiscoveryMode(options.env)
   // Read before the mask and the shutdown are installed, so a missing owner leaves nothing behind.
   const policy = parseAuthorizationPolicy(options.env)
-  const tools = startToolSettings(options, policy)
+  const tools = await startToolSettings(options, policy)
   const platforms = resolvePlatforms(options.env).configured.map((entry) => entry.platform)
   const events = readEventSettings(options.env, platforms)
   const sessionSettings = readSessionSettings(options.env, statSync)
