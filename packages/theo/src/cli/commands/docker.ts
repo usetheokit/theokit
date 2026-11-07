@@ -82,7 +82,9 @@ export function generateDockerfile(input: DockerfileInput): string {
     'ENV HOST=0.0.0.0',
     'ENV PORT=3000',
     `COPY --from=builder --chown=node:node /app/${distDir} ./${distDir}`,
-    ...copySources.map((line) => line.replace('--from=builder', '--from=builder --chown=node:node')),
+    ...copySources.map((line) =>
+      line.replace('--from=builder', '--from=builder --chown=node:node'),
+    ),
     ...(input.hasConfigFile
       ? ['COPY --from=builder --chown=node:node /app/theo.config.ts ./theo.config.ts']
       : []),
