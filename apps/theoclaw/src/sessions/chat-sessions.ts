@@ -1,13 +1,14 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
-import { statSync } from 'node:fs'
-import { join } from 'node:path'
+import { rmSync, statSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, resolve, sep } from 'node:path'
 
 import type { MessageEvent } from '@theokit/gateway'
 import { Agent } from '@theokit/sdk'
 import type { AgentOptions } from '@theokit/sdk'
 
 import { createContainer } from '../agent-container.js'
-import { createChannelAgentFactory, sessionAgentOptions } from '../control-plane/agent-factory.js'
+import { createChannelAgentFactory, isIncognito, sessionAgentOptions } from '../control-plane/agent-factory.js'
 import { Generations } from './generations.js'
 import { type SessionAgent, SessionAgents, type SessionLease } from './session-agents.js'
 import { createSessionRouter } from './session-key.js'
@@ -40,14 +41,19 @@ export type ChatBoundary = <R>(event: MessageEvent, work: (lease: SessionLease) 
 export function chatSessions(options: ChatSessionsOptions): { readonly sessions: SessionAgents; readonly withAgent: ChatBoundary; readonly keyOf: (event: MessageEvent) => string } {
   const settings = options.sessionSettings ?? readSessionSettings(options.env, statSync)
   const router = createSessionRouter(settings)
+  const incognito = isIncognito(options.env)
   const open = options.getOrCreate ?? ((id: string, agentOptions: AgentOptions) => Agent.getOrCreate(id, agentOptions))
   const sessions = new SessionAgents({
     router,
     // Opened by the chat path's own factory, whose protected options are applied last, so the
     // `shell` withholding and memory off hold whatever `optionsFor` returns (B-377 option A). Only
     // those keys are re-pinned, `local` merged so the session's cwd and the hook gate both hold (B-397).
-    getOrCreate: (id, sessionOptions) =>
-      createChannelAgentFactory(options.env, (channel) => open(id, { ...sessionOptions, ...channel, local: { ...sessionOptions.local, ...channel.local } }))(),
+    getOrCreate: async (id, sessionOptions) => {
+      const agent = await createChannelAgentFactory(options.env, (channel) =>
+        open(id, { ...sessionOptions, ...channel, local: { ...sessionOptions.local, ...channel.local } }),
+      )()
+      return incognito ? withIncognitoCleanup(agent, sessionOptions.local?.sessionDir) : agent
+    },
     optionsFor: () => sessionAgentOptions(options.env, settings.workspace),
     generations: options.generations ?? Generations.load(sessionsFile(settings.workspace)),
     settings,
@@ -62,4 +68,25 @@ export function chatSessions(options: ChatSessionsOptions): { readonly sessions:
     },
   })
   return { sessions, keyOf: (event) => router.resolveAgentId(event), withAgent: (event, work) => currentEvent.run(event, () => boundary.withAgent(work)) }
+}
+
+/** An incognito agent whose private transcript directory is removed once it is disposed. */
+export function withIncognitoCleanup(agent: SessionAgent, dir: string | undefined): SessionAgent {
+  // Only a directory under the temp root is ever removed, whatever `dir` holds.
+  const removable = dir !== undefined && resolve(dir).startsWith(resolve(tmpdir()) + sep)
+  return new Proxy(agent, {
+    get(target, property) {
+      if (property === 'dispose') {
+        return async (): Promise<void> => {
+          try {
+            await target.dispose()
+          } finally {
+            if (removable) rmSync(dir, { recursive: true, force: true })
+          }
+        }
+      }
+      const value: unknown = Reflect.get(target, property, target)
+      return typeof value === 'function' ? (value as (...args: unknown[]) => unknown).bind(target) : value
+    },
+  })
 }
