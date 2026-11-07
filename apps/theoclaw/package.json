@@ -9,6 +9,8 @@
   },
   "files": [
     "dist",
+    "tools/browser-proxy.mjs",
+    "tools/install-browser.mjs",
     "README.md",
     "CHANGELOG.md"
   ],
