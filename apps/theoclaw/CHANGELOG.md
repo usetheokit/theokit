@@ -13,6 +13,8 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- WebChat backs each chat with a session agent keyed on the chat id (B-703): a follow-up message from the same page is answered by an agent that has the earlier ones in its history, and a post without a valid chat id is refused 400 `chat_id_invalid`.
+
 - `theoclaw logs` now works outside a Linux user unit (B-718, OC-96). The process mirrors its output to `THEOCLAW_LOG_FILE`, which the container image sets to `/data/state/theoclaw.log`; `logs` prints the last lines of that file with credential values masked.
 
 - `theoclaw doctor`, `status` and `logs`, and hot reload of the model settings (B-399, OC-93 to OC-96). `doctor` checks the configuration offline and exits 3 on a malformed credential, naming the variable and never the value. `logs` tails the file, launchd log or user journal with credential values masked. While running, a change to `THEOCLAW_MODEL`, `THEOCLAW_MODEL_FALLBACK`, `THEOCLAW_THINKING` or the model keys in the configuration file applies to the next agent without a restart; any other changed setting is reported as needing one.
@@ -341,8 +343,9 @@ and versioning follows [Semantic Versioning](https://semver.org/).
   wrong token answers 401 before any agent is built, a post over 64 KiB answers 413, and a client
   that leaves while its post is still being read gets a 400 rather than an error in the log. Each
   message runs one agent turn streamed through `POST /webchat/chat` by the framework's route
-  generator, and closing the tab mid-answer cancels the turn. WebChat keeps no conversation: each
-  message reaches a fresh agent that has not seen the earlier ones, unlike a channel chat (B-378). Without the token every `/webchat` path answers 404 and the start says
+  generator, and closing the tab mid-answer cancels the turn. Each chat id is one conversation (B-703): its messages reach one session
+  agent, so a follow-up sees the earlier ones, and two chat ids never share history; a post with no
+  valid chat id answers 400 `chat_id_invalid`. Without the token every `/webchat` path answers 404 and the start says
   `theoclaw: webchat off (THEOCLAW_WEBCHAT_TOKEN unset)`. The token is masked in the output like
   the control token.
 - A control plane: `pnpm --filter theoclaw run build && pnpm --filter theoclaw start` starts one

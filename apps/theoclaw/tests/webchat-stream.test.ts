@@ -134,13 +134,13 @@ function chunksOfType(frames: unknown[], type: string): { readonly [key: string]
 describe("POST /webchat/chat", () => {
   it("answers 401 with a Bearer challenge to a missing or wrong token and builds 0 agents", async () => {
     const stub = stubRunner({ messages: () => [text("never")] });
-    const handle = createWebchatRoutes({ token: TOKEN, runTurn: stub.runTurn, assetsDir: ASSETS });
+    const handle = createWebchatRoutes({ token: TOKEN, turnFor: () => stub.runTurn, assetsDir: ASSETS });
     const unauthenticated = new Request("http://127.0.0.1/webchat/chat", {
       method: "POST",
-      body: JSON.stringify({ message: "hi" }),
+      body: JSON.stringify({ message: "hi", id: "chat-1" }),
     });
 
-    for (const request of [unauthenticated, chatRequest({ message: "hi" }, "x".repeat(40))]) {
+    for (const request of [unauthenticated, chatRequest({ message: "hi", id: "chat-1" }, "x".repeat(40))]) {
       const response = await handle(request);
       expect(response.status).toBe(401);
       expect(response.headers.get("www-authenticate")).toBe("Bearer");
@@ -150,9 +150,9 @@ describe("POST /webchat/chat", () => {
 
   it("streams a stub agent's text as text/event-stream with at least one text chunk", async () => {
     const stub = stubRunner({ messages: () => [text("hello from the agent")] });
-    const handle = createWebchatRoutes({ token: TOKEN, runTurn: stub.runTurn, assetsDir: ASSETS });
+    const handle = createWebchatRoutes({ token: TOKEN, turnFor: () => stub.runTurn, assetsDir: ASSETS });
 
-    const response = await handle(chatRequest({ message: "hi" }));
+    const response = await handle(chatRequest({ message: "hi", id: "chat-1" }));
 
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toContain("text/event-stream");
@@ -165,7 +165,7 @@ describe("POST /webchat/chat", () => {
   // LCR0121: the routes own the gate, so they refuse a token below the bearer minimum themselves.
   it("refuses a token shorter than 32 characters with a config error naming THEOCLAW_WEBCHAT_TOKEN", () => {
     const stub = stubRunner({ messages: () => [text("never")] });
-    const build = () => createWebchatRoutes({ token: "short", runTurn: stub.runTurn, assetsDir: ASSETS });
+    const build = () => createWebchatRoutes({ token: "short", turnFor: () => stub.runTurn, assetsDir: ASSETS });
 
     expect(build).toThrow(TheoClawConfigError);
     expect(build).toThrow(/THEOCLAW_WEBCHAT_TOKEN must be at least 32 characters/);
@@ -175,7 +175,7 @@ describe("POST /webchat/chat", () => {
   it("refuses a token of 31 characters", () => {
     const stub = stubRunner({ messages: () => [text("never")] });
 
-    expect(() => createWebchatRoutes({ token: "a".repeat(31), runTurn: stub.runTurn, assetsDir: ASSETS })).toThrow(
+    expect(() => createWebchatRoutes({ token: "a".repeat(31), turnFor: () => stub.runTurn, assetsDir: ASSETS })).toThrow(
       TheoClawConfigError,
     );
   });
@@ -183,9 +183,9 @@ describe("POST /webchat/chat", () => {
   it("accepts a token of exactly 32 characters", async () => {
     const stub = stubRunner({ messages: () => [text("at the minimum")] });
     const token = "a".repeat(32);
-    const handle = createWebchatRoutes({ token, runTurn: stub.runTurn, assetsDir: ASSETS });
+    const handle = createWebchatRoutes({ token, turnFor: () => stub.runTurn, assetsDir: ASSETS });
 
-    const response = await handle(chatRequest({ message: "hi" }, token));
+    const response = await handle(chatRequest({ message: "hi", id: "chat-1" }, token));
 
     expect(response.status).toBe(200);
   });
@@ -194,7 +194,7 @@ describe("POST /webchat/chat", () => {
   // claims fewer bytes than it sends is still refused.
   it("answers 413 to a streamed body past the bound whose content-length claims less", async () => {
     const stub = stubRunner({ messages: () => [text("never")] });
-    const handle = createWebchatRoutes({ token: TOKEN, runTurn: stub.runTurn, assetsDir: ASSETS });
+    const handle = createWebchatRoutes({ token: TOKEN, turnFor: () => stub.runTurn, assetsDir: ASSETS });
     const chunk = new Uint8Array(16_384).fill(0x78);
     let sent = 0;
     const body = new ReadableStream<Uint8Array>({
@@ -222,7 +222,7 @@ describe("POST /webchat/chat", () => {
   // F-dom-4: /control caps a frame at 64 KiB; the chat post is bounded the same way.
   it("answers 413 to a body over the chat bound and builds 0 agents", async () => {
     const stub = stubRunner({ messages: () => [text("never")] });
-    const handle = createWebchatRoutes({ token: TOKEN, runTurn: stub.runTurn, assetsDir: ASSETS });
+    const handle = createWebchatRoutes({ token: TOKEN, turnFor: () => stub.runTurn, assetsDir: ASSETS });
 
     const response = await handle(chatRequest({ message: "x".repeat(MAX_MESSAGE_BYTES) }));
 
@@ -235,7 +235,7 @@ describe("POST /webchat/chat", () => {
   // throwing to the listener, which would log "request failed" for a socket already gone.
   it("answers 400 and builds 0 agents when the client leaves while the body is read", async () => {
     const stub = stubRunner({ messages: () => [text("never")] });
-    const handle = createWebchatRoutes({ token: TOKEN, runTurn: stub.runTurn, assetsDir: ASSETS });
+    const handle = createWebchatRoutes({ token: TOKEN, turnFor: () => stub.runTurn, assetsDir: ASSETS });
     const left = new AbortController();
     const body = new ReadableStream<Uint8Array>({
       start(controller) {
@@ -263,7 +263,7 @@ describe("POST /webchat/chat", () => {
 
   it("rejects with the stream's error when the body fails while the client is still there", async () => {
     const stub = stubRunner({ messages: () => [text("never")] });
-    const handle = createWebchatRoutes({ token: TOKEN, runTurn: stub.runTurn, assetsDir: ASSETS });
+    const handle = createWebchatRoutes({ token: TOKEN, turnFor: () => stub.runTurn, assetsDir: ASSETS });
     const body = new ReadableStream<Uint8Array>({
       pull(controller) {
         controller.error(new Error("the body broke"));
@@ -282,10 +282,10 @@ describe("POST /webchat/chat", () => {
 
   it("streams a body of exactly the chat bound", async () => {
     const stub = stubRunner({ messages: () => [text("at the bound")] });
-    const handle = createWebchatRoutes({ token: TOKEN, runTurn: stub.runTurn, assetsDir: ASSETS });
-    const padding = MAX_MESSAGE_BYTES - JSON.stringify({ message: "" }).length;
+    const handle = createWebchatRoutes({ token: TOKEN, turnFor: () => stub.runTurn, assetsDir: ASSETS });
+    const padding = MAX_MESSAGE_BYTES - JSON.stringify({ message: "", id: "chat-1" }).length;
 
-    const response = await handle(chatRequest({ message: "y".repeat(padding) }));
+    const response = await handle(chatRequest({ message: "y".repeat(padding), id: "chat-1" }));
 
     expect(response.status).toBe(200);
     expect(await response.text()).toContain("at the bound");
@@ -295,9 +295,9 @@ describe("POST /webchat/chat", () => {
     const runTurn = async (): Promise<never> => {
       throw new Error("the runner broke");
     };
-    const handle = createWebchatRoutes({ token: TOKEN, runTurn, assetsDir: ASSETS });
+    const handle = createWebchatRoutes({ token: TOKEN, turnFor: () => runTurn, assetsDir: ASSETS });
 
-    const body = await (await handle(chatRequest({ message: "hi" }))).text();
+    const body = await (await handle(chatRequest({ message: "hi", id: "chat-1" }))).text();
 
     const frames = dataFrames(body);
     expect(chunksOfType(frames, "error")).toHaveLength(1);
@@ -307,10 +307,10 @@ describe("POST /webchat/chat", () => {
 
   it("streams no reply text for a request whose signal was already aborted", async () => {
     const stub = stubRunner({ messages: () => [text("should not stream")] });
-    const handle = createWebchatRoutes({ token: TOKEN, runTurn: stub.runTurn, assetsDir: ASSETS });
+    const handle = createWebchatRoutes({ token: TOKEN, turnFor: () => stub.runTurn, assetsDir: ASSETS });
     const left = new AbortController();
     left.abort();
-    const request = new Request(chatRequest({ message: "hi" }), { signal: left.signal });
+    const request = new Request(chatRequest({ message: "hi", id: "chat-1" }), { signal: left.signal });
 
     const body = await (await handle(request)).text();
 
@@ -320,7 +320,7 @@ describe("POST /webchat/chat", () => {
 
   it("answers 400 to a body without message and builds 0 agents", async () => {
     const stub = stubRunner({ messages: () => [text("never")] });
-    const handle = createWebchatRoutes({ token: TOKEN, runTurn: stub.runTurn, assetsDir: ASSETS });
+    const handle = createWebchatRoutes({ token: TOKEN, turnFor: () => stub.runTurn, assetsDir: ASSETS });
 
     const response = await handle(chatRequest({ text: "no message field" }));
 
@@ -330,9 +330,9 @@ describe("POST /webchat/chat", () => {
 
   it("ends a turn that failed without a streamed error with one turn_failed error chunk, then the terminal frame", async () => {
     const stub = stubRunner({ messages: () => [], status: "error" });
-    const handle = createWebchatRoutes({ token: TOKEN, runTurn: stub.runTurn, assetsDir: ASSETS });
+    const handle = createWebchatRoutes({ token: TOKEN, turnFor: () => stub.runTurn, assetsDir: ASSETS });
 
-    const body = await (await handle(chatRequest({ message: "hi" }))).text();
+    const body = await (await handle(chatRequest({ message: "hi", id: "chat-1" }))).text();
 
     const frames = dataFrames(body);
     expect(chunksOfType(frames, "error")).toHaveLength(1);
@@ -342,9 +342,9 @@ describe("POST /webchat/chat", () => {
 
   it("ends a turn that streamed its own error with that error chunk only, then the terminal frame", async () => {
     const stub = stubRunner({ messages: () => [streamedFailure] });
-    const handle = createWebchatRoutes({ token: TOKEN, runTurn: stub.runTurn, assetsDir: ASSETS });
+    const handle = createWebchatRoutes({ token: TOKEN, turnFor: () => stub.runTurn, assetsDir: ASSETS });
 
-    const body = await (await handle(chatRequest({ message: "hi" }))).text();
+    const body = await (await handle(chatRequest({ message: "hi", id: "chat-1" }))).text();
 
     const frames = dataFrames(body);
     expect(chunksOfType(frames, "error")).toHaveLength(1);
@@ -362,9 +362,9 @@ describe("POST /webchat/chat", () => {
         firstMessageAt = Date.now();
       },
     });
-    const handle = createWebchatRoutes({ token: TOKEN, runTurn: stub.runTurn, assetsDir: ASSETS });
+    const handle = createWebchatRoutes({ token: TOKEN, turnFor: () => stub.runTurn, assetsDir: ASSETS });
 
-    const response = await handle(chatRequest({ message: "hi" }));
+    const response = await handle(chatRequest({ message: "hi", id: "chat-1" }));
     const reader = response.body!.getReader();
     await readUntilText(reader);
     const firstByteAt = Date.now();
@@ -382,7 +382,7 @@ describe("cancelling a WebChat turn", () => {
     const outcomes: Promise<unknown>[] = [];
     const handle = createWebchatRoutes({
       token: TOKEN,
-      runTurn: (message, emit, signal) => {
+      turnFor: () => (message, emit, signal) => {
         const outcome = stub.runTurn(message, emit, signal);
         outcomes.push(outcome);
         return outcome;
@@ -390,7 +390,7 @@ describe("cancelling a WebChat turn", () => {
       assetsDir: ASSETS,
     });
 
-    const frames = dataFrames(await (await handle(chatRequest({ message: "hi" }))).text());
+    const frames = dataFrames(await (await handle(chatRequest({ message: "hi", id: "chat-1" }))).text());
 
     expect(frames.at(-1)).toBe("[DONE]");
     expect(await outcomes[0]).toEqual({ ok: true });
@@ -399,8 +399,8 @@ describe("cancelling a WebChat turn", () => {
 
   it("cancelling the response body on a silent turn cancels the run within 1000 ms (EC-2)", async () => {
     const stub = stubRunner({ messages: () => [text("first"), text("never sent")], afterFirst: "silent" });
-    const handle = createWebchatRoutes({ token: TOKEN, runTurn: stub.runTurn, assetsDir: ASSETS });
-    const response = await handle(chatRequest({ message: "hi" }));
+    const handle = createWebchatRoutes({ token: TOKEN, turnFor: () => stub.runTurn, assetsDir: ASSETS });
+    const response = await handle(chatRequest({ message: "hi", id: "chat-1" }));
     const reader = response.body!.getReader();
     await readUntilText(reader);
 
@@ -411,7 +411,7 @@ describe("cancelling a WebChat turn", () => {
 
   it("return() on the source resolves at once on a silent turn (EC-2)", async () => {
     const stub = stubRunner({ messages: () => [text("first"), text("never sent")], afterFirst: "silent" });
-    const source = createWebchatRun(stub.runTurn, new AbortController().signal)("hi", "session-1");
+    const source = createWebchatRun(() => stub.runTurn, new AbortController().signal)("hi", "session-1");
     const iterator = source[Symbol.asyncIterator]();
     await iterator.next();
     const pending = iterator.next();
@@ -432,12 +432,12 @@ describe("cancelling a WebChat turn", () => {
     const slowStub = stubRunner({ messages: () => [text("slow reply"), text("never sent")], afterFirst: "silent" });
     const handle = createWebchatRoutes({
       token: TOKEN,
-      runTurn: (message, emit, signal) =>
+      turnFor: () => (message, emit, signal) =>
         message === "slow" ? slowStub.runTurn(message, emit, signal) : stub.runTurn(message, emit, signal),
       assetsDir: ASSETS,
     });
 
-    const [slow, fast] = await Promise.all([handle(chatRequest({ message: "slow" })), handle(chatRequest({ message: "fast" }))]);
+    const [slow, fast] = await Promise.all([handle(chatRequest({ message: "slow", id: "chat-1" })), handle(chatRequest({ message: "fast", id: "chat-2" }))]);
     const slowReader = slow.body!.getReader();
     const slowSeen = await readUntilText(slowReader);
     await slowReader.cancel();
@@ -466,10 +466,10 @@ describe("the chat route's stream and the generator's compiledOptions", () => {
     const routes = generateAgentRoutes({
       walkResult: { route: WEBCHAT_ROUTE },
       compiledOptions,
-      createRun: createWebchatRun(runTurn, new AbortController().signal),
+      createRun: createWebchatRun(() => runTurn, new AbortController().signal),
     });
     const post = routes.find((route) => route.method === "POST" && route.path === WEBCHAT_CHAT_PATH);
-    const body = await (await post!.handler(chatRequest({ message: "hi" }))).text();
+    const body = await (await post!.handler(chatRequest({ message: "hi", id: "chat-1" }))).text();
     // A text part's id is a fresh UUID and the duration a clock reading: neither depends on the options.
     return dataFrames(body).map((frame) =>
       JSON.parse(JSON.stringify(frame, (key, value: unknown) => (key === "id" || key === "durationMs" ? "_" : value))),

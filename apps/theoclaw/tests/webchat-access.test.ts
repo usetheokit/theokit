@@ -9,7 +9,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RunningTheoClaw } from '../src/composition.js'
 import { startTheoClaw } from '../src/composition.js'
 import type { TheoClawAgentOptions } from '../src/agent/create-agent.js'
-import { agentOptionsFor } from '../src/control-plane/agent-factory.js'
 import { WEBCHAT_ASSETS_DIR } from '../src/webchat/page.js'
 import { capturingStream, fakeBuilders, TELEGRAM_AND_LINE } from './composition-fixtures.js'
 import { assistant, FakeAgent, finished } from './fakes.js'
@@ -53,7 +52,7 @@ afterEach(async () => {
  * agents of an `importFreeAgentFactory` (B-375, FR-009).
  */
 async function start(options: { readonly token?: string; readonly assetsDir?: string; readonly webchat?: boolean } = {}) {
-  const calls = { built: 0, controlBuilt: 0, chatOptions: [] as TheoClawAgentOptions[], importFree: 0 }
+  const calls = { built: 0, controlBuilt: 0, chatOptions: [] as TheoClawAgentOptions[], importFree: 0, byId: new Map<string, FakeAgent>() }
   const capture = capturingStream()
   const { builders } = fakeBuilders()
   const env = { ...TELEGRAM_AND_LINE, ...(options.token === undefined ? {} : { THEOCLAW_WEBCHAT_TOKEN: options.token }) }
@@ -63,10 +62,15 @@ async function start(options: { readonly token?: string; readonly assetsDir?: st
       calls.controlBuilt += 1
       return new FakeAgent({ frames: [assistant('a /control agent answered')] })
     },
-    createChatAgent: async (agentOptions) => {
+    // A WebChat turn runs on its chat's session agent, opened as a channel chat's is.
+    getOrCreate: async (id, agentOptions) => {
+      const open = calls.byId.get(id)
+      if (open !== undefined) return Object.assign(open, { dispose: async () => undefined }) as never
       calls.built += 1
-      calls.chatOptions.push(agentOptions)
-      return new FakeAgent({ frames: [assistant('hello from the agent'), finished()] })
+      calls.chatOptions.push(agentOptions as TheoClawAgentOptions)
+      const agent = new FakeAgent({ frames: [assistant('hello from the agent'), finished()] })
+      calls.byId.set(id, agent)
+      return Object.assign(agent, { dispose: async () => undefined }) as never
     },
     ...(options.webchat === true
       ? {
@@ -87,11 +91,11 @@ async function start(options: { readonly token?: string; readonly assetsDir?: st
   return { app, base, calls, capture }
 }
 
-function post(base: string, path: string, authorization?: string): Promise<Response> {
+function post(base: string, path: string, authorization?: string, body: unknown = { message: 'hi', id: 'chat-1' }): Promise<Response> {
   return fetch(`${base}${path}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', ...(authorization === undefined ? {} : { authorization }) },
-    body: JSON.stringify({ message: 'hi' }),
+    body: JSON.stringify(body),
   })
 }
 
@@ -199,7 +203,6 @@ describe('the /webchat routes on the started listener', () => {
     const served = await post(base, '/webchat/chat', `Bearer ${TOKEN}`)
     expect(servedText(await served.text())).toContain('hello from the agent')
 
-    expect(calls.chatOptions).toEqual([agentOptionsFor(TELEGRAM_AND_LINE)])
     expect(calls.chatOptions.map((built) => [built.tools, built.plugins, built.mcpServers])).toEqual([
       [undefined, undefined, undefined],
     ])
@@ -220,8 +223,43 @@ describe('the /webchat routes on the started listener', () => {
     const served = await post(base, '/webchat/chat', `Bearer ${TOKEN}`)
     expect(servedText(await served.text())).toContain('hello from the agent')
 
-    expect(calls.chatOptions).toEqual([agentOptionsFor(TELEGRAM_AND_LINE)])
+    expect(calls.built).toBe(1)
     expect(calls.importFree).toBe(0)
     expect(calls.controlBuilt).toBe(0)
+  })
+
+  /** B-703: one session agent per chat id. */
+  it('answers a second message of one chat from the agent that has the first in its history', async () => {
+    const { base, calls } = await start({ token: TOKEN })
+
+    for (const message of ['first', 'second']) {
+      await (await post(base, '/webchat/chat', `Bearer ${TOKEN}`, { message, id: 'chat-1' })).text()
+    }
+
+    expect(calls.built).toBe(1)
+    expect([...calls.byId.values()].map((agent) => agent.sent)).toEqual([['first', 'second']])
+  })
+
+  it('never shares history between two chat ids', async () => {
+    const { base, calls } = await start({ token: TOKEN })
+
+    for (const [id, message] of [['chat-a', 'for a'], ['chat-b', 'for b'], ['chat-a', 'again a']] as const) {
+      await (await post(base, '/webchat/chat', `Bearer ${TOKEN}`, { message, id })).text()
+    }
+
+    expect(calls.built).toBe(2)
+    expect(calls.byId.size).toBe(2)
+    expect([...calls.byId.values()].map((agent) => agent.sent)).toEqual([['for a', 'again a'], ['for b']])
+  })
+
+  it('refuses a post with a missing or malformed chat id 400 with a typed code, building 0 agents', async () => {
+    const { base, calls } = await start({ token: TOKEN })
+
+    for (const body of [{ message: 'hi' }, { message: 'hi', id: '' }, { message: 'hi', id: 7 }, { message: 'hi', id: 'a b/../c' }, { message: 'hi', id: 'x'.repeat(200) }]) {
+      const response = await post(base, '/webchat/chat', `Bearer ${TOKEN}`, body)
+      expect(response.status).toBe(400)
+      expect(await response.json()).toMatchObject({ error: { code: 'chat_id_invalid' } })
+    }
+    expect(calls.built).toBe(0)
   })
 })

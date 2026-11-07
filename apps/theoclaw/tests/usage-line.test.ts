@@ -154,7 +154,7 @@ describe("the WebChat done event (FR-003)", () => {
     const lines: string[] = [];
     const withAgent = createContainer<TurnAgent>({ factory: () => new DisposableFake(priced(9, 4, 0.002)) }).withAgent;
     const runTurn = createTurnRunner(withAgent, [], MODEL);
-    const source = createWebchatRun(runTurn, new AbortController().signal, (line) => void lines.push(line))("hi", "s");
+    const source = createWebchatRun(() => runTurn, new AbortController().signal, (line) => void lines.push(line))("hi", "s");
 
     const events: Array<Record<string, unknown>> = [];
     for await (const event of source) events.push(event as unknown as Record<string, unknown>);
@@ -166,7 +166,7 @@ describe("the WebChat done event (FR-003)", () => {
 
   it("an unpriced WebChat turn carries no cost on its done event", async () => {
     const withAgent = createContainer<TurnAgent>({ factory: () => new DisposableFake(priced(9, 4, undefined)) }).withAgent;
-    const source = createWebchatRun(createTurnRunner(withAgent, [], MODEL), new AbortController().signal, () => undefined)("hi", "s");
+    const source = createWebchatRun(() => createTurnRunner(withAgent, [], MODEL), new AbortController().signal, () => undefined)("hi", "s");
 
     const events: Array<Record<string, unknown>> = [];
     for await (const event of source) events.push(event as unknown as Record<string, unknown>);
@@ -190,7 +190,7 @@ describe("the WebChat done held for the turn's usage", () => {
       return outcome;
     };
     const events: Array<Record<string, unknown>> = [];
-    for await (const event of createWebchatRun(runTurn, new AbortController().signal)("hi", "s")) {
+    for await (const event of createWebchatRun(() => runTurn, new AbortController().signal)("hi", "s")) {
       events.push(event as unknown as Record<string, unknown>);
     }
     return events;

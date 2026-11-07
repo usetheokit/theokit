@@ -8,6 +8,7 @@ import { bearerCheck, MIN_BEARER_TOKEN_LENGTH } from '../control-plane/bearer.js
 import { TheoClawConfigError } from '../control-plane/errors.js'
 import { MAX_MESSAGE_BYTES } from '../control-plane/limits.js'
 import type { TurnRunner } from '../control-plane/turn.js'
+import { chatIdOf, WebchatChatIdError } from './chat-id.js'
 import { createWebchatRun } from './create-run.js'
 import { renderPage, WEBCHAT_ASSETS } from './page.js'
 import { WEBCHAT_ASSETS_PREFIX, WEBCHAT_CHAT_PATH, WEBCHAT_ROUTE } from './paths.js'
@@ -15,7 +16,8 @@ import { WEBCHAT_ASSETS_PREFIX, WEBCHAT_CHAT_PATH, WEBCHAT_ROUTE } from './paths
 export interface WebchatRoutesOptions {
   /** The WebChat token every chat post must carry; at least 32 characters. */
   readonly token: string
-  readonly runTurn: TurnRunner
+  /** The turn runner of one chat: its turns share the chat's session agent, and no other chat's. */
+  readonly turnFor: (chatId: string) => TurnRunner
   /** Where the built page assets are (`build:web` writes them). */
   readonly assetsDir: string | URL
   /** Where a finished turn's usage line goes (B-400 FR-004). Default: nowhere. */
@@ -151,7 +153,7 @@ async function boundedBody(request: Request): Promise<Uint8Array<ArrayBuffer> | 
  * own turn. A client that leaves (the listener aborts `request.signal`) or a cancelled body stops
  * the turn.
  */
-async function chat(request: Request, runTurn: TurnRunner, write?: (line: string) => void): Promise<Response> {
+async function chat(request: Request, turnFor: (chatId: string) => TurnRunner, write?: (line: string) => void): Promise<Response> {
   const turn = new AbortController()
   const stopTurn = (): void => turn.abort()
   if (request.signal.aborted) stopTurn()
@@ -159,7 +161,7 @@ async function chat(request: Request, runTurn: TurnRunner, write?: (line: string
   const routes = generateAgentRoutes({
     walkResult: { route: WEBCHAT_ROUTE },
     compiledOptions: COMPILED_OPTIONS,
-    createRun: createWebchatRun(runTurn, turn.signal, write),
+    createRun: createWebchatRun(turnFor, turn.signal, write),
   })
   const post = routes.find((route) => route.method === 'POST' && route.path === WEBCHAT_CHAT_PATH)
   if (post === undefined) throw new Error(`generateAgentRoutes returned no POST ${WEBCHAT_CHAT_PATH}`)
@@ -193,12 +195,38 @@ export function createWebchatRoutes(options: WebchatRoutesOptions): (request: Re
     }
     if (pathname !== WEBCHAT_CHAT_PATH || request.method !== 'POST') return notFound()
     if (!accepts(request.headers.get('authorization') ?? undefined)) return unauthorized()
-    return boundedChat(request, options.runTurn, options.write)
+    return boundedChat(request, options.turnFor, options.write)
+  }
+}
+
+/**
+ * A 400 when the post has a message but no valid chat id, before any agent exists; `undefined` for
+ * a post to go on. A body with no message is left to the generator's own 400.
+ */
+function chatIdRefusal(body: Uint8Array): Response | undefined {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(new TextDecoder().decode(body))
+  } catch {
+    return undefined
+  }
+  if (typeof parsed !== 'object' || parsed === null) return undefined
+  const fields = parsed as Record<string, unknown>
+  if (typeof fields.message !== 'string' || fields.message.length === 0) return undefined
+  try {
+    chatIdOf(fields)
+    return undefined
+  } catch (error) {
+    if (!(error instanceof WebchatChatIdError)) throw error
+    return new Response(JSON.stringify({ error: { code: error.code, message: error.message } }), {
+      status: 400,
+      headers: { 'content-type': 'application/json', ...NO_STORE },
+    })
   }
 }
 
 /** An authorized chat post: its body read within the bound, then handed to `chat`. */
-async function boundedChat(request: Request, runTurn: TurnRunner, write?: (line: string) => void): Promise<Response> {
+async function boundedChat(request: Request, turnFor: (chatId: string) => TurnRunner, write?: (line: string) => void): Promise<Response> {
   const body = await boundedBody(request).catch((error: unknown) => {
     // A client that leaves mid-upload errors the body stream: answer, since the listener would
     // otherwise log "request failed" and write a 500 to a socket that is already gone.
@@ -207,5 +235,7 @@ async function boundedChat(request: Request, runTurn: TurnRunner, write?: (line:
   })
   if (body === null) return clientLeft()
   if (body === undefined) return tooLarge()
-  return chat(new Request(request.url, { method: 'POST', headers: request.headers, body, signal: request.signal }), runTurn, write)
+  const refused = chatIdRefusal(body)
+  if (refused !== undefined) return refused
+  return chat(new Request(request.url, { method: 'POST', headers: request.headers, body, signal: request.signal }), turnFor, write)
 }

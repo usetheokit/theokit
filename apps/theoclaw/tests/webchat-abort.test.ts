@@ -25,7 +25,7 @@ afterEach(async () => {
 function silentAgentFactory() {
   const calls = { cancels: 0, disposed: 0 }
   const factory = (): TurnAgent => {
-    // Disposable, as the SDK agent is: the request boundary disposes it when the turn ends.
+    // Disposable, as the SDK agent is; a session agent is disposed only at stop.
     const agent = {
       async send(): Promise<TurnRun> {
         return {
@@ -58,7 +58,8 @@ describe('a WebChat client that disconnects mid-turn', () => {
       agentFactory: () => {
         throw new Error('a WebChat turn built a /control agent')
       },
-      createChatAgent: async () => factory(),
+      // The chat's session agent: it outlives the turn, so only `disposeAll` at stop disposes it.
+      getOrCreate: async () => Object.assign(factory(), { dispose: async () => undefined }) as never,
       builders,
       signals: new EventEmitter(),
       exit: vi.fn(),
@@ -71,7 +72,7 @@ describe('a WebChat client that disconnects mid-turn', () => {
     const response = await fetch(`http://127.0.0.1:${app.address().port}/webchat/chat`, {
       method: 'POST',
       headers: { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' },
-      body: JSON.stringify({ message: 'hi' }),
+      body: JSON.stringify({ message: 'hi', id: 'chat-1' }),
       signal: client.signal,
     })
     const reader = response.body!.getReader()
@@ -85,10 +86,12 @@ describe('a WebChat client that disconnects mid-turn', () => {
     client.abort()
 
     await waitFor(
-      () => calls.cancels === 1 && calls.disposed === 1,
+      () => calls.cancels === 1,
       1000,
-      'the run cancelled and its agent disposed',
+      'the run cancelled',
     )
     expect(calls.cancels).toBe(1)
+    // The cancelled turn left its chat's agent open for the chat's next message.
+    expect(calls.disposed).toBe(0)
   })
 })

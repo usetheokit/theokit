@@ -41,7 +41,7 @@ describe.runIf(process.env.THEOCLAW_BUNDLE === "1")("the built bundle", () => {
     const handle = createWebchatRoutes({
       token,
       assetsDir: dirname(APP_JS),
-      runTurn: async (message, emit) => {
+      turnFor: () => async (message, emit) => {
         turns.push(message);
         emit({ type: "text_delta", content: "reply from the served agent" });
         return { ok: true };
