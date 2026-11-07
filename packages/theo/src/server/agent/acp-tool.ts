@@ -282,36 +282,54 @@ export function createACPTool(config: AcpToolConfig): CustomTool {
       },
       required: ['message'],
     },
-    handler: async (input: Record<string, unknown>, ctx?: ToolContext): Promise<string> => {
-      const message = typeof input.message === 'string' ? input.message : ''
-      const signal = ctx?.signal
-      // A run cancelled before the call starts gets no agent at all.
-      signal?.throwIfAborted()
-      const transport = makeTransport(config)
-      let onAbort: (() => void) | undefined
-      try {
-        const turn: Turn = {
-          client: new AcpClient(transport),
-          command: config.command,
-          timeoutMs,
-          signal,
-        }
-        // A cancelled run rejects the step in flight with the abort reason; the finally below then
-        // closes the agent, so a cancellation does not wait for the request timeout.
-        onAbort = () => turn.abort?.(signal?.reason)
-        signal?.addEventListener('abort', onAbort, { once: true })
-        turn.client.onRequest('session/request_permission', async (params) =>
-          toAcpPermissionResponse(params, await config.onPermissionRequest(params)),
-        )
-        return await runTurn(turn, resolve(config.cwd ?? process.cwd()), message)
-      } finally {
-        if (onAbort !== undefined) signal?.removeEventListener('abort', onAbort)
-        // The agent is a long-lived stdio server: left open, every call would leave one running.
-        // Awaited, so the call does not return while its agent is still running.
-        await transport.close?.()
-      }
-    },
+    handler: (input: Record<string, unknown>, ctx?: ToolContext): Promise<string> =>
+      callAcpAgent(config, makeTransport, timeoutMs, input, ctx),
   }
+}
+
+/** One tool call: open the agent, run a turn, and always close the agent. */
+async function callAcpAgent(
+  config: AcpToolConfig,
+  makeTransport: (config: AcpToolConfig) => AcpToolTransport,
+  timeoutMs: number,
+  input: Record<string, unknown>,
+  ctx?: ToolContext,
+): Promise<string> {
+  const message = typeof input.message === 'string' ? input.message : ''
+  // A run cancelled before the call starts gets no agent at all.
+  ctx?.signal?.throwIfAborted()
+  const transport = makeTransport(config)
+  let detach: (() => void) | undefined
+  try {
+    const turn: Turn = {
+      client: new AcpClient(transport),
+      command: config.command,
+      timeoutMs,
+      signal: ctx?.signal,
+    }
+    detach = abortTurnOnSignal(turn)
+    turn.client.onRequest('session/request_permission', async (params) =>
+      toAcpPermissionResponse(params, await config.onPermissionRequest(params)),
+    )
+    return await runTurn(turn, resolve(config.cwd ?? process.cwd()), message)
+  } finally {
+    detach?.()
+    // The agent is a long-lived stdio server: left open, every call would leave one running.
+    // Awaited, so the call does not return while its agent is still running.
+    await transport.close?.()
+  }
+}
+
+/**
+ * A cancelled run rejects the step in flight with the abort reason; the caller's `finally` then
+ * closes the agent, so a cancellation does not wait for the request timeout. Returns the detach.
+ */
+function abortTurnOnSignal(turn: Turn): (() => void) | undefined {
+  const { signal } = turn
+  if (signal === undefined) return undefined
+  const onAbort = () => turn.abort?.(signal.reason)
+  signal.addEventListener('abort', onAbort, { once: true })
+  return () => signal.removeEventListener('abort', onAbort)
 }
 
 // M56: the `encodeAcpMessage` re-export had no consumer — callers building custom transports

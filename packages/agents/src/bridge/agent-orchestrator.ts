@@ -231,6 +231,47 @@ export interface SubAgentSpec {
   readonly maxIterations?: number
 }
 
+/** The tighter of the run's own ceiling and the parent's remaining budget (`Infinity` ⇒ unset). */
+function resolveDelegateBudget(opts: DelegateOptions, agentName: string): number {
+  return Math.min(
+    resolveRunBudget(opts.budget, agentName) ?? Infinity,
+    resolveRunBudget(opts.parentBudgetRemaining, agentName, 'parentBudgetRemaining') ?? Infinity,
+  )
+}
+
+/** An injected factory (tests / custom transport) wins; absent ⇒ the SDK adapter. */
+function resolveStreamFactory(
+  compiled: CompiledAgentOptions,
+  tools: Parameters<typeof createSdkAgentStream>[1],
+  apiKey: string,
+  opts: DelegateOptions,
+): RoundStreamFactory {
+  return (
+    opts.streamFactory ??
+    createSdkAgentStream(compiled, tools, apiKey, {
+      model: opts.model ?? compiled.model,
+      cwd: opts.cwd,
+      plugins: opts.plugins,
+      providers: opts.providers,
+      agents: opts.agents,
+      budgetTracker: opts.budgetTracker,
+      sdkTools: opts.sdkTools,
+    })
+  )
+}
+
+/** The `@MainLoop` strategy (per-run `maxIterations` wins) and the reflection that goes with it. */
+function resolveLoopAndReflection(spec: SubAgentSpec, opts: DelegateOptions) {
+  const loopStrategy = resolveLoopStrategy(
+    spec.strategy ?? 'simple-chat',
+    opts.maxIterations ?? spec.maxIterations,
+  )
+  const reflection =
+    opts.reflection ??
+    (loopStrategy.name === 'plan-act-reflect' ? ladderReflectionStrategy : noopReflectionStrategy)
+  return { loopStrategy, reflection }
+}
+
 export async function delegate(
   spec: SubAgentSpec,
   message: string,
@@ -240,10 +281,7 @@ export async function delegate(
   // Both ceilings are checked on the terms `AgentRunner` applies (B-409, review #67), before any
   // hook or round: `Math.min` with `NaN` is `NaN`, which every later budget check reads as unset.
   // A spent parent (`parentBudgetRemaining <= 0`) ends as budget exceeded (docs/adr/0023).
-  const budget = Math.min(
-    resolveRunBudget(opts.budget, spec.name) ?? Infinity,
-    resolveRunBudget(opts.parentBudgetRemaining, spec.name, 'parentBudgetRemaining') ?? Infinity,
-  )
+  const budget = resolveDelegateBudget(opts, spec.name)
 
   // M12 — onDelegationStart: let the supervisor rewrite the input before the sub-agent runs.
   const rewritten = opts.onDelegationStart
@@ -282,29 +320,12 @@ export async function delegate(
   // V4-T: forward the per-run config (parity with AgentRunner.stream); model opt wins over the
   // decorator; absent fields ⇒ no key (byte-identical to the pre-V4-T `{ model }`-only override).
   // M12 — an injected factory (tests / custom transport) wins; absent ⇒ the SDK adapter.
-  const streamFactory =
-    opts.streamFactory ??
-    createSdkAgentStream(compiledForMember, allTools, apiKey, {
-      model: opts.model ?? compiled.model,
-      cwd: opts.cwd,
-      plugins: opts.plugins,
-      providers: opts.providers,
-      agents: opts.agents,
-      budgetTracker: opts.budgetTracker,
-      sdkTools: opts.sdkTools,
-    })
+  const streamFactory = resolveStreamFactory(compiledForMember, allTools, apiKey, opts)
   const sessionId = opts.sessionId ?? `sub-${crypto.randomUUID()}`
 
   // 4. Resolve the @MainLoop strategy + reflection, then run the shared reflective loop.
   // V4-T: per-run maxIterations override (parity with AgentRunner.stream); absent ⇒ decorator ceiling.
-  const loopStrategy = resolveLoopStrategy(
-    spec.strategy ?? 'simple-chat',
-    opts.maxIterations ?? spec.maxIterations,
-  )
-  // V4-T: a custom reflection wins; absent ⇒ the strategy-derived default (ladder/noop).
-  const reflection =
-    opts.reflection ??
-    (loopStrategy.name === 'plan-act-reflect' ? ladderReflectionStrategy : noopReflectionStrategy)
+  const { loopStrategy, reflection } = resolveLoopAndReflection(spec, opts)
   const result = await runReflectiveLoop(streamFactory, effectiveMessage, sessionId, {
     loop: loopStrategy,
     reflection,

@@ -421,6 +421,53 @@ function ceilingRoundFactory(
   return (m, s) => factory(m, s, { disableTools: true })
 }
 
+function emptyResult(): DelegationResult {
+  return {
+    response: '',
+    toolCalls: [],
+    cost: 0,
+    tokens: 0,
+    tokensInput: 0,
+    tokensOutput: 0,
+    reasoningTokens: 0,
+    cacheReadTokens: 0,
+    cacheWriteTokens: 0,
+    rounds: 0,
+  }
+}
+
+/** Fold one round into the accumulator; throw on a round error or a crossed cumulative budget. */
+function foldRound(acc: DelegationResult, r: RoundResult, agentName: string, budget: number): void {
+  acc.response += r.responseText
+  acc.toolCalls.push(...r.toolCalls)
+  accumulateUsage(acc, r)
+  if (r.finishReason === 'error') throw new DelegationError(agentName, r.errorMessage)
+  if (Number.isFinite(budget) && acc.cost > budget) {
+    throw new DelegationBudgetExceededError(agentName, acc.cost, budget)
+  }
+}
+
+/**
+ * V4-D — consecutive no-progress rounds. `observe` returns the current stuck count.
+ * Only would-continue rounds with ≥1 tool call count (EC-1); an empty TOOL_CALLS round has an empty
+ * signature that would collide ('' === '') into a false no_progress, so it neither accumulates nor
+ * resets (theokit#53 review).
+ */
+function createProgressTracker(): { observe: (r: RoundResult) => number } {
+  let prevSig: string | undefined
+  let stuck = 0
+  return {
+    observe(r) {
+      if (r.finishReason === TOOL_CALLS && r.toolCalls.length > 0) {
+        const sig = roundSignature(r.toolCalls)
+        stuck = sig === prevSig ? stuck + 1 : 0
+        prevSig = sig
+      }
+      return stuck
+    },
+  }
+}
+
 /**
  * Drive the reflective loop to a terminal {@link DelegationResult}.
  *
@@ -443,25 +490,13 @@ export async function* runReflectiveLoopStream(
     agentName = loop.name,
     retry,
   } = config
-  const acc: DelegationResult = {
-    response: '',
-    toolCalls: [],
-    cost: 0,
-    tokens: 0,
-    tokensInput: 0,
-    tokensOutput: 0,
-    reasoningTokens: 0,
-    cacheReadTokens: 0,
-    cacheWriteTokens: 0,
-    rounds: 0,
-  }
+  const acc = emptyResult()
   // V4-K: one mutable scratch bag per run, threaded to every reflect() so a stateful
   // strategy accumulates across rounds. The framework writes NOTHING into it.
   const reflectionContext: ReflectionContext = {}
   let round = 1
   let feedback: string | undefined
-  let prevSig: string | undefined // V4-D: prior round's progress signature (no_progress detection)
-  let stuck = 0 // V4-D: consecutive no-progress rounds
+  const progress = createProgressTracker() // V4-D: no_progress detection
 
   while (!signal?.aborted) {
     const prompt = buildPrompt(round, loop.maxIterations, message, feedback)
@@ -471,14 +506,7 @@ export async function* runReflectiveLoopStream(
       agentName,
     )
 
-    acc.response += r.responseText
-    acc.toolCalls.push(...r.toolCalls)
-    accumulateUsage(acc, r)
-
-    if (r.finishReason === 'error') throw new DelegationError(agentName, r.errorMessage)
-    if (Number.isFinite(budget) && acc.cost > budget) {
-      throw new DelegationBudgetExceededError(agentName, acc.cost, budget)
-    }
+    foldRound(acc, r, agentName, budget)
 
     // V4-D no_progress: only on would-continue rounds (EC-1: stop/error/length/empty already
     // terminate with their own reason), evaluated BEFORE the ceiling (EC-4: the earlier signal wins).
@@ -487,11 +515,8 @@ export async function* runReflectiveLoopStream(
     // an empty signature; without this guard two such rounds would collide ('' === '') into a false
     // no_progress (theokit#53 review, architecture+tests LOW). An empty round made no tool progress
     // to compare — skip it (don't accumulate or reset).
-    if (r.finishReason === TOOL_CALLS && r.toolCalls.length > 0) {
-      const sig = roundSignature(r.toolCalls)
-      stuck = sig === prevSig ? stuck + 1 : 0
-      if (stuck >= NO_PROGRESS_THRESHOLD) return finalize(acc, round, 'no_progress', loop.name)
-      prevSig = sig
+    if (progress.observe(r) >= NO_PROGRESS_THRESHOLD) {
+      return finalize(acc, round, 'no_progress', loop.name)
     }
 
     const outcome: LoopOutcome = {
