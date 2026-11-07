@@ -189,7 +189,7 @@ describe('the tool options each agent receives', () => {
       'view_image',
       'web_fetch',
     ])
-    expect(options.plugins.map((plugin) => plugin.name)).toEqual(['theoclaw-path-veto'])
+    expect(options.plugins.map((plugin) => plugin.name)).toEqual(['theoclaw-path-veto', 'theoclaw-loop-detection'])
   })
 
   it('composeTheoClaw opens every chat session agent with shell withheld and no tool', async () => {
