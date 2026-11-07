@@ -141,6 +141,12 @@ function instanceName(running: RunningTheoClaw): string {
   return `${serviceName(hostname(), running.address().port)}._theoclaw._tcp.local`
 }
 
+/**
+ * B-660: on the GitHub runner this turn ended in turn_failed (run 41098236714). The frame carries
+ * only the code, and the cause (runner multicast or network, or the product) could not be
+ * determined offline; the failure message now carries the worker's stderr reason, so the next
+ * Live model run names it. Until then this test is not skipped, so a product fault is not hidden.
+ */
 /** One chat frame over `/control`: resolves with the non-empty text deltas once the `done` frame arrives. */
 async function controlTurn(started: Started): Promise<string[]> {
   const { host, port } = started.running.address()
