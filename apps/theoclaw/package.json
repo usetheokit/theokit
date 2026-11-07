@@ -114,6 +114,7 @@
     "parity": "node tools/check-parity-ledger.mjs",
     "check:versions": "node tools/check-exact-versions.mjs package.json",
     "audit": "node tools/audit-theoclaw.mjs",
+    "joinery": "node tools/measure-app-joinery.mjs",
     "browser:install": "node tools/install-browser.mjs",
     "desktop:sidecar": "node dist/desktop/sidecar.js",
     "tui": "node dist/tui/main.js"
