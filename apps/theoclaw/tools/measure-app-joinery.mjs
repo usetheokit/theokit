@@ -13,8 +13,11 @@
  * It cannot pass on an empty directory: when it resolves no source file it exits 2 and says so,
  * because zeros from a measurement that read nothing are the absence of targets, not of joinery.
  *
- * Classification is the `RULES` table below, first match wins, matched on the path relative to the
- * app root. A file that is glue is added to it, and the gate then fails until the glue is removed.
+ * Classification reads the file, not a list of names: a file is `gap` or `presenter` when its text
+ * contains a SIGNAL below, i.e. a hand-written copy of something @theokit already owns. `RULES`
+ * (path patterns, first match wins) overrides the signals for a file they misjudge.
+ * `joined` counts files that import the framework (@theokit/*), so the report also says how much
+ * of the app is built on it. Adding a signal can turn the gate red; that is its purpose.
  *
  * Exit: 0 gap and presenter are 0; 1 either is above 0; 2 nothing resolved.
  */
@@ -24,6 +27,23 @@ import { fileURLToPath } from 'node:url'
 
 /** @type {ReadonlyArray<{ pattern: RegExp, category: 'gap' | 'presenter' | 'mixed' | 'app', reason: string }>} */
 export const RULES = []
+
+/**
+ * Hand-written copies of framework surface, matched against whole file text.
+ *  - SSE framing by hand: `generateAgentRoutes` (@theokit/agents/bridge) owns the chat stream.
+ *  - A hand-built agent chat route: the same generator owns the POST routes of an agent.
+ *  - A hand-rolled DI container: @theokit/di owns providers and `createAgentProvider` scoping.
+ *  - Hand-rolled ANSI rendering or reply formatting: the presenter belongs to the framework.
+ */
+export const SIGNALS = [
+  { category: 'gap', pattern: /text\/event-stream|`data: \$\{|'data: ' \+/, reason: 'hand-written SSE framing' },
+  { category: 'gap', pattern: /\.(post|route)\(\s*['"`]\/(api\/)?chat/, reason: 'hand-built agent chat route' },
+  { category: 'gap', pattern: /\bclass\s+\w*(Container|Injector)\b|\bnew Map<[^>]*Provider/, reason: 'hand-rolled DI container' },
+  { category: 'presenter', pattern: /\\u001b\[|\\x1b\[/, reason: 'hand-written ANSI rendering' },
+  { category: 'presenter', pattern: /function\s+(render|format)(Agent)?(Reply|Message|Transcript)\w*\(/, reason: 'hand-written reply presenter' },
+]
+
+const FRAMEWORK_IMPORT = /from\s+['"]@theokit\//
 
 const APP_ROOT = fileURLToPath(new URL('..', import.meta.url))
 
@@ -64,12 +84,14 @@ function sourceFiles(dir) {
   return found
 }
 
-export function categoryOf(path, rules = RULES) {
-  return rules.find((rule) => rule.pattern.test(path))?.category ?? 'app'
+export function categoryOf(path, text = '', rules = RULES, signals = SIGNALS) {
+  const byPath = rules.find((rule) => rule.pattern.test(path))
+  if (byPath !== undefined) return byPath.category
+  return signals.find((signal) => signal.pattern.test(text))?.category ?? 'app'
 }
 
 /** The measurement: `{ resolved, rows, totals }`. Pure of process state apart from reading `root`. */
-export function measure(root = APP_ROOT, rules = RULES) {
+export function measure(root = APP_ROOT, rules = RULES, signals = SIGNALS) {
   let files = []
   try {
     files = sourceFiles(join(root, 'src'))
@@ -78,20 +100,26 @@ export function measure(root = APP_ROOT, rules = RULES) {
   }
   const rows = files.map((file) => {
     const path = relative(root, file).split(sep).join('/')
-    return { path, category: categoryOf(path, rules), lines: countCodeLines(readFileSync(file, 'utf8')) }
+    const text = readFileSync(file, 'utf8')
+    return {
+      path,
+      category: categoryOf(path, text, rules, signals),
+      lines: countCodeLines(text),
+      joined: FRAMEWORK_IMPORT.test(text),
+    }
   })
   const totals = { gap: 0, presenter: 0, mixed: 0, app: 0, total: 0 }
   for (const row of rows) {
     totals[row.category] += row.lines
     totals.total += row.lines
   }
-  return { resolved: rows.length, rows, totals }
+  return { resolved: rows.length, joined: rows.filter((row) => row.joined).length, rows, totals }
 }
 
 /** `{ code, report }` for a measurement. */
 export function verdict(result) {
   const { gap, presenter, mixed, app, total } = result.totals
-  const summary = `files: ${result.resolved}  total: ${total}  gap: ${gap}  presenter: ${presenter}  mixed: ${mixed}  app: ${app}`
+  const summary = `files: ${result.resolved}  joined: ${result.joined}  total: ${total}  gap: ${gap}  presenter: ${presenter}  mixed: ${mixed}  app: ${app}`
   if (result.resolved === 0 || total === 0) {
     return {
       code: 2,

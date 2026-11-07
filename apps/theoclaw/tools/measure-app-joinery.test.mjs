@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { countCodeLines, measure, verdict } from './measure-app-joinery.mjs'
+import { categoryOf, countCodeLines, measure, SIGNALS, verdict } from './measure-app-joinery.mjs'
 
 const CLI = fileURLToPath(new URL('./measure-app-joinery.mjs', import.meta.url))
 const scratch = []
@@ -30,6 +30,7 @@ describe('measure-app-joinery', () => {
     const result = measure()
     expect(result.resolved).toBeGreaterThan(50)
     expect(result.totals.total).toBeGreaterThan(0)
+    expect(result.joined).toBeGreaterThan(5)
     expect(result.totals.gap).toBe(0)
     expect(result.totals.presenter).toBe(0)
   })
@@ -37,7 +38,7 @@ describe('measure-app-joinery', () => {
   it('the CLI exits 0 on this app', () => {
     const run = spawnSync(process.execPath, [CLI], { encoding: 'utf8' })
     expect(run.status).toBe(0)
-    expect(run.stdout).toMatch(/gap: 0 {2}presenter: 0/)
+    expect(run.stdout).toMatch(/joined: \d+ {2}total: \d+ {2}gap: 0 {2}presenter: 0/)
   })
 
   it('exits 2 on a directory with no source files (cannot pass vacuously)', () => {
@@ -60,5 +61,36 @@ describe('measure-app-joinery', () => {
   it('does not fail on mixed or app lines', () => {
     const root = app({ 'a.ts': 'export const a = 1\n' })
     expect(verdict(measure(root, [{ pattern: /a\.ts$/, category: 'mixed', reason: 'test' }])).code).toBe(0)
+  })
+})
+
+describe('signals are not vacuous', () => {
+  const samples = {
+    gap: [
+      "res.setHeader('content-type', 'text/event-stream')",
+      'res.write(`data: ${JSON.stringify(x)}`)',
+      "app.post('/chat', handler)",
+      'class ServiceContainer {}',
+      'const providers = new Map<string, Provider>()',
+    ],
+    presenter: ["const red = '\\u001b[31m'", 'function renderReply(r) {}', 'function formatAgentMessage(m) {}'],
+  }
+  for (const [category, texts] of Object.entries(samples)) {
+    for (const text of texts) {
+      it(`${category}: ${text}`, () => {
+        expect(categoryOf('src/x.ts', text, [], SIGNALS)).toBe(category)
+      })
+    }
+  }
+
+  it('a file carrying a signal turns a measured app red', () => {
+    const root = app({ 'sse.ts': "res.setHeader('content-type', 'text/event-stream')\n", 'ok.ts': 'export const c = 3\n' })
+    const out = verdict(measure(root))
+    expect(out.code).toBe(1)
+    expect(out.report).toContain('gap 1 src/sse.ts')
+  })
+
+  it('plain code stays app', () => {
+    expect(categoryOf('src/x.ts', 'export const a = 1', [], SIGNALS)).toBe('app')
   })
 })
