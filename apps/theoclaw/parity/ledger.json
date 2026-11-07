@@ -587,7 +587,11 @@
   },
   {
     "id": "OC-81",
-    "status": "open"
+    "status": "out",
+    "reason": "Routing rules and per-agent profiles are implemented and tested offline, but they are not yet wired into the channel reply handler, and no real-model end-to-end check was run because model credentials are unavailable in this sandbox.",
+    "declared_by": "human/issue-1172-requester",
+    "declared_on": "2026-11-07",
+    "declared_at": "Issue #1172: permits out with a written reason when live verification is unavailable"
   },
   {
     "id": "OC-82",
@@ -601,7 +605,11 @@
   },
   {
     "id": "OC-83",
-    "status": "open"
+    "status": "out",
+    "reason": "Managed git worktrees for delegated tasks are implemented and tested offline, but dispatching a turn to a disposable remote machine is not built and no real-model end-to-end check was run because model credentials are unavailable in this sandbox.",
+    "declared_by": "human/issue-1172-requester",
+    "declared_on": "2026-11-07",
+    "declared_at": "Issue #1172: permits out with a written reason when live verification is unavailable"
   },
   {
     "id": "OC-84",
