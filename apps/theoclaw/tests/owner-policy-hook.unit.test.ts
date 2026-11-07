@@ -121,4 +121,13 @@ describe('createOwnerPolicyHook (no I/O)', () => {
     expect(await run(event('hi'))).toEqual({ block: true })
     expect(lines).toEqual(['theoclaw-owner-policy: telegram: Error: disk full'])
   })
+
+  it('does not admit a paired sender on an unauthenticated platform, and admits one in a group', async () => {
+    const p = fakePairing()
+    p.paired.add('email:friend')
+    p.paired.add('telegram:friend')
+    const { run } = build('pairing', p.store)
+    expect(await run(event('hi', 'friend', 'email'))).toEqual({ block: true })
+    expect(await run(event('hi', 'friend', 'telegram', 'group'))).toBeUndefined()
+  })
 })
