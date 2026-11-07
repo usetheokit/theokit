@@ -86,7 +86,7 @@ export class NodeAcpTransport implements AcpToolTransport {
       env: options.env,
       stdio: ['pipe', 'pipe', options.stderr === undefined ? 'inherit' : 'pipe'],
       detached: OWN_PROCESS_GROUP,
-    })
+    }) as ChildProcessByStdio<Writable, Readable, Readable | null>
     // A pipe cuts stdout wherever it likes; a streaming decoder carries a multibyte character split
     // across two chunks instead of turning each half into U+FFFD.
     this.proc.stdout.setEncoding('utf8')
