@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { runCli } from '../src/cli.js'
+import { teeToLogFile } from '../src/ops/log-tee.js'
 import { reloadConfiguration, watchConfiguration } from '../src/ops/hot-reload.js'
 import { cleanScratch, harness } from './support/cli-harness.js'
 import { parseEnv } from 'node:util'
@@ -111,6 +112,20 @@ describe('doctor, status and logs (OC-95, OC-96)', () => {
     expect(h.stdout()).toContain('[redacted]')
     expect(h.stdout()).not.toContain(KEY)
     expect(h.stdout()).not.toContain('one')
+  })
+
+  it('logs reads THEOCLAW_LOG_FILE as the container does, written by the tee, masked', async () => {
+    const { h } = configured(`THEOCLAW_MODEL="m"\nTHEOKIT_API_KEY="${KEY}"\n`)
+    const log = join(h.io.homeDir, 'state', 'theoclaw.log')
+    const stream = { write: (): boolean => true }
+    teeToLogFile({ THEOCLAW_LOG_FILE: log }, [stream])
+    stream.write(`started\nkey ${KEY} leaked\n` as never)
+    Object.assign(h.io.env, { THEOCLAW_LOG_FILE: log })
+    h.io.runner = () => Promise.reject(new Error('journalctl must not run'))
+    expect(await runCli(['logs', '--lines', '5'], h.io)).toBe(0)
+    expect(h.stdout()).toContain('started')
+    expect(h.stdout()).toContain('[redacted]')
+    expect(h.stdout()).not.toContain(KEY)
   })
 
   it('logs falls back to the journal and reports its failure', async () => {
