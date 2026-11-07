@@ -33,9 +33,10 @@ export function createBunAdapter(): RuntimeAdapter {
       let server: ReturnType<typeof BunRuntime.serve> | null = null
 
       const handle: ServerHandle = {
-        listen(port: number, callback?: () => void) {
+        listen(port: number, callback?: () => void, host = '127.0.0.1') {
           server = BunRuntime.serve({
             port,
+            hostname: host,
             fetch: handler,
           })
           if (callback) callback()
@@ -61,6 +62,7 @@ declare global {
     | {
         serve(options: {
           port: number
+          hostname?: string
           fetch: (request: Request) => Response | Promise<Response>
         }): { port: number; stop(): void }
       }
