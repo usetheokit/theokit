@@ -184,4 +184,16 @@ describe('an ACP agent named by a bare command (B-706)', () => {
     await callAgent(space, '.:bin')
     expect(existsSync(marker)).toBe(true)
   })
+
+  it('negative: refuses a relative command with a slash instead of resolving it in the tool root', async () => {
+    const { scrubbedAgentTransport } = await import('../src/tools/acp-transport.js')
+    const space = workspace(AGENT)
+    mkdirSync(join(space.toolRoot, 'bin'), { recursive: true })
+    const marker = join(space.cwd, 'planted-ran')
+    plant(join(space.toolRoot, 'bin', AGENT), marker)
+    const closed: unknown[] = []
+    scrubbedAgentTransport({ name: 'asker', description: 'asks', command: `bin/${AGENT}`, args: [], cwd: space.toolRoot, timeoutMs: 5_000 } as never).onClose((error) => closed.push(error))
+    expect(closed[0]).toBeInstanceOf(AcpTransportClosedError)
+    expect(existsSync(marker)).toBe(false)
+  })
 })
