@@ -311,12 +311,12 @@ function lineWriter(stream: MaskableStream | undefined): (line: string) => void 
 const SHELL_READ_LINE = 'tools: host tools are on; the shell can read every file the process user can read'
 
 /** The tool settings, every refusal included, before anything opens (FR-008). */
-async function startToolSettings(options: StartOptions, policy: AuthorizationPolicy): Promise<ToolSettings> {
+function startToolSettings(options: StartOptions, policy: AuthorizationPolicy): ToolSettings {
   // A profiled instance's agents work in its workspace (B-514), so their tool root is made there.
   const cwd = options.cwd ?? options.instance?.workspace ?? process.cwd()
   const tools = resolveToolSettings(options.env, cwd, options.toolDeps)
   checkHostToolsPosture(tools, hostToolsProtectedPaths(options.env, policy.stateDir, tools, options.importedPaths ?? []), options.toolDeps)
-  return withInteractiveShell(tools, options.toolDeps)
+  return tools
 }
 
 /** The exec gate's options: needs an asker and a state directory to keep saved approvals in. */
@@ -403,7 +403,7 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
   const discovery = parseDiscoveryMode(options.env)
   // Read before the mask and the shutdown are installed, so a missing owner leaves nothing behind.
   const policy = parseAuthorizationPolicy(options.env)
-  const tools = await startToolSettings(options, policy)
+  let tools = startToolSettings(options, policy)
   const platforms = resolvePlatforms(options.env).configured.map((entry) => entry.platform)
   const events = readEventSettings(options.env, platforms)
   const sessionSettings = readSessionSettings(options.env, statSync)
@@ -459,6 +459,8 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
     },
     write: stderr,
   })
+  // After the shutdown hook is in place, so a signal during the probe still closes cleanly. Nothing reads `tools` before this.
+  tools = await withInteractiveShell(tools, options.toolDeps)
   writeToolLines(tools, stderr)
   for (const line of a2aLines(a2a)) stderr(line)
   // The composition gets the raw factory: chat agents hold no tool, only `/control` agents do.
