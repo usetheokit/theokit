@@ -180,6 +180,16 @@ describe('scripts/live-model-build.mjs', () => {
     expect(readFileSync(calls, 'utf8')).toContain('--filter theoclaw run build:web')
   })
 
+  it('a stale app.js from an earlier build does not satisfy the check when build:web writes nothing', () => {
+    const { script, env } = scratchCopy(
+      'exit 0',
+      'mkdir -p apps/theoclaw/dist/web/assets && touch apps/theoclaw/dist/main.js apps/theoclaw/dist/web/assets/app.js',
+    )
+    const result = runBuildScript(['theoclaw'], { script, env })
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain('apps/theoclaw/dist/web/assets/app.js is missing')
+  })
+
   it('a failed build:web fails naming the WebChat build', () => {
     const { script, env } = scratchCopy(
       'exit 0',

@@ -13,7 +13,7 @@
  * WebChat bundle the build did not produce; exit 2 names an argument it does not take.
  */
 import { spawnSync } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -93,6 +93,8 @@ function build(target) {
   pnpm(['--filter', SELECTORS[target], 'build'], SELECTORS[target])
   if (target !== 'theoclaw') return
   requireOutput(THEOCLAW_ENTRY, SELECTORS.theoclaw)
+  // A bundle left by an earlier build must not stand in for the one build:web fails to write.
+  rmSync(join(ROOT, WEBCHAT_BUNDLE), { force: true })
   pnpm(['--filter', 'theoclaw', 'run', 'build:web'], WEBCHAT_BUILD)
   requireOutput(WEBCHAT_BUNDLE, WEBCHAT_BUILD)
 }
