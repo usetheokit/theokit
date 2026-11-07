@@ -578,11 +578,13 @@
   },
   {
     "id": "OC-79",
-    "status": "open"
+    "status": "open",
+    "note": "not shipped: tool profiles (minimal, coding, messaging, full) and elevated mode are not built; no real-model end-to-end check was run (no credentials in the build sandbox)"
   },
   {
     "id": "OC-80",
-    "status": "open"
+    "status": "open",
+    "note": "offline repeated-identical-call detection is built (src/tools/loop-detection.ts, unit-tested); argument churn and no-progress detection are not, and no real-model end-to-end check was run (no credentials in the build sandbox), so the row stays open"
   },
   {
     "id": "OC-81",
