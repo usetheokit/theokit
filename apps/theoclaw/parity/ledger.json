@@ -655,7 +655,7 @@
       "path": "apps/theoclaw/tests/live/security.live.test.ts",
       "test": "the audit repairs a risky configuration file and TheoClaw still answers a real turn from it for OC-89"
     },
-    "note": "Deferred by S-005 B-398 option A; follow-up B-398-AUDIT. See apps/theoclaw/parity/security-plan.md. Existing implementation or checks do not close this follow-up."
+    "note": "Deferred by S-005 B-398 option A; follow-up B-398-AUDIT. See apps/theoclaw/parity/security-plan.md. Existing implementation or checks do not close this follow-up. B-710 added THEOCLAW_INCOGNITO=on (chat session transcripts and the SDK agent registry go to a scratch directory outside the workspace, removed at exit; offline test in tests/agent-factory.test.ts); stays open until a check against a real model passes."
   },
   {
     "id": "OC-90",

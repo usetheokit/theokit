@@ -1,3 +1,5 @@
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { createTheoClawAgent, theoClawAgentOptions } from '../agent/create-agent.js'
@@ -55,6 +57,23 @@ function createWithFailover(env: BindEnvironment, create: CreateAgent, options: 
   )
 }
 
+/** `THEOCLAW_INCOGNITO=on`: chat sessions persist no transcript under the workspace (OC-92). */
+export function isIncognito(env: BindEnvironment): boolean {
+  return env.THEOCLAW_INCOGNITO?.trim().toLowerCase() === 'on'
+}
+
+let scratchDir: string | undefined
+
+/** One private scratch directory per process, deleted when the process exits. */
+function incognitoScratch(): string {
+  if (scratchDir === undefined) {
+    const dir = mkdtempSync(join(tmpdir(), 'theoclaw-incognito-'))
+    process.once('exit', () => rmSync(dir, { recursive: true, force: true }))
+    scratchDir = dir
+  }
+  return scratchDir
+}
+
 /**
  * A chat session's agent: the same protected options as a `/control` turn's, so the reply path
  * keeps the key, the withheld `shell` and memory off, plus its transcripts under
@@ -64,6 +83,15 @@ function createWithFailover(env: BindEnvironment, create: CreateAgent, options: 
 export function sessionAgentOptions(env: BindEnvironment, workspace: string): SessionAgentOptions {
   const options = agentOptionsFor(env)
   const persona = readPersonaPrompt(workspace)
+  if (isIncognito(env)) {
+    // OC-92: transcripts and the SDK's agent registry go to a scratch directory outside the workspace, removed at exit.
+    const scratch = incognitoScratch()
+    return {
+      ...options,
+      systemPrompt: persona === '' ? options.systemPrompt : `${options.systemPrompt}\n\n${persona}`,
+      local: { ...options.local, cwd: scratch, sessionDir: join(scratch, '.theoclaw') },
+    }
+  }
   return {
     ...options,
     systemPrompt: persona === '' ? options.systemPrompt : `${options.systemPrompt}\n\n${persona}`,

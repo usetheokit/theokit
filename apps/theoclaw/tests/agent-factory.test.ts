@@ -366,3 +366,18 @@ describe("the hook approval gate on every agent's options", () => {
     );
   });
 });
+
+describe("incognito session agents (OC-92)", () => {
+  it("keeps transcripts out of the workspace under THEOCLAW_INCOGNITO=on", () => {
+    const workspace = mkdtempSync(join(tmpdir(), "tc-ws-"));
+    try {
+      const normal = sessionAgentOptions(MODEL_ENV, workspace);
+      expect(normal.local.sessionDir).toBe(join(workspace, ".theoclaw"));
+      const incognito = sessionAgentOptions({ ...MODEL_ENV, THEOCLAW_INCOGNITO: "on" }, workspace);
+      expect(incognito.local.sessionDir.startsWith(workspace)).toBe(false);
+      expect(incognito.local.cwd.startsWith(workspace)).toBe(false);
+    } finally {
+      rmSync(workspace, { recursive: true, force: true });
+    }
+  });
+});
