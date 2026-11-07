@@ -12,7 +12,7 @@ import { createObjectGenerator } from './workflows/object-generator.js'
 import type { AgentImport, TheoClawAgentOptions } from './agent/create-agent.js'
 import { type CreateAgent, createAgentFactory, createChannelAgentFactory } from './control-plane/agent-factory.js'
 import { loadConfiguration } from './config-file.js'
-import { spawnReplacement } from './ops/self-restart.js'
+import { RESTART_EXIT_CODE } from './ops/restart-exit.js'
 import { watchConfiguration } from './ops/hot-reload.js'
 import { parseEntryArguments } from './entry-arguments.js'
 import { describeError } from './control-plane/errors.js'
@@ -47,6 +47,7 @@ function fail(error: unknown): never {
 
 let instance: TheoClawInstance
 let imported: AgentImport | undefined
+let restartRequested = false
 let telemetry: RegisteredTelemetry
 try {
   // The arguments first: a scheduled task passes its configuration as arguments, not as environment.
@@ -56,18 +57,15 @@ try {
     process.exit(2)
   }
   // The configuration file next (B-374): it fills only what the environment leaves unset.
-  const callerEnv = { ...process.env }
   const configFile = loadConfiguration(process.env, homedir())
   // Hot reload (B-399): a change to the model settings applies to the next agent, without a restart.
-  // A changed setting read once at the start restarts the process itself (B-716): it stops as on SIGTERM, then
-  // a replacement starts with the caller's environment only, so it reads the changed file.
+  // A changed setting read once at the start restarts the process (B-716): it stops as on SIGTERM and exits
+  // with the restart code, so the supervisor starts it again and it reads the changed file.
   if (configFile !== undefined) {
     watchConfiguration(configFile, process.env, {
       write: (line) => process.stderr.write(`${line}\n`),
       onRestartRequired: () => {
-        process.once('exit', () =>
-          spawnReplacement({ execPath: process.execPath, args: [...process.execArgv, ...process.argv.slice(1)], env: callerEnv }, process.pid),
-        )
+        restartRequested = true
         process.kill(process.pid, 'SIGTERM')
       },
     })
@@ -121,6 +119,6 @@ startTheoClaw({
   // What is pending is exported first, for at most the bound, so a down collector cannot hold the exit.
   exit: (code) =>
     void Promise.race([telemetry.shutdown(), new Promise((resolve) => setTimeout(resolve, TELEMETRY_SHUTDOWN_MS).unref())]).finally(() =>
-      process.exit(code),
+      process.exit(restartRequested && code === 0 ? RESTART_EXIT_CODE : code),
     ),
 }).catch(fail)

@@ -16,6 +16,7 @@ import { parseOnboard, parseUpdate, UsageError } from './cli-args.js'
 import { type OnboardInput, onboard } from './onboard.js'
 import { doctor } from './ops/doctor.js'
 import { logsCommand } from './ops/logs.js'
+import { RESTART_EXIT_CODE } from './ops/restart-exit.js'
 import { statusCommand } from './ops/status.js'
 import { securityCommand } from './security-audit.js'
 import { update } from './update.js'
@@ -74,7 +75,16 @@ const USAGE = `usage: theoclaw <command>
  * The entry as a child in its own process group, so a terminal's SIGINT reaches only this process,
  * which forwards it once; the exit code is the child's, or 1 with the signal named.
  */
-function startChild(args: readonly string[], io: CliIo): Promise<number> {
+async function startChild(args: readonly string[], io: CliIo): Promise<number> {
+  // The entry exits with the restart code when a reloaded setting needs a restart (B-716): run it again.
+  for (;;) {
+    const code = await runChild(args, io)
+    if (code !== RESTART_EXIT_CODE) return code
+    io.stderr.write('theoclaw: restarting to apply the changed configuration\n')
+  }
+}
+
+function runChild(args: readonly string[], io: CliIo): Promise<number> {
   const child = spawn(process.execPath, [io.entry, ...args], { stdio: 'inherit', detached: true, env: io.env })
   const forward = (signal: NodeJS.Signals): void => {
     child.kill(signal)

@@ -78,6 +78,34 @@ describe('the theoclaw command line', () => {
     expect(readFileSync(log, 'utf8')).toMatch(/^SIGTERM$/m)
   })
 
+  it('start runs the entry again when it exits with the restart code (B-716)', { timeout: 20_000 }, async () => {
+    const dir = scratchDir()
+    const entry = join(dir, 'restarting.mjs')
+    const log = join(dir, 'restarting.log')
+    writeFileSync(
+      entry,
+      [
+        "import { appendFileSync, existsSync } from 'node:fs'",
+        'const [log] = process.argv.slice(2)',
+        "const again = existsSync(log + '.once')",
+        "appendFileSync(log + '.once', '')",
+        'appendFileSync(log, `run again=${again}\\n`)',
+        'if (!again) process.exit(75)',
+        "process.on('SIGTERM', () => process.exit(0))",
+        'setInterval(() => {}, 1000)',
+        '',
+      ].join('\n'),
+    )
+    const h = harness(entry)
+    const done = runCli(['start', log], h.io)
+    await waitForLog(log, /^run again=true$/m)
+    h.signals.emit('SIGTERM', 'SIGTERM')
+
+    expect(await done).toBe(0)
+    expect(readFileSync(log, 'utf8')).toMatch(/^run again=false\n/)
+    expect(h.stderr()).toContain('restarting')
+  })
+
   // Audit finding (post-GREEN): the entry runs in its own session, so a closed terminal reaches only
   // this command; it must pass the hangup on rather than orphan an entry that holds the port.
   it('a terminal hangup is forwarded to the entry', { timeout: 20_000 }, async () => {
