@@ -354,10 +354,14 @@ export class TheoApp {
 
   async listen(port: number, host = '127.0.0.1'): Promise<void> {
     return new Promise((resolve) => {
-      this.serverHandle.listen(port, () => {
-        console.log(`TheoKit app listening on http://${host}:${port}`)
-        resolve()
-      }, host)
+      this.serverHandle.listen(
+        port,
+        () => {
+          console.log(`TheoKit app listening on http://${host}:${port}`)
+          resolve()
+        },
+        host,
+      )
     })
   }
 
