@@ -155,8 +155,11 @@ describe('agent-route session id field', () => {
     const [route] = generateAgentRoutes({
       walkResult: { route: '/a' },
       compiledOptions: applyCapabilities([new ModelCapability('claude-sonnet-4-5-20250929')]),
-      createRun: async function* (_m: string, sid: string): AsyncIterable<StreamEvent> {
+      createRun: (_m: string, sid: string): AsyncIterable<StreamEvent> => {
         seen = sid
+        return (async function* () {
+          yield* [] as StreamEvent[]
+        })()
       },
     })
     const res = await route.handler(
