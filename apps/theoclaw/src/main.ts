@@ -7,6 +7,7 @@ import { Agent } from '@theokit/sdk'
 import type { SDKAgent } from '@theokit/sdk'
 
 import { startTheoClaw } from './composition.js'
+import { resolveSecretRefs } from './secret-refs.js'
 import { createObjectGenerator } from './workflows/object-generator.js'
 import type { AgentImport, TheoClawAgentOptions } from './agent/create-agent.js'
 import { type CreateAgent, createAgentFactory, createChannelAgentFactory } from './control-plane/agent-factory.js'
@@ -76,15 +77,20 @@ const createSdkAgent = (options: TheoClawAgentOptions): Promise<SDKAgent> =>
   Agent.create({ ...options, local: { ...options.local, ...(workspace === undefined ? {} : { cwd: workspace }) } })
 const create: CreateAgent = createSdkAgent
 
+// Secret references become their values in the process environment, so the agent factories that read it
+// see them too; `startTheoClaw` masks the same values (B-711).
+const secretRefs = await resolveSecretRefs(process.env).catch((error: unknown) => fail(error))
+Object.assign(process.env, secretRefs.env)
+
 startTheoClaw({
   env: process.env,
+  importedSecrets: [...importedMcpSecrets(imported), ...secretRefs.values],
   telemetryLog: (line) => telemetry.log(line),
   instance,
   // The import reaches the `/control` agents only; WebChat's, the workers' and the chat path's factories take none (FR-009).
   agentFactory: createAgentFactory(process.env, create, imported),
   importFreeAgentFactory: createAgentFactory(process.env, create),
   importedPaths: importedMcpPaths(imported),
-  importedSecrets: importedMcpSecrets(imported),
   ...(imported === undefined ? {} : { importedLine: importedSetupLine(imported.setup, imported.mcp) }),
   // WebChat's agents: created like the /control ones, from the chat path's options (no tool, B-382).
   createChatAgent: create,

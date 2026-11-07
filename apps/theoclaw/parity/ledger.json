@@ -661,7 +661,6 @@
     "id": "OC-90",
     "status": "shipped",
     "gaps": [
-      "B-711",
       "B-710"
     ],
     "check": {
@@ -669,7 +668,7 @@
       "test": "configured values never reach a reply or a log for OC-90"
     },
     "verified_on": "2026-11-02",
-    "note": "value masking: one list (channel credentials, model keys, bearer tokens, search keys, external tools' and an import's values) masks process output, chat replies, broadcast answers and threads, and /control, session and WebChat events, a value split across streamed deltas included; not covered: a value split across a tool event, session transcripts the SDK writes (B-710), and secret references, a broker, Vault and a secrets tool (B-711); measured live as 0 of 3 values in stdout, stderr, socket frames and the reply"
+    "note": "value masking: one list (channel credentials, model keys, bearer tokens, search keys, external tools' and an import's values) masks process output, chat replies, broadcast answers and threads, and /control, session and WebChat events, a value split across streamed deltas included; not covered: a value split across a tool event, session transcripts the SDK writes (B-710), and a secrets tool for the agent; secret references (env, file, 1Password broker, Vault) resolve at start and their values join the masks, checked offline by tests/secret-refs.test.ts; measured live as 0 of 3 values in stdout, stderr, socket frames and the reply"
   },
   {
     "id": "OC-91",
