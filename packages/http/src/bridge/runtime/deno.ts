@@ -25,8 +25,8 @@ export function createDenoAdapter(): RuntimeAdapter {
       let server: { port: number; shutdown(): Promise<void> } | null = null
 
       const handle: ServerHandle = {
-        listen(port: number, callback?: () => void) {
-          server = DenoRuntime.serve({ port, onListen: () => callback?.() }, handler)
+        listen(port: number, callback?: () => void, host = '127.0.0.1') {
+          server = DenoRuntime.serve({ port, hostname: host, onListen: () => callback?.() }, handler)
         },
         close(callback?: () => void) {
           // EC-1: shutdown() returns Promise — chain callback
@@ -51,7 +51,7 @@ declare global {
   var Deno:
     | {
         serve(
-          options: { port: number; onListen?: () => void },
+          options: { port: number; hostname?: string; onListen?: () => void },
           handler: (request: Request) => Response | Promise<Response>,
         ): { port: number; shutdown(): Promise<void> }
         version: { deno: string }
