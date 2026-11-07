@@ -29,5 +29,8 @@ export function channelHooks(options: ChannelHookOptions): readonly GatewayHook[
     mode: policy.groupActivation,
     write,
   })
-  return [ownerPolicy, groupActivation, ...(options.usage === undefined ? [] : [options.usage]), ...(options.acp === undefined ? [] : [options.acp])]
+  const hooks = [ownerPolicy, groupActivation]
+  if (options.usage !== undefined) hooks.push(options.usage)
+  if (options.acp !== undefined) hooks.push(options.acp)
+  return hooks
 }
