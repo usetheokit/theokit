@@ -444,7 +444,11 @@
   },
   {
     "id": "OC-61",
-    "status": "open"
+    "status": "out",
+    "reason": "show_widget and the WebChat widget renderer are built and covered by offline tests, but no real-model end-to-end check has run because model credentials are unavailable in this sandbox, so no passing live check or model name is claimed. The macOS-hosted panels of OpenClaw's canvas are native-app work and are not built. Add tests/live/widget.live.test.ts, run it with credentials, and record the model before marking shipped.",
+    "declared_by": "factory/B-384",
+    "declared_on": "2026-11-07",
+    "declared_at": "apps/theoclaw/parity/oc-61-verification.md"
   },
   {
     "id": "OC-62",

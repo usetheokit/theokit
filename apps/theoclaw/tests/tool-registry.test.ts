@@ -45,7 +45,7 @@ vi.mock('@theokit/agents/tool-scope', async (importOriginal) => {
   }
 })
 
-const READ_ONLY = ['list_dir', 'read_file', 'todolist', 'view_image', 'web_fetch']
+const READ_ONLY = ['list_dir', 'read_file', 'show_widget', 'todolist', 'view_image', 'web_fetch']
 const HOST = ['apply_patch', 'edit_file', 'shell_exec', 'write_file']
 
 describe('BUILT_TOOL_NAMES', () => {

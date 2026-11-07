@@ -3,7 +3,9 @@ import { ChatComposer } from '@theokit/ui/chat-composer'
 import { ChatThread } from '@theokit/ui/chat-thread'
 import { useState } from 'react'
 
+import { parseWidget } from '../src/canvas/widget.js'
 import { WEBCHAT_API, webchatAgentOptions } from './agent-options.js'
+import { WidgetView } from './widget-view.js'
 import { readToken, writeToken } from './token-store.js'
 
 type ThreadMessage = UseAgentReturn['thread'][number]
@@ -14,6 +16,14 @@ function textOf(message: ThreadMessage): string {
     .filter((part) => part.type === 'text' && typeof part.text === 'string')
     .map((part) => part.text as string)
     .join('')
+}
+
+/** The widgets the agent's `show_widget` calls produced in a message: tool parts whose output is a valid widget. */
+function widgetsOf(message: ThreadMessage) {
+  return message.parts.flatMap((part) => {
+    const widget = part.type.startsWith('tool') ? parseWidget((part as { output?: unknown }).output) : undefined
+    return widget === undefined ? [] : [widget]
+  })
 }
 
 /** The token form: shown until the owner gives the WebChat token. */
@@ -51,6 +61,9 @@ function Chat({ token }: { readonly token: string }) {
         {thread.map((message: ThreadMessage) => (
           <div key={message.id} data-role={message.role}>
             {textOf(message)}
+            {widgetsOf(message).map((widget, index) => (
+              <WidgetView key={index} widget={widget} />
+            ))}
           </div>
         ))}
       </ChatThread>
