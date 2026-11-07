@@ -22,7 +22,7 @@ export function plistPath(label: string, home: string): string {
   return join(home, 'Library', 'LaunchAgents', `${label}.plist`)
 }
 
-function logPath(label: string, home: string): string {
+export function logPath(label: string, home: string): string {
   return join(home, 'Library', 'Logs', 'theoclaw', `${label}.log`)
 }
 
