@@ -26,6 +26,24 @@ interface ControlledEmitter {
   respond(packet: { answers: readonly unknown[] }, callback?: (error?: unknown) => void): void
 }
 
+/** These cases need a host whose multicast loops back; a sandbox without it cannot run them. */
+async function multicastLoopsBack(): Promise<boolean> {
+  const probe = new Bonjour()
+  try {
+    const seen = new Promise<boolean>((resolve) => {
+      probe.find({ type: 'theoclaw-probe' }, () => resolve(true))
+      setTimeout(() => resolve(false), 1500)
+    })
+    probe.publish({ name: `probe-${randomUUID()}`, type: 'theoclaw-probe', port: 40009 })
+    return await seen
+  } catch {
+    return false
+  } finally {
+    await new Promise<void>((resolve) => probe.destroy(() => resolve()))
+  }
+}
+const hasMulticast = await multicastLoopsBack()
+
 let holder: Bonjour | undefined
 let publisher: ServicePublisher | undefined
 let announcement: LanAnnouncement | undefined
@@ -72,7 +90,7 @@ function emitterOf(bonjour: Bonjour): ControlledEmitter {
 const routeAndCode = (error: TheoClawDiscoveryError) => ({ route: error.route, code: error.code })
 
 /** B-613 (LCR0101): a DNS-SD name conflict withdraws the service, and the adapter must say so. */
-describe('createBonjourPublisher on a name another host already answers for', () => {
+describe.skipIf(!hasMulticast)('createBonjourPublisher on a name another host already answers for', () => {
   it('reports the withdrawal through onError', async () => {
     const name = `conflict-${randomUUID()}`
     await holdName(name)
@@ -142,7 +160,7 @@ describe('createBonjourPublisher on a name another host already answers for', ()
 })
 
 /** FR-003: a withdrawal TheoClaw asked for is not a conflict and reports nothing. */
-describe('createBonjourPublisher withdrawing its own service', () => {
+describe.skipIf(!hasMulticast)('createBonjourPublisher withdrawing its own service', () => {
   it('reports nothing when shutdown precedes a late answer', async () => {
     const name = `late-${randomUUID()}`
     const fqdn = `${name}._theoclaw._tcp.local`
