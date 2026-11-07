@@ -189,8 +189,11 @@ describe('agent-route-generator abort propagation (B-510)', () => {
     const routes = generateAgentRoutes({
       walkResult: { route: '/api/agents/support' },
       compiledOptions: applyCapabilities([new ModelCapability('claude-sonnet-4-5-20250929')]),
-      createRun: async function* (_m, _s, signal) {
+      createRun: (_m, _s, signal) => {
         received = signal
+        return (async function* (): AsyncGenerator<StreamEvent> {
+          yield { type: 'text_delta', content: 'hi' }
+        })()
       },
     })
     const controller = new AbortController()
