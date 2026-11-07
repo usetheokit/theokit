@@ -54,6 +54,9 @@ const OFFERED = new Set([
 /** JSON-RPC "invalid params": the tool named is not one this server offers. */
 const NOT_OFFERED = -32602
 
+/** JSON-RPC "invalid request". */
+const INVALID_REQUEST = -32600
+
 const [cliPath, ...serverArgs] = process.argv.slice(2)
 if (cliPath === undefined) {
   process.stderr.write('browser-proxy: usage: browser-proxy.mjs <playwright-mcp cli> [server args...]\n')
@@ -105,6 +108,11 @@ createInterface({ input: process.stdin })
     const message = parse(line)
     if (message === undefined) {
       server.stdin.write(`${line}\n`)
+      return
+    }
+    if (Array.isArray(message)) {
+      // A JSON-RPC batch would carry `tools/call` entries past the checks below; no batch is forwarded.
+      send(process.stdout, { jsonrpc: '2.0', id: null, error: { code: INVALID_REQUEST, message: 'theoclaw: batch requests are not supported' } })
       return
     }
     const name = message.params?.name
