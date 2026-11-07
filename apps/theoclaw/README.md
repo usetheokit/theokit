@@ -9,7 +9,13 @@ Discord, Slack, Matrix, Mattermost, e-mail, LINE, WhatsApp, Microsoft Teams and 
 git clone https://github.com/usetheokit/theokit.git theokit && theokit/apps/theoclaw/install.sh
 ```
 
-It needs `git` and Node 22.16.0+ (on Node 22) or Node 23.8.0+, and network access to the npm registry. The script installs
+From the npm registry (Node 22.16.0+ or 23.8.0+):
+
+```bash
+npm i -g theoclaw
+```
+
+From a checkout, it needs `git` and Node 22.16.0+ (on Node 22) or Node 23.8.0+, and network access to the npm registry. The script installs
 and builds TheoClaw and its workspace packages in the clone, then writes the launcher
 `~/.local/bin/theoclaw` (`THEOCLAW_BIN_DIR` picks another directory). It says so when that
 directory is not on your `PATH`. With no `pnpm` installed, it puts corepack's `pnpm` in

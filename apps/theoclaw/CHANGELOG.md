@@ -169,7 +169,8 @@ and versioning follows [Semantic Versioning](https://semver.org/).
     local changes or local commits.
   - `apps/theoclaw/Dockerfile` builds an image that runs as a non-root user and keeps every write
     under `/data`.
-  - Installing from the npm registry waits on B-691.
+  - Installing from the npm registry (B-691): `npm i -g theoclaw` installs the published package, whose
+    `workspace:*` ranges `pnpm publish` resolves to real versions. `theoclaw update` still needs a checkout.
 - Importing a Claude Code or Hermes setup (B-375, OC-35): `node dist/import-main.js --from
   claude-code|hermes` (`pnpm --filter theoclaw run import`, with `--source`, `--project` and `--home`)
   copies the instructions, MCP servers, skills and memories of the setup into
