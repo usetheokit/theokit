@@ -34,7 +34,7 @@ import { type HttpHandler, serveHandler } from './control-plane/http-dispatch.js
 import { type ControlPlaneHandle, listenControlPlane } from './control-plane/listener.js'
 import { readControlPlaneSettings, type ControlPlaneSettings } from './control-plane/settings.js'
 import { processSecrets } from './secrets.js'
-import { resolveSecretRefs, type SecretStores } from './secret-refs.js'
+import { resolveSecretRefs, secretRefKind, type SecretStores } from './secret-refs.js'
 import { a2aLines, readA2ASettings } from './a2a/a2a-settings.js'
 import { a2aRoute } from './a2a/a2a-route.js'
 import { peerTools } from './a2a/peer-tools.js'
@@ -373,7 +373,9 @@ function startWebchat(options: StartOptions, settings: ControlPlaneSettings, sec
  */
 export async function startTheoClaw(given: StartOptions): Promise<RunningTheoClaw> {
   // Secret references are resolved once, first, so every reader and the masks see the values (B-711).
-  const resolved = await resolveSecretRefs(given.env, given.secretStores)
+  // No await when nothing is a reference: the start stays as synchronous as it was up to its first real await.
+  const hasRefs = Object.values(given.env).some((value) => value !== undefined && secretRefKind(value.trim()) !== undefined)
+  const resolved = hasRefs ? await resolveSecretRefs(given.env, given.secretStores) : { env: given.env, values: [] as string[] }
   const options: StartOptions = resolved.values.length === 0 ? given : { ...given, env: resolved.env, importedSecrets: [...(given.importedSecrets ?? []), ...resolved.values] }
   const settings = readControlPlaneSettings(options.env)
   const discovery = parseDiscoveryMode(options.env)
