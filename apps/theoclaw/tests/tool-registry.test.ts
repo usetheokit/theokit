@@ -56,7 +56,7 @@ describe('BUILT_TOOL_NAMES', () => {
 describe('CONTROL_TOOL_NAMES', () => {
   it('names every tool a /control agent holds beyond buildTools, and only those', async () => {
     const settings = resolveToolSettings({}, tempWorkspace(), { detect: notEnforced, ...quiet })
-    const workflows = createWorkflowTools({ withDraftAgent: () => Promise.reject(new Error('not used')), write: () => undefined })
+    const workflows = createWorkflowTools({ withDraftAgent: () => Promise.reject(new Error('not used')), generateObject: () => Promise.reject(new Error('not used')), write: () => undefined })
     // The schedule tools reach `/control` agents through the same `extra` list (B-396).
     const scheduler = createScheduler({
       store: createJobStore(join(tempWorkspace(), 'schedules.json')),
