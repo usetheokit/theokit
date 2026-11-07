@@ -28,3 +28,25 @@ describe('loop detection', () => {
     expect(handler(a)).toBeUndefined()
   })
 })
+
+describe('loop detection wiring', () => {
+  it('the plugin agentToolOptions registers refuses a repeated call', async () => {
+    const { makeHostToolsWorkspace } = await import('./host-tools-workspace.js')
+    const { enforced } = await import('./tool-start-fixtures.js')
+    const { resolveToolSettings } = await import('../src/tools/tool-settings.js')
+    const { agentToolOptions } = await import('../src/tools/tool-registry.js')
+    const workspace = makeHostToolsWorkspace()
+    try {
+      const settings = resolveToolSettings({}, workspace.path, { detect: enforced, warn: () => undefined })
+      const plugin = agentToolOptions(settings).plugins.find((p) => p.name === 'theoclaw-loop-detection')
+      let handler: Handler | undefined
+      plugin?.register({ on: (_e: string, fn: Handler) => void (handler = fn) } as never)
+      const call = { name: 'read_file', args: { path: 'a' } }
+      const results = [1, 2, 3, 4].map(() => handler?.(call))
+      expect(results[2]).toBeUndefined()
+      expect(results[3]).toMatchObject({ block: true })
+    } finally {
+      workspace.remove()
+    }
+  })
+})

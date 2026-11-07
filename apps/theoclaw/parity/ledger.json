@@ -578,19 +578,13 @@
   },
   {
     "id": "OC-79",
-    "status": "out",
-    "reason": "Tool profiles (minimal, coding, messaging, full) and elevated mode are not built here; only exec approval and loop detection exist, and no real-model end-to-end check was run.",
-    "declared_by": "human/issue-1216-requester",
-    "declared_on": "2026-11-07",
-    "declared_at": "Issue #1216: permits out with a written reason when live verification is unavailable"
+    "status": "open",
+    "note": "not shipped: tool profiles (minimal, coding, messaging, full) and elevated mode are not built; no real-model end-to-end check was run (no credentials in the build sandbox)"
   },
   {
     "id": "OC-80",
-    "status": "out",
-    "reason": "Loop detection stops a repeated identical tool call offline, but argument churn and no-progress detection are not built, and no real-model check was run.",
-    "declared_by": "human/issue-1216-requester",
-    "declared_on": "2026-11-07",
-    "declared_at": "Issue #1216: permits out with a written reason when live verification is unavailable"
+    "status": "open",
+    "note": "offline repeated-identical-call detection is built (src/tools/loop-detection.ts, unit-tested); argument churn and no-progress detection are not, and no real-model end-to-end check was run (no credentials in the build sandbox), so the row stays open"
   },
   {
     "id": "OC-81",
