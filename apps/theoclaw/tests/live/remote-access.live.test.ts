@@ -59,6 +59,14 @@ function joinedStreams(log: ReadonlyMap<string, readonly string[]>): Array<{ rea
   return [...log].map(([key, chunks]) => ({ key, text: chunks.join('') }))
 }
 
+/** The `turn failed:` stderr lines of every process, which hold the reason the error frame omits. */
+function turnFailedReasons(): string {
+  const lines = joinedStreams(outputLog)
+    .filter((stream) => stream.key.endsWith(':stderr'))
+    .flatMap((stream) => stream.text.split('\n').filter((line) => line.includes('turn failed')))
+  return lines.length === 0 ? 'no turn failed line on stderr' : `reason: ${lines.join(' | ')}`
+}
+
 function leakedTokens(): string[] {
   const streams = joinedStreams(outputLog)
   return tokensIssued.filter((token) => streams.some((stream) => stream.text.includes(token)))
@@ -198,7 +206,8 @@ async function turnThrough(port: number, token: string): Promise<Frame[]> {
         }
         frames.push(frame)
         if (frame.type === 'done') resolve()
-        if (frame.type === 'error') reject(new Error(`the turn failed: ${JSON.stringify(frame)}`))
+        // The error frame carries only the code; the reason is the `turn failed:` line on stderr.
+        if (frame.type === 'error') reject(new Error(`the turn failed: ${JSON.stringify(frame)}; ${turnFailedReasons()}`))
       })
     })
     socket.send(JSON.stringify({ type: 'chat', message: 'Reply with the word pong.' }))

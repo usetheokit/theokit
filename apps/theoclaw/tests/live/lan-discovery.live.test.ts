@@ -53,6 +53,8 @@ interface Started {
   readonly signals: EventEmitter
   readonly exited: Promise<number>
   stopped: boolean
+  /** What the worker wrote to stderr: the turn_failed reason is only there. */
+  readonly stderrLines: string[]
 }
 
 const cleanups: Array<() => Promise<void>> = []
@@ -114,6 +116,7 @@ async function start(lan: boolean): Promise<Started> {
   const signals = new EventEmitter()
   let onExit: (code: number) => void = () => undefined
   const exited = new Promise<number>((resolve) => (onExit = resolve))
+  const stderrLines: string[] = []
   const called = performance.now()
   const running = await startTheoClaw({
     env,
@@ -121,13 +124,13 @@ async function start(lan: boolean): Promise<Started> {
     agentFactory: createAgentFactory(env),
     builders: () => [],
     stdout: () => undefined,
-    stderr: () => undefined,
+    stderr: (line) => stderrLines.push(line),
     // No stream to mask: the worker's own streams must not stay wrapped after the test.
     streams: [],
     signals,
     exit: (code) => onExit(code),
   })
-  const started: Started = { running, token, called, resolved: performance.now(), signals, exited, stopped: false }
+  const started: Started = { running, token, called, resolved: performance.now(), signals, exited, stopped: false, stderrLines }
   cleanups.push(async () => {
     if (!started.stopped) await stop(started)
   })
@@ -151,7 +154,7 @@ async function controlTurn(started: Started): Promise<string[]> {
         const frame = JSON.parse(String(raw)) as Record<string, unknown>
         frames.push(frame)
         if (frame.type === 'done') resolve()
-        if (frame.type === 'error') reject(new Error(`the turn failed: ${JSON.stringify(frame)}`))
+        if (frame.type === 'error') reject(new Error(`the turn failed: ${JSON.stringify(frame)}; stderr: ${started.stderrLines.join(' | ')}`))
       })
       socket.once('error', reject)
     })
