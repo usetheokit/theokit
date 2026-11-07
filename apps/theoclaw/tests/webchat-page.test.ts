@@ -31,7 +31,7 @@ beforeEach(async () => {
   const handle = createWebchatRoutes({
     token: TOKEN,
     assetsDir: "/unused",
-    runTurn: async (_message, emit) => {
+    turnFor: () => async (_message, emit) => {
       emit({ type: "text_delta", content: "hello " });
       emit({ type: "text_delta", content: "from the agent" });
       return { ok: true };

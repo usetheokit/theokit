@@ -44,14 +44,14 @@ import { readRelaySettings, relaySecrets } from './relay/relay-settings.js'
 import { RelayState } from './relay/relay-state.js'
 import { installShutdown, type SignalSource } from './control-plane/shutdown.js'
 import { formatAddress, reportSurfacesOff } from './control-plane/start-output.js'
-import { createTurnRunner } from './control-plane/turn.js'
+import { createTurnRunner, type TurnRunner, type WithAgent } from './control-plane/turn.js'
 import { heartbeatJob, readHeartbeatSettings } from './scheduler/heartbeat.js'
 import { loadScheduleStore, type RunningScheduler, wireScheduler } from './scheduler/scheduler-wiring.js'
 import { createBonjourPublisher } from './discovery/bonjour-publisher.js'
 import { announceOnLan, type LanAnnouncement, stopThenClose } from './discovery/lan-announcer.js'
 import { parseDiscoveryMode, type PublisherFactory } from './discovery/publisher.js'
 import { NO_PROFILE, startLine, type TheoClawInstance } from './instance.js'
-import { chatSessions, sessionsFile } from './sessions/chat-sessions.js'
+import { type ChatBoundary, chatSessions, sessionsFile } from './sessions/chat-sessions.js'
 import { Generations } from './sessions/generations.js'
 import type { SessionAgent, SessionAgents } from './sessions/session-agents.js'
 import { readSessionSettings, type SessionSettings } from './sessions/session-settings.js'
@@ -75,6 +75,7 @@ import { checkHostToolsPosture, hostToolsProtectedPaths, type ProtectedPath, res
 import type { ToolDeps, ToolSettings } from './tools/tool-settings.js'
 import type { GenerateObject } from './workflows/triage-workflow.js'
 import { createWorkflowTools } from './workflows/workflow-tools.js'
+import { webchatEvent } from './webchat/chat-id.js'
 import { WEBCHAT_ASSETS_DIR } from './webchat/page.js'
 import { createWebchatRoutes } from './webchat/routes.js'
 import { configuredVoiceReplies, withVoiceReplies } from './voice/voice-replies.js'
@@ -137,6 +138,8 @@ export interface ComposedTheoClaw {
   readonly router: (request: Request) => Promise<Response>
   /** The chat sessions' agents; `disposeAll()` at stop is the only end of their lifetime (D2). */
   readonly sessions: SessionAgents
+  /** The chat path's request boundary over the sessions; WebChat leases one chat's agent through it. */
+  readonly withChatAgent: ChatBoundary
 }
 
 /** The trigger routes (B-397): each run on a fresh tool-less agent in its own request boundary, replying through a started adapter, its reply masked (B-398 FR-006). */
@@ -241,7 +244,7 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
     write: maskedWrite,
     triggers: composedTriggers(options, events, loop, maskedWrite, secrets),
   })
-  return { loop, router, sessions: chat.sessions }
+  return { loop, router, sessions: chat.sessions, withChatAgent: chat.withAgent }
 }
 
 export interface StartOptions extends Omit<TheoClawOptions, 'write'> {
@@ -286,7 +289,7 @@ export interface StartOptions extends Omit<TheoClawOptions, 'write'> {
   readonly agentRegistry?: { configure(options: { readonly maxAgents: number; readonly idleTimeoutMs: number }): void }
   /** Where the WebChat bundle is read from. Default `WEBCHAT_ASSETS_DIR`, where `build:web` writes it. */
   readonly webchatAssetsDir?: string | URL
-  /** Creates a WebChat turn's agent from the chat options `webchatAgentFactory` pins. Default: the SDK's, as `/control`'s. */
+  /** Creates a chat-completion API turn's agent from the chat options `webchatAgentFactory` pins. Default: the SDK's, as `/control`'s. */
   readonly createChatAgent?: CreateAgent
 }
 
@@ -353,12 +356,30 @@ function workflowTools(factory: StartOptions['draftAgentFactory'], generateObjec
  * surface, so its agents are built through the chat path's factory, as every chat agent: no tool
  * (B-382), no `shell` and memory off (B-377), whatever the `/control` turn's options become.
  */
-function startWebchat(options: StartOptions, settings: ControlPlaneSettings, secrets: readonly string[], write: (line: string) => void): HttpHandler | undefined {
+function startWebchat(
+  options: StartOptions,
+  settings: ControlPlaneSettings,
+  secrets: readonly string[],
+  write: (line: string) => void,
+  withChatAgent: ChatBoundary,
+): HttpHandler | undefined {
   const token = settings.webchatToken
   if (token === undefined) return undefined
-  const agents = createContainer<TurnAgent>({ factory: webchatAgentFactory(options.env, options.createChatAgent) })
   const assetsDir = options.webchatAssetsDir ?? WEBCHAT_ASSETS_DIR
-  return createWebchatRoutes({ token, runTurn: createTurnRunner(agents.withAgent, secrets, settings.model), assetsDir, write })
+  // One session agent per chat id: the chat's turns lease the same agent, so a follow-up sees the earlier messages.
+  const turnFor = (chatId: string): TurnRunner => {
+    const event = webchatEvent(chatId)
+    const withAgent: WithAgent = (work) =>
+      withChatAgent(event, async (lease) => {
+        try {
+          return await work(lease.agent)
+        } finally {
+          lease.release()
+        }
+      })
+    return createTurnRunner(withAgent, secrets, settings.model)
+  }
+  return createWebchatRoutes({ token, turnFor, assetsDir, write })
 }
 
 /**
@@ -480,7 +501,7 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
   serving = listen({
     handler: serveHandler(
       composed.router,
-      startWebchat(options, settings, secretValues, stderr),
+      startWebchat(options, settings, secretValues, stderr, composed.withChatAgent),
       devices,
       api,
       a2a.token === undefined ? undefined : a2aRoute({ token: a2a.token, buildWorker, tools, secrets: secretValues, write: stderr }),

@@ -107,10 +107,10 @@ describe("the listener's per-request signal", () => {
     const response = await fetch(url("/echo"), {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ message: "hello", nested: { n: 1 } }),
+      body: JSON.stringify({ message: "hello", id: "chat-1", nested: { n: 1 } }),
     });
 
     expect(response.status).toBe(204);
-    expect(body).toEqual({ message: "hello", nested: { n: 1 } });
+    expect(body).toEqual({ message: "hello", id: "chat-1", nested: { n: 1 } });
   });
 });

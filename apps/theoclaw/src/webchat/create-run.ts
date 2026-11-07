@@ -118,13 +118,13 @@ function startTurn(
 }
 
 /**
- * The `createRun` `generateAgentRoutes` calls: TheoClaw's callback turn runner adapted to the async
+ * The `createRun` `generateAgentRoutes` calls: the chat's turn runner (`turnFor`, one session agent per chat id) adapted to the async
  * source the generator streams. Each run's turn is cancelled when `signal` aborts.
  */
 export function createWebchatRun(
-  runTurn: TurnRunner,
+  turnFor: (chatId: string) => TurnRunner,
   signal: AbortSignal,
   write: (line: string) => void = () => undefined,
 ): (message: string, sessionId: string) => AsyncIterable<StreamEvent> {
-  return (message) => ({ [Symbol.asyncIterator]: () => startTurn(runTurn, message, signal, write) })
+  return (message, chatId) => ({ [Symbol.asyncIterator]: () => startTurn(turnFor(chatId), message, signal, write) })
 }
