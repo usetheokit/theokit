@@ -1,12 +1,19 @@
 {
   "name": "theoclaw",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
   "description": "A personal AI assistant that lives where its user already writes.",
   "type": "module",
   "license": "Apache-2.0",
   "engines": {
     "node": "^22.16.0 || >=23.8.0"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "publishConfig": {
+    "access": "public"
   },
   "bin": {
     "theoclaw": "./dist/cli.js"
@@ -92,6 +99,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "prepublishOnly": "pnpm run build && pnpm run build:web && node ../../scripts/check-pack-no-workspace.mjs .",
     "build:web": "node tools/build-web.mjs",
     "start": "node dist/main.js",
     "import": "node dist/import-main.js",
