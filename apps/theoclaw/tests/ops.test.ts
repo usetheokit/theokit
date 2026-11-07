@@ -68,6 +68,21 @@ describe('hot reload (OC-94)', () => {
       watcher.close()
     }
   })
+
+  it('asks the process to restart when a setting read once at the start changes (B-716)', async () => {
+    const { path } = configured(`THEOCLAW_MODEL="a"\nTHEOKIT_API_KEY="${KEY}"\nTHEOCLAW_PORT="1"\n`)
+    const env: Record<string, string | undefined> = { ...parseEnv(readFileSync(path, 'utf8')) }
+    const asked: (readonly string[])[] = []
+    const watcher = watchConfiguration(path, env, { debounceMs: 20, write: () => undefined, onRestartRequired: (k) => asked.push(k) })
+    try {
+      writeFileSync(path, `THEOCLAW_MODEL="a"\nTHEOKIT_API_KEY="${KEY}"\nTHEOCLAW_PORT="2"\n`)
+      const deadline = Date.now() + 3000
+      while (asked.length === 0 && Date.now() < deadline) await new Promise((r) => setTimeout(r, 25))
+      expect(asked).toEqual([['THEOCLAW_PORT']])
+    } finally {
+      watcher.close()
+    }
+  })
 })
 
 describe('doctor, status and logs (OC-95, OC-96)', () => {

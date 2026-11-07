@@ -8,8 +8,8 @@ import { requireModel } from '../control-plane/settings.js'
  * Hot reload of the configuration file (B-399, OC-94). The agent factories read the model, its
  * key, the fallback and the thinking level from the environment each time they build an agent, so
  * a change to those applies to the next session or turn without a restart. Every other setting is
- * read once at the start: a change to one is reported as needing a restart and is not applied, so
- * the running process never holds half of a new configuration. A candidate file that fails the
+ * read once at the start: a change to one is reported as needing a restart and is not applied to the running process, so
+ * it never holds half of a new configuration; `onRestartRequired` lets the entry restart itself (B-716). A candidate file that fails the
  * model check is refused whole and the running values stay. No result carries a value.
  */
 
@@ -76,6 +76,8 @@ export interface ConfigWatcher {
 export interface WatchOptions {
   readonly debounceMs?: number
   readonly write: (line: string) => void
+  /** Called after a reload that left a setting read once at the start changed: the process restarts itself (B-716). */
+  readonly onRestartRequired?: (keys: readonly string[]) => void
 }
 
 /** One line per reload outcome, naming variables only. */
@@ -99,6 +101,10 @@ export function watchConfiguration(path: string, env: Env, options: WatchOptions
     accepted = outcome.accepted
     const line = describeReload(outcome.result)
     if (line !== undefined) options.write(line)
+    if (outcome.result.kind === 'applied' && outcome.result.restartRequired.length > 0) {
+      options.write('config: restarting to apply the change')
+      options.onRestartRequired?.(outcome.result.restartRequired)
+    }
   }
   const file = basename(path)
   let watcher: FSWatcher
