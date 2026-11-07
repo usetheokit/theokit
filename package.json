@@ -17,7 +17,7 @@
     "validate:attw": "npx @arethetypeswrong/cli --pack packages/theo --ignore-rules cjs-resolves-to-esm no-resolution",
     "typecheck": "pnpm build:packages && tsc --noEmit",
     "typecheck:only": "tsc --noEmit",
-    "lint": "NODE_OPTIONS=\"$NODE_OPTIONS --max-old-space-size=8192\" eslint .",
+    "lint": "node scripts/lint.mjs",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
