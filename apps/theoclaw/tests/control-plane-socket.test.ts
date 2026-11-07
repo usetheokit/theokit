@@ -431,8 +431,9 @@ describe("the /control socket", () => {
     client.send({ type: "chat", message: "too soon" });
     await client.until((frames) => frames.some((frame) => frame.code === "busy"), "the busy reply");
     gate.open();
-    await client.until(turnEnded, "the end of the turn");
+    const frames = await client.until(turnEnded, "the end of the turn");
 
+    expect(finalFrames(frames)).toEqual([{ type: "done" }]);
     expect(builtAgents).toBe(1);
   });
 
@@ -461,8 +462,9 @@ describe("the /control socket", () => {
     client.socket.once("message", () => (firstFrameAt = performance.now()));
 
     client.send({ type: "chat", message: "hello" });
-    await client.until(turnEnded, "the end of the turn");
+    const frames = await client.until(turnEnded, "the end of the turn");
 
+    expect(finalFrames(frames)).toEqual([{ type: "done" }]);
     expect(firstFrameAt).toBeGreaterThan(0);
     expect(firstFrameAt - firstYieldAt).toBeLessThan(500);
   });
