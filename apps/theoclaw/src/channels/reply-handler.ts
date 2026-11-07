@@ -3,9 +3,20 @@ import type { BasePlatformAdapter, GatewayContext, GatewayHandler, MessageEvent,
 import { ChatPresenter, fromSdkMessage } from '@theokit/presenter'
 import type { AgentOutputEvent, ChatMessage } from '@theokit/presenter'
 
-import type { TurnAgent } from '../agent-port.js'
+import type { TurnAgent, TurnRun } from '../agent-port.js'
+import { untrustedContentSendOptions } from '../agent/untrusted-content.js'
+import { maskSecrets } from './channel-loop.js'
+import { createStreamMask } from './stream-mask.js'
+import type { StreamMask } from './stream-mask.js'
 import type { BroadcastGroup, BroadcastGroups } from './broadcast-groups.js'
+import { type DisplayConfig, resolveDisplay } from './display-config.js'
+import { createProgressGate, type ProgressGate } from './progress.js'
+import { deliverText } from './deliver.js'
+import { type GoalSettings, GOAL_USAGE_REPLY, goalOf, runGoal } from './goal-command.js'
 import type { SessionLease } from '../sessions/session-agents.js'
+import { formatUsageFooter, formatUsageLine, type TurnUsage, usageOf } from '../usage/turn-usage.js'
+import type { UsageMode } from './usage-hook.js'
+import { showTyping, type TypingOptions } from './typing.js'
 
 /** The reply to a turn that produced no visible answer (D8): reasoning only, tools only, nothing. */
 export const NO_ANSWER_REPLY = 'I could not come up with an answer to that.'
@@ -44,6 +55,28 @@ export interface ReplyHandlerOptions {
   readonly reset: (event: MessageEvent) => Promise<void>
   /** Without it, every channel is its own conversation. */
   readonly broadcast?: BroadcastOptions
+  /**
+   * Values no reply may carry (`processSecrets`, B-398 FR-006): masked in the origin's reply and in
+   * the answer a broadcast group's other members and thread receive. Default: none.
+   */
+  readonly secrets?: readonly string[]
+  /** What `/goal` runs with (B-397 FR-008); without it, `/goal` is an ordinary message. */
+  readonly goal?: GoalSettings
+  /** Per-platform display overrides (B-370); without them each platform keeps its tier's defaults. */
+  readonly display?: DisplayConfig
+  /** A finished turn's usage: its line, and the footer its conversation's `/usage` asks for (FR-005). */
+  readonly usage?: ReplyUsageOptions
+  /** A typing indicator shown while a turn or goal runs (OC-106); without it, none. */
+  readonly typing?: TypingOptions
+}
+
+export interface ReplyUsageOptions {
+  /** The conversation's `/usage` mode, read when the reply is sent (EC-7). */
+  readonly modeFor: (event: MessageEvent) => UsageMode
+  /** The model the chat agents run (`THEOCLAW_MODEL`). */
+  readonly model: string
+  /** Where the usage line goes; the masked write. */
+  readonly write: (line: string) => void
 }
 
 /** A turn whose run resolved with `status: "error"`, which the SDK reports without rejecting. */
@@ -111,27 +144,47 @@ async function send(
 }
 
 type TurnOutcome =
-  | { readonly failed: false; readonly answer: string }
+  | { readonly failed: false; readonly answer: string; readonly result?: Awaited<ReturnType<TurnRun['wait']>> }
   | { readonly failed: true; readonly error: unknown }
 
-/** What a turn's stream left behind: its plain answer and the error code it streamed, if any. */
+/**
+ * What a turn's stream left behind: its plain answer and the error code it streamed, if any; and
+ * the mask its text crosses before the presenter renders it.
+ */
 interface StreamedTurn {
   answer: string
   error: string | undefined
+  readonly mask: StreamMask
+  /** Progress lines the display settings allow, waiting to be sent. */
+  readonly progress: string[]
+  readonly gate: ProgressGate
 }
 
 /**
  * Present one frame's events. The spread gives the frame an anonymous type, which the presenter's
  * index signature accepts. A streamed `finish` is dropped: it would emit and reset the presenter
- * before the one synthetic finish the reply is taken from (D8).
+ * before the one synthetic finish the reply is taken from (D8). Text is masked before the presenter
+ * renders it: a platform's dialect rewrites marker pairs (`**`, `~~`, `_`), so a value holding one
+ * no longer matches once rendered (LCR #78). The mask holds back an end that could still grow into
+ * a value split across frames.
  */
 function presentFrame(frame: { readonly type: string }, presenter: ChatPresenter, streamed: StreamedTurn): void {
   for (const output of fromSdkMessage({ ...frame })) {
     if (output.type === 'error') streamed.error = output.code
-    // The answer before any platform rendering, for a broadcast group's thread and its other members.
-    if (output.type === 'text') streamed.answer += output.text
-    if (output.type !== 'finish') presenter.present(output)
+    streamed.progress.push(...streamed.gate.lines(output))
+    if (output.type === 'text') {
+      // The answer before any platform rendering, for a broadcast group's thread and its other members.
+      streamed.answer += output.text
+      const released = streamed.mask.push(output.text)
+      if (released !== '') presenter.present({ ...output, text: released })
+    } else if (output.type !== 'finish') presenter.present(output)
   }
+}
+
+/** Present whatever text the mask still holds, masked, once the stream ends or fails. */
+function flushMask(presenter: ChatPresenter, streamed: StreamedTurn): void {
+  const rest = streamed.mask.flush()
+  if (rest !== '') presenter.present({ type: 'text', text: rest })
 }
 
 /** Stream the agent's answer into the presenter; a failure is returned, not thrown. */
@@ -140,15 +193,26 @@ async function streamTurn(
   event: MessageEvent,
   prompt: string,
   presenter: ChatPresenter,
+  secrets: readonly string[],
+  gate: ProgressGate,
+  sendProgress: (line: string) => Promise<void>,
 ): Promise<TurnOutcome> {
   // An ERROR or EXPIRED status in the stream fails the turn even when `wait()` reports it finished.
-  const streamed: StreamedTurn = { answer: '', error: undefined }
+  const streamed: StreamedTurn = { answer: '', error: undefined, mask: createStreamMask(secrets), progress: [], gate }
   try {
-    const run = await agent.send(prompt)
-    for await (const frame of run.stream()) presentFrame(frame, presenter, streamed)
+    const run = await agent.send(prompt, untrustedContentSendOptions())
+    try {
+      for await (const frame of run.stream()) {
+        presentFrame(frame, presenter, streamed)
+        for (const line of streamed.progress.splice(0)) await sendProgress(line)
+      }
+      for (const line of streamed.gate.flush()) await sendProgress(line)
+    } finally {
+      flushMask(presenter, streamed)
+    }
     const result = await run.wait()
     if (result.status !== 'error' && streamed.error === undefined) {
-      return { failed: false, answer: streamed.answer === '' ? NO_ANSWER_REPLY : streamed.answer }
+      return { failed: false, answer: streamed.answer === '' ? NO_ANSWER_REPLY : streamed.answer, result }
     }
     presenter.present(AGENT_ERROR)
     return { failed: true, error: new AgentTurnError(event.platform, result.error?.code ?? streamed.error) }
@@ -166,16 +230,32 @@ async function streamTurn(
  */
 async function answerTurn(options: ReplyHandlerOptions, event: MessageEvent, ctx: GatewayContext, prompt: string): Promise<string> {
   const presenter = presenterFor(event)
+  const secrets = options.secrets ?? []
+  const gate = createProgressGate(resolveDisplay(event.platform, options.display))
+  // Best effort: a progress line that cannot be sent never fails the turn.
+  const sendProgress = async (line: string): Promise<void> => {
+    try {
+      await ctx.reply(maskSecrets(line, secrets), { format: 'plain' })
+    } catch {
+      // the turn's own reply reports delivery problems
+    }
+  }
   let started = false
   try {
     return await options.withAgent(event, async (lease) => {
       started = true
+      const stopTyping = showTyping(options.typing, event.platform, event.channel.id)
       try {
-        const outcome = await streamTurn(lease.agent, event, prompt, presenter)
-        await send(ctx, finishTurn(presenter), outcome)
+        const outcome = await streamTurn(lease.agent, event, prompt, presenter, secrets, gate, sendProgress)
+        // Masked before rendering (in the stream) and again after it, so a value is caught in the
+        // model's text and in the platform's own format; the answer a broadcast group records and
+        // fans out is masked before any member renders it.
+        const reply = withFooter(finishTurn(presenter), options.usage, event, outcome)
+        await send(ctx, { ...reply, text: maskSecrets(reply.text, secrets) }, outcome)
         if (outcome.failed) throw outcome.error
-        return outcome.answer
+        return maskSecrets(outcome.answer, secrets)
       } finally {
+        await stopTyping()
         lease.release()
       }
     })
@@ -189,23 +269,29 @@ async function answerTurn(options: ReplyHandlerOptions, event: MessageEvent, ctx
   }
 }
 
+/**
+ * The reply with the footer the conversation's `/usage` mode asks for, read now, as the reply is
+ * sent (EC-7); a finished turn also writes its usage line. Only the sender's reply carries it: a
+ * broadcast group's other members get the answer alone.
+ */
+function withFooter(
+  reply: Pick<ChatMessage, 'text' | 'format'>,
+  usage: ReplyUsageOptions | undefined,
+  event: MessageEvent,
+  outcome: TurnOutcome,
+): Pick<ChatMessage, 'text' | 'format'> {
+  if (usage === undefined || outcome.failed || outcome.result === undefined) return reply
+  const record: TurnUsage = usageOf(outcome.result, usage.model)
+  usage.write(formatUsageLine('channel', record))
+  const mode = usage.modeFor(event)
+  return mode === 'off' ? reply : { ...reply, text: `${reply.text}\n\n${formatUsageFooter(mode, record)}` }
+}
+
 /** Why one member could not be reached; a code or an error name, never the message or an id. */
 async function sendToMember(adapter: BasePlatformAdapter | undefined, channelId: string, platform: string, answer: string): Promise<string | undefined> {
   if (adapter === undefined) return 'not started'
   // Rendered for the member's own platform, not the origin's dialect.
-  const presenter = new ChatPresenter({ channel: { id: channelId, type: 'group' }, ...channelRendering(platform as PlatformName) })
-  presenter.present({ type: 'text', text: answer })
-  const reply = finishTurn(presenter)
-  try {
-    const result = await adapter.sendMessage({
-      channel: { id: channelId, type: 'group' },
-      text: reply.text,
-      ...(reply.format ? { format: reply.format } : {}),
-    })
-    return result.ok ? undefined : (result.error?.code ?? 'refused')
-  } catch (error) {
-    return error instanceof Error ? error.name : 'thrown'
-  }
+  return deliverText(adapter, platform as PlatformName, channelId, answer)
 }
 
 /** Send the answer to every other member, each on its own: one that fails costs only itself. */
@@ -217,6 +303,33 @@ async function fanOut(broadcast: BroadcastOptions, group: BroadcastGroup, event:
       if (failure !== undefined) broadcast.write(`broadcast group ${group.name}: ${platform}: the answer was not delivered (${failure})`)
     }),
   )
+}
+
+/**
+ * One `/goal`: a bare one gets the usage line and takes no lease; otherwise the session's agent runs
+ * the goal loop and the person gets one reply, `<status>: <final text>`. A loop that threw is
+ * rethrown after that reply, so the runner fires `on_error`. In a broadcast group it is the
+ * session's own goal, with no fan-out.
+ */
+async function answerGoal(settings: GoalSettings, options: ReplyHandlerOptions, event: MessageEvent, ctx: GatewayContext, goal: string): Promise<void> {
+  if (goal === '') {
+    await send(ctx, { text: GOAL_USAGE_REPLY, format: 'plain' }, { failed: false, answer: GOAL_USAGE_REPLY })
+    return
+  }
+  const outcome = await options.withAgent(event, async (lease) => {
+    const stopTyping = showTyping(options.typing, event.platform, event.channel.id)
+    try {
+      return await runGoal(lease.agent, goal, settings)
+    } finally {
+      await stopTyping()
+      lease.release()
+    }
+  })
+  // B-398 FR-006 holds for a goal's reply too: no configured value reaches the chat.
+  const reply = maskSecrets(outcome.reply, options.secrets ?? [])
+  const failure: TurnOutcome = outcome.error === undefined ? { failed: false, answer: reply } : { failed: true, error: outcome.error }
+  await send(ctx, { text: reply, format: 'plain' }, failure)
+  if (outcome.error !== undefined) throw outcome.error
 }
 
 /**
@@ -242,6 +355,11 @@ export function createReplyHandler(options: ReplyHandlerOptions): GatewayHandler
       await send(ctx, { text: NEW_CONVERSATION_REPLY, format: 'plain' }, { failed: false, answer: NEW_CONVERSATION_REPLY })
       return
     }
+    const goal = options.goal === undefined ? undefined : goalOf(text)
+    if (options.goal !== undefined && goal !== undefined) {
+      await answerGoal(options.goal, options, event, ctx, goal)
+      return
+    }
     const broadcast = options.broadcast
     const group = broadcast?.groups.groupOf(event.platform, event.channel.id)
     if (broadcast === undefined || group === undefined) {
@@ -251,7 +369,8 @@ export function createReplyHandler(options: ReplyHandlerOptions): GatewayHandler
     // Entered before any await, so the group's turns run in delivery order.
     await group.run(async () => {
       const answer = await answerTurn(options, event, ctx, group.prompt(event.text))
-      group.record(event.platform, event.text, answer)
+      // A member's own message joins the thread too, so it is masked as the answer is.
+      group.record(event.platform, maskSecrets(event.text, options.secrets ?? []), answer)
       await fanOut(broadcast, group, event, answer)
     })
   }

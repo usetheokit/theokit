@@ -110,60 +110,8 @@ export interface HookApprovalRequest {
   readonly matcher?: string
 }
 
-/** The first `@theokit/sdk` that can honour `local.hooks`. Measured by unpacking the tarballs. */
-const HOOK_GATE_SINCE = { major: 5, minor: 4 } as const
-
-/**
- * Where the NARROWED `compatSources[].import` shape landed.
- *
- * `compatSources` itself landed in 5.0.0 (see {@link warnIfSdkCannotReadCompatSources}); listing
- * WHICH surfaces to import landed in 5.4.0. The two are different versions and were treated as one,
- * which is the whole defect: the `import` field's docblock stated the narrowed form was "refused at
- * resolve time" on an older SDK, and nothing read a version for it. Measured — on 5.0.0 ≤ SDK <
- * 5.4.0, squarely inside this package's declared `^4.52.1 || ^5.0.0`, a narrowed `import` was
- * forwarded, dropped by the runtime in silence, and the foreign root was not read AT ALL.
- *
- * That is the failure `setting-sources-gate.ts` names as its own reason for existing — declared,
- * gated, projected, and then discarded with no message — reproduced by the sentence claiming to
- * prevent it.
- */
-const COMPAT_IMPORT_SINCE = { major: 5, minor: 4 } as const
 /** The major in which `compatSources` itself landed — reading the foreign root at all. */
 const COMPAT_ROOT_SINCE_MAJOR = 5
-
-/**
- * Refuses when the installed SDK cannot honour a declared hook gate.
- *
- * ## Why this THROWS where its `compatSources` sibling only warns
- *
- * That one guards a configuration source: ignored, the foreign root is not read, and the agent runs
- * with less than was asked for. This one guards a SECURITY decision. Ignored, the agent runs with
- * MORE than was asked for — every hook spawns unreviewed — while the consumer believes it is gated
- * and stops looking. The consumer that reported #686 asked for the refusal in those words: they
- * would rather have no gate than a silent one, because their `doctor` would otherwise publish a
- * guarantee that is false on `@theokit/sdk@5.0.0`.
- *
- * ## Why an unreadable version is a refusal and not a shrug
- *
- * The sibling stays silent when it cannot read the version, and that is right for a diagnostic. Here
- * "cannot tell" and "is gated" must not collapse: unproven is not proven, and this whole issue is
- * one instance of that confusion. A bundled SDK that hides `package.json` gets an explicit refusal
- * naming what it could not read, which is recoverable; a silent pass is not.
- */
-export class HookGateUnsupportedError extends TheokitAgentError {
-  override readonly name = 'HookGateUnsupportedError'
-  constructor(version: string | undefined) {
-    super(
-      `a hook approval gate was declared, but the installed @theokit/sdk ` +
-        `(${version ?? 'version unreadable'}) cannot honour it: \`local.hooks\` landed in ` +
-        `${String(HOOK_GATE_SINCE.major)}.${String(HOOK_GATE_SINCE.minor)}.0. Forwarding it anyway ` +
-        `would leave every hook spawning unreviewed while the gate reports as installed. Upgrade ` +
-        `@theokit/sdk, or remove \`hookApproval\` and keep whatever refusal you have today ` +
-        `(usetheokit/theokit#686).`,
-      { code: 'hook_gate_unsupported', isRetryable: false },
-    )
-  }
-}
 
 /**
  * #739 — the installed SDK cannot read a foreign configuration root at all.
@@ -194,45 +142,6 @@ class CompatRootUnsupportedError extends TheokitAgentError {
         `declares a floor above it, so reaching this error means an override pinned the SDK lower. ` +
         `Remove the override, or drop \`compatSources\` if the foreign root is not wanted ` +
         `(usetheokit/theokit#739).`,
-    )
-  }
-}
-
-/**
- * A narrowed `import` on an SDK that cannot read it.
- *
- * Refuses rather than warns, and the asymmetry with {@link warnIfSdkCannotReadCompatSources} is
- * deliberate: an unrecognised `compatSources` shape means the foreign root is not read, so a
- * consumer who asked for "the skills but not the hooks" silently gets NOTHING — strictly further
- * from what they asked for than the un-narrowed form, which at least reads something. Failing loud
- * is recoverable; a silent nothing is discovered by wondering why a skill is missing.
- *
- * ## The cost, which this file argues against two functions above
- *
- * An unreadable version is refused too, on the principle {@link assertSdkCanGateHooks} states:
- * "cannot tell" and "is supported" must not collapse. The sibling WARNING takes the opposite view
- * for itself — *"a bundled or vendored SDK may not resolve that subpath, and refusing to create an
- * agent over a diagnostic would be the cure being worse than the disease."*
- *
- * Both are right for what they guard, and the difference is what the check IS. A diagnostic that
- * cannot read a version should stay quiet; a GATE that cannot read one has not established the
- * thing it exists to establish. But the cost is real and belongs here rather than in a reviewer's
- * report: a consumer who bundles the SDK so `@theokit/sdk/package.json` does not resolve cannot
- * create an agent with a narrowed `import`, even on 5.4.0+. Their exit is to omit `import` and read
- * the whole root.
- */
-export class CompatImportUnsupportedError extends TheokitAgentError {
-  override readonly name = 'CompatImportUnsupportedError'
-  constructor(version: string | undefined) {
-    super(
-      `\`claudeCode.import\` narrows WHICH surfaces of a foreign configuration root to read, but ` +
-        `the installed @theokit/sdk (${version ?? 'version unreadable'}) cannot honour it: the ` +
-        `narrowed shape landed in ` +
-        `${String(COMPAT_IMPORT_SINCE.major)}.${String(COMPAT_IMPORT_SINCE.minor)}.0. An older ` +
-        `runtime drops the unrecognised shape in silence, so the root would not be read AT ALL — ` +
-        `less than you asked for, not more. Upgrade @theokit/sdk, or omit \`import\` to read every ` +
-        `surface of the root (usetheokit/theokit#686).`,
-      { code: 'compat_import_unsupported', isRetryable: false },
     )
   }
 }
@@ -282,30 +191,6 @@ export function compatSourcesForSdk(
     if (forSdk.length > 0) out.push({ kind: source.kind, import: forSdk })
   }
   return out
-}
-
-/** Pure so both directions are testable without installing two SDKs. */
-export function assertSdkCanReadNarrowedImport(version: string | undefined): void {
-  const [major, minor] = (version ?? '').split('.').map((n) => Number.parseInt(n, 10))
-  const known = Number.isFinite(major) && Number.isFinite(minor)
-  const supported =
-    known &&
-    (major > COMPAT_IMPORT_SINCE.major ||
-      (major === COMPAT_IMPORT_SINCE.major && minor >= COMPAT_IMPORT_SINCE.minor))
-  // Unreadable is NOT supported, same as the hook gate: "cannot tell" and "is gated" must not
-  // collapse, and this defect is one instance of that confusion.
-  if (!supported) throw new CompatImportUnsupportedError(version)
-}
-
-/** Pure so both directions are testable without installing two SDKs. */
-export function assertSdkCanGateHooks(version: string | undefined): void {
-  const [major, minor] = (version ?? '').split('.').map((n) => Number.parseInt(n, 10))
-  const known = Number.isFinite(major) && Number.isFinite(minor)
-  const supported =
-    known &&
-    (major > HOOK_GATE_SINCE.major ||
-      (major === HOOK_GATE_SINCE.major && minor >= HOOK_GATE_SINCE.minor))
-  if (!supported) throw new HookGateUnsupportedError(version)
 }
 
 /** The installed SDK's version, or `undefined` when the subpath does not resolve. */
@@ -450,17 +335,6 @@ function applyLocalSources(
   compiled: CompiledAgentOptions,
   options: M8CreateOptions,
   applied: string[],
-  /**
-   * The SDK version to gate against, injectable exactly as {@link applyHookApproval}'s is.
-   *
-   * It was NOT threaded here, and `assembleM8CreateOptions`'s `deps.sdkVersion` is documented
-   * "Injectable for tests" without qualification — so the narrowed-import gate read the ambient
-   * installation and nothing else could reach it. The cost was a test that asserted the refusal and
-   * passed because the workspace happened to resolve 4.52.1; B-029 moved the resolution to 5.5.0
-   * and the assertion went red with no production line changed. A seam honoured by one of two
-   * callers is the half-wired shape this backlog keeps closing.
-   */
-  sdkVersion: string | undefined,
 ): void {
   if (compiled.settingSources !== undefined && compiled.settingSources.length > 0) {
     options.local = { ...options.local, settingSources: [...compiled.settingSources] }
@@ -490,11 +364,6 @@ function applyLocalSources(
     // package's declared floor. It also contradicted `compatSourcesForSdk`'s own docblock: "the SDK
     // is asked for what the SDK handles, and if that is nothing it is not asked."
     const forSdk = compatSourcesForSdk(compiled.compatSources)
-    if (forSdk.some((c) => typeof c === 'object' && 'import' in c)) {
-      // A narrowed `import` needs a newer SDK than `compatSources` itself does — refuse before the
-      // value travels, because the older runtime's silence is indistinguishable from success.
-      assertSdkCanReadNarrowedImport(sdkVersion ?? installedSdkVersion())
-    }
     if (forSdk.length > 0) {
       options.local = { ...options.local, compatSources: forSdk }
       applied.push('compatSources')
@@ -517,19 +386,13 @@ function applyHookApproval(
   compiled: CompiledAgentOptions,
   options: M8CreateOptions,
   applied: string[],
-  sdkVersion: string | undefined,
 ): void {
   if (compiled.hookApproval === undefined) return
-  assertSdkCanGateHooks(sdkVersion ?? installedSdkVersion())
   options.local = { ...options.local, hooks: compiled.hookApproval }
   applied.push('hookApproval')
 }
 
-export function assembleM8CreateOptions(
-  compiled: CompiledAgentOptions,
-  /** Injectable for tests; production reads the installed SDK (#686). */
-  deps: { readonly sdkVersion?: string } = {},
-): {
+export function assembleM8CreateOptions(compiled: CompiledAgentOptions): {
   options: M8CreateOptions
   applied: string[]
 } {
@@ -562,8 +425,8 @@ export function assembleM8CreateOptions(
     options.agents = compiled.agents
     applied.push('agents')
   }
-  applyLocalSources(compiled, options, applied, deps.sdkVersion)
-  applyHookApproval(compiled, options, applied, deps.sdkVersion)
+  applyLocalSources(compiled, options, applied)
+  applyHookApproval(compiled, options, applied)
   if (compiled.context) {
     options.context = compiled.context
     applied.push('context')

@@ -122,9 +122,11 @@ describe('Docker Adapter', () => {
     try {
       await dockerCommand()
       const content = readFileSync(join(dir, 'Dockerfile'), 'utf-8')
-      expect(content).toContain('COPY --from=builder /app/src ./src')
+      expect(content).toContain('COPY --from=builder --chown=node:node /app/src ./src')
       expect(content).not.toContain('/app/server')
-      expect(content).toContain('COPY --from=builder /app/theo.config.ts ./theo.config.ts')
+      expect(content).toContain(
+        'COPY --from=builder --chown=node:node /app/theo.config.ts ./theo.config.ts',
+      )
     } finally {
       process.chdir(origCwd)
       rmSync(dir, { recursive: true, force: true })
@@ -138,8 +140,8 @@ describe('Docker Adapter', () => {
     try {
       await dockerCommand()
       const content = readFileSync(join(dir, 'Dockerfile'), 'utf-8')
-      expect(content).toContain('COPY --from=builder /app/server ./server')
-      expect(content).toContain('COPY --from=builder /app/agents ./agents')
+      expect(content).toContain('COPY --from=builder --chown=node:node /app/server ./server')
+      expect(content).toContain('COPY --from=builder --chown=node:node /app/agents ./agents')
       // No theo.config.ts in this project, so there is nothing to copy and a COPY would fail.
       expect(content).not.toContain('theo.config.ts')
     } finally {

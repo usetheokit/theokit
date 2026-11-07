@@ -134,7 +134,8 @@
       "happy-dom@<21.0.4": "^21.0.4",
       "@azure/msal-node@<7.1.0": "^7.1.0",
       "follow-redirects@<1.16.2": "^1.16.2",
-      "@theokit/sdk": "5.13.0"
+      "katex@<0.18.2": "^0.18.2",
+      "@theokit/sdk": "5.14.0"
     },
     "patchedDependencies": {
       "@vitest/utils@4.1.12": "patches/@vitest__utils@4.1.12.patch"

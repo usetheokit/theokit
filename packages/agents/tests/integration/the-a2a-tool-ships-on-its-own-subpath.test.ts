@@ -37,4 +37,18 @@ describe('the A2A tool subpath', () => {
     const mod = (await import(pathToFileURL(path).href)) as Record<string, unknown>
     expect(typeof mod.createA2ATool).toBe('function')
   })
+
+  it('keeps createA2AJsonRpcHandler out of the root bundle and exports it from dist/a2a.js', async (ctx) => {
+    const root = resolve(distDir, 'index.js')
+    if (!existsSync(root)) {
+      ctx.skip()
+      return
+    }
+    expect(readFileSync(root, 'utf8')).not.toContain('createA2AJsonRpcHandler')
+    const mod = (await import(pathToFileURL(resolve(distDir, 'a2a.js')).href)) as Record<
+      string,
+      unknown
+    >
+    expect(typeof mod.createA2AJsonRpcHandler).toBe('function')
+  })
 })

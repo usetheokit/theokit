@@ -1,0 +1,241 @@
+import {
+  DelegationBudgetExceededError,
+  DelegationError,
+  DelegationTimeoutError,
+  GuardrailError,
+} from '@theokit/agents'
+import type { DelegationPort, DelegationResult } from '@theokit/agents'
+import { createCodeMode } from '@theokit/agents/code-mode'
+import { createQuickJsSandbox } from '@theokit/agents/code-mode-quickjs'
+import { createDelegateAllTool, createDelegateTool } from '@theokit/agents/tools'
+import type { CustomTool } from '@theokit/sdk'
+
+import type { TurnAgent, TurnMessage, TurnRun } from '../agent-port.js'
+import { untrustedContentSendOptions } from '../agent/untrusted-content.js'
+import { describeError } from '../control-plane/errors.js'
+import { vetoToolCall } from './path-veto.js'
+import type { ToolSettings } from './tool-settings.js'
+
+/** The longest script result `run_code` hands back to the model (NFR-004). */
+const MAX_RESULT_CHARACTERS = 16_384
+
+/** The only tools a script may call: they read, and change nothing on the host (plan D3). */
+const SCRIPT_TOOL_NAMES: ReadonlySet<string> = new Set(['read_file', 'list_dir', 'web_fetch', 'web_search'])
+
+/**
+ * The longest `web_fetch` a script may ask for: the sandbox's own deadline. The shipped `web_fetch`
+ * ignores the run's abort, so its own timeout is what bounds it once the run has ended (B-697 D3).
+ */
+const SCRIPT_WEB_FETCH_TIMEOUT_MS = 10_000
+
+/**
+ * What the generated instructions do not say: the sandbox runs JavaScript. Measured on a real model
+ * (gemini-2.5-flash-lite, 2026-10-31): told only "an async function body", it wrote Python three
+ * times in a row and the run ended in error; told the language, it once left a `Promise.all(...).then`
+ * chain unreturned and got null.
+ */
+const SCRIPT_LANGUAGE = [
+  'The code is JavaScript (ECMAScript 2023), not Python. It runs as the body of an async function:',
+  'call `const file = await api.read_file({ path: "a.txt" })`, read `file.content`, and end with `return <value>`.',
+  'Each api call takes one object argument and resolves to the tool\'s answer, parsed when it is JSON.',
+  'Await every call and `return` the final value at the top level of the code: a value that is not returned is lost, and the tool answers null.',
+].join(' ')
+
+/** Builds one worker: a fresh agent holding only the read-only tools (plan D4). */
+export type CreateWorker = () => Promise<TurnAgent>
+
+/** A script's result too long to hand back to the model. */
+class CodeModeResultTooLongError extends Error {
+  override readonly name = 'CodeModeResultTooLongError'
+
+  constructor(readonly length: number) {
+    super(
+      `run_code: the script's result is ${String(length)} characters, past the ${String(MAX_RESULT_CHARACTERS)} a tool result may carry; return a smaller value`,
+    )
+  }
+}
+
+/**
+ * `run_code`: the agent's script calls the read-only `tools` as `api.<name>(input)` inside QuickJS,
+ * and only its return value reaches the model (plan D3). A script's call runs the handler directly,
+ * outside the SDK's `pre_tool_call` plugins, so the gate applies the same path veto itself, and
+ * grants no tool outside `SCRIPT_TOOL_NAMES`, whatever `tools` holds.
+ */
+export function codeModeTool(tools: readonly CustomTool[], settings: ToolSettings): CustomTool {
+  const { tool, instructions } = createCodeMode({
+    tools: cappedScriptTools(tools),
+    sandbox: createQuickJsSandbox(),
+    onPermissionRequest: ({ tool: name, args }) => {
+      if (!SCRIPT_TOOL_NAMES.has(name)) return { granted: false, reason: `${name} is not one of the tools a script may call` }
+      const refusal = vetoToolCall(name, args, settings)
+      return refusal === undefined ? { granted: true } : { granted: false, reason: refusal }
+    },
+  })
+  return {
+    ...tool,
+    description: `${SCRIPT_LANGUAGE}\n\n${instructions}`,
+    // The run's signal reaches the sandbox, which ends the script and its host calls on abort.
+    handler: async (input, ctx) => {
+      const result = await tool.handler(input, ctx?.signal === undefined ? undefined : { signal: ctx.signal })
+      if (result.length > MAX_RESULT_CHARACTERS) throw new CodeModeResultTooLongError(result.length)
+      return result
+    },
+  }
+}
+
+/** The `timeout_ms` a script's `web_fetch` runs with: what it asked for, if positive, up to the cap. */
+function scriptFetchTimeout(asked: unknown): number {
+  const value = Number(asked)
+  return value > 0 ? Math.min(value, SCRIPT_WEB_FETCH_TIMEOUT_MS) : SCRIPT_WEB_FETCH_TIMEOUT_MS
+}
+
+/** The script's tools, with `web_fetch`'s `timeout_ms` held at `SCRIPT_WEB_FETCH_TIMEOUT_MS` at most. */
+function cappedScriptTools(tools: readonly CustomTool[]): CustomTool[] {
+  return tools.map((tool) =>
+    tool.name !== 'web_fetch'
+      ? tool
+      : {
+          ...tool,
+          handler: (input, ctx) => tool.handler({ ...input, timeout_ms: scriptFetchTimeout(input.timeout_ms) }, ctx),
+        },
+  )
+}
+
+/** Drain the run's stream and return the code of the first error event, if any. */
+async function streamedErrorOf(run: TurnRun): Promise<string | undefined> {
+  let streamed: string | undefined
+  for await (const message of run.stream()) {
+    if (message.type === 'error') streamed ??= String((message as { code?: unknown }).code ?? 'error')
+  }
+  return streamed
+}
+
+/**
+ * The run's outcome, its stream drained first. While it runs, an abort of `signal` cancels it; the
+ * cancellation's own failure, if any, rejects here rather than being lost. Its handler is attached
+ * when the cancellation starts, so a run that fails while the cancellation is still rejecting
+ * reports both instead of leaving one unhandled, which would end the process (LCR #76).
+ */
+async function untilSettled(
+  run: TurnRun,
+  signal: AbortSignal | undefined,
+): Promise<Awaited<ReturnType<TurnRun['wait']>> & { readonly streamed: string | undefined }> {
+  let cancelling: Promise<{ readonly failure: unknown } | undefined> | undefined
+  const cancel = (): void => {
+    cancelling ??= run.cancel().then(
+      () => undefined,
+      (failure: unknown) => ({ failure }),
+    )
+  }
+  if (signal?.aborted === true) cancel()
+  else signal?.addEventListener('abort', cancel, { once: true })
+  let result: Awaited<ReturnType<TurnRun['wait']>> & { readonly streamed: string | undefined }
+  try {
+    const streamed = await streamedErrorOf(run)
+    result = { ...(await run.wait()), streamed }
+  } catch (error) {
+    const cancelled = await cancelling
+    if (cancelled === undefined) throw error
+    throw new AggregateError(
+      [error, cancelled.failure],
+      `${describeError(error)}; cancelling the worker's run then failed: ${describeError(cancelled.failure)}`,
+    )
+  } finally {
+    signal?.removeEventListener('abort', cancel)
+  }
+  const cancelled = await cancelling
+  if (cancelled !== undefined) throw cancelled.failure
+  return result
+}
+
+async function disposeWorker(agent: TurnAgent): Promise<void> {
+  const dispose = (agent as Partial<AsyncDisposable>)[Symbol.asyncDispose]
+  if (typeof dispose === 'function') await dispose.call(agent)
+}
+
+/**
+ * A worker failure `delegate_all` must read as itself: a guardrail error, whose message must not
+ * reach the model, and a delegation error, which already says what failed (B-697 D1, #80). A guarded
+ * worker whose disposal or cancellation also failed passes too, so it ends the turn as a defect
+ * rather than leak the guard's trigger inside a wrapped message (EC-1).
+ */
+function passesThrough(error: unknown): boolean {
+  if (error instanceof AggregateError) return carriesGuardrailError(error)
+  return (
+    error instanceof GuardrailError ||
+    error instanceof DelegationError ||
+    error instanceof DelegationBudgetExceededError ||
+    error instanceof DelegationTimeoutError
+  )
+}
+
+/** Whether a guardrail error sits anywhere in `error`, an aggregate of aggregates included. */
+function carriesGuardrailError(error: unknown): boolean {
+  if (error instanceof GuardrailError) return true
+  return error instanceof AggregateError && error.errors.some(carriesGuardrailError)
+}
+
+/**
+ * The one roster entry of `delegate_all`: each task gets a fresh worker, runs one turn, and is
+ * disposed. Every other way a worker can fail, its build and its disposal included, is a
+ * `DelegationError`, so `delegate_all` reports it beside the other tasks instead of ending the
+ * parent's turn (EC-3). The parent turn's signal cancels each worker's run when it aborts.
+ */
+function workerPort(createWorker: CreateWorker): DelegationPort {
+  return {
+    run: async (task, options): Promise<DelegationResult> => {
+      try {
+        return await runWorker(createWorker, task, options?.signal)
+      } catch (error) {
+        throw passesThrough(error) ? error : new DelegationError('worker', error)
+      }
+    },
+  }
+}
+
+/**
+ * One worker turn: built, run and disposed. A build that fails, a run that does not finish and a
+ * disposal that throws all reject: a worker whose disposal failed is in a state nobody knows, as a
+ * `/control` turn's is (`runTheoClawTurn`).
+ */
+export async function runWorker(
+  createWorker: CreateWorker,
+  task: TurnMessage,
+  signal: AbortSignal | undefined,
+): Promise<DelegationResult> {
+  if (signal?.aborted === true) throw new Error('the turn that delegated was cancelled before the worker started')
+  const agent = await createWorker()
+  let outcome: DelegationResult
+  try {
+    // The signal reaches the send too: the SDK composes it into its dispatch signal, where cancelling the run only moves its local status.
+    const run = await agent.send(task, { ...untrustedContentSendOptions(), ...(signal === undefined ? {} : { signal }) })
+    const { streamed, ...result } = await untilSettled(run, signal)
+    if (streamed !== undefined) throw new Error(`the worker's run streamed an error (${streamed})`)
+    if (result.status !== 'finished') throw new Error(`the worker's run ended with status ${result.status}`)
+    // The SDK accounts the worker's cost; this port reports none it measured (plan D4).
+    outcome = { response: result.result ?? '', toolCalls: [], cost: 0, costUnknown: true, tokens: 0 }
+  } catch (error) {
+    // The disposal still runs; if it fails too, both failures are reported, the run's first.
+    try {
+      await disposeWorker(agent)
+    } catch (disposal) {
+      throw new AggregateError(
+        [error, disposal],
+        `${describeError(error)}; disposing the worker then failed: ${describeError(disposal)}`,
+      )
+    }
+    throw error
+  }
+  await disposeWorker(agent)
+  return outcome
+}
+
+/** `delegate_all` over one `worker` roster entry: up to four read-only workers at once. */
+export function delegateAllTool(createWorker: CreateWorker): CustomTool {
+  return createDelegateAllTool({ roster: [{ name: 'worker', target: workerPort(createWorker) }] })
+}
+
+/** `delegate` over the same `worker` roster entry: one read-only worker, its answer returned to the parent (B-611). */
+export function delegateTool(createWorker: CreateWorker): CustomTool {
+  return createDelegateTool({ roster: [{ name: 'worker', target: workerPort(createWorker) }] })
+}

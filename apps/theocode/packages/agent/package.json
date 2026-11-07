@@ -1,6 +1,6 @@
 {
   "name": "@theocode/agent",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "private": true,
   "type": "module",
   "description": "The agent and everything that composes it.",
@@ -23,6 +23,6 @@
     "@theokit/agents-pty": "workspace:*",
     "smol-toml": "^1.7.0",
     "zod": "^4.0.0",
-    "@theokit/sdk": "5.13.0"
+    "@theokit/sdk": "5.14.0"
   }
 }

@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  assertSdkCanReadNarrowedImport,
-  CompatImportUnsupportedError,
-} from '../../src/bridge/sdk-adapter-create-options.js'
-import {
   resolveCompatSources,
   resolveSettingSources,
 } from '../../src/bridge/setting-sources-gate.js'
@@ -51,51 +47,6 @@ const trusted = (
 
 const compatFor = (surfaces?: readonly string[]) =>
   resolveCompatSources({ claudeCode: trusted(surfaces) })
-
-describe('the narrowed compat import is refused when the SDK cannot read it', () => {
-  it('test_an_sdk_that_can_read_the_narrowed_shape_is_accepted', () => {
-    expect(() => {
-      assertSdkCanReadNarrowedImport('5.4.0')
-    }).not.toThrow()
-    expect(() => {
-      assertSdkCanReadNarrowedImport('6.0.0')
-    }).not.toThrow()
-  })
-
-  it('test_an_sdk_that_knows_compatSources_but_not_the_narrowing_is_refused', () => {
-    // The exact window the defect lived in: `compatSources` works, `import` does not.
-    expect(() => {
-      assertSdkCanReadNarrowedImport('5.3.9')
-    }).toThrow(CompatImportUnsupportedError)
-    expect(() => {
-      assertSdkCanReadNarrowedImport('5.0.0')
-    }).toThrow(CompatImportUnsupportedError)
-  })
-
-  it('test_an_unreadable_version_is_refused_rather_than_assumed', () => {
-    // "Cannot tell" and "is supported" must not collapse — unproven is not proven, and this whole
-    // finding is one instance of that confusion. Same posture as the hook gate.
-    expect(() => {
-      assertSdkCanReadNarrowedImport(undefined)
-    }).toThrow(CompatImportUnsupportedError)
-    expect(() => {
-      assertSdkCanReadNarrowedImport('not-a-version')
-    }).toThrow(CompatImportUnsupportedError)
-  })
-
-  it('test_the_refusal_names_the_version_it_needs_and_what_would_happen_without_it', () => {
-    // A refusal an operator cannot act on is a refusal they route around.
-    let message = ''
-    try {
-      assertSdkCanReadNarrowedImport('5.1.0')
-    } catch (cause) {
-      message = cause instanceof Error ? cause.message : String(cause)
-    }
-    expect(message).toContain('5.4.0')
-    expect(message).toContain('5.1.0')
-    expect(message).toMatch(/not be read AT ALL|less than you asked for/)
-  })
-})
 
 describe('resolveSettingSources reads the declaration, not merely its presence', () => {
   it('test_user_false_is_a_refusal_not_a_declaration', () => {
@@ -155,34 +106,12 @@ describe('the gate reads what would actually be sent, not what was declared', ()
     expect(options.local?.compatSources, 'nothing the SDK handles remains').toBeUndefined()
   })
 
-  it('test_a_narrowing_the_sdk_would_receive_is_still_refused', () => {
-    // The other half: the reorder must not have disarmed the gate. `skills` IS forwarded, so on an
-    // SDK that cannot read the narrowed shape the refusal still fires.
-    //
-    // The version is INJECTED, and that is the point of this edit. This assertion used to read the
-    // ambient installation, and it passed for an environmental reason rather than a behavioural
-    // one: the workspace happened to resolve 4.52.1. B-029 narrowed the declared range, the
-    // resolution moved to 5.5.0, and the test went red without a single line of production code
-    // changing — it had been asserting "the SDK on this machine is old", which is not a fact about
-    // this gate. `the-hook-gate-crosses-or-refuses.test.ts` was already injecting; this file is now
-    // consistent with it.
-    expect(() =>
-      assembleM8CreateOptions(
-        { ...base, compatSources: compatFor(['skills']) },
-        { sdkVersion: '5.0.0' },
-      ),
-    ).toThrow(CompatImportUnsupportedError)
-  })
-
-  it('test_a_narrowing_an_sdk_that_CAN_read_it_is_forwarded', () => {
+  it('test_a_narrowing_the_sdk_handles_is_forwarded', () => {
     // The control the refusal above was missing, and without which it proves nothing: a gate that
     // refused unconditionally would satisfy the assertion above and break every consumer. Naming
     // both versions is what makes the pair a statement about the boundary rather than about a
     // machine.
-    const { options } = assembleM8CreateOptions(
-      { ...base, compatSources: compatFor(['skills']) },
-      { sdkVersion: '5.4.0' },
-    )
+    const { options } = assembleM8CreateOptions({ ...base, compatSources: compatFor(['skills']) })
 
     expect(options.local?.compatSources).toEqual([{ kind: 'claude-code', import: ['skills'] }])
   })

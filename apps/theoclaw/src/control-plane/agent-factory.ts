@@ -1,7 +1,12 @@
 import { join } from 'node:path'
 
 import { createTheoClawAgent, theoClawAgentOptions } from '../agent/create-agent.js'
-import type { TheoClawAgentOptions } from '../agent/create-agent.js'
+import type { ThinkingLevel } from '../agent/failover.js'
+import type { AgentImport, TheoClawAgentOptions, TheoClawLocalOptions } from '../agent/create-agent.js'
+import { parseFallbackModel, parseThinkingLevel, withFailover } from '../agent/failover.js'
+import { parseApprovedHooks } from '../agent/hook-approval.js'
+import { readPersonaPrompt } from '../agent/persona-files.js'
+import { agentTelemetry, readTelemetrySettings } from '../telemetry/otel.js'
 import type { AgentToolOptions } from '../tools/tool-registry.js'
 import type { BindEnvironment } from './bind.js'
 import { requireModel } from './settings.js'
@@ -12,7 +17,7 @@ export type CreateAgent = (options: TheoClawAgentOptions) => Promise<TurnAgent>
 
 /** A chat session's options: the protected set, plus where its transcripts live. */
 export interface SessionAgentOptions extends TheoClawAgentOptions {
-  readonly local: { readonly cwd: string; readonly sessionDir: string }
+  readonly local: TheoClawLocalOptions & { readonly cwd: string; readonly sessionDir: string }
 }
 
 /**
@@ -30,7 +35,24 @@ export interface SessionAgentOptions extends TheoClawAgentOptions {
  */
 export function agentOptionsFor(env: BindEnvironment): TheoClawAgentOptions {
   const { model, modelKey } = requireModel(env)
-  return theoClawAgentOptions({ model, apiKey: modelKey })
+  return theoClawAgentOptions({ model, apiKey: modelKey, approvedHooks: parseApprovedHooks(env), ...thinkingOf(env), ...agentTelemetry(readTelemetrySettings(env)) })
+}
+
+function thinkingOf(env: BindEnvironment): { thinking?: ThinkingLevel } {
+  const thinking = parseThinkingLevel(env.THEOCLAW_THINKING)
+  return thinking === undefined ? {} : { thinking }
+}
+
+/**
+ * `create(options)` on the primary model; with `THEOCLAW_MODEL_FALLBACK` set, the agent falls over
+ * to a secondary built lazily from the same options with the fallback model (OC-47). The fallback
+ * runs on the same key; a secondary on another provider's key is not supported.
+ */
+function createWithFailover(env: BindEnvironment, create: CreateAgent, options: TheoClawAgentOptions): Promise<TurnAgent> {
+  const fallback = parseFallbackModel(env.THEOCLAW_MODEL_FALLBACK)
+  return create(options).then((primary) =>
+    fallback === undefined || fallback === options.model ? primary : withFailover(primary, () => create({ ...options, model: fallback })),
+  )
 }
 
 /**
@@ -40,22 +62,42 @@ export function agentOptionsFor(env: BindEnvironment): TheoClawAgentOptions {
  * profile, `workspace` is the profile's own, the directory its `/control` agents work in too.
  */
 export function sessionAgentOptions(env: BindEnvironment, workspace: string): SessionAgentOptions {
-  return { ...agentOptionsFor(env), local: { cwd: workspace, sessionDir: join(workspace, '.theoclaw') } }
+  const options = agentOptionsFor(env)
+  const persona = readPersonaPrompt(workspace)
+  return {
+    ...options,
+    systemPrompt: persona === '' ? options.systemPrompt : `${options.systemPrompt}\n\n${persona}`,
+    local: { ...options.local, cwd: workspace, sessionDir: join(workspace, '.theoclaw') },
+  }
 }
 
 /**
  * One agent per call, for the `/control` socket's turns (one request boundary each), with the
  * start's `agentToolOptions` (B-382): the published theokit tools bound to the tool root and the
- * sandbox, and the state-directory veto. The process entry and the live test both build their
- * agents through this function, so the live check proves the entry's own.
+ * sandbox, and the state-directory veto, plus a migration import when the start read one (FR-008).
+ * The process entry and the live test both build their agents through this function, so the live
+ * check proves the entry's own.
  */
 export function createAgentFactory(
   env: BindEnvironment,
   create: CreateAgent = createTheoClawAgent,
+  imported?: AgentImport,
 ): (toolOptions?: AgentToolOptions) => Promise<TurnAgent> {
   return async (toolOptions) => {
     const { model, modelKey } = requireModel(env)
-    return create(theoClawAgentOptions({ model, apiKey: modelKey, ...(toolOptions === undefined ? {} : { toolOptions }) }))
+    return createWithFailover(env, create, 
+      theoClawAgentOptions({
+        model,
+        apiKey: modelKey,
+        approvedHooks: parseApprovedHooks(env),
+        ...thinkingOf(env),
+        ...agentTelemetry(readTelemetrySettings(env)),
+        ...(toolOptions === undefined ? {} : { toolOptions }),
+        // Installed plugins reach only the owner's `/control` agent, never a chat agent (OC-75).
+        ...(env.THEOCLAW_PLUGIN_WORKSPACE === undefined || env.THEOCLAW_PLUGIN_WORKSPACE === '' ? {} : { pluginWorkspace: env.THEOCLAW_PLUGIN_WORKSPACE }),
+        ...(imported === undefined ? {} : { imported }),
+      }),
+    )
   }
 }
 
@@ -72,4 +114,21 @@ export function createChannelAgentFactory<A>(
   create: (options: TheoClawAgentOptions) => Promise<A>,
 ): () => Promise<A> {
   return async () => create(agentOptionsFor(env))
+}
+
+/** The chat path's factory over the SDK, for a caller given no `create` of its own: a trigger run's default (B-397). */
+export function createSdkChannelAgentFactory(env: BindEnvironment): () => Promise<TurnAgent> {
+  return async () => createWithFailover(env, createTheoClawAgent, agentOptionsFor(env))
+}
+
+/**
+ * A WebChat turn's agent: one per turn, through `createChannelAgentFactory`, so WebChat holds no
+ * tool, no `shell` and memory off by the same export every chat agent is opened through, not by a
+ * second "no tool" mechanism of its own. `create` defaults to the SDK's, as `createAgentFactory`'s.
+ */
+export function webchatAgentFactory(
+  env: BindEnvironment,
+  create: CreateAgent = createTheoClawAgent,
+): () => Promise<TurnAgent> {
+  return async () => createWithFailover(env, create, agentOptionsFor(env))
 }

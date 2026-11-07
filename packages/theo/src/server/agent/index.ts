@@ -46,7 +46,13 @@ export type {
 } from '@theokit/agents'
 
 // MCP stdio transport + `ui://` app resources served by the MCP server.
-export { serveMcpStdio, handleMcpStdioLine, type StdioStreams } from './mcp-stdio.js'
+export {
+  serveMcpStdio,
+  serveMcpToolsStdio,
+  handleMcpStdioLine,
+  type StdioStreams,
+} from './mcp-stdio.js'
+export { handleMcpToolsJsonRpc } from './mcp-handler.js'
 export {
   defineAppResource,
   buildResourceDescriptors,

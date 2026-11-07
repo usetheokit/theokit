@@ -279,17 +279,25 @@ async function prepareCopy(exec, seedDir, dest) {
 /**
  * @param {Exec} exec @param {{ verify: string[], verifyDir: string }} task @param {string} dir
  * @param {number} timeoutMs
+ * @param {boolean} [strict] throw on output without totals (the seed check) instead of counting it a failure
  */
-async function verifyTree(exec, task, dir, timeoutMs) {
+async function verifyTree(exec, task, dir, timeoutMs, strict = false) {
   await cp(task.verifyDir, dir, { recursive: true, force: true })
   const [cmd, ...args] = task.verify
   const result = await exec(cmd, args, { cwd: dir, timeoutMs })
   // A killed run never printed its totals: it has no counts, not unparsable ones.
   if (result.timedOut) return { counts: null, verifyExitCode: result.code, verifyTimedOut: true }
-  return {
-    counts: parseTestCounts(`${result.stdout}\n${result.stderr}`),
-    verifyExitCode: result.code,
-    verifyTimedOut: false,
+  try {
+    return {
+      counts: parseTestCounts(`${result.stdout}\n${result.stderr}`),
+      verifyExitCode: result.code,
+      verifyTimedOut: false,
+    }
+  } catch (error) {
+    // An agent that leaves the tree unable to run the tests (syntax error, crash) prints no totals:
+    // that side failed, and the run's record must still be written.
+    if (strict || !(error instanceof UnparsableVerificationError)) throw error
+    return { counts: null, verifyExitCode: result.code, verifyTimedOut: false }
   }
 }
 
@@ -302,7 +310,7 @@ async function checkSeed(exec, task, workRoot, verifyTimeoutMs = DEFAULT_VERIFY_
   const dir = join(workRoot, `${task.id}-seed-check`)
   await prepareCopy(exec, task.seedDir, dir)
   const seedHash = await hashTree(task.seedDir)
-  const verification = await verifyTree(exec, task, dir, verifyTimeoutMs)
+  const verification = await verifyTree(exec, task, dir, verifyTimeoutMs, true)
   if (verification.counts === null) throw new SeedVerificationHangsError(task.id, verifyTimeoutMs)
   if (sideOutcome(verification) === 'solved')
     throw new SeedAlreadyPassesError(task.id, verification.counts)

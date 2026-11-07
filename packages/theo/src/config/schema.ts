@@ -321,6 +321,13 @@ export const theoConfigSchema = z
             batchSize: z.number().int().positive().default(10),
             /** Lease duration per job; a job still running after it can be leased again. */
             lockSeconds: z.number().int().positive().default(30),
+            /**
+             * How long SIGTERM waits for the job in progress to finish before `theokit start`
+             * closes its storage and exits (usetheokit/theokit#1292). Raise it for jobs that run
+             * longer than 20 seconds, and give the process manager a longer grace period too
+             * (systemd `TimeoutStopSec`, Kubernetes `terminationGracePeriodSeconds`).
+             */
+            shutdownTimeoutMs: z.number().int().positive().default(20_000),
           })
           .prefault({}),
       })

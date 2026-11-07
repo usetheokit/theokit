@@ -120,6 +120,8 @@ export default defineConfig({
     // for in-process tests. See tests/setup-tsx-loader.ts for full rationale
     // + the failure inventory it closes.
     setupFiles: ['./tests/setup-tsx-loader.ts'],
+    // B-429 — fails the run if it leaves a new change under `packages/` (see the file).
+    globalSetup: ['./tests/global-packages-clean.ts'],
     // theokit-test-suite-cleanup followup 2026-06-05 — vitest defaults to
     // running ALL dynamic `await import()` calls through Vite's SSR loader
     // (including those inside framework code like `load-config.ts:68` that
@@ -297,6 +299,16 @@ export default defineConfig({
       // M75 — the hook engine subpath. Every new `@theokit/agents/*` entry needs a line here, ABOVE
       // the bare specifier: a string alias matches by prefix, so without it this resolves to the
       // nonsense path `…/src/index.ts/hooks` instead of erroring.
+      // B-386 — code mode, above the bare specifier for the same prefix reason; the more specific
+      // `/code-mode-quickjs` first.
+      '@theokit/agents/code-mode-quickjs': path.resolve(
+        __dirname,
+        'packages/agents/src/code-mode-quickjs-entry.ts',
+      ),
+      '@theokit/agents/code-mode': path.resolve(
+        __dirname,
+        'packages/agents/src/code-mode-entry.ts',
+      ),
       '@theokit/agents/tool-scope': path.resolve(__dirname, 'packages/agents/src/tools/index.ts'),
       '@theokit/agents/mcp-health': path.resolve(
         __dirname,

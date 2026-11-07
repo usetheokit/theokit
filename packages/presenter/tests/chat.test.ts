@@ -136,3 +136,51 @@ describe('ChatPresenter', () => {
     expect(new ChatPresenter({ channel: { id: 'c1', type: 'dm' } }).surface).toBe('chat')
   })
 })
+
+describe('B-525 — preview on an edit-capable channel', () => {
+  const channel = { id: 'c', type: 'dm' as const }
+  const text = (t: string): AgentOutputEvent => ({ type: 'text', text: t }) as AgentOutputEvent
+  const fin = { type: 'finish' } as AgentOutputEvent
+
+  it('emits a preview before finish and the final message replaces it', () => {
+    const p = new ChatPresenter({ channel, supportsEdit: true, now: () => 0 })
+    const early = p.present(text('Hel'))
+    expect(early).toHaveLength(1)
+    expect(early[0]).toMatchObject({ text: 'Hel', preview: true })
+    p.present(text('lo'))
+    const last = p.present(fin)
+    expect(last).toHaveLength(1)
+    expect(last[0]).toMatchObject({ text: 'Hello', replacesPreview: true })
+    expect(last[0]?.preview).toBeUndefined()
+  })
+
+  it('emits no preview and one plain final message without edit support', () => {
+    const p = new ChatPresenter({ channel })
+    expect(p.present(text('Hel'))).toEqual([])
+    p.present(text('lo'))
+    const last = p.present(fin)
+    expect(last).toHaveLength(1)
+    expect(last[0]?.text).toBe('Hello')
+    expect(last[0]?.replacesPreview).toBeUndefined()
+  })
+
+  it('emits previews no more often than the interval', () => {
+    let t = 0
+    const p = new ChatPresenter({
+      channel,
+      supportsEdit: true,
+      previewIntervalMs: 500,
+      now: () => t,
+    })
+    const count = (): number => p.present(text('x')).length
+    expect(count()).toBe(1)
+    t = 499
+    expect(count()).toBe(0)
+    t = 500
+    expect(count()).toBe(1)
+    t = 700
+    expect(count()).toBe(0)
+    t = 1000
+    expect(count()).toBe(1)
+  })
+})

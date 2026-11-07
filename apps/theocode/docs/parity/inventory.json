@@ -1,0 +1,371 @@
+{
+  "version": 1,
+  "note": "Every row needs a passing check (status shipped + evidence) or a reason. Enforced by tools/check-parity-ledger.mjs.",
+  "rows": [
+    {
+      "id": "codex:slash:raw",
+      "product": "codex",
+      "capability": "/raw prints the reply verbatim (not a toggle)",
+      "status": "shipped",
+      "evidence": {
+        "file": "packages/tui/tests/commands/raw-command.test.ts",
+        "test": "test_the_last_reply_is_written_verbatim_including_a_line_no_terminal_could_fit"
+      }
+    },
+    {
+      "id": "codex:slash:sandbox",
+      "product": "codex",
+      "capability": "/sandbox shows and changes the sandbox mode",
+      "status": "shipped",
+      "evidence": {
+        "file": "packages/tui/tests/commands/sandbox-command.test.ts",
+        "test": "test_taking_the_armed_mode_consumes_it"
+      }
+    },
+    {
+      "id": "codex:hooks",
+      "product": "codex",
+      "capability": "Session-start hooks run only when approved",
+      "status": "shipped",
+      "evidence": {
+        "file": "packages/cli/tests/session-start-e2e.test.ts",
+        "test": "test_an_approved_hook_runs_and_learns_the_session_id"
+      }
+    },
+    {
+      "id": "claude-code:subagents-dir",
+      "product": "claude-code",
+      "capability": "Subagents declared under .claude/ are listed and routed",
+      "status": "shipped",
+      "evidence": {
+        "file": "packages/tui/tests/commands/claude-subagents.test.ts",
+        "test": "test_one_declared_only_under_claude_is_listed"
+      }
+    },
+    {
+      "id": "claude-code:custom-commands",
+      "product": "claude-code",
+      "capability": "Custom commands under .claude/commands load in trusted projects",
+      "status": "shipped",
+      "evidence": {
+        "file": "packages/tui/tests/commands/custom-commands.compat.test.ts",
+        "test": "test_a_command_in_dot_claude_commands_is_loaded"
+      }
+    },
+    {
+      "id": "claude-code:skills-dir",
+      "product": "claude-code",
+      "capability": "Skills under .claude/skills load without a config line",
+      "status": "shipped",
+      "evidence": {
+        "file": "packages/agent/tests/foreign-skills-are-listed.test.ts",
+        "test": "names the skills that live under .claude/skills"
+      }
+    },
+    {
+      "id": "claude-code:hooks",
+      "product": "claude-code",
+      "capability": "Session-start hooks from settings run only when approved",
+      "status": "shipped",
+      "evidence": {
+        "file": "packages/cli/tests/session-start-e2e.test.ts",
+        "test": "test_an_unapproved_hook_does_not_run"
+      }
+    },
+    {
+      "id": "claude-code:output-style",
+      "product": "claude-code",
+      "capability": "Output styles reach the compiled prompt",
+      "status": "shipped",
+      "evidence": {
+        "file": "packages/cli/tests/output-style-e2e.test.ts",
+        "test": "test_the_style_body_is_in_the_compiled_module"
+      }
+    },
+    {
+      "id": "claude-code:plugins-marketplace",
+      "product": "claude-code",
+      "capability": "Plugin marketplace install",
+      "status": "gap",
+      "reason": "No end-to-end check exists yet; not claimed as shipped."
+    },
+    {
+      "id": "claude-code:model-parity-run",
+      "product": "claude-code",
+      "capability": "Same-task results against Claude Code with a live model",
+      "status": "gap",
+      "reason": "Needs a live model and a real account; not runnable offline. See docs/parity/2026-08-25-codex-parity.md for the Codex measurement only."
+    },
+    {
+      "id": "codex:live-task-parity",
+      "product": "codex",
+      "capability": "Same-task results against Codex with a live model",
+      "status": "gap",
+      "reason": "Needs a live model and a ChatGPT sign-in; measured by hand in docs/parity/2026-08-25-codex-parity.md, not by an automated check."
+    },
+    {
+      "id": "codex:slash:memories",
+      "product": "codex",
+      "capability": "/memories slash command",
+      "status": "pointer",
+      "reason": "Answered with a pointer, never 'unknown command': it is /memory here \u2014 /memory, /memory off|on, /memory forget <n>",
+      "evidence": {
+        "file": "packages/tui/tests/commands/codex-names.test.ts",
+        "test": "test_every_mapped_name_routes_instead_of_erroring"
+      }
+    },
+    {
+      "id": "codex:slash:approve",
+      "product": "codex",
+      "capability": "/approve slash command",
+      "status": "pointer",
+      "reason": "Answered with a pointer, never 'unknown command': it is /review here \u2014 /review [base <ref> | commit <sha>]",
+      "evidence": {
+        "file": "packages/tui/tests/commands/codex-names.test.ts",
+        "test": "test_every_mapped_name_routes_instead_of_erroring"
+      }
+    },
+    {
+      "id": "codex:slash:recap",
+      "product": "codex",
+      "capability": "/recap slash command",
+      "status": "pointer",
+      "reason": "Answered with a pointer, never 'unknown command': no on-demand recap \u2014 /compact summarises to reclaim context, which is a different reason",
+      "evidence": {
+        "file": "packages/tui/tests/commands/codex-names.test.ts",
+        "test": "test_every_mapped_name_routes_instead_of_erroring"
+      }
+    },
+    {
+      "id": "codex:slash:worktree",
+      "product": "codex",
+      "capability": "/worktree slash command",
+      "status": "pointer",
+      "reason": "Answered with a pointer, never 'unknown command': no git-worktree session \u2014 /fork branches this session, and leaves the checkout where it is",
+      "evidence": {
+        "file": "packages/tui/tests/commands/codex-names.test.ts",
+        "test": "test_every_mapped_name_routes_instead_of_erroring"
+      }
+    },
+    {
+      "id": "codex:slash:voice",
+      "product": "codex",
+      "capability": "/voice slash command",
+      "status": "pointer",
+      "reason": "Answered with a pointer, never 'unknown command': no voice conversation \u2014 this product is text only",
+      "evidence": {
+        "file": "packages/tui/tests/commands/codex-names.test.ts",
+        "test": "test_every_mapped_name_routes_instead_of_erroring"
+      }
+    },
+    {
+      "id": "codex:slash:mention",
+      "product": "codex",
+      "capability": "/mention slash command",
+      "status": "pointer",
+      "reason": "Answered with a pointer, never 'unknown command': no command needed \u2014 type @ in the composer and pick the file",
+      "evidence": {
+        "file": "packages/tui/tests/commands/codex-names.test.ts",
+        "test": "test_every_mapped_name_routes_instead_of_erroring"
+      }
+    },
+    {
+      "id": "codex:slash:debug-config",
+      "product": "codex",
+      "capability": "/debug-config slash command",
+      "status": "pointer",
+      "reason": "Answered with a pointer, never 'unknown command': /status shows the resolved model, effort, approval, sandbox, cwd and theme; `theocode doctor` checks the same layers from outside the TUI",
+      "evidence": {
+        "file": "packages/tui/tests/commands/codex-names.test.ts",
+        "test": "test_every_mapped_name_routes_instead_of_erroring"
+      }
+    },
+    {
+      "id": "codex:slash:sandbox-add-read-dir",
+      "product": "codex",
+      "capability": "/sandbox-add-read-dir slash command",
+      "status": "pointer",
+      "reason": "Answered with a pointer, never 'unknown command': the sandbox is set as a whole here \u2014 /sandbox shows and changes the mode",
+      "evidence": {
+        "file": "packages/tui/tests/commands/codex-names.test.ts",
+        "test": "test_every_mapped_name_routes_instead_of_erroring"
+      }
+    },
+    {
+      "id": "codex:slash:setup-default-sandbox",
+      "product": "codex",
+      "capability": "/setup-default-sandbox slash command",
+      "status": "pointer",
+      "reason": "Answered with a pointer, never 'unknown command': the sandbox is set as a whole here \u2014 /sandbox shows and changes the mode",
+      "evidence": {
+        "file": "packages/tui/tests/commands/codex-names.test.ts",
+        "test": "test_every_mapped_name_routes_instead_of_erroring"
+      }
+    },
+    {
+      "id": "codex:slash:side",
+      "product": "codex",
+      "capability": "/side slash command",
+      "status": "pointer",
+      "reason": "Answered with a pointer, never 'unknown command': the nearest thing is /fork, which branches this session into a new one",
+      "evidence": {
+        "file": "packages/tui/tests/commands/codex-names.test.ts",
+        "test": "test_every_mapped_name_routes_instead_of_erroring"
+      }
+    },
+    {
+      "id": "codex:slash:btw",
+      "product": "codex",
+      "capability": "/btw slash command",
+      "status": "pointer",
+      "reason": "Answered with a pointer, never 'unknown command': the nearest thing is /fork, which branches this session into a new one",
+      "evidence": {
+        "file": "packages/tui/tests/commands/codex-names.test.ts",
+        "test": "test_every_mapped_name_routes_instead_of_erroring"
+      }
+    },
+    {
+      "id": "codex:slash:cd",
+      "product": "codex",
+      "capability": "/cd slash command",
+      "status": "pointer",
+      "reason": "Answered with a pointer, never 'unknown command': the TUI runs in the directory it was started in and cannot move \u2014 /pwd says which one. Headless takes a directory: `theocode -C <dir> run \"\u2026\"`",
+      "evidence": {
+        "file": "packages/tui/tests/commands/codex-names.test.ts",
+        "test": "test_every_mapped_name_routes_instead_of_erroring"
+      }
+    },
+    {
+      "id": "codex:slash:ide",
+      "product": "codex",
+      "capability": "/ide slash command",
+      "status": "pointer",
+      "reason": "Answered with a pointer, never 'unknown command': no IDE bridge \u2014 TheoCode reads the repository, not your editor",
+      "evidence": {
+        "file": "packages/tui/tests/commands/codex-names.test.ts",
+        "test": "test_every_mapped_name_routes_instead_of_erroring"
+      }
+    },
+    {
+      "id": "codex:slash:app",
+      "product": "codex",
+      "capability": "/app slash command",
+      "status": "pointer",
+      "reason": "Answered with a pointer, never 'unknown command': no desktop app to hand this session to",
+      "evidence": {
+        "file": "packages/tui/tests/commands/codex-names.test.ts",
+        "test": "test_every_mapped_name_routes_instead_of_erroring"
+      }
+    },
+    {
+      "id": "codex:slash:apps",
+      "product": "codex",
+      "capability": "/apps slash command",
+      "status": "pointer",
+      "reason": "Answered with a pointer, never 'unknown command': no app directory \u2014 MCP servers are the extension point (/mcp)",
+      "evidence": {
+        "file": "packages/tui/tests/commands/codex-names.test.ts",
+        "test": "test_every_mapped_name_routes_instead_of_erroring"
+      }
+    },
+    {
+      "id": "codex:slash:plugins",
+      "product": "codex",
+      "capability": "/plugins slash command",
+      "status": "pointer",
+      "reason": "Answered with a pointer, never 'unknown command': no plugin browser \u2014 MCP servers are the extension point (/mcp)",
+      "evidence": {
+        "file": "packages/tui/tests/commands/codex-names.test.ts",
+        "test": "test_every_mapped_name_routes_instead_of_erroring"
+      }
+    },
+    {
+      "id": "codex:slash:import",
+      "product": "codex",
+      "capability": "/import slash command",
+      "status": "pointer",
+      "reason": "Answered with a pointer, never 'unknown command': no importer for Claude Code setup or chats; AGENTS.md is read directly (/status)",
+      "evidence": {
+        "file": "packages/tui/tests/commands/codex-names.test.ts",
+        "test": "test_every_mapped_name_routes_instead_of_erroring"
+      }
+    },
+    {
+      "id": "codex:slash:keymap",
+      "product": "codex",
+      "capability": "/keymap slash command",
+      "status": "pointer",
+      "reason": "Answered with a pointer, never 'unknown command': shortcuts are fixed \u2014 press ? for the list",
+      "evidence": {
+        "file": "packages/tui/tests/commands/codex-names.test.ts",
+        "test": "test_every_mapped_name_routes_instead_of_erroring"
+      }
+    },
+    {
+      "id": "codex:slash:vim",
+      "product": "codex",
+      "capability": "/vim slash command",
+      "status": "pointer",
+      "reason": "Answered with a pointer, never 'unknown command': no Vim mode in the composer",
+      "evidence": {
+        "file": "packages/tui/tests/commands/codex-names.test.ts",
+        "test": "test_every_mapped_name_routes_instead_of_erroring"
+      }
+    },
+    {
+      "id": "codex:slash:personality",
+      "product": "codex",
+      "capability": "/personality slash command",
+      "status": "pointer",
+      "reason": "Answered with a pointer, never 'unknown command': no communication-style picker; /effort changes how hard it thinks",
+      "evidence": {
+        "file": "packages/tui/tests/commands/codex-names.test.ts",
+        "test": "test_every_mapped_name_routes_instead_of_erroring"
+      }
+    },
+    {
+      "id": "codex:slash:pets",
+      "product": "codex",
+      "capability": "/pets slash command",
+      "status": "pointer",
+      "reason": "Answered with a pointer, never 'unknown command': no terminal pet",
+      "evidence": {
+        "file": "packages/tui/tests/commands/codex-names.test.ts",
+        "test": "test_every_mapped_name_routes_instead_of_erroring"
+      }
+    },
+    {
+      "id": "codex:slash:feedback",
+      "product": "codex",
+      "capability": "/feedback slash command",
+      "status": "pointer",
+      "reason": "Answered with a pointer, never 'unknown command': no in-TUI feedback channel \u2014 open an issue on the repository",
+      "evidence": {
+        "file": "packages/tui/tests/commands/codex-names.test.ts",
+        "test": "test_every_mapped_name_routes_instead_of_erroring"
+      }
+    },
+    {
+      "id": "codex:slash:experimental",
+      "product": "codex",
+      "capability": "/experimental slash command",
+      "status": "pointer",
+      "reason": "Answered with a pointer, never 'unknown command': no experimental-features switch",
+      "evidence": {
+        "file": "packages/tui/tests/commands/codex-names.test.ts",
+        "test": "test_every_mapped_name_routes_instead_of_erroring"
+      }
+    },
+    {
+      "id": "codex:slash:rollout",
+      "product": "codex",
+      "capability": "/rollout slash command",
+      "status": "pointer",
+      "reason": "Answered with a pointer, never 'unknown command': no rollout-path command; /export writes the conversation where you ask it to",
+      "evidence": {
+        "file": "packages/tui/tests/commands/codex-names.test.ts",
+        "test": "test_every_mapped_name_routes_instead_of_erroring"
+      }
+    }
+  ]
+}

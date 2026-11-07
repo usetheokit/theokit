@@ -177,8 +177,11 @@ backend with `enqueueInTransaction` (`PostgresJobBackend` has it); any other bac
 
 `theokit start` and `theokit dev` run a job worker in the same process whenever jobs are declared
 and a backend is set: it polls the backend, runs each job and backs off while the backend is
-unreachable. On `SIGTERM`, `start` stops polling and waits up to 20 seconds for the job in progress
-before closing storage. `jobs.worker` tunes it (`pollIntervalMs`, `batchSize`, `lockSeconds`), and
+unreachable. On `SIGTERM`, `start` stops polling and waits for the job in progress before closing
+storage, up to `jobs.worker.shutdownTimeoutMs` (20 seconds by default). Jobs that run longer need a
+larger value, and a process manager that waits as long before it kills the process (systemd
+`TimeoutStopSec`, Kubernetes `terminationGracePeriodSeconds`). `jobs.worker` also takes
+`pollIntervalMs`, `batchSize` and `lockSeconds`, and
 `enabled: false` turns it off in a process that should only serve requests, for example
 `enabled: process.env.ROLE !== 'web'`. Several workers can share one Postgres backend; each job is
 leased to one of them. To run a worker on its own, call `createJobWorker(createJobRunner(backend,

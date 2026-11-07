@@ -1,5 +1,5 @@
 import "reflect-metadata";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import { Container, ScopeViolationError } from "@theokit/di";
 import { createAgentProvider } from "@theokit/di-agent";
@@ -12,12 +12,15 @@ import { join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import type { WhatsAppMessageEvent } from '@theokit/gateway'
+import type { AgentOptions, SDKAgent } from '@theokit/sdk'
 
 import { composeTheoClaw } from '../src/composition.js'
 import { MAX_BODY_BYTES } from '../src/webhooks/router.js'
 import type { TeamsVerifier } from '../src/webhooks/teams.js'
 import { chunkedPost, fakeBuilders, noAgent, signedLinePost, TELEGRAM_AND_LINE, WORKSPACE } from './composition-fixtures.js'
-import { FakeAdapter, FakeAgent, assistant, deferred, finished, waitFor } from './fakes.js'
+import { FakeAdapter, FakeAgent, assistant, deferred, finished, messageEvent, waitFor } from './fakes.js'
+import { notEnforced, runControlTurn, startForTools, stop, tempCwd } from './tool-start-fixtures.js'
+import type { ToolStart } from './tool-start-fixtures.js'
 
 /**
  * B-004, DoD bullet 1 — "an agent is request-scoped through `createAgentProvider`, proven by two
@@ -428,7 +431,8 @@ describe('composeTheoClaw with Teams', () => {
 
 // AC-008 as amended by D5 (v1.4: `createChannelAgentFactory` stays, B-377 option A): the chat path
 // builds no per-message agent, and `Agent.create(` is called only by the `/control` factory: since
-// B-382 that call sits in `createTheoClawAgent`, which only the `/control` factory uses.
+// B-382 that call sits in `createTheoClawAgent`, which only `agent-factory.ts` uses (the `/control`
+// factory's default, and WebChat's through `webchatAgentFactory`).
 describe('the chat path names no per-message factory', () => {
   const SRC = fileURLToPath(new URL('../src/', import.meta.url))
   const sources = (directory: string): string[] =>
@@ -439,13 +443,59 @@ describe('the chat path names no per-message factory', () => {
   it('names channelAgentFactory nowhere and calls Agent.create only in the /control factory', () => {
     const files = sources(SRC).map((path) => ({ path: relative(SRC, path), text: readFileSync(path, 'utf8') }))
     expect(files.filter(({ text }) => /channelAgentFactory/.test(text)).map(({ path }) => path)).toEqual([])
-    // `main.ts` builds the `create` it hands `createAgentFactory`, the `/control` factory, alone.
+    // `main.ts` builds the `create` it hands `createAgentFactory` alone; only the `/control` one takes the import (FR-009).
     expect(files.filter(({ text }) => /Agent\.create\(/.test(text)).map(({ path }) => path).sort()).toEqual(
       [join('agent', 'create-agent.ts'), 'main.ts'].sort(),
     )
     expect(files.filter(({ text }) => /createTheoClawAgent\b/.test(text)).map(({ path }) => path).sort()).toEqual(
       [join('agent', 'create-agent.ts'), join('control-plane', 'agent-factory.ts')].sort(),
     )
-    expect(readFileSync(join(SRC, 'main.ts'), 'utf8')).toContain('agentFactory: createAgentFactory(process.env, create)')
+    expect(readFileSync(join(SRC, 'main.ts'), 'utf8')).toMatch(/agentFactory: createAgentFactory\(process\.env, create, imported\),\n\s+importFreeAgentFactory: createAgentFactory\(process\.env, create\),\n\s+importedPaths: importedMcpPaths\(imported\),/)
+  })
+})
+
+// B-387 AC-003: the `digest` tool reaches the `/control` agents only; a chat reply's agent holds none.
+describe('the digest workflow tool at start', () => {
+  const cleanups: (() => void)[] = []
+  const starts: ToolStart[] = []
+  afterEach(async () => {
+    for (const start of starts.splice(0)) {
+      await stop(start)
+      await start.app?.sessions.disposeAll()
+    }
+    for (const cleanup of cleanups.splice(0)) cleanup()
+  })
+  const draftAgentFactory = async (): Promise<SDKAgent> => ({}) as SDKAgent
+  const names = (tools: readonly { readonly name: string }[]): string[] => tools.map((tool) => tool.name)
+
+  it('the control agent gets the digest tool', async () => {
+    const start = await startForTools({}, tempCwd(cleanups), { detect: notEnforced }, { draftAgentFactory })
+    starts.push(start)
+    const controlOptions = await runControlTurn(start)
+    expect(names(controlOptions.tools)).toContain('digest')
+  })
+
+  it('twenty chat reply agents hold no tool, digest included', async () => {
+    const chatOptions: AgentOptions[] = []
+    const { adapters, builders } = fakeBuilders()
+    const start = await startForTools({ THEOCLAW_DM_POLICY: 'open' }, tempCwd(cleanups), { detect: notEnforced }, {
+      draftAgentFactory,
+      builders,
+      getOrCreate: async (_id, options) => {
+        chatOptions.push(options)
+        return Object.assign(new FakeAgent({ frames: [] }), { dispose: async () => undefined })
+      },
+    })
+    starts.push(start)
+    await start.app?.loop.ready
+    const telegram = adapters.get('telegram') as FakeAdapter
+    for (let sender = 0; sender < 20; sender += 1) await telegram.deliver(messageEvent('telegram', 'hello', `sender-${sender}`))
+    await waitFor(() => chatOptions.length === 20, 5000, 'twenty chat agents to be opened')
+    expect(chatOptions.every((options) => options.tools === undefined)).toBe(true)
+  })
+
+  it('the process entry builds the draft agents through the tool-less chat factory', () => {
+    const main = readFileSync(fileURLToPath(new URL('../src/main.ts', import.meta.url)), 'utf8')
+    expect(main).toContain('draftAgentFactory: createChannelAgentFactory(process.env, createSdkAgent)')
   })
 })

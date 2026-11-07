@@ -1,0 +1,146 @@
+import { readFileSync } from 'node:fs'
+import { writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+
+import { afterEach, describe, expect, it } from 'vitest'
+
+import { runCli } from '../src/cli.js'
+import { teeToLogFile } from '../src/ops/log-tee.js'
+import { reloadConfiguration, watchConfiguration } from '../src/ops/hot-reload.js'
+import { cleanScratch, harness } from './support/cli-harness.js'
+import { parseEnv } from 'node:util'
+
+
+afterEach(cleanScratch)
+
+const KEY = 'sk-test-0123456789abcdef'
+
+function configured(text: string, extra: NodeJS.ProcessEnv = {}) {
+  const h = harness()
+  const path = join(h.io.homeDir, 'theoclaw.env')
+  writeFileSync(path, text)
+  Object.assign(h.io.env, { THEOCLAW_CONFIG: path }, extra)
+  return { h, path }
+}
+
+describe('hot reload (OC-94)', () => {
+  it('applies a model change to the running environment without a restart', () => {
+    const { path } = configured(`THEOCLAW_MODEL="a"\nTHEOKIT_API_KEY="${KEY}"\n`)
+    const previous = parseEnv(readFileSync(path, 'utf8'))
+    const env: Record<string, string | undefined> = { ...previous }
+    writeFileSync(path, `THEOCLAW_MODEL="b"\nTHEOKIT_API_KEY="${KEY}"\nTHEOCLAW_PORT="9"\n`)
+
+    const { result, accepted } = reloadConfiguration(path, env, previous)
+
+    expect(env.THEOCLAW_MODEL).toBe('b')
+    expect(result).toEqual({ kind: 'applied', applied: ['THEOCLAW_MODEL'], restartRequired: ['THEOCLAW_PORT'] })
+    expect(env.THEOCLAW_PORT).toBeUndefined()
+    expect(accepted.THEOCLAW_MODEL).toBe('b')
+  })
+
+  it('leaves a caller-set variable and refuses a file that loses the model', () => {
+    const { path } = configured(`THEOCLAW_MODEL="a"\nTHEOKIT_API_KEY="${KEY}"\n`)
+    const previous = parseEnv(readFileSync(path, 'utf8'))
+    const env: Record<string, string | undefined> = { ...previous, THEOCLAW_MODEL: 'from-env' }
+    writeFileSync(path, `THEOCLAW_MODEL="b"\nTHEOKIT_API_KEY="${KEY}"\n`)
+    expect(reloadConfiguration(path, env, previous).result.kind).toBe('unchanged')
+    expect(env.THEOCLAW_MODEL).toBe('from-env')
+
+    const running: Record<string, string | undefined> = { ...previous }
+    writeFileSync(path, `THEOKIT_API_KEY="${KEY}"\n`)
+    const refused = reloadConfiguration(path, running, previous)
+    expect(refused.result.kind).toBe('refused')
+    expect(running.THEOCLAW_MODEL).toBe('a')
+    expect(JSON.stringify(refused.result)).not.toContain(KEY)
+  })
+
+  it('the watcher applies an edit to the file after the debounce', async () => {
+    const { path } = configured(`THEOCLAW_MODEL="a"\nTHEOKIT_API_KEY="${KEY}"\n`)
+    const env: Record<string, string | undefined> = { ...parseEnv(readFileSync(path, 'utf8')) }
+    const lines: string[] = []
+    const watcher = watchConfiguration(path, env, { debounceMs: 20, write: (l) => lines.push(l) })
+    try {
+      writeFileSync(path, `THEOCLAW_MODEL="c"\nTHEOKIT_API_KEY="${KEY}"\n`)
+      const deadline = Date.now() + 3000
+      while (env.THEOCLAW_MODEL !== 'c' && Date.now() < deadline) await new Promise((r) => setTimeout(r, 25))
+      expect(env.THEOCLAW_MODEL).toBe('c')
+      expect(lines.join('\n')).toContain('applied THEOCLAW_MODEL')
+    } finally {
+      watcher.close()
+    }
+  })
+})
+
+describe('doctor, status and logs (OC-95, OC-96)', () => {
+  it('doctor exits 0 on a sound configuration', async () => {
+    const { h } = configured(`THEOCLAW_MODEL="m"\nTHEOKIT_API_KEY="${KEY}"\n`)
+    expect(await runCli(['doctor'], h.io)).toBe(0)
+  })
+
+  it('doctor exits non-zero on a broken credential without printing it', async () => {
+    const bad = 'your-api-key'
+    const { h } = configured(`THEOCLAW_MODEL="m"\nTHEOKIT_API_KEY="${bad}"\n`)
+    expect(await runCli(['doctor'], h.io)).toBe(3)
+    expect(h.stdout()).toContain('THEOKIT_API_KEY is a placeholder')
+    expect(h.stdout()).not.toContain(bad)
+
+    const spaced = configured(`THEOCLAW_MODEL="m"\nTHEOKIT_API_KEY="${KEY} tail"\n`)
+    expect(await runCli(['doctor'], spaced.h.io)).toBe(3)
+    expect(spaced.h.stdout()).not.toContain(KEY)
+  })
+
+  it('doctor fails when the model or key is missing', async () => {
+    const { h } = configured('THEOKIT_API_KEY="short"\n')
+    expect(await runCli(['doctor'], h.io)).toBe(3)
+    expect(h.stdout()).toContain('THEOCLAW_MODEL')
+  })
+
+  it('status names the instance, model and service state, never a key', async () => {
+    const { h } = configured(`THEOCLAW_MODEL="m1"\nTHEOKIT_API_KEY="${KEY}"\n`)
+    h.io.runner = () => Promise.resolve({ code: 3, stdout: '', stderr: '' })
+    const code = await runCli(['status'], h.io)
+    expect(code).not.toBe(0)
+    expect(h.stdout()).toContain('model: m1')
+    expect(h.stdout()).not.toContain(KEY)
+  })
+
+  it('logs masks configured credentials from a file', async () => {
+    const { h } = configured(`THEOCLAW_MODEL="m"\nTHEOKIT_API_KEY="${KEY}"\n`)
+    const log = join(h.io.homeDir, 'out.log')
+    writeFileSync(log, `one\nkey ${KEY} leaked\nlast\n`)
+    expect(await runCli(['logs', '--lines', '2', '--file', log], h.io)).toBe(0)
+    expect(h.stdout()).toContain('[redacted]')
+    expect(h.stdout()).not.toContain(KEY)
+    expect(h.stdout()).not.toContain('one')
+  })
+
+  it('logs reads THEOCLAW_LOG_FILE as the container does, written by the tee, masked', async () => {
+    const { h } = configured(`THEOCLAW_MODEL="m"\nTHEOKIT_API_KEY="${KEY}"\n`)
+    const log = join(h.io.homeDir, 'state', 'theoclaw.log')
+    const stream = { write: (): boolean => true }
+    teeToLogFile({ THEOCLAW_LOG_FILE: log }, [stream])
+    stream.write(`started\nkey ${KEY} leaked\n` as never)
+    Object.assign(h.io.env, { THEOCLAW_LOG_FILE: log })
+    h.io.runner = () => Promise.reject(new Error('journalctl must not run'))
+    expect(await runCli(['logs', '--lines', '5'], h.io)).toBe(0)
+    expect(h.stdout()).toContain('started')
+    expect(h.stdout()).toContain('[redacted]')
+    expect(h.stdout()).not.toContain(KEY)
+  })
+
+  it('logs falls back to the journal and reports its failure', async () => {
+    const { h } = configured(`THEOCLAW_MODEL="m"\nTHEOKIT_API_KEY="${KEY}"\n`)
+    const calls: string[][] = []
+    h.io.runner = (cmd, args) => {
+      calls.push([cmd, ...args])
+      return Promise.resolve({ code: 0, stdout: `x ${KEY}\n`, stderr: '' })
+    }
+    expect(await runCli(['logs'], h.io)).toBe(0)
+    expect(calls[0]?.[0]).toBe('journalctl')
+    expect(h.stdout()).not.toContain(KEY)
+
+    h.io.runner = () => Promise.resolve({ code: 1, stdout: '', stderr: '' })
+    expect(await runCli(['logs'], h.io)).toBe(1)
+    expect(await runCli(['logs', '--bogus'], h.io)).toBe(2)
+  })
+})

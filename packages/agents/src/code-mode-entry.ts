@@ -1,0 +1,14 @@
+// B-386 — `createCodeMode` on its own subpath: the permission-gated restricted API an agent's
+// script calls, over an injected `Sandbox`. The VM lives on `./code-mode-quickjs`, so importing
+// this subpath loads no WASM.
+export {
+  CodeModeInvalidArgumentsError,
+  CodeModePermissionDeniedError,
+  createCodeMode,
+  type CodeModeApi,
+  type CodeModeCallOptions,
+  type CodeModeConfig,
+  type CodeModePermission,
+  type CodeModeTool,
+  type Sandbox,
+} from './code-mode/code-mode.js'

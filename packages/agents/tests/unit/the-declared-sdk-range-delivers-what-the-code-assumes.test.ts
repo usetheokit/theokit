@@ -23,7 +23,7 @@ import { describe, expect, it } from 'vitest'
  *
  * ## Why the range was narrowed rather than guarded with a fourth runtime check
  *
- * Three version guards already exist — `HOOK_GATE_SINCE`, `COMPAT_IMPORT_SINCE`, and the
+ * Version guards existed — `HOOK_GATE_SINCE`, `COMPAT_IMPORT_SINCE` (removed by B-488), and the
  * `compatSources` warning — and each one is on a path where this layer PASSES AN OPTION to the SDK.
  * The three surfaces above are not like that: nothing is passed, the SDK simply reads a file or does
  * not, so there is no call site to guard. A fourth check could not have been written.

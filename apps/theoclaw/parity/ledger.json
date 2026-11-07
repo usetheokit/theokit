@@ -1,115 +1,827 @@
 [
-  {"id":"OC-1","status":"open"},
-  {"id":"OC-2","status":"open"},
-  {"id":"OC-3","status":"open"},
-  {"id":"OC-4","status":"open"},
-  {"id":"OC-5","status":"open"},
-  {"id":"OC-6","status":"open"},
-  {"id":"OC-7","status":"open"},
-  {"id":"OC-8","status":"open"},
-  {"id":"OC-9","status":"open"},
-  {"id":"OC-10","status":"open"},
-  {"id":"OC-11","status":"out","reason":"OpenClaw does not ship these channels itself, so there is nothing to reach parity with.","declared_by":"human/paulo","declared_on":"2026-10-04","declared_at":".squad/wiki/product/objectives.md:225"},
-  {"id":"OC-12","status":"open"},
-  {"id":"OC-13","status":"open"},
-  {"id":"OC-14","status":"open"},
-  {"id":"OC-15","status":"out","reason":"Real-time voice over phone and meeting infrastructure is a different product from a messaging assistant.","declared_by":"human/paulo","declared_on":"2026-10-04","declared_at":".squad/wiki/product/objectives.md:223"},
-  {"id":"OC-16","status":"out","reason":"Real-time voice over phone and meeting infrastructure is a different product from a messaging assistant.","declared_by":"human/paulo","declared_on":"2026-10-04","declared_at":".squad/wiki/product/objectives.md:223"},
-  {"id":"OC-17","status":"open"},
-  {"id":"OC-18","status":"shipped","check":{"path":"apps/theoclaw/tests/live/authorization.live.test.ts","test":"an owner message gets a real-model reply for OC-18"},"verified_on":"2026-10-27"},
-  {"id":"OC-19","status":"shipped","check":{"path":"apps/theoclaw/tests/live/authorization.live.test.ts","test":"an unlisted DM gets a pairing code the owner approves for OC-19"},"verified_on":"2026-10-27"},
-  {"id":"OC-20","status":"open"},
-  {"id":"OC-21","status":"shipped","check":{"path":"apps/theoclaw/tests/live/authorization.live.test.ts","test":"a broadcast answer reaches both member channels for OC-21"},"verified_on":"2026-10-27"},
-  {"id":"OC-22","status":"shipped","check":{"path":"apps/theoclaw/tests/live/control-plane.live.test.ts","test":"a real-model turn over the control WebSocket of the started process"},"verified_on":"2026-10-23"},
-  {"id":"OC-23","status":"shipped","check":{"path":"apps/theoclaw/tests/live/control-plane.live.test.ts","test":"the started process answers GET /health on its port and is unreachable on the host's non-loopback address"},"verified_on":"2026-10-23"},
-  {"id":"OC-24","status":"shipped","check":{"path":"apps/theoclaw/tests/live/remote-access.live.test.ts","test":"a real-model turn over the control socket through an SSH local forward"},"verified_on":"2026-10-31"},
-  {"id":"OC-25","status":"shipped","check":{"path":"apps/theoclaw/tests/live/lan-discovery.live.test.ts","test":"a real-model turn on a LAN-bound instance that answers an mDNS query with its port"},"verified_on":"2026-10-31"},
-  {"id":"OC-26","status":"open"},
-  {"id":"OC-27","status":"open"},
-  {"id":"OC-28","status":"shipped","check":{"path":"apps/theoclaw/tests/live/instance-profiles.live.test.ts","test":"two profiled instances keep separate state and report distinct labels on a real-model turn"},"verified_on":"2026-10-31"},
-  {"id":"OC-29","status":"out","reason":"One instance serves one person, the first non-goal of the product vision, so a team server is out.","declared_by":"human/paulo","declared_on":"2026-10-04","declared_at":".squad/wiki/product/objectives.md:224"},
-  {"id":"OC-30","status":"open"},
-  {"id":"OC-31","status":"open"},
-  {"id":"OC-32","status":"open"},
-  {"id":"OC-33","status":"open"},
-  {"id":"OC-34","status":"open"},
-  {"id":"OC-35","status":"open"},
-  {"id":"OC-36","status":"open"},
-  {"id":"OC-37","status":"out","reason":"A native desktop app per operating system is a product of its own; the desktop stays in through @theokit/tauri.","declared_by":"human/paulo","declared_on":"2026-10-06","declared_at":"apps/theoclaw/parity/decisions-2026-10-06.md"},
-  {"id":"OC-38","status":"out","reason":"Native mobile apps and device nodes are a product of their own; the desktop stays in through @theokit/tauri.","declared_by":"human/paulo","declared_on":"2026-10-04","declared_at":".squad/wiki/product/objectives.md:222"},
-  {"id":"OC-39","status":"out","reason":"Native mobile apps and device nodes are a product of their own; the desktop stays in through @theokit/tauri.","declared_by":"human/paulo","declared_on":"2026-10-04","declared_at":".squad/wiki/product/objectives.md:222"},
-  {"id":"OC-40","status":"out","reason":"A native companion app per operating system is a product of its own; the desktop stays in through @theokit/tauri.","declared_by":"human/paulo","declared_on":"2026-10-06","declared_at":"apps/theoclaw/parity/decisions-2026-10-06.md"},
-  {"id":"OC-41","status":"open"},
-  {"id":"OC-42","status":"out","reason":"Native mobile apps and device nodes are a product of their own; the desktop stays in through @theokit/tauri.","declared_by":"human/paulo","declared_on":"2026-10-04","declared_at":".squad/wiki/product/objectives.md:222"},
-  {"id":"OC-43","status":"out","reason":"Native mobile apps and device nodes are a product of their own; the desktop stays in through @theokit/tauri.","declared_by":"human/paulo","declared_on":"2026-10-04","declared_at":".squad/wiki/product/objectives.md:222"},
-  {"id":"OC-44","status":"open"},
-  {"id":"OC-45","status":"open"},
-  {"id":"OC-46","status":"open"},
-  {"id":"OC-47","status":"open"},
-  {"id":"OC-48","status":"open"},
-  {"id":"OC-49","status":"open"},
-  {"id":"OC-50","status":"shipped","check":{"path":"apps/theoclaw/tests/live/sessions.live.test.ts","test":"a group session does not see a dm session's turn"},"verified_on":"2026-10-31"},
-  {"id":"OC-51","status":"shipped","check":{"path":"apps/theoclaw/tests/live/sessions.live.test.ts","test":"a real model recalls a turn written before TheoClaw restarted"},"verified_on":"2026-10-31","gaps":["B-596"]},
-  {"id":"OC-52","status":"shipped","check":{"path":"apps/theoclaw/tests/live/sessions.live.test.ts","test":"a second message sent during a running turn is answered after it with the first turn in history"},"verified_on":"2026-10-31","gaps":["B-599","B-601"]},
-  {"id":"OC-53","status":"open"},
-  {"id":"OC-54","status":"open"},
-  {"id":"OC-55","status":"open"},
-  {"id":"OC-56","status":"open"},
-  {"id":"OC-57","status":"open"},
-  {"id":"OC-58","status":"shipped","gaps":["B-550","B-610","B-600"],"check":{"path":"apps/theoclaw/tests/live/tools.live.test.ts","test":"a real model runs a shell command over that file"},"verified_on":"2026-10-26","note":"read, write, edit, ls and apply_patch are checked by 'a real model lists, writes, edits and patches a file in the tool root' and 'a real model reads a file holding a token made at test time'; exec is the sandboxed shell_exec; process (background, send-keys) waits on B-550, a confined interactive shell; the tools reach only the /control agent, and chat-reply agents hold none"},
-  {"id":"OC-59","status":"shipped","gaps":["B-591","B-592","B-609","B-597","B-612","B-611"],"check":{"path":"apps/theoclaw/tests/live/tools.live.test.ts","test":"a real model fetches a page and uses the todolist"},"verified_on":"2026-10-26","note":"of the 13 named entries: web_fetch ships here with a live check, view_image and web_search are wired without one (web_search's waits on a search key, OC-63); goals B-612 (not measured as a tool); tts B-591, pdf B-592, secrets B-609, structured_output B-597, subagents and ask_user B-611; computer is OC-62, nodes OC-42, message B-369, sessions_* B-378; the tools reach only the /control agent, and chat-reply agents hold none"},
-  {"id":"OC-60","status":"open"},
-  {"id":"OC-61","status":"open"},
-  {"id":"OC-62","status":"open"},
-  {"id":"OC-63","status":"open"},
-  {"id":"OC-64","status":"open"},
-  {"id":"OC-65","status":"open"},
-  {"id":"OC-66","status":"open"},
-  {"id":"OC-67","status":"open"},
-  {"id":"OC-68","status":"open"},
-  {"id":"OC-69","status":"shipped","gaps":["B-593","B-594","B-595"],"check":{"path":"apps/theoclaw/tests/live/tools.live.test.ts","test":"a real model shows the diff of a file changed in a tool root that is a repository"},"verified_on":"2026-10-26","note":"the diff viewer is git_diff; output compaction is the published tools' truncateOutput and the nearest workboard is the todolist (a session todo list, not a board); document extraction B-593, GitHub link preview B-594, screenshot logbook B-595; the tools reach only the /control agent, and chat-reply agents hold none"},
-  {"id":"OC-70","status":"open"},
-  {"id":"OC-71","status":"open"},
-  {"id":"OC-72","status":"open"},
-  {"id":"OC-73","status":"open"},
-  {"id":"OC-74","status":"open"},
-  {"id":"OC-75","status":"open"},
-  {"id":"OC-76","status":"open"},
-  {"id":"OC-77","status":"open"},
-  {"id":"OC-78","status":"open"},
-  {"id":"OC-79","status":"open"},
-  {"id":"OC-80","status":"open"},
-  {"id":"OC-81","status":"open"},
-  {"id":"OC-82","status":"open"},
-  {"id":"OC-83","status":"open"},
-  {"id":"OC-84","status":"open"},
-  {"id":"OC-85","status":"open"},
-  {"id":"OC-86","status":"open"},
-  {"id":"OC-87","status":"open"},
-  {"id":"OC-88","status":"open"},
-  {"id":"OC-89","status":"open"},
-  {"id":"OC-90","status":"open"},
-  {"id":"OC-91","status":"open"},
-  {"id":"OC-92","status":"open"},
-  {"id":"OC-93","status":"open"},
-  {"id":"OC-94","status":"open"},
-  {"id":"OC-95","status":"open"},
-  {"id":"OC-96","status":"open"},
-  {"id":"OC-97","status":"open"},
-  {"id":"OC-98","status":"open"},
-  {"id":"OC-99","status":"open"},
-  {"id":"OC-100","status":"open"},
-  {"id":"OC-101","status":"open"},
-  {"id":"OC-102","status":"open"},
-  {"id":"OC-103","status":"open"},
-  {"id":"OC-104","status":"open"},
-  {"id":"OC-105","status":"open"},
-  {"id":"OC-106","status":"open"},
-  {"id":"H-1","status":"open"},
-  {"id":"H-2","status":"open"},
-  {"id":"H-3","status":"open"},
-  {"id":"H-4","status":"open"},
-  {"id":"H-5","status":"open"},
-  {"id":"H-6","status":"out","reason":"Hibernating when idle solves a cloud cost nobody pays with one self-hosted instance per person.","declared_by":"human/paulo","declared_on":"2026-09-17","declared_at":".squad/wiki/product/product-vision.md:243"},
-  {"id":"H-7","status":"out","reason":"Batch trajectory generation for training tool-calling models is model-training tooling, not a capability of a personal messaging assistant.","declared_by":"human/paulo","declared_on":"2026-10-06","declared_at":"apps/theoclaw/parity/decisions-2026-10-06.md"}
+  {
+    "id": "OC-1",
+    "status": "open"
+  },
+  {
+    "id": "OC-2",
+    "status": "open"
+  },
+  {
+    "id": "OC-3",
+    "status": "open"
+  },
+  {
+    "id": "OC-4",
+    "status": "open"
+  },
+  {
+    "id": "OC-5",
+    "status": "open"
+  },
+  {
+    "id": "OC-6",
+    "status": "open"
+  },
+  {
+    "id": "OC-7",
+    "status": "open"
+  },
+  {
+    "id": "OC-8",
+    "status": "open"
+  },
+  {
+    "id": "OC-9",
+    "status": "open"
+  },
+  {
+    "id": "OC-10",
+    "status": "open"
+  },
+  {
+    "id": "OC-11",
+    "status": "out",
+    "reason": "OpenClaw does not ship these channels itself, so there is nothing to reach parity with.",
+    "declared_by": "human/paulo",
+    "declared_on": "2026-10-04",
+    "declared_at": ".squad/wiki/product/objectives.md:225"
+  },
+  {
+    "id": "OC-12",
+    "status": "shipped",
+    "check": {
+      "path": "apps/theoclaw/tests/live/webchat.live.test.ts",
+      "test": "a real-model conversation through the page's transport to the started process"
+    },
+    "verified_on": "2026-11-02",
+    "note": "re-run at 9332cb47, a head holding the reviewed head 79bb9ae1 (after the rebase that added the output mask, the hook approval gate and the untrusted-content notice to the WebChat turn), after node scripts/live-model-build.mjs theoclaw, with THEOCLAW_MODEL=openrouter/google/gemini-2.5-flash-lite: 2 files and 3 tests passed"
+  },
+  {
+    "id": "OC-13",
+    "status": "shipped",
+    "check": {
+      "path": "apps/theoclaw/tests/live/a2a.live.test.ts",
+      "test": "two instances exchange a task over A2A on a real model for OC-13"
+    },
+    "verified_on": "2026-11-03",
+    "note": "A2A JSON-RPC message/send with bearer peer auth and an agent card; tasks/* and streaming not served (B-394). Run on the item head with THEOCLAW_MODEL=openrouter/google/gemini-2.5-flash-lite: 1 test passed"
+  },
+  {
+    "id": "OC-14",
+    "status": "open"
+  },
+  {
+    "id": "OC-15",
+    "status": "out",
+    "reason": "Real-time voice over phone and meeting infrastructure is a different product from a messaging assistant.",
+    "declared_by": "human/paulo",
+    "declared_on": "2026-10-04",
+    "declared_at": ".squad/wiki/product/objectives.md:223"
+  },
+  {
+    "id": "OC-16",
+    "status": "out",
+    "reason": "Real-time voice over phone and meeting infrastructure is a different product from a messaging assistant.",
+    "declared_by": "human/paulo",
+    "declared_on": "2026-10-04",
+    "declared_at": ".squad/wiki/product/objectives.md:223"
+  },
+  {
+    "id": "OC-17",
+    "status": "open"
+  },
+  {
+    "id": "OC-18",
+    "status": "shipped",
+    "check": {
+      "path": "apps/theoclaw/tests/live/authorization.live.test.ts",
+      "test": "an owner message gets a real-model reply for OC-18"
+    },
+    "verified_on": "2026-10-27"
+  },
+  {
+    "id": "OC-19",
+    "status": "shipped",
+    "check": {
+      "path": "apps/theoclaw/tests/live/authorization.live.test.ts",
+      "test": "an unlisted DM gets a pairing code the owner approves for OC-19"
+    },
+    "verified_on": "2026-10-27"
+  },
+  {
+    "id": "OC-20",
+    "status": "open"
+  },
+  {
+    "id": "OC-21",
+    "status": "shipped",
+    "check": {
+      "path": "apps/theoclaw/tests/live/authorization.live.test.ts",
+      "test": "a broadcast answer reaches both member channels for OC-21"
+    },
+    "verified_on": "2026-10-27"
+  },
+  {
+    "id": "OC-22",
+    "status": "shipped",
+    "check": {
+      "path": "apps/theoclaw/tests/live/control-plane.live.test.ts",
+      "test": "a real-model turn over the control WebSocket of the started process"
+    },
+    "verified_on": "2026-10-23"
+  },
+  {
+    "id": "OC-23",
+    "status": "shipped",
+    "check": {
+      "path": "apps/theoclaw/tests/live/control-plane.live.test.ts",
+      "test": "the started process answers GET /health on its port and is unreachable on the host's non-loopback address"
+    },
+    "verified_on": "2026-10-23"
+  },
+  {
+    "id": "OC-24",
+    "status": "shipped",
+    "check": {
+      "path": "apps/theoclaw/tests/live/remote-access.live.test.ts",
+      "test": "a real-model turn over the control socket through an SSH local forward"
+    },
+    "verified_on": "2026-10-31"
+  },
+  {
+    "id": "OC-25",
+    "status": "shipped",
+    "check": {
+      "path": "apps/theoclaw/tests/live/lan-discovery.live.test.ts",
+      "test": "a real-model turn on a LAN-bound instance that answers an mDNS query with its port"
+    },
+    "verified_on": "2026-10-31"
+  },
+  {
+    "id": "OC-26",
+    "status": "shipped",
+    "check": {
+      "path": "apps/theoclaw/tests/live/http-api.live.test.ts",
+      "test": "an OpenAI client gets a real-model answer from the started process for OC-26"
+    },
+    "verified_on": "2026-10-31"
+  },
+  {
+    "id": "OC-27",
+    "status": "shipped",
+    "check": {
+      "path": "apps/theoclaw/tests/live/http-api.live.test.ts",
+      "test": "a tool invoked over HTTP returns its result from the started process for OC-27"
+    },
+    "verified_on": "2026-10-31"
+  },
+  {
+    "id": "OC-28",
+    "status": "shipped",
+    "check": {
+      "path": "apps/theoclaw/tests/live/instance-profiles.live.test.ts",
+      "test": "two profiled instances keep separate state and report distinct labels on a real-model turn"
+    },
+    "verified_on": "2026-10-31"
+  },
+  {
+    "id": "OC-29",
+    "status": "out",
+    "reason": "One instance serves one person, the first non-goal of the product vision, so a team server is out.",
+    "declared_by": "human/paulo",
+    "declared_on": "2026-10-04",
+    "declared_at": ".squad/wiki/product/objectives.md:224"
+  },
+  {
+    "id": "OC-30",
+    "status": "shipped",
+    "check": {
+      "path": "apps/theoclaw/tests/container/install.container.test.ts",
+      "test": "a clean container installs, onboards, replies within 60 s and updates"
+    },
+    "verified_on": "2026-10-31",
+    "note": "the README's install command clones the repository and runs install.sh, which installs and builds the app and writes the theoclaw launcher; checked in a clean node:22 container on the dispatched theoclaw-container run (https://github.com/usetheokit/theokit/actions/runs/41188190008); the registry half (`npm i -g theoclaw`) is out of this row by owner decision 2026-11-02 (theoclaw is not published to npm for now), so the install is the source install, apps/theoclaw/install.sh"
+  },
+  {
+    "id": "OC-31",
+    "status": "shipped",
+    "check": {
+      "path": "apps/theoclaw/tests/container/install.container.test.ts",
+      "test": "a clean container installs, onboards, replies within 60 s and updates"
+    },
+    "verified_on": "2026-10-31",
+    "note": "theoclaw onboard --yes writes the configuration file at mode 0600 and the start reads it; checked in the clean container (https://github.com/usetheokit/theokit/actions/runs/41188190008), where the start also had the key and model in its environment, so the file-only start is proven by tests/integration/config-file.integration.test.ts"
+  },
+  {
+    "id": "OC-32",
+    "status": "shipped",
+    "gaps": [
+      "B-692"
+    ],
+    "check": {
+      "path": "apps/theoclaw/tests/live/daemon.live.test.ts",
+      "test": "the platform service answers a real-model turn and uninstalls cleanly"
+    },
+    "verified_on": "2026-10-31",
+    "note": "theoclaw daemon install writes a systemd --user unit that runs the built entry with the configuration file, enables and starts it, and uninstall removes it; checked on a Linux host with a real unit and a real model; launchd on macOS and the Windows scheduler wait on B-692, and both are refused by name"
+  },
+  {
+    "id": "OC-33",
+    "status": "shipped",
+    "check": {
+      "path": "apps/theoclaw/tests/container/image.container.test.ts",
+      "test": "the image answers health and a real-model turn"
+    },
+    "verified_on": "2026-10-31",
+    "note": "the Dockerfile builds an image that runs TheoClaw as a non-root user and answers /health and a real-model turn; checked on the dispatched theoclaw-container run (https://github.com/usetheokit/theokit/actions/runs/41188190008)"
+  },
+  {
+    "id": "OC-34",
+    "status": "shipped",
+    "check": {
+      "path": "apps/theoclaw/tests/container/install.container.test.ts",
+      "test": "a clean container installs, onboards, replies within 60 s and updates"
+    },
+    "verified_on": "2026-10-31",
+    "note": "theoclaw update fast-forwards the checkout on its channel (stable follows main, dev follows develop) and rebuilds, and the restarted instance answers a second real-model turn; checked on the dev channel in the clean container (https://github.com/usetheokit/theokit/actions/runs/41188190008); restarting a systemd unit is covered by tests/update.test.ts"
+  },
+  {
+    "id": "OC-35",
+    "status": "out",
+    "reason": "Claude Code and Hermes import and startup are covered by offline tests, but real-model end-to-end verification cannot run because model credentials are unavailable in this sandbox. No passing live check or verified model name is claimed. Rerun tests/live/migration.live.test.ts with credentials and record the actual model before marking shipped.",
+    "declared_by": "human/requester",
+    "declared_on": "2026-11-05",
+    "declared_at": "apps/theoclaw/parity/oc-35-verification.md"
+  },
+  {
+    "id": "OC-36",
+    "status": "shipped",
+    "check": {
+      "path": "apps/theoclaw/tests/live/surfaces.live.test.ts",
+      "test": "the desktop reaches the running instance through @theokit/tauri, interrupted and redirected, for OC-36"
+    },
+    "verified_on": "2026-10-31",
+    "note": "desktop part only, on Linux: @theokit/tauri's transport and the real built sidecar process against one running instance, a stop through cancelCommand and a redirect on the same session; the template's Rust shell (cancel_turn) is not compiled here (no cargo on the host), and macOS, Windows and ChromeOS are not exercised; last run green at c8e6c66d"
+  },
+  {
+    "id": "OC-37",
+    "status": "out",
+    "reason": "A native desktop app per operating system is a product of its own; the desktop stays in through @theokit/tauri.",
+    "declared_by": "human/paulo",
+    "declared_on": "2026-10-06",
+    "declared_at": "apps/theoclaw/parity/decisions-2026-10-06.md"
+  },
+  {
+    "id": "OC-38",
+    "status": "out",
+    "reason": "Native mobile apps and device nodes are a product of their own; the desktop stays in through @theokit/tauri.",
+    "declared_by": "human/paulo",
+    "declared_on": "2026-10-04",
+    "declared_at": ".squad/wiki/product/objectives.md:222"
+  },
+  {
+    "id": "OC-39",
+    "status": "out",
+    "reason": "Native mobile apps and device nodes are a product of their own; the desktop stays in through @theokit/tauri.",
+    "declared_by": "human/paulo",
+    "declared_on": "2026-10-04",
+    "declared_at": ".squad/wiki/product/objectives.md:222"
+  },
+  {
+    "id": "OC-40",
+    "status": "out",
+    "reason": "A native companion app per operating system is a product of its own; the desktop stays in through @theokit/tauri.",
+    "declared_by": "human/paulo",
+    "declared_on": "2026-10-06",
+    "declared_at": "apps/theoclaw/parity/decisions-2026-10-06.md"
+  },
+  {
+    "id": "OC-41",
+    "status": "open"
+  },
+  {
+    "id": "OC-42",
+    "status": "out",
+    "reason": "Native mobile apps and device nodes are a product of their own; the desktop stays in through @theokit/tauri.",
+    "declared_by": "human/paulo",
+    "declared_on": "2026-10-04",
+    "declared_at": ".squad/wiki/product/objectives.md:222"
+  },
+  {
+    "id": "OC-43",
+    "status": "out",
+    "reason": "Native mobile apps and device nodes are a product of their own; the desktop stays in through @theokit/tauri.",
+    "declared_by": "human/paulo",
+    "declared_on": "2026-10-04",
+    "declared_at": ".squad/wiki/product/objectives.md:222"
+  },
+  {
+    "id": "OC-44",
+    "status": "open"
+  },
+  {
+    "id": "OC-45",
+    "status": "open"
+  },
+  {
+    "id": "OC-46",
+    "status": "open"
+  },
+  {
+    "id": "OC-47",
+    "status": "open"
+  },
+  {
+    "id": "OC-48",
+    "status": "open"
+  },
+  {
+    "id": "OC-49",
+    "status": "open"
+  },
+  {
+    "id": "OC-50",
+    "status": "shipped",
+    "check": {
+      "path": "apps/theoclaw/tests/live/sessions.live.test.ts",
+      "test": "a group session does not see a dm session's turn"
+    },
+    "verified_on": "2026-10-31"
+  },
+  {
+    "id": "OC-51",
+    "status": "shipped",
+    "check": {
+      "path": "apps/theoclaw/tests/live/sessions.live.test.ts",
+      "test": "a real model recalls a turn written before TheoClaw restarted"
+    },
+    "verified_on": "2026-10-31",
+    "gaps": [
+      "B-596"
+    ]
+  },
+  {
+    "id": "OC-52",
+    "status": "shipped",
+    "check": {
+      "path": "apps/theoclaw/tests/live/sessions.live.test.ts",
+      "test": "a second message sent during a running turn is answered after it with the first turn in history"
+    },
+    "verified_on": "2026-10-31",
+    "gaps": [
+      "B-599",
+      "B-601"
+    ]
+  },
+  {
+    "id": "OC-53",
+    "status": "open",
+    "note": "not shipped: the SDK compacts a run's history itself and TheoClaw adds no /compact command or compaction setting; the real-model check (a long conversation crossing the context limit, next turn answered) has not been run, and no 'out' is declared because that needs a human declarer"
+  },
+  {
+    "id": "OC-54",
+    "status": "open",
+    "gaps": [
+      "B-564"
+    ],
+    "note": "moved to B-564 (dod reduced 2026-10-22, delegated): nothing in the ecosystem prunes aged tool results"
+  },
+  {
+    "id": "OC-55",
+    "status": "open",
+    "note": "not shipped: SOUL.md, IDENTITY.md, USER.md and AGENTS.md are injected into each chat session agent's system prompt and covered by offline tests, but the real-model end-to-end check has not been run"
+  },
+  {
+    "id": "OC-56",
+    "status": "open"
+  },
+  {
+    "id": "OC-57",
+    "status": "open"
+  },
+  {
+    "id": "OC-58",
+    "status": "shipped",
+    "gaps": [
+      "B-550",
+      "B-610",
+      "B-600"
+    ],
+    "check": {
+      "path": "apps/theoclaw/tests/live/tools.live.test.ts",
+      "test": "a real model runs a shell command over that file"
+    },
+    "verified_on": "2026-10-26",
+    "note": "read, write, edit, ls and apply_patch are checked by 'a real model lists, writes, edits and patches a file in the tool root' and 'a real model reads a file holding a token made at test time'; exec is the sandboxed shell_exec; process (background, send-keys) waits on B-550, a confined interactive shell; the tools reach only the /control agent, and chat-reply agents hold none"
+  },
+  {
+    "id": "OC-59",
+    "status": "shipped",
+    "gaps": [
+      "B-591",
+      "B-592",
+      "B-609",
+      "B-597",
+      "B-612",
+      "B-611"
+    ],
+    "check": {
+      "path": "apps/theoclaw/tests/live/tools.live.test.ts",
+      "test": "a real model fetches a page and uses the todolist"
+    },
+    "verified_on": "2026-10-26",
+    "note": "of the 13 named entries: web_fetch ships here with a live check, view_image and web_search are wired without one (web_search's waits on a search key, OC-63); goals B-612 (not measured as a tool); tts B-591, pdf B-592, secrets B-609, structured_output B-597, subagents and ask_user B-611; computer is OC-62, nodes OC-42, message B-369, sessions_* B-378; the tools reach only the /control agent, and chat-reply agents hold none"
+  },
+  {
+    "id": "OC-60",
+    "status": "shipped",
+    "check": {
+      "path": "apps/theoclaw/tests/live/browser.live.test.ts",
+      "test": "a real model reads a value a page renders with JavaScript for OC-60"
+    },
+    "verified_on": "2026-10-31"
+  },
+  {
+    "id": "OC-61",
+    "status": "out",
+    "reason": "show_widget and the WebChat widget renderer are built and covered by offline tests, but no real-model end-to-end check has run because model credentials are unavailable in this sandbox, so no passing live check or model name is claimed. The macOS-hosted panels of OpenClaw's canvas are native-app work and are not built. Add tests/live/widget.live.test.ts, run it with credentials, and record the model before marking shipped.",
+    "declared_by": "factory/B-384",
+    "declared_on": "2026-11-07",
+    "declared_at": "apps/theoclaw/parity/oc-61-verification.md"
+  },
+  {
+    "id": "OC-62",
+    "status": "shipped",
+    "check": {
+      "path": "apps/theoclaw/tests/live/computer.live.test.ts",
+      "test": "a real model takes a screenshot, moves the pointer and types into a window for OC-62"
+    },
+    "verified_on": "2026-11-02",
+    "note": "Xvfb -fbdir displays only; the screenshot reaches the model through a tool-less agent on a user turn (B-676 D1)"
+  },
+  {
+    "id": "OC-63",
+    "status": "open"
+  },
+  {
+    "id": "OC-64",
+    "status": "open"
+  },
+  {
+    "id": "OC-65",
+    "status": "shipped",
+    "check": {
+      "path": "apps/theoclaw/tests/live/code-mode.live.test.ts",
+      "test": "a real model's script calls two tools in one run_code for OC-65"
+    },
+    "verified_on": "2026-10-31"
+  },
+  {
+    "id": "OC-66",
+    "status": "open",
+    "check": {
+      "path": "apps/theoclaw/tests/live/workflows.live.test.ts",
+      "test": "a real model runs the two-step digest workflow for OC-66"
+    },
+    "note": "B-387 verification pending: no named real-model passing run is recorded here. The sandbox cannot verify the chat-to-workflow live condition without model credentials; offline checks do not establish shipment. the check covers the typed pipeline: the committed two-step digest workflow (an agent step that drafts, then a step whose output schema types the points), run from a /control turn through the digest tool on a fresh tool-less draft agent per call; the committed triage workflow adds the JSON-only llm-task step (Agent.generateObject with shell withheld and memory off, schema-checked) and an approval step that suspends and is resumed by the triage_resume tool with the run id the model was given (@theokit/sdk 5.14.0); only the /control agent holds the tool, and chat-reply agents hold none"
+  },
+  {
+    "id": "OC-67",
+    "status": "shipped",
+    "gaps": [
+      "B-680",
+      "B-682"
+    ],
+    "check": {
+      "path": "apps/theoclaw/tests/live/external-tools.live.test.ts",
+      "test": "a real model calls a tool from a stdio MCP server"
+    },
+    "verified_on": "2026-10-31",
+    "note": "MCP servers come from the THEOCLAW_EXTERNAL_TOOLS file, through the SDK's mcpServers option; stdio and HTTP servers work, HTTP with credentials in headers; OAuth through auth is refused at start because @theokit/sdk 5.11.0 ignores it (B-680); serving TheoClaw's own tools over MCP waits on B-682; only the /control agent holds these tools, and chat-reply agents hold none"
+  },
+  {
+    "id": "OC-68",
+    "status": "shipped",
+    "gaps": [
+      "B-681",
+      "B-685"
+    ],
+    "check": {
+      "path": "apps/theoclaw/tests/live/external-tools.live.test.ts",
+      "test": "a real model delegates a turn to an ACP agent"
+    },
+    "verified_on": "2026-10-31",
+    "note": "each ACP agent of THEOCLAW_EXTERNAL_TOOLS is one createACPTool from theokit/server/agent, run in files/, one process per call, refused with THEOCLAW_HOST_TOOLS=on (the shell can write files/); the live check used a fixture ACP agent, not Claude Code or Codex, which need an adapter and credentials this host lacks; every permission request goes to the owner and is granted once only on a yes, refused on a no, a timeout or no asker (the live check did not exercise it); the agent starts through env -i with only PATH, HOME, locale, terminal and XDG variables, so no TheoClaw secret is in its environment, though as the same user it can read TheoClaw's from /proc; an env option and a masked stderr are B-681; the /acp command surface is B-685; only the /control agent holds these tools, and chat-reply agents hold none"
+  },
+  {
+    "id": "OC-69",
+    "status": "shipped",
+    "gaps": [
+      "B-593",
+      "B-594",
+      "B-595"
+    ],
+    "check": {
+      "path": "apps/theoclaw/tests/live/tools.live.test.ts",
+      "test": "a real model shows the diff of a file changed in a tool root that is a repository"
+    },
+    "verified_on": "2026-10-26",
+    "note": "the diff viewer is git_diff; output compaction is the published tools' truncateOutput and the nearest workboard is the todolist (a session todo list, not a board); document extraction B-593, GitHub link preview B-594, screenshot logbook B-595; the tools reach only the /control agent, and chat-reply agents hold none"
+  },
+  {
+    "id": "OC-70",
+    "status": "open",
+    "note": "SKILL.md format (frontmatter name/description/requires plus body) parsed by src/skills/registry.ts; offline test tests/skill-registry.test.ts ; open because no end-to-end check against a real model exists yet, and none was run"
+  },
+  {
+    "id": "OC-71",
+    "status": "open",
+    "note": "precedence built: a workspace skill overrides a bundled one of the same name (tests/skill-registry.test.ts) ; open because no end-to-end check against a real model exists yet, and none was run"
+  },
+  {
+    "id": "OC-72",
+    "status": "open",
+    "note": "gating built: a skill whose required binary is not on PATH is not offered (tests/skill-registry.test.ts) ; open because no end-to-end check against a real model exists yet, and none was run"
+  },
+  {
+    "id": "OC-73",
+    "status": "open",
+    "note": "the oracle gate exists (src/agent/skill-workshop.ts, REQ-12 test offline) but no skill_workshop tool, /learn turn, real example runner or real-model check exists yet; not shipped, and not declared out because only a person may declare out"
+  },
+  {
+    "id": "OC-74",
+    "status": "open",
+    "note": "registry and two bundled skills built (src/skills/registry.ts); not yet wired into the /control agent ; open because no end-to-end check against a real model exists yet, and none was run"
+  },
+  {
+    "id": "OC-75",
+    "status": "open",
+    "note": "built and pinned to @theokit/sdk 5.14.0 (which imports a trusted manifest entry): PLUGIN.md parser, defineTheoClawPlugin, installPlugin (copy plus trust record) and THEOCLAW_PLUGIN_WORKSPACE for the /control agent; tests/plugins.test.ts proves offline, on the real SDK and a stub model, that an installed plugin's tool is advertised and run; open because no end-to-end check against a real model exists yet, and one cannot be recorded as passing until it has been run"
+  },
+  {
+    "id": "OC-76",
+    "status": "shipped",
+    "gaps": [
+      "B-683"
+    ],
+    "check": {
+      "path": "apps/theoclaw/tests/live/sandbox.live.test.ts",
+      "test": "a real model's shell write outside the workspace fails under workspace-write"
+    },
+    "verified_on": "2026-10-31",
+    "note": "read-only = OpenClaw workspace ro for the shell and file tools (the unsandboxed browser server is refused with it), workspace-write = rw (the tool root, and /tmp, which the SDK keeps writable), danger-full-access = mode off; THEOCLAW_SANDBOX_SESSIONS=non-main picks workspace-write for a non-main session (toolSettingsForSession, unit-tested, not yet wired into a running agent: chat agents hold no tool and /control turns carry no session key); not covered: agent and shared scope, workspace none"
+  },
+  {
+    "id": "OC-77",
+    "status": "open",
+    "gaps": [
+      "B-565"
+    ],
+    "note": "moved to B-565 (dod reduced 2026-10-22, delegated): none of the six sandbox backends exists in the ecosystem, so nothing here can be built or checked yet"
+  },
+  {
+    "id": "OC-78",
+    "status": "open"
+  },
+  {
+    "id": "OC-79",
+    "status": "open"
+  },
+  {
+    "id": "OC-80",
+    "status": "open"
+  },
+  {
+    "id": "OC-81",
+    "status": "out",
+    "reason": "Routing rules and per-agent profiles are implemented and tested offline, but they are not yet wired into the channel reply handler, and no real-model end-to-end check was run because model credentials are unavailable in this sandbox.",
+    "declared_by": "human/issue-1172-requester",
+    "declared_on": "2026-11-07",
+    "declared_at": "Issue #1172: permits out with a written reason when live verification is unavailable"
+  },
+  {
+    "id": "OC-82",
+    "status": "shipped",
+    "check": {
+      "path": "apps/theoclaw/tests/live/control-tools.live.test.ts",
+      "test": "a real model delegates one task to a worker and gets its answer"
+    },
+    "verified_on": "2026-11-03",
+    "note": "subagents via delegate and delegate_all (B-611, B-386); sessions_spawn, sessions_send, sessions_list/history/search/yield and agents_list not shipped (B-394). Re-run on the B-394 item head with THEOCLAW_MODEL=openrouter/google/gemini-2.5-flash-lite: 1 test passed"
+  },
+  {
+    "id": "OC-83",
+    "status": "out",
+    "reason": "Managed git worktrees for delegated tasks are implemented and tested offline, but dispatching a turn to a disposable remote machine is not built and no real-model end-to-end check was run because model credentials are unavailable in this sandbox.",
+    "declared_by": "human/issue-1172-requester",
+    "declared_on": "2026-11-07",
+    "declared_at": "Issue #1172: permits out with a written reason when live verification is unavailable"
+  },
+  {
+    "id": "OC-84",
+    "status": "out",
+    "check": {
+      "path": "apps/theoclaw/tests/live/scheduler.live.test.ts",
+      "test": "a real model schedules a job from a sentence and it delivers unattended for OC-84"
+    },
+    "reason": "Scheduler and heartbeat are implemented and covered by offline checks. Real-model end-to-end verification was not run in this sandbox because model credentials and a real delivery account are unavailable. Run tests/live/scheduler.live.test.ts and record the actual model before marking shipped.",
+    "declared_by": "human/issue-1173-requester",
+    "declared_on": "2026-11-05",
+    "declared_at": "Issue #1173: explicitly permits out with a written reason when live verification is unavailable"
+  },
+  {
+    "id": "OC-85",
+    "status": "out",
+    "check": {
+      "path": "apps/theoclaw/tests/live/scheduler.live.test.ts",
+      "test": "a real model answers the heartbeat from HEARTBEAT.md and stays silent when told to for OC-85"
+    },
+    "reason": "Scheduler and heartbeat are implemented and covered by offline checks. Real-model end-to-end verification was not run in this sandbox because model credentials and a real delivery account are unavailable. Run tests/live/scheduler.live.test.ts and record the actual model before marking shipped.",
+    "declared_by": "human/issue-1173-requester",
+    "declared_on": "2026-11-05",
+    "declared_at": "Issue #1173: explicitly permits out with a written reason when live verification is unavailable"
+  },
+  {
+    "id": "OC-86",
+    "status": "open"
+  },
+  {
+    "id": "OC-87",
+    "status": "open"
+  },
+  {
+    "id": "OC-88",
+    "status": "shipped",
+    "check": {
+      "path": "apps/theoclaw/tests/live/security.live.test.ts",
+      "test": "a fetched page's instruction to call a tool is not followed for OC-88"
+    },
+    "verified_on": "2026-11-02",
+    "note": "a mitigation, not a guarantee: every agent send passes the SDK's toolResultGuard, so a tool result reaches the model framed in <untrusted-tool-output> with a forged closing tag neutralised, and every system prompt opens with a notice that framed text is data; measured on openrouter/google/gemini-2.5-flash-lite as todolist calls carrying a page's token: guarded 0 of 5 turns, control (no frame, no notice) 1 of 5; an earlier run that counted every todolist call read guarded 4, control 0 and stronger-page control 8, the guarded calls being the model planning its own summary; the discrimination is weak, since the control reached 1 of 5 turns, so the run shows the frame and notice keep the count at 0 but does not measure by how much they lower it"
+  },
+  {
+    "id": "OC-89",
+    "status": "open",
+    "check": {
+      "path": "apps/theoclaw/tests/live/security.live.test.ts",
+      "test": "the audit repairs a risky configuration file and TheoClaw still answers a real turn from it for OC-89"
+    },
+    "note": "Deferred by S-005 B-398 option A; follow-up B-398-AUDIT. See apps/theoclaw/parity/security-plan.md. Existing implementation or checks do not close this follow-up."
+  },
+  {
+    "id": "OC-90",
+    "status": "shipped",
+    "gaps": [
+      "B-710"
+    ],
+    "check": {
+      "path": "apps/theoclaw/tests/live/security.live.test.ts",
+      "test": "configured values never reach a reply or a log for OC-90"
+    },
+    "verified_on": "2026-11-02",
+    "note": "value masking: one list (channel credentials, model keys, bearer tokens, search keys, external tools' and an import's values) masks process output, chat replies, broadcast answers and threads, and /control, session and WebChat events, a value split across streamed deltas included; not covered: a value split across a tool event, session transcripts the SDK writes (B-710), and a secrets tool for the agent; secret references (env, file, 1Password broker, Vault) resolve at start and their values join the masks, checked offline by tests/secret-refs.test.ts; measured live as 0 of 3 values in stdout, stderr, socket frames and the reply"
+  },
+  {
+    "id": "OC-91",
+    "status": "open",
+    "check": {
+      "path": "apps/theoclaw/tests/live/pairing.live.test.ts",
+      "test": "a device is refused until the owner approves it, then runs a real-model turn"
+    },
+    "note": "Deferred by S-005 B-398 option A; follow-up B-398-PAIRING. See apps/theoclaw/parity/security-plan.md. Existing implementation or checks do not close this follow-up."
+  },
+  {
+    "id": "OC-92",
+    "status": "open",
+    "note": "Deferred by S-005 B-398 option A; follow-up B-398-INCOGNITO. See apps/theoclaw/parity/security-plan.md. Existing implementation or checks do not close this follow-up."
+  },
+  {
+    "id": "OC-93",
+    "status": "open",
+    "note": "Config, hot reload, doctor, status and logs shipped in B-399 (src/ops, tests/ops.test.ts, offline). No passing end-to-end check against a real model has been run, so the row stays open until tests/live gains one."
+  },
+  {
+    "id": "OC-94",
+    "status": "open",
+    "note": "Config, hot reload, doctor, status and logs shipped in B-399 (src/ops, tests/ops.test.ts, offline). No passing end-to-end check against a real model has been run, so the row stays open until tests/live gains one."
+  },
+  {
+    "id": "OC-95",
+    "status": "open",
+    "note": "Config, hot reload, doctor, status and logs shipped in B-399 (src/ops, tests/ops.test.ts, offline). No passing end-to-end check against a real model has been run, so the row stays open until tests/live gains one."
+  },
+  {
+    "id": "OC-96",
+    "status": "open",
+    "note": "Config, hot reload, doctor, status and logs shipped in B-399 (src/ops, tests/ops.test.ts, offline). No passing end-to-end check against a real model has been run, so the row stays open until tests/live gains one."
+  },
+  {
+    "id": "OC-97",
+    "status": "shipped",
+    "check": {
+      "path": "apps/theoclaw/tests/live/usage.live.test.ts",
+      "test": "the done frame's tokens equal the provider's usage response and are above 0"
+    },
+    "verified_on": "2026-11-02",
+    "note": "each finished chat, /control and WebChat turn reports its input and output tokens, the model and its USD cost (or unpriced, never 0) in its final frame or event and one stderr line; /usage off|tokens|cost|full sets a per-conversation reply footer, reset on restart; measured live as the done frame's tokens equal to the provider's own usage response through a recording proxy"
+  },
+  {
+    "id": "OC-98",
+    "status": "open",
+    "note": "B-712: offline log-export and Prometheus scrape coverage added; real-model verification remains outstanding. No live credentials were available in the implementation sandbox; no person has scoped this row out."
+  },
+  {
+    "id": "OC-99",
+    "status": "open",
+    "reason": "Live SQLite snapshots and HTTPS offsite transfer have offline coverage. Real-model recall after offsite restore remains unverified: this sandbox has no model credentials or real offsite account. Run tests/live/backup.live.test.ts with a named THEOCLAW_MODEL and fresh THEOCLAW_BACKUP_TARGET before shipping."
+  },
+  {
+    "id": "OC-100",
+    "status": "open",
+    "note": "B-722: continuous talk-session logic (src/voice/talk-session.ts) has offline tests only. No audio capture is wired and no real-model run was made, so it is not shipped."
+  },
+  {
+    "id": "OC-101",
+    "status": "open",
+    "note": "B-722: wake-word gate (stripWakeWord in src/voice/talk-session.ts) has offline tests only. No microphone/hardware and no real-model run was made, so it is not shipped."
+  },
+  {
+    "id": "OC-102",
+    "status": "open",
+    "note": "B-401: Telegram voice-note transcription and spoken replies implemented with deterministic offline coverage in tests/voice-replies.test.ts. Real-account recorded run with a named THEOCLAW_MODEL, gpt-4o-mini-transcribe and gpt-4o-mini-tts remains unverified: this sandbox has no real chat account or model credentials. See parity/voice-verification.md. Not shipped on offline evidence."
+  },
+  {
+    "id": "OC-103",
+    "status": "open"
+  },
+  {
+    "id": "OC-104",
+    "status": "open"
+  },
+  {
+    "id": "OC-105",
+    "status": "open",
+    "note": "not shipped, no live check run: chat answers /help, /commands, /new, /reset, /goal, /usage and /activation without the model (offline tests only, tests/channel-typing-help.test.ts); /status /model /think /reasoning /fast /elevated /compact /stop /tts /config /mcp /plugins /skill /learn /loop /steer /export /approve /allowlist /acp and the rest of the registry are not built"
+  },
+  {
+    "id": "OC-106",
+    "status": "open",
+    "note": "not shipped, no live check run: a typing indicator is shown through the adapter's startTyping/stopTyping while a turn or /goal runs (offline tests only); typingMode and per-channel ackReaction are not built, the installed @theokit/gateway has no reaction API"
+  },
+  {
+    "id": "H-1",
+    "status": "shipped",
+    "check": {
+      "path": "apps/theoclaw/tests/live/surfaces.live.test.ts",
+      "test": "the TUI and the desktop share one conversation, each interrupted and redirected, for H-1"
+    },
+    "verified_on": "2026-10-31",
+    "note": "the Ink TUI on @theokit/tui: multiline input, slash completion (/interrupt, /new, /quit), streamed text and a tool card, Esc to interrupt and a redirect that keeps the conversation; the code word given in the TUI is answered from the desktop on the same session; the tool card is checked by the name the card draws (ReadFile), which the prompt cannot supply, and the live run was repeated green at 7cb01c1e after that check replaced one the echoed prompt satisfied, and again at c8e6c66d, the tree with the later MCP/ACP and browser items landed"
+  },
+  {
+    "id": "H-2",
+    "status": "open"
+  },
+  {
+    "id": "H-3",
+    "status": "open"
+  },
+  {
+    "id": "H-4",
+    "status": "out",
+    "check": {
+      "path": "apps/theoclaw/tests/live/scheduler.live.test.ts",
+      "test": "a real model's second run after a restart sees the first run's output and a SILENT run sends nothing for H-4"
+    },
+    "reason": "Scheduler and heartbeat are implemented and covered by offline checks. Real-model end-to-end verification was not run in this sandbox because model credentials and a real delivery account are unavailable. Run tests/live/scheduler.live.test.ts and record the actual model before marking shipped.",
+    "declared_by": "human/issue-1173-requester",
+    "declared_on": "2026-11-05",
+    "declared_at": "Issue #1173: explicitly permits out with a written reason when live verification is unavailable"
+  },
+  {
+    "id": "H-5",
+    "status": "shipped",
+    "check": {
+      "path": "apps/theoclaw/tests/live/code-mode.live.test.ts",
+      "test": "a real model fans out to two sub-agents and waits for both for H-5"
+    },
+    "verified_on": "2026-10-31"
+  },
+  {
+    "id": "H-6",
+    "status": "out",
+    "reason": "Hibernating when idle solves a cloud cost nobody pays with one self-hosted instance per person.",
+    "declared_by": "human/paulo",
+    "declared_on": "2026-09-17",
+    "declared_at": ".squad/wiki/product/product-vision.md:243"
+  },
+  {
+    "id": "H-7",
+    "status": "out",
+    "reason": "Batch trajectory generation for training tool-calling models is model-training tooling, not a capability of a personal messaging assistant.",
+    "declared_by": "human/paulo",
+    "declared_on": "2026-10-06",
+    "declared_at": "apps/theoclaw/parity/decisions-2026-10-06.md"
+  }
 ]
