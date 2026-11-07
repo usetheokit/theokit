@@ -8,12 +8,12 @@ describe('channelHooks', () => {
   it('runs the owner policy before group activation', () => {
     const policy = parseAuthorizationPolicy({ THEOCLAW_OWNERS: 'telegram:1', THEOCLAW_DM_POLICY: 'open' })
     const names = channelHooks({ policy, write: () => undefined }).map((hook) => hook.name)
-    expect(names).toEqual(['theoclaw-owner-policy', 'theoclaw-group-activation'])
+    expect(names).toEqual(['theoclaw-owner-policy', 'theoclaw-group-activation', 'theoclaw-help'])
   })
 
   it('answers /usage third, after the owner policy (B-400)', () => {
     const policy = parseAuthorizationPolicy({ THEOCLAW_OWNERS: 'telegram:1', THEOCLAW_DM_POLICY: 'open' })
     const names = channelHooks({ policy, write: () => undefined, usage: createUsageHook().hook }).map((hook) => hook.name)
-    expect(names).toEqual(['theoclaw-owner-policy', 'theoclaw-group-activation', 'theoclaw-usage'])
+    expect(names).toEqual(['theoclaw-owner-policy', 'theoclaw-group-activation', 'theoclaw-usage', 'theoclaw-help'])
   })
 })

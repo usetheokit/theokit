@@ -13,6 +13,8 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Chat: `/help` (and `/commands`) lists the commands a chat answers without the model, and a typing indicator shows on the platform while a turn or `/goal` runs (OC-105, OC-106).
+
 - WebChat backs each chat with a session agent keyed on the chat id (B-703): a follow-up message from the same page is answered by an agent that has the earlier ones in its history, and a post without a valid chat id is refused 400 `chat_id_invalid`.
 
 - `theoclaw logs` now works outside a Linux user unit (B-718, OC-96). The process mirrors its output to `THEOCLAW_LOG_FILE`, which the container image sets to `/data/state/theoclaw.log`; `logs` prints the last lines of that file with credential values masked.
