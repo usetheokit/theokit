@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
 import { readImport } from '../src/migration/import-store.js'
 import { copyFixture, FIXTURE_SECRETS } from './migration-fixtures.js'
@@ -16,6 +16,14 @@ const IMPORT_ENTRY = join(fileURLToPath(new URL('..', import.meta.url)), 'dist',
 const START_ENTRY = join(fileURLToPath(new URL('..', import.meta.url)), 'dist', 'main.js')
 const MODEL_KEY = `model-key-${randomBytes(8).toString('hex')}`
 const TOKEN = `control-token-${randomBytes(16).toString('hex')}`
+
+/** Builds the entries when `dist` lacks them, so a fresh checkout runs this file without a separate build step. */
+function ensureBuilt(): void {
+  if (existsSync(IMPORT_ENTRY) && existsSync(START_ENTRY)) return
+  const root = fileURLToPath(new URL('..', import.meta.url))
+  const built = spawnSync('pnpm', ['run', 'build'], { cwd: root, encoding: 'utf8', timeout: 240_000 })
+  if (built.status !== 0) throw new Error(`building theoclaw failed: ${built.stderr}${built.stdout}`)
+}
 
 interface Run {
   readonly status: number | null
@@ -28,6 +36,8 @@ describe('the import entry', () => {
   let dir = ''
   let home = ''
   let stateDir = ''
+
+  beforeAll(ensureBuilt, 300_000)
 
   beforeEach(() => {
     dir = realpathSync(mkdtempSync(join(tmpdir(), 'theoclaw-migration-')))
@@ -52,7 +62,7 @@ describe('the import entry', () => {
   }
 
   it('is built', () => {
-    expect(existsSync(IMPORT_ENTRY), 'run pnpm --filter theoclaw run build first').toBe(true)
+    expect(existsSync(IMPORT_ENTRY), 'the build in beforeAll did not write the import entry').toBe(true)
   })
 
   it('the import entry exits 1 without a state directory, without --from or with a missing source', () => {
