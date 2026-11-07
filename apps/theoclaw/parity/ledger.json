@@ -527,15 +527,18 @@
   },
   {
     "id": "OC-70",
-    "status": "open"
+    "status": "open",
+    "note": "SKILL.md format (frontmatter name/description/requires plus body) parsed by src/skills/registry.ts; offline test tests/skill-registry.test.ts ; open because no end-to-end check against a real model exists yet, and none was run"
   },
   {
     "id": "OC-71",
-    "status": "open"
+    "status": "open",
+    "note": "precedence built: a workspace skill overrides a bundled one of the same name (tests/skill-registry.test.ts) ; open because no end-to-end check against a real model exists yet, and none was run"
   },
   {
     "id": "OC-72",
-    "status": "open"
+    "status": "open",
+    "note": "gating built: a skill whose required binary is not on PATH is not offered (tests/skill-registry.test.ts) ; open because no end-to-end check against a real model exists yet, and none was run"
   },
   {
     "id": "OC-73",
@@ -544,7 +547,8 @@
   },
   {
     "id": "OC-74",
-    "status": "open"
+    "status": "open",
+    "note": "registry and two bundled skills built (src/skills/registry.ts); not yet wired into the /control agent ; open because no end-to-end check against a real model exists yet, and none was run"
   },
   {
     "id": "OC-75",
