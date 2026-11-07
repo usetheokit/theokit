@@ -689,7 +689,7 @@
       "path": "apps/theoclaw/tests/live/pairing.live.test.ts",
       "test": "a device is refused until the owner approves it, then runs a real-model turn"
     },
-    "note": "Deferred by S-005 B-398 option A; follow-up B-398-PAIRING. See apps/theoclaw/parity/security-plan.md. Existing implementation or checks do not close this follow-up."
+    "note": "Setup code, device request, owner approval and revocation shipped in B-709 (src/control-plane/device-pairing.ts, tests/device-pairing*.test.ts, offline). The named live check (tests/live/pairing.live.test.ts) has not been run against a real model, so the row stays open until it passes."
   },
   {
     "id": "OC-92",
