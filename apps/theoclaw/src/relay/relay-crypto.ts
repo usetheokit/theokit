@@ -32,6 +32,8 @@ export interface Envelope {
   readonly to: string
   readonly from: string
   readonly ephemeral: string
+  /** The sender's counter for this recipient: the recipient accepts each value once, in order. */
+  readonly seq: number
   readonly nonce: string
   readonly ciphertext: string
 }
@@ -67,12 +69,14 @@ export function generateIdentity(): RelayIdentity {
   }
 }
 
-function sessionKey(a: Buffer, b: Buffer, info: string): Buffer {
+/** The key binds both static keys and the ephemeral key into the HKDF info, as the AAD does. */
+function sessionKey(a: Buffer, b: Buffer, from: string, to: string, ephemeral: string): Buffer {
+  const info = `theoclaw-relay-v1|${from}|${to}|${ephemeral}`
   return Buffer.from(hkdfSync('sha256', Buffer.concat([a, b]), Buffer.alloc(0), info, 32))
 }
 
-function aad(from: string, to: string, ephemeral: string): Buffer {
-  return Buffer.from(`theoclaw-relay-v1|${from}|${to}|${ephemeral}`)
+function aad(from: string, to: string, ephemeral: string, seq: number): Buffer {
+  return Buffer.from(`theoclaw-relay-v1|${from}|${to}|${ephemeral}|${seq}`)
 }
 
 /** Seals `plaintext` for the trusted peer `peerName`; refuses a peer that is not trusted. */
@@ -81,6 +85,7 @@ export function seal(
   trusted: TrustedPeers,
   peerName: string,
   plaintext: string,
+  seq: number,
 ): Envelope {
   const to = trusted.get(peerName)
   if (to === undefined) throw new Error(`relay: peer "${peerName}" is not trusted`)
@@ -89,11 +94,13 @@ export function seal(
   const key = sessionKey(
     diffieHellman({ privateKey: eph.privateKey, publicKey: pub(to) }),
     diffieHellman({ privateKey: priv(me.privateKey), publicKey: pub(to) }),
-    'theoclaw-relay-v1',
+    me.publicKey,
+    to,
+    ephemeral,
   )
   const nonce = randomBytes(12)
   const cipher = createCipheriv('aes-256-gcm', key, nonce)
-  cipher.setAAD(aad(me.publicKey, to, ephemeral))
+  cipher.setAAD(aad(me.publicKey, to, ephemeral, seq))
   const body = Buffer.concat([
     cipher.update(plaintext, 'utf8'),
     cipher.final(),
@@ -103,6 +110,7 @@ export function seal(
     to,
     from: me.publicKey,
     ephemeral,
+    seq,
     nonce: nonce.toString('base64url'),
     ciphertext: body.toString('base64url'),
   }
@@ -127,12 +135,14 @@ export function open(
     const key = sessionKey(
       diffieHellman({ privateKey: priv(me.privateKey), publicKey: pub(envelope.ephemeral) }),
       diffieHellman({ privateKey: priv(me.privateKey), publicKey: pub(envelope.from) }),
-      'theoclaw-relay-v1',
+      envelope.from,
+      envelope.to,
+      envelope.ephemeral,
     )
     const body = Buffer.from(envelope.ciphertext, 'base64url')
     if (body.length < 16) throw new Error('short')
     const decipher = createDecipheriv('aes-256-gcm', key, Buffer.from(envelope.nonce, 'base64url'))
-    decipher.setAAD(aad(envelope.from, envelope.to, envelope.ephemeral))
+    decipher.setAAD(aad(envelope.from, envelope.to, envelope.ephemeral, envelope.seq))
     decipher.setAuthTag(body.subarray(body.length - 16))
     const plaintext = Buffer.concat([
       decipher.update(body.subarray(0, body.length - 16)),
