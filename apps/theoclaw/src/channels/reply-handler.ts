@@ -64,6 +64,8 @@ export interface ReplyHandlerOptions {
   readonly goal?: GoalSettings
   /** Per-platform display overrides (B-370); without them each platform keeps its tier's defaults. */
   readonly display?: DisplayConfig
+  /** `THEOCLAW_INCOGNITO=on`: progress lines carry no tool input, status detail or reasoning. */
+  readonly incognito?: boolean
   /** A finished turn's usage: its line, and the footer its conversation's `/usage` asks for (FR-005). */
   readonly usage?: ReplyUsageOptions
   /** A typing indicator shown while a turn or goal runs (OC-106); without it, none. */
@@ -231,7 +233,7 @@ async function streamTurn(
 async function answerTurn(options: ReplyHandlerOptions, event: MessageEvent, ctx: GatewayContext, prompt: string): Promise<string> {
   const presenter = presenterFor(event)
   const secrets = options.secrets ?? []
-  const gate = createProgressGate(resolveDisplay(event.platform, options.display))
+  const gate = createProgressGate(resolveDisplay(event.platform, options.display), options.incognito === true)
   // Best effort: a progress line that cannot be sent never fails the turn.
   const sendProgress = async (line: string): Promise<void> => {
     try {

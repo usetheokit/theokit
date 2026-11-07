@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { createTheoClawAgent, theoClawAgentOptions } from '../agent/create-agent.js'
@@ -9,6 +11,7 @@ import { readPersonaPrompt } from '../agent/persona-files.js'
 import { agentTelemetry, readTelemetrySettings } from '../telemetry/otel.js'
 import type { AgentToolOptions } from '../tools/tool-registry.js'
 import type { BindEnvironment } from './bind.js'
+import { TheoClawConfigError } from './errors.js'
 import { requireModel } from './settings.js'
 import type { TurnAgent } from './turn.js'
 
@@ -18,6 +21,14 @@ export type CreateAgent = (options: TheoClawAgentOptions) => Promise<TurnAgent>
 /** A chat session's options: the protected set, plus where its transcripts live. */
 export interface SessionAgentOptions extends TheoClawAgentOptions {
   readonly local: TheoClawLocalOptions & { readonly cwd: string; readonly sessionDir: string }
+}
+
+/** Whether `THEOCLAW_INCOGNITO=on`: chat turns keep no transcript under the workspace and reach no telemetry (OC-92). */
+export function isIncognito(env: BindEnvironment): boolean {
+  const value = env.THEOCLAW_INCOGNITO?.trim()
+  if (value === undefined || value === '' || value === 'off') return false
+  if (value === 'on') return true
+  throw new TheoClawConfigError('THEOCLAW_INCOGNITO must be on or off', { variable: 'THEOCLAW_INCOGNITO' })
 }
 
 /**
@@ -62,12 +73,16 @@ function createWithFailover(env: BindEnvironment, create: CreateAgent, options: 
  * profile, `workspace` is the profile's own, the directory its `/control` agents work in too.
  */
 export function sessionAgentOptions(env: BindEnvironment, workspace: string): SessionAgentOptions {
-  const options = agentOptionsFor(env)
+  const incognito = isIncognito(env)
+  const { telemetry, ...withoutTelemetry } = agentOptionsFor(env)
+  const options: TheoClawAgentOptions = incognito || telemetry === undefined ? withoutTelemetry : { ...withoutTelemetry, telemetry }
   const persona = readPersonaPrompt(workspace)
   return {
     ...options,
     systemPrompt: persona === '' ? options.systemPrompt : `${options.systemPrompt}\n\n${persona}`,
-    local: { ...options.local, cwd: workspace, sessionDir: join(workspace, '.theoclaw') },
+    // Incognito: the transcript goes to a fresh path under the temp root, never the workspace, created by
+    // the SDK only when it writes; the chat sessions remove it when the agent is disposed.
+    local: { ...options.local, cwd: workspace, sessionDir: incognito ? join(tmpdir(), `theoclaw-incognito-${randomUUID()}`) : join(workspace, '.theoclaw') },
   }
 }
 

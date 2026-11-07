@@ -703,7 +703,7 @@
   {
     "id": "OC-92",
     "status": "open",
-    "note": "Deferred by S-005 B-398 option A; follow-up B-398-INCOGNITO. See apps/theoclaw/parity/security-plan.md. Existing implementation or checks do not close this follow-up."
+    "note": "THEOCLAW_INCOGNITO=on implemented in B-710 (chat transcripts go to a private temp directory removed on dispose; no telemetry; tests/incognito.test.ts, offline). It covers the chat-session transcript directory, telemetry, and channel progress lines (no tool input, status detail or reasoning); it does not change the process's own start and error lines, which carry no turn content, nor the SDK's agent registry under the cwd. No passing check against a real model has been run, so the row stays open until tests/live gains one."
   },
   {
     "id": "OC-93",

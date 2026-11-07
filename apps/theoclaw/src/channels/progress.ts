@@ -21,7 +21,12 @@ function preview(input: unknown, length: number): string {
   return flat.length > length ? `${flat.slice(0, length)}…` : flat
 }
 
-export function createProgressGate(display: DisplaySettings): ProgressGate {
+/**
+ * Incognito (`THEOCLAW_INCOGNITO=on`) sends only a tool's name and a status word: no tool input
+ * preview, no status detail and no reasoning, since those carry the turn's content.
+ */
+export function createProgressGate(shown: DisplaySettings, incognito = false): ProgressGate {
+  const display: DisplaySettings = incognito ? { ...shown, show_reasoning: false, tool_preview_length: 0 } : shown
   let lastTool: string | undefined
   let reasoning = ''
   const reasoningLine = (): string[] => {
@@ -44,7 +49,7 @@ export function createProgressGate(display: DisplaySettings): ProgressGate {
         }
         lastTool = event.name
       } else if (event.type === 'status' && display.live_status !== 'off') {
-        out.push(display.live_status === 'full' && event.detail ? `${event.status}: ${event.detail}` : event.status)
+        out.push(display.live_status === 'full' && !incognito && event.detail ? `${event.status}: ${event.detail}` : event.status)
       }
       return out
     },
