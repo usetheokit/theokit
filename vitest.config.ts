@@ -120,6 +120,8 @@ export default defineConfig({
     // for in-process tests. See tests/setup-tsx-loader.ts for full rationale
     // + the failure inventory it closes.
     setupFiles: ['./tests/setup-tsx-loader.ts'],
+    // B-429 — fails the run if it leaves a new change under `packages/` (see the file).
+    globalSetup: ['./tests/global-packages-clean.ts'],
     // theokit-test-suite-cleanup followup 2026-06-05 — vitest defaults to
     // running ALL dynamic `await import()` calls through Vite's SSR loader
     // (including those inside framework code like `load-config.ts:68` that
