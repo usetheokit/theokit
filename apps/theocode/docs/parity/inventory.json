@@ -8,8 +8,8 @@
       "capability": "/raw prints the reply verbatim (not a toggle)",
       "status": "shipped",
       "evidence": {
-        "file": "packages/tui/tests/commands/raw-command.test.ts",
-        "test": "test_the_last_reply_is_written_verbatim_including_a_line_no_terminal_could_fit"
+        "file": "packages/tui/tests/demo/every-command.test.tsx",
+        "test": "drives every command in its own session and reports what the user sees"
       }
     },
     {
@@ -18,8 +18,8 @@
       "capability": "/sandbox shows and changes the sandbox mode",
       "status": "shipped",
       "evidence": {
-        "file": "packages/tui/tests/commands/sandbox-command.test.ts",
-        "test": "test_accepts_the_three_modes"
+        "file": "packages/tui/tests/demo/every-command.test.tsx",
+        "test": "drives every command in its own session and reports what the user sees"
       }
     },
     {
@@ -108,7 +108,7 @@
       "product": "codex",
       "capability": "/memories slash command",
       "status": "pointer",
-      "reason": "Answered with a pointer, never 'unknown command': it is /memory here — /memory, /memory off|on, /memory forget <n>",
+      "reason": "Answered with a pointer, never 'unknown command': it is /memory here \u2014 /memory, /memory off|on, /memory forget <n>",
       "evidence": {
         "file": "packages/tui/tests/commands/codex-names.test.ts",
         "test": "test_every_mapped_name_routes_instead_of_erroring"
@@ -119,7 +119,7 @@
       "product": "codex",
       "capability": "/approve slash command",
       "status": "pointer",
-      "reason": "Answered with a pointer, never 'unknown command': it is /review here — /review [base <ref> | commit <sha>]",
+      "reason": "Answered with a pointer, never 'unknown command': it is /review here \u2014 /review [base <ref> | commit <sha>]",
       "evidence": {
         "file": "packages/tui/tests/commands/codex-names.test.ts",
         "test": "test_every_mapped_name_routes_instead_of_erroring"
@@ -130,7 +130,7 @@
       "product": "codex",
       "capability": "/recap slash command",
       "status": "pointer",
-      "reason": "Answered with a pointer, never 'unknown command': no on-demand recap — /compact summarises to reclaim context, which is a different reason",
+      "reason": "Answered with a pointer, never 'unknown command': no on-demand recap \u2014 /compact summarises to reclaim context, which is a different reason",
       "evidence": {
         "file": "packages/tui/tests/commands/codex-names.test.ts",
         "test": "test_every_mapped_name_routes_instead_of_erroring"
@@ -141,7 +141,7 @@
       "product": "codex",
       "capability": "/worktree slash command",
       "status": "pointer",
-      "reason": "Answered with a pointer, never 'unknown command': no git-worktree session — /fork branches this session, and leaves the checkout where it is",
+      "reason": "Answered with a pointer, never 'unknown command': no git-worktree session \u2014 /fork branches this session, and leaves the checkout where it is",
       "evidence": {
         "file": "packages/tui/tests/commands/codex-names.test.ts",
         "test": "test_every_mapped_name_routes_instead_of_erroring"
@@ -152,7 +152,7 @@
       "product": "codex",
       "capability": "/voice slash command",
       "status": "pointer",
-      "reason": "Answered with a pointer, never 'unknown command': no voice conversation — this product is text only",
+      "reason": "Answered with a pointer, never 'unknown command': no voice conversation \u2014 this product is text only",
       "evidence": {
         "file": "packages/tui/tests/commands/codex-names.test.ts",
         "test": "test_every_mapped_name_routes_instead_of_erroring"
@@ -163,7 +163,7 @@
       "product": "codex",
       "capability": "/mention slash command",
       "status": "pointer",
-      "reason": "Answered with a pointer, never 'unknown command': no command needed — type @ in the composer and pick the file",
+      "reason": "Answered with a pointer, never 'unknown command': no command needed \u2014 type @ in the composer and pick the file",
       "evidence": {
         "file": "packages/tui/tests/commands/codex-names.test.ts",
         "test": "test_every_mapped_name_routes_instead_of_erroring"
@@ -185,7 +185,7 @@
       "product": "codex",
       "capability": "/sandbox-add-read-dir slash command",
       "status": "pointer",
-      "reason": "Answered with a pointer, never 'unknown command': the sandbox is set as a whole here — /sandbox shows and changes the mode",
+      "reason": "Answered with a pointer, never 'unknown command': the sandbox is set as a whole here \u2014 /sandbox shows and changes the mode",
       "evidence": {
         "file": "packages/tui/tests/commands/codex-names.test.ts",
         "test": "test_every_mapped_name_routes_instead_of_erroring"
@@ -196,7 +196,7 @@
       "product": "codex",
       "capability": "/setup-default-sandbox slash command",
       "status": "pointer",
-      "reason": "Answered with a pointer, never 'unknown command': the sandbox is set as a whole here — /sandbox shows and changes the mode",
+      "reason": "Answered with a pointer, never 'unknown command': the sandbox is set as a whole here \u2014 /sandbox shows and changes the mode",
       "evidence": {
         "file": "packages/tui/tests/commands/codex-names.test.ts",
         "test": "test_every_mapped_name_routes_instead_of_erroring"
@@ -229,7 +229,7 @@
       "product": "codex",
       "capability": "/cd slash command",
       "status": "pointer",
-      "reason": "Answered with a pointer, never 'unknown command': the TUI runs in the directory it was started in and cannot move — /pwd says which one. Headless takes a directory: `theocode -C <dir> run \"…\"`",
+      "reason": "Answered with a pointer, never 'unknown command': the TUI runs in the directory it was started in and cannot move \u2014 /pwd says which one. Headless takes a directory: `theocode -C <dir> run \"\u2026\"`",
       "evidence": {
         "file": "packages/tui/tests/commands/codex-names.test.ts",
         "test": "test_every_mapped_name_routes_instead_of_erroring"
@@ -240,7 +240,7 @@
       "product": "codex",
       "capability": "/ide slash command",
       "status": "pointer",
-      "reason": "Answered with a pointer, never 'unknown command': no IDE bridge — TheoCode reads the repository, not your editor",
+      "reason": "Answered with a pointer, never 'unknown command': no IDE bridge \u2014 TheoCode reads the repository, not your editor",
       "evidence": {
         "file": "packages/tui/tests/commands/codex-names.test.ts",
         "test": "test_every_mapped_name_routes_instead_of_erroring"
@@ -262,7 +262,7 @@
       "product": "codex",
       "capability": "/apps slash command",
       "status": "pointer",
-      "reason": "Answered with a pointer, never 'unknown command': no app directory — MCP servers are the extension point (/mcp)",
+      "reason": "Answered with a pointer, never 'unknown command': no app directory \u2014 MCP servers are the extension point (/mcp)",
       "evidence": {
         "file": "packages/tui/tests/commands/codex-names.test.ts",
         "test": "test_every_mapped_name_routes_instead_of_erroring"
@@ -273,7 +273,7 @@
       "product": "codex",
       "capability": "/plugins slash command",
       "status": "pointer",
-      "reason": "Answered with a pointer, never 'unknown command': no plugin browser — MCP servers are the extension point (/mcp)",
+      "reason": "Answered with a pointer, never 'unknown command': no plugin browser \u2014 MCP servers are the extension point (/mcp)",
       "evidence": {
         "file": "packages/tui/tests/commands/codex-names.test.ts",
         "test": "test_every_mapped_name_routes_instead_of_erroring"
@@ -295,7 +295,7 @@
       "product": "codex",
       "capability": "/keymap slash command",
       "status": "pointer",
-      "reason": "Answered with a pointer, never 'unknown command': shortcuts are fixed — press ? for the list",
+      "reason": "Answered with a pointer, never 'unknown command': shortcuts are fixed \u2014 press ? for the list",
       "evidence": {
         "file": "packages/tui/tests/commands/codex-names.test.ts",
         "test": "test_every_mapped_name_routes_instead_of_erroring"
@@ -339,7 +339,7 @@
       "product": "codex",
       "capability": "/feedback slash command",
       "status": "pointer",
-      "reason": "Answered with a pointer, never 'unknown command': no in-TUI feedback channel — open an issue on the repository",
+      "reason": "Answered with a pointer, never 'unknown command': no in-TUI feedback channel \u2014 open an issue on the repository",
       "evidence": {
         "file": "packages/tui/tests/commands/codex-names.test.ts",
         "test": "test_every_mapped_name_routes_instead_of_erroring"

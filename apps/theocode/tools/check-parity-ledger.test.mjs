@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 
-import { ledgerProblems } from './check-parity-ledger.mjs'
+import { parseLocalSurface } from './check-codex-parity.mjs'
+import { declaresTest, ledgerProblems } from './check-parity-ledger.mjs'
 
 const read = (p) => (p === 'a.test.ts' ? "it('test_x')" : null)
 const base = { product: 'codex', capability: 'c' }
@@ -34,6 +35,18 @@ describe('parity ledger', () => {
   it('test_an_empty_inventory_fails', () => {
     expect(ledgerProblems([], read)).toHaveLength(1)
   })
+  it('test_a_comment_or_skipped_test_is_not_evidence', () => {
+    expect(declaresTest("it('test_x', () => {})", 'test_x')).toBe(true)
+    expect(declaresTest("// test_x", 'test_x')).toBe(false)
+    expect(declaresTest("it.skip('test_x', () => {})", 'test_x')).toBe(false)
+    expect(declaresTest("  it('names the skills that live under .claude/skills and', () => {})", 'names the skills that live under .claude/skills')).toBe(true)
+  })
+  it('test_a_codex_slash_row_the_surface_does_not_answer_fails', () => {
+    const surface = { builtin: new Set(['raw']), pointers: new Set(['recap']) }
+    const row = (n) => ({ ...base, id: `codex:slash:${n}`, status: 'gap', reason: 'x' })
+    expect(ledgerProblems([row('raw'), row('recap')], read, [], surface)).toEqual([])
+    expect(ledgerProblems([row('nope')], read, [], surface)[0]).toMatch(/unknown command/)
+  })
   it('test_the_real_inventory_passes', () => {
     const root = new URL('..', import.meta.url).pathname
     const rows = JSON.parse(readFileSync(`${root}docs/parity/inventory.json`, 'utf8')).rows
@@ -44,6 +57,10 @@ describe('parity ledger', () => {
         return null
       }
     }
-    expect(ledgerProblems(rows, rd)).toEqual([])
+    const surface = parseLocalSurface(
+      rd('packages/tui/src/commands/registry.ts'),
+      rd('packages/tui/src/commands/codex-names.ts'),
+    )
+    expect(ledgerProblems(rows, rd, [...surface.pointers], surface)).toEqual([])
   })
 })
