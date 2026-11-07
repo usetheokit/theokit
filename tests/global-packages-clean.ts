@@ -10,6 +10,7 @@ import { execFileSync } from 'node:child_process'
  */
 function status(): string[] {
   try {
+    // eslint-disable-next-line sonarjs/no-os-command-from-path -- fixed git invocation, no user input
     return execFileSync('git', ['status', '--porcelain', '--', 'packages/'], {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
