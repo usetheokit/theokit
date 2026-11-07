@@ -578,11 +578,19 @@
   },
   {
     "id": "OC-79",
-    "status": "open"
+    "status": "out",
+    "reason": "Tool profiles (minimal, coding, messaging, full) and elevated mode are not built here; only exec approval and loop detection exist, and no real-model end-to-end check was run.",
+    "declared_by": "human/issue-1216-requester",
+    "declared_on": "2026-11-07",
+    "declared_at": "Issue #1216: permits out with a written reason when live verification is unavailable"
   },
   {
     "id": "OC-80",
-    "status": "open"
+    "status": "out",
+    "reason": "Loop detection stops a repeated identical tool call offline, but argument churn and no-progress detection are not built, and no real-model check was run.",
+    "declared_by": "human/issue-1216-requester",
+    "declared_on": "2026-11-07",
+    "declared_at": "Issue #1216: permits out with a written reason when live verification is unavailable"
   },
   {
     "id": "OC-81",

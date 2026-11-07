@@ -25,6 +25,7 @@ import { acpPermissionHandler, type AcpPermissionOptions } from './acp-permissio
 import { browserServer } from './browser-server.js'
 import { codeModeTool, delegateAllTool, delegateTool, type CreateWorker } from './code-mode-tools.js'
 import { computerTool } from './computer-tool.js'
+import { loopDetectionPlugin } from './loop-detection.js'
 import { execApprovalPlugin, type ExecApprovalOptions } from './exec-approval.js'
 import { questionTool, taskTools } from './control-tools.js'
 import { pathVetoPlugin } from './path-veto.js'
@@ -170,7 +171,7 @@ export function agentToolOptions(
   }
   // The exec gate is installed only with host tools on and an asker wired: without one there is
   // nobody to approve, and refusing every shell call would turn the shell off, which is not its job.
-  const plugins = [pathVetoPlugin(settings), ...(execApproval !== undefined && settings.hostTools ? [execApprovalPlugin(execApproval)] : [])]
+  const plugins = [pathVetoPlugin(settings), loopDetectionPlugin(), ...(execApproval !== undefined && settings.hostTools ? [execApprovalPlugin(execApproval)] : [])]
   const base = { tools, plugins }
   const servers = mcpServersOf(settings)
   return Object.keys(servers).length === 0 ? base : { ...base, mcpServers: servers }
