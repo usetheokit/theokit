@@ -10,7 +10,7 @@
  * The script resolves its root from its own location, so each case copies it into a temporary git
  * repository holding the workspace manifests and changesets the case needs.
  */
-import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, readFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { spawnSync, type SpawnSyncReturns } from 'node:child_process'
@@ -397,5 +397,31 @@ describe('this repository passes its own check', () => {
     })
 
     expect(out.status, out.stderr).toBe(0)
+  })
+
+  it('test_theoclaw_is_ignored_by_changesets_and_a_theoclaw_only_change_passes_the_gate', () => {
+    // B-658: a theoclaw-only release must not leave a pending changeset no release consumes.
+    const config = JSON.parse(readFileSync(join(REPO, '.changeset', 'config.json'), 'utf8')) as {
+      ignore: string[]
+    }
+    const manifest = JSON.parse(
+      readFileSync(join(REPO, 'apps', 'theoclaw', 'package.json'), 'utf8'),
+    ) as { name: string }
+    expect(manifest.name).toBe('theoclaw')
+    expect(config.ignore).toContain('theoclaw')
+
+    // Ignored and a changeset-free theoclaw-only change: the gate passes.
+    const only = run(
+      fixture({ ignore: ['priv'], changed: { 'apps/priv/src/x.ts': 'export const x = 1\n' } }),
+      'HEAD~1',
+    )
+    expect(only.status, only.stderr).toBe(0)
+
+    // The changeset the old state carried is refused at the PR, not at the Release workflow.
+    const stale = run(
+      fixture({ ignore: ['priv'], changesets: { 'priv.md': changeset("'priv': patch") } }),
+    )
+    expect(stale.status, stale.stderr).toBe(1)
+    expect(stale.stderr).toMatch(/priv\.md: names only priv/)
   })
 })
