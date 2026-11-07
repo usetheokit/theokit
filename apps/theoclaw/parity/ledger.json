@@ -722,11 +722,13 @@
   },
   {
     "id": "OC-100",
-    "status": "open"
+    "status": "open",
+    "note": "B-722: continuous talk-session logic (src/voice/talk-session.ts) has offline tests only. No audio capture is wired and no real-model run was made, so it is not shipped."
   },
   {
     "id": "OC-101",
-    "status": "open"
+    "status": "open",
+    "note": "B-722: wake-word gate (stripWakeWord in src/voice/talk-session.ts) has offline tests only. No microphone/hardware and no real-model run was made, so it is not shipped."
   },
   {
     "id": "OC-102",
