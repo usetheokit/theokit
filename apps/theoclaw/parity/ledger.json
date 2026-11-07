@@ -195,56 +195,43 @@
   },
   {
     "id": "OC-30",
-    "status": "shipped",
-    "check": {
-      "path": "apps/theoclaw/tests/container/install.container.test.ts",
-      "test": "a clean container installs, onboards, replies within 60 s and updates"
-    },
-    "verified_on": "2026-10-31",
-    "note": "the README's install command clones the repository and runs install.sh, which installs and builds the app and writes the theoclaw launcher; checked in a clean node:22 container on the dispatched theoclaw-container run (https://github.com/usetheokit/theokit/actions/runs/41188190008); the registry half (`npm i -g theoclaw`) is out by owner decision 2026-11-02 (theoclaw is not published to npm for now), so the install is the source install, apps/theoclaw/install.sh; the model that answered is set by THEOCLAW_MODEL on that run and is not named in this checkout, and this sandbox has no Docker or model key to re-run it"
+    "status": "out",
+    "reason": "No model name and no transcript for the clean-container or live run are recorded in this checkout, and the sandbox has no Docker or model key to re-run it, so no passing real-model check is claimed. Rerun the check named in apps/theoclaw/parity/oc-30-34-verification.md, record the model and transcript, then mark shipped.",
+    "declared_by": "human/requester",
+    "declared_on": "2026-11-07",
+    "declared_at": "apps/theoclaw/parity/oc-30-34-verification.md"
   },
   {
     "id": "OC-31",
-    "status": "shipped",
-    "check": {
-      "path": "apps/theoclaw/tests/container/install.container.test.ts",
-      "test": "a clean container installs, onboards, replies within 60 s and updates"
-    },
-    "verified_on": "2026-10-31",
-    "note": "theoclaw onboard --yes writes the configuration file at mode 0600 and the start reads it; checked in the clean container (https://github.com/usetheokit/theokit/actions/runs/41188190008), where the start also had the key and model in its environment, so the file-only start is proven by tests/integration/config-file.integration.test.ts"
+    "status": "out",
+    "reason": "No model name and no transcript for the clean-container or live run are recorded in this checkout, and the sandbox has no Docker or model key to re-run it, so no passing real-model check is claimed. Rerun the check named in apps/theoclaw/parity/oc-30-34-verification.md, record the model and transcript, then mark shipped.",
+    "declared_by": "human/requester",
+    "declared_on": "2026-11-07",
+    "declared_at": "apps/theoclaw/parity/oc-30-34-verification.md"
   },
   {
     "id": "OC-32",
-    "status": "shipped",
-    "gaps": [
-      "B-692"
-    ],
-    "check": {
-      "path": "apps/theoclaw/tests/live/daemon.live.test.ts",
-      "test": "the platform service answers a real-model turn and uninstalls cleanly"
-    },
-    "verified_on": "2026-10-31",
-    "note": "theoclaw daemon install writes a systemd --user unit that runs the built entry with the configuration file, enables and starts it, and uninstall removes it; checked on a Linux host with a real unit and a real model; launchd on macOS and the Windows scheduler wait on B-692, and both are refused by name"
+    "status": "out",
+    "reason": "No model name and no transcript for the clean-container or live run are recorded in this checkout, and the sandbox has no Docker or model key to re-run it, so no passing real-model check is claimed. Rerun the check named in apps/theoclaw/parity/oc-30-34-verification.md, record the model and transcript, then mark shipped.",
+    "declared_by": "human/requester",
+    "declared_on": "2026-11-07",
+    "declared_at": "apps/theoclaw/parity/oc-30-34-verification.md"
   },
   {
     "id": "OC-33",
-    "status": "shipped",
-    "check": {
-      "path": "apps/theoclaw/tests/container/image.container.test.ts",
-      "test": "the image answers health and a real-model turn"
-    },
-    "verified_on": "2026-10-31",
-    "note": "the Dockerfile builds an image that runs TheoClaw as a non-root user and answers /health and a real-model turn; checked on the dispatched theoclaw-container run (https://github.com/usetheokit/theokit/actions/runs/41188190008)"
+    "status": "out",
+    "reason": "No model name and no transcript for the clean-container or live run are recorded in this checkout, and the sandbox has no Docker or model key to re-run it, so no passing real-model check is claimed. Rerun the check named in apps/theoclaw/parity/oc-30-34-verification.md, record the model and transcript, then mark shipped.",
+    "declared_by": "human/requester",
+    "declared_on": "2026-11-07",
+    "declared_at": "apps/theoclaw/parity/oc-30-34-verification.md"
   },
   {
     "id": "OC-34",
-    "status": "shipped",
-    "check": {
-      "path": "apps/theoclaw/tests/container/install.container.test.ts",
-      "test": "a clean container installs, onboards, replies within 60 s and updates"
-    },
-    "verified_on": "2026-10-31",
-    "note": "theoclaw update fast-forwards the checkout on its channel (stable follows main, dev follows develop) and rebuilds, and the restarted instance answers a second real-model turn; checked on the dev channel in the clean container (https://github.com/usetheokit/theokit/actions/runs/41188190008); restarting a systemd unit is covered by tests/update.test.ts"
+    "status": "out",
+    "reason": "No model name and no transcript for the clean-container or live run are recorded in this checkout, and the sandbox has no Docker or model key to re-run it, so no passing real-model check is claimed. Rerun the check named in apps/theoclaw/parity/oc-30-34-verification.md, record the model and transcript, then mark shipped.",
+    "declared_by": "human/requester",
+    "declared_on": "2026-11-07",
+    "declared_at": "apps/theoclaw/parity/oc-30-34-verification.md"
   },
   {
     "id": "OC-35",
