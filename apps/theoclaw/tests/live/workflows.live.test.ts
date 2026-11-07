@@ -10,6 +10,7 @@ import { createContainer } from '../../src/composition.js'
 import { createAgentFactory, createChannelAgentFactory } from '../../src/control-plane/agent-factory.js'
 import { agentToolOptions } from '../../src/tools/tool-registry.js'
 import { resolveToolSettings } from '../../src/tools/tool-settings.js'
+import { createObjectGenerator } from '../../src/workflows/object-generator.js'
 import { createWorkflowTools } from '../../src/workflows/workflow-tools.js'
 
 /**
@@ -68,5 +69,36 @@ describe.skipIf(!LIVE)('the digest workflow against a real model', () => {
     expect(toolCalls, seen).toContain('digest')
     expect(lines, seen).toContainEqual(expect.stringMatching(/^theoclaw-workflow: digest wfr-\S+ completed 2\/2 steps$/))
     expect(answer, seen).toContain(token)
+  })
+})
+
+describe.skipIf(!LIVE)('the triage workflow against a real model', () => {
+  it('a real model runs triage, then resumes the suspended run with its run id for OC-66', { timeout: 180_000 }, async () => {
+    const env = liveEnv()
+    const workspace = mkdtempSync(join(tmpdir(), 'theoclaw-triage-live-'))
+    cleanups.push(() => rmSync(workspace, { recursive: true, force: true }))
+    const lines: string[] = []
+    const tools = createWorkflowTools({ generateObject: createObjectGenerator(env, workspace), write: (line) => lines.push(line) })
+    const settings = resolveToolSettings({}, workspace, { warn: () => undefined })
+    const agent = await createAgentFactory(env, createTheoClawAgent)(agentToolOptions(settings, tools))
+    const toolCalls: string[] = []
+    let answer = ''
+    try {
+      const run = await agent.send(
+        'Use the triage tool on this text: "The export button crashes the app on Safari." Then call triage_resume with the run id it returned and approved true, and reply with the category.',
+      )
+      for await (const event of run.stream()) {
+        if (event.type === 'tool_call' && 'name' in event && 'status' in event && event.status === 'running') toolCalls.push(String(event.name))
+      }
+      const outcome = await run.wait()
+      if (outcome.status !== 'finished') throw new Error(`the run ended ${outcome.status}`)
+      answer = String((outcome as { result?: unknown }).result ?? '')
+    } finally {
+      await (agent as unknown as AsyncDisposable)[Symbol.asyncDispose]()
+    }
+    const seen = JSON.stringify({ toolCalls, lines, answer })
+    expect(toolCalls, seen).toEqual(expect.arrayContaining(['triage', 'triage_resume']))
+    expect(lines, seen).toContainEqual(expect.stringMatching(/^theoclaw-workflow: triage wfr-\S+ suspended$/))
+    expect(answer.toLowerCase(), seen).toContain('bug')
   })
 })

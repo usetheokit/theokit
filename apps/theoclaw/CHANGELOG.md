@@ -13,6 +13,12 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- The `triage` and `triage_resume` tools of the `/control` agent (B-679, OC-66): a workflow whose
+  JSON-only step (`Agent.generateObject` with `shell` withheld and memory off) returns a
+  schema-checked `{ category, summary }`, then suspends for approval. `triage` reports the run id;
+  `triage_resume` takes that run id and `{ approved }`, and a run id resumes once. Needs
+  `@theokit/sdk` 5.14.0. Offline coverage passes; the real-model run is not recorded, so OC-66
+  stays open.
 - Telegram voice-note replies (B-401, OC-102), enabled with
   `THEOCLAW_VOICE_OPENAI_API_KEY`: admitted notes are transcribed into the existing
   chat session and answered with AI-generated speech, with bounded audio requests
@@ -195,8 +201,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
   lists the key points of a text, and a second step checks them as `{ points }` (1 to 10). Each call
   writes one line, `theoclaw-workflow: digest <run id> <status> <completed>/2 steps`, without the
   text; a run that does not complete reaches the model as a tool error. Chat-reply agents hold no
-  tool. The JSON-only `llm-task` step and resumable approvals are not in this release (B-677, B-678,
-  B-679).
+  tool.
 - A headless browser for `/control` agents (B-383): with `THEOCLAW_BROWSER=on` each `/control`
   agent gets the pinned `@playwright/mcp` server (0.0.83) over stdio, headless Chromium on an
   isolated profile, so it reads what a page renders with JavaScript; chat agents never get it. The

@@ -1,6 +1,7 @@
 import type { CustomTool, SDKAgent } from '@theokit/sdk'
-import { workflowAsTool, type WorkflowRun } from '@theokit/sdk/workflow'
+import { workflowAsTool, workflowResumeTool, type WorkflowRun } from '@theokit/sdk/workflow'
 
+import { createTriageWorkflow, TriageInput, type GenerateObject, type TriageInputValue } from './triage-workflow.js'
 import { createDigestWorkflow, DigestInput, type DigestInputValue, type DigestOutputValue } from './digest-workflow.js'
 
 /** Runs `work` inside one request boundary over a fresh draft agent, disposed when `work` settles. */
@@ -12,6 +13,11 @@ export interface WorkflowToolOptions {
    * options (plan D3). Absent: no workflow tool is registered.
    */
   readonly withDraftAgent?: WithDraftAgent
+  /**
+   * The JSON-only model call of the `triage` workflow (B-678), shell withheld and memory off. Absent:
+   * no `triage` tool and no `triage_resume` tool.
+   */
+  readonly generateObject?: GenerateObject
   readonly write: (line: string) => void
 }
 
@@ -54,17 +60,48 @@ function digestRunner(withDraftAgent: WithDraftAgent, write: (line: string) => v
   }
 }
 
+const TRIAGE_DESCRIPTION =
+  'Triage a text: a JSON-only step classifies it as { category, summary }, then the run suspends for ' +
+  'approval and returns { status: "suspended", runId, stepId }. Give that runId to triage_resume only ' +
+  'once the person has approved or refused; never invent one.'
+
+const TRIAGE_RESUME_DESCRIPTION =
+  'Resume a suspended triage run by its runId, with { approved: true | false } as the payload. ' +
+  'Returns { category, summary, approved }. A run id resumes once.'
+
+/** The `triage` tool and its resume tool over one committed workflow, so a run id resumes on the instance that suspended it. */
+function triageTools(generate: GenerateObject, write: (line: string) => void): CustomTool[] {
+  const workflow = createTriageWorkflow(generate)
+  // One log line per started run: the id and status only, never the text or the payload.
+  const logged = {
+    run: async (input: TriageInputValue): Promise<WorkflowRun> => {
+      const run = await workflow.run(input)
+      write(`theoclaw-workflow: triage ${run.id} ${run.status}`)
+      return run
+    },
+  }
+  return [
+    workflowAsTool(logged, { name: 'triage', description: TRIAGE_DESCRIPTION, inputSchema: TriageInput, reportSuspended: true }),
+    workflowResumeTool(workflow as unknown as Parameters<typeof workflowResumeTool>[0], { name: 'triage_resume', description: TRIAGE_RESUME_DESCRIPTION }),
+  ]
+}
+
 /**
  * The workflow tools of a `/control` agent: `digest`, through the SDK's `workflowAsTool` (plan D1),
  * which validates the model's arguments, runs the workflow and turns a run that did not complete into
- * a `WorkflowToolError`, so the model gets a tool error. None without a draft-agent boundary.
+ * a `WorkflowToolError`, so the model gets a tool error; and with a JSON-only model call, `triage` and
+ * `triage_resume` (B-679). Each is absent without its seam.
  */
 export function createWorkflowTools(options: WorkflowToolOptions): CustomTool[] {
-  if (options.withDraftAgent === undefined) return []
-  return [
-    workflowAsTool(
-      { run: digestRunner(options.withDraftAgent, options.write) },
-      { name: 'digest', description: DIGEST_DESCRIPTION, inputSchema: DigestInput },
-    ),
-  ]
+  const tools: CustomTool[] = []
+  if (options.withDraftAgent !== undefined) {
+    tools.push(
+      workflowAsTool(
+        { run: digestRunner(options.withDraftAgent, options.write) },
+        { name: 'digest', description: DIGEST_DESCRIPTION, inputSchema: DigestInput },
+      ),
+    )
+  }
+  if (options.generateObject !== undefined) tools.push(...triageTools(options.generateObject, options.write))
+  return tools
 }

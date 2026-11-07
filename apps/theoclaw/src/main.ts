@@ -7,6 +7,7 @@ import { Agent } from '@theokit/sdk'
 import type { SDKAgent } from '@theokit/sdk'
 
 import { startTheoClaw } from './composition.js'
+import { createObjectGenerator } from './workflows/object-generator.js'
 import type { AgentImport, TheoClawAgentOptions } from './agent/create-agent.js'
 import { type CreateAgent, createAgentFactory, createChannelAgentFactory } from './control-plane/agent-factory.js'
 import { loadConfiguration } from './config-file.js'
@@ -89,6 +90,8 @@ startTheoClaw({
   createChatAgent: create,
   // The `digest` tool's draft agents (B-387): the chat path's factory, so no tool, no shell, memory off.
   draftAgentFactory: createChannelAgentFactory(process.env, createSdkAgent),
+  // The `triage` workflow's JSON-only step (B-679): shell withheld, memory off.
+  generateObject: createObjectGenerator(process.env, workspace),
   // A trigger run's agent (B-397): the chat path's factory too, a fresh one per run, in the workspace.
   triggerAgentFactory: createChannelAgentFactory(process.env, createSdkAgent),
   signals: process,

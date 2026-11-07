@@ -479,16 +479,11 @@
   {
     "id": "OC-66",
     "status": "open",
-    "gaps": [
-      "B-677",
-      "B-678",
-      "B-679"
-    ],
     "check": {
       "path": "apps/theoclaw/tests/live/workflows.live.test.ts",
       "test": "a real model runs the two-step digest workflow for OC-66"
     },
-    "note": "B-387 verification pending: no named real-model passing run is recorded here. The sandbox cannot verify the chat-to-workflow live condition without model credentials; offline checks do not establish shipment. the check covers the typed pipeline: the committed two-step digest workflow (an agent step that drafts, then a step whose output schema types the points), run from a /control turn through the digest tool on a fresh tool-less draft agent per call; the JSON-only llm-task step waits on B-678 (generateObject cannot withhold the shell or turn memory off) and resumable approvals on B-677 (a suspended run cannot reach the model with its run id), both adopted by B-679; only the /control agent holds the tool, and chat-reply agents hold none"
+    "note": "B-387 verification pending: no named real-model passing run is recorded here. The sandbox cannot verify the chat-to-workflow live condition without model credentials; offline checks do not establish shipment. the check covers the typed pipeline: the committed two-step digest workflow (an agent step that drafts, then a step whose output schema types the points), run from a /control turn through the digest tool on a fresh tool-less draft agent per call; the committed triage workflow adds the JSON-only llm-task step (Agent.generateObject with shell withheld and memory off, schema-checked) and an approval step that suspends and is resumed by the triage_resume tool with the run id the model was given (@theokit/sdk 5.14.0); only the /control agent holds the tool, and chat-reply agents hold none"
   },
   {
     "id": "OC-67",

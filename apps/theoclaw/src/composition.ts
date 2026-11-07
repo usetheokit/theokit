@@ -68,6 +68,7 @@ import { type EventSettings, readEventSettings } from './triggers/trigger-settin
 import type { AgentToolOptions } from './tools/tool-registry.js'
 import { checkHostToolsPosture, hostToolsProtectedPaths, type ProtectedPath, resolveToolSettings } from './tools/tool-settings.js'
 import type { ToolDeps, ToolSettings } from './tools/tool-settings.js'
+import type { GenerateObject } from './workflows/triage-workflow.js'
 import { createWorkflowTools } from './workflows/workflow-tools.js'
 import { WEBCHAT_ASSETS_DIR } from './webchat/page.js'
 import { createWebchatRoutes } from './webchat/routes.js'
@@ -272,6 +273,8 @@ export interface StartOptions extends Omit<TheoClawOptions, 'write'> {
   readonly importedSecrets?: readonly string[]
   /** Builds the tool-less agent of one `digest` call (B-387, D3). Absent: no workflow tool. */
   readonly draftAgentFactory?: () => Promise<SDKAgent>
+  /** The JSON-only model call of the `triage` workflow (B-679): shell withheld, memory off. Absent: no `triage` tools. */
+  readonly generateObject?: GenerateObject
   /** The SDK's live agent cache, turned off at start (D2). Default `Agent.registry`. */
   readonly agentRegistry?: { configure(options: { readonly maxAgents: number; readonly idleTimeoutMs: number }): void }
   /** Where the WebChat bundle is read from. Default `WEBCHAT_ASSETS_DIR`, where `build:web` writes it. */
@@ -334,8 +337,8 @@ function announceInstance(given: TheoClawInstance | undefined, stderr: (line: st
 }
 
 /** The `/control` agents' workflow tools: one request boundary per call over the draft factory. */
-function workflowTools(factory: StartOptions['draftAgentFactory'], write: (line: string) => void): CustomTool[] {
-  return createWorkflowTools({ write, ...(factory === undefined ? {} : { withDraftAgent: createContainer({ factory }).withAgent }) })
+function workflowTools(factory: StartOptions['draftAgentFactory'], generateObject: GenerateObject | undefined, write: (line: string) => void): CustomTool[] {
+  return createWorkflowTools({ write, ...(generateObject === undefined ? {} : { generateObject }), ...(factory === undefined ? {} : { withDraftAgent: createContainer({ factory }).withAgent }) })
 }
 
 /**
@@ -438,7 +441,7 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
   const buildWorker = options.importFreeAgentFactory ?? options.agentFactory
   const beat = heartbeat === undefined ? {} : { heartbeat: heartbeatJob(sessionSettings.workspace, heartbeat) }
   scheduled = wireScheduler({ store: scheduleStore, loop: composed.loop, buildRunAgent: buildWorker, tools, platforms, ...beat, write: stderr, secrets: secretValues })
-  const extraTools = [...workflowTools(options.draftAgentFactory, stderr), ...scheduled.scheduleTools, ...peerTools(a2a.peers)]
+  const extraTools = [...workflowTools(options.draftAgentFactory, options.generateObject, stderr), ...scheduled.scheduleTools, ...peerTools(a2a.peers)]
   const execApproval = execApprovalFor(options.execApproval, policy.stateDir)
   const buildControlAgent = async (): Promise<TurnAgent> =>
     options.agentFactory(controlAgentToolOptions(tools, buildWorker, extraTools, execApproval))
