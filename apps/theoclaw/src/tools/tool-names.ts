@@ -8,6 +8,7 @@ export const BUILT_TOOL_NAMES: readonly string[] = [
   'view_image',
   'web_fetch',
   'todolist',
+  'show_widget',
   'web_search',
   'git_diff',
   'write_file',

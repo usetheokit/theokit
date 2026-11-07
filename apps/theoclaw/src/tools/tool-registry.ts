@@ -19,6 +19,7 @@ import {
   createWriteStdinTool,
 } from '@theokit/agents/tools'
 
+import { widgetTool } from '../canvas/widget.js'
 import type { TurnAgent } from '../agent-port.js'
 import { scrubbedAgentTransport } from './acp-transport.js'
 import { acpPermissionHandler, type AcpPermissionOptions } from './acp-permission.js'
@@ -118,6 +119,7 @@ export function buildTools(settings: ToolSettings, permission: AcpPermissionOpti
     // `TodolistTool` types its handler with the todo input union; the SDK validates the model's
     // arguments against the tool's own `inputSchema` before calling it, so the wider type is safe.
     createTodolistTool() as unknown as CustomTool,
+    widgetTool(),
   ]
   const search = webSearchTool(settings)
   if (search !== undefined) tools.push(search)
