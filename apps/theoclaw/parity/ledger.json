@@ -691,19 +691,23 @@
   },
   {
     "id": "OC-93",
-    "status": "open"
+    "status": "open",
+    "note": "Config, hot reload, doctor, status and logs shipped in B-399 (src/ops, tests/ops.test.ts, offline). No passing end-to-end check against a real model has been run, so the row stays open until tests/live gains one."
   },
   {
     "id": "OC-94",
-    "status": "open"
+    "status": "open",
+    "note": "Config, hot reload, doctor, status and logs shipped in B-399 (src/ops, tests/ops.test.ts, offline). No passing end-to-end check against a real model has been run, so the row stays open until tests/live gains one."
   },
   {
     "id": "OC-95",
-    "status": "open"
+    "status": "open",
+    "note": "Config, hot reload, doctor, status and logs shipped in B-399 (src/ops, tests/ops.test.ts, offline). No passing end-to-end check against a real model has been run, so the row stays open until tests/live gains one."
   },
   {
     "id": "OC-96",
-    "status": "open"
+    "status": "open",
+    "note": "Config, hot reload, doctor, status and logs shipped in B-399 (src/ops, tests/ops.test.ts, offline). No passing end-to-end check against a real model has been run, so the row stays open until tests/live gains one."
   },
   {
     "id": "OC-97",

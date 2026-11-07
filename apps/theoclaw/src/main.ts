@@ -12,6 +12,7 @@ import { createObjectGenerator } from './workflows/object-generator.js'
 import type { AgentImport, TheoClawAgentOptions } from './agent/create-agent.js'
 import { type CreateAgent, createAgentFactory, createChannelAgentFactory } from './control-plane/agent-factory.js'
 import { loadConfiguration } from './config-file.js'
+import { watchConfiguration } from './ops/hot-reload.js'
 import { parseEntryArguments } from './entry-arguments.js'
 import { describeError } from './control-plane/errors.js'
 import { resolveInstance, type TheoClawInstance } from './instance.js'
@@ -54,7 +55,9 @@ try {
     process.exit(2)
   }
   // The configuration file next (B-374): it fills only what the environment leaves unset.
-  loadConfiguration(process.env, homedir())
+  const configFile = loadConfiguration(process.env, homedir())
+  // Hot reload (B-399): a change to the model settings applies to the next agent, without a restart.
+  if (configFile !== undefined) watchConfiguration(configFile, process.env, { write: (line) => process.stderr.write(`${line}\n`) })
   instance = resolveInstance(process.env, { homeDir: homedir() })
   // The instance lock before `applyInstance` creates the targets (B-400 FR-010): a start refused
   // while a backup or a restore runs leaves both as they were. Released when the process exits.
