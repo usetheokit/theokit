@@ -53,8 +53,10 @@ export function generateAgentRoutes(ctx: AgentRouteContext): AgentRoute[] {
         )
       }
 
-      const rawSessionId = body?.sessionId
-      const sessionId = typeof rawSessionId === 'string' ? rawSessionId : `session-${Date.now()}`
+      // `sessionId` wins when both are sent; `id` is how HttpTransport sends the chat id.
+      const pick = (v: unknown): string | undefined =>
+        typeof v === 'string' && v.length > 0 ? v : undefined
+      const sessionId = pick(body?.sessionId) ?? pick(body?.id) ?? `session-${Date.now()}`
       return streamAgentResponse(createRun(message, sessionId))
     },
   })
