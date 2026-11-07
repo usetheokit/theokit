@@ -13,6 +13,8 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `theoclaw logs` now works outside a Linux user unit (B-718, OC-96). The process mirrors its output to `THEOCLAW_LOG_FILE`, which the container image sets to `/data/state/theoclaw.log`; `logs` prints the last lines of that file with credential values masked.
+
 - `theoclaw doctor`, `status` and `logs`, and hot reload of the model settings (B-399, OC-93 to OC-96). `doctor` checks the configuration offline and exits 3 on a malformed credential, naming the variable and never the value. `logs` tails the file, launchd log or user journal with credential values masked. While running, a change to `THEOCLAW_MODEL`, `THEOCLAW_MODEL_FALLBACK`, `THEOCLAW_THINKING` or the model keys in the configuration file applies to the next agent without a restart; any other changed setting is reported as needing one.
 
 - The `triage` and `triage_resume` tools of the `/control` agent (B-679, OC-66): a workflow whose

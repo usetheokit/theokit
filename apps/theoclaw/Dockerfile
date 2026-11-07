@@ -25,6 +25,7 @@ ENV THEOCLAW_HOST=0.0.0.0 \
   THEOCLAW_PUBLIC_BIND=yes \
   THEOCLAW_STATE_DIR=/data/state \
   THEOCLAW_CONFIG=/data/theoclaw.env \
+  THEOCLAW_LOG_FILE=/data/state/theoclaw.log \
   THEOKIT_HOME=/data/theokit \
   THEOCLAW_WORKSPACE=/data/work
 USER node
