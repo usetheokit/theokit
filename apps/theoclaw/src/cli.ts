@@ -14,6 +14,7 @@ import { daemonInstall, type DaemonIo, daemonStatus, daemonUninstall } from './d
 import { runCommand, type Runner } from './run-command.js'
 import { parseOnboard, parseUpdate, UsageError } from './cli-args.js'
 import { type OnboardInput, onboard } from './onboard.js'
+import { doctorCommand } from './doctor.js'
 import { securityCommand } from './security-audit.js'
 import { update } from './update.js'
 
@@ -58,6 +59,7 @@ const USAGE = `usage: theoclaw <command>
                             fetch and fast-forward the checkout on its channel, rebuild, restart
   theoclaw security audit [--fix]
                             report risky configuration; --fix narrows file permissions; exit 3 while findings remain
+  theoclaw doctor [--fix]   report a configuration file or directory at the wrong mode and a missing state directory; --fix repairs them
   theoclaw backup <dir>     copy state and workspace; --live snapshots SQLite while running; THEOCLAW_BACKUP_TARGET uploads offsite
   theoclaw restore <dir>    verify a backup and copy it into an empty instance
   theoclaw --help           this text
@@ -142,6 +144,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
   daemon,
   update: (args, io) => update(parseUpdate(args), io, io.runner),
   security: securityCommand,
+  doctor: doctorCommand,
   backup: backupCommand('backup'),
   restore: backupCommand('restore'),
   '--help': (_args, io) => {
