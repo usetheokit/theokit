@@ -59,6 +59,14 @@ function joinedStreams(log: ReadonlyMap<string, readonly string[]>): Array<{ rea
   return [...log].map(([key, chunks]) => ({ key, text: chunks.join('') }))
 }
 
+/** The reasons the instances logged for failed turns: the `error` frame carries only the code (B-660). */
+function turnFailureReasons(): string {
+  return joinedStreams(outputLog)
+    .filter((stream) => stream.key.endsWith(':stderr'))
+    .flatMap((stream) => stream.text.split('\n').filter((line) => line.includes('turn failed')))
+    .join(' | ')
+}
+
 function leakedTokens(): string[] {
   const streams = joinedStreams(outputLog)
   return tokensIssued.filter((token) => streams.some((stream) => stream.text.includes(token)))
@@ -198,7 +206,7 @@ async function turnThrough(port: number, token: string): Promise<Frame[]> {
         }
         frames.push(frame)
         if (frame.type === 'done') resolve()
-        if (frame.type === 'error') reject(new Error(`the turn failed: ${JSON.stringify(frame)}`))
+        if (frame.type === 'error') reject(new Error(`the turn failed: ${JSON.stringify(frame)}; instance stderr: ${turnFailureReasons() || 'none'}`))
       })
     })
     socket.send(JSON.stringify({ type: 'chat', message: 'Reply with the word pong.' }))

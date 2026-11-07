@@ -115,7 +115,7 @@ describe.skipIf(!LIVE)('the core tools against a real model', () => {
     )
     expect(result.toolCalls).toContain('todolist')
     expect(result.toolCalls).toContain('web_fetch')
-    expect(result.answer).toContain('Example Domain')
+    expect(result.answer, `tool calls: ${result.toolCalls.join(', ')}; answer: ${result.answer}`).toContain('Example Domain')
   })
 
   it('a real model lists, writes, edits and patches a file in the tool root', { timeout: 180_000 }, async () => {
