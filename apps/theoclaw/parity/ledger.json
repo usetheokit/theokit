@@ -583,7 +583,7 @@
   {
     "id": "OC-78",
     "status": "open",
-    "note": "exec approval was built earlier (src/tools/exec-approval.ts, tests/exec-approval.test.ts refuses an exec without approval); stays open, to be carried by a follow-up item blocked by B-369 (dod reduced 2026-10-22, S-003 decision B-393 option A); that item is not yet created in this change"
+    "note": "exec approval (src/tools/exec-approval.ts) is now asked in the session chat: /approve, /deny, a 120 s wait and /elevated on|off per session (src/channels/exec-approval-chat.ts, tests/exec-approval-chat.test.ts); stays open until a live check against a real model passes, which this sandbox cannot run"
   },
   {
     "id": "OC-79",

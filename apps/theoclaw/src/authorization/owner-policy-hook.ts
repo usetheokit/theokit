@@ -10,6 +10,8 @@ const HOOK_NAME = 'theoclaw-owner-policy'
 const REFUSAL_MEMORY_MS = 3_600_000
 /** The command word alone or followed by whitespace; `/approver` is not it. */
 const APPROVE_COMMAND = /^\/approve(\s|$)/
+/** What answers an exec question rather than a pairing code. */
+const EXEC_ANSWER = /^\/approve(?:\s+always)?$/
 const APPROVE = /^\/approve\s+(\d{6})$/
 
 const PAIRED = 'Paired.'
@@ -24,6 +26,8 @@ export interface OwnerPolicyHookOptions {
   /** Present only when `THEOCLAW_STATE_DIR` is set; always under the `pairing` policy. */
   readonly pairing?: PairingStore
   readonly clock?: () => number
+  /** True when a bare `/approve` answers an exec waiting in the event's chat, not a pairing: the hook passes it on. */
+  readonly execPending?: (event: MessageEvent) => boolean
   /** Where a failure of the hook is reported. Default: standard error. */
   readonly write?: (line: string) => void
 }
@@ -66,7 +70,12 @@ export function createOwnerPolicyHook(options: OwnerPolicyHookOptions): GatewayH
     if (policy.dmPolicy === 'open') return undefined
     // An unauthenticated sender can never be admitted, and a reply would go to the address it
     // wrote, so answering would send mail or texts to whoever a forger names (backscatter).
-    if (policy.dmPolicy === 'disabled' || !isAuthenticatedSender(event.platform) || refusals.has(key)) return SILENT
+    if (
+      policy.dmPolicy === 'disabled' ||
+      !isAuthenticatedSender(event.platform) ||
+      refusals.has(key)
+    )
+      return SILENT
     // The reply is built first: a sender whose code could not be issued is not silenced for an hour.
     const message = refusalFor(event)
     refusals.set(key, now)
@@ -79,8 +88,16 @@ export function createOwnerPolicyHook(options: OwnerPolicyHookOptions): GatewayH
     const isOwner = isPolicyOwner(policy, event.platform, event.sender.id)
     const isDm = event.channel.type === 'dm'
     const text = event.text.trim()
-    if (isOwner && isDm && APPROVE_COMMAND.test(text)) return approval(text, pairing)
-    const paired = isAuthenticatedSender(event.platform) && (pairing?.isPaired(event.platform, event.sender.id) ?? false)
+    if (
+      isOwner &&
+      isDm &&
+      APPROVE_COMMAND.test(text) &&
+      !(options.execPending?.(event) === true && EXEC_ANSWER.test(text))
+    )
+      return approval(text, pairing)
+    const paired =
+      isAuthenticatedSender(event.platform) &&
+      (pairing?.isPaired(event.platform, event.sender.id) ?? false)
     if (isOwner || paired) return undefined
     return isDm ? refuseDm(event, senderKey(event.platform, event.sender.id), now) : SILENT
   }
@@ -97,7 +114,9 @@ export function createOwnerPolicyHook(options: OwnerPolicyHookOptions): GatewayH
           write(`${HOOK_NAME}: ${event.platform}: ${redactSecrets(reason)}`)
         } catch {
           // A failing log sink must not turn this silent block into the runner's chat reply.
-          process.stderr.write(`${HOOK_NAME}: ${event.platform}: the hook failed and its log line could not be written\n`)
+          process.stderr.write(
+            `${HOOK_NAME}: ${event.platform}: the hook failed and its log line could not be written\n`,
+          )
         }
         return SILENT
       }
