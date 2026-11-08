@@ -8,19 +8,21 @@ import type { BasePlatformAdapter, PlatformName } from '@theokit/gateway'
 import { teamsActivityVerifier } from '@theokit/gateway-teams'
 import type { TeamsActivityVerifierOptions } from '@theokit/gateway-teams'
 import { Agent } from '@theokit/sdk'
-import type { AgentOptions, CustomTool, SDKAgent } from '@theokit/sdk'
+import type { AgentOptions, CustomTool, Plugin, SDKAgent } from '@theokit/sdk'
 
 import { createContainer } from './agent-container.js'
 import { createPairingStore, type PairingStore } from './authorization/pairing-store.js'
 import {
   type AuthorizationPolicy,
   isAuthenticatedSender,
+  isPolicyOwner,
   parseAuthorizationPolicy,
 } from './authorization/policy.js'
 import { type AdapterBuildOptions, adapterBuilders } from './channels/adapter-factory.js'
 import { createBroadcastGroups } from './channels/broadcast-groups.js'
 import { maskSecrets, startChannelLoop } from './channels/channel-loop.js'
 import { channelHooks } from './channel-hooks.js'
+import { createChatExecApproval } from './channels/exec-approval-chat.js'
 import { createUsageHook } from './channels/usage-hook.js'
 import type { ChannelLoop, PlatformBuild } from './channels/channel-loop.js'
 import { installOutputMask, type MaskableStream } from './channels/output-mask.js'
@@ -66,7 +68,7 @@ import {
 import { createWebhookRouter, type WebhookRoute } from './webhooks/router.js'
 import { theoClawApiFor } from './http-api/api-routes.js'
 import type { TeamsVerifier } from './webhooks/teams.js'
-import { createExecApprovalStore, type ExecApprovalOptions } from './tools/exec-approval.js'
+import { createExecApprovalStore, execApprovalPlugin, type ExecApprovalOptions } from './tools/exec-approval.js'
 import { controlAgentToolOptions } from './tools/tool-registry.js'
 import { triggerRoutes } from './triggers/trigger-route.js'
 import { type EventSettings, readEventSettings } from './triggers/trigger-settings.js'
@@ -96,7 +98,7 @@ export interface TheoClawOptions {
    * With `ask` and a `THEOCLAW_STATE_DIR`, every `shell_exec` of a `/control` agent is held to a
    * saved approval, the reviewer, then the person. Absent: the shell runs as before.
    */
-  readonly execApproval?: Pick<ExecApprovalOptions, 'ask' | 'reviewer'>
+  readonly execApproval?: Pick<ExecApprovalOptions, 'ask' | 'reviewer' | 'waived'>
   /**
    * The session generations, loaded from `<workspace>/.theoclaw/sessions.json`. `startTheoClaw`
    * loads them before anything starts, so a malformed file refuses the start; `composeTheoClaw`
@@ -189,7 +191,18 @@ function reportUnservedPlatforms(
 export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
   // First: a bad authorization value stops the start before any adapter is built.
   const policy = options.policy ?? parseAuthorizationPolicy(options.env)
-  const chat = chatSessions(options)
+  // The chat's exec gate (B-572), built on first use so the chat asker exists by the time a session agent opens.
+  let chatGate: Plugin[] | undefined
+  const chat = chatSessions({
+    ...options,
+    plugins: () => {
+      if (chatGate === undefined) {
+        const gate = execApprovalFor({ ...options.execApproval, ...execChat.options }, policy.stateDir)
+        chatGate = gate === undefined ? [] : [execApprovalPlugin(gate)]
+      }
+      return chatGate
+    },
+  })
   const platforms = resolvePlatforms(options.env)
   const { configured, skipped } = platforms
   const secrets = [...(options.secrets ?? platforms.secrets), options.env.THEOCLAW_VOICE_OPENAI_API_KEY?.trim() ?? '']
@@ -201,6 +214,16 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
   const pairing = options.pairing ?? pairingStoreFor(policy, maskedWrite)
   const usage = createUsageHook({ keyOf: chat.keyOf })
   const model = options.env.THEOCLAW_MODEL
+  const execChat = createChatExecApproval({
+    env: options.env,
+    keyOf: chat.keyOf,
+    isOwner: (event) => isPolicyOwner(policy, event.platform, event.sender.id),
+    send: async (event, text) => {
+      const adapter = loop.started.get(event.platform as PlatformName)?.adapter
+      if (adapter === undefined) throw new Error('the platform is not started')
+      await adapter.sendMessage({ channel: event.channel, text })
+    },
+  })
   const deps: WebhookDeps = {
     write: maskedWrite,
     verifierFactory: options.teamsVerifierFactory ?? teamsActivityVerifier,
@@ -233,7 +256,7 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
       goal: events.goal,
       typing: { adapterFor: (platform) => loop.started.get(platform as PlatformName)?.adapter },
     }), configuredVoiceReplies(options.env)),
-    hooks: channelHooks({ policy, ...(pairing === undefined ? {} : { pairing }), write: maskedWrite, ...(model === undefined ? {} : { usage: usage.hook }) }),
+    hooks: channelHooks({ policy, ...(pairing === undefined ? {} : { pairing }), write: maskedWrite, execApproval: execChat, ...(model === undefined ? {} : { usage: usage.hook }) }),
     secrets,
     write: options.write,
     ...(options.startTimeoutMs === undefined ? {} : { startTimeoutMs: options.startTimeoutMs }),

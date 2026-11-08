@@ -72,12 +72,19 @@ export type ReviewerVerdict = 'allow' | 'deny' | 'ask'
 /** The person's answer: run once, run and remember, or refuse. */
 export type PersonAnswer = 'once' | 'always' | 'deny'
 
+/** Which agent ran the command, so a chat asker finds the session's chat. */
+export interface ExecCall {
+  readonly agentId?: string
+}
+
 export interface ExecApprovalOptions {
   readonly store: ExecApprovalStore
   /** Asked before the person; a throw or an unknown verdict counts as `ask`. */
   readonly reviewer?: (command: string) => Promise<ReviewerVerdict>
   /** Asks the person in the chat. Absent: a command nothing approved is refused. */
-  readonly ask?: (command: string) => Promise<PersonAnswer>
+  readonly ask?: (command: string, call?: ExecCall) => Promise<PersonAnswer>
+  /** True when the call's session waived the question (`/elevated on`): the command runs unasked. */
+  readonly waived?: (call?: ExecCall) => boolean
 }
 
 export interface ExecDecision {
@@ -86,9 +93,10 @@ export interface ExecDecision {
 }
 
 /** Standing approval first, then the reviewer, then the person. Never throws. */
-export function createExecApproval(options: ExecApprovalOptions): (command: string) => Promise<ExecDecision> {
-  const { store, reviewer, ask } = options
-  return async (command) => {
+export function createExecApproval(options: ExecApprovalOptions): (command: string, call?: ExecCall) => Promise<ExecDecision> {
+  const { store, reviewer, ask, waived } = options
+  return async (command, call) => {
+    if (waived?.(call) === true) return { allowed: true, reason: 'elevated mode waives the approval' }
     if (store.has(command)) return { allowed: true, reason: 'a saved approval matches' }
     if (reviewer !== undefined) {
       let verdict: ReviewerVerdict = 'ask'
@@ -103,7 +111,7 @@ export function createExecApproval(options: ExecApprovalOptions): (command: stri
     if (ask === undefined) return { allowed: false, reason: 'nobody can approve it' }
     let answer: PersonAnswer
     try {
-      answer = await ask(command)
+      answer = await ask(command, call)
     } catch {
       return { allowed: false, reason: 'the question could not be asked' }
     }
@@ -132,7 +140,7 @@ export function execApprovalPlugin(options: ExecApprovalOptions): Plugin {
         if (call.name === undefined || !EXEC_TOOLS.includes(call.name)) return undefined
         const command = (call.args as { command?: unknown } | undefined)?.command
         if (typeof command !== 'string' || command === '') return { block: true, message: 'theoclaw: the command is missing' }
-        const decision = await decide(command)
+        const decision = await decide(command, { agentId: call.agentId })
         return decision.allowed ? undefined : { block: true, message: `theoclaw: exec refused: ${decision.reason}` }
       })
     },
