@@ -24,7 +24,7 @@ export function processSecrets(
   a2a?: A2ASettings,
 ): string[] {
   const { env } = sources
-  const keys = [env.THEOKIT_API_KEY, env.OPENROUTER_API_KEY, env.THEOCLAW_VOICE_OPENAI_API_KEY]
+  const keys = [env.THEOKIT_API_KEY, env.OPENROUTER_API_KEY, env.THEOCLAW_VOICE_OPENAI_API_KEY, env.THEOCLAW_IMAGE_OPENROUTER_API_KEY]
     .map((value) => (value ?? '').trim())
     .filter((value) => value !== '')
   const tokens = [settings.controlToken, settings.webchatToken].filter((token) => token !== undefined)

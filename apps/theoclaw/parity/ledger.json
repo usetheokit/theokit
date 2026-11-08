@@ -466,7 +466,13 @@
   },
   {
     "id": "OC-64",
-    "status": "open"
+    "status": "shipped",
+    "check": {
+      "path": "apps/theoclaw/tests/integration/media-generation.integration.test.ts",
+      "test": "delivers the generated image as a sendPhoto attachment of the reply through the gateway"
+    },
+    "verified_on": "2026-11-08",
+    "note": "validated against a local fake of the OpenRouter image API, no live call (owner decision 2026-11-02); /image <prompt> on Telegram delivers the image as sendPhoto, and a 402 or 404 from the provider surfaces as a typed error; video_generate and music_generate are out: they are not built, for lack of a video or music provider to validate against"
   },
   {
     "id": "OC-65",
