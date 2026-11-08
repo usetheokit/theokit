@@ -1,7 +1,7 @@
 import { GatewayRunner } from '@theokit/gateway'
 import type { GatewayHook, MessageEvent, PlatformName } from '@theokit/gateway'
 import { MattermostAdapter } from '@theokit/gateway-mattermost'
-import { SlackAdapter } from '@theokit/gateway-slack'
+import { SlackAdapter, normalizeSlackEvent } from '@theokit/gateway-slack'
 import { WhatsAppAdapter } from '@theokit/gateway-whatsapp'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -93,6 +93,14 @@ async function app(platform: PlatformName, hook: GatewayHook) {
 }
 
 describe('group activation', () => {
+  it("the shipped slack gateway drops an unmentioned public-channel message and keeps a mentioned one", () => {
+    const body = (text: string) =>
+      ({ team_id: 'T1', event: { type: 'message', channel: 'C1', channel_type: 'channel', user: 'U1', text, ts: '1.1' } }) as never
+    expect(normalizeSlackEvent(body('hello everyone'), 'UBOT', { requireMention: true })).toBeUndefined()
+    expect(normalizeSlackEvent(body('<@UBOT> hello'), 'UBOT', { requireMention: true })).toBeDefined()
+    expect(normalizeSlackEvent(body('hello everyone'), 'UBOT', { requireMention: false })).toBeDefined()
+  })
+
   it('builds mattermost slack and whatsapp with requireMention under mention', () => {
     expect(builtRequireMention(true)).toEqual([true, true, true])
   })

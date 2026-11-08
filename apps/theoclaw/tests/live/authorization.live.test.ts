@@ -11,15 +11,15 @@ import type { TurnAgent } from '../../src/agent-port.js'
 import { createOwnerPolicyHook } from '../../src/authorization/owner-policy-hook.js'
 import { createPairingStore } from '../../src/authorization/pairing-store.js'
 import { parseAuthorizationPolicy } from '../../src/authorization/policy.js'
-import { createGroupActivationHook } from '../../src/channels/group-activation-hook.js'
 import { createBroadcastGroups } from '../../src/channels/broadcast-groups.js'
+import { createGroupActivationHook } from '../../src/channels/group-activation-hook.js'
 import { createReplyHandler } from '../../src/channels/reply-handler.js'
 import { createContainer } from '../../src/composition.js'
 import { createChannelAgentFactory } from '../../src/control-plane/agent-factory.js'
 import { FakeAdapter, messageEvent, turnText, waitFor } from '../fakes.js'
 
 /**
- * AC-008 (B-371): OC-18, OC-19 and OC-21 (and B-530's OC-20, group mention gating) against a real model. Each test runs the owner policy hook,
+ * AC-008 (B-371): OC-18, OC-19 and OC-21, and B-530's OC-20 (group mention gating) against a real model. Each test runs the owner policy hook,
  * B-369's reply handler and a channel agent on THEOCLAW_MODEL over in-memory adapters, the shape the
  * composed app gives every runner. A turn counts only when the SDK's `wait()` resolved
  * `status: 'finished'` and no `on_error` fired, so the handler's fixed error reply can never pass for
@@ -207,14 +207,14 @@ describe.skipIf(!LIVE)('the owner policy against a real model', () => {
       platforms: ['telegram'],
       hooks: [createGroupActivationHook({ isOwner: (platform, senderId) => platform === 'telegram' && senderId === OWNER, mode: 'mention' })],
     })
+    // Events dispatch in order, so the unmentioned one is settled before the mentioned reply lands.
     await app.deliver(group('hello everyone'), 0)
-    await new Promise((resolve) => setTimeout(resolve, 2000))
-    expect(app.sent('telegram')).toHaveLength(0)
-    expect(app.prompts).toHaveLength(0)
     await app.deliver(group('@theo_bot reply with the single word: pong'), 1)
+    expect(app.sent('telegram')).toHaveLength(1)
+    expect(app.prompts).toHaveLength(1)
+    expect(app.prompts[0]).toContain('@theo_bot')
 
     expect(app.sent('telegram')[0]?.length ?? 0).toBeGreaterThan(0)
-    expect(app.prompts).toHaveLength(1)
     expect(app.completedTurns()).toBe(1)
     expect(app.onErrorCalls()).toBe(0)
   })
