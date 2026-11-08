@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import type { MessageEvent } from '@theokit/gateway'
+import type { AgentOptions } from '@theokit/sdk'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { createOwnerPolicyHook } from '../src/authorization/owner-policy-hook.js'
@@ -13,7 +14,9 @@ import {
 } from '../src/channels/exec-approval-chat.js'
 import { createExecApprovalStore, execApprovalPlugin } from '../src/tools/exec-approval.js'
 import { agentIdFor } from '../src/sessions/session-agents.js'
-import { messageEvent } from './fakes.js'
+import { composeTheoClaw } from '../src/composition.js'
+import { fakeBuilders } from './composition-fixtures.js'
+import { assistant, FakeAgent, finished, messageEvent, waitFor } from './fakes.js'
 
 const OWNER = 'owner'
 const keyOf = (event: MessageEvent): string => `telegram-dm-${event.sender.id}`
@@ -141,5 +144,52 @@ describe('chat exec approval', () => {
     expect(await pairing.pre_inbound!({ event })).toBeUndefined() // an exec waits: passed on to the exec hook
     await say(OWNER, '/approve')
     await run
+  })
+})
+
+describe('the composed app', () => {
+  it('opens each chat session agent with a gate that asks that session and runs the exec only after /approve', async () => {
+    const stateDir = mkdtempSync(join(tmpdir(), 'chat-exec-state-'))
+    const workspace = mkdtempSync(join(tmpdir(), 'chat-exec-ws-'))
+    const { adapters, builders } = fakeBuilders()
+    const opened: { id: string; options: AgentOptions }[] = []
+    const { loop, sessions } = composeTheoClaw({
+      env: {
+        THEOCLAW_OWNERS: 'telegram:user-1',
+        THEOCLAW_DM_POLICY: 'open',
+        THEOCLAW_TELEGRAM_TOKEN: 'telegram-token-value',
+        THEOCLAW_WORKSPACE: workspace,
+        THEOCLAW_STATE_DIR: stateDir,
+        THEOCLAW_MODEL: 'm',
+        OPENROUTER_API_KEY: 'k',
+      },
+      agentFactory: () => {
+        throw new Error('unused')
+      },
+      getOrCreate: async (id, options) => {
+        opened.push({ id, options })
+        return Object.assign(new FakeAgent({ frames: [assistant('ok'), finished()] }), { dispose: async () => undefined })
+      },
+      builders,
+      write: () => undefined,
+    })
+    await loop.ready
+    const telegram = adapters.get('telegram')!
+    await telegram.deliver(messageEvent('telegram', 'hello'))
+    await waitFor(() => telegram.sent.length === 1, 1000, 'the chat reply')
+
+    const plugin = opened[0]!.options.plugins?.find((candidate) => candidate.name === 'theoclaw-exec-approval')
+    expect(plugin).toBeDefined()
+    let handler: ((context: unknown) => Promise<unknown>) | undefined
+    void plugin!.register({ on: (_name: string, h: (context: unknown) => Promise<unknown>) => void (handler = h) } as never)
+    let result: unknown = 'pending'
+    const run = handler!({ name: 'shell_exec', args: { command: 'ls' }, agentId: opened[0]!.id, runId: 'r' }).then((value) => void (result = value))
+    await waitFor(() => telegram.sent.length === 2, 1000, 'the question in the chat')
+    expect(result).toBe('pending')
+    await telegram.deliver(messageEvent('telegram', '/approve'))
+    await run
+    expect(result).toBeUndefined()
+    await loop.stopAll()
+    await sessions.disposeAll()
   })
 })

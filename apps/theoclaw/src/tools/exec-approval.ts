@@ -34,9 +34,7 @@ function load(path: string): Set<string> {
   }
   const list = parsed?.approved
   if (!Array.isArray(list) || !list.every((entry) => typeof entry === 'string')) {
-    throw new Error(
-      `${path} is not an exec approvals file ({ "approved": [...] }); fix or remove it`,
-    )
+    throw new Error(`${path} is not an exec approvals file ({ "approved": [...] }); fix or remove it`)
   }
   return new Set(list as string[])
 }
@@ -52,9 +50,7 @@ export function createExecApprovalStore(dir: string): ExecApprovalStore {
     const handle = await open(temporary, 'w', 0o600)
     try {
       await handle.chmod(0o600)
-      await handle.writeFile(
-        `${JSON.stringify({ approved: [...new Set([...approved, command])] }, null, 2)}\n`,
-      )
+      await handle.writeFile(`${JSON.stringify({ approved: [...new Set([...approved, command])] }, null, 2)}\n`)
     } finally {
       await handle.close()
     }
@@ -97,13 +93,10 @@ export interface ExecDecision {
 }
 
 /** Standing approval first, then the reviewer, then the person. Never throws. */
-export function createExecApproval(
-  options: ExecApprovalOptions,
-): (command: string, call?: ExecCall) => Promise<ExecDecision> {
+export function createExecApproval(options: ExecApprovalOptions): (command: string, call?: ExecCall) => Promise<ExecDecision> {
   const { store, reviewer, ask, waived } = options
   return async (command, call) => {
-    if (waived?.(call) === true)
-      return { allowed: true, reason: 'elevated mode waives the approval' }
+    if (waived?.(call) === true) return { allowed: true, reason: 'elevated mode waives the approval' }
     if (store.has(command)) return { allowed: true, reason: 'a saved approval matches' }
     if (reviewer !== undefined) {
       let verdict: ReviewerVerdict = 'ask'
@@ -146,12 +139,9 @@ export function execApprovalPlugin(options: ExecApprovalOptions): Plugin {
         const call = (context ?? {}) as Partial<PreToolCallContext>
         if (call.name === undefined || !EXEC_TOOLS.includes(call.name)) return undefined
         const command = (call.args as { command?: unknown } | undefined)?.command
-        if (typeof command !== 'string' || command === '')
-          return { block: true, message: 'theoclaw: the command is missing' }
+        if (typeof command !== 'string' || command === '') return { block: true, message: 'theoclaw: the command is missing' }
         const decision = await decide(command, { agentId: call.agentId })
-        return decision.allowed
-          ? undefined
-          : { block: true, message: `theoclaw: exec refused: ${decision.reason}` }
+        return decision.allowed ? undefined : { block: true, message: `theoclaw: exec refused: ${decision.reason}` }
       })
     },
   }

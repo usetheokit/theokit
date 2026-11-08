@@ -70,12 +70,7 @@ export function createOwnerPolicyHook(options: OwnerPolicyHookOptions): GatewayH
     if (policy.dmPolicy === 'open') return undefined
     // An unauthenticated sender can never be admitted, and a reply would go to the address it
     // wrote, so answering would send mail or texts to whoever a forger names (backscatter).
-    if (
-      policy.dmPolicy === 'disabled' ||
-      !isAuthenticatedSender(event.platform) ||
-      refusals.has(key)
-    )
-      return SILENT
+    if (policy.dmPolicy === 'disabled' || !isAuthenticatedSender(event.platform) || refusals.has(key)) return SILENT
     // The reply is built first: a sender whose code could not be issued is not silenced for an hour.
     const message = refusalFor(event)
     refusals.set(key, now)
@@ -88,16 +83,10 @@ export function createOwnerPolicyHook(options: OwnerPolicyHookOptions): GatewayH
     const isOwner = isPolicyOwner(policy, event.platform, event.sender.id)
     const isDm = event.channel.type === 'dm'
     const text = event.text.trim()
-    if (
-      isOwner &&
-      isDm &&
-      APPROVE_COMMAND.test(text) &&
-      !(options.execPending?.(event) === true && EXEC_ANSWER.test(text))
-    )
+    if (isOwner && isDm && APPROVE_COMMAND.test(text) && !(options.execPending?.(event) === true && EXEC_ANSWER.test(text))) {
       return approval(text, pairing)
-    const paired =
-      isAuthenticatedSender(event.platform) &&
-      (pairing?.isPaired(event.platform, event.sender.id) ?? false)
+    }
+    const paired = isAuthenticatedSender(event.platform) && (pairing?.isPaired(event.platform, event.sender.id) ?? false)
     if (isOwner || paired) return undefined
     return isDm ? refuseDm(event, senderKey(event.platform, event.sender.id), now) : SILENT
   }
@@ -114,9 +103,7 @@ export function createOwnerPolicyHook(options: OwnerPolicyHookOptions): GatewayH
           write(`${HOOK_NAME}: ${event.platform}: ${redactSecrets(reason)}`)
         } catch {
           // A failing log sink must not turn this silent block into the runner's chat reply.
-          process.stderr.write(
-            `${HOOK_NAME}: ${event.platform}: the hook failed and its log line could not be written\n`,
-          )
+          process.stderr.write(`${HOOK_NAME}: ${event.platform}: the hook failed and its log line could not be written\n`)
         }
         return SILENT
       }

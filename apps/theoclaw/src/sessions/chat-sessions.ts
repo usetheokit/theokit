@@ -5,7 +5,7 @@ import { join, resolve, sep } from 'node:path'
 
 import type { MessageEvent } from '@theokit/gateway'
 import { Agent } from '@theokit/sdk'
-import type { AgentOptions } from '@theokit/sdk'
+import type { AgentOptions, Plugin } from '@theokit/sdk'
 
 import { createContainer } from '../agent-container.js'
 import { createChannelAgentFactory, isIncognito, sessionAgentOptions } from '../control-plane/agent-factory.js'
@@ -20,6 +20,8 @@ export interface ChatSessionsOptions {
   readonly getOrCreate?: (id: string, options: AgentOptions) => Promise<SessionAgent>
   readonly generations?: Generations
   readonly sessionSettings?: SessionSettings
+  /** Plugins every session agent is opened with (B-572: the exec approval gate), read when an agent opens. */
+  readonly plugins?: () => readonly Plugin[]
   readonly write: (line: string) => void
 }
 
@@ -60,7 +62,11 @@ export function chatSessions(options: ChatSessionsOptions): { readonly sessions:
         throw error
       }
     },
-    optionsFor: () => sessionAgentOptions(options.env, settings.workspace),
+    optionsFor: () => {
+      const base = sessionAgentOptions(options.env, settings.workspace)
+      const plugins = options.plugins?.() ?? []
+      return plugins.length === 0 ? base : { ...base, plugins: [...(base.plugins ?? []), ...plugins] }
+    },
     generations: options.generations ?? Generations.load(sessionsFile(settings.workspace)),
     settings,
     write: options.write,
