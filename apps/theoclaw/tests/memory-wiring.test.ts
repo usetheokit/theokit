@@ -7,6 +7,7 @@ import type { AgentOptions } from '@theokit/sdk'
 import { describe, expect, it } from 'vitest'
 
 import { MemoryStore } from '../src/memory/memory-store.js'
+import { theoClawAgentOptions } from '../src/agent/create-agent.js'
 import { chatSessions } from '../src/sessions/chat-sessions.js'
 
 const ENV = { THEOCLAW_MODEL: 'm', OPENROUTER_API_KEY: 'k' }
@@ -80,5 +81,31 @@ describe('memory wired into the chat sessions (OC-56, Hermes row 3)', () => {
       expect(memory).toBeUndefined()
       await sessions.disposeAll()
     }
+  })
+
+  it('opens a fresh session, on any surface, with the fact earlier sessions kept in its prompt', async () => {
+    const workspace = mkdtempSync(join(tmpdir(), 'theoclaw-mem-'))
+    new MemoryStore(join(workspace, '.theoclaw', 'memory')).saveFact('The owner lives in Porto')
+    const prompts: unknown[] = []
+    const { sessions, withAgent } = chatSessions({
+      env: { ...ENV, THEOCLAW_WORKSPACE: workspace },
+      write: () => undefined,
+      getOrCreate: async (_id, options) => {
+        prompts.push(options.systemPrompt)
+        return scripted(options, 'x') as never
+      },
+    })
+    await withAgent(event('line'), (lease) => lease.release())
+    expect(String(prompts[0])).toContain('- The owner lives in Porto')
+    await sessions.disposeAll()
+  })
+
+  it('puts the recalled facts in a /control agent prompt, after an import too', () => {
+    const options = theoClawAgentOptions({
+      model: 'm',
+      apiKey: 'k',
+      toolOptions: { tools: [], plugins: [], systemPromptSuffix: '## Remembered facts\n\n- The owner lives in Porto' },
+    })
+    expect(options.systemPrompt).toContain('- The owner lives in Porto')
   })
 })

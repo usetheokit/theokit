@@ -48,6 +48,7 @@ export function chatSessions(options: ChatSessionsOptions): { readonly sessions:
   const open = options.getOrCreate ?? ((id: string, agentOptions: AgentOptions) => Agent.getOrCreate(id, agentOptions))
   const memory = memoryEnabled(options.env, incognito) ? createMemory(join(settings.workspace, '.theoclaw', 'memory'), options.write) : undefined
   let reviews = 0
+  const recalled = recalledPrompt(memory)
   const sessions = new SessionAgents({
     router,
     // Opened by the chat path's own factory, whose protected options are applied last, so the
@@ -57,7 +58,7 @@ export function chatSessions(options: ChatSessionsOptions): { readonly sessions:
       const dir = sessionOptions.local?.sessionDir
       const build = (agentId: string, extra: AgentOptions): Promise<SessionAgent> =>
         createChannelAgentFactory(options.env, (channel) =>
-          open(agentId, { ...sessionOptions, ...channel, ...extra, local: { ...sessionOptions.local, ...channel.local } }),
+          open(agentId, { ...sessionOptions, ...channel, ...extra, ...recalled(channel.systemPrompt, extra), local: { ...sessionOptions.local, ...channel.local } }),
         )()
       try {
         const opened = await build(id, {})
@@ -92,6 +93,17 @@ export function chatSessions(options: ChatSessionsOptions): { readonly sessions:
 /** The session key inside an agent id (`agentIdFor`), and the surface (platform) its first segment names. */
 const keyOf = (id: string): string => id.replace(/^theoclaw-/, '').replace(/-g\d+$/, '')
 const surfaceOf = (id: string): string => keyOf(id).split('-')[0] ?? 'chat'
+
+/**
+ * A session's agent opens with the facts earlier sessions kept, as data (OC-56); the reviewer fork
+ * (which passes `tools`) does not. Read when the agent opens, so a new session sees the latest.
+ */
+function recalledPrompt(memory: MemoryWiring | undefined) {
+  return (prompt: string, extra: AgentOptions): { systemPrompt?: string } => {
+    const facts = memory?.store.recallSection() ?? ''
+    return facts === '' || extra.tools !== undefined ? {} : { systemPrompt: `${prompt}\n\n${facts}` }
+  }
+}
 
 /** An incognito agent whose private transcript directory is removed once it is disposed. */
 export function withIncognitoCleanup(agent: SessionAgent, dir: string | undefined): SessionAgent {

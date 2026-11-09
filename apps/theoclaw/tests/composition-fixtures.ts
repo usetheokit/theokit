@@ -66,7 +66,7 @@ export const TELEGRAM_AND_LINE = {
  * the chat session tests: their senders are many and none is an owner, and what they check is the
  * session a message joins, not who may reach the agent.
  */
-export const OPEN_DMS = { ...TELEGRAM_AND_LINE, THEOCLAW_DM_POLICY: 'open', THEOCLAW_MEMORY: 'off' }
+export const OPEN_DMS = { ...TELEGRAM_AND_LINE, THEOCLAW_DM_POLICY: 'open' }
 
 export function signedLinePost(base = 'http://localhost'): Request {
   return new Request(`${base}/webhooks/line`, {

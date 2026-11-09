@@ -50,6 +50,24 @@ describe.skipIf(!LIVE)('memory across surfaces and the per-turn review, live', (
       // A fact the forked reviewer saved with a real model call.
       expect(store.facts().join(' ')).toContain(city)
 
+      // A fresh session on another surface recalls the fact from its prompt alone: it has no tool.
+      const other = chatSessions({
+        env,
+        write: () => undefined,
+        getOrCreate: (id: string, options: AgentOptions) => Agent.getOrCreate(id, options) as unknown as Promise<SessionAgent>,
+      })
+      const line = { platform: 'line', sender: { id: 'u' }, channel: { type: 'dm', id: 'u' } } as never
+      const recalled = await other.withAgent(line, async (lease) => {
+        const run = await lease.agent.send('What is my home city called? Answer with just the name.')
+        for await (const message of run.stream()) void message
+        const result = await run.wait()
+        lease.release()
+        return result.result ?? ''
+      })
+      await other.memory?.idle()
+      await other.sessions.disposeAll()
+      expect(recalled).toContain(city)
+
       // A different surface (the control agent) asks session_search through a real model.
       const control = await createChannelAgentFactory(env, (options) =>
         Agent.create({ ...options, tools: [sessionSearchTool(store)] } as never),
