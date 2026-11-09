@@ -146,7 +146,7 @@ describe('the chat path through startTheoClaw', () => {
   // NFR-002, 20 of 20: each repetition is its own session (its own sender), all run at once.
   it('two messages during one running turn get two replies in order', { timeout: 60_000 }, async () => {
     const stub = await startModelStub({
-      delayMs: 2000,
+      delayMs: 500,
       reply: (request) => `answer to ${stub.userTexts(request).at(-1) ?? ''}`,
     })
     const received: AgentOptions[] = []
