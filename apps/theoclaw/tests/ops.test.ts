@@ -1,5 +1,4 @@
-import { readFileSync } from 'node:fs'
-import { writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { afterEach, describe, expect, it } from 'vitest'
@@ -153,6 +152,31 @@ describe('doctor, status and logs (OC-95, OC-96)', () => {
     const { h } = configured('THEOKIT_API_KEY="short"\n')
     expect(await runCli(['doctor'], h.io)).toBe(3)
     expect(h.stdout()).toContain('THEOCLAW_MODEL')
+  })
+
+  it('doctor --fix narrows the file mode and creates the state directory, leaving the secret as it was', async () => {
+    const text = `THEOCLAW_MODEL="m"\nTHEOKIT_API_KEY="${KEY}"\n`
+    const { h, path } = configured(text)
+    const state = join(h.io.homeDir, 'state', 'theoclaw')
+    h.io.env.THEOCLAW_STATE_DIR = state
+    chmodSync(path, 0o644)
+    expect(await runCli(['doctor'], h.io)).toBe(3)
+    expect(h.stdout()).toContain('THEOCLAW_STATE_DIR')
+    expect(existsSync(state)).toBe(false)
+    expect(statSync(path).mode & 0o777).toBe(0o644)
+
+    expect(await runCli(['doctor', '--fix'], h.io)).toBe(0)
+    expect(h.stdout()).toContain('fixed SA-001')
+    expect(h.stdout()).toContain('fixed THEOCLAW_STATE_DIR')
+    expect(statSync(path).mode & 0o777).toBe(0o600)
+    expect(statSync(state).mode & 0o777).toBe(0o700)
+    expect(readFileSync(path, 'utf8')).toBe(text)
+    expect(h.stdout()).not.toContain(KEY)
+  })
+
+  it('doctor refuses an unknown flag', async () => {
+    const { h } = configured(`THEOCLAW_MODEL="m"\nTHEOKIT_API_KEY="${KEY}"\n`)
+    expect(await runCli(['doctor', '--force'], h.io)).toBe(2)
   })
 
   it('status names the instance, model and service state, never a key', async () => {
