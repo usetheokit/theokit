@@ -119,17 +119,17 @@ describe.skipIf(!LIVE)('the browser against a real model', () => {
     const agent = await createTheoClawAgent(theoClawAgentOptions({ model, apiKey, toolOptions: agentToolOptions(settings) }))
     let answer = ''
     const toolCalls: string[] = []
-    // Every tool_call event (arguments, and the result once it completes), so a failing run shows
-    // what the browser server answered and not only which tools the model chose (issue #1435).
+    // Each tool_call event (arguments, and the result once it completes), kept for the failure
+    // message of the answer check, so a failing run shows what the browser server answered (#1435).
     const trace: string[] = []
     try {
       const run = await agent.send(
-        `Open ${page.url} in the browser and tell me the exact text shown in the element with id v. The result of browser_navigate already holds a snapshot of the rendered page, so read the text from it; do not wait or navigate again.`,
+        `Open ${page.url} in the browser and tell me the exact text shown in the element with id v.`,
       )
       for await (const event of run.stream()) {
         if (event.type !== 'tool_call') continue
         if ('name' in event && 'status' in event && event.status === 'running') toolCalls.push(String(event.name))
-        trace.push(JSON.stringify(event).slice(0, 1500))
+        trace.push(JSON.stringify(event).slice(0, 4000))
       }
       const outcome = await run.wait()
       if (outcome.status !== 'finished') throw new Error(`the run ended ${outcome.status}: ${JSON.stringify(outcome)}`)
@@ -138,9 +138,8 @@ describe.skipIf(!LIVE)('the browser against a real model', () => {
       await agent[Symbol.asyncDispose]()
     }
     console.log(`OC-60 live: model=${model} toolCalls=${JSON.stringify(toolCalls)} answer=${JSON.stringify(answer)}`)
-    console.log(`OC-60 live trace:\n${trace.join('\n')}`)
     expect(toolCalls.some((name) => name.includes('browser_navigate')), JSON.stringify(toolCalls)).toBe(true)
-    expect(answer).toContain(value)
+    expect(answer, trace.join('\n')).toContain(value)
   })
 
   it('leaves no browser server or its directory behind after the agent is disposed', { timeout: 180_000 }, async () => {
@@ -159,7 +158,7 @@ describe.skipIf(!LIVE)('the browser against a real model', () => {
     let ownDirs = new Set<string>()
     try {
       // The server is spawned by the first browser call, not by `create`, so the case runs a turn.
-      const run = await agent.send(`Open ${page.url} in the browser and tell me the text of the element with id v. The result of browser_navigate already holds a snapshot of the page.`)
+      const run = await agent.send(`Open ${page.url} in the browser and tell me the text of the element with id v.`)
       await run.wait()
       own = new Set([...serverPids(cliPath as string)].filter((pid) => !before.has(pid)))
       expect(own.size, 'this agent started a browser server before dispose').toBeGreaterThan(0)
