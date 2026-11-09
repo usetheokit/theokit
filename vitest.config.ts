@@ -42,6 +42,16 @@ if (
   )
 }
 
+/**
+ * TheoClaw refuses to load below Node 22.16 (SQLite's backup API; `apps/theoclaw/package.json`
+ * engines), so on the framework's 22.12 floor leg its project would only fail at import. It runs
+ * in its own CI job on a Node that meets its range; here it is left out below that range.
+ */
+export function nodeSupportsTheoClaw(version = process.versions.node): boolean {
+  const [major = 0, minor = 0] = version.split('.').map(Number)
+  return (major === 22 && minor >= 16) || (major === 23 && minor >= 8) || major >= 24
+}
+
 export default defineConfig({
   test: {
     globals: true,
@@ -108,7 +118,7 @@ export default defineConfig({
       './packages/theo/vitest.config.ts',
       './packages/create-theokit/vitest.config.ts',
       './packages/tauri/vitest.config.ts',
-      './apps/theoclaw/vitest.config.ts',
+      ...(nodeSupportsTheoClaw() ? ['./apps/theoclaw/vitest.config.ts'] : []),
     ],
     // A better-sqlite3 NODE_MODULE_VERSION mismatch surfaces as a raw test failure. Run
     // `pnpm rebuild better-sqlite3` when it does.
