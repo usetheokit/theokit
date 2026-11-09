@@ -23,6 +23,8 @@ import type { ToolStart } from './tool-start-fixtures.js'
 const CLI = '/opt/fake/@playwright/mcp/cli.js'
 /** The wrapper the server is started through: it filters the tool list and owns the file root. */
 const PROXY = join(import.meta.dirname, '..', 'tools', 'browser-proxy.mjs')
+/** The browser config the server is started with: it names the headless shell `browser:install` installs. */
+const CONFIG = join(import.meta.dirname, '..', 'tools', 'browser-config.json')
 const ON_LINE = 'tools: browser is on (headless chromium, isolated profile)'
 const OFF_LINE = 'tools: browser is off (THEOCLAW_BROWSER unset)'
 const MODEL_ENV = { THEOCLAW_MODEL: 'openrouter/m', OPENROUTER_API_KEY: 'router-key' }
@@ -92,7 +94,7 @@ describe('THEOCLAW_BROWSER', () => {
     expect(servers?.browser).toEqual({
       type: 'stdio',
       command: process.execPath,
-      args: [PROXY, CLI, '--headless', '--isolated', '--browser', 'chromium'],
+      args: [PROXY, CLI, '--headless', '--isolated', '--config', CONFIG],
     })
     expect(settings.offLines).toContain(ON_LINE)
     expect(settings.offLines).not.toContain(OFF_LINE)

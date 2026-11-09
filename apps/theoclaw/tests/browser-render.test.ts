@@ -12,11 +12,13 @@ import { browserServer, readBrowser } from '../src/tools/browser-server.js'
  * Issue #1417: `browser_navigate` against a local page whose JavaScript renders a value, through
  * the real wrapper and the real `@playwright/mcp` on the Chromium `browser:install` puts in
  * Playwright's browsers directory (the one the live-model job installs). It needs that Chromium, so
- * it runs only where one is installed; a machine without one skips it, and the live OC-60 case
- * stays the loud check.
+ * it runs where one is installed and always with THEOCLAW_LIVE=1 (a missing Chromium then fails
+ * it); any other machine without one skips it.
  */
 const DEADLINE_MS = 90_000
 const CHROMIUM = (() => {
+  // The live job (THEOCLAW_LIVE=1) installs Chromium: there a missing one fails loudly instead of skipping.
+  if (process.env.THEOCLAW_LIVE === '1') return true
   try {
     return readBrowser({ THEOCLAW_BROWSER: 'on', PLAYWRIGHT_BROWSERS_PATH: process.env.PLAYWRIGHT_BROWSERS_PATH }) !== undefined
   } catch {

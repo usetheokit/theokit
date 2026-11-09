@@ -150,3 +150,14 @@ describe('the browser server over stdio', () => {
     await expect(listTools(dying, process.env)).rejects.toThrow(/exited with 3 \(signal null\) before answering; stderr: dying/)
   })
 })
+
+describe('the browser server config', () => {
+  it('names the headless shell channel the install puts in place, not --browser chromium', () => {
+    const server = browserServer({ cliPath: '/opt/fake/cli.js' }) as { args: string[] }
+    expect(server.args).not.toContain('--browser')
+    const configPath = server.args[server.args.indexOf('--config') + 1] as string
+    const config = JSON.parse(readFileSync(configPath, 'utf8')) as { browser: { browserName: string; launchOptions: Record<string, unknown> } }
+    expect(config.browser.browserName).toBe('chromium')
+    expect(config.browser.launchOptions).toEqual({ channel: 'chromium-headless-shell', chromiumSandbox: false })
+  })
+})
