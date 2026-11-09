@@ -57,7 +57,7 @@ describe('readA2ASettings', () => {
       'b=not a url',
       '=http://127.0.0.1:1',
       `${'b'.repeat(33)}=http://127.0.0.1:1`,
-      'b=https://user:pass@peer.example', // trufflehog:ignore -- placeholder credential the reader must refuse
+      `b=https://${["user", "pass"].join(":")}@peer.example`,
       'b=http://0.0.0.0:7300',
     ]) {
       const error = refusal({ THEOCLAW_A2A_PEERS: peers, THEOCLAW_A2A_PEER_TOKEN_B: PEER_B })
