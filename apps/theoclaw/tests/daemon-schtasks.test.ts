@@ -1,4 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
@@ -32,6 +34,14 @@ function capturing(h: Harness): {
   return { runner, xml: () => xml, path: () => path }
 }
 
+/** The XML sits in a fresh directory of its own under the temp directory, and that directory is gone. */
+function expectPrivateDirGone(path: string): void {
+  const dir = dirname(path)
+  expect(dirname(dir)).toBe(tmpdir())
+  expect(dir).toMatch(/theoclaw-task-.{6}$/)
+  expect(existsSync(dir)).toBe(false)
+}
+
 describe('theoclaw daemon on Windows (Task Scheduler)', () => {
   it('the_task_xml_is_utf_16_with_no_time_limit_and_passes_the_configuration_as_an_argument', async () => {
     const h = harness({ platform: 'win32', env: { ...WINDOWS_ENV, THEOCLAW_PROFILE: 'work' } })
@@ -53,6 +63,7 @@ describe('theoclaw daemon on Windows (Task Scheduler)', () => {
       '/Run /TN theoclaw-work',
     ])
     expect(existsSync(c.path()!)).toBe(false)
+    expectPrivateDirGone(c.path()!)
     expect(h.stdout()).not.toContain('OPENROUTER')
   })
 
@@ -68,6 +79,7 @@ describe('theoclaw daemon on Windows (Task Scheduler)', () => {
     expect(schtasks(h).at(-1)).toBe('/Delete /TN theoclaw /F')
     expect(schtasks(h).some((line) => line.startsWith('/Run'))).toBe(false)
     expect(existsSync(c.path()!)).toBe(false)
+    expectPrivateDirGone(c.path()!)
 
     const run = harness({
       platform: 'win32',

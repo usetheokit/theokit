@@ -109,7 +109,7 @@ describe('createOpenAICompatibleRoutes', () => {
       const error = errorOf(await json(response))
       expect(error.type).toBe('invalid_body')
       if (param === null) expect(error.param).toBeNull()
-      else expect(String(error.param)).toMatch(new RegExp(`^${param.replace(/\./g, '\\.')}`))
+      else expect(String(error.param)).toMatch(new RegExp(`^${param.replace(/[\\.]/g, '\\$&')}`))
       expect(complete).not.toHaveBeenCalled()
     },
   )
