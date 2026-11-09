@@ -498,15 +498,14 @@
     "id": "OC-68",
     "status": "shipped",
     "gaps": [
-      "B-681",
-      "B-685"
+      "B-681"
     ],
     "check": {
       "path": "apps/theoclaw/tests/live/external-tools.live.test.ts",
       "test": "a real model delegates a turn to an ACP agent"
     },
     "verified_on": "2026-10-31",
-    "note": "each ACP agent of THEOCLAW_EXTERNAL_TOOLS is one createACPTool from theokit/server/agent, run in files/, one process per call, refused with THEOCLAW_HOST_TOOLS=on (the shell can write files/); the live check used a fixture ACP agent, not Claude Code or Codex, which need an adapter and credentials this host lacks; every permission request goes to the owner and is granted once only on a yes, refused on a no, a timeout or no asker (the live check did not exercise it); the agent starts through env -i with only PATH, HOME, locale, terminal and XDG variables, so no TheoClaw secret is in its environment, though as the same user it can read TheoClaw's from /proc; an env option and a masked stderr are B-681; the /acp command surface is B-685; only the /control agent holds these tools, and chat-reply agents hold none"
+    "note": "each ACP agent of THEOCLAW_EXTERNAL_TOOLS is one createACPTool from theokit/server/agent, run in files/, one process per call, refused with THEOCLAW_HOST_TOOLS=on (the shell can write files/); the live check used a fixture ACP agent, not Claude Code or Codex, which need an adapter and credentials this host lacks; every permission request goes to the owner and is granted once only on a yes, refused on a no, a timeout or no asker (the live check did not exercise it); the agent starts through env -i with only PATH, HOME, locale, terminal and XDG variables, so no TheoClaw secret is in its environment, though as the same user it can read TheoClaw's from /proc; an env option and a masked stderr are B-681; the owner starts, lists and stops ACP agent sessions with /acp start <agent>, /acp list and /acp stop <id> (one scrubbed agent process each, ended at stop or shutdown; offline test, not the live check); only the /control agent holds these tools, and chat-reply agents hold none"
   },
   {
     "id": "OC-69",
