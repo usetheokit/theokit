@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
 import { type CliIo } from '../../src/cli.js'
+import { type Runner } from '../../src/run-command.js'
 
 const scratch: string[] = []
 
@@ -16,6 +17,8 @@ export function scratchDir(): string {
 export interface Harness {
   readonly io: CliIo
   readonly signals: EventEmitter
+  /** Replaces the command runner the CLI is given; the default rejects every command. */
+  readonly useRunner: (runner: Runner) => void
   readonly stdout: () => string
   readonly stderr: () => string
 }
@@ -29,6 +32,7 @@ export function harness(entry = '/nonexistent/main.js'): Harness {
   stdout.on('data', (chunk: Buffer) => (out += chunk.toString()))
   stderr.on('data', (chunk: Buffer) => (err += chunk.toString()))
   const signals = new EventEmitter()
+  let runner: Runner = () => Promise.reject(new Error('no command expected'))
   const io: CliIo = {
     env: { XDG_CONFIG_HOME: join(dir, 'config'), XDG_DATA_HOME: join(dir, 'data'), XDG_STATE_HOME: join(dir, 'state') },
     homeDir: dir,
@@ -41,9 +45,15 @@ export function harness(entry = '/nonexistent/main.js'): Harness {
     cwd: dir,
     platform: 'linux',
     nodePath: process.execPath,
-    runner: () => Promise.reject(new Error('no command expected')),
+    runner: (command, args) => runner(command, args),
   }
-  return { io, signals, stdout: () => out, stderr: () => err }
+  return {
+    io,
+    signals,
+    useRunner: (next) => {
+      runner = next
+    }, stdout: () => out, stderr: () => err,
+  }
 }
 
 export function processGroup(pid: number): string {

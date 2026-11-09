@@ -47,7 +47,8 @@ describe('the triage tools', () => {
   })
 
   it('fails the run when the JSON-only step returns an object the schema refuses', async () => {
-    const h = harness(async () => ({ category: 'nonsense' }))
+    // A generator that lies about its type: the workflow must still refuse what the schema does not accept.
+    const h = harness(async () => JSON.parse('{"category":"nonsense"}'))
     await expect(Promise.resolve(h.triage.handler({ text: 'it fails' }))).rejects.toThrow()
   })
 })

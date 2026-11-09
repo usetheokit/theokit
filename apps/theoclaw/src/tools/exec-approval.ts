@@ -2,9 +2,10 @@ import { mkdirSync, readFileSync } from 'node:fs'
 import { open, rename } from 'node:fs/promises'
 import { join } from 'node:path'
 
-import type { Plugin, PreToolCallContext } from '@theokit/sdk'
+import type { PreToolCallContext } from '@theokit/sdk'
 
 import { describeError } from '../control-plane/errors.js'
+import type { GeneralPlugin } from './general-plugin.js'
 
 const FILE_NAME = 'exec-approvals.json'
 /** The tools that start a command: `interactive_shell` is held to the same decision as `shell_exec`. */
@@ -128,7 +129,7 @@ export function createExecApproval(options: ExecApprovalOptions): (command: stri
 }
 
 /** A `pre_tool_call` plugin that holds every `shell_exec` and `interactive_shell` call to the decision. */
-export function execApprovalPlugin(options: ExecApprovalOptions): Plugin {
+export function execApprovalPlugin(options: ExecApprovalOptions): GeneralPlugin {
   const decide = createExecApproval(options)
   return {
     kind: 'general',

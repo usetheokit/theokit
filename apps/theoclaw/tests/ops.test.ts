@@ -23,10 +23,19 @@ function configured(text: string, extra: NodeJS.ProcessEnv = {}) {
   return { h, path }
 }
 
+/** The settings a file holds, as the string map `reloadConfiguration` takes (`parseEnv` types each value as possibly undefined). */
+function parsedFile(path: string): Record<string, string> {
+  const parsed: Record<string, string> = {}
+  for (const [key, value] of Object.entries(parseEnv(readFileSync(path, 'utf8')))) {
+    if (value !== undefined) parsed[key] = value
+  }
+  return parsed
+}
+
 describe('hot reload (OC-94)', () => {
   it('applies a model change to the running environment without a restart', () => {
     const { path } = configured(`THEOCLAW_MODEL="a"\nTHEOKIT_API_KEY="${KEY}"\n`)
-    const previous = parseEnv(readFileSync(path, 'utf8'))
+    const previous = parsedFile(path)
     const env: Record<string, string | undefined> = { ...previous }
     writeFileSync(path, `THEOCLAW_MODEL="b"\nTHEOKIT_API_KEY="${KEY}"\nTHEOCLAW_PORT="9"\n`)
 
@@ -40,7 +49,7 @@ describe('hot reload (OC-94)', () => {
 
   it('leaves a caller-set variable and refuses a file that loses the model', () => {
     const { path } = configured(`THEOCLAW_MODEL="a"\nTHEOKIT_API_KEY="${KEY}"\n`)
-    const previous = parseEnv(readFileSync(path, 'utf8'))
+    const previous = parsedFile(path)
     const env: Record<string, string | undefined> = { ...previous, THEOCLAW_MODEL: 'from-env' }
     writeFileSync(path, `THEOCLAW_MODEL="b"\nTHEOKIT_API_KEY="${KEY}"\n`)
     expect(reloadConfiguration(path, env, previous).result.kind).toBe('unchanged')
@@ -56,7 +65,7 @@ describe('hot reload (OC-94)', () => {
 
   it('the watcher applies an edit to the file after the debounce', async () => {
     const { path } = configured(`THEOCLAW_MODEL="a"\nTHEOKIT_API_KEY="${KEY}"\n`)
-    const env: Record<string, string | undefined> = { ...parseEnv(readFileSync(path, 'utf8')) }
+    const env: Record<string, string | undefined> = { ...parsedFile(path) }
     const lines: string[] = []
     const watcher = watchConfiguration(path, env, { debounceMs: 20, write: (l) => lines.push(l) })
     try {
@@ -97,7 +106,7 @@ describe('doctor, status and logs (OC-95, OC-96)', () => {
 
   it('status names the instance, model and service state, never a key', async () => {
     const { h } = configured(`THEOCLAW_MODEL="m1"\nTHEOKIT_API_KEY="${KEY}"\n`)
-    h.io.runner = () => Promise.resolve({ code: 3, stdout: '', stderr: '' })
+    h.useRunner(() => Promise.resolve({ code: 3, stdout: '', stderr: '' }))
     const code = await runCli(['status'], h.io)
     expect(code).not.toBe(0)
     expect(h.stdout()).toContain('model: m1')
@@ -117,11 +126,11 @@ describe('doctor, status and logs (OC-95, OC-96)', () => {
   it('logs reads THEOCLAW_LOG_FILE as the container does, written by the tee, masked', async () => {
     const { h } = configured(`THEOCLAW_MODEL="m"\nTHEOKIT_API_KEY="${KEY}"\n`)
     const log = join(h.io.homeDir, 'state', 'theoclaw.log')
-    const stream = { write: (): boolean => true }
+    const stream = { write: (_chunk: string): boolean => true }
     teeToLogFile({ THEOCLAW_LOG_FILE: log }, [stream])
-    stream.write(`started\nkey ${KEY} leaked\n` as never)
+    stream.write(`started\nkey ${KEY} leaked\n`)
     Object.assign(h.io.env, { THEOCLAW_LOG_FILE: log })
-    h.io.runner = () => Promise.reject(new Error('journalctl must not run'))
+    h.useRunner(() => Promise.reject(new Error('journalctl must not run')))
     expect(await runCli(['logs', '--lines', '5'], h.io)).toBe(0)
     expect(h.stdout()).toContain('started')
     expect(h.stdout()).toContain('[redacted]')
@@ -131,15 +140,15 @@ describe('doctor, status and logs (OC-95, OC-96)', () => {
   it('logs falls back to the journal and reports its failure', async () => {
     const { h } = configured(`THEOCLAW_MODEL="m"\nTHEOKIT_API_KEY="${KEY}"\n`)
     const calls: string[][] = []
-    h.io.runner = (cmd, args) => {
+    h.useRunner((cmd, args) => {
       calls.push([cmd, ...args])
       return Promise.resolve({ code: 0, stdout: `x ${KEY}\n`, stderr: '' })
-    }
+    })
     expect(await runCli(['logs'], h.io)).toBe(0)
     expect(calls[0]?.[0]).toBe('journalctl')
     expect(h.stdout()).not.toContain(KEY)
 
-    h.io.runner = () => Promise.resolve({ code: 1, stdout: '', stderr: '' })
+    h.useRunner(() => Promise.resolve({ code: 1, stdout: '', stderr: '' }))
     expect(await runCli(['logs'], h.io)).toBe(1)
     expect(await runCli(['logs', '--bogus'], h.io)).toBe(2)
   })
