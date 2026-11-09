@@ -195,6 +195,21 @@ describe('readClaudeCodeSetup', () => {
     expect(setup.dropped.some((entry) => entry.path === 'project/CLAUDE.md')).toBe(false)
   })
 
+  it('reads a FIFO named CLAUDE.md as absent without blocking', () => {
+    rmSync(join(project, 'CLAUDE.md'))
+    execFileSync('mkfifo', [join(project, 'CLAUDE.md')])
+
+    const setup = readClaudeCodeSetup({ home, project })
+
+    expect(setup.dropped.some((entry) => entry.path === 'project/CLAUDE.md')).toBe(false)
+  })
+
+  it('drops an oversized CLAUDE.md read through the open descriptor', () => {
+    writeFileSync(join(project, 'CLAUDE.md'), 'x'.repeat(262_145))
+
+    expect(readClaudeCodeSetup({ home, project }).dropped).toContainEqual({ path: 'project/CLAUDE.md', reason: 'file over 262144 bytes' })
+  })
+
   it('keys the memory by the project, not by a repository GIT_DIR points at', () => {
     const other = join(dir, 'other-repo')
     gitInit(other)

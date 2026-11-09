@@ -53,7 +53,7 @@ function findOnPath(name: string, pathVar: string): string | undefined {
 function readFramebufferHead(path: string): Buffer {
   let descriptor: number | undefined
   try {
-    descriptor = openSync(path, 'r')
+    descriptor = openSync(path, constants.O_RDONLY | constants.O_NONBLOCK)
     if (!fstatSync(descriptor).isFile()) throw refusal(`needs THEOCLAW_COMPUTER_FRAMEBUFFER to name a regular file; ${path} is not one`)
     const head = Buffer.alloc(HEADER_BYTES)
     const read = readSync(descriptor, head, 0, HEADER_BYTES, 0)

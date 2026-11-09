@@ -1,4 +1,4 @@
-import { closeSync, fstatSync, openSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { closeSync, constants, fstatSync, openSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { parse as parseYaml } from 'yaml'
@@ -54,7 +54,7 @@ export const SAFE_SKILL_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/
 export function readCapped(path: string, rel: string, dropped: DroppedEntry[]): string | undefined {
   let fd: number
   try {
-    fd = openSync(path, 'r')
+    fd = openSync(path, constants.O_RDONLY | constants.O_NONBLOCK)
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
     throw error

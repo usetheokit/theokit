@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -90,6 +91,12 @@ describe('THEOCLAW_COMPUTER', () => {
     expect(refusal(() => readComputer(onEnv({ THEOCLAW_COMPUTER_FRAMEBUFFER: dir }), POSTURE, FOUND)).message).toContain('is not one')
     const missing = join(dir, 'absent')
     expect(refusal(() => readComputer(onEnv({ THEOCLAW_COMPUTER_FRAMEBUFFER: missing }), POSTURE, FOUND)).message).toContain(missing)
+  })
+
+  it('refuses a framebuffer path that is a FIFO without blocking', () => {
+    const fifo = join(tempDir(), 'fb')
+    execFileSync('mkfifo', [fifo])
+    expect(refusal(() => readComputer(onEnv({ THEOCLAW_COMPUTER_FRAMEBUFFER: fifo }), POSTURE, FOUND)).message).toContain('is not one')
   })
 
   it('finds xdotool as the first executable file on PATH', () => {
