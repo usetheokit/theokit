@@ -736,7 +736,7 @@
   {
     "id": "OC-99",
     "status": "open",
-    "reason": "Live SQLite snapshots and HTTPS offsite transfer have offline coverage. Real-model recall after offsite restore remains unverified: this sandbox has no model credentials or real offsite account. Run tests/live/backup.live.test.ts with a named THEOCLAW_MODEL and fresh THEOCLAW_BACKUP_TARGET before shipping."
+    "reason": "Live SQLite snapshots and HTTPS offsite transfer have offline coverage. Real-model recall after offsite restore remains unverified: this sandbox has no model credentials or real offsite account. Run tests/live/backup.live.test.ts with a named THEOCLAW_MODEL and fresh THEOCLAW_BACKUP_TARGET before shipping. The job sets no THEOCLAW_BACKUP_TARGET, so the live test skips with that reason instead of failing (#1416); the row stays open until a run with a target passes."
   },
   {
     "id": "OC-100",
