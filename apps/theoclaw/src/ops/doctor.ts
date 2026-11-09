@@ -47,7 +47,9 @@ export function doctor(io: DoctorIo): number {
   try {
     requireModel(env)
   } catch (error) {
-    failures.push(error instanceof TheoClawConfigError ? error.message : 'the model settings cannot be read')
+    failures.push(
+      error instanceof TheoClawConfigError ? error.message : 'the model settings cannot be read',
+    )
   }
   for (const key of KEYS) {
     const value = env[key]
@@ -56,7 +58,9 @@ export function doctor(io: DoctorIo): number {
   }
   const warnings = (() => {
     try {
-      return auditConfiguration(io.env, io.homeDir).map((finding) => `${finding.id}: ${finding.message}`)
+      return auditConfiguration(io.env, io.homeDir).map(
+        (finding) => `${finding.id}: ${finding.message}`,
+      )
     } catch {
       return []
     }

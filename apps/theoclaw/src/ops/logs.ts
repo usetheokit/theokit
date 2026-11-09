@@ -42,14 +42,19 @@ function parseLogs(args: readonly string[]): { lines: number; file: string | und
   let file: string | undefined
   for (let i = 0; i < args.length; i += 2) {
     const value = args[i + 1]
-    if (args[i] === '--lines' && value !== undefined && /^[1-9]\d{0,5}$/.test(value)) lines = Number(value)
+    if (args[i] === '--lines' && value !== undefined && /^[1-9]\d{0,5}$/.test(value))
+      lines = Number(value)
     else if (args[i] === '--file' && value !== undefined && !value.startsWith('-')) file = value
     else throw new UsageError('theoclaw logs: expected [--lines <n>] [--file <path>]')
   }
   return { lines, file }
 }
 
-export async function logsCommand(args: readonly string[], io: LogsIo, runner: Runner): Promise<number> {
+export async function logsCommand(
+  args: readonly string[],
+  io: LogsIo,
+  runner: Runner,
+): Promise<number> {
   const { lines, file } = parseLogs(args)
   const env: NodeJS.ProcessEnv = { ...io.env }
   loadConfiguration(env, io.homeDir)
@@ -63,11 +68,25 @@ export async function logsCommand(args: readonly string[], io: LogsIo, runner: R
       io.stderr.write(`theoclaw logs: ${source} does not exist\n`)
       return 1
     }
-    text = readFileSync(source, 'utf8').split('\n').slice(-lines - 1).join('\n')
+    text = readFileSync(source, 'utf8')
+      .split('\n')
+      .slice(-lines - 1)
+      .join('\n')
   } else {
-    const answer = await runner('journalctl', ['--user', '-u', `${label}.service`, '-n', String(lines), '--no-pager', '-o', 'cat'])
+    const answer = await runner('journalctl', [
+      '--user',
+      '-u',
+      `${label}.service`,
+      '-n',
+      String(lines),
+      '--no-pager',
+      '-o',
+      'cat',
+    ])
     if (answer.code !== 0) {
-      io.stderr.write(`theoclaw logs: the journal cannot be read (exit ${answer.code}); pass --file or set THEOCLAW_LOG_FILE\n`)
+      io.stderr.write(
+        `theoclaw logs: the journal cannot be read (exit ${answer.code}); pass --file or set THEOCLAW_LOG_FILE\n`,
+      )
       return 1
     }
     text = answer.stdout

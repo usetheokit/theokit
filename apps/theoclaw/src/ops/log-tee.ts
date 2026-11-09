@@ -25,7 +25,11 @@ export function teeToLogFile(env: NodeJS.ProcessEnv, streams: readonly TeeStream
     ;(stream as { write: unknown }).write = (chunk: unknown, ...rest: unknown[]): boolean => {
       if (working) {
         try {
-          appendFileSync(file, typeof chunk === 'string' ? chunk : Buffer.from(chunk as Uint8Array), { mode: 0o600 })
+          appendFileSync(
+            file,
+            typeof chunk === 'string' ? chunk : Buffer.from(chunk as Uint8Array),
+            { mode: 0o600 },
+          )
         } catch {
           working = false
         }

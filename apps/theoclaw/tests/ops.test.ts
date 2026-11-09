@@ -6,10 +6,12 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import { runCli } from '../src/cli.js'
 import { teeToLogFile } from '../src/ops/log-tee.js'
+import { spawn } from 'node:child_process'
+
+import { PREDECESSOR_VARIABLE, waitForPredecessor } from '../src/ops/self-restart.js'
 import { reloadConfiguration, watchConfiguration } from '../src/ops/hot-reload.js'
 import { cleanScratch, harness } from './support/cli-harness.js'
 import { parseEnv } from 'node:util'
-
 
 afterEach(cleanScratch)
 
@@ -42,7 +44,11 @@ describe('hot reload (OC-94)', () => {
     const { result, accepted } = reloadConfiguration(path, env, previous)
 
     expect(env.THEOCLAW_MODEL).toBe('b')
-    expect(result).toEqual({ kind: 'applied', applied: ['THEOCLAW_MODEL'], restartRequired: ['THEOCLAW_PORT'] })
+    expect(result).toEqual({
+      kind: 'applied',
+      applied: ['THEOCLAW_MODEL'],
+      restartRequired: ['THEOCLAW_PORT'],
+    })
     expect(env.THEOCLAW_PORT).toBeUndefined()
     expect(accepted.THEOCLAW_MODEL).toBe('b')
   })
@@ -71,12 +77,45 @@ describe('hot reload (OC-94)', () => {
     try {
       writeFileSync(path, `THEOCLAW_MODEL="c"\nTHEOKIT_API_KEY="${KEY}"\n`)
       const deadline = Date.now() + 3000
-      while (env.THEOCLAW_MODEL !== 'c' && Date.now() < deadline) await new Promise((r) => setTimeout(r, 25))
+      while (env.THEOCLAW_MODEL !== 'c' && Date.now() < deadline)
+        await new Promise((r) => setTimeout(r, 25))
       expect(env.THEOCLAW_MODEL).toBe('c')
       expect(lines.join('\n')).toContain('applied THEOCLAW_MODEL')
     } finally {
       watcher.close()
     }
+  })
+})
+
+describe('self-restart on a restart-required change (B-716)', () => {
+  it('the watcher asks for a restart when a start-only setting changed', async () => {
+    const { path } = configured(`THEOCLAW_MODEL="a"\nTHEOKIT_API_KEY="${KEY}"\nTHEOCLAW_PORT="1"\n`)
+    const env: Record<string, string | undefined> = { ...parsedFile(path) }
+    const lines: string[] = []
+    let restarts = 0
+    const watcher = watchConfiguration(path, env, {
+      debounceMs: 20,
+      write: (l) => lines.push(l),
+      restart: () => void restarts++,
+    })
+    try {
+      writeFileSync(path, `THEOCLAW_MODEL="a"\nTHEOKIT_API_KEY="${KEY}"\nTHEOCLAW_PORT="2"\n`)
+      const deadline = Date.now() + 3000
+      while (restarts === 0 && Date.now() < deadline) await new Promise((r) => setTimeout(r, 25))
+      expect(restarts).toBe(1)
+      expect(lines.join('\n')).toContain('restart required for THEOCLAW_PORT')
+    } finally {
+      watcher.close()
+    }
+  })
+
+  it('a successor waits for its predecessor and clears the marker', async () => {
+    const child = spawn(process.execPath, ['-e', 'setTimeout(()=>{},300)'])
+    const env: NodeJS.ProcessEnv = { [PREDECESSOR_VARIABLE]: String(child.pid) }
+    const started = Date.now()
+    await waitForPredecessor(env)
+    expect(Date.now() - started).toBeGreaterThan(100)
+    expect(env[PREDECESSOR_VARIABLE]).toBeUndefined()
   })
 })
 
