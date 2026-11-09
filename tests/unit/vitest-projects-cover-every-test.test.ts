@@ -5,6 +5,8 @@ import { join, relative, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { parse as parseYaml } from 'yaml'
 
+import { nodeSupportsTheoClaw } from '../../vitest.config'
+
 /**
  * The anti-vacuity floor for the vitest project split.
  *
@@ -218,6 +220,15 @@ const DECLARED_EXCLUSIONS: { pattern: RegExp; why: string }[] = [
     why: 'ci.yml:425-428 — its suite is NOT merged into the root projects list deliberately, because vitest reads coverage from the root config only and aggregating would discard the 62.03% floor apps/theocode/vitest.config.ts documents. It runs under its own CI job at ci.yml:429.',
   },
 ]
+
+// Below TheoClaw's engines range vitest.config.ts leaves its project out on purpose (it only
+// fails at import there; its own CI job runs it). Declared by name, and only on those Nodes.
+if (!nodeSupportsTheoClaw()) {
+  DECLARED_EXCLUSIONS.push({
+    pattern: /^apps\/theoclaw\//,
+    why: 'vitest.config.ts omits the TheoClaw project on Node below its engines range (^22.16.0 || >=23.8.0)',
+  })
+}
 
 function isDeclaredExclusion(file: string): boolean {
   return DECLARED_EXCLUSIONS.some((rule) => rule.pattern.test(file))
