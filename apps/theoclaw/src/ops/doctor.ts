@@ -1,6 +1,7 @@
+import { existsSync, mkdirSync } from 'node:fs'
 import type { Writable } from 'node:stream'
 
-import { auditConfiguration } from '../security-audit.js'
+import { auditConfiguration, fixFindings } from '../security-audit.js'
 import { configurationPath, loadConfiguration } from '../config-file.js'
 import { TheoClawConfigError } from '../control-plane/errors.js'
 import { requireModel } from '../control-plane/settings.js'
@@ -34,8 +35,36 @@ export function credentialDefect(value: string): string | undefined {
 
 const KEYS = ['THEOKIT_API_KEY', 'OPENROUTER_API_KEY']
 
-export function doctor(io: DoctorIo): number {
+/**
+ * `--fix` (B-717): repairs only what has one safe fix and touches no value: the file and directory
+ * modes of the security audit (SA-001, SA-002) and a missing `THEOCLAW_STATE_DIR`, created at 0700.
+ * Returns the lines to print. The configuration file is never rewritten.
+ */
+function repair(io: DoctorIo): string[] {
+  const lines: string[] = []
   const env: NodeJS.ProcessEnv = { ...io.env }
+  try {
+    const path = loadConfiguration(env, io.homeDir) ?? configurationPath(env, io.homeDir)
+    const fixed = fixFindings(auditConfiguration(io.env, io.homeDir), path)
+    for (const id of fixed) lines.push(`fixed ${id}`)
+  } catch {
+    // an unreadable or missing named file is reported by the checks, not repaired
+  }
+  const stateDir = (env.THEOCLAW_STATE_DIR ?? '').trim()
+  if (stateDir !== '' && !existsSync(stateDir)) {
+    try {
+      mkdirSync(stateDir, { recursive: true, mode: 0o700 })
+      lines.push('fixed THEOCLAW_STATE_DIR: created the state directory')
+    } catch (error) {
+      lines.push(`THEOCLAW_STATE_DIR: cannot create the state directory: ${(error as NodeJS.ErrnoException).code ?? 'unknown error'}`)
+    }
+  }
+  return lines
+}
+
+export function doctor(io: DoctorIo, options: { readonly fix?: boolean } = {}): number {
+  const env: NodeJS.ProcessEnv = { ...io.env }
+  if (options.fix === true) for (const line of repair(io)) io.stdout.write(`${line}\n`)
   const failures: string[] = []
   let path = configurationPath(env, io.homeDir)
   try {
@@ -49,6 +78,8 @@ export function doctor(io: DoctorIo): number {
   } catch (error) {
     failures.push(error instanceof TheoClawConfigError ? error.message : 'the model settings cannot be read')
   }
+  const stateDir = (env.THEOCLAW_STATE_DIR ?? '').trim()
+  if (stateDir !== '' && !existsSync(stateDir)) failures.push('THEOCLAW_STATE_DIR names a directory that does not exist (fixable with --fix)')
   for (const key of KEYS) {
     const value = env[key]
     const defect = value === undefined || value.trim() === '' ? undefined : credentialDefect(value)
