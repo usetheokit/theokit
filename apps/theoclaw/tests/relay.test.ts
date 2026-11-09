@@ -92,7 +92,7 @@ describe('two instances through an HTTP relay (OC-14)', () => {
 
   it('drops a replayed envelope, also after a restart', async () => {
     const { a, b, client, mailbox, files } = setup()
-    const env = a.send('bob', 'once')
+    const env = a.seal('bob', 'once')
     await client.put(env)
     await client.put(env)
     expect(await tool(b, client, 'relay_receive').handler({})).toMatch(
@@ -107,7 +107,7 @@ describe('two instances through an HTTP relay (OC-14)', () => {
   it('refuses a bad token, a bad body and a full mailbox', async () => {
     const { a, fetchImpl } = setup()
     const bad = new RelayClient('http://127.0.0.1:1', 'x'.repeat(40), fetchImpl)
-    await expect(bad.put(a.send('bob', 'x'))).rejects.toThrow(/401/)
+    await expect(bad.put(a.seal('bob', 'x'))).rejects.toThrow(/401/)
     const small = relayRoute(TOKEN, new RelayMailbox(1))
     const post = (body: unknown) =>
       small(
@@ -118,7 +118,7 @@ describe('two instances through an HTTP relay (OC-14)', () => {
         }),
       )
     expect((await post({ nope: 1 })).status).toBe(400)
-    const env = a.send('bob', 'x')
+    const env = a.seal('bob', 'x')
     expect((await post(env)).status).toBe(204)
     expect((await post(env)).status).toBe(507)
   })
