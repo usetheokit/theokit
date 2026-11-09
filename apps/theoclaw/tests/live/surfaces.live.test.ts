@@ -8,7 +8,8 @@ import { createTauriChannelSource, type TauriChannel, type TauriCore } from "@th
 import { render } from "ink-testing-library";
 import { createElement } from "react";
 import { ChannelTransport, createAgentClient } from "theokit/client/core";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import WebSocket from "ws";
 
 import { type ControlClient, createControlClient } from "../../src/control-client/control-client.js";
 import { TheoClawTui } from "../../src/tui/app.js";
@@ -123,6 +124,35 @@ function desktopCore(): TauriCore {
   return { invoke, Channel };
 }
 
+/**
+ * Stop whatever turn SESSION still runs on the instance and wait until it has unwound. A test that
+ * failed mid-turn leaves its turn running, and the next client's first message would answer `busy`
+ * (#1418). Interrupts through a socket of its own until the instance answers `no_turn`.
+ */
+async function endRunningTurn(): Promise<void> {
+  const socket = new WebSocket(`ws://127.0.0.1:${port}/control`, { headers: { Authorization: `Bearer ${TOKEN}` } });
+  const types: string[] = [];
+  socket.on("message", (raw) => void types.push((JSON.parse(String(raw)) as { type: string }).type));
+  socket.on("error", () => undefined);
+  try {
+    await new Promise<void>((resolve, reject) => {
+      socket.once("open", () => resolve());
+      socket.once("error", reject);
+    });
+    const deadline = Date.now() + 15_000;
+    while (Date.now() < deadline) {
+      types.length = 0;
+      socket.send(JSON.stringify({ type: "interrupt", session: SESSION }));
+      await waitFor(() => types.length > 0, 5_000, "an answer to the interrupt");
+      if (types[0] === "no_turn") return;
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+    throw new Error(`the turn on ${SESSION} still runs 15 s after an interrupt; instance:\n${output.slice(-3000)}`);
+  } finally {
+    socket.terminate();
+  }
+}
+
 /** The text of a client's latest assistant message. */
 function assistantText(message: { parts?: readonly { type: string; text?: string }[] } | undefined): string {
   return (message?.parts ?? []).filter((part) => part.type === "text").map((part) => part.text ?? "").join("");
@@ -175,6 +205,14 @@ describe.skipIf(!LIVE)("the TUI and the desktop on one running instance, against
     }
     workspace?.remove();
   }, 20_000);
+
+  // Each test ends the turn it may have left running, so a failure in one cannot answer the next `busy`.
+  afterEach(async () => {
+    for (const child of sidecars) child.kill("SIGKILL");
+    sidecars.clear();
+    for (const client of clients.splice(0)) await client.close().catch(() => undefined);
+    await endRunningTurn();
+  }, 30_000);
 
   it("the TUI and the desktop share one conversation, each interrupted and redirected, for H-1", { timeout: 240_000 }, async () => {
     const tui = await renderTui();

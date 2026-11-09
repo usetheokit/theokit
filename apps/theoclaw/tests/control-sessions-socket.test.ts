@@ -119,6 +119,30 @@ describe("the control socket speaks sessions and interrupt (T2.3)", () => {
     expect(other.frames).toEqual([{ type: "interrupt_ok", session: "owner" }]);
   });
 
+  it("a turn interrupted from one surface is redirected, and both surfaces get the redirected answer", async () => {
+    const hold = deferred<void>();
+    const plane = await startSessionPlane(() => ({
+      frames: (text: string) => [assistant(text === "redirect" ? "redirected" : "long story"), finished()],
+      before: hold.promise,
+    }));
+    const [tui, desktop] = [await peer(plane), await peer(plane)];
+    tui.send({ type: "chat", message: "story", session: "owner" });
+    await waitFor(() => plane.agents[0]?.signals.length === 1, 2000, "the send");
+    desktop.send({ type: "interrupt", session: "owner" });
+    await tui.until(hasType("interrupted"), "interrupted");
+    hold.resolve();
+    // The redirect goes out at once on the TUI's socket; the desktop asks next, on the same session.
+    tui.send({ type: "chat", message: "redirect", session: "owner" });
+    await tui.until(hasType("done"), "the TUI redirect done");
+    desktop.send({ type: "chat", message: "redirect", session: "owner" });
+    await desktop.until(hasType("done"), "the desktop redirect done");
+    for (const surface of [tui, desktop]) {
+      expect(JSON.stringify(surface.frames)).toContain("redirected");
+      expect(JSON.stringify(surface.frames)).not.toContain("busy");
+    }
+    expect(plane.builds()).toBe(1);
+  });
+
   it("a chat frame on a busy session from another socket gets busy", async () => {
     const hold = deferred<void>();
     const plane = await startSessionPlane(() => ({ frames: [assistant("x"), finished()], before: hold.promise }));
