@@ -148,3 +148,66 @@ describe('agent-route-generator', () => {
     }
   })
 })
+
+describe('agent-route session id field', () => {
+  async function post(body: unknown): Promise<string> {
+    let seen = ''
+    const [route] = generateAgentRoutes({
+      walkResult: { route: '/a' },
+      compiledOptions: applyCapabilities([new ModelCapability('claude-sonnet-4-5-20250929')]),
+      createRun: (_m: string, sid: string): AsyncIterable<StreamEvent> => {
+        seen = sid
+        return (async function* () {
+          yield* [] as StreamEvent[]
+        })()
+      },
+    })
+    const res = await route.handler(
+      new Request('http://x/a/chat', { method: 'POST', body: JSON.stringify(body) }),
+    )
+    await res.text()
+    return seen
+  }
+
+  it('reads the top-level id HttpTransport sends', async () => {
+    expect(await post({ message: 'hi', id: 'chat-1' })).toBe('chat-1')
+  })
+  it('still reads sessionId', async () => {
+    expect(await post({ message: 'hi', sessionId: 's-1' })).toBe('s-1')
+  })
+  it('sessionId wins over id when both are sent', async () => {
+    expect(await post({ message: 'hi', id: 'chat-1', sessionId: 's-1' })).toBe('s-1')
+  })
+  it('generates a session id when neither is sent', async () => {
+    expect(await post({ message: 'hi' })).toMatch(/^session-\d+$/)
+  })
+})
+
+describe('agent-route-generator abort propagation (B-510)', () => {
+  it('hands the request signal to createRun so a departing client can cancel the run', async () => {
+    let received: AbortSignal | undefined
+    const routes = generateAgentRoutes({
+      walkResult: { route: '/api/agents/support' },
+      compiledOptions: applyCapabilities([new ModelCapability('claude-sonnet-4-5-20250929')]),
+      createRun: (_m, _s, signal) => {
+        received = signal
+        return (async function* (): AsyncGenerator<StreamEvent> {
+          yield { type: 'text_delta', content: 'hi' }
+        })()
+      },
+    })
+    const controller = new AbortController()
+    const request = new Request('http://localhost/api/agents/support/chat', {
+      method: 'POST',
+      body: JSON.stringify({ message: 'hi' }),
+      signal: controller.signal,
+    })
+
+    await (await routes[0].handler(request)).text()
+
+    expect(received).toBeDefined()
+    expect(received?.aborted).toBe(false)
+    controller.abort()
+    expect(received?.aborted).toBe(true)
+  })
+})

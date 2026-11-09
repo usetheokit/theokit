@@ -24,7 +24,11 @@ import type { DelegationResult } from './delegation-types.js'
  * the loop is now testable without a compiler, a class or an LLM.
  */
 export interface DelegationPort {
-  run(message: string): Promise<DelegationResult>
+  /**
+   * Run one delegated task. `options.signal` is the delegating run's `AbortSignal` when the caller
+   * has one (`delegate_all` hands it over): a port that honours it stops its sub-agent on abort.
+   */
+  run(message: string, options?: { readonly signal?: AbortSignal }): Promise<DelegationResult>
 }
 
 /** What both wrappers accept: the compiled spec (unchanged) or the port (M81, additive). */

@@ -1,0 +1,12 @@
+{
+  "itemCeilingUsd": 20,
+  "reason": "B-423: B-420 exceeded $130 per round. Reserve at most $10 for a full six-domain round and $10 for targeted fixes; stop for a human decision when exhausted. Independent specialists own their domains; do not also run loop-code-review's six overlapping specialists.",
+  "auditors": [
+    { "name": "loop-test-audit", "budgetUsd": 2, "patterns": ["(^|/)(tests?|__tests__)/", "\\.(test|spec)\\."] },
+    { "name": "loop-security-audit", "budgetUsd": 2, "patterns": ["(auth|security|secret|credential|permission|sandbox|redact)"] },
+    { "name": "loop-infra-audit", "budgetUsd": 1, "patterns": ["^(scripts|rules|deploy|\\.github)/", "(^|/)(Dockerfile|package\\.json|[^/]*lock[^/]*|[^/]*config[^/]*)$"] },
+    { "name": "loop-surface-closure", "budgetUsd": 2, "patterns": ["^(packages|apps)/", "^(docs|\\.changeset)/"] },
+    { "name": "loop-performance-audit", "budgetUsd": 1, "patterns": ["(performance|benchmark|cache|stream|loop)"] },
+    { "name": "loop-delivery-audit", "budgetUsd": 2, "patterns": [".*"], "fallbackOnly": true }
+  ]
+}

@@ -37,7 +37,7 @@ function topLevelDir(path: string): string {
   return path.replace(/^\.\//, '').split('/')[0]
 }
 
-function generateDockerfile(input: DockerfileInput): string {
+export function generateDockerfile(input: DockerfileInput): string {
   const { pkgManager, distDir } = input
   const installCmd = {
     pnpm: 'RUN corepack enable && pnpm install --frozen-lockfile',
@@ -81,12 +81,18 @@ function generateDockerfile(input: DockerfileInput): string {
     // Inside a container `localhost` answers nobody, the image's own health check included (#402).
     'ENV HOST=0.0.0.0',
     'ENV PORT=3000',
-    `COPY --from=builder /app/${distDir} ./${distDir}`,
-    ...copySources,
-    ...(input.hasConfigFile ? ['COPY --from=builder /app/theo.config.ts ./theo.config.ts'] : []),
-    ...manifests.map((file) => `COPY --from=builder /app/${file} ./${file}`),
-    'COPY --from=builder /app/node_modules ./node_modules',
+    `COPY --from=builder --chown=node:node /app/${distDir} ./${distDir}`,
+    ...copySources.map((line) =>
+      line.replace('--from=builder', '--from=builder --chown=node:node'),
+    ),
+    ...(input.hasConfigFile
+      ? ['COPY --from=builder --chown=node:node /app/theo.config.ts ./theo.config.ts']
+      : []),
+    ...manifests.map((file) => `COPY --from=builder --chown=node:node /app/${file} ./${file}`),
+    'COPY --from=builder --chown=node:node /app/node_modules ./node_modules',
     '',
+    // The node image ships an unprivileged `node` user; without USER the server runs as root.
+    'USER node',
     'EXPOSE 3000',
     `CMD ["${THEOKIT_BIN}", "start"]`,
     '',

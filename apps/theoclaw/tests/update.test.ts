@@ -1,0 +1,200 @@
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+
+import { afterEach, describe, expect, it } from 'vitest'
+
+import { plistPath } from '../src/daemon-launchd.js'
+import { channelBranch, update } from '../src/update.js'
+import { cleanScratch, commit, git, harness, installLaunchAgent, installUnit, installedAt, snapshot, world } from './support/update-world.js'
+
+/**
+ * `theoclaw update` (B-374, T4.1) over real git repositories in a scratch directory: a bare origin, the install clone,
+ * and a second clone that pushes. Git runs for real; the install step and `systemctl` are stubbed through the runner,
+ * and the stubbed install writes the installed-commit marker the way `install.sh` does.
+ */
+
+afterEach(cleanScratch)
+
+describe('theoclaw update', () => {
+  it('update fast-forwards a clean checkout and refuses a dirty one unchanged', async () => {
+    const w = world()
+    installedAt(w, w.c0)
+    commit(w.upstream, 'a', '1\n')
+    const c2 = commit(w.upstream, 'b', '2\n')
+    git(w.upstream, 'push', '-q', 'origin', 'main')
+    const h = harness(w)
+
+    expect(await update({}, h.io, h.runner)).toBe(0)
+    expect(git(w.checkout, 'rev-parse', 'HEAD')).toBe(c2)
+    expect(h.stdout()).toMatch(new RegExp(`^updated ${w.c0} -> ${c2}`, 'm'))
+
+    writeFileSync(join(w.checkout, 'README'), 'edited\n')
+    const before = snapshot(w)
+    const dirty = harness(w)
+    expect(await update({}, dirty.io, dirty.runner)).toBe(1)
+    expect(dirty.stderr()).toContain('the checkout has local changes')
+    expect(snapshot(w)).toEqual(before)
+    expect(dirty.installs()).toBe(0)
+  })
+
+  it('an up-to-date checkout prints already up to date', async () => {
+    const w = world()
+    installedAt(w, w.c0)
+    const h = harness(w)
+    expect(await update({}, h.io, h.runner)).toBe(0)
+    expect(h.stdout()).toMatch(/^theoclaw update: already up to date/m)
+    expect(h.installs()).toBe(0)
+  })
+
+  it('a refused channel switch leaves the checkout where it was', async () => {
+    const w = world()
+    installedAt(w, w.c0)
+    git(w.checkout, 'branch', 'develop', 'origin/develop')
+    git(w.checkout, 'switch', '-q', 'develop')
+    commit(w.checkout, 'local', 'mine\n')
+    git(w.checkout, 'switch', '-q', 'main')
+    commit(w.upstream, 'up', 'theirs\n')
+    git(w.upstream, 'push', '-q', 'origin', 'HEAD:develop')
+    const before = snapshot(w)
+    const h = harness(w)
+
+    expect(await update({ channel: 'dev' }, h.io, h.runner)).toBe(1)
+    expect(h.stderr()).toContain('develop')
+    expect(snapshot(w)).toEqual(before)
+  })
+
+  it('a checkout with a local commit on its own branch is refused unchanged', async () => {
+    const w = world()
+    installedAt(w, w.c0)
+    commit(w.checkout, 'local', 'mine\n')
+    commit(w.upstream, 'up', 'theirs\n')
+    git(w.upstream, 'push', '-q', 'origin', 'main')
+    const before = snapshot(w)
+    const h = harness(w)
+
+    expect(await update({}, h.io, h.runner)).toBe(1)
+    expect(h.stderr()).toMatch(/main .*diverged/)
+    expect(snapshot(w)).toEqual(before)
+  })
+
+  it('a fetch that fails stops the update with git\'s message', async () => {
+    const w = world()
+    installedAt(w, w.c0)
+    git(w.checkout, 'remote', 'set-url', 'origin', join(w.root, 'missing.git'))
+    const h = harness(w)
+    expect(await update({}, h.io, h.runner)).toBe(1)
+    expect(h.stderr()).toMatch(/fetch .*missing\.git/s)
+    expect(h.installs()).toBe(0)
+  })
+
+  it("each profile's unit is restarted by its own update", async () => {
+    const w = world()
+    installedAt(w, w.c0)
+    for (const label of ['theoclaw-a', 'theoclaw-b']) {
+      installUnit(w, label)
+      writeFileSync(join(w.dist, `.restarted-commit-${label}`), `${w.c0}\n`)
+    }
+    const c1 = commit(w.upstream, 'next', '1\n')
+    git(w.upstream, 'push', '-q', 'origin', 'main')
+
+    const a = harness(w, { env: { THEOCLAW_PROFILE: 'a' } })
+    expect(await update({}, a.io, a.runner)).toBe(0)
+    expect(a.restarts()).toEqual(['theoclaw-a.service'])
+
+    const b = harness(w, { env: { THEOCLAW_PROFILE: 'b' } })
+    expect(await update({}, b.io, b.runner)).toBe(0)
+    expect(b.stdout()).toMatch(new RegExp(`^updated ${w.c0} -> ${c1}`, 'm'))
+    expect(b.stdout()).not.toContain('already up to date')
+    expect(b.restarts()).toEqual(['theoclaw-b.service'])
+    expect(readFileSync(join(w.dist, '.restarted-commit-theoclaw-b'), 'utf8').trim()).toBe(c1)
+  })
+
+  it('update_kickstarts_an_installed_launchd_agent_on_macos', async () => {
+    const w = world()
+    installedAt(w, w.c0)
+    installLaunchAgent(w, 'theoclaw')
+    writeFileSync(join(w.dist, '.restarted-commit-theoclaw'), `${w.c0}\n`)
+    const c1 = commit(w.upstream, 'next', '1\n')
+    git(w.upstream, 'push', '-q', 'origin', 'main')
+
+    const h = harness(w, { platform: 'darwin', uid: 501, restartExit: [1] })
+    expect(await update({}, h.io, h.runner)).toBe(1)
+    expect(h.stderr()).toContain('launchctl kickstart -k gui/501/theoclaw failed: kickstart failed')
+    const retry = harness(w, { platform: 'darwin', uid: 501 })
+    expect(await update({}, retry.io, retry.runner)).toBe(0)
+    expect(retry.restarts()).toEqual(['gui/501/theoclaw'])
+    expect(readFileSync(join(w.dist, '.restarted-commit-theoclaw'), 'utf8').trim()).toBe(c1)
+
+    const bare = harness(w, { platform: 'darwin', uid: 501 })
+    rmSync(plistPath('theoclaw', w.home))
+    commit(w.upstream, 'again', '2\n')
+    git(w.upstream, 'push', '-q', 'origin', 'main')
+    expect(await update({}, bare.io, bare.runner)).toBe(0)
+    expect(bare.restarts()).toEqual([])
+  })
+
+  it('a retry after a failed restart restarts', async () => {
+    const w = world()
+    installedAt(w, w.c0)
+    installUnit(w, 'theoclaw')
+    const c1 = commit(w.upstream, 'next', '1\n')
+    git(w.upstream, 'push', '-q', 'origin', 'main')
+
+    const first = harness(w, { restartExit: [1] })
+    expect(await update({}, first.io, first.runner)).toBe(1)
+    expect(first.stderr()).toContain('restart')
+    expect(readFileSync(join(w.dist, '.installed-commit'), 'utf8').trim()).toBe(c1)
+
+    const second = harness(w)
+    expect(await update({}, second.io, second.runner)).toBe(0)
+    expect(second.restarts()).toEqual(['theoclaw.service'])
+    expect(readFileSync(join(w.dist, '.restarted-commit-theoclaw'), 'utf8').trim()).toBe(c1)
+  })
+
+  it('a retry after a failed install completes it', async () => {
+    const w = world()
+    installedAt(w, w.c0)
+    installUnit(w, 'theoclaw')
+    const c1 = commit(w.upstream, 'next', '1\n')
+    git(w.upstream, 'push', '-q', 'origin', 'main')
+    let installCalls = 0
+
+    const first = harness(w, { installExit: [1] })
+    expect(await update({}, first.io, first.runner)).toBe(1)
+    installCalls += first.installs()
+    expect(first.restarts()).toEqual([])
+    expect(git(w.checkout, 'rev-parse', 'HEAD')).toBe(c1)
+
+    const second = harness(w)
+    expect(await update({}, second.io, second.runner)).toBe(0)
+    installCalls += second.installs()
+    expect(installCalls).toBe(2)
+    expect(second.restarts()).toEqual(['theoclaw.service'])
+    expect(second.stdout()).toMatch(new RegExp(`^updated ${w.c0} -> ${c1}`, 'm'))
+  })
+
+  it('an unknown channel is refused naming stable and dev', async () => {
+    expect(channelBranch('stable')).toBe('main')
+    expect(channelBranch('dev')).toBe('develop')
+    expect(() => channelBranch('nightly')).toThrow(/stable.*dev/)
+    const w = world()
+    const h = harness(w, { env: { THEOCLAW_UPDATE_CHANNEL: 'beta' } })
+    await expect(update({}, h.io, h.runner)).rejects.toThrow(/stable.*dev/)
+  })
+
+  it('update creates the channel branch from origin', async () => {
+    const w = world()
+    installedAt(w, w.c0)
+    git(w.upstream, 'switch', '-q', '-c', 'develop', '--track', 'origin/develop')
+    const ahead = commit(w.upstream, 'dev', '1\n')
+    git(w.upstream, 'push', '-q', 'origin', 'develop')
+    expect(existsSync(join(w.checkout, '.git', 'refs', 'heads', 'develop'))).toBe(false)
+    const h = harness(w)
+
+    expect(await update({ channel: 'dev' }, h.io, h.runner)).toBe(0)
+    const currentBranch = git(w.checkout, 'rev-parse', '--abbrev-ref', 'HEAD')
+    expect(currentBranch).toBe('develop')
+    expect(git(w.checkout, 'rev-parse', 'HEAD')).toBe(ahead)
+    expect(git(w.checkout, 'rev-parse', 'HEAD')).toBe(git(w.checkout, 'rev-parse', 'origin/develop'))
+  })
+})

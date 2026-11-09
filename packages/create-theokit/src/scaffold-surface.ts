@@ -111,7 +111,7 @@ const SURFACE_CONFIG: Record<Exclude<SurfaceKind, 'web'>, SurfaceConfig> = {
     deps: {
       '@theokit/ui': '^1.0.0',
       '@usetheo/ui': '^0.26.0',
-      '@theokit/tauri': '^0.1.1',
+      '@theokit/tauri': '^1.1.0',
       'lucide-react': '^0.469.0',
       ai: '^7.0.0',
     },

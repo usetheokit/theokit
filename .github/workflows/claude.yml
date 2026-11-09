@@ -70,15 +70,15 @@ jobs:
         id: claude
         uses: anthropics/claude-code-action@dcb57747bfceeaa1fa72638cae52295d1d853d4a # v1
         with:
-          # zizmor: ignore[secrets-outside-env] -- an environment would buy nothing HERE, and the
-          # reasoning is the trigger set rather than convenience. `issue_comment`, `issues` and the
-          # two review events all run the workflow from the DEFAULT branch, so there is no other
-          # branch for a deployment branch policy to exclude -- unlike `release.yml`, which carries
-          # `workflow_dispatch` and is genuinely dispatchable from anywhere, and which therefore
-          # does declare one. Moving the token to environment scope is the other half an
-          # environment can buy, and it is impossible: secret values are write-only, so nothing can
-          # copy this one into an environment. Declaring `environment:` anyway would silence this
-          # warning while changing nothing a reader could point at.
+          # zizmor: ignore[secrets-outside-env] -- the workflow file does not come from the same ref
+          # for every trigger. `issue_comment` and `issues` run it from the default branch, while
+          # `pull_request_review_comment` and `pull_request_review` run it as it exists on the pull
+          # request (refs/pull/N/merge). So the review events do have another branch for a
+          # deployment branch policy to exclude, and "an environment buys nothing here" holds only
+          # for the first two. The suppression stays because the other half an environment can buy,
+          # moving the token to environment scope, is impossible: secret values are write-only, so
+          # nothing can copy this one into an environment. Whether a branch policy is worth adding
+          # for the review events alone is an open decision, not one this comment settles.
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 
           # This is an optional setting that allows Claude to read CI results on PRs

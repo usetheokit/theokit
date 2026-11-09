@@ -11,7 +11,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { RunningTheoClaw } from '../../src/composition.js'
 import type { SessionAgent } from '../../src/sessions/session-agents.js'
 import { capturingStream, fakeBuilders } from '../composition-fixtures.js'
-import { messageEvent, waitFor } from '../fakes.js'
+import { messageEvent, turnText, waitFor } from '../fakes.js'
 import type { FakeAdapter } from '../fakes.js'
 
 /**
@@ -67,11 +67,12 @@ function transcripts(directory: string): string[] {
 function watched(agent: SessionAgent, runs: RunRecord[]): SessionAgent {
   return {
     send: async (text) => {
-      const record: RunRecord = { text, sentAt: Date.now(), endedAt: undefined, status: undefined }
+      const record: RunRecord = { text: turnText(text), sentAt: Date.now(), endedAt: undefined, status: undefined }
       runs.push(record)
       const run = await agent.send(text)
       return {
         stream: () => run.stream(),
+        cancel: () => run.cancel(),
         wait: async () => {
           const result = await run.wait()
           record.endedAt = Date.now()

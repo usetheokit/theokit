@@ -42,6 +42,18 @@ export interface A2AToolConfig {
   auth?: A2AAuth
   /** Injected fetch (defaults to the global). Narrowed to the call shape this client uses. */
   fetchImpl?: (url: string, init: RequestInit) => Promise<Response>
+  /**
+   * `'jsonrpc'` posts A2A's JSON-RPC `message/send` (the binding `createA2AJsonRpcHandler` serves)
+   * and reads its `Message` or `Task` result. Omitted, the tool posts TheoKit's `{ message }` body
+   * and reads the event stream a TheoKit agent route answers, exactly as before.
+   */
+  protocol?: 'jsonrpc'
+}
+
+/** The JSON-RPC request asks for a JSON answer, not the event stream TheoKit's routes serve. */
+const JSON_RPC_HEADERS: Readonly<Record<string, string>> = {
+  accept: 'application/json',
+  'content-type': 'application/json',
 }
 
 /** Every rejection of this tool reads `A2A call to "<name>" failed: <reason>`. */
@@ -98,6 +110,82 @@ async function readReply(name: string, res: Response, signal?: AbortSignal): Pro
   return text
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/** The text parts of an A2A `parts` array joined one per line, or undefined when it holds none. */
+function textOfParts(parts: unknown): string | undefined {
+  if (!Array.isArray(parts)) return undefined
+  const texts = parts.flatMap((part: unknown) =>
+    isRecord(part) && part.kind === 'text' && typeof part.text === 'string' ? [part.text] : [],
+  )
+  return texts.length > 0 ? texts.join('\n') : undefined
+}
+
+/** A task's answer: its status message's text, else its artifacts' text. */
+function textOfTask(task: Record<string, unknown>): string | undefined {
+  const status = isRecord(task.status) ? task.status : {}
+  const fromStatus = isRecord(status.message) ? textOfParts(status.message.parts) : undefined
+  if (fromStatus !== undefined) return fromStatus
+  if (!Array.isArray(task.artifacts)) return undefined
+  const texts = task.artifacts.flatMap((artifact: unknown) => {
+    const text = isRecord(artifact) ? textOfParts(artifact.parts) : undefined
+    return text === undefined ? [] : [text]
+  })
+  return texts.length > 0 ? texts.join('\n') : undefined
+}
+
+/** Read a JSON-RPC `message/send` answer to the text the remote returned. */
+async function readJsonRpcResult(
+  name: string,
+  res: Response,
+  signal?: AbortSignal,
+): Promise<string> {
+  let body: unknown
+  try {
+    body = await res.json()
+  } catch (err) {
+    // A body the caller's abort cut short is a cancellation, not a remote that answered badly.
+    signal?.throwIfAborted()
+    throw failure(name, 'the answer was not JSON', { cause: err })
+  }
+  if (!isRecord(body)) throw failure(name, 'the answer was not a JSON-RPC response')
+  if (isRecord(body.error)) {
+    const { code, message } = body.error
+    const reason = [
+      typeof code === 'number' ? String(code) : undefined,
+      typeof message === 'string' ? message : undefined,
+    ].filter((part) => part !== undefined)
+    throw failure(name, reason.length > 0 ? reason.join(' ') : 'the remote answered an error')
+  }
+  const result = isRecord(body.result) ? body.result : {}
+  if (result.kind === 'message') return textOfParts(result.parts) ?? ''
+  if (result.kind === 'task') {
+    const text = textOfTask(result)
+    if (text === undefined) throw failure(name, 'the task answered no text')
+    return text
+  }
+  throw failure(name, 'the result was neither a message nor a task')
+}
+
+/** The `message/send` body carrying `message` as one text part. */
+function jsonRpcBody(message: string): string {
+  return JSON.stringify({
+    jsonrpc: '2.0',
+    id: crypto.randomUUID(),
+    method: 'message/send',
+    params: {
+      message: {
+        kind: 'message',
+        role: 'user',
+        messageId: crypto.randomUUID(),
+        parts: [{ kind: 'text', text: message }],
+      },
+    },
+  })
+}
+
 /**
  * Create a tool that delegates to a remote A2A agent. The remote answers the `{ message }` POST with
  * a UIMessage event stream, as the routes `generateAgentRoutes` and `mountAgent` serve do; the tool
@@ -127,15 +215,16 @@ export function createA2ATool(config: A2AToolConfig): CustomTool {
       // one in any letter case, so a static `x-theo-action` never reaches the route as `1, 0`.
       // The run's signal: a cancelled run aborts the request and the stream it holds open, and the
       // call rejects with the abort reason rather than as a failure of the remote.
+      const jsonRpc = config.protocol === 'jsonrpc'
       const res = await doFetch(config.url, {
         method: 'POST',
         headers: agentRequestHeaders(
-          AGENT_ACTION_HEADERS,
+          jsonRpc ? JSON_RPC_HEADERS : AGENT_ACTION_HEADERS,
           config.headers,
           auth?.bearer ? { authorization: `Bearer ${auth.bearer}` } : undefined,
           auth?.apiKey ? { [auth.apiKey.header]: auth.apiKey.value } : undefined,
         ),
-        body: JSON.stringify({ message }),
+        body: jsonRpc ? jsonRpcBody(message) : JSON.stringify({ message }),
         signal: ctx?.signal,
       })
       if (!res.ok) {
@@ -144,7 +233,7 @@ export function createA2ATool(config: A2AToolConfig): CustomTool {
         await res.body?.cancel().catch(() => undefined)
         throw failure(name, `${res.status} ${res.statusText}`)
       }
-      return readReply(name, res, ctx?.signal)
+      return jsonRpc ? readJsonRpcResult(name, res, ctx?.signal) : readReply(name, res, ctx?.signal)
     },
   }
 }

@@ -10,7 +10,14 @@ name: Live model
 on:
   push:
     branches: [develop]
+  # `suite` picks what a dispatch runs (B-374). Push leaves it empty, so push runs only live-model.
   workflow_dispatch:
+    inputs:
+      suite:
+        description: Which checks to run
+        type: choice
+        default: live-model
+        options: [live-model, theoclaw-container, theoclaw-daemon]
 
 permissions:
   contents: read
@@ -18,6 +25,7 @@ permissions:
 jobs:
   live-model:
     name: Live model (real provider)
+    if: inputs.suite != 'theoclaw-container' && inputs.suite != 'theoclaw-daemon'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     # One model for the preflight and both live steps. The default must equal DEFAULT_LIVE_MODEL in
@@ -58,10 +66,25 @@ jobs:
       # several of them start an sshd or an instance process and share the host's ports.
       # The script builds `theoclaw...`, TheoClaw and its workspace dependencies: control-plane and
       # instance-profiles spawn apps/theoclaw/dist/main.js, which `theoclaw^...` never built (B-651),
-      # and the script fails naming that file when it is missing. ci.yml's `live-model-build` job runs
-      # the same script on every pull request (B-659).
+      # and the script fails naming that file when it is missing. It also runs TheoClaw's build:web,
+      # because webchat.live.test.ts needs the page bundle (GET /webchat is 503 without it). ci.yml's
+      # `live-model-build` job runs the same script on every pull request (B-659).
       - name: Build TheoClaw and its workspace dependencies
         run: node scripts/live-model-build.mjs theoclaw
+      # daemon.live.test.ts (B-374) installs a real systemd user unit, and a runner has no user
+      # manager until lingering starts one; this waits for the manager's bus, with a deadline.
+      - name: Start the runner's systemd user manager
+        run: |
+          sudo loginctl enable-linger "$USER"
+          timeout 20 bash -c "until [ -S /run/user/$(id -u)/bus ]; do sleep 0.2; done" \
+            || { echo "the systemd user manager did not start within 20 s" >&2; exit 1; }
+      # computer.live.test.ts (B-676, OC-62) drives a virtual display: Xvfb, xdotool and x11-utils from
+      # apt, and the Chromium the browser live test also needs. Without them it fails naming the gap.
+      - name: Install the display tools and Chromium for the computer and browser live tests
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends xvfb xdotool x11-utils
+          pnpm --filter theoclaw run browser:install
       - name: TheoClaw live tests (THEOCLAW_LIVE)
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
@@ -70,4 +93,24 @@ jobs:
           THEOCLAW_MODEL: ${{ env.LIVE_MODEL }}
         # bash -eo pipefail: the suite's exit code survives the pipe (D8)
         shell: bash
-        run: pnpm --filter theoclaw test:live 2>&1 | node scripts/redact-key-shapes.mjs
+        run: XDG_RUNTIME_DIR="/run/user/$(id -u)" pnpm --filter theoclaw test:live 2>&1 | node scripts/redact-key-shapes.mjs
+
+  # B-374 (T5.2): TheoClaw's container checks, reached by `gh workflow run live-model.yml --ref <ref>
+  # -f suite=theoclaw-container`. A dispatch reads the called workflow at the dispatched ref.
+  theoclaw-container:
+    if: github.event_name == 'workflow_dispatch' && inputs.suite == 'theoclaw-container'
+    uses: ./.github/workflows/theoclaw-container.yml
+    # Only the one secret theoclaw-container.yml declares, so a secret added to the repository later is not
+    # handed to it by default.
+    secrets:
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+
+  # B-692: TheoClaw's login service on macOS and Windows, reached by `gh workflow run live-model.yml
+  # --ref <ref> -f suite=theoclaw-daemon`. A dispatch reads the called workflow at the dispatched ref.
+  theoclaw-daemon:
+    if: github.event_name == 'workflow_dispatch' && inputs.suite == 'theoclaw-daemon'
+    uses: ./.github/workflows/theoclaw-daemon.yml
+    # Only the one secret theoclaw-daemon.yml declares, so a secret added to the repository later is not
+    # handed to it by default.
+    secrets:
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}

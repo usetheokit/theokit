@@ -14,8 +14,16 @@ import type { Server as HttpServer } from 'node:http'
 
 import { warnOnce } from '../../../server/observability/logger.js'
 
-/** How long shutdown waits for the job in progress before moving on. */
-const BACKGROUND_STOP_BUDGET_MS = 20_000
+/**
+ * How long shutdown waits for the job in progress before moving on, unless the app says otherwise
+ * with `jobs.worker.shutdownTimeoutMs` (usetheokit/theokit#1292).
+ */
+const DEFAULT_BACKGROUND_STOP_TIMEOUT_MS = 20_000
+
+export interface GracefulShutdownOptions {
+  /** How long to wait for `stopBackgroundWork`. Default `DEFAULT_BACKGROUND_STOP_TIMEOUT_MS`. */
+  readonly backgroundStopTimeoutMs?: number
+}
 
 /**
  * @param stopBackgroundWork - stops the cron scheduler and the job worker. Runs FIRST and is
@@ -25,6 +33,7 @@ const BACKGROUND_STOP_BUDGET_MS = 20_000
 export function installGracefulShutdown(
   server: HttpServer,
   stopBackgroundWork: () => Promise<void> = () => Promise.resolve(),
+  { backgroundStopTimeoutMs = DEFAULT_BACKGROUND_STOP_TIMEOUT_MS }: GracefulShutdownOptions = {},
 ): void {
   let shuttingDown = false
   const shutdown = (signal: NodeJS.Signals): void => {
@@ -34,10 +43,11 @@ export function installGracefulShutdown(
     void (async () => {
       try {
         // Bounded: a job handler that never returns must not hold the process past the platform's
-        // grace period. Its lease expires and another worker takes the job.
+        // grace period. Its lease expires and another worker takes the job. An app whose jobs run
+        // longer, under a process manager that waits longer, raises the bound in its config.
         await Promise.race([
           stopBackgroundWork(),
-          new Promise<void>((resolve) => setTimeout(resolve, BACKGROUND_STOP_BUDGET_MS).unref()),
+          new Promise<void>((resolve) => setTimeout(resolve, backgroundStopTimeoutMs).unref()),
         ])
       } catch (err) {
         warnOnce('shutdown.background_error', {

@@ -78,12 +78,24 @@ fn approve(
     Ok(())
 }
 
+/// Stop the in-flight turn: kill the live sidecar, so the awaiting `run_turn` sees `Terminated` and
+/// resolves. The webview's `@theokit/tauri` source invokes it on abort (`cancelCommand`). With no
+/// sidecar running it does nothing.
+#[tauri::command]
+fn cancel_turn(state: State<'_, SidecarState>) -> Result<(), String> {
+    let mut guard = state.0.lock().map_err(|e| e.to_string())?;
+    if let Some(child) = guard.take() {
+        child.kill().map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .manage(SidecarState::default())
-        .invoke_handler(tauri::generate_handler![run_turn, approve])
+        .invoke_handler(tauri::generate_handler![run_turn, approve, cancel_turn])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

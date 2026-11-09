@@ -1,0 +1,12 @@
+model: some-model
+mcp_servers:
+  files:
+    command: npx
+    args: ["-y", "fixture-files-server"]
+    env:
+      PORT: 8080
+      FILES_TOKEN: fixture-secret-hermes-token
+  web:
+    url: https://web.example.test/mcp
+    headers:
+      Authorization: Bearer fixture-secret-hermes-header

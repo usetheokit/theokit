@@ -12,13 +12,14 @@ import { createOwnerPolicyHook } from '../../src/authorization/owner-policy-hook
 import { createPairingStore } from '../../src/authorization/pairing-store.js'
 import { parseAuthorizationPolicy } from '../../src/authorization/policy.js'
 import { createBroadcastGroups } from '../../src/channels/broadcast-groups.js'
+import { createGroupActivationHook } from '../../src/channels/group-activation-hook.js'
 import { createReplyHandler } from '../../src/channels/reply-handler.js'
 import { createContainer } from '../../src/composition.js'
 import { createChannelAgentFactory } from '../../src/control-plane/agent-factory.js'
-import { FakeAdapter, messageEvent, waitFor } from '../fakes.js'
+import { FakeAdapter, messageEvent, turnText, waitFor } from '../fakes.js'
 
 /**
- * AC-008 (B-371): OC-18, OC-19 and OC-21 against a real model. Each test runs the owner policy hook,
+ * AC-008 (B-371): OC-18, OC-19 and OC-21, and B-530's OC-20 (group mention gating) against a real model. Each test runs the owner policy hook,
  * B-369's reply handler and a channel agent on THEOCLAW_MODEL over in-memory adapters, the shape the
  * composed app gives every runner. A turn counts only when the SDK's `wait()` resolved
  * `status: 'finished'` and no `on_error` fired, so the handler's fixed error reply can never pass for
@@ -47,10 +48,12 @@ function requireModelSettings(): void {
 interface LiveOptions {
   readonly env: Readonly<Record<string, string>>
   readonly platforms: readonly PlatformName[]
+  /** Hooks that run after the owner policy, such as group activation. */
+  readonly hooks?: readonly GatewayHook[]
 }
 
 /** A runner over in-memory adapters with the real hook, reply handler and model agent. */
-async function liveApp({ env, platforms }: LiveOptions) {
+async function liveApp({ env, platforms, hooks = [] }: LiveOptions) {
   requireModelSettings()
   const policy = parseAuthorizationPolicy(env)
   const pairing = policy.stateDir === undefined ? undefined : createPairingStore({ dir: policy.stateDir })
@@ -65,10 +68,11 @@ async function liveApp({ env, platforms }: LiveOptions) {
       const agent = await real()
       return {
         send: async (text) => {
-          prompts.push(text)
+          prompts.push(turnText(text))
           const run = await agent.send(text)
           return {
             stream: () => run.stream(),
+            cancel: () => run.cancel(),
             wait: async () => {
               const result = await run.wait()
               if (result.status === 'finished') completedTurns += 1
@@ -101,7 +105,7 @@ async function liveApp({ env, platforms }: LiveOptions) {
       handled.push(event.sender.id)
       await reply(event, ctx)
     },
-    hooks: [createOwnerPolicyHook({ policy, ...(pairing === undefined ? {} : { pairing }) }), onError],
+    hooks: [createOwnerPolicyHook({ policy, ...(pairing === undefined ? {} : { pairing }) }), ...hooks, onError],
   })
   runners.push(runner)
   await runner.start()
@@ -188,5 +192,30 @@ describe.skipIf(!LIVE)('the owner policy against a real model', () => {
     expect(secondPrompt).toContain(firstQuestion)
     // The thread keeps the raw answer, which Discord receives unchanged; Telegram strips markdown.
     expect(secondPrompt).toContain(discordSend)
+  })
+
+  it('an unmentioned group message gets no turn and a mentioned one a real-model reply for OC-20', { timeout: TURN_TIMEOUT_MS }, async () => {
+    const bot = { username: 'theo_bot', id: 99 }
+    const group = (text: string): MessageEvent =>
+      ({
+        ...messageEvent('telegram', text, OWNER),
+        channel: { id: '-100', type: 'group' },
+        telegram: { chatId: -100, messageId: 1, raw: { chat: { id: -100, type: 'group' }, message: { text }, me: bot } },
+      }) as unknown as MessageEvent
+    const app = await liveApp({
+      env: { THEOCLAW_OWNERS: `telegram:${OWNER}`, THEOCLAW_DM_POLICY: 'allowlist' },
+      platforms: ['telegram'],
+      hooks: [createGroupActivationHook({ isOwner: (platform, senderId) => platform === 'telegram' && senderId === OWNER, mode: 'mention' })],
+    })
+    // Events dispatch in order, so the unmentioned one is settled before the mentioned reply lands.
+    await app.deliver(group('hello everyone'), 0)
+    await app.deliver(group('@theo_bot reply with the single word: pong'), 1)
+    expect(app.sent('telegram')).toHaveLength(1)
+    expect(app.prompts).toHaveLength(1)
+    expect(app.prompts[0]).toContain('@theo_bot')
+
+    expect(app.sent('telegram')[0]?.length ?? 0).toBeGreaterThan(0)
+    expect(app.completedTurns()).toBe(1)
+    expect(app.onErrorCalls()).toBe(0)
   })
 })

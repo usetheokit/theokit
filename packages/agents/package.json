@@ -1,6 +1,6 @@
 {
   "name": "@theokit/agents",
-  "version": "16.2.0",
+  "version": "16.3.0",
   "description": "AI agents as first-class citizens of the TheoKit pipeline. The AgentBuilder.create() authoring chain compiles to the @theokit/sdk runtime.",
   "repository": {
     "type": "git",
@@ -52,6 +52,14 @@
     "./tools": {
       "types": "./dist/tools.d.ts",
       "import": "./dist/tools.js"
+    },
+    "./code-mode": {
+      "types": "./dist/code-mode.d.ts",
+      "import": "./dist/code-mode.js"
+    },
+    "./code-mode-quickjs": {
+      "types": "./dist/code-mode-quickjs.d.ts",
+      "import": "./dist/code-mode-quickjs.js"
     },
     "./client": {
       "types": "./dist/client.d.ts",
@@ -126,20 +134,30 @@
     "prepublishOnly": "node ../../scripts/check-pack-no-workspace.mjs ."
   },
   "peerDependencies": {
+    "@jitl/quickjs-wasmfile-release-sync": "0.32.0",
     "@theokit/http": ">=2.1.0-next.0",
+    "quickjs-emscripten-core": "0.32.0",
     "react": ">=18",
     "zod": "^4.0.0"
   },
   "peerDependenciesMeta": {
+    "@jitl/quickjs-wasmfile-release-sync": {
+      "optional": true
+    },
+    "quickjs-emscripten-core": {
+      "optional": true
+    },
     "react": {
       "optional": true
     }
   },
   "devDependencies": {
     "@agentclientprotocol/sdk": "^0.22.1",
+    "@jitl/quickjs-wasmfile-release-sync": "0.32.0",
     "@theokit/acp": "^4.0.1",
     "@theokit/http": "workspace:*",
     "ai": "7.0.14",
+    "quickjs-emscripten-core": "0.32.0",
     "tsup": "^8.5.1",
     "typescript": "^5.9.3",
     "vitest": "^4.1.12",
@@ -150,7 +168,7 @@
   },
   "dependencies": {
     "@theokit/presenter": "workspace:*",
-    "@theokit/sdk": "^5.13.0",
+    "@theokit/sdk": "^5.14.0",
     "@theokit/sdk-tools": "^0.27.1"
   },
   "publishConfig": {

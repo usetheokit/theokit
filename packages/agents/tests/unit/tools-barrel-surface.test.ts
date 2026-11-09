@@ -28,6 +28,17 @@ const REQUIRED = [
 ] as const
 
 describe('M62 — @theokit/agents/tools passes the sdk-tools factory surface through', () => {
+  it('exports the schedule module (B-396)', () => {
+    for (const name of [
+      'createJobStore',
+      'ScheduleStoreError',
+      'createScheduler',
+      'createScheduleTools',
+    ]) {
+      expect(tools[name as keyof typeof tools], name).toBeTypeOf('function')
+    }
+  })
+
   it('re-exports every tool factory + combinator the consumer uses', () => {
     for (const name of REQUIRED) {
       expect(tools[name as keyof typeof tools], name).toBeTypeOf('function')

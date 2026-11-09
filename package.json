@@ -17,7 +17,7 @@
     "validate:attw": "npx @arethetypeswrong/cli --pack packages/theo --ignore-rules cjs-resolves-to-esm no-resolution",
     "typecheck": "pnpm build:packages && tsc --noEmit",
     "typecheck:only": "tsc --noEmit",
-    "lint": "NODE_OPTIONS=\"$NODE_OPTIONS --max-old-space-size=8192\" eslint .",
+    "lint": "node scripts/lint-sharded.mjs",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
@@ -58,7 +58,7 @@
     "@eslint/js": "^9.39.4",
     "@ls-lint/ls-lint": "^2.3.1",
     "@theokit/presenter": "workspace:*",
-    "@theokit/sdk": "^5.9.2",
+    "@theokit/sdk": "^5.14.0",
     "@types/cross-spawn": "^6.0.6",
     "@types/node": "^25.9.3",
     "@types/pg": "^8.21.0",
@@ -134,7 +134,9 @@
       "happy-dom@<21.0.4": "^21.0.4",
       "@azure/msal-node@<7.1.0": "^7.1.0",
       "follow-redirects@<1.16.2": "^1.16.2",
-      "@theokit/sdk": "5.13.0"
+      "katex@<0.18.2": "^0.18.2",
+      "mermaid@<11.16.1": "^11.16.1",
+      "@theokit/sdk": "5.14.0"
     },
     "patchedDependencies": {
       "@vitest/utils@4.1.12": "patches/@vitest__utils@4.1.12.patch"

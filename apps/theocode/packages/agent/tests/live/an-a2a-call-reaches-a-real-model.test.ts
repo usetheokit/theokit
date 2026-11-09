@@ -22,6 +22,7 @@ import {
   createSdkAgentStream,
   generateAgentRoutes,
   type CompiledAgentOptions,
+  type StreamEvent,
 } from '@theokit/agents/bridge'
 import { afterAll, describe, expect, it } from 'vitest'
 
@@ -69,6 +70,24 @@ afterAll(() => {
   writeFileSync(path, `${lines.join('\n')}\n[live] redactions: ${redactions}\n`)
 })
 
+/**
+ * The route hands `createRun` the request's AbortSignal as a third argument; the SDK stream factory
+ * takes `factoryOpts` there instead. Adapt the call: never forward the signal as options, and stop
+ * reading the stream once the signal aborts.
+ */
+function withAbortSignal(
+  factory: (message: string, sessionId: string) => AsyncIterable<StreamEvent>,
+): (message: string, sessionId: string, signal?: AbortSignal) => AsyncIterable<StreamEvent> {
+  return (message, sessionId, signal) => ({
+    async *[Symbol.asyncIterator]() {
+      for await (const event of factory(message, sessionId)) {
+        if (signal?.aborted === true) return
+        yield event
+      }
+    },
+  })
+}
+
 describe.skipIf(!HAS_KEY)('an A2A call against a route answered by a real model', () => {
   it('test_an_a2a_call_reaches_a_real_model', async () => {
     const compiled: CompiledAgentOptions = {
@@ -81,7 +100,7 @@ describe.skipIf(!HAS_KEY)('an A2A call against a route answered by a real model'
     const routes = generateAgentRoutes({
       walkResult: { route: '/api/agents/remote' },
       compiledOptions: compiled,
-      createRun: createSdkAgentStream(compiled, [], () => apiKey()),
+      createRun: withAbortSignal(createSdkAgentStream(compiled, [], () => apiKey())),
     })
     const chat = routes.find((r) => r.method === 'POST')
     if (chat === undefined) throw new Error('generateAgentRoutes mounted no POST route')

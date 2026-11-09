@@ -27,21 +27,11 @@ const THE_GATE_NEEDS = [
   'HookApprovalCapability', // build the capability
   'HookApprovalGate', // type the object it takes
   'HookApprovalRequest', // type the callback's argument
-  'HookGateUnsupportedError', // catch the refusal by class rather than by message
   // #686, second half — a consumer that narrows a foreign root needs to name the surfaces and the
   // shape `resolveCompatSources` returns. The list grows with every public type, which is the point:
   // adding one here is the cheapest moment to notice the barrel does not carry it.
   'CompatSurface',
   'ResolvedCompatSource',
-  // B-004 — the refusal raised when the installed SDK cannot read a narrowed `import`. Added after
-  // a review found it shipped WITHOUT crossing the barrel, while the class it was written to mirror
-  // (`HookGateUnsupportedError`, three entries up) did. A consumer meeting a brand-new refusal could
-  // only match its message string.
-  //
-  // The fifth INSTANCE of the shape, and the first this guard did not catch — it was added by hand
-  // after a review, which is precisely what the note above says the list exists to prevent. Saying
-  // "caught here" would credit the guard with work a person did.
-  'CompatImportUnsupportedError',
 ] as const
 
 describe('the hook gate is nameable by a consumer (theokit#686)', () => {

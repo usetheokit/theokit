@@ -48,6 +48,21 @@ export function refuseUpgrade(
 }
 
 /**
+ * The request with a signal that aborts when its response closes before it finished: the client
+ * left. Neither `nodeIncomingToRequest` nor `writeResponseToNode` says so, and the app owns its
+ * server, so the signal is attached here rather than in `@theokit/http` (plan D3). The listener is
+ * registered before the handler runs, so a client that leaves while the handler awaits is seen too;
+ * a finished response emits `close` after `finish`, which `writableFinished` keeps from aborting.
+ */
+function withDepartureSignal(incoming: IncomingMessage, outgoing: ServerResponse): Request {
+  const controller = new AbortController()
+  outgoing.once('close', () => {
+    if (!outgoing.writableFinished) controller.abort()
+  })
+  return new Request(nodeIncomingToRequest(incoming), { signal: controller.signal })
+}
+
+/**
  * The adapt, handle and write sequence in one `try`: `nodeIncomingToRequest` throws on a malformed
  * `Host`, `writeResponseToNode` catches nothing, and a handler can throw. Each answers 500 and the
  * reason goes to stderr (no request body, which may carry a secret).
@@ -56,7 +71,7 @@ function serve(options: ListenOptions) {
   return (incoming: IncomingMessage, outgoing: ServerResponse): void => {
     void (async () => {
       try {
-        await writeResponseToNode(await options.handler(nodeIncomingToRequest(incoming)), outgoing)
+        await writeResponseToNode(await options.handler(withDepartureSignal(incoming, outgoing)), outgoing)
       } catch (error) {
         options.stderr(`theoclaw: request failed: ${describeError(error)}`)
         if (!outgoing.headersSent) outgoing.writeHead(500)
@@ -94,7 +109,11 @@ function listen(server: Server, options: ListenOptions): Promise<void> {
   })
 }
 
-function handleFor(server: Server, control: ControlSocket | undefined): ControlPlaneHandle {
+function handleFor(
+  server: Server,
+  control: ControlSocket | undefined,
+  sessions: ControlSocketOptions['sessions'],
+): ControlPlaneHandle {
   let closing: Promise<void> | undefined
   return {
     server,
@@ -113,10 +132,15 @@ function handleFor(server: Server, control: ControlSocket | undefined): ControlP
         try {
           await control?.close()
         } finally {
-          await new Promise<void>((resolve, reject) => {
-            server.closeAllConnections()
-            server.close((error) => (error === undefined ? resolve() : reject(error)))
-          })
+          try {
+            // The session agents outlive their turns, so they go with the control plane.
+            await sessions?.close()
+          } finally {
+            await new Promise<void>((resolve, reject) => {
+              server.closeAllConnections()
+              server.close((error) => (error === undefined ? resolve() : reject(error)))
+            })
+          }
         }
       })()),
   }
@@ -142,5 +166,5 @@ export async function listenControlPlane(options: ListenOptions): Promise<Contro
   await listen(server, options)
   // After the bind, a server-level error (an accept failure such as EMFILE) is written, not thrown.
   server.on('error', (error) => options.stderr(`theoclaw: control plane server error: ${describeError(error)}`))
-  return handleFor(server, control)
+  return handleFor(server, control, options.control?.sessions)
 }

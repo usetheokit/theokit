@@ -1,20 +1,16 @@
 import 'reflect-metadata'
 
-import { AsyncLocalStorage } from 'node:async_hooks'
 import { mkdirSync, statSync } from 'node:fs'
-import { isIPv6 } from 'node:net'
 import { join } from 'node:path'
 
-import { Container } from '@theokit/di'
-import { createAgentProvider } from '@theokit/di-agent'
 import { redactSecrets } from '@theokit/gateway'
-import type { BasePlatformAdapter, MessageEvent, PlatformName } from '@theokit/gateway'
+import type { BasePlatformAdapter, PlatformName } from '@theokit/gateway'
 import { teamsActivityVerifier } from '@theokit/gateway-teams'
 import type { TeamsActivityVerifierOptions } from '@theokit/gateway-teams'
 import { Agent } from '@theokit/sdk'
-import type { AgentOptions } from '@theokit/sdk'
+import type { AgentOptions, CustomTool, Plugin, SDKAgent } from '@theokit/sdk'
 
-import { createOwnerPolicyHook } from './authorization/owner-policy-hook.js'
+import { createContainer } from './agent-container.js'
 import { createPairingStore, type PairingStore } from './authorization/pairing-store.js'
 import {
   type AuthorizationPolicy,
@@ -25,23 +21,41 @@ import {
 import { type AdapterBuildOptions, adapterBuilders } from './channels/adapter-factory.js'
 import { createBroadcastGroups } from './channels/broadcast-groups.js'
 import { maskSecrets, startChannelLoop } from './channels/channel-loop.js'
-import { createGroupActivationHook } from './channels/group-activation-hook.js'
+import { channelHooks } from './channel-hooks.js'
+import { createChatExecApproval } from './channels/exec-approval-chat.js'
+import { createUsageHook } from './channels/usage-hook.js'
 import type { ChannelLoop, PlatformBuild } from './channels/channel-loop.js'
 import { installOutputMask, type MaskableStream } from './channels/output-mask.js'
 import { type ConfiguredPlatform, resolvePlatforms } from './channels/platforms.js'
+import { readDisplayConfig } from './channels/display-config.js'
 import { createReplyHandler, type TurnAgent } from './channels/reply-handler.js'
-import { createChannelAgentFactory, sessionAgentOptions } from './control-plane/agent-factory.js'
-import { type ControlPlaneHandle, healthHandler, listenControlPlane } from './control-plane/listener.js'
-import { readControlPlaneSettings } from './control-plane/settings.js'
+import { createSdkChannelAgentFactory, isIncognito, webchatAgentFactory } from './control-plane/agent-factory.js'
+import type { CreateAgent } from './control-plane/agent-factory.js'
+import { controlOptions, devicePairingFor } from './control-plane/control-wiring.js'
+import { type HttpHandler, serveHandler } from './control-plane/http-dispatch.js'
+import { type ControlPlaneHandle, listenControlPlane } from './control-plane/listener.js'
+import { readControlPlaneSettings, type ControlPlaneSettings } from './control-plane/settings.js'
+import { processSecrets } from './secrets.js'
+import { resolveSecretRefs, secretRefKind, type SecretStores } from './secret-refs.js'
+import { a2aLines, readA2ASettings } from './a2a/a2a-settings.js'
+import { a2aRoute } from './a2a/a2a-route.js'
+import { peerTools } from './a2a/peer-tools.js'
+import { RelayClient, relayTools } from './relay/relay-client.js'
+import { RelayMailbox, relayRoute } from './relay/relay-server.js'
+import { readRelaySettings, relaySecrets } from './relay/relay-settings.js'
+import { RelayState } from './relay/relay-state.js'
 import { installShutdown, type SignalSource } from './control-plane/shutdown.js'
-import { createTurnRunner } from './control-plane/turn.js'
+import { formatAddress, reportSurfacesOff } from './control-plane/start-output.js'
+import { createTurnRunner, type TurnRunner, type WithAgent } from './control-plane/turn.js'
+import { heartbeatJob, readHeartbeatSettings } from './scheduler/heartbeat.js'
+import { loadScheduleStore, type RunningScheduler, wireScheduler } from './scheduler/scheduler-wiring.js'
 import { createBonjourPublisher } from './discovery/bonjour-publisher.js'
 import { announceOnLan, type LanAnnouncement, stopThenClose } from './discovery/lan-announcer.js'
 import { parseDiscoveryMode, type PublisherFactory } from './discovery/publisher.js'
-import { NO_PROFILE, type TheoClawInstance } from './instance.js'
+import { NO_PROFILE, startLine, type TheoClawInstance } from './instance.js'
+import { type ChatBoundary, chatSessions, sessionsFile } from './sessions/chat-sessions.js'
 import { Generations } from './sessions/generations.js'
-import { type SessionAgent, SessionAgents, type SessionLease } from './sessions/session-agents.js'
-import { createSessionRouter } from './sessions/session-key.js'
+import type { SessionAgent, SessionAgents } from './sessions/session-agents.js'
 import { readSessionSettings, type SessionSettings } from './sessions/session-settings.js'
 import {
   type Handle,
@@ -52,60 +66,24 @@ import {
   withRoute,
 } from './webhooks/platform-routes.js'
 import { createWebhookRouter, type WebhookRoute } from './webhooks/router.js'
+import { theoClawApiFor } from './http-api/api-routes.js'
 import type { TeamsVerifier } from './webhooks/teams.js'
-import { agentToolOptions } from './tools/tool-registry.js'
+import { createExecApprovalStore, execApprovalPlugin, type ExecApprovalOptions } from './tools/exec-approval.js'
+import { controlAgentToolOptions } from './tools/tool-registry.js'
+import { triggerRoutes } from './triggers/trigger-route.js'
+import { type EventSettings, readEventSettings } from './triggers/trigger-settings.js'
 import type { AgentToolOptions } from './tools/tool-registry.js'
-import { checkHostToolsPosture, resolveToolSettings } from './tools/tool-settings.js'
+import { withInteractiveShell } from './tools/interactive-shell.js'
+import { checkHostToolsPosture, hostToolsProtectedPaths, type ProtectedPath, resolveToolSettings } from './tools/tool-settings.js'
 import type { ToolDeps, ToolSettings } from './tools/tool-settings.js'
+import type { GenerateObject } from './workflows/triage-workflow.js'
+import { createWorkflowTools } from './workflows/workflow-tools.js'
+import { webchatEvent } from './webchat/chat-id.js'
+import { WEBCHAT_ASSETS_DIR } from './webchat/page.js'
+import { createWebchatRoutes } from './webchat/routes.js'
+import { configuredVoiceReplies, withVoiceReplies } from './voice/voice-replies.js'
 
-/**
- * The composition root — where concretes are wired into the container, and the only place that
- * happens (`rules/architecture.md` § 1: "Composition root is at the top… never deep inside
- * business code").
- *
- * **It exposes a request BOUNDARY rather than a resolve.** The container refuses a REQUEST-scoped
- * resolve outside one, with a typed error saying so:
- *
- *     ScopeViolationError: REQUEST scope requires container.runInRequest(...) to be active.
- *
- * That refusal is the reason this shape is what it is. A `resolveAgent()` that opened its own
- * boundary per call would make "one agent per request" mean "one agent per resolve", and two
- * collaborators serving the same inbound message would each get their own — which is the isolation
- * the scope exists to provide, inverted. The caller declares the request; everything resolved
- * inside it shares one agent.
- *
- * Decorators are deliberately absent. `@theokit/di-agent` publishes sixteen, and its own README
- * records — measured 2026-09-17 across every repository in the ecosystem — that fourteen are read
- * by nothing, anywhere; `@Workflow` and `@Step` are the two with a consumer, and that consumer
- * lives inside `di-agent` itself. A declaration this code carried would compile, record metadata,
- * and run nothing.
- */
-export interface AgentCompositionOptions<TAgent> {
-  /** How one agent is built. Called once per request boundary, never shared across two. */
-  readonly factory: () => TAgent | Promise<TAgent>
-}
-
-export interface AgentComposition<TAgent> {
-  /**
-   * Run `work` inside one request. The agent it receives is that request's, and no other request
-   * can observe it.
-   */
-  withAgent<R>(work: (agent: TAgent) => R | Promise<R>): Promise<R>
-}
-
-export function createContainer<TAgent>(
-  options: AgentCompositionOptions<TAgent>,
-): AgentComposition<TAgent> {
-  const container = new Container()
-  const provider = createAgentProvider<TAgent>({ factory: options.factory })
-
-  container.register(provider)
-
-  return {
-    withAgent: (work) =>
-      container.runInRequest(async () => work(await container.resolveAsync<TAgent>(provider.provide))),
-  }
-}
+export { createContainer, type AgentComposition, type AgentCompositionOptions } from './agent-container.js'
 
 /** Everything the running app is made of, for the entry and for tests. */
 export interface TheoClawOptions {
@@ -115,6 +93,12 @@ export interface TheoClawOptions {
    * start resolved: a fresh tool list per agent (plan D3). Chat replies never use it.
    */
   readonly agentFactory: (toolOptions: AgentToolOptions) => TurnAgent | Promise<TurnAgent>
+  /**
+   * The person-facing side of exec approval (B-549): who is asked, and an optional model reviewer.
+   * With `ask` and a `THEOCLAW_STATE_DIR`, every `shell_exec` of a `/control` agent is held to a
+   * saved approval, the reviewer, then the person. Absent: the shell runs as before.
+   */
+  readonly execApproval?: Pick<ExecApprovalOptions, 'ask' | 'reviewer' | 'waived'>
   /**
    * The session generations, loaded from `<workspace>/.theoclaw/sessions.json`. `startTheoClaw`
    * loads them before anything starts, so a malformed file refuses the start; `composeTheoClaw`
@@ -142,6 +126,14 @@ export interface TheoClawOptions {
   readonly pairing?: PairingStore
   /** Builds the Teams activity verifier, once (D4). Defaults to the package's `teamsActivityVerifier`. */
   readonly teamsVerifierFactory?: (options: TeamsActivityVerifierOptions) => TeamsVerifier
+  /** Every value a reply must not carry (`processSecrets`); the channel credentials when absent. */
+  readonly secrets?: readonly string[]
+  /** Stand-ins for the stores a secret reference names (tests); the process uses the real ones. */
+  readonly secretStores?: SecretStores
+  /** The triggers and approved hooks `startTheoClaw` already read; read here when absent (B-397). */
+  readonly events?: EventSettings
+  /** Builds one trigger run's agent, fresh per run: no tool, like a chat agent. Default: the channel factory. */
+  readonly triggerAgentFactory?: () => Promise<TurnAgent>
 }
 
 export interface ComposedTheoClaw {
@@ -149,47 +141,47 @@ export interface ComposedTheoClaw {
   readonly router: (request: Request) => Promise<Response>
   /** The chat sessions' agents; `disposeAll()` at stop is the only end of their lifetime (D2). */
   readonly sessions: SessionAgents
+  /** The chat path's request boundary over the sessions; WebChat leases one chat's agent through it. */
+  readonly withChatAgent: ChatBoundary
 }
 
-/** Where the session generations are kept. */
-function sessionsFile(workspace: string): string {
-  return join(workspace, '.theoclaw', 'sessions.json')
+/** The trigger routes (B-397): each run on a fresh tool-less agent in its own request boundary, replying through a started adapter, its reply masked (B-398 FR-006). */
+function composedTriggers(
+  options: TheoClawOptions,
+  events: EventSettings,
+  loop: ChannelLoop,
+  write: (line: string) => void,
+  secrets: readonly string[],
+): ReadonlyMap<string, WebhookRoute> {
+  const factory = options.triggerAgentFactory ?? createSdkChannelAgentFactory(options.env)
+  return triggerRoutes(events.triggers, {
+    adapterFor: (platform) => loop.started.get(platform)?.adapter,
+    withAgent: createContainer<TurnAgent>({ factory }).withAgent,
+    write,
+    secrets,
+  })
 }
 
-/** The chat path's request boundary: it holds the request's event and leases that session's agent. */
-type ChatBoundary = <R>(event: MessageEvent, work: (lease: SessionLease) => R | Promise<R>) => Promise<R>
-
-/**
- * The chat path's sessions and the request boundary over them. `@theokit/di-agent`'s factory takes
- * no argument and `runInRequest` takes no seed, so the event reaches the factory through an
- * `AsyncLocalStorage` set around the request: per request, which a shared variable would not be
- * once two sessions are dispatched at once. The lease the boundary resolves carries no dispose, so
- * the end of the request leaves the agent open (D2).
- */
-function chatSessions(options: TheoClawOptions): { readonly sessions: SessionAgents; readonly withAgent: ChatBoundary } {
-  const settings = options.sessionSettings ?? readSessionSettings(options.env, statSync)
-  const open = options.getOrCreate ?? ((id: string, agentOptions: AgentOptions) => Agent.getOrCreate(id, agentOptions))
-  const sessions = new SessionAgents({
-    router: createSessionRouter(settings),
-    // Opened by the chat path's own factory, whose protected options are applied last, so the
-    // `shell` withholding and memory off hold whatever `optionsFor` returns (B-377 option A). Only
-    // those two keys are re-pinned: a tool-bearing key added to `optionsFor` would pass through.
-    getOrCreate: (id, sessionOptions) =>
-      createChannelAgentFactory(options.env, (channel) => open(id, { ...sessionOptions, ...channel }))(),
-    optionsFor: () => sessionAgentOptions(options.env, settings.workspace),
-    generations: options.generations ?? Generations.load(sessionsFile(settings.workspace)),
-    settings,
-    write: options.write,
-  })
-  const currentEvent = new AsyncLocalStorage<MessageEvent>()
-  const boundary = createContainer<SessionLease>({
-    factory: () => {
-      const event = currentEvent.getStore()
-      if (event === undefined) throw new Error('a chat agent was resolved outside a message')
-      return sessions.lease(event)
-    },
-  })
-  return { sessions, withAgent: (event, work) => currentEvent.run(event, () => boundary.withAgent(work)) }
+/** One line per platform left unconfigured, and per configured one no sender can reach under the DM policy. */
+function reportUnservedPlatforms(
+  skipped: ReturnType<typeof resolvePlatforms>['skipped'],
+  configured: ReturnType<typeof resolvePlatforms>['configured'],
+  policy: AuthorizationPolicy,
+  write: (line: string) => void,
+): void {
+  for (const { platform, missing } of skipped) {
+    write(`${platform}: not configured (missing ${missing.join(', ')})`)
+  }
+  // Only `open` admits a sender no platform authenticates; under the rest such a channel serves nobody.
+  if (policy.dmPolicy !== 'open') {
+    for (const { platform } of configured.filter(
+      (entry) => !isAuthenticatedSender(entry.platform),
+    )) {
+      write(
+        `${platform}: no sender can be admitted under THEOCLAW_DM_POLICY=${policy.dmPolicy}: its sender id is not authenticated, so its messages are dropped without a reply`,
+      )
+    }
+  }
 }
 
 /**
@@ -199,36 +191,38 @@ function chatSessions(options: TheoClawOptions): { readonly sessions: SessionAge
 export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
   // First: a bad authorization value stops the start before any adapter is built.
   const policy = options.policy ?? parseAuthorizationPolicy(options.env)
-  const chat = chatSessions(options)
-  const { configured, skipped, secrets } = resolvePlatforms(options.env)
-  for (const { platform, missing } of skipped) {
-    options.write(`${platform}: not configured (missing ${missing.join(', ')})`)
-  }
-  // Only `open` admits a sender no platform authenticates; under the rest such a channel serves nobody.
-  if (policy.dmPolicy !== 'open') {
-    for (const { platform } of configured.filter(
-      (entry) => !isAuthenticatedSender(entry.platform),
-    )) {
-      options.write(
-        `${platform}: no sender can be admitted under THEOCLAW_DM_POLICY=${policy.dmPolicy}: its sender id is not authenticated, so its messages are dropped without a reply`,
-      )
-    }
-  }
+  // The chat's exec gate (B-572), built on first use so the chat asker exists by the time a session agent opens.
+  let chatGate: Plugin[] | undefined
+  const chat = chatSessions({
+    ...options,
+    plugins: () => {
+      if (chatGate === undefined) {
+        const gate = execApprovalFor({ ...options.execApproval, ...execChat.options }, policy.stateDir)
+        chatGate = gate === undefined ? [] : [execApprovalPlugin(gate)]
+      }
+      return chatGate
+    },
+  })
+  const platforms = resolvePlatforms(options.env)
+  const { configured, skipped } = platforms
+  const secrets = [...(options.secrets ?? platforms.secrets), options.env.THEOCLAW_VOICE_OPENAI_API_KEY?.trim() ?? '']
+  reportUnservedPlatforms(skipped, configured, policy, options.write)
   // What the routes and the router write can carry a configured value (a verifier's message, an
   // SDK error): masked here as the loop masks its own lines, whatever stream the caller writes to.
   const maskedWrite = (line: string): void => options.write(redactSecrets(maskSecrets(line, secrets)))
   // The store exists only with a state directory; the hook runs without one under the other policies.
   const pairing = options.pairing ?? pairingStoreFor(policy, maskedWrite)
-  const ownerPolicy = createOwnerPolicyHook({
-    policy,
-    ...(pairing === undefined ? {} : { pairing }),
-    write: maskedWrite,
-  })
-  // Runs after the owner policy, so only owners and paired senders reach it (FR-007).
-  const groupActivation = createGroupActivationHook({
-    isOwner: (platform, senderId) => isPolicyOwner(policy, platform, senderId),
-    mode: policy.groupActivation,
-    write: maskedWrite,
+  const usage = createUsageHook({ keyOf: chat.keyOf })
+  const model = options.env.THEOCLAW_MODEL
+  const execChat = createChatExecApproval({
+    env: options.env,
+    keyOf: chat.keyOf,
+    isOwner: (event) => isPolicyOwner(policy, event.platform, event.sender.id),
+    send: async (event, text) => {
+      const adapter = loop.started.get(event.platform as PlatformName)?.adapter
+      if (adapter === undefined) throw new Error('the platform is not started')
+      await adapter.sendMessage({ channel: event.channel, text })
+    },
   })
   const deps: WebhookDeps = {
     write: maskedWrite,
@@ -239,14 +233,19 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
     const webhook = webhookPlatform(entry, deps)
     if (webhook !== undefined) webhooks.set(entry.platform, webhook)
   }
+  const events = options.events ?? readEventSettings(options.env, configured.map((entry) => entry.platform))
   const handles = new WeakMap<BasePlatformAdapter, Handle>()
   const loop = startChannelLoop({
     platforms: (options.builders ?? adapterBuilders)(configured, { requireMention: policy.groupActivation === 'mention' }).map((build) =>
       withRoute(build, webhooks.get(build.platform), handles),
     ),
-    handler: createReplyHandler({
+    handler: withVoiceReplies(createReplyHandler({
       withAgent: chat.withAgent,
       reset: (event) => chat.sessions.reset(event),
+      secrets,
+      display: readDisplayConfig(options.env),
+      incognito: isIncognito(options.env),
+      ...(model === undefined ? {} : { usage: { modeFor: usage.modeFor, model, write: maskedWrite } }),
       // `loop` is read per message, after it exists: a member whose platform has not started is
       // reported as not delivered.
       broadcast: {
@@ -254,8 +253,10 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
         adapterFor: (platform) => loop.started.get(platform as PlatformName)?.adapter,
         write: maskedWrite,
       },
-    }),
-    hooks: [ownerPolicy, groupActivation],
+      goal: events.goal,
+      typing: { adapterFor: (platform) => loop.started.get(platform as PlatformName)?.adapter },
+    }), configuredVoiceReplies(options.env)),
+    hooks: channelHooks({ policy, ...(pairing === undefined ? {} : { pairing }), write: maskedWrite, execApproval: execChat, ...(model === undefined ? {} : { usage: usage.hook }) }),
     secrets,
     write: options.write,
     ...(options.startTimeoutMs === undefined ? {} : { startTimeoutMs: options.startTimeoutMs }),
@@ -267,8 +268,9 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
     routes,
     isStarted: (platform) => loop.started.has(platform),
     write: maskedWrite,
+    triggers: composedTriggers(options, events, loop, maskedWrite, secrets),
   })
-  return { loop, router, sessions: chat.sessions }
+  return { loop, router, sessions: chat.sessions, withChatAgent: chat.withAgent }
 }
 
 export interface StartOptions extends Omit<TheoClawOptions, 'write'> {
@@ -276,6 +278,8 @@ export interface StartOptions extends Omit<TheoClawOptions, 'write'> {
   readonly exit: (code: number) => void
   /** The streams the output mask wraps; `process.stdout` and `process.stderr` by default. */
   readonly streams?: readonly MaskableStream[]
+  /** Receives operational lines after the same secret masking as local output. */
+  readonly telemetryLog?: (line: string) => void
   /** Where the listening lines go. Default: the first of `streams`. */
   readonly stdout?: (line: string) => void
   /** Where every other line goes. Default: the last of `streams`. */
@@ -295,8 +299,24 @@ export interface StartOptions extends Omit<TheoClawOptions, 'write'> {
   readonly toolDeps?: ToolDeps
   /** Which instance this process is (B-514); the process entry resolved and applied it. Default: no profile. */
   readonly instance?: TheoClawInstance
+  /** The migration import's line (FR-010, D1), computed by the entry and written after the instance line. */
+  readonly importedLine?: string
+  /** Every `/control` agent's workers, which an import must not reach (FR-009); WebChat's go through `createChatAgent`. Default: `agentFactory`. */
+  readonly importFreeAgentFactory?: StartOptions['agentFactory']
+  /** The processes an import starts outside the sandbox (`importedMcpPaths`), protected with host tools on. */
+  readonly importedPaths?: readonly ProtectedPath[]
+  /** The import's env and header values (`importedMcpSecrets`), hidden by the output mask with the others. */
+  readonly importedSecrets?: readonly string[]
+  /** Builds the tool-less agent of one `digest` call (B-387, D3). Absent: no workflow tool. */
+  readonly draftAgentFactory?: () => Promise<SDKAgent>
+  /** The JSON-only model call of the `triage` workflow (B-679): shell withheld, memory off. Absent: no `triage` tools. */
+  readonly generateObject?: GenerateObject
   /** The SDK's live agent cache, turned off at start (D2). Default `Agent.registry`. */
   readonly agentRegistry?: { configure(options: { readonly maxAgents: number; readonly idleTimeoutMs: number }): void }
+  /** Where the WebChat bundle is read from. Default `WEBCHAT_ASSETS_DIR`, where `build:web` writes it. */
+  readonly webchatAssetsDir?: string | URL
+  /** Creates a chat-completion API turn's agent from the chat options `webchatAgentFactory` pins. Default: the SDK's, as `/control`'s. */
+  readonly createChatAgent?: CreateAgent
 }
 
 /** The running process: the channel loop, its webhook router, and the one listener serving both. */
@@ -309,30 +329,8 @@ export interface RunningTheoClaw extends ComposedTheoClaw, ControlPlaneHandle {
 
 const NOTHING_TO_WITHDRAW: LanAnnouncement = { stop: () => Promise.resolve() }
 
-function formatAddress(address: { readonly host: string; readonly port: number }): string {
-  return isIPv6(address.host) ? `[${address.host}]:${address.port}` : `${address.host}:${address.port}`
-}
-
-/** The first line a start writes, naming the instance and where its state lives. */
-function startLine(instance: TheoClawInstance): string {
-  return instance.directory === undefined
-    ? 'theoclaw: instance started, no profile'
-    : `${instance.label}: instance started, profile directory ${instance.directory}`
-}
-
 function lineWriter(stream: MaskableStream | undefined): (line: string) => void {
   return (line) => void stream?.write(`${line}\n`)
-}
-
-/**
- * Every value the output mask hides: the channel credentials, both model keys, the control token
- * and the web search keys.
- */
-function processSecrets(env: StartOptions['env'], controlToken: string | undefined, tools: ToolSettings): string[] {
-  const keys = [env.THEOKIT_API_KEY, env.OPENROUTER_API_KEY]
-    .map((value) => (value ?? '').trim())
-    .filter((value) => value !== '')
-  return [...resolvePlatforms(env).secrets, ...keys, ...(controlToken === undefined ? [] : [controlToken]), ...tools.secrets]
 }
 
 const SHELL_READ_LINE = 'tools: host tools are on; the shell can read every file the process user can read'
@@ -342,11 +340,14 @@ function startToolSettings(options: StartOptions, policy: AuthorizationPolicy): 
   // A profiled instance's agents work in its workspace (B-514), so their tool root is made there.
   const cwd = options.cwd ?? options.instance?.workspace ?? process.cwd()
   const tools = resolveToolSettings(options.env, cwd, options.toolDeps)
-  // The pairing list lives in the state directory: a shell that could write it could pair anyone.
-  const protectedPaths =
-    policy.stateDir === undefined ? [] : [{ path: policy.stateDir, variable: 'THEOCLAW_STATE_DIR' }]
-  checkHostToolsPosture(tools, protectedPaths, options.toolDeps)
+  checkHostToolsPosture(tools, hostToolsProtectedPaths(options.env, policy.stateDir, tools, options.importedPaths ?? []), options.toolDeps)
   return tools
+}
+
+/** The exec gate's options: needs an asker and a state directory to keep saved approvals in. */
+function execApprovalFor(given: TheoClawOptions['execApproval'], stateDir: string | undefined): ExecApprovalOptions | undefined {
+  if (given?.ask === undefined || stateDir === undefined) return undefined
+  return { ...given, store: createExecApprovalStore(stateDir) }
 }
 
 /** The store of `policy.stateDir`, or none without one. Throws on a state file it cannot read. */
@@ -357,22 +358,54 @@ function pairingStoreFor(
   return policy.stateDir === undefined ? undefined : createPairingStore({ dir: policy.stateDir, write })
 }
 
-/** What the start says about the tools: each one left off and why, and the shell's reach when host tools are on. */
+/** What the start says about the tools: what is off and why, the shell's reach, the external tools by name. */
 function writeToolLines(tools: ToolSettings, write: (line: string) => void): void {
   for (const line of tools.offLines) write(line)
   if (tools.hostTools) write(SHELL_READ_LINE)
+  if (tools.external.startLine !== undefined) write(tools.external.startLine)
 }
 
-/** Write the instance's start line, the first line of the start, and return the instance in effect. */
-function announceInstance(given: TheoClawInstance | undefined, stderr: (line: string) => void): TheoClawInstance {
+/** Write the instance's start line, the first line of the start, then any import line, and return the instance. */
+function announceInstance(given: TheoClawInstance | undefined, stderr: (line: string) => void, imported?: string): TheoClawInstance {
   const instance = given ?? NO_PROFILE
-  stderr(startLine(instance))
+  for (const line of [startLine(instance), ...(imported === undefined ? [] : [imported])]) stderr(line)
   return instance
 }
 
-/** `GET /health` is the control plane's; every other path goes to the webhook router. */
-function serveHealthAndWebhooks(router: ComposedTheoClaw['router']): (request: Request) => Promise<Response> {
-  return (request) => (new URL(request.url).pathname === '/health' ? healthHandler(request) : router(request))
+/** The `/control` agents' workflow tools: one request boundary per call over the draft factory. */
+function workflowTools(factory: StartOptions['draftAgentFactory'], generateObject: GenerateObject | undefined, write: (line: string) => void): CustomTool[] {
+  return createWorkflowTools({ write, ...(generateObject === undefined ? {} : { generateObject }), ...(factory === undefined ? {} : { withDraftAgent: createContainer({ factory }).withAgent }) })
+}
+
+/**
+ * The WebChat routes, or `undefined` while `THEOCLAW_WEBCHAT_TOKEN` is unset. WebChat is a chat
+ * surface, so its agents are built through the chat path's factory, as every chat agent: no tool
+ * (B-382), no `shell` and memory off (B-377), whatever the `/control` turn's options become.
+ */
+function startWebchat(
+  options: StartOptions,
+  settings: ControlPlaneSettings,
+  secrets: readonly string[],
+  write: (line: string) => void,
+  withChatAgent: ChatBoundary,
+): HttpHandler | undefined {
+  const token = settings.webchatToken
+  if (token === undefined) return undefined
+  const assetsDir = options.webchatAssetsDir ?? WEBCHAT_ASSETS_DIR
+  // One session agent per chat id: the chat's turns lease the same agent, so a follow-up sees the earlier messages.
+  const turnFor = (chatId: string): TurnRunner => {
+    const event = webchatEvent(chatId)
+    const withAgent: WithAgent = (work) =>
+      withChatAgent(event, async (lease) => {
+        try {
+          return await work(lease.agent)
+        } finally {
+          lease.release()
+        }
+      })
+    return createTurnRunner(withAgent, secrets, settings.model)
+  }
+  return createWebchatRoutes({ token, turnFor, assetsDir, write })
 }
 
 /**
@@ -385,14 +418,25 @@ function serveHealthAndWebhooks(router: ComposedTheoClaw['router']): (request: R
  * line is read from the socket. Once it is, the instance is announced on the LAN (`THEOCLAW_MDNS`),
  * and the shutdown withdraws that announcement before it closes the listener.
  */
-export async function startTheoClaw(options: StartOptions): Promise<RunningTheoClaw> {
+export async function startTheoClaw(given: StartOptions): Promise<RunningTheoClaw> {
+  // Secret references are resolved once, first, so every reader and the masks see the values (B-711).
+  // No await when nothing is a reference: the start stays as synchronous as it was up to its first real await.
+  const hasRefs = Object.values(given.env).some((value) => value !== undefined && secretRefKind(value.trim()) !== undefined)
+  const resolved = hasRefs ? await resolveSecretRefs(given.env, given.secretStores) : { env: given.env, values: [] as string[] }
+  const options: StartOptions = resolved.values.length === 0 ? given : { ...given, env: resolved.env, importedSecrets: [...(given.importedSecrets ?? []), ...resolved.values] }
   const settings = readControlPlaneSettings(options.env)
   const discovery = parseDiscoveryMode(options.env)
   // Read before the mask and the shutdown are installed, so a missing owner leaves nothing behind.
   const policy = parseAuthorizationPolicy(options.env)
-  const tools = startToolSettings(options, policy)
+  let tools = startToolSettings(options, policy)
+  const platforms = resolvePlatforms(options.env).configured.map((entry) => entry.platform)
+  const events = readEventSettings(options.env, platforms)
   const sessionSettings = readSessionSettings(options.env, statSync)
   const generations = Generations.load(sessionsFile(sessionSettings.workspace))
+  const scheduleStore = loadScheduleStore(sessionSettings.workspace)
+  const heartbeat = readHeartbeatSettings(options.env, platforms)
+  const a2a = readA2ASettings(options.env)
+  const relay = readRelaySettings(options.env)
   // `SessionAgents` alone decides when a session's agent is disposed: the SDK's cache and its idle
   // sweep know nothing of a turn in flight. `Agent.create` never reads the cache, so `/control`
   // turns are unaffected.
@@ -402,24 +446,31 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
   // as the operator set it. Under a profile the workspace is the profile's own (`instance.ts`).
   mkdirSync(join(sessionSettings.workspace, '.theoclaw'), { recursive: true, mode: 0o700 })
   const streams = options.streams ?? [process.stdout, process.stderr]
-  const stderr = options.stderr ?? lineWriter(streams[streams.length - 1])
+  const secretValues = [...processSecrets(options, settings, tools, events, a2a), ...relaySecrets(relay)]
+  const logged = (write: (line: string) => void) => (line: string): void => {
+    write(line)
+    if (options.telemetryLog !== undefined) options.telemetryLog(redactSecrets(maskSecrets(line, secretValues)))
+  }
+  const stderr = logged(options.stderr ?? lineWriter(streams[streams.length - 1]))
   // Loaded before the start line, the mask and the shutdown: an unreadable pairing file leaves nothing behind.
   const secrets = resolvePlatforms(options.env).secrets
   const pairing = pairingStoreFor(policy, (line) => stderr(redactSecrets(maskSecrets(line, secrets))))
   // First, once every setting is checked: the line holds a label and a directory, never a secret.
-  const instance = announceInstance(options.instance, stderr)
-  const mask = installOutputMask(processSecrets(options.env, settings.controlToken, tools), streams)
-  const stdout = options.stdout ?? lineWriter(streams[0])
+  const instance = announceInstance(options.instance, stderr, options.importedLine)
+  const mask = installOutputMask(secretValues, streams)
+  const stdout = logged(options.stdout ?? lineWriter(streams[0]))
   const flushOnExit = (): void => mask.flush()
   options.signals.on('exit', flushOnExit)
   let composedApp: ComposedTheoClaw | undefined
+  let scheduled: RunningScheduler | undefined
   let serving: Promise<ControlPlaneHandle> | undefined
   // Bound once the listener resolves; the shutdown hook reads it late, as it reads `serving`.
   let announcement: LanAnnouncement | undefined
   const removeShutdown = installShutdown({
     signals: options.signals,
-    // The loop first, so no turn starts once the agents are being disposed.
+    // The scheduler, then the loop, so no run or turn starts once the agents are being disposed.
     stopAll: async () => {
+      await scheduled?.stop()
       await composedApp?.loop.stopAll()
       await composedApp?.sessions.disposeAll()
     },
@@ -433,28 +484,63 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
     },
     write: stderr,
   })
+  // After the shutdown hook is in place, so a signal during the probe still closes cleanly. Nothing reads `tools` before this.
+  tools = await withInteractiveShell(tools, options.toolDeps)
   writeToolLines(tools, stderr)
-  // The raw factory goes to the composition, which hands chat agents no tool; only the `/control`
-  // turn's agents get the tool options.
+  for (const line of a2aLines(a2a)) stderr(line)
+  // The composition gets the raw factory: chat agents hold no tool, only `/control` agents do.
   const composed = composeTheoClaw({
     ...options,
     policy,
     sessionSettings,
     generations,
+    events,
     ...(pairing === undefined ? {} : { pairing }),
     write: stderr,
+    secrets: secretValues,
   })
-  const agents = createContainer<TurnAgent>({ factory: () => options.agentFactory(agentToolOptions(tools)) })
+  // `/control` agents hold `run_code` and `delegate_all`; their read-only workers carry no import.
+  const buildWorker = options.importFreeAgentFactory ?? options.agentFactory
+  const beat = heartbeat === undefined ? {} : { heartbeat: heartbeatJob(sessionSettings.workspace, heartbeat) }
+  scheduled = wireScheduler({ store: scheduleStore, loop: composed.loop, buildRunAgent: buildWorker, tools, platforms, ...beat, write: stderr, secrets: secretValues })
+  const relayDir = join(sessionSettings.workspace, '.theoclaw')
+  const relayState = relay.client === undefined ? undefined : RelayState.load(join(relayDir, 'relay.json'), relay.peers)
+  if (relayState !== undefined) stderr(`relay: public key ${relayState.publicKey}`)
+  const relayTool = relayState === undefined || relay.client === undefined || relay.peers.size === 0 ? [] : relayTools(relayState, new RelayClient(relay.client.url, relay.client.token))
+  const relayHandler = relay.serveToken === undefined ? undefined : relayRoute(relay.serveToken, new RelayMailbox(100, join(relayDir, 'relay-mailbox.json')))
+  const extraTools = [...workflowTools(options.draftAgentFactory, options.generateObject, stderr), ...scheduled.scheduleTools, ...peerTools(a2a.peers), ...relayTool]
+  const execApproval = execApprovalFor(options.execApproval, policy.stateDir)
+  const buildControlAgent = async (): Promise<TurnAgent> =>
+    options.agentFactory(controlAgentToolOptions(tools, buildWorker, extraTools, execApproval))
+  const { withAgent } = createContainer<TurnAgent>({ factory: buildControlAgent })
   composedApp = composed
+  const devices = devicePairingFor(policy.stateDir, settings.controlToken, stderr)
+  // A chat completion is a chat surface: its agent is a chat agent, holding no tool (B-382), so
+  // `/tools/invoke` is the only way to the `/control` set, built by the same call as that agent's.
+  const chatAgents = createContainer<TurnAgent>({ factory: webchatAgentFactory(options.env, options.createChatAgent) })
+  const api = theoClawApiFor(settings.controlToken, {
+    model: settings.model,
+    withAgent: chatAgents.withAgent,
+    toolSettings: tools,
+    controlTools: () => controlAgentToolOptions(tools, buildWorker, extraTools, execApproval).tools,
+    stderr,
+  })
   const listen = options.listen ?? listenControlPlane
   serving = listen({
-    handler: serveHealthAndWebhooks(composed.router),
+    handler: serveHandler(
+      composed.router,
+      startWebchat(options, settings, secretValues, stderr, composed.withChatAgent),
+      devices,
+      api,
+      a2a.token === undefined ? undefined : a2aRoute({ token: a2a.token, buildWorker, tools, secrets: secretValues, write: stderr }),
+      relayHandler,
+    ),
     port: settings.port,
     host: settings.host,
     stderr,
     ...(settings.controlToken === undefined
       ? {}
-      : { control: { token: settings.controlToken, runTurn: createTurnRunner(agents.withAgent) } }),
+      : { control: controlOptions(settings.controlToken, withAgent, buildControlAgent, stderr, secretValues, devices, settings.model) }),
   })
   let handle: ControlPlaneHandle
   try {
@@ -464,6 +550,7 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
     // the entry exit 1.
     removeShutdown()
     options.signals.off('exit', flushOnExit)
+    await scheduled.stop()
     await composed.loop.stopAll()
     await composed.sessions.disposeAll()
     // The mask stays: the entry writes this error and exits, and that line is masked too.
@@ -476,10 +563,14 @@ export async function startTheoClaw(options: StartOptions): Promise<RunningTheoC
     log: stderr,
     createPublisher: options.createPublisher ?? createBonjourPublisher,
   })
-  if (settings.controlToken === undefined) {
-    stdout('theoclaw: control socket off (THEOCLAW_CONTROL_TOKEN unset)')
-  }
+  reportSurfacesOff(settings, stdout)
+  // Last: a shutdown that began during the start has already stopped it, and then this registers nothing.
+  await scheduled.start()
   // `close` withdraws the announcement first, as the shutdown does: a caller that closes the
   // running instance directly must not leave the service advertised.
-  return { ...handle, ...composed, announcement, instance, close: () => stopThenClose(announcement, handle) }
+  const close = async (): Promise<void> => {
+    await scheduled?.stop()
+    await stopThenClose(announcement, handle)
+  }
+  return { ...handle, ...composed, announcement, instance, close }
 }

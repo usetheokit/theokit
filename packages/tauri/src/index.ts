@@ -33,6 +33,12 @@ export interface TauriChannelSourceOptions {
   runCommand?: string
   /** The Rust `#[tauri::command]` that settles a HITL approval (default `approve`). */
   approveCommand?: string
+  /**
+   * The Rust `#[tauri::command]` the abort invokes to stop the in-flight turn (the desktop template's
+   * `cancel_turn` kills the sidecar). Unset, the abort does nothing and the shell kills the prior
+   * sidecar on the next run.
+   */
+  cancelCommand?: string
 }
 
 /**
@@ -46,6 +52,7 @@ export function createTauriChannelSource(
 ): ChannelPushSource {
   const runCommand = options.runCommand ?? 'run_turn'
   const approveCommand = options.approveCommand ?? 'approve'
+  const { cancelCommand } = options
 
   return {
     start(turn, { onLine, onClose, onError }) {
@@ -65,8 +72,14 @@ export function createTauriChannelSource(
           // A Tauri command rejection is a real error — surface it, never swallow it (Rule 8 / M45 review LOW).
           onError?.(err instanceof Error ? err : new Error(String(err)))
         })
-      // The Rust shell kills the prior sidecar on the next run, so no explicit abort is needed.
-      return () => undefined
+      // Without a cancel command the Rust shell kills the prior sidecar on the next run.
+      if (cancelCommand === undefined) return () => undefined
+      // The abort never throws: a rejected cancel is an error of the turn, as a rejected run is.
+      return () => {
+        core.invoke(cancelCommand).catch((err: unknown) => {
+          onError?.(err instanceof Error ? err : new Error(String(err)))
+        })
+      }
     },
     settle: async (approvalId: string, decision: ApprovalDecision) => {
       await core.invoke(approveCommand, { approvalId, approved: decision.approved })
@@ -84,7 +97,7 @@ export function createTauriAgentClient<TInput = unknown>(
   core: TauriCore,
   options: TauriChannelSourceOptions & CreateAgentClientOptions = {},
 ): AgentClientHandle<TInput> {
-  const { runCommand, approveCommand, ...clientOptions } = options
-  const source = createTauriChannelSource(core, { runCommand, approveCommand })
+  const { runCommand, approveCommand, cancelCommand, ...clientOptions } = options
+  const source = createTauriChannelSource(core, { runCommand, approveCommand, cancelCommand })
   return createAgentClient<TInput>(new ChannelTransport({ source }), clientOptions)
 }
