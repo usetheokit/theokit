@@ -183,6 +183,7 @@ describe('the tool options each agent receives', () => {
       'read_file',
       'run_code',
       'schedule_job',
+      'session_search',
       'show_widget',
       'task_complete',
       'task_declare',
