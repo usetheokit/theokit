@@ -51,7 +51,9 @@ describe('live-model.yml for TheoClaw', () => {
   it('the live-model workflow calls the container workflow only on a container dispatch', () => {
     const container = WORKFLOW.jobs['theoclaw-container'] as Job
     expect(container.uses).toBe('./.github/workflows/theoclaw-container.yml')
-    expect(container.secrets).toBe('inherit')
+    // Only the secret the container workflow declares, never `secrets: inherit` (zizmor's
+    // secrets-inherit), so a secret added to the repository later does not reach it by default.
+    expect(container.secrets).toEqual({ OPENROUTER_API_KEY: '${{ secrets.OPENROUTER_API_KEY }}' })
     expect(container.if).toBe(
       "github.event_name == 'workflow_dispatch' && inputs.suite == 'theoclaw-container'",
     )
