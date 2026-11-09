@@ -74,6 +74,9 @@ function pnpm(args, label) {
     cwd: ROOT,
     stdio: 'inherit',
     env: { ...process.env, TURBO_CONCURRENCY: '1' },
+    // On Windows `pnpm` is a .cmd shim, which spawnSync starts only through a shell (ENOENT otherwise).
+    // The arguments are this script's own selectors, never input.
+    shell: process.platform === 'win32',
   })
   // A build that could not start or was killed has status null: never read it as a pass.
   if (result.error !== undefined) fail(`building ${label} could not run: ${result.error.message}`)

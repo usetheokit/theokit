@@ -42,11 +42,17 @@ jobs:
           persist-credentials: false
       # This job handles the provider key, so ADR-0021 pins the action by commit.
       - uses: usetheokit/shared-workflows/actions/setup@95ef5a1ea79f0c4065fa7ca0466b0b07b4c7799d # v1
+        with:
+          # TheoClaw needs Node 22.16 or later and `.nvmrc` holds the framework's 22.12 floor.
+          node-version: '22'
       - name: Install TheoClaw's workspace
         shell: bash
         run: pnpm install --frozen-lockfile --filter 'theoclaw...'
       - name: Build TheoClaw and its workspace dependencies
         shell: bash
+        # The type build ran out of heap on macos-latest with Node's default limit (#1273).
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
         run: node scripts/live-model-build.mjs theoclaw
       - name: Daemon live test (THEOCLAW_LIVE)
         env:
