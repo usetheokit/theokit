@@ -1,4 +1,5 @@
 import type { TurnAgent, TurnMessage, TurnRun } from '../agent-port.js'
+import { untrustedContentSendOptions } from './untrusted-content.js'
 
 /** The thinking levels `THEOCLAW_THINKING` accepts (OC-48). */
 export const THINKING_LEVELS = ['off', 'low', 'medium', 'high'] as const
@@ -26,7 +27,12 @@ type SendOptions = Parameters<TurnAgent['send']>[1]
  * secondary and its stream and result are the turn's. Once the primary has streamed output the
  * turn stays on it, so a reply is never doubled.
  */
-function failoverRun(first: TurnRun, message: TurnMessage, options: SendOptions, secondary: () => Promise<TurnAgent>): TurnRun {
+function failoverRun(
+  first: TurnRun,
+  message: TurnMessage,
+  options: SendOptions,
+  secondary: () => Promise<TurnAgent>,
+): TurnRun {
   let active = first
   return {
     async *stream() {
@@ -43,12 +49,20 @@ function failoverRun(first: TurnRun, message: TurnMessage, options: SendOptions,
       }
       if (streamed) return
       // No output from the primary: a thrown stream or a run that did not finish is a failure.
-      const outcome = primaryError !== undefined ? { status: 'failed' } : await first.wait().catch(() => ({ status: 'failed' }))
+      const outcome =
+        primaryError !== undefined
+          ? { status: 'failed' }
+          : await first.wait().catch(() => ({ status: 'failed' }))
       if (outcome.status === 'finished') return
       try {
-        active = await (await secondary()).send(message, options)
+        active = await (
+          await secondary()
+        ).send(message, { ...untrustedContentSendOptions(), ...options })
       } catch (error) {
-        throw new Error(`the primary model failed and so did the fallback: ${error instanceof Error ? error.message : String(error)}`, { cause: error })
+        throw new Error(
+          `the primary model failed and so did the fallback: ${error instanceof Error ? error.message : String(error)}`,
+          { cause: error },
+        )
       }
       yield* active.stream()
     },
@@ -63,9 +77,9 @@ export function withFailover(primary: TurnAgent, secondary: () => Promise<TurnAg
     async send(message, options) {
       let first: TurnRun
       try {
-        first = await primary.send(message, options)
+        first = await primary.send(message, { ...untrustedContentSendOptions(), ...options })
       } catch {
-        return (await secondary()).send(message, options)
+        return (await secondary()).send(message, { ...untrustedContentSendOptions(), ...options })
       }
       return failoverRun(first, message, options, secondary)
     },

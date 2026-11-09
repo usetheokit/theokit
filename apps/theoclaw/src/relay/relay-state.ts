@@ -56,7 +56,7 @@ export class RelayState {
   }
 
   /** Seals `text` for the trusted peer `peerName`. */
-  send(peerName: string, text: string): Envelope {
+  seal(peerName: string, text: string): Envelope {
     const key = this.trusted.get(peerName)
     if (key === undefined) throw new Error(`relay: peer "${peerName}" is not trusted`)
     const seq = (this.data.sent[key] ?? 0) + 1

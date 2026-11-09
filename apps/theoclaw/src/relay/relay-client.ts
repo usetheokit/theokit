@@ -50,7 +50,7 @@ export function relayTools(state: RelayState, client: RelayClient): CustomTool[]
       },
       handler: async (input) => {
         const peer = String(input.peer)
-        await client.put(state.send(peer, String(input.message)))
+        await client.put(state.seal(peer, String(input.message)))
         return `sent to ${peer}`
       },
     },
