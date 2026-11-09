@@ -1,4 +1,4 @@
-import { accessSync, closeSync, constants, openSync, readSync, statSync } from 'node:fs'
+import { accessSync, closeSync, constants, fstatSync, openSync, readSync, statSync } from 'node:fs'
 import { delimiter, join } from 'node:path'
 
 import type { SandboxMode } from '@theokit/agents/sandbox'
@@ -53,8 +53,8 @@ function findOnPath(name: string, pathVar: string): string | undefined {
 function readFramebufferHead(path: string): Buffer {
   let descriptor: number | undefined
   try {
-    if (!statSync(path).isFile()) throw refusal(`needs THEOCLAW_COMPUTER_FRAMEBUFFER to name a regular file; ${path} is not one`)
     descriptor = openSync(path, 'r')
+    if (!fstatSync(descriptor).isFile()) throw refusal(`needs THEOCLAW_COMPUTER_FRAMEBUFFER to name a regular file; ${path} is not one`)
     const head = Buffer.alloc(HEADER_BYTES)
     const read = readSync(descriptor, head, 0, HEADER_BYTES, 0)
     return head.subarray(0, read)

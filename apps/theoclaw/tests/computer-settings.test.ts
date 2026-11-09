@@ -87,7 +87,7 @@ describe('THEOCLAW_COMPUTER', () => {
 
   it('refuses a framebuffer path that is a directory or is missing', () => {
     const dir = tempDir()
-    expect(refusal(() => readComputer(onEnv({ THEOCLAW_COMPUTER_FRAMEBUFFER: dir }), POSTURE, FOUND)).message).toContain(dir)
+    expect(refusal(() => readComputer(onEnv({ THEOCLAW_COMPUTER_FRAMEBUFFER: dir }), POSTURE, FOUND)).message).toContain('is not one')
     const missing = join(dir, 'absent')
     expect(refusal(() => readComputer(onEnv({ THEOCLAW_COMPUTER_FRAMEBUFFER: missing }), POSTURE, FOUND)).message).toContain(missing)
   })

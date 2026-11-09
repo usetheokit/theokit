@@ -186,6 +186,15 @@ describe('readClaudeCodeSetup', () => {
     expect(setup.memories.map((file) => file.path.split('/').pop())).toEqual(['MEMORY.md', 'ARCH.md'])
   })
 
+  it('reads a directory named CLAUDE.md as absent, not dropped', () => {
+    rmSync(join(project, 'CLAUDE.md'))
+    mkdirSync(join(project, 'CLAUDE.md'))
+
+    const setup = readClaudeCodeSetup({ home, project })
+
+    expect(setup.dropped.some((entry) => entry.path === 'project/CLAUDE.md')).toBe(false)
+  })
+
   it('keys the memory by the project, not by a repository GIT_DIR points at', () => {
     const other = join(dir, 'other-repo')
     gitInit(other)

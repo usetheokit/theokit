@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { closeSync, fstatSync, openSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { parse as parseYaml } from 'yaml'
@@ -52,20 +52,25 @@ export const SAFE_SKILL_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/
  * reads as absent: FR-003 lists no reason for it, and no reader names such a path as an entry.
  */
 export function readCapped(path: string, rel: string, dropped: DroppedEntry[]): string | undefined {
-  let size: number
+  let fd: number
   try {
-    const stat = statSync(path)
-    if (!stat.isFile()) return undefined
-    size = stat.size
+    fd = openSync(path, 'r')
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
     throw error
   }
-  if (size > FILE_CAP) {
-    dropped.push({ path: rel, reason: `file over ${FILE_CAP} bytes` })
-    return undefined
+  try {
+    // Check the open descriptor, then read from it: the file checked is the file read.
+    const stat = fstatSync(fd)
+    if (!stat.isFile()) return undefined
+    if (stat.size > FILE_CAP) {
+      dropped.push({ path: rel, reason: `file over ${FILE_CAP} bytes` })
+      return undefined
+    }
+    return readFileSync(fd, 'utf8')
+  } finally {
+    closeSync(fd)
   }
-  return readFileSync(path, 'utf8')
 }
 
 /** The names in `dir`; none when it does not exist. */
