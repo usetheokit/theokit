@@ -8,10 +8,11 @@ import { runCli } from '../src/cli.js'
 import { teeToLogFile } from '../src/ops/log-tee.js'
 import { spawn } from 'node:child_process'
 
-import { PREDECESSOR_VARIABLE, waitForPredecessor } from '../src/ops/self-restart.js'
+import { PREDECESSOR_VARIABLE, supervised, waitForPredecessor } from '../src/ops/self-restart.js'
 import { reloadConfiguration, watchConfiguration } from '../src/ops/hot-reload.js'
 import { cleanScratch, harness } from './support/cli-harness.js'
 import { parseEnv } from 'node:util'
+
 
 afterEach(cleanScratch)
 
@@ -44,11 +45,7 @@ describe('hot reload (OC-94)', () => {
     const { result, accepted } = reloadConfiguration(path, env, previous)
 
     expect(env.THEOCLAW_MODEL).toBe('b')
-    expect(result).toEqual({
-      kind: 'applied',
-      applied: ['THEOCLAW_MODEL'],
-      restartRequired: ['THEOCLAW_PORT'],
-    })
+    expect(result).toEqual({ kind: 'applied', applied: ['THEOCLAW_MODEL'], restartRequired: ['THEOCLAW_PORT'] })
     expect(env.THEOCLAW_PORT).toBeUndefined()
     expect(accepted.THEOCLAW_MODEL).toBe('b')
   })
@@ -77,8 +74,7 @@ describe('hot reload (OC-94)', () => {
     try {
       writeFileSync(path, `THEOCLAW_MODEL="c"\nTHEOKIT_API_KEY="${KEY}"\n`)
       const deadline = Date.now() + 3000
-      while (env.THEOCLAW_MODEL !== 'c' && Date.now() < deadline)
-        await new Promise((r) => setTimeout(r, 25))
+      while (env.THEOCLAW_MODEL !== 'c' && Date.now() < deadline) await new Promise((r) => setTimeout(r, 25))
       expect(env.THEOCLAW_MODEL).toBe('c')
       expect(lines.join('\n')).toContain('applied THEOCLAW_MODEL')
     } finally {
@@ -87,26 +83,42 @@ describe('hot reload (OC-94)', () => {
   })
 })
 
-describe('self-restart on a restart-required change (B-716)', () => {
-  it('the watcher asks for a restart when a start-only setting changed', async () => {
-    const { path } = configured(`THEOCLAW_MODEL="a"\nTHEOKIT_API_KEY="${KEY}"\nTHEOCLAW_PORT="1"\n`)
+describe('self-restart on a start-only change (B-716)', () => {
+  const file = (port: string): string => `THEOCLAW_MODEL="a"\nTHEOKIT_API_KEY="${KEY}"\nTHEOCLAW_PORT="${port}"\n`
+  async function watched(first: string, second: string): Promise<{ restarts: number; lines: string[] }> {
+    const { path } = configured(file(first))
     const env: Record<string, string | undefined> = { ...parsedFile(path) }
-    const lines: string[] = []
-    let restarts = 0
-    const watcher = watchConfiguration(path, env, {
-      debounceMs: 20,
-      write: (l) => lines.push(l),
-      restart: () => void restarts++,
-    })
+    const seen = { restarts: 0, lines: [] as string[] }
+    const watcher = watchConfiguration(path, env, { debounceMs: 20, write: (l) => seen.lines.push(l), restart: () => void seen.restarts++ })
     try {
-      writeFileSync(path, `THEOCLAW_MODEL="a"\nTHEOKIT_API_KEY="${KEY}"\nTHEOCLAW_PORT="2"\n`)
-      const deadline = Date.now() + 3000
-      while (restarts === 0 && Date.now() < deadline) await new Promise((r) => setTimeout(r, 25))
-      expect(restarts).toBe(1)
-      expect(lines.join('\n')).toContain('restart required for THEOCLAW_PORT')
+      writeFileSync(path, file(second))
+      const deadline = Date.now() + 1500
+      while (seen.lines.length === 0 && Date.now() < deadline) await new Promise((r) => setTimeout(r, 25))
+      await new Promise((r) => setTimeout(r, 100))
     } finally {
       watcher.close()
     }
+    return seen
+  }
+
+  it('asks for a restart when a start-only setting changed to a valid value', async () => {
+    const seen = await watched('1', '2')
+    expect(seen.restarts).toBe(1)
+    expect(seen.lines.join('\n')).toContain('restart required for THEOCLAW_PORT')
+  })
+
+  it('keeps the running instance when the new file would be refused at the start', async () => {
+    const seen = await watched('1', 'not-a-port')
+    expect(seen.restarts).toBe(0)
+    expect(seen.lines.join('\n')).toContain('reload refused')
+  })
+
+  it('leaves the restart to the service manager only where one restarts on a failed exit', () => {
+    expect(supervised({ INVOCATION_ID: 'abc' }, 'linux')).toBe(true)
+    expect(supervised({}, 'linux')).toBe(false)
+    expect(supervised({ XPC_SERVICE_NAME: 'theoclaw.default' }, 'darwin')).toBe(true)
+    expect(supervised({ XPC_SERVICE_NAME: '0' }, 'darwin')).toBe(false)
+    expect(supervised({ INVOCATION_ID: 'abc' }, 'win32')).toBe(false)
   })
 
   it('a successor waits for its predecessor and clears the marker', async () => {

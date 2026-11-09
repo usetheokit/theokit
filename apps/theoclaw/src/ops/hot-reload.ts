@@ -2,34 +2,25 @@ import { type FSWatcher, existsSync, readFileSync, watch } from 'node:fs'
 import { basename, dirname } from 'node:path'
 import { parseEnv } from 'node:util'
 
-import { requireModel } from '../control-plane/settings.js'
+import { readControlPlaneSettings, requireModel } from '../control-plane/settings.js'
 
 /**
  * Hot reload of the configuration file (B-399, OC-94). The agent factories read the model, its
  * key, the fallback and the thinking level from the environment each time they build an agent, so
  * a change to those applies to the next session or turn without a restart. Every other setting is
- * read once at the start: a change to one is reported and, where the entry gives a `restart`
- * (B-716), the process restarts itself onto the new file; it never holds half of a new configuration. A candidate file that fails the
+ * read once at the start: a change to one is not applied to the running process, so it never holds
+ * half of a new configuration. Where the entry gives a `restart` (B-716), the process restarts onto
+ * the file once the whole new file checks out (model, key, port, tokens, bind address). A candidate file that fails the
  * model check is refused whole and the running values stay. No result carries a value.
  */
 
 type Env = Record<string, string | undefined>
 
 /** The settings read per agent. */
-export const HOT_KEYS: readonly string[] = [
-  'THEOCLAW_MODEL',
-  'THEOCLAW_MODEL_FALLBACK',
-  'THEOCLAW_THINKING',
-  'THEOKIT_API_KEY',
-  'OPENROUTER_API_KEY',
-]
+export const HOT_KEYS: readonly string[] = ['THEOCLAW_MODEL', 'THEOCLAW_MODEL_FALLBACK', 'THEOCLAW_THINKING', 'THEOKIT_API_KEY', 'OPENROUTER_API_KEY']
 
 export type ReloadResult =
-  | {
-      readonly kind: 'applied'
-      readonly applied: readonly string[]
-      readonly restartRequired: readonly string[]
-    }
+  | { readonly kind: 'applied'; readonly applied: readonly string[]; readonly restartRequired: readonly string[] }
   | { readonly kind: 'unchanged' }
   | { readonly kind: 'refused'; readonly reason: string }
 
@@ -51,10 +42,7 @@ export function reloadConfiguration(
   env: Env,
   previous: Readonly<Record<string, string>>,
 ): { readonly result: ReloadResult; readonly accepted: Readonly<Record<string, string>> } {
-  const refuse = (reason: string) => ({
-    result: { kind: 'refused', reason } as const,
-    accepted: previous,
-  })
+  const refuse = (reason: string) => ({ result: { kind: 'refused', reason } as const, accepted: previous })
   if (!existsSync(path)) return refuse('the file is gone; keeping the running configuration')
   const next = readFile(path)
   if (typeof next === 'string') return refuse(next)
@@ -69,10 +57,19 @@ export function reloadConfiguration(
   const restartRequired = [...new Set([...Object.keys(next), ...Object.keys(previous)])]
     .filter((key) => !HOT_KEYS.includes(key) && next[key] !== previous[key])
     .sort()
-  if (applied.length === 0 && restartRequired.length === 0)
-    return { result: { kind: 'unchanged' }, accepted: next }
+  if (applied.length === 0 && restartRequired.length === 0) return { result: { kind: 'unchanged' }, accepted: next }
   try {
-    requireModel(candidate)
+    if (restartRequired.length === 0) requireModel(candidate)
+    else {
+      // The successor reads every setting: a file it would refuse must not stop the running instance.
+      const whole: Env = { ...candidate }
+      for (const key of restartRequired) {
+        if (env[key] !== previous[key]) continue
+        if (next[key] === undefined) delete whole[key]
+        else whole[key] = next[key]
+      }
+      readControlPlaneSettings(whole)
+    }
   } catch (error) {
     return refuse(`${(error as Error).message}; keeping the running configuration`)
   }
@@ -90,7 +87,7 @@ export interface ConfigWatcher {
 export interface WatchOptions {
   readonly debounceMs?: number
   readonly write: (line: string) => void
-  /** Called after a reload left settings that are read once at the start changed: the owner's restart, done by the process. */
+  /** Called after a reload that left start-only settings changed and the whole new file checked out (B-716). */
   readonly restart?: () => void
 }
 
@@ -100,9 +97,7 @@ export function describeReload(result: ReloadResult): string | undefined {
   if (result.kind === 'refused') return `config: reload refused: ${result.reason}`
   const parts = [
     ...(result.applied.length > 0 ? [`applied ${result.applied.join(', ')}`] : []),
-    ...(result.restartRequired.length > 0
-      ? [`restart required for ${result.restartRequired.join(', ')}`]
-      : []),
+    ...(result.restartRequired.length > 0 ? [`restart required for ${result.restartRequired.join(', ')}`] : []),
   ]
   return `config: reloaded: ${parts.join('; ')}`
 }
@@ -117,11 +112,7 @@ export function watchConfiguration(path: string, env: Env, options: WatchOptions
     accepted = outcome.accepted
     const line = describeReload(outcome.result)
     if (line !== undefined) options.write(line)
-    if (
-      outcome.result.kind === 'applied' &&
-      outcome.result.restartRequired.length > 0 &&
-      options.restart !== undefined
-    ) {
+    if (outcome.result.kind === 'applied' && outcome.result.restartRequired.length > 0 && options.restart !== undefined) {
       options.write('config: restarting to apply them')
       options.restart()
     }

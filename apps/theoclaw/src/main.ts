@@ -10,31 +10,17 @@ import { startTheoClaw } from './composition.js'
 import { resolveSecretRefs } from './secret-refs.js'
 import { createObjectGenerator } from './workflows/object-generator.js'
 import type { AgentImport, TheoClawAgentOptions } from './agent/create-agent.js'
-import {
-  type CreateAgent,
-  createAgentFactory,
-  createChannelAgentFactory,
-} from './control-plane/agent-factory.js'
+import { type CreateAgent, createAgentFactory, createChannelAgentFactory } from './control-plane/agent-factory.js'
 import { loadConfiguration } from './config-file.js'
 import { teeToLogFile } from './ops/log-tee.js'
 import { watchConfiguration } from './ops/hot-reload.js'
-import { spawnSuccessor, waitForPredecessor } from './ops/self-restart.js'
+import { RESTART_EXIT_CODE, spawnSuccessor, supervised, waitForPredecessor } from './ops/self-restart.js'
 import { parseEntryArguments } from './entry-arguments.js'
 import { describeError } from './control-plane/errors.js'
 import { resolveInstance, type TheoClawInstance } from './instance.js'
-import {
-  importedMcpPaths,
-  importedMcpSecrets,
-  importedSetupLine,
-  readImportAtStart,
-  requireImportedMcp,
-} from './migration/import-start.js'
+import { importedMcpPaths, importedMcpSecrets, importedSetupLine, readImportAtStart, requireImportedMcp } from './migration/import-start.js'
 import { claimInstance } from './backup/instance-lock.js'
-import {
-  readTelemetrySettings,
-  registerTelemetry,
-  type RegisteredTelemetry,
-} from './telemetry/otel.js'
+import { readTelemetrySettings, registerTelemetry, type RegisteredTelemetry } from './telemetry/otel.js'
 
 /**
  * The process entry: the real environment, signals, exit and output streams, and the `/control`
@@ -60,9 +46,10 @@ function fail(error: unknown): never {
   process.exit(1)
 }
 
-// A successor of a self-restart waits for its predecessor, and the environment it started with is kept for the next one.
+// A successor of a self-restart waits for its predecessor; the environment this process started with is kept for the next.
 await waitForPredecessor(process.env)
 const startEnv = { ...process.env }
+let restartCode: number | undefined
 
 let instance: TheoClawInstance
 let imported: AgentImport | undefined
@@ -79,16 +66,18 @@ try {
   // B-718: mirror the output to THEOCLAW_LOG_FILE, which `theoclaw logs` reads where there is no user unit.
   teeToLogFile(process.env, [process.stdout, process.stderr])
   // Hot reload (B-399): a change to the model settings applies to the next agent, without a restart.
-  // A changed setting read once at the start (port, token, channel, policy) restarts the process (B-716).
-  if (configFile !== undefined)
+  // A changed start-only setting (port, token, channel, policy) restarts the process (B-716).
+  if (configFile !== undefined) {
     watchConfiguration(configFile, process.env, {
       write: (line) => process.stderr.write(`${line}\n`),
       restart: () => {
-        if (spawnSuccessor(startEnv)) process.kill(process.pid, 'SIGTERM')
-        else
-          process.stderr.write('config: cannot restart; the change needs a restart by the owner\n')
+        // Under a supervisor the exit alone is the restart; otherwise this process starts its own successor.
+        if (supervised(process.env, process.platform)) restartCode = RESTART_EXIT_CODE
+        else if (!spawnSuccessor(startEnv)) return process.stderr.write('config: cannot restart; the change needs a restart by the owner\n')
+        process.kill(process.pid, 'SIGTERM')
       },
     })
+  }
   instance = resolveInstance(process.env, { homeDir: homedir() })
   // The instance lock before `applyInstance` creates the targets (B-400 FR-010): a start refused
   // while a backup or a restore runs leaves both as they were. Released when the process exits.
@@ -99,9 +88,7 @@ try {
   const setup = readImportAtStart(process.env, (line) => process.stderr.write(`${line}\n`))
   imported = setup === undefined ? undefined : { setup, mcp }
   // Before any agent exists, so every agent records through the providers (B-400 FR-006).
-  telemetry = await registerTelemetry(readTelemetrySettings(process.env), {
-    write: (line) => process.stderr.write(`${line}\n`),
-  })
+  telemetry = await registerTelemetry(readTelemetrySettings(process.env), { write: (line) => process.stderr.write(`${line}\n`) })
 } catch (error) {
   fail(error)
 }
@@ -110,10 +97,7 @@ process.title = instance.label
 
 const workspace = instance.workspace
 const createSdkAgent = (options: TheoClawAgentOptions): Promise<SDKAgent> =>
-  Agent.create({
-    ...options,
-    local: { ...options.local, ...(workspace === undefined ? {} : { cwd: workspace }) },
-  })
+  Agent.create({ ...options, local: { ...options.local, ...(workspace === undefined ? {} : { cwd: workspace }) } })
 const create: CreateAgent = createSdkAgent
 
 // Secret references become their values in the process environment, so the agent factories that read it
@@ -130,9 +114,7 @@ startTheoClaw({
   agentFactory: createAgentFactory(process.env, create, imported),
   importFreeAgentFactory: createAgentFactory(process.env, create),
   importedPaths: importedMcpPaths(imported),
-  ...(imported === undefined
-    ? {}
-    : { importedLine: importedSetupLine(imported.setup, imported.mcp) }),
+  ...(imported === undefined ? {} : { importedLine: importedSetupLine(imported.setup, imported.mcp) }),
   // WebChat's agents: created like the /control ones, from the chat path's options (no tool, B-382).
   createChatAgent: create,
   // The `digest` tool's draft agents (B-387): the chat path's factory, so no tool, no shell, memory off.
@@ -144,8 +126,7 @@ startTheoClaw({
   signals: process,
   // What is pending is exported first, for at most the bound, so a down collector cannot hold the exit.
   exit: (code) =>
-    void Promise.race([
-      telemetry.shutdown(),
-      new Promise((resolve) => setTimeout(resolve, TELEMETRY_SHUTDOWN_MS).unref()),
-    ]).finally(() => process.exit(code)),
+    void Promise.race([telemetry.shutdown(), new Promise((resolve) => setTimeout(resolve, TELEMETRY_SHUTDOWN_MS).unref())]).finally(() =>
+      process.exit(restartCode ?? code),
+    ),
 }).catch(fail)

@@ -5,7 +5,20 @@ import { spawn } from 'node:child_process'
  * command with the environment the first process was started with, so it reads the configuration
  * file afresh, and it waits for this process to exit before it starts, so the port and the instance
  * lock are free. The caller then stops this process through its normal graceful shutdown.
+ *
+ * Under a supervisor a detached child would be killed with the unit's control group (systemd) or
+ * be unmanaged (launchd), so there the process exits non-zero instead, which the unit's
+ * `Restart=on-failure` and the agent's `KeepAlive` `SuccessfulExit=false` answer with a start.
  */
+export const RESTART_EXIT_CODE = 75
+
+/** Whether a service manager that restarts on a failed exit started this process. */
+export function supervised(env: NodeJS.ProcessEnv, platform: NodeJS.Platform): boolean {
+  if (platform === 'linux') return env.INVOCATION_ID !== undefined && env.INVOCATION_ID !== ''
+  if (platform === 'darwin') return env.XPC_SERVICE_NAME !== undefined && env.XPC_SERVICE_NAME !== '' && env.XPC_SERVICE_NAME !== '0'
+  return false
+}
+
 export const PREDECESSOR_VARIABLE = 'THEOCLAW_RESTART_AFTER_PID'
 
 /** Start the successor, detached, with `startEnv`. Returns false when it cannot be spawned. */

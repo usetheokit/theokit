@@ -13,8 +13,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- A changed restart-required setting (`THEOCLAW_PORT`, a token, a channel or a policy) in the configuration file of a running instance now makes TheoClaw restart itself onto the new file, through its normal graceful shutdown, instead of only reporting it (B-716, OC-94). The successor waits for the old process to exit first.
-
+- A changed start-only setting (`THEOCLAW_PORT`, a token, a channel or a policy) in the configuration file of a running instance now restarts TheoClaw onto the new file instead of only being reported (B-716, OC-94). Under systemd or launchd the process exits 75 and the manager restarts it; otherwise it starts its own successor, which waits for the old process to exit. A new file that would be refused at the start (a bad port or token) is refused whole and the instance keeps running. Offline-tested; the live check `tests/live/config-restart.live.test.ts` has not been run.
 - Memory across surfaces (OC-56, Hermes row 3): every chat, WebChat, `/control`, TUI and desktop turn is stored in `<workspace>/.theoclaw/memory`, the `/control` agent has a `session_search` tool over all of it, and after each turn a forked reviewer with `save_memory` keeps durable facts (`THEOCLAW_MEMORY=off` and incognito disable it). Offline-tested; the live check `tests/live/memory.live.test.ts` has not been run yet.
 
 - Chat: `/help` (and `/commands`) lists the commands a chat answers without the model, and a typing indicator shows on the platform while a turn or `/goal` runs (OC-105, OC-106).
@@ -57,7 +56,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
   Windows (B-692, OC-32). On macOS it writes a launchd agent to `~/Library/LaunchAgents` and loads it
   into `gui/<uid>`; on Windows it registers a Task Scheduler task started at logon, with no execution
   time limit. A load or registration the platform refuses leaves no definition behind. `theoclaw
-update` restarts the macOS agent with `launchctl kickstart -k`. The process entry now accepts
+  update` restarts the macOS agent with `launchctl kickstart -k`. The process entry now accepts
   `--config <path>` and `--profile <name>` (a scheduled task carries no environment), so
   `theoclaw start <other argument>` exits 2 where it used to ignore the argument. The real-model
   daemon test runs on `macos-latest` and `windows-latest` through `theoclaw-daemon.yml`.
@@ -184,13 +183,13 @@ update` restarts the macOS agent with `launchctl kickstart -k`. The process entr
   - Installing from the npm registry (B-691): `npm i -g theoclaw` installs the published package, whose
     `workspace:*` ranges `pnpm publish` resolves to real versions. `theoclaw update` still needs a checkout.
 - Importing a Claude Code or Hermes setup (B-375, OC-35): `node dist/import-main.js --from
-claude-code|hermes` (`pnpm --filter theoclaw run import`, with `--source`, `--project` and `--home`)
+  claude-code|hermes` (`pnpm --filter theoclaw run import`, with `--source`, `--project` and `--home`)
   copies the instructions, MCP servers, skills and memories of the setup into
   `THEOCLAW_STATE_DIR/import` at 0700/0600, after the framework's `loadMcpJson` reads the staged MCP
   file back; a server it would ignore refuses the whole import and a previous import is left as it
   was. It prints a count per kind and a `dropped <path>: <reason>` line for every entry it did not
   carry, and no MCP `env` or `headers` value. The next start writes `theoclaw: imported <kind> setup:
-...` after its instance line and hands the import to the `/control` agent only: instructions and
+  ...` after its instance line and hands the import to the `/control` agent only: instructions and
   read-only memory in its system prompt, the skills inline with a `skill_read` tool, and the MCP
   servers only with `THEOCLAW_IMPORTED_MCP=on` (any other value stops the start). Channel, session
   and WebChat agents, and the `run_code` and `delegate_all` workers, receive nothing from it. With
@@ -292,7 +291,7 @@ claude-code|hermes` (`pnpm --filter theoclaw run import`, with `--source`, `--pr
   first line, `theoclaw: instance started, no profile`.
 - Exact dependency versions and an audit of what TheoClaw installs (B-406). Every entry of
   `apps/theoclaw/package.json` is now an exact version or `workspace:*`, and `pnpm --filter theoclaw
-run check:versions` refuses any other form (`^`, `~`, `>=`, `*`, a tag, `workspace:^`, `file:`,
+  run check:versions` refuses any other form (`^`, `~`, `>=`, `*`, a tag, `workspace:^`, `file:`,
   `link:`, `npm:`, git), printing one `<section> <name> <specifier>` line per non-exact entry and
   exiting 1. `pnpm --filter theoclaw run audit` runs one workspace `pnpm audit --json` and exits 1
   on any advisory whose path starts at TheoClaw, dev tree included, or at a production dependency
@@ -359,7 +358,7 @@ run check:versions` refuses any other form (`^`, `~`, `>=`, `*`, a tag, `workspa
   `THEOCLAW_HOST` names another address; a non-loopback address also needs
   `THEOCLAW_PUBLIC_BIND=yes`, and the generic `HOST` is never read. A busy port or an address the
   host does not have is refused by name, and the listening line is read from the socket. `GET
-/health` answers `{"status":"ok"}`. With `THEOCLAW_CONTROL_TOKEN` set (32 characters or more),
+  /health` answers `{"status":"ok"}`. With `THEOCLAW_CONTROL_TOKEN` set (32 characters or more),
   `/control` accepts a WebSocket carrying `Authorization: Bearer <token>` and runs one agent turn
   per `{"type":"chat","message":"..."}` frame, streaming each event as `{"type":"event"}` and
   ending with exactly one `{"type":"done"}` or `{"type":"error","code":"turn_failed"}`. The start
