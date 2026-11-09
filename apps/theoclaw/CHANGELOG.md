@@ -13,6 +13,8 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Memory across surfaces (OC-56, Hermes row 3): every chat, WebChat, `/control`, TUI and desktop turn is stored in `<workspace>/.theoclaw/memory`, the `/control` agent has a `session_search` tool over all of it, and after each turn a forked reviewer with `save_memory` keeps durable facts (`THEOCLAW_MEMORY=off` and incognito disable it). Offline-tested; the live check `tests/live/memory.live.test.ts` has not been run yet.
+
 - Chat: `/help` (and `/commands`) lists the commands a chat answers without the model, and a typing indicator shows on the platform while a turn or `/goal` runs (OC-105, OC-106).
 
 - WebChat backs each chat with a session agent keyed on the chat id (B-703): a follow-up message from the same page is answered by an agent that has the earlier ones in its history, and a post without a valid chat id is refused 400 `chat_id_invalid`.

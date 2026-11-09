@@ -391,7 +391,8 @@
   },
   {
     "id": "OC-56",
-    "status": "open"
+    "status": "open",
+    "note": "not shipped, no live check run: wired and covered by offline tests (tests/memory-wiring.test.ts): chat and WebChat turns and /control, TUI and desktop turns are stored, session_search is on the /control agent, new sessions of every surface open with the kept facts in their prompt, and a forked reviewer with save_memory runs after each turn; the real-model check tests/live/memory.live.test.ts is written but has not been run because this sandbox has no model credentials"
   },
   {
     "id": "OC-57",
@@ -789,7 +790,8 @@
   },
   {
     "id": "H-3",
-    "status": "open"
+    "status": "open",
+    "note": "not shipped, no live check run: wired and covered by offline tests (tests/memory-wiring.test.ts): chat and WebChat turns and /control, TUI and desktop turns are stored, session_search is on the /control agent, new sessions of every surface open with the kept facts in their prompt, and a forked reviewer with save_memory runs after each turn; the real-model check tests/live/memory.live.test.ts is written but has not been run because this sandbox has no model credentials"
   },
   {
     "id": "H-4",
