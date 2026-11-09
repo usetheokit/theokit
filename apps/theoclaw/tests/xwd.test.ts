@@ -2,7 +2,7 @@ import { inflateSync } from 'node:zlib'
 
 import { describe, expect, it } from 'vitest'
 
-import { readXwdHeader, XwdFormatError, xwdToPng } from '../src/tools/xwd.js'
+import { readXwdHeader, XwdFormatError, XwdNotWrittenError, xwdToPng } from '../src/tools/xwd.js'
 import { buildXwd } from './xwd-fixtures.js'
 
 const FILE = '/tmp/x/Xvfb_screen0'
@@ -88,6 +88,18 @@ describe('xwd', () => {
   it('accepts the largest header_size the buffer holds and a palette of 256 colours', () => {
     const bytes = buildXwd({ width: 2, height: 2, ncolors: 256, headerSize: 100 })
     expect(readXwdHeader(bytes, FILE).dataOffset).toBe(100 + 256 * 12)
+  })
+
+  it('decodes a header_size of 160 (a window name after the fixed header)', () => {
+    const bytes = buildXwd({ width: 2, height: 1, headerSize: 160, pixels: [[1, 2, 3], [4, 5, 6]] })
+    expect(readXwdHeader(bytes, FILE).dataOffset).toBe(160)
+    expect(pngPixels(xwdToPng(bytes, FILE).png).rows).toEqual([[1, 2, 3, 4, 5, 6]])
+  })
+
+  it('says a file shorter than its header is not written yet', () => {
+    const bytes = buildXwd({ width: 2, height: 1, headerSize: 160 }).subarray(0, 120)
+    expect(() => readXwdHeader(bytes, FILE)).toThrow(XwdNotWrittenError)
+    expect(() => readXwdHeader(bytes, FILE)).toThrow('not written yet')
   })
 
   it('refuses bytes too short to hold a header', () => {

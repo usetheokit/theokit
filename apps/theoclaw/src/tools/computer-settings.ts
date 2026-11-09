@@ -4,12 +4,11 @@ import { delimiter, join } from 'node:path'
 import type { SandboxMode } from '@theokit/agents/sandbox'
 
 import { TheoClawConfigError } from '../control-plane/errors.js'
-import { readXwdHeader, XwdFormatError } from './xwd.js'
+import { MAX_HEADER_BYTES, readXwdHeader, XwdFormatError } from './xwd.js'
 
 type Env = Readonly<Record<string, string | undefined>>
 
 const VARIABLE = 'THEOCLAW_COMPUTER'
-const HEADER_BYTES = 100
 
 /** What the `computer` tool runs against, resolved and checked once at start (B-676 D2, D3). */
 export interface ComputerSettings {
@@ -55,8 +54,8 @@ function readFramebufferHead(path: string): Buffer {
   try {
     descriptor = openSync(path, constants.O_RDONLY | constants.O_NONBLOCK)
     if (!fstatSync(descriptor).isFile()) throw refusal(`needs THEOCLAW_COMPUTER_FRAMEBUFFER to name a regular file; ${path} is not one`)
-    const head = Buffer.alloc(HEADER_BYTES)
-    const read = readSync(descriptor, head, 0, HEADER_BYTES, 0)
+    const head = Buffer.alloc(MAX_HEADER_BYTES)
+    const read = readSync(descriptor, head, 0, MAX_HEADER_BYTES, 0)
     return head.subarray(0, read)
   } catch (error) {
     if (error instanceof TheoClawConfigError) throw error

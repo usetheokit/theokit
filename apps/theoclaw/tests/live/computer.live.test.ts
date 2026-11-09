@@ -131,7 +131,7 @@ describe.skipIf(!LIVE)('the computer tool against a real model', () => {
     cleanups.push(() => rmSync(framebufferDirectory, { recursive: true, force: true }))
     const display = await startXvfb(framebufferDirectory)
     const profile = mkdtempSync(join(tmpdir(), 'theoclaw-computer-profile-'))
-    cleanups.push(() => rmSync(profile, { recursive: true, force: true }))
+    cleanups.push(() => rmSync(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }))
     // This host's Chromium needs `--no-sandbox` (no usable user-namespace sandbox) and the shared libraries in LD_LIBRARY_PATH: harness details, never a TheoClaw setting (plan Q2).
     const chromium = spawn(
       chromiumBinary(),
