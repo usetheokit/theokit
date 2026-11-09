@@ -87,6 +87,9 @@ async function callAndReadPid(args: string[], extra: { timeoutMs?: number } = {}
   return { result, pid: Number(readFileSync(pidFile, 'utf8')) }
 }
 
+// Long enough for a child to start on a loaded machine, short enough to fit the 10s deadline.
+const PROMPT_TIMEOUT_MS = 3_000
+
 // Above the 10s deadline in `outcome`, so a hang fails with its own message, not the runner's.
 const LIMIT = { timeout: 25_000 }
 
@@ -118,8 +121,10 @@ describe('an ACP tool call releases the agent process it spawned', LIMIT, () => 
   })
 
   it('test_an_agent_that_never_answers_rejects_with_the_timeout_error', async () => {
+    // `timeoutMs` covers every request of the turn, `initialize` included, so it is also the time
+    // the child has to start. 300ms was too little for a loaded machine: initialize timed out first.
     const { result, pid } = await callAndReadPid(['--silent-on=session/prompt'], {
-      timeoutMs: 300,
+      timeoutMs: PROMPT_TIMEOUT_MS,
     })
 
     expect(result).not.toBe(HANG)
