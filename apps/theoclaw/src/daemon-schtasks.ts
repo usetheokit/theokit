@@ -1,4 +1,4 @@
-import { rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -123,15 +123,20 @@ export const schtasksBackend: DaemonBackend = {
     const { label } = target
     const xml = taskXml({ ...target, nodePath: io.nodePath, entryPath: io.entry, user })
     // The scheduler reads UTF-16 with a byte order mark.
-    const path = join(tmpdir(), `theoclaw-task-${process.pid}.xml`)
+    // A directory only this user can enter, and an exclusive create inside it, so nobody can plant the path.
+    const dir = mkdtempSync(join(tmpdir(), 'theoclaw-task-'))
+    const path = join(dir, 'task.xml')
     try {
-      writeFileSync(path, Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(xml, 'utf16le')]))
+      writeFileSync(path, Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(xml, 'utf16le')]), {
+        flag: 'wx',
+        mode: 0o600,
+      })
       // A running task keeps its old definition, so a reinstall ends it first; a missing one is no error.
       await schtasks(runner, '/End', '/TN', label)
       const created = await schtasks(runner, '/Create', '/TN', label, '/XML', path, '/F')
       if (created.code !== 0) return await fail(io, runner, label, '/Create', created)
     } finally {
-      rmSync(path, { force: true })
+      rmSync(dir, { recursive: true, force: true })
     }
     const started = await schtasks(runner, '/Run', '/TN', label)
     if (started.code !== 0) return fail(io, runner, label, '/Run', started)
