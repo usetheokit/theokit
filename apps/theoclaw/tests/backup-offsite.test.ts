@@ -113,3 +113,18 @@ it.each([false, true])('preserves deleted-row gaps and references to surviving r
     } finally { check.close() }
   } finally { if (live) db.close(); lock?.release() }
 })
+
+it.each(['state/../../escaped', '../escaped', '/tmp/theoclaw-escaped', 'state\\..\\escaped', 'state/a/../../../escaped', 'C:\\escaped'])(
+  'refuses a downloaded manifest entry %j before writing outside the directory',
+  async (path) => {
+    const root = scratch(), dir = join(root, 'download')
+    const manifest = { version: 1, files: [{ path, sha256: '0'.repeat(64), size: 1 }] }
+    const fetcher = vi.fn(async (url: URL) =>
+      new Response(url.pathname.endsWith('/manifest.json') ? JSON.stringify(manifest) : 'x', { status: 200 }))
+    vi.stubGlobal('fetch', fetcher)
+    await expect(downloadBackup(dir, 'https://backup.example/snapshot')).rejects.toThrow('leaves state/ and workspace/')
+    expect(fetcher).toHaveBeenCalledTimes(1) // only the manifest was fetched
+    expect(existsSync(dir)).toBe(false)
+    expect(existsSync(join(root, 'escaped'))).toBe(false)
+  },
+)
