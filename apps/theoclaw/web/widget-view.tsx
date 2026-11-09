@@ -1,4 +1,4 @@
-import type { Widget } from '../src/canvas/widget.js'
+import type { Widget } from '../src/canvas/widget-schema.js'
 
 /** One widget, drawn as plain elements: every string is a React text child, so none is ever parsed as HTML. */
 export function WidgetView({ widget }: { readonly widget: Widget }) {
