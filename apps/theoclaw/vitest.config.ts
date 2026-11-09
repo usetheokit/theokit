@@ -14,6 +14,9 @@ export default defineConfig({
     // Related runs also start real TUI and control-client subprocesses with short deadlines.
     // Bound concurrency so those subprocesses get CPU time while sibling tests load the SDK.
     maxWorkers: 2,
+    // Its own group: vitest refuses two projects with different maxWorkers in the same group, and the root
+    // config's cap follows the runner's CPU count (8 on a 12-core machine).
+    sequence: { groupOrder: 1 },
     // Named, so `--project theoclaw` selects it and the root runner reports it by name. A sibling's
     // config carries the same note and the reason it gives is measured: copying one without the
     // name produced a project that was in the list and matched no filter.
