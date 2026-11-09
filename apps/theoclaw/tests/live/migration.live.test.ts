@@ -154,7 +154,7 @@ describe.skipIf(!LIVE)('an imported setup against a real model', () => {
     expect(imported.status, imported.stderr).toBe(0)
     expect(imported.stdout).toContain('1 MCP servers')
 
-    const instance = await startInstance({ profile: 'migration', home, cwd, env: { ...env, THEOCLAW_IMPORTED_MCP: 'on', THEOCLAW_WORKSPACE: cwd } })
+    const instance = await startInstance({ profile: 'migration', home, cwd, env: { ...env, THEOCLAW_IMPORTED_MCP: 'on' } })
     children.push(instance)
     // Named with the output, so a start that stops says why.
     await waitForStartLine(instance, 'migration').catch((error: unknown) => {
