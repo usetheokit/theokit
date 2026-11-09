@@ -3,7 +3,7 @@ import { ChatComposer } from '@theokit/ui/chat-composer'
 import { ChatThread } from '@theokit/ui/chat-thread'
 import { useState } from 'react'
 
-import { parseWidget } from '../src/canvas/widget.js'
+import { parseWidget } from '../src/canvas/widget-schema.js'
 import { WEBCHAT_API, webchatAgentOptions } from './agent-options.js'
 import { WidgetView } from './widget-view.js'
 import { readToken, writeToken } from './token-store.js'
@@ -21,7 +21,9 @@ function textOf(message: ThreadMessage): string {
 /** The widgets the agent's `show_widget` calls produced in a message: tool parts whose output is a valid widget. */
 function widgetsOf(message: ThreadMessage) {
   return message.parts.flatMap((part) => {
-    const widget = part.type.startsWith('tool') ? parseWidget((part as { output?: unknown }).output) : undefined
+    const widget = part.type.startsWith('tool')
+      ? parseWidget((part as { output?: unknown }).output)
+      : undefined
     return widget === undefined ? [] : [widget]
   })
 }
@@ -39,7 +41,12 @@ function TokenForm({ onToken }: { readonly onToken: (token: string) => void }) {
     <form onSubmit={submit}>
       <label>
         WebChat token
-        <input type="password" autoComplete="off" value={value} onChange={(event) => setValue(event.target.value)} />
+        <input
+          type="password"
+          autoComplete="off"
+          value={value}
+          onChange={(event) => setValue(event.target.value)}
+        />
       </label>
       <button type="submit">Open chat</button>
     </form>

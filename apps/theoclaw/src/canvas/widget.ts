@@ -4,22 +4,9 @@ import { Tool, ToolError } from '@theokit/sdk'
 import type { CustomTool } from '@theokit/sdk'
 import { z } from 'zod'
 
-const MAX_ITEMS = 50
-const text = z.string().max(500)
-
-export const widgetSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('text'), title: text.optional(), body: z.string().min(1).max(5000) }),
-  z.object({ kind: z.literal('list'), title: text.optional(), items: z.array(text).min(1).max(MAX_ITEMS) }),
-  z.object({
-    kind: z.literal('table'),
-    title: text.optional(),
-    columns: z.array(text).min(1).max(20),
-    rows: z.array(z.array(text).max(20)).max(MAX_ITEMS),
-  }),
-  z.object({ kind: z.literal('metric'), title: text.optional(), label: text, value: text }),
-])
-
-export type Widget = z.infer<typeof widgetSchema>
+import { MAX_ITEMS, text, widgetSchema } from './widget-schema.js'
+export { parseWidget, widgetSchema } from './widget-schema.js'
+export type { Widget } from './widget-schema.js'
 
 export const WIDGET_TOOL_NAME = 'show_widget'
 
@@ -39,9 +26,15 @@ const inputSchema = z.object({
 export function widgetTool(): CustomTool {
   const handler = (input: z.infer<typeof inputSchema>): string => {
     const parsed = widgetSchema.safeParse(input)
-    if (!parsed.success) throw new ToolError(`show_widget: invalid ${input.kind} widget: ${parsed.error.issues[0]?.message ?? 'bad input'}`)
+    if (!parsed.success)
+      throw new ToolError(
+        `show_widget: invalid ${input.kind} widget: ${parsed.error.issues[0]?.message ?? 'bad input'}`,
+      )
     const widget = parsed.data
-    if (widget.kind === 'table' && widget.rows.some((row) => row.length !== widget.columns.length)) {
+    if (
+      widget.kind === 'table' &&
+      widget.rows.some((row) => row.length !== widget.columns.length)
+    ) {
       throw new ToolError('show_widget: every table row needs one cell per column')
     }
     return JSON.stringify({ widget })
@@ -53,19 +46,4 @@ export function widgetTool(): CustomTool {
     inputSchema,
     handler,
   }) as unknown as CustomTool
-}
-
-/** The widget a tool result holds, or `undefined` when it is not a valid one. */
-export function parseWidget(output: unknown): Widget | undefined {
-  let value: unknown = output
-  if (typeof output === 'string') {
-    try {
-      value = JSON.parse(output)
-    } catch {
-      return undefined
-    }
-  }
-  if (value === null || typeof value !== 'object' || !('widget' in value)) return undefined
-  const parsed = widgetSchema.safeParse((value as { widget: unknown }).widget)
-  return parsed.success ? parsed.data : undefined
 }
