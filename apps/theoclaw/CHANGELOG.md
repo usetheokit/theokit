@@ -13,6 +13,8 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Memory building blocks (OC-56, Hermes row 3): a store shared by every surface, a `session_search` tool over it, a `save_memory` tool and a per-turn background reviewer whose saved facts open the next session. Offline-tested only; not yet wired into the session agents, and no real-model check has run.
+
 - Chat: `/help` (and `/commands`) lists the commands a chat answers without the model, and a typing indicator shows on the platform while a turn or `/goal` runs (OC-105, OC-106).
 
 - WebChat backs each chat with a session agent keyed on the chat id (B-703): a follow-up message from the same page is answered by an agent that has the earlier ones in its history, and a post without a valid chat id is refused 400 `chat_id_invalid`.

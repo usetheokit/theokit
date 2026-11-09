@@ -391,7 +391,8 @@
   },
   {
     "id": "OC-56",
-    "status": "open"
+    "status": "open",
+    "note": "not shipped, no live check run: the cross-surface store, session_search, save_memory and the per-turn reviewer exist with offline tests (src/memory), but they are not wired into the session agents and no real-model end-to-end check has run"
   },
   {
     "id": "OC-57",
@@ -789,7 +790,8 @@
   },
   {
     "id": "H-3",
-    "status": "open"
+    "status": "open",
+    "note": "not shipped, no live check run: the cross-surface store, session_search, save_memory and the per-turn reviewer exist with offline tests (src/memory), but they are not wired into the session agents and no real-model end-to-end check has run"
   },
   {
     "id": "H-4",
