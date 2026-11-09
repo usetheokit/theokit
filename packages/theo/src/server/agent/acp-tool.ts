@@ -95,6 +95,15 @@ export interface AcpToolConfig {
   args?: string[]
   /** Working directory for the spawned agent. */
   cwd?: string
+  /**
+   * The spawned agent's whole environment: when given, the agent sees exactly these variables and
+   * none of the parent's (so channel tokens stay out of it). Omitted, it inherits `process.env`.
+   */
+  env?: Record<string, string | undefined>
+  /**
+   * Receives what the agent writes to its stderr. Omitted, the agent's stderr is the parent's.
+   */
+  onStderr?: (chunk: string) => void
   /** Tool name the model calls. */
   name: string
   /** Tool description surfaced to the model. */
@@ -118,7 +127,7 @@ export interface AcpToolConfig {
 export const DEFAULT_ACP_TIMEOUT_MS = 600_000
 
 function defaultTransport(config: AcpToolConfig): AcpToolTransport {
-  return new NodeAcpTransport(config.command, config.args, config.cwd)
+  return new NodeAcpTransport(config.command, config.args, config.cwd, config.env, config.onStderr)
 }
 
 /** The ACP protocol version this client speaks. */
