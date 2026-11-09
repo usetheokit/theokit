@@ -226,23 +226,45 @@ async function runTurn(
   return rpcError(id, INTERNAL_ERROR, 'the agent turn failed')
 }
 
+async function handle(
+  options: A2AJsonRpcHandlerOptions,
+  request: Request,
+  deadline: AbortSignal,
+): Promise<Response> {
+  if (request.method !== 'POST') {
+    return new Response(null, { status: 405, headers: { allow: 'POST' } })
+  }
+  if (!options.authorize(request.headers.get('authorization') ?? undefined)) {
+    return new Response(null, { status: 401, headers: { 'www-authenticate': 'Bearer' } })
+  }
+  const read = await readBoundedBody(request, options.maxBodyBytes, deadline)
+  if (!read.ok) return new Response(null, { status: read.status })
+  const parsed = parseRequest(read.bytes)
+  if (!parsed.ok) return parsed.response
+  return runTurn(options, parsed.id, parsed.text, deadline)
+}
+
 /** Build the `message/send` handler. Each call keeps its own state; nothing is shared. */
 export function createA2AJsonRpcHandler(
   options: A2AJsonRpcHandlerOptions,
 ): (request: Request) => Promise<Response> {
   return async (request: Request): Promise<Response> => {
     // Created on entry so one bound covers the body read and the turn.
-    const deadline = AbortSignal.any([request.signal, AbortSignal.timeout(options.timeoutMs)])
-    if (request.method !== 'POST') {
-      return new Response(null, { status: 405, headers: { allow: 'POST' } })
+    // A plain controller and timer, not AbortSignal.any + AbortSignal.timeout: on Node 22.12 that
+    // composite signal can be collected before its unref'd timer fires, so it never aborted.
+    const controller = new AbortController()
+    const abort = () => {
+      controller.abort()
     }
-    if (!options.authorize(request.headers.get('authorization') ?? undefined)) {
-      return new Response(null, { status: 401, headers: { 'www-authenticate': 'Bearer' } })
+    const timer = setTimeout(abort, options.timeoutMs)
+    if (request.signal.aborted) abort()
+    else request.signal.addEventListener('abort', abort, { once: true })
+    const deadline = controller.signal
+    try {
+      return await handle(options, request, deadline)
+    } finally {
+      clearTimeout(timer)
+      request.signal.removeEventListener('abort', abort)
     }
-    const read = await readBoundedBody(request, options.maxBodyBytes, deadline)
-    if (!read.ok) return new Response(null, { status: read.status })
-    const parsed = parseRequest(read.bytes)
-    if (!parsed.ok) return parsed.response
-    return runTurn(options, parsed.id, parsed.text, deadline)
   }
 }
