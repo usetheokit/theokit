@@ -567,8 +567,8 @@ importers:
         specifier: 5.14.0
         version: 5.14.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)
       '@theokit/sdk-tools':
-        specifier: ^0.27.1
-        version: 0.27.1(@theokit/sdk@5.14.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0))(vitest@4.1.12)(zod@4.6.7)
+        specifier: ^0.29.0
+        version: 0.29.0(@theokit/sdk@5.14.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0))(vitest@4.1.12)(zod@4.6.7)
       react:
         specifier: '>=18'
         version: 19.2.7
@@ -3389,16 +3389,22 @@ packages:
     peerDependencies:
       '@theokit/sdk': 5.14.0
 
-  '@theokit/sdk-tools@0.27.1':
-    resolution: {integrity: sha512-qH70wYpUdZKHdW32/q93x3zG8M0egC+ar2MNqpUlw4sXSbb11Fv6UVcT19k4EVass76T7r9adVvEjtISnVBxcg==}
+  '@theokit/sdk-tools@0.29.0':
+    resolution: {integrity: sha512-O96htwfh40QlQgEAcWbSMqdJ9555XjpqWqopoT3sGQ7B4QW58v7sQw0a0WgILeJUlR8EXxmMDK8RP7LBRNFMuQ==}
     engines: {node: '>=22.12.0'}
     peerDependencies:
       '@theokit/sdk': 5.14.0
-      simple-git: ^3.0.0
+      mammoth: ^1.13.0
+      simple-git: ^4.0.1
+      unpdf: ^2.1.0
       vitest: '>=2.0.0'
       zod: ^4.6.6
     peerDependenciesMeta:
+      mammoth:
+        optional: true
       simple-git:
+        optional: true
+      unpdf:
         optional: true
       vitest:
         optional: true
@@ -10884,7 +10890,7 @@ snapshots:
     optionalDependencies:
       node-pty: 1.1.0
 
-  '@theokit/sdk-tools@0.27.1(@theokit/sdk@5.14.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0))(vitest@4.1.12)(zod@4.6.7)':
+  '@theokit/sdk-tools@0.29.0(@theokit/sdk@5.14.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0))(vitest@4.1.12)(zod@4.6.7)':
     dependencies:
       '@theokit/sdk': 5.14.0(@lancedb/lancedb@0.30.0(apache-arrow@18.1.0))(@opentelemetry/api@1.10.0)(@types/ws@8.18.1)(better-sqlite3@12.11.1)(proper-lockfile@4.1.2)(sqlite-vec@0.1.9)(ws@8.22.0)
       zod: 4.6.7
