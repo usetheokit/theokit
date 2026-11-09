@@ -100,11 +100,17 @@ jobs:
   theoclaw-container:
     if: github.event_name == 'workflow_dispatch' && inputs.suite == 'theoclaw-container'
     uses: ./.github/workflows/theoclaw-container.yml
-    secrets: inherit
+    # Only the one secret theoclaw-container.yml declares, so a secret added to the repository later is not
+    # handed to it by default.
+    secrets:
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
 
   # B-692: TheoClaw's login service on macOS and Windows, reached by `gh workflow run live-model.yml
   # --ref <ref> -f suite=theoclaw-daemon`. A dispatch reads the called workflow at the dispatched ref.
   theoclaw-daemon:
     if: github.event_name == 'workflow_dispatch' && inputs.suite == 'theoclaw-daemon'
     uses: ./.github/workflows/theoclaw-daemon.yml
-    secrets: inherit
+    # Only the one secret theoclaw-daemon.yml declares, so a secret added to the repository later is not
+    # handed to it by default.
+    secrets:
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
