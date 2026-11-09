@@ -1,5 +1,5 @@
 import { DatabaseSync } from 'node:sqlite'
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, existsSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, existsSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -67,6 +67,21 @@ it('rejects a malicious downloaded manifest and removes the partial download', a
   expect(existsSync(dir)).toBe(false)
   expect(existsSync(join(root, 'escape'))).toBe(false)
 })
+
+it.each(['../escape', 'state/../../escape', '/tmp/theoclaw-escape', 'state\\..\\escape', 'C:\\escape', 'state//x', 'other/file'])(
+  'refuses the manifest path %s before fetching or writing anything',
+  async (path) => {
+    const root = scratch(), dir = join(root, 'inner', 'download')
+    mkdirSync(join(root, 'inner'))
+    const fetcher = vi.fn(async () => new Response(JSON.stringify({ version: 1, files: [{ path, sha256: '0'.repeat(64), size: 1 }] })))
+    vi.stubGlobal('fetch', fetcher)
+    await expect(downloadBackup(dir, 'https://backup.example/new')).rejects.toThrow('leaves state/')
+    expect(fetcher).toHaveBeenCalledTimes(1)
+    expect(existsSync(dir)).toBe(false)
+    expect(readdirSync(join(root, 'inner'))).toEqual([])
+    expect(readdirSync(root)).toEqual(['inner'])
+  },
+)
 
 it('removes downloaded data whose hash does not match the manifest', async () => {
   const root = scratch(), dir = join(root, 'download')
