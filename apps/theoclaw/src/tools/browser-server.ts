@@ -30,6 +30,12 @@ const INSTALL_HINT = 'run `pnpm --filter theoclaw run browser:install`'
  * levels under the app, so one relative path serves the tests and the built process.
  */
 const PROXY_PATH = fileURLToPath(new URL('../../tools/browser-proxy.mjs', import.meta.url))
+/**
+ * The server's browser config (`tools/browser-config.json`). `--browser chromium` would select the
+ * `chrome-for-testing` channel, the full Chromium build, while `browser:install` and the live job
+ * install `chromium-headless-shell`; the file names that build's channel instead (issue #1417).
+ */
+const CONFIG_PATH = fileURLToPath(new URL('../../tools/browser-config.json', import.meta.url))
 /** The directory names Playwright gives a Chromium build: the full browser or the headless shell. */
 const CHROMIUM_BUILD = /^chromium(_headless_shell)?-\d+$/
 
@@ -123,6 +129,6 @@ export function browserServer(settings: BrowserSettings): McpServerConfig {
   return {
     type: 'stdio',
     command: process.execPath,
-    args: [PROXY_PATH, settings.cliPath, '--headless', '--isolated', '--browser', 'chromium'],
+    args: [PROXY_PATH, settings.cliPath, '--headless', '--isolated', '--config', CONFIG_PATH],
   }
 }
