@@ -421,6 +421,65 @@ function ceilingRoundFactory(
   return (m, s) => factory(m, s, { disableTools: true })
 }
 
+function resolveBudgetAndName(config: RunReflectiveLoopConfig): {
+  budget: number
+  agentName: string
+} {
+  return {
+    budget: config.budget ?? Number.POSITIVE_INFINITY,
+    agentName: config.agentName ?? config.loop.name,
+  }
+}
+
+function emptyDelegationResult(): DelegationResult {
+  return {
+    response: '',
+    toolCalls: [],
+    cost: 0,
+    tokens: 0,
+    tokensInput: 0,
+    tokensOutput: 0,
+    reasoningTokens: 0,
+    cacheReadTokens: 0,
+    cacheWriteTokens: 0,
+    rounds: 0,
+  }
+}
+
+function throwIfRoundFailed(
+  acc: DelegationResult,
+  r: RoundResult,
+  budget: number,
+  agentName: string,
+): void {
+  if (r.finishReason === 'error') throw new DelegationError(agentName, r.errorMessage)
+  if (Number.isFinite(budget) && acc.cost > budget) {
+    throw new DelegationBudgetExceededError(agentName, acc.cost, budget)
+  }
+}
+
+interface ProgressTracker {
+  prevSig: string | undefined // prior round's progress signature
+  stuck: number // consecutive no-progress rounds
+}
+
+/**
+ * V4-D no_progress: only on would-continue rounds (EC-1: stop/error/length/empty already
+ * terminate with their own reason), evaluated BEFORE the ceiling (EC-4: the earlier signal wins).
+ * Require ≥1 tool call: a TOOL_CALLS round with an empty tool-call set (reachable only via the
+ * dormant deriveFinishReason path 2) has an empty signature; without this guard two such rounds
+ * would collide ('' === '') into a false no_progress (theokit#53 review). An empty round made no
+ * tool progress to compare — skip it (don't accumulate or reset).
+ */
+function isNoProgress(p: ProgressTracker, r: RoundResult): boolean {
+  if (r.finishReason !== TOOL_CALLS || r.toolCalls.length === 0) return false
+  const sig = roundSignature(r.toolCalls)
+  p.stuck = sig === p.prevSig ? p.stuck + 1 : 0
+  if (p.stuck >= NO_PROGRESS_THRESHOLD) return true
+  p.prevSig = sig
+  return false
+}
+
 /**
  * Drive the reflective loop to a terminal {@link DelegationResult}.
  *
@@ -435,33 +494,15 @@ export async function* runReflectiveLoopStream(
   sessionId: string,
   config: RunReflectiveLoopConfig,
 ): AsyncGenerator<StreamEvent, DelegationResult> {
-  const {
-    loop,
-    reflection,
-    budget = Number.POSITIVE_INFINITY,
-    signal,
-    agentName = loop.name,
-    retry,
-  } = config
-  const acc: DelegationResult = {
-    response: '',
-    toolCalls: [],
-    cost: 0,
-    tokens: 0,
-    tokensInput: 0,
-    tokensOutput: 0,
-    reasoningTokens: 0,
-    cacheReadTokens: 0,
-    cacheWriteTokens: 0,
-    rounds: 0,
-  }
+  const { loop, reflection, signal, retry } = config
+  const { budget, agentName } = resolveBudgetAndName(config)
+  const acc = emptyDelegationResult()
   // V4-K: one mutable scratch bag per run, threaded to every reflect() so a stateful
   // strategy accumulates across rounds. The framework writes NOTHING into it.
   const reflectionContext: ReflectionContext = {}
   let round = 1
   let feedback: string | undefined
-  let prevSig: string | undefined // V4-D: prior round's progress signature (no_progress detection)
-  let stuck = 0 // V4-D: consecutive no-progress rounds
+  const progress: ProgressTracker = { prevSig: undefined, stuck: 0 } // V4-D: no_progress detection
 
   while (!signal?.aborted) {
     const prompt = buildPrompt(round, loop.maxIterations, message, feedback)
@@ -475,24 +516,9 @@ export async function* runReflectiveLoopStream(
     acc.toolCalls.push(...r.toolCalls)
     accumulateUsage(acc, r)
 
-    if (r.finishReason === 'error') throw new DelegationError(agentName, r.errorMessage)
-    if (Number.isFinite(budget) && acc.cost > budget) {
-      throw new DelegationBudgetExceededError(agentName, acc.cost, budget)
-    }
+    throwIfRoundFailed(acc, r, budget, agentName)
 
-    // V4-D no_progress: only on would-continue rounds (EC-1: stop/error/length/empty already
-    // terminate with their own reason), evaluated BEFORE the ceiling (EC-4: the earlier signal wins).
-    // Require ≥1 tool call: a TOOL_CALLS round with an empty tool-call set (reachable only via the
-    // dormant deriveFinishReason path 2 — done.finishReason==='tool-calls' with no tool_result) has
-    // an empty signature; without this guard two such rounds would collide ('' === '') into a false
-    // no_progress (theokit#53 review, architecture+tests LOW). An empty round made no tool progress
-    // to compare — skip it (don't accumulate or reset).
-    if (r.finishReason === TOOL_CALLS && r.toolCalls.length > 0) {
-      const sig = roundSignature(r.toolCalls)
-      stuck = sig === prevSig ? stuck + 1 : 0
-      if (stuck >= NO_PROGRESS_THRESHOLD) return finalize(acc, round, 'no_progress', loop.name)
-      prevSig = sig
-    }
+    if (isNoProgress(progress, r)) return finalize(acc, round, 'no_progress', loop.name)
 
     const outcome: LoopOutcome = {
       finishReason: r.finishReason,
