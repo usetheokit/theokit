@@ -80,7 +80,13 @@ describe('live-model.yml', () => {
   })
 
   it('hands the key only through step env and never names it in a run line', () => {
-    expect(RAW.match(/secrets\.OPENROUTER_API_KEY/g)).toHaveLength(4)
+    // 4 step envs here, plus the one secret each called TheoClaw workflow declares (#1395).
+    expect(RAW.match(/secrets\.OPENROUTER_API_KEY/g)).toHaveLength(6)
+    for (const called of ['theoclaw-container', 'theoclaw-daemon']) {
+      expect(WORKFLOW.jobs[called].secrets).toEqual({
+        OPENROUTER_API_KEY: '${{ secrets.OPENROUTER_API_KEY }}',
+      })
+    }
     const fromEnv = STEPS.filter((step) =>
       (step.env?.OPENROUTER_API_KEY ?? '').includes('secrets.OPENROUTER_API_KEY'),
     )
