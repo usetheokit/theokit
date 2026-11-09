@@ -1,3 +1,4 @@
+import type { PublishedService } from '../src/discovery/publisher.js'
 import { describe, expect, it, vi } from 'vitest'
 
 interface FakeService {
@@ -24,7 +25,7 @@ vi.mock('bonjour-service', () => ({
 
 const { createBonjourPublisher } = await import('../src/discovery/bonjour-publisher.js')
 
-const svc = (name: string) => ({ name, type: 'theoclaw', port: 40000, txt: {} })
+const svc = (name: string): PublishedService => ({ name, type: 'theoclaw', port: 40000, txt: { path: '/control' } })
 
 /** B-613: a withdrawal covers the services published before it, not one published afterwards. */
 describe('createBonjourPublisher conflict after a withdrawal (offline)', () => {

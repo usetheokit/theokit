@@ -2,8 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { parseWidget, widgetTool } from '../src/canvas/widget.js'
 
-type Handler = (input: unknown) => unknown
-const run = (input: unknown): Promise<unknown> => (widgetTool() as unknown as { handler: Handler }).handler(input)
+const run = async (input: Record<string, unknown>): Promise<unknown> => widgetTool().handler(input)
 
 describe('show_widget', () => {
   it('returns a table widget the page can parse back', async () => {

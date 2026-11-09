@@ -8,6 +8,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { resolveToolSettings } from '../src/tools/tool-settings.js'
 import { controlAgentToolOptions } from '../src/tools/tool-registry.js'
+import { handlerOf as hookOf } from './support/plugin-host.js'
 import { createExecApproval, createExecApprovalStore, execApprovalPlugin } from '../src/tools/exec-approval.js'
 
 const dir = (): string => mkdtempSync(join(tmpdir(), 'exec-approval-'))
@@ -57,10 +58,7 @@ describe('exec approval', () => {
 describe('exec approval plugin', () => {
   type Handler = (context: unknown) => Promise<unknown> | unknown
   const handlerOf = (options: Parameters<typeof execApprovalPlugin>[0]): Handler => {
-    let handler: Handler | undefined
-    execApprovalPlugin(options).register({ on: (_event: string, fn: Handler) => void (handler = fn) } as never)
-    if (handler === undefined) throw new Error('no handler')
-    return handler
+    return hookOf(execApprovalPlugin(options)) as Handler
   }
   const store = (): ReturnType<typeof createExecApprovalStore> => createExecApprovalStore(dir())
 

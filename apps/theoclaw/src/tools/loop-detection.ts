@@ -1,4 +1,6 @@
-import type { Plugin, PreToolCallContext } from '@theokit/sdk'
+import type { PreToolCallContext } from '@theokit/sdk'
+
+import type { GeneralPlugin } from './general-plugin.js'
 
 /** How many times the same call may start within the window before the next one is stopped. */
 const REPEAT_LIMIT = 3
@@ -23,7 +25,7 @@ function signature(name: string, args: unknown): string {
  * once `limit` identical calls are among the last `window`, the next one is blocked with the reason.
  * State is per plugin instance, so each agent counts its own calls (OC-80, argument churn aside).
  */
-export function loopDetectionPlugin(options: LoopDetectionOptions = {}): Plugin {
+export function loopDetectionPlugin(options: LoopDetectionOptions = {}): GeneralPlugin {
   const limit = options.limit ?? REPEAT_LIMIT
   const window = options.window ?? WINDOW
   const recent: string[] = []

@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import type { MessageEvent } from '@theokit/gateway'
-import type { AgentOptions } from '@theokit/sdk'
+import type { AgentOptions, Plugin } from '@theokit/sdk'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { createOwnerPolicyHook } from '../src/authorization/owner-policy-hook.js'
@@ -13,6 +13,7 @@ import {
   EXEC_APPROVAL_TIMEOUT_MS,
 } from '../src/channels/exec-approval-chat.js'
 import { createExecApprovalStore, execApprovalPlugin } from '../src/tools/exec-approval.js'
+import { handlerOf as hookOf } from './support/plugin-host.js'
 import { agentIdFor } from '../src/sessions/session-agents.js'
 import { composeTheoClaw } from '../src/composition.js'
 import { fakeBuilders } from './composition-fixtures.js'
@@ -33,12 +34,9 @@ function setup(env: Record<string, string> = {}) {
     store: createExecApprovalStore(mkdtempSync(join(tmpdir(), 'chat-exec-'))),
     ...chat.options,
   })
-  let handler: ((context: unknown) => Promise<unknown>) | undefined
-  void plugin.register({
-    on: (_name: string, h: (context: unknown) => Promise<unknown>) => void (handler = h),
-  } as never)
-  const exec = (sender: string, command: string): Promise<unknown> =>
-    handler!({
+  const handler = hookOf(plugin)
+  const exec = async (sender: string, command: string): Promise<unknown> =>
+    handler({
       name: 'shell_exec',
       args: { command },
       agentId: agentIdFor(`telegram-dm-${sender}`, 0),
@@ -178,12 +176,13 @@ describe('the composed app', () => {
     await telegram.deliver(messageEvent('telegram', 'hello'))
     await waitFor(() => telegram.sent.length === 1, 1000, 'the chat reply')
 
-    const plugin = opened[0]!.options.plugins?.find((candidate) => candidate.name === 'theoclaw-exec-approval')
-    expect(plugin).toBeDefined()
-    let handler: ((context: unknown) => Promise<unknown>) | undefined
-    void plugin!.register({ on: (_name: string, h: (context: unknown) => Promise<unknown>) => void (handler = h) } as never)
+    const plugins = opened[0]!.options.plugins
+    const installed = Array.isArray(plugins) ? (plugins as readonly Plugin[]) : []
+    const plugin = installed.find((candidate) => candidate.name === 'theoclaw-exec-approval')
+    if (plugin?.kind !== 'general') throw new Error('the exec-approval plugin is not installed as a general plugin')
+    const handler = hookOf(plugin)
     let result: unknown = 'pending'
-    const run = handler!({ name: 'shell_exec', args: { command: 'ls' }, agentId: opened[0]!.id, runId: 'r' }).then((value) => void (result = value))
+    const run = Promise.resolve(handler({ name: 'shell_exec', args: { command: 'ls' }, agentId: opened[0]!.id, runId: 'r' })).then((value) => void (result = value))
     await waitFor(() => telegram.sent.length === 2, 1000, 'the question in the chat')
     expect(result).toBe('pending')
     await telegram.deliver(messageEvent('telegram', '/approve'))

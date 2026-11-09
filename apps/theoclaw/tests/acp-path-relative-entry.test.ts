@@ -195,7 +195,7 @@ describe('an ACP agent named by a bare command (B-706)', () => {
     plant(join(dir, AGENT), marker)
     const command = join(relative(process.cwd(), dir), AGENT)
     const closed: unknown[] = []
-    scrubbedAgentTransport({ name: 'asker', description: 'asks', command, args: [], cwd: space.toolRoot, timeoutMs: 5_000 } as never).onClose((error) => closed.push(error))
+    scrubbedAgentTransport({ name: 'asker', description: 'asks', command, args: [], cwd: space.toolRoot, timeoutMs: 5_000, onPermissionRequest: () => ({ granted: false }) }).onClose?.((error) => closed.push(error))
     // A refused command is reported closed at once; the old code spawned `env` instead.
     expect(closed[0]).toBeInstanceOf(AcpTransportClosedError)
     expect(existsSync(marker)).toBe(false)

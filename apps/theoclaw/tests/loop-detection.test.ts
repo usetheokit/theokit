@@ -1,14 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
 import { loopDetectionPlugin } from '../src/tools/loop-detection.js'
+import { handlerOf as hookOf } from './support/plugin-host.js'
 
 type Handler = (context: unknown) => unknown
 
 function handlerOf(options?: Parameters<typeof loopDetectionPlugin>[0]): Handler {
-  let handler: Handler | undefined
-  loopDetectionPlugin(options).register({ on: (_event: string, fn: Handler) => void (handler = fn) } as never)
-  if (handler === undefined) throw new Error('no handler')
-  return handler
+  return hookOf(loopDetectionPlugin(options))
 }
 
 describe('loop detection', () => {
