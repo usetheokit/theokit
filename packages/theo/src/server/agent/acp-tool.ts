@@ -164,11 +164,15 @@ function toAcpPermissionResponse(
 
 /** The text of an `agent_message_chunk` update for `sessionId`, or `undefined` for anything else. */
 function agentTextChunk(params: unknown, sessionId: string): string | undefined {
-  if (!isRecord(params) || params.sessionId !== sessionId || !isRecord(params.update))
-    return undefined
-  const { sessionUpdate, content } = params.update
-  if (sessionUpdate !== 'agent_message_chunk' || !isRecord(content)) return undefined
-  return content.type === 'text' && typeof content.text === 'string' ? content.text : undefined
+  if (!isRecord(params) || params.sessionId !== sessionId) return undefined
+  return chunkText(params.update)
+}
+
+function chunkText(update: unknown): string | undefined {
+  if (!isRecord(update) || update.sessionUpdate !== 'agent_message_chunk') return undefined
+  const { content } = update
+  if (!isRecord(content) || content.type !== 'text') return undefined
+  return typeof content.text === 'string' ? content.text : undefined
 }
 
 /** What one turn needs besides the client: who to name in errors, and how long to wait. */
@@ -267,6 +271,59 @@ async function runTurn(turn: Turn, cwd: string, message: string): Promise<string
   return reply
 }
 
+function resolveTimeoutMs(config: AcpToolConfig): number {
+  const timeoutMs = config.timeoutMs ?? DEFAULT_ACP_TIMEOUT_MS
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    throw new RangeError(
+      `[theokit] createACPTool: timeoutMs must be a positive finite number of milliseconds (got ${String(timeoutMs)})`,
+    )
+  }
+  return timeoutMs
+}
+
+/** Forward the run's abort to the step in flight; returns the unlink. */
+function linkAbort(turn: Turn, signal: AbortSignal | undefined): () => void {
+  const onAbort = () => turn.abort?.(signal?.reason)
+  signal?.addEventListener('abort', onAbort, { once: true })
+  return () => signal?.removeEventListener('abort', onAbort)
+}
+
+/** One tool call: open the transport, run the turn, and always close the agent. */
+async function callAcpAgent(
+  config: AcpToolConfig,
+  makeTransport: NonNullable<AcpToolConfig['transportFactory']>,
+  timeoutMs: number,
+  input: Record<string, unknown>,
+  ctx?: ToolContext,
+): Promise<string> {
+  const message = typeof input.message === 'string' ? input.message : ''
+  const signal = ctx?.signal
+  // A run cancelled before the call starts gets no agent at all.
+  signal?.throwIfAborted()
+  const transport = makeTransport(config)
+  let unlink: (() => void) | undefined
+  try {
+    const turn: Turn = {
+      client: new AcpClient(transport),
+      command: config.command,
+      timeoutMs,
+      signal,
+    }
+    // A cancelled run rejects the step in flight with the abort reason; the finally below then
+    // closes the agent, so a cancellation does not wait for the request timeout.
+    unlink = linkAbort(turn, signal)
+    turn.client.onRequest('session/request_permission', async (params) =>
+      toAcpPermissionResponse(params, await config.onPermissionRequest(params)),
+    )
+    return await runTurn(turn, resolve(config.cwd ?? process.cwd()), message)
+  } finally {
+    unlink?.()
+    // The agent is a long-lived stdio server: left open, every call would leave one running.
+    // Awaited, so the call does not return while its agent is still running.
+    await transport.close?.()
+  }
+}
+
 /** Wrap a coding agent as a `CustomTool`. Fails fast if `onPermissionRequest` is missing. */
 export function createACPTool(config: AcpToolConfig): CustomTool {
   if (typeof config.onPermissionRequest !== 'function') {
@@ -274,12 +331,7 @@ export function createACPTool(config: AcpToolConfig): CustomTool {
       '[theokit] createACPTool requires onPermissionRequest (security by default — no default-allow)',
     )
   }
-  const timeoutMs = config.timeoutMs ?? DEFAULT_ACP_TIMEOUT_MS
-  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
-    throw new RangeError(
-      `[theokit] createACPTool: timeoutMs must be a positive finite number of milliseconds (got ${String(timeoutMs)})`,
-    )
-  }
+  const timeoutMs = resolveTimeoutMs(config)
   const makeTransport = config.transportFactory ?? defaultTransport
   return {
     name: config.name,
@@ -291,35 +343,8 @@ export function createACPTool(config: AcpToolConfig): CustomTool {
       },
       required: ['message'],
     },
-    handler: async (input: Record<string, unknown>, ctx?: ToolContext): Promise<string> => {
-      const message = typeof input.message === 'string' ? input.message : ''
-      const signal = ctx?.signal
-      // A run cancelled before the call starts gets no agent at all.
-      signal?.throwIfAborted()
-      const transport = makeTransport(config)
-      let onAbort: (() => void) | undefined
-      try {
-        const turn: Turn = {
-          client: new AcpClient(transport),
-          command: config.command,
-          timeoutMs,
-          signal,
-        }
-        // A cancelled run rejects the step in flight with the abort reason; the finally below then
-        // closes the agent, so a cancellation does not wait for the request timeout.
-        onAbort = () => turn.abort?.(signal?.reason)
-        signal?.addEventListener('abort', onAbort, { once: true })
-        turn.client.onRequest('session/request_permission', async (params) =>
-          toAcpPermissionResponse(params, await config.onPermissionRequest(params)),
-        )
-        return await runTurn(turn, resolve(config.cwd ?? process.cwd()), message)
-      } finally {
-        if (onAbort !== undefined) signal?.removeEventListener('abort', onAbort)
-        // The agent is a long-lived stdio server: left open, every call would leave one running.
-        // Awaited, so the call does not return while its agent is still running.
-        await transport.close?.()
-      }
-    },
+    handler: (input: Record<string, unknown>, ctx?: ToolContext): Promise<string> =>
+      callAcpAgent(config, makeTransport, timeoutMs, input, ctx),
   }
 }
 

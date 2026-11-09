@@ -240,15 +240,10 @@ export async function delegate(
   // Both ceilings are checked on the terms `AgentRunner` applies (B-409, review #67), before any
   // hook or round: `Math.min` with `NaN` is `NaN`, which every later budget check reads as unset.
   // A spent parent (`parentBudgetRemaining <= 0`) ends as budget exceeded (docs/adr/0023).
-  const budget = Math.min(
-    resolveRunBudget(opts.budget, spec.name) ?? Infinity,
-    resolveRunBudget(opts.parentBudgetRemaining, spec.name, 'parentBudgetRemaining') ?? Infinity,
-  )
+  const budget = effectiveBudget(opts, spec.name)
 
   // M12 — onDelegationStart: let the supervisor rewrite the input before the sub-agent runs.
-  const rewritten = opts.onDelegationStart
-    ? await opts.onDelegationStart({ subAgent: spec.name, input: message })
-    : message
+  const rewritten = await applyStartHook(opts, spec.name, message)
 
   const { compiled } = spec
 
@@ -282,17 +277,7 @@ export async function delegate(
   // V4-T: forward the per-run config (parity with AgentRunner.stream); model opt wins over the
   // decorator; absent fields ⇒ no key (byte-identical to the pre-V4-T `{ model }`-only override).
   // M12 — an injected factory (tests / custom transport) wins; absent ⇒ the SDK adapter.
-  const streamFactory =
-    opts.streamFactory ??
-    createSdkAgentStream(compiledForMember, allTools, apiKey, {
-      model: opts.model ?? compiled.model,
-      cwd: opts.cwd,
-      plugins: opts.plugins,
-      providers: opts.providers,
-      agents: opts.agents,
-      budgetTracker: opts.budgetTracker,
-      sdkTools: opts.sdkTools,
-    })
+  const streamFactory = memberStreamFactory(opts, compiledForMember, allTools, apiKey)
   const sessionId = opts.sessionId ?? `sub-${crypto.randomUUID()}`
 
   // 4. Resolve the @MainLoop strategy + reflection, then run the shared reflective loop.
@@ -302,9 +287,7 @@ export async function delegate(
     opts.maxIterations ?? spec.maxIterations,
   )
   // V4-T: a custom reflection wins; absent ⇒ the strategy-derived default (ladder/noop).
-  const reflection =
-    opts.reflection ??
-    (loopStrategy.name === 'plan-act-reflect' ? ladderReflectionStrategy : noopReflectionStrategy)
+  const reflection = opts.reflection ?? defaultReflection(loopStrategy)
   const result = await runReflectiveLoop(streamFactory, effectiveMessage, sessionId, {
     loop: loopStrategy,
     reflection,
@@ -315,11 +298,61 @@ export async function delegate(
   })
 
   // M12 — onDelegationComplete: let the supervisor transform the result before it returns.
-  const transformed = opts.onDelegationComplete
-    ? await opts.onDelegationComplete({ subAgent: spec.name, result })
-    : result
+  const transformed = await applyCompleteHook(opts, spec.name, result)
 
   return await moderateDelegationResult(transformed, guardrails)
+}
+
+/** Both ceilings, on the terms `AgentRunner` applies: the smaller wins, an absent one is no ceiling. */
+function effectiveBudget(opts: DelegateOptions, name: string): number {
+  return Math.min(
+    resolveRunBudget(opts.budget, name) ?? Infinity,
+    resolveRunBudget(opts.parentBudgetRemaining, name, 'parentBudgetRemaining') ?? Infinity,
+  )
+}
+
+async function applyStartHook(
+  opts: DelegateOptions,
+  name: string,
+  message: string,
+): Promise<string> {
+  if (!opts.onDelegationStart) return message
+  return await opts.onDelegationStart({ subAgent: name, input: message })
+}
+
+async function applyCompleteHook(
+  opts: DelegateOptions,
+  name: string,
+  result: DelegationResult,
+): Promise<DelegationResult> {
+  if (!opts.onDelegationComplete) return result
+  return await opts.onDelegationComplete({ subAgent: name, result })
+}
+
+/** An injected factory (tests / custom transport) wins; absent ⇒ the SDK adapter. */
+function memberStreamFactory(
+  opts: DelegateOptions,
+  compiledForMember: CompiledAgentOptions,
+  allTools: Parameters<typeof createSdkAgentStream>[1],
+  apiKey: string,
+) {
+  if (opts.streamFactory) return opts.streamFactory
+  return createSdkAgentStream(compiledForMember, allTools, apiKey, {
+    model: opts.model ?? compiledForMember.model,
+    cwd: opts.cwd,
+    plugins: opts.plugins,
+    providers: opts.providers,
+    agents: opts.agents,
+    budgetTracker: opts.budgetTracker,
+    sdkTools: opts.sdkTools,
+  })
+}
+
+/** A custom reflection wins elsewhere; absent ⇒ the strategy-derived default (ladder/noop). */
+function defaultReflection(loopStrategy: ReturnType<typeof resolveLoopStrategy>) {
+  return loopStrategy.name === 'plan-act-reflect'
+    ? ladderReflectionStrategy
+    : noopReflectionStrategy
 }
 
 /**
