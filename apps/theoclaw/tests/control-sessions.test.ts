@@ -182,6 +182,21 @@ describe('the control session store (T2.2)', () => {
     expect(f.agents[0]!.sent).toEqual(['first', 'redirect'])
   })
 
+  it('a turn sent just before the old socket\'s close arrives runs once that close cancels the old turn', async () => {
+    const hold = deferred<void>()
+    const f = storeOf(() => ({ frames: [assistant('ok'), finished()], before: hold.promise }))
+    const [first, second] = [owner(), owner()]
+    const turn = f.sessions.run('s1', 'long', collect().emit, first)
+    await waitFor(() => f.agents[0]?.signals.length === 1, 2000, 'the send')
+    // The redirect reaches the store first; the close of the killed sidecar's socket follows.
+    const redirect = f.sessions.run('s1', 'redirect', collect().emit, second)
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    f.sessions.cancelOwnedBy(first)
+    expect(await turn).toEqual({ ok: false, code: 'interrupted' })
+    hold.resolve()
+    expect(await redirect).toEqual({ ok: true })
+  })
+
   it('an interrupt while a tool call is held aborts its signal and ends the turn interrupted', async () => {
     const f = storeOf((n) => (n === 0 ? { frames: [], toolHeld: true } : quick))
     const { events, emit } = collect()

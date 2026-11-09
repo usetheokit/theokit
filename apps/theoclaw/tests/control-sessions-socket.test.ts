@@ -9,6 +9,7 @@ import { createContainer } from "../src/composition.js";
 import { controlOptions } from "../src/control-plane/control-wiring.js";
 import { type ControlPlaneHandle, healthHandler, listenControlPlane } from "../src/control-plane/listener.js";
 import type { TurnAgent } from "../src/control-plane/turn.js";
+import { endRunningTurn } from "./live/support/end-running-turn.js";
 import { assistant, deferred, DisposableFake, type FakeTurn, finished, waitFor } from "./fakes.js";
 
 const quick: FakeTurn = { frames: [assistant("ok"), finished()] };
@@ -119,28 +120,67 @@ describe("the control socket speaks sessions and interrupt (T2.3)", () => {
     expect(other.frames).toEqual([{ type: "interrupt_ok", session: "owner" }]);
   });
 
-  it("a turn interrupted from one surface is redirected, and both surfaces get the redirected answer", async () => {
+  it("a turn interrupted from one surface is redirected at once, and the other surface gets the same answer", async () => {
     const hold = deferred<void>();
+    let streams = 0;
+    // Only the first turn is held; the interrupt, not a released gate, is what frees the session.
     const plane = await startSessionPlane(() => ({
       frames: (text: string) => [assistant(text === "redirect" ? "redirected" : "long story"), finished()],
-      before: hold.promise,
+      get before() {
+        streams += 1;
+        return streams === 1 ? hold.promise : undefined;
+      },
     }));
     const [tui, desktop] = [await peer(plane), await peer(plane)];
     tui.send({ type: "chat", message: "story", session: "owner" });
     await waitFor(() => plane.agents[0]?.signals.length === 1, 2000, "the send");
     desktop.send({ type: "interrupt", session: "owner" });
     await tui.until(hasType("interrupted"), "interrupted");
-    hold.resolve();
-    // The redirect goes out at once on the TUI's socket; the desktop asks next, on the same session.
+    // The TUI sends its redirect the moment it sees `interrupted`, with the held turn never released.
     tui.send({ type: "chat", message: "redirect", session: "owner" });
     await tui.until(hasType("done"), "the TUI redirect done");
     desktop.send({ type: "chat", message: "redirect", session: "owner" });
-    await desktop.until(hasType("done"), "the desktop redirect done");
+    await desktop.until((frames) => frames.some((f) => f.type === "done"), "the desktop redirect done");
     for (const surface of [tui, desktop]) {
       expect(JSON.stringify(surface.frames)).toContain("redirected");
       expect(JSON.stringify(surface.frames)).not.toContain("busy");
     }
     expect(plane.builds()).toBe(1);
+  });
+
+  it("endRunningTurn, the live file's cleanup, stops a turn a failed test left running", async () => {
+    const hold = deferred<void>();
+    const plane = await startSessionPlane(() => ({ frames: [assistant("x"), finished()], before: hold.promise }));
+    const left = await peer(plane);
+    left.send({ type: "chat", message: "story", session: "owner" });
+    await waitFor(() => plane.agents[0]?.signals.length === 1, 2000, "the send");
+    const { host, port } = plane.handle.address();
+    await endRunningTurn({ url: `ws://${host}:${port}/control`, token: SOCKET_TOKEN, session: "owner" });
+    hold.resolve();
+    const next = await peer(plane);
+    next.send({ type: "chat", message: "first", session: "owner" });
+    await next.until(hasType("done"), "the next client's first message");
+    expect(JSON.stringify(next.frames)).not.toContain("busy");
+  });
+
+  it("a chat from a new socket right after the old socket was terminated is not busy", async () => {
+    const hold = deferred<void>();
+    let streams = 0;
+    const plane = await startSessionPlane(() => ({
+      frames: [assistant("redirected"), finished()],
+      get before() {
+        streams += 1;
+        return streams === 1 ? hold.promise : undefined;
+      },
+    }));
+    const old = await peer(plane);
+    old.send({ type: "chat", message: "story", session: "owner" });
+    await waitFor(() => plane.agents[0]?.signals.length === 1, 2000, "the send");
+    old.socket.terminate();
+    const next = await peer(plane);
+    next.send({ type: "chat", message: "redirect", session: "owner" });
+    await next.until(hasType("done"), "the redirect done");
+    expect(JSON.stringify(next.frames)).not.toContain("busy");
   });
 
   it("a chat frame on a busy session from another socket gets busy", async () => {
