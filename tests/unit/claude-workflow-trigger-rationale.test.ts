@@ -48,3 +48,34 @@ describe('claude.yml dangerous-triggers suppression (B-634)', () => {
     expect(rationale).not.toMatch(/checks?\s+out\s+the\s+default\s+branch/i)
   })
 })
+
+/** The comment block carrying zizmor's `secrets-outside-env` suppression. */
+function secretsOutsideEnvRationale(source: string): string {
+  const lines = source.split('\n')
+  const start = lines.findIndex((line) => line.includes('zizmor: ignore[secrets-outside-env]'))
+  if (start === -1) return ''
+  const block: string[] = []
+  for (let i = start; i < lines.length && lines[i].trim().startsWith('#'); i++) {
+    block.push(lines[i].trim().replace(/^#\s?/, ''))
+  }
+  return block.join(' ').replace(/\s+/g, ' ')
+}
+
+describe('claude.yml secrets-outside-env suppression (B-701)', () => {
+  // The review events run the workflow as it exists on the pull request, so no claim that all four
+  // triggers run from the default branch holds.
+  it('test_the_secrets_rationale_does_not_claim_all_triggers_run_from_the_default_branch', () => {
+    const rationale = secretsOutsideEnvRationale(WORKFLOW)
+    expect(rationale, 'claude.yml no longer suppresses secrets-outside-env').not.toBe('')
+    expect(rationale).not.toMatch(/all\s+run\s+the\s+workflow\s+from\s+the\s+default\s+branch/i)
+    expect(rationale).not.toMatch(/no\s+other\s+branch\s+for\s+a\s+deployment\s+branch\s+policy/i)
+  })
+
+  it('test_the_secrets_rationale_states_the_ref_per_trigger', () => {
+    const rationale = secretsOutsideEnvRationale(WORKFLOW)
+    expect(rationale).toMatch(/`issue_comment` and `issues` use the default branch/i)
+    expect(rationale).toMatch(
+      /`pull_request_review_comment` and `pull_request_review` run the workflow as it exists on the pull request/i,
+    )
+  })
+})

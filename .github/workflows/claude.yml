@@ -71,10 +71,14 @@ jobs:
         uses: anthropics/claude-code-action@dcb57747bfceeaa1fa72638cae52295d1d853d4a # v1
         with:
           # zizmor: ignore[secrets-outside-env] -- an environment would buy nothing HERE, and the
-          # reasoning is the trigger set rather than convenience. `issue_comment`, `issues` and the
-          # two review events all run the workflow from the DEFAULT branch, so there is no other
-          # branch for a deployment branch policy to exclude -- unlike `release.yml`, which carries
-          # `workflow_dispatch` and is genuinely dispatchable from anywhere, and which therefore
+          # reasoning is the trigger set rather than convenience. The workflow file comes from a
+          # different ref per trigger: `issue_comment` and `issues` use the DEFAULT branch, while
+          # `pull_request_review_comment` and `pull_request_review` run the workflow as it exists
+          # on the pull request. So a deployment branch policy would not be a no-op: it would
+          # exclude the review events, which are meant to run, and it could not tell a member's
+          # pull request from any other. The control that bounds who gets the token is the
+          # author_association gate on the job, not a branch policy -- unlike `release.yml`, which
+          # carries `workflow_dispatch` and is genuinely dispatchable from anywhere, and which therefore
           # does declare one. Moving the token to environment scope is the other half an
           # environment can buy, and it is impossible: secret values are write-only, so nothing can
           # copy this one into an environment. Declaring `environment:` anyway would silence this
