@@ -197,32 +197,41 @@ function buildExtraCreateOptions(
   overrides: RuntimeOverrides,
   compiled: CompiledAgentOptions,
 ): Record<string, unknown> {
-  const recoverLeakedToolCalls =
-    overrides.recoverLeakedToolCalls ?? compiled.recoverLeakedToolCalls ?? false
   const extra: Record<string, unknown> = {}
-  // A per-run plugin override (e.g. the HITL gate) must NOT silently drop the agent's own code plugins:
-  // `extra` is spread AFTER the assembled options, so a bare assignment clobbered `compiled.plugins`
-  // and every `createToolHooksPlugin` hook was lost whenever HITL was active. Concatenate when both
-  // sides are arrays; keep the previous replace semantics for the legacy `{ enabled }` object form.
-  if (overrides.plugins !== undefined) {
-    // `Array.isArray` narrows to `any[]`, losing the element type — a local guard keeps it.
-    const asArray = (v: unknown): readonly unknown[] | undefined =>
-      Array.isArray(v) ? (v as readonly unknown[]) : undefined
-    const overrideList = asArray(overrides.plugins)
-    const compiledList = asArray(compiled.plugins)
-    extra.plugins =
-      overrideList !== undefined && compiledList !== undefined
-        ? [...compiledList, ...overrideList]
-        : overrides.plugins
-  }
+  if (overrides.plugins !== undefined)
+    extra.plugins = mergePlugins(overrides.plugins, compiled.plugins)
   if (overrides.providers !== undefined) {
-    extra.providers = recoverLeakedToolCalls
+    extra.providers = leakedRecoveryEnabled(overrides, compiled)
       ? withLeakedDialectRecovery(overrides.providers)
       : overrides.providers
   }
   if (overrides.agents !== undefined) extra.agents = overrides.agents
   if (overrides.budgetTracker !== undefined) extra.budgetTracker = overrides.budgetTracker
   return extra
+}
+
+function leakedRecoveryEnabled(
+  overrides: RuntimeOverrides,
+  compiled: CompiledAgentOptions,
+): boolean {
+  return overrides.recoverLeakedToolCalls ?? compiled.recoverLeakedToolCalls ?? false
+}
+
+/**
+ * A per-run plugin override (e.g. the HITL gate) must NOT silently drop the agent's own code plugins:
+ * `extra` is spread AFTER the assembled options, so a bare assignment clobbered `compiled.plugins`
+ * and every `createToolHooksPlugin` hook was lost whenever HITL was active. Concatenate when both
+ * sides are arrays; keep the previous replace semantics for the legacy `{ enabled }` object form.
+ */
+function mergePlugins(override: unknown, compiledPlugins: unknown): unknown {
+  // `Array.isArray` narrows to `any[]`, losing the element type — a local guard keeps it.
+  const asArray = (v: unknown): readonly unknown[] | undefined =>
+    Array.isArray(v) ? (v as readonly unknown[]) : undefined
+  const overrideList = asArray(override)
+  const compiledList = asArray(compiledPlugins)
+  return overrideList !== undefined && compiledList !== undefined
+    ? [...compiledList, ...overrideList]
+    : override
 }
 
 /**
@@ -437,6 +446,49 @@ function buildSdkTools(
  * Returns a function that, given a message + sessionId, yields TheoKit
  * AgentStreamEvent via the SDK's Agent.create() + Run.stream() pipeline.
  */
+/** theokit#475 — one meter per turn, opt-in; absent ⇒ no meter. */
+function createTurnUsageMeter(
+  overrides: RuntimeOverrides,
+  model: string | ModelSelection,
+): RunUsageMeter | undefined {
+  if (overrides.exposeUsageToTools !== true) return undefined
+  return createRunUsageMeter({
+    contextWindowTokens: contextWindowOf(model),
+    delegate: overrides.budgetTracker,
+  })
+}
+
+/**
+ * Auto-wire `skill_read` for inline skills (`defineAgent({ skills: [inlineSkill] })`). An inline
+ * skill lists in the `<skills>` block by name + description only — its body is unreachable to the
+ * model without the `skill_read` tool, so registering an inline skill implies wanting it readable.
+ * Dedup: skip when the app already declared a `skill_read` (an explicit `defineSkillReadTool` wins).
+ * Graceful: skip when the loaded SDK predates `defineSkillReadTool`.
+ */
+function wireInlineSkillRead(
+  sdkTools: unknown[],
+  rt: SdkRuntime,
+  compiled: CompiledAgentOptions,
+  compiledTools: CompiledTool[],
+): void {
+  const inlineSkills = compiled.skills?.inline
+  if (
+    inlineSkills !== undefined &&
+    inlineSkills.length > 0 &&
+    rt.defineSkillReadTool !== undefined &&
+    !compiledTools.some((t) => t.name === 'skill_read')
+  ) {
+    sdkTools.push(rt.defineSkillReadTool(inlineSkills))
+  }
+}
+
+/** Wiring triad pillar (c) — M7 run-context metric: where the injected run-context came from. */
+function runContextSource(overrides: RuntimeOverrides, compiled: CompiledAgentOptions): string {
+  if (overrides.runContext !== undefined) return 'per-run'
+  if (compiled.runContext !== undefined) return 'agent-level'
+  return 'none'
+}
+
 /** M74 — resolves the credential when the stream/session STARTS; with a `string` the value arrived frozen. */
 const resolverApiKey = async (k: string | (() => string | Promise<string>)): Promise<string> =>
   typeof k === 'function' ? await k() : k
@@ -485,13 +537,7 @@ export function createSdkAgentStream(
       // real usage to and the reader every tool handler is handed, so the two halves cannot drift.
       // The window is the DECLARED one (`ModelSelection.contextWindow`) or absent — see
       // `contextWindowOf` for why the model catalog is not consulted here.
-      const usageMeter =
-        overrides.exposeUsageToTools === true
-          ? createRunUsageMeter({
-              contextWindowTokens: contextWindowOf(model),
-              delegate: overrides.budgetTracker,
-            })
-          : undefined
+      const usageMeter = createTurnUsageMeter(overrides, model)
 
       // M7 — pass the resolved run-context so every tool handler receives it as `ctx.context`.
       const sdkTools = buildSdkTools(
@@ -502,32 +548,9 @@ export function createSdkAgentStream(
         usageMeter,
       )
 
-      // Auto-wire `skill_read` for inline skills (`defineAgent({ skills: [inlineSkill] })`). An inline
-      // skill lists in the `<skills>` block by name + description only — its body is unreachable to the
-      // model without the `skill_read` tool, so registering an inline skill implies wanting it readable.
-      // One `.skills([...])` call thus both registers AND makes the skill readable. Dedup: skip when the
-      // app already declared a `skill_read` (an explicit `defineSkillReadTool` wins). Graceful: skip when
-      // the loaded SDK predates `defineSkillReadTool` (inline skills still list, just not auto-readable).
-      const inlineSkills = compiled.skills?.inline
-      if (
-        inlineSkills !== undefined &&
-        inlineSkills.length > 0 &&
-        rt.defineSkillReadTool !== undefined &&
-        !compiledTools.some((t) => t.name === 'skill_read')
-      ) {
-        sdkTools.push(rt.defineSkillReadTool(inlineSkills))
-      }
-      // Wiring triad pillar (c) — M7 run-context metric: observable proof that context injection is active.
-      let runContextSource: string
-      if (overrides.runContext !== undefined) {
-        runContextSource = 'per-run'
-      } else if (compiled.runContext !== undefined) {
-        runContextSource = 'agent-level'
-      } else {
-        runContextSource = 'none'
-      }
+      wireInlineSkillRead(sdkTools, rt, compiled, compiledTools)
       debugLog('[THEO_AGENT_M7_RUN_CONTEXT]', {
-        source: runContextSource,
+        source: runContextSource(overrides, compiled),
         keys: runContext !== undefined ? Object.keys(runContext) : [],
       })
 
@@ -569,6 +592,106 @@ export function createSdkAgentStream(
   // wrong argument shape (as the HTTP app builder did) gets `openai/gpt-4o-mini` with no error and
   // no way to tell. Exposing it makes the resolution observable — and testable.
   return Object.assign(factory, { resolvedModel: model })
+}
+
+/**
+ * Root the session at the per-run `cwd` and, SDK 4.0 (SE40), the native session transcript at the
+ * framework-resolved app root when known (mount-agent threads it), so sessions persist per-app;
+ * unset ⇒ SDK default (`~/.theokit`).
+ */
+function applyLocalOverrides(
+  m8: { local?: Record<string, unknown> },
+  overrides: RuntimeOverrides,
+): void {
+  if (overrides.cwd !== undefined) m8.local = { ...m8.local, cwd: overrides.cwd }
+  if (overrides.baseDir !== undefined) m8.local = { ...m8.local, baseDir: overrides.baseDir }
+}
+
+/** Project the compiled M8 decorator fields + per-run overrides into native Agent.create args. */
+function resolveCreateOptions(
+  compiled: CompiledAgentOptions,
+  overrides: RuntimeOverrides,
+  usageMeter: RunUsageMeter | undefined,
+) {
+  const { options: m8, applied } = assembleM8CreateOptions(compiled)
+  applyLocalOverrides(m8, overrides)
+  const extra = buildExtraCreateOptions(overrides, compiled)
+  // theokit#475 — the meter REPLACES the tracker key, because it already wraps that same caller
+  // tracker (`createRunUsageMeter({ delegate })`); `Agent.create` takes one tracker.
+  if (usageMeter !== undefined) extra.budgetTracker = usageMeter.tracker
+  if (applied.length > 0) {
+    // Wiring triad — runtime metric: observable proof the decorators fired (opt-in via THEOKIT_DEBUG).
+    debugLog('[THEO_AGENT_M8_RUNTIME_APPLIED]', {
+      skills: applied.includes('skills'),
+      contextWindow: applied.includes('context'),
+      projectContext: applied.includes('projectContext'),
+    })
+  }
+  return { m8, extra }
+}
+
+function buildSendOptions(
+  overrides: RuntimeOverrides,
+  factoryOpts: { disableTools?: boolean } | undefined,
+  compiled: CompiledAgentOptions,
+): SendOptions {
+  const sendOptions: SendOptions = {}
+  if (factoryOpts?.disableTools === true) sendOptions.toolChoice = 'none'
+  applyStepCeiling(sendOptions, compiled.maxIterations)
+  // theokit#132 — set only when supplied: an `onRunEvent: undefined` riding along would still
+  // change what the SDK receives on the non-opted-in path.
+  if (overrides.onRunEvent !== undefined) sendOptions.onRunEvent = overrides.onRunEvent
+  return sendOptions
+}
+
+/** M35 — images ⇒ the SDK's structured `{ text, images }` form; otherwise the plain string. */
+function buildSendInput(message: string, overrides: RuntimeOverrides): string {
+  const sendInput =
+    overrides.images && overrides.images.length > 0
+      ? { text: message, images: overrides.images }
+      : message
+  return sendInput as typeof message
+}
+
+async function* streamTimeline(
+  sendPromise: Promise<unknown>,
+  runId: string,
+  state: { sawError: boolean; lastEventType: string },
+  outcome: TurnOutcome | undefined,
+): AsyncGenerator<StreamEvent> {
+  const run = (await sendPromise) as {
+    events: () => AsyncGenerator<SdkTimelineEvent>
+  }
+  const seen = createToolSeen()
+  const emit = function* (events: StreamEvent[]): Generator<StreamEvent> {
+    for (const event of events) {
+      if (event.type === 'error') state.sawError = true
+      // #142 — the SDK's `done` stays suppressed here; the tail block emits the terminal frame.
+      if (event.type === 'done') continue
+      state.lastEventType = event.type
+      yield event
+    }
+  }
+  for await (const ev of run.events()) {
+    const translated = translateTimelineEvent(ev, runId, seen)
+    // theokit#474 — recover the run's TYPED failure, but ONLY for a turn that failed before
+    // yielding anything (`lastEventType === ''`): the one case the retry seam can act on, and one
+    // where `wait()` is already resolved. Awaiting it for a NON-terminal error could hang.
+    if (
+      outcome !== undefined &&
+      state.lastEventType === '' &&
+      translated.some((e) => e.type === 'error')
+    ) {
+      outcome.failure = (
+        await (
+          (await sendPromise) as { wait: () => Promise<{ error?: { cause?: unknown } }> }
+        ).wait()
+      ).error?.cause
+    }
+    yield* emit(translated)
+  }
+  // #388 — a tool result held for a second report the run never sent still belongs on the wire.
+  yield* emit(flushPendingToolResults(seen))
 }
 
 interface StreamSdkAgentOpts {
@@ -619,26 +742,7 @@ async function* streamSdkAgent(
     t0,
   } = opts
 
-  // Project the compiled M8 decorator fields into native Agent.create args.
-  const { options: m8, applied } = assembleM8CreateOptions(compiled)
-  if (overrides.cwd !== undefined) m8.local = { ...m8.local, cwd: overrides.cwd }
-  // SDK 4.0 (SE40): root the native session transcript at the framework-resolved app root when known
-  // (mount-agent threads it), so sessions persist per-app; unset ⇒ SDK default (`~/.theokit`).
-  if (overrides.baseDir !== undefined) m8.local = { ...m8.local, baseDir: overrides.baseDir }
-  const extra = buildExtraCreateOptions(overrides, compiled)
-  // theokit#475 — the meter REPLACES the tracker key set just above, because it already wraps that
-  // same caller tracker (`createRunUsageMeter({ delegate })`). `Agent.create` takes one tracker;
-  // handing it the wrapper is what makes the SDK's per-completion `track()` reach both the caller's
-  // budget gate and the snapshot a tool reads.
-  if (opts.usageMeter !== undefined) extra.budgetTracker = opts.usageMeter.tracker
-  if (applied.length > 0) {
-    // Wiring triad — runtime metric: observable proof the decorators fired (opt-in via THEOKIT_DEBUG).
-    debugLog('[THEO_AGENT_M8_RUNTIME_APPLIED]', {
-      skills: applied.includes('skills'),
-      contextWindow: applied.includes('context'),
-      projectContext: applied.includes('projectContext'),
-    })
-  }
+  const { m8, extra } = resolveCreateOptions(compiled, overrides, opts.usageMeter)
 
   // V4-N.1: declared before try so `finally` can dispose even when `run.wait()` rejects.
   const agent = await Agent.getOrCreate(sessionId, {
@@ -654,60 +758,12 @@ async function* streamSdkAgent(
     // model order, and `textAlreadyStreamed` tells us which text is a repeat instead of leaving us
     // to compare content. `state` survives only to carry the two facts the tail block below needs.
     const state = { sawError: false, lastEventType: '' }
-    const sendOptions: SendOptions = {}
-    if (factoryOpts?.disableTools === true) sendOptions.toolChoice = 'none'
-    applyStepCeiling(sendOptions, compiled.maxIterations)
-    // theokit#132 — hand the caller's sink to the SDK. Set only when supplied: an `onRunEvent:
-    // undefined` riding along would still change what the SDK receives on the non-opted-in path,
-    // and back-compat here is a floor, not a preference.
-    if (overrides.onRunEvent !== undefined) sendOptions.onRunEvent = overrides.onRunEvent
-    // M35 — when images are present, use the SDK's structured `SDKUserMessage { text, images }` form so
-    // the model receives them alongside the text; otherwise the plain-string form is unchanged (back-compat).
-    const sendInput =
-      overrides.images && overrides.images.length > 0
-        ? { text: message, images: overrides.images }
-        : message
-    const sendPromise = agent.send(sendInput as typeof message, sendOptions)
+    const sendOptions = buildSendOptions(overrides, factoryOpts, compiled)
+    const sendPromise = agent.send(buildSendInput(message, overrides), sendOptions)
     // The generator is opened lazily so consumption starts only when the caller pulls — the loop is
     // detached inside the SDK (`setTimeout(() => void driveLoop())`), so the run handle is available
     // long before the turn finishes and the timeline streams live.
-    const timeline = async function* (): AsyncGenerator<StreamEvent> {
-      const run = (await sendPromise) as unknown as {
-        events: () => AsyncGenerator<SdkTimelineEvent>
-      }
-      const seen = createToolSeen()
-      const emit = function* (events: StreamEvent[]): Generator<StreamEvent> {
-        for (const event of events) {
-          if (event.type === 'error') state.sawError = true
-          // #142 — the SDK's `done` stays suppressed here, on the promise that the tail block below
-          // emits the terminal frame (a real-usage `done`, or an `error` when the turn failed).
-          if (event.type === 'done') continue
-          state.lastEventType = event.type
-          yield event
-        }
-      }
-      for await (const ev of run.events()) {
-        const translated = translateTimelineEvent(ev, runId, seen)
-        // theokit#474 — recover the run's TYPED failure, but ONLY for a turn that failed before
-        // yielding anything (`lastEventType === ''`), which is the one case the retry seam can act
-        // on. Bounded that tightly for two reasons: every other run pays nothing, and in this case
-        // `wait()` is already resolved — the SDK yields a `status: "ERROR"` message only from
-        // `terminalErrorEvent()`, i.e. after `transitionTo("error")` resolved the termination
-        // promise. Awaiting it for a NON-terminal error would be a way to hang the stream.
-        if (
-          opts.outcome !== undefined &&
-          state.lastEventType === '' &&
-          translated.some((e) => e.type === 'error')
-        ) {
-          opts.outcome.failure = (await (await sendPromise).wait()).error?.cause
-        }
-        yield* emit(translated)
-      }
-      // #388 — a tool result held for a second report the run never sent still belongs on the wire.
-      // Without this, a turn whose last act was a tool call would drop it: the hold is released by
-      // the next timeline event, and a run that ends has none.
-      yield* emit(flushPendingToolResults(seen))
-    }
+    const timeline = () => streamTimeline(sendPromise, runId, state, opts.outcome)
     for await (const event of applyTextTransforms(timeline(), {
       parseThinkTags,
       stripToolDialect,
@@ -864,20 +920,10 @@ export function toAgentFactory(
       )
     }
     const sdkTools = buildSdkTools(compiled.tools, rt.defineTool, overrides.sdkTools, runContext)
-    // Auto-wire `skill_read` for inline skills (mirror createSdkAgentStream) so an inline skill's
-    // body stays reachable to the model when this factory serves the agent.
-    const inlineSkills = compiled.skills?.inline
-    if (
-      inlineSkills !== undefined &&
-      inlineSkills.length > 0 &&
-      rt.defineSkillReadTool !== undefined &&
-      !compiled.tools.some((t) => t.name === 'skill_read')
-    ) {
-      sdkTools.push(rt.defineSkillReadTool(inlineSkills))
-    }
+    // Auto-wire `skill_read` for inline skills (mirror createSdkAgentStream).
+    wireInlineSkillRead(sdkTools, rt, compiled, compiled.tools)
     const { options: m8 } = assembleM8CreateOptions(compiled)
-    if (overrides.cwd !== undefined) m8.local = { ...m8.local, cwd: overrides.cwd }
-    if (overrides.baseDir !== undefined) m8.local = { ...m8.local, baseDir: overrides.baseDir }
+    applyLocalOverrides(m8, overrides)
     const extra = buildExtraCreateOptions(overrides, compiled)
     applyPosture(extra, m8, opts.approvals, compiled.hitl)
     const agent = await rt.Agent.getOrCreate(sessionId, {

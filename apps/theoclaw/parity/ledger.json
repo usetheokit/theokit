@@ -216,15 +216,12 @@
   {
     "id": "OC-32",
     "status": "shipped",
-    "gaps": [
-      "B-692"
-    ],
     "check": {
       "path": "apps/theoclaw/tests/live/daemon.live.test.ts",
       "test": "the platform service answers a real-model turn and uninstalls cleanly"
     },
-    "verified_on": "2026-10-31",
-    "note": "theoclaw daemon install writes a systemd --user unit that runs the built entry with the configuration file, enables and starts it, and uninstall removes it; checked on a Linux host with a real unit and a real model; launchd on macOS and the Windows scheduler wait on B-692, and both are refused by name"
+    "verified_on": "2026-11-09",
+    "note": "theoclaw daemon install writes a login service that runs the built entry with the configuration file, starts it, and uninstall removes it: a systemd --user unit on Linux, a launchd agent on macOS and a scheduled task on Windows. Linux was checked on a host with a real unit and a real model on 2026-10-31; macOS and Windows on hosted runners with a real model in https://github.com/usetheokit/theokit/actions/runs/42687267556 (macos-latest 5450 ms, windows-latest 11701 ms for this test)"
   },
   {
     "id": "OC-33",
@@ -739,7 +736,7 @@
   {
     "id": "OC-99",
     "status": "open",
-    "reason": "Live SQLite snapshots and HTTPS offsite transfer have offline coverage. Real-model recall after offsite restore remains unverified: this sandbox has no model credentials or real offsite account. Run tests/live/backup.live.test.ts with a named THEOCLAW_MODEL and fresh THEOCLAW_BACKUP_TARGET before shipping."
+    "reason": "Live SQLite snapshots and HTTPS offsite transfer have offline coverage. Real-model recall after offsite restore remains unverified: this sandbox has no model credentials or real offsite account. Run tests/live/backup.live.test.ts with a named THEOCLAW_MODEL and fresh THEOCLAW_BACKUP_TARGET before shipping. The job sets no THEOCLAW_BACKUP_TARGET, so the live test skips with that reason instead of failing (#1416); the row stays open until a run with a target passes."
   },
   {
     "id": "OC-100",

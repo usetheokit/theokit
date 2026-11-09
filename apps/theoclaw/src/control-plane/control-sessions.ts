@@ -11,6 +11,9 @@ export const MAX_CONTROL_SESSIONS = 16
 /** How long a turn sent to a session waits for that session's cancelled turn to unwind. */
 export const CANCEL_DRAIN_MS = 5000
 
+/** How long a chat on a running, not yet cancelled session waits for a close or interrupt in flight. */
+const GRACE_MS = 250
+
 /** A session id a client may choose: it names a stderr line, so it carries no free text. */
 const SESSION_ID = /^[A-Za-z0-9_-]{1,64}$/
 
@@ -167,10 +170,16 @@ export function createControlSessions(options: ControlSessionsOptions): ControlS
     return entries.get(session)?.running
   }
 
-  /** Wait, at most `drainMs`, for a cancelled turn on `session` to unwind. */
+  /**
+   * Wait, at most `drainMs`, for a cancelled turn on `session` to unwind. A turn not yet cancelled
+   * gets a short grace first: a surface that killed its sidecar and sent the next message at once
+   * may reach the instance before the old socket's close does, and that close cancels the turn.
+   */
   async function drain(session: string): Promise<void> {
     const turn = entries.get(session)?.running
-    if (turn?.cancelRequested === true) await Promise.race([turn.ended, delay(drainMs)])
+    if (turn === undefined) return
+    if (!turn.cancelRequested) await Promise.race([turn.ended, delay(GRACE_MS)])
+    if (turn.cancelRequested) await Promise.race([turn.ended, delay(drainMs)])
   }
 
   async function turnOn(

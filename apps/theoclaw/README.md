@@ -954,7 +954,7 @@ Without a target, backup and restore continue to use local directories.
 The credential-gated `tests/live/backup.live.test.ts` checks model recall after a
 running instance uploads and a new instance restores from offsite. It requires
 `THEOCLAW_LIVE=1`, a named `THEOCLAW_MODEL`, its API key, and a fresh
-`THEOCLAW_BACKUP_TARGET` (plus its token if needed). OC-99 remains open until that
+`THEOCLAW_BACKUP_TARGET` (plus its token if needed); without the target the test skips and says why. OC-99 remains open until that
 check is actually run and the model and passing result are recorded in the ledger.
 
 Telegram voice notes can receive spoken replies when

@@ -8,10 +8,11 @@ import { createTauriChannelSource, type TauriChannel, type TauriCore } from "@th
 import { render } from "ink-testing-library";
 import { createElement } from "react";
 import { ChannelTransport, createAgentClient } from "theokit/client/core";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 
 import { type ControlClient, createControlClient } from "../../src/control-client/control-client.js";
 import { TheoClawTui } from "../../src/tui/app.js";
+import { endRunningTurn } from "./support/end-running-turn.js";
 import { composerReady } from "../composer-ready.js";
 import { waitFor } from "../fakes.js";
 import { type HostToolsWorkspace, makeHostToolsWorkspace } from "../host-tools-workspace.js";
@@ -175,6 +176,14 @@ describe.skipIf(!LIVE)("the TUI and the desktop on one running instance, against
     }
     workspace?.remove();
   }, 20_000);
+
+  // Each test ends the turn it may have left running, so a failure in one cannot answer the next `busy`.
+  afterEach(async () => {
+    for (const child of sidecars) child.kill("SIGKILL");
+    sidecars.clear();
+    for (const client of clients.splice(0)) await client.close().catch(() => undefined);
+    await endRunningTurn({ url: `ws://127.0.0.1:${port}/control`, token: TOKEN, session: SESSION, context: () => output.slice(-3000) });
+  }, 30_000);
 
   it("the TUI and the desktop share one conversation, each interrupted and redirected, for H-1", { timeout: 240_000 }, async () => {
     const tui = await renderTui();

@@ -1,0 +1,6 @@
+{
+  "browser": {
+    "browserName": "chromium",
+    "launchOptions": { "channel": "chromium-headless-shell", "chromiumSandbox": false }
+  }
+}

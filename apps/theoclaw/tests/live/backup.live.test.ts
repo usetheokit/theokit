@@ -7,6 +7,7 @@ import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 
 import { downloadBackup, restoreInstance } from '../../src/backup/backup.js'
+import { backupSkipReason } from './support/backup-target.js'
 
 /**
  * AC-009 (B-400, OC-99's built half): three DM sessions store a code word each against a real
@@ -16,6 +17,9 @@ import { downloadBackup, restoreInstance } from '../../src/backup/backup.js'
  * do. Runs only with THEOCLAW_LIVE=1, THEOCLAW_MODEL and a key.
  */
 const LIVE = process.env.THEOCLAW_LIVE === '1'
+// Skipped, with the reason, when no offsite target is configured (#1416).
+const SKIP_REASON = LIVE ? backupSkipReason(process.env) : undefined
+if (SKIP_REASON) console.warn(`backup.live.test.ts skipped: ${SKIP_REASON}`)
 const TURN_TIMEOUT_MS = 120_000
 const TSX_LOADER = import.meta.resolve('tsx')
 const INSTANCE = join(import.meta.dirname, 'support', 'chat-instance.ts')
@@ -82,18 +86,17 @@ function chat(target: Profile, texts: readonly string[], backupDir?: string): Pr
   )
 }
 
-describe.skipIf(!LIVE)('backup and restore against a real model (OC-99)', () => {
+describe.skipIf(!LIVE || SKIP_REASON !== undefined)('backup and restore against a real model (OC-99)', () => {
   it('a restored profile recalls each of 3 code words and an unrestored one recalls none', { timeout: TURN_TIMEOUT_MS * 6 }, async () => {
     if (!process.env.THEOCLAW_MODEL || !(process.env.THEOKIT_API_KEY ?? process.env.OPENROUTER_API_KEY)) {
       throw new Error('THEOCLAW_LIVE=1 needs THEOCLAW_MODEL and THEOKIT_API_KEY or OPENROUTER_API_KEY')
     }
     const words = SENDERS.map(() => token())
     const original = profile(true)
-    if (!process.env.THEOCLAW_BACKUP_TARGET) throw new Error('live backup needs a fresh HTTPS THEOCLAW_BACKUP_TARGET')
     const backupDir = join(scratch(), 'backup')
     await chat(original, words.map(SAY), backupDir)
     rmSync(backupDir, { recursive: true })
-    await downloadBackup(backupDir, process.env.THEOCLAW_BACKUP_TARGET, process.env.THEOCLAW_BACKUP_TOKEN)
+    await downloadBackup(backupDir, process.env.THEOCLAW_BACKUP_TARGET!, process.env.THEOCLAW_BACKUP_TOKEN)
 
     // The control: an empty profile has none of the three conversations.
     const control = await chat(profile(true), SENDERS.map(() => RECALL))
