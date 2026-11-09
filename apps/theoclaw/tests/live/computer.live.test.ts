@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process'
 import type { ChildProcess } from 'node:child_process'
-import { randomBytes } from 'node:crypto'
+import { randomInt } from 'node:crypto'
 import { mkdtempSync, readdirSync, rmSync } from 'node:fs'
 import { createServer } from 'node:http'
 import type { Server } from 'node:http'
@@ -42,7 +42,7 @@ afterEach(async () => {
 })
 
 function randomText(length: number): string {
-  return [...randomBytes(length)].map((byte) => TOKEN_ALPHABET[byte % TOKEN_ALPHABET.length]).join('')
+  return Array.from({ length }, () => TOKEN_ALPHABET[randomInt(TOKEN_ALPHABET.length)]).join('')
 }
 
 function stopProcess(child: ChildProcess): Promise<void> {
