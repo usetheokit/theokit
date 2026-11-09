@@ -119,12 +119,17 @@ describe.skipIf(!LIVE)('the browser against a real model', () => {
     const agent = await createTheoClawAgent(theoClawAgentOptions({ model, apiKey, toolOptions: agentToolOptions(settings) }))
     let answer = ''
     const toolCalls: string[] = []
+    // Every tool_call event (arguments, and the result once it completes), so a failing run shows
+    // what the browser server answered and not only which tools the model chose (issue #1435).
+    const trace: string[] = []
     try {
       const run = await agent.send(
         `Open ${page.url} in the browser and tell me the exact text shown in the element with id v. The result of browser_navigate already holds a snapshot of the rendered page, so read the text from it; do not wait or navigate again.`,
       )
       for await (const event of run.stream()) {
-        if (event.type === 'tool_call' && 'name' in event && 'status' in event && event.status === 'running') toolCalls.push(String(event.name))
+        if (event.type !== 'tool_call') continue
+        if ('name' in event && 'status' in event && event.status === 'running') toolCalls.push(String(event.name))
+        trace.push(JSON.stringify(event).slice(0, 1500))
       }
       const outcome = await run.wait()
       if (outcome.status !== 'finished') throw new Error(`the run ended ${outcome.status}: ${JSON.stringify(outcome)}`)
@@ -133,6 +138,7 @@ describe.skipIf(!LIVE)('the browser against a real model', () => {
       await agent[Symbol.asyncDispose]()
     }
     console.log(`OC-60 live: model=${model} toolCalls=${JSON.stringify(toolCalls)} answer=${JSON.stringify(answer)}`)
+    console.log(`OC-60 live trace:\n${trace.join('\n')}`)
     expect(toolCalls.some((name) => name.includes('browser_navigate')), JSON.stringify(toolCalls)).toBe(true)
     expect(answer).toContain(value)
   })
