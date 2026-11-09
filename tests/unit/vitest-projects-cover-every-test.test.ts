@@ -5,6 +5,8 @@ import { join, relative, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { parse as parseYaml } from 'yaml'
 
+import { isSupportedRuntime } from '../../apps/theoclaw/src/runtime-support.js'
+
 /**
  * The anti-vacuity floor for the vitest project split.
  *
@@ -272,8 +274,13 @@ describe('the vitest project split reaches every test file', () => {
   it('test_EVERY_file_under_tests_is_claimed_by_some_project', () => {
     // The omission failure. A new `tests/e2e/` directory would land here, loudly, instead of
     // silently never running.
+    // TheoClaw's project is left out of the root config on a Node below its range (#1368), on
+    // purpose and with a log line; its tests are then not orphans.
+    const theoclawSkipped = !isSupportedRuntime()
     const orphans = onDisk.filter(
-      (file) => ![...claimed.keys()].some((c) => c.endsWith(file) || file.endsWith(c)),
+      (file) =>
+        !(theoclawSkipped && file.startsWith('apps/theoclaw/')) &&
+        ![...claimed.keys()].some((c) => c.endsWith(file) || file.endsWith(c)),
     )
     expect(orphans, `not covered by any vitest project: ${orphans.join(', ')}`).toEqual([])
   })

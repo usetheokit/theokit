@@ -3,13 +3,16 @@ import path from 'node:path'
 
 import { defineConfig } from 'vitest/config'
 
-/** Mirrors `assertSupportedRuntime` in `apps/theoclaw/src/runtime.ts`: 22.16+, 23.8+, or 24+. */
-function theoclawSupportsThisNode(version = process.versions.node): boolean {
-  const [major = 0, minor = 0] = version.split('.').map(Number)
-  return (major === 22 && minor >= 16) || (major === 23 && minor >= 8) || major >= 24
-}
+import { isSupportedRuntime } from './apps/theoclaw/src/runtime-support.js'
 
 const MAX_WORKERS = Math.max(2, cpus().length - 4)
+
+if (!isSupportedRuntime() && process.env.THEOKIT_1368_SKIP_REPORTED === undefined) {
+  process.env.THEOKIT_1368_SKIP_REPORTED = '1'
+  console.error(
+    `[vitest] Node ${process.versions.node}: skipping the TheoClaw project, it needs Node 22.16+ / 23.8+ (theokit#1368)`,
+  )
+}
 
 /**
  * What the run actually got, printed once, in CI only (usetheokit/theokit#635).
@@ -117,7 +120,7 @@ export default defineConfig({
       // TheoClaw refuses Node < 22.16 (SQLite backup API; `apps/theoclaw/src/runtime.ts`), so on the
       // framework's 22.12 floor its project is left out rather than failing to load. TheoClaw's own
       // job runs it through `pnpm --filter theoclaw test` on a Node that meets its range.
-      ...(theoclawSupportsThisNode() ? ['./apps/theoclaw/vitest.config.ts'] : []),
+      ...(isSupportedRuntime() ? ['./apps/theoclaw/vitest.config.ts'] : []),
     ],
     // A better-sqlite3 NODE_MODULE_VERSION mismatch surfaces as a raw test failure. Run
     // `pnpm rebuild better-sqlite3` when it does.
