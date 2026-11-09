@@ -33,5 +33,6 @@ describe('published tarball contents (B-691)', () => {
     for (const path of ['package.json', 'tools/browser-proxy.mjs', 'tools/install-browser.mjs']) expect(packed, path).toContain(path)
     const source = readFileSync(join(root, 'src/tools/browser-server.ts'), 'utf8')
     expect(source).toContain("'../../tools/browser-proxy.mjs'")
-  })
+    // Measured: `npm pack --dry-run` takes ~0.3s locally but exceeded the 5s default on CI (#1377), so allow 30s.
+  }, 30_000)
 })
