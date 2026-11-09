@@ -18,6 +18,14 @@ export class XwdFormatError extends Error {
   }
 }
 
+/** The file ends before its own header does: Xvfb has not finished writing it (or the read took too few bytes). */
+export class XwdNotWrittenError extends XwdFormatError {
+  constructor(path: string, headerSize: number, length: number) {
+    super(path, 'header_size', headerSize)
+    this.message = `${path} is not written yet: its header_size is ${headerSize} but the file holds ${length} bytes`
+  }
+}
+
 export interface XwdHeader {
   readonly width: number
   readonly height: number
@@ -29,6 +37,8 @@ export interface XwdHeader {
 }
 
 const HEADER_BYTES = 100
+/** The fixed header plus a window name; anything larger is not an Xvfb header. */
+export const MAX_HEADER_BYTES = 4096
 const COLOR_ENTRY_BYTES = 12
 const ZPIXMAP = 2
 const MAX_SIDE = 16384
@@ -39,7 +49,8 @@ const MAX_COLORS = 65_536
 /** The header_size and ncolors fields place the pixel data; both come from the file, so both are bounded. */
 function dataOffsetOf(bytes: Buffer, path: string): number {
   const headerSize = bytes.readUInt32BE(0)
-  if (headerSize < HEADER_BYTES || headerSize > bytes.length) throw new XwdFormatError(path, 'header_size', headerSize)
+  if (headerSize < HEADER_BYTES || headerSize > MAX_HEADER_BYTES) throw new XwdFormatError(path, 'header_size', headerSize)
+  if (headerSize > bytes.length) throw new XwdNotWrittenError(path, headerSize, bytes.length)
   const colors = bytes.readUInt32BE(76)
   if (colors > MAX_COLORS) throw new XwdFormatError(path, 'ncolors', colors)
   return headerSize + colors * COLOR_ENTRY_BYTES
