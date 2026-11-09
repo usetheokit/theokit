@@ -21,7 +21,7 @@ export function buildXwd(options: XwdFixtureOptions): Buffer {
   const { width, height, bitsPerPixel, pixmapFormat, msbFirst, truncateBy, headerSize, ncolors } = { ...DEFAULTS, ...options }
   const bytesPerPixel = bitsPerPixel / 8
   const bytesPerLine = width * bytesPerPixel
-  const header = Buffer.alloc(HEADER_BYTES)
+  const header = Buffer.alloc(Math.max(HEADER_BYTES, headerSize <= 4096 ? headerSize : 0))
   const fields: Record<number, number> = {
     0: headerSize,
     4: 7,
