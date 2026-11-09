@@ -121,7 +121,7 @@ describe.skipIf(!LIVE)('the browser against a real model', () => {
     const toolCalls: string[] = []
     try {
       const run = await agent.send(
-        `Open ${page.url} in the browser and tell me the exact text shown in the element with id v.`,
+        `Open ${page.url} in the browser and tell me the exact text shown in the element with id v. The result of browser_navigate already holds a snapshot of the rendered page, so read the text from it; do not wait or navigate again.`,
       )
       for await (const event of run.stream()) {
         if (event.type === 'tool_call' && 'name' in event && 'status' in event && event.status === 'running') toolCalls.push(String(event.name))
@@ -153,7 +153,7 @@ describe.skipIf(!LIVE)('the browser against a real model', () => {
     let ownDirs = new Set<string>()
     try {
       // The server is spawned by the first browser call, not by `create`, so the case runs a turn.
-      const run = await agent.send(`Open ${page.url} in the browser and tell me the text of the element with id v.`)
+      const run = await agent.send(`Open ${page.url} in the browser and tell me the text of the element with id v. The result of browser_navigate already holds a snapshot of the page.`)
       await run.wait()
       own = new Set([...serverPids(cliPath as string)].filter((pid) => !before.has(pid)))
       expect(own.size, 'this agent started a browser server before dispose').toBeGreaterThan(0)
