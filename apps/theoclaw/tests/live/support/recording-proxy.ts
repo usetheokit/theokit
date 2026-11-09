@@ -68,7 +68,7 @@ export async function startRecordingProxy(upstream: string): Promise<RecordingPr
       response.end()
       usages.push(...usagesIn(text))
     })().catch((error: unknown) => {
-      if (!response.headersSent) response.writeHead(502)
+      if (!response.headersSent) response.writeHead(502, { 'content-type': 'text/plain; charset=utf-8' })
       response.end(String(error))
     })
   })
