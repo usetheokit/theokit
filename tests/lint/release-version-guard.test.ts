@@ -23,10 +23,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import {
-  releaseSet,
-  // @ts-expect-error — plain .mjs release guard, no declarations by design
-} from '../../scripts/verify-version-not-published.mjs'
+import { releaseSet } from '../../scripts/verify-version-not-published.mjs'
 
 const AGENTS = { dir: 'packages/agents', name: '@theokit/agents', version: '10.1.0' }
 const THEO = { dir: 'packages/theo', name: 'theokit', version: '0.48.14' }

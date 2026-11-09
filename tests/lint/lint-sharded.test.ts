@@ -3,7 +3,6 @@
  * resident and was killed by earlyoom. Splitting must never drop a file.
  */
 import { describe, expect, it } from 'vitest'
-// @ts-expect-error — plain .mjs script, no declarations
 import { planShards, MAX_FILES_PER_SHARD, LINTABLE } from '../../scripts/lint-sharded.mjs'
 
 const make = (dir: string, n: number): string[] =>
