@@ -52,6 +52,12 @@ export function createCronScheduler(
   options: CronSchedulerOptions = {},
 ): CronScheduler {
   const lock = options.lock
+  const candidate = lock as { acquire?: unknown } | null | undefined
+  if (candidate !== undefined && typeof candidate?.acquire !== 'function') {
+    throw new TypeError(
+      'createCronScheduler: `lock` must be an object with an `acquire(name, scheduledAt)` method returning Promise<boolean>.',
+    )
+  }
   const states: CronJobState[] = definitions.map((def) => ({
     def,
     inFlight: false,
@@ -68,20 +74,23 @@ export function createCronScheduler(
       return
     }
     state.timer = null
-    void lock.acquire(state.def.name, scheduledAt).then(
-      (won) => {
-        if (won) fireAndReschedule(state, scheduledAt)
-        else scheduleNext(state)
-      },
-      (err: unknown) => {
-        console.error(
-          `[theokit:cron] "${state.def.name}" skipped tick at ${scheduledAt.toISOString()}: ` +
-            'the cron lock could not be acquired:',
-          err instanceof Error ? err.message : err,
-        )
-        scheduleNext(state)
-      },
-    )
+    // A synchronous throw from `acquire` is treated like a rejection.
+    void Promise.resolve()
+      .then(() => lock.acquire(state.def.name, scheduledAt))
+      .then(
+        (won) => {
+          if (won) fireAndReschedule(state, scheduledAt)
+          else scheduleNext(state)
+        },
+        (err: unknown) => {
+          console.error(
+            `[theokit:cron] "${state.def.name}" skipped tick at ${scheduledAt.toISOString()}: ` +
+              'the cron lock could not be acquired:',
+            err instanceof Error ? err.message : err,
+          )
+          scheduleNext(state)
+        },
+      )
   }
 
   const fireAndReschedule = (state: CronJobState, scheduledAt: Date): void => {
