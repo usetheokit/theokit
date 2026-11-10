@@ -49,6 +49,20 @@ export function agentOptionsFor(env: BindEnvironment): TheoClawAgentOptions {
   return theoClawAgentOptions({ model, apiKey: modelKey, approvedHooks: parseApprovedHooks(env), ...thinkingOf(env), ...agentTelemetry(readTelemetrySettings(env)) })
 }
 
+/**
+ * `options` with the transcript directory the SDK would otherwise default to `<home>/.theokit`: a
+ * one-shot channel agent (a trigger run, a digest draft, a chat-completions turn) writes its
+ * transcript under `<workspace>/.theoclaw` like a chat session, not into the operator's home, outside
+ * the state the operator configured. Incognito sends it to a temp path instead. Absent a workspace
+ * (a test), the options are returned as they were.
+ */
+export function withSessionHome(env: BindEnvironment, options: TheoClawAgentOptions): TheoClawAgentOptions {
+  const workspace = env.THEOCLAW_WORKSPACE?.trim()
+  if (workspace === undefined || workspace === '' || options.local.sessionDir !== undefined) return options
+  const sessionDir = isIncognito(env) ? join(tmpdir(), `theoclaw-incognito-${randomUUID()}`) : join(workspace, '.theoclaw')
+  return { ...options, local: { ...options.local, sessionDir } }
+}
+
 function thinkingOf(env: BindEnvironment): { thinking?: ThinkingLevel } {
   const thinking = parseThinkingLevel(env.THEOCLAW_THINKING)
   return thinking === undefined ? {} : { thinking }
@@ -133,7 +147,7 @@ export function createChannelAgentFactory<A>(
 
 /** The chat path's factory over the SDK, for a caller given no `create` of its own: a trigger run's default (B-397). */
 export function createSdkChannelAgentFactory(env: BindEnvironment): () => Promise<TurnAgent> {
-  return async () => createWithFailover(env, createTheoClawAgent, agentOptionsFor(env))
+  return async () => createWithFailover(env, createTheoClawAgent, withSessionHome(env, agentOptionsFor(env)))
 }
 
 /**
@@ -145,5 +159,5 @@ export function webchatAgentFactory(
   env: BindEnvironment,
   create: CreateAgent = createTheoClawAgent,
 ): () => Promise<TurnAgent> {
-  return async () => createWithFailover(env, create, agentOptionsFor(env))
+  return async () => createWithFailover(env, create, withSessionHome(env, agentOptionsFor(env)))
 }

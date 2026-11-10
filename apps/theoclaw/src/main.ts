@@ -10,7 +10,7 @@ import { startTheoClaw } from './composition.js'
 import { resolveSecretRefs } from './secret-refs.js'
 import { createObjectGenerator } from './workflows/object-generator.js'
 import type { AgentImport, TheoClawAgentOptions } from './agent/create-agent.js'
-import { type CreateAgent, createAgentFactory, createChannelAgentFactory } from './control-plane/agent-factory.js'
+import { type CreateAgent, createAgentFactory, createChannelAgentFactory, withSessionHome } from './control-plane/agent-factory.js'
 import { loadConfiguration } from './config-file.js'
 import { teeToLogFile } from './ops/log-tee.js'
 import { watchConfiguration } from './ops/hot-reload.js'
@@ -97,7 +97,7 @@ process.title = instance.label
 
 const workspace = instance.workspace
 const createSdkAgent = (options: TheoClawAgentOptions): Promise<SDKAgent> =>
-  Agent.create({ ...options, local: { ...options.local, ...(workspace === undefined ? {} : { cwd: workspace }) } })
+  Agent.create({ ...options, local: { ...withSessionHome(process.env, options).local, ...(workspace === undefined ? {} : { cwd: workspace }) } })
 const create: CreateAgent = createSdkAgent
 
 // Secret references become their values in the process environment, so the agent factories that read it
