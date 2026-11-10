@@ -1,5 +1,17 @@
 # create-theo
 
+## 3.0.33
+
+### Patch Changes
+
+- 40188b4: The agent-node service Dockerfile runs as a non-root user (uid 1000). (B-661)
+- a08d373: The `@theokit/sdk` floor is now 5.14.0, in `@theokit/agents`, `theokit` and the `create-theokit` template. TheoClaw's plugin install (`installPlugin`, B-391) needs the SDK to import a trusted manifest entry, which 5.14.0 added; the bottom-of-range install now agrees with the root override.
+- dee3337: The `@theokit/sdk` floor is now 5.15.1, in `@theokit/agents`, `theokit` and the `create-theokit` template. 5.15.1 recovers several Gemini `<ctrl42>call` calls under one marker and keeps that text out of `text_delta` while streaming. `@theokit/agents/persistence` now re-exports `SqliteSessionStore` and `SqliteSessionStoreOptions`, and `@theokit/agents/sandbox` re-exports `DockerSandbox`, `DockerRunner`, `DockerRunResult` and `DockerSandboxConfig`, which the SDK added in 5.15.0.
+- ef05872: The `@theokit/sdk` floor is now 5.15.3, in `@theokit/agents`, `theokit` and the `create-theokit` template. 5.15.3 bounds the wait for a model response's headers (30 s by default), so a request whose response never starts fails with a retryable `NetworkError` and is retried, instead of holding the turn for up to 300 s.
+- 966a3d4: `createTauriChannelSource` and `createTauriAgentClient` take an optional `cancelCommand`. When it is set, aborting a desktop turn invokes that Tauri command (the desktop template's `cancel_turn`), so a stop button stops the turn instead of waiting for the next message. A rejected cancel command reaches the turn's `onError`; the abort itself never throws. Without the option the abort does nothing, as before. (B-376)
+
+  The `create-theokit` desktop template ships a `cancel_turn` command that kills the in-flight sidecar, registers it beside `run_turn` and `approve`, and its webview passes `cancelCommand: 'cancel_turn'`. (B-376) A scaffolded desktop app now depends on `@theokit/tauri` `^1.1.0`, the release that carries `cancelCommand`; it was `^0.1.1`, which never resolved to 1.x.
+
 ## 3.0.32
 
 ### Patch Changes
