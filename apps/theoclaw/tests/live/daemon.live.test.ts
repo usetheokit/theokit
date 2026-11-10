@@ -112,8 +112,13 @@ afterEach(async () => {
     expect(await SERVICE.definitionExists(`theoclaw-${current.profile}`)).toBe(false)
     expect(await SERVICE.isRunning(`theoclaw-${current.profile}`)).toBe(false)
   } finally {
-    rmSync(join(HOME, '.theokit', 'profiles', current.profile), { recursive: true, force: true })
-    rmSync(current.dir, { recursive: true, force: true })
+    rmSync(join(HOME, '.theokit', 'profiles', current.profile), {
+      recursive: true,
+      force: true,
+      maxRetries: 10,
+      retryDelay: 200,
+    })
+    rmSync(current.dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 })
   }
 }, 30_000)
 
