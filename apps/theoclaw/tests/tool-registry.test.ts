@@ -306,6 +306,22 @@ describe('makeHostToolsWorkspace', () => {
   })
 })
 
+describe('the MCP servers of a /control agent', () => {
+  it('runs the browser server sequentially and no other', () => {
+    const base = resolveToolSettings({}, tempWorkspace(), { detect: notEnforced, ...quiet })
+    const other = { type: 'stdio', command: 'node', args: ['other.js'] } as const
+    const settings = {
+      ...base,
+      browser: { cliPath: '/x/cli.js' },
+      external: { ...base.external, mcpServers: { other } },
+    } as typeof base
+    const servers = agentToolOptions(settings).mcpServers ?? {}
+    expect(servers.browser).toMatchObject({ sequential: true })
+    expect(servers.other).toBeDefined()
+    expect(servers.other).not.toHaveProperty('sequential')
+  })
+})
+
 describe('the extra tools of a /control agent', () => {
   const extraTool = (name: string): CustomTool =>
     ({ name, description: `the ${name} tool`, inputSchema: { type: 'object' }, handler: () => '' }) as CustomTool
