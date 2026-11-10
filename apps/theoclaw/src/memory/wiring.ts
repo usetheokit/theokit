@@ -25,8 +25,8 @@ export function memoryEnabled(env: Readonly<Record<string, string | undefined>>,
 }
 
 /** The options of the reviewer fork: the session's, with only `save_memory` and no plugin. */
-export function reviewerOptions(store: MemoryStore, base: AgentOptions): AgentOptions {
-  return { ...base, tools: [saveMemoryTool(store)], plugins: [] }
+export function reviewerOptions(store: MemoryStore, base: AgentOptions, scope?: string): AgentOptions {
+  return { ...base, tools: [saveMemoryTool(store, scope)], plugins: [] }
 }
 
 function textOf(message: TurnMessage): string {

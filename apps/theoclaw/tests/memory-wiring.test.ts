@@ -67,7 +67,8 @@ describe('memory wired into the chat sessions (OC-56, Hermes row 3)', () => {
 
     const store = new MemoryStore(join(workspace, '.theoclaw', 'memory'))
     expect(store.search('Porto').map((hit) => hit.surface).sort()).toEqual(['line', 'telegram'])
-    expect(store.facts()).toEqual(['The owner lives in Porto'])
+    expect(store.facts('telegram:u')).toEqual(['The owner lives in Porto'])
+    expect(store.facts('line:u')).toEqual(['The owner lives in Porto'])
     await sessions.disposeAll()
   })
 
@@ -85,7 +86,7 @@ describe('memory wired into the chat sessions (OC-56, Hermes row 3)', () => {
 
   it('opens a fresh session, on any surface, with the fact earlier sessions kept in its prompt', async () => {
     const workspace = mkdtempSync(join(tmpdir(), 'theoclaw-mem-'))
-    new MemoryStore(join(workspace, '.theoclaw', 'memory')).saveFact('The owner lives in Porto')
+    new MemoryStore(join(workspace, '.theoclaw', 'memory')).saveFact('The owner lives in Porto', 'line:u')
     const prompts: unknown[] = []
     const { sessions, withAgent } = chatSessions({
       env: { ...ENV, THEOCLAW_WORKSPACE: workspace },
@@ -97,6 +98,32 @@ describe('memory wired into the chat sessions (OC-56, Hermes row 3)', () => {
     })
     await withAgent(event('line'), (lease) => lease.release())
     expect(String(prompts[0])).toContain('- The owner lives in Porto')
+    await sessions.disposeAll()
+  })
+
+  it('recalls a fact only to the sender who said it; an owner shares one scope across platforms (#1508)', async () => {
+    const workspace = mkdtempSync(join(tmpdir(), 'theoclaw-mem-'))
+    const store = new MemoryStore(join(workspace, '.theoclaw', 'memory'))
+    store.saveFact('The owner favorite color is teal')
+    store.saveFact('Peer likes tea', 'matrix:@peer')
+    const prompts = new Map<string, string>()
+    const { sessions, withAgent } = chatSessions({
+      env: { ...ENV, THEOCLAW_WORKSPACE: workspace, THEOCLAW_OWNERS: 'matrix:@owner,telegram:1' },
+      write: () => undefined,
+      getOrCreate: async (id, options) => {
+        prompts.set(id, String(options.systemPrompt))
+        return scripted(options, 'x') as never
+      },
+    })
+    const dm = (platform: string, id: string) => ({ platform, sender: { id }, channel: { type: 'dm', id } }) as unknown as MessageEvent
+    for (const e of [dm('matrix', '@owner'), dm('matrix', '@peer'), dm('telegram', '1'), dm('matrix', '@other')]) {
+      await withAgent(e, (lease) => lease.release())
+    }
+    const all = [...prompts.values()]
+    expect(all.filter((p) => p.includes('teal'))).toHaveLength(2)
+    expect(all.filter((p) => p.includes('Peer likes tea'))).toHaveLength(1)
+    expect(all.filter((p) => p.includes('teal') && p.includes('Peer likes tea'))).toHaveLength(0)
+    expect(store.saveFact('Peer likes tea', 'matrix:@other')).toBe(true)
     await sessions.disposeAll()
   })
 
