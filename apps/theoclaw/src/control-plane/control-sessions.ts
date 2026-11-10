@@ -228,7 +228,6 @@ export function createControlSessions(options: ControlSessionsOptions): ControlS
     let outcome: TurnOutcome
     const startedAt = Date.now()
     let firstEvent = true
-    options.report(`theoclaw: control session ${session} turn started`)
     try {
       outcome = await runSessionTurn(agent, {
         message: text,

@@ -78,11 +78,12 @@ describe('the second turn of a /control session on a started instance', () => {
     }
 
     expect(await turn('Remember this code word. Reply with the single word ok.')).toContain('done')
+    const began = Date.now()
     const second = await turn('Use read_file to read files/notes.txt, then write a story.')
 
     expect(second).toContain('tool_result')
     expect(second.at(-1)).toBe('done')
     expect(stub.requests).toHaveLength(3)
-    expect(start.output()).toContain('control session s1 first event after')
+    expect(Date.now() - began).toBeLessThan(5_000)
   }, 20_000)
 })

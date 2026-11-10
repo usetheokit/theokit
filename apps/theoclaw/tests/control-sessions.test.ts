@@ -423,7 +423,8 @@ describe('the control session store (T2.2)', () => {
     sessions.interrupt('s1')
     sendGate.resolve()
     expect(await turn).toEqual({ ok: false, code: 'interrupted' })
-    await waitFor(() => reports.some((line) => line.includes('cancel refused')), 2000, 'the cancel failure line')
+    await waitFor(() => reports.length > 0, 2000, 'the cancel failure line')
+    expect(reports[0]).toContain('cancel refused')
   })
 
   it('a turn sent while a cancelled turn never unwinds gets busy after 5000 ms', async () => {
