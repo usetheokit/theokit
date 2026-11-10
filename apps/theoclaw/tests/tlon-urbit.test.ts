@@ -22,8 +22,23 @@ const ENV = {
  * A fake ship: the few Eyre endpoints the adapter calls, answered from memory. It speaks only what
  * a ship speaks; the Urbit protocol code under test lives in the adapter, not in TheoClaw.
  */
+/** The DM reply poke the adapter sends, as far as these tests read it. */
+interface DmPokeJson {
+  readonly ship: string
+  readonly diff: { readonly delta: { readonly add: { readonly memo: { readonly author: string; readonly content: unknown } } } }
+}
+
+/** One action of a channel PUT: a subscribe or a poke. */
+interface ChannelAction {
+  readonly action: string
+  readonly id: number
+  readonly app: string
+  readonly mark: string
+  readonly json: DmPokeJson
+}
+
 class FakeShip {
-  readonly pokes: { readonly app: string; readonly mark: string; readonly json: any }[] = []
+  readonly pokes: { readonly app: string; readonly mark: string; readonly json: DmPokeJson }[] = []
   readonly logins: string[] = []
   private stream: ReadableStreamDefaultController<Uint8Array> | undefined
   private subscriptionId = 0
@@ -39,7 +54,7 @@ class FakeShip {
       return new Response(null, { status: 204, headers: { 'set-cookie': 'urbauth-~sampel-palnet=abc; Path=/' } })
     }
     if (url.startsWith(`${SHIP_URL}/~/channel/`) && method === 'PUT') {
-      for (const action of JSON.parse(String(init?.body)) as any[]) this.onAction(action)
+      for (const action of JSON.parse(String(init?.body)) as ChannelAction[]) this.onAction(action)
       return new Response(null, { status: 204 })
     }
     if (url.startsWith(`${SHIP_URL}/~/channel/`) && method === 'GET') {
@@ -59,7 +74,7 @@ class FakeShip {
     this.frame({ response: 'diff', id: this.subscriptionId, json: { whom: author, id: `${author}/170`, response: { add: { essay } } } })
   }
 
-  private onAction(action: any): void {
+  private onAction(action: ChannelAction): void {
     if (action.action === 'subscribe') {
       this.subscriptionId = action.id
       queueMicrotask(() => this.frame({ response: 'subscribe', id: action.id, ok: '.' }))
