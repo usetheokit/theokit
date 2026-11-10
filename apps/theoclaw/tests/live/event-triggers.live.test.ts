@@ -164,7 +164,9 @@ describe.skipIf(!LIVE)('event triggers, the hook gate and /goal against a real m
     const { telegram } = await startOnFakeTelegram({ THEOCLAW_GOAL_TOKEN_BUDGET: '1' })
     // A goal one turn cannot finish: the SDK's judge answers `done` before the budget is read, so a
     // goal the first turn completes ends `completed` whatever the budget (measured on this run).
-    const goal = '/goal write a twenty-chapter story, one short chapter per turn; write only chapter 1 now'
+    // "Write only chapter 1 now" let gemini-2.5-flash's judge call the goal done after chapter 1
+    // (develop run 42794879186, twice), so the goal names its end: all twenty chapters.
+    const goal = '/goal write a twenty-chapter story, one short chapter per turn, and stop only when all twenty chapters are written'
     await telegram.deliver(messageEvent('telegram', goal, 'live-goal-user'))
     await waitFor(() => telegram.sent.length === 1, 90_000, 'the goal reply')
     expect(telegram.sent[0]?.text).toMatch(/^budget_limited: /)
