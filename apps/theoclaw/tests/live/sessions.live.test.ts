@@ -100,6 +100,7 @@ async function startLive(workspace: string) {
       OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
       THEOCLAW_PORT: '0',
       THEOCLAW_WORKSPACE: workspace,
+      THEOCLAW_TRANSCRIPTS: 'on',
       THEOCLAW_TELEGRAM_TOKEN: 'live-stand-in-telegram-token',
       // Every start names its owners (B-371); each live sender is one, so a group answers it too, and
       // a group answers without a mention, since these events carry no bot identity to mention.
@@ -110,7 +111,11 @@ async function startLive(workspace: string) {
     agentFactory: () => {
       throw new Error('the /control factory must not build a chat agent')
     },
-    getOrCreate: async (id, options) => watched(await Agent.getOrCreate(id, options), runs),
+    getOrCreate: async (id, options) => {
+      const agent = await Agent.getOrCreate(id, options)
+      // The per-turn memory review (B-381) runs a forked agent named `<id>-review-<n>`; it is not a chat session run.
+      return id.includes('-review-') ? agent : watched(agent, runs)
+    },
     builders,
     signals,
     exit,

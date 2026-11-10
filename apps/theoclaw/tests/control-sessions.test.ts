@@ -45,6 +45,7 @@ import {
   type ControlSessions,
   createControlSessions,
   MAX_CONTROL_SESSIONS,
+  REDIRECT_NOTE,
   type SessionOutcome,
 } from '../src/control-plane/control-sessions.js'
 import { createTurnRunner, type TurnAgent, type TurnEvent } from '../src/control-plane/turn.js'
@@ -179,7 +180,10 @@ describe('the control session store (T2.2)', () => {
     hold.resolve()
     expect(await f.sessions.run('s1', 'redirect', collect().emit, me)).toEqual({ ok: true })
     expect(f.builds).toBe(1)
-    expect(f.agents[0]!.sent).toEqual(['first', 'redirect'])
+    expect(f.agents[0]!.sent).toEqual(['first', `${REDIRECT_NOTE}redirect`])
+    // Only the first message after the interrupt is a redirect.
+    expect(await f.sessions.run('s1', 'later', collect().emit, me)).toEqual({ ok: true })
+    expect(f.agents[0]!.sent.at(-1)).toBe('later')
   })
 
   it('a turn sent just before the old socket\'s close arrives runs once that close cancels the old turn', async () => {
@@ -354,7 +358,7 @@ describe('the control session store (T2.2)', () => {
     hold.resolve()
     expect(await first).toEqual({ ok: false, code: 'interrupted' })
     expect(await redirect).toEqual({ ok: true })
-    expect(f.agents[0]!.sent).toEqual(['first', 'redirect'])
+    expect(f.agents[0]!.sent).toEqual(['first', `${REDIRECT_NOTE}redirect`])
   })
 
   it('an interrupt while a turn waits for the cancelled turn to unwind stops the waiting turn', async () => {

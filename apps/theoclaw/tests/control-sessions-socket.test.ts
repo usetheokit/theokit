@@ -125,7 +125,7 @@ describe("the control socket speaks sessions and interrupt (T2.3)", () => {
     let streams = 0;
     // Only the first turn is held; the interrupt, not a released gate, is what frees the session.
     const plane = await startSessionPlane(() => ({
-      frames: (text: string) => [assistant(text === "redirect" ? "redirected" : "long story"), finished()],
+      frames: (text: string) => [assistant(text.endsWith("redirect") ? "redirected" : "long story"), finished()],
       get before() {
         streams += 1;
         return streams === 1 ? hold.promise : undefined;

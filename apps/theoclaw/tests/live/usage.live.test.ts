@@ -6,6 +6,7 @@ import { controlOptions } from '../../src/control-plane/control-wiring.js'
 import { type ControlPlaneHandle, healthHandler, listenControlPlane } from '../../src/control-plane/listener.js'
 import type { TurnAgent } from '../../src/control-plane/turn.js'
 import { runControlTurn } from './support/control-turn.js'
+import { throwUnlessFinished } from './support/turn-failed.js'
 import { type RecordingProxy, startRecordingProxy } from './support/recording-proxy.js'
 
 /**
@@ -46,7 +47,7 @@ describe.skipIf(!LIVE)('usage and cost against a real model (OC-97)', () => {
 
     const turn = await runControlTurn(handle.address().port, TOKEN, 'Reply with exactly the word: pong', TURN_TIMEOUT_MS - 10_000)
 
-    expect(turn.status, turn.error).toBe('finished')
+    throwUnlessFinished(turn, stderr.join('\n'), [TOKEN, key])
     const done = turn.frames.find((frame) => frame.type === 'done') as {
       usage: { inputTokens: number; outputTokens: number }
       model: string

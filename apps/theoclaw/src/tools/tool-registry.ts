@@ -41,6 +41,8 @@ export interface AgentToolOptions {
   readonly plugins: readonly Plugin[]
   /** The browser server with `THEOCLAW_BROWSER=on` (B-383) and the MCP servers of `THEOCLAW_EXTERNAL_TOOLS`; absent when neither names one. */
   readonly mcpServers?: Readonly<Record<string, McpServerConfig>>
+  /** Appended to the agent's system prompt: the facts earlier sessions kept (OC-56); absent adds nothing. */
+  readonly systemPromptSuffix?: string
 }
 
 /** One `createACPTool` per agent of the external tools file, each run in the tool root without the host secrets. */

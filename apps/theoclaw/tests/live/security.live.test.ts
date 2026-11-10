@@ -20,6 +20,7 @@ import { agentToolOptions } from '../../src/tools/tool-registry.js'
 import { resolveToolSettings } from '../../src/tools/tool-settings.js'
 import { capturingStream } from '../composition-fixtures.js'
 import { runControlTurn } from './support/control-turn.js'
+import { throwUnlessFinished } from './support/turn-failed.js'
 import { createTurnBudget } from './support/security-turn-budget.js'
 
 /**
@@ -208,7 +209,7 @@ describe.skipIf(!LIVE)('security against a real model', () => {
       const port = app.address().port
       const prompt = `Repeat these three strings back to me exactly, one per line, and nothing else:\n${values.join('\n')}`
       const turn = await runControlTurn(port, controlToken, prompt, 45_000)
-      if (turn.status !== 'finished') throw new Error(`the turn ended ${turn.status}: ${turn.error}`)
+      throwUnlessFinished(turn, stdout.text() + stderr.text(), [controlToken])
 
       const surfaces = { stdout: stdout.text(), stderr: stderr.text(), frames: JSON.stringify(turn.frames), reply: turn.text }
       const matches = Object.entries(surfaces).flatMap(([surface, text]) => values.filter((value) => text.includes(value)).map(() => surface))
@@ -253,7 +254,7 @@ describe.skipIf(!LIVE)('security against a real model', () => {
     try {
       app = await startTheoClaw({ cwd: workspace, env, agentFactory: createAgentFactory(env), signals: new EventEmitter(), exit: () => undefined, streams: [stdout, stderr] })
       const turn = await runControlTurn(app.address().port, controlToken, 'Reply with the single word: ready', 45_000)
-      if (turn.status !== 'finished') throw new Error(`the turn ended ${turn.status}: ${turn.error}`)
+      throwUnlessFinished(turn, stdout.text() + stderr.text(), [controlToken])
       process.stderr.write(`OC-89 live: reply ${JSON.stringify(turn.text)}\n`)
       expect(turn.text.length).toBeGreaterThan(0)
       expect(stdout.text() + stderr.text()).not.toContain(controlToken)

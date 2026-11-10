@@ -1,8 +1,10 @@
-import { execSync } from 'node:child_process'
-import { existsSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { execFileSync } from 'node:child_process'
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
+import { dirname, join, resolve } from 'node:path'
 
 import { loadConfig } from '../../config/load-config.js'
+import { storageSchema } from '../../config/schema.js'
 
 type DbAction = 'migrate' | 'push' | 'generate' | 'seed'
 
@@ -14,11 +16,35 @@ interface DbCommandResult {
   action?: DbAction
 }
 
-/** Runs a shell command in the project. Injected so a test can see the command without running it. */
-type RunCommand = (command: string, cwd: string) => void
+type DbTool = 'drizzle-kit' | 'tsx'
 
-const runInherited: RunCommand = (command, cwd) => {
-  execSync(command, { cwd, stdio: 'inherit' })
+/**
+ * Runs one of the project's own tools, without a shell: the tool name and its argv, so a path with a
+ * space or a quote is never parsed. Injected so a test can see the command without running it.
+ */
+type RunCommand = (tool: DbTool, args: readonly string[], cwd: string) => void
+
+/**
+ * The JS entry of a tool installed in the project, read from its package.json `bin`. Running it with
+ * `process.execPath` needs neither a shell nor `npx`/`.cmd` shims, which Node refuses to spawn
+ * without a shell on Windows (CVE-2024-27980).
+ */
+export function resolveToolBin(cwd: string, tool: DbTool): string {
+  const req = createRequire(join(cwd, 'package.json'))
+  let pkgPath: string
+  try {
+    pkgPath = req.resolve(`${tool}/package.json`)
+  } catch {
+    throw new Error(`${tool} not found. Run: npm install -D ${tool}`)
+  }
+  const pkg = JSON.parse(readFileSync(pkgPath, 'utf8')) as { bin?: string | Record<string, string> }
+  const rel = typeof pkg.bin === 'string' ? pkg.bin : pkg.bin?.[tool]
+  if (rel === undefined) throw new Error(`${tool} has no "${tool}" bin in its package.json`)
+  return resolve(dirname(pkgPath), rel)
+}
+
+const runInherited: RunCommand = (tool, args, cwd) => {
+  execFileSync(process.execPath, [resolveToolBin(cwd, tool), ...args], { cwd, stdio: 'inherit' })
 }
 
 function assertFileExists(cwd: string, relPath: string, hint: string): void {
@@ -44,19 +70,37 @@ function assertBinExists(cwd: string, bin: string): void {
  * behaviour stays available, under its real name, as `push`.
  */
 const DRIZZLE_KIT_VERBS = {
-  migrate: { command: 'npx drizzle-kit migrate', message: 'Migrations applied' },
-  push: { command: 'npx drizzle-kit push', message: 'Schema pushed to the database' },
-  generate: { command: 'npx drizzle-kit generate', message: 'Migration files generated' },
+  migrate: { args: ['drizzle-kit', 'migrate'], message: 'Migrations applied' },
+  push: { args: ['drizzle-kit', 'push'], message: 'Schema pushed to the database' },
+  generate: { args: ['drizzle-kit', 'generate'], message: 'Migration files generated' },
 } as const
 
 async function runSeed(cwd: string, run: RunCommand): Promise<string> {
   // The seed file lives under the configured `serverDir`; a hardcoded `server/` missed the
   // scaffold's `src/server` layout.
-  const { serverDir } = await loadConfig(cwd)
+  const { serverDir, storage } = await loadConfig(cwd)
   const seedPath = join(serverDir, 'db', 'seed.ts')
   assertFileExists(cwd, seedPath, `Create ${seedPath} with your seed data.`)
   console.log('\n  ▸ Running seed...\n')
-  run(`npx tsx ${seedPath}`, cwd)
+  // #1439 — the seed is a bare child process, so `config.storage` never reached its storage manager
+  // and any seed importing a `usePostgres('main', ...)` module threw "Database not configured".
+  // A preload applies the parsed storage config through the project's own `theokit` instance.
+  const preloadDir = resolve(cwd, 'node_modules', '.cache', 'theokit')
+  const preload = join(preloadDir, 'seed-preload.mjs')
+  const hasStorage = storage !== undefined
+  if (hasStorage) {
+    mkdirSync(preloadDir, { recursive: true })
+    const parsed = JSON.stringify(storageSchema.parse(storage))
+    writeFileSync(
+      preload,
+      `import { getStorageManager } from 'theokit/server/storage'\ngetStorageManager().configure(${parsed})\n`,
+    )
+  }
+  try {
+    run('tsx', hasStorage ? ['--import', preload, seedPath] : [seedPath], cwd)
+  } finally {
+    if (hasStorage) rmSync(preload, { force: true })
+  }
   return 'Database seeded successfully'
 }
 
@@ -81,8 +125,8 @@ export async function dbCommand(
     const verb = DRIZZLE_KIT_VERBS[dbAction]
     assertFileExists(cwd, 'drizzle.config.ts', 'Create a drizzle.config.ts for your project.')
     assertBinExists(cwd, 'drizzle-kit')
-    console.log(`\n  ▸ Running ${verb.command.replace('npx ', '')}...\n`)
-    run(verb.command, cwd)
+    console.log(`\n  ▸ Running ${verb.args.join(' ')}...\n`)
+    run('drizzle-kit', verb.args.slice(1), cwd)
     return { status: 'success', message: verb.message, action: dbAction }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)

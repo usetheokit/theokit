@@ -8,7 +8,7 @@ import type { BwrapDetection } from '@theokit/agents/sandbox'
 import { resolveSandboxPosture } from '@theokit/agents/sandbox'
 import { createJobStore, createScheduler, createScheduleTools } from '@theokit/agents/tools'
 import { effectiveToolNames } from '@theokit/sdk'
-import type { CustomTool } from '@theokit/sdk'
+import type { CustomTool, McpServerConfig } from '@theokit/sdk'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { createTheoClawAgent, theoClawAgentOptions } from '../src/agent/create-agent.js'
@@ -303,6 +303,22 @@ describe('makeHostToolsWorkspace', () => {
     const repository = hostWorkspace()
     makeRepository(repository)
     expect(() => makeHostToolsWorkspace(join(repository, 'base'))).toThrow(/is inside a git repository/)
+  })
+})
+
+describe('the MCP servers of a /control agent', () => {
+  it('runs the browser server sequentially and no other', () => {
+    const base = resolveToolSettings({}, tempWorkspace(), { detect: notEnforced, ...quiet })
+    const other: McpServerConfig = { type: 'stdio', command: 'node', args: ['other.js'] }
+    const settings = {
+      ...base,
+      browser: { cliPath: '/x/cli.js' },
+      external: { ...base.external, mcpServers: { other } },
+    } as typeof base
+    const servers = agentToolOptions(settings).mcpServers ?? {}
+    expect(servers.browser).toMatchObject({ sequential: true })
+    expect(servers.other).toBeDefined()
+    expect(servers.other).not.toHaveProperty('sequential')
   })
 })
 

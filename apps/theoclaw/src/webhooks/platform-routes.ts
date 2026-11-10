@@ -3,7 +3,7 @@ import type { TeamsActivityVerifierOptions } from '@theokit/gateway-teams'
 
 import { smsOptions } from '../channels/adapter-factory.js'
 import type { ChannelLoop, PlatformBuild } from '../channels/channel-loop.js'
-import type { PlatformSettings } from '../channels/platforms.js'
+import type { PlatformSettings, SupportedPlatform } from '../channels/platforms.js'
 import { describeError } from '../control-plane/errors.js'
 import { createLineRoute } from './line.js'
 import type { WebhookRoute } from './router.js'
@@ -64,7 +64,7 @@ export interface WebhookDeps {
   readonly verifierFactory: (options: TeamsActivityVerifierOptions) => TeamsVerifier
 }
 
-type WebhookPlatformFor<P extends PlatformName> = (
+type WebhookPlatformFor<P extends SupportedPlatform> = (
   settings: PlatformSettings<P>,
   deps: WebhookDeps,
 ) => WebhookPlatform
@@ -73,12 +73,13 @@ type WebhookPlatformFor<P extends PlatformName> = (
  * Each platform's webhook, or `null` for one that has none. Keyed by every platform name, so a new
  * platform does not compile until it has a decision here (an unlisted one would answer 404).
  */
-const WEBHOOK_PLATFORMS: { readonly [P in PlatformName]: WebhookPlatformFor<P> | null } = {
+const WEBHOOK_PLATFORMS: { readonly [P in SupportedPlatform]: WebhookPlatformFor<P> | null } = {
   telegram: null,
   discord: null,
   slack: null,
   matrix: null,
   mattermost: null,
+  tlon_urbit: null,
   email: null,
   line: ({ channelSecret }) => ({
     methods: ['POST'],
@@ -116,7 +117,7 @@ const WEBHOOK_PLATFORMS: { readonly [P in PlatformName]: WebhookPlatformFor<P> |
 }
 
 /** The route builder of one configured platform, or undefined for a platform with no webhook. */
-export function webhookPlatform<P extends PlatformName>(
+export function webhookPlatform<P extends SupportedPlatform>(
   entry: { readonly platform: P; readonly settings: PlatformSettings<P> },
   deps: WebhookDeps,
 ): WebhookPlatform | undefined {

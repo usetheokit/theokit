@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import WebSocket from 'ws'
 
 import { ENTRY, killInstance, startInstance, type StartedInstance, waitForListener, waitForStartLine } from './support/instance-process.js'
+import { turnFailedError } from './support/turn-failed.js'
 
 /**
  * FR-013 (B-375, AC-016, AC-017): an imported Claude Code setup and an imported Hermes setup, each
@@ -71,7 +72,7 @@ async function turn(instance: StartedInstance, message: string): Promise<Turn> {
           resolve({ answer, toolCalls })
         } else if (frame.type === 'error') {
           clearTimeout(timer)
-          reject(new Error(`turn failed: ${frame.code ?? ''}`))
+          reject(turnFailedError(frame, instance.output(), [instance.token]))
         }
       })
       // A dropped socket ends the turn at once, not at the deadline.

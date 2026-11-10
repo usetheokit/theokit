@@ -92,6 +92,8 @@ export async function runAgentEvals(opts: RunAgentEvalsOptions): Promise<AgentEv
   const factory = toAgentFactory(opts.agent, {
     apiKey: opts.apiKey,
     approvals: opts.approvals,
+    // An unattended eval must not hold the SDK's default shell: approvals do not gate it.
+    withholdBuiltinShell: true,
     ...(opts.overrides === undefined ? {} : { overrides: opts.overrides }),
   })
   // One uuid per call: the SDK caches agents by session id, so a name reused across sequential runs

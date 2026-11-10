@@ -70,7 +70,8 @@ describe('a provider that answers 429', () => {
     const provider = await startProvider(Number.MAX_SAFE_INTEGER, 'never')
     const outcome = await turn(provider.url)
     expect(outcome.status).toBe('error')
-    expect(outcome.error).toBe('openrouter API error: rate_limit (HTTP 429)')
+    // Since #1479 a streamed error keeps the SDK's message after its code.
+    expect(outcome.error).toBe('openrouter API error: rate_limit (HTTP 429): rate limited')
     expect(provider.requests()).toBe(SDK_ATTEMPTS)
   }, 60_000)
 })

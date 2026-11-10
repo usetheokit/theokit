@@ -13,6 +13,7 @@ import { type ControlClient, createControlClient } from "../src/control-client/c
 import { composerReady } from "./composer-ready.js";
 import { createContainer } from "../src/composition.js";
 import { controlOptions } from "../src/control-plane/control-wiring.js";
+import { REDIRECT_NOTE } from "../src/control-plane/control-sessions.js";
 import { type ControlPlaneHandle, healthHandler, listenControlPlane } from "../src/control-plane/listener.js";
 import type { TurnAgent } from "../src/control-plane/turn.js";
 import { TheoClawTui } from "../src/tui/app.js";
@@ -170,7 +171,7 @@ describe("theoclaw-tui (T4.2)", () => {
     await tui.until((f) => f.includes("sent when the running turn ends"), "the queued notice");
     teardown.resolve();
     await waitFor(() => instance.agents[0]!.sent.length === 2, 3000, "the redirect to reach the instance");
-    expect(instance.agents[0]!.sent).toEqual(["hi", "again"]);
+    expect(instance.agents[0]!.sent).toEqual(["hi", `${REDIRECT_NOTE}again`]);
   });
 
   it("/new during a turn is refused, so Esc still stops that turn", async () => {

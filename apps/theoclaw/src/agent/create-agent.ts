@@ -95,7 +95,9 @@ export function theoClawAgentOptions<Model extends string | ModelSelection>(
     ...(input.thinking === undefined ? {} : { thinking: input.thinking }),
   }
   const withTools: TheoClawAgentOptions<Model> = input.toolOptions === undefined ? base : withToolOptions(base, input.toolOptions)
-  return input.imported === undefined ? withTools : withImport(withTools, input.imported)
+  const imported = input.imported === undefined ? withTools : withImport(withTools, input.imported)
+  const suffix = input.toolOptions?.systemPromptSuffix
+  return suffix === undefined || suffix === '' ? imported : { ...imported, systemPrompt: `${imported.systemPrompt}\n\n${suffix}` }
 }
 
 /** `base` plus the tool options: the tools, the plugins, and the browser and external servers. */

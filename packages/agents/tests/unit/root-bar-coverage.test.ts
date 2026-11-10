@@ -237,6 +237,7 @@ const ROOT_BAR_VERDICTS: Record<string, Verdict> = {
   // ── OUT — session lifecycle / retention (M71, M72 territory) ────────────────────────────────
   guardSessionDestruction: { verdict: 'out', reason: R.SESSION_LIFECYCLE },
   planReaping: { verdict: 'out', reason: R.SESSION_LIFECYCLE },
+  SqliteSessionStore: { verdict: 'out', reason: R.SESSION_LIFECYCLE },
   RetentionPolicyError: { verdict: 'out', reason: R.SESSION_LIFECYCLE },
   LiveSessionError: { verdict: 'out', reason: R.SESSION_LIFECYCLE },
   scopedConversationId: { verdict: 'out', reason: R.SCOPING_IS_FRAMEWORK },

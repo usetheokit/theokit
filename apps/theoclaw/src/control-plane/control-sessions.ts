@@ -60,6 +60,8 @@ interface Running {
 
 interface Entry {
   agent: TurnAgent | undefined
+  /** The session's last turn was sent and then interrupted: the next message is a redirect. */
+  interrupted: boolean
   lastUsed: number
   running: Running | undefined
 }
@@ -69,6 +71,14 @@ interface Admission {
   readonly entry: Entry
   readonly evicted: Entry | undefined
 }
+
+/**
+ * What the model is told before the message that follows an interrupted turn. The agent keeps the
+ * interrupted message in its history with no answer after it, so the redirect would reach the model
+ * beside a request nobody withdrew, and the model goes on with that request instead of answering.
+ */
+export const REDIRECT_NOTE =
+  '[The owner stopped your previous answer and withdrew that request. Do not continue it. Answer only the message below.]\n\n'
 
 const INTERRUPTED: SessionOutcome = { ok: false, code: 'interrupted' }
 const BUSY: SessionOutcome = { ok: false, code: 'busy' }
@@ -132,7 +142,7 @@ export function createControlSessions(options: ControlSessionsOptions): ControlS
         evicted = evictIdle()
         if (evicted === undefined) return BUSY
       }
-      entry = { agent: undefined, lastUsed: 0, running: undefined }
+      entry = { agent: undefined, interrupted: false, lastUsed: 0, running: undefined }
       entries.set(session, entry)
     }
     entry.running = turn
@@ -213,21 +223,28 @@ export function createControlSessions(options: ControlSessionsOptions): ControlS
       }
       entry.agent = agent
     }
-    const outcome = await runSessionTurn(agent, {
-      message,
-      runId: randomUUID(),
-      signal: turn.controller.signal,
-      emit,
-      secrets: options.secrets ?? [],
-      ...(options.model === undefined ? {} : { model: options.model }),
-      onRun: (run) => {
-        turn.run = run
-        if (turn.cancelRequested) cancelRun(run)
-      },
-      onEventsEnded: () => {
-        turn.eventsEnded = true
-      },
-    })
+    const text = entry.interrupted ? `${REDIRECT_NOTE}${message}` : message
+    entry.interrupted = false
+    let outcome: TurnOutcome
+    try {
+      outcome = await runSessionTurn(agent, {
+        message: text,
+        runId: randomUUID(),
+        signal: turn.controller.signal,
+        emit,
+        secrets: options.secrets ?? [],
+        ...(options.model === undefined ? {} : { model: options.model }),
+        onRun: (run) => {
+          turn.run = run
+          if (turn.cancelRequested) cancelRun(run)
+        },
+        onEventsEnded: () => {
+          turn.eventsEnded = true
+        },
+      })
+    } finally {
+      if (turn.cancelRequested) entry.interrupted = true
+    }
     return turn.cancelRequested ? INTERRUPTED : outcome
   }
 

@@ -188,7 +188,7 @@ async function main(): Promise<void> {
   // Interactive prompts (skipped with --yes or --bare)
   let options: ProjectOptions
   if (useDefaults || bare) {
-    options = getDefaults(projectName)
+    options = getDefaults(projectName, bare)
     if (useBiome) options.eslint = false // Biome replaces ESLint
   } else {
     options = await runPrompts(projectName)

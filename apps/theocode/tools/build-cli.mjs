@@ -110,7 +110,11 @@ export function bundleOptions(root = REPO_ROOT) {
     // bundle warned `could not be loaded` while the same turn under `tsx` warned nothing at all. We
     // run the TUI, exec and ACP over the same sessions directory, so a lock that is silently off is
     // a race, not a detail.
-    external: ['node-pty', 'better-sqlite3', 'proper-lockfile', '*.node'],
+    //
+    // `readline/promises` is a Node builtin that the SDK's `dist` imports without the `node:` scheme
+    // (usetheokit/theokit-sdk#960), and esbuild does not resolve that bare name as a builtin, so the
+    // bundle failed to build. Node resolves it at runtime. Remove it once the SDK keeps the scheme.
+    external: ['node-pty', 'better-sqlite3', 'proper-lockfile', '*.node', 'readline/promises'],
     // Ink's optional devtools client, resolved to an empty module — see `devtoolsStub` above
     // for why `external` does not work here.
     plugins: [devtoolsStub, reactProduction],

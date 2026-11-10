@@ -6,6 +6,7 @@ import type { GatewayContext, MessageEvent } from '@theokit/gateway'
 
 import { createGroupActivationHook } from '../src/channels/group-activation-hook.js'
 import { createUsageHook } from '../src/channels/usage-hook.js'
+import { createAcpCommandHook, createAcpSessions } from '../src/channels/acp-command.js'
 import { createHelpHook, HELP_COMMANDS, HELP_TEXT } from '../src/channels/help-hook.js'
 import { createReplyHandler } from '../src/channels/reply-handler.js'
 import { showTyping } from '../src/channels/typing.js'
@@ -75,6 +76,7 @@ describe('the commands /help lists', () => {
   it('each is answered by its own handler without a model turn', async () => {
     const usage = createUsageHook().hook
     const activation = createGroupActivationHook({ isOwner: () => true, mode: 'mention', write: () => undefined })
+    const acp = createAcpCommandHook({ sessions: createAcpSessions({ agents: [], cwd: '/tmp' }), isOwner: () => true })
     let sends = 0
     const agent = { send: async () => (sends += 1, never()) } as never
     const never = (): never => {
@@ -90,7 +92,7 @@ describe('the commands /help lists', () => {
       // /activation is a group command: in a DM it is an ordinary message.
       const base = messageEvent('telegram', command)
       const event = { ...base, channel: { ...base.channel, type: 'group' } } as MessageEvent
-      const hooked = [usage, activation].map((hook) => hook.pre_inbound?.({ event } as never))
+      const hooked = [usage, activation, acp].map((hook) => hook.pre_inbound?.({ event } as never))
       const log: string[] = []
       if ((await Promise.all(hooked)).some((d) => d?.block === true)) continue
       await handler(event, ctxFor(event, log)).catch(() => undefined)

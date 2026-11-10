@@ -274,8 +274,11 @@ describe("sessionAgentOptions", () => {
     }
   });
 
-  it("keeps the transcripts under the workspace", () => {
-    expect(sessionAgentOptions({ THEOCLAW_MODEL: "m", OPENROUTER_API_KEY: "k" }, "/ws").local).toEqual({
+  it("sends the transcripts to a temp directory by default, under the workspace with THEOCLAW_TRANSCRIPTS=on", () => {
+    const dir = sessionAgentOptions({ THEOCLAW_MODEL: "m", OPENROUTER_API_KEY: "k" }, "/ws").local.sessionDir;
+    expect(dir.startsWith("/ws")).toBe(false);
+    expect(dir.startsWith(tmpdir())).toBe(true);
+    expect(sessionAgentOptions({ THEOCLAW_MODEL: "m", OPENROUTER_API_KEY: "k", THEOCLAW_TRANSCRIPTS: "on" }, "/ws").local).toEqual({
       cwd: "/ws",
       sessionDir: "/ws/.theoclaw",
       hooks: expect.anything(),

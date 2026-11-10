@@ -7,8 +7,10 @@ import type { MessageEvent } from '@theokit/gateway'
 import { Agent } from '@theokit/sdk'
 import type { AgentOptions, Plugin } from '@theokit/sdk'
 
+import { createMemory, type MemoryWiring, memoryEnabled, reviewerOptions } from '../memory/wiring.js'
 import { createContainer } from '../agent-container.js'
-import { createChannelAgentFactory, isIncognito, sessionAgentOptions } from '../control-plane/agent-factory.js'
+import { TheoClawConfigError } from '../control-plane/errors.js'
+import { createChannelAgentFactory, isIncognito, keepsTranscripts, sessionAgentOptions } from '../control-plane/agent-factory.js'
 import { Generations } from './generations.js'
 import { type SessionAgent, SessionAgents, type SessionLease } from './session-agents.js'
 import { createSessionRouter } from './session-key.js'
@@ -40,11 +42,20 @@ export type ChatBoundary = <R>(event: MessageEvent, work: (lease: SessionLease) 
  * once two sessions are dispatched at once. The lease the boundary resolves carries no dispose, so
  * the end of the request leaves the agent open (D2).
  */
-export function chatSessions(options: ChatSessionsOptions): { readonly sessions: SessionAgents; readonly withAgent: ChatBoundary; readonly keyOf: (event: MessageEvent) => string } {
+export function chatSessions(options: ChatSessionsOptions): { readonly sessions: SessionAgents; readonly withAgent: ChatBoundary; readonly keyOf: (event: MessageEvent) => string; readonly memory: MemoryWiring | undefined } {
   const settings = options.sessionSettings ?? readSessionSettings(options.env, statSync)
   const router = createSessionRouter(settings)
   const incognito = isIncognito(options.env)
+  const transient = incognito || !keepsTranscripts(options.env)
   const open = options.getOrCreate ?? ((id: string, agentOptions: AgentOptions) => Agent.getOrCreate(id, agentOptions))
+  if (!incognito && transient && options.env.THEOCLAW_MEMORY?.trim().toLowerCase() === 'on') {
+    throw new TheoClawConfigError('THEOCLAW_MEMORY=on needs THEOCLAW_TRANSCRIPTS=on: memory recalls from the chat transcripts, and with transcripts off none is kept', {
+      variable: 'THEOCLAW_MEMORY',
+    })
+  }
+  const memory = memoryEnabled(options.env, transient) ? createMemory(join(settings.workspace, '.theoclaw', 'memory'), options.write) : undefined
+  let reviews = 0
+  const recalled = recalledPrompt(memory)
   const sessions = new SessionAgents({
     router,
     // Opened by the chat path's own factory, whose protected options are applied last, so the
@@ -52,13 +63,17 @@ export function chatSessions(options: ChatSessionsOptions): { readonly sessions:
     // those keys are re-pinned, `local` merged so the session's cwd and the hook gate both hold (B-397).
     getOrCreate: async (id, sessionOptions) => {
       const dir = sessionOptions.local?.sessionDir
-      try {
-        const agent = await createChannelAgentFactory(options.env, (channel) =>
-          open(id, { ...sessionOptions, ...channel, local: { ...sessionOptions.local, ...channel.local } }),
+      const build = (agentId: string, extra: AgentOptions): Promise<SessionAgent> =>
+        createChannelAgentFactory(options.env, (channel) =>
+          open(agentId, { ...sessionOptions, ...channel, ...extra, ...recalled(channel.systemPrompt, extra), local: { ...sessionOptions.local, ...channel.local } }),
         )()
-        return incognito ? withIncognitoCleanup(agent, dir) : agent
+      try {
+        const opened = await build(id, {})
+        // The reviewer is a fork: its own agent id and only `save_memory`, opened after each turn.
+        const agent = memory === undefined ? opened : memory.wrap(opened, surfaceOf(id), keyOf(id), () => build(`${id}-review-${++reviews}`, reviewerOptions(memory.store, sessionOptions)))
+        return transient ? withIncognitoCleanup(agent, dir) : agent
       } catch (error) {
-        if (incognito) removeIncognitoDir(dir)
+        if (transient) removeIncognitoDir(dir)
         throw error
       }
     },
@@ -79,7 +94,22 @@ export function chatSessions(options: ChatSessionsOptions): { readonly sessions:
       return sessions.lease(event)
     },
   })
-  return { sessions, keyOf: (event) => router.resolveAgentId(event), withAgent: (event, work) => currentEvent.run(event, () => boundary.withAgent(work)) }
+  return { sessions, memory, keyOf: (event) => router.resolveAgentId(event), withAgent: (event, work) => currentEvent.run(event, () => boundary.withAgent(work)) }
+}
+
+/** The session key inside an agent id (`agentIdFor`), and the surface (platform) its first segment names. */
+const keyOf = (id: string): string => id.replace(/^theoclaw-/, '').replace(/-g\d+$/, '')
+const surfaceOf = (id: string): string => keyOf(id).split('-')[0] ?? 'chat'
+
+/**
+ * A session's agent opens with the facts earlier sessions kept, as data (OC-56); the reviewer fork
+ * (which passes `tools`) does not. Read when the agent opens, so a new session sees the latest.
+ */
+function recalledPrompt(memory: MemoryWiring | undefined) {
+  return (prompt: string, extra: AgentOptions): { systemPrompt?: string } => {
+    const facts = memory?.store.recallSection() ?? ''
+    return facts === '' || extra.tools !== undefined ? {} : { systemPrompt: `${prompt}\n\n${facts}` }
+  }
 }
 
 /** An incognito agent whose private transcript directory is removed once it is disposed. */

@@ -78,6 +78,45 @@ describe('createCronScheduler with a lock', () => {
     expect(error.mock.calls.map((c) => c.join(' ')).join('\n')).toContain('connection refused')
   })
 
+  it('a lock whose acquire throws synchronously skips the tick and asks again', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    let attempts = 0
+    const lock: CronLock = {
+      acquire: () => {
+        attempts++
+        throw new Error('boom')
+      },
+    }
+    const handler = vi.fn()
+    const s = createCronScheduler([everySecond(handler)], { lock })
+    schedulers.push(s)
+    s.start()
+    await until(() => attempts >= 2, 4000)
+    expect(handler).not.toHaveBeenCalled()
+    expect(error.mock.calls.map((c) => c.join(' ')).join('\n')).toContain('boom')
+  })
+
+  it('an acquire that never settles does not stop later ticks asking the lock', async () => {
+    let attempts = 0
+    const lock: CronLock = {
+      acquire: () => (attempts++ === 0 ? new Promise<boolean>(() => {}) : Promise.resolve(true)),
+    }
+    const handler = vi.fn()
+    const s = createCronScheduler([everySecond(handler)], { lock })
+    schedulers.push(s)
+    s.start()
+    await until(() => handler.mock.calls.length >= 1, 4000)
+    expect(attempts).toBeGreaterThanOrEqual(2)
+  })
+
+  it('refuses a lock without an acquire function at construction', () => {
+    for (const lock of [{}, { acquire: 'x' }, null, true]) {
+      expect(() => createCronScheduler([everySecond(() => {})], { lock } as never)).toThrow(
+        /acquire/,
+      )
+    }
+  })
+
   it('without a lock the scheduler fires as before', async () => {
     const handler = vi.fn()
     const s = createCronScheduler([everySecond(handler)])

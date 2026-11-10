@@ -23,6 +23,7 @@ import { createBroadcastGroups } from './channels/broadcast-groups.js'
 import { maskSecrets, startChannelLoop } from './channels/channel-loop.js'
 import { channelHooks } from './channel-hooks.js'
 import { createChatExecApproval } from './channels/exec-approval-chat.js'
+import { createAcpSessions, type AcpSessions } from './channels/acp-command.js'
 import { createUsageHook } from './channels/usage-hook.js'
 import type { ChannelLoop, PlatformBuild } from './channels/channel-loop.js'
 import { installOutputMask, type MaskableStream } from './channels/output-mask.js'
@@ -53,6 +54,8 @@ import { createBonjourPublisher } from './discovery/bonjour-publisher.js'
 import { announceOnLan, type LanAnnouncement, stopThenClose } from './discovery/lan-announcer.js'
 import { parseDiscoveryMode, type PublisherFactory } from './discovery/publisher.js'
 import { NO_PROFILE, startLine, type TheoClawInstance } from './instance.js'
+import { saveMemoryTool } from './memory/memory-tools.js'
+import type { MemoryWiring } from './memory/wiring.js'
 import { type ChatBoundary, chatSessions, sessionsFile } from './sessions/chat-sessions.js'
 import { Generations } from './sessions/generations.js'
 import type { SessionAgent, SessionAgents } from './sessions/session-agents.js'
@@ -115,6 +118,8 @@ export interface TheoClawOptions {
   readonly sessionSettings?: SessionSettings
   /** Defaults to the ten real adapters; tests pass fakes. */
   readonly builders?: (configured: readonly ConfiguredPlatform[], options: AdapterBuildOptions) => PlatformBuild[]
+  /** The ACP sessions `/acp` manages (B-685); `startTheoClaw` builds them from the external tools file. */
+  readonly acp?: AcpSessions
   readonly write: (line: string) => void
   readonly startTimeoutMs?: number
   /** Who the instance serves, parsed from this same `env`; parsed here when absent (`startTheoClaw` parses it first). */
@@ -143,6 +148,8 @@ export interface ComposedTheoClaw {
   readonly sessions: SessionAgents
   /** The chat path's request boundary over the sessions; WebChat leases one chat's agent through it. */
   readonly withChatAgent: ChatBoundary
+  /** The memory every surface shares; absent under incognito or `THEOCLAW_MEMORY=off`. */
+  readonly memory?: MemoryWiring | undefined
 }
 
 /** The trigger routes (B-397): each run on a fresh tool-less agent in its own request boundary, replying through a started adapter, its reply masked (B-398 FR-006). */
@@ -256,7 +263,7 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
       goal: events.goal,
       typing: { adapterFor: (platform) => loop.started.get(platform as PlatformName)?.adapter },
     }), configuredVoiceReplies(options.env)),
-    hooks: channelHooks({ policy, ...(pairing === undefined ? {} : { pairing }), write: maskedWrite, execApproval: execChat, ...(model === undefined ? {} : { usage: usage.hook }) }),
+    hooks: channelHooks({ policy, ...(pairing === undefined ? {} : { pairing }), write: maskedWrite, execApproval: execChat, ...(options.acp === undefined ? {} : { acp: options.acp }), ...(model === undefined ? {} : { usage: usage.hook }) }),
     secrets,
     write: options.write,
     ...(options.startTimeoutMs === undefined ? {} : { startTimeoutMs: options.startTimeoutMs }),
@@ -270,7 +277,7 @@ export function composeTheoClaw(options: TheoClawOptions): ComposedTheoClaw {
     write: maskedWrite,
     triggers: composedTriggers(options, events, loop, maskedWrite, secrets),
   })
-  return { loop, router, sessions: chat.sessions, withChatAgent: chat.withAgent }
+  return { loop, router, sessions: chat.sessions, withChatAgent: chat.withAgent, memory: chat.memory }
 }
 
 export interface StartOptions extends Omit<TheoClawOptions, 'write'> {
@@ -463,6 +470,7 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
   options.signals.on('exit', flushOnExit)
   let composedApp: ComposedTheoClaw | undefined
   let scheduled: RunningScheduler | undefined
+  let acpSessions: AcpSessions | undefined
   let serving: Promise<ControlPlaneHandle> | undefined
   // Bound once the listener resolves; the shutdown hook reads it late, as it reads `serving`.
   let announcement: LanAnnouncement | undefined
@@ -471,6 +479,7 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
     // The scheduler, then the loop, so no run or turn starts once the agents are being disposed.
     stopAll: async () => {
       await scheduled?.stop()
+      await acpSessions?.stopAll()
       await composedApp?.loop.stopAll()
       await composedApp?.sessions.disposeAll()
     },
@@ -487,10 +496,13 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
   // After the shutdown hook is in place, so a signal during the probe still closes cleanly. Nothing reads `tools` before this.
   tools = await withInteractiveShell(tools, options.toolDeps)
   writeToolLines(tools, stderr)
+  const acp = createAcpSessions({ agents: tools.external.acpAgents, cwd: tools.toolRoot })
+  acpSessions = acp
   for (const line of a2aLines(a2a)) stderr(line)
   // The composition gets the raw factory: chat agents hold no tool, only `/control` agents do.
   const composed = composeTheoClaw({
     ...options,
+    acp,
     policy,
     sessionSettings,
     generations,
@@ -510,8 +522,15 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
   const relayHandler = relay.serveToken === undefined ? undefined : relayRoute(relay.serveToken, new RelayMailbox(100, join(relayDir, 'relay-mailbox.json')))
   const extraTools = [...workflowTools(options.draftAgentFactory, options.generateObject, stderr), ...scheduled.scheduleTools, ...peerTools(a2a.peers), ...relayTool]
   const execApproval = execApprovalFor(options.execApproval, policy.stateDir)
-  const buildControlAgent = async (): Promise<TurnAgent> =>
-    options.agentFactory(controlAgentToolOptions(tools, buildWorker, extraTools, execApproval))
+  const memory = composed.memory
+  const controlExtras = [...extraTools, ...(memory?.tools ?? [])]
+  const buildControlAgent = async (): Promise<TurnAgent> => {
+    const control = controlAgentToolOptions(tools, buildWorker, controlExtras, execApproval)
+    const recalled = memory?.store.recallSection() ?? ''
+    const agent = await options.agentFactory(recalled === '' ? control : { ...control, systemPromptSuffix: recalled })
+    // TUI, desktop and `/control` turns share the chat surfaces' memory; the reviewer has `save_memory` alone.
+    return memory === undefined ? agent : memory.wrap(agent, 'control', 'control', async () => options.agentFactory({ tools: [saveMemoryTool(memory.store)], plugins: [] }))
+  }
   const { withAgent } = createContainer<TurnAgent>({ factory: buildControlAgent })
   composedApp = composed
   const devices = devicePairingFor(policy.stateDir, settings.controlToken, stderr)
@@ -522,7 +541,7 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
     model: settings.model,
     withAgent: chatAgents.withAgent,
     toolSettings: tools,
-    controlTools: () => controlAgentToolOptions(tools, buildWorker, extraTools, execApproval).tools,
+    controlTools: () => controlAgentToolOptions(tools, buildWorker, controlExtras, execApproval).tools,
     stderr,
   })
   const listen = options.listen ?? listenControlPlane
@@ -551,6 +570,7 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
     removeShutdown()
     options.signals.off('exit', flushOnExit)
     await scheduled.stop()
+    await acp.stopAll()
     await composed.loop.stopAll()
     await composed.sessions.disposeAll()
     // The mask stays: the entry writes this error and exits, and that line is masked too.
@@ -570,6 +590,7 @@ export async function startTheoClaw(given: StartOptions): Promise<RunningTheoCla
   // running instance directly must not leave the service advertised.
   const close = async (): Promise<void> => {
     await scheduled?.stop()
+    await acp.stopAll()
     await stopThenClose(announcement, handle)
   }
   return { ...handle, ...composed, announcement, instance, close }

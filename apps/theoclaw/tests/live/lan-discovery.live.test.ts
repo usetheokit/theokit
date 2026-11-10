@@ -19,6 +19,7 @@ import {
   startControlResponder,
   waitForSrv,
 } from './support/mdns-client.js'
+import { turnFailedError } from './support/turn-failed.js'
 
 /**
  * OC-25 (B-513) against a real multicast socket and a real model: TheoClaw is started in-process
@@ -48,6 +49,8 @@ function lanAddress(): string {
 interface Started {
   readonly running: RunningTheoClaw
   readonly token: string
+  /** What the instance wrote to stdout and stderr, for the reason of a failed turn. */
+  output(): string
   readonly called: number
   readonly resolved: number
   readonly signals: EventEmitter
@@ -111,6 +114,7 @@ async function start(lan: boolean): Promise<Started> {
     THEOCLAW_CONTROL_TOKEN: token,
     ...(lan ? { THEOCLAW_HOST: lanAddress(), THEOCLAW_PUBLIC_BIND: 'yes' } : {}),
   }
+  const written: string[] = []
   const signals = new EventEmitter()
   let onExit: (code: number) => void = () => undefined
   const exited = new Promise<number>((resolve) => (onExit = resolve))
@@ -120,14 +124,14 @@ async function start(lan: boolean): Promise<Started> {
     cwd,
     agentFactory: createAgentFactory(env),
     builders: () => [],
-    stdout: () => undefined,
-    stderr: () => undefined,
+    stdout: (chunk: string) => void written.push(chunk),
+    stderr: (chunk: string) => void written.push(chunk),
     // No stream to mask: the worker's own streams must not stay wrapped after the test.
     streams: [],
     signals,
     exit: (code) => onExit(code),
   })
-  const started: Started = { running, token, called, resolved: performance.now(), signals, exited, stopped: false }
+  const started: Started = { running, token, output: () => written.join(''), called, resolved: performance.now(), signals, exited, stopped: false }
   cleanups.push(async () => {
     if (!started.stopped) await stop(started)
   })
@@ -151,7 +155,7 @@ async function controlTurn(started: Started): Promise<string[]> {
         const frame = JSON.parse(String(raw)) as Record<string, unknown>
         frames.push(frame)
         if (frame.type === 'done') resolve()
-        if (frame.type === 'error') reject(new Error(`the turn failed: ${JSON.stringify(frame)}`))
+        if (frame.type === 'error') reject(turnFailedError(frame, started.output(), [started.token]))
       })
       socket.once('error', reject)
     })

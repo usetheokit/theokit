@@ -45,6 +45,7 @@ interface CronJobState {
   inFlight: boolean
   timer: NodeJS.Timeout | null
   abortController: AbortController | null
+  lockToken?: number
 }
 
 export function createCronScheduler(
@@ -52,6 +53,12 @@ export function createCronScheduler(
   options: CronSchedulerOptions = {},
 ): CronScheduler {
   const lock = options.lock
+  const candidate = lock as { acquire?: unknown } | null | undefined
+  if (candidate !== undefined && typeof candidate?.acquire !== 'function') {
+    throw new TypeError(
+      'createCronScheduler: `lock` must be an object with an `acquire(name, scheduledAt)` method returning Promise<boolean>.',
+    )
+  }
   const states: CronJobState[] = definitions.map((def) => ({
     def,
     inFlight: false,
@@ -64,27 +71,41 @@ export function createCronScheduler(
   /** Run the tick if the lock (when there is one) gives it to this process. */
   const fireIfLockAllows = (state: CronJobState, scheduledAt: Date): void => {
     if (lock === undefined) {
-      fireAndReschedule(state, scheduledAt)
+      runTick(state, scheduledAt)
+      scheduleNext(state)
       return
     }
     state.timer = null
-    void lock.acquire(state.def.name, scheduledAt).then(
-      (won) => {
-        if (won) fireAndReschedule(state, scheduledAt)
-        else scheduleNext(state)
-      },
-      (err: unknown) => {
-        console.error(
-          `[theokit:cron] "${state.def.name}" skipped tick at ${scheduledAt.toISOString()}: ` +
-            'the cron lock could not be acquired:',
-          err instanceof Error ? err.message : err,
-        )
-        scheduleNext(state)
-      },
-    )
+    // Schedule the next tick now: an acquire that never settles must not stop this cron.
+    scheduleNext(state)
+    const token = (state.lockToken = (state.lockToken ?? 0) + 1)
+    const superseded = (): boolean => state.lockToken !== token || !started
+    // A synchronous throw from `acquire` is treated like a rejection.
+    void Promise.resolve()
+      .then(() => lock.acquire(state.def.name, scheduledAt))
+      .then(
+        (won) => {
+          if (!won) return
+          if (superseded()) {
+            console.warn(
+              `[theokit:cron] "${state.def.name}" skipped tick at ${scheduledAt.toISOString()} ` +
+                '— the cron lock answered after the next tick was already scheduled.',
+            )
+            return
+          }
+          runTick(state, scheduledAt)
+        },
+        (err: unknown) => {
+          console.error(
+            `[theokit:cron] "${state.def.name}" skipped tick at ${scheduledAt.toISOString()}: ` +
+              'the cron lock could not be acquired:',
+            err instanceof Error ? err.message : err,
+          )
+        },
+      )
   }
 
-  const fireAndReschedule = (state: CronJobState, scheduledAt: Date): void => {
+  const runTick = (state: CronJobState, scheduledAt: Date): void => {
     state.timer = null
 
     if (state.inFlight && state.def.concurrency === 'forbid') {
@@ -92,7 +113,6 @@ export function createCronScheduler(
         `[theokit:cron] "${state.def.name}" skipped tick at ${scheduledAt.toISOString()} ` +
           '— previous handler still running (concurrency: forbid).',
       )
-      scheduleNext(state)
       return
     }
 
@@ -118,8 +138,6 @@ export function createCronScheduler(
       .finally(() => {
         state.inFlight = false
       })
-
-    scheduleNext(state)
   }
 
   const scheduleNext = (state: CronJobState): void => {

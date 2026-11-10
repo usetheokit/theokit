@@ -1,11 +1,13 @@
-import { readFileSync } from 'node:fs'
-import { writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { runCli } from '../src/cli.js'
 import { teeToLogFile } from '../src/ops/log-tee.js'
+import { spawn } from 'node:child_process'
+
+import { PREDECESSOR_VARIABLE, supervised, waitForPredecessor } from '../src/ops/self-restart.js'
 import { reloadConfiguration, watchConfiguration } from '../src/ops/hot-reload.js'
 import { cleanScratch, harness } from './support/cli-harness.js'
 import { parseEnv } from 'node:util'
@@ -80,6 +82,54 @@ describe('hot reload (OC-94)', () => {
   })
 })
 
+describe('self-restart on a start-only change (B-716)', () => {
+  const file = (port: string): string => `THEOCLAW_MODEL="a"\nTHEOKIT_API_KEY="${KEY}"\nTHEOCLAW_PORT="${port}"\n`
+  async function watched(first: string, second: string): Promise<{ restarts: number; lines: string[] }> {
+    const { path } = configured(file(first))
+    const env: Record<string, string | undefined> = { ...parsedFile(path) }
+    const seen = { restarts: 0, lines: [] as string[] }
+    const watcher = watchConfiguration(path, env, { debounceMs: 20, write: (l) => seen.lines.push(l), restart: () => void seen.restarts++ })
+    try {
+      writeFileSync(path, file(second))
+      const deadline = Date.now() + 1500
+      while (seen.lines.length === 0 && Date.now() < deadline) await new Promise((r) => setTimeout(r, 25))
+      await new Promise((r) => setTimeout(r, 100))
+    } finally {
+      watcher.close()
+    }
+    return seen
+  }
+
+  it('asks for a restart when a start-only setting changed to a valid value', async () => {
+    const seen = await watched('1', '2')
+    expect(seen.restarts).toBe(1)
+    expect(seen.lines.join('\n')).toContain('restart required for THEOCLAW_PORT')
+  })
+
+  it('keeps the running instance when the new file would be refused at the start', async () => {
+    const seen = await watched('1', 'not-a-port')
+    expect(seen.restarts).toBe(0)
+    expect(seen.lines.join('\n')).toContain('reload refused')
+  })
+
+  it('leaves the restart to the service manager only where one restarts on a failed exit', () => {
+    expect(supervised({ INVOCATION_ID: 'abc' }, 'linux')).toBe(true)
+    expect(supervised({}, 'linux')).toBe(false)
+    expect(supervised({ XPC_SERVICE_NAME: 'theoclaw.default' }, 'darwin')).toBe(true)
+    expect(supervised({ XPC_SERVICE_NAME: '0' }, 'darwin')).toBe(false)
+    expect(supervised({ INVOCATION_ID: 'abc' }, 'win32')).toBe(false)
+  })
+
+  it('a successor waits for its predecessor and clears the marker', async () => {
+    const child = spawn(process.execPath, ['-e', 'setTimeout(()=>{},300)'])
+    const env: NodeJS.ProcessEnv = { [PREDECESSOR_VARIABLE]: String(child.pid) }
+    const started = Date.now()
+    await waitForPredecessor(env)
+    expect(Date.now() - started).toBeGreaterThan(100)
+    expect(env[PREDECESSOR_VARIABLE]).toBeUndefined()
+  })
+})
+
 describe('doctor, status and logs (OC-95, OC-96)', () => {
   it('doctor exits 0 on a sound configuration', async () => {
     const { h } = configured(`THEOCLAW_MODEL="m"\nTHEOKIT_API_KEY="${KEY}"\n`)
@@ -102,6 +152,31 @@ describe('doctor, status and logs (OC-95, OC-96)', () => {
     const { h } = configured('THEOKIT_API_KEY="short"\n')
     expect(await runCli(['doctor'], h.io)).toBe(3)
     expect(h.stdout()).toContain('THEOCLAW_MODEL')
+  })
+
+  it('doctor --fix narrows the file mode and creates the state directory, leaving the secret as it was', async () => {
+    const text = `THEOCLAW_MODEL="m"\nTHEOKIT_API_KEY="${KEY}"\n`
+    const { h, path } = configured(text)
+    const state = join(h.io.homeDir, 'state', 'theoclaw')
+    h.io.env.THEOCLAW_STATE_DIR = state
+    chmodSync(path, 0o644)
+    expect(await runCli(['doctor'], h.io)).toBe(3)
+    expect(h.stdout()).toContain('THEOCLAW_STATE_DIR')
+    expect(existsSync(state)).toBe(false)
+    expect(statSync(path).mode & 0o777).toBe(0o644)
+
+    expect(await runCli(['doctor', '--fix'], h.io)).toBe(0)
+    expect(h.stdout()).toContain('fixed SA-001')
+    expect(h.stdout()).toContain('fixed THEOCLAW_STATE_DIR')
+    expect(statSync(path).mode & 0o777).toBe(0o600)
+    expect(statSync(state).mode & 0o777).toBe(0o700)
+    expect(readFileSync(path, 'utf8')).toBe(text)
+    expect(h.stdout()).not.toContain(KEY)
+  })
+
+  it('doctor refuses an unknown flag', async () => {
+    const { h } = configured(`THEOCLAW_MODEL="m"\nTHEOKIT_API_KEY="${KEY}"\n`)
+    expect(await runCli(['doctor', '--force'], h.io)).toBe(2)
   })
 
   it('status names the instance, model and service state, never a key', async () => {

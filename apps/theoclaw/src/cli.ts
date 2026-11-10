@@ -61,7 +61,7 @@ const USAGE = `usage: theoclaw <command>
                             fetch and fast-forward the checkout on its channel, rebuild, restart
   theoclaw security audit [--fix]
                             report risky configuration; --fix narrows file permissions; exit 3 while findings remain
-  theoclaw doctor           check the configuration offline; exit 3 on a failed check, never printing a value
+  theoclaw doctor [--fix]   check the configuration offline (--fix: file modes, missing state directory); exit 3 on a failed check, never printing a value
   theoclaw status           the instance, its model and channels, and whether the service runs; exit 3 when it does not
   theoclaw logs [--lines <n>] [--file <path>]
                             the last log lines (file, launchd log or user journal), secrets masked
@@ -149,7 +149,10 @@ const COMMANDS: Readonly<Record<string, Command>> = {
   daemon,
   update: (args, io) => update(parseUpdate(args), io, io.runner),
   security: securityCommand,
-  doctor: (_args, io) => Promise.resolve(doctor(io)),
+  doctor: (args, io) => {
+    if (args.some((arg) => arg !== '--fix')) throw new UsageError('theoclaw doctor: expected [--fix]')
+    return Promise.resolve(doctor(io, { fix: args.includes('--fix') }))
+  },
   status: (_args, io) => statusCommand(io, io.runner),
   logs: (args, io) => logsCommand(args, io, io.runner),
   backup: backupCommand('backup'),

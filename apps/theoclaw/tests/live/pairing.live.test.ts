@@ -9,6 +9,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 
 import { runControlTurn } from "./support/control-turn.js";
+import { throwUnlessFinished } from "./support/turn-failed.js";
 
 /**
  * AC-003 (B-709): OC-91 against a real model, through the BUILT entry (`dist/main.js`). A device
@@ -130,7 +131,7 @@ describe.skipIf(!LIVE)("device pairing against a real model", () => {
     expect(await upgradeStatus(DEVICE_TOKEN), "the approved device").toBe(101);
     const turn = await runControlTurn(port, DEVICE_TOKEN, "Reply with the single word: pong", 60_000);
     if (turn.status === "timeout") throw new Error(`no final frame within 60 s: ${JSON.stringify(turn.frames)}`);
-    expect(turn.status, turn.error).toBe("finished");
+    throwUnlessFinished(turn, output, [DEVICE_TOKEN]);
     expect(turn.text.trim().length).toBeGreaterThan(0);
 
     const stored = readFileSync(join(stateDir, "devices.json"), "utf8");
