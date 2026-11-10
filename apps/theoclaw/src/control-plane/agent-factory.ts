@@ -32,6 +32,18 @@ export function isIncognito(env: BindEnvironment): boolean {
 }
 
 /**
+ * Whether `THEOCLAW_TRANSCRIPTS=on`: chat sessions keep their transcripts under `<workspace>/.theoclaw`, so a
+ * conversation survives a restart. Off (the default), a session's transcript goes to a temp directory removed
+ * when the agent is disposed, so a message from a channel is stored in no file of the operator's.
+ */
+export function keepsTranscripts(env: BindEnvironment): boolean {
+  const value = env.THEOCLAW_TRANSCRIPTS?.trim()
+  if (value === undefined || value === '' || value === 'off') return false
+  if (value === 'on') return true
+  throw new TheoClawConfigError('THEOCLAW_TRANSCRIPTS must be on or off', { variable: 'THEOCLAW_TRANSCRIPTS' })
+}
+
+/**
  * The options every TheoClaw agent is built with, the model key passed explicitly (plan D4): the
  * SDK refuses `OPENROUTER_API_KEY` from the environment, so the key is resolved here by the same
  * `requireModel` the start checks.
@@ -47,6 +59,20 @@ export function isIncognito(env: BindEnvironment): boolean {
 export function agentOptionsFor(env: BindEnvironment): TheoClawAgentOptions {
   const { model, modelKey } = requireModel(env)
   return theoClawAgentOptions({ model, apiKey: modelKey, approvedHooks: parseApprovedHooks(env), ...thinkingOf(env), ...agentTelemetry(readTelemetrySettings(env)) })
+}
+
+/**
+ * `options` with the transcript directory the SDK would otherwise default to `<home>/.theokit`: a
+ * one-shot channel agent (a trigger run, a digest draft, a chat-completions turn) writes its
+ * transcript under `<workspace>/.theoclaw` like a chat session, not into the operator's home, outside
+ * the state the operator configured. Incognito sends it to a temp path instead. Absent a workspace
+ * (a test), the options are returned as they were.
+ */
+export function withSessionHome(env: BindEnvironment, options: TheoClawAgentOptions): TheoClawAgentOptions {
+  const workspace = env.THEOCLAW_WORKSPACE?.trim()
+  if (workspace === undefined || workspace === '' || options.local.sessionDir !== undefined) return options
+  const sessionDir = isIncognito(env) ? join(tmpdir(), `theoclaw-incognito-${randomUUID()}`) : join(workspace, '.theoclaw')
+  return { ...options, local: { ...options.local, sessionDir } }
 }
 
 function thinkingOf(env: BindEnvironment): { thinking?: ThinkingLevel } {
@@ -74,6 +100,7 @@ function createWithFailover(env: BindEnvironment, create: CreateAgent, options: 
  */
 export function sessionAgentOptions(env: BindEnvironment, workspace: string): SessionAgentOptions {
   const incognito = isIncognito(env)
+  const transient = incognito || !keepsTranscripts(env)
   const { telemetry, ...withoutTelemetry } = agentOptionsFor(env)
   const options: TheoClawAgentOptions = incognito || telemetry === undefined ? withoutTelemetry : { ...withoutTelemetry, telemetry }
   const persona = readPersonaPrompt(workspace)
@@ -82,7 +109,7 @@ export function sessionAgentOptions(env: BindEnvironment, workspace: string): Se
     systemPrompt: persona === '' ? options.systemPrompt : `${options.systemPrompt}\n\n${persona}`,
     // Incognito: the transcript goes to a fresh path under the temp root, never the workspace, created by
     // the SDK only when it writes; the chat sessions remove it when the agent is disposed.
-    local: { ...options.local, cwd: workspace, sessionDir: incognito ? join(tmpdir(), `theoclaw-incognito-${randomUUID()}`) : join(workspace, '.theoclaw') },
+    local: { ...options.local, cwd: workspace, sessionDir: transient ? join(tmpdir(), `theoclaw-incognito-${randomUUID()}`) : join(workspace, '.theoclaw') },
   }
 }
 
@@ -133,7 +160,7 @@ export function createChannelAgentFactory<A>(
 
 /** The chat path's factory over the SDK, for a caller given no `create` of its own: a trigger run's default (B-397). */
 export function createSdkChannelAgentFactory(env: BindEnvironment): () => Promise<TurnAgent> {
-  return async () => createWithFailover(env, createTheoClawAgent, agentOptionsFor(env))
+  return async () => createWithFailover(env, createTheoClawAgent, withSessionHome(env, agentOptionsFor(env)))
 }
 
 /**
@@ -145,5 +172,5 @@ export function webchatAgentFactory(
   env: BindEnvironment,
   create: CreateAgent = createTheoClawAgent,
 ): () => Promise<TurnAgent> {
-  return async () => createWithFailover(env, create, agentOptionsFor(env))
+  return async () => createWithFailover(env, create, withSessionHome(env, agentOptionsFor(env)))
 }

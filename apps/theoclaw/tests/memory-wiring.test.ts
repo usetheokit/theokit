@@ -10,7 +10,7 @@ import { MemoryStore } from '../src/memory/memory-store.js'
 import { theoClawAgentOptions } from '../src/agent/create-agent.js'
 import { chatSessions } from '../src/sessions/chat-sessions.js'
 
-const ENV = { THEOCLAW_MODEL: 'm', OPENROUTER_API_KEY: 'k' }
+const ENV = { THEOCLAW_MODEL: 'm', OPENROUTER_API_KEY: 'k', THEOCLAW_TRANSCRIPTS: 'on' }
 const event = (platform: string) =>
   ({ platform, sender: { id: 'u' }, channel: { type: 'dm', id: 'u' } }) as unknown as MessageEvent
 

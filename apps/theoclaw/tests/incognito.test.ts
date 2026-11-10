@@ -9,7 +9,7 @@ import { isIncognito, sessionAgentOptions } from "../src/control-plane/agent-fac
 import { createProgressGate } from "../src/channels/progress.js";
 import { chatSessions, withIncognitoCleanup } from "../src/sessions/chat-sessions.js";
 
-const ENV = { THEOCLAW_MODEL: "m", OPENROUTER_API_KEY: "k" };
+const ENV = { THEOCLAW_MODEL: "m", OPENROUTER_API_KEY: "k", THEOCLAW_TRANSCRIPTS: "on" };
 
 describe("incognito sessions (OC-92)", () => {
   it("reads THEOCLAW_INCOGNITO as on or off", () => {
