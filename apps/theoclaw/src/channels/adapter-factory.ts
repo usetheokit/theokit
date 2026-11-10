@@ -1,4 +1,4 @@
-import type { BasePlatformAdapter, PlatformName } from '@theokit/gateway'
+import type { BasePlatformAdapter } from '@theokit/gateway'
 import { DiscordAdapter } from '@theokit/gateway-discord'
 import { EmailAdapter } from '@theokit/gateway-email'
 import { LineAdapter } from '@theokit/gateway-line'
@@ -9,10 +9,11 @@ import { SMSAdapter } from '@theokit/gateway-sms'
 import type { TwilioOptions } from '@theokit/gateway-sms'
 import { TeamsAdapter } from '@theokit/gateway-teams'
 import { TelegramAdapter } from '@theokit/gateway-telegram'
+import { TlonUrbitAdapter } from '@theokit/gateway-tlon-urbit'
 import { WhatsAppAdapter } from '@theokit/gateway-whatsapp'
 
 import type { PlatformBuild } from './channel-loop.js'
-import type { ConfiguredPlatform, PlatformSettings } from './platforms.js'
+import type { ConfiguredPlatform, PlatformSettings, SupportedPlatform } from './platforms.js'
 
 /**
  * The SMS adapter's options: Twilio only (D6). The webhook route parses with the same options, so
@@ -32,7 +33,7 @@ export interface AdapterBuildOptions {
 }
 
 type AdapterConstructors = {
-  readonly [P in PlatformName]: (settings: PlatformSettings<P>, options: AdapterBuildOptions) => BasePlatformAdapter
+  readonly [P in SupportedPlatform]: (settings: PlatformSettings<P>, options: AdapterBuildOptions) => BasePlatformAdapter
 }
 
 function mention(options: AdapterBuildOptions): { readonly requireMention?: boolean } {
@@ -40,7 +41,7 @@ function mention(options: AdapterBuildOptions): { readonly requireMention?: bool
 }
 
 /**
- * The one module that imports the ten gateway packages: a missing peer or a renamed class fails
+ * The one module that imports the eleven gateway packages: a missing peer or a renamed class fails
  * here and nowhere else. No constructor connects; some validate their options and throw, which
  * fails only that platform's builder.
  */
@@ -57,6 +58,7 @@ const ADAPTERS: AdapterConstructors = {
   whatsapp: ({ accessToken, phoneNumberId, appSecret }, options) =>
     WhatsAppAdapter.from({ backend: 'cloud', cloud: { accessToken, phoneNumberId, appSecret } }, mention(options)),
   teams: (settings) => new TeamsAdapter(settings),
+  tlon_urbit: (settings) => new TlonUrbitAdapter(settings),
   sms: (settings) => new SMSAdapter(smsOptions(settings)),
 }
 
@@ -65,11 +67,11 @@ const ADAPTERS: AdapterConstructors = {
  * stay paired for the compiler (the correlated-union pattern): a builder handed another
  * platform's settings does not compile.
  */
-type SettingsFor<P extends PlatformName = PlatformName> = {
+type SettingsFor<P extends SupportedPlatform = SupportedPlatform> = {
   [K in P]: { readonly platform: K; readonly settings: PlatformSettings<K> }
 }[P]
 
-function buildAdapter<P extends PlatformName>(entry: SettingsFor<P>, options: AdapterBuildOptions): BasePlatformAdapter {
+function buildAdapter<P extends SupportedPlatform>(entry: SettingsFor<P>, options: AdapterBuildOptions): BasePlatformAdapter {
   return ADAPTERS[entry.platform](entry.settings, options)
 }
 

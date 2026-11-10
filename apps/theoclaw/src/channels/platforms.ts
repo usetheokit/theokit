@@ -36,27 +36,39 @@ const PLATFORM_VARIABLES = {
     clientSecret: 'THEOCLAW_TEAMS_CLIENT_SECRET',
     tenantId: 'THEOCLAW_TEAMS_TENANT_ID',
   },
+  tlon_urbit: {
+    shipUrl: 'THEOCLAW_TLON_URBIT_SHIP_URL',
+    ship: 'THEOCLAW_TLON_URBIT_SHIP',
+    code: 'THEOCLAW_TLON_URBIT_CODE',
+  },
   sms: {
     accountSid: 'THEOCLAW_SMS_TWILIO_ACCOUNT_SID',
     authToken: 'THEOCLAW_SMS_TWILIO_AUTH_TOKEN',
     fromNumber: 'THEOCLAW_SMS_TWILIO_FROM_NUMBER',
     publicUrl: 'THEOCLAW_SMS_PUBLIC_URL',
   },
-} as const satisfies Record<PlatformName, Readonly<Record<string, string>>>
+} as const satisfies Partial<Record<PlatformName, Readonly<Record<string, string>>>>
+
+/**
+ * The platforms TheoClaw can run. `PlatformName` also lists the gateway's other platforms (Signal,
+ * IRC, ...), which have no adapter package here, so every map keyed by all platforms is keyed by
+ * this instead: adding a platform to the table above is what makes those maps demand a decision.
+ */
+export type SupportedPlatform = keyof typeof PLATFORM_VARIABLES
 
 type PlatformVariables = typeof PLATFORM_VARIABLES
 
 /** The settings one platform's adapter is built from, keyed by the adapter's own option names. */
-export type PlatformSettings<P extends PlatformName> = { readonly [K in keyof PlatformVariables[P]]: string }
+export type PlatformSettings<P extends SupportedPlatform> = { readonly [K in keyof PlatformVariables[P]]: string }
 
 /** A platform whose every variable is set, with the settings read from them. */
 export type ConfiguredPlatform = {
-  readonly [P in PlatformName]: { readonly platform: P; readonly settings: PlatformSettings<P> }
-}[PlatformName]
+  readonly [P in SupportedPlatform]: { readonly platform: P; readonly settings: PlatformSettings<P> }
+}[SupportedPlatform]
 
 /** A platform left out, and the variables it lacks. Never carries a value. */
 export interface SkippedPlatform {
-  readonly platform: PlatformName
+  readonly platform: SupportedPlatform
   readonly missing: readonly string[]
 }
 
@@ -68,12 +80,12 @@ export interface ResolvedPlatforms {
 }
 
 export interface PlatformSpec {
-  readonly platform: PlatformName
+  readonly platform: SupportedPlatform
   readonly variables: readonly string[]
 }
 
 /** The ten platforms of FR-001, in the order the loop starts them. */
-export const PLATFORMS: readonly PlatformSpec[] = (Object.keys(PLATFORM_VARIABLES) as PlatformName[]).map(
+export const PLATFORMS: readonly PlatformSpec[] = (Object.keys(PLATFORM_VARIABLES) as SupportedPlatform[]).map(
   (platform) => ({ platform, variables: Object.values(PLATFORM_VARIABLES[platform]) }),
 )
 
