@@ -30,7 +30,7 @@ describe.skipIf(!LIVE)('memory across surfaces and the per-turn review, live', (
     async () => {
       const workspace = mkdtempSync(join(tmpdir(), 'theoclaw-mem-live-'))
       const city = word()
-      const env = { ...process.env, THEOCLAW_WORKSPACE: workspace }
+      const env = { ...process.env, THEOCLAW_WORKSPACE: workspace, THEOCLAW_TRANSCRIPTS: 'on', THEOCLAW_MEMORY: 'on' }
       const { sessions, withAgent, memory } = chatSessions({
         env,
         write: () => undefined,

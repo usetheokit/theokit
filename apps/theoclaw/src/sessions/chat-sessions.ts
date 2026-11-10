@@ -9,6 +9,7 @@ import type { AgentOptions, Plugin } from '@theokit/sdk'
 
 import { createMemory, type MemoryWiring, memoryEnabled, reviewerOptions } from '../memory/wiring.js'
 import { createContainer } from '../agent-container.js'
+import { TheoClawConfigError } from '../control-plane/errors.js'
 import { createChannelAgentFactory, isIncognito, keepsTranscripts, sessionAgentOptions } from '../control-plane/agent-factory.js'
 import { Generations } from './generations.js'
 import { type SessionAgent, SessionAgents, type SessionLease } from './session-agents.js'
@@ -47,6 +48,11 @@ export function chatSessions(options: ChatSessionsOptions): { readonly sessions:
   const incognito = isIncognito(options.env)
   const transient = incognito || !keepsTranscripts(options.env)
   const open = options.getOrCreate ?? ((id: string, agentOptions: AgentOptions) => Agent.getOrCreate(id, agentOptions))
+  if (!incognito && transient && options.env.THEOCLAW_MEMORY?.trim().toLowerCase() === 'on') {
+    throw new TheoClawConfigError('THEOCLAW_MEMORY=on needs THEOCLAW_TRANSCRIPTS=on: memory recalls from the chat transcripts, and with transcripts off none is kept', {
+      variable: 'THEOCLAW_MEMORY',
+    })
+  }
   const memory = memoryEnabled(options.env, transient) ? createMemory(join(settings.workspace, '.theoclaw', 'memory'), options.write) : undefined
   let reviews = 0
   const recalled = recalledPrompt(memory)
