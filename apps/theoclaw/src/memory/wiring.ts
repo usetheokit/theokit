@@ -37,7 +37,8 @@ export function createMemory(dir: string, report: (line: string) => void): Memor
   // One review at a time: a busy chat never fans out into a crowd of model calls.
   let tail: Promise<void> = Promise.resolve()
   const enqueue = (work: () => Promise<void>): void => {
-    tail = tail.then(work)
+    // A failure of `work` must not poison the turns queued after it.
+    tail = tail.then(work).catch((error: unknown) => report(`theoclaw: memory review failed: ${String(error)}`))
   }
   const wrapRun = (run: TurnRun, message: string, surface: string, sessionKey: string, reviewer: RunReviewer): TurnRun => {
     let recorded = false

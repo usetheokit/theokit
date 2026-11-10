@@ -110,7 +110,11 @@ async function startLive(workspace: string) {
     agentFactory: () => {
       throw new Error('the /control factory must not build a chat agent')
     },
-    getOrCreate: async (id, options) => watched(await Agent.getOrCreate(id, options), runs),
+    getOrCreate: async (id, options) => {
+      const agent = await Agent.getOrCreate(id, options)
+      // The per-turn memory review (B-381) runs a forked agent named `<id>-review-<n>`; it is not a chat session run.
+      return id.includes('-review-') ? agent : watched(agent, runs)
+    },
     builders,
     signals,
     exit,

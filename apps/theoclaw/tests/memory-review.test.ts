@@ -56,3 +56,24 @@ describe('memory across surfaces (OC-56, Hermes row 3)', () => {
     expect(errors).toHaveLength(1)
   })
 })
+
+describe('a failed turn append (#1462)', () => {
+  it('reaches onError and the next turn is still recorded and reviewed', async () => {
+    const appended: unknown[] = []
+    let calls = 0
+    const store = {
+      appendTurn: (turn: unknown) => {
+        if (++calls === 1) throw new Error('ENOENT')
+        appended.push(turn)
+      },
+    } as never
+    const errors: unknown[] = []
+    const reviewed: string[] = []
+    const turn = { surface: 's', sessionKey: 'k', user: 'u', assistant: 'a', at: 't' }
+    await afterTurn(store, turn, async (p) => void reviewed.push(p), (e) => errors.push(e))
+    await afterTurn(store, turn, async (p) => void reviewed.push(p), (e) => errors.push(e))
+    expect(errors).toHaveLength(1)
+    expect(appended).toHaveLength(1)
+    expect(reviewed).toHaveLength(1)
+  })
+})
