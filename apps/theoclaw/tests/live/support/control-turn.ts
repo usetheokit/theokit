@@ -1,10 +1,18 @@
 import WebSocket from 'ws'
 
+import { turnFailureDetail } from './turn-failure.js'
+
 /**
  * One `/control` turn against a started TheoClaw (moved from `control-plane.live.test.ts`, B-374
  * T3.2, so the daemon and container checks run the same turn). Every wait is a condition with a
  * deadline (`rules/testing.md` § 3).
  */
+/** What a failed turn adds to `error`: the instance's output and the secrets to mask in it (#1464). */
+export interface InstanceOutput {
+  readonly output: () => string
+  readonly secrets?: readonly (string | undefined)[]
+}
+
 export type Frame = Record<string, unknown>
 
 export interface ControlTurn {
@@ -30,7 +38,7 @@ function event(frame: Frame): { type?: unknown; content?: unknown } | undefined 
  * Sends `prompt` and waits for the final frame until `deadlineMs`; `settleMs` keeps the socket open
  * that long after it, so a test can assert nothing follows.
  */
-export async function runControlTurn(port: number, token: string, prompt: string, deadlineMs: number, settleMs = 0): Promise<ControlTurn> {
+export async function runControlTurn(port: number, token: string, prompt: string, deadlineMs: number, settleMs = 0, instance?: InstanceOutput): Promise<ControlTurn> {
   const started = Date.now()
   const socket = new WebSocket(`ws://127.0.0.1:${port}/control`, { headers: { Authorization: `Bearer ${token}` } })
   const frames: Frame[] = []
@@ -56,7 +64,8 @@ export async function runControlTurn(port: number, token: string, prompt: string
       .map((e) => e!.content as string)
       .join('')
     const errors = frames.filter((frame) => event(frame)?.type === 'error' || frame.type === 'error')
-    return { status, text, elapsedMs, error: status === 'finished' ? '' : JSON.stringify(errors), frames, framesAtEnd }
+    const reason = status === 'failed' && instance !== undefined ? `\n${turnFailureDetail(instance.output(), instance.secrets)}` : ''
+    return { status, text, elapsedMs, error: status === 'finished' ? '' : `${JSON.stringify(errors)}${reason}`, frames, framesAtEnd }
   } finally {
     socket.close()
   }

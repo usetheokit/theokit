@@ -19,6 +19,7 @@ import {
   startControlResponder,
   waitForSrv,
 } from './support/mdns-client.js'
+import { turnFailedError } from './support/turn-failure.js'
 
 /**
  * OC-25 (B-513) against a real multicast socket and a real model: TheoClaw is started in-process
@@ -48,6 +49,7 @@ function lanAddress(): string {
 interface Started {
   readonly running: RunningTheoClaw
   readonly token: string
+  readonly output: string[]
   readonly called: number
   readonly resolved: number
   readonly signals: EventEmitter
@@ -114,6 +116,7 @@ async function start(lan: boolean): Promise<Started> {
   const signals = new EventEmitter()
   let onExit: (code: number) => void = () => undefined
   const exited = new Promise<number>((resolve) => (onExit = resolve))
+  const output: string[] = []
   const called = performance.now()
   const running = await startTheoClaw({
     env,
@@ -121,13 +124,13 @@ async function start(lan: boolean): Promise<Started> {
     agentFactory: createAgentFactory(env),
     builders: () => [],
     stdout: () => undefined,
-    stderr: () => undefined,
+    stderr: (line) => void output.push(`${line}\n`),
     // No stream to mask: the worker's own streams must not stay wrapped after the test.
     streams: [],
     signals,
     exit: (code) => onExit(code),
   })
-  const started: Started = { running, token, called, resolved: performance.now(), signals, exited, stopped: false }
+  const started: Started = { running, token, output, called, resolved: performance.now(), signals, exited, stopped: false }
   cleanups.push(async () => {
     if (!started.stopped) await stop(started)
   })
@@ -151,7 +154,7 @@ async function controlTurn(started: Started): Promise<string[]> {
         const frame = JSON.parse(String(raw)) as Record<string, unknown>
         frames.push(frame)
         if (frame.type === 'done') resolve()
-        if (frame.type === 'error') reject(new Error(`the turn failed: ${JSON.stringify(frame)}`))
+        if (frame.type === 'error') reject(turnFailedError(frame, started.output.join(''), [started.token, process.env.OPENROUTER_API_KEY, process.env.THEOKIT_API_KEY]))
       })
       socket.once('error', reject)
     })

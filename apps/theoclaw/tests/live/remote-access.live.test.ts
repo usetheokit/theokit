@@ -25,6 +25,7 @@ import { createTheoClawAgent, type TheoClawAgentOptions } from '../../src/agent/
 import { createAgentFactory } from '../../src/control-plane/agent-factory.js'
 import { useForwardCleanup } from './support/forward-cleanup.js'
 import { findBinary, openSshForward, type SshForward, waitForForward } from './support/ssh-forward.js'
+import { turnFailedError } from './support/turn-failure.js'
 
 /**
  * OC-24 (B-512): the owner reaches the loopback control plane from another machine through an SSH
@@ -198,7 +199,7 @@ async function turnThrough(port: number, token: string): Promise<Frame[]> {
         }
         frames.push(frame)
         if (frame.type === 'done') resolve()
-        if (frame.type === 'error') reject(new Error(`the turn failed: ${JSON.stringify(frame)}`))
+        if (frame.type === 'error') reject(turnFailedError(frame, joinedStreams(outputLog).map((s) => s.text).join(''), [token, process.env.OPENROUTER_API_KEY, process.env.THEOKIT_API_KEY]))
       })
     })
     socket.send(JSON.stringify({ type: 'chat', message: 'Reply with the word pong.' }))
