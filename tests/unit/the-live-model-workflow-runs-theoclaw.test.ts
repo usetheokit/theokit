@@ -102,12 +102,14 @@ describe('live-model.yml for TheoClaw', () => {
     expect(run).toContain('pnpm --filter theoclaw run browser:install')
   })
 
-  it('points theoclaw test:live at its live tests, one file at a time', () => {
+  it('points theoclaw test:live at its live tests, one file at a time, retrying a failed test once', () => {
     const pkg = JSON.parse(
       readFileSync(resolve(__dirname, '../../apps/theoclaw/package.json'), 'utf8'),
     ) as {
       scripts: Record<string, string>
     }
-    expect(pkg.scripts['test:live']).toBe('vitest run tests/live --no-file-parallelism')
+    // One retry: a live test measures a sampled model, and on develop each full run lost a different
+    // test to sampling alone (OC-84, OC-62, H-1; #1235). A product failure repeats and still fails.
+    expect(pkg.scripts['test:live']).toBe('vitest run tests/live --no-file-parallelism --retry=1')
   })
 })
