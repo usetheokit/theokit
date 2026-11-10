@@ -1,6 +1,10 @@
 import { randomUUID } from 'node:crypto'
 
-import { type SdkMessage, translateSdkEvent } from '@theokit/agents/bridge'
+import {
+  type SdkMessage,
+  translateInteractionUpdate,
+  translateSdkEvent,
+} from '@theokit/agents/bridge'
 
 import type { TurnAgent, TurnRun } from '../agent-port.js'
 import { untrustedContentSendOptions } from '../agent/untrusted-content.js'
@@ -86,12 +90,24 @@ function watchAbort(signal: AbortSignal | undefined): AbortWatch {
 async function cancelRun(run: TurnRun, iterator?: AsyncIterator<unknown>): Promise<TurnOutcome> {
   const reasons: string[] = []
   const keep = (error: unknown): void => void reasons.push(describeError(error))
-  const settling = [Promise.resolve().then(() => run.cancel()).then(ignore, keep)]
+  const settling = [
+    Promise.resolve()
+      .then(() => run.cancel())
+      .then(ignore, keep),
+  ]
   if (iterator?.return !== undefined) {
-    settling.push(Promise.resolve().then(() => iterator.return?.()).then(ignore, keep))
+    settling.push(
+      Promise.resolve()
+        .then(() => iterator.return?.())
+        .then(ignore, keep),
+    )
   }
   await Promise.race([Promise.all(settling), new Promise((resolve) => setImmediate(resolve))])
-  return { ok: false, code: 'turn_cancelled', reason: ['the turn was cancelled', ...reasons].join('; ') }
+  return {
+    ok: false,
+    code: 'turn_cancelled',
+    reason: ['the turn was cancelled', ...reasons].join('; '),
+  }
 }
 
 /** The next message of the stream, or ABORTED when the signal wins; a losing read is never unhandled. */
@@ -109,14 +125,27 @@ function nextOrAbort(
  * Emit one SDK message's translated events, stopping at the first one after the signal aborted;
  * the code of the first error among them, if any.
  */
-function emitMessage(message: { readonly type: string }, options: TurnOptions): string | undefined {
+function emitMessage(
+  message: { readonly type: string },
+  options: TurnOptions,
+  delta: DeltaState,
+): string | undefined {
   let streamedError: string | undefined
+  // The step's finished `assistant` message repeats text its deltas already sent.
+  const textStreamed = message.type === 'assistant' && delta.streamed
+  if (message.type === 'assistant') delta.streamed = false
   for (const event of translateSdkEvent(message as SdkMessage, options.runId)) {
     if (options.signal?.aborted === true) break
+    if (textStreamed && event.type === 'text_delta') continue
     if (event.type === 'error') streamedError ??= describeStreamedError(event)
     options.emit(event)
   }
   return streamedError
+}
+
+/** Whether `onDelta` sent text since the last finished `assistant` message. */
+interface DeltaState {
+  streamed: boolean
 }
 
 type Streamed = { readonly cancelled: TurnOutcome } | { readonly streamedError: string | undefined }
@@ -126,7 +155,12 @@ type Streamed = { readonly cancelled: TurnOutcome } | { readonly streamedError: 
  * raced against the signal, so a pending read on a silent stream cannot hold an aborted turn, and
  * nothing is emitted once the signal aborted.
  */
-async function streamRun(run: TurnRun, options: TurnOptions, aborted?: Promise<typeof ABORTED>): Promise<Streamed> {
+async function streamRun(
+  run: TurnRun,
+  options: TurnOptions,
+  delta: DeltaState,
+  aborted?: Promise<typeof ABORTED>,
+): Promise<Streamed> {
   const iterator = run.stream()[Symbol.asyncIterator]()
   let streamedError: string | undefined
   let closed = false
@@ -137,12 +171,15 @@ async function streamRun(run: TurnRun, options: TurnOptions, aborted?: Promise<t
       if (step === ABORTED) return { cancelled: await cancelRun(run, iterator) }
       if (step.done === true) return { streamedError }
       // Emitted first, always: the first streamed error is kept, and every event still reaches the caller.
-      const error = emitMessage(step.value, options)
+      const error = emitMessage(step.value, options, delta)
       streamedError ??= error
     }
   } finally {
     // A read, a translation or an emit that throws leaves the stream open; close it, as `for await` did.
-    if (!closed) void Promise.resolve().then(() => iterator.return?.()).catch(ignore)
+    if (!closed)
+      void Promise.resolve()
+        .then(() => iterator.return?.())
+        .catch(ignore)
   }
 }
 
@@ -161,12 +198,30 @@ export function outcomeOf(
   return model === undefined ? { ok: true } : { ok: true, usage: usageOf(result, model) }
 }
 
-async function runWith(agent: TurnAgent, options: TurnOptions, flush: () => void): Promise<TurnOutcome> {
-  const run = await agent.send(options.message, untrustedContentSendOptions())
+async function runWith(
+  agent: TurnAgent,
+  options: TurnOptions,
+  flush: () => void,
+): Promise<TurnOutcome> {
+  const delta: DeltaState = { streamed: false }
+  // Text and thinking reach the surface as the model writes them; tool events keep their stream path.
+  const onDelta = ({ update }: { readonly update: { readonly type: string } }): void => {
+    if (options.signal?.aborted === true) return
+    if (update.type !== 'text-delta' && update.type !== 'thinking-delta') return
+    for (const event of translateInteractionUpdate(
+      update as Parameters<typeof translateInteractionUpdate>[0],
+    )) {
+      if (event.type === 'text_delta') delta.streamed = true
+      options.emit(event)
+    }
+  }
+  const run = await agent.send(options.message, { ...untrustedContentSendOptions(), onDelta })
   // Checked before any listener is added: a listener on a signal that already aborted never fires (EC-1).
   if (options.signal?.aborted === true) return cancelRun(run)
   const watch = watchAbort(options.signal)
-  const streamed = await streamRun(run, options, watch.aborted).finally(() => watch.release())
+  const streamed = await streamRun(run, options, delta, watch.aborted).finally(() =>
+    watch.release(),
+  )
   // A cancelled turn emits nothing more: what the mask still holds is dropped, never sent.
   if ('cancelled' in streamed) return streamed.cancelled
   flush()
@@ -194,7 +249,9 @@ export async function runTheoClawTurn(options: TurnOptions): Promise<TurnOutcome
   const model = options.model === undefined ? {} : { model: maskSecrets(options.model, secrets) }
   let outcome: TurnOutcome
   try {
-    outcome = await options.withAgent((agent) => runWith(agent, { ...options, ...model, emit: mask.emit }, mask.flush))
+    outcome = await options.withAgent((agent) =>
+      runWith(agent, { ...options, ...model, emit: mask.emit }, mask.flush),
+    )
   } catch (error) {
     outcome = failed(describeError(error))
   }
@@ -206,7 +263,11 @@ export async function runTheoClawTurn(options: TurnOptions): Promise<TurnOutcome
  * The runner the control socket and WebChat call: one fresh run id per turn. With `model`, a
  * finished turn's outcome carries its usage record (B-400 FR-003).
  */
-export function createTurnRunner(withAgent: WithAgent, secrets: readonly string[] = [], model?: string): TurnRunner {
+export function createTurnRunner(
+  withAgent: WithAgent,
+  secrets: readonly string[] = [],
+  model?: string,
+): TurnRunner {
   return (message, emit, signal) =>
     runTheoClawTurn({
       withAgent,

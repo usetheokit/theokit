@@ -17,7 +17,10 @@
  */
 export type TurnMessage =
   | string
-  | { readonly text: string; readonly images: { readonly data: string; readonly mimeType: string }[] }
+  | {
+      readonly text: string
+      readonly images: { readonly data: string; readonly mimeType: string }[]
+    }
 
 export interface TurnAgent {
   /**
@@ -28,7 +31,12 @@ export interface TurnAgent {
    */
   send(
     message: TurnMessage,
-    options?: { readonly signal?: AbortSignal; readonly toolResultGuard?: { readonly delimit?: boolean } },
+    options?: {
+      readonly signal?: AbortSignal
+      readonly toolResultGuard?: { readonly delimit?: boolean }
+      /** Called with each `InteractionUpdate` as the model writes; `text-delta` carries the reply's text. */
+      readonly onDelta?: (args: { readonly update: { readonly type: string } }) => void
+    },
   ): Promise<TurnRun>
   /**
    * The SDK's goal loop (B-397 FR-008): it yields events and returns the final status and text. A
