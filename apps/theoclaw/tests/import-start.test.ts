@@ -162,6 +162,8 @@ describe('an import reaching the agents', () => {
     await createAgentFactory(ENV, withEmpty.create, { setup: empty, mcp: true })()
     await createAgentFactory(ENV, without.create)()
 
-    expect(withEmpty.options[0]).toEqual(without.options[0])
+    const { sessionDir: _a, ...a } = withEmpty.options[0]!.local ?? {}
+    const { sessionDir: _b, ...b } = without.options[0]!.local ?? {}
+    expect({ ...withEmpty.options[0], local: a }).toEqual({ ...without.options[0], local: b })
   })
 })

@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -127,8 +128,10 @@ export function createAgentFactory(
 ): (toolOptions?: AgentToolOptions) => Promise<TurnAgent> {
   return async (toolOptions) => {
     const { model, modelKey } = requireModel(env)
-    return createWithFailover(env, create, 
-      theoClawAgentOptions({
+    // A `/control` turn's transcript goes to a temp directory removed on dispose, unless THEOCLAW_TRANSCRIPTS=on.
+    const transient = isIncognito(env) || !keepsTranscripts(env)
+    const dir = transient ? join(tmpdir(), `theoclaw-incognito-${randomUUID()}`) : undefined
+    const options = theoClawAgentOptions({
         model,
         apiKey: modelKey,
         approvedHooks: parseApprovedHooks(env),
@@ -138,8 +141,9 @@ export function createAgentFactory(
         // Installed plugins reach only the owner's `/control` agent, never a chat agent (OC-75).
         ...(env.THEOCLAW_PLUGIN_WORKSPACE === undefined || env.THEOCLAW_PLUGIN_WORKSPACE === '' ? {} : { pluginWorkspace: env.THEOCLAW_PLUGIN_WORKSPACE }),
         ...(imported === undefined ? {} : { imported }),
-      }),
-    )
+      })
+    const agent = await createWithFailover(env, create, dir === undefined ? options : { ...options, local: { ...options.local, sessionDir: dir } })
+    return dir === undefined ? agent : removingOnDispose(agent, dir)
   }
 }
 
@@ -173,4 +177,19 @@ export function webchatAgentFactory(
   create: CreateAgent = createTheoClawAgent,
 ): () => Promise<TurnAgent> {
   return async () => createWithFailover(env, create, withSessionHome(env, agentOptionsFor(env)))
+}
+
+/** `agent` with its private transcript directory removed once it is disposed (the agent itself, not a wrapper). */
+function removingOnDispose(agent: TurnAgent, dir: string): TurnAgent {
+  const target = agent as unknown as { dispose?: () => Promise<void> }
+  const original = target.dispose
+  if (typeof original !== 'function') return agent
+  target.dispose = async () => {
+    try {
+      await original.call(agent)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  }
+  return agent
 }
