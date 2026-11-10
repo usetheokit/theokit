@@ -95,6 +95,10 @@ describe('theoclaw daemon on Windows (Task Scheduler)', () => {
     const h = harness({ platform: 'win32', env: WINDOWS_ENV })
     expect(await daemonUninstall(h.io, h.runner)).toBe(0)
     expect(schtasks(h)).toEqual(['/End /TN theoclaw', '/Delete /TN theoclaw /F'])
+    // Between /End and /Delete, whatever still runs from the instance's config is killed (#1496).
+    const kill = h.calls.find((call) => call.command === 'powershell.exe')
+    expect(kill?.args.at(-1)).toContain('taskkill /F /T')
+    expect(kill?.args.at(-1)).toContain('Win32_Process')
 
     const gone = harness({
       platform: 'win32',
@@ -209,14 +213,16 @@ describe('theoclaw daemon on Windows (Task Scheduler)', () => {
       })
 
       expect(await daemonUninstall(h.io, h.runner)).toBe(0)
-      const query = h.calls.find((call) => call.command === 'powershell.exe')
+      const query = h.calls.find(
+        (call) => call.command === 'powershell.exe' && call.args.join(' ').includes('Get-ScheduledTask'),
+      )
       expect(query?.args.join(' ')).toContain("Get-ScheduledTask -TaskName 'theoclaw'")
     })
 
     it('a_task_that_was_deleted_needs_no_second_look', async () => {
       const h = harness({ platform: 'win32', env: WINDOWS_ENV })
       expect(await daemonUninstall(h.io, h.runner)).toBe(0)
-      expect(h.calls.some((call) => call.command === 'powershell.exe')).toBe(false)
+      expect(h.calls.some((call) => call.args.join(' ').includes('Get-ScheduledTask'))).toBe(false)
     })
   })
 })

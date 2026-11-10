@@ -116,6 +116,27 @@ async function fail(
   return 1
 }
 
+/**
+ * `/End` returns before the task's process is gone, and a child of it can outlive it; the service's cwd
+ * is the profile workspace, so a survivor keeps that directory locked (EBUSY on removal, #1496). This
+ * kills, with its tree, every process whose command line names the instance's configuration file,
+ * and returns once none is left (or after about 10 s). A failure here changes nothing for the caller.
+ */
+async function stopStragglers(runner: Runner, configPath: string): Promise<void> {
+  const quoted = configPath.replaceAll("'", "''")
+  const script = [
+    `$p = '${quoted}'`,
+    '$self = $PID',
+    'for ($i = 0; $i -lt 50; $i++) {',
+    "  $found = @(Get-CimInstance Win32_Process | Where-Object { $_.ProcessId -ne $self -and $_.Name -ne 'powershell.exe' -and $_.CommandLine -and $_.CommandLine.Contains($p) })",
+    '  if ($found.Count -eq 0) { break }',
+    '  foreach ($f in $found) { taskkill /F /T /PID $f.ProcessId | Out-Null }',
+    '  Start-Sleep -Milliseconds 200',
+    '}',
+  ].join('\n')
+  await runner('powershell.exe', ['-NonInteractive', '-NoProfile', '-Command', script])
+}
+
 export const schtasksBackend: DaemonBackend = {
   async install(io, runner, target) {
     const user = taskUser(io)
@@ -147,6 +168,7 @@ export const schtasksBackend: DaemonBackend = {
   async uninstall(io, runner, target) {
     const { label } = target
     await schtasks(runner, '/End', '/TN', label)
+    await stopStragglers(runner, target.configPath)
     const deleted = await schtasks(runner, '/Delete', '/TN', label, '/F')
     // A refused or impossible /Delete leaves the task in place. It counts as removed only when the
     // scheduler is asked and says there is no such task: a command that cannot start (127) or a
