@@ -86,7 +86,7 @@ async function peer(plane: Plane): Promise<Peer> {
     socket,
     frames,
     send: (frame) => socket.send(JSON.stringify(frame)),
-    until: (predicate, what) => waitFor(() => predicate(frames), 2000, `${what}; frames: ${JSON.stringify(frames)}`),
+    until: (predicate, what) => waitFor(() => predicate(frames), 2000, () => `${what}; frames: ${JSON.stringify(frames)}`),
   };
 }
 

@@ -168,7 +168,7 @@
   },
   "dependencies": {
     "@theokit/presenter": "workspace:*",
-    "@theokit/sdk": "^5.15.1",
+    "@theokit/sdk": "^5.15.3",
     "@theokit/sdk-tools": "^0.29.0"
   },
   "publishConfig": {

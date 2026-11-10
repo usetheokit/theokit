@@ -35,7 +35,7 @@ const ASK_WORD =
 const MARKER = `Saga${randomBytes(3).toString("hex")}`;
 // Long enough that the turn is still streaming when the surface stops it, even on a fast model; the
 // marker opens the reply, so a test can tell the reply's text from the prompt that asked for it.
-const LONG_ANSWER = `Without using any tool, write a story of at least 3000 words about a lighthouse keeper. Begin it with the word ${MARKER}. Do not stop early.`;
+const LONG_ANSWER = `Without using any tool, write a story about a lighthouse keeper in twenty chapters, each under its own heading. Begin it with the word ${MARKER}. Do not stop before the twentieth chapter.`;
 
 let instance: ChildProcess | undefined;
 let output = "";
@@ -85,7 +85,7 @@ async function renderTui() {
   const turn = async (message: string, what: string): Promise<void> => {
     const before = replies();
     await type(message, "\r");
-    await waitFor(() => replies() > before && !running(), 120_000, `${what}; screen:\n${screen()}\ninstance:\n${output.slice(-3000)}`);
+    await waitFor(() => replies() > before && !running(), 120_000, () => `${what}; screen:\n${screen()}\ninstance:\n${output.slice(-3000)}`);
   };
   return { view, screen, type, running, replies, turn };
 }
@@ -193,11 +193,11 @@ describe.skipIf(!LIVE)("the TUI and the desktop on one running instance, against
     );
     // A tool card, then text as it is generated: Esc lands while the turn still streams.
     // The card draws `read_file` as `ReadFile`; the prompt holds only `read_file`, so the echo cannot match.
-    await waitFor(() => tui.screen().includes("ReadFile"), 90_000, `the tool card; screen:\n${tui.screen()}`);
+    await waitFor(() => tui.screen().includes("ReadFile"), 90_000, () => `the tool card; screen:\n${tui.screen()}`);
     // The marker once in the prompt, once more when the reply's text has begun streaming.
-    await waitFor(() => tui.screen().split(MARKER).length > 2, 90_000, `streamed text after the tool; screen:\n${tui.screen()}`);
+    await waitFor(() => tui.screen().split(MARKER).length > 2, 90_000, () => `streamed text after the tool; screen:\n${tui.screen()}`);
     await tui.type("\u001B");
-    await waitFor(() => tui.screen().includes("interrupted"), 10_000, `the turn shown interrupted; screen:\n${tui.screen()}`);
+    await waitFor(() => tui.screen().includes("interrupted"), 10_000, () => `the turn shown interrupted; screen:\n${tui.screen()}`);
     await waitFor(() => !tui.running(), 10_000, "the interrupted turn to settle");
     await tui.turn(ASK_WORD, "the redirect");
     expect(tui.screen()).toContain(WORD);

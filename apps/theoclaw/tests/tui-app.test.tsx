@@ -71,7 +71,7 @@ async function renderTui(instance: Instance, session = "owner") {
   unmounts.push(view.unmount);
   const screen = (): string => view.lastFrame() ?? "";
   const until = (predicate: (frame: string) => boolean, what: string): Promise<void> =>
-    waitFor(() => predicate(screen()), 3000, `${what}; screen:\n${screen()}`);
+    waitFor(() => predicate(screen()), 3000, () => `${what}; screen:\n${screen()}`);
   // Each write is its own keypress: Ink parses a chunk at a time.
   const type = async (...keys: string[]): Promise<void> => {
     for (const key of keys) {
@@ -220,7 +220,7 @@ describe("theoclaw-tui entry (T4.2)", { timeout: 40_000 }, () => {
     const leak = `refused ${TOKEN} with ${MODEL_KEY}`;
     const instance = await startInstance(() => ({ frames: [{ type: "status", status: "ERROR", message: leak }], result: { status: "error" } }));
     const tui = tuiProcess(instance.port);
-    await waitFor(() => tui.output().includes("owner"), 20_000, `the TUI to start; output: ${tui.output()}`);
+    await waitFor(() => tui.output().includes("owner"), 20_000, () => `the TUI to start; output: ${tui.output()}`);
     for (const key of ["h", "i", ENTER]) {
       tui.child.stdin!.write(key);
       await new Promise((resolve) => setTimeout(resolve, 50));
@@ -228,7 +228,7 @@ describe("theoclaw-tui entry (T4.2)", { timeout: 40_000 }, () => {
     await waitFor(() => instance.agents[0]?.sent.length === 1, 10_000, "the turn to reach the instance");
     // The turn's error is drawn before the token check reads the output, so the frame carrying the
     // secret-bearing message has reached the terminal (rules/testing.md § 3: a condition, not a delay).
-    await waitFor(() => tui.output().includes("the turn"), 10_000, `the turn's error to be drawn; output: ${tui.output()}`);
+    await waitFor(() => tui.output().includes("the turn"), 10_000, () => `the turn's error to be drawn; output: ${tui.output()}`);
     for (const key of ["/", "q", "u", "i", "t", ENTER, ENTER]) {
       tui.child.stdin!.write(key);
       await new Promise((resolve) => setTimeout(resolve, 50));
