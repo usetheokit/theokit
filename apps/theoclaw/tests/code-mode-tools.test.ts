@@ -188,7 +188,7 @@ describe('run_code and delegate_all on a /control agent', () => {
 
     await tool.handler({ tasks: [{ agent: 'worker', task: 'one' }, { agent: 'worker', task: 'two' }] })
 
-    expect(plugins).toEqual([['theoclaw-path-veto', 'theoclaw-loop-detection'], ['theoclaw-path-veto', 'theoclaw-loop-detection']])
+    expect(plugins).toEqual([['theoclaw-path-veto', 'theoclaw-provenance-guard', 'theoclaw-loop-detection'], ['theoclaw-path-veto', 'theoclaw-provenance-guard', 'theoclaw-loop-detection']])
   })
 
   it('reports a worker whose stream carries an error as delegation_failed even when wait() says finished', async () => {

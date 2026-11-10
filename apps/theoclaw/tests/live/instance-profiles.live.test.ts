@@ -39,7 +39,9 @@ function modelEnv(): Record<string, string> {
   }
   if (!existsSync(ENTRY)) throw new Error(`${ENTRY} is missing: run pnpm --filter theoclaw run build`)
   // B-371: the start refuses an instance with no owner; nobody messages this one but the test.
-  return { ...env, THEOCLAW_OWNERS: 'telegram:owner', THEOCLAW_DM_POLICY: 'allowlist', THEOCLAW_MDNS: 'off' }
+  // The isolation check reads each profile's turn record, and since #1457 a transcript is kept only
+  // when THEOCLAW_TRANSCRIPTS is on, as #1478 did for the sessions and memory suites.
+  return { ...env, THEOCLAW_OWNERS: 'telegram:owner', THEOCLAW_DM_POLICY: 'allowlist', THEOCLAW_MDNS: 'off', THEOCLAW_TRANSCRIPTS: 'on' }
 }
 
 /** Every regular file under `root`, as paths relative to it. */

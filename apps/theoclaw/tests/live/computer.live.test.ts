@@ -105,14 +105,20 @@ interface Page {
   readonly loaded: () => boolean
 }
 
-/** A loopback page: a large `CODE <token>` line, and a textarea filling the rest that reports what it holds. */
+/**
+ * A loopback page: a large `CODE <token>` line, and a textarea filling the rest that reports what it holds.
+ * `loaded` turns true only when the page has focused the textarea and painted two frames, then posts
+ * `/ready`. Waiting for the request for `/` raced the window's first paint: on the runner the model's
+ * first screenshot came back blank and its typing reached no text box (runs 42781665117, 42759660884).
+ */
 async function servePage(token: string): Promise<Page> {
   let typed = ''
   let loaded = false
   const html = `<!doctype html><html><body style="margin:0;font-family:sans-serif">
 <div style="font-size:64px;padding:16px;height:100px">CODE ${token}</div>
 <textarea autofocus style="position:absolute;top:130px;left:0;right:0;bottom:0;width:100%;font-size:32px;box-sizing:border-box"
- oninput="fetch('/typed',{method:'POST',body:this.value})"></textarea></body></html>`
+ oninput="fetch('/typed',{method:'POST',body:this.value})"></textarea>
+<script>addEventListener('load',()=>{document.querySelector('textarea').focus();requestAnimationFrame(()=>requestAnimationFrame(()=>fetch('/ready',{method:'POST'})))})</script></body></html>`
   const server: Server = createServer((request, response) => {
     if (request.method === 'POST' && request.url === '/typed') {
       let body = ''
@@ -123,7 +129,11 @@ async function servePage(token: string): Promise<Page> {
       })
       return
     }
-    if (request.url === '/') loaded = true
+    if (request.method === 'POST' && request.url === '/ready') {
+      loaded = true
+      response.end('ok')
+      return
+    }
     response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
     response.end(html)
   })
