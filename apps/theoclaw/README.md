@@ -20,8 +20,7 @@ and builds TheoClaw and its workspace packages in the clone, then writes the lau
 `~/.local/bin/theoclaw` (`THEOCLAW_BIN_DIR` picks another directory). It says so when that
 directory is not on your `PATH`. With no `pnpm` installed, it puts corepack's `pnpm` in
 `~/.local/share/theoclaw/bin` for the build. It never writes into Node's global directory. Running
-it again rebuilds and rewrites the same launcher. Publishing to the npm registry is not available
-yet.
+it again rebuilds and rewrites the same launcher.
 
 Then write the configuration and start:
 
