@@ -104,7 +104,7 @@ export {
   extractThinkTagStream,
   type Segment,
 } from './think-tag-extractor.js'
-export { translateSdkEvent, type SdkMessage } from './event-translator.js'
+export { translateInteractionUpdate, translateSdkEvent, type SdkMessage } from './event-translator.js'
 // B-373 — the OpenAI-compatible routes and the tool route, Web-standard handlers over ports, with
 // every option and callback type they take, so a consumer can type what it passes.
 export {
