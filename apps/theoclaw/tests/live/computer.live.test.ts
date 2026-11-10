@@ -15,6 +15,7 @@ import type { AgentToolOptions } from '../../src/tools/tool-registry.js'
 import { controlAgentToolOptions } from '../../src/tools/tool-registry.js'
 import { resolveToolSettings } from '../../src/tools/tool-settings.js'
 import { makeHostToolsWorkspace } from '../host-tools-workspace.js'
+import { stopProcessGroup } from '../stop-process-group.js'
 
 /**
  * OC-62 (B-676): the `computer` tool on a real model, on a virtual display. Xvfb runs with
@@ -55,12 +56,27 @@ function stopProcess(child: ChildProcess): Promise<void> {
 
 /** Xvfb on a free display, its framebuffer under `directory`; resolves with the display, e.g. `:99`. */
 async function startXvfb(directory: string): Promise<string> {
-  const child = spawn('Xvfb', ['-displayfd', '3', '-screen', '0', `${SCREEN.width}x${SCREEN.height}x24`, '-fbdir', directory, '-nolisten', 'tcp'], {
-    stdio: ['ignore', 'ignore', 'ignore', 'pipe'],
-  })
+  const child = spawn(
+    'Xvfb',
+    [
+      '-displayfd',
+      '3',
+      '-screen',
+      '0',
+      `${SCREEN.width}x${SCREEN.height}x24`,
+      '-fbdir',
+      directory,
+      '-nolisten',
+      'tcp',
+    ],
+    {
+      stdio: ['ignore', 'ignore', 'ignore', 'pipe'],
+    },
+  )
   cleanups.push(() => stopProcess(child))
   const pipe = child.stdio[3]
-  if (pipe === null || pipe === undefined || !('on' in pipe)) throw new Error('Xvfb gave no display pipe; is Xvfb installed?')
+  if (pipe === null || pipe === undefined || !('on' in pipe))
+    throw new Error('Xvfb gave no display pipe; is Xvfb installed?')
   const number = await new Promise<string>((resolve, reject) => {
     let text = ''
     pipe.on('data', (chunk: Buffer) => {
@@ -68,7 +84,9 @@ async function startXvfb(directory: string): Promise<string> {
       if (text.includes('\n')) resolve(text.trim())
     })
     child.once('error', (error) => reject(new Error(`Xvfb did not start: ${error.message}`)))
-    child.once('exit', (code) => reject(new Error(`Xvfb exited with ${code} before naming a display`)))
+    child.once('exit', (code) =>
+      reject(new Error(`Xvfb exited with ${code} before naming a display`)),
+    )
   })
   return `:${number}`
 }
@@ -76,7 +94,8 @@ async function startXvfb(directory: string): Promise<string> {
 function chromiumBinary(): string {
   const base = process.env.PLAYWRIGHT_BROWSERS_PATH ?? join(homedir(), '.cache', 'ms-playwright')
   const build = readdirSync(base).find((name) => /^chromium-\d+$/.test(name))
-  if (build === undefined) throw new Error(`no chromium build in ${base}; run the browser:install script`)
+  if (build === undefined)
+    throw new Error(`no chromium build in ${base}; run the browser:install script`)
   return join(base, build, 'chrome-linux64', 'chrome')
 }
 
@@ -123,52 +142,86 @@ async function waitUntil(condition: () => boolean, what: string, timeoutMs: numb
 }
 
 describe.skipIf(!LIVE)('the computer tool against a real model', () => {
-  it('a real model takes a screenshot, moves the pointer and types into a window for OC-62', { timeout: 240_000 }, async () => {
-    const token = randomText(6)
-    const word = randomText(8).toLowerCase()
-    const page = await servePage(token)
-    const framebufferDirectory = mkdtempSync(join(tmpdir(), 'theoclaw-computer-live-'))
-    cleanups.push(() => rmSync(framebufferDirectory, { recursive: true, force: true }))
-    const display = await startXvfb(framebufferDirectory)
-    const profile = mkdtempSync(join(tmpdir(), 'theoclaw-computer-profile-'))
-    cleanups.push(() => rmSync(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }))
-    // This host's Chromium needs `--no-sandbox` (no usable user-namespace sandbox) and the shared libraries in LD_LIBRARY_PATH: harness details, never a TheoClaw setting (plan Q2).
-    const chromium = spawn(
-      chromiumBinary(),
-      [`--app=${page.url}`, `--user-data-dir=${profile}`, '--no-first-run', '--no-sandbox', '--window-position=0,0', `--window-size=${SCREEN.width},${SCREEN.height}`],
-      { env: { PATH: process.env.PATH, HOME: process.env.HOME, LD_LIBRARY_PATH: process.env.LD_LIBRARY_PATH, DISPLAY: display }, stdio: 'ignore' },
-    )
-    cleanups.push(() => stopProcess(chromium))
-    await waitUntil(page.loaded, 'the window loading the page', 15_000)
-
-    const workspace = makeHostToolsWorkspace()
-    cleanups.push(() => workspace.remove())
-    const settings = resolveToolSettings(
-      { THEOCLAW_HOST_TOOLS: 'on', THEOCLAW_COMPUTER: 'on', DISPLAY: display, THEOCLAW_COMPUTER_FRAMEBUFFER: join(framebufferDirectory, 'Xvfb_screen0'), PATH: process.env.PATH },
-      workspace.path,
-    )
-    const { model, apiKey } = liveModel()
-    const build = (toolOptions: AgentToolOptions) => createTheoClawAgent(theoClawAgentOptions({ model, apiKey, toolOptions }))
-    const agent = await build(controlAgentToolOptions(settings, build))
-    const actions: string[] = []
-    let answer = ''
-    try {
-      const run = await agent.send(
-        `Use the computer tool. Take a screenshot, move the pointer onto the text box, type the word ${word}, then take another screenshot. Tell me the code shown after the word CODE.`,
+  it(
+    'a real model takes a screenshot, moves the pointer and types into a window for OC-62',
+    { timeout: 240_000 },
+    async () => {
+      const token = randomText(6)
+      const word = randomText(8).toLowerCase()
+      const page = await servePage(token)
+      const framebufferDirectory = mkdtempSync(join(tmpdir(), 'theoclaw-computer-live-'))
+      cleanups.push(() => rmSync(framebufferDirectory, { recursive: true, force: true }))
+      const display = await startXvfb(framebufferDirectory)
+      const profile = mkdtempSync(join(tmpdir(), 'theoclaw-computer-profile-'))
+      cleanups.push(() =>
+        rmSync(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }),
       )
-      for await (const event of run.stream()) {
-        if (event.type !== 'tool_call' || !('name' in event) || event.name !== 'computer') continue
-        if ('status' in event && event.status === 'running' && 'args' in event) actions.push(String((event.args as { action?: unknown })?.action))
+      // This host's Chromium needs `--no-sandbox` (no usable user-namespace sandbox) and the shared libraries in LD_LIBRARY_PATH: harness details, never a TheoClaw setting (plan Q2).
+      const chromium = spawn(
+        chromiumBinary(),
+        [
+          `--app=${page.url}`,
+          `--user-data-dir=${profile}`,
+          '--no-first-run',
+          '--no-sandbox',
+          '--window-position=0,0',
+          `--window-size=${SCREEN.width},${SCREEN.height}`,
+        ],
+        {
+          env: {
+            PATH: process.env.PATH,
+            HOME: process.env.HOME,
+            LD_LIBRARY_PATH: process.env.LD_LIBRARY_PATH,
+            DISPLAY: display,
+          },
+          stdio: 'ignore',
+          detached: true,
+        },
+      )
+      cleanups.push(() => stopProcessGroup(chromium))
+      await waitUntil(page.loaded, 'the window loading the page', 15_000)
+
+      const workspace = makeHostToolsWorkspace()
+      cleanups.push(() => workspace.remove())
+      const settings = resolveToolSettings(
+        {
+          THEOCLAW_HOST_TOOLS: 'on',
+          THEOCLAW_COMPUTER: 'on',
+          DISPLAY: display,
+          THEOCLAW_COMPUTER_FRAMEBUFFER: join(framebufferDirectory, 'Xvfb_screen0'),
+          PATH: process.env.PATH,
+        },
+        workspace.path,
+      )
+      const { model, apiKey } = liveModel()
+      const build = (toolOptions: AgentToolOptions) =>
+        createTheoClawAgent(theoClawAgentOptions({ model, apiKey, toolOptions }))
+      const agent = await build(controlAgentToolOptions(settings, build))
+      const actions: string[] = []
+      let answer = ''
+      try {
+        const run = await agent.send(
+          `Use the computer tool. Take a screenshot, move the pointer onto the text box, type the word ${word}, then take another screenshot. Tell me the code shown after the word CODE.`,
+        )
+        for await (const event of run.stream()) {
+          if (event.type !== 'tool_call' || !('name' in event) || event.name !== 'computer')
+            continue
+          if ('status' in event && event.status === 'running' && 'args' in event)
+            actions.push(String((event.args as { action?: unknown })?.action))
+        }
+        const outcome = await run.wait()
+        if (outcome.status !== 'finished')
+          throw new Error(`the run ended ${outcome.status}: ${JSON.stringify(outcome)}`)
+        answer = String(outcome.result ?? '')
+      } finally {
+        await agent[Symbol.asyncDispose]()
       }
-      const outcome = await run.wait()
-      if (outcome.status !== 'finished') throw new Error(`the run ended ${outcome.status}: ${JSON.stringify(outcome)}`)
-      answer = String(outcome.result ?? '')
-    } finally {
-      await agent[Symbol.asyncDispose]()
-    }
-    console.log(`OC-62 live: model=${model} actions=${JSON.stringify(actions)} typed=${JSON.stringify(page.typed())} answer=${JSON.stringify(answer)}`)
-    expect(actions).toEqual(expect.arrayContaining(['screenshot', 'mouse_move', 'type']))
-    expect(page.typed()).toContain(word)
-    expect(answer).toContain(token)
-  })
+      console.log(
+        `OC-62 live: model=${model} actions=${JSON.stringify(actions)} typed=${JSON.stringify(page.typed())} answer=${JSON.stringify(answer)}`,
+      )
+      expect(actions).toEqual(expect.arrayContaining(['screenshot', 'mouse_move', 'type']))
+      expect(page.typed()).toContain(word)
+      expect(answer).toContain(token)
+    },
+  )
 })
