@@ -11,6 +11,9 @@
  *   `--output-dir`, so the files its tools write by name or by default land there, not in the
  *   workspace (its file root is its working directory once the client names no roots, and the
  *   `roots` capability is stripped from `initialize`); the directory is removed when it exits;
+ * - the server answers every action with a `- [Snapshot](<file>)` link to a file in that directory,
+ *   which no tool of the agent can open; a `tools/call` answer gets the file's content in its place
+ *   (a path that leaves the directory is left as it was);
  * - `PLAYWRIGHT_MCP_*` variables are dropped, so the environment cannot widen the server's config.
  *
  * Exits with the server's status, 1 when it ended on a signal (SIGTERM, SIGINT and SIGHUP are
@@ -18,9 +21,9 @@
  * cannot be forwarded: the server then exits on its stdin closing and the directory stays behind.
  */
 import { spawn } from 'node:child_process'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, relative, resolve } from 'node:path'
 import { createInterface } from 'node:readline'
 
 /** Every tool `@playwright/mcp@0.0.83` lists by default, less `browser_run_code_unsafe`. */
@@ -98,7 +101,34 @@ function fromClient(message) {
   return message
 }
 
+const SNAPSHOT_LINK = /^[ \t]*- \[Snapshot\]\(([^)\n]+)\)[ \t]*$/gm
+
+/** The content of `link` when it names a file inside the output directory, else `undefined`. */
+function snapshotContent(link) {
+  try {
+    const root = realpathSync(workDir)
+    const path = realpathSync(resolve(root, link))
+    const rel = relative(root, path)
+    if (rel === '' || rel.startsWith('..') || resolve(rel) === rel) return undefined
+    return readFileSync(path, 'utf8').trimEnd()
+  } catch {
+    return undefined
+  }
+}
+
+function inlineSnapshots(message) {
+  const content = message.result?.content
+  if (!Array.isArray(content)) return message
+  const inlined = content.map((part) =>
+    part?.type === 'text' && typeof part.text === 'string'
+      ? { ...part, text: part.text.replace(SNAPSHOT_LINK, (line, link) => snapshotContent(link) ?? line) }
+      : part,
+  )
+  return { ...message, result: { ...message.result, content: inlined } }
+}
+
 function fromServer(message) {
+  if (message.result?.content !== undefined) return inlineSnapshots(message)
   if (!listRequests.delete(message.id) || !Array.isArray(message.result?.tools)) return message
   return { ...message, result: { ...message.result, tools: message.result.tools.filter((tool) => OFFERED.has(tool?.name)) } }
 }

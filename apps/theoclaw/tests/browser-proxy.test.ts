@@ -23,6 +23,7 @@ afterEach(() => {
 
 const STAND_IN = `
 import { createInterface } from 'node:readline'
+import { writeFileSync } from 'node:fs'
 const send = (message) => process.stdout.write(JSON.stringify(message) + '\\n')
 createInterface({ input: process.stdin }).on('line', (line) => {
   const message = JSON.parse(line)
@@ -31,6 +32,10 @@ createInterface({ input: process.stdin }).on('line', (line) => {
   if (message.method === 'initialize') send({ jsonrpc: '2.0', id: message.id, result: { seen: message.params } })
   else if (message.method === 'tools/list') {
     send({ jsonrpc: '2.0', id: message.id, result: { tools: [{ name: 'browser_navigate' }, { name: 'browser_run_code_unsafe' }, { name: 'browser_snapshot' }] } })
+  } else if (message.params?.arguments?.link !== undefined) {
+    writeFileSync('page.yml', '- generic [ref=e1]: hello page')
+    writeFileSync('../theoclaw-outside.yml', 'outside')
+    send({ jsonrpc: '2.0', id: message.id, result: { content: [{ type: 'text', text: '### Page\\n- Page URL: x\\n### Snapshot\\n- [Snapshot](' + message.params.arguments.link + ')' }] } })
   } else {
     const env = Object.keys(process.env).filter((key) => key.startsWith('PLAYWRIGHT_MCP_'))
     send({ jsonrpc: '2.0', id: message.id, result: { called: message.params?.name, cwd: process.cwd(), argv: process.argv.slice(2), env, pid: process.pid } })
@@ -119,6 +124,21 @@ describe('the browser server wrapper', () => {
     const answers = await exchange([{ method: 'tools/call', params: { name: 'browser_run_code_unsafe', arguments: { code: '1' } } }])
     expect(answers.get(1)?.result).toBeUndefined()
     expect(answers.get(1)?.error?.message).toBe('theoclaw: the browser tool browser_run_code_unsafe is not offered')
+  })
+
+  it('answers a snapshot link with the content of the file it names', async () => {
+    const answers = await exchange([{ method: 'tools/call', params: { name: 'browser_navigate', arguments: { link: './page.yml' } } }])
+    const text = (answers.get(1)?.result as { content: { text: string }[] }).content[0]?.text
+    expect(text).toContain('- generic [ref=e1]: hello page')
+    expect(text).not.toContain('[Snapshot]')
+  })
+
+  it('leaves a snapshot link that leaves the output directory as it was', async () => {
+    cleanups.push(() => rmSync(join(tmpdir(), 'theoclaw-outside.yml'), { force: true }))
+    const answers = await exchange([{ method: 'tools/call', params: { name: 'browser_navigate', arguments: { link: '../theoclaw-outside.yml' } } }])
+    const text = (answers.get(1)?.result as { content: { text: string }[] }).content[0]?.text
+    expect(text).toContain('- [Snapshot](../theoclaw-outside.yml)')
+    expect(text).not.toContain('outside\n')
   })
 
   it('refuses a JSON-RPC batch, so a tools/call inside it cannot bypass the offered set', async () => {
