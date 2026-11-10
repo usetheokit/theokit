@@ -93,7 +93,7 @@ async function installAndTurn(port: number, token: string): Promise<ControlTurn 
   expect(await daemonInstall(run!.io, runCommand), run!.output()).toBe(0)
   const startedAt = Date.now()
   await waitForHealth(port, 30_000)
-  const turn = await runControlTurn(port, token, 'Reply with the single word: pong', 60_000 - (Date.now() - startedAt))
+  const turn = await runControlTurn(port, token, 'Reply with the single word: pong', 60_000 - (Date.now() - startedAt), 0, { output: () => `${run!.output()}\n${serviceLog()}`, secrets: [token, process.env.THEOKIT_API_KEY, process.env.OPENROUTER_API_KEY] })
   return { ...turn, sinceStartMs: Date.now() - startedAt }
 }
 

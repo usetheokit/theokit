@@ -82,6 +82,8 @@ describe.skipIf(!LIVE)('A2A between two TheoClaw instances', () => {
       'Make exactly one call to the peer_b tool asking it: "Use read_file to read note.txt and reply with its exact content". ' +
         'Do not read any file yourself. Then reply with the content peer b returned.',
       240_000,
+      0,
+      { output: a.output, secrets: [a.token, process.env.THEOKIT_API_KEY, process.env.OPENROUTER_API_KEY] },
     )
     expect(turn.status, `A's turn: ${turn.error}`).toBe('finished')
     expect(turn.text).toContain(phrase)

@@ -78,10 +78,10 @@ describe.skipIf(!LIVE)('a changed start-only setting restarts the instance (OC-9
     const word = (): string => `w${randomInt(10 ** 8)}`
     const ask = async (port: number, token: string): Promise<void> => {
       const expected = word()
-      let turn = await runControlTurn(port, token, `Reply with just this word: ${expected}`, TURN_MS)
+      let turn = await runControlTurn(port, token, `Reply with just this word: ${expected}`, TURN_MS, 0, { output: () => log, secrets: [token, process.env.THEOKIT_API_KEY, process.env.OPENROUTER_API_KEY] })
       for (let attempt = 0; attempt < 30 && turn.status !== 'finished' && !turn.text; attempt++) {
         await new Promise((resolve) => setTimeout(resolve, 1000))
-        turn = await runControlTurn(port, token, `Reply with just this word: ${expected}`, TURN_MS).catch(() => turn)
+        turn = await runControlTurn(port, token, `Reply with just this word: ${expected}`, TURN_MS, 0, { output: () => log, secrets: [token, process.env.THEOKIT_API_KEY, process.env.OPENROUTER_API_KEY] }).catch(() => turn)
       }
       expect(turn.status, log).toBe('finished')
       expect(turn.text.toLowerCase(), log).toContain(expected)

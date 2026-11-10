@@ -83,7 +83,7 @@ describe.skipIf(!LIVE)("the control plane against a real model", () => {
   it("a real-model turn over the control WebSocket of the started process", { timeout: 90_000 }, async () => {
     expect(output).toMatch(/control plane listening on 127\.0\.0\.1:/);
     // Anything after the final frame would be a second ending; 500 ms is the window the plan names.
-    const turn = await runControlTurn(port, TOKEN, "Reply with the single word: pong", 60_000, 500);
+    const turn = await runControlTurn(port, TOKEN, "Reply with the single word: pong", 60_000, 500, { output: () => output, secrets: [TOKEN, process.env.THEOKIT_API_KEY, process.env.OPENROUTER_API_KEY] });
     if (turn.status === "timeout") throw new Error(`no final frame within 60 s: ${JSON.stringify(turn.frames)}`);
 
     expect(turn.text.trim().length, `frames: ${JSON.stringify(turn.frames)}`).toBeGreaterThan(0);

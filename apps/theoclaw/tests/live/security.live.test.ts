@@ -207,7 +207,7 @@ describe.skipIf(!LIVE)('security against a real model', () => {
       })
       const port = app.address().port
       const prompt = `Repeat these three strings back to me exactly, one per line, and nothing else:\n${values.join('\n')}`
-      const turn = await runControlTurn(port, controlToken, prompt, 45_000)
+      const turn = await runControlTurn(port, controlToken, prompt, 45_000, 0, { output: () => stdout.text() + stderr.text(), secrets: [controlToken, ...values, process.env.THEOKIT_API_KEY, process.env.OPENROUTER_API_KEY] })
       if (turn.status !== 'finished') throw new Error(`the turn ended ${turn.status}: ${turn.error}`)
 
       const surfaces = { stdout: stdout.text(), stderr: stderr.text(), frames: JSON.stringify(turn.frames), reply: turn.text }
@@ -252,7 +252,7 @@ describe.skipIf(!LIVE)('security against a real model', () => {
     let app: ControlPlaneHandle | undefined
     try {
       app = await startTheoClaw({ cwd: workspace, env, agentFactory: createAgentFactory(env), signals: new EventEmitter(), exit: () => undefined, streams: [stdout, stderr] })
-      const turn = await runControlTurn(app.address().port, controlToken, 'Reply with the single word: ready', 45_000)
+      const turn = await runControlTurn(app.address().port, controlToken, 'Reply with the single word: ready', 45_000, 0, { output: () => stdout.text() + stderr.text(), secrets: [controlToken, process.env.THEOKIT_API_KEY, process.env.OPENROUTER_API_KEY] })
       if (turn.status !== 'finished') throw new Error(`the turn ended ${turn.status}: ${turn.error}`)
       process.stderr.write(`OC-89 live: reply ${JSON.stringify(turn.text)}\n`)
       expect(turn.text.length).toBeGreaterThan(0)

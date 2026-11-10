@@ -7,13 +7,13 @@ import { turnFailureDetail } from './turn-failure.js'
  * T3.2, so the daemon and container checks run the same turn). Every wait is a condition with a
  * deadline (`rules/testing.md` § 3).
  */
+export type Frame = Record<string, unknown>
+
 /** What a failed turn adds to `error`: the instance's output and the secrets to mask in it (#1464). */
 export interface InstanceOutput {
-  readonly output: () => string
+  readonly output: () => string | Promise<string>
   readonly secrets?: readonly (string | undefined)[]
 }
-
-export type Frame = Record<string, unknown>
 
 export interface ControlTurn {
   /** `finished` on a `done` frame, `failed` on a `turn_failed` error frame, `timeout` otherwise. */
@@ -64,7 +64,7 @@ export async function runControlTurn(port: number, token: string, prompt: string
       .map((e) => e!.content as string)
       .join('')
     const errors = frames.filter((frame) => event(frame)?.type === 'error' || frame.type === 'error')
-    const reason = status === 'failed' && instance !== undefined ? `\n${turnFailureDetail(instance.output(), instance.secrets)}` : ''
+    const reason = status === 'failed' && instance !== undefined ? `\n${turnFailureDetail(await instance.output(), instance.secrets)}` : ''
     return { status, text, elapsedMs, error: status === 'finished' ? '' : `${JSON.stringify(errors)}${reason}`, frames, framesAtEnd }
   } finally {
     socket.close()

@@ -44,7 +44,7 @@ describe.skipIf(!LIVE)('usage and cost against a real model (OC-97)', () => {
     })
     closers.push(() => handle.close())
 
-    const turn = await runControlTurn(handle.address().port, TOKEN, 'Reply with exactly the word: pong', TURN_TIMEOUT_MS - 10_000)
+    const turn = await runControlTurn(handle.address().port, TOKEN, 'Reply with exactly the word: pong', TURN_TIMEOUT_MS - 10_000, 0, { output: () => stderr.join('\n'), secrets: [TOKEN, key] })
 
     expect(turn.status, turn.error).toBe('finished')
     const done = turn.frames.find((frame) => frame.type === 'done') as {

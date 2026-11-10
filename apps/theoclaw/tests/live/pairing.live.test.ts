@@ -112,8 +112,10 @@ describe.skipIf(!LIVE)("device pairing against a real model", () => {
       owner.once("open", () => resolve());
       owner.once("error", reject);
     });
+    let pairCode: string | undefined;
     try {
       const { code } = await ask(owner, { type: "pair_code" });
+      pairCode = String(code);
       const pairing = await fetch(`http://127.0.0.1:${port}/control/pair`, {
         method: "POST",
         body: JSON.stringify({ code, name: "live laptop", token: DEVICE_TOKEN }),
@@ -128,7 +130,10 @@ describe.skipIf(!LIVE)("device pairing against a real model", () => {
     }
 
     expect(await upgradeStatus(DEVICE_TOKEN), "the approved device").toBe(101);
-    const turn = await runControlTurn(port, DEVICE_TOKEN, "Reply with the single word: pong", 60_000);
+    const turn = await runControlTurn(port, DEVICE_TOKEN, "Reply with the single word: pong", 60_000, 0, {
+      output: () => output,
+      secrets: [OWNER_TOKEN, DEVICE_TOKEN, pairCode, process.env.THEOKIT_API_KEY, process.env.OPENROUTER_API_KEY],
+    });
     if (turn.status === "timeout") throw new Error(`no final frame within 60 s: ${JSON.stringify(turn.frames)}`);
     expect(turn.status, turn.error).toBe("finished");
     expect(turn.text.trim().length).toBeGreaterThan(0);

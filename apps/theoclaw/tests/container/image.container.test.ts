@@ -99,7 +99,13 @@ describe.skipIf(!CONTAINER)("TheoClaw's image", () => {
       'GET /health never answered 200',
     )
     expect(health.status).toBe(200)
-    const turn = await runControlTurn(port, token, 'Reply with the single word: pong', 60_000 - (Date.now() - startedAt))
+    const turn = await runControlTurn(port, token, 'Reply with the single word: pong', 60_000 - (Date.now() - startedAt), 0, {
+      output: async () => {
+        const logs = await docker!.run(['logs', container!], 30_000)
+        return `${logs.stdout}${logs.stderr}`
+      },
+      secrets: [token, process.env.OPENROUTER_API_KEY],
+    })
     const finishedAt = Date.now()
     process.stdout.write(`[turn] ${turn.status} after ${finishedAt - startedAt} ms: ${turn.text.slice(0, 200)}\n`)
     expect(turn.status, turn.error).toBe('finished')
