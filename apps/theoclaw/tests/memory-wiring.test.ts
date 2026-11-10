@@ -109,3 +109,16 @@ describe('memory wired into the chat sessions (OC-56, Hermes row 3)', () => {
     expect(options.systemPrompt).toContain('- The owner lives in Porto')
   })
 })
+
+describe('memory with transcripts off', () => {
+  const base = { THEOCLAW_MODEL: 'm', OPENROUTER_API_KEY: 'k', THEOCLAW_WORKSPACE: mkdtempSync(join(tmpdir(), 'theoclaw-mem-off-')) }
+  const open = (env: Record<string, string>) => chatSessions({ env, write: () => undefined, getOrCreate: async () => scripted({}, 'x') as never })
+
+  it('refuses THEOCLAW_MEMORY=on, naming both variables', () => {
+    expect(() => open({ ...base, THEOCLAW_MEMORY: 'on' })).toThrow(/THEOCLAW_MEMORY=on needs THEOCLAW_TRANSCRIPTS=on/)
+  })
+
+  it('starts with memory off by default', () => {
+    expect(open(base).memory).toBeUndefined()
+  })
+})

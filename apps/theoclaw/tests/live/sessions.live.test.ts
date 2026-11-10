@@ -100,6 +100,7 @@ async function startLive(workspace: string) {
       OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
       THEOCLAW_PORT: '0',
       THEOCLAW_WORKSPACE: workspace,
+      THEOCLAW_TRANSCRIPTS: 'on',
       THEOCLAW_TELEGRAM_TOKEN: 'live-stand-in-telegram-token',
       // Every start names its owners (B-371); each live sender is one, so a group answers it too, and
       // a group answers without a mention, since these events carry no bot identity to mention.
