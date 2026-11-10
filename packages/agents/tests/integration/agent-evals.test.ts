@@ -29,6 +29,8 @@ const h = vi.hoisted(() => ({
   ids: [] as string[],
   /** Every message a scripted agent's `send` received. */
   sends: [] as string[],
+  /** The `withheldBuiltinTools` each `Agent.getOrCreate` received. */
+  withheld: [] as unknown[],
   /** How many scripted agents were disposed. */
   disposed: 0,
   /** When set, every scripted `dispose` rejects with it. */
@@ -46,6 +48,7 @@ vi.mock('@theokit/sdk', () => ({
   Agent: {
     getOrCreate: vi.fn(async (id: string, opts: Record<string, unknown>) => {
       h.ids.push(id)
+      h.withheld.push(opts.withheldBuiltinTools)
       h.waiters = h.waiters.filter((w) => (w.length <= h.ids.length ? (w.resolve(), false) : true))
       const prompt = typeof opts.systemPrompt === 'string' ? opts.systemPrompt : ''
       return {
@@ -118,6 +121,7 @@ const network = vi.fn(() => Promise.reject(new Error('a case reached the network
 beforeEach(() => {
   h.ids = []
   h.sends = []
+  h.withheld = []
   h.disposed = 0
   h.disposeError = undefined
   h.hold = undefined
@@ -151,6 +155,17 @@ describe('runAgentEvals verdicts', () => {
     expect(result.cases[0]?.scores.map((s) => s.name)).toEqual(['contains-expected'])
     expect(result.cases.map((c) => c.meanScore)).toEqual([1, 0])
     expect(result.threshold).toBe(0.5)
+  })
+
+  it('withholds the SDK default shell from the case agent', async () => {
+    await runAgentEvals({
+      agent: KIWI,
+      apiKey: 'k',
+      approvals: NO_GATE,
+      cases: [{ input: 'a' }],
+      scorers: [Scorers.containsExpected()],
+    })
+    expect(h.withheld).toEqual([['shell']])
   })
 
   it('reports a run that does not finish as an error', async () => {

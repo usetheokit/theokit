@@ -906,6 +906,8 @@ export function toAgentFactory(
     apiKey: string | (() => string | Promise<string>)
     approvals: ApprovalPosture
     overrides?: RuntimeOverrides
+    /** Withhold the SDK default `shell`, which `approvals` does not gate. */
+    withholdBuiltinShell?: boolean
   },
 ): (sessionId: string) => Promise<SdkAgentHandle> {
   const overrides = opts.overrides ?? {}
@@ -932,6 +934,7 @@ export function toAgentFactory(
       tools: sdkTools,
       ...m8,
       ...extra,
+      ...(opts.withholdBuiltinShell === true ? { withheldBuiltinTools: ['shell'] } : {}),
     })
     return withGuardrails(
       withStepCeiling(agent as unknown as SdkAgentHandle, compiled.maxIterations),
