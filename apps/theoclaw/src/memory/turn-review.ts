@@ -13,7 +13,7 @@ export function reviewPrompt(turn: StoredTurn): string {
 
 /**
  * After a turn: records it for `session_search`, then runs the reviewer. A reviewer failure goes to
- * `onError` and never rejects. The caller does not await it on the turn's path; it returns the review
+ * `onError` and never rejects; nor does a failed append. The caller does not await it on the turn's path; it returns the review
  * so a test (or a shutdown) can wait for it.
  */
 export function afterTurn(
@@ -22,8 +22,10 @@ export function afterTurn(
   runReviewer: RunReviewer,
   onError: (error: unknown) => void = () => undefined,
 ): Promise<void> {
-  store.appendTurn(turn)
-  return runReviewer(reviewPrompt(turn)).catch(onError)
+  return (async () => {
+    store.appendTurn(turn)
+    await runReviewer(reviewPrompt(turn))
+  })().catch(onError)
 }
 
 /** A reviewer that sends the prompt to a forked agent (built with `save_memory`) and drains its run. */
