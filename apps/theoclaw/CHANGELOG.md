@@ -13,6 +13,7 @@ and versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- A `/control` chat turn no longer writes its transcript under `HOME/.theokit/projects` (#1434): it goes to a temp directory removed when the agent is disposed, unless `THEOCLAW_TRANSCRIPTS=on`. The SDK still records the agent in `<cwd>/.theokit/agents/registry.json`, without message text.
 - A chat or channel turn (SMS and the rest) no longer leaves its text in a transcript file by default (#1457). Each session's transcript goes to a temp directory removed when the agent is disposed, and the memory store, which records turns, is off with it. `THEOCLAW_TRANSCRIPTS=on` restores the transcripts under `<THEOCLAW_WORKSPACE>/.theoclaw/` (a conversation then survives a restart) and the memory default. Trigger and WebChat agents write theirs under the workspace instead of the home directory.
 
 ### Added
