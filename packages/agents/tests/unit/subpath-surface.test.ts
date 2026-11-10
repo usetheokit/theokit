@@ -119,8 +119,12 @@ describe('M90 — the infra subpath surface is locked', () => {
     // `TextToSpeechResult`. Upstream names differ from the issue text (`TextToSpeechToolOptions`
     // is `CreateTextToSpeechToolOptions`; `TextToSpeechFailure` is not exported), and the gate
     // forbids inventing names, so the layer mirrors upstream exactly.
+    //
+    // 200 since the floor moved to `@theokit/sdk` ^5.15.1: +6, nothing removed. In `persistence`,
+    // `SqliteSessionStore` and the type `SqliteSessionStoreOptions`; in `sandbox`, `DockerSandbox`
+    // and the types `DockerRunner`, `DockerRunResult`, `DockerSandboxConfig`.
     const total = Object.values(SNAPSHOT).reduce((n, s) => n + s.values.length + s.types.length, 0)
-    expect(total).toBe(194)
+    expect(total).toBe(200)
   })
 
   /**
