@@ -63,7 +63,7 @@ describe.skipIf(!LIVE)('a changed start-only setting restarts the instance (OC-9
     mkdirSync(workspace)
     const config = join(root, 'theoclaw.env')
     const model = [`THEOCLAW_MODEL="${process.env.THEOCLAW_MODEL}"`, ...(['THEOKIT_API_KEY', 'OPENROUTER_API_KEY'] as const).flatMap((k) => (process.env[k] ? [`${k}="${process.env[k]}"`] : []))]
-    const write = (port: number, token: string): void => writeFileSync(config, [...model, `THEOCLAW_PORT="${port}"`, `THEOCLAW_CONTROL_TOKEN="${token}"`, ''].join('\n'))
+    const write = (port: number, token: string): void => writeFileSync(config, [...model, `THEOCLAW_PORT="${port}"`, `THEOCLAW_CONTROL_TOKEN="${token}"`, 'THEOCLAW_OWNERS="telegram:owner"', ''].join('\n'))
     const [first, second] = [await freePort(), await freePort()]
     const [tokenA, tokenB] = [randomBytes(24).toString('base64url'), randomBytes(24).toString('base64url')]
     write(first, tokenA)
@@ -76,17 +76,31 @@ describe.skipIf(!LIVE)('a changed start-only setting restarts the instance (OC-9
     child.stderr!.on('data', (chunk: Buffer) => (log += chunk.toString()))
 
     const word = (): string => `w${randomInt(10 ** 8)}`
-    const ask = async (port: number, token: string): Promise<void> => {
+    const ask = async (port: number, token: string, watch = false): Promise<void> => {
       const expected = word()
-      let turn = await runControlTurn(port, token, `Reply with just this word: ${expected}`, TURN_MS)
+      // The first instance may exit by design once it restarts, so only the first ask watches for it.
+      const refused = (): void => {
+        if (watch && child?.exitCode != null) throw new Error(`the instance exited before it listened:\n${log}`)
+      }
+      const send = (): ReturnType<typeof runControlTurn> => runControlTurn(port, token, `Reply with just this word: ${expected}`, TURN_MS)
+      let turn: Awaited<ReturnType<typeof send>> | undefined
+      for (let attempt = 0; attempt < 30 && turn === undefined; attempt++) {
+        turn = await send().catch(() => undefined)
+        if (turn === undefined) {
+          refused()
+          await new Promise((resolve) => setTimeout(resolve, 1000))
+        }
+      }
+      if (turn === undefined) throw new Error(`the instance never listened on ${port}:\n${log}`)
       for (let attempt = 0; attempt < 30 && turn.status !== 'finished' && !turn.text; attempt++) {
         await new Promise((resolve) => setTimeout(resolve, 1000))
-        turn = await runControlTurn(port, token, `Reply with just this word: ${expected}`, TURN_MS).catch(() => turn)
+        refused()
+        turn = await send().catch(() => turn!)
       }
       expect(turn.status, log).toBe('finished')
       expect(turn.text.toLowerCase(), log).toContain(expected)
     }
-    await ask(first, tokenA)
+    await ask(first, tokenA, true)
 
     write(second, tokenB)
     await ask(second, tokenB)
