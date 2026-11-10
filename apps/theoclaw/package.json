@@ -109,7 +109,7 @@
     "start": "node dist/main.js",
     "import": "node dist/import-main.js",
     "test": "vitest run",
-    "test:live": "vitest run tests/live --no-file-parallelism",
+    "test:live": "vitest run tests/live --no-file-parallelism --retry=1",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json && tsc -p tsconfig.web.json",
     "boundaries": "depcruise --config .dependency-cruiser.cjs src tests",
     "lint": "eslint .",

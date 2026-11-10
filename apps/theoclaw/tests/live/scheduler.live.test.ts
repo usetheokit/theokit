@@ -128,7 +128,12 @@ describe.skipIf(!LIVE)('scheduled runs against a real model', () => {
     expect(store.list()).toHaveLength(1)
     expect(store.list()[0]?.target).toEqual({ platform: 'telegram', channelId: '42' })
     // Nothing calls `fire` here: only the SDK Cron's minute tick can produce this send.
-    await until(() => r.telegram.sent.some((message) => message.text.includes(`tick ${tick}`)), TICK_DEADLINE_MS, `a send holding "tick ${tick}"`)
+    // The job as stored and every send so far, so a miss says whether the tick never fired, the run
+    // failed, or the model answered something else (develop run 42788706261 failed with neither).
+    const seen = () => `job ${JSON.stringify(store.list()[0])}; sends ${JSON.stringify(r.telegram.sent.map((message) => message.text))}`
+    await until(() => r.telegram.sent.some((message) => message.text.includes(`tick ${tick}`)), TICK_DEADLINE_MS, `a send holding "tick ${tick}"`).catch((error: unknown) => {
+      throw new Error(`${(error as Error).message}; ${seen()}`)
+    })
     expect(r.telegram.sent[0]?.channel.id).toBe('42')
   })
 
